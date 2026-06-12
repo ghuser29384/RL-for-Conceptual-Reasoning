@@ -1,0 +1,3 @@
+node_modules/
+data/audit/*.jsonl
+!data/audit/.gitkeep

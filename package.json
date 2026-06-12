@@ -1,0 +1,14 @@
+{
+  "name": "rlhf-conceptual-reasoning-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/server.mjs",
+    "serve": "node src/server.mjs",
+    "build": "node scripts/build-static.mjs",
+    "test": "node --test",
+    "smoke:server": "node scripts/smoke-server.mjs",
+    "check": "npm run test && npm run build"
+  }
+}

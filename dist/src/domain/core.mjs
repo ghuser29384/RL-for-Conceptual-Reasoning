@@ -1,0 +1,7719 @@
+export const RUBRIC_DIMENSIONS = [
+  "centrality",
+  "strength",
+  "correctness",
+  "clarity",
+  "dead_weight",
+  "single_issue",
+  "overall",
+];
+
+export const CURRENT_RUBRIC_VERSION = "lmca-app-f-2026-10";
+
+const FULL_RUBRIC_FIELDS = ["centrality", "strength", "correctness", "dead_weight", "single_issue"];
+const now = "2026-06-11T13:00:00.000Z";
+
+function version(id, text) {
+  return {
+    id,
+    text,
+    canonicalHash: `sha256:${id}:canonical`,
+    renderedHash: `sha256:${id}:rendered`,
+    createdAt: now,
+  };
+}
+
+export const positions = [
+  {
+    id: "pos-ai-prior",
+    clusterId: "cluster-ai-prior",
+    title: "Prior-only risk estimate",
+    topicFamily: "ai_safety",
+    split: "public_train",
+    sourceCategory: "hand_written",
+    sourceLanguage: "en",
+    translationStatus: "original_english",
+    sourceTaskFormat: "short essay claim",
+    authorshipRoute: "expert-authored seed item",
+    llmAssistance: "none",
+    conceptualScope: "primarily_conceptual",
+    groundTruthAvailability: "no_realistically_accessible_ground_truth",
+    nonConceptualDependencyNotes: "No checkable empirical subclaim is central to the target.",
+    contextSufficiency: "sufficient",
+    assumedBackgroundPolicy: "Ordinary familiarity with forecasting arguments is enough.",
+    pricedInContextNotes: "Do not assume the author has priced in all classic base-rate objections unless the text says so.",
+    intakeScreening: {
+      originalTextPreserved: true,
+      raterVisibleTextVersionId: "ptv-ai-prior-v1",
+      normalizationStatus: "not_needed",
+      expertNormalizationRequired: false,
+      adminOnlyAmbiguityNotes: ["Check that the critique does not import an unstated claim that interpretability forecasts are reliable."],
+      adminOnlyIntendedConclusionNotes: ["Target conclusion is slowdown priority, not a general anti-scaling proof."],
+      notesVisibleToInitialRaters: false,
+      contextGapFlags: [],
+      ordinaryHeadlineEligibility: "eligible",
+    },
+    textVersions: [
+      version(
+        "ptv-ai-prior-v1",
+        "A cautious AI lab should prioritize alignment interpretability over scaling because expert forecasts are systematically overconfident about controllability. Even without decisive empirical evidence, a policy of slowing capability growth is justified by the asymmetry of downside risk.",
+      ),
+    ],
+    adminTags: [
+      {
+        tag: "ai-safety",
+        visibilityClass: "safe_topic_routing",
+        changedAt: now,
+        reason: "Topic routing only; not rater-visible during blind initial rating.",
+      },
+    ],
+  },
+  {
+    id: "pos-voting",
+    clusterId: "cluster-voting",
+    title: "Approval voting incentive claim",
+    topicFamily: "politics",
+    split: "internal_validation",
+    sourceCategory: "coursework_derived",
+    sourceLanguage: "en",
+    translationStatus: "original_english",
+    sourceTaskFormat: "coursework prompt adaptation",
+    authorshipRoute: "normalized from classroom argument",
+    llmAssistance: "edited",
+    conceptualScope: "mixed_conceptual_non_conceptual",
+    groundTruthAvailability: "verifiable_subclaims_present",
+    nonConceptualDependencyNotes: "Empirical claims about voter behavior must be separated from the conceptual incentive argument.",
+    contextSufficiency: "needs_normalization",
+    assumedBackgroundPolicy: "Assume standard single-winner election terminology only.",
+    pricedInContextNotes: "The author mentions strategic voting but not bullet-voting equilibria.",
+    intakeScreening: {
+      originalTextPreserved: true,
+      raterVisibleTextVersionId: "ptv-voting-v1",
+      normalizationStatus: "expert_normalization_required",
+      expertNormalizationRequired: true,
+      adminOnlyAmbiguityNotes: ["Separate conceptual incentive claims from empirical voter-behavior claims before headline benchmark use."],
+      adminOnlyIntendedConclusionNotes: ["The target is near-immunity to strategic manipulation, not plurality comparison in every respect."],
+      notesVisibleToInitialRaters: false,
+      contextGapFlags: ["strategic_manipulation_background_boundary", "verifiable_behavior_claim_separation"],
+      ordinaryHeadlineEligibility: "internal_validation_only_until_normalized",
+    },
+    textVersions: [
+      version(
+        "ptv-voting-v1",
+        "Approval voting is preferable to plurality because it lets citizens support every acceptable candidate. This makes it almost immune to strategic manipulation while preserving a simple ballot that ordinary voters can understand.",
+      ),
+    ],
+    adminTags: [
+      {
+        tag: "voting-methods",
+        visibilityClass: "possible_confounder",
+        changedAt: now,
+        reason: "Could prime raters toward known social-choice objections; hidden during initial rating.",
+      },
+    ],
+  },
+  {
+    id: "pos-mind",
+    clusterId: "cluster-mind",
+    title: "Functionalism and qualia",
+    topicFamily: "philosophy_of_mind",
+    split: "hidden_benchmark",
+    sourceCategory: "book_adapted",
+    sourceLanguage: "en",
+    translationStatus: "original_english",
+    sourceTaskFormat: "book passage adaptation",
+    authorshipRoute: "rights-review excerpt and normalization",
+    llmAssistance: "none",
+    conceptualScope: "primarily_conceptual",
+    groundTruthAvailability: "no_realistically_accessible_ground_truth",
+    nonConceptualDependencyNotes: "Neuroscience facts are background only; the target is a conceptual identity claim.",
+    contextSufficiency: "sufficient",
+    assumedBackgroundPolicy: "Assume only the position's own characterization of functional role.",
+    pricedInContextNotes: "Do not assume the author has already accepted absent-qualia cases.",
+    intakeScreening: {
+      originalTextPreserved: true,
+      raterVisibleTextVersionId: "ptv-mind-v1",
+      normalizationStatus: "rights_review_normalized",
+      expertNormalizationRequired: false,
+      adminOnlyAmbiguityNotes: ["Keep absent-qualia modal-case familiarity out of the blind initial rater view."],
+      adminOnlyIntendedConclusionNotes: ["Target is functional-role exhaustion of consciousness, not a neuroscience claim."],
+      notesVisibleToInitialRaters: false,
+      contextGapFlags: [],
+      ordinaryHeadlineEligibility: "eligible",
+    },
+    textVersions: [
+      version(
+        "ptv-mind-v1",
+        "If two systems have exactly the same causal and functional organization, then there is no further fact about whether one has conscious experience and the other does not. Consciousness is exhausted by functional role.",
+      ),
+    ],
+    adminTags: [
+      {
+        tag: "hidden-benchmark-candidate",
+        visibilityClass: "known_rating_confounder",
+        changedAt: now,
+        reason: "Benchmark status must never be visible before initial rating lock.",
+      },
+    ],
+  },
+];
+
+export const critiques = [
+  {
+    id: "crit-ai-base-rate",
+    positionId: "pos-ai-prior",
+    sourceType: "human_written",
+    authorshipType: "expert",
+    lengthBand: "medium",
+    styleBand: "direct",
+    marginalInformativeness: "new_objection_type",
+    textVersions: [
+      version(
+        "ctv-ai-base-rate-v1",
+        "The argument treats expert overconfidence as evidence specifically against controllability, but the same overconfidence claim could also weaken confidence in the interpretability program. Without a reason that this bias selectively undermines scaling optimism rather than all AI governance forecasts, the conclusion does not follow.",
+      ),
+    ],
+  },
+  {
+    id: "crit-ai-generic",
+    positionId: "pos-ai-prior",
+    sourceType: "llm_generated",
+    authorshipType: "model",
+    sourceModel: "judge-generator-demo-2026-05",
+    generatorPromptVersion: "candidate-gen-v3",
+    lengthBand: "short",
+    styleBand: "handwavy",
+    marginalInformativeness: "artifact_control",
+    textVersions: [
+      version(
+        "ctv-ai-generic-v1",
+        "This is too speculative. The author just assumes bad outcomes are possible and does not provide enough evidence, so the conclusion is weak.",
+      ),
+    ],
+  },
+  {
+    id: "crit-voting-bullet",
+    positionId: "pos-voting",
+    sourceType: "human_written",
+    authorshipType: "volunteer",
+    lengthBand: "medium",
+    styleBand: "technical",
+    marginalInformativeness: "hard_to_rank",
+    validationTranche: "random_sentinel",
+    validationSelectionReason: "seed random validation sentinel for ordinary live-rating behavior",
+    validationMembershipVisibility: "hidden_until_initial_rating_lock_where_feasible",
+    textVersions: [
+      version(
+        "ctv-voting-bullet-v1",
+        "Approval voting still creates incentives to withhold approval from acceptable but less-preferred rivals when the race is close. That does not show it is worse than plurality, but it directly challenges the claim that the system is almost immune to manipulation.",
+      ),
+    ],
+  },
+  {
+    id: "crit-voting-style",
+    positionId: "pos-voting",
+    sourceType: "llm_generated",
+    authorshipType: "model",
+    sourceModel: "candidate-generator-alias",
+    generatorPromptVersion: "candidate-gen-v3",
+    lengthBand: "long",
+    styleBand: "fluent_obfuscated_risk",
+    marginalInformativeness: "low_redundant",
+    validationTranche: "hard_case_stress",
+    validationSelectionReason: "deliberate obfuscated-style hard case retained outside cherry-picked sentinel evidence",
+    validationMembershipVisibility: "admin_only_until_initial_rating_lock",
+    textVersions: [
+      version(
+        "ctv-voting-style-v1",
+        "The purported immunity dissolves under a richer appreciation of preference ecosystems, because democratic agency is embedded in multifaceted tactical horizons where permissive selection can refract rather than eliminate strategic burdens.",
+      ),
+    ],
+  },
+  {
+    id: "crit-mind-zombie",
+    positionId: "pos-mind",
+    sourceType: "expert_written",
+    authorshipType: "expert",
+    lengthBand: "medium",
+    styleBand: "direct",
+    marginalInformativeness: "new_quality_band",
+    textVersions: [
+      version(
+        "ctv-mind-zombie-v1",
+        "The position asserts that no further fact remains once functional organization is fixed, but that is exactly what absent-qualia and inverted-qualia cases deny. Unless it gives an argument that such cases are incoherent, it has not shown that functional sameness entails phenomenal sameness.",
+      ),
+    ],
+  },
+];
+
+export const assignments = [
+  {
+    id: "assign-ai-base-rate",
+    queueType: "live",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    assignedTo: "rater-a",
+    status: "in_progress",
+    topicFit: "ordinary",
+    exposure: "blind_initial",
+    createdAt: now,
+  },
+  {
+    id: "assign-voting-bullet",
+    queueType: "validation_subset",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-bullet",
+    assignedTo: "rater-b",
+    status: "escalated",
+    topicFit: "specialized",
+    exposure: "post_lock_discussion",
+    createdAt: now,
+  },
+  {
+    id: "assign-mind-zombie",
+    queueType: "benchmark_candidate_review",
+    positionId: "pos-mind",
+    critiqueId: "crit-mind-zombie",
+    assignedTo: "expert-1",
+    status: "locked",
+    topicFit: "expert_required",
+    exposure: "admin_review",
+    createdAt: now,
+  },
+];
+
+export const raterProfiles = [
+  {
+    id: "rater-a",
+    tier: "graduate",
+    topicExpertise: ["ai_safety", "decision_theory"],
+    certificationStatus: "restricted_pending_retraining",
+    reliabilityProfile: "seed_equal_weight",
+    conflictDisclosures: [],
+    priorExposure: {
+      authoredPositionIds: [],
+      selectedCritiqueIds: [],
+      adaptedPositionIds: [],
+      previouslyDiscussedPositionIds: [],
+    },
+  },
+  {
+    id: "rater-b",
+    tier: "phd",
+    topicExpertise: ["ai_safety", "normative_ethics"],
+    certificationStatus: "seed_trusted",
+    reliabilityProfile: "seed_equal_weight",
+    conflictDisclosures: [],
+    priorExposure: {
+      authoredPositionIds: [],
+      selectedCritiqueIds: [],
+      adaptedPositionIds: [],
+      previouslyDiscussedPositionIds: [],
+    },
+  },
+  {
+    id: "rater-c",
+    tier: "undergraduate",
+    topicExpertise: ["politics"],
+    certificationStatus: "needs_expert_review_for_release_critical_items",
+    reliabilityProfile: "seed_equal_weight",
+    conflictDisclosures: [],
+    priorExposure: {
+      authoredPositionIds: [],
+      selectedCritiqueIds: [],
+      adaptedPositionIds: [],
+      previouslyDiscussedPositionIds: [],
+    },
+  },
+  {
+    id: "expert-1",
+    tier: "expert",
+    topicExpertise: ["politics", "philosophy_of_mind"],
+    certificationStatus: "expert_adjudicator_seed",
+    reliabilityProfile: "seed_equal_weight",
+    conflictDisclosures: [],
+    priorExposure: {
+      authoredPositionIds: [],
+      selectedCritiqueIds: [],
+      adaptedPositionIds: [],
+      previouslyDiscussedPositionIds: [],
+    },
+  },
+];
+
+export const ratingContextSnapshots = [
+  {
+    id: "rc-target-only-1",
+    policy: "target_only",
+    positionId: "pos-ai-prior",
+    visibleCritiqueIds: ["crit-ai-base-rate"],
+    priorSiblingCritiqueIds: [],
+    laterSiblingCritiqueIdsAbsentAtSubmission: ["crit-ai-generic"],
+    orderIndexByCritiqueId: { "crit-ai-base-rate": 0 },
+    orderPolicy: "single_target_no_sibling_context",
+    siblingExposurePattern: "none",
+    humanModelParityStatus: "matchable_target_only",
+    frozenAt: now,
+  },
+  {
+    id: "rc-target-only-ai-generic",
+    policy: "target_only",
+    positionId: "pos-ai-prior",
+    visibleCritiqueIds: ["crit-ai-generic"],
+    priorSiblingCritiqueIds: [],
+    laterSiblingCritiqueIdsAbsentAtSubmission: ["crit-ai-base-rate"],
+    orderIndexByCritiqueId: { "crit-ai-generic": 0 },
+    orderPolicy: "single_target_no_sibling_context",
+    siblingExposurePattern: "none",
+    humanModelParityStatus: "matchable_target_only",
+    frozenAt: now,
+  },
+  {
+    id: "rc-counterbalanced-voting",
+    policy: "counterbalanced_sibling_context",
+    positionId: "pos-voting",
+    visibleCritiqueIds: ["crit-voting-bullet", "crit-voting-style"],
+    priorSiblingCritiqueIds: ["crit-voting-bullet"],
+    laterSiblingCritiqueIdsAbsentAtSubmission: [],
+    orderIndexByCritiqueId: { "crit-voting-bullet": 0, "crit-voting-style": 1 },
+    counterbalanceGroupId: "validation-voting-order-a",
+    orderPolicy: "counterbalanced_for_validation_subset",
+    siblingExposurePattern: "same_position_siblings_visible_after_initial_target",
+    humanModelParityStatus: "context_sensitive_requires_matched_prompt_or_target_restriction",
+    frozenAt: now,
+  },
+  {
+    id: "rc-hidden-target-only",
+    policy: "target_only",
+    positionId: "pos-mind",
+    visibleCritiqueIds: ["crit-mind-zombie"],
+    priorSiblingCritiqueIds: [],
+    laterSiblingCritiqueIdsAbsentAtSubmission: [],
+    orderIndexByCritiqueId: { "crit-mind-zombie": 0 },
+    orderPolicy: "restricted_hidden_target_only",
+    siblingExposurePattern: "none",
+    humanModelParityStatus: "protected_split_admin_only",
+    frozenAt: now,
+  },
+];
+
+const baseRating = {
+  rubricVersion: "lmca-app-f-2026-10",
+  submittedAt: now,
+  lockedAt: now,
+  activeSeconds: 760,
+  idleGapSeconds: 35,
+  interruptionCount: 0,
+};
+
+function rating(input) {
+  return { ...baseRating, ...input };
+}
+
+export const seedRatings = [
+  rating({
+    id: "rating-ai-base-rate-a",
+    assignmentId: "assign-ai-base-rate",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    raterId: "rater-a",
+    raterTier: "graduate",
+    kind: "blind_initial",
+    positionTextVersionId: "ptv-ai-prior-v1",
+    critiqueTextVersionId: "ctv-ai-base-rate-v1",
+    ratingContextSnapshotId: "rc-target-only-1",
+    scores: {
+      centrality: 0.68,
+      strength: 0.7,
+      correctness: 0.88,
+      clarity: 0.9,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.64,
+    },
+    provisionalDimensions: [],
+    rationale: "The critique targets a central selectivity assumption and states the objection cleanly.",
+    flags: {},
+  }),
+  rating({
+    id: "rating-ai-base-rate-b",
+    assignmentId: "assign-ai-base-rate",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    raterId: "rater-b",
+    raterTier: "phd",
+    kind: "blind_initial",
+    positionTextVersionId: "ptv-ai-prior-v1",
+    critiqueTextVersionId: "ctv-ai-base-rate-v1",
+    ratingContextSnapshotId: "rc-target-only-1",
+    scores: {
+      centrality: 0.72,
+      strength: 0.62,
+      correctness: 0.9,
+      clarity: 0.86,
+      dead_weight: 0.1,
+      single_issue: 0.9,
+      overall: 0.6,
+    },
+    provisionalDimensions: [],
+    rationale: "Good but not decisive because the original may only need asymmetric downside, not selective forecast trust.",
+    flags: { strengthCentralityAllocationAmbiguity: true },
+  }),
+  rating({
+    id: "rating-ai-generic-a",
+    assignmentId: "assign-ai-generic",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-generic",
+    raterId: "rater-a",
+    raterTier: "graduate",
+    kind: "blind_initial",
+    positionTextVersionId: "ptv-ai-prior-v1",
+    critiqueTextVersionId: "ctv-ai-generic-v1",
+    ratingContextSnapshotId: "rc-target-only-ai-generic",
+    scores: {
+      centrality: 0.35,
+      strength: 0.18,
+      correctness: 0.7,
+      clarity: 0.78,
+      dead_weight: 0.38,
+      single_issue: 0.82,
+      overall: 0.16,
+    },
+    provisionalDimensions: [],
+    rationale: "This gestures at under-evidence but does not identify a specific flaw.",
+    flags: { vagueGoodObjectionGesture: true },
+  }),
+  rating({
+    id: "rating-voting-bullet-a",
+    assignmentId: "assign-voting-bullet",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-bullet",
+    raterId: "rater-c",
+    raterTier: "undergraduate",
+    kind: "blind_initial",
+    positionTextVersionId: "ptv-voting-v1",
+    critiqueTextVersionId: "ctv-voting-bullet-v1",
+    ratingContextSnapshotId: "rc-counterbalanced-voting",
+    scores: {
+      centrality: 0.78,
+      strength: 0.74,
+      correctness: 0.82,
+      clarity: 0.84,
+      dead_weight: 0.06,
+      single_issue: 0.95,
+      overall: 0.7,
+    },
+    provisionalDimensions: [],
+    rationale: "Directly undercuts the near-immunity claim but leaves comparison with plurality intact.",
+    flags: { needsVerification: true, correctnessWeightingIssue: true },
+  }),
+  rating({
+    id: "rating-voting-bullet-b",
+    assignmentId: "assign-voting-bullet",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-bullet",
+    raterId: "expert-1",
+    raterTier: "expert",
+    kind: "expert_check",
+    positionTextVersionId: "ptv-voting-v1",
+    critiqueTextVersionId: "ctv-voting-bullet-v1",
+    ratingContextSnapshotId: "rc-counterbalanced-voting",
+    scores: {
+      centrality: 0.82,
+      strength: 0.8,
+      correctness: 0.9,
+      clarity: 0.9,
+      dead_weight: 0.02,
+      single_issue: 1,
+      overall: 0.76,
+    },
+    provisionalDimensions: [],
+    rationale: "The strategic manipulation point is standard and materially central.",
+    flags: {},
+  }),
+  rating({
+    id: "rating-voting-style-a",
+    assignmentId: "assign-voting-style",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-style",
+    raterId: "rater-c",
+    raterTier: "undergraduate",
+    kind: "blind_initial",
+    positionTextVersionId: "ptv-voting-v1",
+    critiqueTextVersionId: "ctv-voting-style-v1",
+    ratingContextSnapshotId: "rc-counterbalanced-voting",
+    scores: {
+      centrality: null,
+      strength: null,
+      correctness: 0.5,
+      clarity: 0.32,
+      dead_weight: null,
+      single_issue: null,
+      overall: 0.12,
+    },
+    provisionalDimensions: ["centrality", "strength", "dead_weight", "single_issue"],
+    rationale: "The prose gestures at strategy but does not make a pin-downable objection.",
+    flags: {
+      correctnessNotAssessableDueToClarity: true,
+      obfuscatedArgumentRisk: true,
+      contentFreePseudoSubstance: true,
+      clarityAfterEffortIssue: true,
+    },
+  }),
+  rating({
+    id: "rating-mind-zombie-a",
+    assignmentId: "assign-mind-zombie",
+    positionId: "pos-mind",
+    critiqueId: "crit-mind-zombie",
+    raterId: "expert-1",
+    raterTier: "expert",
+    kind: "blind_initial",
+    positionTextVersionId: "ptv-mind-v1",
+    critiqueTextVersionId: "ctv-mind-zombie-v1",
+    ratingContextSnapshotId: "rc-hidden-target-only",
+    scores: {
+      centrality: 0.9,
+      strength: 0.66,
+      correctness: 0.86,
+      clarity: 0.92,
+      dead_weight: 0.03,
+      single_issue: 0.95,
+      overall: 0.68,
+    },
+    provisionalDimensions: [],
+    rationale: "It identifies a central modal challenge but mostly demands an argument rather than proving the challenge succeeds.",
+    flags: { backgroundKnowledgeDependence: true, midRangeStrengthUncertainty: true },
+  }),
+];
+
+export const postLockSourceStyleAudits = [
+  {
+    id: "source-style-audit-ai-base-rate-b",
+    ratingId: "rating-ai-base-rate-b",
+    assignmentId: "assign-ai-base-rate",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    raterId: "rater-b",
+    collectedAt: "2026-06-11T13:22:00.000Z",
+    ratingLockedAt: now,
+    sourceGuess: "human_written",
+    authorshipGuess: "expert",
+    styleGuess: "direct",
+    styleGuessConfidence: 0.66,
+    collectionPhase: "post_initial_lock",
+    shownBeforeInitialLock: false,
+    usedForScoring: false,
+    notes: "Rater guessed concise expert-authored prose only after the blind rating was locked.",
+  },
+  {
+    id: "source-style-audit-voting-style-a",
+    ratingId: "rating-voting-style-a",
+    assignmentId: "assign-voting-style",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-style",
+    raterId: "rater-c",
+    collectedAt: "2026-06-11T13:26:00.000Z",
+    ratingLockedAt: now,
+    sourceGuess: "llm_generated",
+    authorshipGuess: "model",
+    styleGuess: "fluent_obfuscated_risk",
+    styleGuessConfidence: 0.88,
+    collectionPhase: "post_initial_lock",
+    shownBeforeInitialLock: false,
+    usedForScoring: false,
+    notes: "Rater flagged fluent abstraction as source-identifiable after submitting the initial score.",
+  },
+  {
+    id: "source-style-audit-mind-zombie-a",
+    ratingId: "rating-mind-zombie-a",
+    assignmentId: "assign-mind-zombie",
+    positionId: "pos-mind",
+    critiqueId: "crit-mind-zombie",
+    raterId: "expert-1",
+    collectedAt: "2026-06-11T13:28:00.000Z",
+    ratingLockedAt: now,
+    sourceGuess: "expert_written",
+    authorshipGuess: "expert",
+    styleGuess: "direct",
+    styleGuessConfidence: 0.81,
+    collectionPhase: "post_initial_lock",
+    shownBeforeInitialLock: false,
+    usedForScoring: false,
+    notes: "Expert guessed expert-written direct style after the hidden-item rating was locked.",
+  },
+];
+
+export const adjudicationMemos = [
+  {
+    id: "memo-voting-style",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-style",
+    contestedInterpretation: "Whether the critique contains an actual strategic-voting objection or only fluent abstraction.",
+    plausibleInterpretations: ["Strategic manipulation objection", "Content-free pseudo-substantive style critique"],
+    worstPlausibleInterpretationConsidered:
+      "Read charitably, the critique might be gesturing at a strategic-manipulation objection; the adverse reading is still plausible because it never supplies the actual mechanism.",
+    critiqueRefutesInterpretations: [],
+    adversarialPlausibilityWeightingDecision:
+      "Overweight the adverse interpretation because no concrete mechanism is supplied after careful reading.",
+    bottomLineDependence: false,
+    minorityRationales: [],
+    clearlyUnsatisfactoryImprecision: true,
+    obfuscatedOrMaskedFallacyRisk: true,
+    stableJudgment: "plainly_bad_low_clarity_not_fine_grained_strength_precision",
+    pricedInAssessment: "The position already mentions strategy, so a bare strategic label is priced in.",
+    backgroundKnowledgeRelevance: "No specialized background can rescue the missing mechanism without steelmanning.",
+    correctnessVerificationSummary: "Not assessable due to low clarity; stored correctness defaults to 0.5.",
+    benchmarkEligibilityDecision: "blocked",
+    splitDecision: "stress_test",
+    revisionReason: "Low-clarity obfuscation stress case retained outside headline validation.",
+    disagreementTaxonomy: ["critique_interpretation_vagueness", "content_free_pseudo_substance", "low_clarity_handling", "clarity_after_effort"],
+    unresolvedDisagreementClass: "stable low-quality diagnosis",
+    createdAt: now,
+  },
+  {
+    id: "memo-mind-zombie",
+    positionId: "pos-mind",
+    critiqueId: "crit-mind-zombie",
+    contestedInterpretation:
+      "Whether absent-qualia and inverted-qualia cases are decisive conceptual refutations or contentious intuition pumps against functionalism.",
+    plausibleInterpretations: ["Modal challenge directly targets the entailment claim", "Functionalist treats the modal cases as question-begging"],
+    worstPlausibleInterpretationConsidered:
+      "Under the strongest functionalist reading, absent-qualia cases are not refutations unless the critique explains why the cases are coherent.",
+    critiqueRefutesInterpretations: ["Modal challenge directly targets the entailment claim"],
+    adversarialPlausibilityWeightingDecision:
+      "Preserve the functionalist minority rationale and cap strength below centrality because the critique's force depends on a disputed bottom-line modal premise.",
+    bottomLineDependence: true,
+    minorityRationales: [
+      {
+        stance: "functionalist_minority",
+        dimensions: ["strength", "correctness"],
+        rationale:
+          "If absent-qualia cases are denied as incoherent, the critique is a demand for argument rather than a direct refutation.",
+      },
+    ],
+    clearlyUnsatisfactoryImprecision: false,
+    obfuscatedOrMaskedFallacyRisk: false,
+    stableJudgment: "central_but_bottom_line_dependent_strength_limited",
+    pricedInAssessment: "The position asserts the functionalist conclusion rather than separately arguing against absent-qualia cases.",
+    backgroundKnowledgeRelevance: "Expert familiarity with modal-case debates is relevant only after initial lock.",
+    correctnessVerificationSummary: "Marked not practicable; preserve bottom-line-dependent minority rationale instead of pretending to verify the premise.",
+    benchmarkEligibilityDecision: "restricted",
+    splitDecision: "hidden_benchmark_with_not_practicable_verification",
+    revisionReason: "Hidden benchmark item retains minority rationale and modal-premise dependence in release validation reporting.",
+    disagreementTaxonomy: [
+      "contentious_bottom_line_premise",
+      "intuition_pump_correctness",
+      "background_knowledge_dependence",
+      "mid_range_strength_uncertainty",
+      "strength_centrality_allocation",
+      "correctness_significance_weighting",
+    ],
+    unresolvedDisagreementClass: "minority_bottom_line_rationale_preserved",
+    createdAt: now,
+  },
+];
+
+export const verificationRecords = [
+  {
+    id: "verify-voting-bullet-strategy",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-bullet",
+    relatedRatingId: "rating-voting-bullet-a",
+    claimChecked: "Approval voting can still incentivize withholding approval from less-preferred acceptable rivals when the race is close.",
+    verificationType: "logical",
+    verificationMaterials: [
+      "Check whether the critique's incentive claim follows from standard approval-voting strategy rather than from an empirical turnout assumption.",
+      "Hold initial rater score fixed until the expert verification record is resolved.",
+    ],
+    verifierId: "expert-1",
+    verifierRole: "expert",
+    verificationStatus: "unresolved",
+    verificationResult: "Needs expert social-choice review before validation or benchmark use.",
+    confidence: 0.55,
+    exposureStatus: "post_initial_lock_adjudication",
+    createdAt: now,
+  },
+  {
+    id: "verify-ai-base-rate-not-needed",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    relatedRatingId: "rating-ai-base-rate-b",
+    claimChecked: "Selectivity of the expert-overconfidence objection is a conceptual entailment check, not a separate factual claim.",
+    verificationType: "logical",
+    verificationMaterials: ["No external materials required; adjudication can inspect the internal entailment."],
+    verifierId: "expert-1",
+    verifierRole: "expert",
+    verificationStatus: "not_needed",
+    verificationResult: "No correctness-sensitive external verification required.",
+    confidence: 0.9,
+    exposureStatus: "blind_initial_preserved_no_extra_materials",
+    createdAt: now,
+  },
+  {
+    id: "verify-mind-zombie-not-practicable",
+    positionId: "pos-mind",
+    critiqueId: "crit-mind-zombie",
+    relatedRatingId: "rating-mind-zombie-a",
+    claimChecked: "Absent-qualia modal intuitions are substantive philosophical checks rather than easy empirical or mathematical verification.",
+    verificationType: "subjective_or_intuition_pump",
+    verificationMaterials: ["Adjudicator may cite modal-case familiarity after initial lock without treating it as externally verified ground truth."],
+    verifierId: "expert-1",
+    verifierRole: "expert",
+    verificationStatus: "not_practicable",
+    verificationResult: "Marked not practicable by expert adjudicator; preserve uncertainty rather than blocking on empirical verification.",
+    confidence: 0.8,
+    exposureStatus: "post_initial_lock_adjudication",
+    createdAt: now,
+  },
+];
+
+export const promptArtifacts = {
+  "project-full-rubric-v1": {
+    id: "project-full-rubric-v1",
+    artifactKind: "prompt_template",
+    promptFamily: "project_full_rubric",
+    promptScope: "project_full_rubric",
+    promptPolicyComparabilityStatus: "project_extension_not_appendix_g_exact",
+    itemRoleTerminology: "position_critique",
+    outputFormatPolicy: "json_all_seven_lmca_dimensions",
+    bodyHash: "sha256:project-full-rubric-v1:body",
+    renderedPromptChecksum: "sha256:project-full-rubric-v1:rendered",
+    promptBody:
+      "Read the POSITION and CRITIQUE exactly as shown. Rate the critique on centrality, strength, correctness, clarity, dead_weight, single_issue, and overall using the LMCA Appendix-F-style 0 to 1 scale. Return only JSON with those seven numeric fields.",
+    promptExampleProvenance: [],
+    protectedSplitExclusionCheck: {
+      exampleItemIds: [],
+      examplePositionClusterIds: [],
+      exampleSplits: [],
+      hiddenBenchmarkExamplesExcluded: true,
+      protectedValidationExamplesExcluded: true,
+      status: "no_few_shot_examples_used",
+    },
+  },
+  "appendix-g-overall-v1": {
+    id: "appendix-g-overall-v1",
+    artifactKind: "prompt_template",
+    promptFamily: "lmca_simple_baseline",
+    promptScope: "appendix_g_overall_only_exact",
+    promptPolicyComparabilityStatus: "source_comparable_overall_only_prompt_track",
+    itemRoleTerminology: "legacy_argument_wording",
+    outputFormatPolicy: "json_overall_only_no_subscore_imputation",
+    bodyHash: "sha256:appendix-g-overall-v1:body",
+    renderedPromptChecksum: "sha256:appendix-g-overall-v1:rendered",
+    promptBody:
+      "You will be given an argument and a critique of that argument. Think step by step about how good the critique is, but return only JSON with one field named overall containing a number from 0 to 1.",
+    promptExampleProvenance: [],
+    protectedSplitExclusionCheck: {
+      exampleItemIds: [],
+      examplePositionClusterIds: [],
+      exampleSplits: [],
+      hiddenBenchmarkExamplesExcluded: true,
+      protectedValidationExamplesExcluded: true,
+      status: "no_few_shot_examples_used",
+    },
+  },
+  "candidate-gen-v3": {
+    id: "candidate-gen-v3",
+    artifactKind: "prompt_template",
+    promptFamily: "critique_generation",
+    promptScope: "candidate_generation_project_extension",
+    promptPolicyComparabilityStatus: "generation_not_lmca_rating_prompt",
+    itemRoleTerminology: "position_to_critique",
+    outputFormatPolicy: "plain_text_candidate_critique",
+    bodyHash: "sha256:candidate-gen-v3:body",
+    renderedPromptChecksum: "sha256:candidate-gen-v3:rendered",
+    promptBody:
+      "Given the position text, write one concise critique that identifies a concrete weakness in the reasoning. Do not rate the critique and do not reveal source metadata.",
+    promptExampleProvenance: [],
+    protectedSplitExclusionCheck: {
+      exampleItemIds: [],
+      examplePositionClusterIds: [],
+      exampleSplits: [],
+      hiddenBenchmarkExamplesExcluded: true,
+      protectedValidationExamplesExcluded: true,
+      status: "no_few_shot_examples_used",
+    },
+  },
+  "candidate-judge-v2": {
+    id: "candidate-judge-v2",
+    artifactKind: "prompt_template",
+    promptFamily: "model_judge_screening",
+    promptScope: "admin_only_candidate_screening",
+    promptPolicyComparabilityStatus: "diagnostic_only_not_gold_label",
+    itemRoleTerminology: "position_candidate_critique",
+    outputFormatPolicy: "json_screening_score_only",
+    bodyHash: "sha256:candidate-judge-v2:body",
+    renderedPromptChecksum: "sha256:candidate-judge-v2:rendered",
+    promptBody:
+      "Score whether the candidate critique identifies a concrete object-level weakness. Return JSON with a diagnostic screening_score. This score is admin-only and cannot become a gold or adjudicated label without human review.",
+    promptExampleProvenance: [],
+    protectedSplitExclusionCheck: {
+      exampleItemIds: [],
+      examplePositionClusterIds: [],
+      exampleSplits: [],
+      hiddenBenchmarkExamplesExcluded: true,
+      protectedValidationExamplesExcluded: true,
+      status: "no_few_shot_examples_used",
+    },
+  },
+};
+
+function promptArtifactRef(id) {
+  const artifact = promptArtifacts[id];
+  if (!artifact) throw new Error(`Unknown prompt artifact: ${id}`);
+  return structuredClone(artifact);
+}
+
+function prediction(id, positionId, critiqueId, scores) {
+  const overallOnly = Object.keys(scores).length === 1 && Object.hasOwn(scores, "overall");
+  const positionVersion = latestText(mustFind(positions, positionId));
+  const critiqueVersion = latestText(mustFind(critiques, critiqueId));
+  return {
+    id,
+    evaluationRunId: overallOnly ? "eval-overall-demo" : "eval-full-rubric-demo",
+    positionId,
+    critiqueId,
+    positionTextVersionId: positionVersion.id,
+    critiqueTextVersionId: critiqueVersion.id,
+    modelVisiblePositionRenderedHash: positionVersion.renderedHash,
+    modelVisibleCritiqueRenderedHash: critiqueVersion.renderedHash,
+    humanModelItemViewParityStatus: "model_visible_hashes_match_rater_visible_versions",
+    requestedModelAlias: overallOnly ? "appendix-g-demo" : "gpt-demo-full-rubric",
+    resolvedModelSnapshot: overallOnly ? "appendix-g-demo-2026-06-01" : "gpt-demo-full-rubric-2026-06-01",
+    rawModelResponse: JSON.stringify(scores),
+    parseStatus: "parsed",
+    parseAttemptCount: 1,
+    scores,
+    promptTemplateId: overallOnly ? "appendix-g-overall-v1" : "project-full-rubric-v1",
+    renderedPromptChecksum: overallOnly
+      ? promptArtifacts["appendix-g-overall-v1"].renderedPromptChecksum
+      : promptArtifacts["project-full-rubric-v1"].renderedPromptChecksum,
+    parserConfigId: overallOnly ? "json-overall-v1" : "json-seven-dim-v1",
+  };
+}
+
+export const fullRubricEvaluationRun = {
+  id: "eval-full-rubric-demo",
+  mode: "full_rubric",
+  requestedModelAlias: "gpt-demo-full-rubric",
+  resolvedModelSnapshot: "gpt-demo-full-rubric-2026-06-01",
+  modelProvider: "openai_demo",
+  modelFamily: "gpt_demo_family",
+  promptFamily: "project_full_rubric",
+  promptScope: "project_full_rubric",
+  promptArtifact: promptArtifactRef("project-full-rubric-v1"),
+  promptTemplateBody: promptArtifacts["project-full-rubric-v1"].promptBody,
+  renderedPromptChecksum: promptArtifacts["project-full-rubric-v1"].renderedPromptChecksum,
+  promptPolicyComparabilityStatus: promptArtifacts["project-full-rubric-v1"].promptPolicyComparabilityStatus,
+  promptExampleProvenance: promptArtifacts["project-full-rubric-v1"].promptExampleProvenance,
+  protectedPromptExampleCheck: promptArtifacts["project-full-rubric-v1"].protectedSplitExclusionCheck,
+  parserConfigId: "json-seven-dim-v1",
+  acceptedOutputSchema: {
+    type: "object",
+    required: RUBRIC_DIMENSIONS,
+    additionalProperties: false,
+    numericRange: [0, 1],
+  },
+  reasoningMode: "not_requested",
+  reasoningBudgetTokens: 0,
+  answerExtractionPolicy: "extract_all_seven_dimensions_from_json",
+  itemRoleTerminology: "position_critique",
+  targetLabelSnapshotId: "snapshot-oct-demo",
+  pairwiseComparisonSnapshotId: "pairwise-oct-demo",
+  parseFailureCount: 0,
+  invalidScoreCount: 0,
+  retryCount: 0,
+  repairedOutputCount: 0,
+  predictions: [
+    prediction("pred-ai-base", "pos-ai-prior", "crit-ai-base-rate", {
+      centrality: 0.62,
+      strength: 0.67,
+      correctness: 0.84,
+      clarity: 0.88,
+      dead_weight: 0.08,
+      single_issue: 0.9,
+      overall: 0.58,
+    }),
+    prediction("pred-ai-generic", "pos-ai-prior", "crit-ai-generic", {
+      centrality: 0.42,
+      strength: 0.3,
+      correctness: 0.7,
+      clarity: 0.74,
+      dead_weight: 0.3,
+      single_issue: 0.75,
+      overall: 0.26,
+    }),
+    prediction("pred-voting-bullet", "pos-voting", "crit-voting-bullet", {
+      centrality: 0.78,
+      strength: 0.78,
+      correctness: 0.86,
+      clarity: 0.86,
+      dead_weight: 0.05,
+      single_issue: 0.96,
+      overall: 0.72,
+    }),
+    prediction("pred-voting-style", "pos-voting", "crit-voting-style", {
+      centrality: 0.5,
+      strength: 0.44,
+      correctness: 0.56,
+      clarity: 0.5,
+      dead_weight: 0.2,
+      single_issue: 0.7,
+      overall: 0.42,
+    }),
+  ],
+};
+
+export const overallOnlyEvaluationRun = {
+  id: "eval-overall-demo",
+  mode: "overall_only",
+  requestedModelAlias: "appendix-g-demo",
+  resolvedModelSnapshot: "appendix-g-demo-2026-06-01",
+  modelProvider: "local_seed_fixture",
+  modelFamily: "appendix_g_demo_family",
+  promptFamily: "lmca_simple_baseline",
+  promptScope: "appendix_g_overall_only_exact",
+  promptArtifact: promptArtifactRef("appendix-g-overall-v1"),
+  promptTemplateBody: promptArtifacts["appendix-g-overall-v1"].promptBody,
+  renderedPromptChecksum: promptArtifacts["appendix-g-overall-v1"].renderedPromptChecksum,
+  promptPolicyComparabilityStatus: promptArtifacts["appendix-g-overall-v1"].promptPolicyComparabilityStatus,
+  promptExampleProvenance: promptArtifacts["appendix-g-overall-v1"].promptExampleProvenance,
+  protectedPromptExampleCheck: promptArtifacts["appendix-g-overall-v1"].protectedSplitExclusionCheck,
+  parserConfigId: "json-overall-v1",
+  acceptedOutputSchema: {
+    type: "object",
+    required: ["overall"],
+    forbiddenImputedFields: FULL_RUBRIC_FIELDS,
+    numericRange: [0, 1],
+  },
+  reasoningMode: "step_by_step_prompt_text",
+  reasoningBudgetTokens: null,
+  answerExtractionPolicy: "extract_overall_json_only_no_full_rubric_imputation",
+  itemRoleTerminology: "legacy_argument_wording",
+  targetLabelSnapshotId: "snapshot-oct-demo",
+  pairwiseComparisonSnapshotId: "pairwise-oct-demo",
+  parseFailureCount: 0,
+  invalidScoreCount: 0,
+  retryCount: 1,
+  repairedOutputCount: 1,
+  predictions: [
+    prediction("pred-overall-ai-base", "pos-ai-prior", "crit-ai-base-rate", { overall: 0.55 }),
+    prediction("pred-overall-ai-generic", "pos-ai-prior", "crit-ai-generic", { overall: 0.36 }),
+    prediction("pred-overall-voting-bullet", "pos-voting", "crit-voting-bullet", { overall: 0.65 }),
+    prediction("pred-overall-voting-style", "pos-voting", "crit-voting-style", { overall: 0.5 }),
+  ],
+};
+
+export const RUBRIC_QA_REQUIRED_FAMILIES = [
+  "source_example_anchor_cases",
+  "somewhat_literal_reading",
+  "argument_quality_not_persuasion_or_agreement",
+  "hedged_vs_categorical_centrality_target_invariance",
+  "fractional_centrality_strength_scale",
+  "combined_centrality",
+  "strength_assessed_against_centrality_generating_targets",
+  "failed_added_attack_product_invariance",
+  "asserted_confidence_strength_separation",
+  "vague_good_objection_not_steelmanned",
+  "clearly_unsatisfactory_imprecision",
+  "content_free_pseudo_substance_dead_weight",
+  "obfuscated_surface_fluency",
+  "background_knowledge_dependence",
+  "contentious_bottom_line_dependence",
+  "mid_range_strength_uncertainty",
+  "correctness_significance_weighting",
+  "low_strength_but_correct",
+  "perfect_strength_imperfect_correctness",
+  "clarity_after_effort_pin_downability",
+  "subjective_intuition_pump_correctness",
+  "rater_familiarity_non_penalization",
+  "simple_disagreement_low_strength",
+  "priced_in_awareness",
+  "clarity_vs_topic_expertise",
+  "dead_weight_litmus",
+  "tone_only_comments",
+  "in_between_single_issue_side_issue",
+  "necessary_multi_claim_single_issue",
+  "equal_plausibility_ambiguity",
+  "favorable_but_nonexclusive_ambiguity",
+  "high_score_multi_interpretation_coverage",
+  "verbosity_dead_weight_distinction",
+];
+
+export const rubricQaFixtures = [
+  {
+    id: "fixture-source-anchor-public",
+    title: "Public source-example anchors",
+    invariant: "LMCA public examples are calibration and prompt-regression fixtures, not protected benchmark rows.",
+    coveredFamilies: ["source_example_anchor_cases", "argument_quality_not_persuasion_or_agreement"],
+    targetDimensions: ["overall", "centrality", "strength"],
+    source: "lmca_public_example_anchor_suite",
+  },
+  {
+    id: "fixture-literal-reading-target",
+    title: "Somewhat literal target reading",
+    invariant: "Do not import unstated goals, intended conclusions, or background views into the position.",
+    coveredFamilies: ["somewhat_literal_reading", "priced_in_awareness"],
+    targetDimensions: ["centrality", "strength", "overall"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-hedged-categorical-target",
+    title: "Hedged and categorical attacks share a target",
+    invariant: "`X may not be true`, `X is unsupported`, and `X is false` can attack the same central claim.",
+    coveredFamilies: ["hedged_vs_categorical_centrality_target_invariance", "combined_centrality"],
+    targetDimensions: ["centrality"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-fractional-weakening-scale",
+    title: "Fractional weakening scale",
+    invariant: "Centrality and strength calibrate 0, 0.5, and 1 as approximate weakening/refutation magnitudes, not vague ordinal categories.",
+    coveredFamilies: ["fractional_centrality_strength_scale", "strength_assessed_against_centrality_generating_targets"],
+    targetDimensions: ["centrality", "strength"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-product-invariance",
+    title: "Failed added attacks do not double-penalize product",
+    invariant: "`centrality * strength` tracks overall weakening; failed extra attacks are handled through correctness, single_issue, dead_weight, or overall where warranted.",
+    coveredFamilies: ["failed_added_attack_product_invariance", "asserted_confidence_strength_separation"],
+    targetDimensions: ["centrality", "strength", "correctness", "single_issue", "dead_weight"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-vague-good-objection",
+    title: "Vague good-objection gestures are not steelmanned",
+    invariant: "A critique that only gestures toward a good objection receives low strength until it spells out the object-level reason.",
+    coveredFamilies: ["vague_good_objection_not_steelmanned", "simple_disagreement_low_strength"],
+    targetDimensions: ["strength", "clarity", "overall"],
+    source: "appendix_d_f_operational_pack",
+  },
+  {
+    id: "fixture-imprecision-and-obfuscation",
+    title: "Imprecision, pseudo-substance, and obfuscation",
+    invariant: "Clearly bad imprecision, content-free pseudo-substance, and fluent masked fallacies are separate low-quality cases.",
+    coveredFamilies: ["clearly_unsatisfactory_imprecision", "content_free_pseudo_substance_dead_weight", "obfuscated_surface_fluency", "dead_weight_litmus"],
+    targetDimensions: ["clarity", "dead_weight", "overall"],
+    source: "appendix_d_f_operational_pack",
+  },
+  {
+    id: "fixture-background-and-topic-fit",
+    title: "Background knowledge is not topic-fit punishment",
+    invariant: "Rater unfamiliarity routes to topic-fit review; it should not automatically lower clarity or correctness.",
+    coveredFamilies: ["background_knowledge_dependence", "clarity_vs_topic_expertise", "rater_familiarity_non_penalization"],
+    targetDimensions: ["clarity", "correctness"],
+    source: "appendix_d_f_operational_pack",
+  },
+  {
+    id: "fixture-bottom-line-and-intuitions",
+    title: "Bottom-line dependence and intuition pumps",
+    invariant: "Subjective or intuition-pump premises preserve credence-sensitive minority rationales rather than pretending binary verification.",
+    coveredFamilies: ["contentious_bottom_line_dependence", "subjective_intuition_pump_correctness", "mid_range_strength_uncertainty"],
+    targetDimensions: ["strength", "correctness", "overall"],
+    source: "appendix_c_d_f_operational_pack",
+  },
+  {
+    id: "fixture-correctness-weighting",
+    title: "Correctness significance weighting",
+    invariant: "Correct claims with low strength and strong critiques with imperfect correctness are calibrated separately by claim significance.",
+    coveredFamilies: ["correctness_significance_weighting", "low_strength_but_correct", "perfect_strength_imperfect_correctness"],
+    targetDimensions: ["correctness", "strength", "overall"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-clarity-after-effort",
+    title: "Clarity after appropriate effort",
+    invariant: "Clarity measures pin-downability after appropriate effort, not immediate ease or familiarity with the topic.",
+    coveredFamilies: ["clarity_after_effort_pin_downability", "rater_familiarity_non_penalization"],
+    targetDimensions: ["clarity"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-tone-only-comment",
+    title: "Tone-only comments are not substantive critiques",
+    invariant: "A tone or style complaint without object-level argumentative content should not be rewarded as strength.",
+    coveredFamilies: ["tone_only_comments", "dead_weight_litmus"],
+    targetDimensions: ["strength", "dead_weight", "overall"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-single-issue-borderline",
+    title: "Single-issue borderline cases",
+    invariant: "Brief independent side issues get in-between single_issue scores; multiple claims can still be one issue when jointly needed.",
+    coveredFamilies: ["in_between_single_issue_side_issue", "necessary_multi_claim_single_issue"],
+    targetDimensions: ["single_issue", "overall"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-ambiguity-weighting",
+    title: "Adversarial ambiguity weighting",
+    invariant: "Equally plausible interpretations need multi-interpretation coverage; favorable but nonexclusive readings receive in-between scores weighted toward the adverse reading.",
+    coveredFamilies: ["equal_plausibility_ambiguity", "favorable_but_nonexclusive_ambiguity", "high_score_multi_interpretation_coverage"],
+    targetDimensions: ["centrality", "strength", "overall"],
+    source: "appendix_f_operational_pack",
+  },
+  {
+    id: "fixture-verbosity-dead-weight",
+    title: "Verbosity is not automatically dead weight",
+    invariant: "Verbose explanation can be useful if it identifies a concrete flaw; empty verbosity is dead weight.",
+    coveredFamilies: ["verbosity_dead_weight_distinction", "content_free_pseudo_substance_dead_weight"],
+    targetDimensions: ["dead_weight", "clarity"],
+    source: "appendix_f_operational_pack",
+  },
+];
+
+export const lmcaSourceExampleAnchors = [
+  {
+    id: "anchor-is-ought-near-zero",
+    suiteVersion: "lmca-public-source-anchors-2026-10",
+    sourceExampleFamily: "is_ought_gap",
+    publicSourceReference: "LMCA public is/ought-gap example, weak critique anchor",
+    itemId: "lmca-public::is-ought-near-zero",
+    positionClusterId: "lmca-public-is-ought-gap",
+    split: "public_training_qa_anchor",
+    rubricVersion: CURRENT_RUBRIC_VERSION,
+    exposurePolicy: "public_training_qa_only",
+    protectedValidationEligible: false,
+    hiddenBenchmarkEligible: false,
+    humanCeilingEligible: false,
+    promptRegressionEligible: true,
+    certificationExposureEligible: true,
+    expectedLabelSummary: "near_zero_overall_low_centrality_strength",
+    targetDimensions: ["centrality", "strength", "overall"],
+  },
+  {
+    id: "anchor-is-ought-near-perfect",
+    suiteVersion: "lmca-public-source-anchors-2026-10",
+    sourceExampleFamily: "is_ought_gap",
+    publicSourceReference: "LMCA public is/ought-gap example, strong critique anchor",
+    itemId: "lmca-public::is-ought-near-perfect",
+    positionClusterId: "lmca-public-is-ought-gap",
+    split: "public_training_qa_anchor",
+    rubricVersion: CURRENT_RUBRIC_VERSION,
+    exposurePolicy: "public_training_qa_only",
+    protectedValidationEligible: false,
+    hiddenBenchmarkEligible: false,
+    humanCeilingEligible: false,
+    promptRegressionEligible: true,
+    certificationExposureEligible: true,
+    expectedLabelSummary: "near_perfect_overall_high_centrality_strength",
+    targetDimensions: ["centrality", "strength", "correctness", "clarity", "overall"],
+  },
+  {
+    id: "anchor-approval-voting-midrange",
+    suiteVersion: "lmca-public-source-anchors-2026-10",
+    sourceExampleFamily: "approval_voting_midrange",
+    publicSourceReference: "LMCA public approval-voting example with mid-range strength/centrality disagreement",
+    itemId: "lmca-public::approval-voting-midrange",
+    positionClusterId: "lmca-public-approval-voting",
+    split: "public_training_qa_anchor",
+    rubricVersion: CURRENT_RUBRIC_VERSION,
+    exposurePolicy: "public_training_qa_only",
+    protectedValidationEligible: false,
+    hiddenBenchmarkEligible: false,
+    humanCeilingEligible: false,
+    promptRegressionEligible: true,
+    certificationExposureEligible: true,
+    expectedLabelSummary: "midrange_strength_centrality_allocation_anchor",
+    targetDimensions: ["centrality", "strength", "overall"],
+  },
+  {
+    id: "anchor-table4-model-failure-overcredit",
+    suiteVersion: "lmca-public-source-anchors-2026-10",
+    sourceExampleFamily: "table4_model_failure",
+    publicSourceReference: "LMCA Table 4 model-failure response that over-credits a weak critique",
+    itemId: "lmca-public::table4-overcredit-weak-critique",
+    positionClusterId: "lmca-public-table4-model-failure",
+    split: "public_training_qa_anchor",
+    rubricVersion: CURRENT_RUBRIC_VERSION,
+    exposurePolicy: "public_training_qa_only",
+    protectedValidationEligible: false,
+    hiddenBenchmarkEligible: false,
+    humanCeilingEligible: false,
+    promptRegressionEligible: true,
+    certificationExposureEligible: true,
+    expectedLabelSummary: "model_failure_overcredits_weak_critique",
+    targetDimensions: ["overall", "correctness", "clarity"],
+  },
+];
+
+export const rubricFixtures = rubricQaFixtures.map((fixture) => [fixture.title, fixture.invariant]);
+
+export const dimensionGuidance = {
+  centrality: "Fraction by which successful refutation of the attacked claim-set weakens the position.",
+  strength: "Fraction by which the critique refutes the attacked claim-set from which centrality derives.",
+  correctness: "Credence-sensitive correctness of critique claims, weighted by significance within the critique.",
+  clarity: "Pin-downability after appropriate effort, not immediate ease or rater familiarity.",
+  dead_weight: "Material that does not substantively contribute or attempt to contribute.",
+  single_issue: "Focus on one issue, allowing multiple claims when jointly needed.",
+  overall: "Holistic adjusted anchor, starting from centrality * strength without becoming a formula.",
+};
+
+export const OCTOBER_RELEASE_TARGETS = {
+  deadline: "2026-10-31",
+  positions: 120,
+  critiques: 360,
+  blindInitialRatings: 1440,
+  goldLibraryItems: 60,
+  validationCritiques: 52,
+  validationPositions: 19,
+  coreAllItemsRaters: 4,
+  expertAdjudicators: 4,
+  personWeeksRange: [132, 154],
+  budgetRangeUsd: [600000, 1000000],
+};
+
+export const EFFORT_EXPECTATIONS = {
+  short_pair_5_to_15_minutes: {
+    minActiveSeconds: 300,
+    maxIdleGapSeconds: 300,
+  },
+  medium_pair_10_to_25_minutes: {
+    minActiveSeconds: 600,
+    maxIdleGapSeconds: 300,
+  },
+  long_pair_20_to_45_minutes: {
+    minActiveSeconds: 1200,
+    maxIdleGapSeconds: 420,
+  },
+};
+
+export const LMCA_BASELINES = {
+  corpusScale: {
+    ratedCritiques: 951,
+    ratingsIgnoringRevisions: 1458,
+    modelWrittenCritiques: 478,
+    positionsWithAtLeastOneCritique: 442,
+    positionsWithAtLeastTwoCritiques: 279,
+  },
+  positionSourceCounts: {
+    hand_written: 27,
+    book_adapted: 168,
+    coursework_derived: 41,
+    magazine_blog_forum_derived: 108,
+    primarily_model_written: 68,
+    other_dataset_adapted: 28,
+  },
+  knownOtherDatasetSubsources: {
+    DebateBench: 18,
+    VivesDebate: 6,
+  },
+  topicFamilies: ["ai_safety", "decision_theory", "normative_ethics", "philosophy_of_mind", "politics", "miscellaneous"],
+  raterDistributionIgnoringRevisions: {
+    "Emery Cooper": 946,
+    "Caspar Oesterheld": 211,
+    "Alexander Kastner": 130,
+    "Linh Chi Nguyen": 103,
+    "Lukas Gloor": 43,
+    "Lukas Finnveden": 25,
+  },
+  modelEvaluationDenominators: {
+    weightedPairwisePositions: 255,
+    weightedPairwiseCritiquePairs: 856,
+    customMetricDialogues: 933,
+  },
+  appendixCNumericBaselines: {
+    overlappingRaterVsPrimaryCustomLoss: [
+      { rater: "Caspar Oesterheld", critiques: 209, mean: 0.139, ci95: 0.016 },
+      { rater: "Alexander Kastner", critiques: 127, mean: 0.159, ci95: 0.023 },
+      { rater: "Chi Nguyen", critiques: 103, mean: 0.151, ci95: 0.024 },
+    ],
+    ratingTestFinalVsFinalAverage: {
+      commonOverlapRange: [0.044, 0.065],
+      wholeRatingTestRange: [0.058, 0.069],
+    },
+    ratingTestInitialVsFinal: {
+      commonOverlapRange: [0.064, 0.149],
+      wholeRatingTestRange: [0.081, 0.127],
+    },
+    emeryCooperDeltas: {
+      initialDelta: { mean: 0.123, ci95: 0.028 },
+      checkedDelta: { mean: 0.077, ci95: 0.014 },
+    },
+    gpt5ComparisonPoints: {
+      wholeRatingTestCustomLoss: { mean: 0.169, ci95: 0.031 },
+      commonOverlapCustomLoss: { mean: 0.153, ci95: 0.036 },
+      againstEmeryFirstRatings: { mean: 0.206, ci95: 0.036 },
+      wholeRatingTestWeightedComparisonLoss: { mean: 0.068, ci95: 0.07 },
+    },
+  },
+  modelScoreAnchors: {
+    weightedPairwiseTable5: [
+      { model: "gpt-5-2025-08-07", loss: 0.08, ci95: 0.016 },
+      { model: "o3-pro-2025-06-10", loss: 0.083, ci95: 0.018 },
+      { model: "claude-opus-4-1-20250805", loss: 0.09, ci95: 0.017 },
+      { model: "random", loss: 0.173, ci95: 0.016 },
+    ],
+    customMetricTable7: [
+      { model: "gpt-5-2025-08-07", loss: 0.211, ci95: 0.009 },
+      { model: "claude-opus-4-1-20250805", loss: 0.222, ci95: 0.01 },
+      { model: "gpt-4.1-nano-2025-04-14", loss: 0.433, ci95: 0.016 },
+    ],
+  },
+  reasoningModeTable6: [
+    { model: "claude-opus-4-1-20250805", baselineMode: "non_thinking", baselineLoss: 0.09, variantMode: "thinking10k", variantLoss: 0.086, variantMinusBaseline: -0.004 },
+    { model: "claude-sonnet-4-20250514", baselineMode: "non_thinking", baselineLoss: 0.098, variantMode: "thinking10k", variantLoss: 0.112, variantMinusBaseline: 0.014 },
+    { model: "gemini-2.5-flash", baselineMode: "default", baselineLoss: 0.118, variantMode: "no_thinking", variantLoss: 0.112, variantMinusBaseline: -0.006 },
+    { model: "qwen3-4b-instruct", baselineMode: "instruct", baselineLoss: 0.142, variantMode: "thinking", variantLoss: 0.149, variantMinusBaseline: 0.007 },
+  ],
+};
+
+export const certificationPacks = [
+  {
+    id: "cert-tier-zero-2026-10",
+    rubricVersion: "lmca-app-f-2026-10",
+    raterTier: "tier_zero_candidate",
+    requiredItems: { gold: 20, duplicates: 5, hardAmbiguity: 5 },
+    exposureClass: "training_exposure",
+    clusterIsolationPolicy: "exclude_from_hidden_benchmark_and_protected_validation",
+    hiddenBenchmarkClusterOverlap: [],
+    protectedValidationClusterOverlap: [],
+    recertificationPolicy: "material_rubric_change_requires_recertification_or_grandfathering_review",
+    status: "live",
+  },
+  {
+    id: "cert-graduate-refresh-2026-10",
+    rubricVersion: "lmca-app-f-2026-10",
+    raterTier: "graduate_or_phd_refresh",
+    requiredItems: { gold: 8, duplicates: 2, hardAmbiguity: 2 },
+    exposureClass: "training_exposure",
+    clusterIsolationPolicy: "exclude_from_hidden_benchmark_and_protected_validation",
+    hiddenBenchmarkClusterOverlap: [],
+    protectedValidationClusterOverlap: [],
+    recertificationPolicy: "material_rubric_change_requires_targeted_dimension_drift_review",
+    status: "live",
+  },
+];
+
+export const goldLibraryItems = [
+  {
+    id: "gold-ai-selectivity",
+    clusterId: "gold-cluster-ai-selectivity",
+    rubricVersion: "lmca-app-f-2026-10",
+    itemType: "gold",
+    splitExposure: "training_qa_only",
+    humanAdjudicated: true,
+    modelJudgeAcceptedAsGold: false,
+    protectedSplitExcluded: true,
+  },
+  {
+    id: "gold-priced-in-objection",
+    clusterId: "gold-cluster-priced-in",
+    rubricVersion: "lmca-app-f-2026-10",
+    itemType: "hard_ambiguity",
+    splitExposure: "training_qa_only",
+    humanAdjudicated: true,
+    modelJudgeAcceptedAsGold: false,
+    protectedSplitExcluded: true,
+  },
+  {
+    id: "gold-low-clarity-obfuscation",
+    clusterId: "gold-cluster-obfuscation",
+    rubricVersion: "lmca-app-f-2026-10",
+    itemType: "duplicate",
+    splitExposure: "training_qa_only",
+    humanAdjudicated: true,
+    modelJudgeAcceptedAsGold: false,
+    protectedSplitExcluded: true,
+  },
+];
+
+export const seedCertificationAttempts = [
+  {
+    id: "cert-attempt-demo-rater-2026-06",
+    raterId: "demo-rater",
+    packId: "cert-tier-zero-2026-10",
+    rubricVersion: "lmca-app-f-2026-10",
+    submittedAt: now,
+    goldItemsCompleted: 20,
+    duplicateItemsCompleted: 5,
+    hardAmbiguityItemsCompleted: 5,
+    duplicateConsistencyMeanAbsDiff: 0.07,
+    hardAmbiguityReviewPass: true,
+    itemResults: [
+      {
+        itemId: "gold-ai-selectivity",
+        dimensionErrors: {
+          centrality: 0.08,
+          strength: 0.1,
+          correctness: 0.21,
+          clarity: 0.04,
+          dead_weight: 0.03,
+          single_issue: 0.04,
+          overall: 0.08,
+        },
+      },
+      {
+        itemId: "gold-priced-in-objection",
+        dimensionErrors: {
+          centrality: 0.1,
+          strength: 0.12,
+          correctness: 0.18,
+          clarity: 0.06,
+          dead_weight: 0.07,
+          single_issue: 0.06,
+          overall: 0.1,
+        },
+      },
+      {
+        itemId: "gold-low-clarity-obfuscation",
+        dimensionErrors: {
+          centrality: 0.14,
+          strength: 0.13,
+          correctness: 0.12,
+          clarity: 0.08,
+          dead_weight: 0.09,
+          single_issue: 0.07,
+          overall: 0.11,
+        },
+      },
+    ],
+  },
+];
+
+export const provenanceRightsRecords = [
+  {
+    id: "rights-pos-ai-prior",
+    positionId: "pos-ai-prior",
+    rightsStatus: "cleared",
+    releaseScopes: ["public", "training", "internal"],
+    sourceLanguage: "en",
+    translationRoute: "none_original_english",
+    taskFormat: "short essay claim",
+    sourceDomainSuitability: "suitable_conceptual",
+    singleTopicConcentration: "none",
+    lsatDerived: false,
+    clearedAt: now,
+  },
+  {
+    id: "rights-pos-voting",
+    positionId: "pos-voting",
+    rightsStatus: "cleared_internal_only",
+    releaseScopes: ["internal"],
+    sourceLanguage: "en",
+    translationRoute: "none_original_english",
+    taskFormat: "coursework prompt adaptation",
+    sourceDomainSuitability: "mixed_conceptual_empirical",
+    singleTopicConcentration: "voting_methods",
+    lsatDerived: false,
+    clearedAt: now,
+  },
+  {
+    id: "rights-pos-mind",
+    positionId: "pos-mind",
+    rightsStatus: "cleared_restricted_benchmark",
+    releaseScopes: ["hidden_benchmark", "internal"],
+    sourceLanguage: "en",
+    translationRoute: "none_original_english",
+    taskFormat: "book passage adaptation",
+    sourceDomainSuitability: "suitable_conceptual",
+    singleTopicConcentration: "functionalism",
+    lsatDerived: false,
+    clearedAt: now,
+  },
+];
+
+export const activeLearningBatches = [
+  {
+    id: "candidate-batch-demo-2026-06",
+    generated: 42,
+    ingested: 12,
+    judged: 12,
+    disagreementSelected: 4,
+    highRated: 3,
+    suspectedJudgeFalsePositive: 1,
+    handSelected: 5,
+    rejected: 7,
+    promoted: 5,
+    acceptedCritiqueIds: ["crit-ai-generic", "crit-voting-style"],
+    modelJudgeScoresVisibleToInitialRaters: false,
+    selectionReasonHiddenFromInitialRaters: true,
+  },
+];
+
+export const critiqueGenerationRuns = [
+  {
+    id: "generation-run-demo-2026-06",
+    requestedModelAlias: "critique-generator-demo",
+    resolvedModelSnapshot: "critique-generator-demo-2026-06-01",
+    providerRoute: "local_seed_fixture",
+    inferenceDate: "2026-06-01",
+    promptTemplateId: "candidate-gen-v3",
+    promptFamily: "critique_generation",
+    promptArtifact: promptArtifactRef("candidate-gen-v3"),
+    promptBody: promptArtifacts["candidate-gen-v3"].promptBody,
+    renderedPromptChecksum: promptArtifacts["candidate-gen-v3"].renderedPromptChecksum,
+    promptPolicyComparabilityStatus: promptArtifacts["candidate-gen-v3"].promptPolicyComparabilityStatus,
+    protectedPromptExampleCheck: promptArtifacts["candidate-gen-v3"].protectedSplitExclusionCheck,
+    sourcePositionSplitPolicy: "public_train_and_internal_validation_only_seed_demo",
+    sourcePositionIds: ["pos-ai-prior", "pos-voting"],
+    generationBudgetPerPosition: 3,
+    sampledOutputCount: 6,
+    generationSettings: {
+      temperature: 0.7,
+      topP: 0.95,
+      maxOutputTokens: 220,
+      reasoningMode: "not_requested",
+    },
+    filteringPolicy: {
+      duplicatePolicy: "near_duplicate_outputs_filtered_before_rating",
+      emptyRefusalPolicy: "count_as_generation_failure_not_silently_dropped",
+      humanCurationPolicy: "human_hand_selection_after_admin_only_model_judge_screening",
+      protectedSplitUse: "no_hidden_benchmark_or_protected_validation_generation_for_seed_demo",
+    },
+    modelJudgeScreening: {
+      requestedModelAlias: "judge-generator-demo",
+      resolvedModelSnapshot: "judge-generator-demo-2026-05-15",
+      parserConfigId: "json-generation-judge-v1",
+      acceptedOutputSchema: {
+        type: "object",
+        required: ["screening_score"],
+        numericRange: [0, 1],
+      },
+      promptTemplateId: "candidate-judge-v2",
+      promptArtifact: promptArtifactRef("candidate-judge-v2"),
+      renderedPromptChecksum: promptArtifacts["candidate-judge-v2"].renderedPromptChecksum,
+      promptPolicyComparabilityStatus: promptArtifacts["candidate-judge-v2"].promptPolicyComparabilityStatus,
+      parseFailureCount: 0,
+      invalidScoreCount: 0,
+      retryCount: 0,
+      repairedOutputCount: 0,
+      scoresVisibleToInitialRaters: false,
+      diagnosticOnly: true,
+    },
+    outputs: [
+      {
+        id: "gen-output-ai-generic",
+        positionId: "pos-ai-prior",
+        status: "promoted_to_rating",
+        promotedCritiqueId: "crit-ai-generic",
+        selectionReasons: ["artifact_control", "low_redundant_baseline"],
+        modelJudgeScore: 0.42,
+      },
+      {
+        id: "gen-output-voting-style",
+        positionId: "pos-voting",
+        status: "promoted_to_rating",
+        promotedCritiqueId: "crit-voting-style",
+        selectionReasons: ["judge_disagreement", "obfuscation_stress"],
+        modelJudgeScore: 0.61,
+      },
+      {
+        id: "gen-output-ai-empty",
+        positionId: "pos-ai-prior",
+        status: "empty_or_refusal",
+        selectionReasons: ["empty_output"],
+        modelJudgeScore: null,
+      },
+      {
+        id: "gen-output-ai-duplicate",
+        positionId: "pos-ai-prior",
+        status: "duplicate_filtered",
+        duplicateOfOutputId: "gen-output-ai-generic",
+        selectionReasons: ["near_duplicate"],
+        modelJudgeScore: 0.39,
+      },
+      {
+        id: "gen-output-voting-filtered",
+        positionId: "pos-voting",
+        status: "filtered_before_rating",
+        selectionReasons: ["too_generic", "does_not_spell_out_objection"],
+        modelJudgeScore: 0.22,
+      },
+      {
+        id: "gen-output-voting-rejected",
+        positionId: "pos-voting",
+        status: "human_rejected",
+        selectionReasons: ["redundant_with_existing_candidate"],
+        modelJudgeScore: 0.48,
+      },
+    ],
+    metricDefinitions: {
+      headlineMetric: "blind_human_rated_promoted_outputs_only_seed_demo",
+      uncuratedRandomSampleMetric: "all_generated_status_accounting_no_quality_claim_without_blind_rating",
+      bestOfNPolicy: "best_of_generation_budget_per_position_reported_descriptively_not_clean_cross_model_ranking",
+      topKPolicy: "top_k_after_admin_model_judge_screening_reported_separately_from_random_sample",
+      passThresholdOverall: 0.6,
+    },
+  },
+];
+
+export const seedBenchmarkExposureEvents = [
+  {
+    id: "benchmark-exposure-seed-freeze-review",
+    type: "benchmark_exposure_recorded",
+    occurredAt: now,
+    actorRole: "admin",
+    action: "freeze_report_read",
+    artifactId: "hidden-benchmark-freeze-october-2026-demo",
+    purpose: "release_freeze",
+    allowed: true,
+    accessPhase: "pre_freeze",
+  },
+];
+
+export function isValidScore(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function requireScores(scores, fieldNames, label) {
+  const missing = fieldNames.filter((name) => scores[name] === null || scores[name] === undefined);
+  if (missing.length) throw new Error(`${label} missing required rating fields: ${missing.join(", ")}`);
+}
+
+function validateUnitInterval(scores, fieldNames, label) {
+  const invalid = fieldNames
+    .filter((name) => !isValidScore(scores[name]))
+    .map((name) => `${name}=${String(scores[name])}`);
+  if (invalid.length) {
+    throw new Error(`${label} fields must be finite non-boolean numeric values in [0, 1]: ${invalid.join(", ")}`);
+  }
+}
+
+export function customWeightedLoss(human, model) {
+  requireScores(human, ["overall", "clarity"], "human");
+  requireScores(model, ["overall", "clarity"], "model");
+  validateUnitInterval(human, ["overall", "clarity"], "human");
+  validateUnitInterval(model, ["overall", "clarity"], "model");
+
+  if (human.clarity < 0.5) {
+    return 0.5 * Math.abs(human.overall - model.overall) + 0.5 * Math.abs(human.clarity - model.clarity);
+  }
+
+  requireScores(human, FULL_RUBRIC_FIELDS, "human");
+  requireScores(model, FULL_RUBRIC_FIELDS, "model");
+  validateUnitInterval(human, FULL_RUBRIC_FIELDS, "human");
+  validateUnitInterval(model, FULL_RUBRIC_FIELDS, "model");
+  return (
+    0.5 * Math.abs(human.overall - model.overall) +
+    0.2 * Math.abs(human.centrality * human.strength - model.centrality * model.strength) +
+    0.1 * Math.abs(human.clarity - model.clarity) +
+    0.1 * Math.abs(human.correctness - model.correctness) +
+    0.05 * Math.abs(human.dead_weight - model.dead_weight) +
+    0.05 * Math.abs(human.single_issue - model.single_issue)
+  );
+}
+
+export function validateScoreMap(scoreMap, label) {
+  const invalid = Object.entries(scoreMap)
+    .filter(([, value]) => !isValidScore(value))
+    .map(([id, value]) => `${id}=${String(value)}`);
+  if (invalid.length) throw new Error(`${label} scores must be finite non-boolean numeric values in [0, 1]: ${invalid.join(", ")}`);
+}
+
+export function isTie(diff, tieTolerance = 0) {
+  if (tieTolerance < 0) throw new Error("tie_tolerance must be non-negative");
+  return Math.abs(diff) <= tieTolerance;
+}
+
+function assertSameKeys(a, b, subject) {
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  const missingFromB = aKeys.filter((key) => !(key in b));
+  const extraInB = bKeys.filter((key) => !(key in a));
+  if (missingFromB.length || extraInB.length) {
+    throw new Error(`${subject} sets must match: missing_from_model=${missingFromB.join(",") || "none"}, extra_in_model=${extraInB.join(",") || "none"}`);
+  }
+}
+
+export function weightedPairwiseLossForPosition(humanOveralls, modelOveralls, tieTolerance = 0) {
+  validateScoreMap(humanOveralls, "human_overalls");
+  validateScoreMap(modelOveralls, "model_overalls");
+  assertSameKeys(humanOveralls, modelOveralls, "Human/model critique");
+  const losses = [];
+  let nHumanTiePairsExcluded = 0;
+  const ids = Object.keys(humanOveralls);
+  ids.forEach((a, index) => {
+    ids.slice(index + 1).forEach((b) => {
+      const hdiff = humanOveralls[a] - humanOveralls[b];
+      if (isTie(hdiff, tieTolerance)) {
+        nHumanTiePairsExcluded += 1;
+        return;
+      }
+      const humanPref = hdiff > 0 ? 1 : -1;
+      const mdiff = modelOveralls[a] - modelOveralls[b];
+      const weight = Math.abs(hdiff);
+      if (isTie(mdiff, tieTolerance)) losses.push(weight / 2);
+      else if ((mdiff > 0 ? 1 : -1) === humanPref) losses.push(0);
+      else losses.push(weight);
+    });
+  });
+  return { loss: losses.length ? mean(losses) : null, coverage: { nPairsScored: losses.length, nHumanTiePairsExcluded } };
+}
+
+export function unweightedPairwiseLossForPosition(humanOveralls, modelOveralls, tieTolerance = 0) {
+  validateScoreMap(humanOveralls, "human_overalls");
+  validateScoreMap(modelOveralls, "model_overalls");
+  assertSameKeys(humanOveralls, modelOveralls, "Human/model critique");
+  const losses = [];
+  let nHumanTiePairsExcluded = 0;
+  const ids = Object.keys(humanOveralls);
+  ids.forEach((a, index) => {
+    ids.slice(index + 1).forEach((b) => {
+      const hdiff = humanOveralls[a] - humanOveralls[b];
+      if (isTie(hdiff, tieTolerance)) {
+        nHumanTiePairsExcluded += 1;
+        return;
+      }
+      const humanPref = hdiff > 0 ? 1 : -1;
+      const mdiff = modelOveralls[a] - modelOveralls[b];
+      if (isTie(mdiff, tieTolerance)) losses.push(0.5);
+      else if ((mdiff > 0 ? 1 : -1) === humanPref) losses.push(0);
+      else losses.push(1);
+    });
+  });
+  return { loss: losses.length ? mean(losses) : null, coverage: { nPairsScored: losses.length, nHumanTiePairsExcluded } };
+}
+
+export function weightedPairwiseErrorRateByPosition(human, model, tieTolerance = 0) {
+  return pairwiseErrorRateByPosition(human, model, weightedPairwiseLossForPosition, tieTolerance);
+}
+
+export function unweightedPairwiseErrorRateByPosition(human, model, tieTolerance = 0) {
+  return pairwiseErrorRateByPosition(human, model, unweightedPairwiseLossForPosition, tieTolerance);
+}
+
+function pairwiseErrorRateByPosition(positionToHuman, positionToModel, scorer, tieTolerance) {
+  assertSameKeys(positionToHuman, positionToModel, "Human/model position");
+  const positionLosses = [];
+  const excludedNoNonTiedPairs = [];
+  const coverage = {
+    nPositionsScored: 0,
+    nPositionsExcludedNoNonTiedPairs: 0,
+    nPairsScored: 0,
+    nHumanTiePairsExcluded: 0,
+  };
+  Object.entries(positionToHuman).forEach(([positionId, humanOveralls]) => {
+    const result = scorer(humanOveralls, positionToModel[positionId], tieTolerance);
+    coverage.nPairsScored += result.coverage.nPairsScored;
+    coverage.nHumanTiePairsExcluded += result.coverage.nHumanTiePairsExcluded;
+    if (result.loss === null) {
+      excludedNoNonTiedPairs.push(positionId);
+      coverage.nPositionsExcludedNoNonTiedPairs += 1;
+    } else {
+      coverage.nPositionsScored += 1;
+      positionLosses.push(result.loss);
+    }
+  });
+  return { loss: positionLosses.length ? mean(positionLosses) : null, coverage, excludedNoNonTiedPairs };
+}
+
+export function defaultFullRubricUtility(label, targetLabel) {
+  const lowClarityController = targetLabel ?? label;
+  requireScores(lowClarityController, ["clarity"], "low_clarity_controller");
+  validateUnitInterval(lowClarityController, ["clarity"], "low_clarity_controller");
+  requireScores(label, ["overall", "clarity"], "label");
+  validateUnitInterval(label, ["overall", "clarity"], "label");
+  if (lowClarityController.clarity < 0.5) return 0.5 * label.overall + 0.5 * label.clarity;
+  requireScores(label, FULL_RUBRIC_FIELDS, "label");
+  validateUnitInterval(label, FULL_RUBRIC_FIELDS, "label");
+  return 0.5 * label.overall + 0.2 * label.centrality * label.strength + 0.1 * label.clarity + 0.1 * label.correctness + 0.05 * (1 - label.dead_weight) + 0.05 * label.single_issue;
+}
+
+export function derivedUtilityPairwiseErrorRateByPosition(humanRatings, modelRatings, tieTolerance = 0) {
+  assertSameKeys(humanRatings, modelRatings, "Human/model position");
+  const humanUtilities = {};
+  const modelUtilities = {};
+  Object.entries(humanRatings).forEach(([positionId, ratings]) => {
+    assertSameKeys(ratings, modelRatings[positionId], "Human/model critique");
+    humanUtilities[positionId] = {};
+    modelUtilities[positionId] = {};
+    Object.entries(ratings).forEach(([critiqueId, human]) => {
+      const model = modelRatings[positionId][critiqueId];
+      humanUtilities[positionId][critiqueId] = defaultFullRubricUtility(human);
+      modelUtilities[positionId][critiqueId] = defaultFullRubricUtility(model, human);
+    });
+  });
+  return weightedPairwiseErrorRateByPosition(humanUtilities, modelUtilities, tieTolerance);
+}
+
+export function customWeightedLossForDataset(humanRatings, modelRatings) {
+  assertSameKeys(humanRatings, modelRatings, "Human/model item");
+  const losses = [];
+  const coverage = { nItemsScored: 0, nLowClarityBranchItems: 0, nFullRubricItems: 0 };
+  Object.entries(humanRatings).forEach(([itemId, human]) => {
+    losses.push(customWeightedLoss(human, modelRatings[itemId]));
+    coverage.nItemsScored += 1;
+    if (human.clarity < 0.5) coverage.nLowClarityBranchItems += 1;
+    else coverage.nFullRubricItems += 1;
+  });
+  return { loss: losses.length ? mean(losses) : null, coverage };
+}
+
+export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabelVersion, positionToHumanOveralls, tieTolerance = 0) {
+  const nonTiedEdges = [];
+  let excludedHumanTieEdges = 0;
+  const excludedNoPairPositions = [];
+  Object.entries(positionToHumanOveralls).forEach(([positionId, critiqueScores]) => {
+    const ids = Object.keys(critiqueScores);
+    let positionEdgeCount = 0;
+    ids.forEach((a, index) => {
+      ids.slice(index + 1).forEach((b) => {
+        const margin = Math.abs(critiqueScores[a] - critiqueScores[b]);
+        if (isTie(margin, tieTolerance)) {
+          excludedHumanTieEdges += 1;
+          return;
+        }
+        positionEdgeCount += 1;
+        nonTiedEdges.push({
+          positionId,
+          critiqueA: a,
+          critiqueB: b,
+          humanMargin: margin,
+          marginBin: margin < 0.15 ? "low" : margin < 0.35 ? "medium" : "high",
+        });
+      });
+    });
+    if (positionEdgeCount === 0) excludedNoPairPositions.push(positionId);
+  });
+  return {
+    id,
+    labelSnapshotId,
+    targetLabelVersion,
+    tieTolerance,
+    humanTieTolerance: tieTolerance,
+    modelTieTolerance: tieTolerance,
+    humanTiePolicy: "exclude_human_tied_pairs_from_pairwise_loss",
+    modelTiePolicy: "score_model_tied_predictions_as_half_error",
+    scoreRoundingPolicy: tieTolerance === 0 ? "stored_exact" : "declared_tolerance",
+    scoreQuantizationPolicy: "unit_interval_decimal_scores_no_bucket_quantization",
+    positionIds: Object.keys(positionToHumanOveralls),
+    critiqueIdsByPosition: Object.fromEntries(Object.entries(positionToHumanOveralls).map(([positionId, scores]) => [positionId, Object.keys(scores)])),
+    nonTiedEdges,
+    excludedHumanTieEdges,
+    excludedNoPairPositions,
+    frozenAt: new Date().toISOString(),
+  };
+}
+
+export function pairwiseMarginDistribution(snapshot) {
+  const margins = snapshot.nonTiedEdges.map((edge) => edge.humanMargin).sort((a, b) => a - b);
+  const totalWeight = margins.reduce((sum, margin) => sum + margin, 0);
+  const lowWeight = snapshot.nonTiedEdges.filter((edge) => edge.marginBin === "low").reduce((sum, edge) => sum + edge.humanMargin, 0);
+  return {
+    min: margins[0] ?? null,
+    median: margins.length ? percentile(margins, 0.5) : null,
+    mean: margins.length ? mean(margins) : null,
+    max: margins.at(-1) ?? null,
+    bins: {
+      low: snapshot.nonTiedEdges.filter((edge) => edge.marginBin === "low").length,
+      medium: snapshot.nonTiedEdges.filter((edge) => edge.marginBin === "medium").length,
+      high: snapshot.nonTiedEdges.filter((edge) => edge.marginBin === "high").length,
+    },
+    lowMarginPairShare: snapshot.nonTiedEdges.length ? snapshot.nonTiedEdges.filter((edge) => edge.marginBin === "low").length / snapshot.nonTiedEdges.length : 0,
+    lowMarginWeightShare: totalWeight ? lowWeight / totalWeight : 0,
+  };
+}
+
+export function createBlindRatingView(assignment, positionList = positions, critiqueList = critiques) {
+  const position = mustFind(positionList, assignment.positionId);
+  const critique = mustFind(critiqueList, assignment.critiqueId);
+  return {
+    assignmentId: assignment.id,
+    positionText: latestText(position).text,
+    critiqueText: latestText(critique).text,
+    hiddenMetadata: [
+      "source metadata",
+      "admin tags",
+      "benchmark status",
+      "model-judge scores",
+      "active-learning flags",
+      "intake screening notes",
+      "peer ratings",
+      "candidate-selection reasons",
+    ],
+  };
+}
+
+export function appendRatingRevision(original, patch = {}) {
+  if (!["blind_initial", "self_check", "expert_check"].includes(original.kind)) {
+    throw new Error("Only human rating records can be revised through the revision workflow.");
+  }
+  return {
+    ...original,
+    ...patch,
+    id: patch.id ?? `${original.id}-rev-${Date.now()}`,
+    kind: "revision",
+    parentRatingId: original.id,
+    submittedAt: new Date().toISOString(),
+    lockedAt: new Date().toISOString(),
+  };
+}
+
+export function buildRatingRevisionAuditReport(releaseId, ratings = seedRatings, positionList = positions) {
+  const ratingById = new Map(ratings.map((rating) => [rating.id, rating]));
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const revisionRows = ratings
+    .filter((rating) => rating.kind === "revision")
+    .map((rating) => {
+      const parent = ratingById.get(rating.parentRatingId);
+      const position = positionById.get(rating.positionId);
+      const hasReasonCode = typeof rating.revisionReasonCode === "string" && rating.revisionReasonCode.length > 0;
+      const hasObjectLevelComment = typeof rating.revisionComment === "string" && rating.revisionComment.trim().length > 0;
+      return {
+        ratingId: rating.id,
+        parentRatingId: rating.parentRatingId ?? null,
+        itemId: makeItemId(rating.positionId, rating.critiqueId),
+        split: position?.split ?? "unknown",
+        raterId: rating.raterId,
+        parentFound: Boolean(parent),
+        parentKind: parent?.kind ?? null,
+        originalPreserved: Boolean(parent) && parent.id !== rating.id && parent.kind !== "revision",
+        revisionReasonCode: rating.revisionReasonCode ?? null,
+        revisionComment: rating.revisionComment ?? null,
+        hasReasonCode,
+        hasObjectLevelComment,
+        metadataStatus:
+          Boolean(parent) && parent.kind !== "revision" && hasReasonCode && hasObjectLevelComment
+            ? "revision_metadata_complete"
+            : "revision_metadata_incomplete",
+      };
+    });
+  const checkRows = ratings
+    .filter((rating) => ["self_check", "expert_check", "model_assisted_check"].includes(rating.kind))
+    .map((rating) => {
+      const position = positionById.get(rating.positionId);
+      return {
+        ratingId: rating.id,
+        itemId: makeItemId(rating.positionId, rating.critiqueId),
+        split: position?.split ?? "unknown",
+        kind: rating.kind,
+        raterId: rating.raterId,
+        checkExposure:
+          rating.kind === "model_assisted_check"
+            ? rating.modelAssistance?.exposureTiming ?? rating.checkExposure ?? "model_assisted_exposure_unknown"
+            : rating.kind === "expert_check"
+              ? "expert_check"
+              : "human_only_self_check",
+        modelAssisted: rating.kind === "model_assisted_check",
+        postHumanOnlySelfCheckLock:
+          rating.kind !== "model_assisted_check" ||
+          rating.modelAssistance?.exposureTiming === "post_human_only_self_check_lock",
+      };
+    });
+  const independentCoverageRows = ratings
+    .filter((rating) => rating.kind === "blind_initial")
+    .map((rating) => ({
+      ratingId: rating.id,
+      itemId: makeItemId(rating.positionId, rating.critiqueId),
+      raterId: rating.raterId,
+      kind: rating.kind,
+    }));
+  const denominatorInflationRows = ratings
+    .filter((rating) => rating.kind !== "blind_initial")
+    .map((rating) => ({
+      ratingId: rating.id,
+      itemId: makeItemId(rating.positionId, rating.critiqueId),
+      raterId: rating.raterId,
+      kind: rating.kind,
+      denominatorPolicy: "excluded_from_independent_blind_initial_coverage",
+    }));
+  const incompleteRevisionRows = revisionRows.filter((row) => row.metadataStatus !== "revision_metadata_complete");
+  const modelAssistedStagingRows = checkRows.filter((row) => row.modelAssisted && !row.postHumanOnlySelfCheckLock);
+  return {
+    id: `rating-revision-audit-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      immutableOriginalRule:
+        "Revisions append a child row with parentRatingId; the first blind, self-check, or expert-check row remains immutable and separately counted.",
+      reasonMetadataRule:
+        "Every revision must carry a structured revisionReasonCode and a free-text object-level revisionComment.",
+      denominatorRule:
+        "Blind initial ratings, revisions, self-checks, expert checks, model-assisted checks, and adjudication labels are counted separately so checks and revisions cannot inflate independent blind-rater coverage.",
+      modelAssistanceRule:
+        "Release-critical model-assisted checks should occur only after a locked human-only self-check where feasible and must be reported as intervention exposure.",
+    },
+    counts: {
+      totalRatingRows: ratings.length,
+      blindInitialRows: countKind(ratings, "blind_initial"),
+      revisionRows: revisionRows.length,
+      selfCheckRows: countKind(ratings, "self_check"),
+      expertCheckRows: countKind(ratings, "expert_check"),
+      modelAssistedCheckRows: countKind(ratings, "model_assisted_check"),
+      adjudicationRows: countKind(ratings, "adjudication"),
+      independentBlindInitialCoverageRows: independentCoverageRows.length,
+      denominatorInflationExcludedRows: denominatorInflationRows.length,
+      incompleteRevisionMetadataRows: incompleteRevisionRows.length,
+      modelAssistedStagingViolationRows: modelAssistedStagingRows.length,
+    },
+    byKind: countBy(ratings, "kind"),
+    revisionRows,
+    checkRows,
+    independentCoverageRows,
+    denominatorInflationRows,
+    incompleteRevisionRows,
+    modelAssistedStagingRows,
+    releaseUseStatus:
+      incompleteRevisionRows.length > 0
+        ? "revision_metadata_review_required"
+        : modelAssistedStagingRows.length > 0
+          ? "model_assisted_check_staging_review_required"
+          : "revision_and_check_denominators_separated",
+  };
+}
+
+export function detectEscalations(ratings) {
+  const triggers = [];
+  if (ratings.some((rating) => value(rating, "clarity") !== null && value(rating, "clarity") < 0.5)) triggers.push("low clarity workflow required");
+  if (ratings.filter((rating) => (value(rating, "clarity") ?? 1) < 0.5).length >= 2) triggers.push("two or more raters gave clarity below 0.5");
+  const overallSpread = spread(ratings, "overall");
+  if (overallSpread !== null && overallSpread > 0.35) triggers.push("initial overall score spread above 0.35");
+  const productSpread = centralityStrengthSpread(ratings);
+  if (productSpread !== null && productSpread > 0.3) triggers.push("centrality * strength spread above 0.30");
+  const correctnessSpread = spread(ratings, "correctness");
+  if (correctnessSpread !== null && correctnessSpread > 0.35) triggers.push("correctness spread above 0.35");
+  if (ratings.some((rating) => rating.flags.insufficientTopicExpertise)) triggers.push("topic-fit review required");
+  if (ratings.some((rating) => rating.flags.needsVerification)) triggers.push("correctness verification record required");
+  if (ratings.some((rating) => value(rating, "correctness") === 0 && (value(rating, "strength") ?? 0) > 0)) triggers.push("zero correctness with nonzero strength consistency review");
+  if (
+    ratings.some(
+      (rating) =>
+        (value(rating, "clarity") ?? 0) >= 0.5 &&
+        rating.provisionalDimensions.some((dimension) => dimension !== "clarity" && dimension !== "overall"),
+    )
+  ) {
+    triggers.push("non-clarity provisional fields with clarity >= 0.5");
+  }
+  return triggers;
+}
+
+export const RATER_ISSUE_FLAG_DEFINITIONS = [
+  {
+    key: "needsVerification",
+    label: "Needs verification",
+    detail: "Structured correctness status or VerificationRecord required.",
+    issueType: "correctness_verification_required",
+    taxonomyCodes: ["correctness_significance_weighting", "low_clarity_handling"],
+    policy:
+      "Correctness-sensitive rows keep a structured verification status and note, and release-critical unresolved rows are blocked by the correctness verification report.",
+  },
+  {
+    key: "correctnessNotAssessableDueToClarity",
+    label: "Correctness not assessable due to clarity",
+    detail: "Use Appendix F's 0.5 correctness default when the whole critique is too unclear.",
+    issueType: "correctness_not_assessable_due_to_clarity",
+    taxonomyCodes: ["low_clarity_handling", "clarity_after_effort"],
+    policy:
+      "When low clarity makes correctness non-assessable, store the 0.5 correctness default as a flag rather than silently dropping correctness.",
+  },
+  {
+    key: "insufficientTopicExpertise",
+    label: "Insufficient topic expertise",
+    detail: "Route to topic-fit review; do not lower clarity automatically.",
+    issueType: "topic_fit_review_required",
+    taxonomyCodes: ["background_knowledge_dependence"],
+    policy:
+      "Insufficient rater expertise routes the assignment to topic-fit review and must not be converted into a lower clarity score by itself.",
+  },
+  {
+    key: "strengthCentralityAllocationAmbiguity",
+    label: "Strength-centrality allocation ambiguity",
+    detail: "Taxonomy: strength-centrality allocation.",
+    issueType: "strength_centrality_allocation",
+    taxonomyCodes: ["strength_centrality_allocation"],
+    policy:
+      "Record allocation ambiguity separately from centrality x strength product disagreement; model scoring can still use the product while adjudicators preserve subscore uncertainty.",
+  },
+  {
+    key: "correctnessWeightingIssue",
+    label: "Correctness significance weighting issue",
+    detail: "Taxonomy: correctness weighting or intuition-pump correctness.",
+    issueType: "correctness_significance_weighting",
+    taxonomyCodes: ["correctness_significance_weighting", "intuition_pump_correctness"],
+    policy:
+      "Record whether correctness turns on the significance of an erroneous, disputed, or not-practicable claim in the critique rather than collapsing it into strength.",
+  },
+  {
+    key: "clarityAfterEffortIssue",
+    label: "Clarity after effort issue",
+    detail: "Taxonomy: low-clarity handling after appropriate effort.",
+    issueType: "clarity_after_effort_pin_downability",
+    taxonomyCodes: ["clarity_after_effort", "low_clarity_handling"],
+    policy:
+      "Record when the critique remains hard to pin down after effort, separately from rater topic expertise or mere unfamiliarity.",
+  },
+  {
+    key: "clearlyUnsatisfactoryImprecision",
+    label: "Clearly unsatisfactory imprecision",
+    detail: "Plainly bad critique where fine-grained strength precision is low value.",
+    issueType: "clearly_unsatisfactory_imprecision",
+    taxonomyCodes: ["critique_interpretation_vagueness", "content_free_pseudo_substance", "low_clarity_handling"],
+    policy:
+      "Plainly handwavy or information-poor critiques keep ordinary LMCA scores but are flagged so release adjudication does not overstate fine-grained strength precision.",
+  },
+  {
+    key: "contentFreePseudoSubstance",
+    label: "Content-free/dead-weight pseudo-substance",
+    detail: "Flag fluent material that does not attempt a substantive objection.",
+    issueType: "content_free_pseudo_substance_dead_weight",
+    taxonomyCodes: ["content_free_pseudo_substance"],
+    policy:
+      "Content-free pseudo-substantive text is summarized separately and usually contributes to dead_weight rather than strength.",
+  },
+  {
+    key: "obfuscatedArgumentRisk",
+    label: "Obfuscated argument or masked fallacy",
+    detail: "Surface fluency may hide low clarity, low strength, or a fallacy.",
+    issueType: "obfuscated_argument_or_masked_fallacy",
+    taxonomyCodes: ["critique_interpretation_vagueness", "low_clarity_handling"],
+    policy:
+      "Obfuscated or masked-fallacy risks supplement the seven LMCA scores and feed stress/audit reporting rather than replacing ordinary scoring.",
+  },
+  {
+    key: "strengthCentralityProductInvariance",
+    label: "Strength-centrality product invariance",
+    detail: "Failed added attacks should not double-penalize beyond the denominator effect.",
+    issueType: "strength_centrality_product_invariance",
+    taxonomyCodes: ["strength_centrality_allocation"],
+    policy:
+      "Failed added attacks should not double-penalize centrality x strength beyond the Appendix F denominator effect; remaining penalties belong in other dimensions when warranted.",
+  },
+  {
+    key: "inBetweenSingleIssueSideIssue",
+    label: "In-between single-issue side issue",
+    detail: "Brief independent side issue may justify a mid-range single_issue score.",
+    issueType: "single_issue_mid_range_side_issue",
+    taxonomyCodes: ["single_issue_mid_range_side_issue"],
+    policy:
+      "Brief independent side issues are preserved as a single_issue issue flag so multi-part but jointly necessary critiques are not penalized by default.",
+  },
+  {
+    key: "bottomLineDependence",
+    label: "Bottom-line dependence",
+    detail: "Strength or correctness turns on a disputed bottom-line premise.",
+    issueType: "contentious_bottom_line_dependence",
+    taxonomyCodes: ["contentious_bottom_line_premise", "intuition_pump_correctness"],
+    policy:
+      "Contentious bottom-line dependence preserves minority rationales and prevents subjective premise disputes from being hidden as ordinary low disagreement.",
+  },
+  {
+    key: "midRangeStrengthUncertainty",
+    label: "Mid-range strength uncertainty",
+    detail: "Use when a critique is materially relevant but its weakening force is credence-sensitive or hard to pin between weak and strong.",
+    issueType: "mid_range_strength_uncertainty",
+    taxonomyCodes: ["mid_range_strength_uncertainty", "contentious_bottom_line_premise"],
+    policy:
+      "Mid-range strength uncertainty preserves cases where a critique is central but its strength depends on disputed premises, intuition pumps, or ambiguous weakening magnitude.",
+  },
+  {
+    key: "backgroundKnowledgeDependence",
+    label: "Background-knowledge dependence",
+    detail: "Specialized assumptions materially affect interpretation or correctness.",
+    issueType: "background_knowledge_dependence",
+    taxonomyCodes: ["background_knowledge_dependence"],
+    policy:
+      "Background-knowledge dependence records whether assumptions are reasonably priced in, too specialized, or need expert adjudication.",
+  },
+  {
+    key: "vagueGoodObjectionGesture",
+    label: "Vague good-objection gesture",
+    detail: "Do not steelman a merely gestured objection into a concrete critique.",
+    issueType: "vague_good_objection_not_steelmanned",
+    taxonomyCodes: ["critique_interpretation_vagueness", "content_free_pseudo_substance"],
+    policy:
+      "Vague gestures toward good objections are scored as written and routed separately from concrete object-level arguments.",
+  },
+  {
+    key: "disagreementTaxonomyReview",
+    label: "Disagreement taxonomy review",
+    detail: "Escalate interpretation, vagueness, correctness, source/style, or low-clarity taxonomy.",
+    issueType: "disagreement_taxonomy_review",
+    taxonomyCodes: ["critique_interpretation_vagueness", "correctness_significance_weighting", "low_clarity_handling"],
+    policy:
+      "Disagreement taxonomy review records why raters disagree before adjudication tries to reconcile scores.",
+  },
+];
+
+export function buildRubricIssueFlagReport(
+  releaseId,
+  ratings = seedRatings,
+  memos = adjudicationMemos,
+  positionList = positions,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const flagRows = ratings.flatMap((rating) =>
+    RATER_ISSUE_FLAG_DEFINITIONS.filter((definition) => rating.flags?.[definition.key]).map((definition) => {
+      const position = positionById.get(rating.positionId);
+      return {
+        ratingId: rating.id,
+        itemId: makeItemId(rating.positionId, rating.critiqueId),
+        raterId: rating.raterId,
+        kind: rating.kind,
+        split: position?.split ?? "unknown",
+        releaseCritical: isReleaseCriticalSplit(position?.split),
+        flag: definition.key,
+        label: definition.label,
+        issueType: definition.issueType,
+      };
+    }),
+  );
+  const itemRows = [...new Set(ratings.map((rating) => makeItemId(rating.positionId, rating.critiqueId)))]
+    .sort()
+    .map((itemId) => {
+      const itemRatings = ratings.filter((rating) => makeItemId(rating.positionId, rating.critiqueId) === itemId);
+      const [positionId] = itemId.split("::");
+      const productSpread = centralityStrengthSpread(itemRatings);
+      const issueFlagCounts = Object.fromEntries(
+        RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => [
+          definition.key,
+          itemRatings.filter((rating) => rating.flags?.[definition.key]).length,
+        ]),
+      );
+      return {
+        itemId,
+        split: positionById.get(positionId)?.split ?? "unknown",
+        ratingCount: itemRatings.length,
+        productSpread,
+        productDisagreementStatus:
+          productSpread !== null && productSpread > 0.3
+            ? "product_level_disagreement_observed"
+            : "no_high_product_level_disagreement",
+        issueFlagCounts,
+        issueFlagsPresent: Object.entries(issueFlagCounts)
+          .filter(([, count]) => count > 0)
+          .map(([flag]) => flag),
+      };
+    });
+  const memoTaxonomyRows = RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => {
+    const matchingMemos = memos.filter((memo) =>
+      definition.taxonomyCodes.some((code) => (memo.disagreementTaxonomy ?? []).includes(code)),
+    );
+    return {
+      flag: definition.key,
+      issueType: definition.issueType,
+      taxonomyCodes: definition.taxonomyCodes,
+      memoIds: matchingMemos.map((memo) => memo.id),
+      covered: matchingMemos.length > 0,
+    };
+  });
+  const flagCoverageRows = RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => {
+    const rows = flagRows.filter((row) => row.flag === definition.key);
+    const taxonomyRow = memoTaxonomyRows.find((row) => row.flag === definition.key);
+    const adjudicationTaxonomyCovered = taxonomyRow?.covered ?? false;
+    const coverageStatus = rows.length === 0 ? "not_observed_in_seed" : adjudicationTaxonomyCovered ? "covered" : "adjudication_taxonomy_missing";
+    return {
+      flag: definition.key,
+      label: definition.label,
+      detail: definition.detail,
+      issueType: definition.issueType,
+      ratingFlagCount: rows.length,
+      releaseCriticalRatingFlagCount: rows.filter((row) => row.releaseCritical).length,
+      adjudicationTaxonomyCovered,
+      coverageStatus,
+      policy: definition.policy,
+    };
+  });
+  const observedFlagCoverageRows = flagCoverageRows.filter((row) => row.ratingFlagCount > 0);
+  const missingCoverageRows = observedFlagCoverageRows.filter((row) => !row.adjudicationTaxonomyCovered);
+  const productDisagreementRows = itemRows.filter((row) => row.productDisagreementStatus === "product_level_disagreement_observed");
+  const flagCounts = Object.fromEntries(
+    RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => [definition.key, flagRows.filter((row) => row.flag === definition.key).length]),
+  );
+  return {
+    id: `rubric-issue-flags-${releaseId}`,
+    releaseId,
+    policy: {
+      requiredRaterFlags: RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => definition.key),
+      separationRule:
+        "Rater issue flags are structured workflow and adjudication signals, not substitutes for the seven LMCA scores or product-level score-spread disagreement.",
+      productDisagreementRule:
+        "Product-level disagreement is still computed from centrality x strength spread and reported as its own item-level condition.",
+    },
+    counts: {
+      ratingRowCount: ratings.length,
+      flaggedRatingRowCount: new Set(flagRows.map((row) => row.ratingId)).size,
+      issueFlagRowCount: flagRows.length,
+      strengthCentralityAllocationAmbiguityCount: flagRows.filter((row) => row.flag === "strengthCentralityAllocationAmbiguity").length,
+      correctnessWeightingIssueCount: flagRows.filter((row) => row.flag === "correctnessWeightingIssue").length,
+      clarityAfterEffortIssueCount: flagRows.filter((row) => row.flag === "clarityAfterEffortIssue").length,
+      midRangeStrengthUncertaintyCount: flagRows.filter((row) => row.flag === "midRangeStrengthUncertainty").length,
+      observedIssueFlagFamilyCount: observedFlagCoverageRows.length,
+      productLevelDisagreementItemCount: productDisagreementRows.length,
+      coveredIssueFlagCount: observedFlagCoverageRows.filter((row) => row.adjudicationTaxonomyCovered).length,
+      missingCoverageCount: missingCoverageRows.length,
+      byFlag: flagCounts,
+    },
+    flagCoverageRows,
+    flagRows,
+    itemRows,
+    memoTaxonomyRows,
+    productDisagreementRows,
+    releaseUseStatus:
+      missingCoverageRows.length > 0
+        ? "rubric_issue_flag_coverage_incomplete"
+        : productDisagreementRows.length > 0
+          ? "rubric_issue_flags_separated_with_product_disagreement"
+          : "rubric_issue_flags_separated_from_product_disagreement",
+  };
+}
+
+export function aggregateRatings(positionId, critiqueId, ratings, status = "initial_only") {
+  const includedRatings = ratings.filter((rating) => rating.positionId === positionId && rating.critiqueId === critiqueId);
+  const weightedMeanScores = Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => {
+      const values = includedScoresForDimension(includedRatings, dimension);
+      return [dimension, values.length ? round(mean(values)) : null];
+    }),
+  );
+  const medianScores = Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => {
+      const values = includedScoresForDimension(includedRatings, dimension);
+      return [dimension, values.length ? round(median(values)) : null];
+    }),
+  );
+  const products = includedRatings
+    .filter((rating) => !isLowClarityProvisional(rating, "centrality") && !isLowClarityProvisional(rating, "strength"))
+    .map((rating) => {
+      const centrality = value(rating, "centrality");
+      const strength = value(rating, "strength");
+      return centrality !== null && strength !== null ? centrality * strength : null;
+    })
+    .filter((item) => typeof item === "number");
+  const raterSet = new Set(includedRatings.map((rating) => rating.raterId));
+  const expertSet = new Set(includedRatings.filter((rating) => ["graduate", "phd", "expert", "admin"].includes(rating.raterTier)).map((rating) => rating.raterId));
+  return {
+    positionId,
+    critiqueId,
+    weightedMeanScores,
+    medianScores,
+    centXStrWeightedMean: products.length ? round(mean(products)) : null,
+    dimensionCoverageCounts: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, dimensionCoverage(includedRatings, dimension)])),
+    spreadPreDiscussion: spread(includedRatings.filter((rating) => rating.kind === "blind_initial"), "overall") ?? 0,
+    spreadPostDiscussion: spread(includedRatings, "overall") ?? 0,
+    raterCount: raterSet.size,
+    expertCount: expertSet.size,
+    uncertaintyFlag: detectEscalations(includedRatings).length > 0,
+    finalLabelStatus: status,
+    largestSingleRaterContributionShare: includedRatings.length ? round(1 / raterSet.size) : 0,
+  };
+}
+
+function preLockVisibilityFromRating(rating) {
+  const visibility = rating.preLockVisibility ?? {};
+  return {
+    sourceMetadataVisibleBeforeInitialLock: Boolean(
+      rating.sourceMetadataVisibleBeforeInitialLock ?? visibility.sourceMetadataVisibleBeforeInitialLock ?? visibility.sourceMetadataVisible,
+    ),
+    adminTagsVisibleBeforeInitialLock: Boolean(
+      rating.adminTagsVisibleBeforeInitialLock ?? visibility.adminTagsVisibleBeforeInitialLock ?? visibility.adminTagsVisible,
+    ),
+    topicRoutingTagsVisibleBeforeInitialLock: Boolean(
+      rating.topicRoutingTagsVisibleBeforeInitialLock ?? visibility.topicRoutingTagsVisibleBeforeInitialLock ?? visibility.topicRoutingTagsVisible,
+    ),
+    benchmarkStatusVisibleBeforeInitialLock: Boolean(
+      rating.benchmarkStatusVisibleBeforeInitialLock ?? visibility.benchmarkStatusVisibleBeforeInitialLock ?? visibility.benchmarkStatusVisible,
+    ),
+  };
+}
+
+function sourceTagVisibleBeforeInitialLock(rating) {
+  const visibility = preLockVisibilityFromRating(rating);
+  return Object.values(visibility).some(Boolean);
+}
+
+function blindAggregationExceptionId(rating) {
+  return (
+    rating.blindAggregationAdjudicatedExceptionId ??
+    rating.preLockVisibility?.adjudicatedExceptionId ??
+    rating.initialBlindingException?.adjudicatedExceptionId ??
+    null
+  );
+}
+
+function blindAggregationExceptionDisclosed(rating) {
+  return Boolean(
+    rating.blindAggregationExceptionDisclosed === true ||
+      rating.preLockVisibility?.exceptionDisclosed === true ||
+      rating.initialBlindingException?.disclosed === true,
+  );
+}
+
+function hiddenBenchmarkInitialRatingPolicy(rating, positionList = positions) {
+  const position = positionList.find((item) => item.id === rating.positionId);
+  if (position?.split !== "hidden_benchmark" || rating.kind !== "blind_initial") return "not_hidden_benchmark_initial";
+  if (!sourceTagVisibleBeforeInitialLock(rating)) return "include_hidden_source_tag_blind_initial";
+  if (blindAggregationExceptionId(rating) && blindAggregationExceptionDisclosed(rating)) return "include_adjudicated_exception_disclosed";
+  return "exclude_source_tag_visible_initial_from_blind_aggregation";
+}
+
+function ratingsEligibleForLabelSnapshot(ratings, positionList = positions) {
+  return ratings.filter((rating) => hiddenBenchmarkInitialRatingPolicy(rating, positionList) !== "exclude_source_tag_visible_initial_from_blind_aggregation");
+}
+
+function buildReliabilityWeightModelReport(snapshotId, releaseId, ratings, pairs, itemLabels, status, positionList = positions) {
+  const snapshotItemIds = new Set(pairs.map(({ positionId, critiqueId }) => makeItemId(positionId, critiqueId)));
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const includedRatings = ratings.filter((rating) => snapshotItemIds.has(makeItemId(rating.positionId, rating.critiqueId)));
+  const excludedRatings = ratings.filter((rating) => !snapshotItemIds.has(makeItemId(rating.positionId, rating.critiqueId)));
+  const raterRowsById = includedRatings.reduce((acc, rating) => {
+    const itemId = makeItemId(rating.positionId, rating.critiqueId);
+    acc[rating.raterId] ??= { raterId: rating.raterId, raterTiers: new Set(), itemIds: new Set(), ratingKinds: {} };
+    acc[rating.raterId].raterTiers.add(rating.raterTier);
+    acc[rating.raterId].itemIds.add(itemId);
+    acc[rating.raterId].ratingKinds[rating.kind] = (acc[rating.raterId].ratingKinds[rating.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+  const raterWeights = Object.values(raterRowsById)
+    .map((row) => ({
+      raterId: row.raterId,
+      raterTiers: [...row.raterTiers].sort(),
+      includedItemCount: row.itemIds.size,
+      ratingKinds: row.ratingKinds,
+      dimensionWeights: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, 1])),
+      fitSource: "uniform_project_default_not_learned_from_validation_or_hidden_benchmark",
+    }))
+    .sort((left, right) => right.includedItemCount - left.includedItemCount || left.raterId.localeCompare(right.raterId));
+  const itemContributionRows = Object.entries(itemLabels)
+    .map(([itemId, label]) => ({
+      itemId,
+      raterCount: label.raterCount,
+      expertCount: label.expertCount,
+      largestSingleRaterContributionShare: label.largestSingleRaterContributionShare,
+      dominanceStatus: label.largestSingleRaterContributionShare > 0.5 ? "single_rater_dominance_disclosed" : "pass",
+      independentExpertReviewRequired: label.largestSingleRaterContributionShare > 0.5 && label.expertCount === 0,
+    }))
+    .sort((left, right) => right.largestSingleRaterContributionShare - left.largestSingleRaterContributionShare || left.itemId.localeCompare(right.itemId));
+  const sensitivityRows = Object.entries(itemLabels).map(([itemId, label]) => {
+    const dimensionMeanMinusMedian = Object.fromEntries(
+      RUBRIC_DIMENSIONS.map((dimension) => {
+        const meanValue = label.weightedMeanScores[dimension];
+        const medianValue = label.medianScores[dimension];
+        return [
+          dimension,
+          isValidScore(meanValue) && isValidScore(medianValue) ? round(meanValue - medianValue) : null,
+        ];
+      }),
+    );
+    const overallDelta = dimensionMeanMinusMedian.overall;
+    return {
+      itemId,
+      dimensionMeanMinusMedian,
+      absOverallMeanMedianDelta: typeof overallDelta === "number" ? round(Math.abs(overallDelta)) : null,
+    };
+  });
+  const maxOverallDeltaRow = sensitivityRows
+    .filter((row) => typeof row.absOverallMeanMedianDelta === "number")
+    .sort((left, right) => right.absOverallMeanMedianDelta - left.absOverallMeanMedianDelta || left.itemId.localeCompare(right.itemId))[0];
+  const protectedExcludedSplits = ["internal_validation", "hidden_benchmark"];
+  const protectedRatingsUsedForFit = includedRatings.filter((rating) => protectedExcludedSplits.includes(positionById.get(rating.positionId)?.split)).length;
+  return {
+    id: `reliability-weight-model-${snapshotId}`,
+    releaseId,
+    labelSnapshotId: snapshotId,
+    targetLabelStatus: status,
+    reliabilityWeightModelId: "uniform-v1-with-sensitivity",
+    modelFamily: "uniform_equal_rater_weight",
+    frozenBeforeAggregation: true,
+    learnedReliabilityWeightsUsed: false,
+    fitDataProvenance: {
+      permittedFitSplits: ["public_train"],
+      protectedExcludedSplits,
+      fitRatingCount: 0,
+      fitItemCount: 0,
+      protectedRatingsUsedForFit: 0,
+      observedProtectedRatingRows: protectedRatingsUsedForFit,
+      rationale: "The seed release uses a frozen uniform rater-weight model; protected validation and hidden benchmark ratings are observed for reporting only and are not fit data.",
+    },
+    raterWeights,
+    effectiveContribution: {
+      maxSingleRaterContributionShare: itemContributionRows[0]?.largestSingleRaterContributionShare ?? null,
+      singleRaterDominatedItemIds: itemContributionRows.filter((row) => row.largestSingleRaterContributionShare > 0.5).map((row) => row.itemId),
+      independentExpertReviewRequiredItemIds: itemContributionRows.filter((row) => row.independentExpertReviewRequired).map((row) => row.itemId),
+      itemRows: itemContributionRows,
+      dominanceReviewStatus: itemContributionRows.some((row) => row.independentExpertReviewRequired)
+        ? "single_rater_dominance_review_required_before_strong_claims"
+        : "single_rater_dominance_disclosed",
+    },
+    sensitivitySummary: {
+      unweightedMeanMatchesHeadline: true,
+      unweightedMeanPolicy: "Headline labels use equal per-rater means; no reliability-upweighted mean is substituted.",
+      medianSensitivityAvailable: true,
+      meanAbsMeanMedianDeltaByDimension: Object.fromEntries(
+        RUBRIC_DIMENSIONS.map((dimension) => {
+          const values = sensitivityRows
+            .map((row) => row.dimensionMeanMinusMedian[dimension])
+            .filter((value) => typeof value === "number")
+            .map((value) => Math.abs(value));
+          return [dimension, values.length ? round(mean(values)) : null];
+        }),
+      ),
+      maxOverallMeanMedianDelta: maxOverallDeltaRow?.absOverallMeanMedianDelta ?? null,
+      maxOverallMeanMedianDeltaItemId: maxOverallDeltaRow?.itemId ?? null,
+      itemRows: sensitivityRows,
+    },
+    includedRatingProvenance: {
+      includedRatingCount: includedRatings.length,
+      excludedRatingCount: excludedRatings.length,
+      includedRatingKinds: countBy(includedRatings, "kind"),
+      includedRaterCount: raterWeights.length,
+      includedItemCount: Object.keys(itemLabels).length,
+    },
+    releaseUseStatus: "uniform_weights_frozen_with_sensitivity_report",
+  };
+}
+
+export function createLabelSnapshot(id, releaseId, ratings, pairs, status = "initial_only", positionList = positions) {
+  const snapshotRatings = ratingsEligibleForLabelSnapshot(ratings, positionList);
+  const excludedBlindAggregationRows = ratings
+    .filter((rating) => !snapshotRatings.includes(rating))
+    .map((rating) => ({
+      ratingId: rating.id,
+      itemId: makeItemId(rating.positionId, rating.critiqueId),
+      exclusionReason: hiddenBenchmarkInitialRatingPolicy(rating, positionList),
+    }));
+  const itemLabels = Object.fromEntries(
+    pairs.map(({ positionId, critiqueId }) => [makeItemId(positionId, critiqueId), aggregateRatings(positionId, critiqueId, snapshotRatings, status)]),
+  );
+  const reliabilityWeightModel = buildReliabilityWeightModelReport(id, releaseId, snapshotRatings, pairs, itemLabels, status, positionList);
+  return {
+    id,
+    releaseId,
+    targetLabelVersion: status === "benchmark_frozen" ? "benchmark_frozen" : status === "adjudicated" ? "adjudicated" : "initial_mean",
+    status,
+    rubricVersion: "lmca-app-f-2026-10",
+    reliabilityWeightModelId: "uniform-v1-with-sensitivity",
+    reliabilityWeightModel,
+    aggregationSensitivity: reliabilityWeightModel.sensitivitySummary,
+    includedRatingProvenance: reliabilityWeightModel.includedRatingProvenance,
+    excludedBlindAggregationRows,
+    createdAt: new Date().toISOString(),
+    itemLabels,
+    denominatorCounts: {
+      blindInitialRatings: countKind(ratings, "blind_initial"),
+      revisions: countKind(ratings, "revision"),
+      selfChecks: countKind(ratings, "self_check"),
+      expertChecks: countKind(ratings, "expert_check"),
+      modelAssistedChecks: countKind(ratings, "model_assisted_check"),
+      adjudicationLabels: countKind(ratings, "adjudication"),
+      totalRows: ratings.length,
+    },
+  };
+}
+
+export function selectPrimaryRaterAnchor(
+  ratings,
+  pairs,
+  options = {},
+) {
+  const allowedKinds = options.allowedKinds ?? ["blind_initial"];
+  const eligibleItemIds = new Set(pairs.map(({ positionId, critiqueId }) => makeItemId(positionId, critiqueId)));
+  const coverageByRater = {};
+  ratings
+    .filter((rating) => allowedKinds.includes(rating.kind) && eligibleItemIds.has(makeItemId(rating.positionId, rating.critiqueId)))
+    .forEach((rating) => {
+      coverageByRater[rating.raterId] ??= { raterId: rating.raterId, itemIds: new Set(), tiers: new Set() };
+      coverageByRater[rating.raterId].itemIds.add(makeItemId(rating.positionId, rating.critiqueId));
+      coverageByRater[rating.raterId].tiers.add(rating.raterTier);
+    });
+  const rows = Object.values(coverageByRater)
+    .map((row) => ({
+      raterId: row.raterId,
+      coverageItemCount: row.itemIds.size,
+      coverageShare: round(row.itemIds.size / Math.max(1, eligibleItemIds.size)),
+      raterTiers: [...row.tiers].sort(),
+    }))
+    .sort((left, right) => right.coverageItemCount - left.coverageItemCount || left.raterId.localeCompare(right.raterId));
+  const selected = rows[0] ?? { raterId: null, coverageItemCount: 0, coverageShare: 0, raterTiers: [] };
+  return {
+    ...selected,
+    candidateRows: rows,
+    selectionPolicy: "predeclared_max_blind_initial_coverage_tie_break_rater_id",
+    allowedKinds,
+    frozenBeforeModelEvaluation: true,
+    prohibitedPostHocCriteria: ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
+  };
+}
+
+export function createPrimaryRaterAnchorSnapshot(id, releaseId, ratings, pairs, options = {}) {
+  const anchor = options.anchor ?? selectPrimaryRaterAnchor(ratings, pairs, options);
+  const allowedKinds = anchor.allowedKinds ?? options.allowedKinds ?? ["blind_initial"];
+  const anchorRatings = ratings.filter((rating) => rating.raterId === anchor.raterId && allowedKinds.includes(rating.kind));
+  const itemLabels = Object.fromEntries(
+    pairs.map(({ positionId, critiqueId }) => [makeItemId(positionId, critiqueId), aggregateRatings(positionId, critiqueId, anchorRatings, "primary_rater_anchor")]),
+  );
+  return {
+    id,
+    releaseId,
+    targetLabelVersion: "primary_rater_anchor",
+    status: "primary_rater_anchor",
+    rubricVersion: "lmca-app-f-2026-10",
+    reliabilityWeightModelId: "single-primary-rater-no-reliability-weighting",
+    createdAt: new Date().toISOString(),
+    primaryRaterAnchor: anchor,
+    itemLabels,
+    denominatorCounts: {
+      blindInitialRatings: countKind(anchorRatings, "blind_initial"),
+      revisions: countKind(anchorRatings, "revision"),
+      selfChecks: countKind(anchorRatings, "self_check"),
+      expertChecks: countKind(anchorRatings, "expert_check"),
+      modelAssistedChecks: countKind(anchorRatings, "model_assisted_check"),
+      adjudicationLabels: countKind(anchorRatings, "adjudication"),
+      totalRows: anchorRatings.length,
+    },
+    aggregationSensitivity: {
+      unweightedMedianAvailable: false,
+      finalAverageApproximation: false,
+      note: "Primary-rater anchor preserves LMCA Table-5-style target semantics; consensus snapshots should be reported separately for quality-sensitive targets.",
+    },
+  };
+}
+
+export function buildReleaseGateProfile(releaseId) {
+  return {
+    id: `gate-${releaseId}`,
+    releaseId,
+    claimTier: "hidden_benchmark",
+    frozenAt: "2026-09-30T12:00:00.000Z",
+    sourceCriticalCore: [
+      gate("position-critique-units", "Position + critique unit model", "pass", "source_critical_core", "Position, Critique, ItemTextVersion, and Rating records are keyed by position and critique ids."),
+      gate("seven-dimensions", "Seven exact LMCA dimensions", "pass", "source_critical_core", "RUBRIC_DIMENSIONS stores centrality, strength, correctness, clarity, dead_weight, single_issue, overall."),
+      gate("blind-initial", "Blind initial rating surface", "pass", "source_critical_core", "createBlindRatingView strips source, tags, benchmark status, model scores, and peer ratings."),
+      gate("immutable-revisions", "Original ratings preserved after revision", "pass", "source_critical_core", "appendRatingRevision creates a child revision with parentRatingId and does not mutate the original."),
+      gate("metric-families", "Weighted pairwise and custom loss kept separate", "pass", "source_critical_core", "Evaluation UI and scoring functions compute separate metric families."),
+    ],
+    benchmarkQualitySafeguards: [
+      gate("split-isolation", "Position-cluster split isolation", "partial", "benchmark_quality", "Schema stores cluster ids and split labels; import-time blocking is ready for backend enforcement."),
+      gate("release-manifests", "Public/internal/hidden manifests", "pass", "benchmark_quality", "createExportManifest emits split-aware manifests and excludes hidden benchmark from public/training exports."),
+      gate("artifact-balance", "Source/style artifact balance", "partial", "benchmark_quality", "Position and critique source/style fields are modeled and shown in release reports."),
+      gate("access-audit", "Hidden benchmark access audit", "pass", "benchmark_quality", "Admin-only benchmark endpoints write append-only exposure logs and feed the hidden benchmark freeze report."),
+    ],
+    claimGatedDiagnostics: [
+      gate("derived-utility", "Full-rubric derived utility diagnostic", "pass", "claim_gated_diagnostic", "defaultFullRubricUtility normalizes dead_weight and declares low-clarity target policy."),
+      gate("sycophancy", "Sycophancy and orthodoxy probes", "deferred", "claim_gated_diagnostic", "Not run for the seed demo because no robustness claim is made.", "Required only when a release makes deference/orthodoxy robustness claims."),
+      gate("obfuscation", "Obfuscation stress probes", "deferred", "claim_gated_diagnostic", "Seed rubric fixtures include obfuscation handling; generated stress runs are not claimed.", "Required when reporting obfuscated-argument robustness."),
+    ],
+  };
+}
+
+export function evaluateReleaseGateProfile(profile) {
+  const checks = [...profile.sourceCriticalCore, ...profile.benchmarkQualitySafeguards, ...profile.claimGatedDiagnostics];
+  return {
+    passCount: checks.filter((check) => check.status === "pass").length,
+    failCount: checks.filter((check) => check.status === "fail").length,
+    partialCount: checks.filter((check) => check.status === "partial").length,
+    deferredCount: checks.filter((check) => check.status === "deferred").length,
+    blockingFailures: checks.filter((check) => check.status === "fail" && check.tier !== "claim_gated_diagnostic"),
+  };
+}
+
+export function createExportManifest(kind, releaseId, positionList = positions, critiqueList = critiques, labelSnapshot) {
+  const hiddenBenchmarkExcluded = kind === "public" || kind === "training";
+  const includedSplits = allowedSplitsForExport(kind);
+  const includedPositionIds = new Set(positionList.filter((position) => includedSplits.includes(position.split)).map((position) => position.id));
+  const includedCritiques = critiqueList.filter((critique) => includedPositionIds.has(critique.positionId));
+  return {
+    id: `${kind}-manifest-${releaseId}`,
+    kind,
+    releaseId,
+    createdAt: new Date().toISOString(),
+    includedSplits,
+    excludedSplits: hiddenBenchmarkExcluded ? ["hidden_benchmark", "internal_validation"] : [],
+    rightsClearedOnly: kind === "public",
+    hiddenBenchmarkExcluded,
+    labelSnapshotId: labelSnapshot?.id,
+    counts: {
+      positions: includedPositionIds.size,
+      critiques: includedCritiques.length,
+      itemLabels: labelSnapshot ? Object.keys(labelSnapshot.itemLabels).length : 0,
+    },
+    notes: [
+      "Source and admin tags remain excluded from blind rater views.",
+      "Blind initial ratings, revisions, checks, and adjudication labels are counted separately.",
+      hiddenBenchmarkExcluded ? "Hidden benchmark and protected validation splits are excluded." : "Restricted export requires exposure logging.",
+    ],
+  };
+}
+
+export function buildTrainingExport(
+  releaseId,
+  labelSnapshot,
+  positionList = positions,
+  critiqueList = critiques,
+  ratings = seedRatings,
+  contextSnapshots = ratingContextSnapshots,
+  options = {},
+) {
+  const includedSplits = options.includedSplits ?? ["public_train"];
+  const excludedSplits = options.excludedSplits ?? ["public_dev", "internal_validation", "hidden_benchmark", "stress_test"];
+  const includedPositions = positionList.filter((position) => includedSplits.includes(position.split));
+  const excludedPositions = positionList.filter((position) => excludedSplits.includes(position.split));
+  const includedPositionIds = new Set(includedPositions.map((position) => position.id));
+  const includedCritiques = critiqueList.filter((critique) => includedPositionIds.has(critique.positionId));
+  const includedCritiqueIds = new Set(includedCritiques.map((critique) => critique.id));
+  const includedRatings = ratings.filter((rating) => includedPositionIds.has(rating.positionId) && includedCritiqueIds.has(rating.critiqueId));
+  const pointwiseExamples = includedCritiques
+    .map((critique) => buildPointwiseTrainingExample(critique, positionList, labelSnapshot, includedRatings, contextSnapshots))
+    .filter(Boolean);
+  const positionToOveralls = Object.fromEntries(
+    includedPositions.map((position) => [
+      position.id,
+      Object.fromEntries(
+        includedCritiques
+          .filter((critique) => critique.positionId === position.id)
+          .map((critique) => [critique.id, labelSnapshot.itemLabels[makeItemId(position.id, critique.id)]?.weightedMeanScores.overall])
+          .filter(([, score]) => isValidScore(score)),
+      ),
+    ]),
+  );
+  const pairwiseComparisonSnapshot = buildPairwiseComparisonSnapshot(
+    `training-pairwise-${releaseId}`,
+    labelSnapshot.id,
+    labelSnapshot.targetLabelVersion,
+    positionToOveralls,
+  );
+  const labelByItemId = labelSnapshot.itemLabels;
+  const pairwisePreferenceExamples = pairwiseComparisonSnapshot.nonTiedEdges.map((edge) => {
+    const itemA = labelByItemId[makeItemId(edge.positionId, edge.critiqueA)];
+    const itemB = labelByItemId[makeItemId(edge.positionId, edge.critiqueB)];
+    const overallA = itemA.weightedMeanScores.overall;
+    const overallB = itemB.weightedMeanScores.overall;
+    const preferred = overallA > overallB ? edge.critiqueA : edge.critiqueB;
+    return {
+      id: `pref-${edge.positionId}-${edge.critiqueA}-${edge.critiqueB}`,
+      positionId: edge.positionId,
+      critiqueA: edge.critiqueA,
+      critiqueB: edge.critiqueB,
+      pairwiseComparisonSnapshotId: pairwiseComparisonSnapshot.id,
+      preferredCritiqueId: preferred,
+      preferenceWeight: round(Math.abs(overallA - overallB)),
+      targetLabelVersion: labelSnapshot.targetLabelVersion,
+      marginBin: edge.marginBin,
+      lowMarginFlag: Math.abs(overallA - overallB) < (options.lowMarginThreshold ?? 0.2),
+      labelUncertaintyClass:
+        itemA.uncertaintyFlag || itemB.uncertaintyFlag
+          ? "review_before_training"
+          : Math.abs(overallA - overallB) < (options.lowMarginThreshold ?? 0.2)
+            ? "low_margin_downweight"
+            : "standard_weighted_preference",
+    };
+  });
+  const scalarRewardTargets = pointwiseExamples.map((example) => ({
+    itemId: example.itemId,
+    positionId: example.positionId,
+    critiqueId: example.critiqueId,
+    overallTarget: example.scores.overall,
+    centXStrTarget: example.centXStrWeightedMean,
+    deadWeightBadnessTarget: example.scores.dead_weight,
+    singleIssueDiagnosticTarget: example.scores.single_issue,
+    rewardPolicy: "overall_and_cent_x_strength_separate_dead_weight_badness_not_personal_agreement",
+  }));
+  const includedClusterIds = new Set(includedPositions.map((position) => position.clusterId));
+  const protectedClusterIds = new Set(excludedPositions.map((position) => position.clusterId));
+  const clusterOverlaps = [...includedClusterIds].filter((clusterId) => protectedClusterIds.has(clusterId));
+  return {
+    id: `training-export-${releaseId}`,
+    releaseId,
+    createdAt: new Date().toISOString(),
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    rubricVersion: labelSnapshot.rubricVersion,
+    exportKind: "model_improvement_training_export",
+    promptTrackExposure: options.promptTrackExposure ?? "project_full_rubric_training",
+    optimizedSurrogateObjective: {
+      pairwise: options.pairwiseSurrogate ?? "bradley_terry_logistic_margin_weighted",
+      pointwise: options.pointwiseSurrogate ?? "dimensionwise_absolute_error_or_regression",
+      scalarReward: "configured_downstream_from_overall_and_cent_x_strength_separately",
+      tieHandling: "human_ties_excluded_from_pairwise_preferences",
+      lowMarginTreatment: "retain_continuous_weight_and_flag_below_0_20",
+      calibrationTargetDistribution: "none_in_export_raw_labels_only",
+      lmcaEvaluationMetricsSeparate: true,
+    },
+    protectedSplitPolicy: {
+      includedSplits,
+      excludedSplits,
+      publicDevPolicy: "development_or_evaluation_by_default_not_training",
+      hiddenBenchmarkExcluded: !pointwiseExamples.some((example) => example.split === "hidden_benchmark"),
+      internalValidationExcluded: !pointwiseExamples.some((example) => example.split === "internal_validation"),
+      positionClusterIsolationStatus: clusterOverlaps.length ? "blocked" : "pass",
+      overlappingProtectedClusterIds: clusterOverlaps,
+    },
+    counts: {
+      pointwiseExamples: pointwiseExamples.length,
+      pairwisePreferenceExamples: pairwisePreferenceExamples.length,
+      scalarRewardTargets: scalarRewardTargets.length,
+      includedRatings: includedRatings.length,
+      includedPositions: includedPositions.length,
+      excludedProtectedPositions: excludedPositions.length,
+    },
+    ratingContextSnapshots: contextSnapshots.filter((snapshot) => includedPositionIds.has(snapshot.positionId)),
+    pairwiseComparisonSnapshot,
+    pairwiseMarginDistribution: pairwiseMarginDistribution(pairwiseComparisonSnapshot),
+    pointwiseExamples,
+    pairwisePreferenceExamples,
+    scalarRewardTargets,
+    notes: [
+      "Training exports use training-approved splits only by default.",
+      "Hidden benchmark and protected validation splits are excluded from model-improvement artifacts.",
+      "LMCA evaluation metrics remain frozen report metrics, not optimized training losses.",
+      "Label uncertainty, rater coverage, spread, and context-snapshot provenance are preserved for downstream exclusion or downweighting.",
+    ],
+  };
+}
+
+export function buildLabelChannelSeparationReport(
+  releaseId,
+  labelSnapshot,
+  trainingExport,
+  certification = buildCertificationAudit(),
+  rubricQaCoverage = buildRubricQaCoverageReport(releaseId),
+) {
+  const forbiddenChannels = ["personal_agreement", "preference_persuasion", "persuasion", "user_agreement"];
+  const itemLabelRows = Object.entries(labelSnapshot.itemLabels ?? {}).map(([itemId, label]) => {
+    const scoreFields = Object.keys(label.weightedMeanScores ?? {}).sort();
+    const nonLmcaScoreFields = scoreFields.filter((field) => !RUBRIC_DIMENSIONS.includes(field));
+    return {
+      itemId,
+      labelStatus: label.finalLabelStatus,
+      scoreFields,
+      labelChannel: "lmca_argumentative_quality",
+      nonLmcaScoreFields,
+      channelStatus: nonLmcaScoreFields.length ? "non_lmca_score_field_present" : "pass",
+    };
+  });
+  const trainingRows = [
+    ...(trainingExport.pointwiseExamples ?? []).map((example) => ({
+      rowId: example.itemId,
+      surface: "training_pointwise",
+      labelChannel: "lmca_argumentative_quality",
+      policy: "uses_lmca_score_vector",
+      forbiddenChannelPresent: forbiddenChannels.some((channel) => JSON.stringify(example).includes(channel)),
+    })),
+    ...(trainingExport.pairwisePreferenceExamples ?? []).map((example) => ({
+      rowId: example.id,
+      surface: "training_pairwise_preference",
+      labelChannel: "lmca_argumentative_quality_preference_from_overall_gap",
+      policy: "preference_is_pairwise_critique_quality_order_not_personal_preference",
+      forbiddenChannelPresent: forbiddenChannels.some((channel) => JSON.stringify(example).includes(channel)),
+    })),
+    ...(trainingExport.scalarRewardTargets ?? []).map((target) => ({
+      rowId: target.itemId,
+      surface: "training_scalar_reward",
+      labelChannel: "lmca_argumentative_quality_reward_target",
+      policy: target.rewardPolicy,
+      forbiddenChannelPresent:
+        !String(target.rewardPolicy).includes("not_personal_agreement") ||
+        forbiddenChannels.some((channel) => channel !== "personal_agreement" && String(target.rewardPolicy).includes(channel)),
+    })),
+  ];
+  const surfaceRows = [
+    {
+      surface: "rating_ui",
+      labelChannel: "lmca_argumentative_quality",
+      evidence: "RUBRIC_DIMENSIONS defines the rater-visible score fields.",
+      status: RUBRIC_DIMENSIONS.length === 7 ? "pass" : "review_required",
+    },
+    {
+      surface: "label_snapshot",
+      labelChannel: "lmca_argumentative_quality",
+      evidence: `${itemLabelRows.length} item labels expose only LMCA score dimensions.`,
+      status: itemLabelRows.some((row) => row.nonLmcaScoreFields.length) ? "review_required" : "pass",
+    },
+    {
+      surface: "training_export",
+      labelChannel: "lmca_argumentative_quality",
+      evidence: `${trainingRows.length} training rows audited for forbidden agreement/persuasion channels.`,
+      status: trainingRows.some((row) => row.forbiddenChannelPresent) ? "review_required" : "pass",
+    },
+    {
+      surface: "certification",
+      labelChannel: "lmca_argumentative_quality_calibration",
+      evidence: `${certification.packs.length} packs and ${certification.loadedGoldLibraryItems} gold items remain training exposure.`,
+      status: certification.modelJudgeGoldViolations.length || !certification.trainingExposureOnly ? "review_required" : "pass",
+    },
+    {
+      surface: "rubric_qa_exports",
+      labelChannel: "lmca_argumentative_quality_public_qa",
+      evidence: `${rubricQaCoverage.counts.fixtureCount} QA fixtures are public training/QA only.`,
+      status: rubricQaCoverage.counts.protectedExposureViolationCount ? "review_required" : "pass",
+    },
+  ];
+  const violationRows = [
+    ...itemLabelRows
+      .filter((row) => row.nonLmcaScoreFields.length > 0)
+      .map((row) => ({ surface: "label_snapshot", rowId: row.itemId, reason: `non-LMCA score fields: ${row.nonLmcaScoreFields.join(", ")}` })),
+    ...trainingRows
+      .filter((row) => row.forbiddenChannelPresent)
+      .map((row) => ({ surface: row.surface, rowId: row.rowId, reason: `forbidden channel in policy: ${row.policy}` })),
+    ...surfaceRows
+      .filter((row) => row.status !== "pass")
+      .map((row) => ({ surface: row.surface, rowId: row.surface, reason: row.evidence })),
+  ];
+  return {
+    id: `label-channel-separation-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      allowedChannel: "lmca_argumentative_quality",
+      forbiddenChannels,
+      separationRule:
+        "LMCA labels score critique argumentative quality only; personal agreement, persuasion, user preference, and sycophancy/orthodoxy cues remain separate diagnostics or prohibited training channels.",
+      trainingRule:
+        "Pairwise preferences and scalar rewards derive from LMCA overall and rubric dimensions, not from personal-agreement or persuasion labels.",
+    },
+    counts: {
+      auditedSurfaces: surfaceRows.length,
+      itemLabelRows: itemLabelRows.length,
+      trainingRows: trainingRows.length,
+      violationCount: violationRows.length,
+      forbiddenTrainingChannelRows: trainingRows.filter((row) => row.forbiddenChannelPresent).length,
+      nonLmcaSnapshotFieldRows: itemLabelRows.filter((row) => row.nonLmcaScoreFields.length > 0).length,
+    },
+    rubricDimensions: RUBRIC_DIMENSIONS,
+    surfaceRows,
+    itemLabelRows,
+    trainingRows,
+    violationRows,
+    releaseUseStatus: violationRows.length ? "label_channel_separation_review_required" : "lmca_argumentative_quality_channel_separated",
+  };
+}
+
+export function summarizeAdjudication(memos = adjudicationMemos) {
+  return memos.reduce((acc, memo) => {
+    (memo.disagreementTaxonomy ?? []).forEach((taxonomy) => {
+      acc[taxonomy] = (acc[taxonomy] ?? 0) + 1;
+    });
+    return acc;
+  }, {});
+}
+
+export function buildAdjudicationMemoAuditReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  memos = adjudicationMemos,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueByItemId = new Map(critiqueList.map((critique) => [makeItemId(critique.positionId, critique.id), critique]));
+  const memoRows = memos
+    .map((memo) => {
+      const itemId = makeItemId(memo.positionId, memo.critiqueId);
+      const position = positionById.get(memo.positionId);
+      const itemRatings = ratings.filter((rating) => rating.positionId === memo.positionId && rating.critiqueId === memo.critiqueId);
+      const plausibleInterpretations = memo.plausibleInterpretations ?? [];
+      const critiqueRefutesInterpretations = memo.critiqueRefutesInterpretations ?? [];
+      const raterRationales = itemRatings
+        .filter((rating) => rating.rationale)
+        .map((rating) => ({
+          ratingId: rating.id,
+          raterId: rating.raterId,
+          kind: rating.kind,
+          raterTier: rating.raterTier,
+          rationale: rating.rationale,
+        }));
+      return {
+        memoId: memo.id,
+        itemId,
+        positionId: memo.positionId,
+        critiqueId: memo.critiqueId,
+        split: position?.split ?? "unknown",
+        releaseCritical: isReleaseCriticalSplit(position?.split),
+        targetLabelPresent: Boolean(labelSnapshot.itemLabels[itemId]),
+        topicFamily: position?.topicFamily ?? "unknown",
+        contestedInterpretation: memo.contestedInterpretation,
+        plausibleInterpretations,
+        plausibleInterpretationCount: plausibleInterpretations.length,
+        worstPlausibleInterpretationConsidered: memo.worstPlausibleInterpretationConsidered ?? null,
+        critiqueRefutesInterpretations,
+        critiqueRefutesInterpretationsRecorded: Array.isArray(memo.critiqueRefutesInterpretations),
+        adversarialPlausibilityWeightingDecision: memo.adversarialPlausibilityWeightingDecision ?? null,
+        bottomLineDependence: Boolean(memo.bottomLineDependence),
+        minorityRationales: memo.minorityRationales ?? [],
+        minorityRationaleCount: (memo.minorityRationales ?? []).length,
+        clearlyUnsatisfactoryImprecision: Boolean(memo.clearlyUnsatisfactoryImprecision),
+        obfuscatedOrMaskedFallacyRisk: Boolean(memo.obfuscatedOrMaskedFallacyRisk),
+        stableJudgment: memo.stableJudgment ?? null,
+        benchmarkEligibilityDecision: memo.benchmarkEligibilityDecision,
+        splitDecision: memo.splitDecision,
+        disagreementTaxonomy: memo.disagreementTaxonomy ?? [],
+        unresolvedDisagreementClass: memo.unresolvedDisagreementClass ?? null,
+        raterRationales,
+        critiqueSourceType: critiqueByItemId.get(itemId)?.sourceType ?? "unknown",
+        critiqueStyleBand: critiqueByItemId.get(itemId)?.styleBand ?? "unknown",
+      };
+    })
+    .sort((left, right) => Number(right.releaseCritical) - Number(left.releaseCritical) || left.itemId.localeCompare(right.itemId));
+  const incompleteAmbiguityRows = memoRows.filter(
+    (row) =>
+      row.releaseCritical &&
+      (!row.plausibleInterpretationCount ||
+        !row.worstPlausibleInterpretationConsidered ||
+        !row.critiqueRefutesInterpretationsRecorded ||
+        !row.adversarialPlausibilityWeightingDecision),
+  );
+  const bottomLineDependentRows = memoRows.filter((row) => row.bottomLineDependence);
+  const imprecisionRows = memoRows.filter((row) => row.clearlyUnsatisfactoryImprecision);
+  const obfuscationRows = memoRows.filter((row) => row.obfuscatedOrMaskedFallacyRisk);
+  return {
+    id: `adjudication-memo-audit-${releaseId}-${labelSnapshot.id}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      ambiguityRule:
+        "Release-critical ambiguity memos must record plausible interpretations, the worst plausible interpretation considered, which interpretations the critique refutes, and an adversarial-plausibility weighting decision.",
+      bottomLineRule:
+        "When strength or correctness turns on disputed bottom-line premises, release validation preserves minority rationales rather than forcing consensus.",
+      imprecisionRule:
+        "Clearly unsatisfactory imprecision and obfuscated or masked-fallacy cases are reported separately from ordinary low-score disagreement.",
+    },
+    counts: {
+      memoCount: memoRows.length,
+      releaseCriticalMemoCount: memoRows.filter((row) => row.releaseCritical).length,
+      ambiguousMemoCount: memoRows.filter((row) => row.plausibleInterpretationCount > 1 || row.contestedInterpretation).length,
+      completeAmbiguityMemoCount: memoRows.filter(
+        (row) =>
+          row.plausibleInterpretationCount &&
+          row.worstPlausibleInterpretationConsidered &&
+          row.critiqueRefutesInterpretationsRecorded &&
+          row.adversarialPlausibilityWeightingDecision,
+      ).length,
+      incompleteReleaseCriticalAmbiguityMemoCount: incompleteAmbiguityRows.length,
+      bottomLineDependentItemCount: bottomLineDependentRows.length,
+      minorityRationaleCount: memoRows.reduce((sum, row) => sum + row.minorityRationaleCount, 0),
+      clearlyUnsatisfactoryImprecisionItemCount: imprecisionRows.length,
+      obfuscatedOrMaskedFallacyItemCount: obfuscationRows.length,
+    },
+    taxonomyCounts: summarizeAdjudication(memos),
+    memoRows,
+    incompleteAmbiguityRows,
+    bottomLineDependentRows,
+    imprecisionRows,
+    obfuscationRows,
+    releaseUseStatus:
+      incompleteAmbiguityRows.length > 0
+        ? "adjudication_memo_fields_incomplete"
+        : bottomLineDependentRows.length || imprecisionRows.length || obfuscationRows.length
+          ? "adjudication_limitations_preserved"
+          : "adjudication_memos_complete",
+  };
+}
+
+export function buildPostDiscussionDisagreementReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  memos = adjudicationMemos,
+  threshold = 0.3,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const memosByItemId = memos.reduce((acc, memo) => {
+    const itemId = makeItemId(memo.positionId, memo.critiqueId);
+    acc[itemId] ??= [];
+    acc[itemId].push(memo);
+    return acc;
+  }, {});
+  const itemRows = critiqueList
+    .map((critique) => {
+      const position = positionById.get(critique.positionId);
+      const releaseCritical = isReleaseCriticalSplit(position?.split);
+      if (!releaseCritical) return null;
+      const itemId = makeItemId(critique.positionId, critique.id);
+      const itemRatings = ratings.filter((rating) => rating.positionId === critique.positionId && rating.critiqueId === critique.id);
+      const finalRaterIds = [...new Set(itemRatings.map((rating) => rating.raterId))].sort();
+      const byDimensionFinalSpread = Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, spread(itemRatings, dimension)]));
+      const measuredSpreads = Object.entries(byDimensionFinalSpread).filter(([, value]) => typeof value === "number");
+      const maxEntry = measuredSpreads.sort((left, right) => right[1] - left[1])[0] ?? [null, null];
+      const itemMemos = memosByItemId[itemId] ?? [];
+      const label = labelSnapshot.itemLabels[itemId];
+      const highSpread = typeof maxEntry[1] === "number" && maxEntry[1] > threshold;
+      const insufficientFinalOverlap = finalRaterIds.length < 2;
+      const classification = highSpread
+        ? itemMemos.length
+          ? "high_post_discussion_spread_classified_with_memo"
+          : "high_post_discussion_spread_requires_adjudication_memo"
+        : insufficientFinalOverlap
+          ? "insufficient_final_rater_overlap"
+          : "post_discussion_spread_within_threshold";
+      return {
+        itemId,
+        itemHash: `sha256:${itemId}:post-discussion-disagreement`,
+        split: position?.split ?? "unknown",
+        topicFamily: position?.topicFamily ?? "unknown",
+        releaseCritical,
+        targetLabelPresent: Boolean(label),
+        blindInitialRatingCount: itemRatings.filter((rating) => rating.kind === "blind_initial").length,
+        finalRatingCount: itemRatings.length,
+        finalRaterIds,
+        ratingKinds: countBy(itemRatings, "kind"),
+        threshold,
+        spreadPreDiscussionOverall: label?.spreadPreDiscussion ?? null,
+        spreadPostDiscussionOverall: label?.spreadPostDiscussion ?? null,
+        byDimensionFinalSpread,
+        maxFinalSpreadDimension: maxEntry[0],
+        maxFinalSpread: maxEntry[1],
+        highSpread,
+        adjudicationMemoIds: itemMemos.map((memo) => memo.id),
+        unresolvedDisagreementClasses: itemMemos.map((memo) => memo.unresolvedDisagreementClass).filter(Boolean),
+        disagreementTaxonomy: uniqueStrings(itemMemos.flatMap((memo) => memo.disagreementTaxonomy ?? [])),
+        minorityRationaleCount: itemMemos.reduce((sum, memo) => sum + (memo.minorityRationales?.length ?? 0), 0),
+        classification,
+        releaseAction:
+          classification === "high_post_discussion_spread_requires_adjudication_memo"
+            ? "block_release_until_residual_disagreement_is_classified"
+            : classification === "high_post_discussion_spread_classified_with_memo"
+              ? "publish_residual_disagreement_class_and_minority_rationale"
+              : classification === "insufficient_final_rater_overlap"
+                ? "disclose_thin_overlap_and_do_not_claim_consensus"
+                : "eligible_for_low_spread_release_claims",
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => Number(right.highSpread) - Number(left.highSpread) || left.itemId.localeCompare(right.itemId));
+  const highSpreadRows = itemRows.filter((row) => row.highSpread);
+  const missingMemoRows = itemRows.filter((row) => row.classification === "high_post_discussion_spread_requires_adjudication_memo");
+  const classifiedHighSpreadRows = itemRows.filter((row) => row.classification === "high_post_discussion_spread_classified_with_memo");
+  const insufficientOverlapRows = itemRows.filter((row) => row.classification === "insufficient_final_rater_overlap");
+  return {
+    id: `post-discussion-disagreement-${releaseId}-${labelSnapshot.id}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      maxSpreadThreshold: threshold,
+      finalSpreadDefinition:
+        "Final spread is the maximum per-dimension spread across rating rows included in the release label after blind initial ratings, checks, revisions, or adjudication rows are recorded.",
+      releaseRule:
+        "Release-critical items with final max rater spread above the threshold must keep a structured adjudication memo and residual-disagreement class; they must not be forced into silent consensus.",
+      thinOverlapRule: "Items with fewer than two final raters are disclosed as thin overlap rather than treated as low-disagreement evidence.",
+    },
+    counts: {
+      releaseCriticalItemCount: itemRows.length,
+      highSpreadItemCount: highSpreadRows.length,
+      classifiedHighSpreadItemCount: classifiedHighSpreadRows.length,
+      missingMemoHighSpreadItemCount: missingMemoRows.length,
+      insufficientFinalOverlapItemCount: insufficientOverlapRows.length,
+    },
+    byClassification: countBy(itemRows, "classification"),
+    itemRows,
+    highSpreadRows,
+    classifiedHighSpreadRows,
+    missingMemoRows,
+    insufficientOverlapRows,
+    releaseUseStatus: missingMemoRows.length
+      ? "post_discussion_disagreement_memo_required"
+      : classifiedHighSpreadRows.length
+        ? "post_discussion_disagreement_classified"
+        : insufficientOverlapRows.length
+          ? "post_discussion_spread_check_thin_no_high_spread_observed"
+          : "post_discussion_disagreement_checked",
+  };
+}
+
+export function buildCommonMaps(labelSnapshot, run = fullRubricEvaluationRun) {
+  const modelOveralls = {};
+  const humanOveralls = {};
+  const modelFullRatings = {};
+  const humanFullRatings = {};
+  const modelFullByPosition = {};
+  const humanFullByPosition = {};
+  run.predictions.forEach((prediction) => {
+    const label = labelSnapshot.itemLabels[makeItemId(prediction.positionId, prediction.critiqueId)];
+    const humanOverall = label?.weightedMeanScores.overall;
+    const modelOverall = prediction.scores.overall;
+    if (typeof humanOverall !== "number" || typeof modelOverall !== "number") return;
+    humanOveralls[prediction.positionId] ??= {};
+    modelOveralls[prediction.positionId] ??= {};
+    humanFullByPosition[prediction.positionId] ??= {};
+    modelFullByPosition[prediction.positionId] ??= {};
+    humanOveralls[prediction.positionId][prediction.critiqueId] = humanOverall;
+    modelOveralls[prediction.positionId][prediction.critiqueId] = modelOverall;
+    humanFullRatings[makeItemId(prediction.positionId, prediction.critiqueId)] = label.weightedMeanScores;
+    modelFullRatings[makeItemId(prediction.positionId, prediction.critiqueId)] = prediction.scores;
+    humanFullByPosition[prediction.positionId][prediction.critiqueId] = label.weightedMeanScores;
+    modelFullByPosition[prediction.positionId][prediction.critiqueId] = prediction.scores;
+  });
+  return { humanOveralls, modelOveralls, humanFullRatings, modelFullRatings, humanFullByPosition, modelFullByPosition };
+}
+
+export function buildCertificationAudit(packs = certificationPacks, items = goldLibraryItems, targets = OCTOBER_RELEASE_TARGETS) {
+  const modelJudgeViolations = items.filter((item) => item.modelJudgeAcceptedAsGold || !item.humanAdjudicated);
+  return {
+    id: "certification-audit-october-2026",
+    targetGoldLibraryItems: targets.goldLibraryItems,
+    loadedGoldLibraryItems: items.length,
+    goldLibraryStatus: items.length >= targets.goldLibraryItems ? "pass" : "incomplete",
+    modelJudgeGoldViolations: modelJudgeViolations.map((item) => item.id),
+    trainingExposureOnly: items.every((item) => item.splitExposure === "training_qa_only" && item.protectedSplitExcluded),
+    packs: packs.map((pack) => ({
+      id: pack.id,
+      raterTier: pack.raterTier,
+      rubricVersion: pack.rubricVersion,
+      totalRequiredItems: pack.requiredItems.gold + pack.requiredItems.duplicates + pack.requiredItems.hardAmbiguity,
+      requiredItems: pack.requiredItems,
+      clusterIsolationStatus:
+        pack.hiddenBenchmarkClusterOverlap.length === 0 && pack.protectedValidationClusterOverlap.length === 0 ? "pass" : "blocked",
+      recertificationPolicy: pack.recertificationPolicy,
+      status: pack.status,
+    })),
+  };
+}
+
+export function buildProtectedSplitIsolationReport(
+  releaseId,
+  positionList = positions,
+  packs = certificationPacks,
+  goldItems = goldLibraryItems,
+  options = {},
+) {
+  const protectedSplits = options.protectedSplits ?? ["internal_validation", "hidden_benchmark"];
+  const protectedSplitSet = new Set(protectedSplits);
+  const exceptionRows = (options.deprotectionExceptions ?? []).map((exception, index) => ({
+    id: exception.id ?? `deprotection-exception-${index + 1}`,
+    clusterId: exception.clusterId,
+    fromSplit: exception.fromSplit ?? "unknown",
+    toSplit: exception.toSplit ?? "unknown",
+    loggedAt: exception.loggedAt ?? null,
+    reason: exception.reason ?? "not recorded",
+    excludedFromOrdinaryHiddenBenchmarkClaims: exception.excludedFromOrdinaryHiddenBenchmarkClaims === true,
+    status:
+      exception.clusterId && exception.excludedFromOrdinaryHiddenBenchmarkClaims === true
+        ? "logged_excluded_from_ordinary_hidden_benchmark_claims"
+        : "logged_but_not_excluded_from_ordinary_hidden_benchmark_claims",
+  }));
+  const exceptionsByCluster = exceptionRows.reduce((acc, exception) => {
+    acc[exception.clusterId] ??= [];
+    acc[exception.clusterId].push(exception);
+    return acc;
+  }, {});
+  const clusters = positionList.reduce((acc, position) => {
+    acc[position.clusterId] ??= [];
+    acc[position.clusterId].push(position);
+    return acc;
+  }, {});
+  const clusterRows = Object.entries(clusters)
+    .map(([clusterId, clusterPositions]) => {
+      const splits = [...new Set(clusterPositions.map((position) => position.split))].sort();
+      const protectedClusterSplits = splits.filter((split) => protectedSplitSet.has(split));
+      const ordinarySplits = splits.filter((split) => !protectedSplitSet.has(split));
+      const crossSplit = splits.length > 1;
+      const protectedCrossSplit = crossSplit && protectedClusterSplits.length > 0;
+      const clusterExceptions = exceptionsByCluster[clusterId] ?? [];
+      const validException = clusterExceptions.some((exception) => exception.excludedFromOrdinaryHiddenBenchmarkClaims);
+      return {
+        clusterId,
+        positionIds: clusterPositions.map((position) => position.id).sort(),
+        splits,
+        protectedSplits: protectedClusterSplits,
+        ordinarySplits,
+        crossSplit,
+        protectedCrossSplit,
+        deprotectionExceptionIds: clusterExceptions.map((exception) => exception.id),
+        ordinaryHiddenBenchmarkClaimExcluded: protectedCrossSplit,
+        isolationStatus: protectedCrossSplit
+          ? validException
+            ? "deprotection_exception_logged_excluded"
+            : "blocked_unlogged_protected_cross_split"
+          : "pass",
+      };
+    })
+    .sort((a, b) => a.clusterId.localeCompare(b.clusterId));
+  const protectedClusterIds = new Set(
+    clusterRows.filter((row) => row.protectedSplits.length > 0).map((row) => row.clusterId),
+  );
+  const packRows = packs.map((pack) => {
+    const hiddenOverlap = pack.hiddenBenchmarkClusterOverlap ?? [];
+    const validationOverlap = pack.protectedValidationClusterOverlap ?? [];
+    const overlapClusterIds = [...new Set([...hiddenOverlap, ...validationOverlap])].sort();
+    const validExceptionCount = overlapClusterIds.filter((clusterId) =>
+      (exceptionsByCluster[clusterId] ?? []).some((exception) => exception.excludedFromOrdinaryHiddenBenchmarkClaims),
+    ).length;
+    return {
+      packId: pack.id,
+      raterTier: pack.raterTier,
+      exposureClass: pack.exposureClass,
+      clusterIsolationPolicy: pack.clusterIsolationPolicy,
+      hiddenBenchmarkClusterOverlap: hiddenOverlap,
+      protectedValidationClusterOverlap: validationOverlap,
+      overlapClusterIds,
+      deprotectionExceptionCount: validExceptionCount,
+      isolationStatus:
+        overlapClusterIds.length === 0
+          ? "pass"
+          : validExceptionCount === overlapClusterIds.length
+            ? "deprotection_exception_logged_excluded"
+            : "blocked_gold_certification_protected_overlap",
+    };
+  });
+  const goldRows = goldItems.map((item) => {
+    const protectedOverlap = protectedClusterIds.has(item.clusterId);
+    const validException = (exceptionsByCluster[item.clusterId] ?? []).some((exception) => exception.excludedFromOrdinaryHiddenBenchmarkClaims);
+    return {
+      itemId: item.id,
+      clusterId: item.clusterId,
+      itemType: item.itemType,
+      splitExposure: item.splitExposure,
+      protectedSplitExcluded: item.protectedSplitExcluded === true,
+      protectedClusterOverlap: protectedOverlap,
+      isolationStatus:
+        item.splitExposure === "training_qa_only" && item.protectedSplitExcluded === true && !protectedOverlap
+          ? "pass"
+          : protectedOverlap && validException
+            ? "deprotection_exception_logged_excluded"
+            : "blocked_gold_protected_overlap",
+    };
+  });
+  const protectedCrossSplitRows = clusterRows.filter((row) => row.protectedCrossSplit);
+  const unloggedProtectedCrossSplitRows = protectedCrossSplitRows.filter((row) => row.isolationStatus === "blocked_unlogged_protected_cross_split");
+  const blockedPackRows = packRows.filter((row) => row.isolationStatus === "blocked_gold_certification_protected_overlap");
+  const blockedGoldRows = goldRows.filter((row) => row.isolationStatus === "blocked_gold_protected_overlap");
+  const ordinaryHiddenBenchmarkClaimExcludedRows = [
+    ...protectedCrossSplitRows.map((row) => ({
+      kind: "position_cluster",
+      id: row.clusterId,
+      splits: row.splits,
+      reason: row.deprotectionExceptionIds.length
+        ? "deprotection_exception_logged"
+        : "unlogged_protected_cross_split_overlap",
+      claimUse: "excluded_from_ordinary_hidden_benchmark_claims",
+    })),
+    ...packRows
+      .filter((row) => row.overlapClusterIds.length > 0)
+      .map((row) => ({
+        kind: "certification_pack",
+        id: row.packId,
+        overlapClusterIds: row.overlapClusterIds,
+        reason: "training_exposure_overlaps_protected_cluster",
+        claimUse: "excluded_from_ordinary_hidden_benchmark_claims",
+      })),
+    ...goldRows
+      .filter((row) => row.protectedClusterOverlap)
+      .map((row) => ({
+        kind: "gold_item",
+        id: row.itemId,
+        clusterId: row.clusterId,
+        reason: "training_exposure_overlaps_protected_cluster",
+        claimUse: "excluded_from_ordinary_hidden_benchmark_claims",
+      })),
+  ];
+  const blockingIssueCount = unloggedProtectedCrossSplitRows.length + blockedPackRows.length + blockedGoldRows.length;
+  return {
+    id: `protected-split-isolation-${releaseId}`,
+    releaseId,
+    protectedSplits,
+    policy: {
+      protectedSplitRule:
+        "Position clusters cannot straddle protected evaluation and public/training splits unless a deprotection exception is logged and excluded from ordinary hidden-benchmark claims.",
+      goldCertificationExposureRule:
+        "Gold, duplicate, and hard-ambiguity certification items are training exposure and cannot overlap hidden-benchmark/protected-validation clusters without recertification or deprotection review.",
+      ordinaryClaimExclusionRule:
+        "Any protected cross-split or deprotected cluster is removed from ordinary hidden-benchmark denominators and claim language until reviewed.",
+    },
+    counts: {
+      positionClusterCount: clusterRows.length,
+      crossSplitClusterCount: clusterRows.filter((row) => row.crossSplit).length,
+      protectedCrossSplitClusterCount: protectedCrossSplitRows.length,
+      unloggedProtectedCrossSplitClusterCount: unloggedProtectedCrossSplitRows.length,
+      deprotectionExceptionCount: exceptionRows.length,
+      certificationPackOverlapCount: packRows.filter((row) => row.overlapClusterIds.length > 0).length,
+      goldProtectedOverlapCount: goldRows.filter((row) => row.protectedClusterOverlap).length,
+      ordinaryClaimExcludedCount: ordinaryHiddenBenchmarkClaimExcludedRows.length,
+    },
+    clusterRows,
+    protectedCrossSplitRows,
+    deprotectionExceptionRows: exceptionRows,
+    packRows,
+    goldRows,
+    ordinaryHiddenBenchmarkClaimExcludedRows,
+    releaseUseStatus:
+      blockingIssueCount > 0
+        ? "protected_split_isolation_review_required"
+        : ordinaryHiddenBenchmarkClaimExcludedRows.length > 0 || exceptionRows.length > 0
+          ? "protected_split_exceptions_logged_excluded_from_claims"
+          : "protected_split_cluster_isolation_pass",
+  };
+}
+
+export function scoreCertificationAttempt(attempt, packs = certificationPacks) {
+  const pack = packs.find((item) => item.id === attempt.packId);
+  if (!pack) throw new Error(`Unknown certification pack: ${attempt.packId}`);
+  const completion = {
+    gold: attempt.goldItemsCompleted ?? 0,
+    duplicates: attempt.duplicateItemsCompleted ?? 0,
+    hardAmbiguity: attempt.hardAmbiguityItemsCompleted ?? 0,
+  };
+  const completionPass =
+    completion.gold >= pack.requiredItems.gold &&
+    completion.duplicates >= pack.requiredItems.duplicates &&
+    completion.hardAmbiguity >= pack.requiredItems.hardAmbiguity;
+  const dimensionMeanAbsError = Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => {
+      const values = (attempt.itemResults ?? [])
+        .map((result) => result.dimensionErrors?.[dimension])
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      return [dimension, values.length ? round(mean(values)) : null];
+    }),
+  );
+  const validDimensionValues = Object.values(dimensionMeanAbsError).filter((value) => typeof value === "number");
+  const meanAbsError = validDimensionValues.length ? round(mean(validDimensionValues)) : null;
+  const targetedRetrainingFlags = Object.entries(dimensionMeanAbsError)
+    .filter(([, value]) => typeof value === "number" && value > 0.15)
+    .map(([dimension]) => dimension);
+  const restrictionFlags = [];
+  if ((dimensionMeanAbsError.correctness ?? 0) > 0.2) restrictionFlags.push("hold_correctness_sensitive_assignments");
+  if ((dimensionMeanAbsError.clarity ?? 0) > 0.2) restrictionFlags.push("hold_low_clarity_workflows");
+  if ((dimensionMeanAbsError.dead_weight ?? 0) > 0.2) restrictionFlags.push("hold_obfuscation_dead_weight_items");
+  if ((attempt.duplicateConsistencyMeanAbsDiff ?? 1) > 0.12) restrictionFlags.push("duplicate_consistency_review_required");
+  if (!attempt.hardAmbiguityReviewPass) restrictionFlags.push("hard_ambiguity_review_required");
+
+  const rubricCurrent = attempt.rubricVersion === pack.rubricVersion;
+  const passed =
+    completionPass &&
+    rubricCurrent &&
+    meanAbsError !== null &&
+    meanAbsError <= 0.14 &&
+    targetedRetrainingFlags.length === 0 &&
+    restrictionFlags.length === 0;
+  return {
+    attemptId: attempt.id,
+    raterId: attempt.raterId,
+    packId: pack.id,
+    rubricVersion: attempt.rubricVersion,
+    status: passed ? "certified" : completionPass ? "restricted_pending_retraining" : "incomplete",
+    completion,
+    requiredItems: pack.requiredItems,
+    completionPass,
+    rubricCurrent,
+    duplicateConsistencyMeanAbsDiff: attempt.duplicateConsistencyMeanAbsDiff,
+    hardAmbiguityReviewPass: Boolean(attempt.hardAmbiguityReviewPass),
+    meanAbsError,
+    dimensionMeanAbsError,
+    targetedRetrainingFlags,
+    restrictionFlags,
+    recertificationRequired: !rubricCurrent,
+  };
+}
+
+export function buildRaterCertificationReport(raterId, attempts = seedCertificationAttempts, packs = certificationPacks) {
+  const scoredAttempts = attempts.filter((attempt) => attempt.raterId === raterId).map((attempt) => scoreCertificationAttempt(attempt, packs));
+  const latestAttempt = scoredAttempts.at(-1) ?? null;
+  return {
+    id: `certification-report-${raterId}`,
+    raterId,
+    generatedAt: new Date().toISOString(),
+    certified: latestAttempt?.status === "certified",
+    currentStatus: latestAttempt?.status ?? "not_started",
+    latestAttempt,
+    attemptCount: scoredAttempts.length,
+    attemptHistory: scoredAttempts,
+    availablePacks: packs.map((pack) => ({
+      id: pack.id,
+      raterTier: pack.raterTier,
+      rubricVersion: pack.rubricVersion,
+      totalRequiredItems: pack.requiredItems.gold + pack.requiredItems.duplicates + pack.requiredItems.hardAmbiguity,
+      requiredItems: pack.requiredItems,
+      recertificationPolicy: pack.recertificationPolicy,
+    })),
+  };
+}
+
+export function buildRubricVersionDriftReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  certificationAttempts = seedCertificationAttempts,
+  packs = certificationPacks,
+  goldItems = goldLibraryItems,
+  currentRubricVersion = CURRENT_RUBRIC_VERSION,
+) {
+  const ratingRubricVersionCounts = countBy(ratings, "rubricVersion");
+  const ratingRubricVersions = Object.keys(ratingRubricVersionCounts).filter(Boolean).sort();
+  const labelSnapshotRubricVersion = labelSnapshot?.rubricVersion ?? null;
+  const mixedRatingVersions = ratingRubricVersions.length > 1;
+  const snapshotRubricCurrent = labelSnapshotRubricVersion === null || labelSnapshotRubricVersion === currentRubricVersion;
+  const mixedRubricSnapshotStatus =
+    mixedRatingVersions || !snapshotRubricCurrent
+      ? "mixed_or_noncurrent_rubric_snapshot_disclosed"
+      : "single_rubric_version_current";
+
+  const packRows = packs.map((pack) => {
+    const current = pack.rubricVersion === currentRubricVersion;
+    return {
+      packId: pack.id,
+      rubricVersion: pack.rubricVersion,
+      current,
+      recertificationPolicy: pack.recertificationPolicy,
+      reviewAction: current ? "current_pack_no_review_required" : "material_change_requires_recertification_or_grandfathering_review",
+    };
+  });
+  const goldItemRows = goldItems.map((item) => {
+    const current = item.rubricVersion === currentRubricVersion;
+    return {
+      itemId: item.id,
+      itemType: item.itemType,
+      rubricVersion: item.rubricVersion,
+      current,
+      humanAdjudicated: Boolean(item.humanAdjudicated),
+      modelJudgeAcceptedAsGold: Boolean(item.modelJudgeAcceptedAsGold),
+      reviewAction: current ? "current_gold_no_review_required" : "gold_item_recertification_or_grandfathering_review_required",
+    };
+  });
+  const raterCalibrationRows = certificationAttempts.map((attempt) => {
+    const scored = scoreCertificationAttempt(attempt, packs);
+    const pack = packs.find((item) => item.id === attempt.packId);
+    const currentRubricAligned = scored.rubricVersion === currentRubricVersion && pack?.rubricVersion === currentRubricVersion;
+    return {
+      attemptId: scored.attemptId,
+      raterId: scored.raterId,
+      packId: scored.packId,
+      rubricVersion: scored.rubricVersion,
+      packRubricVersion: pack?.rubricVersion ?? null,
+      currentRubricAligned,
+      status: scored.status,
+      meanAbsError: scored.meanAbsError,
+      dimensionMeanAbsError: scored.dimensionMeanAbsError,
+      targetedRetrainingFlags: scored.targetedRetrainingFlags,
+      restrictionFlags: scored.restrictionFlags,
+      recertificationRequired: scored.recertificationRequired || !currentRubricAligned,
+      reviewAction: currentRubricAligned
+        ? "current_attempt_calibration_applies"
+        : "material_change_requires_recertification_or_grandfathering_review",
+    };
+  });
+  const reviewRows = [
+    ...packRows.filter((row) => !row.current).map((row) => ({ kind: "certification_pack", id: row.packId, action: row.reviewAction })),
+    ...goldItemRows.filter((row) => !row.current).map((row) => ({ kind: "gold_item", id: row.itemId, action: row.reviewAction })),
+    ...raterCalibrationRows
+      .filter((row) => row.recertificationRequired)
+      .map((row) => ({ kind: "rater_certification_attempt", id: row.attemptId, raterId: row.raterId, action: row.reviewAction })),
+  ];
+  const retrainingRows = raterCalibrationRows.filter((row) => row.targetedRetrainingFlags.length > 0);
+  const restrictionRows = raterCalibrationRows.filter((row) => row.restrictionFlags.length > 0);
+  return {
+    id: `rubric-version-drift-${releaseId}`,
+    releaseId,
+    currentRubricVersion,
+    labelSnapshotId: labelSnapshot?.id ?? null,
+    labelSnapshotRubricVersion,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      materialChangeRule:
+        "Material rubric-version changes require certification-pack, gold-item, and rater-attempt recertification or an explicit grandfathering review before release-critical use.",
+      mixedRubricRule: "Label snapshots and release reports disclose mixed or non-current rubric versions rather than silently aggregating them.",
+      calibrationRule:
+        "Certification and drift reports preserve per-dimension calibration error, targeted retraining flags, restriction flags, and recertification requirements.",
+    },
+    ratingRubricVersionCounts,
+    mixedRubricSnapshotStatus,
+    packRows,
+    goldItemRows,
+    raterCalibrationRows,
+    reviewRows,
+    counts: {
+      ratingRowCount: ratings.length,
+      ratingRubricVersionCount: ratingRubricVersions.length,
+      certificationPackCount: packRows.length,
+      goldItemCount: goldItemRows.length,
+      raterCalibrationAttemptCount: raterCalibrationRows.length,
+      recertificationOrGrandfatheringReviewCount: reviewRows.length,
+      raterAttemptRecertificationRequiredCount: raterCalibrationRows.filter((row) => row.recertificationRequired).length,
+      ratersWithTargetedRetrainingFlags: new Set(retrainingRows.map((row) => row.raterId)).size,
+      ratersWithRestrictionFlags: new Set(restrictionRows.map((row) => row.raterId)).size,
+    },
+    releaseUseStatus: reviewRows.length
+      ? "rubric_version_recertification_review_required"
+      : retrainingRows.length || restrictionRows.length
+        ? "rater_retraining_or_restriction_flags_active"
+        : mixedRubricSnapshotStatus === "mixed_or_noncurrent_rubric_snapshot_disclosed"
+          ? "mixed_rubric_snapshot_disclosed"
+          : "rubric_version_drift_controls_current",
+  };
+}
+
+export function auditProvenanceRights(exportKind = "public", positionList = positions, records = provenanceRightsRecords) {
+  const includedSplits = allowedSplitsForExport(exportKind);
+  const includedPositions = positionList.filter((position) => includedSplits.includes(position.split));
+  const recordsByPosition = new Map(records.map((record) => [record.positionId, record]));
+  const missingRecords = [];
+  const releaseScopeFailures = [];
+  const unclearedRecords = [];
+  includedPositions.forEach((position) => {
+    const record = recordsByPosition.get(position.id);
+    if (!record) {
+      missingRecords.push(position.id);
+      return;
+    }
+    if (!record.releaseScopes.includes(exportKind)) releaseScopeFailures.push(position.id);
+    if (!isRightsStatusAllowed(exportKind, record.rightsStatus)) unclearedRecords.push(position.id);
+  });
+  return {
+    id: `${exportKind}-provenance-rights-audit`,
+    exportKind,
+    includedSplits,
+    checkedPositionCount: includedPositions.length,
+    missingRecords,
+    releaseScopeFailures,
+    unclearedRecords,
+    status: missingRecords.length || releaseScopeFailures.length || unclearedRecords.length ? "blocked" : "pass",
+    adaptedSourceFieldsPresent: records.every(
+      (record) => record.sourceLanguage && record.translationRoute && record.taskFormat && record.sourceDomainSuitability,
+    ),
+  };
+}
+
+export function buildActiveLearningAudit(batches = activeLearningBatches) {
+  const totals = ["generated", "ingested", "judged", "disagreementSelected", "highRated", "suspectedJudgeFalsePositive", "handSelected", "rejected", "promoted"].reduce(
+    (acc, field) => {
+      acc[field] = batches.reduce((sum, batch) => sum + batch[field], 0);
+      return acc;
+    },
+    {},
+  );
+  return {
+    id: "active-learning-selection-denominator-audit",
+    totals,
+    acceptedCritiqueIds: [...new Set(batches.flatMap((batch) => batch.acceptedCritiqueIds))],
+    blindingPass: batches.every((batch) => !batch.modelJudgeScoresVisibleToInitialRaters && batch.selectionReasonHiddenFromInitialRaters),
+    batches: batches.map((batch) => ({
+      id: batch.id,
+      generated: batch.generated,
+      judged: batch.judged,
+      promoted: batch.promoted,
+      selectionRates: {
+        promotedFromGenerated: batch.generated ? round(batch.promoted / batch.generated) : null,
+        handSelectedFromJudged: batch.judged ? round(batch.handSelected / batch.judged) : null,
+      },
+    })),
+  };
+}
+
+export function buildCandidateIntakeQualityAudit(
+  releaseId,
+  critiqueList = critiques,
+  positionList = positions,
+  generationRuns = critiqueGenerationRuns,
+  batches = activeLearningBatches,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const acceptedCritiqueIds = new Set(batches.flatMap((batch) => batch.acceptedCritiqueIds));
+  const generatedOutputs = generationRuns.flatMap((run) =>
+    run.outputs.map((output) => ({
+      ...output,
+      generationRunId: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+    })),
+  );
+  const duplicateOutputRows = generatedOutputs
+    .filter((output) => output.status === "duplicate_filtered" || output.duplicateOfOutputId)
+    .map((output) => ({
+      generationRunId: output.generationRunId,
+      outputId: output.id,
+      positionId: output.positionId,
+      duplicateOfOutputId: output.duplicateOfOutputId ?? null,
+      status: output.status,
+      selectionReasons: output.selectionReasons ?? [],
+    }));
+  const critiqueRows = critiqueList.map((critique) => {
+    const position = positionById.get(critique.positionId);
+    const redundancyRisk = redundancyRiskForCritique(critique);
+    return {
+      itemId: makeItemId(critique.positionId, critique.id),
+      critiqueId: critique.id,
+      positionId: critique.positionId,
+      split: position?.split ?? "unknown",
+      topicFamily: position?.topicFamily ?? "unknown",
+      sourceType: critique.sourceType,
+      authorshipType: critique.authorshipType,
+      styleBand: critique.styleBand,
+      marginalInformativeness: critique.marginalInformativeness ?? "unknown",
+      redundancyRisk,
+      activeLearningAccepted: acceptedCritiqueIds.has(critique.id),
+      countsTowardUnqualifiedScaleClaim: redundancyRisk === "pass",
+      scaleClaimPolicy:
+        redundancyRisk === "pass"
+          ? "eligible_for_unqualified_critique_count_subject_to_release_metric_gates"
+          : "disclosed_as_artifact_control_or_low_marginal_information_not_used_to_inflate_quality_claims",
+    };
+  });
+  const positionRows = Object.entries(
+    critiqueRows.reduce((acc, row) => {
+      acc[row.positionId] ??= [];
+      acc[row.positionId].push(row);
+      return acc;
+    }, {}),
+  )
+    .map(([positionId, rows]) => ({
+      positionId,
+      critiqueCount: rows.length,
+      unqualifiedScaleEligibleCritiqueCount: rows.filter((row) => row.countsTowardUnqualifiedScaleClaim).length,
+      lowInformationOrArtifactControlCount: rows.filter((row) => !row.countsTowardUnqualifiedScaleClaim).length,
+      marginalInformativenessCounts: countBy(rows, "marginalInformativeness"),
+      status: rows.some((row) => !row.countsTowardUnqualifiedScaleClaim) ? "mixed_information_quality_disclosed" : "pass",
+    }))
+    .sort((left, right) => right.lowInformationOrArtifactControlCount - left.lowInformationOrArtifactControlCount || left.positionId.localeCompare(right.positionId));
+  const lowInformationRows = critiqueRows.filter((row) => !row.countsTowardUnqualifiedScaleClaim);
+  const acceptedRows = critiqueRows.filter((row) => row.activeLearningAccepted);
+  return {
+    id: `candidate-intake-quality-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      auditScope: "candidate_and_benchmark_intake_marginal_informativeness_redundancy",
+      unqualifiedScaleRule:
+        "Critique counts used for quality or benchmark breadth claims must disclose artifact-control, duplicate-filtered, and low-marginal-information rows separately.",
+      duplicatePolicy: "Near-duplicate generated outputs count as generation outcomes but not additional promoted critique quality evidence.",
+      benchmarkPolicy:
+        "Hidden-benchmark and validation candidates keep marginal-information and redundancy fields so protected critique counts are not inflated by trivially weak variants.",
+    },
+    counts: {
+      totalCritiques: critiqueRows.length,
+      unqualifiedScaleEligibleCritiques: critiqueRows.filter((row) => row.countsTowardUnqualifiedScaleClaim).length,
+      lowInformationOrArtifactControlCritiques: lowInformationRows.length,
+      activeLearningAcceptedCritiques: acceptedRows.length,
+      acceptedLowInformationOrArtifactControlCritiques: acceptedRows.filter((row) => !row.countsTowardUnqualifiedScaleClaim).length,
+      duplicateGeneratedOutputs: duplicateOutputRows.length,
+    },
+    marginalInformativenessCounts: countBy(critiqueRows, "marginalInformativeness"),
+    redundancyRiskCounts: countBy(critiqueRows, "redundancyRisk"),
+    generatedOutputStatusCounts: countBy(generatedOutputs, "status"),
+    duplicateOutputRows,
+    lowInformationRows,
+    activeLearningAcceptedRows: acceptedRows,
+    positionRows,
+    critiqueRows,
+    releaseUseStatus:
+      lowInformationRows.length || duplicateOutputRows.length
+        ? "marginal_informativeness_audit_disclosed_low_redundancy_controls"
+        : "marginal_informativeness_audit_pass",
+  };
+}
+
+export function buildHiddenBenchmarkInitialBlindingReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const rows = ratings
+    .filter((rating) => positionById.get(rating.positionId)?.split === "hidden_benchmark" && rating.kind === "blind_initial")
+    .map((rating) => {
+      const visibility = preLockVisibilityFromRating(rating);
+      const visibleCueFields = Object.entries(visibility)
+        .filter(([, visible]) => visible)
+        .map(([field]) => field);
+      const exceptionId = blindAggregationExceptionId(rating);
+      const exceptionDisclosed = blindAggregationExceptionDisclosed(rating);
+      const blindAggregationPolicy = hiddenBenchmarkInitialRatingPolicy(rating, positionList);
+      return {
+        ratingId: rating.id,
+        itemId: makeItemId(rating.positionId, rating.critiqueId),
+        raterId: rating.raterId,
+        sourceMetadataVisibleBeforeInitialLock: visibility.sourceMetadataVisibleBeforeInitialLock,
+        adminTagsVisibleBeforeInitialLock: visibility.adminTagsVisibleBeforeInitialLock,
+        topicRoutingTagsVisibleBeforeInitialLock: visibility.topicRoutingTagsVisibleBeforeInitialLock,
+        benchmarkStatusVisibleBeforeInitialLock: visibility.benchmarkStatusVisibleBeforeInitialLock,
+        visibleCueFields,
+        sourceTagVisibleBeforeInitialLock: visibleCueFields.length > 0,
+        adjudicatedExceptionId: exceptionId,
+        exceptionDisclosed,
+        blindAggregationPolicy,
+        includedInBlindAggregation: blindAggregationPolicy !== "exclude_source_tag_visible_initial_from_blind_aggregation",
+      };
+    })
+    .sort((left, right) => left.itemId.localeCompare(right.itemId) || left.ratingId.localeCompare(right.ratingId));
+  const visibleRows = rows.filter((row) => row.sourceTagVisibleBeforeInitialLock);
+  const excludedRows = rows.filter((row) => row.blindAggregationPolicy === "exclude_source_tag_visible_initial_from_blind_aggregation");
+  const exceptionRows = rows.filter((row) => row.blindAggregationPolicy === "include_adjudicated_exception_disclosed");
+  const snapshotExcludedRows = labelSnapshot?.excludedBlindAggregationRows ?? [];
+  const undisclosedIncludedRows = visibleRows.filter((row) => row.includedInBlindAggregation && row.blindAggregationPolicy !== "include_adjudicated_exception_disclosed");
+  return {
+    id: `hidden-benchmark-initial-blinding-${releaseId}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot?.id ?? null,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      hiddenInitialRule:
+        "Hidden-benchmark blind aggregation can include only source/tag-hidden initial ratings or source/tag-visible initial ratings with a disclosed adjudicated exception.",
+      exclusionRule:
+        "Source, admin-tag, topic-routing-tag, or benchmark-status visibility before initial lock excludes the row from blind aggregation unless an adjudicated exception is disclosed.",
+      snapshotBindingRule:
+        "LabelSnapshot.excludedBlindAggregationRows records source/tag-visible hidden-benchmark initial ratings excluded from the target labels.",
+    },
+    counts: {
+      hiddenInitialRatingRows: rows.length,
+      sourceTagVisibleInitialRows: visibleRows.length,
+      excludedFromBlindAggregationRows: excludedRows.length,
+      adjudicatedExceptionRows: exceptionRows.length,
+      undisclosedIncludedRows: undisclosedIncludedRows.length,
+      snapshotExcludedRows: snapshotExcludedRows.length,
+    },
+    rows,
+    sourceTagVisibleRows: visibleRows,
+    excludedRows,
+    exceptionRows,
+    snapshotExcludedRows,
+    releaseUseStatus:
+      undisclosedIncludedRows.length > 0
+        ? "hidden_benchmark_initial_blinding_violation"
+        : visibleRows.length > 0
+          ? "source_tag_visible_initial_ratings_excluded_or_exception_disclosed"
+          : "hidden_benchmark_initial_rating_blinding_pass",
+  };
+}
+
+export function buildPositionIntakeReadinessReport(releaseId, positionList = positions) {
+  const rows = positionList
+    .map((position) => {
+      const latestVersion = latestText(position);
+      const screening = position.intakeScreening ?? {};
+      const originalTextPreserved = screening.originalTextPreserved === true && Boolean(latestVersion?.text);
+      const adminNotes = [...(screening.adminOnlyAmbiguityNotes ?? []), ...(screening.adminOnlyIntendedConclusionNotes ?? [])];
+      const adminNotesHiddenFromInitialRaters = screening.notesVisibleToInitialRaters === false && adminNotes.length > 0;
+      const conceptuallyAdmissible = ["primarily_conceptual", "mixed_conceptual_non_conceptual"].includes(position.conceptualScope);
+      const contextSufficientOrNormalized =
+        position.contextSufficiency === "sufficient" ||
+        ["normalized", "rights_review_normalized", "expert_normalized"].includes(screening.normalizationStatus);
+      const ordinaryHeadlineEligible = conceptuallyAdmissible && contextSufficientOrNormalized && screening.ordinaryHeadlineEligibility === "eligible";
+      return {
+        positionId: position.id,
+        clusterId: position.clusterId,
+        split: position.split,
+        topicFamily: position.topicFamily,
+        conceptualScope: position.conceptualScope,
+        groundTruthAvailability: position.groundTruthAvailability,
+        nonConceptualDependencyNotes: position.nonConceptualDependencyNotes,
+        contextSufficiency: position.contextSufficiency,
+        assumedBackgroundPolicy: position.assumedBackgroundPolicy,
+        pricedInContextNotes: position.pricedInContextNotes,
+        originalTextPreserved,
+        raterVisibleTextVersionId: screening.raterVisibleTextVersionId ?? latestVersion?.id ?? null,
+        canonicalHash: latestVersion?.canonicalHash ?? null,
+        normalizationStatus: screening.normalizationStatus ?? "missing",
+        expertNormalizationRequired: Boolean(screening.expertNormalizationRequired),
+        adminOnlyAmbiguityNotes: screening.adminOnlyAmbiguityNotes ?? [],
+        adminOnlyIntendedConclusionNotes: screening.adminOnlyIntendedConclusionNotes ?? [],
+        adminNotesHiddenFromInitialRaters,
+        contextGapFlags: screening.contextGapFlags ?? [],
+        ordinaryHeadlineEligibility: screening.ordinaryHeadlineEligibility ?? "missing",
+        ordinaryHeadlineEligible,
+        hiddenBenchmarkEligible:
+          position.split === "hidden_benchmark" &&
+          ordinaryHeadlineEligible &&
+          screening.notesVisibleToInitialRaters === false,
+      };
+    })
+    .sort((left, right) => Number(right.expertNormalizationRequired) - Number(left.expertNormalizationRequired) || left.positionId.localeCompare(right.positionId));
+  const normalizationRequiredRows = rows.filter((row) => row.expertNormalizationRequired || row.contextSufficiency === "needs_normalization");
+  const contextGapRows = rows.filter((row) => row.contextGapFlags.length > 0);
+  const nonHeadlineRows = rows.filter((row) => !row.ordinaryHeadlineEligible);
+  const hiddenBenchmarkContextBlockedRows = rows.filter((row) => row.split === "hidden_benchmark" && !row.hiddenBenchmarkEligible);
+  return {
+    id: `position-intake-readiness-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      blindRaterBoundary:
+        "Original text, normalization notes, intended-conclusion notes, topic-routing tags, and context-gap flags remain admin-only before initial ratings lock.",
+      headlineEligibilityRule:
+        "Ordinary hidden-benchmark/headline use requires conceptual admissibility plus sufficient or completed expert-normalized rater-visible context.",
+      preservationRule:
+        "Every position keeps an original/canonical text version and a rater-visible text version id for content-addressed comparison.",
+    },
+    counts: {
+      positionsScreened: rows.length,
+      originalTextPreservedCount: rows.filter((row) => row.originalTextPreserved).length,
+      adminNotesHiddenCount: rows.filter((row) => row.adminNotesHiddenFromInitialRaters).length,
+      normalizationRequiredCount: normalizationRequiredRows.length,
+      contextGapFlaggedPositionCount: contextGapRows.length,
+      ordinaryHeadlineEligibleCount: rows.filter((row) => row.ordinaryHeadlineEligible).length,
+      nonHeadlinePositionCount: nonHeadlineRows.length,
+      hiddenBenchmarkContextBlockedCount: hiddenBenchmarkContextBlockedRows.length,
+    },
+    byConceptualScope: countBy(rows, "conceptualScope"),
+    byGroundTruthAvailability: countBy(rows, "groundTruthAvailability"),
+    byContextSufficiency: countBy(rows, "contextSufficiency"),
+    rows,
+    normalizationRequiredRows,
+    contextGapRows,
+    nonHeadlineRows,
+    hiddenBenchmarkContextBlockedRows,
+    releaseUseStatus:
+      hiddenBenchmarkContextBlockedRows.length > 0
+        ? "position_intake_blocks_hidden_benchmark_claims"
+        : normalizationRequiredRows.length || contextGapRows.length || nonHeadlineRows.length
+          ? "position_intake_limitations_disclosed"
+          : "position_intake_ready",
+  };
+}
+
+export function buildItemTextViewParityReport(
+  releaseId,
+  ratings = seedRatings,
+  evaluationRuns = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  positionList = positions,
+  critiqueList = critiques,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueById = new Map(critiqueList.map((critique) => [critique.id, critique]));
+  const textVersionFor = (item, versionId) => item?.textVersions?.find((version) => version.id === versionId) ?? null;
+  const ratingRows = ratings.map((rating) => {
+    const position = positionById.get(rating.positionId);
+    const critique = critiqueById.get(rating.critiqueId);
+    const positionVersion = textVersionFor(position, rating.positionTextVersionId);
+    const critiqueVersion = textVersionFor(critique, rating.critiqueTextVersionId);
+    const versionBound = Boolean(positionVersion && critiqueVersion);
+    return {
+      ratingId: rating.id,
+      itemId: makeItemId(rating.positionId, rating.critiqueId),
+      kind: rating.kind,
+      split: position?.split ?? "unknown",
+      positionTextVersionId: rating.positionTextVersionId ?? null,
+      critiqueTextVersionId: rating.critiqueTextVersionId ?? null,
+      positionCanonicalHash: positionVersion?.canonicalHash ?? null,
+      critiqueCanonicalHash: critiqueVersion?.canonicalHash ?? null,
+      raterVisiblePositionRenderedHash: positionVersion?.renderedHash ?? null,
+      raterVisibleCritiqueRenderedHash: critiqueVersion?.renderedHash ?? null,
+      status: versionBound ? "frozen_item_text_version_bound" : "missing_or_unknown_item_text_version",
+    };
+  });
+  const evaluationRows = evaluationRuns.flatMap((run) =>
+    run.predictions.map((prediction) => {
+      const position = positionById.get(prediction.positionId);
+      const critique = critiqueById.get(prediction.critiqueId);
+      const positionVersion = textVersionFor(position, prediction.positionTextVersionId);
+      const critiqueVersion = textVersionFor(critique, prediction.critiqueTextVersionId);
+      const versionBound = Boolean(positionVersion && critiqueVersion);
+      const positionHashMatches = prediction.modelVisiblePositionRenderedHash === positionVersion?.renderedHash;
+      const critiqueHashMatches = prediction.modelVisibleCritiqueRenderedHash === critiqueVersion?.renderedHash;
+      const parityStatus =
+        versionBound && positionHashMatches && critiqueHashMatches
+          ? "human_model_text_view_match"
+          : versionBound
+            ? "text_view_sensitive_hash_mismatch"
+            : "missing_or_unknown_item_text_version";
+      return {
+        evaluationRunId: run.id,
+        predictionId: prediction.id,
+        itemId: makeItemId(prediction.positionId, prediction.critiqueId),
+        promptScope: run.promptScope,
+        positionTextVersionId: prediction.positionTextVersionId ?? null,
+        critiqueTextVersionId: prediction.critiqueTextVersionId ?? null,
+        positionCanonicalHash: positionVersion?.canonicalHash ?? null,
+        critiqueCanonicalHash: critiqueVersion?.canonicalHash ?? null,
+        modelVisiblePositionRenderedHash: prediction.modelVisiblePositionRenderedHash ?? null,
+        modelVisibleCritiqueRenderedHash: prediction.modelVisibleCritiqueRenderedHash ?? null,
+        targetRaterVisiblePositionRenderedHash: positionVersion?.renderedHash ?? null,
+        targetRaterVisibleCritiqueRenderedHash: critiqueVersion?.renderedHash ?? null,
+        positionHashMatches,
+        critiqueHashMatches,
+        humanModelItemViewParityStatus: prediction.humanModelItemViewParityStatus ?? "missing_prediction_parity_status",
+        parityStatus,
+      };
+    }),
+  );
+  const textViewSensitiveRows = evaluationRows.filter((row) => row.parityStatus !== "human_model_text_view_match");
+  const missingRatingVersionRows = ratingRows.filter((row) => row.status !== "frozen_item_text_version_bound");
+  return {
+    id: `item-text-view-parity-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      requiredArtifact: "ItemTextVersion",
+      ratingRule:
+        "Every rating must bind to frozen position and critique text-version ids with canonical and rater-visible rendered hashes.",
+      modelViewRule:
+        "Every model prediction must declare the target item text-version ids and model-visible rendered hashes; mismatches are text-view-sensitive, not clean LMCA comparisons.",
+    },
+    counts: {
+      ratingRows: ratingRows.length,
+      frozenRatingTextVersionRows: ratingRows.filter((row) => row.status === "frozen_item_text_version_bound").length,
+      evaluationPredictionRows: evaluationRows.length,
+      evaluationRowsWithViewParity: evaluationRows.filter((row) => row.parityStatus === "human_model_text_view_match").length,
+      textViewSensitiveRows: textViewSensitiveRows.length,
+      missingRatingVersionRows: missingRatingVersionRows.length,
+    },
+    byRatingStatus: countBy(ratingRows, "status"),
+    byEvaluationParityStatus: countBy(evaluationRows, "parityStatus"),
+    ratingRows,
+    evaluationRows,
+    textViewSensitiveRows,
+    missingRatingVersionRows,
+    releaseUseStatus:
+      missingRatingVersionRows.length || textViewSensitiveRows.length
+        ? "item_text_view_parity_review_required"
+        : "item_text_versions_frozen_with_human_model_view_parity",
+  };
+}
+
+export function buildRubricQaCoverageReport(
+  releaseId,
+  fixtures = rubricQaFixtures,
+  requiredFamilies = RUBRIC_QA_REQUIRED_FAMILIES,
+) {
+  const fixtureRows = fixtures
+    .map((fixture) => ({
+      fixtureId: fixture.id,
+      title: fixture.title,
+      invariant: fixture.invariant,
+      coveredFamilies: fixture.coveredFamilies ?? [],
+      coveredFamilyCount: (fixture.coveredFamilies ?? []).length,
+      targetDimensions: fixture.targetDimensions ?? [],
+      source: fixture.source,
+      rubricVersion: fixture.rubricVersion ?? "lmca-app-f-2026-10",
+      exposurePolicy: fixture.exposurePolicy ?? "public_training_qa_only",
+      protectedEvaluationEligible: fixture.protectedEvaluationEligible ?? false,
+      promptRegressionEligible: fixture.promptRegressionEligible ?? true,
+    }))
+    .sort((left, right) => left.fixtureId.localeCompare(right.fixtureId));
+  const coveredFamilies = uniqueStrings(fixtureRows.flatMap((row) => row.coveredFamilies)).sort();
+  const missingFamilies = requiredFamilies.filter((family) => !coveredFamilies.includes(family)).sort();
+  const protectedExposureRows = fixtureRows.filter((row) => row.protectedEvaluationEligible || row.exposurePolicy !== "public_training_qa_only");
+  const dimensionCoverage = Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => [dimension, fixtureRows.filter((row) => row.targetDimensions.includes(dimension)).length]),
+  );
+  return {
+    id: `rubric-qa-coverage-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    rubricVersion: "lmca-app-f-2026-10",
+    policy: {
+      source: "Appendix-F operational rubric pack plus public LMCA calibration examples.",
+      protectionBoundary:
+        "Rubric QA fixtures are public training and certification exposure; they are excluded from protected validation, hidden benchmark, label snapshots, and clean model-score claims.",
+      coverageRule:
+        "Each RLHF77 Appendix-F edge-case family must have at least one versioned fixture before claiming the rubric pack is frozen for release.",
+    },
+    counts: {
+      requiredFamilyCount: requiredFamilies.length,
+      coveredFamilyCount: coveredFamilies.length,
+      missingFamilyCount: missingFamilies.length,
+      fixtureCount: fixtureRows.length,
+      protectedExposureViolationCount: protectedExposureRows.length,
+    },
+    requiredFamilies,
+    coveredFamilies,
+    missingFamilies,
+    fixtureRows,
+    dimensionCoverage,
+    familyCoverageRows: requiredFamilies
+      .map((family) => ({
+        family,
+        fixtureIds: fixtureRows.filter((row) => row.coveredFamilies.includes(family)).map((row) => row.fixtureId),
+        status: coveredFamilies.includes(family) ? "covered" : "missing",
+      }))
+      .sort((left, right) => left.status.localeCompare(right.status) || left.family.localeCompare(right.family)),
+    protectedExposureRows,
+    releaseUseStatus:
+      missingFamilies.length > 0
+        ? "rubric_qa_required_families_missing"
+        : protectedExposureRows.length > 0
+          ? "rubric_qa_protected_exposure_review_required"
+          : "rubric_qa_pack_frozen_public_only",
+  };
+}
+
+export function buildLmcaSourceExampleAnchorReport(
+  releaseId,
+  anchors = lmcaSourceExampleAnchors,
+  options = {},
+) {
+  const requiredFamilies = options.requiredFamilies ?? ["is_ought_gap", "approval_voting_midrange", "table4_model_failure"];
+  const protectedSplits = new Set(options.protectedSplits ?? ["internal_validation", "hidden_benchmark"]);
+  const anchorRows = anchors
+    .map((anchor) => ({
+      anchorId: anchor.id,
+      suiteVersion: anchor.suiteVersion,
+      sourceExampleFamily: anchor.sourceExampleFamily,
+      publicSourceReference: anchor.publicSourceReference,
+      itemId: anchor.itemId,
+      positionClusterId: anchor.positionClusterId,
+      split: anchor.split,
+      rubricVersion: anchor.rubricVersion,
+      exposurePolicy: anchor.exposurePolicy,
+      protectedValidationEligible: anchor.protectedValidationEligible === true,
+      hiddenBenchmarkEligible: anchor.hiddenBenchmarkEligible === true,
+      humanCeilingEligible: anchor.humanCeilingEligible === true,
+      promptRegressionEligible: anchor.promptRegressionEligible === true,
+      certificationExposureEligible: anchor.certificationExposureEligible === true,
+      expectedLabelSummary: anchor.expectedLabelSummary,
+      targetDimensions: anchor.targetDimensions ?? [],
+      protectedSplitLeakage:
+        protectedSplits.has(anchor.split) ||
+        anchor.protectedValidationEligible === true ||
+        anchor.hiddenBenchmarkEligible === true ||
+        anchor.humanCeilingEligible === true,
+      requiredIdsPresent:
+        Boolean(anchor.id) &&
+        Boolean(anchor.itemId) &&
+        Boolean(anchor.positionClusterId) &&
+        Boolean(anchor.split) &&
+        Boolean(anchor.suiteVersion),
+    }))
+    .sort((left, right) => left.anchorId.localeCompare(right.anchorId));
+  const coveredFamilies = uniqueStrings(anchorRows.map((row) => row.sourceExampleFamily)).sort();
+  const missingFamilies = requiredFamilies.filter((family) => !coveredFamilies.includes(family)).sort();
+  const exposureViolationRows = anchorRows.filter(
+    (row) => row.exposurePolicy !== "public_training_qa_only" || row.protectedSplitLeakage,
+  );
+  const missingRequiredIdRows = anchorRows.filter((row) => !row.requiredIdsPresent);
+  const suiteVersions = uniqueStrings(anchorRows.map((row) => row.suiteVersion)).sort();
+  return {
+    id: `lmca-source-example-anchors-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      sourceAnchorRule:
+        "LMCA public source examples are versioned public training, certification, and prompt-regression anchors; they are not hidden-benchmark, protected-validation, or human-ceiling rows.",
+      requiredFamiliesRule:
+        "The suite must include is/ought near-zero and near-perfect anchors, approval-voting mid-range strength/centrality calibration, and the Table 4 over-crediting model-failure anchor.",
+      denominatorExclusionRule:
+        "Anchor item ids and position clusters are excluded from protected validation, hidden benchmark, human-ceiling, and clean leaderboard denominators.",
+    },
+    suiteVersions,
+    coveredFamilies,
+    missingFamilies,
+    counts: {
+      anchorCount: anchorRows.length,
+      suiteVersionCount: suiteVersions.length,
+      coveredFamilyCount: coveredFamilies.length,
+      requiredFamilyCount: requiredFamilies.length,
+      missingFamilyCount: missingFamilies.length,
+      exposureViolationCount: exposureViolationRows.length,
+      missingRequiredIdCount: missingRequiredIdRows.length,
+      humanCeilingEligibleCount: anchorRows.filter((row) => row.humanCeilingEligible).length,
+      promptRegressionEligibleCount: anchorRows.filter((row) => row.promptRegressionEligible).length,
+      certificationExposureEligibleCount: anchorRows.filter((row) => row.certificationExposureEligible).length,
+    },
+    anchorRows,
+    exposureViolationRows,
+    missingRequiredIdRows,
+    byFamily: countBy(anchorRows, "sourceExampleFamily"),
+    releaseUseStatus:
+      exposureViolationRows.length || missingRequiredIdRows.length
+        ? "source_anchor_protection_review_required"
+        : missingFamilies.length
+          ? "source_anchor_required_family_missing"
+          : "source_anchor_suite_public_training_only",
+  };
+}
+
+export function buildRaterCompositionConflictReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+  profiles = raterProfiles,
+) {
+  const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const includedRatings = ratings.filter((rating) => snapshotItemIds.has(makeItemId(rating.positionId, rating.critiqueId)));
+  const releaseCriticalRatings = includedRatings.filter((rating) => isReleaseCriticalSplit(positionById.get(rating.positionId)?.split));
+  const raterRows = Object.values(
+    includedRatings.reduce((acc, rating) => {
+      const position = positionById.get(rating.positionId);
+      const profile = profileById.get(rating.raterId) ?? fallbackRaterProfile(rating);
+      acc[rating.raterId] ??= {
+        raterId: rating.raterId,
+        tier: profile.tier ?? rating.raterTier,
+        certificationStatus: profile.certificationStatus ?? "unknown",
+        reliabilityProfile: profile.reliabilityProfile ?? "unknown",
+        topicExpertise: profile.topicExpertise ?? [],
+        conflictDisclosures: profile.conflictDisclosures ?? [],
+        itemIds: new Set(),
+        releaseCriticalItemIds: new Set(),
+        ratingKinds: {},
+        topicFamiliesRated: new Set(),
+        releaseCriticalTopicFamiliesRated: new Set(),
+        topicExpertiseMatchedItemIds: new Set(),
+      };
+      const row = acc[rating.raterId];
+      const itemId = makeItemId(rating.positionId, rating.critiqueId);
+      row.itemIds.add(itemId);
+      row.ratingKinds[rating.kind] = (row.ratingKinds[rating.kind] ?? 0) + 1;
+      if (position?.topicFamily) row.topicFamiliesRated.add(position.topicFamily);
+      if (isReleaseCriticalSplit(position?.split)) {
+        row.releaseCriticalItemIds.add(itemId);
+        if (position?.topicFamily) row.releaseCriticalTopicFamiliesRated.add(position.topicFamily);
+      }
+      if (position?.topicFamily && (profile.topicExpertise ?? []).includes(position.topicFamily)) {
+        row.topicExpertiseMatchedItemIds.add(itemId);
+      }
+      return acc;
+    }, {}),
+  )
+    .map((row) => ({
+      raterId: row.raterId,
+      tier: row.tier,
+      certificationStatus: row.certificationStatus,
+      reliabilityProfile: row.reliabilityProfile,
+      topicExpertise: [...row.topicExpertise].sort(),
+      conflictDisclosures: row.conflictDisclosures,
+      includedItemCount: row.itemIds.size,
+      releaseCriticalItemCount: row.releaseCriticalItemIds.size,
+      ratingKinds: row.ratingKinds,
+      topicFamiliesRated: [...row.topicFamiliesRated].sort(),
+      releaseCriticalTopicFamiliesRated: [...row.releaseCriticalTopicFamiliesRated].sort(),
+      topicExpertiseMatchedItemCount: row.topicExpertiseMatchedItemIds.size,
+      topicExpertiseCoverageShare: row.itemIds.size ? round(row.topicExpertiseMatchedItemIds.size / row.itemIds.size) : 0,
+    }))
+    .sort((left, right) => right.includedItemCount - left.includedItemCount || left.raterId.localeCompare(right.raterId));
+  const itemRows = Object.entries(labelSnapshot.itemLabels)
+    .map(([itemId, label]) => {
+      const [positionId, critiqueId] = itemId.split("::");
+      const position = positionById.get(positionId);
+      const itemRatings = includedRatings.filter((rating) => rating.positionId === positionId && rating.critiqueId === critiqueId);
+      const itemRaterIds = uniqueStrings(itemRatings.map((rating) => rating.raterId)).sort();
+      const expertRaterIds = uniqueStrings(itemRatings.filter((rating) => ["graduate", "phd", "expert", "admin"].includes(rating.raterTier)).map((rating) => rating.raterId)).sort();
+      const topicExpertRaterIds = itemRaterIds.filter((raterId) => (profileById.get(raterId)?.topicExpertise ?? []).includes(position?.topicFamily));
+      const releaseCritical = isReleaseCriticalSplit(position?.split);
+      return {
+        itemId,
+        split: position?.split ?? "unknown",
+        topicFamily: position?.topicFamily ?? "unknown",
+        releaseCritical,
+        raterIds: itemRaterIds,
+        raterCount: itemRaterIds.length,
+        expertRaterIds,
+        topicExpertRaterIds,
+        topicExpertCoverage: topicExpertRaterIds.length > 0,
+        largestSingleRaterContributionShare: label.largestSingleRaterContributionShare,
+        singleRaterDominated: label.largestSingleRaterContributionShare > 0.5,
+        independentExpertReviewRequired: releaseCritical && label.largestSingleRaterContributionShare > 0.5,
+        conflictRows: itemRatings.flatMap((rating) => conflictRowsForRating(rating, position, profileById.get(rating.raterId))),
+      };
+    })
+    .sort((left, right) => Number(right.releaseCritical) - Number(left.releaseCritical) || right.largestSingleRaterContributionShare - left.largestSingleRaterContributionShare || left.itemId.localeCompare(right.itemId));
+  const conflictRows = itemRows.flatMap((row) => row.conflictRows);
+  const releaseCriticalItemRows = itemRows.filter((row) => row.releaseCritical);
+  const singleRaterDominatedReleaseCriticalRows = releaseCriticalItemRows.filter((row) => row.singleRaterDominated);
+  const topicExpertiseMissingRows = releaseCriticalItemRows.filter((row) => !row.topicExpertCoverage);
+  return {
+    id: `rater-composition-conflicts-${releaseId}-${labelSnapshot.id}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      releaseCriticalSplits: ["internal_validation", "hidden_benchmark"],
+      conflictRule:
+        "Ratings are flagged when a rater authored, selected, adapted, or previously discussed the item unless an admin exception is explicitly recorded.",
+      topicExpertiseRule:
+        "Release-critical items disclose whether at least one included rater has topic expertise for the position family.",
+      dominanceRule:
+        "Protected validation and hidden-benchmark items with a single-rater majority are disclosed and require independent expert-review before strong headline claims.",
+    },
+    counts: {
+      includedRatingRows: includedRatings.length,
+      includedRaterCount: raterRows.length,
+      releaseCriticalRatingRows: releaseCriticalRatings.length,
+      releaseCriticalItemCount: releaseCriticalItemRows.length,
+      conflictFlagCount: conflictRows.length,
+      topicExpertiseMissingItemCount: topicExpertiseMissingRows.length,
+      singleRaterDominatedReleaseCriticalItemCount: singleRaterDominatedReleaseCriticalRows.length,
+    },
+    raterTierDistribution: countBy(raterRows, "tier"),
+    releaseCriticalRaterTierDistribution: countBy(
+      raterRows.filter((row) => row.releaseCriticalItemCount > 0),
+      "tier",
+    ),
+    raterRows,
+    itemRows,
+    conflictRows,
+    topicExpertiseMissingRows,
+    singleRaterDominatedReleaseCriticalRows,
+    releaseUseStatus:
+      conflictRows.length > 0
+        ? "rater_conflict_review_required"
+        : singleRaterDominatedReleaseCriticalRows.length > 0 || topicExpertiseMissingRows.length > 0
+          ? "rater_composition_limitations_disclosed"
+          : "rater_composition_conflict_pass",
+  };
+}
+
+export function buildCritiqueGenerationEvaluationReport(
+  releaseId,
+  labelSnapshot,
+  generationRuns = critiqueGenerationRuns,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  memos = adjudicationMemos,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueById = new Map(critiqueList.map((critique) => [critique.id, critique]));
+  const adjudicatedCritiqueIds = new Set(memos.map((memo) => memo.critiqueId));
+  const runRows = generationRuns.map((run) => {
+    const outputRows = run.outputs.map((output) => {
+      const position = positionById.get(output.positionId);
+      const promotedCritique = output.promotedCritiqueId ? critiqueById.get(output.promotedCritiqueId) : null;
+      const itemId = promotedCritique ? makeItemId(promotedCritique.positionId, promotedCritique.id) : null;
+      const blindRatings = promotedCritique
+        ? ratings.filter((rating) => rating.kind === "blind_initial" && rating.positionId === promotedCritique.positionId && rating.critiqueId === promotedCritique.id)
+        : [];
+      const label = itemId ? labelSnapshot.itemLabels[itemId] : null;
+      return {
+        outputId: output.id,
+        positionId: output.positionId,
+        positionSplit: position?.split ?? "unknown",
+        status: output.status,
+        promotedCritiqueId: output.promotedCritiqueId ?? null,
+        itemId,
+        duplicateOfOutputId: output.duplicateOfOutputId ?? null,
+        selectionReasons: output.selectionReasons ?? [],
+        modelJudgeScore: output.modelJudgeScore ?? null,
+        modelJudgeDiagnosticOnly: true,
+        blindInitialRatingCount: blindRatings.length,
+        blindHumanRated: blindRatings.length > 0,
+        adjudicated: promotedCritique ? adjudicatedCritiqueIds.has(promotedCritique.id) : false,
+        targetOverall: label?.weightedMeanScores?.overall ?? null,
+        targetQualityBand: qualityBand(label?.weightedMeanScores?.overall),
+      };
+    });
+    const promotedRows = outputRows.filter((row) => row.status === "promoted_to_rating");
+    const blindRatedRows = promotedRows.filter((row) => row.blindHumanRated);
+    const passThreshold = run.metricDefinitions.passThresholdOverall;
+    return {
+      id: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+      providerRoute: run.providerRoute,
+      inferenceDate: run.inferenceDate,
+      promptTemplateId: run.promptTemplateId,
+      promptFamily: run.promptFamily,
+      promptArtifact: run.promptArtifact,
+      promptBody: run.promptBody,
+      renderedPromptChecksum: run.renderedPromptChecksum,
+      promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus,
+      protectedPromptExampleCheck: run.protectedPromptExampleCheck,
+      sourcePositionSplitPolicy: run.sourcePositionSplitPolicy,
+      sourcePositionIds: run.sourcePositionIds,
+      generationBudgetPerPosition: run.generationBudgetPerPosition,
+      sampledOutputCount: run.sampledOutputCount,
+      generationSettings: run.generationSettings,
+      filteringPolicy: run.filteringPolicy,
+      modelJudgeScreening: run.modelJudgeScreening,
+      metricDefinitions: run.metricDefinitions,
+      outputStatusCounts: countBy(outputRows, "status"),
+      counts: {
+        generatedOutputs: outputRows.length,
+        emptyOrRefusal: outputRows.filter((row) => row.status === "empty_or_refusal").length,
+        duplicatesFiltered: outputRows.filter((row) => row.status === "duplicate_filtered").length,
+        filteredBeforeRating: outputRows.filter((row) => row.status === "filtered_before_rating").length,
+        humanRejected: outputRows.filter((row) => row.status === "human_rejected").length,
+        promotedToRating: promotedRows.length,
+        blindHumanRatedPromoted: blindRatedRows.length,
+        adjudicatedPromoted: promotedRows.filter((row) => row.adjudicated).length,
+      },
+      blindRatingCoverage: {
+        promotedCoverageNumerator: blindRatedRows.length,
+        promotedCoverageDenominator: promotedRows.length,
+        promotedCoverageShare: promotedRows.length ? round(blindRatedRows.length / promotedRows.length) : null,
+        noBlindRatingOutputIds: promotedRows.filter((row) => !row.blindHumanRated).map((row) => row.outputId),
+      },
+      qualityMetrics: {
+        ratedPromotedOverall: summarizeValues(blindRatedRows.map((row) => row.targetOverall).filter(isValidScore)),
+        passThresholdOverall: passThreshold,
+        passAtThresholdCount: blindRatedRows.filter((row) => isValidScore(row.targetOverall) && row.targetOverall >= passThreshold).length,
+        passAtThresholdRate: blindRatedRows.length
+          ? round(blindRatedRows.filter((row) => isValidScore(row.targetOverall) && row.targetOverall >= passThreshold).length / blindRatedRows.length)
+          : null,
+        bestOfNByPosition: buildGenerationBestOfNRows(run, outputRows),
+      },
+      outputRows,
+    };
+  });
+  return {
+    id: `critique-generation-evaluation-${releaseId}`,
+    releaseId,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    generatedAt: new Date().toISOString(),
+    reportScope: "critique_generation_not_critique_rating_or_model_judging",
+    generationVsJudgingSeparation: {
+      generatedCritiquesRequireBlindHumanRatingBeforeQualityClaim: true,
+      modelJudgeScoresDiagnosticOnly: true,
+      modelJudgeScoresAcceptedAsGoldLabels: false,
+      modelJudgeScoresVisibleToInitialRaters: generationRuns.some((run) => run.modelJudgeScreening.scoresVisibleToInitialRaters),
+    },
+    aggregateCounts: aggregateGenerationCounts(runRows),
+    runRows,
+    releaseUseStatus: runRows.every((row) => !row.modelJudgeScreening.scoresVisibleToInitialRaters && row.blindRatingCoverage.noBlindRatingOutputIds.length === 0)
+      ? "generation_evaluation_separate_with_blind_rating_coverage"
+      : "generation_evaluation_requires_blinding_or_rating_coverage_review",
+  };
+}
+
+export function buildHiddenBenchmarkFreezeReport(
+  releaseId,
+  labelSnapshot,
+  positionList = positions,
+  critiqueList = critiques,
+  rightsRecords = provenanceRightsRecords,
+  exposureEvents = seedBenchmarkExposureEvents,
+  options = {},
+) {
+  const ratings = options.ratings ?? seedRatings;
+  const hiddenPositions = positionList.filter((position) => position.split === "hidden_benchmark");
+  const hiddenPositionIds = hiddenPositions.map((position) => position.id);
+  const hiddenPositionIdSet = new Set(hiddenPositionIds);
+  const hiddenCritiques = critiqueList.filter((critique) => hiddenPositionIdSet.has(critique.positionId));
+  const hiddenCritiqueIds = hiddenCritiques.map((critique) => critique.id);
+  const hiddenItemIds = hiddenCritiques.map((critique) => makeItemId(critique.positionId, critique.id));
+  const hiddenClusters = new Set(hiddenPositions.map((position) => position.clusterId));
+  const overlappingSplitClusters = positionList
+    .filter((position) => position.split !== "hidden_benchmark" && hiddenClusters.has(position.clusterId))
+    .map((position) => ({
+      clusterId: position.clusterId,
+      positionId: position.id,
+      split: position.split,
+    }));
+  const rightsStatus = auditProvenanceRights("hidden_benchmark", positionList, rightsRecords);
+  const metricEligibility = buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, hiddenPositions, hiddenCritiques);
+  const positionToHumanOveralls = Object.fromEntries(
+    hiddenPositions.map((position) => [
+      position.id,
+      Object.fromEntries(
+        hiddenCritiques
+          .filter((critique) => critique.positionId === position.id)
+          .map((critique) => [critique.id, labelSnapshot.itemLabels[makeItemId(position.id, critique.id)]?.weightedMeanScores.overall])
+          .filter(([, score]) => isValidScore(score)),
+      ),
+    ]),
+  );
+  const pairwiseSnapshot = buildPairwiseComparisonSnapshot(
+    `hidden-benchmark-pairwise-${releaseId}`,
+    labelSnapshot.id,
+    labelSnapshot.targetLabelVersion,
+    positionToHumanOveralls,
+  );
+  const marginDistribution = pairwiseMarginDistribution(pairwiseSnapshot);
+  const artifactBalance = buildHiddenArtifactBalance(hiddenPositions, hiddenCritiques, labelSnapshot);
+  const accessAudit = summarizeBenchmarkAccess(exposureEvents);
+  const artifactProbeDiagnostics = buildArtifactProbeDiagnostics(exposureEvents);
+  const initialBlinding = buildHiddenBenchmarkInitialBlindingReport(releaseId, labelSnapshot, ratings, positionList);
+  const freezeChecks = [
+    freezeCheck("rights", rightsStatus.status, "Hidden-benchmark positions have restricted benchmark release scopes and adapted-source provenance."),
+    freezeCheck(
+      "position_cluster_isolation",
+      overlappingSplitClusters.length ? "blocked" : "pass",
+      "Hidden benchmark positions must not share clusters with public, training, or validation positions.",
+    ),
+    freezeCheck(
+      "context_sufficiency",
+      hiddenPositions.every((position) => position.contextSufficiency === "sufficient") ? "pass" : "blocked",
+      "Hidden benchmark positions must have enough rater-visible context or a disclosed expert normalization route.",
+    ),
+    freezeCheck(
+      "conceptual_scope",
+      hiddenPositions.every((position) => position.conceptualScope === "primarily_conceptual" || position.conceptualScope === "mixed_conceptual_non_conceptual")
+        ? "pass"
+        : "blocked",
+      "Ordinary hidden-benchmark claims exclude primarily non-conceptual items unless declared as stress/comparison cases.",
+    ),
+    freezeCheck(
+      "metric_family_eligibility",
+      metricEligibility.pairwiseEligiblePairCount > 0 ? "pass" : metricEligibility.customLossEligibleItems.length > 0 ? "pointwise_only" : "blocked",
+      "Pairwise headline subsets require non-tied same-position critique pairs; custom weighted loss can include pointwise-only items when disclosed.",
+    ),
+    freezeCheck(
+      "pairwise_margin_distribution",
+      pairwiseSnapshot.nonTiedEdges.length > 0 ? (marginDistribution.lowMarginWeightShare > 0.75 ? "low_margin_sensitive" : "pass") : "pointwise_only",
+      "Benchmark-freeze reports must disclose human/adjudicated overall-score gap distributions and low-margin sensitivity.",
+    ),
+    freezeCheck(
+      "artifact_balance",
+      artifactBalance.counterbalanceStatus,
+      "Position source/adaptation, critique source/authorship, LLM assistance, length, style, and adjudicated quality are counterbalanced before freeze.",
+    ),
+    freezeCheck(
+      "artifact_probe_diagnostics",
+      artifactProbeDiagnostics.status,
+      "Critique-only and metadata/style-only probes must be run or explicitly documented on authorized data before ordinary headline claims.",
+    ),
+    freezeCheck(
+      "access_audit",
+      accessAudit.unauthorizedAccessCount === 0 && accessAudit.totalEvents > 0 ? "pass" : "blocked",
+      "Hidden benchmark status and membership are restricted to authorized roles, with accesses logged before and after freeze.",
+    ),
+    freezeCheck(
+      "initial_rating_blinding",
+      initialBlinding.releaseUseStatus === "hidden_benchmark_initial_blinding_violation" ? "blocked" : "pass",
+      `${initialBlinding.counts.sourceTagVisibleInitialRows} source/tag-visible hidden-benchmark initial rows; ${initialBlinding.counts.excludedFromBlindAggregationRows} excluded and ${initialBlinding.counts.adjudicatedExceptionRows} disclosed exceptions.`,
+    ),
+  ];
+  return {
+    id: `hidden-benchmark-freeze-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    freezeStatus: summarizeFreezeStatus(freezeChecks),
+    frozenAt: summarizeFreezeStatus(freezeChecks) === "frozen" ? new Date().toISOString() : null,
+    hiddenPositionCount: hiddenPositions.length,
+    hiddenCritiqueCount: hiddenCritiques.length,
+    restrictedItemRefs: options.includeRestrictedIds
+      ? { hiddenPositionIds, hiddenCritiqueIds, hiddenItemIds }
+      : { hiddenPositionIds: [], hiddenCritiqueIds: [], hiddenItemIds: [], redaction: "membership_ids_restricted_to_admin_endpoint" },
+    rightsStatus,
+    clusterIsolation: {
+      status: overlappingSplitClusters.length ? "blocked" : "pass",
+      hiddenClusterIds: options.includeRestrictedIds ? [...hiddenClusters] : [],
+      overlappingSplitClusters,
+    },
+    metricEligibility,
+    pairwiseComparisonSnapshot: pairwiseSnapshot,
+    pairwiseMarginDistribution: marginDistribution,
+    artifactBalance,
+    artifactProbeDiagnostics,
+    accessAudit,
+    initialBlinding,
+    freezeChecks,
+  };
+}
+
+export function buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, positionList = positions, critiqueList = critiques, tieTolerance = 0) {
+  const pairwiseEligiblePositions = [];
+  const pointwiseOnlyItems = [];
+  const customLossEligibleItems = [];
+  const metricFamilySpecificExclusions = [];
+
+  positionList.forEach((position) => {
+    const positionCritiques = critiqueList.filter((critique) => critique.positionId === position.id);
+    const scoredCritiques = positionCritiques
+      .map((critique) => {
+        const itemId = makeItemId(position.id, critique.id);
+        const label = labelSnapshot.itemLabels[itemId];
+        if (label && isCustomLossEligibleLabel(label.weightedMeanScores)) customLossEligibleItems.push(itemId);
+        return { critique, itemId, overall: label?.weightedMeanScores.overall };
+      })
+      .filter((item) => isValidScore(item.overall));
+
+    let nonTiedPairCount = 0;
+    scoredCritiques.forEach((a, index) => {
+      scoredCritiques.slice(index + 1).forEach((b) => {
+        if (!isTie(a.overall - b.overall, tieTolerance)) nonTiedPairCount += 1;
+      });
+    });
+
+    if (scoredCritiques.length >= 2 && nonTiedPairCount > 0) {
+      pairwiseEligiblePositions.push({
+        positionId: position.id,
+        critiqueIds: scoredCritiques.map((item) => item.critique.id),
+        nonTiedPairCount,
+      });
+      return;
+    }
+
+    scoredCritiques.forEach((item) => {
+      if (customLossEligibleItems.includes(item.itemId)) pointwiseOnlyItems.push(item.itemId);
+    });
+    metricFamilySpecificExclusions.push({
+      positionId: position.id,
+      reason: scoredCritiques.length < 2 ? "fewer_than_two_labelled_critiques" : "no_non_tied_human_pairs",
+      scoredCritiqueCount: scoredCritiques.length,
+      nonTiedPairCount,
+    });
+  });
+
+  return {
+    id: `metric-eligibility-${releaseId}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    pairwiseEligiblePositions,
+    pairwiseEligiblePairCount: pairwiseEligiblePositions.reduce((sum, item) => sum + item.nonTiedPairCount, 0),
+    customLossEligibleItems,
+    pointwiseOnlyItems,
+    metricFamilySpecificExclusions,
+    notes: [
+      "Pairwise headline subsets require same-position non-tied critique pairs.",
+      "Custom weighted loss remains pointwise and may include pointwise-only items.",
+    ],
+  };
+}
+
+export function buildHumanScoreDistributionReport(releaseId, labelSnapshot, positionList = positions, critiqueList = critiques) {
+  const rows = buildLabelRows(labelSnapshot, positionList, critiqueList);
+  return {
+    id: `human-score-distribution-${releaseId}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    createdAt: new Date().toISOString(),
+    histogramBins: ["0-0.2", "0.2-0.4", "0.4-0.6", "0.6-0.8", "0.8-1.0"],
+    overall: summarizeLabelRows(rows),
+    bySplit: summarizeRowsBy(rows, "split"),
+    bySourceCategory: summarizeRowsBy(rows, "sourceCategory"),
+    byTopicFamily: summarizeRowsBy(rows, "topicFamily"),
+    byCritiqueLengthBand: summarizeRowsBy(rows, "critiqueLengthBand"),
+    byCritiqueAuthorshipType: summarizeRowsBy(rows, "critiqueAuthorshipType"),
+    notes: [
+      "Distributions make prior-only and constant-score baselines interpretable.",
+      "Split/source/topic/length strata are reported separately so artifact and calibration confounds remain visible.",
+    ],
+  };
+}
+
+export function buildRatingEffortQualityReport(releaseId, ratings = seedRatings, positionList = positions, critiqueList = critiques, assignmentList = assignments) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueById = new Map(critiqueList.map((critique) => [critique.id, critique]));
+  const assignmentById = new Map(assignmentList.map((assignment) => [assignment.id, assignment]));
+  const rows = ratings.map((rating) => {
+    const position = positionById.get(rating.positionId);
+    const critique = critiqueById.get(rating.critiqueId);
+    const assignment = assignmentById.get(rating.assignmentId);
+    const positionLengthBand = position ? textLengthBand(latestText(position).text) : "unknown";
+    const critiqueLengthBand = critique?.lengthBand ?? "unknown";
+    const expectation = effortExpectation(positionLengthBand, critiqueLengthBand);
+    const telemetry = {
+      activeSeconds: rating.activeSeconds,
+      idleGapSeconds: rating.idleGapSeconds,
+      interruptionCount: rating.interruptionCount,
+    };
+    const routeReasons = effortRouteReasons(telemetry, expectation);
+    const split = position?.split ?? "unknown";
+    const protectedUseBlocks = protectedEffortUseBlocks(routeReasons, split, assignment?.queueType);
+    return {
+      ratingId: rating.id,
+      ratingHash: `sha256:${rating.id}:effort`,
+      itemHash: `sha256:${makeItemId(rating.positionId, rating.critiqueId)}:effort`,
+      split,
+      queueType: assignment?.queueType ?? "unknown",
+      kind: rating.kind,
+      raterTier: rating.raterTier,
+      positionLengthBand,
+      critiqueLengthBand,
+      expectedEffortBand: expectation.band,
+      expectedActiveSecondsMin: expectation.minActiveSeconds,
+      activeSeconds: telemetry.activeSeconds ?? null,
+      idleGapSeconds: telemetry.idleGapSeconds ?? null,
+      interruptionCount: telemetry.interruptionCount ?? null,
+      routeReasons,
+      qaStatus: routeReasons.length ? "qa_review_required_before_sensitive_use" : "effort_telemetry_pass",
+      protectedUseBlocks,
+    };
+  });
+  const qaRoutedRatings = rows.filter((row) => row.routeReasons.length);
+  return {
+    id: `rating-effort-quality-${releaseId}`,
+    releaseId,
+    policy: {
+      requiredTelemetryFields: ["activeSeconds", "idleGapSeconds", "interruptionCount"],
+      lengthAdjustedExpectations: EFFORT_EXPECTATIONS,
+      idleGapPolicy: "idle gaps above 50% of active time or the band maximum route to QA",
+      interruptionPolicy: "interrupted ratings route to QA before certification, validation, or hidden-benchmark use",
+      protectedUsePolicy: "QA-routed rows are blocked from certification, validation, and hidden-benchmark denominators until reviewed or rerated.",
+    },
+    telemetryCoverage: {
+      totalRows: rows.length,
+      completeTelemetryRows: rows.filter(hasCompleteEffortTelemetry).length,
+      missingTelemetryRows: rows.filter((row) => !hasCompleteEffortTelemetry(row)).length,
+    },
+    byExpectedEffortBand: countBy(rows, "expectedEffortBand"),
+    bySplit: countBy(rows, "split"),
+    qaRoutedRatings,
+    protectedUseBlockSummary: {
+      certificationBlockedCount: qaRoutedRatings.filter((row) => row.protectedUseBlocks.includes("certification")).length,
+      validationBlockedCount: qaRoutedRatings.filter((row) => row.protectedUseBlocks.includes("validation")).length,
+      hiddenBenchmarkBlockedCount: qaRoutedRatings.filter((row) => row.protectedUseBlocks.includes("hidden_benchmark")).length,
+    },
+    releaseUseStatus: qaRoutedRatings.length ? "qa_routing_required_before_sensitive_use" : "pass",
+  };
+}
+
+export function buildPostLockSourceStyleAuditReport(
+  releaseId,
+  audits = postLockSourceStyleAudits,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  labelSnapshot = null,
+) {
+  const ratingById = new Map(ratings.map((rating) => [rating.id, rating]));
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueById = new Map(critiqueList.map((critique) => [critique.id, critique]));
+  const rows = audits.map((audit) => {
+    const rating = ratingById.get(audit.ratingId);
+    const position = positionById.get(audit.positionId);
+    const critique = critiqueById.get(audit.critiqueId);
+    const itemId = makeItemId(audit.positionId, audit.critiqueId);
+    const label = labelSnapshot?.itemLabels?.[itemId];
+    const collectedAtMs = timestampMs(audit.collectedAt);
+    const lockedAtMs = timestampMs(rating?.lockedAt ?? audit.ratingLockedAt);
+    const collectedAfterLock = collectedAtMs !== null && lockedAtMs !== null && collectedAtMs >= lockedAtMs;
+    const shownBeforeInitialLock = audit.shownBeforeInitialLock === true;
+    const usedForScoring = audit.usedForScoring === true;
+    const actualSourceType = critique?.sourceType ?? "unknown";
+    const actualAuthorshipType = critique?.authorshipType ?? "unknown";
+    const actualStyleBand = critique?.styleBand ?? "unknown";
+    return {
+      auditId: audit.id,
+      ratingHash: `sha256:${audit.ratingId}:source-style-audit`,
+      itemHash: `sha256:${itemId}:source-style-audit`,
+      split: position?.split ?? "unknown",
+      collectionStatus: collectedAfterLock && !shownBeforeInitialLock ? "post_lock" : "policy_violation",
+      collectedAfterLock,
+      shownBeforeInitialLock,
+      usedForScoring,
+      sourceGuess: audit.sourceGuess ?? "unknown",
+      authorshipGuess: audit.authorshipGuess ?? "unknown",
+      styleGuess: audit.styleGuess ?? "unknown",
+      styleGuessConfidence: typeof audit.styleGuessConfidence === "number" ? round(audit.styleGuessConfidence) : null,
+      actualSourceType,
+      actualAuthorshipType,
+      actualStyleBand,
+      sourceGuessMatches: actualSourceType !== "unknown" && audit.sourceGuess !== "unknown" ? audit.sourceGuess === actualSourceType : null,
+      authorshipGuessMatches: actualAuthorshipType !== "unknown" && audit.authorshipGuess !== "unknown" ? audit.authorshipGuess === actualAuthorshipType : null,
+      styleGuessMatches: actualStyleBand !== "unknown" && audit.styleGuess !== "unknown" ? audit.styleGuess === actualStyleBand : null,
+      targetOverall: label?.weightedMeanScores?.overall ?? null,
+      targetQualityBand: qualityBand(label?.weightedMeanScores?.overall),
+    };
+  });
+  const preLockViolations = rows.filter((row) => !row.collectedAfterLock || row.shownBeforeInitialLock);
+  const scoringUseViolations = rows.filter((row) => row.usedForScoring);
+  const highConfidenceRows = rows.filter((row) => typeof row.styleGuessConfidence === "number" && row.styleGuessConfidence >= 0.75);
+  const sourceAccuracy = matchRate(rows, "sourceGuessMatches");
+  const authorshipAccuracy = matchRate(rows, "authorshipGuessMatches");
+  const styleAccuracy = matchRate(rows, "styleGuessMatches");
+  const highConfidenceSourceAccuracy = matchRate(highConfidenceRows, "sourceGuessMatches");
+  const meanOverallByGuessedSource = summarizeNumericBy(rows, "sourceGuess", "targetOverall");
+  const qualityMeanRange = meanRange(meanOverallByGuessedSource);
+  const qualityAssociationStatus =
+    Object.keys(meanOverallByGuessedSource).length < 2
+      ? "insufficient_labelled_guess_groups"
+      : qualityMeanRange >= 0.25
+        ? "source_guess_quality_association_observed"
+        : "no_large_source_guess_quality_association_observed";
+  const residualUnblindingRisk = sourceStyleResidualRisk(preLockViolations, scoringUseViolations, highConfidenceRows, highConfidenceSourceAccuracy, qualityMeanRange);
+  return {
+    id: `post-lock-source-style-audit-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      collectionPhase: "post_initial_lock_only",
+      displayBeforeInitialLockAllowed: false,
+      ordinaryRatingOrAdjudicationFeedbackAllowed: false,
+      scoringUseAllowed: false,
+      reportUse: "diagnose residual source/style artifacts and rater overreliance on source cues",
+    },
+    counts: {
+      totalAudits: rows.length,
+      postLockAudits: rows.filter((row) => row.collectionStatus === "post_lock").length,
+      preLockViolationCount: preLockViolations.length,
+      scoringUseViolationCount: scoringUseViolations.length,
+      highConfidenceAuditCount: highConfidenceRows.length,
+    },
+    accuracySummary: {
+      sourceGuess: sourceAccuracy,
+      authorshipGuess: authorshipAccuracy,
+      styleGuess: styleAccuracy,
+      highConfidenceSourceGuess: highConfidenceSourceAccuracy,
+    },
+    bySplit: countBy(rows, "split"),
+    byActualSourceType: countBy(rows, "actualSourceType"),
+    byGuessedSource: countBy(rows, "sourceGuess"),
+    byStyleGuess: countBy(rows, "styleGuess"),
+    qualityCorrelationDiagnostic: {
+      meanOverallByGuessedSource,
+      meanOverallRange: qualityMeanRange,
+      status: qualityAssociationStatus,
+      caveat: "Associations are small-sample diagnostics, not evidence for label quality by source.",
+    },
+    residualUnblindingRisk,
+    auditRows: rows,
+    diagnosticOnly: true,
+    releaseUseStatus:
+      preLockViolations.length || scoringUseViolations.length
+        ? "source_style_audit_policy_violation"
+        : residualUnblindingRisk.status === "residual_unblinding_risk_disclose_counterbalance_or_carve_out"
+          ? "residual_unblinding_disclosure_required"
+          : "pass",
+  };
+}
+
+export function buildCorrectnessVerificationReport(
+  releaseId,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  records = verificationRecords,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const recordsByItem = records.reduce((acc, record) => {
+    const itemId = makeItemId(record.positionId, record.critiqueId);
+    acc[itemId] ??= [];
+    acc[itemId].push(record);
+    return acc;
+  }, {});
+  const rows = critiqueList.map((critique) => {
+    const position = positionById.get(critique.positionId);
+    const itemId = makeItemId(critique.positionId, critique.id);
+    const itemRatings = ratings.filter((rating) => rating.positionId === critique.positionId && rating.critiqueId === critique.id);
+    const correctnessSpread = spread(itemRatings, "correctness");
+    const requirementReasons = [];
+    if (itemRatings.some((rating) => rating.flags?.needsVerification)) requirementReasons.push("rater_needs_verification_flag");
+    if (correctnessSpread !== null && correctnessSpread > 0.35) requirementReasons.push("correctness_spread_above_0_35");
+    const itemRecords = recordsByItem[itemId] ?? [];
+    const latestRecord = latestVerificationRecord(itemRecords);
+    const verificationStatus = latestRecord?.verificationStatus ?? (requirementReasons.length ? "missing" : "not_needed");
+    const notPracticableResolved = verificationStatus === "not_practicable" && ["expert", "admin"].includes(latestRecord?.verifierRole);
+    const resolved = !requirementReasons.length || ["verified", "not_needed"].includes(verificationStatus) || notPracticableResolved;
+    const releaseCritical = ["public_train", "public_dev", "internal_validation", "hidden_benchmark"].includes(position?.split);
+    return {
+      itemHash: `sha256:${itemId}:verification`,
+      split: position?.split ?? "unknown",
+      positionId: critique.positionId,
+      critiqueId: critique.id,
+      verificationRequired: requirementReasons.length > 0,
+      requirementReasons,
+      correctnessSpread: correctnessSpread ?? null,
+      linkedRecordCount: itemRecords.length,
+      latestRecordHash: latestRecord ? `sha256:${latestRecord.id}:verification-record` : null,
+      verificationStatus,
+      verificationType: latestRecord?.verificationType ?? "not_applicable",
+      verifierRole: latestRecord?.verifierRole ?? null,
+      exposureStatus: latestRecord?.exposureStatus ?? "not_applicable",
+      releaseBlocking: requirementReasons.length > 0 && !resolved && releaseCritical,
+      resultSummary: latestRecord?.verificationResult ?? (requirementReasons.length ? "Verification required but no linked VerificationRecord is resolved." : "No correctness-sensitive verification required."),
+    };
+  });
+  const requiredRows = rows.filter((row) => row.verificationRequired);
+  const releaseBlockingRows = rows.filter((row) => row.releaseBlocking);
+  return {
+    id: `correctness-verification-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      validStatuses: ["not_needed", "verified", "not_practicable", "unresolved"],
+      requiredWhen: ["rater_needs_verification_flag", "correctness_spread_above_0_35"],
+      releaseRule: "Correctness-sensitive benchmark, validation, or public-release items must be verified or explicitly marked not_practicable by an expert/admin adjudicator.",
+      ratingPreservation: "Verification materials are linked records and do not overwrite blind initial ratings.",
+    },
+    requiredItemCount: requiredRows.length,
+    linkedRecordCount: records.length,
+    unresolvedRequiredItems: requiredRows.filter((row) => ["missing", "unresolved"].includes(row.verificationStatus)),
+    releaseBlockingItems: releaseBlockingRows,
+    byVerificationStatus: countBy(rows, "verificationStatus"),
+    byVerificationType: countBy(rows, "verificationType"),
+    byExposureStatus: countBy(rows, "exposureStatus"),
+    verificationRows: rows,
+    releaseUseStatus: releaseBlockingRows.length ? "verification_review_required_before_benchmark_or_public_release" : "pass",
+  };
+}
+
+export function buildHumanCeilingAndSaturationReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  runs = [fullRubricEvaluationRun],
+) {
+  const validationPositions = positionList.filter((position) => position.split === "internal_validation");
+  const validationPositionIds = new Set(validationPositions.map((position) => position.id));
+  const validationCritiques = critiqueList.filter((critique) => validationPositionIds.has(critique.positionId));
+  const validationItemIds = validationCritiques.map((critique) => makeItemId(critique.positionId, critique.id)).sort();
+  const validationRatings = ratings.filter((rating) => validationPositionIds.has(rating.positionId));
+  const raterCoverageRows = buildRaterItemCoverageRows(validationRatings, validationItemIds);
+  const commonOverlapItemIds = validationItemIds.filter(
+    (itemId) => new Set(validationRatings.filter((rating) => makeItemId(rating.positionId, rating.critiqueId) === itemId).map((rating) => rating.raterId)).size >= 2,
+  );
+  const comparisonRows = ["blind_initial", "self_check", "expert_check", "model_assisted_check"].map((kind) =>
+    humanCeilingComparisonRow(kind, validationRatings, labelSnapshot, validationItemIds),
+  );
+  const modelProximityRows = runs.map((run) => modelValidationProximityRow(run, labelSnapshot, validationItemIds));
+  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList);
+  const thinValidation = validationDesign.status !== "appendix_c_scale";
+  const bestHumanMeanAbsOverallDiff = minValid(comparisonRows.map((row) => row.meanAbsOverallDiff));
+  const closestModelMeanAbsOverallDiff = minValid(modelProximityRows.map((row) => row.meanAbsOverallDiff));
+  const modelWithinHumanBand =
+    bestHumanMeanAbsOverallDiff !== null &&
+    closestModelMeanAbsOverallDiff !== null &&
+    closestModelMeanAbsOverallDiff <= bestHumanMeanAbsOverallDiff + 0.02;
+  return {
+    id: `human-ceiling-saturation-${releaseId}`,
+    releaseId,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    validationScope: {
+      split: "internal_validation",
+      validationPositionCount: validationPositions.length,
+      validationCritiqueCount: validationCritiques.length,
+      validationItemIds,
+      appendixCScaleStatus: validationDesign.status,
+    },
+    finalAverageApproximationPolicy:
+      "Final-average labels are an approximation target for validation diagnostics, not literal ground truth or a substitute for blind initial ratings.",
+    raterItemCoverage: {
+      rows: raterCoverageRows,
+      commonOverlapItemIds,
+      fullCoverageRaterIds: raterCoverageRows.filter((row) => row.coveredItemCount === validationItemIds.length && validationItemIds.length > 0).map((row) => row.raterId),
+      partialCoverageRaterIds: raterCoverageRows.filter((row) => row.coveredItemCount > 0 && row.coveredItemCount < validationItemIds.length).map((row) => row.raterId),
+    },
+    comparisonRows,
+    checkSeparation: {
+      selfCheckRows: comparisonRows.find((row) => row.ratingKind === "self_check")?.rowCount ?? 0,
+      expertCheckRows: comparisonRows.find((row) => row.ratingKind === "expert_check")?.rowCount ?? 0,
+      modelAssistedCheckRows: comparisonRows.find((row) => row.ratingKind === "model_assisted_check")?.rowCount ?? 0,
+      modelAssistedTreatedAsIndependentHuman: false,
+      incrementalModelAssistanceStatus:
+        (comparisonRows.find((row) => row.ratingKind === "model_assisted_check")?.rowCount ?? 0) > 0
+          ? "model_assisted_delta_report_required"
+          : "no_model_assisted_checks_in_seed",
+    },
+    modelProximityRows,
+    uncertaintyPolicy: {
+      intervalType: "descriptive_seed_no_interval",
+      nominalLevel: null,
+      constructionMethod: "not_computed_until_appendix_c_scale_or_bootstrap_sample_available",
+      resamplingUnit: "item",
+      resampleCountOrDegreesOfFreedom: 0,
+      randomSeedOrArtifact: "not_applicable_seed_demo",
+    },
+    saturationRisk: {
+      bestHumanMeanAbsOverallDiff,
+      closestModelMeanAbsOverallDiff,
+      modelWithinHumanBand,
+      status: thinValidation
+        ? "not_assessable_thin_validation"
+        : modelWithinHumanBand
+          ? "saturation_risk_refresh_required"
+          : "no_saturation_signal_current_release",
+      releaseUsePolicy:
+        "Do not make human-ceiling or saturation claims unless the validation design is Appendix-C-scale or explicitly labeled thinner with reduced claim strength.",
+    },
+    refreshQueue: buildSaturationRefreshQueue(labelSnapshot, positionList, critiqueList),
+    releaseUseStatus: thinValidation ? "human_ceiling_claims_blocked_thinner_than_appendix_c" : "human_ceiling_claims_allowed_with_declared_uncertainty",
+  };
+}
+
+export function buildSamePositionContextReport(
+  releaseId,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  contextSnapshots = ratingContextSnapshots,
+  assignmentList = assignments,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const assignmentById = new Map(assignmentList.map((assignment) => [assignment.id, assignment]));
+  const snapshotById = new Map(contextSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+  const critiqueIdsByPosition = critiqueList.reduce((acc, critique) => {
+    acc[critique.positionId] ??= [];
+    acc[critique.positionId].push(critique.id);
+    return acc;
+  }, {});
+  const rows = ratings.map((rating) => {
+    const position = positionById.get(rating.positionId);
+    const assignment = assignmentById.get(rating.assignmentId);
+    const snapshot = snapshotById.get(rating.ratingContextSnapshotId);
+    const allCritiqueIds = critiqueIdsByPosition[rating.positionId] ?? [];
+    const siblingCritiqueIds = allCritiqueIds.filter((id) => id !== rating.critiqueId);
+    const visibleCritiqueIds = snapshot?.visibleCritiqueIds ?? [];
+    const visibleSet = new Set(visibleCritiqueIds);
+    const orderIndex = snapshot?.orderIndexByCritiqueId ?? {};
+    const currentOrderIndex = orderIndex[rating.critiqueId];
+    const visibleSiblingCritiqueIds = siblingCritiqueIds.filter((id) => visibleSet.has(id));
+    const priorSiblingCritiqueIds = Number.isInteger(currentOrderIndex)
+      ? visibleSiblingCritiqueIds.filter((id) => Number.isInteger(orderIndex[id]) && orderIndex[id] < currentOrderIndex)
+      : snapshot?.priorSiblingCritiqueIds ?? [];
+    const laterVisibleSiblingCritiqueIds = Number.isInteger(currentOrderIndex)
+      ? visibleSiblingCritiqueIds.filter((id) => Number.isInteger(orderIndex[id]) && orderIndex[id] > currentOrderIndex)
+      : [];
+    const absentSiblingCritiqueIds = uniqueStrings([
+      ...siblingCritiqueIds.filter((id) => !visibleSet.has(id)),
+      ...(snapshot?.laterSiblingCritiqueIdsAbsentAtSubmission ?? []),
+    ]);
+    const releaseCritical =
+      ["internal_validation", "hidden_benchmark"].includes(position?.split) ||
+      ["validation_subset", "benchmark_candidate_review"].includes(assignment?.queueType);
+    const currentCritiqueVisible = visibleSet.has(rating.critiqueId);
+    const humanModelParityStatus = snapshot?.humanModelParityStatus ?? "missing_context_snapshot";
+    const contextSensitive = visibleSiblingCritiqueIds.length > 0 || humanModelParityStatus.includes("context_sensitive");
+    const orderPolicyStatus = !snapshot
+      ? "missing_context_snapshot"
+      : !releaseCritical
+        ? "not_release_critical"
+        : snapshot.orderPolicy.includes("counterbalanced")
+          ? "counterbalanced"
+          : "fixed_or_target_only_order_disclosed";
+    return {
+      ratingHash: `sha256:${rating.id}:same-position-context`,
+      ratingId: rating.id,
+      itemHash: `sha256:${makeItemId(rating.positionId, rating.critiqueId)}:same-position-context`,
+      split: position?.split ?? "unknown",
+      queueType: assignment?.queueType ?? "unknown",
+      ratingContextSnapshotId: rating.ratingContextSnapshotId,
+      contextSnapshotFrozen: Boolean(snapshot?.frozenAt),
+      currentCritiqueVisible,
+      policy: snapshot?.policy ?? "missing_context_snapshot",
+      orderPolicy: snapshot?.orderPolicy ?? "missing_context_snapshot",
+      orderPolicyStatus,
+      siblingExposurePattern: snapshot?.siblingExposurePattern ?? "missing_context_snapshot",
+      visibleSiblingCritiqueIds,
+      priorSiblingCritiqueIds,
+      laterVisibleSiblingCritiqueIds,
+      absentSiblingCritiqueIds,
+      releaseCritical,
+      humanModelParityStatus,
+      contextSensitive,
+      cleanModelPromptRequirement: contextSensitive
+        ? "model_prompt_must_match_frozen_sibling_context_or_restrict_target_snapshot"
+        : "target_only_context_is_matchable",
+    };
+  });
+  const missingContextRows = rows.filter((row) => row.policy === "missing_context_snapshot");
+  const currentCritiqueVisibilityViolations = rows.filter((row) => !row.currentCritiqueVisible);
+  const contextSensitiveRows = rows.filter((row) => row.contextSensitive);
+  return {
+    id: `same-position-context-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      requiredArtifact: "RatingContextSnapshot",
+      releaseRule: "Ratings and model prompts must bind to frozen same-position context snapshots; context-sensitive labels require matching model sibling context or target-snapshot restriction.",
+      orderRule: "Validation and benchmark-candidate queues must counterbalance order where feasible or disclose fixed target-only order.",
+      lateSiblingRule: "Later-added same-position critiques absent at submission are recorded so historical context does not mutate.",
+    },
+    counts: {
+      totalRatings: rows.length,
+      ratingsWithFrozenContext: rows.filter((row) => row.contextSnapshotFrozen).length,
+      missingContextSnapshotCount: missingContextRows.length,
+      currentCritiqueVisibilityViolationCount: currentCritiqueVisibilityViolations.length,
+      contextSensitiveRatingCount: contextSensitiveRows.length,
+      releaseCriticalRatingCount: rows.filter((row) => row.releaseCritical).length,
+      counterbalancedReleaseCriticalRatingCount: rows.filter((row) => row.releaseCritical && row.orderPolicyStatus === "counterbalanced").length,
+      absentSiblingDisclosureCount: rows.filter((row) => row.absentSiblingCritiqueIds.length > 0).length,
+    },
+    byPolicy: countBy(rows, "policy"),
+    byOrderPolicy: countBy(rows, "orderPolicy"),
+    byOrderPolicyStatus: countBy(rows, "orderPolicyStatus"),
+    byHumanModelParityStatus: countBy(rows, "humanModelParityStatus"),
+    contextSensitiveRows,
+    currentCritiqueVisibilityViolations,
+    contextRows: rows,
+    releaseUseStatus:
+      missingContextRows.length || currentCritiqueVisibilityViolations.length
+        ? "rating_context_snapshot_repair_required"
+        : contextSensitiveRows.length
+          ? "rating_context_sensitive_model_prompt_matching_required"
+          : "pass",
+  };
+}
+
+export function buildSanityBaselineReport(releaseId, labelSnapshot, positionList = positions, critiqueList = critiques, options = {}) {
+  const rows = buildLabelRows(labelSnapshot, positionList, critiqueList);
+  const fitSplits = options.fitSplits ?? ["public_train", "public_dev"];
+  const protectedExcludedSplits = options.protectedExcludedSplits ?? ["internal_validation", "hidden_benchmark"];
+  const fitRows = rows.filter((row) => fitSplits.includes(row.split) && isCustomLossEligibleLabel(row.scores));
+  const scoredRows = rows.filter((row) => isCustomLossEligibleLabel(row.scores));
+  const fitMeanScores = constantScoresFromRows(fitRows, "mean");
+  const fitMedianScores = constantScoresFromRows(fitRows, "median");
+  const allMeanScores = constantScoresFromRows(scoredRows, "mean");
+  const allMedianScores = constantScoresFromRows(scoredRows, "median");
+  const pairwiseRows = rows.filter((row) => isValidScore(row.scores.overall));
+  const positionToOveralls = groupOverallsByPosition(pairwiseRows);
+  const pairwiseSnapshot = buildPairwiseComparisonSnapshot(`sanity-pairwise-${releaseId}`, labelSnapshot.id, labelSnapshot.targetLabelVersion, positionToOveralls);
+  return {
+    id: `sanity-baselines-${releaseId}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    createdAt: new Date().toISOString(),
+    metricVersion: "lmca-demo-sanity-v1",
+    protectedSplitPolicy: {
+      fitSplits,
+      protectedExcludedSplits,
+      hiddenBenchmarkFitExcluded: !fitRows.some((row) => row.split === "hidden_benchmark"),
+      internalValidationFitExcluded: !fitRows.some((row) => row.split === "internal_validation"),
+    },
+    baselines: [
+      sanityBaseline("random_pairwise", "weighted_pairwise", "all_scored_splits", {
+        loss: pairwiseSnapshot.nonTiedEdges.length ? 0.5 : null,
+        coverage: {
+          nPairsScored: pairwiseSnapshot.nonTiedEdges.length,
+          nPositionsScored: pairwiseSnapshot.positionIds.length - pairwiseSnapshot.excludedNoPairPositions.length,
+          nHumanTiePairsExcluded: pairwiseSnapshot.excludedHumanTieEdges,
+          nPositionsExcludedNoNonTiedPairs: pairwiseSnapshot.excludedNoPairPositions.length,
+        },
+      }),
+      sanityBaseline("constant_mean", "custom_weighted_loss", "all_scored_labels", constantBaselineLoss(scoredRows, allMeanScores)),
+      sanityBaseline("constant_median", "custom_weighted_loss", "all_scored_labels", constantBaselineLoss(scoredRows, allMedianScores)),
+      sanityBaseline("prior_only_train_dev", "custom_weighted_loss", fitSplits.join(","), constantBaselineLoss(scoredRows, fitMeanScores)),
+    ],
+    fitDistribution: summarizeLabelRows(fitRows),
+    scoredDistribution: summarizeLabelRows(scoredRows),
+    pairwiseComparisonSnapshot: pairwiseSnapshot,
+    pairwiseMarginDistribution: pairwiseMarginDistribution(pairwiseSnapshot),
+    notes: [
+      "Sanity baselines are reported separately from conceptual-reasoning model runs.",
+      "Prior-only fitting excludes protected validation and hidden benchmark splits.",
+      "Constant-score baselines test label-prior calibration rather than contextual conceptual judgment.",
+    ],
+  };
+}
+
+export function buildRecalibratedEvaluationReport(
+  releaseId,
+  labelSnapshot,
+  run = fullRubricEvaluationRun,
+  positionList = positions,
+  options = {},
+) {
+  const fitSplits = options.fitSplits ?? ["public_train"];
+  const protectedExcludedSplits = options.protectedExcludedSplits ?? ["internal_validation", "hidden_benchmark"];
+  const targetDimensions = options.targetDimensions ?? (run.mode === "full_rubric" ? RUBRIC_DIMENSIONS : ["overall"]);
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const calibrationRows = run.predictions
+    .map((prediction) => {
+      const itemId = makeItemId(prediction.positionId, prediction.critiqueId);
+      const label = labelSnapshot.itemLabels[itemId];
+      const position = positionById.get(prediction.positionId);
+      if (!label || !position) return null;
+      return {
+        itemId,
+        split: position.split,
+        humanScores: label.weightedMeanScores,
+        modelScores: prediction.scores,
+      };
+    })
+    .filter(Boolean);
+  const fitRows = calibrationRows.filter((row) => fitSplits.includes(row.split));
+  const protectedRowsExcludedFromFit = calibrationRows.filter((row) => protectedExcludedSplits.includes(row.split));
+  const parameters = Object.fromEntries(
+    targetDimensions.map((dimension) => [dimension, additiveCalibrationParameter(fitRows, dimension)]),
+  );
+  const calibratedRun = {
+    ...run,
+    id: `${run.id}-recalibrated-${releaseId}`,
+    calibrationSetting: "per_dimension_additive_intercept_clamped_0_1",
+    predictions: run.predictions.map((prediction) => ({
+      ...prediction,
+      id: `${prediction.id}-recalibrated`,
+      rawPredictionId: prediction.id,
+      scores: calibrateScores(prediction.scores, parameters),
+    })),
+  };
+  const rawMetrics = evaluationMetricBundle(labelSnapshot, run);
+  const recalibratedMetrics = evaluationMetricBundle(labelSnapshot, calibratedRun);
+  return {
+    id: `recalibrated-evaluation-${releaseId}-${run.id}`,
+    releaseId,
+    evaluationRunId: run.id,
+    requestedModelAlias: run.requestedModelAlias,
+    resolvedModelSnapshot: run.resolvedModelSnapshot,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    metricVersion: "lmca-demo-calibration-v1",
+    calibrationArtifact: {
+      id: `calibration-${releaseId}-${run.id}`,
+      fitSplits,
+      protectedExcludedSplits,
+      protectedRowsExcludedFromFit: protectedRowsExcludedFromFit.length,
+      targetDimensions,
+      targetDerivedFields: ["centrality_x_strength_reported_not_directly_fitted"],
+      transformationFamily: "per_dimension_additive_intercept",
+      outputClamp: "[0,1]",
+      fittedParameters: parameters,
+      fitRows: fitRows.map((row) => ({
+        itemId: row.itemId,
+        split: row.split,
+        dimensionsFit: targetDimensions.filter((dimension) => isValidScore(row.humanScores[dimension]) && isValidScore(row.modelScores[dimension])),
+      })),
+      protectedLeakageCount: fitRows.filter((row) => protectedExcludedSplits.includes(row.split)).length,
+      promptProvenance: {
+        sourceEvaluationPromptArtifactId: run.promptArtifact?.id ?? run.promptTemplateId ?? null,
+        sourceRenderedPromptChecksum: run.renderedPromptChecksum ?? null,
+        calibrationPromptArtifactId: null,
+        calibrationPromptApplicability: "not_applicable_deterministic_score_transform_no_model_prompt",
+      },
+    },
+    rawMetrics,
+    recalibratedMetrics,
+    metricDeltas: {
+      weightedPairwiseLoss: numericDelta(rawMetrics.weightedPairwise.loss, recalibratedMetrics.weightedPairwise.loss),
+      customWeightedLoss: numericDelta(rawMetrics.customWeightedLoss.loss, recalibratedMetrics.customWeightedLoss.loss),
+      unweightedPairwiseLoss: numericDelta(rawMetrics.unweightedPairwiseDiagnostic.loss, recalibratedMetrics.unweightedPairwiseDiagnostic.loss),
+    },
+    customWeightedLossDirectionality:
+      "The frozen human LabelSnapshot is the target/prediction-left operand and controls the low-clarity branch; recalibration only transforms model predictions.",
+    releaseUseStatus:
+      protectedRowsExcludedFromFit.length > 0 && fitRows.every((row) => !protectedExcludedSplits.includes(row.split))
+        ? "recalibrated_report_protected_fit_excluded"
+        : "recalibration_fit_policy_review_required",
+  };
+}
+
+export function buildUncertaintyAwareLeaderboardReport(
+  releaseId,
+  labelSnapshot,
+  runs = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  options = {},
+) {
+  const metricFamily = options.metricFamily ?? "weighted_pairwise";
+  const practicalDifferenceThreshold = options.practicalDifferenceThreshold ?? 0.02;
+  const commonItemIds = commonPredictionItemIds(runs, labelSnapshot);
+  const commonHumanOveralls = commonHumanOverallsByPosition(labelSnapshot, commonItemIds);
+  const pairwiseSnapshot = buildPairwiseComparisonSnapshot(
+    `leaderboard-pairwise-${releaseId}`,
+    labelSnapshot.id,
+    labelSnapshot.targetLabelVersion,
+    commonHumanOveralls,
+  );
+  const modelAssistedLabelOverlap =
+    options.modelAssistedLabelOverlapReport ??
+    buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, options.ratings ?? seedRatings, runs, options.pairs);
+  const rows = runs.map((run) => leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily));
+  const pairwiseComparisons = buildLeaderboardPairwiseComparisons(rows, practicalDifferenceThreshold);
+  const unresolvedGroups = pairwiseComparisons
+    .filter((comparison) => comparison.interpretation === "unresolved_within_uncertainty")
+    .map((comparison) => comparison.comparison);
+  return {
+    id: `leaderboard-${releaseId}-${metricFamily}`,
+    releaseId,
+    metricFamily,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    commonSubsetPolicy: "intersection_of_items_with_human_labels_and_all_included_model_predictions",
+    commonItemIds,
+    commonPositionIds: pairwiseSnapshot.positionIds,
+    pairwiseComparisonSnapshot: pairwiseSnapshot,
+    commonMetricConfig: {
+      lowerIsBetter: true,
+      tieTolerance: pairwiseSnapshot.tieTolerance,
+      humanTieTolerance: pairwiseSnapshot.humanTieTolerance,
+      modelTieTolerance: pairwiseSnapshot.modelTieTolerance,
+      humanTiePolicy: pairwiseSnapshot.humanTiePolicy,
+      modelTiePolicy: pairwiseSnapshot.modelTiePolicy,
+      scoreRoundingPolicy: pairwiseSnapshot.scoreRoundingPolicy,
+      scoreQuantizationPolicy: pairwiseSnapshot.scoreQuantizationPolicy,
+      practicalDifferenceThreshold,
+      commonMetricConfigStatus: "declared_common_metric_config",
+    },
+    uncertaintyPolicy: {
+      intervalType: "paired_difference_interval",
+      nominalLevel: 0.95,
+      constructionMethod: "deterministic_seed_demo_interval_width_declared_until_bootstrap_sample_is_large_enough",
+      resamplingUnit: "position",
+      resampleCountOrDegreesOfFreedom: 0,
+      randomSeedOrArtifact: "not_applicable_seed_demo",
+      pairedVsIndependentPolicy: "paired_common_item_set_only_for_rank_claims",
+    },
+    rows,
+    pairwiseComparisons,
+    uncertaintySupportedRankTiers: buildLeaderboardRankTiers(rows, pairwiseComparisons),
+    unresolvedComparisonGroups: unresolvedGroups,
+    pointEstimateOnlyOrdering: unresolvedGroups.length > 0,
+    promptComparability: summarizePromptComparability(runs),
+    modelSnapshotComparability: summarizeModelSnapshotComparability(runs),
+    modelAssistedLabelOverlap,
+    reasoningModeSensitivity: buildReasoningModeSensitivityReport(releaseId, runs),
+    superiorityClaimPolicy:
+      "Do not claim model superiority unless paired-difference intervals exclude zero and the absolute point-estimate gap meets the predeclared practical threshold.",
+    releaseUseStatus: unresolvedGroups.length ? "point_estimate_ordering_only_unresolved_within_uncertainty" : "rank_claims_supported_for_declared_common_subset",
+  };
+}
+
+export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling) {
+  const pairwiseSnapshot = leaderboardReport.pairwiseComparisonSnapshot;
+  const commonConfig = leaderboardReport.commonMetricConfig;
+  const pairwiseConfigRows = [
+    {
+      surface: "pairwise_ranking_report",
+      metricFamily: "weighted_pairwise",
+      lowerIsBetter: true,
+      scoreRoundingPolicy: pairwiseSnapshot.scoreRoundingPolicy,
+      scoreQuantizationPolicy: pairwiseSnapshot.scoreQuantizationPolicy,
+      humanTieTolerance: pairwiseSnapshot.humanTieTolerance,
+      modelTieTolerance: pairwiseSnapshot.modelTieTolerance,
+      humanTiePolicy: pairwiseSnapshot.humanTiePolicy,
+      modelTiePolicy: pairwiseSnapshot.modelTiePolicy,
+      commonMetricConfigStatus: commonConfig.commonMetricConfigStatus,
+      evidence: `${pairwiseSnapshot.nonTiedEdges.length} non-tied edges frozen in ${pairwiseSnapshot.id}.`,
+      diagnosticOnly: false,
+    },
+    {
+      surface: "pairwise_diagnostic_report",
+      metricFamily: "unweighted_pairwise_diagnostic",
+      lowerIsBetter: true,
+      scoreRoundingPolicy: pairwiseSnapshot.scoreRoundingPolicy,
+      scoreQuantizationPolicy: pairwiseSnapshot.scoreQuantizationPolicy,
+      humanTieTolerance: pairwiseSnapshot.humanTieTolerance,
+      modelTieTolerance: pairwiseSnapshot.modelTieTolerance,
+      humanTiePolicy: pairwiseSnapshot.humanTiePolicy,
+      modelTiePolicy: pairwiseSnapshot.modelTiePolicy,
+      commonMetricConfigStatus: commonConfig.commonMetricConfigStatus,
+      evidence: "Diagnostic uses the same pairwise snapshot, tie handling, and common item set as the weighted headline family.",
+      diagnosticOnly: true,
+    },
+    {
+      surface: "cross_model_leaderboard",
+      metricFamily: leaderboardReport.metricFamily,
+      lowerIsBetter: commonConfig.lowerIsBetter,
+      scoreRoundingPolicy: commonConfig.scoreRoundingPolicy,
+      scoreQuantizationPolicy: commonConfig.scoreQuantizationPolicy,
+      humanTieTolerance: commonConfig.humanTieTolerance,
+      modelTieTolerance: commonConfig.modelTieTolerance,
+      humanTiePolicy: commonConfig.humanTiePolicy,
+      modelTiePolicy: commonConfig.modelTiePolicy,
+      commonMetricConfigStatus: commonConfig.commonMetricConfigStatus,
+      evidence: `${leaderboardReport.rows.length} runs compared on ${leaderboardReport.commonItemIds.length} common items using ${leaderboardReport.commonSubsetPolicy}.`,
+      diagnosticOnly: false,
+    },
+  ];
+  const directionalityRows = [
+    {
+      metricFamily: "custom_weighted_loss",
+      targetRole: "label_snapshot_target_or_human_rating",
+      predictionRole: "model_full_rubric_prediction",
+      callSignature: "customWeightedLoss(targetLabel, modelPrediction)",
+      directionality: "lower_is_better_absolute_distance_from_target_to_prediction",
+      lowerIsBetter: true,
+      lowClarityPolicy: "target_label_clarity_below_0_5_switches_to_overall_plus_clarity_branch",
+      targetPredictionDirectionalityStatus: "target_prediction_roles_declared",
+    },
+    {
+      metricFamily: "human_ceiling_and_validation",
+      targetRole: "final_average_approximation",
+      predictionRole: "human_check_or_model_prediction",
+      callSignature: "mean absolute overall difference against validation target",
+      directionality: "lower_is_better_distance_to_final_average_approximation",
+      lowerIsBetter: true,
+      finalAveragePolicy: humanCeiling.finalAverageApproximationPolicy,
+      targetPredictionDirectionalityStatus: "final_average_marked_as_approximation",
+    },
+  ];
+  const configViolationRows = pairwiseConfigRows.filter(
+    (row) =>
+      row.scoreRoundingPolicy === undefined ||
+      row.scoreQuantizationPolicy === undefined ||
+      row.humanTieTolerance === undefined ||
+      row.modelTieTolerance === undefined ||
+      row.commonMetricConfigStatus !== "declared_common_metric_config",
+  );
+  const directionalityViolationRows = directionalityRows.filter(
+    (row) =>
+      row.targetPredictionDirectionalityStatus !== "target_prediction_roles_declared" &&
+      row.targetPredictionDirectionalityStatus !== "final_average_marked_as_approximation",
+  );
+  return {
+    id: `metric-directionality-config-${releaseId}`,
+    releaseId,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    policy: {
+      scoreRoundingRule: "Score rounding and quantization must be declared before pairwise ranking or leaderboard claims.",
+      tieToleranceRule: "Human-tied pairs are excluded; model-tied predictions are scored as half-error under the same declared tolerance.",
+      directionalityRule: "Custom weighted loss is always reported as lower-is-better distance from the target label to the prediction.",
+      finalAverageRule: humanCeiling.finalAverageApproximationPolicy,
+    },
+    counts: {
+      pairwiseConfigRows: pairwiseConfigRows.length,
+      directionalityRows: directionalityRows.length,
+      configViolationCount: configViolationRows.length,
+      directionalityViolationCount: directionalityViolationRows.length,
+    },
+    pairwiseConfigRows,
+    directionalityRows,
+    configViolationRows,
+    directionalityViolationRows,
+    releaseUseStatus:
+      configViolationRows.length || directionalityViolationRows.length
+        ? "metric_config_or_directionality_review_required"
+        : "metric_config_and_directionality_declared",
+  };
+}
+
+export function buildPairedTargetLabelSnapshotReport(
+  releaseId,
+  consensusSnapshot,
+  ratings = seedRatings,
+  pairs = critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  runs = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  options = {},
+) {
+  const primarySnapshot =
+    options.primarySnapshot ??
+    createPrimaryRaterAnchorSnapshot(`snapshot-${releaseId}-primary-rater-anchor`, releaseId, ratings, pairs, options.primaryAnchorOptions ?? {});
+  const primaryItemIds = scoredItemIds(primarySnapshot);
+  const consensusItemIds = scoredItemIds(consensusSnapshot);
+  const overlapItemIds = intersectSorted(primaryItemIds, consensusItemIds);
+  const modelScoreDeltas = runs.map((run) => {
+    const runItemIds = intersectSorted(overlapItemIds, predictionItemIds(run));
+    const primary = targetRunScoreRow(run, primarySnapshot, runItemIds, "weighted_pairwise");
+    const consensus = targetRunScoreRow(run, consensusSnapshot, runItemIds, "weighted_pairwise");
+    return {
+      evaluationRunId: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      commonOverlapItemCount: runItemIds.length,
+      primaryRaterAnchor: {
+        targetLabelSnapshotId: primarySnapshot.id,
+        weightedPairwiseLoss: primary.weightedPairwise.loss,
+        customWeightedLoss: primary.customWeightedLoss.loss,
+        coverage: primary.coverage,
+      },
+      consensus: {
+        targetLabelSnapshotId: consensusSnapshot.id,
+        weightedPairwiseLoss: consensus.weightedPairwise.loss,
+        customWeightedLoss: consensus.customWeightedLoss.loss,
+        coverage: consensus.coverage,
+      },
+      lossDeltaPrimaryMinusConsensus:
+        typeof primary.weightedPairwise.loss === "number" && typeof consensus.weightedPairwise.loss === "number"
+          ? round(primary.weightedPairwise.loss - consensus.weightedPairwise.loss)
+          : null,
+    };
+  });
+  const primaryOrder = pointEstimateOrder(modelScoreDeltas, "primaryRaterAnchor");
+  const consensusOrder = pointEstimateOrder(modelScoreDeltas, "consensus");
+  return {
+    id: `paired-target-label-snapshots-${releaseId}`,
+    releaseId,
+    primaryRaterAnchorSnapshot: primarySnapshot,
+    consensusSnapshot: {
+      id: consensusSnapshot.id,
+      targetLabelVersion: consensusSnapshot.targetLabelVersion,
+      status: consensusSnapshot.status,
+      reliabilityWeightModelId: consensusSnapshot.reliabilityWeightModelId,
+      denominatorCounts: consensusSnapshot.denominatorCounts,
+    },
+    coverageOverlap: {
+      primaryScoredItemCount: primaryItemIds.length,
+      consensusScoredItemCount: consensusItemIds.length,
+      overlapItemCount: overlapItemIds.length,
+      overlapItemIds,
+      primaryOnlyItemIds: primaryItemIds.filter((itemId) => !consensusItemIds.includes(itemId)),
+      consensusOnlyItemIds: consensusItemIds.filter((itemId) => !primaryItemIds.includes(itemId)),
+    },
+    targetLabelDeltas: overlapItemIds.map((itemId) => {
+      const primaryOverall = primarySnapshot.itemLabels[itemId].weightedMeanScores.overall;
+      const consensusOverall = consensusSnapshot.itemLabels[itemId].weightedMeanScores.overall;
+      return {
+        itemId,
+        primaryOverall,
+        consensusOverall,
+        primaryMinusConsensusOverall: round(primaryOverall - consensusOverall),
+      };
+    }),
+    modelScoreDeltas,
+    rankSensitivity: {
+      itemSubsetPolicy: "primary_anchor_consensus_overlap_with_common_model_predictions",
+      primaryPointEstimateOrder: primaryOrder,
+      consensusPointEstimateOrder: consensusOrder,
+      status: sameOrder(primaryOrder, consensusOrder) ? "no_point_estimate_order_change_on_overlap" : "target_label_sensitive_point_estimate_order",
+      uncertaintyNote:
+        "Target-label sensitivity is descriptive; leaderboard rank claims still require paired common-set intervals and the predeclared practical-difference threshold.",
+    },
+    claimPolicy: {
+      lmcaTable5TargetIdenticalOnlyWithPrimaryAnchor: true,
+      consensusSnapshotUse: "higher_quality_volunteer_label_not_target_identical_to_lmca_table_5",
+      postHocAnchorSwitchingAllowed: false,
+    },
+  };
+}
+
+export function buildModelAssistedLabelOverlapReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  runs = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  pairs = critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  options = {},
+) {
+  const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
+  const targetModelAssistedRows = ratings
+    .filter(hasModelAssistedExposure)
+    .map((rating) => modelAssistedRatingRow(rating))
+    .filter((row) => snapshotItemIds.has(row.itemId));
+  const humanOnlyRatings = ratings.filter((rating) => !hasModelAssistedExposure(rating));
+  const humanOnlySnapshot =
+    options.humanOnlyPreAssistanceSnapshot ??
+    createLabelSnapshot(`snapshot-${releaseId}-human-only-pre-assistance`, releaseId, humanOnlyRatings, pairs, "human_only_pre_assistance");
+  const runRows = runs.map((run) => {
+    const evaluatedModel = modelIdentityForRun(run);
+    const overlapRows = targetModelAssistedRows
+      .map((row) => ({
+        ...row,
+        overlapBasis: modelOverlapBasis(evaluatedModel, row.assistingModel),
+      }))
+      .filter((row) => row.overlapBasis !== "none");
+    const status =
+      targetModelAssistedRows.length === 0
+        ? "no_model_assisted_target_rows"
+        : overlapRows.length > 0
+          ? "model_assisted_label_overlap_sensitive"
+          : "model_assisted_rows_present_no_evaluated_model_overlap";
+    return {
+      evaluationRunId: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+      modelProvider: evaluatedModel.provider,
+      modelFamily: evaluatedModel.modelFamily,
+      targetModelAssistedRatingCount: targetModelAssistedRows.length,
+      overlappingAssistedRatingCount: overlapRows.length,
+      overlapItemIds: uniqueStrings(overlapRows.map((row) => row.itemId)).sort(),
+      overlapRows,
+      status,
+      cleanClaimStatus:
+        status === "model_assisted_label_overlap_sensitive"
+          ? "clean_claim_requires_human_only_pre_assistance_target_or_overlap_sensitive_label"
+          : status === "model_assisted_rows_present_no_evaluated_model_overlap"
+            ? "clean_claim_allowed_with_assisted_label_rows_disclosed"
+            : "clean_claim_allowed_no_model_assisted_label_exposure",
+      humanOnlyPreAssistanceTargetRequired: status === "model_assisted_label_overlap_sensitive",
+      humanOnlyPreAssistanceTargetSnapshotId: humanOnlySnapshot.id,
+    };
+  });
+  const overlapRunRows = runRows.filter((row) => row.status === "model_assisted_label_overlap_sensitive");
+  return {
+    id: `model-assisted-label-overlap-${releaseId}-${labelSnapshot.id}`,
+    releaseId,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      closeModelFamilyDefinition:
+        "Exact evaluated-model alias, exact resolved snapshot, or declared modelFamily match counts as overlap-sensitive; provider-only matches are not enough.",
+      cleanClaimRule:
+        "Clean leaderboard claims must use no model-assisted target rows, no evaluated-model-family overlap, or a paired human-only/pre-assistance target snapshot.",
+      modelAssistedRowsIndependentHumanEvidence: false,
+      preAssistanceTargetPolicy:
+        "Rows with model-assisted exposure are excluded from the human-only/pre-assistance target; blind initial, self-check, expert-check, adjudication, and unassisted revision rows remain eligible.",
+    },
+    counts: {
+      targetLabelItemCount: snapshotItemIds.size,
+      targetModelAssistedRatingRows: targetModelAssistedRows.length,
+      evaluatedRunCount: runRows.length,
+      overlapSensitiveRunCount: overlapRunRows.length,
+    },
+    assistanceRows: targetModelAssistedRows,
+    runRows,
+    humanOnlyPreAssistanceTarget: {
+      id: humanOnlySnapshot.id,
+      targetLabelVersion: humanOnlySnapshot.targetLabelVersion,
+      status: "human_only_pre_assistance",
+      itemCount: Object.keys(humanOnlySnapshot.itemLabels).length,
+      denominatorCounts: humanOnlySnapshot.denominatorCounts,
+      excludedModelAssistedRows: targetModelAssistedRows.length,
+      sameAsTargetLabelSnapshot: targetModelAssistedRows.length === 0,
+    },
+    releaseUseStatus:
+      overlapRunRows.length > 0
+        ? "model_assisted_overlap_sensitive_reports_require_human_only_target"
+        : targetModelAssistedRows.length > 0
+          ? "model_assisted_rows_disclosed_no_evaluated_model_overlap"
+          : "clean_no_model_assisted_label_overlap",
+  };
+}
+
+export function buildReasoningModeSensitivityReport(
+  releaseId,
+  runs = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  options = {},
+) {
+  const pairedComparisons = options.pairedComparisons ?? [];
+  return {
+    id: `reasoning-mode-sensitivity-${releaseId}`,
+    releaseId,
+    table6SourceBaseline: LMCA_BASELINES.reasoningModeTable6,
+    runRows: runs.map((run) => ({
+      evaluationRunId: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+      promptFamily: run.promptFamily,
+      promptScope: run.promptScope,
+      reasoningMode: run.reasoningMode ?? (run.mode === "overall_only" ? "step_by_step_prompt_text" : "not_requested"),
+      reasoningBudgetTokens: run.reasoningBudgetTokens ?? null,
+      answerExtractionPolicy:
+        run.answerExtractionPolicy ?? (run.mode === "overall_only" ? "extract_overall_json_only_no_full_rubric_imputation" : "extract_all_seven_dimensions_from_json"),
+      itemRoleTerminology: run.itemRoleTerminology ?? (run.promptScope === "appendix_g_overall_only_exact" ? "legacy_argument_wording" : "position_critique"),
+    })),
+    pairedComparisons,
+    pairedComparisonPolicy:
+      "A reasoning-mode effect requires same base model, same target label snapshot, same prompt family except thinking-mode instructions, same common item set, paired interval, and declared reasoning budget.",
+    table6BaselineComparabilityStatus:
+      pairedComparisons.length > 0 ? "lmca_table_6_style_seed_pair_available" : "lmca_table_6_anchors_declared_no_seed_pair_available",
+    status: pairedComparisons.length > 0 ? "paired_reasoning_mode_sensitivity_reported" : "no_paired_reasoning_mode_run_deferred",
+    deferredRationale:
+      pairedComparisons.length > 0
+        ? null
+        : "The seed demo includes mixed prompt families but no same-model with-versus-without-thinking run, so no reasoning-mode benefit or harm is claimed.",
+    releaseUseStatus: pairedComparisons.length > 0 ? "reasoning_mode_comparison_claims_limited_to_paired_rows" : "reasoning_mode_claims_not_supported_seed_demo",
+  };
+}
+
+function buildClaimGatedModelDiagnostics(run, options = {}) {
+  const robustnessClaims = options.robustnessClaims ?? [];
+  const robustnessClaimMade = robustnessClaims.length > 0;
+  const status = robustnessClaimMade ? "required_not_run_claim_blocking" : "deferred_no_robustness_claim";
+  return {
+    evaluationRunId: run.id,
+    requestedModelAlias: run.requestedModelAlias,
+    resolvedModelSnapshot: run.resolvedModelSnapshot,
+    robustnessClaims,
+    suites: [
+      {
+        id: "sycophancy_orthodoxy_sensitivity",
+        status,
+        cueFamilies: ["user_agreement", "authority", "consensus", "safety_orthodoxy"],
+        requiredWhenClaiming: ["deference_robustness", "orthodoxy_robustness", "user_agreement_resistance"],
+        pairedCommonSetRequired: true,
+        notRunRationale: robustnessClaimMade
+          ? "Robustness claims were requested but no paired sycophancy/orthodoxy probe outputs are attached."
+          : "The seed demo makes no deference, authority, consensus, safety, or orthodoxy robustness claim.",
+      },
+      {
+        id: "obfuscated_argument_stress",
+        status,
+        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
+        requiredWhenClaiming: ["obfuscation_robustness", "style_artifact_robustness", "masked_fallacy_detection"],
+        pairedCommonSetRequired: true,
+        notRunRationale: robustnessClaimMade
+          ? "Robustness claims were requested but no paired obfuscated-argument stress outputs are attached."
+          : "The seed demo includes obfuscated-style rubric fixtures but does not claim model robustness on stress variants.",
+      },
+    ],
+    releaseUseStatus: robustnessClaimMade ? "robustness_claim_blocked_until_claim_gated_probes_run" : "claim_gated_diagnostics_deferred_no_robustness_claim",
+  };
+}
+
+export function buildModelFailureAudit(
+  releaseId,
+  labelSnapshot,
+  run = fullRubricEvaluationRun,
+  positionList = positions,
+  critiqueList = critiques,
+  options = {},
+) {
+  const excludedProtectedSplits = options.excludedProtectedSplits ?? ["internal_validation", "hidden_benchmark"];
+  const rowLimit = options.rowLimit ?? 3;
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueById = new Map(critiqueList.map((critique) => [critique.id, critique]));
+  const modelAssistedLabelOverlapReport =
+    options.modelAssistedLabelOverlapReport ??
+    buildModelAssistedLabelOverlapReport(
+      releaseId,
+      labelSnapshot,
+      options.ratings ?? seedRatings,
+      [run],
+      critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    );
+  const modelAssistedLabelOverlap =
+    modelAssistedLabelOverlapReport.runRows.find((row) => row.evaluationRunId === run.id) ??
+    modelAssistedLabelOverlapReport.runRows[0] ??
+    null;
+  const allRows = run.predictions
+    .map((prediction) => buildFailureAuditRow(prediction, labelSnapshot, positionById, critiqueById, run))
+    .filter(Boolean);
+  const protectedRows = allRows.filter((row) => excludedProtectedSplits.includes(row.split));
+  const eligibleRows = allRows.filter((row) => !excludedProtectedSplits.includes(row.split));
+  const topCustomLossRows = eligibleRows
+    .filter((row) => typeof row.customWeightedLoss === "number")
+    .sort((a, b) => b.customWeightedLoss - a.customWeightedLoss || b.overallAbsError - a.overallAbsError || a.itemId.localeCompare(b.itemId))
+    .slice(0, rowLimit);
+  const largestOverallDisagreements = eligibleRows
+    .filter((row) => typeof row.overallAbsError === "number")
+    .sort((a, b) => b.overallAbsError - a.overallAbsError || a.itemId.localeCompare(b.itemId))
+    .slice(0, rowLimit);
+  return {
+    id: `model-failure-audit-${releaseId}-${run.id}`,
+    releaseId,
+    evaluationRunId: run.id,
+    metricFamilies: run.mode === "full_rubric" ? ["custom_weighted_loss", "overall_disagreement"] : ["overall_disagreement"],
+    leaderboardReportId: options.leaderboardReportId ?? null,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    selectionPolicy: "deterministic_top_loss_then_largest_overall_disagreement",
+    commonSubsetPolicy: "non_protected_predictions_with_target_labels",
+    promptTemplateId: run.predictions[0]?.promptTemplateId ?? null,
+    promptArtifact: run.promptArtifact ?? promptArtifactRef(run.predictions[0]?.promptTemplateId ?? "project-full-rubric-v1"),
+    renderedPromptChecksum: run.renderedPromptChecksum ?? run.predictions[0]?.renderedPromptChecksum ?? null,
+    promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus ?? "missing_prompt_policy",
+    promptExampleProvenance: run.promptExampleProvenance ?? [],
+    protectedPromptExampleCheck: run.protectedPromptExampleCheck ?? null,
+    acceptedOutputSchema: run.acceptedOutputSchema ?? null,
+    promptFamily: run.promptFamily,
+    promptScope: run.promptScope,
+    parserConfigId: run.parserConfigId,
+    reasoningModeSetting: run.mode === "overall_only" ? "appendix_g_step_by_step_overall_only_baseline" : "project_full_rubric_answer_extraction",
+    protectedSplitHandling: {
+      excludedProtectedSplits,
+      protectedPredictionCount: protectedRows.length,
+      protectedItemsRedacted: protectedRows.map((row) => ({ split: row.split, itemHash: `sha256:${row.itemId}:redacted` })),
+      policy: "audit rows in release reports exclude protected validation and hidden benchmark contents unless an admin-only report explicitly deprotects the cluster",
+    },
+    parserAudit: {
+      parseFailureCount: run.parseFailureCount,
+      invalidScoreCount: run.invalidScoreCount,
+      retryCount: run.retryCount,
+      repairedOutputCount: run.repairedOutputCount,
+    },
+    modelAssistedLabelOverlap,
+    claimGatedDiagnostics: buildClaimGatedModelDiagnostics(run, options),
+    topCustomLossRows,
+    largestOverallDisagreements,
+    diagnosticOnly: true,
+    cannotReplaceAggregateMetrics: true,
+    createdBy: "deterministic_local_report",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function buildValidationTrancheReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  memos = adjudicationMemos,
+) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const memoByItemId = new Map(memos.map((memo) => [makeItemId(memo.positionId, memo.critiqueId), memo]));
+  const validationCritiques = critiqueList.filter((critique) => positionById.get(critique.positionId)?.split === "internal_validation");
+  const trancheRows = ["random_sentinel", "hard_case_stress"].map((tranche) => {
+    const trancheCritiques = validationCritiques.filter((critique) => validationTrancheForCritique(critique) === tranche);
+    const itemIds = trancheCritiques.map((critique) => makeItemId(critique.positionId, critique.id)).sort();
+    const positionIds = uniqueStrings(trancheCritiques.map((critique) => critique.positionId)).sort();
+    const trancheRatings = ratings.filter((rating) => itemIds.includes(makeItemId(rating.positionId, rating.critiqueId)));
+    const comparisonRows = ["blind_initial", "self_check", "expert_check", "model_assisted_check"].map((kind) =>
+      humanCeilingComparisonRow(kind, trancheRatings, labelSnapshot, itemIds),
+    );
+    const unresolvedRows = itemIds
+      .map((itemId) => {
+        const label = labelSnapshot.itemLabels[itemId];
+        const memo = memoByItemId.get(itemId);
+        if (!label && !memo) return null;
+        return {
+          itemId,
+          spreadPostDiscussion: label?.spreadPostDiscussion ?? null,
+          maxSpreadAbove030: (label?.spreadPostDiscussion ?? 0) > 0.3,
+          unresolvedDisagreementClass: memo?.unresolvedDisagreementClass ?? null,
+          disagreementTaxonomy: memo?.disagreementTaxonomy ?? [],
+        };
+      })
+      .filter((row) => row && (row.maxSpreadAbove030 || row.unresolvedDisagreementClass));
+    const modelAssistedRow = comparisonRows.find((row) => row.ratingKind === "model_assisted_check");
+    return {
+      tranche,
+      selectionPolicy:
+        tranche === "random_sentinel"
+          ? "random sentinel validation membership hidden until initial ratings lock where feasible"
+          : "deliberately selected hard cases reported separately from random sentinel evidence",
+      membershipBlindingStatus:
+        tranche === "random_sentinel"
+          ? "membership_hidden_until_initial_lock_where_feasible"
+          : "hard_case_status_admin_only_until_initial_lock",
+      positionCount: positionIds.length,
+      critiqueCount: trancheCritiques.length,
+      itemIds,
+      positionIds,
+      validationSelectionReasons: uniqueStrings(trancheCritiques.map((critique) => critique.validationSelectionReason)),
+      membershipVisibilityPolicies: uniqueStrings(trancheCritiques.map((critique) => critique.validationMembershipVisibility)),
+      ratingCountsByKind: countBy(trancheRatings, "kind"),
+      comparisonRows,
+      initialVsFinal: comparisonRows.find((row) => row.ratingKind === "blind_initial"),
+      humanOnlySelfCheckedVsFinal: comparisonRows.find((row) => row.ratingKind === "self_check"),
+      expertCheckedVsFinal: comparisonRows.find((row) => row.ratingKind === "expert_check"),
+      modelAssistedCheckedVsFinal: modelAssistedRow,
+      incrementalPostModelAssistanceDelta:
+        modelAssistedRow?.rowCount > 0
+          ? {
+              status: "model_assisted_delta_rows_available",
+              comparisonPolicy: "compare locked pre-assistance rating with post-model-assisted check on the same item",
+            }
+          : {
+              status: "no_model_assisted_checks_in_tranche",
+              comparisonPolicy: "do not infer incremental model-assistance value without paired pre/post rows",
+            },
+      unresolvedPostDiscussionRows: unresolvedRows,
+    };
+  });
+  const randomSentinel = trancheRows.find((row) => row.tranche === "random_sentinel");
+  const hardCaseStress = trancheRows.find((row) => row.tranche === "hard_case_stress");
+  return {
+    id: `validation-tranches-${releaseId}`,
+    releaseId,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      randomSentinelPurpose: "Measures ordinary validation behavior without telling raters they are in the validation tranche before initial lock.",
+      hardCaseStressPurpose: "Retains deliberately difficult or artifact-prone cases without letting them masquerade as random validation evidence.",
+      combinedValidationClaimPolicy:
+        "Combined validation summaries may be shown, but release claims must keep random-sentinel and hard-case stress metrics separately visible.",
+      requiredComparisonRows: ["initial_vs_final", "human_only_self_checked_vs_final", "model_assisted_checked_vs_final", "incremental_post_model_assistance_delta"],
+    },
+    trancheRows,
+    randomSentinel,
+    hardCaseStress,
+    releaseUseStatus:
+      randomSentinel?.critiqueCount > 0 && hardCaseStress?.critiqueCount > 0
+        ? "validation_tranches_separated_seed_thin"
+        : "validation_tranche_design_incomplete",
+  };
+}
+
+export function buildValidationDesignReport(ratings = seedRatings, positionList = positions, critiqueList = critiques) {
+  const validationPositionIds = new Set(positionList.filter((position) => position.split === "internal_validation").map((position) => position.id));
+  const validationCritiqueIds = critiqueList.filter((critique) => validationPositionIds.has(critique.positionId)).map((critique) => critique.id);
+  const validationItemIds = new Set(critiqueList.filter((critique) => validationPositionIds.has(critique.positionId)).map((critique) => makeItemId(critique.positionId, critique.id)));
+  const coverageByRater = {};
+  ratings.forEach((rating) => {
+    const itemId = makeItemId(rating.positionId, rating.critiqueId);
+    if (!validationItemIds.has(itemId) || rating.kind === "revision") return;
+    coverageByRater[rating.raterId] ??= new Set();
+    coverageByRater[rating.raterId].add(itemId);
+  });
+  const fullCoverageRaters = Object.entries(coverageByRater)
+    .filter(([, itemSet]) => itemSet.size === validationItemIds.size && validationItemIds.size > 0)
+    .map(([raterId]) => raterId);
+  const floorMet =
+    validationCritiqueIds.length >= OCTOBER_RELEASE_TARGETS.validationCritiques &&
+    validationPositionIds.size >= OCTOBER_RELEASE_TARGETS.validationPositions &&
+    fullCoverageRaters.length >= OCTOBER_RELEASE_TARGETS.coreAllItemsRaters;
+
+  return {
+    id: "appendix-c-validation-design-report",
+    status: floorMet ? "appendix_c_scale" : "thinner_than_appendix_c",
+    requiredScale: {
+      critiqueCount: OCTOBER_RELEASE_TARGETS.validationCritiques,
+      positionCount: OCTOBER_RELEASE_TARGETS.validationPositions,
+      coreAllItemsRaters: OCTOBER_RELEASE_TARGETS.coreAllItemsRaters,
+      discussionHours: "7-8",
+    },
+    currentScale: {
+      critiqueCount: validationCritiqueIds.length,
+      positionCount: validationPositionIds.size,
+      fullCoverageRaterCount: fullCoverageRaters.length,
+      fullCoverageRaters,
+    },
+    comparabilityAxes: {
+      blindInitialRatings: ratings.some((rating) => rating.kind === "blind_initial" && validationItemIds.has(makeItemId(rating.positionId, rating.critiqueId))),
+      fullVsPartialRaterCoverageReported: true,
+      membershipAwarenessPolicy: "random_sentinel_membership_hidden_until_initial_lock_where_feasible",
+      positionCritiqueOrderPolicy: "counterbalance_validation_and_benchmark_candidates_where_feasible",
+      synchronizedRatingWindow: "required_for_formal_validation_cycle",
+      writtenFollowUp: "required_after_discussion_for_object_level_revision_instructions",
+      thinnerThanAppendixCLabelRequired: !floorMet,
+    },
+    numericBaselineComparisonTable: LMCA_BASELINES.appendixCNumericBaselines,
+  };
+}
+
+export function buildAdminTagBlindingReport(releaseId, positionList = positions) {
+  const tagRows = buildAdminTagRows(positionList);
+  const preLockVisibilityViolations = tagRows.filter((row) => row.raterVisibleBeforeInitialLock);
+  const confounderRiskRows = tagRows.filter((row) => row.confounderRiskClass !== "safe_topic_routing");
+  return {
+    id: `admin-tag-blinding-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      visibilityRule:
+        "Admin tags, topic-routing tags, benchmark-status tags, source hints, and confounder-risk classes remain hidden from blind initial raters until rating lock.",
+      manifestRule: "Corpus manifests publish tag-risk distributions and visibility-history rows without exposing tags in rater workspaces.",
+      blindingAuditRule:
+        "Any admin tag visible before initial lock blocks source-critical release claims until the item is rerated or an adjudicated exception is disclosed.",
+    },
+    counts: {
+      taggedPositionCount: new Set(tagRows.map((row) => row.positionId)).size,
+      tagCount: tagRows.length,
+      safeTopicRoutingTagCount: tagRows.filter((row) => row.confounderRiskClass === "safe_topic_routing").length,
+      possibleConfounderTagCount: tagRows.filter((row) => row.confounderRiskClass === "possible_confounder").length,
+      knownRatingConfounderTagCount: tagRows.filter((row) => row.confounderRiskClass === "known_rating_confounder").length,
+      preLockVisibilityViolationCount: preLockVisibilityViolations.length,
+      confounderRiskTagCount: confounderRiskRows.length,
+    },
+    byVisibilityClass: countBy(tagRows, "visibilityClass"),
+    byConfounderRiskClass: countBy(tagRows, "confounderRiskClass"),
+    visibilityHistoryRows: tagRows,
+    preLockVisibilityViolations,
+    confounderRiskRows,
+    releaseUseStatus: preLockVisibilityViolations.length
+      ? "admin_tag_blinding_policy_violation"
+      : confounderRiskRows.length
+        ? "admin_tag_confounder_risk_disclosed_hidden_before_lock"
+        : "admin_tag_blinding_pass",
+  };
+}
+
+export function buildCorpusCompositionManifest(releaseId, positionList = positions, critiqueList = critiques, ratings = seedRatings) {
+  const critiqueCountsByPosition = Object.fromEntries(positionList.map((position) => [position.id, critiqueList.filter((critique) => critique.positionId === position.id).length]));
+  const ratingRowsIgnoringRevisions = ratings.filter((rating) => rating.kind !== "revision");
+  const adminTagRows = buildAdminTagRows(positionList);
+  const sourceDetailRows = positionList.map((position) => ({
+    positionId: position.id,
+    clusterId: position.clusterId,
+    split: position.split,
+    sourceCategory: position.sourceCategory,
+    authorshipRoute: position.authorshipRoute ?? "unknown",
+    sourceLanguage: position.sourceLanguage ?? "unknown",
+    translationStatus: position.translationStatus ?? "unknown",
+    sourceTaskFormat: position.sourceTaskFormat ?? "unknown",
+    sourceDomainSuitability: position.intakeScreening?.ordinaryHeadlineEligibility ?? "unknown",
+    vivesDebateMachineTranslationStatus: position.sourceSubsource === "VivesDebate" ? (position.translationStatus ?? "machine_translation_status_missing") : "not_vivesdebate",
+    lsatDerivedStatus: String(position.sourceTaskFormat ?? "").toLowerCase().includes("lsat") ? "lsat_derived_item" : "not_lsat_derived",
+  }));
+  const sourceDetailMissingRows = sourceDetailRows.filter(
+    (row) =>
+      ["sourceCategory", "authorshipRoute", "sourceLanguage", "translationStatus", "sourceTaskFormat", "sourceDomainSuitability"].some(
+        (field) => row[field] === "unknown" || row[field] === "",
+      ),
+  );
+  const knownAdaptedSubsourceRows = [
+    {
+      subsource: "DebateBench",
+      lmcaCount: LMCA_BASELINES.knownOtherDatasetSubsources.DebateBench,
+      releaseCount: positionList.filter((position) => position.sourceSubsource === "DebateBench").length,
+      sourceLanguage: "en",
+      translationRoute: "transcribed_competitive_debate_speeches",
+      sourceTaskFormat: "competitive_debate_speech_with_judge_rating_context",
+      sourceDomainSuitability: "argumentative_debate_material_not_ordinary_conceptual_position_by_default",
+    },
+    {
+      subsource: "VivesDebate",
+      lmcaCount: LMCA_BASELINES.knownOtherDatasetSubsources.VivesDebate,
+      releaseCount: positionList.filter((position) => position.sourceSubsource === "VivesDebate").length,
+      sourceLanguage: "ca",
+      translationRoute: "machine_translated_catalan_to_english",
+      sourceTaskFormat: "debate_material_topically_concentrated_on_gestational_surrogacy",
+      sourceDomainSuitability: "translation_and_topic_concentration_must_be_disclosed_before_comparability_claims",
+    },
+    {
+      subsource: "LSAT-derived",
+      lmcaCount: "few_source_not_exact",
+      releaseCount: sourceDetailRows.filter((row) => row.lsatDerivedStatus === "lsat_derived_item").length,
+      sourceLanguage: "en",
+      translationRoute: "none_or_source_specific",
+      sourceTaskFormat: "standardized_test_question_adaptation",
+      sourceDomainSuitability: "usually_not_suitable_domains_unless_explicitly_labeled",
+    },
+  ];
+  return {
+    id: `corpus-composition-${releaseId}`,
+    releaseId,
+    counts: {
+      positions: positionList.length,
+      critiques: critiqueList.length,
+      ratingsIgnoringRevisions: ratingRowsIgnoringRevisions.length,
+      blindInitialRatings: countKind(ratings, "blind_initial"),
+      modelWrittenCritiques: critiqueList.filter((critique) => critique.sourceType === "llm_generated").length,
+      positionsWithAtLeastTwoCritiques: Object.values(critiqueCountsByPosition).filter((count) => count >= 2).length,
+    },
+    positionSourceCategory: countBy(positionList, "sourceCategory"),
+    topicFamily: countBy(positionList, "topicFamily"),
+    positionLlmAssistance: countBy(positionList, "llmAssistance"),
+    splitMembership: countBy(positionList, "split"),
+    critiqueSourceType: countBy(critiqueList, "sourceType"),
+    critiqueAuthorshipType: countBy(critiqueList, "authorshipType"),
+    critiqueLengthBand: countBy(critiqueList, "lengthBand"),
+    critiqueCountPerPositionDistribution: countBy(Object.values(critiqueCountsByPosition).map((count) => ({ countBand: String(count) })), "countBand"),
+    raterDistributionIgnoringRevisions: countBy(ratingRowsIgnoringRevisions, "raterId"),
+    sourceDetailRows,
+    sourceDetailCoverage: {
+      rowCount: sourceDetailRows.length,
+      completeRows: sourceDetailRows.length - sourceDetailMissingRows.length,
+      missingRows: sourceDetailMissingRows,
+      bySourceLanguage: countBy(sourceDetailRows, "sourceLanguage"),
+      byTranslationStatus: countBy(sourceDetailRows, "translationStatus"),
+      bySourceTaskFormat: countBy(sourceDetailRows, "sourceTaskFormat"),
+      bySourceDomainSuitability: countBy(sourceDetailRows, "sourceDomainSuitability"),
+      status: sourceDetailMissingRows.length ? "source_detail_metadata_review_required" : "source_detail_metadata_declared",
+    },
+    knownAdaptedSubsourceRows,
+    adminTagRisk: {
+      taggedPositionCount: new Set(adminTagRows.map((row) => row.positionId)).size,
+      tagCount: adminTagRows.length,
+      byVisibilityClass: countBy(adminTagRows, "visibilityClass"),
+      byConfounderRiskClass: countBy(adminTagRows, "confounderRiskClass"),
+      visibilityHistoryRows: adminTagRows.map((row) => ({
+        positionId: row.positionId,
+        split: row.split,
+        tag: row.tag,
+        visibilityClass: row.visibilityClass,
+        confounderRiskClass: row.confounderRiskClass,
+        changedAt: row.changedAt,
+        raterVisibleBeforeInitialLock: row.raterVisibleBeforeInitialLock,
+      })),
+      policy: "Admin-tag distributions are published in manifests, but tag values remain excluded from blind initial rater views.",
+    },
+    lmcaBaseline: {
+      corpusScale: LMCA_BASELINES.corpusScale,
+      positionSourceCounts: LMCA_BASELINES.positionSourceCounts,
+      raterDistributionIgnoringRevisions: LMCA_BASELINES.raterDistributionIgnoringRevisions,
+      topicFamilies: LMCA_BASELINES.topicFamilies,
+    },
+  };
+}
+
+export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEligibility, validationDesign, labelSnapshot }) {
+  const releaseRaterTotal = countTotal(corpusManifest.raterDistributionIgnoringRevisions);
+  const lmcaRaterTotal = countTotal(LMCA_BASELINES.raterDistributionIgnoringRevisions);
+  const releaseLargestRaterShare = largestShare(corpusManifest.raterDistributionIgnoringRevisions);
+  const lmcaLargestRaterShare = largestShare(LMCA_BASELINES.raterDistributionIgnoringRevisions);
+  const weightedPairwiseAnchorCount = LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5.length;
+  const customMetricAnchorCount = LMCA_BASELINES.modelScoreAnchors.customMetricTable7.length;
+  return {
+    id: `lmca-comparison-${releaseId}`,
+    releaseId,
+    comparisonScope: "compressed_october_seed_vs_lmca_source_baselines",
+    sourceScaleComparison: [
+      comparisonRow("rated_critiques", corpusManifest.counts.critiques, LMCA_BASELINES.corpusScale.ratedCritiques),
+      comparisonRow("ratings_ignoring_revisions", corpusManifest.counts.ratingsIgnoringRevisions, LMCA_BASELINES.corpusScale.ratingsIgnoringRevisions),
+      comparisonRow("model_written_critiques", corpusManifest.counts.modelWrittenCritiques, LMCA_BASELINES.corpusScale.modelWrittenCritiques),
+      comparisonRow("positions_with_at_least_one_critique", corpusManifest.counts.positions, LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique),
+      comparisonRow(
+        "positions_with_at_least_two_critiques",
+        corpusManifest.counts.positionsWithAtLeastTwoCritiques,
+        LMCA_BASELINES.corpusScale.positionsWithAtLeastTwoCritiques,
+      ),
+    ],
+    positionSourceComparison: Object.entries(LMCA_BASELINES.positionSourceCounts).map(([sourceCategory, lmcaCount]) => {
+      const releaseCount = corpusManifest.positionSourceCategory[sourceCategory] ?? 0;
+      return {
+        sourceCategory,
+        releaseCount,
+        lmcaCount,
+        releaseShare: share(releaseCount, corpusManifest.counts.positions),
+        lmcaShare: share(lmcaCount, LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique),
+        status: releaseCount > 0 ? "covered_in_seed" : "missing_from_seed",
+      };
+    }),
+    knownOtherDatasetSubsources: LMCA_BASELINES.knownOtherDatasetSubsources,
+    topicFamilyComparison: LMCA_BASELINES.topicFamilies.map((topicFamily) => ({
+      topicFamily,
+      releaseCount: corpusManifest.topicFamily[topicFamily] ?? 0,
+      status: corpusManifest.topicFamily[topicFamily] ? "covered_in_seed" : "missing_from_seed",
+    })),
+    raterCompositionComparison: {
+      releaseDistributionIgnoringRevisions: corpusManifest.raterDistributionIgnoringRevisions,
+      lmcaDistributionIgnoringRevisions: LMCA_BASELINES.raterDistributionIgnoringRevisions,
+      releaseTotal: releaseRaterTotal,
+      lmcaTotal: lmcaRaterTotal,
+      releaseLargestRaterShare,
+      lmcaLargestRaterShare,
+      status: releaseRaterTotal >= LMCA_BASELINES.corpusScale.ratingsIgnoringRevisions && releaseLargestRaterShare <= lmcaLargestRaterShare ? "rater_composition_comparable" : "seed_rater_composition_not_comparable",
+      note: "Rater-composition claims compare independent rows ignoring revisions; revisions, checks, and adjudication labels are tracked separately.",
+    },
+    modelDenominatorComparison: [
+      comparisonRow("weighted_pairwise_positions", metricEligibility.pairwiseEligiblePositions.length, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwisePositions),
+      comparisonRow("weighted_pairwise_critique_pairs", metricEligibility.pairwiseEligiblePairCount, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs),
+      comparisonRow("custom_metric_dialogues", metricEligibility.customLossEligibleItems.length, LMCA_BASELINES.modelEvaluationDenominators.customMetricDialogues),
+    ],
+    modelScoreAnchorComparison: {
+      weightedPairwiseTable5: LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5,
+      customMetricTable7: LMCA_BASELINES.modelScoreAnchors.customMetricTable7,
+      anchorCount: weightedPairwiseAnchorCount + customMetricAnchorCount,
+      status: "anchors_declared_seed_run_not_numeric_comparable",
+      note: "Anchor scores are source baselines for release reports; the seed run differs in scale, target labels, prompt tracks, and protected split policy.",
+    },
+    targetLabelComparison: {
+      currentTargetLabelVersion: labelSnapshot.targetLabelVersion,
+      requiredForTable5StyleTarget: "primary_rater_anchor",
+      lmcaTable5Target: "Emery Cooper ratings",
+      status: labelSnapshot.targetLabelVersion === "primary_rater_anchor" ? "target_identical_candidate" : "lmca_style_not_target_identical",
+      rows: [
+        {
+          comparison: "lmca_table_5_weighted_pairwise",
+          lmcaTarget: "Emery Cooper ratings",
+          releaseTarget: labelSnapshot.targetLabelVersion,
+          cleanClaimAllowed: labelSnapshot.targetLabelVersion === "primary_rater_anchor",
+        },
+        {
+          comparison: "volunteer_consensus_or_adjudicated",
+          lmcaTarget: "not Table 5 target-identical",
+          releaseTarget: labelSnapshot.targetLabelVersion,
+          cleanClaimAllowed: true,
+        },
+      ],
+    },
+    validationHumanCeilingComparison: {
+      currentValidationStatus: validationDesign.status,
+      appendixCScaleMet: validationDesign.status === "appendix_c_scale",
+      numericBaselines: LMCA_BASELINES.appendixCNumericBaselines,
+      status: validationDesign.status === "appendix_c_scale" ? "appendix_c_comparable" : "numeric_baselines_declared_but_seed_validation_thin",
+    },
+    overclaimGuardrail:
+      "This comparison is descriptive unless the relevant scale, source composition, rater composition, target-label, validation, denominator, and prompt-track gates pass independently.",
+  };
+}
+
+export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibility, validationDesign, labelSnapshot }) {
+  return [
+    claim("method_preserving", "passes", "Position-critique units, seven-dimensional ratings, blind initial surface, immutable revisions, and the two LMCA scoring families are implemented."),
+    claim(
+      "corpus_scale_comparable",
+      corpusManifest.counts.positions >= LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique ? "passes" : "fails",
+      `${corpusManifest.counts.positions} positions loaded versus LMCA's ${LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique} positions with at least one rated critique.`,
+    ),
+    claim(
+      "source_topic_rater_comparable",
+      coversAllBaselineTopics(corpusManifest.topicFamily) ? "passes" : "partial",
+      "Source, topic, split, and rater-composition tables are generated; the seed corpus does not yet cover every LMCA topic family.",
+    ),
+    claim(
+      "metric_denominator_comparable",
+      metricEligibility.pairwiseEligiblePairCount >= LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs ? "passes" : "fails",
+      `${metricEligibility.pairwiseEligiblePairCount} pairwise-eligible critique pairs versus LMCA Table 5's ${LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs}.`,
+    ),
+    claim(
+      "target_label_comparable",
+      labelSnapshot.targetLabelVersion === "primary_rater_anchor" ? "passes" : "fails",
+      `Current target label version is ${labelSnapshot.targetLabelVersion}; LMCA Table 5-style target-identical claims require a frozen primary-rater anchor.`,
+    ),
+    claim(
+      "validation_design_comparable",
+      validationDesign.status === "appendix_c_scale" ? "passes" : "fails",
+      `Validation status is ${validationDesign.status}; Appendix-C-scale requires ${OCTOBER_RELEASE_TARGETS.validationCritiques} critiques, ${OCTOBER_RELEASE_TARGETS.validationPositions} positions, and ${OCTOBER_RELEASE_TARGETS.coreAllItemsRaters} core all-items raters.`,
+    ),
+    claim("validation_ceiling_comparable", validationDesign.status === "appendix_c_scale" ? "passes" : "fails", "Human-ceiling numeric baselines are stored, but the seed validation run is thinner than Appendix C."),
+    claim("model_score_anchor_comparable", "partial", "LMCA Table 5 and Table 7 anchor scores are stored for reports; seed model outputs are not a comparable leaderboard run."),
+    claim("replication_like", "fails", "The current seed release is method-preserving scaffolding, not an LMCA-scale or target-identical replication."),
+  ];
+}
+
+export function buildPromptTrackSeparationReport(
+  releaseId,
+  evaluationRuns = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  generationRuns = critiqueGenerationRuns,
+) {
+  const evaluationRows = evaluationRuns.map((run) => promptTrackRowFromRun("model_evaluation", run));
+  const generationRows = generationRuns.flatMap((run) => {
+    const generationRow = promptTrackRowFromRun("critique_generation", run);
+    const judge = run.modelJudgeScreening;
+    const judgeArtifact = judge?.promptArtifact ?? promptArtifactRef(judge?.promptTemplateId ?? "candidate-judge-v2");
+    const judgeRow = {
+      ...promptTrackRowFromArtifact("model_judge_screening", {
+        id: `${run.id}::model-judge`,
+        requestedModelAlias: judge?.requestedModelAlias,
+        resolvedModelSnapshot: judge?.resolvedModelSnapshot,
+        promptFamily: judgeArtifact.promptFamily,
+        promptScope: judgeArtifact.promptScope,
+        promptArtifact: judgeArtifact,
+        renderedPromptChecksum: judge?.renderedPromptChecksum ?? judgeArtifact.renderedPromptChecksum,
+        promptPolicyComparabilityStatus: judge?.promptPolicyComparabilityStatus ?? judgeArtifact.promptPolicyComparabilityStatus,
+        protectedPromptExampleCheck: judgeArtifact.protectedSplitExclusionCheck,
+        itemRoleTerminology: judgeArtifact.itemRoleTerminology,
+        outputFormatPolicy: judgeArtifact.outputFormatPolicy,
+      }),
+      parentGenerationRunId: run.id,
+      diagnosticOnly: judge?.diagnosticOnly ?? true,
+      scoresVisibleToInitialRaters: judge?.scoresVisibleToInitialRaters ?? null,
+    };
+    return [generationRow, judgeRow];
+  });
+  const rows = [...evaluationRows, ...generationRows].sort((left, right) => left.trackKind.localeCompare(right.trackKind) || left.runId.localeCompare(right.runId));
+  const protectedExampleViolations = rows.filter((row) => !row.hiddenBenchmarkExamplesExcluded || !row.protectedValidationExamplesExcluded);
+  const appendixGBaselineRows = rows.filter((row) => row.promptScope === "appendix_g_overall_only_exact");
+  const projectExtensionRows = rows.filter((row) => row.promptPolicyComparabilityStatus !== "source_comparable_overall_only_prompt_track");
+  const exampleRows = rows.flatMap((row) => row.promptExampleProvenance.map((example) => ({ ...example, runId: row.runId, promptArtifactId: row.promptArtifactId })));
+  const exampleRowsMissingRequiredIds = exampleRows.filter(
+    (row) =>
+      !row.itemId ||
+      !row.positionClusterId ||
+      !row.split ||
+      row.hiddenBenchmarkExcluded !== true ||
+      row.protectedValidationExcluded !== true,
+  );
+  return {
+    id: `prompt-track-separation-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      appendixGRule: "Appendix-G exact overall-only prompts are a source-comparable simple-baseline track and must not be merged with project full-rubric prompts.",
+      projectExtensionRule:
+        "Full-rubric, critique-generation, model-judge, elicitation, few-shot, optimized, and tool-assisted tracks are project extensions or diagnostics unless explicitly reported as prompt-sensitivity variants.",
+      protectedExampleRule:
+        "Few-shot and worked examples must record item ids, position-cluster ids, split membership, and hidden-benchmark/protected-validation exclusion checks; no-example tracks must say so explicitly.",
+    },
+    counts: {
+      promptTrackRows: rows.length,
+      evaluationPromptTrackRows: evaluationRows.length,
+      generationPromptTrackRows: generationRows.length,
+      appendixGExactRows: appendixGBaselineRows.length,
+      projectExtensionRows: projectExtensionRows.length,
+      protectedExampleViolationCount: protectedExampleViolations.length,
+      promptExampleRows: exampleRows.length,
+      promptExampleRowsMissingRequiredIds: exampleRowsMissingRequiredIds.length,
+    },
+    byTrackKind: countBy(rows, "trackKind"),
+    byPromptScope: countBy(rows, "promptScope"),
+    byPromptPolicyComparabilityStatus: countBy(rows, "promptPolicyComparabilityStatus"),
+    rows,
+    appendixGBaselineRows,
+    projectExtensionRows,
+    protectedExampleViolations,
+    exampleRows,
+    exampleRowsMissingRequiredIds,
+    releaseUseStatus:
+      protectedExampleViolations.length || exampleRowsMissingRequiredIds.length
+        ? "prompt_track_protected_example_review_required"
+        : appendixGBaselineRows.length && projectExtensionRows.length
+          ? "appendix_g_baseline_separated_from_project_prompt_tracks"
+          : appendixGBaselineRows.length
+            ? "appendix_g_baseline_prompt_track_only"
+            : "project_prompt_tracks_disclosed_without_appendix_g_baseline",
+  };
+}
+
+export function buildOctoberReleaseReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  positionList = positions,
+  critiqueList = critiques,
+  certificationAttempts = seedCertificationAttempts,
+  benchmarkExposureEvents = seedBenchmarkExposureEvents,
+  sourceStyleAudits = postLockSourceStyleAudits,
+) {
+  const corpusManifest = buildCorpusCompositionManifest(releaseId, positionList, critiqueList, ratings);
+  const adminTagBlinding = buildAdminTagBlindingReport(releaseId, positionList);
+  const positionIntakeReadiness = buildPositionIntakeReadinessReport(releaseId, positionList);
+  const rubricQaCoverage = buildRubricQaCoverageReport(releaseId);
+  const sourceExampleAnchors = buildLmcaSourceExampleAnchorReport(releaseId);
+  const metricEligibility = buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, positionList, critiqueList);
+  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList);
+  const validationTrancheReport = buildValidationTrancheReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
+  const humanScoreDistribution = buildHumanScoreDistributionReport(releaseId, labelSnapshot, positionList, critiqueList);
+  const ratingRevisionAudit = buildRatingRevisionAuditReport(releaseId, ratings, positionList);
+  const ratingEffortQuality = buildRatingEffortQualityReport(releaseId, ratings, positionList, critiqueList);
+  const rubricIssueFlags = buildRubricIssueFlagReport(releaseId, ratings, adjudicationMemos, positionList);
+  const sourceStyleAudit = buildPostLockSourceStyleAuditReport(releaseId, sourceStyleAudits, ratings, positionList, critiqueList, labelSnapshot);
+  const correctnessVerification = buildCorrectnessVerificationReport(releaseId, ratings, positionList, critiqueList);
+  const adjudicationMemoAudit = buildAdjudicationMemoAuditReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
+  const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
+  const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
+  const samePositionContext = buildSamePositionContextReport(releaseId, ratings, positionList, critiqueList);
+  const sanityBaselines = buildSanityBaselineReport(releaseId, labelSnapshot, positionList, critiqueList);
+  const recalibratedEvaluation = buildRecalibratedEvaluationReport(releaseId, labelSnapshot, fullRubricEvaluationRun, positionList);
+  const evaluationRuns = [fullRubricEvaluationRun, overallOnlyEvaluationRun];
+  const itemTextViewParity = buildItemTextViewParityReport(releaseId, ratings, evaluationRuns, positionList, critiqueList);
+  const promptTrackSeparation = buildPromptTrackSeparationReport(releaseId, evaluationRuns, critiqueGenerationRuns);
+  const evaluationPairs = critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id }));
+  const modelAssistedLabelOverlap = buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, ratings, evaluationRuns, evaluationPairs);
+  const leaderboardReport = buildUncertaintyAwareLeaderboardReport(releaseId, labelSnapshot, evaluationRuns, {
+    ratings,
+    pairs: evaluationPairs,
+    modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+  });
+  const metricDirectionalityConfig = buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling);
+  const pairedTargetLabelSnapshots = buildPairedTargetLabelSnapshotReport(
+    releaseId,
+    labelSnapshot,
+    ratings,
+    evaluationPairs,
+  );
+  const modelFailureAudits = [
+    buildModelFailureAudit(releaseId, labelSnapshot, fullRubricEvaluationRun, positionList, critiqueList, {
+      leaderboardReportId: leaderboardReport.id,
+      ratings,
+      modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+    }),
+    buildModelFailureAudit(releaseId, labelSnapshot, overallOnlyEvaluationRun, positionList, critiqueList, {
+      leaderboardReportId: leaderboardReport.id,
+      ratings,
+      modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+    }),
+  ];
+  const certification = buildCertificationAudit();
+  const certificationReports = [...new Set(certificationAttempts.map((attempt) => attempt.raterId))].map((raterId) =>
+    buildRaterCertificationReport(raterId, certificationAttempts),
+  );
+  const protectedSplitIsolation = buildProtectedSplitIsolationReport(releaseId, positionList);
+  const rubricDrift = buildRubricVersionDriftReport(releaseId, labelSnapshot, ratings, certificationAttempts);
+  const publicRights = auditProvenanceRights("public", positionList);
+  const hiddenBenchmarkRights = auditProvenanceRights("hidden_benchmark", positionList);
+  const activeLearning = buildActiveLearningAudit();
+  const candidateIntakeQualityAudit = buildCandidateIntakeQualityAudit(releaseId, critiqueList, positionList);
+  const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList);
+  const hiddenBenchmarkFreeze = buildHiddenBenchmarkFreezeReport(
+    releaseId,
+    labelSnapshot,
+    positionList,
+    critiqueList,
+    provenanceRightsRecords,
+    benchmarkExposureEvents,
+    { ratings },
+  );
+  const critiqueGenerationEvaluation = buildCritiqueGenerationEvaluationReport(releaseId, labelSnapshot, undefined, ratings, positionList, critiqueList);
+  const trainingExport = buildTrainingExport(releaseId, labelSnapshot, positionList, critiqueList, ratings);
+  const labelChannelSeparation = buildLabelChannelSeparationReport(releaseId, labelSnapshot, trainingExport, certification, rubricQaCoverage);
+  const comparabilityClaims = buildComparabilityClaimMatrix({ corpusManifest, metricEligibility, validationDesign, labelSnapshot });
+  const lmcaComparison = buildLmcaComparisonReport({ releaseId, corpusManifest, metricEligibility, validationDesign, labelSnapshot });
+  const targetGaps = {
+    positionsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.positions - corpusManifest.counts.positions),
+    critiquesRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.critiques - corpusManifest.counts.critiques),
+    blindInitialRatingsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.blindInitialRatings - corpusManifest.counts.blindInitialRatings),
+    goldItemsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.goldLibraryItems - certification.loadedGoldLibraryItems),
+  };
+  return {
+    id: `release-report-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    octoberTargets: OCTOBER_RELEASE_TARGETS,
+    currentStatus: Object.values(targetGaps).some((value) => value > 0) ? "incomplete_against_october_target" : "target_scale_met",
+    targetGaps,
+    corpusManifest,
+    adminTagBlinding,
+    positionIntakeReadiness,
+    rubricQaCoverage,
+    sourceExampleAnchors,
+    certification,
+    certificationReports,
+    protectedSplitIsolation,
+    rubricDrift,
+    provenanceRights: { public: publicRights, hidden_benchmark: hiddenBenchmarkRights },
+    activeLearning,
+    candidateIntakeQualityAudit,
+    raterCompositionConflicts,
+    hiddenBenchmarkFreeze,
+    critiqueGenerationEvaluation,
+    trainingExport,
+    labelChannelSeparation,
+    humanScoreDistribution,
+    labelSnapshotReliability: {
+      labelSnapshotId: labelSnapshot.id,
+      targetLabelVersion: labelSnapshot.targetLabelVersion,
+      reliabilityWeightModel: labelSnapshot.reliabilityWeightModel,
+      aggregationSensitivity: labelSnapshot.aggregationSensitivity,
+      includedRatingProvenance: labelSnapshot.includedRatingProvenance,
+    },
+    ratingRevisionAudit,
+    ratingEffortQuality,
+    rubricIssueFlags,
+    sourceStyleAudit,
+    correctnessVerification,
+    adjudicationMemoAudit,
+    postDiscussionDisagreement,
+    humanCeiling,
+    samePositionContext,
+    itemTextViewParity,
+    sanityBaselines,
+    recalibratedEvaluation,
+    promptTrackSeparation,
+    leaderboardReport,
+    metricDirectionalityConfig,
+    reasoningModeSensitivity: leaderboardReport.reasoningModeSensitivity,
+    pairedTargetLabelSnapshots,
+    modelAssistedLabelOverlap,
+    modelFailureAudits,
+    promptArtifacts: Object.values(promptArtifacts),
+    metricEligibility,
+    validationDesign,
+    validationTrancheReport,
+    comparabilityClaims,
+    lmcaComparison,
+    modelScoreAnchors: LMCA_BASELINES.modelScoreAnchors,
+  };
+}
+
+export function makeItemId(positionId, critiqueId) {
+  return `${positionId}::${critiqueId}`;
+}
+
+export function mean(values) {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function median(values) {
+  if (!values.length) return Number.NaN;
+  return percentile([...values].sort((a, b) => a - b), 0.5);
+}
+
+function percentile(sortedValues, p) {
+  if (!sortedValues.length) return Number.NaN;
+  const index = (sortedValues.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sortedValues[lower];
+  const weight = index - lower;
+  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+}
+
+function allowedSplitsForExport(kind) {
+  if (kind === "public") return ["public_train", "public_dev"];
+  if (kind === "training") return ["public_train"];
+  if (kind === "hidden_benchmark") return ["hidden_benchmark"];
+  return ["public_train", "public_dev", "internal_validation", "hidden_benchmark", "stress_test"];
+}
+
+function countKind(ratings, kind) {
+  return ratings.filter((rating) => rating.kind === kind).length;
+}
+
+function gate(id, label, status, tier, evidence, notRunRationale) {
+  return { id, label, status, tier, evidence, notRunRationale };
+}
+
+function claim(tier, status, evidence) {
+  return { tier, status, evidence };
+}
+
+function buildAdminTagRows(positionList) {
+  return positionList.flatMap((position) =>
+    (position.adminTags ?? []).map((tag) => ({
+      positionId: position.id,
+      split: position.split,
+      topicFamily: position.topicFamily,
+      tag: tag.tag,
+      visibilityClass: tag.visibilityClass ?? "unknown",
+      confounderRiskClass: adminTagRiskClass(tag.visibilityClass),
+      changedAt: tag.changedAt ?? null,
+      reason: tag.reason ?? null,
+      raterVisibleBeforeInitialLock: tag.raterVisibleBeforeInitialLock === true,
+      visibilityHistoryStatus: tag.raterVisibleBeforeInitialLock === true ? "pre_lock_visibility_violation" : "admin_only_before_initial_lock",
+    })),
+  );
+}
+
+function adminTagRiskClass(visibilityClass) {
+  if (visibilityClass === "safe_topic_routing") return "safe_topic_routing";
+  if (visibilityClass === "possible_confounder") return "possible_confounder";
+  if (visibilityClass === "known_rating_confounder") return "known_rating_confounder";
+  return "unknown_or_unclassified_confounder_risk";
+}
+
+function promptTrackRowFromRun(trackKind, run) {
+  return promptTrackRowFromArtifact(trackKind, {
+    id: run.id,
+    requestedModelAlias: run.requestedModelAlias,
+    resolvedModelSnapshot: run.resolvedModelSnapshot,
+    promptFamily: run.promptFamily,
+    promptScope: run.promptScope,
+    promptArtifact: run.promptArtifact,
+    renderedPromptChecksum: run.renderedPromptChecksum,
+    promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus,
+    protectedPromptExampleCheck: run.protectedPromptExampleCheck,
+    itemRoleTerminology: run.itemRoleTerminology,
+    outputFormatPolicy: run.promptArtifact?.outputFormatPolicy,
+    sourcePositionIds: run.sourcePositionIds,
+    sourcePositionSplitPolicy: run.sourcePositionSplitPolicy,
+  });
+}
+
+function promptTrackRowFromArtifact(trackKind, run) {
+  const artifact = run.promptArtifact ?? promptArtifactRef(run.promptTemplateId);
+  const check = run.protectedPromptExampleCheck ?? artifact.protectedSplitExclusionCheck ?? {};
+  const examples = artifact.promptExampleProvenance ?? [];
+  return {
+    trackKind,
+    runId: run.id,
+    requestedModelAlias: run.requestedModelAlias ?? null,
+    resolvedModelSnapshot: run.resolvedModelSnapshot ?? null,
+    promptFamily: run.promptFamily ?? artifact.promptFamily,
+    promptScope: run.promptScope ?? artifact.promptScope,
+    promptArtifactId: artifact.id,
+    promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus ?? artifact.promptPolicyComparabilityStatus,
+    renderedPromptChecksum: run.renderedPromptChecksum ?? artifact.renderedPromptChecksum,
+    itemRoleTerminology: run.itemRoleTerminology ?? artifact.itemRoleTerminology,
+    outputFormatPolicy: run.outputFormatPolicy ?? artifact.outputFormatPolicy,
+    promptExampleProvenance: examples,
+    promptExampleCount: examples.length,
+    promptExampleStatus: examples.length ? "prompt_examples_recorded_with_split_checks" : "no_few_shot_examples_used",
+    protectedPromptExampleStatus: check.status ?? "missing",
+    hiddenBenchmarkExamplesExcluded: check.hiddenBenchmarkExamplesExcluded === true,
+    protectedValidationExamplesExcluded: check.protectedValidationExamplesExcluded === true,
+    exampleItemIds: check.exampleItemIds ?? [],
+    examplePositionClusterIds: check.examplePositionClusterIds ?? [],
+    exampleSplits: check.exampleSplits ?? [],
+    sourcePositionIds: run.sourcePositionIds ?? [],
+    sourcePositionSplitPolicy: run.sourcePositionSplitPolicy ?? null,
+    sourceComparable: artifact.promptPolicyComparabilityStatus === "source_comparable_overall_only_prompt_track",
+  };
+}
+
+function countBy(items, fieldName) {
+  return items.reduce((acc, item) => {
+    const key = String(item[fieldName] ?? "unknown");
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function countTotal(counts) {
+  return Object.values(counts).reduce((sum, count) => sum + count, 0);
+}
+
+function largestShare(counts) {
+  const total = countTotal(counts);
+  if (!total) return 0;
+  return round(Math.max(...Object.values(counts)) / total);
+}
+
+function share(value, total) {
+  return total > 0 ? round(value / total) : 0;
+}
+
+function comparisonRow(metric, releaseValue, lmcaValue) {
+  return {
+    metric,
+    releaseValue,
+    lmcaValue,
+    releaseToLmcaRatio: share(releaseValue, lmcaValue),
+    remainingToLmca: Math.max(0, lmcaValue - releaseValue),
+    status: releaseValue >= lmcaValue ? "meets_or_exceeds_lmca_baseline" : "compressed_seed_below_lmca_baseline",
+  };
+}
+
+function textLengthBand(text) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean).length;
+  if (words <= 70) return "short";
+  if (words <= 180) return "medium";
+  return "long";
+}
+
+function effortExpectation(positionLengthBand, critiqueLengthBand) {
+  if (positionLengthBand === "long" || critiqueLengthBand === "long") {
+    return { band: "long_pair_20_to_45_minutes", ...EFFORT_EXPECTATIONS.long_pair_20_to_45_minutes };
+  }
+  if (positionLengthBand === "medium" || critiqueLengthBand === "medium") {
+    return { band: "medium_pair_10_to_25_minutes", ...EFFORT_EXPECTATIONS.medium_pair_10_to_25_minutes };
+  }
+  return { band: "short_pair_5_to_15_minutes", ...EFFORT_EXPECTATIONS.short_pair_5_to_15_minutes };
+}
+
+function effortRouteReasons(telemetry, expectation) {
+  const reasons = [];
+  if (!Number.isFinite(telemetry.activeSeconds) || !Number.isFinite(telemetry.idleGapSeconds) || !Number.isInteger(telemetry.interruptionCount)) {
+    reasons.push("missing_or_invalid_effort_telemetry");
+    return reasons;
+  }
+  if (telemetry.activeSeconds < expectation.minActiveSeconds) reasons.push("length_adjusted_active_time_below_expected");
+  if (telemetry.idleGapSeconds > expectation.maxIdleGapSeconds || telemetry.idleGapSeconds > telemetry.activeSeconds * 0.5) {
+    reasons.push("idle_gap_exceeds_policy");
+  }
+  if (telemetry.interruptionCount > 0) reasons.push("interruption_recorded");
+  return reasons;
+}
+
+function protectedEffortUseBlocks(routeReasons, split, queueType) {
+  if (!routeReasons.length) return [];
+  const blocks = new Set(["certification"]);
+  if (split === "internal_validation" || queueType === "validation_subset") blocks.add("validation");
+  if (split === "hidden_benchmark" || queueType === "benchmark_candidate_review") blocks.add("hidden_benchmark");
+  return [...blocks];
+}
+
+function hasCompleteEffortTelemetry(row) {
+  return Number.isFinite(row.activeSeconds) && Number.isFinite(row.idleGapSeconds) && Number.isInteger(row.interruptionCount);
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === "string" && value))];
+}
+
+function latestVerificationRecord(records) {
+  return [...records].sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt)) || String(left.id).localeCompare(String(right.id))).at(-1) ?? null;
+}
+
+function timestampMs(value) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function matchRate(rows, matchField) {
+  const eligible = rows.filter((row) => typeof row[matchField] === "boolean");
+  const correct = eligible.filter((row) => row[matchField]).length;
+  return {
+    eligibleCount: eligible.length,
+    correctCount: correct,
+    accuracy: eligible.length ? share(correct, eligible.length) : null,
+  };
+}
+
+function summarizeNumericBy(rows, keyField, valueField) {
+  const grouped = rows.reduce((acc, row) => {
+    const value = row[valueField];
+    if (!isValidScore(value)) return acc;
+    const key = String(row[keyField] ?? "unknown");
+    acc[key] ??= [];
+    acc[key].push(value);
+    return acc;
+  }, {});
+  return Object.fromEntries(
+    Object.entries(grouped).map(([key, values]) => [
+      key,
+      {
+        count: values.length,
+        mean: round(mean(values)),
+        min: round(Math.min(...values)),
+        max: round(Math.max(...values)),
+      },
+    ]),
+  );
+}
+
+function meanRange(groupSummary) {
+  const means = Object.values(groupSummary)
+    .map((item) => item.mean)
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+  return means.length >= 2 ? round(Math.max(...means) - Math.min(...means)) : 0;
+}
+
+function sourceStyleResidualRisk(preLockViolations, scoringUseViolations, highConfidenceRows, highConfidenceSourceAccuracy, qualityMeanRange) {
+  if (preLockViolations.length || scoringUseViolations.length) {
+    return {
+      status: "collection_policy_violation",
+      disclosureRequired: true,
+      countermeasure: "Remove or rerun affected audits; do not use them in release diagnostics until the post-lock policy is satisfied.",
+    };
+  }
+  if (!highConfidenceRows.length) {
+    return {
+      status: "not_collected_or_low_confidence_only",
+      disclosureRequired: false,
+      countermeasure: "Continue collecting optional post-lock guesses where feasible.",
+    };
+  }
+  const highAccuracy = (highConfidenceSourceAccuracy.accuracy ?? 0) >= 0.75 && highConfidenceRows.length >= 2;
+  if (highAccuracy && qualityMeanRange >= 0.25) {
+    return {
+      status: "residual_unblinding_risk_disclose_counterbalance_or_carve_out",
+      disclosureRequired: true,
+      countermeasure: "Disclose the source-identifiability signal and counterbalance or carve out affected source/style subsets before source-sensitive claims.",
+    };
+  }
+  if (highAccuracy) {
+    return {
+      status: "source_style_identifiability_signal_monitor",
+      disclosureRequired: false,
+      countermeasure: "Increase post-lock audit sample size and monitor whether source guesses track quality labels.",
+    };
+  }
+  return {
+    status: "low_current_signal_or_insufficient_sample",
+    disclosureRequired: false,
+    countermeasure: "No carve-out triggered by the current diagnostic sample.",
+  };
+}
+
+function coversAllBaselineTopics(topicCounts) {
+  return LMCA_BASELINES.topicFamilies.every((topic) => topicCounts[topic] > 0);
+}
+
+function commonPredictionItemIds(runs, labelSnapshot) {
+  const sets = runs.map(
+    (run) =>
+      new Set(
+        run.predictions
+          .filter((prediction) => isValidScore(prediction.scores.overall))
+          .map((prediction) => makeItemId(prediction.positionId, prediction.critiqueId))
+          .filter((itemId) => isValidScore(labelSnapshot.itemLabels[itemId]?.weightedMeanScores.overall)),
+      ),
+  );
+  if (!sets.length) return [];
+  return [...sets[0]].filter((itemId) => sets.every((set) => set.has(itemId))).sort();
+}
+
+function additiveCalibrationParameter(rows, dimension) {
+  const deltas = rows
+    .map((row) => {
+      const human = row.humanScores[dimension];
+      const model = row.modelScores[dimension];
+      return isValidScore(human) && isValidScore(model) ? human - model : null;
+    })
+    .filter((value) => typeof value === "number");
+  return {
+    intercept: deltas.length ? round(mean(deltas)) : 0,
+    fitCount: deltas.length,
+  };
+}
+
+function calibrateScores(scores, parameters) {
+  const calibrated = { ...scores };
+  Object.entries(parameters).forEach(([dimension, parameter]) => {
+    if (isValidScore(scores[dimension])) calibrated[dimension] = round(Math.min(1, Math.max(0, scores[dimension] + parameter.intercept)));
+  });
+  return calibrated;
+}
+
+function evaluationMetricBundle(labelSnapshot, run) {
+  const maps = buildCommonMaps(labelSnapshot, run);
+  const weightedPairwise = weightedPairwiseErrorRateByPosition(maps.humanOveralls, maps.modelOveralls);
+  const unweightedPairwiseDiagnostic = unweightedPairwiseErrorRateByPosition(maps.humanOveralls, maps.modelOveralls);
+  const customEligibleItemIds = Object.keys(maps.humanFullRatings).filter(
+    (itemId) => isCustomLossEligibleLabel(maps.humanFullRatings[itemId]) && isCustomLossEligibleLabel(maps.modelFullRatings[itemId]),
+  );
+  const customWeightedLoss =
+    customEligibleItemIds.length === Object.keys(maps.humanFullRatings).length && customEligibleItemIds.length > 0
+      ? customWeightedLossForDataset(maps.humanFullRatings, maps.modelFullRatings)
+      : {
+          loss: null,
+          coverage: {
+            nItemsScored: customEligibleItemIds.length,
+            nLowClarityBranchItems: 0,
+            nFullRubricItems: customEligibleItemIds.length,
+          },
+          unavailableReason: "full_rubric_scores_missing_for_some_common_items",
+        };
+  return {
+    weightedPairwise,
+    unweightedPairwiseDiagnostic,
+    customWeightedLoss,
+    coverage: {
+      commonItems: Object.keys(maps.humanFullRatings).length,
+      commonPositions: Object.keys(maps.humanOveralls).length,
+      fullRubricEligibleItems: customEligibleItemIds.length,
+    },
+  };
+}
+
+function numericDelta(raw, recalibrated) {
+  return typeof raw === "number" && typeof recalibrated === "number" ? round(recalibrated - raw) : null;
+}
+
+function scoredItemIds(labelSnapshot) {
+  return Object.entries(labelSnapshot.itemLabels)
+    .filter(([, label]) => isValidScore(label?.weightedMeanScores?.overall))
+    .map(([itemId]) => itemId)
+    .sort();
+}
+
+function predictionItemIds(run) {
+  return run.predictions
+    .filter((prediction) => isValidScore(prediction.scores.overall))
+    .map((prediction) => makeItemId(prediction.positionId, prediction.critiqueId))
+    .sort();
+}
+
+function intersectSorted(left, right) {
+  const rightSet = new Set(right);
+  return left.filter((item) => rightSet.has(item)).sort();
+}
+
+function commonHumanOverallsByPosition(labelSnapshot, commonItemIds) {
+  return commonItemIds.reduce((acc, itemId) => {
+    const [positionId, critiqueId] = itemId.split("::");
+    const score = labelSnapshot.itemLabels[itemId]?.weightedMeanScores.overall;
+    if (!isValidScore(score)) return acc;
+    acc[positionId] ??= {};
+    acc[positionId][critiqueId] = score;
+    return acc;
+  }, {});
+}
+
+function targetRunScoreRow(run, labelSnapshot, commonItemIds, metricFamily) {
+  const pairwiseSnapshot = buildPairwiseComparisonSnapshot(
+    `target-sensitivity-pairwise-${labelSnapshot.id}-${run.id}`,
+    labelSnapshot.id,
+    labelSnapshot.targetLabelVersion,
+    commonHumanOverallsByPosition(labelSnapshot, commonItemIds),
+  );
+  return leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily);
+}
+
+function pointEstimateOrder(modelScoreDeltas, targetKey) {
+  return modelScoreDeltas
+    .map((row) => ({
+      evaluationRunId: row.evaluationRunId,
+      pointEstimate: row[targetKey].weightedPairwiseLoss,
+    }))
+    .sort((left, right) => (left.pointEstimate ?? Number.POSITIVE_INFINITY) - (right.pointEstimate ?? Number.POSITIVE_INFINITY) || left.evaluationRunId.localeCompare(right.evaluationRunId))
+    .map((row) => row.evaluationRunId);
+}
+
+function sameOrder(left, right) {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function hasModelAssistedExposure(rating) {
+  return (
+    rating.kind === "model_assisted_check" ||
+    Boolean(rating.modelAssistance) ||
+    Boolean(rating.modelAssistedExposure) ||
+    Boolean(rating.assistingModelAlias) ||
+    Boolean(rating.assistingResolvedModelSnapshot) ||
+    Boolean(rating.assistingModelFamily)
+  );
+}
+
+function modelAssistedRatingRow(rating) {
+  const exposure = rating.modelAssistance ?? rating.modelAssistedExposure ?? {};
+  const assistingModel = modelIdentityFromValues({
+    requestedModelAlias:
+      exposure.requestedModelAlias ??
+      exposure.modelAlias ??
+      exposure.assistingModelAlias ??
+      rating.assistingModelAlias ??
+      null,
+    resolvedModelSnapshot:
+      exposure.resolvedModelSnapshot ??
+      exposure.modelSnapshot ??
+      exposure.assistingResolvedModelSnapshot ??
+      rating.assistingResolvedModelSnapshot ??
+      null,
+    provider: exposure.provider ?? exposure.modelProvider ?? rating.assistingModelProvider ?? null,
+    modelFamily: exposure.modelFamily ?? rating.assistingModelFamily ?? null,
+  });
+  return {
+    ratingId: rating.id,
+    itemId: makeItemId(rating.positionId, rating.critiqueId),
+    positionId: rating.positionId,
+    critiqueId: rating.critiqueId,
+    ratingKind: rating.kind,
+    raterId: rating.raterId,
+    parentRatingId: rating.parentRatingId ?? null,
+    preAssistanceRatingId:
+      exposure.preAssistanceRatingId ??
+      exposure.lockedHumanOnlyRatingId ??
+      rating.preAssistanceRatingId ??
+      rating.parentRatingId ??
+      null,
+    exposureTiming:
+      exposure.exposureTiming ??
+      rating.modelExposureTiming ??
+      (rating.kind === "model_assisted_check" ? "post_human_rating_lock" : "recorded_model_assisted_exposure"),
+    humanOnlySelfCheckLockedBeforeExposure: Boolean(
+      exposure.humanOnlySelfCheckLockedBeforeExposure ?? rating.humanOnlySelfCheckLockedBeforeExposure ?? rating.preAssistanceRatingId,
+    ),
+    assistanceDeltaSummary: exposure.deltaSummary ?? rating.modelAssistanceDeltaSummary ?? null,
+    promptTemplateId: exposure.promptTemplateId ?? rating.assistingPromptTemplateId ?? null,
+    assistingModel,
+  };
+}
+
+function modelIdentityForRun(run) {
+  return modelIdentityFromValues({
+    requestedModelAlias: run.requestedModelAlias,
+    resolvedModelSnapshot: run.resolvedModelSnapshot,
+    provider: run.modelProvider ?? run.providerRoute ?? null,
+    modelFamily: run.modelFamily ?? null,
+  });
+}
+
+function modelIdentityFromValues(identity) {
+  const modelFamily =
+    normalizeModelKey(identity.modelFamily) ??
+    inferModelFamily(identity.resolvedModelSnapshot, identity.requestedModelAlias, identity.provider);
+  return {
+    requestedModelAlias: identity.requestedModelAlias ?? null,
+    resolvedModelSnapshot: identity.resolvedModelSnapshot ?? null,
+    provider: identity.provider ?? null,
+    modelFamily,
+    normalizedAlias: normalizeModelKey(identity.requestedModelAlias),
+    normalizedSnapshot: normalizeModelKey(identity.resolvedModelSnapshot),
+  };
+}
+
+function modelOverlapBasis(evaluatedModel, assistingModel) {
+  if (evaluatedModel.normalizedSnapshot && evaluatedModel.normalizedSnapshot === assistingModel.normalizedSnapshot) return "exact_resolved_snapshot";
+  if (evaluatedModel.normalizedAlias && evaluatedModel.normalizedAlias === assistingModel.normalizedAlias) return "exact_requested_alias";
+  if (evaluatedModel.modelFamily && evaluatedModel.modelFamily === assistingModel.modelFamily) return "close_model_family";
+  return "none";
+}
+
+function inferModelFamily(...values) {
+  const text = values.filter(Boolean).join(" ").toLowerCase();
+  if (!text) return null;
+  if (text.includes("gpt-demo")) return "gpt_demo_family";
+  if (text.includes("appendix-g-demo")) return "appendix_g_demo_family";
+  if (text.includes("judge-generator-demo")) return "judge_generator_demo_family";
+  if (text.includes("critique-generator-demo")) return "critique_generator_demo_family";
+  if (/\bgpt[-_\s]?\d|\bgpt\b|\bo3\b|\bo4\b/.test(text)) return "openai_gpt_family";
+  if (text.includes("claude")) return "anthropic_claude_family";
+  if (text.includes("gemini")) return "google_gemini_family";
+  if (text.includes("qwen")) return "qwen_family";
+  return normalizeModelKey(text.split(/\s+/)[0]);
+}
+
+function normalizeModelKey(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily) {
+  const commonItemSet = new Set(commonItemIds);
+  const predictions = run.predictions.filter((prediction) => commonItemSet.has(makeItemId(prediction.positionId, prediction.critiqueId)));
+  const humanOveralls = commonHumanOverallsByPosition(labelSnapshot, commonItemIds);
+  const modelOveralls = predictions.reduce((acc, prediction) => {
+    acc[prediction.positionId] ??= {};
+    acc[prediction.positionId][prediction.critiqueId] = prediction.scores.overall;
+    return acc;
+  }, {});
+  const weightedPairwise = weightedPairwiseErrorRateByPosition(humanOveralls, modelOveralls, pairwiseSnapshot.tieTolerance);
+  const unweightedPairwise = unweightedPairwiseErrorRateByPosition(humanOveralls, modelOveralls, pairwiseSnapshot.tieTolerance);
+  const fullRubricAvailable = predictions.every((prediction) => FULL_RUBRIC_FIELDS.every((field) => isValidScore(prediction.scores[field])));
+  const commonMaps = buildCommonMaps(
+    {
+      ...labelSnapshot,
+      itemLabels: Object.fromEntries(commonItemIds.map((itemId) => [itemId, labelSnapshot.itemLabels[itemId]])),
+    },
+    { ...run, predictions },
+  );
+  const customLoss = fullRubricAvailable ? customWeightedLossForDataset(commonMaps.humanFullRatings, commonMaps.modelFullRatings) : null;
+  const pointEstimate = metricFamily === "custom_weighted_loss" && customLoss ? customLoss.loss : weightedPairwise.loss;
+  return {
+    evaluationRunId: run.id,
+    requestedModelAlias: run.requestedModelAlias,
+    resolvedModelSnapshot: run.resolvedModelSnapshot,
+    promptFamily: run.promptFamily,
+    promptScope: run.promptScope,
+    promptArtifactId: run.promptArtifact?.id ?? null,
+    renderedPromptChecksum: run.renderedPromptChecksum ?? null,
+    promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus ?? "missing_prompt_policy",
+    protectedPromptExampleCheck: run.protectedPromptExampleCheck ?? null,
+    outputFormatPolicy: run.promptArtifact?.outputFormatPolicy ?? "unknown",
+    parserConfigId: run.parserConfigId,
+    acceptedOutputSchema: run.acceptedOutputSchema ?? null,
+    reasoningModeSetting: run.mode === "overall_only" ? "appendix_g_step_by_step_overall_only_baseline" : "project_full_rubric_answer_extraction",
+    commonItemCount: commonItemIds.length,
+    pointEstimate,
+    interval: demoLeaderboardInterval(pointEstimate, weightedPairwise.coverage.nPositionsScored),
+    weightedPairwise,
+    unweightedPairwiseDiagnostic: unweightedPairwise,
+    customWeightedLoss: customLoss ?? { loss: null, coverage: { nItemsScored: 0, nLowClarityBranchItems: 0, nFullRubricItems: 0 }, unavailableReason: "run_does_not_provide_full_rubric_scores" },
+    coverage: {
+      nPositionsScored: weightedPairwise.coverage.nPositionsScored,
+      nPairsScored: weightedPairwise.coverage.nPairsScored,
+      nHumanTiePairsExcluded: weightedPairwise.coverage.nHumanTiePairsExcluded,
+      nItemsScored: commonItemIds.length,
+    },
+  };
+}
+
+function demoLeaderboardInterval(pointEstimate, nPositionsScored) {
+  if (!isValidScore(pointEstimate)) return { lower: null, upper: null, halfWidth: null };
+  const halfWidth = nPositionsScored >= 10 ? 0.015 : 0.03;
+  return {
+    lower: round(Math.max(0, pointEstimate - halfWidth)),
+    upper: round(Math.min(1, pointEstimate + halfWidth)),
+    halfWidth,
+  };
+}
+
+function buildLeaderboardPairwiseComparisons(rows, practicalDifferenceThreshold) {
+  const comparisons = [];
+  rows.forEach((left, index) => {
+    rows.slice(index + 1).forEach((right) => {
+      const difference = isValidScore(left.pointEstimate) && isValidScore(right.pointEstimate) ? round(left.pointEstimate - right.pointEstimate) : null;
+      const halfWidth = Math.max(left.interval.halfWidth ?? 0.03, right.interval.halfWidth ?? 0.03);
+      const interval =
+        difference === null
+          ? { lower: null, upper: null }
+          : { lower: round(difference - halfWidth), upper: round(difference + halfWidth) };
+      const intervalExcludesZero = interval.lower !== null && (interval.upper < 0 || interval.lower > 0);
+      const practicalGapMet = difference !== null && Math.abs(difference) >= practicalDifferenceThreshold;
+      comparisons.push({
+        comparison: `${left.evaluationRunId}_vs_${right.evaluationRunId}`,
+        leftRunId: left.evaluationRunId,
+        rightRunId: right.evaluationRunId,
+        leftMinusRightPointEstimate: difference,
+        pairedDifferenceInterval: interval,
+        intervalExcludesZero,
+        practicalGapMet,
+        interpretation: intervalExcludesZero && practicalGapMet ? "rank_claim_supported" : "unresolved_within_uncertainty",
+      });
+    });
+  });
+  return comparisons;
+}
+
+function buildLeaderboardRankTiers(rows, comparisons) {
+  const unresolvedEdges = new Map();
+  rows.forEach((row) => unresolvedEdges.set(row.evaluationRunId, new Set([row.evaluationRunId])));
+  comparisons
+    .filter((comparison) => comparison.interpretation === "unresolved_within_uncertainty")
+    .forEach((comparison) => {
+      unresolvedEdges.get(comparison.leftRunId)?.add(comparison.rightRunId);
+      unresolvedEdges.get(comparison.rightRunId)?.add(comparison.leftRunId);
+    });
+  const visited = new Set();
+  const groups = [];
+  rows
+    .slice()
+    .sort((left, right) => (left.pointEstimate ?? Number.POSITIVE_INFINITY) - (right.pointEstimate ?? Number.POSITIVE_INFINITY))
+    .forEach((row) => {
+      if (visited.has(row.evaluationRunId)) return;
+      const group = [];
+      const stack = [row.evaluationRunId];
+      while (stack.length) {
+        const runId = stack.pop();
+        if (visited.has(runId)) continue;
+        visited.add(runId);
+        group.push(runId);
+        unresolvedEdges.get(runId)?.forEach((neighbor) => {
+          if (!visited.has(neighbor)) stack.push(neighbor);
+        });
+      }
+      const groupRows = group.map((runId) => rows.find((item) => item.evaluationRunId === runId)).filter(Boolean);
+      groups.push({
+        tier: groups.length + 1,
+        status: groupRows.length > 1 ? "unresolved_tied_rank_tier" : "point_estimate_rank",
+        runIds: groupRows.map((item) => item.evaluationRunId),
+        bestPointEstimate: round(Math.min(...groupRows.map((item) => item.pointEstimate ?? Number.POSITIVE_INFINITY))),
+      });
+    });
+  return groups;
+}
+
+function summarizePromptComparability(runs) {
+  const promptFamilies = uniqueStrings(runs.map((run) => run.promptFamily));
+  const promptScopes = uniqueStrings(runs.map((run) => run.promptScope));
+  const promptArtifactIds = uniqueStrings(runs.map((run) => run.promptArtifact?.id));
+  const promptPolicyStatuses = uniqueStrings(runs.map((run) => run.promptPolicyComparabilityStatus));
+  return {
+    promptFamilies,
+    promptScopes,
+    promptArtifactIds,
+    renderedPromptChecksums: uniqueStrings(runs.map((run) => run.renderedPromptChecksum)),
+    promptPolicyStatuses,
+    protectedPromptExampleChecks: runs.map((run) => ({
+      evaluationRunId: run.id,
+      promptArtifactId: run.promptArtifact?.id ?? null,
+      status: run.protectedPromptExampleCheck?.status ?? "missing",
+      hiddenBenchmarkExamplesExcluded: run.protectedPromptExampleCheck?.hiddenBenchmarkExamplesExcluded ?? null,
+      protectedValidationExamplesExcluded: run.protectedPromptExampleCheck?.protectedValidationExamplesExcluded ?? null,
+    })),
+    status: promptFamilies.length === 1 && promptScopes.length === 1 ? "common_prompt_policy" : "mixed_prompt_scope_sensitivity",
+  };
+}
+
+function summarizeModelSnapshotComparability(runs) {
+  const snapshots = uniqueStrings(runs.map((run) => run.resolvedModelSnapshot));
+  return {
+    resolvedModelSnapshots: snapshots,
+    mutableAliasWarning: runs.some((run) => !String(run.resolvedModelSnapshot).match(/\d{4}-\d{2}-\d{2}/)),
+    status: snapshots.length === runs.length ? "snapshots_declared" : "duplicate_or_missing_snapshot",
+  };
+}
+
+function freezeCheck(id, status, evidence) {
+  return { id, status, evidence };
+}
+
+function summarizeFreezeStatus(checks) {
+  if (checks.some((check) => check.status === "blocked")) return "blocked";
+  if (checks.some((check) => ["partial", "pointwise_only", "low_margin_sensitive", "not_run_documented", "insufficient_seed_benchmark"].includes(check.status))) {
+    return "not_ready_for_release_freeze";
+  }
+  return "frozen";
+}
+
+function buildHiddenArtifactBalance(hiddenPositions, hiddenCritiques, labelSnapshot) {
+  const critiqueRows = hiddenCritiques.map((critique) => {
+    const score = labelSnapshot.itemLabels[makeItemId(critique.positionId, critique.id)]?.weightedMeanScores.overall;
+    const position = hiddenPositions.find((item) => item.id === critique.positionId);
+    return {
+      positionId: critique.positionId,
+      sourceCategory: position?.sourceCategory ?? "unknown",
+      authorshipRoute: position?.authorshipRoute ?? "unknown",
+      llmAssistance: position?.llmAssistance ?? "unknown",
+      critiqueSourceType: critique.sourceType,
+      critiqueAuthorshipType: critique.authorshipType,
+      lengthBand: critique.lengthBand,
+      styleBand: critique.styleBand,
+      adjudicatedQualityBand: qualityBand(score),
+    };
+  });
+  const distinctStyleQualityCells = new Set(critiqueRows.map((row) => `${row.styleBand}:${row.adjudicatedQualityBand}`));
+  const counterbalanceStatus =
+    hiddenPositions.length >= 6 && hiddenCritiques.length >= 12 && distinctStyleQualityCells.size >= 4 ? "pass" : "insufficient_seed_benchmark";
+  return {
+    counterbalanceStatus,
+    positionSourceCategory: countBy(hiddenPositions, "sourceCategory"),
+    positionAuthorshipRoute: countBy(hiddenPositions, "authorshipRoute"),
+    sourceLanguage: countBy(hiddenPositions, "sourceLanguage"),
+    translationStatus: countBy(hiddenPositions, "translationStatus"),
+    sourceTaskFormat: countBy(hiddenPositions, "sourceTaskFormat"),
+    positionLlmAssistance: countBy(hiddenPositions, "llmAssistance"),
+    critiqueSourceType: countBy(hiddenCritiques, "sourceType"),
+    critiqueAuthorshipType: countBy(hiddenCritiques, "authorshipType"),
+    critiqueLengthBand: countBy(hiddenCritiques, "lengthBand"),
+    critiqueStyleBand: countBy(hiddenCritiques, "styleBand"),
+    sourceStyleQualityCells: countBy(critiqueRows, "adjudicatedQualityBand"),
+    counterbalanceRows: critiqueRows,
+    confoundDisclosure:
+      counterbalanceStatus === "pass"
+        ? "No single source/style route determines the hidden quality band in this report."
+        : "Seed hidden benchmark has too few hidden items to rule out source/style/quality confounds for ordinary headline claims.",
+  };
+}
+
+function qualityBand(score) {
+  if (!isValidScore(score)) return "unlabelled";
+  if (score >= 0.67) return "high";
+  if (score >= 0.34) return "middle";
+  return "low";
+}
+
+function summarizeBenchmarkAccess(events = []) {
+  const normalized = events.filter((event) => event && typeof event === "object");
+  const authorized = normalized.filter((event) => event.allowed !== false && ["admin", "expert"].includes(event.actorRole));
+  const unauthorized = normalized.filter((event) => event.allowed === false || !["admin", "expert"].includes(event.actorRole));
+  return {
+    requiredRole: "admin",
+    totalEvents: normalized.length,
+    authorizedAccessCount: authorized.length,
+    unauthorizedAccessCount: unauthorized.length,
+    actions: countBy(normalized, "action"),
+    purposes: countBy(normalized, "purpose"),
+    lastAuthorizedAccessAt: authorized.map((event) => event.occurredAt ?? event.receivedAt).filter(Boolean).sort().at(-1) ?? null,
+    status: unauthorized.length ? "blocked" : normalized.length ? "pass" : "no_access_log",
+  };
+}
+
+function buildArtifactProbeDiagnostics(events = []) {
+  const probeEvents = events.filter((event) => event.action === "artifact_probe_run");
+  return {
+    status: probeEvents.length ? "pass" : "not_run_documented",
+    requiredProbeFamilies: ["full_context", "critique_only", "metadata_style_only"],
+    completedProbeFamilies: [...new Set(probeEvents.flatMap((event) => event.probeFamilies ?? []))],
+    notRunRationale: probeEvents.length ? null : "Seed fixture documents the required probes but blocks ordinary hidden-benchmark headline claims until authorized probes run.",
+  };
+}
+
+function buildPointwiseTrainingExample(critique, positionList, labelSnapshot, ratings, contextSnapshots) {
+  const position = positionList.find((item) => item.id === critique.positionId);
+  if (!position) return null;
+  const itemId = makeItemId(position.id, critique.id);
+  const label = labelSnapshot.itemLabels[itemId];
+  if (!label || !isCustomLossEligibleLabel(label.weightedMeanScores)) return null;
+  const itemRatings = ratings.filter((rating) => rating.positionId === position.id && rating.critiqueId === critique.id);
+  const contextSnapshotId = itemRatings.find((rating) => rating.ratingContextSnapshotId)?.ratingContextSnapshotId ?? null;
+  const contextSnapshot = contextSnapshots.find((snapshot) => snapshot.id === contextSnapshotId) ?? null;
+  const positionVersion = latestText(position);
+  const critiqueVersion = latestText(critique);
+  const memo = adjudicationMemos.find((item) => item.positionId === position.id && item.critiqueId === critique.id);
+  return {
+    itemId,
+    positionId: position.id,
+    critiqueId: critique.id,
+    split: position.split,
+    positionTextVersionId: positionVersion.id,
+    critiqueTextVersionId: critiqueVersion.id,
+    positionCanonicalHash: positionVersion.canonicalHash,
+    critiqueCanonicalHash: critiqueVersion.canonicalHash,
+    ratingContextSnapshotId: contextSnapshot?.id ?? contextSnapshotId,
+    ratingContextPolicy: contextSnapshot?.policy ?? "unknown",
+    humanModelContextParityStatus: contextSnapshot?.humanModelParityStatus ?? "unknown",
+    scores: label.weightedMeanScores,
+    medianScores: label.medianScores,
+    centXStrWeightedMean: label.centXStrWeightedMean,
+    labelStatus: label.finalLabelStatus,
+    raterCount: label.raterCount,
+    expertCount: label.expertCount,
+    uncertainty: {
+      spreadPreDiscussion: label.spreadPreDiscussion,
+      spreadPostDiscussion: label.spreadPostDiscussion,
+      uncertaintyFlag: label.uncertaintyFlag,
+      largestSingleRaterContributionShare: label.largestSingleRaterContributionShare,
+      dimensionCoverageCounts: label.dimensionCoverageCounts,
+    },
+    disagreementTaxonomy: memo?.disagreementTaxonomy ?? detectEscalations(itemRatings),
+    conceptualScopeStatus: position.conceptualScope,
+    groundTruthAvailability: position.groundTruthAvailability,
+    nonConceptualDependencyNotes: position.nonConceptualDependencyNotes,
+    promptTrackExposure: "project_full_rubric_training",
+    rationales: itemRatings
+      .filter((rating) => rating.rationale)
+      .map((rating) => ({
+        ratingId: rating.id,
+        kind: rating.kind,
+        raterTier: rating.raterTier,
+        rationale: rating.rationale,
+      })),
+  };
+}
+
+function buildLabelRows(labelSnapshot, positionList, critiqueList) {
+  return critiqueList
+    .map((critique) => {
+      const position = positionList.find((item) => item.id === critique.positionId);
+      const label = labelSnapshot.itemLabels[makeItemId(critique.positionId, critique.id)];
+      if (!position || !label) return null;
+      return {
+        itemId: makeItemId(critique.positionId, critique.id),
+        positionId: critique.positionId,
+        critiqueId: critique.id,
+        split: position.split,
+        sourceCategory: position.sourceCategory,
+        topicFamily: position.topicFamily,
+        critiqueLengthBand: critique.lengthBand,
+        critiqueAuthorshipType: critique.authorshipType,
+        scores: label.weightedMeanScores,
+        centXStrWeightedMean: label.centXStrWeightedMean,
+        raterCount: label.raterCount,
+        expertCount: label.expertCount,
+        uncertaintyFlag: label.uncertaintyFlag,
+        spreadPostDiscussion: label.spreadPostDiscussion,
+      };
+    })
+    .filter(Boolean);
+}
+
+function validationTrancheForCritique(critique) {
+  if (critique.validationTranche) return critique.validationTranche;
+  if (String(critique.styleBand ?? "").includes("obfuscated") || critique.marginalInformativeness === "low_redundant") return "hard_case_stress";
+  return "random_sentinel";
+}
+
+function redundancyRiskForCritique(critique) {
+  if (critique.marginalInformativeness === "low_redundant") return "low_marginal_information_redundancy_risk";
+  if (critique.marginalInformativeness === "artifact_control") return "artifact_control_not_quality_increment";
+  return "pass";
+}
+
+function isReleaseCriticalSplit(split) {
+  return split === "internal_validation" || split === "hidden_benchmark";
+}
+
+function fallbackRaterProfile(rating) {
+  return {
+    id: rating.raterId,
+    tier: rating.raterTier,
+    topicExpertise: [],
+    certificationStatus: "unknown_unprofiled_persisted_rater",
+    reliabilityProfile: "not_in_seed_profile_registry",
+    conflictDisclosures: ["profile_missing_conflicts_unknown"],
+    priorExposure: {
+      authoredPositionIds: [],
+      selectedCritiqueIds: [],
+      adaptedPositionIds: [],
+      previouslyDiscussedPositionIds: [],
+    },
+  };
+}
+
+function conflictRowsForRating(rating, position, profile = fallbackRaterProfile(rating)) {
+  const exposure = profile.priorExposure ?? {};
+  const checks = [
+    ["authored_position", exposure.authoredPositionIds, rating.positionId],
+    ["selected_critique", exposure.selectedCritiqueIds, rating.critiqueId],
+    ["adapted_position", exposure.adaptedPositionIds, rating.positionId],
+    ["previously_discussed_position", exposure.previouslyDiscussedPositionIds, rating.positionId],
+  ];
+  return checks
+    .filter(([, ids, target]) => Array.isArray(ids) && ids.includes(target))
+    .map(([conflictType]) => ({
+      ratingId: rating.id,
+      raterId: rating.raterId,
+      itemId: makeItemId(rating.positionId, rating.critiqueId),
+      split: position?.split ?? "unknown",
+      conflictType,
+      adminExceptionRecorded: Boolean(rating.conflictExceptionId),
+      releaseBlocking: !rating.conflictExceptionId && isReleaseCriticalSplit(position?.split),
+    }));
+}
+
+function summarizeRowsBy(rows, fieldName) {
+  return Object.fromEntries(
+    [...new Set(rows.map((row) => row[fieldName] ?? "unknown"))]
+      .sort()
+      .map((value) => [value, summarizeLabelRows(rows.filter((row) => (row[fieldName] ?? "unknown") === value))]),
+  );
+}
+
+function summarizeLabelRows(rows) {
+  return {
+    itemCount: rows.length,
+    overall: summarizeValues(rows.map((row) => row.scores.overall).filter(isValidScore)),
+    dimensions: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, summarizeValues(rows.map((row) => row.scores[dimension]).filter(isValidScore))])),
+    centXStr: summarizeValues(rows.map((row) => row.centXStrWeightedMean).filter(isValidScore)),
+    uncertainty: {
+      flaggedItemCount: rows.filter((row) => row.uncertaintyFlag).length,
+      meanPostDiscussionSpread: summarizeValues(rows.map((row) => row.spreadPostDiscussion).filter((value) => typeof value === "number")).mean,
+      meanRaterCount: summarizeValues(rows.map((row) => row.raterCount).filter((value) => typeof value === "number")).mean,
+      meanExpertCount: summarizeValues(rows.map((row) => row.expertCount).filter((value) => typeof value === "number")).mean,
+    },
+  };
+}
+
+function summarizeValues(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const valueMean = sorted.length ? round(mean(sorted)) : null;
+  const variance =
+    sorted.length && valueMean !== null ? sorted.reduce((sum, value) => sum + (value - valueMean) ** 2, 0) / sorted.length : null;
+  return {
+    count: sorted.length,
+    mean: valueMean,
+    median: sorted.length ? round(median(sorted)) : null,
+    min: sorted[0] ?? null,
+    max: sorted.at(-1) ?? null,
+    spread: sorted.length ? round((sorted.at(-1) ?? 0) - sorted[0]) : null,
+    standardDeviation: variance === null ? null : round(Math.sqrt(variance)),
+    histogram: histogram(sorted),
+  };
+}
+
+function buildRaterItemCoverageRows(ratings, itemIds) {
+  const rowsByRater = {};
+  ratings.forEach((rating) => {
+    const itemId = makeItemId(rating.positionId, rating.critiqueId);
+    if (!itemIds.includes(itemId)) return;
+    rowsByRater[rating.raterId] ??= { raterId: rating.raterId, coveredItemIds: new Set(), byKind: {} };
+    rowsByRater[rating.raterId].coveredItemIds.add(itemId);
+    rowsByRater[rating.raterId].byKind[rating.kind] = (rowsByRater[rating.raterId].byKind[rating.kind] ?? 0) + 1;
+  });
+  return Object.values(rowsByRater)
+    .map((row) => ({
+      raterId: row.raterId,
+      coveredItemCount: row.coveredItemIds.size,
+      coverageShare: round(row.coveredItemIds.size / Math.max(1, itemIds.length)),
+      coveredItemIds: [...row.coveredItemIds].sort(),
+      byKind: row.byKind,
+    }))
+    .sort((left, right) => right.coveredItemCount - left.coveredItemCount || left.raterId.localeCompare(right.raterId));
+}
+
+function humanCeilingComparisonRow(kind, ratings, labelSnapshot, itemIds) {
+  const rows = ratings
+    .filter((rating) => rating.kind === kind && itemIds.includes(makeItemId(rating.positionId, rating.critiqueId)))
+    .map((rating) => {
+      const itemId = makeItemId(rating.positionId, rating.critiqueId);
+      const target = labelSnapshot.itemLabels[itemId]?.weightedMeanScores;
+      if (!target || !isValidScore(rating.scores.overall) || !isValidScore(target.overall)) return null;
+      return {
+        ratingId: rating.id,
+        itemId,
+        raterId: rating.raterId,
+        targetPolicy: "final_average_approximation",
+        overallAbsDiff: round(Math.abs(rating.scores.overall - target.overall)),
+        customWeightedLoss: isCustomLossEligibleLabel(target) && isCustomLossEligibleLabel(rating.scores) ? round(customWeightedLoss(target, rating.scores)) : null,
+      };
+    })
+    .filter(Boolean);
+  return {
+    ratingKind: kind,
+    rowCount: rows.length,
+    itemCount: new Set(rows.map((row) => row.itemId)).size,
+    meanAbsOverallDiff: summarizeValues(rows.map((row) => row.overallAbsDiff)).mean,
+    meanCustomWeightedLoss: summarizeValues(rows.map((row) => row.customWeightedLoss).filter((value) => typeof value === "number")).mean,
+    rows,
+  };
+}
+
+function modelValidationProximityRow(run, labelSnapshot, validationItemIds) {
+  const rows = run.predictions
+    .map((prediction) => {
+      const itemId = makeItemId(prediction.positionId, prediction.critiqueId);
+      if (!validationItemIds.includes(itemId)) return null;
+      const target = labelSnapshot.itemLabels[itemId]?.weightedMeanScores;
+      if (!target || !isValidScore(prediction.scores.overall) || !isValidScore(target.overall)) return null;
+      return {
+        predictionId: prediction.id,
+        itemId,
+        overallAbsDiff: round(Math.abs(prediction.scores.overall - target.overall)),
+        customWeightedLoss: isCustomLossEligibleLabel(target) && isCustomLossEligibleLabel(prediction.scores) ? round(customWeightedLoss(target, prediction.scores)) : null,
+      };
+    })
+    .filter(Boolean);
+  return {
+    evaluationRunId: run.id,
+    requestedModelAlias: run.requestedModelAlias,
+    resolvedModelSnapshot: run.resolvedModelSnapshot,
+    rowCount: rows.length,
+    itemCount: new Set(rows.map((row) => row.itemId)).size,
+    meanAbsOverallDiff: summarizeValues(rows.map((row) => row.overallAbsDiff)).mean,
+    meanCustomWeightedLoss: summarizeValues(rows.map((row) => row.customWeightedLoss).filter((value) => typeof value === "number")).mean,
+    rows,
+  };
+}
+
+function minValid(values) {
+  const valid = values.filter((value) => typeof value === "number" && Number.isFinite(value));
+  return valid.length ? Math.min(...valid) : null;
+}
+
+function buildSaturationRefreshQueue(labelSnapshot, positionList, critiqueList) {
+  return critiqueList
+    .map((critique) => {
+      const position = positionList.find((item) => item.id === critique.positionId);
+      const itemId = makeItemId(critique.positionId, critique.id);
+      const label = labelSnapshot.itemLabels[itemId];
+      if (!position || !label) return null;
+      const reasons = [];
+      if (label.raterCount < 2) reasons.push("double_rate");
+      if (label.expertCount === 0) reasons.push("expert_double_check");
+      if (label.uncertaintyFlag || label.spreadPostDiscussion > 0.3) reasons.push("adjudicate_or_preserve_disagreement");
+      if (position.split === "hidden_benchmark" || position.split === "internal_validation") reasons.push("protected_split_refresh_candidate");
+      if (critique.marginalInformativeness === "hard_to_rank" || critique.styleBand === "fluent_obfuscated_risk") reasons.push("harder_or_obfuscated_item");
+      if (!reasons.length) return null;
+      return {
+        itemId,
+        split: position.split,
+        topicFamily: position.topicFamily,
+        critiqueStyleBand: critique.styleBand,
+        currentRaterCount: label.raterCount,
+        currentExpertCount: label.expertCount,
+        spreadPostDiscussion: label.spreadPostDiscussion,
+        priorityScore: reasons.length,
+        refreshActions: reasons,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.priorityScore - left.priorityScore || left.itemId.localeCompare(right.itemId));
+}
+
+function buildGenerationBestOfNRows(run, outputRows) {
+  return run.sourcePositionIds.map((positionId) => {
+    const rows = outputRows.filter((row) => row.positionId === positionId);
+    const ratedRows = rows.filter((row) => isValidScore(row.targetOverall));
+    const best = ratedRows.slice().sort((left, right) => right.targetOverall - left.targetOverall || left.outputId.localeCompare(right.outputId))[0] ?? null;
+    return {
+      positionId,
+      generationBudget: run.generationBudgetPerPosition,
+      sampledOutputs: rows.length,
+      blindRatedOutputs: ratedRows.length,
+      bestOutputId: best?.outputId ?? null,
+      bestPromotedCritiqueId: best?.promotedCritiqueId ?? null,
+      bestOverall: best?.targetOverall ?? null,
+      budgetNormalized: rows.length === run.generationBudgetPerPosition,
+    };
+  });
+}
+
+function aggregateGenerationCounts(runRows) {
+  return runRows.reduce(
+    (acc, run) => {
+      Object.entries(run.counts).forEach(([key, value]) => {
+        acc[key] = (acc[key] ?? 0) + value;
+      });
+      return acc;
+    },
+    {
+      generatedOutputs: 0,
+      emptyOrRefusal: 0,
+      duplicatesFiltered: 0,
+      filteredBeforeRating: 0,
+      humanRejected: 0,
+      promotedToRating: 0,
+      blindHumanRatedPromoted: 0,
+      adjudicatedPromoted: 0,
+    },
+  );
+}
+
+function histogram(values) {
+  return values.reduce(
+    (acc, value) => {
+      const key = value < 0.2 ? "0-0.2" : value < 0.4 ? "0.2-0.4" : value < 0.6 ? "0.4-0.6" : value < 0.8 ? "0.6-0.8" : "0.8-1.0";
+      acc[key] += 1;
+      return acc;
+    },
+    { "0-0.2": 0, "0.2-0.4": 0, "0.4-0.6": 0, "0.6-0.8": 0, "0.8-1.0": 0 },
+  );
+}
+
+function constantScoresFromRows(rows, mode) {
+  return Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => {
+      const values = rows.map((row) => row.scores[dimension]).filter(isValidScore);
+      if (!values.length) return [dimension, null];
+      return [dimension, round(mode === "median" ? median(values) : mean(values))];
+    }),
+  );
+}
+
+function constantBaselineLoss(rows, scores) {
+  const humanRatings = {};
+  const modelRatings = {};
+  rows.forEach((row) => {
+    if (!isCustomLossEligibleLabel(row.scores) || !isCustomLossEligibleLabel(scores)) return;
+    humanRatings[row.itemId] = row.scores;
+    modelRatings[row.itemId] = scores;
+  });
+  if (!Object.keys(humanRatings).length) return { loss: null, coverage: { nItemsScored: 0, nLowClarityBranchItems: 0, nFullRubricItems: 0 } };
+  return customWeightedLossForDataset(humanRatings, modelRatings);
+}
+
+function groupOverallsByPosition(rows) {
+  return rows.reduce((acc, row) => {
+    acc[row.positionId] ??= {};
+    acc[row.positionId][row.critiqueId] = row.scores.overall;
+    return acc;
+  }, {});
+}
+
+function sanityBaseline(baselineType, metricFamily, fitSplit, metricOutputs) {
+  return {
+    id: `${baselineType}-${metricFamily}`,
+    baselineType,
+    metricFamily,
+    fitSplit,
+    metricOutputs,
+    createdBy: "deterministic_local_report",
+  };
+}
+
+function buildFailureAuditRow(prediction, labelSnapshot, positionById, critiqueById, run) {
+  const position = positionById.get(prediction.positionId);
+  const critique = critiqueById.get(prediction.critiqueId);
+  const label = labelSnapshot.itemLabels[makeItemId(prediction.positionId, prediction.critiqueId)];
+  if (!position || !critique || !label) return null;
+  const humanScores = label.weightedMeanScores;
+  const modelScores = prediction.scores;
+  const overallAbsError =
+    isValidScore(humanScores.overall) && isValidScore(modelScores.overall) ? round(Math.abs(humanScores.overall - modelScores.overall)) : null;
+  const dimensionAbsErrors = Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => [
+      dimension,
+      isValidScore(humanScores[dimension]) && isValidScore(modelScores[dimension]) ? round(Math.abs(humanScores[dimension] - modelScores[dimension])) : null,
+    ]),
+  );
+  const customWeightedLossValue =
+    isCustomLossEligibleLabel(humanScores) && isCustomLossEligibleLabel(modelScores) ? round(customWeightedLoss(humanScores, modelScores)) : null;
+  const failureTaxonomyCodes = classifyFailureModes({
+    position,
+    critique,
+    humanScores,
+    modelScores,
+    dimensionAbsErrors,
+    overallAbsError,
+    prediction,
+  });
+  return {
+    id: `failure-${run.id}-${prediction.positionId}-${prediction.critiqueId}`,
+    evaluationRunId: run.id,
+    itemId: makeItemId(prediction.positionId, prediction.critiqueId),
+    positionId: prediction.positionId,
+    critiqueId: prediction.critiqueId,
+    split: position.split,
+    targetLabelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    targetHumanScores: humanScores,
+    parsedModelScores: modelScores,
+    rawModelResponse: prediction.rawModelResponse,
+    parseStatus: prediction.parseStatus,
+    errorMagnitude: {
+      overallAbsError,
+      customWeightedLoss: customWeightedLossValue,
+      dimensionAbsErrors,
+    },
+    overallAbsError,
+    customWeightedLoss: customWeightedLossValue,
+    promptTemplateId: prediction.promptTemplateId,
+    promptArtifactId: run.promptArtifact?.id ?? prediction.promptTemplateId,
+    renderedPromptChecksum: prediction.renderedPromptChecksum ?? run.renderedPromptChecksum ?? null,
+    promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus ?? "missing_prompt_policy",
+    outputFormatPolicy: run.promptArtifact?.outputFormatPolicy ?? "unknown",
+    parserConfigId: prediction.parserConfigId,
+    acceptedOutputSchema: run.acceptedOutputSchema ?? null,
+    requestedModelAlias: prediction.requestedModelAlias,
+    resolvedModelSnapshot: prediction.resolvedModelSnapshot,
+    reasoningModeSetting: run.mode === "overall_only" ? "appendix_g_step_by_step_overall_only_baseline" : "project_full_rubric_answer_extraction",
+    failureTaxonomyCodes,
+    failureSummary: summarizeFailure(failureTaxonomyCodes, critique),
+    promptElicitationSensitivityNote:
+      run.promptScope === "appendix_g_overall_only_exact"
+        ? "Overall-only prompt cannot reveal rubric-specific failure modes."
+        : "Full-rubric prompt preserves dimension-level disagreement for review.",
+    reviewerRole: "expert_adjudicator_required_for_final_failure_taxonomy",
+  };
+}
+
+function classifyFailureModes({ critique, humanScores, modelScores, dimensionAbsErrors, overallAbsError, prediction }) {
+  const modes = [];
+  if (prediction.parseStatus !== "parsed") modes.push("parser_format_failure");
+  if (overallAbsError !== null && modelScores.overall > humanScores.overall + 0.08 && (critique.marginalInformativeness === "low_redundant" || critique.marginalInformativeness === "artifact_control")) {
+    modes.push("over_crediting_generic_or_vague_critique");
+  }
+  if ((dimensionAbsErrors.correctness ?? 0) >= 0.08) modes.push("incorrect_correctness_judgment");
+  if ((dimensionAbsErrors.centrality ?? 0) >= 0.08 || (dimensionAbsErrors.strength ?? 0) >= 0.08) modes.push("strength_centrality_allocation_error");
+  if ((dimensionAbsErrors.clarity ?? 0) >= 0.15) modes.push("critique_misinterpretation");
+  if (critique.sourceType === "llm_generated" || critique.styleBand === "fluent_obfuscated_risk" || critique.styleBand === "handwavy") {
+    modes.push("source_style_artifact_reliance");
+  }
+  if (overallAbsError !== null && overallAbsError >= 0.12 && modes.length === 0) modes.push("insufficient_deliberation_or_under_reasoning");
+  if (!modes.length) modes.push("small_residual_calibration_error");
+  return [...new Set(modes)];
+}
+
+function summarizeFailure(failureTaxonomyCodes, critique) {
+  if (failureTaxonomyCodes.includes("over_crediting_generic_or_vague_critique")) {
+    return "Model appears to over-credit a vague or artifact-like critique relative to the human label.";
+  }
+  if (failureTaxonomyCodes.includes("incorrect_correctness_judgment")) {
+    return "Model correctness score diverges materially from the human target label.";
+  }
+  if (failureTaxonomyCodes.includes("strength_centrality_allocation_error")) {
+    return "Model allocation across centrality and strength differs from the target label.";
+  }
+  if (failureTaxonomyCodes.includes("source_style_artifact_reliance")) {
+    return `Review whether ${critique.sourceType} or ${critique.styleBand} cues affected the model score.`;
+  }
+  return "Residual disagreement is small and best treated as calibration or noise until adjudicated.";
+}
+
+function isRightsStatusAllowed(exportKind, status) {
+  if (exportKind === "public" || exportKind === "training") return status === "cleared";
+  if (exportKind === "hidden_benchmark") return status === "cleared_restricted_benchmark" || status === "cleared";
+  return ["cleared", "cleared_internal_only", "cleared_restricted_benchmark"].includes(status);
+}
+
+function isCustomLossEligibleLabel(scores) {
+  if (!scores || !isValidScore(scores.overall) || !isValidScore(scores.clarity)) return false;
+  if (scores.clarity < 0.5) return true;
+  return FULL_RUBRIC_FIELDS.every((field) => isValidScore(scores[field]));
+}
+
+function includedScoresForDimension(ratings, dimension) {
+  return ratings
+    .filter((rating) => !isLowClarityProvisional(rating, dimension))
+    .map((rating) => rating.scores[dimension])
+    .filter((item) => isValidScore(item));
+}
+
+function dimensionCoverage(ratings, dimension) {
+  let included = 0;
+  let adjudicated = 0;
+  let provisional = 0;
+  let excluded = 0;
+  ratings.forEach((rating) => {
+    if (rating.provisionalDimensions.includes(dimension)) provisional += 1;
+    if (isLowClarityProvisional(rating, dimension)) {
+      excluded += 1;
+      return;
+    }
+    if (isValidScore(rating.scores[dimension])) {
+      included += 1;
+      if (rating.kind === "adjudication") adjudicated += 1;
+    } else {
+      excluded += 1;
+    }
+  });
+  return { included, adjudicated, provisional, excluded };
+}
+
+function isLowClarityProvisional(rating, dimension) {
+  if (dimension === "clarity" || dimension === "overall") return false;
+  return (rating.scores.clarity ?? 1) < 0.5 && rating.provisionalDimensions.includes(dimension);
+}
+
+function spread(ratings, dimension) {
+  const values = ratings.map((rating) => value(rating, dimension)).filter((item) => item !== null);
+  if (values.length < 2) return null;
+  return Math.max(...values) - Math.min(...values);
+}
+
+function centralityStrengthSpread(ratings) {
+  const values = ratings
+    .map((rating) => {
+      const centrality = value(rating, "centrality");
+      const strength = value(rating, "strength");
+      return centrality === null || strength === null ? null : centrality * strength;
+    })
+    .filter((item) => item !== null);
+  if (values.length < 2) return null;
+  return Math.max(...values) - Math.min(...values);
+}
+
+function value(rating, dimension) {
+  const item = rating.scores[dimension];
+  return isValidScore(item) ? item : null;
+}
+
+function latestText(item) {
+  const latest = item.textVersions.at(-1);
+  if (!latest) throw new Error(`${item.id} has no text versions`);
+  return latest;
+}
+
+function mustFind(items, id) {
+  const found = items.find((item) => item.id === id);
+  if (!found) throw new Error(`Missing item: ${id}`);
+  return found;
+}
+
+function round(value) {
+  return Math.round(value * 1000) / 1000;
+}
