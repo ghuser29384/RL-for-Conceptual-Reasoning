@@ -10413,6 +10413,1740 @@ function governedBundleFamilyEvidenceRow(bundleFamily, rows) {
   };
 }
 
+const REQUIRED_QUALIFICATION_SCOPES = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+
+const PROHIBITED_INCENTIVE_SIGNALS = [
+  "rating_direction",
+  "peer_agreement_before_feedback",
+  "model_agreement",
+  "gold_performance_before_permitted_feedback",
+  "speed_beyond_qa_band",
+  "hidden_benchmark_performance",
+  "accepted_revision_count",
+  "leaderboard_rank",
+];
+
+const LANGUAGE_ARTIFACT_TYPES = [
+  "non_native_wording",
+  "dialect_or_register",
+  "machine_translation_residue",
+  "typo_or_grammar_noise",
+  "OCR_or_formatting_noise",
+  "awkward_but_determinate",
+];
+
+const MODEL_PROVIDER_PROTECTED_RUN_CLASSES = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+
+const SOURCE_RECOGNITION_TYPES = [
+  "source_recognized",
+  "author_or_style_recognized",
+  "prior_coursework_or_forum_exposure",
+  "model_generation_route_recognized",
+  "other_prior_exposure",
+];
+
+function defaultVolunteerIncentivePolicy(releaseId) {
+  return {
+    id: `volunteer-incentive-policy-${releaseId}`,
+    policyVersion: "volunteer-incentive-rlhf84-v1",
+    allowedCompensationCreditInputs: ["eligible_completed_work", "role", "time_commitment", "training_completion"],
+    prohibitedIncentiveSignals: PROHIBITED_INCENTIVE_SIGNALS,
+    speedEffortGuardrails: "private QA-safe effort bands only; no public speed rewards",
+    publicRecognitionPolicy: "acknowledge participation without score, agreement, speed, or benchmark ranking",
+    privateProgressDashboardPolicy: "private non-gamified progress only",
+    calibrationFeedbackUseLimits: "post-lock training-approved feedback only",
+    hiddenBenchmarkGoldPerformanceExclusionPolicy: "never use hidden-benchmark or protected gold performance for incentives",
+    leaderboardBadgeRestrictions: "no peer, model, gold, hidden-benchmark, or speed leaderboards",
+    qaEscalationEffects: "QA routes remediation without public penalty or score incentives",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRaterQualificationRecords(releaseId) {
+  return REQUIRED_QUALIFICATION_SCOPES.map((qualificationScope) => ({
+    id: `rater-qualification-${releaseId}-${qualificationScope}`,
+    raterId: `qualified-${qualificationScope}`,
+    qualificationScope,
+    qualificationSource: qualificationScope === "primary_rater_anchor" ? "manual_expert_review" : "certification_pack",
+    evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
+    approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
+    topicFamilyScope: ["AI safety", "decision theory", "normative ethics", "philosophy of mind", "politics", "miscellaneous"],
+    splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+    expiryReviewDate: "2027-01-31",
+    approver: "seed-qualification-reviewer",
+    approvedException: false,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultLanguageArtifactAssessment(releaseId) {
+  return {
+    id: `language-artifact-assessment-${releaseId}`,
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    artifactType: "machine_translation_residue",
+    sourceLanguage: "unknown",
+    translationStatus: "not_translation_or_unknown",
+    pinDownabilityImpact: "none",
+    substantiveAmbiguityImpact: "none",
+    correctnessImpact: "none",
+    deadWeightImpact: "none",
+    overallQualityImpact: "none",
+    automaticScorePenaltyApplied: false,
+    scoreChangeRationale: "Artifact flagged for fairness review without automatic LMCA score change.",
+    reviewerRole: "expert",
+    visibilityState: "release_safe_summary",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultSourceRecognitionEvent(releaseId) {
+  return {
+    id: `source-recognition-${releaseId}`,
+    assignmentId: "assign-ai-base-rate",
+    raterId: "demo-rater",
+    recognitionType: "source_recognized",
+    raterAction: "safe_decline",
+    independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator",
+    protectedStatusHiddenFromRater: true,
+    reviewerResolution: "paused_and_reassigned",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultModelProviderDataHandlingPolicies(releaseId) {
+  return MODEL_PROVIDER_PROTECTED_RUN_CLASSES.map((runClass) => ({
+    id: `model-provider-data-handling-${releaseId}-${runClass}`,
+    providerEndpointClass: `${runClass}-approved-endpoint`,
+    coveredRunClass: runClass,
+    approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
+    noTrainingOnInputsOutputs: true,
+    noPromptOrOutputReuse: true,
+    unnecessaryHumanReviewProhibited: true,
+    logRetentionWindowDays: 30,
+    subprocessorsSummary: "approved bounded processing route",
+    deletionOrRetentionProofRequired: true,
+    protectedContentEligible: true,
+    approvalStatus: "approved",
+    reviewer: "seed-provider-reviewer",
+    approvedAt: "2026-10-01T00:00:00.000Z",
+    expiresAt: "2026-12-31T00:00:00.000Z",
+  }));
+}
+
+export function buildParticipantSafeguardEvidenceReport(releaseId, options = {}) {
+  const submittedIncentiveRows = (options.volunteerIncentivePolicies ?? [])
+    .map((policy) => normalizeVolunteerIncentivePolicy(policy, "submitted_workflow_volunteer_incentive_policy"))
+    .filter(Boolean);
+  const seedIncentiveRows = [normalizeVolunteerIncentivePolicy(defaultVolunteerIncentivePolicy(releaseId), "seed_volunteer_incentive_policy")];
+  const submittedQualificationRows = (options.raterQualificationRecords ?? [])
+    .map((record) => normalizeRaterQualificationRecord(record, "submitted_workflow_rater_qualification_record"))
+    .filter(Boolean);
+  const seedQualificationRows = defaultRaterQualificationRecords(releaseId).map((record) => normalizeRaterQualificationRecord(record, "seed_rater_qualification_record"));
+  const qualificationRowsForGate = submittedQualificationRows.length ? submittedQualificationRows : seedQualificationRows;
+  const submittedLanguageRows = (options.languageArtifactAssessments ?? [])
+    .map((assessment) => normalizeLanguageArtifactAssessment(assessment, "submitted_workflow_language_artifact_assessment"))
+    .filter(Boolean);
+  const seedLanguageRows = [normalizeLanguageArtifactAssessment(defaultLanguageArtifactAssessment(releaseId), "seed_language_artifact_assessment")];
+  const submittedSourceRecognitionRows = (options.sourceRecognitionEvents ?? [])
+    .map((event) => normalizeSourceRecognitionEvent(event, "submitted_workflow_source_recognition_event"))
+    .filter(Boolean);
+  const seedSourceRecognitionRows = [normalizeSourceRecognitionEvent(defaultSourceRecognitionEvent(releaseId), "seed_source_recognition_event")];
+  const submittedModelProviderRows = (options.modelProviderDataHandlingPolicies ?? [])
+    .map((policy) => normalizeModelProviderDataHandlingPolicy(policy, "submitted_workflow_model_provider_data_handling_policy"))
+    .filter(Boolean);
+  const seedModelProviderRows = defaultModelProviderDataHandlingPolicies(releaseId).map((policy) =>
+    normalizeModelProviderDataHandlingPolicy(policy, "seed_model_provider_data_handling_policy"),
+  );
+  const modelProviderRowsForGate = submittedModelProviderRows.length ? submittedModelProviderRows : seedModelProviderRows;
+  const qualificationScopeRows = REQUIRED_QUALIFICATION_SCOPES.map((scope) => qualificationScopeEvidenceRow(scope, qualificationRowsForGate));
+  const modelProviderRunClassRows = MODEL_PROVIDER_PROTECTED_RUN_CLASSES.map((runClass) => modelProviderRunClassEvidenceRow(runClass, modelProviderRowsForGate));
+  const reviewSections = [
+    ...submittedIncentiveRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "volunteer_incentive_policy", artifactId: row.id, reason }))),
+    ...submittedQualificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_qualification_record", artifactId: row.id, reason }))),
+    ...submittedLanguageRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "language_artifact_assessment", artifactId: row.id, reason }))),
+    ...submittedSourceRecognitionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "source_recognition_event", artifactId: row.id, reason }))),
+    ...submittedModelProviderRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_provider_data_handling_policy", artifactId: row.id, reason }))),
+    (submittedIncentiveRows.length ? submittedIncentiveRows : seedIncentiveRows).some((row) => row.reviewReasons.length === 0)
+      ? null
+      : { artifactType: "volunteer_incentive_policy", artifactId: "volunteer_incentive_policy", reason: "missing_complete_incentive_policy" },
+    ...qualificationScopeRows.filter((row) => row.status !== "qualification_scope_complete").map((row) => ({
+      artifactType: "rater_qualification_scope",
+      artifactId: row.qualificationScope,
+      reason: row.status,
+    })),
+    (submittedLanguageRows.length ? submittedLanguageRows : seedLanguageRows).some((row) => row.reviewReasons.length === 0)
+      ? null
+      : { artifactType: "language_artifact_assessment", artifactId: "language_artifact_assessment", reason: "missing_complete_language_artifact_path" },
+    (submittedSourceRecognitionRows.length ? submittedSourceRecognitionRows : seedSourceRecognitionRows).some((row) => row.reviewReasons.length === 0)
+      ? null
+      : { artifactType: "source_recognition_event", artifactId: "source_recognition_event", reason: "missing_complete_source_recognition_path" },
+    ...modelProviderRunClassRows.filter((row) => row.status !== "model_provider_run_class_complete").map((row) => ({
+      artifactType: "model_provider_run_class",
+      artifactId: row.coveredRunClass,
+      reason: row.status,
+    })),
+  ].filter(Boolean);
+  const submittedEvidenceComplete =
+    submittedIncentiveRows.length > 0 &&
+    submittedQualificationRows.length > 0 &&
+    submittedLanguageRows.length > 0 &&
+    submittedSourceRecognitionRows.length > 0 &&
+    submittedModelProviderRows.length > 0 &&
+    reviewSections.length === 0;
+  return {
+    id: `participant-safeguard-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    requiredQualificationScopes: REQUIRED_QUALIFICATION_SCOPES,
+    prohibitedIncentiveSignals: PROHIBITED_INCENTIVE_SIGNALS,
+    languageArtifactTypes: LANGUAGE_ARTIFACT_TYPES,
+    sourceRecognitionTypes: SOURCE_RECOGNITION_TYPES,
+    modelProviderProtectedRunClasses: MODEL_PROVIDER_PROTECTED_RUN_CLASSES,
+    volunteerIncentivePolicyRows: [...seedIncentiveRows, ...submittedIncentiveRows],
+    raterQualificationRows: [...seedQualificationRows, ...submittedQualificationRows],
+    languageArtifactAssessmentRows: [...seedLanguageRows, ...submittedLanguageRows],
+    sourceRecognitionRows: [...seedSourceRecognitionRows, ...submittedSourceRecognitionRows],
+    modelProviderDataHandlingPolicyRows: [...seedModelProviderRows, ...submittedModelProviderRows],
+    qualificationScopeRows,
+    modelProviderRunClassRows,
+    counts: {
+      submittedVolunteerIncentivePolicyCount: submittedIncentiveRows.length,
+      submittedRaterQualificationRecordCount: submittedQualificationRows.length,
+      submittedLanguageArtifactAssessmentCount: submittedLanguageRows.length,
+      submittedSourceRecognitionEventCount: submittedSourceRecognitionRows.length,
+      submittedModelProviderDataHandlingPolicyCount: submittedModelProviderRows.length,
+      passingQualificationScopeCount: qualificationScopeRows.filter((row) => row.status === "qualification_scope_complete").length,
+      passingModelProviderRunClassCount: modelProviderRunClassRows.filter((row) => row.status === "model_provider_run_class_complete").length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "participant_safeguard_review_required"
+      : submittedEvidenceComplete
+        ? "submitted_participant_safeguard_evidence_complete"
+        : "seed_participant_safeguard_evidence_complete",
+  };
+}
+
+function normalizeVolunteerIncentivePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.volunteerIncentivePolicyId;
+  if (!id) return null;
+  const prohibitedSignals = normalizeStringArray(policy.prohibitedIncentiveSignals);
+  const missingSignals = PROHIBITED_INCENTIVE_SIGNALS.filter((signal) => !prohibitedSignals.includes(signal));
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    normalizeStringArray(policy.allowedCompensationCreditInputs).length ? null : "allowedCompensationCreditInputs",
+    missingSignals.length ? `prohibitedIncentiveSignals:${missingSignals.join(",")}` : null,
+    policyMentions(policy.speedEffortGuardrails, ["qa"]) ? null : "speedEffortGuardrails",
+    policyMentions(policy.publicRecognitionPolicy, ["without"]) || policyMentions(policy.publicRecognitionPolicy, ["no"]) ? null : "publicRecognitionPolicy",
+    policyMentions(policy.privateProgressDashboardPolicy, ["private"]) && policyMentions(policy.privateProgressDashboardPolicy, ["non-gamified"])
+      ? null
+      : "privateProgressDashboardPolicy",
+    policyMentions(policy.hiddenBenchmarkGoldPerformanceExclusionPolicy, ["hidden"]) && policyMentions(policy.hiddenBenchmarkGoldPerformanceExclusionPolicy, ["never"])
+      ? null
+      : "hiddenBenchmarkGoldPerformanceExclusionPolicy",
+    policyMentions(policy.leaderboardBadgeRestrictions, ["no"]) ? null : "leaderboardBadgeRestrictions",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    allowedCompensationCreditInputs: normalizeStringArray(policy.allowedCompensationCreditInputs),
+    prohibitedIncentiveSignals: prohibitedSignals,
+    missingSignals,
+    reviewReasons,
+    status: reviewReasons.length ? "volunteer_incentive_policy_review_required" : "volunteer_incentive_policy_complete",
+  };
+}
+
+function normalizeRaterQualificationRecord(record, rowSource) {
+  const id = record?.id ?? record?.raterQualificationRecordId;
+  if (!id) return null;
+  const qualificationScope = record.qualificationScope ?? record.scope ?? null;
+  const qualificationSource = record.qualificationSource ?? null;
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", record.raterId),
+    REQUIRED_QUALIFICATION_SCOPES.includes(qualificationScope) ? null : "qualificationScope",
+    ["credential", "certification_pack", "prior_rating_reliability", "manual_expert_review", "approved_exception"].includes(qualificationSource)
+      ? null
+      : "qualificationSource",
+    requiredPromptFieldReason("evidenceArtifactReference", record.evidenceArtifactReference ?? record.evidenceArtifactId),
+    normalizeStringArray(record.approvedRoles).length ? null : "approvedRoles",
+    normalizeStringArray(record.topicFamilyScope).length ? null : "topicFamilyScope",
+    normalizeStringArray(record.splitWorkflowEligibility).length ? null : "splitWorkflowEligibility",
+    requiredPromptFieldReason("expiryReviewDate", record.expiryReviewDate),
+    requiredPromptFieldReason("approver", record.approver),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    raterId: record.raterId ?? null,
+    qualificationScope,
+    qualificationSource,
+    approvedRoles: normalizeStringArray(record.approvedRoles),
+    topicFamilyScope: normalizeStringArray(record.topicFamilyScope),
+    splitWorkflowEligibility: normalizeStringArray(record.splitWorkflowEligibility),
+    expiryReviewDate: record.expiryReviewDate ?? null,
+    approvedException: qualificationSource === "approved_exception",
+    reviewReasons,
+    status: reviewReasons.length ? "rater_qualification_review_required" : "rater_qualification_complete",
+  };
+}
+
+function normalizeLanguageArtifactAssessment(assessment, rowSource) {
+  const id = assessment?.id ?? assessment?.languageArtifactAssessmentId;
+  if (!id) return null;
+  const artifactType = assessment.artifactType ?? null;
+  const reviewReasons = [
+    assessment.positionId || assessment.critiqueId || assessment.assignmentId || assessment.ratingId || assessment.adjudicationId ? null : "itemReference",
+    LANGUAGE_ARTIFACT_TYPES.includes(artifactType) ? null : "artifactType",
+    requiredPromptFieldReason("pinDownabilityImpact", assessment.pinDownabilityImpact),
+    requiredPromptFieldReason("substantiveAmbiguityImpact", assessment.substantiveAmbiguityImpact),
+    requiredPromptFieldReason("correctnessImpact", assessment.correctnessImpact),
+    requiredPromptFieldReason("deadWeightImpact", assessment.deadWeightImpact),
+    requiredPromptFieldReason("overallQualityImpact", assessment.overallQualityImpact),
+    assessment.automaticScorePenaltyApplied === false ? null : "automaticScorePenaltyApplied",
+    requiredPromptFieldReason("reviewerRole", assessment.reviewerRole),
+    requiredPromptFieldReason("visibilityState", assessment.visibilityState),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    positionId: assessment.positionId ?? null,
+    critiqueId: assessment.critiqueId ?? null,
+    assignmentId: assessment.assignmentId ?? null,
+    artifactType,
+    sourceLanguage: assessment.sourceLanguage ?? null,
+    translationStatus: assessment.translationStatus ?? null,
+    automaticScorePenaltyApplied: assessment.automaticScorePenaltyApplied === true,
+    reviewerRole: assessment.reviewerRole ?? null,
+    visibilityState: assessment.visibilityState ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "language_artifact_assessment_review_required" : "language_artifact_assessment_complete",
+  };
+}
+
+function normalizeSourceRecognitionEvent(event, rowSource) {
+  const id = event?.id ?? event?.sourceRecognitionEventId;
+  if (!id) return null;
+  const recognitionType = event.recognitionType ?? null;
+  const reviewReasons = [
+    requiredPromptFieldReason("assignmentId", event.assignmentId),
+    requiredPromptFieldReason("raterId", event.raterId),
+    SOURCE_RECOGNITION_TYPES.includes(recognitionType) ? null : "recognitionType",
+    ["safe_decline", "continue_nonblind", "request_review"].includes(event.raterAction) ? null : "raterAction",
+    requiredPromptFieldReason("independentBlindEligibilityEffect", event.independentBlindEligibilityEffect),
+    event.protectedStatusHiddenFromRater === true ? null : "protectedStatusHiddenFromRater",
+    event.raterAction === "continue_nonblind" && !policyMentions(event.independentBlindEligibilityEffect, ["excluded"]) && !policyMentions(event.reviewerResolution, ["review"])
+      ? "continuedRatingReview"
+      : null,
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    assignmentId: event.assignmentId ?? null,
+    raterId: event.raterId ?? null,
+    recognitionType,
+    raterAction: event.raterAction ?? null,
+    independentBlindEligibilityEffect: event.independentBlindEligibilityEffect ?? null,
+    protectedStatusHiddenFromRater: event.protectedStatusHiddenFromRater === true,
+    reviewerResolution: event.reviewerResolution ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "source_recognition_review_required" : "source_recognition_path_complete",
+  };
+}
+
+function normalizeModelProviderDataHandlingPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.modelProviderDataHandlingPolicyId;
+  if (!id) return null;
+  const coveredRunClass = policy.coveredRunClass ?? policy.runClass ?? null;
+  const approvedClasses = normalizeStringArray(policy.approvedSplitContentClasses);
+  const reviewReasons = [
+    requiredPromptFieldReason("providerEndpointClass", policy.providerEndpointClass ?? policy.providerEndpoint),
+    MODEL_PROVIDER_PROTECTED_RUN_CLASSES.includes(coveredRunClass) ? null : "coveredRunClass",
+    approvedClasses.includes("hidden_benchmark") && approvedClasses.includes("protected_validation") ? null : "approvedSplitContentClasses",
+    policy.noTrainingOnInputsOutputs === true ? null : "noTrainingOnInputsOutputs",
+    policy.noPromptOrOutputReuse === true ? null : "noPromptOrOutputReuse",
+    policy.unnecessaryHumanReviewProhibited === true ? null : "unnecessaryHumanReviewProhibited",
+    Number.isFinite(policy.logRetentionWindowDays) && policy.logRetentionWindowDays >= 0 && policy.logRetentionWindowDays <= 30 ? null : "logRetentionWindowDays",
+    requiredPromptFieldReason("subprocessorsSummary", policy.subprocessorsSummary),
+    policy.deletionOrRetentionProofRequired === true ? null : "deletionOrRetentionProofRequired",
+    policy.protectedContentEligible === true ? null : "protectedContentEligible",
+    policy.approvalStatus === "approved" ? null : "approvalStatus",
+    requiredPromptFieldReason("reviewer", policy.reviewer),
+    requiredPromptFieldReason("expiresAt", policy.expiresAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    providerEndpointClass: policy.providerEndpointClass ?? policy.providerEndpoint ?? null,
+    coveredRunClass,
+    approvedSplitContentClasses: approvedClasses,
+    noTrainingOnInputsOutputs: policy.noTrainingOnInputsOutputs === true,
+    noPromptOrOutputReuse: policy.noPromptOrOutputReuse === true,
+    unnecessaryHumanReviewProhibited: policy.unnecessaryHumanReviewProhibited === true,
+    logRetentionWindowDays: policy.logRetentionWindowDays ?? null,
+    protectedContentEligible: policy.protectedContentEligible === true,
+    approvalStatus: policy.approvalStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_provider_data_handling_review_required" : "model_provider_data_handling_complete",
+  };
+}
+
+function qualificationScopeEvidenceRow(qualificationScope, rows) {
+  const latestRow = rows.find((row) => row.qualificationScope === qualificationScope && row.reviewReasons.length === 0) ?? null;
+  return {
+    qualificationScope,
+    raterQualificationRecordId: latestRow?.id ?? null,
+    approvedRoles: latestRow?.approvedRoles ?? [],
+    splitWorkflowEligibility: latestRow?.splitWorkflowEligibility ?? [],
+    status: latestRow ? "qualification_scope_complete" : "qualification_scope_missing",
+  };
+}
+
+function modelProviderRunClassEvidenceRow(coveredRunClass, rows) {
+  const latestRow = rows.find((row) => row.coveredRunClass === coveredRunClass && row.reviewReasons.length === 0) ?? null;
+  return {
+    coveredRunClass,
+    modelProviderDataHandlingPolicyId: latestRow?.id ?? null,
+    protectedContentEligible: latestRow?.protectedContentEligible === true,
+    status: latestRow ? "model_provider_run_class_complete" : "model_provider_run_class_missing",
+  };
+}
+
+const REQUIRED_TASK_OUTPUT_USES = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
+const REQUIRED_SCORE_INPUT_SPLITS = ["release_critical", "validation", "hidden_benchmark"];
+const REQUIRED_RUBRIC_LINT_RULES = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const REQUIRED_ITEM_ISSUE_CATEGORIES = ["source_leakage", "missing_context", "malformed_text", "duplicate_or_near_duplicate", "nonconceptual_or_scope", "translation_or_adaptation_error", "rights_or_provenance", "rubric_or_ui_render_defect"];
+const REQUIRED_PROTECTED_ARTIFACT_TYPES = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
+
+function defaultTaskOutputEligibilityPolicy(releaseId) {
+  return {
+    id: `task-output-eligibility-${releaseId}`,
+    policyVersion: "task-output-eligibility-rlhf85-v1",
+    assignmentOutputClasses: ["blind_initial_rating", "revision", "expert_check", "adjudication_label", "model_assisted_check", "draft"],
+    eligibleLabelSnapshotUses: ["blind_initial_rating", "expert_check", "adjudication_label"],
+    excludedDenominatorClasses: ["draft", "safe_decline", "source_recognition_compromised", "model_assisted_check"],
+    promotionToLabelRequirements: ["locked_initial", "valid_score_input_policy", "current_instruction_render", "no_stale_dependencies"],
+    adjudicationEvidencePolicy: "adjudication labels require preserved original ratings and memo linkage",
+    pairwisePreferenceExportPolicy: "pairwise exports require frozen pairwise snapshot and non-tied target scores",
+    trainingExportEligibility: "exclude protected splits and high-uncertainty rows unless predeclared",
+    protectedSplitExclusions: ["hidden_benchmark", "protected_validation"],
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultScoreInputPolicy(releaseId) {
+  return {
+    id: `score-input-policy-${releaseId}`,
+    policyVersion: "score-input-rlhf85-v1",
+    coveredWorkflowSplitClasses: REQUIRED_SCORE_INPUT_SPLITS,
+    scoreControlMode: "numeric_plus_slider",
+    manualNumericEntryAvailable: true,
+    initialDefaultState: "unset_required",
+    allowedPrecision: 0.001,
+    defaultStep: 0.01,
+    sliderSnapBehavior: "no_hidden_midpoint_default",
+    keyboardIncrement: 0.01,
+    displayRounding: 3,
+    rawStoragePrecision: 6,
+    exportQuantizationPolicy: "declare_quantization_per_export",
+    correctionOverridePolicy: "append_only_correction_with_reason",
+    protectedSplitCompatibilityClass: "fine_grained_unset_required_v1",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRaterInstructionRenderVersion(releaseId, scoreInputPolicyId) {
+  return {
+    id: `rater-instruction-render-${releaseId}`,
+    rubricVersion: "appendix-f-operational-v1",
+    workflowProfileId: `rating-workflow-profile-${releaseId}`,
+    renderedRubricAnchorChecksum: `sha256:rubric-anchor-${releaseId}`,
+    scoreInputPolicyId,
+    uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
+    scoreControlMode: "numeric_plus_slider",
+    scoreDefaultPolicy: "unset_required",
+    displayedExampleIds: ["source-anchor-ai-base-rate"],
+    workflowBannerTextVersion: "critique-not-position-v1",
+    issuePanelCopyVersion: "issue-panel-blind-safe-v1",
+    preSubmitAssistPolicyId: `pre-submit-assist-${releaseId}`,
+    rubricLintConfigId: `rubric-lint-config-${releaseId}`,
+    accessibilityVisualVariant: "wcag-aa-task-first",
+    uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
+    protectedSplitEligibilityPolicy: "compatible_with_protected_splits",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRubricLintConfig(releaseId) {
+  return {
+    id: `rubric-lint-config-${releaseId}`,
+    rubricVersion: "appendix-f-operational-v1",
+    workflowProfileId: `rating-workflow-profile-${releaseId}`,
+    preSubmitAssistPolicyId: `pre-submit-assist-${releaseId}`,
+    lintRuleIds: REQUIRED_RUBRIC_LINT_RULES,
+    triggerConditions: "deterministic rubric consistency checks only",
+    severityPolicy: "warn_acknowledge_or_route_to_qa",
+    requiredAcknowledgementExplanationPolicy: "acknowledge or explain before lock; never auto-change score",
+    qaRoutingPolicy: "route suspicious or unresolved lints to QA without exposing labels",
+    protectedSplitEligible: true,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRubricLintEvent(releaseId, lintConfigId) {
+  return {
+    id: `rubric-lint-event-${releaseId}`,
+    assignmentId: "assign-ai-base-rate",
+    ratingId: "rating-seed-ai-base-rate-r1",
+    lintConfigId,
+    lintRuleId: "centrality_strength_product_gap",
+    triggerState: "triggered",
+    severity: "warning",
+    acknowledgementNote: "Rater acknowledged product diagnostic without score auto-change.",
+    resolvedStatus: "acknowledged",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultItemIssueReport(releaseId) {
+  return {
+    id: `item-issue-report-${releaseId}`,
+    reporterId: "demo-rater",
+    reporterRole: "graduate",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    assignmentId: "assign-ai-base-rate",
+    issueCategory: "missing_context",
+    severity: "medium",
+    blindSafeReporterNote: "Rater reports context insufficiency without protected status knowledge.",
+    reporterExposureState: "initial_blind",
+    labelVisibilityStateForTriage: "hidden",
+    modelResultVisibilityStateForTriage: "hidden",
+    triageState: "label_model_result_blind_review",
+    quarantineStalePropagationState: "quarantine_pending_review",
+    excludedFromLabelDenominator: true,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRatingDraftSession(releaseId, renderVersionId, scoreInputPolicyId, lintConfigId) {
+  return {
+    id: `rating-draft-session-${releaseId}`,
+    assignmentId: "assign-ai-base-rate",
+    autosaveRevisionId: "autosave-1",
+    dependencyVersionSnapshot: {
+      itemTextVersionId: "ptv-ai-prior-v1",
+      rubricVersion: "appendix-f-operational-v1",
+      instructionRenderVersionId: renderVersionId,
+      workflowProfileId: `rating-workflow-profile-${releaseId}`,
+      assistPolicyId: `pre-submit-assist-${releaseId}`,
+      rubricLintConfigId: lintConfigId,
+      scoreInputPolicyId,
+      ratingContextSnapshotId: "rc-target-only-1",
+    },
+    staleDependencyStatus: "current",
+    staleSubmissionBlocked: true,
+    fieldCompletionState: "partial",
+    lastSavedAt: "2026-10-01T00:00:00.000Z",
+    resumeCount: 1,
+    recoveredAfterInterruption: true,
+    abandonedVsSubmittedStatus: "draft_not_submitted",
+    draftNotExportedAsLabel: true,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultCorrectnessClaimWeightWorksheet(releaseId) {
+  return {
+    id: `correctness-claim-weight-worksheet-${releaseId}`,
+    ratingId: "rating-seed-ai-base-rate-r1",
+    verificationWorkspaceId: `verification-workspace-${releaseId}`,
+    claimSpanIds: ["claim-span-1", "claim-span-2"],
+    claimSignificanceWeights: [0.7, 0.3],
+    correctnessCredencesStatuses: ["verified:0.8", "unresolved:0.5"],
+    unclearClaimExclusionFlags: [false, false],
+    advisoryAggregateCorrectnessEstimate: 0.71,
+    submittedScoreOverrideFlag: true,
+    overrideExplanation: "Rater kept submitted score after reviewing weighted worksheet.",
+    exposureBlindingState: "blind_auxiliary_material_not_consulted",
+    createdBy: "demo-expert",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultProtectedArtifactRetentionRecords(releaseId) {
+  return REQUIRED_PROTECTED_ARTIFACT_TYPES.map((artifactType) => ({
+    id: `protected-artifact-retention-${releaseId}-${artifactType}`,
+    artifactType,
+    artifactIdOrStoragePointer: `${artifactType}-artifact-${releaseId}`,
+    sourceSplitProtectionClass: "hidden_benchmark",
+    releaseConfigManifestId: `release-config-manifest-${releaseId}`,
+    retentionDeletionPolicy: "bounded_retention_then_delete_or_anonymize",
+    cacheOutboxPurgeStatus: "purged_or_not_cached",
+    backupSnapshotCoverage: "inherits_split_policy",
+    developmentStagingEligibility: "not_eligible_without_revalidation",
+    restoreTimeRevalidationStatus: "passed_current_manifest_revalidation",
+    incidentErratumLinks: [],
+    createdAt: "2026-10-01T00:00:00.000Z",
+    expiresAt: "2026-12-31T00:00:00.000Z",
+  }));
+}
+
+export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
+  const submittedTaskOutputRows = (options.taskOutputEligibilityPolicies ?? [])
+    .map((policy) => normalizeTaskOutputEligibilityPolicy(policy, "submitted_workflow_task_output_eligibility_policy"))
+    .filter(Boolean);
+  const seedTaskOutputRows = [normalizeTaskOutputEligibilityPolicy(defaultTaskOutputEligibilityPolicy(releaseId), "seed_task_output_eligibility_policy")];
+  const submittedScoreInputRows = (options.scoreInputPolicies ?? [])
+    .map((policy) => normalizeScoreInputPolicy(policy, "submitted_workflow_score_input_policy"))
+    .filter(Boolean);
+  const seedScoreInputRows = [normalizeScoreInputPolicy(defaultScoreInputPolicy(releaseId), "seed_score_input_policy")];
+  const activeScoreInput = submittedScoreInputRows.find((row) => row.reviewReasons.length === 0) ?? seedScoreInputRows[0];
+  const submittedRenderRows = (options.raterInstructionRenderVersions ?? [])
+    .map((version) => normalizeRaterInstructionRenderVersion(version, activeScoreInput.id, "submitted_workflow_rater_instruction_render_version"))
+    .filter(Boolean);
+  const seedRenderRows = [
+    normalizeRaterInstructionRenderVersion(defaultRaterInstructionRenderVersion(releaseId, seedScoreInputRows[0].id), seedScoreInputRows[0].id, "seed_rater_instruction_render_version"),
+  ];
+  const activeRender = submittedRenderRows.find((row) => row.reviewReasons.length === 0) ?? seedRenderRows[0];
+  const submittedLintConfigRows = (options.rubricLintConfigs ?? [])
+    .map((config) => normalizeRubricLintConfig(config, "submitted_workflow_rubric_lint_config"))
+    .filter(Boolean);
+  const seedLintConfigRows = [normalizeRubricLintConfig(defaultRubricLintConfig(releaseId), "seed_rubric_lint_config")];
+  const activeLintConfig = submittedLintConfigRows.find((row) => row.reviewReasons.length === 0) ?? seedLintConfigRows[0];
+  const submittedLintEventRows = (options.rubricLintEvents ?? [])
+    .map((event) => normalizeRubricLintEvent(event, activeLintConfig.id, "submitted_workflow_rubric_lint_event"))
+    .filter(Boolean);
+  const seedLintEventRows = [normalizeRubricLintEvent(defaultRubricLintEvent(releaseId, seedLintConfigRows[0].id), seedLintConfigRows[0].id, "seed_rubric_lint_event")];
+  const submittedItemIssueRows = (options.itemIssueReports ?? [])
+    .map((report) => normalizeItemIssueReport(report, "submitted_workflow_item_issue_report"))
+    .filter(Boolean);
+  const seedItemIssueRows = [normalizeItemIssueReport(defaultItemIssueReport(releaseId), "seed_item_issue_report")];
+  const submittedDraftRows = (options.ratingDraftSessions ?? [])
+    .map((draft) => normalizeRatingDraftSession(draft, activeRender.id, activeScoreInput.id, activeLintConfig.id, "submitted_workflow_rating_draft_session"))
+    .filter(Boolean);
+  const seedDraftRows = [
+    normalizeRatingDraftSession(
+      defaultRatingDraftSession(releaseId, seedRenderRows[0].id, seedScoreInputRows[0].id, seedLintConfigRows[0].id),
+      seedRenderRows[0].id,
+      seedScoreInputRows[0].id,
+      seedLintConfigRows[0].id,
+      "seed_rating_draft_session",
+    ),
+  ];
+  const submittedWorksheetRows = (options.correctnessClaimWeightWorksheets ?? [])
+    .map((worksheet) => normalizeCorrectnessClaimWeightWorksheet(worksheet, "submitted_workflow_correctness_claim_weight_worksheet"))
+    .filter(Boolean);
+  const seedWorksheetRows = [normalizeCorrectnessClaimWeightWorksheet(defaultCorrectnessClaimWeightWorksheet(releaseId), "seed_correctness_claim_weight_worksheet")];
+  const submittedRetentionRows = (options.protectedArtifactRetentionRecords ?? [])
+    .map((record) => normalizeProtectedArtifactRetentionRecord(record, "submitted_workflow_protected_artifact_retention_record"))
+    .filter(Boolean);
+  const seedRetentionRows = defaultProtectedArtifactRetentionRecords(releaseId).map((record) =>
+    normalizeProtectedArtifactRetentionRecord(record, "seed_protected_artifact_retention_record"),
+  );
+  const retentionRowsForGate = submittedRetentionRows.length ? submittedRetentionRows : seedRetentionRows;
+  const protectedArtifactTypeRows = REQUIRED_PROTECTED_ARTIFACT_TYPES.map((artifactType) => protectedArtifactTypeEvidenceRow(artifactType, retentionRowsForGate));
+  const gateGroups = [
+    ["task_output_eligibility_policy", submittedTaskOutputRows.length ? submittedTaskOutputRows : seedTaskOutputRows],
+    ["score_input_policy", submittedScoreInputRows.length ? submittedScoreInputRows : seedScoreInputRows],
+    ["rater_instruction_render_version", submittedRenderRows.length ? submittedRenderRows : seedRenderRows],
+    ["rubric_lint_config", submittedLintConfigRows.length ? submittedLintConfigRows : seedLintConfigRows],
+    ["rubric_lint_event", submittedLintEventRows.length ? submittedLintEventRows : seedLintEventRows],
+    ["item_issue_report", submittedItemIssueRows.length ? submittedItemIssueRows : seedItemIssueRows],
+    ["rating_draft_session", submittedDraftRows.length ? submittedDraftRows : seedDraftRows],
+    ["correctness_claim_weight_worksheet", submittedWorksheetRows.length ? submittedWorksheetRows : seedWorksheetRows],
+  ];
+  const reviewSections = [
+    ...submittedTaskOutputRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "task_output_eligibility_policy", artifactId: row.id, reason }))),
+    ...submittedScoreInputRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_input_policy", artifactId: row.id, reason }))),
+    ...submittedRenderRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_instruction_render_version", artifactId: row.id, reason }))),
+    ...submittedLintConfigRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_config", artifactId: row.id, reason }))),
+    ...submittedLintEventRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_event", artifactId: row.id, reason }))),
+    ...submittedItemIssueRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_report", artifactId: row.id, reason }))),
+    ...submittedDraftRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rating_draft_session", artifactId: row.id, reason }))),
+    ...submittedWorksheetRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "correctness_claim_weight_worksheet", artifactId: row.id, reason }))),
+    ...submittedRetentionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "protected_artifact_retention_record", artifactId: row.id, reason }))),
+    ...gateGroups
+      .filter(([, rows]) => !rows.some((row) => row.reviewReasons.length === 0))
+      .map(([artifactType]) => ({ artifactType, artifactId: artifactType, reason: "missing_complete_rating_experience_artifact" })),
+    ...protectedArtifactTypeRows.filter((row) => row.status !== "protected_artifact_type_complete").map((row) => ({
+      artifactType: "protected_artifact_type",
+      artifactId: row.artifactType,
+      reason: row.status,
+    })),
+  ];
+  const submittedEvidenceComplete =
+    submittedTaskOutputRows.length > 0 &&
+    submittedScoreInputRows.length > 0 &&
+    submittedRenderRows.length > 0 &&
+    submittedLintConfigRows.length > 0 &&
+    submittedLintEventRows.length > 0 &&
+    submittedItemIssueRows.length > 0 &&
+    submittedDraftRows.length > 0 &&
+    submittedWorksheetRows.length > 0 &&
+    submittedRetentionRows.length > 0 &&
+    reviewSections.length === 0;
+  return {
+    id: `rating-experience-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    requiredTaskOutputUses: REQUIRED_TASK_OUTPUT_USES,
+    requiredScoreInputSplits: REQUIRED_SCORE_INPUT_SPLITS,
+    requiredRubricLintRules: REQUIRED_RUBRIC_LINT_RULES,
+    requiredItemIssueCategories: REQUIRED_ITEM_ISSUE_CATEGORIES,
+    requiredProtectedArtifactTypes: REQUIRED_PROTECTED_ARTIFACT_TYPES,
+    taskOutputEligibilityPolicyRows: [...seedTaskOutputRows, ...submittedTaskOutputRows],
+    scoreInputPolicyRows: [...seedScoreInputRows, ...submittedScoreInputRows],
+    raterInstructionRenderVersionRows: [...seedRenderRows, ...submittedRenderRows],
+    rubricLintConfigRows: [...seedLintConfigRows, ...submittedLintConfigRows],
+    rubricLintEventRows: [...seedLintEventRows, ...submittedLintEventRows],
+    itemIssueReportRows: [...seedItemIssueRows, ...submittedItemIssueRows],
+    ratingDraftSessionRows: [...seedDraftRows, ...submittedDraftRows],
+    correctnessClaimWeightWorksheetRows: [...seedWorksheetRows, ...submittedWorksheetRows],
+    protectedArtifactRetentionRows: [...seedRetentionRows, ...submittedRetentionRows],
+    protectedArtifactTypeRows,
+    counts: {
+      submittedTaskOutputEligibilityPolicyCount: submittedTaskOutputRows.length,
+      submittedScoreInputPolicyCount: submittedScoreInputRows.length,
+      submittedRaterInstructionRenderVersionCount: submittedRenderRows.length,
+      submittedRubricLintConfigCount: submittedLintConfigRows.length,
+      submittedRubricLintEventCount: submittedLintEventRows.length,
+      submittedItemIssueReportCount: submittedItemIssueRows.length,
+      submittedRatingDraftSessionCount: submittedDraftRows.length,
+      submittedCorrectnessClaimWeightWorksheetCount: submittedWorksheetRows.length,
+      submittedProtectedArtifactRetentionRecordCount: submittedRetentionRows.length,
+      passingProtectedArtifactTypeCount: protectedArtifactTypeRows.filter((row) => row.status === "protected_artifact_type_complete").length,
+      completeArtifactGroupCount: gateGroups.filter(([, rows]) => rows.some((row) => row.reviewReasons.length === 0)).length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "rating_experience_evidence_review_required"
+      : submittedEvidenceComplete
+        ? "submitted_rating_experience_evidence_complete"
+        : "seed_rating_experience_evidence_complete",
+  };
+}
+
+function normalizeTaskOutputEligibilityPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.taskOutputEligibilityPolicyId;
+  if (!id) return null;
+  const eligibleUses = normalizeStringArray(policy.eligibleLabelSnapshotUses);
+  const excludedDenominatorClasses = normalizeStringArray(policy.excludedDenominatorClasses);
+  const promotionRequirements = normalizeStringArray(policy.promotionToLabelRequirements);
+  const protectedSplitExclusions = normalizeStringArray(policy.protectedSplitExclusions);
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    normalizeStringArray(policy.assignmentOutputClasses).length ? null : "assignmentOutputClasses",
+    eligibleUses.length ? null : "eligibleLabelSnapshotUses",
+    excludedDenominatorClasses.includes("draft") ? null : "excludedDenominatorClasses:draft",
+    promotionRequirements.includes("no_stale_dependencies") ? null : "promotionToLabelRequirements:no_stale_dependencies",
+    requiredPromptFieldReason("adjudicationEvidencePolicy", policy.adjudicationEvidencePolicy),
+    requiredPromptFieldReason("pairwisePreferenceExportPolicy", policy.pairwisePreferenceExportPolicy),
+    requiredPromptFieldReason("trainingExportEligibility", policy.trainingExportEligibility),
+    protectedSplitExclusions.includes("hidden_benchmark") ? null : "protectedSplitExclusions:hidden_benchmark",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    eligibleLabelSnapshotUses: eligibleUses,
+    excludedDenominatorClasses,
+    promotionToLabelRequirements: promotionRequirements,
+    protectedSplitExclusions,
+    reviewReasons,
+    status: reviewReasons.length ? "task_output_eligibility_review_required" : "task_output_eligibility_complete",
+  };
+}
+
+function normalizeScoreInputPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.scoreInputPolicyId;
+  if (!id) return null;
+  const coveredWorkflowSplitClasses = normalizeStringArray(policy.coveredWorkflowSplitClasses);
+  const missingSplits = REQUIRED_SCORE_INPUT_SPLITS.filter((split) => !coveredWorkflowSplitClasses.includes(split));
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    missingSplits.length ? `coveredWorkflowSplitClasses:${missingSplits.join(",")}` : null,
+    requiredPromptFieldReason("scoreControlMode", policy.scoreControlMode),
+    policy.manualNumericEntryAvailable === true ? null : "manualNumericEntryAvailable",
+    policy.initialDefaultState === "unset_required" ? null : "initialDefaultState",
+    Number.isFinite(policy.allowedPrecision) && policy.allowedPrecision > 0 ? null : "allowedPrecision",
+    Number.isFinite(policy.defaultStep) && policy.defaultStep > 0 ? null : "defaultStep",
+    policyMentions(policy.sliderSnapBehavior, ["no"]) || policyMentions(policy.sliderSnapBehavior, ["unset"]) ? null : "sliderSnapBehavior",
+    Number.isFinite(policy.rawStoragePrecision) && policy.rawStoragePrecision >= 3 ? null : "rawStoragePrecision",
+    requiredPromptFieldReason("exportQuantizationPolicy", policy.exportQuantizationPolicy),
+    requiredPromptFieldReason("correctionOverridePolicy", policy.correctionOverridePolicy),
+    requiredPromptFieldReason("protectedSplitCompatibilityClass", policy.protectedSplitCompatibilityClass),
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    coveredWorkflowSplitClasses,
+    missingSplits,
+    scoreControlMode: policy.scoreControlMode ?? null,
+    initialDefaultState: policy.initialDefaultState ?? null,
+    rawStoragePrecision: policy.rawStoragePrecision ?? null,
+    displayRounding: policy.displayRounding ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "score_input_policy_review_required" : "score_input_policy_complete",
+  };
+}
+
+function normalizeRaterInstructionRenderVersion(version, activeScoreInputPolicyId, rowSource) {
+  const id = version?.id ?? version?.instructionRenderVersionId ?? version?.raterInstructionRenderVersionId;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("rubricVersion", version.rubricVersion),
+    requiredPromptFieldReason("workflowProfileId", version.workflowProfileId),
+    String(version.renderedRubricAnchorChecksum ?? "").startsWith("sha256:") ? null : "renderedRubricAnchorChecksum",
+    version.scoreInputPolicyId === activeScoreInputPolicyId ? null : "scoreInputPolicyId",
+    requiredPromptFieldReason("uxSimplificationPolicyId", version.uxSimplificationPolicyId),
+    requiredPromptFieldReason("scoreControlMode", version.scoreControlMode),
+    version.scoreDefaultPolicy === "unset_required" ? null : "scoreDefaultPolicy",
+    requiredPromptFieldReason("workflowBannerTextVersion", version.workflowBannerTextVersion),
+    requiredPromptFieldReason("issuePanelCopyVersion", version.issuePanelCopyVersion),
+    requiredPromptFieldReason("preSubmitAssistPolicyId", version.preSubmitAssistPolicyId),
+    requiredPromptFieldReason("rubricLintConfigId", version.rubricLintConfigId),
+    requiredPromptFieldReason("accessibilityVisualVariant", version.accessibilityVisualVariant),
+    requiredPromptFieldReason("uiExperimentPolicyId", version.uiExperimentPolicyId),
+    requiredPromptFieldReason("protectedSplitEligibilityPolicy", version.protectedSplitEligibilityPolicy),
+    requiredPromptFieldReason("frozenAt", version.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    rubricVersion: version.rubricVersion ?? null,
+    workflowProfileId: version.workflowProfileId ?? null,
+    scoreInputPolicyId: version.scoreInputPolicyId ?? null,
+    scoreDefaultPolicy: version.scoreDefaultPolicy ?? null,
+    rubricLintConfigId: version.rubricLintConfigId ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rater_instruction_render_review_required" : "rater_instruction_render_complete",
+  };
+}
+
+function normalizeRubricLintConfig(config, rowSource) {
+  const id = config?.id ?? config?.rubricLintConfigId;
+  if (!id) return null;
+  const lintRuleIds = normalizeStringArray(config.lintRuleIds);
+  const missingRules = REQUIRED_RUBRIC_LINT_RULES.filter((rule) => !lintRuleIds.includes(rule));
+  const reviewReasons = [
+    requiredPromptFieldReason("rubricVersion", config.rubricVersion),
+    requiredPromptFieldReason("workflowProfileId", config.workflowProfileId),
+    requiredPromptFieldReason("preSubmitAssistPolicyId", config.preSubmitAssistPolicyId),
+    missingRules.length ? `lintRuleIds:${missingRules.join(",")}` : null,
+    requiredPromptFieldReason("triggerConditions", config.triggerConditions),
+    requiredPromptFieldReason("severityPolicy", config.severityPolicy),
+    policyMentions(config.requiredAcknowledgementExplanationPolicy, ["acknowledge"]) ? null : "requiredAcknowledgementExplanationPolicy",
+    policyMentions(config.qaRoutingPolicy, ["qa"]) ? null : "qaRoutingPolicy",
+    config.protectedSplitEligible === true ? null : "protectedSplitEligible",
+    requiredPromptFieldReason("frozenAt", config.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    rubricVersion: config.rubricVersion ?? null,
+    lintRuleIds,
+    missingRules,
+    protectedSplitEligible: config.protectedSplitEligible === true,
+    reviewReasons,
+    status: reviewReasons.length ? "rubric_lint_config_review_required" : "rubric_lint_config_complete",
+  };
+}
+
+function normalizeRubricLintEvent(event, activeLintConfigId, rowSource) {
+  const id = event?.id ?? event?.lintEventId ?? event?.rubricLintEventId;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("assignmentId", event.assignmentId),
+    event.lintConfigId === activeLintConfigId ? null : "lintConfigId",
+    REQUIRED_RUBRIC_LINT_RULES.includes(event.lintRuleId) ? null : "lintRuleId",
+    ["triggered", "not_triggered", "acknowledged"].includes(event.triggerState) ? null : "triggerState",
+    ["info", "warning", "blocker"].includes(event.severity) ? null : "severity",
+    event.triggerState === "triggered" ? requiredPromptFieldReason("acknowledgementNote", event.acknowledgementNote) : null,
+    ["acknowledged", "resolved", "overridden", "not_applicable"].includes(event.resolvedStatus) ? null : "resolvedStatus",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    assignmentId: event.assignmentId ?? null,
+    ratingId: event.ratingId ?? null,
+    lintConfigId: event.lintConfigId ?? null,
+    lintRuleId: event.lintRuleId ?? null,
+    triggerState: event.triggerState ?? null,
+    severity: event.severity ?? null,
+    resolvedStatus: event.resolvedStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rubric_lint_event_review_required" : "rubric_lint_event_complete",
+  };
+}
+
+function normalizeItemIssueReport(report, rowSource) {
+  const id = report?.id ?? report?.itemIssueReportId;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("reporterId", report.reporterId),
+    requiredPromptFieldReason("reporterRole", report.reporterRole),
+    report.positionId || report.critiqueId || report.assignmentId || report.ratingId ? null : "affectedItemReference",
+    REQUIRED_ITEM_ISSUE_CATEGORIES.includes(report.issueCategory) ? null : "issueCategory",
+    ["low", "medium", "high", "critical"].includes(report.severity) ? null : "severity",
+    requiredPromptFieldReason("blindSafeReporterNote", report.blindSafeReporterNote),
+    requiredPromptFieldReason("reporterExposureState", report.reporterExposureState),
+    report.labelVisibilityStateForTriage === "hidden" ? null : "labelVisibilityStateForTriage",
+    report.modelResultVisibilityStateForTriage === "hidden" ? null : "modelResultVisibilityStateForTriage",
+    policyMentions(report.triageState, ["blind"]) ? null : "triageState",
+    requiredPromptFieldReason("quarantineStalePropagationState", report.quarantineStalePropagationState),
+    typeof report.excludedFromLabelDenominator === "boolean" ? null : "excludedFromLabelDenominator",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    reporterId: report.reporterId ?? null,
+    issueCategory: report.issueCategory ?? null,
+    severity: report.severity ?? null,
+    labelVisibilityStateForTriage: report.labelVisibilityStateForTriage ?? null,
+    modelResultVisibilityStateForTriage: report.modelResultVisibilityStateForTriage ?? null,
+    triageState: report.triageState ?? null,
+    excludedFromLabelDenominator: report.excludedFromLabelDenominator === true,
+    reviewReasons,
+    status: reviewReasons.length ? "item_issue_report_review_required" : "item_issue_report_complete",
+  };
+}
+
+function normalizeRatingDraftSession(draft, activeRenderVersionId, activeScoreInputPolicyId, activeLintConfigId, rowSource) {
+  const id = draft?.id ?? draft?.draftSessionId ?? draft?.ratingDraftSessionId;
+  if (!id) return null;
+  const snapshot = draft.dependencyVersionSnapshot ?? {};
+  const reviewReasons = [
+    requiredPromptFieldReason("assignmentId", draft.assignmentId),
+    requiredPromptFieldReason("autosaveRevisionId", draft.autosaveRevisionId),
+    requiredPromptFieldReason("dependencyVersionSnapshot.itemTextVersionId", snapshot.itemTextVersionId),
+    requiredPromptFieldReason("dependencyVersionSnapshot.rubricVersion", snapshot.rubricVersion),
+    snapshot.instructionRenderVersionId === activeRenderVersionId ? null : "dependencyVersionSnapshot.instructionRenderVersionId",
+    requiredPromptFieldReason("dependencyVersionSnapshot.workflowProfileId", snapshot.workflowProfileId),
+    requiredPromptFieldReason("dependencyVersionSnapshot.assistPolicyId", snapshot.assistPolicyId),
+    snapshot.rubricLintConfigId === activeLintConfigId ? null : "dependencyVersionSnapshot.rubricLintConfigId",
+    snapshot.scoreInputPolicyId === activeScoreInputPolicyId ? null : "dependencyVersionSnapshot.scoreInputPolicyId",
+    requiredPromptFieldReason("dependencyVersionSnapshot.ratingContextSnapshotId", snapshot.ratingContextSnapshotId),
+    ["current", "stale_blocked", "stale_requires_rerender"].includes(draft.staleDependencyStatus) ? null : "staleDependencyStatus",
+    draft.staleSubmissionBlocked === true ? null : "staleSubmissionBlocked",
+    draft.draftNotExportedAsLabel === true ? null : "draftNotExportedAsLabel",
+    requiredPromptFieldReason("lastSavedAt", draft.lastSavedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    assignmentId: draft.assignmentId ?? null,
+    dependencyVersionSnapshot: snapshot,
+    staleDependencyStatus: draft.staleDependencyStatus ?? null,
+    staleSubmissionBlocked: draft.staleSubmissionBlocked === true,
+    draftNotExportedAsLabel: draft.draftNotExportedAsLabel === true,
+    reviewReasons,
+    status: reviewReasons.length ? "rating_draft_session_review_required" : "rating_draft_session_complete",
+  };
+}
+
+function normalizeCorrectnessClaimWeightWorksheet(worksheet, rowSource) {
+  const id = worksheet?.id ?? worksheet?.correctnessClaimWeightWorksheetId;
+  if (!id) return null;
+  const claimSpanIds = normalizeStringArray(worksheet.claimSpanIds);
+  const weights = Array.isArray(worksheet.claimSignificanceWeights) ? worksheet.claimSignificanceWeights : [];
+  const statuses = normalizeStringArray(worksheet.correctnessCredencesStatuses);
+  const weightSum = weights.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
+  const reviewReasons = [
+    worksheet.ratingId || worksheet.adjudicationId || worksheet.verificationWorkspaceId ? null : "workflowReference",
+    claimSpanIds.length ? null : "claimSpanIds",
+    weights.length === claimSpanIds.length && weights.every((value) => Number.isFinite(value) && value >= 0) ? null : "claimSignificanceWeights",
+    Math.abs(weightSum - 1) <= 0.001 ? null : "claimSignificanceWeightsSum",
+    statuses.length === claimSpanIds.length ? null : "correctnessCredencesStatuses",
+    Array.isArray(worksheet.unclearClaimExclusionFlags) ? null : "unclearClaimExclusionFlags",
+    Number.isFinite(worksheet.advisoryAggregateCorrectnessEstimate) ? null : "advisoryAggregateCorrectnessEstimate",
+    worksheet.submittedScoreOverrideFlag === true ? requiredPromptFieldReason("overrideExplanation", worksheet.overrideExplanation) : null,
+    requiredPromptFieldReason("exposureBlindingState", worksheet.exposureBlindingState),
+    requiredPromptFieldReason("createdBy", worksheet.createdBy),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    ratingId: worksheet.ratingId ?? null,
+    adjudicationId: worksheet.adjudicationId ?? null,
+    verificationWorkspaceId: worksheet.verificationWorkspaceId ?? null,
+    claimSpanIds,
+    claimSignificanceWeights: weights,
+    advisoryAggregateCorrectnessEstimate: worksheet.advisoryAggregateCorrectnessEstimate ?? null,
+    submittedScoreOverrideFlag: worksheet.submittedScoreOverrideFlag === true,
+    exposureBlindingState: worksheet.exposureBlindingState ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "correctness_claim_weight_worksheet_review_required" : "correctness_claim_weight_worksheet_complete",
+  };
+}
+
+function normalizeProtectedArtifactRetentionRecord(record, rowSource) {
+  const id = record?.id ?? record?.protectedArtifactRetentionId;
+  if (!id) return null;
+  const artifactType = record.artifactType ?? null;
+  const reviewReasons = [
+    REQUIRED_PROTECTED_ARTIFACT_TYPES.includes(artifactType) ? null : "artifactType",
+    requiredPromptFieldReason("artifactIdOrStoragePointer", record.artifactIdOrStoragePointer ?? record.storagePointer),
+    requiredPromptFieldReason("sourceSplitProtectionClass", record.sourceSplitProtectionClass),
+    requiredPromptFieldReason("releaseConfigManifestId", record.releaseConfigManifestId),
+    requiredPromptFieldReason("retentionDeletionPolicy", record.retentionDeletionPolicy),
+    policyMentions(record.cacheOutboxPurgeStatus, ["purged"]) || policyMentions(record.cacheOutboxPurgeStatus, ["not_cached"]) ? null : "cacheOutboxPurgeStatus",
+    policyMentions(record.backupSnapshotCoverage, ["split"]) ? null : "backupSnapshotCoverage",
+    policyMentions(record.developmentStagingEligibility, ["revalidation"]) ? null : "developmentStagingEligibility",
+    policyMentions(record.restoreTimeRevalidationStatus, ["passed"]) ? null : "restoreTimeRevalidationStatus",
+    requiredPromptFieldReason("createdAt", record.createdAt),
+    requiredPromptFieldReason("expiresAt", record.expiresAt ?? record.deletionAnonymizationTimestamp),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    artifactType,
+    sourceSplitProtectionClass: record.sourceSplitProtectionClass ?? null,
+    releaseConfigManifestId: record.releaseConfigManifestId ?? null,
+    cacheOutboxPurgeStatus: record.cacheOutboxPurgeStatus ?? null,
+    restoreTimeRevalidationStatus: record.restoreTimeRevalidationStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "protected_artifact_retention_review_required" : "protected_artifact_retention_complete",
+  };
+}
+
+function protectedArtifactTypeEvidenceRow(artifactType, rows) {
+  const latestRow = rows.find((row) => row.artifactType === artifactType && row.reviewReasons.length === 0) ?? null;
+  return {
+    artifactType,
+    protectedArtifactRetentionRecordId: latestRow?.id ?? null,
+    restoreTimeRevalidationStatus: latestRow?.restoreTimeRevalidationStatus ?? null,
+    status: latestRow ? "protected_artifact_type_complete" : "protected_artifact_type_missing",
+  };
+}
+
+const REQUIRED_POLICY_ACTION_KINDS = [
+  "protected_render",
+  "assignment_issue",
+  "rating_lock",
+  "revision_submit",
+  "discussion_open",
+  "adjudication_finalize",
+  "label_snapshot_freeze",
+  "pairwise_snapshot_freeze",
+  "evaluation_run",
+  "hidden_benchmark_aggregate_report",
+  "release_freeze",
+  "training_export",
+  "manifest_activation",
+];
+
+const REQUIRED_PHASE_GATE_LANE_KINDS = [
+  "route",
+  "worker",
+  "queue",
+  "ui_panel",
+  "export_path",
+  "evaluation_lane",
+  "hidden_benchmark_submission_lane",
+  "governance_action",
+];
+
+const REQUIRED_QUEUE_FRESHNESS_LANES = [
+  "assignment",
+  "draft",
+  "discussion",
+  "adjudication",
+  "model_evaluation_job",
+  "hidden_benchmark_submission",
+  "export",
+  "outbox",
+  "delayed_report",
+];
+
+const REQUIRED_QUEUE_REVALIDATION_CHECKS = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+
+const REQUIRED_CLIENT_SURFACES = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
+
+const REQUIRED_AUDIT_CHAIN_EVENT_KINDS = [
+  "governance_approval",
+  "manifest_activation",
+  "protected_label_access",
+  "hidden_benchmark_release",
+  "training_export_release",
+];
+
+function defaultPolicyActionKindRecords(releaseId) {
+  return REQUIRED_POLICY_ACTION_KINDS.map((actionKind) => ({
+    id: `policy-action-kind-${releaseId}-${actionKind}`,
+    actionKind,
+    sideEffecting: actionKind !== "protected_render",
+    protectedRender: actionKind === "protected_render",
+    requiresCurrentDecision: true,
+    requiresManifestBinding: true,
+    requiresActorBinding: true,
+    requiresOutputSchemaBinding: true,
+    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
+    wrongScopeBehavior: "fail_closed",
+    activatedAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultPolicyDecisionRecords(releaseId, actionKindRows) {
+  return actionKindRows.map((row) => ({
+    id: `policy-decision-${releaseId}-${row.actionKind}`,
+    actionKindId: row.id,
+    actionKind: row.actionKind,
+    decisionStatus: "allow",
+    actorId: "seed-release-admin",
+    actorRole: "admin",
+    manifestId: `release-config-manifest-${releaseId}`,
+    releaseId,
+    outputSchemaVersion: "lmca-policy-decision-v1",
+    idempotencyKey: `seed-${row.actionKind}`,
+    singleUse: row.sideEffecting,
+    expiresAt: "2026-10-01T01:00:00.000Z",
+    decidedAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultImplementationPhaseGateBundle(releaseId) {
+  return {
+    id: `implementation-phase-gate-bundle-${releaseId}`,
+    releaseId,
+    manifestId: `release-config-manifest-${releaseId}`,
+    version: "implementation-phase-rlhf87-v1",
+    laneStates: REQUIRED_PHASE_GATE_LANE_KINDS.map((laneKind) => ({
+      laneKind,
+      laneId: `${laneKind}-${releaseId}`,
+      phaseState: laneKind === "hidden_benchmark_submission_lane" ? "staff_only" : "enabled",
+      failClosed: true,
+      noSideEffectsWhenDisabled: true,
+      labelsExposedWhenDisabled: false,
+      supportsReleaseClaimsWhenDisabled: false,
+    })),
+    futurePhaseDefault: "blocked",
+    broadeningRequiresManifestActivation: true,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultQueueFreshnessPolicies(releaseId) {
+  return REQUIRED_QUEUE_FRESHNESS_LANES.map((lane, index) => ({
+    id: `queue-freshness-${releaseId}-${lane}`,
+    releaseId,
+    lane,
+    freshnessWindowMinutes: 60 + index,
+    dependencyRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
+    staleBehavior: lane === "outbox" ? "suppress" : "stale",
+    workerConsumeRevalidationRequired: true,
+    renderRevalidationRequired: true,
+    submitRevalidationRequired: true,
+    backpressureBehavior: "pause_or_recompute_before_side_effect",
+    activatedAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultClientSurfaceIntegrityPolicies(releaseId) {
+  return REQUIRED_CLIENT_SURFACES.map((surface) => ({
+    id: `client-surface-integrity-${releaseId}-${surface}`,
+    releaseId,
+    surface,
+    thirdPartyAnalyticsProhibited: true,
+    sessionReplayProhibited: true,
+    domCaptureProhibited: true,
+    keystrokeLoggingProhibited: true,
+    sensitiveUrlIdsProhibited: true,
+    referrerLeakageBlocked: true,
+    persistentOfflineCacheProhibited: true,
+    cspEnforced: true,
+    firstPartyTelemetryAllowlist: ["page_load", "submit_click", "validation_error"],
+    promotedToNonStaffAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultClientSurfaceIntegrityChecks(releaseId, policies) {
+  return policies.map((policy) => ({
+    id: `client-surface-integrity-check-${releaseId}-${policy.surface}`,
+    clientSurfaceId: policy.id,
+    surface: policy.surface,
+    checkStatus: "passed",
+    checksPassed: [
+      "no_third_party_analytics",
+      "no_session_replay",
+      "no_dom_capture",
+      "no_sensitive_url_ids",
+      "referrer_policy",
+      "no_persistent_offline_cache",
+      "csp",
+    ],
+    failures: [],
+    checkedAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultSensitiveAuditChainEvents(releaseId) {
+  let previousEventHash = null;
+  return REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind, index) => {
+    const eventHash = `sha256:seed-audit-chain-${releaseId}-${index + 1}-${eventKind}`;
+    const row = {
+      id: `sensitive-audit-chain-event-${releaseId}-${index + 1}`,
+      releaseId,
+      sequence: index + 1,
+      eventKind,
+      actionKind: eventKind,
+      actorHash: `sha256:seed-actor-${index + 1}`,
+      approverHashes: ["sha256:seed-approver-a", "sha256:seed-approver-b"],
+      affectedArtifactIds: [`artifact-${eventKind}-${releaseId}`],
+      beforeHash: `sha256:before-${eventKind}`,
+      afterHash: `sha256:after-${eventKind}`,
+      previousEventHash,
+      eventHash,
+      redactionPolicy: "no_protected_labels_no_hidden_text_no_private_rater_data",
+      occurredAt: "2026-10-01T00:00:00.000Z",
+    };
+    previousEventHash = eventHash;
+    return row;
+  });
+}
+
+function defaultSensitiveAuditChainVerification(releaseId, events) {
+  return {
+    id: `sensitive-audit-chain-verification-${releaseId}`,
+    releaseId,
+    chainStatus: "passed",
+    verifiedEventCount: events.length,
+    verifiedAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
+  const submittedActionRows = (options.policyActionKinds ?? [])
+    .map((record) => normalizePolicyActionKind(record, "submitted_workflow_policy_action_kind"))
+    .filter(Boolean);
+  const seedActionRows = defaultPolicyActionKindRecords(releaseId).map((record) => normalizePolicyActionKind(record, "seed_policy_action_kind"));
+  const actionRowsForGate = submittedActionRows.length ? submittedActionRows : seedActionRows;
+  const submittedDecisionRows = (options.policyDecisionRecords ?? [])
+    .map((record) => normalizePolicyDecisionRecord(record, actionRowsForGate, "submitted_workflow_policy_decision"))
+    .filter(Boolean);
+  const seedDecisionRows = defaultPolicyDecisionRecords(releaseId, seedActionRows).map((record) =>
+    normalizePolicyDecisionRecord(record, seedActionRows, "seed_policy_decision"),
+  );
+  const decisionRowsForGate = submittedDecisionRows.length ? submittedDecisionRows : seedDecisionRows;
+  const submittedConsumptionRows = (options.policyDecisionConsumptions ?? [])
+    .map((record) => normalizePolicyDecisionConsumption(record, decisionRowsForGate, "submitted_workflow_policy_decision_consumption"))
+    .filter(Boolean);
+  const submittedPhaseRows = (options.implementationPhaseGateBundles ?? [])
+    .map((bundle) => normalizeImplementationPhaseGateBundle(bundle, "submitted_workflow_implementation_phase_gate_bundle"))
+    .filter(Boolean);
+  const seedPhaseRows = [normalizeImplementationPhaseGateBundle(defaultImplementationPhaseGateBundle(releaseId), "seed_implementation_phase_gate_bundle")];
+  const submittedQueueRows = (options.queueFreshnessPolicies ?? [])
+    .map((policy) => normalizeQueueFreshnessPolicy(policy, "submitted_workflow_queue_freshness_policy"))
+    .filter(Boolean);
+  const seedQueueRows = defaultQueueFreshnessPolicies(releaseId).map((policy) => normalizeQueueFreshnessPolicy(policy, "seed_queue_freshness_policy"));
+  const queueRowsForGate = submittedQueueRows.length ? submittedQueueRows : seedQueueRows;
+  const submittedScanRows = (options.queueStaleByDelayScans ?? [])
+    .map((scan) => normalizeQueueStaleByDelayScan(scan, queueRowsForGate, "submitted_workflow_queue_stale_by_delay_scan"))
+    .filter(Boolean);
+  const submittedClientPolicyRows = (options.clientSurfaceIntegrityPolicies ?? [])
+    .map((policy) => normalizeClientSurfaceIntegrityPolicy(policy, "submitted_workflow_client_surface_integrity_policy"))
+    .filter(Boolean);
+  const seedClientPolicyRows = defaultClientSurfaceIntegrityPolicies(releaseId).map((policy) =>
+    normalizeClientSurfaceIntegrityPolicy(policy, "seed_client_surface_integrity_policy"),
+  );
+  const clientPolicyRowsForGate = submittedClientPolicyRows.length ? submittedClientPolicyRows : seedClientPolicyRows;
+  const submittedClientCheckRows = (options.clientSurfaceIntegrityChecks ?? [])
+    .map((check) => normalizeClientSurfaceIntegrityCheck(check, clientPolicyRowsForGate, "submitted_workflow_client_surface_integrity_check"))
+    .filter(Boolean);
+  const seedClientCheckRows = defaultClientSurfaceIntegrityChecks(releaseId, defaultClientSurfaceIntegrityPolicies(releaseId)).map((check) =>
+    normalizeClientSurfaceIntegrityCheck(check, seedClientPolicyRows, "seed_client_surface_integrity_check"),
+  );
+  const clientCheckRowsForGate = submittedClientCheckRows.length ? submittedClientCheckRows : seedClientCheckRows;
+  const submittedAuditRows = (options.sensitiveAuditChainEvents ?? [])
+    .map((event) => normalizeSensitiveAuditChainEvent(event, "submitted_workflow_sensitive_audit_chain_event"))
+    .filter(Boolean);
+  const seedAuditRows = defaultSensitiveAuditChainEvents(releaseId).map((event) => normalizeSensitiveAuditChainEvent(event, "seed_sensitive_audit_chain_event"));
+  const auditRowsForGate = submittedAuditRows.length ? submittedAuditRows : seedAuditRows;
+  const submittedAuditVerificationRows = (options.sensitiveAuditChainVerifications ?? [])
+    .map((verification) => normalizeSensitiveAuditChainVerification(verification, auditRowsForGate, "submitted_workflow_sensitive_audit_chain_verification"))
+    .filter(Boolean);
+  const seedAuditVerificationRows = [
+    normalizeSensitiveAuditChainVerification(defaultSensitiveAuditChainVerification(releaseId, seedAuditRows), seedAuditRows, "seed_sensitive_audit_chain_verification"),
+  ];
+  const actionKindRows = REQUIRED_POLICY_ACTION_KINDS.map((actionKind) => policyActionKindEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate));
+  const phaseLaneRows = REQUIRED_PHASE_GATE_LANE_KINDS.map((laneKind) => implementationPhaseLaneEvidenceRow(laneKind, submittedPhaseRows.length ? submittedPhaseRows : seedPhaseRows));
+  const queueLaneRows = REQUIRED_QUEUE_FRESHNESS_LANES.map((lane) => queueFreshnessLaneEvidenceRow(lane, queueRowsForGate, submittedScanRows));
+  const clientSurfaceRows = REQUIRED_CLIENT_SURFACES.map((surface) => clientSurfaceEvidenceRow(surface, clientPolicyRowsForGate, clientCheckRowsForGate));
+  const auditKindRows = REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind) => auditChainKindEvidenceRow(eventKind, auditRowsForGate));
+  const auditVerificationRowsForGate = submittedAuditVerificationRows.length ? submittedAuditVerificationRows : seedAuditVerificationRows;
+  const reviewSections = [
+    ...submittedActionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_action_kind", artifactId: row.id, reason }))),
+    ...submittedDecisionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_decision", artifactId: row.id, reason }))),
+    ...submittedConsumptionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_decision_consumption", artifactId: row.id, reason }))),
+    ...submittedPhaseRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "implementation_phase_gate_bundle", artifactId: row.id, reason }))),
+    ...submittedQueueRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_freshness_policy", artifactId: row.id, reason }))),
+    ...submittedScanRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_stale_by_delay_scan", artifactId: row.id, reason }))),
+    ...submittedClientPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_policy", artifactId: row.id, reason }))),
+    ...submittedClientCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_check", artifactId: row.id, reason }))),
+    ...submittedAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_event", artifactId: row.id, reason }))),
+    ...submittedAuditVerificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_verification", artifactId: row.id, reason }))),
+    ...actionKindRows.filter((row) => row.status !== "policy_action_kind_gate_complete").map((row) => ({
+      artifactType: "policy_action_kind_gate",
+      artifactId: row.actionKind,
+      reason: row.status,
+    })),
+    ...phaseLaneRows.filter((row) => row.status !== "implementation_phase_lane_complete").map((row) => ({
+      artifactType: "implementation_phase_lane",
+      artifactId: row.laneKind,
+      reason: row.status,
+    })),
+    ...queueLaneRows.filter((row) => row.status !== "queue_freshness_lane_complete").map((row) => ({
+      artifactType: "queue_freshness_lane",
+      artifactId: row.lane,
+      reason: row.status,
+    })),
+    ...clientSurfaceRows.filter((row) => row.status !== "client_surface_integrity_complete").map((row) => ({
+      artifactType: "client_surface",
+      artifactId: row.surface,
+      reason: row.status,
+    })),
+    ...auditKindRows.filter((row) => row.status !== "sensitive_audit_chain_kind_complete").map((row) => ({
+      artifactType: "sensitive_audit_chain_kind",
+      artifactId: row.eventKind,
+      reason: row.status,
+    })),
+    auditVerificationRowsForGate.some((row) => row.reviewReasons.length === 0)
+      ? null
+      : { artifactType: "sensitive_audit_chain_verification", artifactId: "sensitive_audit_chain", reason: "missing_complete_audit_chain_verification" },
+  ].filter(Boolean);
+  const submittedEvidenceComplete =
+    submittedActionRows.length > 0 &&
+    submittedDecisionRows.length > 0 &&
+    submittedConsumptionRows.length > 0 &&
+    submittedPhaseRows.length > 0 &&
+    submittedQueueRows.length > 0 &&
+    submittedScanRows.length > 0 &&
+    submittedClientPolicyRows.length > 0 &&
+    submittedClientCheckRows.length > 0 &&
+    submittedAuditRows.length > 0 &&
+    submittedAuditVerificationRows.length > 0 &&
+    reviewSections.length === 0;
+  return {
+    id: `operational-control-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    requiredPolicyActionKinds: REQUIRED_POLICY_ACTION_KINDS,
+    requiredPhaseGateLaneKinds: REQUIRED_PHASE_GATE_LANE_KINDS,
+    requiredQueueFreshnessLanes: REQUIRED_QUEUE_FRESHNESS_LANES,
+    requiredQueueRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
+    requiredClientSurfaces: REQUIRED_CLIENT_SURFACES,
+    requiredAuditChainEventKinds: REQUIRED_AUDIT_CHAIN_EVENT_KINDS,
+    policyActionKindRows: [...seedActionRows, ...submittedActionRows],
+    policyDecisionRows: [...seedDecisionRows, ...submittedDecisionRows],
+    policyDecisionConsumptionRows: submittedConsumptionRows,
+    implementationPhaseGateBundleRows: [...seedPhaseRows, ...submittedPhaseRows],
+    queueFreshnessPolicyRows: [...seedQueueRows, ...submittedQueueRows],
+    queueStaleByDelayScanRows: submittedScanRows,
+    clientSurfaceIntegrityPolicyRows: [...seedClientPolicyRows, ...submittedClientPolicyRows],
+    clientSurfaceIntegrityCheckRows: [...seedClientCheckRows, ...submittedClientCheckRows],
+    sensitiveAuditChainEventRows: [...seedAuditRows, ...submittedAuditRows],
+    sensitiveAuditChainVerificationRows: [...seedAuditVerificationRows, ...submittedAuditVerificationRows],
+    actionKindRows,
+    phaseLaneRows,
+    queueLaneRows,
+    clientSurfaceRows,
+    auditKindRows,
+    counts: {
+      submittedPolicyActionKindCount: submittedActionRows.length,
+      submittedPolicyDecisionCount: submittedDecisionRows.length,
+      submittedPolicyDecisionConsumptionCount: submittedConsumptionRows.length,
+      submittedImplementationPhaseGateBundleCount: submittedPhaseRows.length,
+      submittedQueueFreshnessPolicyCount: submittedQueueRows.length,
+      submittedQueueStaleByDelayScanCount: submittedScanRows.length,
+      submittedClientSurfaceIntegrityPolicyCount: submittedClientPolicyRows.length,
+      submittedClientSurfaceIntegrityCheckCount: submittedClientCheckRows.length,
+      submittedSensitiveAuditChainEventCount: submittedAuditRows.length,
+      submittedSensitiveAuditChainVerificationCount: submittedAuditVerificationRows.length,
+      passingPolicyActionKindCount: actionKindRows.filter((row) => row.status === "policy_action_kind_gate_complete").length,
+      passingPhaseLaneCount: phaseLaneRows.filter((row) => row.status === "implementation_phase_lane_complete").length,
+      passingQueueFreshnessLaneCount: queueLaneRows.filter((row) => row.status === "queue_freshness_lane_complete").length,
+      passingClientSurfaceCount: clientSurfaceRows.filter((row) => row.status === "client_surface_integrity_complete").length,
+      passingAuditChainKindCount: auditKindRows.filter((row) => row.status === "sensitive_audit_chain_kind_complete").length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "operational_control_review_required"
+      : submittedEvidenceComplete
+        ? "submitted_operational_control_evidence_complete"
+        : "seed_operational_control_evidence_complete",
+  };
+}
+
+function normalizePolicyActionKind(record, rowSource) {
+  const id = record?.id ?? record?.policyActionKindId;
+  if (!id) return null;
+  const actionKind = record.actionKind ?? record.kind ?? null;
+  const reviewReasons = [
+    REQUIRED_POLICY_ACTION_KINDS.includes(actionKind) ? null : "actionKind",
+    record.requiresCurrentDecision === true ? null : "requiresCurrentDecision",
+    record.requiresManifestBinding === true ? null : "requiresManifestBinding",
+    record.requiresActorBinding === true ? null : "requiresActorBinding",
+    record.requiresOutputSchemaBinding === true ? null : "requiresOutputSchemaBinding",
+    ["single_use", "idempotency_bound"].includes(record.replayProtection) ? null : "replayProtection",
+    record.wrongScopeBehavior === "fail_closed" ? null : "wrongScopeBehavior",
+    requiredPromptFieldReason("activatedAt", record.activatedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    actionKind,
+    sideEffecting: record.sideEffecting === true,
+    protectedRender: record.protectedRender === true,
+    replayProtection: record.replayProtection ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "policy_action_kind_review_required" : "policy_action_kind_complete",
+  };
+}
+
+function normalizePolicyDecisionRecord(record, actionRows, rowSource) {
+  const id = record?.id ?? record?.policyDecisionRecordId;
+  if (!id) return null;
+  const actionKindId = record.actionKindId ?? record.policyActionKindId ?? null;
+  const actionKind = record.actionKind ?? actionRows.find((row) => row.id === actionKindId)?.actionKind ?? null;
+  const actionRow = actionRows.find((row) => row.id === actionKindId || row.actionKind === actionKind);
+  const reviewReasons = [
+    actionRow && actionRow.reviewReasons.length === 0 ? null : "actionKindId",
+    record.decisionStatus === "allow" ? null : "decisionStatus",
+    requiredPromptFieldReason("actorId", record.actorId),
+    requiredPromptFieldReason("manifestId", record.manifestId),
+    requiredPromptFieldReason("releaseId", record.releaseId),
+    requiredPromptFieldReason("outputSchemaVersion", record.outputSchemaVersion),
+    record.singleUse === true || requiredPromptFieldReason("idempotencyKey", record.idempotencyKey) === null ? null : "idempotencyKey",
+    requiredPromptFieldReason("expiresAt", record.expiresAt),
+    requiredPromptFieldReason("decidedAt", record.decidedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    actionKindId,
+    actionKind,
+    decisionStatus: record.decisionStatus ?? null,
+    actorId: record.actorId ?? null,
+    actorRole: record.actorRole ?? null,
+    manifestId: record.manifestId ?? null,
+    releaseId: record.releaseId ?? null,
+    outputSchemaVersion: record.outputSchemaVersion ?? null,
+    idempotencyKey: record.idempotencyKey ?? null,
+    singleUse: record.singleUse === true,
+    expiresAt: record.expiresAt ?? null,
+    consumedAt: record.consumedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "policy_decision_review_required" : "policy_decision_allow_current",
+  };
+}
+
+function normalizePolicyDecisionConsumption(record, decisionRows, rowSource) {
+  const id = record?.id ?? record?.policyDecisionConsumptionId;
+  if (!id) return null;
+  const decisionId = record.decisionId ?? record.policyDecisionId ?? null;
+  const decisionRow = decisionRows.find((row) => row.id === decisionId);
+  const reviewReasons = [
+    decisionRow && decisionRow.reviewReasons.length === 0 ? null : "decisionId",
+    record.replayRejected === false ? null : "replayRejected",
+    record.scopeMatched === true ? null : "scopeMatched",
+    requiredPromptFieldReason("consumedAt", record.consumedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    decisionId,
+    actionKind: record.actionKind ?? decisionRow?.actionKind ?? null,
+    replayRejected: record.replayRejected === true,
+    scopeMatched: record.scopeMatched === true,
+    consumedAt: record.consumedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "policy_decision_consumption_review_required" : "policy_decision_consumed_once",
+  };
+}
+
+function normalizeImplementationPhaseGateBundle(bundle, rowSource) {
+  const id = bundle?.id ?? bundle?.implementationPhaseGateBundleId;
+  if (!id) return null;
+  const laneStates = Array.isArray(bundle.laneStates) ? bundle.laneStates : [];
+  const coveredLaneKinds = laneStates.map((lane) => lane.laneKind).filter(Boolean);
+  const missingLaneKinds = REQUIRED_PHASE_GATE_LANE_KINDS.filter((laneKind) => !coveredLaneKinds.includes(laneKind));
+  const unsafeDisabledLanes = laneStates
+    .filter((lane) => ["disabled_stub", "blocked"].includes(lane.phaseState))
+    .filter((lane) => lane.failClosed !== true || lane.noSideEffectsWhenDisabled !== true || lane.labelsExposedWhenDisabled === true || lane.supportsReleaseClaimsWhenDisabled === true)
+    .map((lane) => lane.laneKind ?? lane.laneId ?? "unknown");
+  const reviewReasons = [
+    requiredPromptFieldReason("releaseId", bundle.releaseId),
+    requiredPromptFieldReason("manifestId", bundle.manifestId),
+    requiredPromptFieldReason("version", bundle.version),
+    missingLaneKinds.length ? `laneStates:${missingLaneKinds.join(",")}` : null,
+    unsafeDisabledLanes.length ? `disabledLaneFailClosed:${unsafeDisabledLanes.join(",")}` : null,
+    bundle.futurePhaseDefault === "blocked" ? null : "futurePhaseDefault",
+    bundle.broadeningRequiresManifestActivation === true ? null : "broadeningRequiresManifestActivation",
+    requiredPromptFieldReason("frozenAt", bundle.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: bundle.releaseId ?? null,
+    manifestId: bundle.manifestId ?? null,
+    version: bundle.version ?? null,
+    laneStates,
+    missingLaneKinds,
+    unsafeDisabledLanes,
+    futurePhaseDefault: bundle.futurePhaseDefault ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "implementation_phase_gate_review_required" : "implementation_phase_gate_complete",
+  };
+}
+
+function normalizeQueueFreshnessPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.queueFreshnessPolicyId;
+  if (!id) return null;
+  const lane = policy.lane ?? policy.queueLane ?? null;
+  const dependencyRevalidationChecks = normalizeStringArray(policy.dependencyRevalidationChecks);
+  const missingChecks = REQUIRED_QUEUE_REVALIDATION_CHECKS.filter((check) => !dependencyRevalidationChecks.includes(check));
+  const reviewReasons = [
+    REQUIRED_QUEUE_FRESHNESS_LANES.includes(lane) ? null : "lane",
+    Number.isFinite(policy.freshnessWindowMinutes) && policy.freshnessWindowMinutes > 0 ? null : "freshnessWindowMinutes",
+    missingChecks.length ? `dependencyRevalidationChecks:${missingChecks.join(",")}` : null,
+    ["stale", "paused", "pause", "cancel", "cancelled", "recompute", "suppress"].includes(policy.staleBehavior) ? null : "staleBehavior",
+    policy.workerConsumeRevalidationRequired === true ? null : "workerConsumeRevalidationRequired",
+    policy.renderRevalidationRequired === true ? null : "renderRevalidationRequired",
+    policy.submitRevalidationRequired === true ? null : "submitRevalidationRequired",
+    policyMentions(policy.backpressureBehavior, ["pause"]) || policyMentions(policy.backpressureBehavior, ["recompute"]) ? null : "backpressureBehavior",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: policy.releaseId ?? null,
+    lane,
+    freshnessWindowMinutes: policy.freshnessWindowMinutes ?? null,
+    dependencyRevalidationChecks,
+    missingChecks,
+    staleBehavior: policy.staleBehavior ?? null,
+    workerConsumeRevalidationRequired: policy.workerConsumeRevalidationRequired === true,
+    renderRevalidationRequired: policy.renderRevalidationRequired === true,
+    submitRevalidationRequired: policy.submitRevalidationRequired === true,
+    reviewReasons,
+    status: reviewReasons.length ? "queue_freshness_policy_review_required" : "queue_freshness_policy_complete",
+  };
+}
+
+function normalizeQueueStaleByDelayScan(scan, policyRows, rowSource) {
+  const id = scan?.id ?? scan?.queueStaleByDelayScanId;
+  if (!id) return null;
+  const lane = scan.lane ?? null;
+  const policyRow = policyRows.find((row) => row.lane === lane && row.reviewReasons.length === 0);
+  const staleCount = Number(scan.staleCount ?? 0);
+  const reviewReasons = [
+    policyRow ? null : "lane",
+    scan.scanStatus === "passed" ? null : "scanStatus",
+    Number.isFinite(staleCount) ? null : "staleCount",
+    normalizeStringArray(scan.dependencyRevalidationChecks).length ? null : "dependencyRevalidationChecks",
+    requiredPromptFieldReason("scannedAt", scan.scannedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    lane,
+    scanStatus: scan.scanStatus ?? null,
+    staleCount,
+    dependencyRevalidationChecks: normalizeStringArray(scan.dependencyRevalidationChecks),
+    scannedAt: scan.scannedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "queue_stale_by_delay_scan_review_required" : "queue_stale_by_delay_scan_complete",
+  };
+}
+
+function normalizeClientSurfaceIntegrityPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.clientSurfaceIntegrityPolicyId;
+  if (!id) return null;
+  const surface = policy.surface ?? policy.screenKind ?? null;
+  const reviewReasons = [
+    REQUIRED_CLIENT_SURFACES.includes(surface) ? null : "surface",
+    policy.thirdPartyAnalyticsProhibited === true ? null : "thirdPartyAnalyticsProhibited",
+    policy.sessionReplayProhibited === true ? null : "sessionReplayProhibited",
+    policy.domCaptureProhibited === true ? null : "domCaptureProhibited",
+    policy.keystrokeLoggingProhibited === true ? null : "keystrokeLoggingProhibited",
+    policy.sensitiveUrlIdsProhibited === true ? null : "sensitiveUrlIdsProhibited",
+    policy.referrerLeakageBlocked === true ? null : "referrerLeakageBlocked",
+    policy.persistentOfflineCacheProhibited === true ? null : "persistentOfflineCacheProhibited",
+    policy.cspEnforced === true ? null : "cspEnforced",
+    normalizeStringArray(policy.firstPartyTelemetryAllowlist).length ? null : "firstPartyTelemetryAllowlist",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: policy.releaseId ?? null,
+    surface,
+    firstPartyTelemetryAllowlist: normalizeStringArray(policy.firstPartyTelemetryAllowlist),
+    reviewReasons,
+    status: reviewReasons.length ? "client_surface_integrity_policy_review_required" : "client_surface_integrity_policy_complete",
+  };
+}
+
+function normalizeClientSurfaceIntegrityCheck(check, policyRows, rowSource) {
+  const id = check?.id ?? check?.clientSurfaceIntegrityCheckId;
+  if (!id) return null;
+  const clientSurfaceId = check.clientSurfaceId ?? check.policyId ?? null;
+  const surface = check.surface ?? policyRows.find((row) => row.id === clientSurfaceId)?.surface ?? null;
+  const policyRow = policyRows.find((row) => row.id === clientSurfaceId || row.surface === surface);
+  const failures = Array.isArray(check.failures) ? check.failures : [];
+  const checksPassed = normalizeStringArray(check.checksPassed);
+  const reviewReasons = [
+    policyRow && policyRow.reviewReasons.length === 0 ? null : "clientSurfaceId",
+    check.checkStatus === "passed" ? null : "checkStatus",
+    checksPassed.includes("no_third_party_analytics") ? null : "no_third_party_analytics",
+    checksPassed.includes("no_session_replay") ? null : "no_session_replay",
+    checksPassed.includes("no_dom_capture") ? null : "no_dom_capture",
+    checksPassed.includes("no_sensitive_url_ids") ? null : "no_sensitive_url_ids",
+    checksPassed.includes("referrer_policy") ? null : "referrer_policy",
+    checksPassed.includes("no_persistent_offline_cache") ? null : "no_persistent_offline_cache",
+    checksPassed.includes("csp") ? null : "csp",
+    failures.length ? "failures" : null,
+    requiredPromptFieldReason("checkedAt", check.checkedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    clientSurfaceId,
+    surface,
+    checkStatus: check.checkStatus ?? null,
+    checksPassed,
+    failures,
+    checkedAt: check.checkedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "client_surface_integrity_check_review_required" : "client_surface_integrity_check_passed",
+  };
+}
+
+function normalizeSensitiveAuditChainEvent(event, rowSource) {
+  const id = event?.id ?? event?.sensitiveAuditChainEventId;
+  if (!id) return null;
+  const eventKind = event.eventKind ?? event.actionKind ?? null;
+  const reviewReasons = [
+    REQUIRED_AUDIT_CHAIN_EVENT_KINDS.includes(eventKind) ? null : "eventKind",
+    Number.isInteger(event.sequence) && event.sequence > 0 ? null : "sequence",
+    String(event.eventHash ?? "").startsWith("sha256:") ? null : "eventHash",
+    event.sequence === 1 || String(event.previousEventHash ?? "").startsWith("sha256:") ? null : "previousEventHash",
+    requiredPromptFieldReason("actorHash", event.actorHash),
+    normalizeStringArray(event.approverHashes).length >= 1 ? null : "approverHashes",
+    normalizeStringArray(event.affectedArtifactIds).length ? null : "affectedArtifactIds",
+    String(event.beforeHash ?? "").startsWith("sha256:") ? null : "beforeHash",
+    String(event.afterHash ?? "").startsWith("sha256:") ? null : "afterHash",
+    policyMentions(event.redactionPolicy, ["protected"]) && policyMentions(event.redactionPolicy, ["private"]) ? null : "redactionPolicy",
+    requiredPromptFieldReason("occurredAt", event.occurredAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: event.releaseId ?? null,
+    sequence: event.sequence ?? null,
+    eventKind,
+    actorHash: event.actorHash ?? null,
+    approverHashes: normalizeStringArray(event.approverHashes),
+    affectedArtifactIds: normalizeStringArray(event.affectedArtifactIds),
+    beforeHash: event.beforeHash ?? null,
+    afterHash: event.afterHash ?? null,
+    previousEventHash: event.previousEventHash ?? null,
+    eventHash: event.eventHash ?? null,
+    redactionPolicy: event.redactionPolicy ?? null,
+    occurredAt: event.occurredAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "sensitive_audit_chain_event_review_required" : "sensitive_audit_chain_event_complete",
+  };
+}
+
+function normalizeSensitiveAuditChainVerification(verification, eventRows, rowSource) {
+  const id = verification?.id ?? verification?.sensitiveAuditChainVerificationId;
+  if (!id) return null;
+  const completeEventCount = eventRows.filter((row) => row.reviewReasons.length === 0).length;
+  const reviewReasons = [
+    verification.chainStatus === "passed" ? null : "chainStatus",
+    verification.verifiedEventCount === completeEventCount ? null : "verifiedEventCount",
+    requiredPromptFieldReason("verifiedAt", verification.verifiedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: verification.releaseId ?? null,
+    chainStatus: verification.chainStatus ?? null,
+    verifiedEventCount: verification.verifiedEventCount ?? null,
+    expectedEventCount: completeEventCount,
+    verifiedAt: verification.verifiedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "sensitive_audit_chain_verification_review_required" : "sensitive_audit_chain_verification_passed",
+  };
+}
+
+function policyActionKindEvidenceRow(actionKind, actionRows, decisionRows) {
+  const actionRow = actionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0) ?? null;
+  const decisionRow = decisionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0) ?? null;
+  return {
+    actionKind,
+    policyActionKindId: actionRow?.id ?? null,
+    policyDecisionId: decisionRow?.id ?? null,
+    replayProtection: actionRow?.replayProtection ?? null,
+    status: actionRow && decisionRow ? "policy_action_kind_gate_complete" : actionRow ? "policy_decision_missing" : "policy_action_kind_missing",
+  };
+}
+
+function implementationPhaseLaneEvidenceRow(laneKind, bundleRows) {
+  const lane = bundleRows.flatMap((bundle) => bundle.laneStates.map((laneState) => ({ ...laneState, bundleId: bundle.id })))
+    .find((laneState) => laneState.laneKind === laneKind && laneState.failClosed === true) ?? null;
+  return {
+    laneKind,
+    bundleId: lane?.bundleId ?? null,
+    phaseState: lane?.phaseState ?? null,
+    failClosed: lane?.failClosed === true,
+    status: lane ? "implementation_phase_lane_complete" : "implementation_phase_lane_missing",
+  };
+}
+
+function queueFreshnessLaneEvidenceRow(lane, policyRows, scanRows) {
+  const policyRow = policyRows.find((row) => row.lane === lane && row.reviewReasons.length === 0) ?? null;
+  const scanRow = scanRows.find((row) => row.lane === lane && row.reviewReasons.length === 0) ?? null;
+  return {
+    lane,
+    queueFreshnessPolicyId: policyRow?.id ?? null,
+    queueStaleByDelayScanId: scanRow?.id ?? null,
+    freshnessWindowMinutes: policyRow?.freshnessWindowMinutes ?? null,
+    staleBehavior: policyRow?.staleBehavior ?? null,
+    status: policyRow && scanRow ? "queue_freshness_lane_complete" : policyRow ? "queue_stale_by_delay_scan_missing" : "queue_freshness_policy_missing",
+  };
+}
+
+function clientSurfaceEvidenceRow(surface, policyRows, checkRows) {
+  const policyRow = policyRows.find((row) => row.surface === surface && row.reviewReasons.length === 0) ?? null;
+  const checkRow = checkRows.find((row) => row.surface === surface && row.reviewReasons.length === 0) ?? null;
+  return {
+    surface,
+    clientSurfaceIntegrityPolicyId: policyRow?.id ?? null,
+    clientSurfaceIntegrityCheckId: checkRow?.id ?? null,
+    status: policyRow && checkRow ? "client_surface_integrity_complete" : policyRow ? "client_surface_integrity_check_missing" : "client_surface_integrity_policy_missing",
+  };
+}
+
+function auditChainKindEvidenceRow(eventKind, eventRows) {
+  const eventRow = eventRows.find((row) => row.eventKind === eventKind && row.reviewReasons.length === 0) ?? null;
+  return {
+    eventKind,
+    sensitiveAuditChainEventId: eventRow?.id ?? null,
+    sequence: eventRow?.sequence ?? null,
+    eventHash: eventRow?.eventHash ?? null,
+    status: eventRow ? "sensitive_audit_chain_kind_complete" : "sensitive_audit_chain_kind_missing",
+  };
+}
+
 export function buildOctoberReleaseReport(
   releaseId,
   labelSnapshot,
@@ -10643,11 +12377,30 @@ export function buildOctoberReleaseReport(
     preSubmitAssistPolicies: options.preSubmitAssistPolicies ?? [],
     accessibilityConformanceReports: options.accessibilityConformanceReports ?? [],
   });
+  const participantSafeguardEvidence = buildParticipantSafeguardEvidenceReport(releaseId, {
+    volunteerIncentivePolicies: options.volunteerIncentivePolicies ?? [],
+    raterQualificationRecords: options.raterQualificationRecords ?? [],
+    languageArtifactAssessments: options.languageArtifactAssessments ?? [],
+    sourceRecognitionEvents: options.sourceRecognitionEvents ?? [],
+    modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
+  });
   const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
     governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
     governedBundleRecords: options.governedBundleRecords ?? [],
     releaseConfigManifests: options.releaseConfigManifests ?? [],
     releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
+  });
+  const operationalControlEvidence = buildOperationalControlEvidenceReport(releaseId, {
+    policyActionKinds: options.policyActionKinds ?? [],
+    policyDecisionRecords: options.policyDecisionRecords ?? [],
+    policyDecisionConsumptions: options.policyDecisionConsumptions ?? [],
+    implementationPhaseGateBundles: options.implementationPhaseGateBundles ?? [],
+    queueFreshnessPolicies: options.queueFreshnessPolicies ?? [],
+    queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
+    clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
+    clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
+    sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
+    sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
   });
   return {
     id: `release-report-${releaseId}`,
@@ -10663,7 +12416,9 @@ export function buildOctoberReleaseReport(
     workflowStateMachineEvidence,
     raterDataGovernance,
     policyBundleEvidence,
+    participantSafeguardEvidence,
     releaseConfigManifestEvidence,
+    operationalControlEvidence,
     corpusManifest,
     releaseGateProfile,
     releaseGateEvaluation,
@@ -10799,11 +12554,30 @@ export function buildOctoberReleaseReport(
       preSubmitAssistPolicies: options.preSubmitAssistPolicies ?? [],
       accessibilityConformanceReports: options.accessibilityConformanceReports ?? [],
     },
+    workflowParticipantSafeguardArtifacts: {
+      volunteerIncentivePolicies: options.volunteerIncentivePolicies ?? [],
+      raterQualificationRecords: options.raterQualificationRecords ?? [],
+      languageArtifactAssessments: options.languageArtifactAssessments ?? [],
+      sourceRecognitionEvents: options.sourceRecognitionEvents ?? [],
+      modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
+    },
     workflowReleaseConfigArtifacts: {
       governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
       governedBundleRecords: options.governedBundleRecords ?? [],
       releaseConfigManifests: options.releaseConfigManifests ?? [],
       releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
+    },
+    workflowOperationalControlArtifacts: {
+      policyActionKinds: options.policyActionKinds ?? [],
+      policyDecisionRecords: options.policyDecisionRecords ?? [],
+      policyDecisionConsumptions: options.policyDecisionConsumptions ?? [],
+      implementationPhaseGateBundles: options.implementationPhaseGateBundles ?? [],
+      queueFreshnessPolicies: options.queueFreshnessPolicies ?? [],
+      queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
+      clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
+      clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
+      sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
+      sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
     },
     workflowGovernanceArtifacts: {
       releaseGateProfiles: options.releaseGateProfiles ?? [],

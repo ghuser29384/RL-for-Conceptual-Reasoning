@@ -291,6 +291,28 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: ["id", "screenIds", "checksPassed", "readabilityReviewStatus"],
   }),
+  workflowWriteSpec(/^\/api\/v1\/volunteer-incentive-policies$/, "volunteer_incentive_policy_submitted", "volunteerIncentivePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "allowedCompensationCreditInputs", "prohibitedIncentiveSignals", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-qualification-records$/, "rater_qualification_record_submitted", "raterQualificationRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "raterId", "qualificationScope", "qualificationSource", "evidenceArtifactReference", "approvedRoles", "approver"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/language-artifact-assessments$/, "language_artifact_assessment_submitted", "languageArtifactAssessment", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "artifactType", "pinDownabilityImpact", "substantiveAmbiguityImpact", "correctnessImpact", "deadWeightImpact", "overallQualityImpact"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/source-recognition-events$/, "source_recognition_event_submitted", "sourceRecognitionEvent", ratingWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "assignmentId", "raterId", "recognitionType", "raterAction", "independentBlindEligibilityEffect", "protectedStatusHiddenFromRater"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/model-provider-data-handling-policies$/, "model_provider_data_handling_policy_submitted", "modelProviderDataHandlingPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "providerEndpointClass", "coveredRunClass", "approvedSplitContentClasses", "approvalStatus", "reviewer", "expiresAt"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "version", "hashAlgorithm", "materializationQueryRules", "activatedAt"],
@@ -317,6 +339,40 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     pathParamField: "manifestId",
     requiredFields: ["id", "manifestId", "verificationStatus", "expectedHash", "observedHash"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/policy-action-kinds$/, "policy_action_kind_submitted", "policyActionKind", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "actionKind", "requiresCurrentDecision", "requiresManifestBinding", "replayProtection", "wrongScopeBehavior"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/policy-decisions$/, "policy_decision_submitted", "policyDecisionRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "actionKindId", "decisionStatus", "actorId", "manifestId", "releaseId", "outputSchemaVersion", "expiresAt", "decidedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/implementation-phase-gate-bundles$/, "implementation_phase_gate_bundle_submitted", "implementationPhaseGateBundle", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "releaseId", "manifestId", "version", "laneStates", "futurePhaseDefault", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/queue-freshness-policies$/, "queue_freshness_policy_submitted", "queueFreshnessPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "lane", "freshnessWindowMinutes", "dependencyRevalidationChecks", "staleBehavior"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/queues\/(?<id>[^/]+)\/stale-by-delay-scan$/, "queue_stale_by_delay_scan_submitted", "queueStaleByDelayScan", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "lane",
+    requiredFields: ["id", "lane", "scanStatus", "staleCount", "dependencyRevalidationChecks", "scannedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/client-surface-integrity-policies$/, "client_surface_integrity_policy_submitted", "clientSurfaceIntegrityPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "surface", "thirdPartyAnalyticsProhibited", "sessionReplayProhibited", "domCaptureProhibited", "cspEnforced"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/client-surfaces\/(?<id>[^/]+)\/integrity-check$/, "client_surface_integrity_check_submitted", "clientSurfaceIntegrityCheck", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "clientSurfaceId",
+    requiredFields: ["id", "clientSurfaceId", "surface", "checkStatus", "checksPassed", "checkedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "sequence", "eventKind", "actorHash", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "occurredAt"],
   }),
 ];
 
@@ -367,9 +423,20 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/ui-experiment-policies\/(?<id>[^/]+)$/, "uiExperimentPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/pre-submit-assist-policies\/(?<id>[^/]+)$/, "preSubmitAssistPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/accessibility-conformance-reports\/(?<id>[^/]+)$/, "accessibilityConformanceReport", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/volunteer-incentive-policies\/(?<id>[^/]+)$/, "volunteerIncentivePolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-qualification-records\/(?<id>[^/]+)$/, "raterQualificationRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/language-artifact-assessments\/(?<id>[^/]+)$/, "languageArtifactAssessment", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/source-recognition-events\/(?<id>[^/]+)$/, "sourceRecognitionEvent", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/model-provider-data-handling-policies\/(?<id>[^/]+)$/, "modelProviderDataHandlingPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles\/(?<id>[^/]+)$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)$/, "governedBundleRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)$/, "releaseConfigManifest", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/policy-action-kinds\/(?<id>[^/]+)$/, "policyActionKind", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/policy-decisions\/(?<id>[^/]+)$/, "policyDecisionRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/implementation-phase-gate-bundles\/(?<id>[^/]+)$/, "implementationPhaseGateBundle", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/queue-freshness-policies\/(?<id>[^/]+)$/, "queueFreshnessPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/client-surface-integrity-policies\/(?<id>[^/]+)$/, "clientSurfaceIntegrityPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/sensitive-audit-chain\/events\/(?<id>[^/]+)$/, "sensitiveAuditChainEvent", adminAuditRoles),
 ];
 
 const mimeTypes = {
@@ -684,6 +751,23 @@ export async function handleApiRequest(request, response, url, context) {
   const v1EvaluationConfigManifestMatch = url.pathname.match(/^\/api\/v1\/evaluations\/([^/]+)\/release-config-manifest$/);
   if (request.method === "GET" && v1EvaluationConfigManifestMatch) {
     await releaseConfigManifestForEvaluationEndpoint(request, response, context, decodeURIComponent(v1EvaluationConfigManifestMatch[1]));
+    return;
+  }
+  const v1PolicyDecisionConsumeMatch = url.pathname.match(/^\/api\/v1\/policy-decisions\/([^/]+)\/consume$/);
+  if (request.method === "POST" && v1PolicyDecisionConsumeMatch) {
+    await policyDecisionConsumeEndpoint(request, response, context, decodeURIComponent(v1PolicyDecisionConsumeMatch[1]));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/implementation-phase") {
+    await implementationPhaseEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/sensitive-audit-chain/events") {
+    await sensitiveAuditChainEventsEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/sensitive-audit-chain/verify") {
+    await sensitiveAuditChainVerifyEndpoint(request, response, context);
     return;
   }
 
@@ -1116,6 +1200,162 @@ async function releaseConfigManifestForEvaluationEndpoint(request, response, con
   sendJson(response, 200, manifest);
 }
 
+async function policyDecisionConsumeEndpoint(request, response, context, requestedDecisionId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminRoles });
+    return;
+  }
+  const decision = await workflowResourceById(context, "policyDecisionRecord", requestedDecisionId);
+  if (!decision) {
+    sendJson(response, 404, { error: "policy_decision_not_found" });
+    return;
+  }
+  const priorConsumptions = await workflowResourcesByField(context, "policyDecisionConsumption", "decisionId", requestedDecisionId);
+  if (priorConsumptions.length) {
+    sendJson(response, 409, { error: "policy_decision_already_consumed", decisionId: requestedDecisionId });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.policyDecisionConsumption ?? body.resource ?? body;
+  const consumption = {
+    ...candidate,
+    decisionId: requestedDecisionId,
+    actionKind: candidate.actionKind ?? decision.actionKind,
+    manifestId: candidate.manifestId ?? decision.manifestId,
+    outputSchemaVersion: candidate.outputSchemaVersion ?? decision.outputSchemaVersion,
+    idempotencyKey: candidate.idempotencyKey ?? decision.idempotencyKey,
+    replayRejected: false,
+    scopeMatched: true,
+    consumedAt: candidate.consumedAt ?? new Date().toISOString(),
+  };
+  const scopeMismatches = [
+    consumption.actionKind !== decision.actionKind ? "actionKind" : null,
+    consumption.manifestId !== decision.manifestId ? "manifestId" : null,
+    consumption.outputSchemaVersion !== decision.outputSchemaVersion ? "outputSchemaVersion" : null,
+    decision.idempotencyKey && consumption.idempotencyKey !== decision.idempotencyKey ? "idempotencyKey" : null,
+  ].filter(Boolean);
+  if (scopeMismatches.length) {
+    sendJson(response, 409, { error: "policy_decision_scope_mismatch", decisionId: requestedDecisionId, scopeMismatches });
+    return;
+  }
+  const validation = validateWorkflowPayload(consumption, session.user, {
+    resourceKey: "policyDecisionConsumption",
+    requiredFields: ["id", "decisionId", "actionKind", "manifestId", "outputSchemaVersion", "consumedAt"],
+    allowHiddenMetadata: true,
+  });
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_policy_decision_consumption", detail: validation.detail });
+    return;
+  }
+  const event = createWorkflowAuditEvent("policy_decision_consumed", session.user, "policyDecisionConsumption", validation.resource, request, {
+    route: "/api/v1/policy-decisions/{id}/consume",
+    requiredRoles: adminRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: "policyDecisionConsumption",
+    resourceId: validation.resource.id,
+    decisionId: requestedDecisionId,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+async function implementationPhaseEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const bundles = await workflowResourcesByField(context, "implementationPhaseGateBundle", "releaseId", releaseId);
+  const activeBundle = bundles.at(-1);
+  if (!activeBundle) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, {
+    releaseId,
+    activeBundleId: activeBundle.id,
+    manifestId: activeBundle.manifestId,
+    futurePhaseDefault: activeBundle.futurePhaseDefault,
+    broadeningRequiresManifestActivation: activeBundle.broadeningRequiresManifestActivation === true,
+    laneStates: activeBundle.laneStates ?? [],
+  });
+}
+
+async function sensitiveAuditChainEventsEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const events = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "sensitiveAuditChainEvent").sort(
+    (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0) || String(left.id).localeCompare(String(right.id)),
+  );
+  sendJson(response, 200, { releaseId, events });
+}
+
+async function sensitiveAuditChainVerifyEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const events = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "sensitiveAuditChainEvent").sort(
+    (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0) || String(left.id).localeCompare(String(right.id)),
+  );
+  const failures = [];
+  events.forEach((event, index) => {
+    const expectedSequence = index + 1;
+    const previous = events[index - 1] ?? null;
+    if (event.sequence !== expectedSequence) failures.push(`sequence:${event.id}`);
+    if (index === 0 && event.previousEventHash) failures.push(`previousEventHash:${event.id}`);
+    if (index > 0 && event.previousEventHash !== previous.eventHash) failures.push(`previousEventHash:${event.id}`);
+    if (!String(event.eventHash ?? "").startsWith("sha256:")) failures.push(`eventHash:${event.id}`);
+  });
+  const verification = {
+    id: body.id ?? body.sensitiveAuditChainVerification?.id ?? `sensitive-audit-chain-verification-${Date.now()}`,
+    releaseId,
+    chainStatus: failures.length ? "failed" : "passed",
+    verifiedEventCount: events.length,
+    failures,
+    verifiedAt: body.verifiedAt ?? body.sensitiveAuditChainVerification?.verifiedAt ?? new Date().toISOString(),
+  };
+  const event = createWorkflowAuditEvent("sensitive_audit_chain_verification_submitted", session.user, "sensitiveAuditChainVerification", verification, request, {
+    route: "/api/v1/sensitive-audit-chain/verify",
+    requiredRoles: adminRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    ...verification,
+    eventId: event.id,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
 async function workflowStateTransitionEndpoint(request, response, context) {
   const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
@@ -1380,10 +1620,25 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const uiExperimentPolicies = latestWorkflowResources(workflowEvents, "uiExperimentPolicy");
   const preSubmitAssistPolicies = latestWorkflowResources(workflowEvents, "preSubmitAssistPolicy");
   const accessibilityConformanceReports = latestWorkflowResources(workflowEvents, "accessibilityConformanceReport");
+  const volunteerIncentivePolicies = latestWorkflowResources(workflowEvents, "volunteerIncentivePolicy");
+  const raterQualificationRecords = latestWorkflowResources(workflowEvents, "raterQualificationRecord");
+  const languageArtifactAssessments = latestWorkflowResources(workflowEvents, "languageArtifactAssessment");
+  const sourceRecognitionEvents = latestWorkflowResources(workflowEvents, "sourceRecognitionEvent");
+  const modelProviderDataHandlingPolicies = latestWorkflowResources(workflowEvents, "modelProviderDataHandlingPolicy");
   const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
   const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
   const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
   const releaseConfigManifestVerifications = latestWorkflowResources(workflowEvents, "releaseConfigManifestVerification");
+  const policyActionKinds = latestWorkflowResources(workflowEvents, "policyActionKind");
+  const policyDecisionRecords = latestWorkflowResources(workflowEvents, "policyDecisionRecord");
+  const policyDecisionConsumptions = latestWorkflowResources(workflowEvents, "policyDecisionConsumption");
+  const implementationPhaseGateBundles = latestWorkflowResources(workflowEvents, "implementationPhaseGateBundle");
+  const queueFreshnessPolicies = latestWorkflowResources(workflowEvents, "queueFreshnessPolicy");
+  const queueStaleByDelayScans = latestWorkflowResources(workflowEvents, "queueStaleByDelayScan");
+  const clientSurfaceIntegrityPolicies = latestWorkflowResources(workflowEvents, "clientSurfaceIntegrityPolicy");
+  const clientSurfaceIntegrityChecks = latestWorkflowResources(workflowEvents, "clientSurfaceIntegrityCheck");
+  const sensitiveAuditChainEvents = latestWorkflowResources(workflowEvents, "sensitiveAuditChainEvent");
+  const sensitiveAuditChainVerifications = latestWorkflowResources(workflowEvents, "sensitiveAuditChainVerification");
   const ratings = [...seedRatings, ...persistedRatings];
   const certificationAttempts = [...seedCertificationAttempts, ...persistedCertificationAttempts];
   const benchmarkExposureEvents = [...seedBenchmarkExposureEvents, ...persistedBenchmarkExposureEvents];
@@ -1466,10 +1721,25 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
+    volunteerIncentivePolicies,
+    raterQualificationRecords,
+    languageArtifactAssessments,
+    sourceRecognitionEvents,
+    modelProviderDataHandlingPolicies,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,
     releaseConfigManifestVerifications,
+    policyActionKinds,
+    policyDecisionRecords,
+    policyDecisionConsumptions,
+    implementationPhaseGateBundles,
+    queueFreshnessPolicies,
+    queueStaleByDelayScans,
+    clientSurfaceIntegrityPolicies,
+    clientSurfaceIntegrityChecks,
+    sensitiveAuditChainEvents,
+    sensitiveAuditChainVerifications,
   });
   return {
     report,
@@ -1549,10 +1819,25 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
+    volunteerIncentivePolicies,
+    raterQualificationRecords,
+    languageArtifactAssessments,
+    sourceRecognitionEvents,
+    modelProviderDataHandlingPolicies,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,
     releaseConfigManifestVerifications,
+    policyActionKinds,
+    policyDecisionRecords,
+    policyDecisionConsumptions,
+    implementationPhaseGateBundles,
+    queueFreshnessPolicies,
+    queueStaleByDelayScans,
+    clientSurfaceIntegrityPolicies,
+    clientSurfaceIntegrityChecks,
+    sensitiveAuditChainEvents,
+    sensitiveAuditChainVerifications,
   };
 }
 

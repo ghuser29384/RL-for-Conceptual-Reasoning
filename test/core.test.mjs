@@ -24,7 +24,9 @@ import {
   buildModelAssistedLabelOverlapReport,
   buildModelFailureAudit,
   buildOctoberReleaseReport,
+  buildOperationalControlEvidenceReport,
   buildPairwiseComparisonSnapshot,
+  buildParticipantSafeguardEvidenceReport,
   buildPairedTargetLabelSnapshotReport,
   buildPolicyBundleEvidenceReport,
   buildPositionIntakeReadinessReport,
@@ -266,6 +268,38 @@ const governedBundleFamilies = [
   "export_policy",
   "phase_gate",
 ];
+const policyActionKinds = [
+  "protected_render",
+  "assignment_issue",
+  "rating_lock",
+  "revision_submit",
+  "discussion_open",
+  "adjudication_finalize",
+  "label_snapshot_freeze",
+  "pairwise_snapshot_freeze",
+  "evaluation_run",
+  "hidden_benchmark_aggregate_report",
+  "release_freeze",
+  "training_export",
+  "manifest_activation",
+];
+const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
+const queueFreshnessLanes = ["assignment", "draft", "discussion", "adjudication", "model_evaluation_job", "hidden_benchmark_submission", "export", "outbox", "delayed_report"];
+const queueRevalidationChecks = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
+const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
+const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+const prohibitedIncentiveSignals = [
+  "rating_direction",
+  "peer_agreement_before_feedback",
+  "model_agreement",
+  "gold_performance_before_permitted_feedback",
+  "speed_beyond_qa_band",
+  "hidden_benchmark_performance",
+  "accepted_revision_count",
+  "leaderboard_rank",
+];
+const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 
 function completePolicyBundleFixtures() {
   return {
@@ -416,6 +450,227 @@ function completeReleaseConfigManifestFixtures() {
   };
 }
 
+function completeOperationalControlFixtures() {
+  const policyActionKindsSubmitted = policyActionKinds.map((actionKind) => ({
+    id: `policy-action-kind-submitted-${actionKind}`,
+    actionKind,
+    sideEffecting: actionKind !== "protected_render",
+    protectedRender: actionKind === "protected_render",
+    requiresCurrentDecision: true,
+    requiresManifestBinding: true,
+    requiresActorBinding: true,
+    requiresOutputSchemaBinding: true,
+    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
+    wrongScopeBehavior: "fail_closed",
+    activatedAt: "2026-10-01T00:00:00.000Z",
+  }));
+  const policyDecisionRecords = policyActionKindsSubmitted.map((actionKind) => ({
+    id: `policy-decision-submitted-${actionKind.actionKind}`,
+    actionKindId: actionKind.id,
+    actionKind: actionKind.actionKind,
+    decisionStatus: "allow",
+    actorId: "release-admin",
+    actorRole: "admin",
+    manifestId: "release-config-manifest-submitted",
+    releaseId: "october-2026-demo",
+    outputSchemaVersion: "lmca-policy-decision-v1",
+    idempotencyKey: `idempotency-${actionKind.actionKind}`,
+    singleUse: actionKind.actionKind !== "protected_render",
+    expiresAt: "2026-10-01T01:00:00.000Z",
+    decidedAt: "2026-10-01T00:01:00.000Z",
+  }));
+  const clientSurfaceIntegrityPolicies = clientSurfaces.map((surface) => ({
+    id: `client-surface-integrity-submitted-${surface}`,
+    releaseId: "october-2026-demo",
+    surface,
+    thirdPartyAnalyticsProhibited: true,
+    sessionReplayProhibited: true,
+    domCaptureProhibited: true,
+    keystrokeLoggingProhibited: true,
+    sensitiveUrlIdsProhibited: true,
+    referrerLeakageBlocked: true,
+    persistentOfflineCacheProhibited: true,
+    cspEnforced: true,
+    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
+  }));
+  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
+    id: `sensitive-audit-event-submitted-${index + 1}`,
+    releaseId: "october-2026-demo",
+    sequence: index + 1,
+    eventKind,
+    actorHash: `sha256:actor-${index + 1}`,
+    approverHashes: ["sha256:approver-a", "sha256:approver-b"],
+    affectedArtifactIds: [`artifact-${eventKind}`],
+    beforeHash: `sha256:before-${eventKind}`,
+    afterHash: `sha256:after-${eventKind}`,
+    previousEventHash: index === 0 ? null : `sha256:event-${index}`,
+    eventHash: `sha256:event-${index + 1}`,
+    redactionPolicy: "redact protected labels, hidden text, and private rater data",
+    occurredAt: "2026-10-01T00:02:00.000Z",
+  }));
+  return {
+    policyActionKinds: policyActionKindsSubmitted,
+    policyDecisionRecords,
+    policyDecisionConsumptions: [
+      {
+        id: "policy-decision-consumption-submitted",
+        decisionId: policyDecisionRecords[1].id,
+        actionKind: policyDecisionRecords[1].actionKind,
+        manifestId: policyDecisionRecords[1].manifestId,
+        outputSchemaVersion: policyDecisionRecords[1].outputSchemaVersion,
+        replayRejected: false,
+        scopeMatched: true,
+        consumedAt: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+    implementationPhaseGateBundles: [
+      {
+        id: "implementation-phase-gate-submitted",
+        releaseId: "october-2026-demo",
+        manifestId: "release-config-manifest-submitted",
+        version: "implementation-phase-rlhf87-v1",
+        laneStates: phaseGateLaneKinds.map((laneKind) => ({
+          laneKind,
+          laneId: `lane-${laneKind}`,
+          phaseState: laneKind === "hidden_benchmark_submission_lane" ? "staff_only" : "enabled",
+          failClosed: true,
+          noSideEffectsWhenDisabled: true,
+          labelsExposedWhenDisabled: false,
+          supportsReleaseClaimsWhenDisabled: false,
+        })),
+        futurePhaseDefault: "blocked",
+        broadeningRequiresManifestActivation: true,
+        frozenAt: "2026-10-01T00:04:00.000Z",
+      },
+    ],
+    queueFreshnessPolicies: queueFreshnessLanes.map((lane, index) => ({
+      id: `queue-freshness-submitted-${lane}`,
+      releaseId: "october-2026-demo",
+      lane,
+      freshnessWindowMinutes: 30 + index,
+      dependencyRevalidationChecks: queueRevalidationChecks,
+      staleBehavior: lane === "outbox" ? "suppress" : "stale",
+      workerConsumeRevalidationRequired: true,
+      renderRevalidationRequired: true,
+      submitRevalidationRequired: true,
+      backpressureBehavior: "pause or recompute before side effects",
+    })),
+    queueStaleByDelayScans: queueFreshnessLanes.map((lane) => ({
+      id: `queue-stale-scan-submitted-${lane}`,
+      lane,
+      scanStatus: "passed",
+      staleCount: 0,
+      dependencyRevalidationChecks: queueRevalidationChecks,
+      scannedAt: "2026-10-01T00:05:00.000Z",
+    })),
+    clientSurfaceIntegrityPolicies,
+    clientSurfaceIntegrityChecks: clientSurfaceIntegrityPolicies.map((policy) => ({
+      id: `client-surface-integrity-check-submitted-${policy.surface}`,
+      clientSurfaceId: policy.id,
+      surface: policy.surface,
+      checkStatus: "passed",
+      checksPassed: [
+        "no_third_party_analytics",
+        "no_session_replay",
+        "no_dom_capture",
+        "no_sensitive_url_ids",
+        "referrer_policy",
+        "no_persistent_offline_cache",
+        "csp",
+      ],
+      failures: [],
+      checkedAt: "2026-10-01T00:06:00.000Z",
+    })),
+    sensitiveAuditChainEvents,
+    sensitiveAuditChainVerifications: [
+      {
+        id: "sensitive-audit-chain-verification-submitted",
+        releaseId: "october-2026-demo",
+        chainStatus: "passed",
+        verifiedEventCount: sensitiveAuditChainEvents.length,
+        verifiedAt: "2026-10-01T00:07:00.000Z",
+      },
+    ],
+  };
+}
+
+function completeParticipantSafeguardFixtures() {
+  return {
+    volunteerIncentivePolicies: [
+      {
+        id: "volunteer-incentive-submitted",
+        policyVersion: "volunteer-incentive-rlhf84-v1",
+        allowedCompensationCreditInputs: ["eligible_completed_work", "role", "time_commitment", "training_completion"],
+        prohibitedIncentiveSignals,
+        speedEffortGuardrails: "private QA-safe effort bands only",
+        publicRecognitionPolicy: "participation acknowledgement without scores, speed, agreement, or benchmark ranking",
+        privateProgressDashboardPolicy: "private non-gamified progress only",
+        calibrationFeedbackUseLimits: "post-lock training-approved feedback only",
+        hiddenBenchmarkGoldPerformanceExclusionPolicy: "never use hidden-benchmark or gold performance for incentives",
+        leaderboardBadgeRestrictions: "no peer, model, gold, hidden-benchmark, or speed leaderboards",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    raterQualificationRecords: qualificationScopes.map((qualificationScope) => ({
+      id: `rater-qualification-submitted-${qualificationScope}`,
+      raterId: `qualified-${qualificationScope}`,
+      qualificationScope,
+      qualificationSource: qualificationScope === "primary_rater_anchor" ? "manual_expert_review" : "certification_pack",
+      evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
+      approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
+      topicFamilyScope: ["AI safety", "decision theory", "normative ethics"],
+      splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+      expiryReviewDate: "2027-01-31",
+      approver: "release-admin",
+      timestamp: "2026-10-01T00:01:00.000Z",
+    })),
+    languageArtifactAssessments: [
+      {
+        id: "language-artifact-submitted",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        artifactType: "machine_translation_residue",
+        pinDownabilityImpact: "none",
+        substantiveAmbiguityImpact: "none",
+        correctnessImpact: "none",
+        deadWeightImpact: "none",
+        overallQualityImpact: "none",
+        automaticScorePenaltyApplied: false,
+        reviewerRole: "expert",
+        visibilityState: "release_safe_summary",
+      },
+    ],
+    sourceRecognitionEvents: [
+      {
+        id: "source-recognition-submitted",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        recognitionType: "source_recognized",
+        raterAction: "safe_decline",
+        independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator",
+        protectedStatusHiddenFromRater: true,
+        reviewerResolution: "paused_and_reassigned",
+      },
+    ],
+    modelProviderDataHandlingPolicies: modelProviderRunClasses.map((coveredRunClass) => ({
+      id: `model-provider-data-handling-submitted-${coveredRunClass}`,
+      providerEndpointClass: `approved-${coveredRunClass}`,
+      coveredRunClass,
+      approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
+      noTrainingOnInputsOutputs: true,
+      noPromptOrOutputReuse: true,
+      unnecessaryHumanReviewProhibited: true,
+      logRetentionWindowDays: 30,
+      subprocessorsSummary: "approved bounded processing route",
+      deletionOrRetentionProofRequired: true,
+      protectedContentEligible: true,
+      approvalStatus: "approved",
+      reviewer: "release-admin",
+      expiresAt: "2026-12-31T00:00:00.000Z",
+    })),
+  };
+}
+
 test("policy bundle evidence gates visibility, workflow profile, UI experiments, assist, and accessibility", () => {
   const report = buildPolicyBundleEvidenceReport("october-2026-demo", completePolicyBundleFixtures());
 
@@ -435,6 +690,30 @@ test("release config manifest evidence gates governed bundle families and manife
   assert.equal(report.counts.passingBundleFamilyCount, governedBundleFamilies.length);
   assert.equal(report.activeManifestId, "release-config-manifest-submitted");
   assert.equal(report.activeManifestHash, "sha256:submitted-release-config");
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("participant safeguard evidence gates qualification, incentives, recognition, language artifacts, and provider data handling", () => {
+  const report = buildParticipantSafeguardEvidenceReport("october-2026-demo", completeParticipantSafeguardFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_participant_safeguard_evidence_complete");
+  assert.equal(report.counts.submittedVolunteerIncentivePolicyCount, 1);
+  assert.equal(report.counts.passingQualificationScopeCount, qualificationScopes.length);
+  assert.equal(report.counts.submittedLanguageArtifactAssessmentCount, 1);
+  assert.equal(report.counts.submittedSourceRecognitionEventCount, 1);
+  assert.equal(report.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("operational control evidence gates policy decisions, phase gates, queue freshness, client surfaces, and audit chain", () => {
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", completeOperationalControlFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_operational_control_evidence_complete");
+  assert.equal(report.counts.passingPolicyActionKindCount, policyActionKinds.length);
+  assert.equal(report.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
+  assert.equal(report.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
+  assert.equal(report.counts.passingClientSurfaceCount, clientSurfaces.length);
+  assert.equal(report.counts.passingAuditChainKindCount, auditChainEventKinds.length);
   assert.deepEqual(report.reviewSections, []);
 });
 

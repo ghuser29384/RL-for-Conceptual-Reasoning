@@ -203,6 +203,38 @@ const governedBundleFamilies = [
   "export_policy",
   "phase_gate",
 ];
+const policyActionKinds = [
+  "protected_render",
+  "assignment_issue",
+  "rating_lock",
+  "revision_submit",
+  "discussion_open",
+  "adjudication_finalize",
+  "label_snapshot_freeze",
+  "pairwise_snapshot_freeze",
+  "evaluation_run",
+  "hidden_benchmark_aggregate_report",
+  "release_freeze",
+  "training_export",
+  "manifest_activation",
+];
+const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
+const queueFreshnessLanes = ["assignment", "draft", "discussion", "adjudication", "model_evaluation_job", "hidden_benchmark_submission", "export", "outbox", "delayed_report"];
+const queueRevalidationChecks = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
+const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
+const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+const prohibitedIncentiveSignals = [
+  "rating_direction",
+  "peer_agreement_before_feedback",
+  "model_agreement",
+  "gold_performance_before_permitted_feedback",
+  "speed_beyond_qa_band",
+  "hidden_benchmark_performance",
+  "accepted_revision_count",
+  "leaderboard_rank",
+];
+const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 
 function completePolicyBundleFixtures() {
   return {
@@ -347,6 +379,207 @@ function completeReleaseConfigWorkflowFixtures() {
       observedHash: releaseConfigManifest.canonicalManifestHash,
       verifiedAt: "2026-10-01T00:11:00.000Z",
     },
+  };
+}
+
+function completeOperationalControlWorkflowFixtures() {
+  const policyActionKindRecords = policyActionKinds.map((actionKind) => ({
+    id: `policy-action-kind-workflow-${actionKind}`,
+    actionKind,
+    sideEffecting: actionKind !== "protected_render",
+    protectedRender: actionKind === "protected_render",
+    requiresCurrentDecision: true,
+    requiresManifestBinding: true,
+    requiresActorBinding: true,
+    requiresOutputSchemaBinding: true,
+    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
+    wrongScopeBehavior: "fail_closed",
+    activatedAt: "2026-10-01T00:12:00.000Z",
+  }));
+  const policyDecisionRecords = policyActionKindRecords.map((actionKind) => ({
+    id: `policy-decision-workflow-${actionKind.actionKind}`,
+    actionKindId: actionKind.id,
+    actionKind: actionKind.actionKind,
+    decisionStatus: "allow",
+    actorId: "demo-admin",
+    actorRole: "admin",
+    manifestId: "release-config-manifest-workflow-new",
+    releaseId: "october-2026-demo",
+    outputSchemaVersion: "lmca-policy-decision-v1",
+    idempotencyKey: `idempotency-${actionKind.actionKind}`,
+    singleUse: actionKind.actionKind !== "protected_render",
+    expiresAt: "2026-10-01T01:12:00.000Z",
+    decidedAt: "2026-10-01T00:12:00.000Z",
+  }));
+  const clientSurfaceIntegrityPolicies = clientSurfaces.map((surface) => ({
+    id: `client-surface-integrity-workflow-${surface}`,
+    releaseId: "october-2026-demo",
+    surface,
+    thirdPartyAnalyticsProhibited: true,
+    sessionReplayProhibited: true,
+    domCaptureProhibited: true,
+    keystrokeLoggingProhibited: true,
+    sensitiveUrlIdsProhibited: true,
+    referrerLeakageBlocked: true,
+    persistentOfflineCacheProhibited: true,
+    cspEnforced: true,
+    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
+  }));
+  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
+    id: `sensitive-audit-chain-event-workflow-${index + 1}`,
+    releaseId: "october-2026-demo",
+    sequence: index + 1,
+    eventKind,
+    actorHash: `sha256:workflow-actor-${index + 1}`,
+    approverHashes: ["sha256:workflow-approver-a", "sha256:workflow-approver-b"],
+    affectedArtifactIds: [`artifact-${eventKind}`],
+    beforeHash: `sha256:workflow-before-${eventKind}`,
+    afterHash: `sha256:workflow-after-${eventKind}`,
+    previousEventHash: index === 0 ? null : `sha256:workflow-event-${index}`,
+    eventHash: `sha256:workflow-event-${index + 1}`,
+    redactionPolicy: "redact protected labels, hidden text, and private rater data",
+    occurredAt: "2026-10-01T00:17:00.000Z",
+  }));
+  return {
+    policyActionKindRecords,
+    policyDecisionRecords,
+    policyDecisionConsumption: {
+      id: "policy-decision-consumption-workflow-new",
+      decisionId: "policy-decision-workflow-rating_lock",
+      actionKind: "rating_lock",
+      manifestId: "release-config-manifest-workflow-new",
+      outputSchemaVersion: "lmca-policy-decision-v1",
+      idempotencyKey: "idempotency-rating_lock",
+      consumedAt: "2026-10-01T00:13:00.000Z",
+    },
+    implementationPhaseGateBundle: {
+      id: "implementation-phase-gate-workflow-new",
+      releaseId: "october-2026-demo",
+      manifestId: "release-config-manifest-workflow-new",
+      version: "implementation-phase-rlhf87-v1",
+      laneStates: phaseGateLaneKinds.map((laneKind) => ({
+        laneKind,
+        laneId: `lane-${laneKind}`,
+        phaseState: laneKind === "hidden_benchmark_submission_lane" ? "staff_only" : "enabled",
+        failClosed: true,
+        noSideEffectsWhenDisabled: true,
+        labelsExposedWhenDisabled: false,
+        supportsReleaseClaimsWhenDisabled: false,
+      })),
+      futurePhaseDefault: "blocked",
+      broadeningRequiresManifestActivation: true,
+      frozenAt: "2026-10-01T00:14:00.000Z",
+    },
+    queueFreshnessPolicies: queueFreshnessLanes.map((lane, index) => ({
+      id: `queue-freshness-workflow-${lane}`,
+      releaseId: "october-2026-demo",
+      lane,
+      freshnessWindowMinutes: 45 + index,
+      dependencyRevalidationChecks: queueRevalidationChecks,
+      staleBehavior: lane === "outbox" ? "suppress" : "stale",
+      workerConsumeRevalidationRequired: true,
+      renderRevalidationRequired: true,
+      submitRevalidationRequired: true,
+      backpressureBehavior: "pause or recompute before side effects",
+    })),
+    queueStaleByDelayScans: queueFreshnessLanes.map((lane) => ({
+      id: `queue-stale-scan-workflow-${lane}`,
+      lane,
+      scanStatus: "passed",
+      staleCount: 0,
+      dependencyRevalidationChecks: queueRevalidationChecks,
+      scannedAt: "2026-10-01T00:15:00.000Z",
+    })),
+    clientSurfaceIntegrityPolicies,
+    clientSurfaceIntegrityChecks: clientSurfaceIntegrityPolicies.map((policy) => ({
+      id: `client-surface-integrity-check-workflow-${policy.surface}`,
+      clientSurfaceId: policy.id,
+      surface: policy.surface,
+      checkStatus: "passed",
+      checksPassed: [
+        "no_third_party_analytics",
+        "no_session_replay",
+        "no_dom_capture",
+        "no_sensitive_url_ids",
+        "referrer_policy",
+        "no_persistent_offline_cache",
+        "csp",
+      ],
+      failures: [],
+      checkedAt: "2026-10-01T00:16:00.000Z",
+    })),
+    sensitiveAuditChainEvents,
+  };
+}
+
+function completeParticipantSafeguardWorkflowFixtures() {
+  return {
+    volunteerIncentivePolicy: {
+      id: "volunteer-incentive-workflow-new",
+      policyVersion: "volunteer-incentive-rlhf84-v1",
+      allowedCompensationCreditInputs: ["eligible_completed_work", "role", "time_commitment", "training_completion"],
+      prohibitedIncentiveSignals,
+      speedEffortGuardrails: "private QA-safe effort bands only",
+      publicRecognitionPolicy: "participation acknowledgement without scores, speed, agreement, or benchmark ranking",
+      privateProgressDashboardPolicy: "private non-gamified progress only",
+      calibrationFeedbackUseLimits: "post-lock training-approved feedback only",
+      hiddenBenchmarkGoldPerformanceExclusionPolicy: "never use hidden-benchmark or gold performance for incentives",
+      leaderboardBadgeRestrictions: "no peer, model, gold, hidden-benchmark, or speed leaderboards",
+      frozenAt: "2026-10-01T00:19:00.000Z",
+    },
+    raterQualificationRecords: qualificationScopes.map((qualificationScope) => ({
+      id: `rater-qualification-workflow-${qualificationScope}`,
+      raterId: `qualified-${qualificationScope}`,
+      qualificationScope,
+      qualificationSource: qualificationScope === "primary_rater_anchor" ? "manual_expert_review" : "certification_pack",
+      evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
+      approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
+      topicFamilyScope: ["AI safety", "decision theory", "normative ethics"],
+      splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+      expiryReviewDate: "2027-01-31",
+      approver: "demo-admin",
+      timestamp: "2026-10-01T00:20:00.000Z",
+    })),
+    languageArtifactAssessment: {
+      id: "language-artifact-workflow-new",
+      positionId: "pos-ai-prior",
+      critiqueId: "crit-ai-base-rate",
+      artifactType: "machine_translation_residue",
+      pinDownabilityImpact: "none",
+      substantiveAmbiguityImpact: "none",
+      correctnessImpact: "none",
+      deadWeightImpact: "none",
+      overallQualityImpact: "none",
+      automaticScorePenaltyApplied: false,
+      reviewerRole: "expert",
+      visibilityState: "release_safe_summary",
+    },
+    sourceRecognitionEvent: {
+      id: "source-recognition-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      raterId: "demo-rater",
+      recognitionType: "source_recognized",
+      raterAction: "safe_decline",
+      independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator",
+      protectedStatusHiddenFromRater: true,
+      reviewerResolution: "paused_and_reassigned",
+    },
+    modelProviderDataHandlingPolicies: modelProviderRunClasses.map((coveredRunClass) => ({
+      id: `model-provider-data-handling-workflow-${coveredRunClass}`,
+      providerEndpointClass: `approved-${coveredRunClass}`,
+      coveredRunClass,
+      approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
+      noTrainingOnInputsOutputs: true,
+      noPromptOrOutputReuse: true,
+      unnecessaryHumanReviewProhibited: true,
+      logRetentionWindowDays: 30,
+      subprocessorsSummary: "approved bounded processing route",
+      deletionOrRetentionProofRequired: true,
+      protectedContentEligible: true,
+      approvalStatus: "approved",
+      reviewer: "demo-admin",
+      expiresAt: "2026-12-31T00:00:00.000Z",
+    })),
   };
 }
 
@@ -665,6 +898,16 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/pre-submit-assist-policies/pre-submit-assist-smoke"],
     ["POST", "/api/v1/accessibility-conformance-reports"],
     ["GET", "/api/v1/accessibility-conformance-reports/accessibility-smoke"],
+    ["POST", "/api/v1/volunteer-incentive-policies"],
+    ["GET", "/api/v1/volunteer-incentive-policies/volunteer-incentive-smoke"],
+    ["POST", "/api/v1/rater-qualification-records"],
+    ["GET", "/api/v1/rater-qualification-records/rater-qualification-smoke"],
+    ["POST", "/api/v1/language-artifact-assessments"],
+    ["GET", "/api/v1/language-artifact-assessments/language-artifact-smoke"],
+    ["POST", "/api/v1/source-recognition-events"],
+    ["GET", "/api/v1/source-recognition-events/source-recognition-smoke"],
+    ["POST", "/api/v1/model-provider-data-handling-policies"],
+    ["GET", "/api/v1/model-provider-data-handling-policies/model-provider-policy-smoke"],
     ["POST", "/api/v1/governed-bundle-canonicalization-profiles"],
     ["GET", "/api/v1/governed-bundle-canonicalization-profiles/profile-smoke"],
     ["POST", "/api/v1/governed-bundles"],
@@ -676,6 +919,24 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/releases/october-2026-demo/freeze-config-manifest"],
     ["GET", "/api/v1/releases/october-2026-demo/config-manifest"],
     ["GET", "/api/v1/evaluations/eval-smoke/release-config-manifest"],
+    ["POST", "/api/v1/policy-action-kinds"],
+    ["GET", "/api/v1/policy-action-kinds/policy-action-kind-smoke"],
+    ["POST", "/api/v1/policy-decisions"],
+    ["GET", "/api/v1/policy-decisions/policy-decision-smoke"],
+    ["POST", "/api/v1/policy-decisions/policy-decision-smoke/consume"],
+    ["POST", "/api/v1/implementation-phase-gate-bundles"],
+    ["GET", "/api/v1/implementation-phase-gate-bundles/implementation-phase-smoke"],
+    ["GET", "/api/v1/implementation-phase"],
+    ["POST", "/api/v1/queue-freshness-policies"],
+    ["GET", "/api/v1/queue-freshness-policies/queue-freshness-smoke"],
+    ["POST", "/api/v1/queues/assignment/stale-by-delay-scan"],
+    ["POST", "/api/v1/client-surface-integrity-policies"],
+    ["GET", "/api/v1/client-surface-integrity-policies/client-surface-policy-smoke"],
+    ["POST", "/api/v1/client-surfaces/client-surface-policy-smoke/integrity-check"],
+    ["POST", "/api/v1/sensitive-audit-chain/events"],
+    ["GET", "/api/v1/sensitive-audit-chain/events"],
+    ["GET", "/api/v1/sensitive-audit-chain/events/audit-event-smoke"],
+    ["POST", "/api/v1/sensitive-audit-chain/verify"],
     ["GET", "/api/v1/evaluations/eval-smoke/report"],
   ];
 
@@ -2831,6 +3092,91 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(visibilityPolicyById.status, 200);
   assert.equal(visibilityPolicyById.body.backendEnforced, true);
 
+  const participantSafeguards = completeParticipantSafeguardWorkflowFixtures();
+  const volunteerIncentivePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/volunteer-incentive-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ volunteerIncentivePolicy: participantSafeguards.volunteerIncentivePolicy }),
+  });
+  assert.equal(volunteerIncentivePolicy.status, 201);
+
+  const volunteerIncentivePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/volunteer-incentive-policies/volunteer-incentive-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(volunteerIncentivePolicyById.status, 200);
+  assert.equal(volunteerIncentivePolicyById.body.privateProgressDashboardPolicy, "private non-gamified progress only");
+
+  for (const raterQualificationRecord of participantSafeguards.raterQualificationRecords) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/rater-qualification-records",
+      headers: adminHeaders,
+      body: JSON.stringify({ raterQualificationRecord }),
+    });
+    assert.equal(response.status, 201, raterQualificationRecord.qualificationScope);
+  }
+
+  const qualificationById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rater-qualification-records/rater-qualification-workflow-adjudicator",
+    headers: adminHeaders,
+  });
+  assert.equal(qualificationById.status, 200);
+  assert.deepEqual(qualificationById.body.approvedRoles, ["expert", "adjudicator"]);
+
+  const languageAssessment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/language-artifact-assessments",
+    headers: adminHeaders,
+    body: JSON.stringify({ languageArtifactAssessment: participantSafeguards.languageArtifactAssessment }),
+  });
+  assert.equal(languageAssessment.status, 201);
+
+  const languageAssessmentById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/language-artifact-assessments/language-artifact-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(languageAssessmentById.status, 200);
+  assert.equal(languageAssessmentById.body.automaticScorePenaltyApplied, false);
+
+  const sourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({ sourceRecognitionEvent: participantSafeguards.sourceRecognitionEvent }),
+  });
+  assert.equal(sourceRecognition.status, 201);
+
+  const sourceRecognitionById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/source-recognition-events/source-recognition-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(sourceRecognitionById.status, 200);
+  assert.equal(sourceRecognitionById.body.protectedStatusHiddenFromRater, true);
+
+  for (const modelProviderDataHandlingPolicy of participantSafeguards.modelProviderDataHandlingPolicies) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/model-provider-data-handling-policies",
+      headers: adminHeaders,
+      body: JSON.stringify({ modelProviderDataHandlingPolicy }),
+    });
+    assert.equal(response.status, 201, modelProviderDataHandlingPolicy.coveredRunClass);
+  }
+
+  const providerPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-provider-data-handling-policies/model-provider-data-handling-workflow-model_evaluation",
+    headers: adminHeaders,
+  });
+  assert.equal(providerPolicyById.status, 200);
+  assert.equal(providerPolicyById.body.protectedContentEligible, true);
+
   const releaseConfig = completeReleaseConfigWorkflowFixtures();
   const canonicalizationProfile = await invokeApi(context, {
     method: "POST",
@@ -2913,6 +3259,163 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(manifestForEvaluation.status, 200);
   assert.equal(manifestForEvaluation.body.id, "release-config-manifest-workflow-new");
+
+  const operationalControls = completeOperationalControlWorkflowFixtures();
+  for (const policyActionKind of operationalControls.policyActionKindRecords) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/policy-action-kinds",
+      headers: adminHeaders,
+      body: JSON.stringify({ policyActionKind }),
+    });
+    assert.equal(response.status, 201, policyActionKind.actionKind);
+  }
+
+  const policyActionKindById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/policy-action-kinds/policy-action-kind-workflow-rating_lock",
+    headers: adminHeaders,
+  });
+  assert.equal(policyActionKindById.status, 200);
+  assert.equal(policyActionKindById.body.wrongScopeBehavior, "fail_closed");
+
+  for (const policyDecisionRecord of operationalControls.policyDecisionRecords) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/policy-decisions",
+      headers: adminHeaders,
+      body: JSON.stringify({ policyDecisionRecord }),
+    });
+    assert.equal(response.status, 201, policyDecisionRecord.actionKind);
+  }
+
+  const policyDecisionById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock",
+    headers: adminHeaders,
+  });
+  assert.equal(policyDecisionById.status, 200);
+  assert.equal(policyDecisionById.body.manifestId, "release-config-manifest-workflow-new");
+
+  const policyDecisionConsumption = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock/consume",
+    headers: adminHeaders,
+    body: JSON.stringify({ policyDecisionConsumption: operationalControls.policyDecisionConsumption }),
+  });
+  assert.equal(policyDecisionConsumption.status, 201);
+
+  const policyDecisionReplay = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock/consume",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      policyDecisionConsumption: {
+        ...operationalControls.policyDecisionConsumption,
+        id: "policy-decision-consumption-replay",
+      },
+    }),
+  });
+  assert.equal(policyDecisionReplay.status, 409);
+  assert.equal(policyDecisionReplay.body.error, "policy_decision_already_consumed");
+
+  const implementationPhaseGate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/implementation-phase-gate-bundles",
+    headers: adminHeaders,
+    body: JSON.stringify({ implementationPhaseGateBundle: operationalControls.implementationPhaseGateBundle }),
+  });
+  assert.equal(implementationPhaseGate.status, 201);
+
+  const implementationPhase = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/implementation-phase",
+    headers: adminHeaders,
+  });
+  assert.equal(implementationPhase.status, 200);
+  assert.equal(implementationPhase.body.futurePhaseDefault, "blocked");
+  assert.equal(implementationPhase.body.laneStates.length, phaseGateLaneKinds.length);
+
+  for (const queueFreshnessPolicy of operationalControls.queueFreshnessPolicies) {
+    const policyResponse = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/queue-freshness-policies",
+      headers: adminHeaders,
+      body: JSON.stringify({ queueFreshnessPolicy }),
+    });
+    assert.equal(policyResponse.status, 201, queueFreshnessPolicy.lane);
+
+    const scan = operationalControls.queueStaleByDelayScans.find((item) => item.lane === queueFreshnessPolicy.lane);
+    const scanResponse = await invokeApi(context, {
+      method: "POST",
+      url: `/api/v1/queues/${queueFreshnessPolicy.lane}/stale-by-delay-scan`,
+      headers: adminHeaders,
+      body: JSON.stringify({ queueStaleByDelayScan: scan }),
+    });
+    assert.equal(scanResponse.status, 201, queueFreshnessPolicy.lane);
+  }
+
+  const queueFreshnessById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/queue-freshness-policies/queue-freshness-workflow-assignment",
+    headers: adminHeaders,
+  });
+  assert.equal(queueFreshnessById.status, 200);
+  assert.equal(queueFreshnessById.body.workerConsumeRevalidationRequired, true);
+
+  for (const clientSurfaceIntegrityPolicy of operationalControls.clientSurfaceIntegrityPolicies) {
+    const policyResponse = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/client-surface-integrity-policies",
+      headers: adminHeaders,
+      body: JSON.stringify({ clientSurfaceIntegrityPolicy }),
+    });
+    assert.equal(policyResponse.status, 201, clientSurfaceIntegrityPolicy.surface);
+
+    const check = operationalControls.clientSurfaceIntegrityChecks.find((item) => item.surface === clientSurfaceIntegrityPolicy.surface);
+    const checkResponse = await invokeApi(context, {
+      method: "POST",
+      url: `/api/v1/client-surfaces/${clientSurfaceIntegrityPolicy.id}/integrity-check`,
+      headers: adminHeaders,
+      body: JSON.stringify({ clientSurfaceIntegrityCheck: check }),
+    });
+    assert.equal(checkResponse.status, 201, clientSurfaceIntegrityPolicy.surface);
+  }
+
+  const clientSurfacePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/client-surface-integrity-policies/client-surface-integrity-workflow-rating",
+    headers: adminHeaders,
+  });
+  assert.equal(clientSurfacePolicyById.status, 200);
+  assert.equal(clientSurfacePolicyById.body.sessionReplayProhibited, true);
+
+  for (const sensitiveAuditChainEvent of operationalControls.sensitiveAuditChainEvents) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/sensitive-audit-chain/events",
+      headers: adminHeaders,
+      body: JSON.stringify({ sensitiveAuditChainEvent }),
+    });
+    assert.equal(response.status, 201, sensitiveAuditChainEvent.eventKind);
+  }
+
+  const auditChainEvents = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/sensitive-audit-chain/events",
+    headers: adminHeaders,
+  });
+  assert.equal(auditChainEvents.status, 200);
+  assert.equal(auditChainEvents.body.events.length, auditChainEventKinds.length);
+
+  const auditChainVerification = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sensitive-audit-chain/verify",
+    headers: adminHeaders,
+    body: JSON.stringify({ id: "sensitive-audit-chain-verification-workflow-new", verifiedAt: "2026-10-01T00:18:00.000Z" }),
+  });
+  assert.equal(auditChainVerification.status, 201);
+  assert.equal(auditChainVerification.body.chainStatus, "passed");
 
   const releaseReport = await invokeApi(context, { method: "GET", url: "/api/release/report" });
   assert.equal(releaseReport.status, 200);
@@ -3160,6 +3663,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.policyBundleEvidence.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
   assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 5);
   assert.deepEqual(releaseReport.body.policyBundleEvidence.reviewSections, []);
+  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.volunteerIncentivePolicies.length, 1);
+  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.raterQualificationRecords.length, qualificationScopes.length);
+  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.languageArtifactAssessments.length, 1);
+  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.sourceRecognitionEvents.length, 1);
+  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.modelProviderDataHandlingPolicies.length, modelProviderRunClasses.length);
+  assert.equal(releaseReport.body.participantSafeguardEvidence.releaseUseStatus, "submitted_participant_safeguard_evidence_complete");
+  assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingQualificationScopeCount, qualificationScopes.length);
+  assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
+  assert.deepEqual(releaseReport.body.participantSafeguardEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleCanonicalizationProfiles.length, 1);
   assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleRecords.length, governedBundleFamilies.length);
   assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifests.length, 1);
@@ -3168,6 +3680,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.counts.passingBundleFamilyCount, governedBundleFamilies.length);
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
   assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyActionKinds.length, policyActionKinds.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 1);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.implementationPhaseGateBundles.length, 1);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.queueFreshnessPolicies.length, queueFreshnessLanes.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.queueStaleByDelayScans.length, queueFreshnessLanes.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.clientSurfaceIntegrityPolicies.length, clientSurfaces.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.clientSurfaceIntegrityChecks.length, clientSurfaces.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainEvents.length, auditChainEventKinds.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainVerifications.length, 1);
+  assert.equal(releaseReport.body.operationalControlEvidence.releaseUseStatus, "submitted_operational_control_evidence_complete");
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPolicyActionKindCount, policyActionKinds.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.passingClientSurfaceCount, clientSurfaces.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.passingAuditChainKindCount, auditChainEventKinds.length);
+  assert.deepEqual(releaseReport.body.operationalControlEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.labelSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.corpusManifests.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.trainingExports.length, 1);
@@ -3250,7 +3779,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 110);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 190);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
