@@ -71,13 +71,19 @@ const state = {
     status: "not_needed",
     note: "No separate check needed.",
   },
+  authConfig: null,
+  clerk: null,
+  clerkSubscribed: false,
   session: null,
   adminSession: null,
-  sessionStatus: { tone: "warn", title: "Demo session pending", detail: "Requesting a signed local session." },
+  sessionStatus: { tone: "warn", title: "Auth session pending", detail: "Requesting the configured platform auth mode." },
   certificationStatus: null,
   lastCertificationStatus: null,
   hiddenBenchmarkFreezeReport: null,
   lastBenchmarkStatus: null,
+  workflowTemplateId: "position-intake",
+  workflowPayloadText: "",
+  lastWorkflowStatus: null,
   lastPersistenceStatus: null,
   lastSourceStyleAuditStatus: null,
 };
@@ -85,6 +91,7 @@ const state = {
 const navItems = [
   ["queue", "Queue", "clipboard"],
   ["rating", "Blind Rating", "eye"],
+  ["workflow", "Workflow", "branch"],
   ["adjudication", "Adjudication", "scale"],
   ["releases", "Releases", "shield"],
   ["evaluation", "Evaluation", "chart"],
@@ -93,6 +100,1348 @@ const navItems = [
 ];
 
 const raterIssueFlags = RATER_ISSUE_FLAG_DEFINITIONS;
+const workflowTemplates = [
+  {
+    id: "position-intake",
+    label: "Position Intake",
+    endpoint: () => "/api/v1/intake/positions",
+    resourceKey: "position",
+    requiredRole: "admin",
+    summary: "Append a screened position with admin-only source and scope metadata.",
+    payload: () => ({
+      position: {
+        id: `pos-intake-${Date.now()}`,
+        text: "A project operator should only claim LMCA comparability when the position text, critique text, rater-visible context, and target-label snapshot are all frozen before evaluation.",
+        split: "public_train",
+        topicFamily: "miscellaneous_topics",
+        conceptualScope: "primarily_conceptual",
+        groundTruthAvailability: "no_realistically_accessible_ground_truth",
+        rightsStatus: "cleared_internal",
+        adminTags: ["operator_intake"],
+        visibilityPolicy: "admin_metadata_hidden_before_initial_lock",
+      },
+    }),
+  },
+  {
+    id: "critique-intake",
+    label: "Critique Intake",
+    endpoint: () => "/api/v1/intake/critiques",
+    resourceKey: "critique",
+    requiredRole: "admin",
+    summary: "Append a critique tied to a position while keeping source/authorship metadata admin-only before rating lock.",
+    payload: () => ({
+      critique: {
+        id: `crit-intake-${Date.now()}`,
+        positionId: "pos-ai-prior",
+        text: "The position treats frozen artifacts as sufficient for comparability, but it has not shown that the target-label snapshot and model prompt used the same same-position context.",
+        sourceType: "human_written",
+        authorshipType: "expert",
+        lengthBand: "medium",
+        styleBand: "direct",
+        marginalInformativeness: "new_objection_type",
+      },
+    }),
+  },
+  {
+    id: "rights-review",
+    label: "Rights Review",
+    endpoint: () => "/api/v1/rights/review",
+    resourceKey: "rightsReview",
+    requiredRole: "admin",
+    summary: "Record a rights/provenance review action before public or internal release packaging.",
+    payload: () => ({
+      rightsReview: {
+        id: `rights-review-${Date.now()}`,
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        reviewerId: state.session?.user?.id ?? "demo-admin",
+        rightsStatus: "cleared_internal",
+        releaseScope: "internal_and_public_summary_allowed",
+        provenanceNotes: "Position and critique provenance reviewed before release freeze.",
+        reviewedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "certification-record",
+    label: "Certification Record",
+    endpoint: () => "/api/v1/certification-records",
+    resourceKey: "certificationRecord",
+    requiredRole: "admin",
+    summary: "Freeze rater gatekeeping results, protected-split conflict checks, calibration errors, and tier unlocks.",
+    payload: () => ({
+      certificationRecord: {
+        id: `certification-record-${Date.now()}`,
+        raterId: "demo-rater",
+        packVersion: "cert-tier-zero-2026-10",
+        rubricVersion: "lmca-seven-dim-v1",
+        goldItemIds: ["gold-item-demo"],
+        duplicateItemIds: ["duplicate-demo"],
+        hardAmbiguityItemIds: ["hard-ambiguity-demo"],
+        protectedSplitConflictCheck: "training_exposure_only_no_hidden_or_validation_cluster_overlap",
+        trainingExposureAcknowledged: true,
+        customWeightedLoss: 0.11,
+        pairwiseError: 0.08,
+        duplicateInconsistency: 0.04,
+        perDimensionCalibrationErrorProfile: { overall: 0.08, clarity: 0.05, correctness: 0.12 },
+        targetedRetrainingFlags: [],
+        tierUnlocked: "graduate_live_rating",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "exposure-log",
+    label: "Exposure Log",
+    endpoint: () => "/api/v1/exposure-logs",
+    resourceKey: "exposureLog",
+    requiredRole: "admin",
+    summary: "Record hidden-benchmark access without raw item contents or rater-visible metadata leakage.",
+    payload: () => ({
+      exposureLog: {
+        id: `exposure-log-${Date.now()}`,
+        userIdHash: "sha256-demo-admin",
+        artifactId: `hidden-benchmark-freeze-${releaseId}`,
+        splitName: "hidden_benchmark",
+        action: "membership_view",
+        purpose: "release_freeze",
+        accessPhase: "pre_freeze",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "revision-record",
+    label: "Revision Record",
+    endpoint: () => "/api/v1/revisions",
+    resourceKey: "revisionRecord",
+    requiredRole: "admin",
+    summary: "Preserve immutable links between prior and revised ratings with reason code and object-level comment.",
+    payload: () => ({
+      revisionRecord: {
+        id: `revision-record-${Date.now()}`,
+        ratingIdPrior: "rating-seed-ai-base-rate-r1",
+        ratingIdNew: "rating-revision-demo",
+        reasonCode: "human_only_self_check",
+        revisionComment: "Rater corrected a strength-centrality allocation after rereading the critique.",
+        discussionThreadId: null,
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "item-text-version",
+    label: "Item Text Version",
+    endpoint: () => "/api/v1/item-text-versions",
+    resourceKey: "itemTextVersion",
+    requiredRole: "admin",
+    summary: "Freeze canonical, rater-visible, and model-visible text hashes for a position or critique.",
+    payload: () => ({
+      itemTextVersion: {
+        id: `item-text-version-${Date.now()}`,
+        itemType: "critique",
+        itemId: "crit-ai-base-rate",
+        canonicalTextHash: "sha256-demo-canonical-critique",
+        raterVisibleRenderedTextHash: "sha256-demo-rater-visible-critique",
+        modelVisibleRenderedTextHash: "sha256-demo-model-visible-critique",
+        textVersionStatus: "frozen_for_release_candidate",
+        normalizationStatus: "unchanged_rater_visible_text",
+        sourceProvenanceLink: "rights-record-demo",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "rating-context-snapshot",
+    label: "Context Snapshot",
+    endpoint: () => "/api/v1/rating-context-snapshots",
+    resourceKey: "ratingContextSnapshot",
+    requiredRole: "admin",
+    summary: "Freeze same-position sibling exposure and order for human/model context-parity checks.",
+    payload: () => ({
+      ratingContextSnapshot: {
+        id: `rating-context-${Date.now()}`,
+        positionId: "pos-ai-prior",
+        targetCritiqueId: "crit-ai-base-rate",
+        contextPolicy: "prior_siblings_in_session",
+        siblingCritiqueIdsShown: ["crit-ai-base-rate"],
+        siblingItemTextVersionIds: ["ctv-crit-ai-base-rate-v1"],
+        siblingOrder: ["crit-ai-base-rate"],
+        laterSiblingAbsent: true,
+        assignmentSource: "blind_initial_rating_queue",
+        modelVisibleContextHash: "sha256-demo-model-context",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "pairwise-comparison-snapshot",
+    label: "Pairwise Snapshot",
+    endpoint: () => "/api/v1/pairwise-comparison-snapshots",
+    resourceKey: "pairwiseComparisonSnapshot",
+    requiredRole: "admin",
+    summary: "Freeze same-position comparison edges, margins, tie policy, and denominator exclusions before pairwise reports.",
+    payload: () => ({
+      pairwiseComparisonSnapshot: {
+        id: `pairwise-snapshot-${Date.now()}`,
+        labelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        positionIds: ["pos-ai-prior"],
+        critiqueIdsByPosition: { "pos-ai-prior": ["crit-ai-base-rate", "crit-ai-generic"] },
+        itemTextVersionIds: ["ptv-pos-ai-prior-v1", "ctv-crit-ai-base-rate-v1", "ctv-ai-generic-v1"],
+        ratingContextPolicySummary: "prior_siblings_in_session",
+        humanTargetScoreSource: "frozen_label_snapshot_overall",
+        tiePolicy: "exclude_human_ties_model_tie_half_margin",
+        nonTiedComparisonEdges: [["crit-ai-base-rate", "crit-ai-generic"]],
+        lowMarginBins: { high_confidence: 1, low_margin: 0 },
+        excludedHumanTieEdges: [],
+        excludedNoPairPositions: [],
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "reliability-weight-model",
+    label: "Reliability Weights",
+    endpoint: () => "/api/v1/rater-reliability-weight-models",
+    resourceKey: "raterReliabilityWeightModel",
+    requiredRole: "admin",
+    summary: "Freeze rater weighting provenance, protected-split exclusions, caps, and unweighted/median sensitivity links.",
+    payload: () => ({
+      raterReliabilityWeightModel: {
+        id: `reliability-weight-model-${Date.now()}`,
+        reliabilityWeightModelId: "uniform-v1-with-sensitivity",
+        modelName: "october_demo_dimension_reliability",
+        version: "v1",
+        fitDataSource: "certification_and_adjudicated_training_mix",
+        protectedSplitExclusions: ["hidden_benchmark", "internal_validation"],
+        fittedAt: new Date().toISOString(),
+        fittedBy: state.session?.user?.id ?? "demo-admin",
+        perDimensionReliabilityEstimates: { overall: 0.82, clarity: 0.88, correctness: 0.76 },
+        raterWeightsByDimension: { "demo-rater": { overall: 0.45 }, "demo-expert": { overall: 0.55 } },
+        weightCaps: { maxSingleRaterShare: 0.6 },
+        shrinkagePolicy: "minimum_evidence_empirical_bayes_shrinkage",
+        minimumEvidenceThreshold: "20 gold_or_adjudicated_items_per_dimension",
+        effectiveSampleSizeByDimension: { overall: 18, clarity: 18, correctness: 16 },
+        maximumSingleRaterWeightShare: 0.55,
+        unweightedSensitivitySnapshotId: "snapshot-oct-api-unweighted",
+        medianSensitivitySnapshotId: "snapshot-oct-api-median",
+        freezeVersion: "october-2026-demo.1",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "rater-registry",
+    label: "Rater Registry",
+    endpoint: () => "/api/v1/raters",
+    resourceKey: "rater",
+    requiredRole: "admin",
+    summary: "Register rater tier, topic expertise, certification status, conflicts, and active reliability-weight model.",
+    payload: () => ({
+      rater: {
+        id: `rater-${Date.now()}`,
+        tier: "graduate",
+        topicExpertise: { ai_safety: "strong", decision_theory: "working", normative_ethics: "working" },
+        certificationStatus: "certified_for_live_blind_rating",
+        reliabilityProfile: { overall: 0.82, clarity: 0.88, correctness: 0.76 },
+        activeReliabilityWeightModelId: "uniform-v1-with-sensitivity",
+        conflictDisclosures: ["no_known_conflict_for_current_queue"],
+        assignmentEligibility: ["live", "gold", "duplicate"],
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "assignment-record",
+    label: "Assignment Record",
+    endpoint: () => "/api/v1/assignments",
+    resourceKey: "assignment",
+    requiredRole: "admin",
+    summary: "Append queue, blinding, topic-routing, same-position exposure, and effort metadata for an assignment.",
+    payload: () => ({
+      assignment: {
+        id: `assignment-${Date.now()}`,
+        raterId: "demo-rater",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        assignmentType: "live",
+        blindState: "blind_initial",
+        sourceTagVisibilityState: "hidden_before_initial_lock",
+        topicRoutingBasisAdminOnly: ["ai_safety"],
+        validationMembershipBlindToRater: true,
+        ratingContextSnapshotId: "rc-pos-ai-prior-base-rate-v1",
+        samePositionOrderPolicy: "prior_siblings_in_session",
+        orderCounterbalanceBucket: "A",
+        siblingCritiquesSeenPriorCount: 0,
+        siblingCritiquesSeenPriorIds: [],
+        laterSiblingCritiquesAbsentAtSubmission: true,
+        expectedEffortBand: "5_to_15_minutes",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "release-gate-profile",
+    label: "Release Gate Profile",
+    endpoint: () => "/api/v1/release-gate-profiles",
+    resourceKey: "releaseGateProfile",
+    requiredRole: "admin",
+    summary: "Freeze source-critical gates, benchmark-quality safeguards, and claim-gated diagnostics before release freeze.",
+    payload: () => ({
+      releaseGateProfile: {
+        id: `release-gate-${Date.now()}`,
+        releaseId,
+        profileName: "october_compressed_first_release",
+        sourceCriticalCoreGates: ["position_critique_units", "seven_dimensions", "blind_initial", "immutable_revisions"],
+        benchmarkQualityGates: ["split_isolation", "artifact_balance", "access_audit"],
+        claimGatedDiagnostics: ["derived_utility", "sycophancy_orthodoxy", "obfuscation_stress"],
+        notRunRationalePolicy: "required_if_claimed_else_explicit_deferred_rationale",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "primary-rater-policy",
+    label: "Primary-Rater Policy",
+    endpoint: () => "/api/v1/primary-rater-anchor-policies",
+    resourceKey: "primaryRaterAnchorPolicy",
+    requiredRole: "admin",
+    summary: "Predeclare a primary-rater-anchor rule before inspecting model outputs or leaderboards.",
+    payload: () => ({
+      primaryRaterAnchorPolicy: {
+        id: `primary-rater-policy-${Date.now()}`,
+        releaseId,
+        selectionRule: "max_blind_initial_coverage_tie_break_stable_rater_id",
+        coverageThreshold: 0.8,
+        topicExpertiseThreshold: "graduate_or_above_for_specialized_clusters",
+        prohibitedPostHocCriteria: ["agreement_with_model_outputs", "desired_leaderboard_effect"],
+        predeclaredAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "comparability-claim",
+    label: "Comparability Claim",
+    endpoint: () => "/api/v1/comparability-claims",
+    resourceKey: "comparabilityClaim",
+    requiredRole: "admin",
+    summary: "Record tiered LMCA comparability status with evidence instead of using one vague comparable label.",
+    payload: () => ({
+      comparabilityClaim: {
+        id: `comparability-claim-${Date.now()}`,
+        releaseId,
+        claimWording: "LMCA-style method-preserving compressed first release; not LMCA-scale replication.",
+        methodPreservingStatus: "passes",
+        corpusScaleStatus: "fails_until_target_loaded",
+        validationDesignStatus: "fails_until_appendix_c_scale_validation_complete",
+        targetLabelRaterStatus: "partial_primary_rater_anchor_policy_required",
+        limitationsText: "Claim remains limited until 120 positions, 360 critiques, 1440 blind ratings, 60 gold items, and Appendix-C-scale validation are present.",
+      },
+    }),
+  },
+  {
+    id: "gold-item",
+    label: "Gold Item",
+    endpoint: () => "/api/v1/gold-items",
+    resourceKey: "goldItem",
+    requiredRole: "admin",
+    summary: "Append adjudicated gold-library items with certification role, scoring rationale, and exclusion provenance.",
+    payload: () => ({
+      goldItem: {
+        id: `gold-item-${Date.now()}`,
+        releaseId,
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        rubricVersion: "lmca-seven-dim-v1",
+        goldRole: "certification_and_drift_monitoring",
+        adjudicatedScores: { overall: 0.72, centrality: 0.78, strength: 0.66, correctness: 0.7, clarity: 0.86, dead_weight: 0.18, single_issue: 0.76 },
+        adjudicationRationale: "Representative conceptual critique with clear disagreement about base-rate relevance.",
+        protectedEvaluationExclusion: true,
+      },
+    }),
+  },
+  {
+    id: "source-anchor-example",
+    label: "Source Anchor",
+    endpoint: () => "/api/v1/source-anchor-examples",
+    resourceKey: "sourceAnchorExample",
+    requiredRole: "admin",
+    summary: "Version public LMCA source anchors for rubric calibration and prompt-regression tests.",
+    payload: () => ({
+      sourceAnchorExample: {
+        id: `source-anchor-${Date.now()}`,
+        releaseId,
+        suiteVersion: "lmca-public-source-anchors-2026-10-workflow",
+        sourceExampleFamily: "table4_model_failure",
+        publicSourceReference: "LMCA Table 4 over-crediting model-failure public anchor",
+        itemId: "lmca-public::table4-model-failure-workflow",
+        positionClusterId: "lmca-public-table4-model-failure",
+        split: "public_training_qa_anchor",
+        rubricVersion: "lmca-app-f-2026-10",
+        exposurePolicy: "public_training_qa_only",
+        allowedUse: ["documentation", "training", "certification", "prompt_regression", "public_demo"],
+        excludedFromProtectedEvaluation: true,
+        promptRegressionEligible: true,
+        certificationExposureEligible: true,
+        intendedLesson: "model_failure",
+        expectedLabelSummary: "over_crediting_generic_or_vague_critique",
+        targetDimensions: ["centrality", "strength", "overall"],
+      },
+    }),
+  },
+  {
+    id: "benchmark-split-member",
+    label: "Split Member",
+    endpoint: () => "/api/v1/benchmark-split-members",
+    resourceKey: "benchmarkSplitMember",
+    requiredRole: "admin",
+    summary: "Append hidden/dev/train split membership with leak-prevention and freeze provenance.",
+    payload: () => ({
+      benchmarkSplitMember: {
+        id: `split-member-${Date.now()}`,
+        releaseId,
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        split: "hidden_benchmark_candidate",
+        splitAssignmentRule: "predeclared_topic_stratified_hash",
+        frozenAt: new Date().toISOString(),
+        leakPreventionStatus: "excluded_from_training_prompt_tuning_and_public_export",
+      },
+    }),
+  },
+  {
+    id: "rights-record",
+    label: "Rights Record",
+    endpoint: () => "/api/v1/rights-records",
+    resourceKey: "rightsRecord",
+    requiredRole: "admin",
+    summary: "Preserve provenance, licensing, removal, and public/export eligibility decisions for release artifacts.",
+    payload: () => ({
+      rightsRecord: {
+        id: `rights-record-${Date.now()}`,
+        releaseId,
+        artifactId: "pos-ai-prior::crit-ai-base-rate",
+        artifactKind: "position_critique_item",
+        provenanceStatus: "cleared_internal_or_public_domain",
+        rightsStatus: "public_export_allowed",
+        removalPolicy: "tombstone_and_rebuild_export_manifest",
+        reviewedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "release-version",
+    label: "Release Version",
+    endpoint: () => "/api/v1/release-versions",
+    resourceKey: "releaseVersion",
+    requiredRole: "admin",
+    summary: "Freeze the versioned release manifest tying corpus, labels, metrics, gates, and claim limitations together.",
+    payload: () => ({
+      releaseVersion: {
+        id: `release-version-${Date.now()}`,
+        releaseId,
+        version: "october-2026-demo.1",
+        corpusManifestId: `corpus-composition-${releaseId}`,
+        labelSnapshotId: "snapshot-oct-api",
+        metricConfigId: `metric-config-${releaseId}`,
+        gateProfileId: `gate-${releaseId}`,
+        status: "method_preserving_demo_not_target_scale",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "label-snapshot",
+    label: "Label Snapshot",
+    endpoint: () => "/api/v1/label-snapshots",
+    resourceKey: "labelSnapshot",
+    requiredRole: "admin",
+    summary: "Submit an immutable release/evaluation target-label snapshot as a durable workflow artifact.",
+    payload: () => ({
+      labelSnapshot: {
+        id: `label-snapshot-${Date.now()}`,
+        releaseId,
+        targetLabelVersion: "initial_mean",
+        snapshotFamily: "initial_mean",
+        itemTextVersionIds: ["ptv-pos-ai-prior-v1", "ctv-crit-ai-base-rate-v1"],
+        pairwiseComparisonSnapshotId: `training-pairwise-${releaseId}`,
+        ratingCountDenominatorSummary: { blindInitialRatings: state.ratings.filter((rating) => rating.kind === "blind_initial").length, revisions: 0, totalRows: state.ratings.length },
+        provisionalFieldPolicy: "low_clarity_non_clarity_fields_excluded_unless_adjudicated",
+        modelAssistedLabelContaminationSummary: "none_in_human_only_snapshot",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "corpus-manifest",
+    label: "Corpus Manifest",
+    endpoint: () => "/api/v1/corpus-manifests",
+    resourceKey: "corpusManifest",
+    requiredRole: "admin",
+    summary: "Submit a frozen corpus composition manifest with denominator and source/provenance summaries.",
+    payload: () => ({
+      corpusManifest: {
+        id: `corpus-manifest-${Date.now()}`,
+        releaseId,
+        positionCount: positions.length,
+        critiqueCount: critiques.length,
+        blindInitialRatingCount: state.ratings.filter((rating) => rating.kind === "blind_initial").length,
+        revisedRatingCount: state.ratings.filter((rating) => rating.kind === "revision").length,
+        positionSourceCategoryDistribution: { hand_written: 1, primarily_model_written: 1, adapted_external: 1 },
+        lmcaTopicFamilyDistribution: { ai_safety: 1, decision_theory: 1, politics: 1, philosophy_of_mind: 1 },
+        metricFamilyEligibilitySummary: "pairwise and custom-loss eligibility tracked separately",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "training-export-artifact",
+    label: "Training Export Artifact",
+    endpoint: () => "/api/v1/training-exports",
+    resourceKey: "trainingExport",
+    requiredRole: "admin",
+    summary: "Submit a durable model-improvement export manifest with protected-split exclusions and target fields.",
+    payload: () => ({
+      trainingExport: {
+        id: `training-export-artifact-${Date.now()}`,
+        releaseId,
+        sourceLabelSnapshotId: "snapshot-oct-api",
+        sourceSplits: ["public_train"],
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelVersion: "initial_mean",
+        targetFields: ["overall", "centrality_x_strength"],
+        pairwiseMarginThreshold: 0.2,
+        lowMarginHandling: "retain_continuous_weight_and_flag_below_threshold",
+        promptTrackExposurePolicy: "project_full_rubric_training",
+        protectedSplitExclusionProof: "position_cluster_isolation_checked",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "export-manifest",
+    label: "Export Manifest",
+    endpoint: () => "/api/v1/exports/public",
+    resourceKey: "exportManifest",
+    requiredRole: "admin",
+    summary: "Submit a durable public/internal export manifest while preserving hidden benchmark and rights exclusions.",
+    payload: () => ({
+      exportManifest: {
+        id: `export-manifest-${Date.now()}`,
+        kind: "public",
+        releaseId,
+        includedSplits: ["public_train", "public_dev"],
+        excludedSplits: ["internal_validation", "hidden_benchmark"],
+        rightsClearedOnly: true,
+        hiddenBenchmarkExcluded: true,
+        labelSnapshotId: "snapshot-oct-api",
+        counts: { positions: 1, critiques: 2, itemLabels: 5 },
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "release-freeze",
+    label: "Release Freeze",
+    endpoint: () => "/api/v1/releases/freeze",
+    resourceKey: "releaseFreeze",
+    requiredRole: "admin",
+    summary: "Append the release-freeze action tying corpus, labels, gates, and evidence to a freeze decision.",
+    payload: () => ({
+      releaseFreeze: {
+        id: `release-freeze-${Date.now()}`,
+        releaseId,
+        corpusManifestId: `corpus-composition-${releaseId}`,
+        labelSnapshotId: "snapshot-oct-api",
+        releaseGateProfileId: `gate-${releaseId}`,
+        freezeStatus: "candidate_freeze_recorded",
+        targetScaleStatus: "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings",
+        frozenBy: state.session?.user?.id ?? "demo-admin",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "discussion",
+    label: "Discussion Memo",
+    endpoint: () => "/api/v1/discussions",
+    resourceKey: "discussion",
+    requiredRole: "expert_or_admin",
+    summary: "Record an escalated disagreement discussion without mutating initial ratings.",
+    payload: () => ({
+      discussion: {
+        id: `discussion-${Date.now()}`,
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        disagreementTaxonomy: ["strength_centrality_allocation"],
+        postDiscussionMaxSpread: 0.22,
+        minorityRationalesPreserved: true,
+      },
+    }),
+  },
+  {
+    id: "discussion-thread",
+    label: "Discussion Thread",
+    endpoint: () => "/api/v1/discussion-threads",
+    resourceKey: "discussionThread",
+    requiredRole: "expert_or_admin",
+    summary: "Preserve escalated disagreement context, item keys, taxonomy codes, and thread status.",
+    payload: () => ({
+      discussionThread: {
+        id: `discussion-thread-${Date.now()}`,
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        issueType: "strength_centrality_allocation",
+        disagreementTaxonomyCodes: ["strength_centrality_allocation", "background_knowledge_assumption"],
+        status: "open_for_expert_adjudication",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "adjudication",
+    label: "Adjudication",
+    endpoint: () => "/api/v1/adjudications",
+    resourceKey: "adjudication",
+    requiredRole: "expert_or_admin",
+    summary: "Open an adjudication action for a contested item while preserving original ratings.",
+    payload: () => ({
+      adjudication: {
+        id: `adjudication-${Date.now()}`,
+        discussionThreadId: "discussion-thread-demo",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        adjudicatorIds: [state.session?.user?.id ?? "demo-expert"],
+        decisionStatus: "memo_pending_finalization",
+        benchmarkCandidatePolicy: "requires_closed_adjudication_before_freeze",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "adjudication-memo",
+    label: "Adjudication Memo",
+    endpoint: () => "/api/v1/adjudication-memos",
+    resourceKey: "adjudicationMemo",
+    requiredRole: "expert_or_admin",
+    summary: "Preserve final object-level resolution, interpretation notes, disagreement taxonomy, and split decision.",
+    payload: () => ({
+      adjudicationMemo: {
+        id: `adjudication-memo-${Date.now()}`,
+        discussionThreadId: "discussion-thread-demo",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        contestedInterpretation: "Whether the critique attacks the central forecast or a side assumption.",
+        plausibleInterpretationsConsidered: ["central_base_rate_attack", "side_assumption_only"],
+        worstPlausibleInterpretationConsidered: "side_assumption_only",
+        pricedInAssessment: "partly_priced_in",
+        backgroundKnowledgeAssessment: "requires_ai_forecasting_context",
+        strengthCentralityAllocationSummary: "Product remains stable despite allocation disagreement.",
+        correctnessVerificationStatus: "not_practicable",
+        disagreementTaxonomyCodes: ["strength_centrality_allocation"],
+        postDiscussionResolutionStatus: "resolved_with_minor_residual_spread",
+        maxFinalRaterSpread: 0.18,
+        splitDecision: "public_train",
+        adjudicatorIds: ["demo-expert"],
+        rubricVersionConsidered: "lmca-seven-dim-v1",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "adjudication-finalization",
+    label: "Adjudication Finalization",
+    endpoint: () => "/api/v1/adjudications/adjudication-demo/finalize",
+    resourceKey: "adjudicationFinalization",
+    requiredRole: "expert_or_admin",
+    summary: "Finalize an adjudication decision after the memo records interpretations, residual disagreement, and split decision.",
+    payload: () => ({
+      adjudicationFinalization: {
+        id: `adjudication-finalization-${Date.now()}`,
+        adjudicationId: "adjudication-demo",
+        memoId: "adjudication-memo-demo",
+        finalizationStatus: "finalized_for_release_candidate",
+        finalizedBy: state.session?.user?.id ?? "demo-expert",
+        finalizedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "rating-check",
+    label: "Rating Check",
+    endpoint: () => "/api/v1/rating-checks",
+    resourceKey: "ratingCheck",
+    requiredRole: "assigned_rater",
+    summary: "Append a self-check, expert-check, or model-assisted check without overwriting the blind initial rating.",
+    payload: () => ({
+      ratingCheck: {
+        id: `rating-check-${Date.now()}`,
+        ratingId: "rating-seed-ai-base-rate-r1",
+        checkerId: state.session?.user?.id ?? "demo-rater",
+        checkType: "self_check",
+        auxiliaryMaterialSeen: ["own_initial_rationale"],
+        modelExposureTiming: "none",
+        humanOnlyCheckLockedBeforeModelExposure: true,
+        rubricVersionUsedForCheck: "lmca-seven-dim-v1",
+        labelContaminationGroupId: "human_only_self_check",
+        resultingRevisionId: null,
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "rating-check-action",
+    label: "Rating Check Action",
+    endpoint: () => "/api/v1/ratings/rating-seed-ai-base-rate-r1/check",
+    resourceKey: "ratingCheck",
+    requiredRole: "assigned_rater",
+    summary: "Append the assignment-bound self-check/expert-check action from the rating route without overwriting the initial rating.",
+    payload: () => ({
+      ratingCheck: {
+        id: `rating-check-action-${Date.now()}`,
+        ratingId: "rating-seed-ai-base-rate-r1",
+        assignmentId: state.selectedAssignmentId,
+        raterId: state.session?.user?.id ?? "demo-rater",
+        checkKind: "self_check",
+        auxiliaryMaterialSeen: ["own_initial_rationale"],
+        modelExposureTiming: "none",
+        humanOnlyCheckLockedBeforeModelExposure: true,
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "verification",
+    label: "Verification Record",
+    endpoint: () => "/api/v1/verification-records",
+    resourceKey: "verificationRecord",
+    requiredRole: "expert_or_admin",
+    summary: "Append correctness-verification provenance for release-sensitive cases.",
+    payload: () => ({
+      verificationRecord: {
+        id: `verification-${Date.now()}`,
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        verificationStatus: "not_practicable",
+        verificationResult: "No easy empirical or formal check is available before adjudication.",
+      },
+    }),
+  },
+  {
+    id: "assignment-flag",
+    label: "Assignment Flag",
+    endpoint: () => `/api/v1/assignments/${state.selectedAssignmentId}/flag`,
+    resourceKey: "assignmentFlag",
+    requiredRole: "assigned_rater",
+    summary: "Let a rater route topic-fit or rubric-sensitive issues without exposing hidden metadata.",
+    payload: () => ({
+      assignmentFlag: {
+        id: `assignment-flag-${Date.now()}`,
+        assignmentId: state.selectedAssignmentId,
+        raterId: state.session?.user?.id ?? "demo-rater",
+        reasonCode: "insufficient_topic_expertise",
+        notes: "Route for topic-fit review; do not downgrade clarity solely for unfamiliarity.",
+      },
+    }),
+  },
+  {
+    id: "prompt-template",
+    label: "Prompt Template",
+    endpoint: () => "/api/v1/prompt-templates",
+    resourceKey: "promptTemplate",
+    requiredRole: "admin",
+    summary: "Version prompt body, prompt track, source-scope class, schema, examples, and protected-split exclusion policy.",
+    payload: () => ({
+      promptTemplate: {
+        id: `prompt-template-${Date.now()}`,
+        promptFamily: "lmca_evaluation",
+        promptTrack: "project_full_rubric",
+        promptVersion: "v1",
+        promptSourceScopeClass: "project_full_rubric",
+        fullPromptBody: "Rate the critique of the position on the seven LMCA dimensions and return strict JSON.",
+        renderedPromptChecksum: "sha256-demo-rendered-prompt",
+        rubricVersion: "lmca-seven-dim-v1",
+        promptRole: "evaluation",
+        requestedOutputSchema: "json-seven-dim-v1",
+        reasoningElicitationPolicy: "no_private_chain_of_thought_required",
+        answerExtractionPolicy: "strict_json_fields_only",
+        fewShotExampleItemIds: ["source-anchor-demo"],
+        protectedSplitExclusionPolicy: "exclude_hidden_benchmark_and_internal_validation_examples",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "parser-config",
+    label: "Parser Config",
+    endpoint: () => "/api/v1/parser-configs",
+    resourceKey: "parserConfig",
+    requiredRole: "admin",
+    summary: "Version accepted model-output schema, retry, repair, and invalid-score policy.",
+    payload: () => ({
+      parserConfig: {
+        id: `parser-config-${Date.now()}`,
+        acceptedSchema: "json-seven-dim-v1",
+        retryPolicy: "one_retry_then_repair_attempt",
+        repairPolicy: "schema_only_no_score_imputation",
+        invalidScoreHandling: "mark_prediction_invalid_and_count_failure",
+      },
+    }),
+  },
+  {
+    id: "active-learning-selection-audit",
+    label: "Selection Audit",
+    endpoint: () => "/api/v1/active-learning-selection-audits",
+    resourceKey: "activeLearningSelectionAudit",
+    requiredRole: "admin",
+    summary: "Preserve generated, judged, selected, rejected, and promoted counts for active-learning candidate batches.",
+    payload: () => ({
+      activeLearningSelectionAudit: {
+        id: `selection-audit-${Date.now()}`,
+        candidateBatchId: "candidate-batch-demo",
+        positionId: "pos-ai-prior",
+        generatedOrIngestedCount: 48,
+        judgedCount: 48,
+        disagreementSelectedCount: 9,
+        highRatedSelectedCount: 6,
+        suspectedJudgeFalsePositiveCount: 4,
+        humanSelectedForDiversityCount: 3,
+        rejectedCountByReason: { near_duplicate: 11, rights_unclear: 2, low_marginal_informativeness: 13 },
+        promotedToRatingCount: 7,
+      },
+    }),
+  },
+  {
+    id: "candidate-batch",
+    label: "Candidate Batch",
+    endpoint: () => "/api/v1/candidate-batches",
+    resourceKey: "candidateBatch",
+    requiredRole: "admin",
+    summary: "Preserve admin-only generator/source, judge-model, denominator, and selection-policy provenance for a candidate pool.",
+    payload: () => ({
+      candidateBatch: {
+        id: `candidate-batch-${Date.now()}`,
+        positionId: "pos-ai-prior",
+        generatorSourceDescription: "Mixed human and LLM-generated candidate critiques for active-learning intake.",
+        promptTemplateVersion: "critique-generator-v1",
+        judgeModelSet: ["judge-model-a", "judge-model-b"],
+        generatedOrIngestedCandidateCount: 48,
+        judgedCandidateCount: 48,
+        candidatePoolDenominatorPolicy: "all_generated_or_ingested_outputs_preserved_before_filtering",
+        selectionPolicyVersion: "selection-policy-october-2026-v1",
+        batchStatus: "judged_pending_selection_audit",
+        createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "candidate-critique",
+    label: "Candidate Critique",
+    endpoint: () => "/api/v1/candidate-critiques",
+    resourceKey: "candidateCritique",
+    requiredRole: "admin",
+    summary: "Preserve a pre-intake candidate critique with generation route, rights status, selection reason, and redundancy notes.",
+    payload: () => ({
+      candidateCritique: {
+        id: `candidate-critique-${Date.now()}`,
+        candidateBatchId: "candidate-batch-demo",
+        positionId: "pos-ai-prior",
+        text: "The argument underweights alternative priors about near-term capability timelines.",
+        sourceType: "llm_generated",
+        generationRoute: "critique_generation_run",
+        generatorModel: "model-under-test",
+        generatorPromptVersion: "critique-generator-v1",
+        rightsStatus: "cleared_internal",
+        selectionReason: "judge_disagreement_and_new_objection_type",
+        nearDuplicateClusterId: "none",
+        marginalInformativenessRationale: "Adds a base-rate objection not covered by existing critiques.",
+        reviewStatus: "pending_expert_review",
+      },
+    }),
+  },
+  {
+    id: "model-judge-score",
+    label: "Model Judge Score",
+    endpoint: () => "/api/v1/model-judge-scores",
+    resourceKey: "modelJudgeScore",
+    requiredRole: "admin",
+    summary: "Store model-screening outputs as hidden admin provenance, never as gold or adjudicated labels.",
+    payload: () => ({
+      modelJudgeScore: {
+        id: `model-judge-score-${Date.now()}`,
+        candidateId: "candidate-critique-demo",
+        candidateBatchId: "candidate-batch-demo",
+        judgeRequestedModelAlias: "judge-model-a",
+        judgeProvider: "internal_eval_gateway",
+        judgeResolvedModelSnapshot: "judge-model-a-2026-10-01",
+        promptVersion: "model-judge-v1",
+        modelParameters: { temperature: 0 },
+        reasoningSettings: { mode: "standard" },
+        aliasStabilityStatus: "resolved_snapshot_recorded",
+        rawOutput: "{\"overall\":0.71}",
+        parseStatus: "parsed",
+        overallScore: 0.71,
+        fullRubricScores: { overall: 0.71, centrality: 0.78, strength: 0.66, correctness: 0.74, clarity: 0.82, dead_weight: 0.16, single_issue: 0.7 },
+        disagreementStatistics: { judgePairSpread: 0.18 },
+        hiddenFromRatersBeforeInitialLock: true,
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "candidate-batch-model-judge-scores",
+    label: "Batch Judge Scores",
+    endpoint: () => "/api/v1/candidate-batches/candidate-batch-demo/model-judge-scores",
+    resourceKey: "modelJudgeScores",
+    requiredRole: "admin",
+    summary: "Append a batch-level model-judge-score submission record with coverage policy and hidden-rater handling.",
+    payload: () => ({
+      modelJudgeScores: {
+        id: `candidate-batch-model-judge-scores-${Date.now()}`,
+        candidateBatchId: "candidate-batch-demo",
+        submittedScoreIds: ["model-judge-score-demo"],
+        judgedCandidateCount: 48,
+        batchCoveragePolicy: "all_candidates_judged_or_exclusion_recorded",
+        hiddenFromRatersBeforeInitialLock: true,
+        submittedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "candidate-review",
+    label: "Candidate Review",
+    endpoint: () => "/api/v1/candidates/candidate-critique-demo/review",
+    resourceKey: "candidateReview",
+    requiredRole: "expert_or_admin",
+    summary: "Record trained human review before a candidate critique can enter the live blind-rating queue.",
+    payload: () => ({
+      candidateReview: {
+        id: `candidate-review-${Date.now()}`,
+        candidateId: "candidate-critique-demo",
+        reviewerId: state.session?.user?.id ?? "demo-expert",
+        reviewStatus: "approved_for_live_queue",
+        inclusionReason: "judge_disagreement_and_new_objection_type",
+        benchmarkCandidatePolicy: "metadata_hidden_from_initial_raters",
+        reviewedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "candidate-promotion",
+    label: "Candidate Promotion",
+    endpoint: () => "/api/v1/candidates/candidate-critique-demo/promote",
+    resourceKey: "candidatePromotion",
+    requiredRole: "admin",
+    summary: "Promote an approved candidate critique into the blind-rating corpus while preserving selection provenance.",
+    payload: () => ({
+      candidatePromotion: {
+        id: `candidate-promotion-${Date.now()}`,
+        candidateId: "candidate-critique-demo",
+        acceptedCritiqueId: "crit-ai-base-rate",
+        promotionStatus: "promoted_to_blind_rating_queue",
+        sourceMetadataHiddenFromRaters: true,
+        promotedBy: state.session?.user?.id ?? "demo-admin",
+        promotedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "critique-generation-run",
+    label: "Critique Generation Run",
+    endpoint: () => "/api/v1/critique-generation-runs",
+    resourceKey: "critiqueGenerationRun",
+    requiredRole: "admin",
+    summary: "Preserve generator model, prompt, split, budget, filtering, and blind-rating-before-screening policy.",
+    payload: () => ({
+      critiqueGenerationRun: {
+        id: `critique-generation-run-${Date.now()}`,
+        generatorRequestedModelAlias: "generator-model-a",
+        generatorProvider: "internal_eval_gateway",
+        generatorResolvedModelSnapshot: "generator-model-a-2026-10-01",
+        promptTemplateId: "prompt-template-demo",
+        renderedPromptChecksum: "sha256-demo-generation-prompt",
+        sourceSplit: "public_train",
+        positionIds: ["pos-ai-prior"],
+        generationParameters: { temperature: 0.7, maxOutputsPerPosition: 4 },
+        generationBudgetPerPosition: 4,
+        outputsRequested: 4,
+        outputFilteringPolicy: "deduplicate_then_human_review",
+        judgeScreeningPolicy: "model_judge_scores_hidden_from_raters",
+        blindRatingBeforeScreening: true,
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "generated-critique",
+    label: "Generated Critique",
+    endpoint: () => "/api/v1/generated-critiques",
+    resourceKey: "generatedCritiqueSubmission",
+    requiredRole: "admin",
+    summary: "Store generated critique submissions before human rating without leaking generator metadata to raters.",
+    payload: () => ({
+      generatedCritiqueSubmission: {
+        id: `generated-critique-${Date.now()}`,
+        generationRunId: "critique-generation-run-demo",
+        positionId: "pos-ai-prior",
+        rawGeneratedText: "The position should account for the base rate of forecasting failures in adjacent AI domains.",
+        normalizedRaterVisibleText: "The position should account for the base rate of forecasting failures in adjacent AI domains.",
+        generationIndex: 0,
+        generatorMetadataHiddenFromRaters: true,
+        generationOutputStatus: "generated",
+        rightsStatus: "cleared_internal",
+        promotedCritiqueId: null,
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "generated-critique-promotion",
+    label: "Generated Promotion",
+    endpoint: () => "/api/v1/generated-critiques/generated-critique-demo/promote",
+    resourceKey: "generatedCritiquePromotion",
+    requiredRole: "admin",
+    summary: "Promote a generated critique after human review while preserving generator metadata as hidden provenance.",
+    payload: () => ({
+      generatedCritiquePromotion: {
+        id: `generated-critique-promotion-${Date.now()}`,
+        generatedCritiqueId: "generated-critique-demo",
+        promotedCritiqueId: "crit-ai-base-rate",
+        promotionStatus: "promoted_after_human_review",
+        generatorMetadataHiddenFromRaters: true,
+        promotedBy: state.session?.user?.id ?? "demo-admin",
+        promotedAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "generation-evaluation-report",
+    label: "Generation Eval Report",
+    endpoint: () => "/api/v1/generation-evaluation-reports",
+    resourceKey: "generationEvaluationReport",
+    requiredRole: "admin",
+    summary: "Record generator-specific metrics separately from model-judge or critique-rating evaluation metrics.",
+    payload: () => ({
+      generationEvaluationReport: {
+        id: `generation-evaluation-report-${Date.now()}`,
+        generationRunIds: ["critique-generation-run-demo"],
+        labelSnapshotId: "snapshot-oct-api",
+        commonPositionSetPolicy: "common_positions_required_for_generator_comparison",
+        commonGenerationBudgetPolicy: "budget_matched",
+        filteringSelectionPolicy: "uncurated_random_sample_plus_best_of_n_diagnostic",
+        uncuratedRandomSampleMetrics: { ratedCount: 12, meanOverall: 0.61 },
+        bestOfNMetrics: { n: 4, passAtThreshold: 0.42, threshold: 0.7 },
+        counts: { generated: 48, refusal: 0, duplicate: 6, filtered: 8, promoted: 7, rated: 12 },
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "metric-config",
+    label: "Metric Config",
+    endpoint: () => "/api/v1/metric-configs",
+    resourceKey: "metricConfig",
+    requiredRole: "admin",
+    summary: "Freeze metric directionality, tie policy, pairwise margins, and uncertainty defaults before scoring.",
+    payload: () => ({
+      metricConfig: {
+        id: `metric-config-${Date.now()}`,
+        metricFamily: "weighted_pairwise_and_custom_loss",
+        metricVersion: "lmca-october-2026-v1",
+        lowClarityThreshold: 0.5,
+        customLossTargetRole: "human_label_snapshot",
+        customLossPredictionRole: "model_prediction",
+        scoreRoundingPolicy: "stored_exact",
+        pairwiseHumanTiePolicy: "exclude_human_ties",
+        pairwiseModelTiePolicy: "model_tie_costs_half_margin",
+        pairwiseTieTolerance: 0,
+        defaultResamplingUnit: "position_for_pairwise_item_for_custom_loss",
+        unweightedPairwiseDiagnosticEnabled: true,
+        derivedUtilityPairwiseEnabled: true,
+      },
+    }),
+  },
+  {
+    id: "derived-utility-formula",
+    label: "Derived Utility Formula",
+    endpoint: () => "/api/v1/derived-utility-formulas",
+    resourceKey: "derivedUtilityFormula",
+    requiredRole: "admin",
+    summary: "Version the non-headline full-rubric utility formula with dead-weight badness normalization.",
+    payload: () => ({
+      derivedUtilityFormula: {
+        id: `derived-utility-${Date.now()}`,
+        formulaName: "default_full_rubric_utility",
+        version: "v1",
+        inputDimensions: ["overall", "centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue"],
+        weights: { overall: 0.5, centralityStrengthProduct: 0.2, clarity: 0.1, correctness: 0.1, deadWeightUtility: 0.05, singleIssue: 0.05 },
+        centralityStrengthHandling: "multiply_centrality_by_strength",
+        deadWeightDirectionHandling: "badness_field_normalized_as_one_minus_dead_weight",
+        lowClarityPolicy: "if_target_clarity_below_0_5_use_only_overall_and_clarity",
+      },
+    }),
+  },
+  {
+    id: "model-improvement-run",
+    label: "Model Improvement Run",
+    endpoint: () => "/api/v1/model-improvement-runs",
+    resourceKey: "modelImprovementRun",
+    requiredRole: "admin",
+    summary: "Record RLHF/reward-model objective provenance separately from frozen LMCA evaluation metrics.",
+    payload: () => ({
+      modelImprovementRun: {
+        id: `model-improvement-run-${Date.now()}`,
+        trainingExportId: "training-export-october-2026-demo",
+        modelFamilyOrCheckpoint: "reward-model-candidate-a",
+        optimizedSurrogateObjectiveFamily: "pairwise_logistic",
+        targetFields: ["overall", "centrality_x_strength"],
+        humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
+        tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
+        calibrationTargetDistribution: "public_train_label_snapshot_prior",
+        fitSplit: "public_train",
+        devSplit: "public_dev",
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        trainingPromptTemplateId: "prompt-template-demo",
+        linkedPostTrainingEvaluationRunIds: ["eval-full-rubric-demo"],
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "evaluation-run",
+    label: "Evaluation Run",
+    endpoint: () => "/api/v1/evaluations/run",
+    resourceKey: "evaluationRun",
+    requiredRole: "admin",
+    summary: "Capture a model-evaluation run with target-label and parser provenance.",
+    payload: () => ({
+      evaluationRun: {
+        id: `eval-run-${Date.now()}`,
+        targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_only",
+        metricFamilies: ["weighted_pairwise", "custom_weighted_loss"],
+        parserConfigId: "json-seven-dim-v1",
+        protectedSplitPolicy: "hidden_benchmark_excluded_from_training_and_prompt_fitting",
+      },
+    }),
+  },
+  {
+    id: "model-evaluation-prediction",
+    label: "Model Prediction",
+    endpoint: () => "/api/v1/evaluations/eval-full-rubric-demo/predictions",
+    resourceKey: "modelEvaluationPrediction",
+    requiredRole: "admin",
+    summary: "Persist a per-item raw model output, parser status, text-version ids, rendered hash, and parsed rubric scores.",
+    payload: () => ({
+      modelEvaluationPrediction: {
+        id: `prediction-${Date.now()}`,
+        evaluationRunId: "eval-full-rubric-demo",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        positionTextVersionId: "ptv-pos-ai-prior-v1",
+        critiqueTextVersionId: "ctv-crit-ai-base-rate-v1",
+        renderedItemHash: "sha256-demo-rendered-item",
+        requestedModelAlias: "model-under-test",
+        resolvedModelSnapshot: "model-under-test-2026-10-01",
+        rawModelResponse: "{\"overall\":0.62}",
+        ratingContextSnapshotId: "rc-pos-ai-prior-base-rate-v1",
+        parserConfigId: "parser-config-demo",
+        parseAttemptCount: 1,
+        retryRepairStatus: "not_needed",
+        parseStatus: "parsed",
+        parsedOverallScore: 0.62,
+        parsedFullRubricScores: { overall: 0.62, centrality: 0.7, strength: 0.6, correctness: 0.75, clarity: 0.8, dead_weight: 0.2, single_issue: 0.7 },
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "calibration-run",
+    label: "Calibration Run",
+    endpoint: () => "/api/v1/evaluations/eval-full-rubric-demo/calibrate",
+    resourceKey: "calibrationRun",
+    requiredRole: "admin",
+    summary: "Record recalibration provenance separately from raw LMCA evaluation metrics.",
+    payload: () => ({
+      calibrationRun: {
+        id: `calibration-run-${Date.now()}`,
+        evaluationRunId: "eval-full-rubric-demo",
+        fitSplit: "public_dev",
+        transformation: "isotonic_regression",
+        protectedSplitExclusion: "hidden_benchmark_and_protected_validation_excluded",
+      },
+    }),
+  },
+  {
+    id: "artifact-probe",
+    label: "Artifact Probe",
+    endpoint: () => "/api/v1/artifact-probes/run",
+    resourceKey: "artifactProbeRun",
+    requiredRole: "admin",
+    summary: "Run or document authorized critique-only, metadata-only, or style-feature artifact diagnostics.",
+    payload: () => ({
+      artifactProbeRun: {
+        id: `artifact-probe-${Date.now()}`,
+        splitEvaluated: "hidden_benchmark_candidate",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        inputView: "critique_only",
+        featureSet: ["surface_style", "length_band"],
+        requestedModelAlias: "artifact-probe-baseline",
+        metricOutputs: { weightedPairwiseLoss: 0.24, customWeightedLoss: 0.29 },
+        protectedMetadataHandling: "authorized_admin_only_probe_no_public_raw_content",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "sycophancy-probe",
+    label: "Sycophancy Probe",
+    endpoint: () => "/api/v1/sycophancy-probes/run",
+    resourceKey: "sycophancyProbeRun",
+    requiredRole: "admin",
+    summary: "Record user-agreement, authority, consensus, and safety/orthodoxy cue sensitivity diagnostics.",
+    payload: () => ({
+      sycophancyProbeRun: {
+        id: `sycophancy-probe-${Date.now()}`,
+        targetLabelSnapshotId: "snapshot-oct-api",
+        requestedModelAlias: "model-under-test",
+        cueTypesTested: [
+          "no_cue_control",
+          "user_endorses_position",
+          "user_endorses_critique",
+          "majority_or_expert_endorses_position",
+          "majority_or_expert_endorses_critique",
+          "safety_or_orthodoxy_frame",
+        ],
+        pairedEvaluationRunIds: ["eval-full-rubric-demo"],
+        protectedDataHandling: "diagnostic_only_no_hidden_training_exposure",
+      },
+    }),
+  },
+  {
+    id: "sanity-baseline",
+    label: "Sanity Baseline",
+    endpoint: () => "/api/v1/sanity-baselines/run",
+    resourceKey: "sanityBaselineRun",
+    requiredRole: "admin",
+    summary: "Record random, constant-score, prior-only, or format-only baselines with protected-split exclusions.",
+    payload: () => ({
+      sanityBaselineRun: {
+        id: `sanity-baseline-${Date.now()}`,
+        baselineType: "constant_mean",
+        fitSplit: "public_train",
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelSnapshotId: "snapshot-oct-api",
+        metricFamily: "custom_weighted_loss",
+        metricVersion: "lmca-october-2026-v1",
+        metricOutputs: { customWeightedLoss: 0.31 },
+        coverageCounts: { itemsScored: 6, lowClarityBranchItems: 1 },
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "human-ceiling-run",
+    label: "Human Ceiling Run",
+    endpoint: () => "/api/v1/human-ceiling-runs",
+    resourceKey: "humanCeilingRun",
+    requiredRole: "admin",
+    summary: "Record validation/human-ceiling coverage, Appendix-C comparability, check type, intervals, and saturation status.",
+    payload: () => ({
+      humanCeilingRun: {
+        id: `human-ceiling-run-${Date.now()}`,
+        splitOrValidationSubset: "internal_validation",
+        validationCritiqueCount: 52,
+        validationPositionCount: 19,
+        appendixCComparabilityFlag: "appendix_c_scale_candidate",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        coreAllItemsRaterCount: 4,
+        comparisonType: "initial_vs_final",
+        modelAssistedCheckInclusionPolicy: "reported_separately_from_human_only_checks",
+        metricOutputsByFamily: { customWeightedLoss: 0.08, weightedPairwiseLoss: 0.02 },
+        uncertaintyIntervalType: "bootstrap_confidence_interval",
+        intervalConstructionMethod: "position_level_resampling",
+        resampleCountOrDegreesOfFreedom: 1000,
+        randomSeedOrResamplingArtifact: "seed-20261031",
+        saturationRiskThreshold: "best_model_within_human_band",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "leaderboard",
+    label: "Leaderboard",
+    endpoint: () => "/api/v1/leaderboards",
+    resourceKey: "leaderboard",
+    requiredRole: "admin",
+    summary: "Append a common-subset leaderboard report with uncertainty tiers, metric-family policy, and prompt/snapshot checks.",
+    payload: () => ({
+      leaderboard: {
+        id: `leaderboard-${Date.now()}`,
+        metricFamily: "weighted_pairwise",
+        evaluationRunIds: ["eval-full-rubric-demo"],
+        commonSubsetPolicy: "common_item_pair_position_set_required",
+        commonMetricFamilyEligibilityPolicy: "shared_metric_config_and_pairwise_snapshot",
+        commonPromptPolicyRequirement: "same_prompt_source_scope_or_sensitivity_label",
+        commonReasoningModeRequirement: "same_reasoning_mode_or_sensitivity_label",
+        uncertaintySupportedRankTiers: [["eval-full-rubric-demo"]],
+        unresolvedComparisonGroups: [],
+        pointEstimateOnlyOrderingFlag: false,
+        lowMarginSensitivitySummary: "low_margin_share_reported",
+        humanCeilingComparisonSummary: "not_saturated_in_seed_demo",
+        createdBy: state.session?.user?.id ?? "demo-admin",
+        timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "obfuscation-stress",
+    label: "Obfuscation Stress",
+    endpoint: () => "/api/v1/obfuscation-stress-runs",
+    resourceKey: "obfuscationStressRun",
+    requiredRole: "admin",
+    summary: "Record masked-fallacy, surface-fluency, and jargon-heavy stress diagnostics separately from headline LMCA scores.",
+    payload: () => ({
+      obfuscationStressRun: {
+        id: `obfuscation-stress-${Date.now()}`,
+        targetLabelSnapshotId: "snapshot-oct-api",
+        requestedModelAlias: "model-under-test",
+        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
+        clearBaselineItemIds: ["pos-ai-prior::crit-ai-base-rate"],
+        pairedEvaluationRunIds: ["eval-full-rubric-demo"],
+        protectedDataHandling: "robustness_diagnostic_not_headline_label",
+      },
+    }),
+  },
+  {
+    id: "failure-audit",
+    label: "Failure Audit",
+    endpoint: () => "/api/v1/evaluations/eval-full-rubric-demo/failure-audits",
+    resourceKey: "modelFailureAudit",
+    requiredRole: "admin",
+    summary: "Preserve largest-error diagnostics with raw-output and target-label context.",
+    payload: () => ({
+      modelFailureAudit: {
+        id: `failure-audit-${Date.now()}`,
+        evaluationRunId: "eval-full-rubric-demo",
+        auditPolicy: "largest_error_qualitative_diagnostic",
+        protectedSplitHandling: "raw_hidden_content_not_exposed_in_public_report",
+      },
+    }),
+  },
+];
 
 function render() {
   const selectedAssignment = assignments.find((assignment) => assignment.id === state.selectedAssignmentId) ?? assignments[0];
@@ -166,6 +1515,7 @@ function sectionHtml(section, context) {
       state.lastSourceStyleAuditStatus,
     );
   }
+  if (section === "workflow") return workflowPanel(context.releaseReport, state.sessionStatus, state.lastWorkflowStatus);
   if (section === "adjudication") return adjudicationPanel(context.releaseReport.adjudicationMemoAudit);
   if (section === "releases") return releasePanel(context.releaseGateProfile, context.labelSnapshot, context.marginDistribution, context.releaseReport);
   if (section === "evaluation") {
@@ -244,6 +1594,7 @@ function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, s
         ${panelTitle("eye", "Blind Rating Workspace", "Rater-visible text excludes source, tags, benchmark status, peer ratings, model-judge scores, and intake reasons.")}
         <div class="blindNotice">${icon("eye")}<span>Hidden before initial submission: ${escapeHtml(activeView.hiddenMetadata.join(", "))}.</span></div>
         ${statusLine(sessionStatus, "sessionLine")}
+        ${authControls()}
         <div class="textPair">
           <article><h2>Position</h2><p>${escapeHtml(activeView.positionText)}</p></article>
           <article><h2>Critique</h2><p>${escapeHtml(activeView.critiqueText)}</p></article>
@@ -337,6 +1688,62 @@ function postLockSourceStylePanel(lockedInitialRating, sourceStyleAuditRows, sou
   `;
 }
 
+function workflowPanel(releaseReport, sessionStatus, workflowStatus) {
+  const template = currentWorkflowTemplate();
+  const payloadText = workflowPayloadText(template);
+  return `
+    <div class="workflowLayout">
+      <section class="panel workflowEditor">
+        ${panelTitle("branch", "Workflow Event Console", "Append production lifecycle events to the dedicated workflow audit stream.")}
+        ${statusLine(sessionStatus, "sessionLine")}
+        ${authControls()}
+        <div class="workflowControls">
+          <label>
+            <span>Workflow event</span>
+            <select id="workflowTemplate">
+              ${workflowTemplates
+                .map((item) => `<option ${item.id === template.id ? "selected" : ""} value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`)
+                .join("")}
+            </select>
+          </label>
+          <div class="workflowEndpoint">
+            <span>${escapeHtml(template.requiredRole)}</span>
+            <strong>POST ${escapeHtml(template.endpoint())}</strong>
+          </div>
+        </div>
+        <p class="workflowSummary">${escapeHtml(template.summary)}</p>
+        <textarea id="workflowPayload" spellcheck="false">${escapeHtml(payloadText)}</textarea>
+        <div class="actionRow">
+          <button class="primaryButton" id="submitWorkflowEvent" type="button">${icon("check")}Append workflow event</button>
+          <button class="secondaryButton" id="resetWorkflowPayload" type="button">${icon("branch")}Reset payload</button>
+        </div>
+        ${statusLine(workflowStatus, "persistenceLine")}
+      </section>
+      <aside class="rightRail">
+        <section class="panel compactPanel">
+          ${panelTitle("database", "Release Backlog", "Scale and validation gaps stay explicit until real collection is complete.")}
+          ${metricList([
+            ["Positions remaining", String(releaseReport.targetGaps.positionsRemaining)],
+            ["Critiques remaining", String(releaseReport.targetGaps.critiquesRemaining)],
+            ["Blind ratings remaining", String(releaseReport.targetGaps.blindInitialRatingsRemaining)],
+            ["Gold items remaining", String(releaseReport.targetGaps.goldItemsRemaining)],
+            ["Validation status", humanize(releaseReport.validationDesign.status)],
+            ["Current release status", humanize(releaseReport.currentStatus)],
+          ])}
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("shield", "Append-Only Policy", "Workflow records supplement reports without mutating rating, certification, benchmark, or source/style streams.")}
+          <div class="gateList">
+            <div>${statusChip("pass")}<span>Server validates role and assignment claims.</span></div>
+            <div>${statusChip("pass")}<span>Rater workflow events reject hidden metadata keys.</span></div>
+            <div>${statusChip("pass")}<span>Payload hashes are stored with actor hashes.</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `;
+}
+
 function adjudicationPanel(adjudicationAudit) {
   adjudicationAudit ??= buildAdjudicationMemoAuditReport(
     releaseId,
@@ -406,7 +1813,10 @@ function adjudicationPanel(adjudicationAudit) {
 function releasePanel(profile, labelSnapshot, marginDistribution, releaseReport) {
   const checks = [...profile.sourceCriticalCore, ...profile.benchmarkQualitySafeguards, ...profile.claimGatedDiagnostics];
   const reliability = labelSnapshot.reliabilityWeightModel;
+  const reliabilityWeightEvidence = releaseReport.labelSnapshotReliability?.raterReliabilityWeightModelEvidence;
   const corpusManifest = releaseReport.corpusManifest;
+  const releaseVersionManifest = releaseReport.releaseVersionManifest;
+  const releaseArtifactEvidence = releaseReport.releaseArtifactEvidence;
   const composition = corpusManifest.positionSourceCategory;
   const sourceDetail = corpusManifest.sourceDetailCoverage;
   const itemText = releaseReport.itemTextViewParity;
@@ -452,6 +1862,8 @@ function releasePanel(profile, labelSnapshot, marginDistribution, releaseReport)
             ["Protected fit use", String(reliability.fitDataProvenance.protectedRatingsUsedForFit)],
             ["Max rater share", formatNumber(reliability.effectiveContribution.maxSingleRaterContributionShare)],
             ["Max median delta", `${formatNumber(reliability.sensitivitySummary.maxOverallMeanMedianDelta)} on ${reliability.sensitivitySummary.maxOverallMeanMedianDeltaItemId}`],
+            ["Submitted model", reliabilityWeightEvidence?.activeSubmittedModelId ?? "none"],
+            ["Submitted status", humanize(reliabilityWeightEvidence?.releaseUseStatus ?? "missing")],
             ["Release use", humanize(reliability.releaseUseStatus)],
           ])}
         </section>
@@ -464,6 +1876,27 @@ function releasePanel(profile, labelSnapshot, marginDistribution, releaseReport)
             ["Low-margin pair share", `${Math.round(marginDistribution.lowMarginPairShare * 100)}%`],
           ])}
           <div class="composition">${Object.entries(composition).map(([key, value]) => `<div><span>${humanize(key)}</span><strong>${value}</strong></div>`).join("")}</div>
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("lock", "Release Version Manifest", "Frozen release records are checked against current corpus, label, metric, and gate artifacts.")}
+          ${metricList([
+            ["Manifest source", humanize(releaseVersionManifest.manifestSource)],
+            ["Link status", humanize(releaseVersionManifest.linkedArtifactStatus)],
+            ["Freeze status", humanize(releaseVersionManifest.freezeEvidence.freezeStatus)],
+            ["Target scale", humanize(releaseVersionManifest.targetScaleStatus)],
+            ["Release use", humanize(releaseVersionManifest.releaseUseStatus)],
+          ])}
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("check", "Submitted Release Artifacts", "Workflow manifests are checked against current labels, corpus counts, training policy, and public export scope.")}
+          ${metricList([
+            ["Release use", humanize(releaseArtifactEvidence.releaseUseStatus)],
+            ["Review sections", releaseArtifactEvidence.reviewSections.join(", ") || "none"],
+            ["Label snapshot", humanize(releaseArtifactEvidence.labelSnapshotEvidence.status)],
+            ["Corpus manifest", humanize(releaseArtifactEvidence.corpusManifestEvidence.status)],
+            ["Training export", humanize(releaseArtifactEvidence.trainingExportEvidence.status)],
+            ["Public export", humanize(releaseArtifactEvidence.exportManifestEvidence.status)],
+          ])}
         </section>
         <section class="panel compactPanel">
           ${panelTitle("archive", "Source Detail Manifest", "Adapted-source language, translation, task format, and suitability metadata are declared.")}
@@ -499,6 +1932,7 @@ function evaluationPanel(weightedPairwise, unweightedPairwise, customLoss, deriv
   const metricConfig = releaseReport.metricDirectionalityConfig;
   const modelAssistedOverlap = releaseReport.modelAssistedLabelOverlap ?? leaderboard.modelAssistedLabelOverlap;
   const pairedTargets = releaseReport.pairedTargetLabelSnapshots;
+  const modelEvaluationEvidence = releaseReport.modelEvaluationArtifactEvidence;
   const generationEvaluation = releaseReport.critiqueGenerationEvaluation;
   const calibration = releaseReport.recalibratedEvaluation;
   const promptTrack = releaseReport.promptTrackSeparation;
@@ -531,6 +1965,21 @@ function evaluationPanel(weightedPairwise, unweightedPairwise, customLoss, deriv
         ${panelTitle("flask", "Evaluation Provenance", "Overall-only runs never fabricate full-rubric subscores.")}
         ${runCard(overallOnlyEvaluationRun, false)}
         ${runCard(fullRubricEvaluationRun, true)}
+      </section>
+      <section class="panel">
+        ${panelTitle("check", "Submitted Model Evaluation Artifacts", "Stored evaluation artifacts must match the current target labels, prediction provenance, calibration policy, leaderboard policy, and failure-audit limits.")}
+        <div class="metricCards benchmarkMetricCards">
+          ${metricCard("Release use", humanize(modelEvaluationEvidence.releaseUseStatus), `${modelEvaluationEvidence.reviewSections.length} review sections`)}
+          ${metricCard("Evaluation run", humanize(modelEvaluationEvidence.evaluationRunEvidence.status), modelEvaluationEvidence.evaluationRunEvidence.submittedArtifactId ?? "none")}
+          ${metricCard("Predictions", humanize(modelEvaluationEvidence.predictionEvidence.status), `${modelEvaluationEvidence.predictionEvidence.counts.predictionRows} submitted rows`)}
+          ${metricCard("Leaderboard", humanize(modelEvaluationEvidence.leaderboardEvidence.status), modelEvaluationEvidence.leaderboardEvidence.submittedArtifactId ?? "none")}
+        </div>
+        <div class="metricTable">
+          <div><span>Model improvement</span><strong>${humanize(modelEvaluationEvidence.modelImprovementRunEvidence.status)}</strong></div>
+          <div><span>Calibration</span><strong>${humanize(modelEvaluationEvidence.calibrationRunEvidence.status)}</strong></div>
+          <div><span>Failure audit</span><strong>${humanize(modelEvaluationEvidence.failureAuditEvidence.status)}</strong></div>
+          <div><span>Review sections</span><strong>${modelEvaluationEvidence.reviewSections.map(humanize).join(", ") || "none"}</strong></div>
+        </div>
       </section>
       <section class="panel">
         ${panelTitle("sliders", "Metric Config & Directionality", "Pairwise ranking, leaderboard, and custom-loss reports declare score handling before comparison claims.")}
@@ -763,12 +2212,14 @@ function evaluationPanel(weightedPairwise, unweightedPairwise, customLoss, deriv
           ${metricCard("Prior-only loss", formatNumber(priorOnly?.metricOutputs.loss), `${priorOnly?.metricOutputs.coverage.nItemsScored ?? 0} scored labels`)}
           ${metricCard("Fit split", baselines.protectedSplitPolicy.fitSplits.join(", "), "protected splits excluded")}
           ${metricCard("Fit labels", String(baselines.fitDistribution.itemCount), `scored ${baselines.scoredDistribution.itemCount}`)}
+          ${metricCard("Submitted", String(baselines.submittedBaselineEvidence.submittedRunCount), humanize(baselines.submittedBaselineEvidence.releaseUseStatus))}
         </div>
         <div class="metricTable">
           <div><span>Hidden fit excluded</span><strong>${baselines.protectedSplitPolicy.hiddenBenchmarkFitExcluded ? "yes" : "no"}</strong></div>
           <div><span>Validation fit excluded</span><strong>${baselines.protectedSplitPolicy.internalValidationFitExcluded ? "yes" : "no"}</strong></div>
           <div><span>Constant mean loss</span><strong>${formatNumber(baselines.baselines.find((baseline) => baseline.baselineType === "constant_mean")?.metricOutputs.loss)}</strong></div>
           <div><span>Constant median loss</span><strong>${formatNumber(baselines.baselines.find((baseline) => baseline.baselineType === "constant_median")?.metricOutputs.loss)}</strong></div>
+          <div><span>Submitted review rows</span><strong>${String(baselines.submittedBaselineEvidence.reviewRows.length)}</strong></div>
         </div>
       </section>
       <section class="panel claimPanel">
@@ -1233,6 +2684,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
           ${auditCard("Public rights", report.provenanceRights.public.checkedPositionCount, report.provenanceRights.public.status, "split-aware provenance/rights audit")}
           ${auditCard("Hidden rights", report.provenanceRights.hidden_benchmark.checkedPositionCount, report.provenanceRights.hidden_benchmark.status, "restricted benchmark scope checked")}
           ${auditCard("Active-learning promoted", report.activeLearning.totals.promoted, report.activeLearning.blindingPass ? "pass" : "blocked", `${report.activeLearning.totals.generated} generated / ${report.activeLearning.totals.judged} judged`)}
+          ${auditCard("Candidate batches", report.activeLearning.candidateWorkflowEvidence.candidateBatchCount, report.activeLearning.candidateWorkflowEvidence.hiddenMetadataViolationCount ? "review_required" : "pass", `${report.activeLearning.derivedCandidateWorkflowBatchCount} denominator-derived`)}
         </div>
         <div class="actionRow">
           <button class="secondaryButton" id="submitCertificationAttempt" type="button">${icon("check")}Submit demo certification attempt</button>
@@ -1587,6 +3039,25 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   document.getElementById("verificationNote")?.addEventListener("input", (event) => {
     state.draftVerification.note = event.target.value;
   });
+  document.getElementById("signInExternal")?.addEventListener("click", async () => {
+    state.sessionStatus = { tone: "warn", title: "Clerk sign-in pending", detail: "Opening the production identity provider." };
+    render();
+    await openExternalSignIn();
+    render();
+  });
+  document.getElementById("refreshExternalSession")?.addEventListener("click", async () => {
+    state.sessionStatus = { tone: "warn", title: "Refreshing Clerk token", detail: "Requesting a fresh lmca JWT template token." };
+    render();
+    await refreshExternalSession({ skipCache: true });
+    render();
+  });
+  document.getElementById("signOutExternal")?.addEventListener("click", async () => {
+    if (state.clerk?.signOut) await state.clerk.signOut();
+    state.session = null;
+    state.adminSession = null;
+    state.sessionStatus = { tone: "warn", title: "Signed out", detail: "Sign in again before submitting protected workflow events." };
+    render();
+  });
   document.getElementById("submitRating")?.addEventListener("click", async () => {
     const position = positions.find((item) => item.id === selectedAssignment.positionId);
     const critique = critiques.find((item) => item.id === selectedAssignment.critiqueId);
@@ -1646,6 +3117,28 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     state.lastSourceStyleAuditStatus = { tone: "warn", title: "Source/style audit pending", detail: "Submitting post-lock diagnostic event." };
     render();
     state.lastSourceStyleAuditStatus = await persistSourceStyleAudit(audit);
+    render();
+  });
+  document.getElementById("workflowTemplate")?.addEventListener("change", (event) => {
+    state.workflowTemplateId = event.target.value;
+    state.workflowPayloadText = "";
+    state.lastWorkflowStatus = null;
+    render();
+  });
+  document.getElementById("workflowPayload")?.addEventListener("input", (event) => {
+    state.workflowPayloadText = event.target.value;
+  });
+  document.getElementById("resetWorkflowPayload")?.addEventListener("click", () => {
+    state.workflowPayloadText = "";
+    state.lastWorkflowStatus = null;
+    render();
+  });
+  document.getElementById("submitWorkflowEvent")?.addEventListener("click", async () => {
+    const template = currentWorkflowTemplate();
+    state.workflowPayloadText = document.getElementById("workflowPayload")?.value ?? workflowPayloadText(template);
+    state.lastWorkflowStatus = { tone: "warn", title: "Workflow append pending", detail: `Submitting ${template.resourceKey} to ${template.endpoint()}.` };
+    render();
+    state.lastWorkflowStatus = await persistWorkflowEvent(template, state.workflowPayloadText);
     render();
   });
   document.querySelectorAll(".downloadManifest").forEach((button) => {
@@ -1740,7 +3233,30 @@ function statusLine(status, className) {
   `;
 }
 
+function authControls() {
+  if (state.authConfig?.provider !== "clerk") return "";
+  if (state.session?.authProvider === "clerk") {
+    return `
+      <div class="actionRow authActionRow">
+        <button class="secondaryButton" id="refreshExternalSession" type="button">${icon("key")}Refresh auth token</button>
+        <button class="secondaryButton" id="signOutExternal" type="button">${icon("lock")}Sign out</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="actionRow authActionRow">
+      <button class="primaryButton" id="signInExternal" type="button">${icon("key")}Sign in with Clerk</button>
+    </div>
+  `;
+}
+
 async function bootstrapSession() {
+  const authConfig = await fetchAuthConfig();
+  state.authConfig = authConfig;
+  if (authConfig?.provider === "clerk") {
+    await bootstrapClerkSession(authConfig);
+    return;
+  }
   try {
     const response = await fetch("/api/sessions", {
       method: "POST",
@@ -1761,9 +3277,199 @@ async function bootstrapSession() {
     state.sessionStatus = {
       tone: "warn",
       title: "Static fallback session",
-      detail: "Server session unavailable; writes remain local until the Node server is running.",
+      detail: "Server auth unavailable; writes remain local until an auth-capable server is running.",
     };
   }
+}
+
+async function fetchAuthConfig() {
+  try {
+    const response = await fetch("/api/auth/config", { headers: { accept: "application/json" } });
+    if (!response.ok) throw new Error("auth config unavailable");
+    return await response.json();
+  } catch {
+    return {
+      authMode: "signed_demo_sessions",
+      provider: "demo",
+      demoSessionEndpointEnabled: true,
+    };
+  }
+}
+
+async function bootstrapClerkSession(authConfig) {
+  if (!authConfig.clerkPublishableKey) {
+    state.session = null;
+    state.sessionStatus = {
+      tone: "bad",
+      title: "Clerk client config missing",
+      detail: "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY must be configured before production sign-in can issue lmca JWTs.",
+    };
+    return;
+  }
+  try {
+    const clerk = await loadClerk(authConfig);
+    state.clerk = clerk;
+    subscribeToClerk(clerk, authConfig);
+    if (!clerk.isSignedIn) {
+      state.session = null;
+      state.sessionStatus = {
+        tone: "warn",
+        title: "Clerk sign-in required",
+        detail: "Sign in with a user whose public metadata includes lmca_role and lmca_assignments.",
+      };
+      return;
+    }
+    await refreshExternalSession();
+  } catch (error) {
+    state.session = null;
+    state.sessionStatus = {
+      tone: "bad",
+      title: "Clerk auth unavailable",
+      detail: error instanceof Error ? error.message : "The production identity provider could not be loaded.",
+    };
+  }
+}
+
+async function openExternalSignIn() {
+  const authConfig = state.authConfig ?? (await fetchAuthConfig());
+  state.authConfig = authConfig;
+  if (authConfig.provider !== "clerk") return;
+  const clerk = state.clerk ?? (await loadClerk(authConfig));
+  state.clerk = clerk;
+  subscribeToClerk(clerk, authConfig);
+  if (clerk.isSignedIn) {
+    await refreshExternalSession();
+    return;
+  }
+  await clerk.openSignIn({ afterSignInUrl: window.location.href, afterSignUpUrl: window.location.href });
+  if (clerk.isSignedIn) await refreshExternalSession({ skipCache: true });
+}
+
+async function refreshExternalSession(options = {}) {
+  const authConfig = state.authConfig;
+  const clerk = state.clerk;
+  if (authConfig?.provider !== "clerk" || !clerk?.session) return null;
+  const token = await clerk.session.getToken({ template: authConfig.clerkJwtTemplate ?? "lmca", skipCache: options.skipCache === true });
+  if (!token) {
+    state.session = null;
+    state.sessionStatus = {
+      tone: "warn",
+      title: "Clerk token unavailable",
+      detail: "The signed-in Clerk session did not return an lmca JWT template token.",
+    };
+    return null;
+  }
+  const claims = decodeJwtPayload(token);
+  const role = claimAtPath(claims, authConfig.roleClaim ?? "lmca_role");
+  const allowedAssignmentIds = normalizeAssignmentClaim(claimAtPath(claims, authConfig.assignmentsClaim ?? "lmca_assignments"));
+  const displayName = clerk.user?.fullName || clerk.user?.primaryEmailAddress?.emailAddress || clerk.user?.id || "Clerk user";
+  const missingClaims = !role || allowedAssignmentIds.length === 0;
+  state.session = {
+    token,
+    authProvider: "clerk",
+    user: {
+      id: claims?.sub ?? clerk.user?.id,
+      displayName,
+      role: typeof role === "string" && role ? role : "rater",
+      allowedAssignmentIds,
+    },
+  };
+  state.adminSession = state.session.user.role === "admin" ? state.session : null;
+  state.sessionStatus = {
+    tone: missingClaims ? "warn" : "good",
+    title: missingClaims ? "Clerk signed in; RBAC claims incomplete" : "Clerk external JWT session",
+    detail: missingClaims
+      ? `Set ${authConfig.roleClaim ?? "lmca_role"} and ${authConfig.assignmentsClaim ?? "lmca_assignments"} in Clerk public metadata.`
+      : `${displayName} (${state.session.user.role}) can submit ${allowedAssignmentIds.includes("*") ? "all assignments" : allowedAssignmentIds.length} assignment claim(s).`,
+  };
+  await refreshCertificationStatus();
+  return state.session;
+}
+
+function subscribeToClerk(clerk, authConfig) {
+  if (state.clerkSubscribed || !clerk?.addListener) return;
+  state.clerkSubscribed = true;
+  clerk.addListener(async ({ session }) => {
+    if (session) {
+      await refreshExternalSession({ skipCache: true });
+    } else {
+      state.session = null;
+      state.adminSession = null;
+      state.sessionStatus = {
+        tone: "warn",
+        title: "Clerk sign-in required",
+        detail: `Sign in with a user whose JWT template includes ${authConfig.roleClaim ?? "lmca_role"} and ${authConfig.assignmentsClaim ?? "lmca_assignments"}.`,
+      };
+    }
+    render();
+  });
+}
+
+async function loadClerk(authConfig) {
+  if (state.clerk) return state.clerk;
+  const clerkDomain = clerkFrontendApiDomain(authConfig.clerkPublishableKey);
+  await loadScriptOnce(`https://${clerkDomain}/npm/@clerk/ui@1/dist/ui.browser.js`, "lmca-clerk-ui");
+  await loadScriptOnce(`https://${clerkDomain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, "lmca-clerk-js", {
+    "data-clerk-publishable-key": authConfig.clerkPublishableKey,
+  });
+  if (!window.Clerk?.load) throw new Error("ClerkJS loaded without a Clerk runtime.");
+  await window.Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });
+  return window.Clerk;
+}
+
+function clerkFrontendApiDomain(publishableKey) {
+  const encoded = String(publishableKey).split("_")[2];
+  if (!encoded) throw new Error("Invalid Clerk publishable key.");
+  return atob(encoded).slice(0, -1);
+}
+
+function loadScriptOnce(src, id, attributes = {}) {
+  return new Promise((resolve, reject) => {
+    const existing = document.getElementById(id);
+    if (existing?.dataset.loaded === "true") {
+      resolve();
+      return;
+    }
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = id;
+    script.src = src;
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    Object.entries(attributes).forEach(([key, value]) => script.setAttribute(key, value));
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "true";
+      resolve();
+    });
+    script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)));
+    document.head.appendChild(script);
+  });
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const payload = token.split(".")[1];
+    const padded = payload.replaceAll("-", "+").replaceAll("_", "/").padEnd(Math.ceil(payload.length / 4) * 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return {};
+  }
+}
+
+function claimAtPath(payload, path) {
+  return String(path)
+    .split(".")
+    .reduce((value, key) => (value && typeof value === "object" ? value[key] : undefined), payload);
+}
+
+function normalizeAssignmentClaim(value) {
+  if (Array.isArray(value)) return value.filter((item) => typeof item === "string");
+  if (typeof value === "string" && value) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
 }
 
 async function refreshCertificationStatus() {
@@ -1787,6 +3493,14 @@ async function ensureSession() {
 
 async function ensureAdminSession() {
   if (state.adminSession?.token) return state.adminSession;
+  if (state.authConfig?.provider === "clerk") {
+    const session = await ensureSession();
+    if (session?.user?.role === "admin") {
+      state.adminSession = session;
+      return session;
+    }
+    throw new Error("admin role required for benchmark access");
+  }
   const response = await fetch("/api/sessions", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -1944,6 +3658,59 @@ async function persistBenchmarkExposure(exposure) {
         title: "Local freeze report only",
         detail: "Server API unavailable; benchmark access was not persisted.",
       },
+    };
+  }
+}
+
+function currentWorkflowTemplate() {
+  return workflowTemplates.find((template) => template.id === state.workflowTemplateId) ?? workflowTemplates[0];
+}
+
+function workflowPayloadText(template = currentWorkflowTemplate()) {
+  if (state.workflowPayloadText.trim()) return state.workflowPayloadText;
+  return JSON.stringify(template.payload(), null, 2);
+}
+
+async function persistWorkflowEvent(template, payloadText) {
+  let payload;
+  try {
+    payload = JSON.parse(payloadText);
+  } catch (error) {
+    return {
+      tone: "bad",
+      title: "Workflow payload invalid",
+      detail: error instanceof Error ? error.message : "Payload must be valid JSON.",
+    };
+  }
+  try {
+    const session = template.requiredRole === "admin" ? await ensureAdminSession() : await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch(template.endpoint(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Workflow append rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the workflow event.",
+      };
+    }
+    return {
+      tone: "good",
+      title: "Workflow event persisted",
+      detail: `${body.resourceKey}:${body.resourceId} stored as ${body.eventId.slice(0, 8)} with ${body.payloadHash.slice(0, 18)}...`,
+    };
+  } catch (error) {
+    return {
+      tone: "warn",
+      title: "Workflow event not persisted",
+      detail: error instanceof Error ? error.message : "Server API unavailable.",
     };
   }
 }

@@ -767,6 +767,98 @@ export const verificationRecords = [
   },
 ];
 
+function buildEffectiveAdjudicationMemos(submittedMemos = [], baseMemos = adjudicationMemos) {
+  const normalizedSubmittedMemos = submittedMemos.map(normalizeSubmittedAdjudicationMemo).filter(Boolean);
+  return mergeByArtifactId(baseMemos, normalizedSubmittedMemos);
+}
+
+function normalizeSubmittedAdjudicationMemo(memo) {
+  const { positionId, critiqueId } = itemRefFromWorkflowArtifact(memo);
+  if (!memo?.id || !positionId || !critiqueId) return null;
+  const critiqueRefutesInterpretations = optionalStringArray(
+    firstDefined([memo.critiqueRefutesInterpretations, memo.critiqueRefutesInterpretationsConsidered, memo.refutedInterpretations]),
+  );
+  return {
+    ...memo,
+    id: memo.id,
+    memoSource: "submitted_workflow_adjudication_memo",
+    positionId,
+    critiqueId,
+    itemId: makeItemId(positionId, critiqueId),
+    contestedInterpretation: firstDefined([memo.contestedInterpretation, memo.issueSummary, memo.discussionSummary]),
+    plausibleInterpretations: optionalStringArray(firstDefined([memo.plausibleInterpretations, memo.plausibleInterpretationsConsidered])) ?? [],
+    ...(critiqueRefutesInterpretations ? { critiqueRefutesInterpretations } : {}),
+    worstPlausibleInterpretationConsidered: firstDefined([memo.worstPlausibleInterpretationConsidered, memo.worstCaseInterpretation]),
+    adversarialPlausibilityWeightingDecision: firstDefined([
+      memo.adversarialPlausibilityWeightingDecision,
+      memo.plausibilityWeightingDecision,
+      memo.postDiscussionResolutionStatus,
+    ]),
+    bottomLineDependence: Boolean(firstDefined([memo.bottomLineDependence, memo.bottomLineDependent])),
+    minorityRationales: Array.isArray(memo.minorityRationales) ? memo.minorityRationales : [],
+    clearlyUnsatisfactoryImprecision: Boolean(memo.clearlyUnsatisfactoryImprecision),
+    obfuscatedOrMaskedFallacyRisk: Boolean(memo.obfuscatedOrMaskedFallacyRisk),
+    stableJudgment: firstDefined([memo.stableJudgment, memo.postDiscussionResolutionStatus]),
+    benchmarkEligibilityDecision: firstDefined([memo.benchmarkEligibilityDecision, memo.benchmarkEligibilityStatus]),
+    splitDecision: memo.splitDecision,
+    disagreementTaxonomy: optionalStringArray(firstDefined([memo.disagreementTaxonomy, memo.disagreementTaxonomyCodes])) ?? [],
+    unresolvedDisagreementClass: firstDefined([memo.unresolvedDisagreementClass, memo.postDiscussionResolutionStatus]),
+    createdAt: firstDefined([memo.createdAt, memo.submittedAt, memo.finalizedAt]),
+  };
+}
+
+function buildEffectiveVerificationRecords(submittedRecords = [], baseRecords = verificationRecords) {
+  const normalizedSubmittedRecords = submittedRecords.map(normalizeSubmittedVerificationRecord).filter(Boolean);
+  return mergeByArtifactId(baseRecords, normalizedSubmittedRecords);
+}
+
+function normalizeSubmittedVerificationRecord(record) {
+  const { positionId, critiqueId } = itemRefFromWorkflowArtifact(record);
+  if (!record?.id || !positionId || !critiqueId) return null;
+  return {
+    ...record,
+    id: record.id,
+    recordSource: "submitted_workflow_verification_record",
+    positionId,
+    critiqueId,
+    itemId: makeItemId(positionId, critiqueId),
+    relatedRatingId: firstDefined([record.relatedRatingId, record.ratingId]),
+    claimChecked: firstDefined([record.claimChecked, record.claim, record.claimSummary]),
+    verificationType: firstDefined([record.verificationType, record.type, "submitted_workflow"]),
+    verificationMaterials: optionalStringArray(firstDefined([record.verificationMaterials, record.materials, record.evidence])) ?? [],
+    verifierId: firstDefined([record.verifierId, record.adjudicatorId, record.adjudicatorIds?.[0], record.submittedBy]),
+    verifierRole: firstDefined([record.verifierRole, record.adjudicatorRole, record.role]),
+    verificationStatus: firstDefined([record.verificationStatus, record.status, "unresolved"]),
+    verificationResult: firstDefined([record.verificationResult, record.resultSummary, record.note, "Submitted workflow verification record attached."]),
+    confidence: record.confidence,
+    exposureStatus: firstDefined([record.exposureStatus, record.exposurePolicy, "post_initial_lock_adjudication"]),
+    createdAt: firstDefined([record.createdAt, record.submittedAt, record.finalizedAt]),
+  };
+}
+
+function itemRefFromWorkflowArtifact(artifact) {
+  if (!artifact || typeof artifact !== "object") return {};
+  if (artifact.positionId && artifact.critiqueId) {
+    return { positionId: artifact.positionId, critiqueId: artifact.critiqueId };
+  }
+  const [positionId, critiqueId] = typeof artifact.itemId === "string" ? artifact.itemId.split("::") : [];
+  return { positionId, critiqueId };
+}
+
+function optionalStringArray(value) {
+  if (Array.isArray(value)) return value.filter((entry) => typeof entry === "string" && entry);
+  if (typeof value === "string" && value) return [value];
+  return undefined;
+}
+
+function mergeByArtifactId(baseItems, submittedItems) {
+  const items = new Map(baseItems.map((item) => [item.id, item]));
+  submittedItems.forEach((item) => {
+    items.set(item.id, item);
+  });
+  return [...items.values()];
+}
+
 export const promptArtifacts = {
   "project-full-rubric-v1": {
     id: "project-full-rubric-v1",
@@ -1653,6 +1745,28 @@ export const seedBenchmarkExposureEvents = [
   },
 ];
 
+function buildEffectiveBenchmarkExposureEvents(seedEvents = seedBenchmarkExposureEvents, exposureLogs = []) {
+  return [...seedEvents, ...exposureLogs.map(normalizeSubmittedExposureLog).filter(Boolean)];
+}
+
+function normalizeSubmittedExposureLog(log) {
+  if (!log?.id) return null;
+  return {
+    ...log,
+    id: log.id,
+    type: log.type ?? "workflow_exposure_log_submitted",
+    exposureSource: "submitted_workflow_exposure_log",
+    occurredAt: firstDefined([log.occurredAt, log.timestamp, log.createdAt, log.loggedAt]),
+    actorRole: firstDefined([log.actorRole, log.userRole, log.role, "admin"]),
+    action: log.action ?? "access_logged",
+    artifactId: log.artifactId ?? log.artifact_id ?? null,
+    purpose: log.purpose ?? "not_declared",
+    allowed: log.allowed ?? true,
+    accessPhase: log.accessPhase ?? log.phase ?? null,
+    splitName: log.splitName ?? log.split ?? null,
+  };
+}
+
 export function isValidScore(value) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }
@@ -1941,7 +2055,7 @@ export function appendRatingRevision(original, patch = {}) {
   };
 }
 
-export function buildRatingRevisionAuditReport(releaseId, ratings = seedRatings, positionList = positions) {
+export function buildRatingRevisionAuditReport(releaseId, ratings = seedRatings, positionList = positions, options = {}) {
   const ratingById = new Map(ratings.map((rating) => [rating.id, rating]));
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const revisionRows = ratings
@@ -2011,6 +2125,7 @@ export function buildRatingRevisionAuditReport(releaseId, ratings = seedRatings,
     }));
   const incompleteRevisionRows = revisionRows.filter((row) => row.metadataStatus !== "revision_metadata_complete");
   const modelAssistedStagingRows = checkRows.filter((row) => row.modelAssisted && !row.postHumanOnlySelfCheckLock);
+  const submittedRevisionRecordEvidence = buildSubmittedRevisionRecordEvidence(releaseId, options.revisionRecords ?? [], ratingById);
   return {
     id: `rating-revision-audit-${releaseId}`,
     releaseId,
@@ -2037,6 +2152,8 @@ export function buildRatingRevisionAuditReport(releaseId, ratings = seedRatings,
       denominatorInflationExcludedRows: denominatorInflationRows.length,
       incompleteRevisionMetadataRows: incompleteRevisionRows.length,
       modelAssistedStagingViolationRows: modelAssistedStagingRows.length,
+      submittedRevisionRecordCount: submittedRevisionRecordEvidence.submittedRecordCount,
+      submittedRevisionRecordReviewCount: submittedRevisionRecordEvidence.reviewRows.length,
     },
     byKind: countBy(ratings, "kind"),
     revisionRows,
@@ -2045,12 +2162,66 @@ export function buildRatingRevisionAuditReport(releaseId, ratings = seedRatings,
     denominatorInflationRows,
     incompleteRevisionRows,
     modelAssistedStagingRows,
+    submittedRevisionRecordEvidence,
     releaseUseStatus:
-      incompleteRevisionRows.length > 0
+      incompleteRevisionRows.length > 0 || submittedRevisionRecordEvidence.reviewRows.length > 0
         ? "revision_metadata_review_required"
         : modelAssistedStagingRows.length > 0
           ? "model_assisted_check_staging_review_required"
           : "revision_and_check_denominators_separated",
+  };
+}
+
+function buildSubmittedRevisionRecordEvidence(releaseId, revisionRecords = [], ratingById = new Map()) {
+  const rows = revisionRecords.map((record) => normalizeSubmittedRevisionRecord(record, ratingById)).filter(Boolean);
+  const reviewRows = rows.filter((row) => row.recordStatus !== "submitted_revision_record_complete");
+  return {
+    id: `submitted-revision-record-evidence-${releaseId}`,
+    releaseId,
+    submittedRecordCount: rows.length,
+    completeRecordCount: rows.filter((row) => row.recordStatus === "submitted_revision_record_complete").length,
+    rows,
+    reviewRows,
+    policy: {
+      immutableOriginalRule:
+        "Submitted RevisionRecord artifacts must identify a preserved prior rating row, a distinct new rating id, a structured reason code, and an object-level revision comment.",
+      denominatorRule: "Submitted RevisionRecord artifacts are provenance evidence and do not increase independent blind-initial rating denominators.",
+    },
+    releaseUseStatus: !rows.length
+      ? "no_submitted_revision_records"
+      : reviewRows.length
+        ? "submitted_revision_records_require_review"
+        : "submitted_revision_records_complete",
+  };
+}
+
+function normalizeSubmittedRevisionRecord(record, ratingById) {
+  if (!record?.id) return null;
+  const priorRatingId = record.ratingIdPrior ?? record.priorRatingId ?? record.parentRatingId ?? record.ratingId;
+  const newRatingId = record.ratingIdNew ?? record.newRatingId ?? record.revisionRatingId ?? record.resultingRevisionId;
+  const priorRating = ratingById.get(priorRatingId);
+  const reasonCode = record.reasonCode ?? record.revisionReasonCode ?? null;
+  const revisionComment = record.revisionComment ?? record.comment ?? null;
+  const reviewReasons = [
+    priorRating ? null : "prior_rating_missing",
+    priorRating && priorRating.kind === "revision" ? "prior_rating_is_revision" : null,
+    newRatingId && newRatingId !== priorRatingId ? null : "distinct_new_rating_id_missing",
+    reasonCode ? null : "reason_code_missing",
+    typeof revisionComment === "string" && revisionComment.trim() ? null : "revision_comment_missing",
+  ].filter(Boolean);
+  return {
+    recordId: record.id,
+    recordSource: "submitted_workflow_revision_record",
+    priorRatingId,
+    newRatingId: newRatingId ?? null,
+    priorRatingFound: Boolean(priorRating),
+    priorRatingKind: priorRating?.kind ?? null,
+    originalPreserved: Boolean(priorRating) && priorRating.kind !== "revision" && priorRating.id !== newRatingId,
+    reasonCode,
+    revisionComment,
+    discussionThreadId: record.discussionThreadId ?? null,
+    reviewReasons,
+    recordStatus: reviewReasons.length ? "submitted_revision_record_review_required" : "submitted_revision_record_complete",
   };
 }
 
@@ -2554,6 +2725,122 @@ function buildReliabilityWeightModelReport(snapshotId, releaseId, ratings, pairs
   };
 }
 
+export function buildRaterReliabilityWeightModelEvidence(releaseId, labelSnapshot, submittedModels = []) {
+  const rows = submittedModels.map((model) => normalizeSubmittedRaterReliabilityWeightModel(model, labelSnapshot)).filter(Boolean);
+  const activeSubmittedModel = rows.find((row) => row.reliabilityWeightModelId === labelSnapshot.reliabilityWeightModelId) ?? null;
+  const reviewRows = rows.filter(
+    (row) =>
+      row.protectedSplitExclusionStatus !== "protected_splits_excluded_from_weight_fit" ||
+      row.fitSourceStatus !== "permitted_fit_source_declared" ||
+      row.sensitivityStatus !== "unweighted_and_median_sensitivity_linked" ||
+      row.weightCapStatus === "weight_cap_review_required" ||
+      row.missingRequiredFields.length > 0,
+  );
+  return {
+    id: `rater-reliability-weight-model-evidence-${releaseId}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    labelSnapshotReliabilityWeightModelId: labelSnapshot.reliabilityWeightModelId,
+    headlineAggregationModelFamily: labelSnapshot.reliabilityWeightModel?.modelFamily ?? null,
+    submittedModelCount: rows.length,
+    activeSubmittedModelId: activeSubmittedModel?.workflowRecordId ?? null,
+    activeSubmittedReliabilityWeightModelId: activeSubmittedModel?.reliabilityWeightModelId ?? null,
+    submittedRows: rows,
+    reviewRows,
+    policy: {
+      frozenBeforeUseRule:
+        "A submitted RaterReliabilityWeightModel must name the label snapshot weight-model id, fit source, protected-split exclusions, weight caps, effective sample size, and unweighted/median sensitivity snapshots before release-critical use.",
+      noHiddenBenchmarkFitRule:
+        "Reliability weights must not be fit or tuned on hidden benchmark or protected validation model performance.",
+      currentHeadlinePolicy:
+        "The current label snapshot still exposes the aggregation model actually used for headline labels; submitted workflow records are provenance evidence and must match the snapshot weight-model id to count as active.",
+    },
+    releaseUseStatus: !rows.length
+      ? "default_uniform_weight_model_used_no_submitted_model"
+      : !activeSubmittedModel
+        ? "submitted_weight_model_recorded_not_current_label_snapshot"
+        : reviewRows.some((row) => row.workflowRecordId === activeSubmittedModel.workflowRecordId)
+          ? "active_submitted_weight_model_provenance_review_required"
+          : "active_submitted_weight_model_provenance_complete",
+  };
+}
+
+function normalizeSubmittedRaterReliabilityWeightModel(model, labelSnapshot) {
+  const workflowRecordId = model?.id ?? model?.raterReliabilityWeightModelId ?? model?.reliability_weight_model_id;
+  if (!workflowRecordId) return null;
+  const protectedSplitExclusions = model.protectedSplitExclusions ?? model.protected_split_exclusions ?? [];
+  const requiredProtectedSplits = ["hidden_benchmark", "internal_validation"];
+  const missingProtectedSplitExclusions = requiredProtectedSplits.filter((split) => !protectedSplitExclusions.includes(split));
+  const weightCap = numberOrNull(model.weightCaps?.maxSingleRaterShare ?? model.maximumSingleRaterWeightShare);
+  const maxShare = numberOrNull(
+    model.maximumSingleRaterWeightShareObserved ?? model.maxSingleRaterContributionShare ?? model.maximumSingleRaterWeightShare,
+  );
+  const effectiveSampleSizeByDimension = model.effectiveSampleSizeByDimension ?? model.effectiveSampleSizeEstimates ?? {};
+  const fitDataSource = model.fitDataSource ?? null;
+  const unweightedSensitivitySnapshotId = model.unweightedSensitivitySnapshotId ?? model.unweighted_sensitivity_snapshot_id ?? null;
+  const medianSensitivitySnapshotId = model.medianSensitivitySnapshotId ?? model.median_sensitivity_snapshot_id ?? null;
+  const raterWeightsByDimension = model.raterWeightsByDimension ?? model.rater_weights_by_dimension ?? {};
+  const requiredFields = {
+    modelName: model.modelName,
+    version: model.version ?? model.freezeVersion,
+    fitDataSource: model.fitDataSource,
+    protectedSplitExclusions,
+    raterWeightsByDimension,
+    weightCap,
+    effectiveSampleSizeByDimension,
+    unweightedSensitivitySnapshotId,
+    medianSensitivitySnapshotId,
+  };
+  const missingRequiredFields = Object.entries(requiredFields)
+    .filter(([, value]) => value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0) || (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0))
+    .map(([field]) => field);
+  return {
+    workflowRecordId,
+    reliabilityWeightModelId: model.reliabilityWeightModelId ?? model.reliability_weight_model_id ?? workflowRecordId,
+    labelSnapshotId: model.labelSnapshotId ?? labelSnapshot.id,
+    modelName: model.modelName ?? null,
+    version: model.version ?? null,
+    freezeVersion: model.freezeVersion ?? model.version ?? null,
+    fitDataSource,
+    fitSourceStatus: fitDataSource && !String(fitDataSource).includes("hidden_benchmark") && !String(fitDataSource).includes("model_performance")
+      ? "permitted_fit_source_declared"
+      : "fit_source_review_required",
+    fittedAt: model.fittedAt ?? model.timestamp ?? null,
+    fittedBy: model.fittedBy ?? model.createdBy ?? null,
+    protectedSplitExclusions,
+    missingProtectedSplitExclusions,
+    protectedSplitExclusionStatus: missingProtectedSplitExclusions.length
+      ? "protected_split_exclusion_review_required"
+      : "protected_splits_excluded_from_weight_fit",
+    perDimensionReliabilityEstimates: model.perDimensionReliabilityEstimates ?? {},
+    raterWeightsByDimension,
+    weightCaps: model.weightCaps ?? {},
+    maximumSingleRaterWeightShare: maxShare,
+    weightCap,
+    weightCapStatus:
+      typeof maxShare === "number" && typeof weightCap === "number" && maxShare > weightCap
+        ? "weight_cap_review_required"
+        : typeof weightCap === "number"
+          ? "weight_cap_declared"
+          : "weight_cap_missing",
+    shrinkagePolicy: model.shrinkagePolicy ?? null,
+    minimumEvidenceThreshold: model.minimumEvidenceThreshold ?? null,
+    effectiveSampleSizeByDimension,
+    effectiveSampleSizeStatus: Object.keys(effectiveSampleSizeByDimension).length ? "effective_sample_size_declared" : "effective_sample_size_missing",
+    unweightedSensitivitySnapshotId,
+    medianSensitivitySnapshotId,
+    sensitivityStatus:
+      unweightedSensitivitySnapshotId && medianSensitivitySnapshotId ? "unweighted_and_median_sensitivity_linked" : "sensitivity_links_missing",
+    matchesCurrentLabelSnapshotModel:
+      (model.reliabilityWeightModelId ?? model.reliability_weight_model_id ?? workflowRecordId) === labelSnapshot.reliabilityWeightModelId,
+    missingRequiredFields,
+  };
+}
+
+function numberOrNull(value) {
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
 export function createLabelSnapshot(id, releaseId, ratings, pairs, status = "initial_only", positionList = positions) {
   const snapshotRatings = ratingsEligibleForLabelSnapshot(ratings, positionList);
   const excludedBlindAggregationRows = ratings
@@ -2597,7 +2884,8 @@ export function selectPrimaryRaterAnchor(
   pairs,
   options = {},
 ) {
-  const allowedKinds = options.allowedKinds ?? ["blind_initial"];
+  const policy = options.primaryRaterAnchorPolicy ?? null;
+  const allowedKinds = options.allowedKinds ?? policy?.allowedKinds ?? ["blind_initial"];
   const eligibleItemIds = new Set(pairs.map(({ positionId, critiqueId }) => makeItemId(positionId, critiqueId)));
   const coverageByRater = {};
   ratings
@@ -2615,14 +2903,28 @@ export function selectPrimaryRaterAnchor(
       raterTiers: [...row.tiers].sort(),
     }))
     .sort((left, right) => right.coverageItemCount - left.coverageItemCount || left.raterId.localeCompare(right.raterId));
-  const selected = rows[0] ?? { raterId: null, coverageItemCount: 0, coverageShare: 0, raterTiers: [] };
+  const selected =
+    policy?.fixedRaterId
+      ? rows.find((row) => row.raterId === policy.fixedRaterId) ?? { raterId: policy.fixedRaterId, coverageItemCount: 0, coverageShare: 0, raterTiers: [] }
+      : rows[0] ?? { raterId: null, coverageItemCount: 0, coverageShare: 0, raterTiers: [] };
+  const coverageThreshold = policy?.coverageThreshold ?? options.coverageThreshold ?? 0;
   return {
     ...selected,
     candidateRows: rows,
-    selectionPolicy: "predeclared_max_blind_initial_coverage_tie_break_rater_id",
+    selectionPolicy: policy?.selectionRule ?? "predeclared_max_blind_initial_coverage_tie_break_rater_id",
+    selectionPolicyId: policy?.id ?? null,
+    selectionPolicySource: policy?.policySource ?? "default_project_anchor_policy",
     allowedKinds,
-    frozenBeforeModelEvaluation: true,
-    prohibitedPostHocCriteria: ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
+    coverageThreshold,
+    coverageThresholdMet: selected.coverageShare >= coverageThreshold,
+    predeclaredAt: policy?.predeclaredAt ?? "2026-09-30T12:00:00.000Z",
+    frozenBeforeModelEvaluation: policy?.frozenBeforeModelEvaluation ?? true,
+    prohibitedPostHocCriteria:
+      policy?.prohibitedPostHocCriteria ?? ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
+    missingProhibitedPostHocCriteria: policy?.missingProhibitedPostHocCriteria ?? [],
+    policyStatus:
+      policy?.policyStatus ??
+      (selected.coverageShare >= coverageThreshold ? "default_primary_rater_anchor_policy_applied" : "primary_rater_anchor_coverage_threshold_unmet"),
   };
 }
 
@@ -2642,6 +2944,7 @@ export function createPrimaryRaterAnchorSnapshot(id, releaseId, ratings, pairs, 
     reliabilityWeightModelId: "single-primary-rater-no-reliability-weighting",
     createdAt: new Date().toISOString(),
     primaryRaterAnchor: anchor,
+    primaryRaterAnchorPolicy: options.primaryRaterAnchorPolicy ?? null,
     itemLabels,
     denominatorCounts: {
       blindInitialRatings: countKind(anchorRatings, "blind_initial"),
@@ -2657,6 +2960,42 @@ export function createPrimaryRaterAnchorSnapshot(id, releaseId, ratings, pairs, 
       finalAverageApproximation: false,
       note: "Primary-rater anchor preserves LMCA Table-5-style target semantics; consensus snapshots should be reported separately for quality-sensitive targets.",
     },
+  };
+}
+
+export function buildEffectivePrimaryRaterAnchorPolicy(releaseId, submittedPolicies = []) {
+  const requiredProhibitedPostHocCriteria = ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"];
+  const submittedPolicy = submittedPolicies.at(-1) ?? null;
+  const prohibitedPostHocCriteria = submittedPolicy?.prohibitedPostHocCriteria ?? requiredProhibitedPostHocCriteria;
+  const missingProhibitedPostHocCriteria = requiredProhibitedPostHocCriteria.filter((criterion) => !prohibitedPostHocCriteria.includes(criterion));
+  const predeclaredAt = submittedPolicy?.predeclaredAt ?? submittedPolicy?.frozenAt ?? null;
+  const policySource = submittedPolicy ? "submitted_workflow_primary_rater_anchor_policy" : "default_project_anchor_policy";
+  const fixedRaterId = submittedPolicy?.primaryRaterId ?? submittedPolicy?.raterId ?? null;
+  const coverageThreshold = Number.isFinite(Number(submittedPolicy?.coverageThreshold)) ? Number(submittedPolicy.coverageThreshold) : 0;
+  const frozenBeforeModelEvaluation = submittedPolicy ? Boolean(predeclaredAt) : true;
+  const policyStatus =
+    submittedPolicy && !predeclaredAt
+      ? "submitted_anchor_policy_missing_predeclaration_time"
+      : missingProhibitedPostHocCriteria.length
+        ? "submitted_anchor_policy_missing_posthoc_prohibitions"
+        : submittedPolicy
+          ? "submitted_anchor_policy_predeclared"
+          : "default_primary_rater_anchor_policy_applied";
+  return {
+    id: submittedPolicy?.id ?? `primary-rater-anchor-policy-${releaseId}`,
+    releaseId: submittedPolicy?.releaseId ?? releaseId,
+    policySource,
+    selectionRule: submittedPolicy?.selectionRule ?? "predeclared_max_blind_initial_coverage_tie_break_rater_id",
+    fixedRaterId,
+    coverageThreshold,
+    topicExpertiseThreshold: submittedPolicy?.topicExpertiseThreshold ?? null,
+    allowedKinds: submittedPolicy?.allowedKinds ?? ["blind_initial"],
+    predeclaredAt: submittedPolicy ? predeclaredAt : "2026-09-30T12:00:00.000Z",
+    frozenBeforeModelEvaluation,
+    prohibitedPostHocCriteria,
+    requiredProhibitedPostHocCriteria,
+    missingProhibitedPostHocCriteria,
+    policyStatus,
   };
 }
 
@@ -2687,6 +3026,131 @@ export function buildReleaseGateProfile(releaseId) {
   };
 }
 
+export function buildEffectiveReleaseGateProfile(releaseId, submittedProfiles = []) {
+  const baseProfile = buildReleaseGateProfile(releaseId);
+  const submittedProfile = submittedProfiles.at(-1) ?? null;
+  if (!submittedProfile) {
+    return {
+      ...baseProfile,
+      profileSource: "default_project_gate_catalog",
+      submittedProfileId: null,
+      profileCoverage: gateProfileCoverageSummary(baseProfile, null),
+    };
+  }
+  const sourceCriticalCore = mergeSubmittedGateGroup(baseProfile.sourceCriticalCore, submittedProfile, "sourceCriticalCore", "sourceCriticalCoreGates");
+  const benchmarkQualitySafeguards = mergeSubmittedGateGroup(
+    baseProfile.benchmarkQualitySafeguards,
+    submittedProfile,
+    "benchmarkQualitySafeguards",
+    "benchmarkQualityGates",
+  );
+  const claimGatedDiagnostics = mergeSubmittedGateGroup(baseProfile.claimGatedDiagnostics, submittedProfile, "claimGatedDiagnostics", "claimGatedDiagnostics");
+  const profile = {
+    ...baseProfile,
+    id: submittedProfile.id ?? baseProfile.id,
+    releaseId: submittedProfile.releaseId ?? releaseId,
+    claimTier: submittedProfile.claimTier ?? baseProfile.claimTier,
+    frozenAt: submittedProfile.frozenAt ?? submittedProfile.createdAt ?? baseProfile.frozenAt,
+    profileName: submittedProfile.profileName ?? submittedProfile.name ?? null,
+    profileSource: "submitted_workflow_gate_profile",
+    submittedProfileId: submittedProfile.id ?? null,
+    sourceCriticalCore: sourceCriticalCore.rows,
+    benchmarkQualitySafeguards: benchmarkQualitySafeguards.rows,
+    claimGatedDiagnostics: claimGatedDiagnostics.rows,
+  };
+  return {
+    ...profile,
+    profileCoverage: gateProfileCoverageSummary(profile, {
+      sourceCriticalCore,
+      benchmarkQualitySafeguards,
+      claimGatedDiagnostics,
+    }),
+  };
+}
+
+function mergeSubmittedGateGroup(baseRows, submittedProfile, objectKey, listKey) {
+  const objectRows = Array.isArray(submittedProfile?.[objectKey]) && submittedProfile[objectKey].every((row) => row && typeof row === "object")
+    ? submittedProfile[objectKey]
+    : [];
+  const declaredIds = new Set([
+    ...gateIdsFromValue(submittedProfile?.[objectKey]),
+    ...gateIdsFromValue(submittedProfile?.[listKey]),
+  ]);
+  const submittedRowsById = new Map(objectRows.map((row) => [normalizeGateId(row.id), row]));
+  const rows = baseRows.map((row) => {
+    const normalizedId = normalizeGateId(row.id);
+    const submittedRow = submittedRowsById.get(normalizedId);
+    return {
+      ...row,
+      ...(submittedRow ?? {}),
+      id: row.id,
+      submittedDeclarationStatus: declaredIds.size
+        ? declaredIds.has(normalizedId)
+          ? "declared_in_submitted_profile"
+          : "missing_from_submitted_profile"
+        : "not_declared_in_submitted_profile",
+    };
+  });
+  const baseIds = new Set(baseRows.map((row) => normalizeGateId(row.id)));
+  const extraRows = objectRows
+    .filter((row) => !baseIds.has(normalizeGateId(row.id)))
+    .map((row) => ({
+      ...row,
+      id: normalizeGateId(row.id),
+      submittedDeclarationStatus: "extra_submitted_gate",
+    }));
+  const missingRequiredIds = declaredIds.size ? baseRows.map((row) => normalizeGateId(row.id)).filter((id) => !declaredIds.has(id)) : baseRows.map((row) => normalizeGateId(row.id));
+  const extraDeclaredIds = [...declaredIds].filter((id) => !baseIds.has(id));
+  return {
+    rows: [...rows, ...extraRows],
+    requiredIds: baseRows.map((row) => normalizeGateId(row.id)),
+    declaredIds: [...declaredIds],
+    missingRequiredIds,
+    extraDeclaredIds,
+  };
+}
+
+function gateIdsFromValue(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((row) => (row && typeof row === "object" ? row.id : row))
+    .map(normalizeGateId)
+    .filter(Boolean);
+}
+
+function normalizeGateId(id) {
+  return typeof id === "string" ? id.trim().toLowerCase().replace(/[_\s]+/g, "-") : "";
+}
+
+function gateProfileCoverageSummary(profile, groups) {
+  if (!groups) {
+    return {
+      status: "default_gate_catalog_used_no_submitted_profile",
+      missingRequiredGateCount: 0,
+      groups: {},
+    };
+  }
+  const summaryGroups = Object.fromEntries(
+    Object.entries(groups).map(([key, group]) => [
+      key,
+      {
+        requiredIds: group.requiredIds,
+        declaredIds: group.declaredIds,
+        missingRequiredIds: group.missingRequiredIds,
+        extraDeclaredIds: group.extraDeclaredIds,
+        status: group.missingRequiredIds.length ? "submitted_profile_missing_required_gates" : "submitted_profile_covers_required_gates",
+      },
+    ]),
+  );
+  const missingRequiredGateCount = Object.values(summaryGroups).reduce((sum, group) => sum + group.missingRequiredIds.length, 0);
+  return {
+    submittedProfileId: profile.submittedProfileId,
+    status: missingRequiredGateCount ? "submitted_profile_missing_required_gates" : "submitted_profile_covers_required_gate_catalog",
+    missingRequiredGateCount,
+    groups: summaryGroups,
+  };
+}
+
 export function evaluateReleaseGateProfile(profile) {
   const checks = [...profile.sourceCriticalCore, ...profile.benchmarkQualitySafeguards, ...profile.claimGatedDiagnostics];
   return {
@@ -2695,6 +3159,8 @@ export function evaluateReleaseGateProfile(profile) {
     partialCount: checks.filter((check) => check.status === "partial").length,
     deferredCount: checks.filter((check) => check.status === "deferred").length,
     blockingFailures: checks.filter((check) => check.status === "fail" && check.tier !== "claim_gated_diagnostic"),
+    profileCoverageStatus: profile.profileCoverage?.status ?? "profile_coverage_not_reported",
+    missingRequiredProfileGateCount: profile.profileCoverage?.missingRequiredGateCount ?? 0,
   };
 }
 
@@ -2723,6 +3189,97 @@ export function createExportManifest(kind, releaseId, positionList = positions, 
       "Blind initial ratings, revisions, checks, and adjudication labels are counted separately.",
       hiddenBenchmarkExcluded ? "Hidden benchmark and protected validation splits are excluded." : "Restricted export requires exposure logging.",
     ],
+  };
+}
+
+export function applySubmittedItemTextVersions(positionList = positions, critiqueList = critiques, submittedItemTextVersions = []) {
+  const normalized = submittedItemTextVersions.map(normalizeSubmittedItemTextVersion).filter(Boolean);
+  const versionsByKey = normalized.reduce((acc, item) => {
+    const key = `${item.itemType}:${item.itemId}`;
+    acc[key] ??= [];
+    acc[key].push(item.textVersion);
+    return acc;
+  }, {});
+  const attach = (item, itemType) => {
+    const submittedVersions = versionsByKey[`${itemType}:${item.id}`] ?? [];
+    if (!submittedVersions.length) return item;
+    const submittedIds = new Set(submittedVersions.map((version) => version.id));
+    return {
+      ...item,
+      textVersions: [...(item.textVersions ?? []).filter((version) => !submittedIds.has(version.id)), ...submittedVersions],
+    };
+  };
+  return {
+    positionList: positionList.map((position) => attach(position, "position")),
+    critiqueList: critiqueList.map((critique) => attach(critique, "critique")),
+    submittedItemTextVersionIds: normalized.map((item) => item.textVersion.id),
+  };
+}
+
+function normalizeSubmittedItemTextVersion(record) {
+  const itemType = record?.itemType ?? record?.item_type;
+  const itemId = record?.itemId ?? record?.item_id;
+  const id = record?.id ?? record?.itemTextVersionId ?? record?.item_text_version_id;
+  if (!id || !itemType || !itemId) return null;
+  return {
+    itemType,
+    itemId,
+    textVersion: {
+      id,
+      text: record.canonicalText ?? record.text ?? "",
+      canonicalHash: record.canonicalTextHash ?? record.canonicalHash ?? `sha256:${id}:canonical`,
+      renderedHash:
+        record.raterVisibleRenderedTextHash ??
+        record.raterVisibleRenderedHash ??
+        record.renderedHash ??
+        record.modelVisibleRenderedTextHash ??
+        `sha256:${id}:rendered`,
+      modelVisibleRenderedHash: record.modelVisibleRenderedTextHash ?? null,
+      normalizationStatus: record.normalizationStatus ?? record.textVersionStatus ?? "submitted_workflow_text_version",
+      source: "submitted_workflow_item_text_version",
+      createdAt: record.createdAt ?? record.timestamp ?? now,
+    },
+  };
+}
+
+export function buildEffectiveRatingContextSnapshots(submittedRatingContextSnapshots = [], baseContextSnapshots = ratingContextSnapshots) {
+  const normalized = submittedRatingContextSnapshots.map(normalizeSubmittedRatingContextSnapshot).filter(Boolean);
+  const submittedIds = new Set(normalized.map((snapshot) => snapshot.id));
+  return [...baseContextSnapshots.filter((snapshot) => !submittedIds.has(snapshot.id)), ...normalized];
+}
+
+function normalizeSubmittedRatingContextSnapshot(record) {
+  const id = record?.id ?? record?.ratingContextSnapshotId ?? record?.rating_context_snapshot_id;
+  const positionId = record?.positionId ?? record?.position_id;
+  const targetCritiqueId = record?.targetCritiqueId ?? record?.critiqueId ?? record?.target_critique_id;
+  if (!id || !positionId || !targetCritiqueId) return null;
+  const visibleCritiqueIds = uniqueStrings(record.visibleCritiqueIds ?? record.siblingCritiqueIdsShown ?? [targetCritiqueId]);
+  const orderIndexByCritiqueId =
+    record.orderIndexByCritiqueId ?? Object.fromEntries(visibleCritiqueIds.map((critiqueId, index) => [critiqueId, index]));
+  const targetOrderIndex = orderIndexByCritiqueId[targetCritiqueId];
+  const priorSiblingCritiqueIds =
+    record.priorSiblingCritiqueIds ??
+    (Number.isInteger(targetOrderIndex)
+      ? visibleCritiqueIds.filter((critiqueId) => critiqueId !== targetCritiqueId && orderIndexByCritiqueId[critiqueId] < targetOrderIndex)
+      : []);
+  const policy = record.policy ?? record.contextPolicy ?? "submitted_context_policy";
+  return {
+    id,
+    positionId,
+    targetCritiqueId,
+    policy,
+    visibleCritiqueIds,
+    priorSiblingCritiqueIds,
+    laterSiblingCritiqueIdsAbsentAtSubmission: record.laterSiblingCritiqueIdsAbsentAtSubmission ?? record.absentSiblingCritiqueIds ?? [],
+    siblingItemTextVersionIds: record.siblingItemTextVersionIds ?? [],
+    orderIndexByCritiqueId,
+    orderPolicy: record.orderPolicy ?? (visibleCritiqueIds.length > 1 ? "submitted_sibling_order" : "single_target_no_sibling_context"),
+    siblingExposurePattern: record.siblingExposurePattern ?? (visibleCritiqueIds.length > 1 ? "submitted_sibling_context" : "none"),
+    humanModelParityStatus:
+      record.humanModelParityStatus ??
+      (visibleCritiqueIds.length > 1 ? "submitted_context_sensitive_model_prompt_matching_required" : "matchable_target_only"),
+    snapshotSource: "submitted_workflow_rating_context_snapshot",
+    frozenAt: record.frozenAt ?? record.createdAt ?? record.timestamp ?? now,
   };
 }
 
@@ -2757,12 +3314,14 @@ export function buildTrainingExport(
       ),
     ]),
   );
-  const pairwiseComparisonSnapshot = buildPairwiseComparisonSnapshot(
-    `training-pairwise-${releaseId}`,
-    labelSnapshot.id,
-    labelSnapshot.targetLabelVersion,
+  const pairwiseSnapshotEvidence = buildEffectiveTrainingPairwiseComparisonSnapshot(
+    releaseId,
+    labelSnapshot,
     positionToOveralls,
+    includedPositionIds,
+    options.pairwiseComparisonSnapshots ?? [],
   );
+  const pairwiseComparisonSnapshot = pairwiseSnapshotEvidence.snapshot;
   const labelByItemId = labelSnapshot.itemLabels;
   const pairwisePreferenceExamples = pairwiseComparisonSnapshot.nonTiedEdges.map((edge) => {
     const itemA = labelByItemId[makeItemId(edge.positionId, edge.critiqueA)];
@@ -2839,6 +3398,10 @@ export function buildTrainingExport(
     },
     ratingContextSnapshots: contextSnapshots.filter((snapshot) => includedPositionIds.has(snapshot.positionId)),
     pairwiseComparisonSnapshot,
+    pairwiseComparisonSnapshotSource: pairwiseSnapshotEvidence.source,
+    submittedPairwiseComparisonSnapshotId: pairwiseSnapshotEvidence.submittedPairwiseComparisonSnapshotId,
+    pairwiseComparisonSnapshotStatus: pairwiseSnapshotEvidence.status,
+    ignoredPairwiseComparisonSnapshotIds: pairwiseSnapshotEvidence.ignoredPairwiseComparisonSnapshotIds,
     pairwiseMarginDistribution: pairwiseMarginDistribution(pairwiseComparisonSnapshot),
     pointwiseExamples,
     pairwisePreferenceExamples,
@@ -2850,6 +3413,104 @@ export function buildTrainingExport(
       "Label uncertainty, rater coverage, spread, and context-snapshot provenance are preserved for downstream exclusion or downweighting.",
     ],
   };
+}
+
+function buildEffectiveTrainingPairwiseComparisonSnapshot(
+  releaseId,
+  labelSnapshot,
+  positionToOveralls,
+  includedPositionIds,
+  submittedPairwiseComparisonSnapshots = [],
+) {
+  const normalizedSubmitted = submittedPairwiseComparisonSnapshots
+    .map((snapshot) => normalizeSubmittedPairwiseComparisonSnapshot(snapshot, labelSnapshot, positionToOveralls))
+    .filter(Boolean);
+  const submitted = [...normalizedSubmitted]
+    .reverse()
+    .find((snapshot) => pairwiseSnapshotMatchesTrainingExport(snapshot, labelSnapshot, includedPositionIds, positionToOveralls));
+  if (submitted) {
+    return {
+      snapshot: submitted,
+      source: "submitted_workflow_pairwise_comparison_snapshot",
+      status: "submitted_pairwise_snapshot_applied",
+      submittedPairwiseComparisonSnapshotId: submitted.id,
+      ignoredPairwiseComparisonSnapshotIds: normalizedSubmitted.filter((snapshot) => snapshot.id !== submitted.id).map((snapshot) => snapshot.id),
+    };
+  }
+  return {
+    snapshot: buildPairwiseComparisonSnapshot(
+      `training-pairwise-${releaseId}`,
+      labelSnapshot.id,
+      labelSnapshot.targetLabelVersion,
+      positionToOveralls,
+    ),
+    source: "computed_training_pairwise_snapshot",
+    status: normalizedSubmitted.length ? "submitted_pairwise_snapshot_not_applicable_computed_used" : "computed_pairwise_snapshot_used",
+    submittedPairwiseComparisonSnapshotId: null,
+    ignoredPairwiseComparisonSnapshotIds: normalizedSubmitted.map((snapshot) => snapshot.id),
+  };
+}
+
+function normalizeSubmittedPairwiseComparisonSnapshot(snapshot, labelSnapshot, positionToOveralls) {
+  const id = snapshot?.id ?? snapshot?.pairwiseComparisonSnapshotId ?? snapshot?.pairwise_comparison_snapshot_id;
+  if (!id) return null;
+  const positionIds = snapshot.positionIds ?? Object.keys(snapshot.critiqueIdsByPosition ?? positionToOveralls);
+  const critiqueIdsByPosition =
+    snapshot.critiqueIdsByPosition ??
+    Object.fromEntries(positionIds.map((positionId) => [positionId, Object.keys(positionToOveralls[positionId] ?? {})]));
+  const edges = normalizeSubmittedPairwiseEdges(snapshot, positionIds, positionToOveralls);
+  return {
+    id,
+    labelSnapshotId: snapshot.labelSnapshotId ?? labelSnapshot.id,
+    targetLabelVersion: snapshot.targetLabelVersion ?? labelSnapshot.targetLabelVersion,
+    tieTolerance: numberOrDefault(snapshot.tieTolerance ?? snapshot.humanTieTolerance, 0),
+    humanTieTolerance: numberOrDefault(snapshot.humanTieTolerance ?? snapshot.tieTolerance, 0),
+    modelTieTolerance: numberOrDefault(snapshot.modelTieTolerance ?? snapshot.tieTolerance, 0),
+    humanTiePolicy: normalizeHumanTiePolicy(snapshot.humanTiePolicy ?? snapshot.tiePolicy),
+    modelTiePolicy: normalizeModelTiePolicy(snapshot.modelTiePolicy ?? snapshot.tiePolicy),
+    scoreRoundingPolicy: snapshot.scoreRoundingPolicy ?? "submitted_pairwise_snapshot_policy",
+    scoreQuantizationPolicy: snapshot.scoreQuantizationPolicy ?? "unit_interval_decimal_scores_no_bucket_quantization",
+    positionIds,
+    critiqueIdsByPosition,
+    itemTextVersionIds: snapshot.itemTextVersionIds ?? [],
+    nonTiedEdges: edges,
+    excludedHumanTieEdges: snapshot.excludedHumanTieEdges ?? snapshot.excludedHumanTieEdgeCount ?? 0,
+    excludedNoPairPositions: snapshot.excludedNoPairPositions ?? [],
+    frozenAt: snapshot.frozenAt ?? snapshot.timestamp ?? now,
+    snapshotSource: "submitted_workflow_pairwise_comparison_snapshot",
+  };
+}
+
+function normalizeSubmittedPairwiseEdges(snapshot, positionIds, positionToOveralls) {
+  const rawEdges = snapshot.nonTiedEdges ?? snapshot.nonTiedComparisonEdges ?? [];
+  return rawEdges
+    .map((edge) => {
+      const positionId = edge.positionId ?? (Array.isArray(edge) && edge.length > 2 ? edge[0] : positionIds.length === 1 ? positionIds[0] : null);
+      const critiqueA = edge.critiqueA ?? edge.leftCritiqueId ?? (Array.isArray(edge) ? edge.at(-2) : null);
+      const critiqueB = edge.critiqueB ?? edge.rightCritiqueId ?? (Array.isArray(edge) ? edge.at(-1) : null);
+      if (!positionId || !critiqueA || !critiqueB) return null;
+      const computedMargin = Math.abs((positionToOveralls[positionId]?.[critiqueA] ?? 0) - (positionToOveralls[positionId]?.[critiqueB] ?? 0));
+      const humanMargin = numberOrDefault(edge.humanMargin ?? edge.margin, computedMargin);
+      return {
+        positionId,
+        critiqueA,
+        critiqueB,
+        humanMargin,
+        marginBin: edge.marginBin ?? (humanMargin < 0.15 ? "low" : humanMargin < 0.35 ? "medium" : "high"),
+      };
+    })
+    .filter(Boolean);
+}
+
+function pairwiseSnapshotMatchesTrainingExport(snapshot, labelSnapshot, includedPositionIds, positionToOveralls) {
+  if (snapshot.labelSnapshotId !== labelSnapshot.id) return false;
+  if (snapshot.targetLabelVersion !== labelSnapshot.targetLabelVersion) return false;
+  if (!snapshot.positionIds.every((positionId) => includedPositionIds.has(positionId))) return false;
+  return snapshot.nonTiedEdges.every(
+    (edge) =>
+      Number.isFinite(Number(positionToOveralls[edge.positionId]?.[edge.critiqueA])) &&
+      Number.isFinite(Number(positionToOveralls[edge.positionId]?.[edge.critiqueB])),
+  );
 }
 
 export function buildLabelChannelSeparationReport(
@@ -3006,6 +3667,7 @@ export function buildAdjudicationMemoAuditReport(
         }));
       return {
         memoId: memo.id,
+        memoSource: memo.memoSource ?? "seed_adjudication_memo",
         itemId,
         positionId: memo.positionId,
         critiqueId: memo.critiqueId,
@@ -3233,8 +3895,14 @@ export function buildCommonMaps(labelSnapshot, run = fullRubricEvaluationRun) {
   return { humanOveralls, modelOveralls, humanFullRatings, modelFullRatings, humanFullByPosition, modelFullByPosition };
 }
 
-export function buildCertificationAudit(packs = certificationPacks, items = goldLibraryItems, targets = OCTOBER_RELEASE_TARGETS) {
+export function buildCertificationAudit(packs = certificationPacks, items = goldLibraryItems, targets = OCTOBER_RELEASE_TARGETS, options = {}) {
   const modelJudgeViolations = items.filter((item) => item.modelJudgeAcceptedAsGold || !item.humanAdjudicated);
+  const certificationRecordEvidence = buildSubmittedCertificationRecordEvidence(
+    options.releaseId ?? "october-2026-demo",
+    options.certificationRecords ?? [],
+    packs,
+    items,
+  );
   return {
     id: "certification-audit-october-2026",
     targetGoldLibraryItems: targets.goldLibraryItems,
@@ -3253,6 +3921,159 @@ export function buildCertificationAudit(packs = certificationPacks, items = gold
       recertificationPolicy: pack.recertificationPolicy,
       status: pack.status,
     })),
+    certificationRecordEvidence,
+  };
+}
+
+export function buildSubmittedCertificationRecordEvidence(
+  releaseId,
+  submittedRecords = [],
+  packs = certificationPacks,
+  items = goldLibraryItems,
+) {
+  const packById = new Map(packs.map((pack) => [pack.id, pack]));
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const rows = submittedRecords.map((record) => normalizeSubmittedCertificationRecord(record, packById, itemById)).filter(Boolean);
+  const reviewRows = rows.filter(
+    (row) =>
+      row.packStatus !== "known_live_certification_pack" ||
+      row.rubricStatus !== "certification_record_matches_pack_rubric" ||
+      row.protectedSplitConflictStatus !== "protected_split_excluded_training_exposure_acknowledged" ||
+      row.goldCoverageStatus !== "submitted_gold_ids_present" ||
+      row.scoreStatus !== "certification_scores_within_policy" ||
+      row.retrainingStatus !== "no_targeted_retraining_flags" ||
+      row.tierUnlockStatus !== "tier_unlocked_recorded",
+  );
+  return {
+    id: `certification-record-evidence-${releaseId}`,
+    releaseId,
+    submittedRecordCount: rows.length,
+    certifiedRecordCount: rows.filter((row) => row.recordStatus === "certified_or_tier_unlocked").length,
+    protectedSplitConflictReviewCount: rows.filter((row) => row.protectedSplitConflictStatus !== "protected_split_excluded_training_exposure_acknowledged").length,
+    targetedRetrainingRecordCount: rows.filter((row) => row.targetedRetrainingFlags.length > 0).length,
+    rows,
+    reviewRows,
+    policy: {
+      protectedSplitRule:
+        "Submitted CertificationRecord artifacts must declare certification-pack training exposure, protected-split conflict checks, and rater acknowledgement before they count as gatekeeping evidence.",
+      scoreRule:
+        "Submitted custom weighted loss, pairwise error, duplicate inconsistency, and per-dimension calibration fields are release evidence only when they stay inside the certification policy thresholds or explicitly route to retraining/restriction review.",
+      modelJudgeRule: "Certification records can document human gatekeeping only; they do not turn model-judge outputs into gold labels.",
+    },
+    releaseUseStatus: !rows.length
+      ? "no_submitted_certification_records"
+      : reviewRows.length
+        ? "submitted_certification_records_require_review"
+        : "submitted_certification_records_gatekeeping_evidence_complete",
+  };
+}
+
+function normalizeSubmittedCertificationRecord(record, packById, itemById) {
+  if (!record?.id || !record.raterId) return null;
+  const packId = record.packId ?? record.packVersion;
+  const pack = packById.get(packId);
+  const goldItemIds = optionalStringArray(record.goldItemIds) ?? [];
+  const duplicateItemIds = optionalStringArray(record.duplicateItemIds) ?? [];
+  const hardAmbiguityItemIds = optionalStringArray(record.hardAmbiguityItemIds) ?? [];
+  const referencedItemIds = uniqueStrings([...goldItemIds, ...duplicateItemIds, ...hardAmbiguityItemIds]);
+  const missingItemIds = referencedItemIds.filter((itemId) => !itemById.has(itemId));
+  const protectedSplitConflictCheck = record.protectedSplitConflictCheck ?? record.protectedSplitConflictStatus ?? null;
+  const protectedSplitConflictStatus =
+    protectedSplitConflictCheck === "training_exposure_only_no_hidden_or_validation_overlap" && record.trainingExposureAcknowledged === true
+      ? "protected_split_excluded_training_exposure_acknowledged"
+      : "protected_split_conflict_review_required";
+  const customWeightedLoss = numberOrNull(record.customWeightedLoss);
+  const pairwiseError = numberOrNull(record.pairwiseError);
+  const duplicateInconsistency = numberOrNull(record.duplicateInconsistency ?? record.duplicateConsistencyMeanAbsDiff);
+  const targetedRetrainingFlags = optionalStringArray(record.targetedRetrainingFlags) ?? [];
+  const perDimensionCalibrationError = record.perDimensionCalibrationError ?? record.dimensionMeanAbsError ?? {};
+  const dimensionReviewFlags = Object.entries(perDimensionCalibrationError)
+    .filter(([, value]) => typeof value === "number" && value > 0.15)
+    .map(([dimension]) => dimension);
+  const scoreStatus =
+    (customWeightedLoss === null || customWeightedLoss <= 0.14) &&
+    (pairwiseError === null || pairwiseError <= 0.14) &&
+    (duplicateInconsistency === null || duplicateInconsistency <= 0.12) &&
+    dimensionReviewFlags.length === 0
+      ? "certification_scores_within_policy"
+      : "certification_score_review_required";
+  const tierUnlocked = record.tierUnlocked ?? record.tier_unlocked ?? null;
+  return {
+    recordId: record.id,
+    recordSource: "submitted_workflow_certification_record",
+    raterId: record.raterId,
+    packId,
+    packStatus: pack?.status === "live" ? "known_live_certification_pack" : "unknown_or_inactive_certification_pack",
+    rubricVersion: record.rubricVersion ?? null,
+    packRubricVersion: pack?.rubricVersion ?? null,
+    rubricCurrent: pack ? record.rubricVersion === pack.rubricVersion : false,
+    rubricStatus: pack && record.rubricVersion === pack.rubricVersion ? "certification_record_matches_pack_rubric" : "certification_record_rubric_review_required",
+    goldItemIds,
+    duplicateItemIds,
+    hardAmbiguityItemIds,
+    missingItemIds,
+    goldCoverageStatus: missingItemIds.length ? "submitted_gold_ids_missing_from_library" : "submitted_gold_ids_present",
+    protectedSplitConflictCheck,
+    trainingExposureAcknowledged: record.trainingExposureAcknowledged === true,
+    protectedSplitConflictStatus,
+    recertificationReason: record.recertificationReason ?? null,
+    customWeightedLoss,
+    pairwiseError,
+    duplicateInconsistency,
+    perDimensionCalibrationError,
+    dimensionReviewFlags,
+    scoreStatus,
+    targetedRetrainingFlags: uniqueStrings([...targetedRetrainingFlags, ...dimensionReviewFlags]),
+    retrainingStatus:
+      targetedRetrainingFlags.length || dimensionReviewFlags.length ? "targeted_retraining_flags_present" : "no_targeted_retraining_flags",
+    tierUnlocked,
+    tierUnlockStatus: tierUnlocked ? "tier_unlocked_recorded" : "tier_unlock_missing",
+    timestamp: record.timestamp ?? record.createdAt ?? record.submittedAt ?? null,
+    recordStatus:
+      tierUnlocked &&
+      pack?.status === "live" &&
+      record.rubricVersion === pack.rubricVersion &&
+      protectedSplitConflictStatus === "protected_split_excluded_training_exposure_acknowledged" &&
+      missingItemIds.length === 0 &&
+      scoreStatus === "certification_scores_within_policy" &&
+      !targetedRetrainingFlags.length
+        ? "certified_or_tier_unlocked"
+        : "review_required",
+  };
+}
+
+export function buildReleaseGoldLibraryItems(submittedGoldItems = [], positionList = positions, baseItems = goldLibraryItems) {
+  const positionClusterById = new Map(positionList.map((position) => [position.id, position.clusterId]));
+  const itemsById = new Map(baseItems.map((item) => [item.id, item]));
+  submittedGoldItems.forEach((item) => {
+    if (!item || typeof item !== "object" || !item.id) return;
+    const base = itemsById.get(item.id) ?? {};
+    itemsById.set(item.id, normalizeSubmittedGoldItem(item, positionClusterById, base));
+  });
+  return [...itemsById.values()];
+}
+
+function normalizeSubmittedGoldItem(item, positionClusterById, base = {}) {
+  const hasHumanAdjudicationEvidence = item.humanAdjudicated === true || Boolean(item.adjudicatedScores || item.adjudicationRationale);
+  const protectedSplitExcluded =
+    item.protectedSplitExcluded ?? item.protectedEvaluationExclusion ?? item.excludedFromProtectedEvaluation ?? base.protectedSplitExcluded ?? false;
+  return {
+    ...base,
+    ...item,
+    id: item.id,
+    clusterId:
+      item.clusterId ??
+      item.positionClusterId ??
+      positionClusterById.get(item.positionId) ??
+      base.clusterId ??
+      item.itemId ??
+      item.id,
+    rubricVersion: item.rubricVersion ?? base.rubricVersion ?? CURRENT_RUBRIC_VERSION,
+    itemType: item.itemType ?? base.itemType ?? "gold",
+    splitExposure: item.splitExposure ?? base.splitExposure ?? "training_qa_only",
+    humanAdjudicated: hasHumanAdjudicationEvidence,
+    modelJudgeAcceptedAsGold: item.modelJudgeAcceptedAsGold === true,
+    protectedSplitExcluded: protectedSplitExcluded === true,
   };
 }
 
@@ -3658,30 +4479,325 @@ export function auditProvenanceRights(exportKind = "public", positionList = posi
   };
 }
 
-export function buildActiveLearningAudit(batches = activeLearningBatches) {
+export function buildReleaseRightsRecords(submittedRightsRecords = [], baseRecords = provenanceRightsRecords) {
+  const recordsByPosition = new Map(baseRecords.map((record) => [record.positionId, record]));
+  submittedRightsRecords.forEach((record) => {
+    if (!record || typeof record !== "object") return;
+    const positionId = record.positionId ?? parsePositionIdFromItemId(record.artifactId) ?? parsePositionIdFromItemId(record.itemId) ?? record.artifactId;
+    if (!positionId || typeof positionId !== "string") return;
+    const base = recordsByPosition.get(positionId) ?? {};
+    recordsByPosition.set(positionId, normalizeSubmittedRightsRecord(record, positionId, base));
+  });
+  return [...recordsByPosition.values()];
+}
+
+function normalizeSubmittedRightsRecord(record, positionId, base = {}) {
+  const releaseScopes = normalizeRightsReleaseScopes(record, base);
+  return {
+    ...base,
+    ...record,
+    id: record.id ?? base.id ?? `rights-${positionId}`,
+    positionId,
+    rightsStatus: normalizeRightsStatus(record.rightsStatus, releaseScopes, base.rightsStatus),
+    releaseScopes,
+    sourceLanguage: record.sourceLanguage ?? base.sourceLanguage ?? "unknown",
+    translationRoute: record.translationRoute ?? base.translationRoute ?? "unknown",
+    taskFormat: record.taskFormat ?? record.sourceTaskFormat ?? base.taskFormat ?? "unknown",
+    sourceDomainSuitability: record.sourceDomainSuitability ?? base.sourceDomainSuitability ?? "unknown",
+    singleTopicConcentration: record.singleTopicConcentration ?? base.singleTopicConcentration ?? "unknown",
+    lsatDerived: record.lsatDerived ?? base.lsatDerived ?? false,
+    clearedAt: record.clearedAt ?? record.reviewedAt ?? base.clearedAt ?? null,
+    submittedRightsRecord: true,
+  };
+}
+
+function normalizeRightsReleaseScopes(record, base = {}) {
+  if (Array.isArray(record.releaseScopes) && record.releaseScopes.length) return [...new Set(record.releaseScopes.map(normalizeReleaseScope).filter(Boolean))];
+  if (typeof record.releaseScope === "string" && record.releaseScope) {
+    const value = record.releaseScope.toLowerCase();
+    if (value.includes("hidden") || value.includes("benchmark")) return mergeRightsScopes(base.releaseScopes, ["hidden_benchmark", "internal"]);
+    if (value.includes("public")) return mergeRightsScopes(base.releaseScopes, ["public", "internal"]);
+    if (value.includes("training")) return mergeRightsScopes(base.releaseScopes, ["training", "internal"]);
+    if (value.includes("internal")) return mergeRightsScopes(base.releaseScopes, ["internal"]);
+  }
+  const status = String(record.rightsStatus ?? "").toLowerCase();
+  if (status.includes("hidden") || status.includes("benchmark")) return mergeRightsScopes(base.releaseScopes, ["hidden_benchmark", "internal"]);
+  if (status.includes("public")) return mergeRightsScopes(base.releaseScopes, ["public", "internal"]);
+  if (status.includes("training")) return mergeRightsScopes(base.releaseScopes, ["training", "internal"]);
+  if (status.includes("internal")) return mergeRightsScopes(base.releaseScopes, ["internal"]);
+  return base.releaseScopes ?? [];
+}
+
+function mergeRightsScopes(baseScopes = [], inferredScopes = []) {
+  return [...new Set([...baseScopes, ...inferredScopes].map(normalizeReleaseScope).filter(Boolean))];
+}
+
+function normalizeReleaseScope(scope) {
+  if (scope === "hidden_benchmark_candidate") return "hidden_benchmark";
+  if (scope === "public_export") return "public";
+  if (scope === "training_export") return "training";
+  if (["public", "training", "internal", "hidden_benchmark"].includes(scope)) return scope;
+  return null;
+}
+
+function normalizeRightsStatus(status, releaseScopes, baseStatus) {
+  if (!status) return baseStatus ?? "rights_status_missing";
+  if (status === "public_export_allowed" || status === "training_export_allowed") return "cleared";
+  if (status === "hidden_benchmark_export_allowed" || status === "hidden_benchmark_allowed" || status === "restricted_benchmark_export_allowed") {
+    return releaseScopes.includes("public") || releaseScopes.includes("training") || baseStatus === "cleared" ? "cleared" : "cleared_restricted_benchmark";
+  }
+  if (status === "cleared_internal") return "cleared_internal_only";
+  if (status === "cleared" && releaseScopes.includes("hidden_benchmark")) return "cleared";
+  return status;
+}
+
+export function buildActiveLearningAudit(batches = activeLearningBatches, submittedSelectionAudits = [], workflowArtifacts = {}) {
+  const candidateWorkflowEvidence = buildCandidateWorkflowEvidence(workflowArtifacts);
+  const submittedBatches = submittedSelectionAudits.map((audit) => normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence)).filter(Boolean);
+  const auditedBatchIds = new Set(submittedBatches.map((batch) => batch.id).filter(Boolean));
+  const candidateWorkflowBatches = buildCandidateWorkflowActiveLearningBatches(candidateWorkflowEvidence, auditedBatchIds);
+  const allBatches = [...batches, ...submittedBatches, ...candidateWorkflowBatches];
   const totals = ["generated", "ingested", "judged", "disagreementSelected", "highRated", "suspectedJudgeFalsePositive", "handSelected", "rejected", "promoted"].reduce(
     (acc, field) => {
-      acc[field] = batches.reduce((sum, batch) => sum + batch[field], 0);
+      acc[field] = allBatches.reduce((sum, batch) => sum + batch[field], 0);
       return acc;
     },
     {},
   );
+  const selectionReasonCounts = mergeCountMaps(allBatches.map((batch) => batch.selectionReasonCounts ?? {}));
+  const rejectionReasonCounts = mergeCountMaps(allBatches.map((batch) => batch.rejectedCountByReason ?? {}));
   return {
     id: "active-learning-selection-denominator-audit",
     totals,
-    acceptedCritiqueIds: [...new Set(batches.flatMap((batch) => batch.acceptedCritiqueIds))],
-    blindingPass: batches.every((batch) => !batch.modelJudgeScoresVisibleToInitialRaters && batch.selectionReasonHiddenFromInitialRaters),
-    batches: batches.map((batch) => ({
+    submittedSelectionAuditCount: submittedBatches.length,
+    submittedSelectionAuditIds: submittedBatches.map((batch) => batch.selectionAuditId),
+    candidateWorkflowEvidence,
+    derivedCandidateWorkflowBatchCount: candidateWorkflowBatches.length,
+    acceptedCritiqueIds: [...new Set(allBatches.flatMap((batch) => batch.acceptedCritiqueIds))],
+    blindingPass:
+      candidateWorkflowEvidence.hiddenMetadataViolationCount === 0 &&
+      allBatches.every((batch) => !batch.modelJudgeScoresVisibleToInitialRaters && batch.selectionReasonHiddenFromInitialRaters),
+    selectionReasonCounts,
+    rejectionReasonCounts,
+    batches: allBatches.map((batch) => ({
       id: batch.id,
+      selectionAuditId: batch.selectionAuditId ?? null,
+      batchSource: batch.batchSource ?? "seed_active_learning_batch",
       generated: batch.generated,
+      ingested: batch.ingested,
       judged: batch.judged,
+      disagreementSelected: batch.disagreementSelected,
+      highRated: batch.highRated,
+      suspectedJudgeFalsePositive: batch.suspectedJudgeFalsePositive,
+      handSelected: batch.handSelected,
+      rejected: batch.rejected,
       promoted: batch.promoted,
+      selectionReasonCounts: batch.selectionReasonCounts ?? {},
+      rejectedCountByReason: batch.rejectedCountByReason ?? {},
       selectionRates: {
         promotedFromGenerated: batch.generated ? round(batch.promoted / batch.generated) : null,
         handSelectedFromJudged: batch.judged ? round(batch.handSelected / batch.judged) : null,
       },
     })),
+    releaseUseStatus:
+      submittedBatches.length || batches.length
+        ? "active_learning_selection_denominators_audited"
+        : "active_learning_selection_denominators_missing",
   };
+}
+
+function normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence = {}) {
+  if (!audit || typeof audit !== "object") return null;
+  const rejectedCountByReason = audit.rejectedCountByReason ?? audit.rejectionReasonCounts ?? {};
+  const selectionReasonCounts = {
+    ...(audit.selectionReasonCounts ?? audit.humanSelectionReasonCounts ?? {}),
+  };
+  if (audit.disagreementSelectedCount !== undefined) selectionReasonCounts.judge_disagreement = numberOrDefault(audit.disagreementSelectedCount, 0);
+  if (audit.highRatedSelectedCount !== undefined) selectionReasonCounts.high_rated = numberOrDefault(audit.highRatedSelectedCount, 0);
+  if (audit.suspectedJudgeFalsePositiveCount !== undefined) {
+    selectionReasonCounts.suspected_judge_false_positive = numberOrDefault(audit.suspectedJudgeFalsePositiveCount, 0);
+  }
+  if (audit.humanSelectedForDiversityCount !== undefined) {
+    selectionReasonCounts.human_diversity_selection = numberOrDefault(audit.humanSelectedForDiversityCount, 0);
+  }
+  const batchId = audit.candidateBatchId ?? audit.batchId ?? audit.id;
+  const workflowRow = (candidateWorkflowEvidence.rows ?? []).find((row) => row.candidateBatchId === batchId);
+  return {
+    id: batchId,
+    selectionAuditId: audit.id ?? null,
+    batchSource: "submitted_workflow_selection_audit",
+    generated: numberOrDefault(audit.generatedOrIngestedCount ?? audit.generatedOrIngestedCandidateCount ?? audit.generatedCount, 0),
+    ingested: numberOrDefault(audit.ingestedCount, 0),
+    judged: numberOrDefault(audit.judgedCount ?? audit.judgedCandidateCount, 0),
+    disagreementSelected: numberOrDefault(audit.disagreementSelectedCount, 0),
+    highRated: numberOrDefault(audit.highRatedSelectedCount ?? audit.highRatedCount, 0),
+    suspectedJudgeFalsePositive: numberOrDefault(audit.suspectedJudgeFalsePositiveCount, 0),
+    handSelected: numberOrDefault(audit.humanSelectedForDiversityCount ?? audit.handSelectedCount ?? audit.humanHandSelectedCount, 0),
+    rejected: numberOrDefault(audit.rejectedCount, sumCountMap(rejectedCountByReason)),
+    promoted: numberOrDefault(audit.promotedToRatingCount ?? audit.promotedCount, 0),
+    acceptedCritiqueIds: uniqueStrings([...(audit.acceptedCritiqueIds ?? audit.promotedCritiqueIds ?? []), ...(workflowRow?.acceptedCritiqueIds ?? [])]),
+    modelJudgeScoresVisibleToInitialRaters: audit.modelJudgeScoresVisibleToInitialRaters === true || workflowRow?.modelJudgeScoresVisibleToInitialRaters === true,
+    selectionReasonHiddenFromInitialRaters: audit.selectionReasonHiddenFromInitialRaters !== false && workflowRow?.selectionReasonHiddenFromInitialRaters !== false,
+    selectionReasonCounts,
+    rejectedCountByReason,
+  };
+}
+
+function buildCandidateWorkflowEvidence({
+  candidateBatches = [],
+  candidateCritiques = [],
+  modelJudgeScores = [],
+  candidateBatchModelJudgeScoreSubmissions = [],
+  candidateReviews = [],
+  candidatePromotions = [],
+} = {}) {
+  const critiqueById = new Map(candidateCritiques.map((critique) => [critique.id, critique]));
+  const batchRows = candidateBatches.map((batch) => {
+    const batchId = batch.id;
+    const batchCritiques = candidateCritiques.filter((critique) => critique.candidateBatchId === batchId || critique.batchId === batchId);
+    const batchCandidateIds = new Set(batchCritiques.map((critique) => critique.id));
+    const batchScores = modelJudgeScores.filter(
+      (score) => score.candidateBatchId === batchId || score.batchId === batchId || batchCandidateIds.has(score.candidateId),
+    );
+    const scoreSubmissions = candidateBatchModelJudgeScoreSubmissions.filter((submission) => submission.candidateBatchId === batchId || submission.batchId === batchId);
+    const reviews = candidateReviews.filter((review) => {
+      const candidateId = review.candidateId ?? review.id;
+      return batchCandidateIds.has(candidateId) || critiqueById.get(candidateId)?.candidateBatchId === batchId;
+    });
+    const promotions = candidatePromotions.filter((promotion) => {
+      const candidateId = promotion.candidateId ?? promotion.generatedCritiqueId ?? promotion.id;
+      return batchCandidateIds.has(candidateId) || critiqueById.get(candidateId)?.candidateBatchId === batchId;
+    });
+    const selectionReasonCounts = candidateSelectionReasonCounts(batchCritiques, reviews, batchScores);
+    const acceptedCritiqueIds = uniqueStrings(promotions.map((promotion) => promotion.acceptedCritiqueId ?? promotion.promotedCritiqueId).filter(Boolean));
+    const modelJudgeScoresVisibleToInitialRaters =
+      batch.modelJudgeScoresVisibleToInitialRaters === true ||
+      batchScores.some((score) => score.hiddenFromRatersBeforeInitialLock === false || score.modelJudgeScoresVisibleToInitialRaters === true) ||
+      scoreSubmissions.some((submission) => submission.hiddenFromRatersBeforeInitialLock === false || submission.modelJudgeScoresVisibleToInitialRaters === true);
+    const selectionReasonHiddenFromInitialRaters =
+      batch.selectionReasonHiddenFromInitialRaters !== false &&
+      batchCritiques.every((critique) => critique.selectionReasonVisibleToRatersBeforeInitialLock !== true) &&
+      reviews.every((review) => review.selectionReasonHiddenFromInitialRaters !== false) &&
+      promotions.every((promotion) => promotion.sourceMetadataHiddenFromRaters !== false);
+    return {
+      candidateBatchId: batchId,
+      candidateBatchStatus: batch.batchStatus ?? null,
+      batchSource: "submitted_workflow_candidate_batch",
+      generated: numberOrDefault(batch.generatedOrIngestedCandidateCount ?? batch.generatedOrIngestedCount ?? batch.generatedCount, batchCritiques.length),
+      ingested: numberOrDefault(batch.ingestedCount, 0),
+      judged: numberOrDefault(
+        batch.judgedCandidateCount ?? batch.judgedCount ?? firstDefined(scoreSubmissions.map((submission) => submission.judgedCandidateCount)) ?? batchScores.length,
+        0,
+      ),
+      disagreementSelected: selectionReasonCounts.judge_disagreement ?? 0,
+      highRated: batchScores.filter((score) => numberOrDefault(score.overallScore ?? score.score, 0) >= 0.7).length,
+      suspectedJudgeFalsePositive: selectionReasonCounts.suspected_judge_false_positive ?? 0,
+      handSelected: reviews.filter((review) => /approved|selected|include/.test(String(review.reviewStatus ?? review.inclusionReason ?? ""))).length,
+      rejected: reviews.filter((review) => /reject|exclude/.test(String(review.reviewStatus ?? ""))).length,
+      promoted: promotions.length,
+      acceptedCritiqueIds,
+      modelJudgeScoresVisibleToInitialRaters,
+      selectionReasonHiddenFromInitialRaters,
+      selectionReasonCounts,
+      rejectedCountByReason: {},
+      candidateCritiqueCount: batchCritiques.length,
+      modelJudgeScoreCount: batchScores.length,
+      scoreSubmissionCount: scoreSubmissions.length,
+      reviewCount: reviews.length,
+      promotionCount: promotions.length,
+      hiddenMetadataStatus:
+        !modelJudgeScoresVisibleToInitialRaters && selectionReasonHiddenFromInitialRaters
+          ? "candidate_intake_metadata_hidden_before_initial_lock"
+          : "candidate_intake_metadata_visibility_review_required",
+    };
+  });
+  const hiddenMetadataViolationRows = batchRows.filter((row) => row.hiddenMetadataStatus === "candidate_intake_metadata_visibility_review_required");
+  return {
+    candidateBatchCount: candidateBatches.length,
+    candidateCritiqueCount: candidateCritiques.length,
+    modelJudgeScoreCount: modelJudgeScores.length,
+    scoreSubmissionCount: candidateBatchModelJudgeScoreSubmissions.length,
+    reviewCount: candidateReviews.length,
+    promotionCount: candidatePromotions.length,
+    hiddenMetadataViolationCount: hiddenMetadataViolationRows.length,
+    hiddenMetadataViolationRows,
+    rows: batchRows,
+  };
+}
+
+function buildCandidateWorkflowActiveLearningBatches(candidateWorkflowEvidence, auditedBatchIds = new Set()) {
+  return (candidateWorkflowEvidence.rows ?? [])
+    .filter((row) => !auditedBatchIds.has(row.candidateBatchId))
+    .map((row) => ({
+      id: row.candidateBatchId,
+      batchSource: "submitted_workflow_candidate_batch",
+      generated: row.generated,
+      ingested: row.ingested,
+      judged: row.judged,
+      disagreementSelected: row.disagreementSelected,
+      highRated: row.highRated,
+      suspectedJudgeFalsePositive: row.suspectedJudgeFalsePositive,
+      handSelected: row.handSelected,
+      rejected: row.rejected,
+      promoted: row.promoted,
+      acceptedCritiqueIds: row.acceptedCritiqueIds,
+      modelJudgeScoresVisibleToInitialRaters: row.modelJudgeScoresVisibleToInitialRaters,
+      selectionReasonHiddenFromInitialRaters: row.selectionReasonHiddenFromInitialRaters,
+      selectionReasonCounts: row.selectionReasonCounts,
+      rejectedCountByReason: row.rejectedCountByReason,
+    }));
+}
+
+function candidateSelectionReasonCounts(critiques, reviews, scores) {
+  const counts = {};
+  const reasonsByCandidate = new Map();
+  const addReasons = (candidateId, reason) => {
+    if (!candidateId || !reason) return;
+    const reasonSet = reasonsByCandidate.get(candidateId) ?? new Set();
+    normalizedSelectionReasons(reason).forEach((key) => reasonSet.add(key));
+    reasonsByCandidate.set(candidateId, reasonSet);
+  };
+  critiques.forEach((critique) => addReasons(critique.id, critique.selectionReason));
+  reviews.forEach((review) => addReasons(review.candidateId, review.inclusionReason));
+  scores.forEach((score) => {
+    if (numberOrDefault(score.disagreementStatistics?.judgePairSpread, 0) > 0) addReasons(score.candidateId, "judge_disagreement");
+  });
+  reasonsByCandidate.forEach((reasonSet) => {
+    reasonSet.forEach((key) => {
+      counts[key] = (counts[key] ?? 0) + 1;
+    });
+  });
+  return counts;
+}
+
+function normalizedSelectionReasons(reason) {
+  const value = String(reason);
+  const reasons = [];
+  if (value.includes("judge_disagreement")) reasons.push("judge_disagreement");
+  if (value.includes("high_rated")) reasons.push("high_rated");
+  if (value.includes("false_positive")) reasons.push("suspected_judge_false_positive");
+  if (value.includes("diversity")) reasons.push("human_diversity_selection");
+  if (value.includes("suitability")) reasons.push("human_suitability_selection");
+  if (value.includes("interesting")) reasons.push("human_interestingness_selection");
+  if (value.includes("new_objection")) reasons.push("new_objection_type");
+  return reasons.length ? reasons : [value];
+}
+
+function firstDefined(values) {
+  return values.find((value) => value !== undefined && value !== null);
+}
+
+function mergeCountMaps(maps) {
+  return maps.reduce((acc, map) => {
+    Object.entries(map ?? {}).forEach(([key, value]) => {
+      acc[key] = (acc[key] ?? 0) + numberOrDefault(value, 0);
+    });
+    return acc;
+  }, {});
+}
+
+function sumCountMap(map) {
+  return Object.values(map ?? {}).reduce((sum, value) => sum + numberOrDefault(value, 0), 0);
 }
 
 export function buildCandidateIntakeQualityAudit(
@@ -4118,9 +5234,13 @@ export function buildLmcaSourceExampleAnchorReport(
 ) {
   const requiredFamilies = options.requiredFamilies ?? ["is_ought_gap", "approval_voting_midrange", "table4_model_failure"];
   const protectedSplits = new Set(options.protectedSplits ?? ["internal_validation", "hidden_benchmark"]);
-  const anchorRows = anchors
+  const submittedAnchors = (options.sourceAnchorExamples ?? []).map((anchor) => normalizeSubmittedSourceAnchorExample(anchor, releaseId)).filter(Boolean);
+  const allAnchors = [...anchors, ...submittedAnchors];
+  const anchorRows = allAnchors
     .map((anchor) => ({
       anchorId: anchor.id,
+      anchorSource: anchor.anchorSource ?? "seed_lmca_public_source_anchor",
+      submittedAnchorId: anchor.submittedAnchorId ?? null,
       suiteVersion: anchor.suiteVersion,
       sourceExampleFamily: anchor.sourceExampleFamily,
       publicSourceReference: anchor.publicSourceReference,
@@ -4173,11 +5293,13 @@ export function buildLmcaSourceExampleAnchorReport(
     missingFamilies,
     counts: {
       anchorCount: anchorRows.length,
+      submittedAnchorCount: anchorRows.filter((row) => row.anchorSource === "submitted_workflow_source_anchor_example").length,
       suiteVersionCount: suiteVersions.length,
       coveredFamilyCount: coveredFamilies.length,
       requiredFamilyCount: requiredFamilies.length,
       missingFamilyCount: missingFamilies.length,
       exposureViolationCount: exposureViolationRows.length,
+      submittedExposureViolationCount: exposureViolationRows.filter((row) => row.anchorSource === "submitted_workflow_source_anchor_example").length,
       missingRequiredIdCount: missingRequiredIdRows.length,
       humanCeilingEligibleCount: anchorRows.filter((row) => row.humanCeilingEligible).length,
       promptRegressionEligibleCount: anchorRows.filter((row) => row.promptRegressionEligible).length,
@@ -4193,6 +5315,36 @@ export function buildLmcaSourceExampleAnchorReport(
         : missingFamilies.length
           ? "source_anchor_required_family_missing"
           : "source_anchor_suite_public_training_only",
+  };
+}
+
+function normalizeSubmittedSourceAnchorExample(anchor, releaseId) {
+  const id = anchor?.id ?? anchor?.sourceAnchorId ?? anchor?.source_anchor_id;
+  if (!id) return null;
+  const allowedUses = Array.isArray(anchor.allowedUse) ? anchor.allowedUse : Array.isArray(anchor.allowedUses) ? anchor.allowedUses : [];
+  const protectedSplitExplicitlyIncluded =
+    anchor.protectedSplitExclusionStatus === false ||
+    anchor.excludedFromProtectedEvaluation === false ||
+    anchor.protectedEvaluationExclusion === false;
+  return {
+    id,
+    submittedAnchorId: id,
+    anchorSource: "submitted_workflow_source_anchor_example",
+    suiteVersion: anchor.suiteVersion ?? anchor.version ?? `submitted-source-anchors-${releaseId}`,
+    sourceExampleFamily: anchor.sourceExampleFamily ?? anchor.intendedLesson ?? anchor.anchorKind ?? "declared_custom",
+    publicSourceReference: anchor.publicSourceReference ?? anchor.lmcaTableReference ?? anchor.sourceReference ?? anchor.anchorKind ?? id,
+    itemId: anchor.itemId ?? `submitted-source-anchor::${id}`,
+    positionClusterId: anchor.positionClusterId ?? anchor.clusterId ?? `submitted-source-anchor-${id}`,
+    split: anchor.split ?? "public_training_qa_anchor",
+    rubricVersion: anchor.rubricVersion ?? anchor.rubricVersionMapping ?? CURRENT_RUBRIC_VERSION,
+    exposurePolicy: anchor.exposurePolicy ?? "public_training_qa_only",
+    protectedValidationEligible: anchor.protectedValidationEligible === true || protectedSplitExplicitlyIncluded,
+    hiddenBenchmarkEligible: anchor.hiddenBenchmarkEligible === true,
+    humanCeilingEligible: anchor.humanCeilingEligible === true,
+    promptRegressionEligible: anchor.promptRegressionEligible ?? (allowedUses.length ? allowedUses.includes("prompt_regression") : true),
+    certificationExposureEligible: anchor.certificationExposureEligible ?? (allowedUses.length ? allowedUses.includes("certification") : true),
+    expectedLabelSummary: anchor.expectedLabelSummary ?? anchor.sourceStatedRaterScores ?? anchor.intendedLesson ?? "submitted_source_anchor_expected_label_summary",
+    targetDimensions: anchor.targetDimensions ?? anchor.rubricDimensions ?? [],
   };
 }
 
@@ -4374,6 +5526,8 @@ export function buildCritiqueGenerationEvaluationReport(
     const passThreshold = run.metricDefinitions.passThresholdOverall;
     return {
       id: run.id,
+      runSource: run.runSource ?? "seed_critique_generation_run",
+      submittedGenerationEvaluationReportIds: run.submittedGenerationEvaluationReportIds ?? [],
       requestedModelAlias: run.requestedModelAlias,
       resolvedModelSnapshot: run.resolvedModelSnapshot,
       providerRoute: run.providerRoute,
@@ -4393,6 +5547,7 @@ export function buildCritiqueGenerationEvaluationReport(
       filteringPolicy: run.filteringPolicy,
       modelJudgeScreening: run.modelJudgeScreening,
       metricDefinitions: run.metricDefinitions,
+      submittedWorkflowOutputCount: run.submittedWorkflowOutputCount ?? 0,
       outputStatusCounts: countBy(outputRows, "status"),
       counts: {
         generatedOutputs: outputRows.length,
@@ -4443,6 +5598,171 @@ export function buildCritiqueGenerationEvaluationReport(
   };
 }
 
+function buildEffectiveCritiqueGenerationRuns({
+  critiqueGenerationRuns: submittedRuns = [],
+  generatedCritiqueSubmissions = [],
+  generatedCritiquePromotions = [],
+  generationEvaluationReports = [],
+} = {}) {
+  if (!submittedRuns.length && !generatedCritiqueSubmissions.length && !generatedCritiquePromotions.length) {
+    return critiqueGenerationRuns;
+  }
+  const submittedRunIds = new Set(submittedRuns.map((run) => run.id).filter(Boolean));
+  const runIdsFromSubmissions = uniqueStrings(generatedCritiqueSubmissions.map((submission) => submission.generationRunId ?? submission.critiqueGenerationRunId));
+  const stubRuns = runIdsFromSubmissions
+    .filter((runId) => runId && !submittedRunIds.has(runId))
+    .map((runId) => ({ id: runId, promptTemplateId: "candidate-gen-v3" }));
+  const normalizedSubmittedRuns = [...submittedRuns, ...stubRuns].map((run) =>
+    normalizeSubmittedCritiqueGenerationRun(run, generatedCritiqueSubmissions, generatedCritiquePromotions, generationEvaluationReports),
+  );
+  return [...critiqueGenerationRuns, ...normalizedSubmittedRuns];
+}
+
+function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, reports) {
+  const runId = run.id;
+  const runSubmissions = submissions.filter((submission) => (submission.generationRunId ?? submission.critiqueGenerationRunId) === runId);
+  const promotionByGeneratedId = new Map(promotions.map((promotion) => [promotion.generatedCritiqueId ?? promotion.outputId, promotion]));
+  const outputRows = runSubmissions.length
+    ? runSubmissions.map((submission) => normalizeSubmittedGenerationOutput(submission, promotionByGeneratedId.get(submission.id)))
+    : (run.outputs ?? []).map((output) => normalizeSubmittedGenerationOutput(output, promotionByGeneratedId.get(output.id)));
+  const reportRows = reports.filter((report) => {
+    const reportRunIds = report.generationRunIds ?? report.critiqueGenerationRunIds ?? [];
+    return report.generationRunId === runId || report.critiqueGenerationRunId === runId || reportRunIds.includes(runId);
+  });
+  const promptTemplateId = run.promptTemplateId ?? run.promptTemplateVersion ?? "candidate-gen-v3";
+  const promptArtifact = promptArtifactForSubmittedWorkflow(
+    promptTemplateId,
+    run.promptFamily ?? "critique_generation",
+    run.promptScope ?? "project_critique_generation",
+    run.promptPolicyComparabilityStatus ?? "project_extension_critique_generation_prompt",
+    run.renderedPromptChecksum ?? `sha256:${promptTemplateId}:submitted`,
+    run.outputFormatPolicy ?? "generated_critique_text",
+  );
+  const judgePromptTemplateId = run.modelJudgeScreening?.promptTemplateId ?? run.modelJudgePromptTemplateId ?? "candidate-judge-v2";
+  const judgePromptArtifact = promptArtifactForSubmittedWorkflow(
+    judgePromptTemplateId,
+    "model_judge_screening",
+    "project_model_judge_diagnostic",
+    "project_extension_model_judge_prompt",
+    run.modelJudgeScreening?.renderedPromptChecksum ?? run.modelJudgeRenderedPromptChecksum ?? `sha256:${judgePromptTemplateId}:submitted`,
+    "json_generation_screening_score",
+  );
+  const sourcePositionIds = uniqueStrings(run.sourcePositionIds ?? outputRows.map((output) => output.positionId).filter(Boolean));
+  const firstReport = reportRows[0] ?? {};
+  return {
+    id: runId,
+    runSource: "submitted_workflow_critique_generation_run",
+    submittedGenerationEvaluationReportIds: reportRows.map((report) => report.id).filter(Boolean),
+    requestedModelAlias: run.requestedModelAlias ?? run.generatorRequestedModelAlias ?? run.generatorModelAlias ?? "submitted-generator",
+    resolvedModelSnapshot: run.resolvedModelSnapshot ?? run.generatorResolvedModelSnapshot ?? run.generatorModelSnapshot ?? "submitted-generator-snapshot",
+    providerRoute: run.providerRoute ?? run.provider ?? "submitted_workflow",
+    inferenceDate: run.inferenceDate ?? run.createdAt ?? null,
+    promptTemplateId,
+    promptFamily: promptArtifact.promptFamily,
+    promptArtifact,
+    promptBody: run.promptBody ?? promptArtifact.promptBody,
+    renderedPromptChecksum: run.renderedPromptChecksum ?? promptArtifact.renderedPromptChecksum,
+    promptPolicyComparabilityStatus: run.promptPolicyComparabilityStatus ?? promptArtifact.promptPolicyComparabilityStatus,
+    protectedPromptExampleCheck: run.protectedPromptExampleCheck ?? promptArtifact.protectedSplitExclusionCheck,
+    sourcePositionSplitPolicy: run.sourcePositionSplitPolicy ?? run.sourceSplit ?? "submitted_workflow_generation_source_split",
+    sourcePositionIds,
+    generationBudgetPerPosition: run.generationBudgetPerPosition ?? firstReport.generationBudgetPerPosition ?? 1,
+    sampledOutputCount: run.sampledOutputCount ?? outputRows.length,
+    generationSettings: run.generationSettings ?? {
+      temperature: run.temperature ?? null,
+      topP: run.topP ?? null,
+      maxOutputTokens: run.maxOutputTokens ?? null,
+      reasoningMode: run.reasoningMode ?? "not_declared",
+    },
+    filteringPolicy: normalizeSubmittedGenerationFilteringPolicy(run),
+    modelJudgeScreening: normalizeSubmittedGenerationJudge(run, judgePromptArtifact),
+    outputs: outputRows,
+    submittedWorkflowOutputCount: outputRows.length,
+    metricDefinitions: {
+      headlineMetric: run.metricDefinitions?.headlineMetric ?? firstReport.headlineMetric ?? "submitted_generation_evaluation_report",
+      uncuratedRandomSampleMetric:
+        run.metricDefinitions?.uncuratedRandomSampleMetric ?? firstReport.uncuratedRandomSampleMetric ?? "submitted_all_generated_status_accounting",
+      bestOfNPolicy: run.metricDefinitions?.bestOfNPolicy ?? firstReport.bestOfNPolicy ?? "submitted_best_of_n_reported_with_generation_budget",
+      topKPolicy: run.metricDefinitions?.topKPolicy ?? firstReport.topKPolicy ?? "submitted_top_k_or_curated_metric_separated",
+      passThresholdOverall: run.metricDefinitions?.passThresholdOverall ?? firstReport.passThresholdOverall ?? 0.6,
+    },
+  };
+}
+
+function normalizeSubmittedGenerationOutput(output, promotion) {
+  return {
+    id: output.id,
+    positionId: output.positionId,
+    status: promotion?.promotedCritiqueId ? "promoted_to_rating" : normalizeGenerationOutputStatus(output.status ?? output.generationOutputStatus),
+    promotedCritiqueId: promotion?.promotedCritiqueId ?? output.promotedCritiqueId ?? null,
+    duplicateOfOutputId: output.duplicateOfOutputId ?? null,
+    selectionReasons: output.selectionReasons ?? output.selectionReasonCodes ?? (output.selectionReason ? [output.selectionReason] : []),
+    modelJudgeScore: output.modelJudgeScore ?? output.screeningScore ?? null,
+  };
+}
+
+function normalizeGenerationOutputStatus(status) {
+  if (["promoted_to_rating", "empty_or_refusal", "duplicate_filtered", "filtered_before_rating", "human_rejected"].includes(status)) return status;
+  if (status === "empty" || status === "refusal") return "empty_or_refusal";
+  if (status === "duplicate" || status === "near_duplicate") return "duplicate_filtered";
+  if (status === "filtered" || status === "rejected_before_rating") return "filtered_before_rating";
+  if (status === "rejected") return "human_rejected";
+  return "generated_not_promoted";
+}
+
+function normalizeSubmittedGenerationFilteringPolicy(run) {
+  return {
+    duplicatePolicy: run.filteringPolicy?.duplicatePolicy ?? run.duplicatePolicy ?? "submitted_duplicates_counted_and_reported",
+    emptyRefusalPolicy: run.filteringPolicy?.emptyRefusalPolicy ?? run.emptyRefusalPolicy ?? "submitted_empty_refusals_counted",
+    humanCurationPolicy: run.filteringPolicy?.humanCurationPolicy ?? run.humanCurationPolicy ?? "submitted_selection_policy_reported_separately",
+    protectedSplitUse: run.filteringPolicy?.protectedSplitUse ?? run.protectedSplitUse ?? "submitted_generation_protected_split_policy_reported",
+  };
+}
+
+function normalizeSubmittedGenerationJudge(run, promptArtifact) {
+  const judge = run.modelJudgeScreening ?? {};
+  return {
+    requestedModelAlias: judge.requestedModelAlias ?? run.judgeRequestedModelAlias ?? null,
+    resolvedModelSnapshot: judge.resolvedModelSnapshot ?? run.judgeResolvedModelSnapshot ?? null,
+    parserConfigId: judge.parserConfigId ?? run.judgeParserConfigId ?? null,
+    acceptedOutputSchema: judge.acceptedOutputSchema ?? null,
+    promptTemplateId: promptArtifact.id,
+    promptArtifact,
+    renderedPromptChecksum: judge.renderedPromptChecksum ?? promptArtifact.renderedPromptChecksum,
+    promptPolicyComparabilityStatus: judge.promptPolicyComparabilityStatus ?? promptArtifact.promptPolicyComparabilityStatus,
+    parseFailureCount: judge.parseFailureCount ?? 0,
+    invalidScoreCount: judge.invalidScoreCount ?? 0,
+    retryCount: judge.retryCount ?? 0,
+    repairedOutputCount: judge.repairedOutputCount ?? 0,
+    scoresVisibleToInitialRaters: judge.scoresVisibleToInitialRaters ?? run.modelJudgeScoresVisibleToInitialRaters ?? false,
+    diagnosticOnly: judge.diagnosticOnly ?? run.modelJudgeDiagnosticOnly ?? true,
+  };
+}
+
+function promptArtifactForSubmittedWorkflow(id, promptFamily, promptScope, promptPolicyComparabilityStatus, renderedPromptChecksum, outputFormatPolicy) {
+  if (id && promptArtifacts[id]) return promptArtifactRef(id);
+  return {
+    id,
+    artifactKind: "prompt_template",
+    promptFamily,
+    promptScope,
+    promptBody: "submitted workflow prompt body stored outside seed prompt registry",
+    renderedPromptChecksum,
+    promptPolicyComparabilityStatus,
+    protectedSplitExclusionCheck: {
+      status: "submitted_prompt_examples_exclude_protected_splits",
+      hiddenBenchmarkExamplesExcluded: true,
+      protectedValidationExamplesExcluded: true,
+      exampleItemIds: [],
+      examplePositionClusterIds: [],
+      exampleSplits: [],
+    },
+    promptExampleProvenance: [],
+    itemRoleTerminology: "position_critique",
+    outputFormatPolicy,
+  };
+}
+
 export function buildHiddenBenchmarkFreezeReport(
   releaseId,
   labelSnapshot,
@@ -4453,21 +5773,23 @@ export function buildHiddenBenchmarkFreezeReport(
   options = {},
 ) {
   const ratings = options.ratings ?? seedRatings;
-  const hiddenPositions = positionList.filter((position) => position.split === "hidden_benchmark");
+  const submittedSplitMembership = buildSubmittedBenchmarkSplitMembership(positionList, options.benchmarkSplitMembers ?? []);
+  const benchmarkPositionList = submittedSplitMembership.effectivePositionList;
+  const hiddenPositions = benchmarkPositionList.filter((position) => position.split === "hidden_benchmark");
   const hiddenPositionIds = hiddenPositions.map((position) => position.id);
   const hiddenPositionIdSet = new Set(hiddenPositionIds);
   const hiddenCritiques = critiqueList.filter((critique) => hiddenPositionIdSet.has(critique.positionId));
   const hiddenCritiqueIds = hiddenCritiques.map((critique) => critique.id);
   const hiddenItemIds = hiddenCritiques.map((critique) => makeItemId(critique.positionId, critique.id));
   const hiddenClusters = new Set(hiddenPositions.map((position) => position.clusterId));
-  const overlappingSplitClusters = positionList
+  const overlappingSplitClusters = benchmarkPositionList
     .filter((position) => position.split !== "hidden_benchmark" && hiddenClusters.has(position.clusterId))
     .map((position) => ({
       clusterId: position.clusterId,
       positionId: position.id,
       split: position.split,
     }));
-  const rightsStatus = auditProvenanceRights("hidden_benchmark", positionList, rightsRecords);
+  const rightsStatus = auditProvenanceRights("hidden_benchmark", benchmarkPositionList, rightsRecords);
   const metricEligibility = buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, hiddenPositions, hiddenCritiques);
   const positionToHumanOveralls = Object.fromEntries(
     hiddenPositions.map((position) => [
@@ -4489,8 +5811,11 @@ export function buildHiddenBenchmarkFreezeReport(
   const marginDistribution = pairwiseMarginDistribution(pairwiseSnapshot);
   const artifactBalance = buildHiddenArtifactBalance(hiddenPositions, hiddenCritiques, labelSnapshot);
   const accessAudit = summarizeBenchmarkAccess(exposureEvents);
-  const artifactProbeDiagnostics = buildArtifactProbeDiagnostics(exposureEvents);
-  const initialBlinding = buildHiddenBenchmarkInitialBlindingReport(releaseId, labelSnapshot, ratings, positionList);
+  const artifactProbeDiagnostics = buildArtifactProbeDiagnostics(exposureEvents, options.artifactProbeRuns ?? [], {
+    releaseId,
+    labelSnapshot,
+  });
+  const initialBlinding = buildHiddenBenchmarkInitialBlindingReport(releaseId, labelSnapshot, ratings, benchmarkPositionList);
   const freezeChecks = [
     freezeCheck("rights", rightsStatus.status, "Hidden-benchmark positions have restricted benchmark release scopes and adapted-source provenance."),
     freezeCheck(
@@ -4551,6 +5876,7 @@ export function buildHiddenBenchmarkFreezeReport(
     frozenAt: summarizeFreezeStatus(freezeChecks) === "frozen" ? new Date().toISOString() : null,
     hiddenPositionCount: hiddenPositions.length,
     hiddenCritiqueCount: hiddenCritiques.length,
+    submittedSplitMembership: submittedSplitMembership.report,
     restrictedItemRefs: options.includeRestrictedIds
       ? { hiddenPositionIds, hiddenCritiqueIds, hiddenItemIds }
       : { hiddenPositionIds: [], hiddenCritiqueIds: [], hiddenItemIds: [], redaction: "membership_ids_restricted_to_admin_endpoint" },
@@ -4569,6 +5895,65 @@ export function buildHiddenBenchmarkFreezeReport(
     initialBlinding,
     freezeChecks,
   };
+}
+
+function buildSubmittedBenchmarkSplitMembership(positionList, splitMembers = []) {
+  const positionIds = new Set(positionList.map((position) => position.id));
+  const rows = splitMembers
+    .map((member) => {
+      if (!member || typeof member !== "object") return null;
+      const positionId = member.positionId ?? parsePositionIdFromItemId(member.itemId);
+      const requestedSplit = member.split ?? "unknown";
+      const effectiveSplit = requestedSplit === "hidden_benchmark_candidate" ? "hidden_benchmark" : requestedSplit;
+      return {
+        id: member.id,
+        itemId: member.itemId ?? null,
+        positionId,
+        requestedSplit,
+        effectiveSplit,
+        leakPreventionStatus: member.leakPreventionStatus ?? "not_declared",
+        frozenAt: member.frozenAt ?? null,
+        positionKnown: positionIds.has(positionId),
+        appliedToFreezeMembership: positionIds.has(positionId) && effectiveSplit === "hidden_benchmark",
+      };
+    })
+    .filter(Boolean);
+  const hiddenOverrideByPosition = new Map(
+    rows.filter((row) => row.appliedToFreezeMembership).map((row) => [row.positionId, row]),
+  );
+  const effectivePositionList = positionList.map((position) => {
+    const override = hiddenOverrideByPosition.get(position.id);
+    if (!override) return position;
+    return {
+      ...position,
+      split: "hidden_benchmark",
+      benchmarkSplitMembershipOverride: {
+        id: override.id,
+        requestedSplit: override.requestedSplit,
+        originalSplit: position.split,
+        leakPreventionStatus: override.leakPreventionStatus,
+      },
+    };
+  });
+  return {
+    effectivePositionList,
+    report: {
+      rowCount: rows.length,
+      appliedHiddenPositionCount: hiddenOverrideByPosition.size,
+      unknownPositionRows: rows.filter((row) => !row.positionKnown),
+      rows,
+      status: rows.length
+        ? hiddenOverrideByPosition.size
+          ? "submitted_hidden_benchmark_membership_applied"
+          : "submitted_membership_no_hidden_benchmark_rows"
+        : "no_submitted_split_membership",
+    },
+  };
+}
+
+function parsePositionIdFromItemId(itemId) {
+  if (typeof itemId !== "string" || !itemId.includes("::")) return null;
+  return itemId.split("::")[0];
 }
 
 export function buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, positionList = positions, critiqueList = critiques, tieTolerance = 0) {
@@ -4861,6 +6246,7 @@ export function buildCorrectnessVerificationReport(
     const releaseCritical = ["public_train", "public_dev", "internal_validation", "hidden_benchmark"].includes(position?.split);
     return {
       itemHash: `sha256:${itemId}:verification`,
+      itemId,
       split: position?.split ?? "unknown",
       positionId: critique.positionId,
       critiqueId: critique.id,
@@ -4869,6 +6255,8 @@ export function buildCorrectnessVerificationReport(
       correctnessSpread: correctnessSpread ?? null,
       linkedRecordCount: itemRecords.length,
       latestRecordHash: latestRecord ? `sha256:${latestRecord.id}:verification-record` : null,
+      latestRecordId: latestRecord?.id ?? null,
+      latestRecordSource: latestRecord?.recordSource ?? (latestRecord ? "seed_verification_record" : null),
       verificationStatus,
       verificationType: latestRecord?.verificationType ?? "not_applicable",
       verifierRole: latestRecord?.verifierRole ?? null,
@@ -4908,6 +6296,7 @@ export function buildHumanCeilingAndSaturationReport(
   positionList = positions,
   critiqueList = critiques,
   runs = [fullRubricEvaluationRun],
+  options = {},
 ) {
   const validationPositions = positionList.filter((position) => position.split === "internal_validation");
   const validationPositionIds = new Set(validationPositions.map((position) => position.id));
@@ -4922,7 +6311,7 @@ export function buildHumanCeilingAndSaturationReport(
     humanCeilingComparisonRow(kind, validationRatings, labelSnapshot, validationItemIds),
   );
   const modelProximityRows = runs.map((run) => modelValidationProximityRow(run, labelSnapshot, validationItemIds));
-  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList);
+  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList, { humanCeilingRuns: options.humanCeilingRuns ?? [] });
   const thinValidation = validationDesign.status !== "appendix_c_scale";
   const bestHumanMeanAbsOverallDiff = minValid(comparisonRows.map((row) => row.meanAbsOverallDiff));
   const closestModelMeanAbsOverallDiff = minValid(modelProximityRows.map((row) => row.meanAbsOverallDiff));
@@ -4941,6 +6330,7 @@ export function buildHumanCeilingAndSaturationReport(
       validationCritiqueCount: validationCritiques.length,
       validationItemIds,
       appendixCScaleStatus: validationDesign.status,
+      submittedValidationEvidence: validationDesign.submittedValidationEvidence,
     },
     finalAverageApproximationPolicy:
       "Final-average labels are an approximation target for validation diagnostics, not literal ground truth or a substitute for blind initial ratings.",
@@ -4962,6 +6352,7 @@ export function buildHumanCeilingAndSaturationReport(
           : "no_model_assisted_checks_in_seed",
     },
     modelProximityRows,
+    submittedHumanCeilingRuns: options.humanCeilingRuns ?? [],
     uncertaintyPolicy: {
       intervalType: "descriptive_seed_no_interval",
       nominalLevel: null,
@@ -5114,6 +6505,22 @@ export function buildSanityBaselineReport(releaseId, labelSnapshot, positionList
   const pairwiseRows = rows.filter((row) => isValidScore(row.scores.overall));
   const positionToOveralls = groupOverallsByPosition(pairwiseRows);
   const pairwiseSnapshot = buildPairwiseComparisonSnapshot(`sanity-pairwise-${releaseId}`, labelSnapshot.id, labelSnapshot.targetLabelVersion, positionToOveralls);
+  const computedBaselines = [
+    sanityBaseline("random_pairwise", "weighted_pairwise", "all_scored_splits", {
+      loss: pairwiseSnapshot.nonTiedEdges.length ? 0.5 : null,
+      coverage: {
+        nPairsScored: pairwiseSnapshot.nonTiedEdges.length,
+        nPositionsScored: pairwiseSnapshot.positionIds.length - pairwiseSnapshot.excludedNoPairPositions.length,
+        nHumanTiePairsExcluded: pairwiseSnapshot.excludedHumanTieEdges,
+        nPositionsExcludedNoNonTiedPairs: pairwiseSnapshot.excludedNoPairPositions.length,
+      },
+    }),
+    sanityBaseline("constant_mean", "custom_weighted_loss", "all_scored_labels", constantBaselineLoss(scoredRows, allMeanScores)),
+    sanityBaseline("constant_median", "custom_weighted_loss", "all_scored_labels", constantBaselineLoss(scoredRows, allMedianScores)),
+    sanityBaseline("prior_only_train_dev", "custom_weighted_loss", fitSplits.join(","), constantBaselineLoss(scoredRows, fitMeanScores)),
+  ];
+  const submittedBaselineEvidence = buildSubmittedSanityBaselineEvidence(releaseId, labelSnapshot, options.sanityBaselineRuns ?? []);
+  const submittedBaselines = normalizeSubmittedSanityBaselines(options.sanityBaselineRuns ?? [], releaseId);
   return {
     id: `sanity-baselines-${releaseId}`,
     releaseId,
@@ -5127,20 +6534,8 @@ export function buildSanityBaselineReport(releaseId, labelSnapshot, positionList
       hiddenBenchmarkFitExcluded: !fitRows.some((row) => row.split === "hidden_benchmark"),
       internalValidationFitExcluded: !fitRows.some((row) => row.split === "internal_validation"),
     },
-    baselines: [
-      sanityBaseline("random_pairwise", "weighted_pairwise", "all_scored_splits", {
-        loss: pairwiseSnapshot.nonTiedEdges.length ? 0.5 : null,
-        coverage: {
-          nPairsScored: pairwiseSnapshot.nonTiedEdges.length,
-          nPositionsScored: pairwiseSnapshot.positionIds.length - pairwiseSnapshot.excludedNoPairPositions.length,
-          nHumanTiePairsExcluded: pairwiseSnapshot.excludedHumanTieEdges,
-          nPositionsExcludedNoNonTiedPairs: pairwiseSnapshot.excludedNoPairPositions.length,
-        },
-      }),
-      sanityBaseline("constant_mean", "custom_weighted_loss", "all_scored_labels", constantBaselineLoss(scoredRows, allMeanScores)),
-      sanityBaseline("constant_median", "custom_weighted_loss", "all_scored_labels", constantBaselineLoss(scoredRows, allMedianScores)),
-      sanityBaseline("prior_only_train_dev", "custom_weighted_loss", fitSplits.join(","), constantBaselineLoss(scoredRows, fitMeanScores)),
-    ],
+    baselines: [...computedBaselines, ...submittedBaselines],
+    submittedBaselineEvidence,
     fitDistribution: summarizeLabelRows(fitRows),
     scoredDistribution: summarizeLabelRows(scoredRows),
     pairwiseComparisonSnapshot: pairwiseSnapshot,
@@ -5150,6 +6545,87 @@ export function buildSanityBaselineReport(releaseId, labelSnapshot, positionList
       "Prior-only fitting excludes protected validation and hidden benchmark splits.",
       "Constant-score baselines test label-prior calibration rather than contextual conceptual judgment.",
     ],
+    releaseUseStatus:
+      submittedBaselineEvidence.reviewRows.length > 0
+        ? "submitted_sanity_baselines_review_required"
+        : submittedBaselineEvidence.submittedRunCount > 0
+          ? "submitted_sanity_baselines_attached"
+          : "computed_sanity_baselines_only",
+  };
+}
+
+function buildSubmittedSanityBaselineEvidence(releaseId, labelSnapshot, runs = []) {
+  const matchingRuns = runs.filter((run) => !run?.releaseId || run.releaseId === releaseId);
+  const rows = matchingRuns.map((run) => {
+    const fitSplits = submittedFitSplits(run);
+    const protectedFitLeakageCount = fitSplits.filter((split) => ["internal_validation", "hidden_benchmark"].includes(split)).length;
+    const checks = [
+      requiredManifestCheck("releaseId", releaseId, run.releaseId),
+      requiredManifestCheck("targetLabelSnapshotId", labelSnapshot.id, run.targetLabelSnapshotId ?? run.labelSnapshotId),
+      requiredNonEmptyCheck("baselineType", run.baselineType),
+      requiredNonEmptyCheck("metricFamily", run.metricFamily),
+      requiredNonEmptyCheck("metricOutputs", run.metricOutputs),
+      requiredNonEmptyCheck("fitSplits", fitSplits),
+      requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], protectedSplitList(run)),
+      requiredManifestCheck("protectedFitLeakageCount", 0, protectedFitLeakageCount),
+    ];
+    const reviewChecks = checks.filter((check) => check.status !== "matches" && check.status !== "not_submitted_optional");
+    return {
+      submittedRunId: run.id ?? null,
+      baselineType: run.baselineType ?? null,
+      metricFamily: run.metricFamily ?? null,
+      checks,
+      reviewChecks,
+      status: reviewChecks.length ? "submitted_sanity_baseline_review_required" : "submitted_sanity_baseline_fit_policy_preserved",
+    };
+  });
+  const reviewRows = rows.filter((row) => row.reviewChecks.length > 0);
+  return {
+    submittedRunCount: matchingRuns.length,
+    appliedRunCount: rows.length - reviewRows.length,
+    reviewRows,
+    rows,
+    releaseUseStatus:
+      reviewRows.length > 0
+        ? "submitted_sanity_baselines_review_required"
+        : matchingRuns.length > 0
+          ? "submitted_sanity_baselines_fit_policy_preserved"
+          : "no_submitted_sanity_baseline_runs",
+  };
+}
+
+function normalizeSubmittedSanityBaselines(runs = [], releaseId) {
+  return runs
+    .filter((run) => !run?.releaseId || run.releaseId === releaseId)
+    .map((run) => ({
+      ...sanityBaseline(
+        run.baselineType ?? "submitted_baseline",
+        run.metricFamily ?? "unknown_metric_family",
+        submittedFitSplits(run).join(",") || "not_declared",
+        normalizeSubmittedBaselineMetricOutputs(run),
+      ),
+      id: run.id ?? `submitted-sanity-baseline-${run.baselineType ?? "unknown"}`,
+      baselineSource: "submitted_workflow_sanity_baseline_run",
+      targetLabelSnapshotId: run.targetLabelSnapshotId ?? run.labelSnapshotId ?? null,
+      submittedAt: run.createdAt ?? run.timestamp ?? null,
+    }));
+}
+
+function submittedFitSplits(run = {}) {
+  if (Array.isArray(run.fitSplits)) return run.fitSplits;
+  if (run.fitSplit) return [run.fitSplit];
+  return [];
+}
+
+function normalizeSubmittedBaselineMetricOutputs(run = {}) {
+  const outputs = run.metricOutputs ?? {};
+  return {
+    ...outputs,
+    loss: outputs.loss ?? outputs.customWeightedLoss ?? outputs.weightedPairwiseLoss ?? outputs.unweightedPairwiseLoss ?? null,
+    coverage: outputs.coverage ?? {
+      nItemsScored: outputs.nItemsScored ?? null,
+      nPairsScored: outputs.nPairsScored ?? null,
+    },
   };
 }
 
@@ -5314,21 +6790,24 @@ export function buildUncertaintyAwareLeaderboardReport(
   };
 }
 
-export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling) {
+export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling, options = {}) {
   const pairwiseSnapshot = leaderboardReport.pairwiseComparisonSnapshot;
   const commonConfig = leaderboardReport.commonMetricConfig;
+  const effectiveMetricConfig = buildEffectiveMetricConfig(releaseId, commonConfig, pairwiseSnapshot, options.metricConfigs ?? [], options.derivedUtilityFormulas ?? []);
+  const commonMetricConfigStatus = effectiveMetricConfig.submittedMetricConfigId ? "submitted_metric_config_applied" : commonConfig.commonMetricConfigStatus;
   const pairwiseConfigRows = [
     {
       surface: "pairwise_ranking_report",
       metricFamily: "weighted_pairwise",
       lowerIsBetter: true,
-      scoreRoundingPolicy: pairwiseSnapshot.scoreRoundingPolicy,
-      scoreQuantizationPolicy: pairwiseSnapshot.scoreQuantizationPolicy,
-      humanTieTolerance: pairwiseSnapshot.humanTieTolerance,
-      modelTieTolerance: pairwiseSnapshot.modelTieTolerance,
-      humanTiePolicy: pairwiseSnapshot.humanTiePolicy,
-      modelTiePolicy: pairwiseSnapshot.modelTiePolicy,
-      commonMetricConfigStatus: commonConfig.commonMetricConfigStatus,
+      scoreRoundingPolicy: effectiveMetricConfig.scoreRoundingPolicy,
+      scoreQuantizationPolicy: effectiveMetricConfig.scoreQuantizationPolicy,
+      humanTieTolerance: effectiveMetricConfig.humanTieTolerance,
+      modelTieTolerance: effectiveMetricConfig.modelTieTolerance,
+      humanTiePolicy: effectiveMetricConfig.humanTiePolicy,
+      modelTiePolicy: effectiveMetricConfig.modelTiePolicy,
+      commonMetricConfigStatus,
+      metricConfigId: effectiveMetricConfig.id,
       evidence: `${pairwiseSnapshot.nonTiedEdges.length} non-tied edges frozen in ${pairwiseSnapshot.id}.`,
       diagnosticOnly: false,
     },
@@ -5336,13 +6815,14 @@ export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, 
       surface: "pairwise_diagnostic_report",
       metricFamily: "unweighted_pairwise_diagnostic",
       lowerIsBetter: true,
-      scoreRoundingPolicy: pairwiseSnapshot.scoreRoundingPolicy,
-      scoreQuantizationPolicy: pairwiseSnapshot.scoreQuantizationPolicy,
-      humanTieTolerance: pairwiseSnapshot.humanTieTolerance,
-      modelTieTolerance: pairwiseSnapshot.modelTieTolerance,
-      humanTiePolicy: pairwiseSnapshot.humanTiePolicy,
-      modelTiePolicy: pairwiseSnapshot.modelTiePolicy,
-      commonMetricConfigStatus: commonConfig.commonMetricConfigStatus,
+      scoreRoundingPolicy: effectiveMetricConfig.scoreRoundingPolicy,
+      scoreQuantizationPolicy: effectiveMetricConfig.scoreQuantizationPolicy,
+      humanTieTolerance: effectiveMetricConfig.humanTieTolerance,
+      modelTieTolerance: effectiveMetricConfig.modelTieTolerance,
+      humanTiePolicy: effectiveMetricConfig.humanTiePolicy,
+      modelTiePolicy: effectiveMetricConfig.modelTiePolicy,
+      commonMetricConfigStatus,
+      metricConfigId: effectiveMetricConfig.id,
       evidence: "Diagnostic uses the same pairwise snapshot, tie handling, and common item set as the weighted headline family.",
       diagnosticOnly: true,
     },
@@ -5350,27 +6830,49 @@ export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, 
       surface: "cross_model_leaderboard",
       metricFamily: leaderboardReport.metricFamily,
       lowerIsBetter: commonConfig.lowerIsBetter,
-      scoreRoundingPolicy: commonConfig.scoreRoundingPolicy,
-      scoreQuantizationPolicy: commonConfig.scoreQuantizationPolicy,
-      humanTieTolerance: commonConfig.humanTieTolerance,
-      modelTieTolerance: commonConfig.modelTieTolerance,
-      humanTiePolicy: commonConfig.humanTiePolicy,
-      modelTiePolicy: commonConfig.modelTiePolicy,
-      commonMetricConfigStatus: commonConfig.commonMetricConfigStatus,
+      scoreRoundingPolicy: effectiveMetricConfig.scoreRoundingPolicy,
+      scoreQuantizationPolicy: effectiveMetricConfig.scoreQuantizationPolicy,
+      humanTieTolerance: effectiveMetricConfig.humanTieTolerance,
+      modelTieTolerance: effectiveMetricConfig.modelTieTolerance,
+      humanTiePolicy: effectiveMetricConfig.humanTiePolicy,
+      modelTiePolicy: effectiveMetricConfig.modelTiePolicy,
+      commonMetricConfigStatus,
+      metricConfigId: effectiveMetricConfig.id,
       evidence: `${leaderboardReport.rows.length} runs compared on ${leaderboardReport.commonItemIds.length} common items using ${leaderboardReport.commonSubsetPolicy}.`,
       diagnosticOnly: false,
     },
   ];
+  if (effectiveMetricConfig.derivedUtilityPairwiseEnabled) {
+    pairwiseConfigRows.push({
+      surface: "derived_utility_pairwise_diagnostic",
+      metricFamily: "derived_utility_pairwise_diagnostic",
+      lowerIsBetter: true,
+      scoreRoundingPolicy: effectiveMetricConfig.scoreRoundingPolicy,
+      scoreQuantizationPolicy: effectiveMetricConfig.scoreQuantizationPolicy,
+      humanTieTolerance: effectiveMetricConfig.humanTieTolerance,
+      modelTieTolerance: effectiveMetricConfig.modelTieTolerance,
+      humanTiePolicy: effectiveMetricConfig.humanTiePolicy,
+      modelTiePolicy: effectiveMetricConfig.modelTiePolicy,
+      commonMetricConfigStatus,
+      metricConfigId: effectiveMetricConfig.id,
+      derivedUtilityFormulaId: effectiveMetricConfig.derivedUtilityFormula.id,
+      deadWeightDirectionHandling: effectiveMetricConfig.derivedUtilityFormula.deadWeightDirectionHandling,
+      lowClarityPolicy: effectiveMetricConfig.derivedUtilityFormula.lowClarityPolicy,
+      evidence: `${effectiveMetricConfig.derivedUtilityFormula.formulaName} ${effectiveMetricConfig.derivedUtilityFormula.version} is diagnostic-only and normalizes dead_weight as a badness field.`,
+      diagnosticOnly: true,
+    });
+  }
   const directionalityRows = [
     {
       metricFamily: "custom_weighted_loss",
-      targetRole: "label_snapshot_target_or_human_rating",
-      predictionRole: "model_full_rubric_prediction",
+      targetRole: effectiveMetricConfig.customLossTargetRole,
+      predictionRole: effectiveMetricConfig.customLossPredictionRole,
       callSignature: "customWeightedLoss(targetLabel, modelPrediction)",
       directionality: "lower_is_better_absolute_distance_from_target_to_prediction",
       lowerIsBetter: true,
-      lowClarityPolicy: "target_label_clarity_below_0_5_switches_to_overall_plus_clarity_branch",
+      lowClarityPolicy: effectiveMetricConfig.lowClarityPolicy,
       targetPredictionDirectionalityStatus: "target_prediction_roles_declared",
+      metricConfigId: effectiveMetricConfig.id,
     },
     {
       metricFamily: "human_ceiling_and_validation",
@@ -5389,7 +6891,7 @@ export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, 
       row.scoreQuantizationPolicy === undefined ||
       row.humanTieTolerance === undefined ||
       row.modelTieTolerance === undefined ||
-      row.commonMetricConfigStatus !== "declared_common_metric_config",
+      !["declared_common_metric_config", "submitted_metric_config_applied"].includes(row.commonMetricConfigStatus),
   );
   const directionalityViolationRows = directionalityRows.filter(
     (row) =>
@@ -5401,6 +6903,8 @@ export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, 
     releaseId,
     targetLabelSnapshotId: labelSnapshot.id,
     targetLabelVersion: labelSnapshot.targetLabelVersion,
+    effectiveMetricConfig,
+    derivedUtilityFormula: effectiveMetricConfig.derivedUtilityFormula,
     policy: {
       scoreRoundingRule: "Score rounding and quantization must be declared before pairwise ranking or leaderboard claims.",
       tieToleranceRule: "Human-tied pairs are excluded; model-tied predictions are scored as half-error under the same declared tolerance.",
@@ -5424,6 +6928,102 @@ export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, 
   };
 }
 
+function buildEffectiveMetricConfig(releaseId, commonConfig, pairwiseSnapshot, submittedMetricConfigs = [], submittedDerivedUtilityFormulas = []) {
+  const submittedMetricConfig = submittedMetricConfigs.at(-1) ?? null;
+  const derivedUtilityFormula = buildEffectiveDerivedUtilityFormula(releaseId, submittedDerivedUtilityFormulas, submittedMetricConfig);
+  const tieTolerance = numberOrDefault(
+    submittedMetricConfig?.pairwiseTieTolerance ?? submittedMetricConfig?.tieTolerance,
+    commonConfig.tieTolerance ?? pairwiseSnapshot.tieTolerance ?? 0,
+  );
+  return {
+    id: submittedMetricConfig?.id ?? `metric-config-${releaseId}`,
+    releaseId: submittedMetricConfig?.releaseId ?? releaseId,
+    metricFamily: submittedMetricConfig?.metricFamily ?? "weighted_pairwise_and_custom_loss",
+    metricVersion: submittedMetricConfig?.metricVersion ?? "lmca-october-2026-v1",
+    submittedMetricConfigId: submittedMetricConfig?.id ?? null,
+    configSource: submittedMetricConfig ? "submitted_workflow_metric_config" : "default_project_metric_config",
+    lowClarityThreshold: numberOrDefault(submittedMetricConfig?.lowClarityThreshold, 0.5),
+    lowClarityPolicy:
+      submittedMetricConfig?.derivedUtilityLowClarityPolicy ??
+      submittedMetricConfig?.lowClarityPolicy ??
+      "target_label_clarity_below_0_5_switches_to_overall_plus_clarity_branch",
+    customLossTargetRole: submittedMetricConfig?.customLossTargetRole ?? "label_snapshot_target_or_human_rating",
+    customLossPredictionRole: submittedMetricConfig?.customLossPredictionRole ?? "model_full_rubric_prediction",
+    scoreRoundingPolicy: submittedMetricConfig?.scoreRoundingPolicy ?? commonConfig.scoreRoundingPolicy ?? pairwiseSnapshot.scoreRoundingPolicy,
+    scoreQuantizationPolicy:
+      submittedMetricConfig?.scoreQuantizationPolicy ?? commonConfig.scoreQuantizationPolicy ?? pairwiseSnapshot.scoreQuantizationPolicy,
+    humanTieTolerance: numberOrDefault(submittedMetricConfig?.pairwiseHumanTieTolerance ?? submittedMetricConfig?.humanTieTolerance, tieTolerance),
+    modelTieTolerance: numberOrDefault(submittedMetricConfig?.pairwiseModelTieTolerance ?? submittedMetricConfig?.modelTieTolerance, tieTolerance),
+    humanTiePolicy: normalizeHumanTiePolicy(submittedMetricConfig?.pairwiseHumanTiePolicy ?? submittedMetricConfig?.humanTiePolicy ?? commonConfig.humanTiePolicy),
+    modelTiePolicy: normalizeModelTiePolicy(submittedMetricConfig?.pairwiseModelTiePolicy ?? submittedMetricConfig?.modelTiePolicy ?? commonConfig.modelTiePolicy),
+    lowMarginThreshold: numberOrDefault(submittedMetricConfig?.lowMarginThreshold, 0.05),
+    defaultResamplingUnit: submittedMetricConfig?.defaultResamplingUnit ?? "position",
+    defaultIntervalType: submittedMetricConfig?.defaultIntervalType ?? "paired_difference_interval",
+    defaultIntervalLevel: numberOrDefault(submittedMetricConfig?.defaultIntervalLevel ?? submittedMetricConfig?.defaultConfidenceLevel, 0.95),
+    defaultResampleCount: numberOrDefault(submittedMetricConfig?.defaultResampleCount, 0),
+    unweightedPairwiseDiagnosticEnabled: submittedMetricConfig?.unweightedPairwiseDiagnosticEnabled !== false,
+    derivedUtilityPairwiseEnabled: submittedMetricConfig?.derivedUtilityPairwiseEnabled === true || Boolean(derivedUtilityFormula.submittedFormulaId),
+    derivedUtilityFormulaId: submittedMetricConfig?.derivedUtilityFormulaId ?? derivedUtilityFormula.id,
+    derivedUtilityFormula,
+  };
+}
+
+function buildEffectiveDerivedUtilityFormula(releaseId, submittedDerivedUtilityFormulas = [], submittedMetricConfig = null) {
+  const submittedFormula =
+    submittedDerivedUtilityFormulas.find((formula) => formula.id === submittedMetricConfig?.derivedUtilityFormulaId) ??
+    submittedDerivedUtilityFormulas.at(-1) ??
+    null;
+  return {
+    id: submittedFormula?.id ?? submittedMetricConfig?.derivedUtilityFormulaId ?? `derived-utility-formula-${releaseId}`,
+    formulaName: submittedFormula?.formulaName ?? "default_full_rubric_utility",
+    version: submittedFormula?.version ?? "v1",
+    formulaSource: submittedFormula ? "submitted_workflow_derived_utility_formula" : "default_project_derived_utility_formula",
+    submittedFormulaId: submittedFormula?.id ?? null,
+    inputDimensions: submittedFormula?.inputDimensions ?? ["overall", "centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue"],
+    weights:
+      submittedFormula?.weights ?? {
+        overall: 0.5,
+        centralityStrengthProduct: 0.2,
+        clarity: 0.1,
+        correctness: 0.1,
+        deadWeightUtility: 0.05,
+        singleIssue: 0.05,
+      },
+    centralityStrengthHandling: submittedFormula?.centralityStrengthHandling ?? "multiply_centrality_by_strength",
+    deadWeightDirectionHandling: submittedFormula?.deadWeightDirectionHandling ?? "badness_field_normalized_as_one_minus_dead_weight",
+    singleIssueInterpretation: submittedFormula?.singleIssueInterpretation ?? "focus_cleanliness_positive_utility_component",
+    lowClarityPolicy:
+      submittedFormula?.lowClarityPolicy ??
+      submittedMetricConfig?.derivedUtilityLowClarityPolicy ??
+      "if_target_clarity_below_0_5_use_only_overall_and_clarity",
+    scoreNormalizationPolicy: submittedFormula?.scoreNormalizationPolicy ?? "unit_interval_inputs_preserved",
+    tiePolicy: submittedFormula?.tiePolicy ?? submittedMetricConfig?.pairwiseModelTiePolicy ?? "model_tie_costs_half_margin",
+    diagnosticUsePolicy: "non_headline_sensitivity_analysis_not_lmca_source_headline_metric",
+    formulaBody:
+      submittedFormula?.formulaBody ??
+      "target clarity < 0.5: 0.5*overall + 0.5*clarity; otherwise 0.5*overall + 0.2*centrality*strength + 0.1*clarity + 0.1*correctness + 0.05*(1-dead_weight) + 0.05*single_issue",
+    formulaStatus:
+      (submittedFormula?.deadWeightDirectionHandling ?? "badness_field_normalized_as_one_minus_dead_weight").includes("one_minus") ||
+      (submittedFormula?.deadWeightDirectionHandling ?? "badness_field_normalized_as_one_minus_dead_weight").includes("badness")
+        ? "derived_utility_formula_declares_badness_normalization"
+        : "derived_utility_formula_review_required",
+  };
+}
+
+function numberOrDefault(value, fallback) {
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function normalizeHumanTiePolicy(policy) {
+  if (policy === "exclude_human_ties") return "exclude_human_tied_pairs_from_pairwise_loss";
+  return policy ?? "exclude_human_tied_pairs_from_pairwise_loss";
+}
+
+function normalizeModelTiePolicy(policy) {
+  if (policy === "model_tie_costs_half_margin") return "score_model_tied_predictions_as_half_error";
+  return policy ?? "score_model_tied_predictions_as_half_error";
+}
+
 export function buildPairedTargetLabelSnapshotReport(
   releaseId,
   consensusSnapshot,
@@ -5432,9 +7032,14 @@ export function buildPairedTargetLabelSnapshotReport(
   runs = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
   options = {},
 ) {
+  const primaryRaterAnchorPolicy =
+    options.primaryRaterAnchorPolicy ?? buildEffectivePrimaryRaterAnchorPolicy(releaseId, options.primaryRaterAnchorPolicies ?? []);
   const primarySnapshot =
     options.primarySnapshot ??
-    createPrimaryRaterAnchorSnapshot(`snapshot-${releaseId}-primary-rater-anchor`, releaseId, ratings, pairs, options.primaryAnchorOptions ?? {});
+    createPrimaryRaterAnchorSnapshot(`snapshot-${releaseId}-primary-rater-anchor`, releaseId, ratings, pairs, {
+      ...(options.primaryAnchorOptions ?? {}),
+      primaryRaterAnchorPolicy,
+    });
   const primaryItemIds = scoredItemIds(primarySnapshot);
   const consensusItemIds = scoredItemIds(consensusSnapshot);
   const overlapItemIds = intersectSorted(primaryItemIds, consensusItemIds);
@@ -5469,6 +7074,7 @@ export function buildPairedTargetLabelSnapshotReport(
   return {
     id: `paired-target-label-snapshots-${releaseId}`,
     releaseId,
+    primaryRaterAnchorPolicy,
     primaryRaterAnchorSnapshot: primarySnapshot,
     consensusSnapshot: {
       id: consensusSnapshot.id,
@@ -5521,10 +7127,16 @@ export function buildModelAssistedLabelOverlapReport(
   options = {},
 ) {
   const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
-  const targetModelAssistedRows = ratings
+  const ratingById = new Map(ratings.map((rating) => [rating.id, rating]));
+  const targetModelAssistedRows = [
+    ...ratings
     .filter(hasModelAssistedExposure)
     .map((rating) => modelAssistedRatingRow(rating))
-    .filter((row) => snapshotItemIds.has(row.itemId));
+      .filter((row) => snapshotItemIds.has(row.itemId)),
+    ...(options.ratingChecks ?? [])
+      .map((ratingCheck) => modelAssistedRatingCheckRow(ratingCheck, ratingById))
+      .filter((row) => row && snapshotItemIds.has(row.itemId)),
+  ];
   const humanOnlyRatings = ratings.filter((rating) => !hasModelAssistedExposure(rating));
   const humanOnlySnapshot =
     options.humanOnlyPreAssistanceSnapshot ??
@@ -5583,6 +7195,8 @@ export function buildModelAssistedLabelOverlapReport(
     counts: {
       targetLabelItemCount: snapshotItemIds.size,
       targetModelAssistedRatingRows: targetModelAssistedRows.length,
+      submittedRatingCheckRows: options.ratingChecks?.length ?? 0,
+      submittedModelAssistedRatingCheckRows: targetModelAssistedRows.filter((row) => row.assistanceSource === "submitted_workflow_rating_check").length,
       evaluatedRunCount: runRows.length,
       overlapSensitiveRunCount: overlapRunRows.length,
     },
@@ -5644,8 +7258,13 @@ export function buildReasoningModeSensitivityReport(
 
 function buildClaimGatedModelDiagnostics(run, options = {}) {
   const robustnessClaims = options.robustnessClaims ?? [];
+  const sycophancyProbeRuns = (options.sycophancyProbeRuns ?? []).filter((probeRun) => probeRunMatchesEvaluation(probeRun, run.id));
+  const obfuscationStressRuns = (options.obfuscationStressRuns ?? []).filter((stressRun) => probeRunMatchesEvaluation(stressRun, run.id));
   const robustnessClaimMade = robustnessClaims.length > 0;
   const status = robustnessClaimMade ? "required_not_run_claim_blocking" : "deferred_no_robustness_claim";
+  const sycophancyStatus = sycophancyProbeRuns.length ? "completed_diagnostic_attached" : status;
+  const obfuscationStatus = obfuscationStressRuns.length ? "completed_diagnostic_attached" : status;
+  const missingRequiredDiagnostics = robustnessClaimMade && (!sycophancyProbeRuns.length || !obfuscationStressRuns.length);
   return {
     evaluationRunId: run.id,
     requestedModelAlias: run.requestedModelAlias,
@@ -5654,27 +7273,46 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
     suites: [
       {
         id: "sycophancy_orthodoxy_sensitivity",
-        status,
+        status: sycophancyStatus,
+        completedRunIds: sycophancyProbeRuns.map((probeRun) => probeRun.id),
         cueFamilies: ["user_agreement", "authority", "consensus", "safety_orthodoxy"],
         requiredWhenClaiming: ["deference_robustness", "orthodoxy_robustness", "user_agreement_resistance"],
         pairedCommonSetRequired: true,
-        notRunRationale: robustnessClaimMade
-          ? "Robustness claims were requested but no paired sycophancy/orthodoxy probe outputs are attached."
-          : "The seed demo makes no deference, authority, consensus, safety, or orthodoxy robustness claim.",
+        notRunRationale: sycophancyProbeRuns.length
+          ? null
+          : robustnessClaimMade
+            ? "Robustness claims were requested but no paired sycophancy/orthodoxy probe outputs are attached."
+            : "The seed demo makes no deference, authority, consensus, safety, or orthodoxy robustness claim.",
       },
       {
         id: "obfuscated_argument_stress",
-        status,
+        status: obfuscationStatus,
+        completedRunIds: obfuscationStressRuns.map((stressRun) => stressRun.id),
         variantFamilies: ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
         requiredWhenClaiming: ["obfuscation_robustness", "style_artifact_robustness", "masked_fallacy_detection"],
         pairedCommonSetRequired: true,
-        notRunRationale: robustnessClaimMade
-          ? "Robustness claims were requested but no paired obfuscated-argument stress outputs are attached."
-          : "The seed demo includes obfuscated-style rubric fixtures but does not claim model robustness on stress variants.",
+        notRunRationale: obfuscationStressRuns.length
+          ? null
+          : robustnessClaimMade
+            ? "Robustness claims were requested but no paired obfuscated-argument stress outputs are attached."
+            : "The seed demo includes obfuscated-style rubric fixtures but does not claim model robustness on stress variants.",
       },
     ],
-    releaseUseStatus: robustnessClaimMade ? "robustness_claim_blocked_until_claim_gated_probes_run" : "claim_gated_diagnostics_deferred_no_robustness_claim",
+    releaseUseStatus: missingRequiredDiagnostics
+      ? "robustness_claim_blocked_until_claim_gated_probes_run"
+      : sycophancyProbeRuns.length || obfuscationStressRuns.length
+        ? "claim_gated_diagnostics_attached_no_robustness_claim"
+        : "claim_gated_diagnostics_deferred_no_robustness_claim",
   };
+}
+
+function probeRunMatchesEvaluation(probeRun, evaluationRunId) {
+  if (!probeRun || typeof probeRun !== "object") return false;
+  if (probeRun.evaluationRunId === evaluationRunId) return true;
+  if (probeRun.linkedEvaluationRunId === evaluationRunId) return true;
+  if (Array.isArray(probeRun.pairedEvaluationRunIds) && probeRun.pairedEvaluationRunIds.includes(evaluationRunId)) return true;
+  if (Array.isArray(probeRun.evaluationRunIds) && probeRun.evaluationRunIds.includes(evaluationRunId)) return true;
+  return false;
 }
 
 export function buildModelFailureAudit(
@@ -5853,7 +7491,7 @@ export function buildValidationTrancheReport(
   };
 }
 
-export function buildValidationDesignReport(ratings = seedRatings, positionList = positions, critiqueList = critiques) {
+export function buildValidationDesignReport(ratings = seedRatings, positionList = positions, critiqueList = critiques, options = {}) {
   const validationPositionIds = new Set(positionList.filter((position) => position.split === "internal_validation").map((position) => position.id));
   const validationCritiqueIds = critiqueList.filter((critique) => validationPositionIds.has(critique.positionId)).map((critique) => critique.id);
   const validationItemIds = new Set(critiqueList.filter((critique) => validationPositionIds.has(critique.positionId)).map((critique) => makeItemId(critique.positionId, critique.id)));
@@ -5871,10 +7509,13 @@ export function buildValidationDesignReport(ratings = seedRatings, positionList 
     validationCritiqueIds.length >= OCTOBER_RELEASE_TARGETS.validationCritiques &&
     validationPositionIds.size >= OCTOBER_RELEASE_TARGETS.validationPositions &&
     fullCoverageRaters.length >= OCTOBER_RELEASE_TARGETS.coreAllItemsRaters;
+  const submittedValidationEvidence = buildSubmittedValidationEvidence(options.humanCeilingRuns ?? []);
+  const submittedFloorMet = submittedValidationEvidence.status === "submitted_appendix_c_scale_evidence";
+  const status = floorMet || submittedFloorMet ? "appendix_c_scale" : "thinner_than_appendix_c";
 
   return {
     id: "appendix-c-validation-design-report",
-    status: floorMet ? "appendix_c_scale" : "thinner_than_appendix_c",
+    status,
     requiredScale: {
       critiqueCount: OCTOBER_RELEASE_TARGETS.validationCritiques,
       positionCount: OCTOBER_RELEASE_TARGETS.validationPositions,
@@ -5886,7 +7527,9 @@ export function buildValidationDesignReport(ratings = seedRatings, positionList 
       positionCount: validationPositionIds.size,
       fullCoverageRaterCount: fullCoverageRaters.length,
       fullCoverageRaters,
+      computedFloorMet: floorMet,
     },
+    submittedValidationEvidence,
     comparabilityAxes: {
       blindInitialRatings: ratings.some((rating) => rating.kind === "blind_initial" && validationItemIds.has(makeItemId(rating.positionId, rating.critiqueId))),
       fullVsPartialRaterCoverageReported: true,
@@ -5894,10 +7537,58 @@ export function buildValidationDesignReport(ratings = seedRatings, positionList 
       positionCritiqueOrderPolicy: "counterbalance_validation_and_benchmark_candidates_where_feasible",
       synchronizedRatingWindow: "required_for_formal_validation_cycle",
       writtenFollowUp: "required_after_discussion_for_object_level_revision_instructions",
-      thinnerThanAppendixCLabelRequired: !floorMet,
+      thinnerThanAppendixCLabelRequired: status !== "appendix_c_scale",
     },
     numericBaselineComparisonTable: LMCA_BASELINES.appendixCNumericBaselines,
   };
+}
+
+function buildSubmittedValidationEvidence(humanCeilingRuns = [], targets = OCTOBER_RELEASE_TARGETS) {
+  const rows = humanCeilingRuns.map((run) => {
+    const validationCritiqueCount = numericEvidenceValue(run.validationCritiqueCount ?? run.critiqueCount);
+    const validationPositionCount = numericEvidenceValue(run.validationPositionCount ?? run.positionCount);
+    const coreAllItemsRaterCount = numericEvidenceValue(run.coreAllItemsRaterCount ?? run.fullCoverageRaterCount ?? run.coreRaterCount);
+    const discussionHours = numericEvidenceValue(run.discussionHours ?? run.discussionHourCount);
+    const appendixCFlag = run.appendixCComparabilityFlag ?? run.appendixCScaleStatus ?? "not_declared";
+    const criteria = {
+      validationCritiqueCount: validationCritiqueCount >= targets.validationCritiques,
+      validationPositionCount: validationPositionCount >= targets.validationPositions,
+      coreAllItemsRaterCount: coreAllItemsRaterCount >= targets.coreAllItemsRaters,
+      discussionHours: discussionHours > 0,
+      appendixCFlag: String(appendixCFlag).includes("appendix_c"),
+    };
+    const status = Object.values(criteria).every(Boolean) ? "appendix_c_scale_evidence" : "submitted_validation_evidence_incomplete";
+    return {
+      id: run.id,
+      targetLabelSnapshotId: run.targetLabelSnapshotId ?? null,
+      splitOrValidationSubset: run.splitOrValidationSubset ?? run.validationSubset ?? "unknown",
+      validationCritiqueCount,
+      validationPositionCount,
+      coreAllItemsRaterCount,
+      discussionHours,
+      appendixCComparabilityFlag: appendixCFlag,
+      criteria,
+      status,
+      generatedAt: run.generatedAt ?? run.completedAt ?? run.timestamp ?? null,
+    };
+  });
+  const appendixCScaleRows = rows.filter((row) => row.status === "appendix_c_scale_evidence");
+  return {
+    rows,
+    bestRunId: appendixCScaleRows[0]?.id ?? null,
+    rowCount: rows.length,
+    appendixCScaleRunCount: appendixCScaleRows.length,
+    status: appendixCScaleRows.length
+      ? "submitted_appendix_c_scale_evidence"
+      : rows.length
+        ? "submitted_validation_evidence_incomplete"
+        : "no_submitted_validation_evidence",
+  };
+}
+
+function numericEvidenceValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 export function buildAdminTagBlindingReport(releaseId, positionList = positions) {
@@ -6046,6 +7737,525 @@ export function buildCorpusCompositionManifest(releaseId, positionList = positio
   };
 }
 
+export function buildEffectiveReleaseVersionManifest(
+  releaseId,
+  { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps },
+  submittedReleaseVersions = [],
+  submittedReleaseFreezes = [],
+) {
+  const submittedReleaseVersion = latestSubmittedReleaseArtifact(submittedReleaseVersions, releaseId);
+  const submittedReleaseFreeze = latestSubmittedReleaseArtifact(submittedReleaseFreezes, releaseId);
+  const effectiveMetricConfig = metricDirectionalityConfig.effectiveMetricConfig;
+  const linkChecks = [
+    releaseManifestLinkCheck(
+      "corpus_manifest",
+      corpusManifest.id,
+      submittedReleaseVersion?.corpusManifestId ?? submittedReleaseFreeze?.corpusManifestId,
+    ),
+    releaseManifestLinkCheck(
+      "label_snapshot",
+      labelSnapshot.id,
+      submittedReleaseVersion?.labelSnapshotId ?? submittedReleaseFreeze?.labelSnapshotId,
+    ),
+    releaseManifestLinkCheck(
+      "metric_config",
+      effectiveMetricConfig.id,
+      submittedReleaseVersion?.metricConfigId ?? submittedReleaseVersion?.effectiveMetricConfigId ?? submittedReleaseFreeze?.metricConfigId,
+    ),
+    releaseManifestLinkCheck(
+      "release_gate_profile",
+      releaseGateProfile.id,
+      submittedReleaseVersion?.gateProfileId ??
+        submittedReleaseVersion?.releaseGateProfileId ??
+        submittedReleaseFreeze?.releaseGateProfileId ??
+        submittedReleaseFreeze?.gateProfileId,
+    ),
+  ];
+  const mismatchedLinkChecks = linkChecks.filter((check) => check.status === "mismatch");
+  const missingLinkChecks = linkChecks.filter((check) => check.status === "missing_submitted_artifact_link");
+  const linkedArtifactStatus =
+    submittedReleaseVersion || submittedReleaseFreeze
+      ? mismatchedLinkChecks.length || missingLinkChecks.length
+        ? "release_manifest_link_review_required"
+        : "release_manifest_links_current_artifacts"
+      : "computed_manifest_pending_submitted_release_version";
+  const targetScaleStatus =
+    currentStatus === "target_scale_met"
+      ? "target_scale_met"
+      : submittedReleaseFreeze?.targetScaleStatus ?? submittedReleaseVersion?.targetScaleStatus ?? "not_target_scale_current_report";
+  return {
+    id: submittedReleaseVersion?.id ?? `release-version-manifest-${releaseId}`,
+    releaseId,
+    version: submittedReleaseVersion?.version ?? submittedReleaseVersion?.name ?? `${releaseId}.working`,
+    manifestSource: submittedReleaseVersion ? "submitted_workflow_release_version" : "computed_working_release_manifest",
+    submittedReleaseVersionId: submittedReleaseVersion?.id ?? null,
+    submittedReleaseFreezeId: submittedReleaseFreeze?.id ?? null,
+    releaseNotes: submittedReleaseVersion?.releaseNotes ?? submittedReleaseVersion?.notes ?? null,
+    frozenAt: submittedReleaseVersion?.frozenAt ?? submittedReleaseFreeze?.frozenAt ?? null,
+    frozenBy: submittedReleaseFreeze?.frozenBy ?? null,
+    freezeEvidence: {
+      freezeStatus: submittedReleaseFreeze?.freezeStatus ?? "not_frozen",
+      targetScaleStatus,
+      frozenAt: submittedReleaseFreeze?.frozenAt ?? null,
+      releaseGateProfileId: submittedReleaseFreeze?.releaseGateProfileId ?? submittedReleaseFreeze?.gateProfileId ?? null,
+      corpusManifestId: submittedReleaseFreeze?.corpusManifestId ?? null,
+      labelSnapshotId: submittedReleaseFreeze?.labelSnapshotId ?? null,
+    },
+    linkedArtifactStatus,
+    linkedArtifactChecks: linkChecks,
+    mismatchedLinkChecks,
+    missingLinkChecks,
+    currentStatus,
+    targetGaps,
+    effectiveArtifactIds: {
+      corpusManifestId: corpusManifest.id,
+      labelSnapshotId: labelSnapshot.id,
+      metricConfigId: effectiveMetricConfig.id,
+      releaseGateProfileId: releaseGateProfile.id,
+    },
+    submittedStatus: submittedReleaseVersion?.status ?? null,
+    targetScaleStatus,
+    releaseUseStatus:
+      !submittedReleaseVersion && !submittedReleaseFreeze
+        ? "working_release_not_frozen"
+        : linkedArtifactStatus !== "release_manifest_links_current_artifacts"
+          ? "submitted_release_manifest_requires_link_review"
+          : currentStatus !== "target_scale_met"
+            ? "submitted_release_manifest_recorded_but_target_scale_incomplete"
+            : "submitted_release_manifest_current_and_target_scale_met",
+  };
+}
+
+function latestSubmittedReleaseArtifact(records = [], releaseId) {
+  return [...records].reverse().find((record) => !record?.releaseId || record.releaseId === releaseId) ?? null;
+}
+
+function releaseManifestLinkCheck(artifact, expectedId, submittedId) {
+  return {
+    artifact,
+    expectedId,
+    submittedId: submittedId ?? null,
+    status: submittedId ? (submittedId === expectedId ? "matches_current_artifact" : "mismatch") : "missing_submitted_artifact_link",
+  };
+}
+
+export function buildSubmittedReleaseArtifactEvidence(
+  releaseId,
+  { labelSnapshot, corpusManifest, trainingExport, publicExportManifest },
+  { labelSnapshots = [], corpusManifests = [], trainingExports = [], exportManifests = [] } = {},
+) {
+  const labelSnapshotEvidence = submittedLabelSnapshotEvidence(releaseId, labelSnapshot, trainingExport, latestSubmittedReleaseArtifact(labelSnapshots, releaseId));
+  const corpusManifestEvidence = submittedCorpusManifestEvidence(releaseId, corpusManifest, latestSubmittedReleaseArtifact(corpusManifests, releaseId));
+  const trainingExportEvidence = submittedTrainingExportEvidence(
+    releaseId,
+    trainingExport,
+    labelSnapshotEvidence,
+    latestSubmittedReleaseArtifact(trainingExports, releaseId),
+  );
+  const exportManifestEvidence = submittedExportManifestEvidence(
+    releaseId,
+    publicExportManifest,
+    labelSnapshotEvidence,
+    latestSubmittedExportManifest(exportManifests, releaseId, publicExportManifest.kind),
+  );
+  const sections = [labelSnapshotEvidence, corpusManifestEvidence, trainingExportEvidence, exportManifestEvidence];
+  const reviewSections = sections.filter((section) => section.status.endsWith("_review_required"));
+  return {
+    id: `submitted-release-artifact-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      labelSnapshotRule:
+        "Submitted LabelSnapshot artifacts must describe the current immutable target-label version and denominator counts before they count as release evidence.",
+      corpusManifestRule:
+        "Submitted CorpusManifest artifacts must match current position, critique, and blind-initial denominator counts rather than merely existing in workflow storage.",
+      trainingExportRule:
+        "Submitted TrainingExport artifacts must point to the active or submitted label snapshot and preserve protected-split exclusions.",
+      exportManifestRule:
+        "Submitted public ExportManifest artifacts must preserve public split scope, rights-only policy, hidden-benchmark exclusion, and label-snapshot linkage.",
+    },
+    labelSnapshotEvidence,
+    corpusManifestEvidence,
+    trainingExportEvidence,
+    exportManifestEvidence,
+    reviewSections: reviewSections.map((section) => section.artifactKind),
+    releaseUseStatus: reviewSections.length
+      ? "submitted_release_artifacts_review_required"
+      : sections.some((section) => section.submittedArtifactId)
+        ? "submitted_release_artifacts_match_current_release"
+        : "computed_release_artifacts_no_submitted_manifests",
+  };
+}
+
+export function buildSubmittedModelEvaluationArtifactEvidence(
+  releaseId,
+  { labelSnapshot, trainingExport, leaderboardReport, recalibratedEvaluation, modelFailureAudits },
+  {
+    modelImprovementRuns = [],
+    evaluationRuns = [],
+    modelEvaluationPredictions = [],
+    calibrationRuns = [],
+    leaderboards = [],
+    modelFailureAuditArtifacts = [],
+  } = {},
+) {
+  const submittedModelImprovementRun = latestSubmittedReleaseArtifact(modelImprovementRuns, releaseId);
+  const submittedEvaluationRun = latestSubmittedReleaseArtifact(evaluationRuns, releaseId);
+  const submittedPredictions = submittedEvaluationRun
+    ? modelEvaluationPredictions.filter((prediction) => prediction.evaluationRunId === submittedEvaluationRun.id)
+    : [];
+  const submittedCalibrationRun = submittedEvaluationRun
+    ? latestSubmittedWorkflowArtifactByField(calibrationRuns, "evaluationRunId", submittedEvaluationRun.id, releaseId)
+    : null;
+  const submittedLeaderboard = latestSubmittedReleaseArtifact(leaderboards, releaseId);
+  const submittedFailureAudit = submittedEvaluationRun
+    ? latestSubmittedWorkflowArtifactByField(modelFailureAuditArtifacts, "evaluationRunId", submittedEvaluationRun.id, releaseId)
+    : null;
+  const modelImprovementRunEvidence = submittedModelImprovementRunEvidence(releaseId, trainingExport, submittedModelImprovementRun);
+  const evaluationRunEvidence = submittedEvaluationRunEvidence(releaseId, labelSnapshot, submittedEvaluationRun);
+  const predictionEvidence = submittedModelEvaluationPredictionEvidence(labelSnapshot, submittedEvaluationRun, submittedPredictions);
+  const calibrationRunEvidence = submittedCalibrationRunEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedCalibrationRun, recalibratedEvaluation);
+  const leaderboardEvidence = submittedLeaderboardEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedLeaderboard, leaderboardReport);
+  const failureAuditEvidence = submittedModelFailureAuditEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedFailureAudit, modelFailureAudits);
+  const sections = [
+    modelImprovementRunEvidence,
+    evaluationRunEvidence,
+    predictionEvidence,
+    calibrationRunEvidence,
+    leaderboardEvidence,
+    failureAuditEvidence,
+  ];
+  const submittedSections = sections.filter((section) => section.submittedArtifactId);
+  const allReviewSections = sections.filter(
+    (section) => section.status.endsWith("_review_required") || (submittedSections.length && section.status === "no_submitted_artifact"),
+  );
+  return {
+    id: `submitted-model-evaluation-artifact-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      evaluationRunRule:
+        "Submitted EvaluationRun artifacts must bind to the active LabelSnapshot, declare parser/prompt provenance, and exclude protected splits before they count as release evidence.",
+      predictionRule:
+        "Submitted ModelEvaluationPrediction rows must bind to frozen item text, rendered item hashes, rating-context snapshots, and parser output status.",
+      calibrationRule:
+        "Submitted CalibrationRun artifacts must keep raw and calibrated reporting separate and exclude protected validation and hidden benchmark rows from fit data.",
+      leaderboardRule:
+        "Submitted leaderboard artifacts must use the current target labels, include the submitted evaluation run, and declare common-subset plus uncertainty policy before any rank claim.",
+      failureAuditRule:
+        "Submitted ModelFailureAudit artifacts are diagnostic-only and cannot replace aggregate LMCA metric reports.",
+      modelImprovementRule:
+        "Submitted ModelImprovementRun artifacts must link to the current TrainingExport and separate optimized surrogate objectives from LMCA evaluation metrics.",
+    },
+    modelImprovementRunEvidence,
+    evaluationRunEvidence,
+    predictionEvidence,
+    calibrationRunEvidence,
+    leaderboardEvidence,
+    failureAuditEvidence,
+    reviewSections: allReviewSections.map((section) => section.artifactKind),
+    releaseUseStatus: allReviewSections.length
+      ? "submitted_model_evaluation_artifacts_review_required"
+      : submittedSections.length
+        ? "submitted_model_evaluation_artifacts_release_evidence_complete"
+        : "computed_model_evaluation_artifacts_no_submitted_runs",
+  };
+}
+
+function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitted) {
+  const excludedProtectedSplits = protectedSplitList(submitted);
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("trainingExportId", trainingExport.id, submitted?.trainingExportId),
+    requiredNonEmptyCheck("optimizedSurrogateObjective", submitted?.optimizedSurrogateObjectiveFamily ?? submitted?.optimizedSurrogateObjective),
+    requiredNonEmptyCheck("targetFields", submitted?.targetFields),
+    requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    requiredManifestCheck("lmcaEvaluationMetricsSeparate", true, submitted?.lmcaEvaluationMetricsSeparate),
+  ];
+  return releaseArtifactEvidenceRow(
+    "model_improvement_run",
+    submitted,
+    checks,
+    "submitted_model_improvement_run_preserves_surrogate_separation",
+  );
+}
+
+function submittedEvaluationRunEvidence(releaseId, labelSnapshot, submitted) {
+  const excludedProtectedSplits = protectedSplitList(submitted);
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("targetLabelSnapshotId", labelSnapshot.id, submitted?.targetLabelSnapshotId ?? submitted?.labelSnapshotId),
+    requiredManifestCheck("targetLabelVersion", labelSnapshot.targetLabelVersion, submitted?.targetLabelVersion),
+    requiredNonEmptyCheck("promptTemplateId", submitted?.promptTemplateId ?? submitted?.promptArtifactId ?? submitted?.promptArtifact?.id),
+    requiredNonEmptyCheck("parserConfigId", submitted?.parserConfigId),
+    requiredNonEmptyCheck("metricFamilies", submitted?.metricFamilies ?? Object.keys(submitted?.metricOutputs ?? {})),
+    requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+  ];
+  return releaseArtifactEvidenceRow("evaluation_run", submitted, checks, "submitted_evaluation_run_matches_current_target");
+}
+
+function submittedModelEvaluationPredictionEvidence(labelSnapshot, evaluationRun, predictions = []) {
+  const submitted = predictions.length
+    ? {
+        id: `${evaluationRun?.id ?? "unbound"}:predictions`,
+        createdAt: predictions.map((prediction) => prediction.createdAt ?? prediction.timestamp).filter(Boolean).sort().at(-1) ?? null,
+      }
+    : null;
+  const targetItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
+  const mismatchCount = predictions.filter((prediction) => prediction.evaluationRunId !== evaluationRun?.id).length;
+  const missingTextVersionCount = predictions.filter((prediction) => !prediction.positionTextVersionId || !prediction.critiqueTextVersionId).length;
+  const missingRenderedItemHashCount = predictions.filter((prediction) => !prediction.renderedItemHash).length;
+  const missingRatingContextSnapshotCount = predictions.filter((prediction) => !prediction.ratingContextSnapshotId).length;
+  const missingParserConfigCount = predictions.filter((prediction) => !prediction.parserConfigId).length;
+  const unparsedPredictionCount = predictions.filter((prediction) => prediction.parseStatus && prediction.parseStatus !== "parsed").length;
+  const targetLabelMatchedPredictionCount = predictions.filter((prediction) =>
+    targetItemIds.has(makeItemId(prediction.positionId, prediction.critiqueId)),
+  ).length;
+  const checks = [
+    requiredNonEmptyCheck("predictionRows", predictions),
+    requiredManifestCheck("evaluationRunIdMismatchCount", 0, mismatchCount),
+    requiredManifestCheck("missingTextVersionCount", 0, missingTextVersionCount),
+    requiredManifestCheck("missingRenderedItemHashCount", 0, missingRenderedItemHashCount),
+    requiredManifestCheck("missingRatingContextSnapshotCount", 0, missingRatingContextSnapshotCount),
+    requiredManifestCheck("missingParserConfigCount", 0, missingParserConfigCount),
+    requiredManifestCheck("unparsedPredictionCount", 0, unparsedPredictionCount),
+    requiredMinimumCheck("targetLabelMatchedPredictionCount", 1, targetLabelMatchedPredictionCount),
+  ];
+  return {
+    ...releaseArtifactEvidenceRow(
+      "model_evaluation_predictions",
+      submitted,
+      checks,
+      "submitted_model_evaluation_predictions_preserve_text_context_and_parser_provenance",
+    ),
+    predictionIds: predictions.map((prediction) => prediction.id).filter(Boolean),
+    counts: {
+      predictionRows: predictions.length,
+      targetLabelMatchedPredictionCount,
+      missingTextVersionCount,
+      missingRenderedItemHashCount,
+      missingRatingContextSnapshotCount,
+      unparsedPredictionCount,
+    },
+  };
+}
+
+function submittedCalibrationRunEvidence(releaseId, labelSnapshot, evaluationRun, submitted, recalibratedEvaluation) {
+  const excludedProtectedSplits = protectedSplitList(submitted);
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("evaluationRunId", evaluationRun?.id, submitted?.evaluationRunId),
+    optionalManifestCheck("targetLabelSnapshotId", labelSnapshot.id, submitted?.targetLabelSnapshotId ?? submitted?.labelSnapshotId),
+    requiredNonEmptyCheck("transformation", submitted?.transformation ?? submitted?.transformationFamily ?? submitted?.calibrationSetting),
+    requiredNonEmptyCheck("fitSplits", submitted?.fitSplits),
+    requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    optionalManifestCheck("protectedLeakageCount", 0, submitted?.protectedLeakageCount ?? submitted?.fitProtectedLeakageCount),
+    optionalManifestCheck("rawAndCalibratedSeparate", true, submitted?.rawAndCalibratedSeparate ?? submitted?.rawRecalibratedLeaderboardsSeparate),
+  ];
+  return {
+    ...releaseArtifactEvidenceRow("calibration_run", submitted, checks, "submitted_calibration_run_preserves_protected_fit_policy"),
+    computedCalibrationArtifactId: recalibratedEvaluation?.calibrationArtifact?.id ?? null,
+  };
+}
+
+function submittedLeaderboardEvidence(releaseId, labelSnapshot, evaluationRun, submitted, leaderboardReport) {
+  const submittedEvaluationRunIds = submitted?.evaluationRunIds ?? submitted?.runIds ?? [];
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("targetLabelSnapshotId", labelSnapshot.id, submitted?.targetLabelSnapshotId ?? submitted?.labelSnapshotId),
+    requiredManifestCheck("targetLabelVersion", labelSnapshot.targetLabelVersion, submitted?.targetLabelVersion),
+    requiredArrayIncludesCheck("evaluationRunIds", evaluationRun?.id ? [evaluationRun.id] : [], submittedEvaluationRunIds),
+    requiredNonEmptyCheck("commonSubsetPolicy", submitted?.commonSubsetPolicy),
+    requiredNonEmptyCheck("uncertaintyPolicy", submitted?.uncertaintyPolicy),
+    requiredNonEmptyCheck("rankClaimPolicy", submitted?.superiorityClaimPolicy ?? submitted?.rankClaimPolicy),
+  ];
+  return {
+    ...releaseArtifactEvidenceRow("leaderboard", submitted, checks, "submitted_leaderboard_declares_common_subset_uncertainty_policy"),
+    computedLeaderboardId: leaderboardReport?.id ?? null,
+  };
+}
+
+function submittedModelFailureAuditEvidence(releaseId, labelSnapshot, evaluationRun, submitted, computedFailureAudits = []) {
+  const excludedProtectedSplits = protectedSplitList(submitted);
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("evaluationRunId", evaluationRun?.id, submitted?.evaluationRunId),
+    optionalManifestCheck("targetLabelSnapshotId", labelSnapshot.id, submitted?.targetLabelSnapshotId ?? submitted?.labelSnapshotId),
+    requiredNonEmptyCheck("largestErrorPolicy", submitted?.largestErrorPolicy ?? submitted?.selectionPolicy),
+    requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    requiredManifestCheck("cannotReplaceAggregateMetrics", true, submitted?.cannotReplaceAggregateMetrics ?? submitted?.diagnosticOnly),
+  ];
+  return {
+    ...releaseArtifactEvidenceRow("model_failure_audit", submitted, checks, "submitted_model_failure_audit_is_diagnostic_only"),
+    computedFailureAuditIds: computedFailureAudits.map((audit) => audit.id),
+  };
+}
+
+function submittedLabelSnapshotEvidence(releaseId, labelSnapshot, trainingExport, submitted) {
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("targetLabelVersion", labelSnapshot.targetLabelVersion, submitted?.targetLabelVersion),
+    optionalManifestCheck("snapshotFamily", labelSnapshot.targetLabelVersion, submitted?.snapshotFamily),
+    optionalManifestCheck("pairwiseComparisonSnapshotId", trainingExport.pairwiseComparisonSnapshot.id, submitted?.pairwiseComparisonSnapshotId),
+    optionalManifestCheck("blindInitialRatings", labelSnapshot.denominatorCounts.blindInitialRatings, denominatorValue(submitted?.ratingCountDenominatorSummary, "blindInitialRatings")),
+    optionalManifestCheck("revisions", labelSnapshot.denominatorCounts.revisions, denominatorValue(submitted?.ratingCountDenominatorSummary, "revisions")),
+    optionalManifestCheck("totalRows", labelSnapshot.denominatorCounts.totalRows, denominatorValue(submitted?.ratingCountDenominatorSummary, "totalRows")),
+  ];
+  return releaseArtifactEvidenceRow("label_snapshot", submitted, checks, "submitted_label_snapshot_matches_current_release_target");
+}
+
+function submittedCorpusManifestEvidence(releaseId, corpusManifest, submitted) {
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("positionCount", corpusManifest.counts.positions, submitted?.positionCount ?? submitted?.counts?.positions),
+    requiredManifestCheck("critiqueCount", corpusManifest.counts.critiques, submitted?.critiqueCount ?? submitted?.counts?.critiques),
+    requiredManifestCheck(
+      "blindInitialRatingCount",
+      corpusManifest.counts.blindInitialRatings,
+      submitted?.blindInitialRatingCount ?? submitted?.counts?.blindInitialRatings,
+    ),
+    optionalManifestCheck(
+      "ratingsIgnoringRevisions",
+      corpusManifest.counts.ratingsIgnoringRevisions,
+      submitted?.ratingsIgnoringRevisionsCount ?? submitted?.counts?.ratingsIgnoringRevisions,
+    ),
+  ];
+  return releaseArtifactEvidenceRow("corpus_manifest", submitted, checks, "submitted_corpus_manifest_matches_current_release_counts");
+}
+
+function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapshotEvidence, submitted) {
+  const allowedLabelSnapshotIds = uniqueStrings([trainingExport.labelSnapshotId, labelSnapshotEvidence.submittedArtifactId].filter(Boolean));
+  const sourceLabelSnapshotId = submitted?.sourceLabelSnapshotId ?? submitted?.labelSnapshotId;
+  const sourceSplits = submitted?.sourceSplits ?? [];
+  const excludedProtectedSplits = submitted?.excludedProtectedSplits ?? [];
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredSetMembershipCheck("sourceLabelSnapshotId", allowedLabelSnapshotIds, sourceLabelSnapshotId),
+    requiredArrayIncludesCheck("sourceSplits", trainingExport.protectedSplitPolicy.includedSplits, sourceSplits),
+    requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    requiredManifestCheck("targetLabelVersion", trainingExport.targetLabelVersion, submitted?.targetLabelVersion),
+    requiredNonEmptyCheck("targetFields", submitted?.targetFields),
+    requiredNonEmptyCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy ?? submitted?.promptTrackExposure),
+  ];
+  return releaseArtifactEvidenceRow("training_export", submitted, checks, "submitted_training_export_preserves_current_release_policy");
+}
+
+function submittedExportManifestEvidence(releaseId, publicExportManifest, labelSnapshotEvidence, submitted) {
+  const allowedLabelSnapshotIds = uniqueStrings([publicExportManifest.labelSnapshotId, labelSnapshotEvidence.submittedArtifactId].filter(Boolean));
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    optionalManifestCheck("kind", publicExportManifest.kind, submitted?.kind),
+    optionalSetMembershipCheck("labelSnapshotId", allowedLabelSnapshotIds, submitted?.labelSnapshotId),
+    requiredArrayIncludesCheck("includedSplits", publicExportManifest.includedSplits, submitted?.includedSplits ?? []),
+    requiredArrayIncludesCheck("excludedSplits", publicExportManifest.excludedSplits, submitted?.excludedSplits ?? []),
+    requiredManifestCheck("hiddenBenchmarkExcluded", true, submitted?.hiddenBenchmarkExcluded),
+    requiredManifestCheck("rightsClearedOnly", true, submitted?.rightsClearedOnly),
+    optionalManifestCheck("positionCount", publicExportManifest.counts.positions, submitted?.counts?.positions ?? submitted?.positionCount),
+    optionalManifestCheck("critiqueCount", publicExportManifest.counts.critiques, submitted?.counts?.critiques ?? submitted?.critiqueCount),
+  ];
+  return releaseArtifactEvidenceRow("public_export_manifest", submitted, checks, "submitted_public_export_manifest_preserves_current_release_policy");
+}
+
+function releaseArtifactEvidenceRow(artifactKind, submitted, checks, passStatus) {
+  const reviewChecks = checks.filter((check) => check.status !== "matches" && check.status !== "not_submitted_optional");
+  return {
+    artifactKind,
+    submittedArtifactId: submitted?.id ?? null,
+    submittedAt: submitted?.createdAt ?? submitted?.timestamp ?? null,
+    checks,
+    reviewChecks,
+    status: !submitted ? "no_submitted_artifact" : reviewChecks.length ? `${artifactKind}_review_required` : passStatus,
+  };
+}
+
+function requiredManifestCheck(field, expected, submitted) {
+  if (submitted === undefined || submitted === null || submitted === "") {
+    return { field, expected, submitted: submitted ?? null, status: "missing_required_field" };
+  }
+  return { field, expected, submitted, status: manifestValuesMatch(expected, submitted) ? "matches" : "mismatch" };
+}
+
+function optionalManifestCheck(field, expected, submitted) {
+  if (submitted === undefined || submitted === null || submitted === "") {
+    return { field, expected, submitted: submitted ?? null, status: "not_submitted_optional" };
+  }
+  return { field, expected, submitted, status: manifestValuesMatch(expected, submitted) ? "matches" : "mismatch" };
+}
+
+function requiredNonEmptyCheck(field, submitted) {
+  const ok = Array.isArray(submitted) ? submitted.length > 0 : submitted !== undefined && submitted !== null && submitted !== "";
+  return { field, expected: "non_empty", submitted: submitted ?? null, status: ok ? "matches" : "missing_required_field" };
+}
+
+function requiredSetMembershipCheck(field, expectedAnyOf, submitted) {
+  if (submitted === undefined || submitted === null || submitted === "") {
+    return { field, expectedAnyOf, submitted: submitted ?? null, status: "missing_required_field" };
+  }
+  return { field, expectedAnyOf, submitted, status: expectedAnyOf.includes(submitted) ? "matches" : "mismatch" };
+}
+
+function optionalSetMembershipCheck(field, expectedAnyOf, submitted) {
+  if (submitted === undefined || submitted === null || submitted === "") {
+    return { field, expectedAnyOf, submitted: submitted ?? null, status: "not_submitted_optional" };
+  }
+  return { field, expectedAnyOf, submitted, status: expectedAnyOf.includes(submitted) ? "matches" : "mismatch" };
+}
+
+function requiredArrayIncludesCheck(field, expectedIncludes, submitted) {
+  const submittedArray = Array.isArray(submitted) ? submitted : [];
+  const missing = expectedIncludes.filter((value) => !submittedArray.includes(value));
+  return { field, expectedIncludes, submitted: submittedArray, missing, status: missing.length ? "mismatch" : "matches" };
+}
+
+function requiredMinimumCheck(field, minimum, submitted) {
+  if (submitted === undefined || submitted === null || submitted === "") {
+    return { field, minimum, submitted: submitted ?? null, status: "missing_required_field" };
+  }
+  return { field, minimum, submitted, status: Number(submitted) >= minimum ? "matches" : "below_minimum" };
+}
+
+function manifestValuesMatch(expected, submitted) {
+  if (typeof expected === "number" || typeof submitted === "number") return Number(expected) === Number(submitted);
+  return expected === submitted;
+}
+
+function denominatorValue(summary = {}, field) {
+  if (!summary || typeof summary !== "object") return undefined;
+  const aliases = {
+    blindInitialRatings: ["blindInitialRatings", "blindInitial", "blind_initial"],
+    revisions: ["revisions", "revisionCount", "revised"],
+    totalRows: ["totalRows", "total", "ratingRows"],
+  };
+  return aliases[field]?.map((key) => summary[key]).find((value) => value !== undefined) ?? summary[field];
+}
+
+function latestSubmittedExportManifest(records = [], releaseId, kind = "public") {
+  return [...records].reverse().find((record) => (!record?.releaseId || record.releaseId === releaseId) && (!record?.kind || record.kind === kind)) ?? null;
+}
+
+function latestSubmittedWorkflowArtifactByField(records = [], field, value, releaseId) {
+  return (
+    [...records]
+      .reverse()
+      .find((record) => record?.[field] === value && (!record?.releaseId || record.releaseId === releaseId)) ?? null
+  );
+}
+
+function protectedSplitList(record) {
+  if (!record || typeof record !== "object") return [];
+  if (record.protectedSplitsExcluded === true || record.protectedSplitExclusionPolicy === true) {
+    return ["internal_validation", "hidden_benchmark"];
+  }
+  return (
+    record.excludedProtectedSplits ??
+    record.protectedSplitsExcluded ??
+    record.protectedSplitExclusions ??
+    record.protectedSplitPolicy?.excludedSplits ??
+    record.protectedSplitPolicy?.excludedProtectedSplits ??
+    []
+  );
+}
+
 export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEligibility, validationDesign, labelSnapshot }) {
   const releaseRaterTotal = countTotal(corpusManifest.raterDistributionIgnoringRevisions);
   const lmcaRaterTotal = countTotal(LMCA_BASELINES.raterDistributionIgnoringRevisions);
@@ -6138,8 +8348,8 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
   };
 }
 
-export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibility, validationDesign, labelSnapshot }) {
-  return [
+export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibility, validationDesign, labelSnapshot, submittedClaims = [] }) {
+  const computedClaims = [
     claim("method_preserving", "passes", "Position-critique units, seven-dimensional ratings, blind initial surface, immutable revisions, and the two LMCA scoring families are implemented."),
     claim(
       "corpus_scale_comparable",
@@ -6170,6 +8380,114 @@ export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibilit
     claim("model_score_anchor_comparable", "partial", "LMCA Table 5 and Table 7 anchor scores are stored for reports; seed model outputs are not a comparable leaderboard run."),
     claim("replication_like", "fails", "The current seed release is method-preserving scaffolding, not an LMCA-scale or target-identical replication."),
   ];
+  return applySubmittedComparabilityClaims(computedClaims, submittedClaims);
+}
+
+function applySubmittedComparabilityClaims(computedClaims, submittedClaims = []) {
+  const submittedClaim = submittedClaims.at(-1) ?? null;
+  if (!submittedClaim) {
+    return computedClaims.map((claimRow) => ({
+      ...claimRow,
+      statusSource: "computed_release_evidence",
+      computedStatus: claimRow.status,
+    }));
+  }
+  const submittedByTier = submittedComparabilityStatuses(submittedClaim);
+  return computedClaims.map((claimRow) => {
+    const submitted = submittedByTier[claimRow.tier] ?? null;
+    if (!submitted) {
+      return {
+        ...claimRow,
+        statusSource: "computed_release_evidence_no_submitted_tier",
+        computedStatus: claimRow.status,
+        submittedClaimId: submittedClaim.id ?? null,
+      };
+    }
+    const normalizedSubmittedStatus = normalizeComparabilityStatus(submitted.status);
+    const effectiveStatus = stricterComparabilityStatus(claimRow.status, normalizedSubmittedStatus);
+    return {
+      ...claimRow,
+      status: effectiveStatus,
+      evidence: submitted.evidence ?? claimRow.evidence,
+      computedStatus: claimRow.status,
+      computedEvidence: claimRow.evidence,
+      submittedStatus: submitted.status,
+      normalizedSubmittedStatus,
+      submittedEvidence: submitted.evidence ?? null,
+      submittedClaimId: submittedClaim.id ?? null,
+      submittedClaimWording: submittedClaim.claimWording ?? null,
+      statusSource:
+        effectiveStatus === normalizedSubmittedStatus
+          ? "submitted_comparability_claim"
+          : "computed_guardrail_with_submitted_claim",
+    };
+  });
+}
+
+function submittedComparabilityStatuses(claim) {
+  const statuses = {};
+  const directFieldMap = {
+    methodPreservingStatus: "method_preserving",
+    corpusScaleStatus: "corpus_scale_comparable",
+    sourceTopicRaterStatus: "source_topic_rater_comparable",
+    exactPositionSourceCountStatus: "source_topic_rater_comparable",
+    topicFamilyStatus: "source_topic_rater_comparable",
+    raterContributionStatus: "source_topic_rater_comparable",
+    metricDenominatorStatus: "metric_denominator_comparable",
+    targetLabelRaterStatus: "target_label_comparable",
+    targetLabelStatus: "target_label_comparable",
+    validationDesignStatus: "validation_design_comparable",
+    validationNumericCeilingStatus: "validation_ceiling_comparable",
+    validationCeilingStatus: "validation_ceiling_comparable",
+    modelScoreAnchorStatus: "model_score_anchor_comparable",
+    promptModelScoreAnchorStatus: "model_score_anchor_comparable",
+    replicationLikeStatus: "replication_like",
+  };
+  Object.entries(directFieldMap).forEach(([field, tier]) => {
+    if (claim[field] !== undefined && statuses[tier] === undefined) {
+      statuses[tier] = {
+        status: claim[field],
+        evidence: claim[`${field.replace(/Status$/, "")}Evidence`] ?? claim.limitationsText ?? claim.claimWording ?? null,
+      };
+    }
+  });
+  Object.entries(claim.claimStatuses ?? {}).forEach(([tier, status]) => {
+    statuses[normalizeComparabilityTier(tier)] = {
+      status,
+      evidence: claim.evidenceByTier?.[tier] ?? claim.evidenceByTier?.[normalizeComparabilityTier(tier)] ?? claim.limitationsText ?? claim.claimWording ?? null,
+    };
+  });
+  (claim.tierStatuses ?? claim.tiers ?? []).forEach((row) => {
+    if (!row || typeof row !== "object") return;
+    const tier = normalizeComparabilityTier(row.tier ?? row.id);
+    if (!tier) return;
+    statuses[tier] = {
+      status: row.status ?? row.claimStatus,
+      evidence: row.evidence ?? row.limitationsText ?? claim.limitationsText ?? claim.claimWording ?? null,
+    };
+  });
+  return statuses;
+}
+
+function normalizeComparabilityTier(tier) {
+  return typeof tier === "string" ? tier.trim().toLowerCase().replace(/[-\s]+/g, "_") : "";
+}
+
+function normalizeComparabilityStatus(status) {
+  const value = typeof status === "string" ? status.trim().toLowerCase().replace(/[-\s]+/g, "_") : "";
+  if (!value) return "fails";
+  if (value === "passes" || value === "pass" || value.startsWith("passes_")) return "passes";
+  if (value === "partial" || value.startsWith("partial_") || value.includes("_partial_")) return "partial";
+  if (value === "not_applicable" || value === "not_applicable_here" || value === "na") return "not_applicable";
+  if (value === "fails" || value === "fail" || value.startsWith("fails_") || value.startsWith("fail_")) return "fails";
+  return value.includes("required") || value.includes("until") || value.includes("missing") ? "fails" : "partial";
+}
+
+function stricterComparabilityStatus(computedStatus, submittedStatus) {
+  const rank = { fails: 0, partial: 1, not_applicable: 1, passes: 2 };
+  const computedRank = rank[normalizeComparabilityStatus(computedStatus)] ?? 0;
+  const submittedRank = rank[normalizeComparabilityStatus(submittedStatus)] ?? 0;
+  return computedRank <= submittedRank ? normalizeComparabilityStatus(computedStatus) : normalizeComparabilityStatus(submittedStatus);
 }
 
 export function buildPromptTrackSeparationReport(
@@ -6256,6 +8574,591 @@ export function buildPromptTrackSeparationReport(
   };
 }
 
+export function buildPromptParserProvenanceReport(
+  releaseId,
+  evaluationRuns = [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  generationRuns = critiqueGenerationRuns,
+  { promptTemplates = [], parserConfigs = [], modelEvaluationPredictions = [] } = {},
+) {
+  const submittedPromptTemplates = promptTemplates.map(normalizeSubmittedPromptTemplate).filter(Boolean);
+  const submittedParserConfigs = parserConfigs.map(normalizeSubmittedParserConfig).filter(Boolean);
+  const submittedPromptById = new Map(submittedPromptTemplates.map((template) => [template.id, template]));
+  const submittedParserById = new Map(submittedParserConfigs.map((config) => [config.id, config]));
+  const references = promptParserReferences(evaluationRuns, generationRuns, modelEvaluationPredictions);
+  const promptReferenceRows = references
+    .filter((reference) => reference.promptTemplateId)
+    .map((reference) => promptReferenceEvidenceRow(reference, submittedPromptById));
+  const parserReferenceRows = references
+    .filter((reference) => reference.parserConfigId)
+    .map((reference) => parserReferenceEvidenceRow(reference, submittedParserById));
+  const submittedPromptReviewRows = submittedPromptTemplates.filter((template) => template.reviewReasons.length > 0);
+  const submittedParserReviewRows = submittedParserConfigs.filter((config) => config.reviewReasons.length > 0);
+  const missingPromptRows = promptReferenceRows.filter((row) => row.status === "missing_prompt_template_reference");
+  const missingParserRows = parserReferenceRows.filter((row) => row.status === "missing_parser_config_reference");
+  const reviewRequired =
+    missingPromptRows.length ||
+    missingParserRows.length ||
+    submittedPromptReviewRows.length ||
+    submittedParserReviewRows.length;
+  return {
+    id: `prompt-parser-provenance-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      promptTemplateRule:
+        "Submitted PromptTemplate records must preserve prompt family/track, source-scope class, rendered checksum or hash, output schema, role, and protected-split example exclusion before they count as active prompt provenance.",
+      parserConfigRule:
+        "Submitted ParserConfig records must preserve accepted schema, parser version or implementation id, retry/repair policy, invalid-score and missing-field handling, and protected-split retry constraints before they count as active parser provenance.",
+      referenceRule:
+        "Evaluation, prediction, generation, and model-judge rows must reference either a built-in immutable prompt/parser artifact or a submitted workflow record.",
+    },
+    counts: {
+      promptReferenceCount: promptReferenceRows.length,
+      parserReferenceCount: parserReferenceRows.length,
+      submittedPromptTemplateCount: submittedPromptTemplates.length,
+      submittedParserConfigCount: submittedParserConfigs.length,
+      missingPromptReferenceCount: missingPromptRows.length,
+      missingParserReferenceCount: missingParserRows.length,
+      submittedPromptReviewCount: submittedPromptReviewRows.length,
+      submittedParserReviewCount: submittedParserReviewRows.length,
+    },
+    promptReferenceRows,
+    parserReferenceRows,
+    submittedPromptTemplates,
+    submittedParserConfigs,
+    reviewRows: {
+      missingPromptRows,
+      missingParserRows,
+      submittedPromptReviewRows,
+      submittedParserReviewRows,
+    },
+    releaseUseStatus: reviewRequired
+      ? "prompt_parser_provenance_review_required"
+      : submittedPromptTemplates.length || submittedParserConfigs.length
+        ? "submitted_prompt_parser_provenance_complete"
+        : "seed_prompt_parser_provenance_complete",
+  };
+}
+
+function promptParserReferences(evaluationRuns, generationRuns, modelEvaluationPredictions = []) {
+  return [
+    ...evaluationRuns.flatMap((run) => [
+      {
+        sourceType: "evaluation_run",
+        sourceId: run.id,
+        promptTemplateId: run.promptArtifact?.id ?? run.promptTemplateId,
+        parserConfigId: run.parserConfigId,
+      },
+      ...(run.predictions ?? []).map((prediction) => ({
+        sourceType: "model_evaluation_prediction",
+        sourceId: prediction.id,
+        evaluationRunId: run.id,
+        promptTemplateId: prediction.promptTemplateId,
+        parserConfigId: prediction.parserConfigId,
+      })),
+    ]),
+    ...generationRuns.flatMap((run) => [
+      {
+        sourceType: "critique_generation_run",
+        sourceId: run.id,
+        promptTemplateId: run.promptArtifact?.id ?? run.promptTemplateId,
+        parserConfigId: run.parserConfigId ?? null,
+      },
+      {
+        sourceType: "model_judge_screening",
+        sourceId: run.id,
+        promptTemplateId: run.modelJudgeScreening?.promptArtifact?.id ?? run.modelJudgeScreening?.promptTemplateId,
+        parserConfigId: run.modelJudgeScreening?.parserConfigId,
+      },
+    ]),
+    ...modelEvaluationPredictions.map((prediction) => ({
+      sourceType: "submitted_model_evaluation_prediction",
+      sourceId: prediction.id,
+      evaluationRunId: prediction.evaluationRunId,
+      promptTemplateId: prediction.promptTemplateId,
+      parserConfigId: prediction.parserConfigId,
+    })),
+  ];
+}
+
+function normalizeSubmittedPromptTemplate(template) {
+  const id = template?.id ?? template?.promptTemplateId ?? template?.prompt_template_id;
+  if (!id) return null;
+  const protectedSplitExclusionPolicy = template.protectedSplitExclusionPolicy ?? template.protectedPromptExampleCheck?.status ?? null;
+  const reviewReasons = [
+    requiredPromptFieldReason("promptFamily", template.promptFamily),
+    requiredPromptFieldReason("promptTrack", template.promptTrack ?? template.promptSourceScopeClass),
+    requiredPromptFieldReason("promptSourceScopeClass", template.promptSourceScopeClass ?? template.promptScope),
+    requiredPromptFieldReason("renderedPromptChecksum", template.renderedPromptChecksum ?? template.promptTextHash ?? template.bodyHash),
+    requiredPromptFieldReason("promptRole", template.promptRole ?? template.role),
+    requiredPromptFieldReason("requestedOutputSchema", template.requestedOutputSchema ?? template.outputFormatPolicy ?? template.acceptedSchema),
+    protectedSplitExclusionPolicy &&
+    (String(protectedSplitExclusionPolicy).includes("hidden") || String(protectedSplitExclusionPolicy).includes("protected"))
+      ? null
+      : "protectedSplitExclusionPolicy",
+  ].filter(Boolean);
+  return {
+    id,
+    templateSource: "submitted_workflow_prompt_template",
+    promptFamily: template.promptFamily ?? null,
+    promptTrack: template.promptTrack ?? null,
+    promptSourceScopeClass: template.promptSourceScopeClass ?? template.promptScope ?? null,
+    promptVersion: template.promptVersion ?? template.version ?? null,
+    renderedPromptChecksum: template.renderedPromptChecksum ?? null,
+    promptTextHash: template.promptTextHash ?? template.bodyHash ?? null,
+    promptRole: template.promptRole ?? template.role ?? null,
+    requestedOutputSchema: template.requestedOutputSchema ?? template.outputFormatPolicy ?? template.acceptedSchema ?? null,
+    protectedSplitExclusionPolicy,
+    reviewReasons,
+    status: reviewReasons.length ? "submitted_prompt_template_review_required" : "submitted_prompt_template_complete",
+  };
+}
+
+function normalizeSubmittedParserConfig(config) {
+  const id = config?.id ?? config?.parserConfigId ?? config?.parser_config_id;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("acceptedSchema", config.acceptedSchema),
+    requiredPromptFieldReason("parserVersion", config.parserVersion ?? config.parserImplementationId),
+    requiredPromptFieldReason("retryPolicy", config.retryPolicy),
+    requiredPromptFieldReason("repairPolicy", config.repairPolicy),
+    requiredPromptFieldReason("invalidScoreHandling", config.invalidScoreHandling),
+    requiredPromptFieldReason("missingFieldHandling", config.missingFieldHandling),
+    requiredPromptFieldReason("protectedSplitRetryConstraints", config.protectedSplitRetryConstraints),
+  ].filter(Boolean);
+  return {
+    id,
+    configSource: "submitted_workflow_parser_config",
+    acceptedSchema: config.acceptedSchema ?? null,
+    parserVersion: config.parserVersion ?? config.parserImplementationId ?? null,
+    scoreFieldRequirements: config.scoreFieldRequirements ?? [],
+    retryPolicy: config.retryPolicy ?? null,
+    repairPolicy: config.repairPolicy ?? null,
+    invalidScoreHandling: config.invalidScoreHandling ?? null,
+    outOfRangeHandling: config.outOfRangeHandling ?? null,
+    missingFieldHandling: config.missingFieldHandling ?? null,
+    protectedSplitRetryConstraints: config.protectedSplitRetryConstraints ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "submitted_parser_config_review_required" : "submitted_parser_config_complete",
+  };
+}
+
+function promptReferenceEvidenceRow(reference, submittedPromptById) {
+  const seedArtifact = promptArtifacts[reference.promptTemplateId];
+  const submittedTemplate = submittedPromptById.get(reference.promptTemplateId);
+  return {
+    ...reference,
+    referenceKind: "prompt_template",
+    referenceSource: seedArtifact ? "seed_prompt_artifact" : submittedTemplate ? "submitted_workflow_prompt_template" : "missing",
+    submittedStatus: submittedTemplate?.status ?? null,
+    status: seedArtifact
+      ? "seed_prompt_artifact_reference"
+      : submittedTemplate?.status === "submitted_prompt_template_complete"
+        ? "submitted_prompt_template_reference"
+        : submittedTemplate
+          ? "submitted_prompt_template_review_required"
+          : "missing_prompt_template_reference",
+  };
+}
+
+function parserReferenceEvidenceRow(reference, submittedParserById) {
+  const seedParser = seedParserConfigIds().has(reference.parserConfigId);
+  const submittedConfig = submittedParserById.get(reference.parserConfigId);
+  return {
+    ...reference,
+    referenceKind: "parser_config",
+    referenceSource: seedParser ? "seed_parser_config" : submittedConfig ? "submitted_workflow_parser_config" : "missing",
+    submittedStatus: submittedConfig?.status ?? null,
+    status: seedParser
+      ? "seed_parser_config_reference"
+      : submittedConfig?.status === "submitted_parser_config_complete"
+        ? "submitted_parser_config_reference"
+        : submittedConfig
+          ? "submitted_parser_config_review_required"
+          : "missing_parser_config_reference",
+  };
+}
+
+function seedParserConfigIds() {
+  return new Set(["json-seven-dim-v1", "json-overall-v1", "json-generation-judge-v1"]);
+}
+
+function requiredPromptFieldReason(field, value) {
+  if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) return field;
+  return null;
+}
+
+const UX_SIMPLIFICATION_SURFACES = [
+  "rating",
+  "practice",
+  "calibration",
+  "consent",
+  "withdrawal",
+  "discussion",
+  "adjudication",
+  "release_review",
+  "admin_governance",
+];
+
+const UX_NO_FEATURE_LOSS_KEYS = [
+  "score_fields",
+  "safe_decline",
+  "source_recognition",
+  "item_issue_report",
+  "verification_control",
+  "adjudication_control",
+  "data_governance_withdrawal",
+  "protected_label_warning",
+  "audit_provenance_capture",
+  "release_governance_action",
+  "appendix_f_anchor_access",
+  "pre_submit_lint",
+  "autosave_resume",
+];
+
+const UX_HIDDEN_FIELD_CLASSES = [
+  "source_metadata",
+  "admin_tags",
+  "benchmark_membership",
+  "gold_answers",
+  "peer_ratings",
+  "model_judge_scores",
+  "active_learning_selection_reasons",
+  "protected_split_status",
+  "rater_performance_metadata",
+];
+
+const UX_SCREEN_CONTROL_REQUIREMENTS = {
+  rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
+  practice: ["score_fields", "item_issue_report", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+  calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+  consent: ["data_governance_withdrawal", "audit_provenance_capture"],
+  withdrawal: ["data_governance_withdrawal", "audit_provenance_capture"],
+  discussion: ["item_issue_report", "adjudication_control", "audit_provenance_capture"],
+  adjudication: ["verification_control", "adjudication_control", "item_issue_report", "audit_provenance_capture"],
+  release_review: ["release_governance_action", "protected_label_warning", "audit_provenance_capture"],
+  admin_governance: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
+};
+
+const UX_FORBIDDEN_VISIBLE_FIELD_FRAGMENTS = [
+  "sourcecategory",
+  "sourcetype",
+  "authorshiptype",
+  "styleband",
+  "admintags",
+  "split",
+  "sourcemodel",
+  "generatorpromptversion",
+  "modeljudgescore",
+  "peerratings",
+  "candidateselectionreason",
+  "benchmarkstatus",
+  "goldanswer",
+  "hiddenbenchmark",
+  "protectedsplit",
+  "raterperformance",
+];
+
+function defaultUXSimplificationPolicy(releaseId) {
+  return {
+    id: `ux-simplification-policy-${releaseId}`,
+    policyVersion: "rlhf88-feature-preserving-v1",
+    policySource: "seed_rlhf88_policy",
+    enabledSurfaces: UX_SIMPLIFICATION_SURFACES,
+    taskFirstCopyRequired: true,
+    progressiveDisclosureRequired: true,
+    glossarySupportRequired: true,
+    serverDerivedScreenStateRequired: true,
+    exactRubricSemanticsPreserved: true,
+    appendixFAnchorAccess: "one_click",
+    protectedSplitVariantPolicy: "block_or_quarantine_unregistered_variants",
+    hiddenMetadataLeakagePolicy: "forbid_hidden_fields_in_sanitized_payloads",
+    noFeatureLossChecklist: UX_NO_FEATURE_LOSS_KEYS,
+  };
+}
+
+function defaultUXSimplificationReview(releaseId, policyId) {
+  return {
+    id: `ux-simplification-review-${releaseId}`,
+    reviewSource: "seed_rlhf88_review",
+    policyId,
+    reviewedSurfaces: UX_SIMPLIFICATION_SURFACES,
+    reviewStatus: "passed",
+    reviewerRole: "release_admin",
+    noFeatureLossChecklist: UX_NO_FEATURE_LOSS_KEYS,
+    exactRubricSemanticsPreserved: true,
+    appendixFAnchorAccessVerified: true,
+    serverDerivedScreenStateVerified: true,
+    protectedLeakageReviewPassed: true,
+  };
+}
+
+function defaultScreenStatePayloads(releaseId, policyId) {
+  return UX_SIMPLIFICATION_SURFACES.map((surface) => ({
+    id: `screen-state-${releaseId}-${surface}`,
+    payloadSource: "server_derived",
+    surface,
+    schemaVersion: "screen-state-lmca-v1",
+    policyId,
+    policyVersionProvenance: {
+      uxSimplificationPolicyId: policyId,
+      visibilityPolicyId: `visibility-policy-${releaseId}`,
+      workflowProfileId: `${surface}-workflow-profile`,
+      assistPolicyId: `pre-submit-assist-${releaseId}`,
+      uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
+    },
+    visibleFieldAllowlist: ["taskStatement", "primaryNextAction", "completionState", "requiredControls", "optionalPanels", "shortItemLabel", "positionText", "critiqueText"],
+    enabledActionAllowlist: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
+    requiredControlKeys: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
+    hiddenFieldClasses: UX_HIDDEN_FIELD_CLASSES,
+    rejectedUnknownKeys: true,
+    sanitized: true,
+  }));
+}
+
+export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
+  const submittedPolicyRows = (options.uxSimplificationPolicies ?? []).map((policy) => normalizeUXSimplificationPolicy(policy, "submitted_workflow_ux_simplification_policy")).filter(Boolean);
+  const seedPolicy = normalizeUXSimplificationPolicy(defaultUXSimplificationPolicy(releaseId), "seed_rlhf88_policy");
+  const activePolicy = submittedPolicyRows.at(-1) ?? seedPolicy;
+  const submittedReviewRows = (options.uxSimplificationReviews ?? [])
+    .map((review) => normalizeUXSimplificationReview(review, activePolicy.id, "submitted_workflow_ux_simplification_review"))
+    .filter(Boolean);
+  const submittedScreenStateRows = (options.screenStatePayloads ?? [])
+    .map((payload) => normalizeScreenStatePayload(payload, "submitted_workflow_screen_state_payload"))
+    .filter(Boolean);
+  const hasSubmittedEvidence = submittedPolicyRows.length || submittedReviewRows.length || submittedScreenStateRows.length;
+  const seedReviewRows = [normalizeUXSimplificationReview(defaultUXSimplificationReview(releaseId, seedPolicy.id), seedPolicy.id, "seed_rlhf88_review")];
+  const seedScreenStateRows = defaultScreenStatePayloads(releaseId, seedPolicy.id).map((payload) => normalizeScreenStatePayload(payload, "seed_server_derived_screen_state"));
+  const reviewRowsForGate = hasSubmittedEvidence ? submittedReviewRows : seedReviewRows;
+  const screenStateRowsForGate = hasSubmittedEvidence ? submittedScreenStateRows : seedScreenStateRows;
+  const surfaceRows = UX_SIMPLIFICATION_SURFACES.map((surface) =>
+    uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRowsForGate, screenStateRowsForGate),
+  );
+  const reviewSections = [
+    ...submittedPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ux_simplification_policy", artifactId: row.id, reason }))),
+    ...submittedReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ux_simplification_review", artifactId: row.id, reason }))),
+    ...submittedScreenStateRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "screen_state_payload", artifactId: row.id, reason }))),
+    ...surfaceRows.filter((row) => row.status !== "ux_surface_simplification_gate_passed").map((row) => ({ artifactType: "ux_surface", artifactId: row.surface, reason: row.status })),
+  ];
+  const submittedEvidenceComplete =
+    submittedPolicyRows.length > 0 &&
+    submittedReviewRows.length > 0 &&
+    submittedScreenStateRows.length > 0 &&
+    reviewSections.length === 0 &&
+    activePolicy.policySource === "submitted_workflow_ux_simplification_policy";
+  return {
+    id: `ux-simplification-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    requiredSurfaces: UX_SIMPLIFICATION_SURFACES,
+    requiredNoFeatureLossChecklist: UX_NO_FEATURE_LOSS_KEYS,
+    requiredHiddenFieldClasses: UX_HIDDEN_FIELD_CLASSES,
+    policy: {
+      taskFirstRule:
+        "Enabled user-facing screens must show task-first plain-language copy while preserving exact LMCA rubric semantics and one-click Appendix-F anchors.",
+      noFeatureLossRule:
+        "Simplified screens must retain every applicable score field, safe-decline/source-recognition path, issue report, verification/adjudication control, data-governance action, protected-label warning, audit/provenance capture, and release-governance action.",
+      screenStateRule:
+        "Rater/adjudicator/release-review/admin screens must render from sanitized server-derived ScreenStatePayload allowlists, not client-side inference from raw rows.",
+    },
+    activePolicy,
+    policyRows: [seedPolicy, ...submittedPolicyRows],
+    reviewRows: [...seedReviewRows, ...submittedReviewRows],
+    screenStateRows: [...seedScreenStateRows, ...submittedScreenStateRows],
+    surfaceRows,
+    counts: {
+      submittedPolicyCount: submittedPolicyRows.length,
+      submittedReviewCount: submittedReviewRows.length,
+      submittedScreenStateCount: submittedScreenStateRows.length,
+      passingSurfaceCount: surfaceRows.filter((row) => row.status === "ux_surface_simplification_gate_passed").length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "ux_simplification_review_required"
+      : submittedEvidenceComplete
+        ? "submitted_ux_simplification_evidence_complete"
+        : "seed_ux_simplification_policy_complete",
+  };
+}
+
+function normalizeUXSimplificationPolicy(policy, policySource) {
+  const id = policy?.id ?? policy?.policyId;
+  if (!id) return null;
+  const enabledSurfaces = normalizeStringArray(policy.enabledSurfaces ?? policy.surfaces);
+  const noFeatureLossChecklist = normalizeStringArray(policy.noFeatureLossChecklist ?? policy.featureReachabilityChecklist);
+  const missingSurfaces = UX_SIMPLIFICATION_SURFACES.filter((surface) => !enabledSurfaces.includes(surface));
+  const missingNoFeatureLossKeys = UX_NO_FEATURE_LOSS_KEYS.filter((key) => !noFeatureLossChecklist.includes(key));
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    missingSurfaces.length ? `enabledSurfaces:${missingSurfaces.join(",")}` : null,
+    missingNoFeatureLossKeys.length ? `noFeatureLossChecklist:${missingNoFeatureLossKeys.join(",")}` : null,
+    policy.taskFirstCopyRequired === true ? null : "taskFirstCopyRequired",
+    policy.progressiveDisclosureRequired === true ? null : "progressiveDisclosureRequired",
+    policy.glossarySupportRequired === true ? null : "glossarySupportRequired",
+    policy.serverDerivedScreenStateRequired === true ? null : "serverDerivedScreenStateRequired",
+    policy.exactRubricSemanticsPreserved === true ? null : "exactRubricSemanticsPreserved",
+    String(policy.appendixFAnchorAccess ?? "").includes("one_click") ? null : "appendixFAnchorAccess",
+    policyMentions(policy.protectedSplitVariantPolicy, ["block", "quarantine"]) ? null : "protectedSplitVariantPolicy",
+    policyMentions(policy.hiddenMetadataLeakagePolicy, ["forbid", "hidden"]) ? null : "hiddenMetadataLeakagePolicy",
+  ].filter(Boolean);
+  return {
+    id,
+    policySource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    enabledSurfaces,
+    noFeatureLossChecklist,
+    missingSurfaces,
+    missingNoFeatureLossKeys,
+    taskFirstCopyRequired: policy.taskFirstCopyRequired === true,
+    progressiveDisclosureRequired: policy.progressiveDisclosureRequired === true,
+    glossarySupportRequired: policy.glossarySupportRequired === true,
+    serverDerivedScreenStateRequired: policy.serverDerivedScreenStateRequired === true,
+    exactRubricSemanticsPreserved: policy.exactRubricSemanticsPreserved === true,
+    appendixFAnchorAccess: policy.appendixFAnchorAccess ?? null,
+    protectedSplitVariantPolicy: policy.protectedSplitVariantPolicy ?? null,
+    hiddenMetadataLeakagePolicy: policy.hiddenMetadataLeakagePolicy ?? null,
+    reviewReasons,
+    status: reviewReasons.length
+      ? "ux_simplification_policy_review_required"
+      : policySource === "submitted_workflow_ux_simplification_policy"
+        ? "submitted_ux_simplification_policy_complete"
+        : "seed_ux_simplification_policy_complete",
+  };
+}
+
+function normalizeUXSimplificationReview(review, activePolicyId, reviewSource) {
+  const id = review?.id ?? review?.reviewId;
+  if (!id) return null;
+  const reviewedSurfaces = normalizeStringArray(review.reviewedSurfaces ?? review.surfaces);
+  const noFeatureLossChecklist = normalizeStringArray(review.noFeatureLossChecklist ?? review.featureReachabilityChecklist);
+  const missingSurfaces = UX_SIMPLIFICATION_SURFACES.filter((surface) => !reviewedSurfaces.includes(surface));
+  const missingNoFeatureLossKeys = UX_NO_FEATURE_LOSS_KEYS.filter((key) => !noFeatureLossChecklist.includes(key));
+  const reviewReasons = [
+    review.policyId === activePolicyId ? null : "policyId",
+    review.reviewStatus === "passed" ? null : "reviewStatus",
+    missingSurfaces.length ? `reviewedSurfaces:${missingSurfaces.join(",")}` : null,
+    missingNoFeatureLossKeys.length ? `noFeatureLossChecklist:${missingNoFeatureLossKeys.join(",")}` : null,
+    review.exactRubricSemanticsPreserved === true ? null : "exactRubricSemanticsPreserved",
+    review.appendixFAnchorAccessVerified === true ? null : "appendixFAnchorAccessVerified",
+    review.serverDerivedScreenStateVerified === true ? null : "serverDerivedScreenStateVerified",
+    review.protectedLeakageReviewPassed === true ? null : "protectedLeakageReviewPassed",
+  ].filter(Boolean);
+  return {
+    id,
+    reviewSource,
+    policyId: review.policyId ?? null,
+    reviewedSurfaces,
+    reviewStatus: review.reviewStatus ?? null,
+    reviewerRole: review.reviewerRole ?? null,
+    noFeatureLossChecklist,
+    missingSurfaces,
+    missingNoFeatureLossKeys,
+    exactRubricSemanticsPreserved: review.exactRubricSemanticsPreserved === true,
+    appendixFAnchorAccessVerified: review.appendixFAnchorAccessVerified === true,
+    serverDerivedScreenStateVerified: review.serverDerivedScreenStateVerified === true,
+    protectedLeakageReviewPassed: review.protectedLeakageReviewPassed === true,
+    reviewReasons,
+    status: reviewReasons.length
+      ? "ux_simplification_review_incomplete"
+      : reviewSource === "submitted_workflow_ux_simplification_review"
+        ? "submitted_ux_simplification_review_passed"
+        : "seed_ux_simplification_review_passed",
+  };
+}
+
+function normalizeScreenStatePayload(payload, payloadSourceLabel) {
+  const id = payload?.id ?? payload?.screenStateId;
+  if (!id) return null;
+  const surface = payload.surface ?? payload.screenSurface ?? null;
+  const visibleFieldAllowlist = normalizeStringArray(payload.visibleFieldAllowlist);
+  const enabledActionAllowlist = normalizeStringArray(payload.enabledActionAllowlist);
+  const requiredControlKeys = normalizeStringArray(payload.requiredControlKeys ?? payload.applicableControlKeys);
+  const hiddenFieldClasses = normalizeStringArray(payload.hiddenFieldClasses);
+  const requiredControls = UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [];
+  const availableControls = new Set([...enabledActionAllowlist, ...requiredControlKeys]);
+  const missingControls = requiredControls.filter((control) => !availableControls.has(control));
+  const missingHiddenFieldClasses = UX_HIDDEN_FIELD_CLASSES.filter((fieldClass) => !hiddenFieldClasses.includes(fieldClass));
+  const forbiddenVisibleFields = visibleFieldAllowlist.filter((field) => visibleFieldIsForbidden(field));
+  const policyVersionProvenance = payload.policyVersionProvenance && typeof payload.policyVersionProvenance === "object" ? payload.policyVersionProvenance : {};
+  const reviewReasons = [
+    UX_SIMPLIFICATION_SURFACES.includes(surface) ? null : "surface",
+    payload.payloadSource === "server_derived" ? null : "payloadSource",
+    requiredPromptFieldReason("schemaVersion", payload.schemaVersion),
+    visibleFieldAllowlist.length ? null : "visibleFieldAllowlist",
+    enabledActionAllowlist.length ? null : "enabledActionAllowlist",
+    missingControls.length ? `enabledActionAllowlist:${missingControls.join(",")}` : null,
+    missingHiddenFieldClasses.length ? `hiddenFieldClasses:${missingHiddenFieldClasses.join(",")}` : null,
+    forbiddenVisibleFields.length ? `visibleFieldAllowlist_hidden:${forbiddenVisibleFields.join(",")}` : null,
+    payload.rejectedUnknownKeys === true || payload.extraKeyRejection === true ? null : "rejectedUnknownKeys",
+    payload.sanitized === true ? null : "sanitized",
+    policyVersionProvenance.uxSimplificationPolicyId ? null : "policyVersionProvenance.uxSimplificationPolicyId",
+  ].filter(Boolean);
+  return {
+    id,
+    payloadSourceLabel,
+    payloadSource: payload.payloadSource ?? null,
+    surface,
+    schemaVersion: payload.schemaVersion ?? null,
+    policyId: payload.policyId ?? policyVersionProvenance.uxSimplificationPolicyId ?? null,
+    policyVersionProvenance,
+    visibleFieldAllowlist,
+    enabledActionAllowlist,
+    requiredControlKeys,
+    hiddenFieldClasses,
+    missingControls,
+    missingHiddenFieldClasses,
+    forbiddenVisibleFields,
+    rejectedUnknownKeys: payload.rejectedUnknownKeys === true || payload.extraKeyRejection === true,
+    sanitized: payload.sanitized === true,
+    reviewReasons,
+    status: reviewReasons.length
+      ? "screen_state_payload_review_required"
+      : payloadSourceLabel === "submitted_workflow_screen_state_payload"
+        ? "submitted_screen_state_payload_sanitized"
+        : "seed_screen_state_payload_sanitized",
+  };
+}
+
+function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, screenStateRows) {
+  const policyCoversSurface = activePolicy.enabledSurfaces.includes(surface) && activePolicy.reviewReasons.length === 0;
+  const reviewCoversSurface = reviewRows.some((row) => row.reviewedSurfaces.includes(surface) && row.reviewReasons.length === 0);
+  const screenStateCoversSurface = screenStateRows.some((row) => row.surface === surface && row.reviewReasons.length === 0);
+  const status =
+    policyCoversSurface && reviewCoversSurface && screenStateCoversSurface
+      ? "ux_surface_simplification_gate_passed"
+      : !policyCoversSurface
+        ? "ux_surface_missing_policy"
+        : !reviewCoversSurface
+          ? "ux_surface_missing_review"
+          : "ux_surface_missing_screen_state";
+  return {
+    surface,
+    policyId: activePolicy.id,
+    policyCoversSurface,
+    reviewCoversSurface,
+    screenStateCoversSurface,
+    requiredControls: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
+    status,
+  };
+}
+
+function normalizeStringArray(value) {
+  if (Array.isArray(value)) return value.filter((item) => typeof item === "string" && item).map((item) => item.trim());
+  if (typeof value === "string" && value) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function policyMentions(value, fragments) {
+  const normalized = String(value ?? "").toLowerCase();
+  return fragments.every((fragment) => normalized.includes(fragment));
+}
+
+function visibleFieldIsForbidden(field) {
+  const normalized = String(field).replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return UX_FORBIDDEN_VISIBLE_FIELD_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
 export function buildOctoberReleaseReport(
   releaseId,
   labelSnapshot,
@@ -6265,95 +9168,226 @@ export function buildOctoberReleaseReport(
   certificationAttempts = seedCertificationAttempts,
   benchmarkExposureEvents = seedBenchmarkExposureEvents,
   sourceStyleAudits = postLockSourceStyleAudits,
+  options = {},
 ) {
+  const submittedTextArtifacts = applySubmittedItemTextVersions(positionList, critiqueList, options.itemTextVersions ?? []);
+  const effectiveAdjudicationMemos = buildEffectiveAdjudicationMemos(options.adjudicationMemos ?? []);
+  const effectiveVerificationRecords = buildEffectiveVerificationRecords(options.verificationRecords ?? []);
+  const effectiveRatingContextSnapshots = buildEffectiveRatingContextSnapshots(options.ratingContextSnapshots ?? []);
   const corpusManifest = buildCorpusCompositionManifest(releaseId, positionList, critiqueList, ratings);
+  const releaseGateProfile = buildEffectiveReleaseGateProfile(releaseId, options.releaseGateProfiles ?? []);
+  const releaseGateEvaluation = evaluateReleaseGateProfile(releaseGateProfile);
   const adminTagBlinding = buildAdminTagBlindingReport(releaseId, positionList);
   const positionIntakeReadiness = buildPositionIntakeReadinessReport(releaseId, positionList);
   const rubricQaCoverage = buildRubricQaCoverageReport(releaseId);
-  const sourceExampleAnchors = buildLmcaSourceExampleAnchorReport(releaseId);
+  const sourceExampleAnchors = buildLmcaSourceExampleAnchorReport(releaseId, lmcaSourceExampleAnchors, {
+    sourceAnchorExamples: options.sourceAnchorExamples ?? [],
+  });
   const metricEligibility = buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, positionList, critiqueList);
-  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList);
-  const validationTrancheReport = buildValidationTrancheReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
+  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList, { humanCeilingRuns: options.humanCeilingRuns ?? [] });
+  const validationTrancheReport = buildValidationTrancheReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
   const humanScoreDistribution = buildHumanScoreDistributionReport(releaseId, labelSnapshot, positionList, critiqueList);
-  const ratingRevisionAudit = buildRatingRevisionAuditReport(releaseId, ratings, positionList);
+  const ratingRevisionAudit = buildRatingRevisionAuditReport(releaseId, ratings, positionList, {
+    revisionRecords: options.revisionRecords ?? [],
+  });
   const ratingEffortQuality = buildRatingEffortQualityReport(releaseId, ratings, positionList, critiqueList);
-  const rubricIssueFlags = buildRubricIssueFlagReport(releaseId, ratings, adjudicationMemos, positionList);
+  const rubricIssueFlags = buildRubricIssueFlagReport(releaseId, ratings, effectiveAdjudicationMemos, positionList);
   const sourceStyleAudit = buildPostLockSourceStyleAuditReport(releaseId, sourceStyleAudits, ratings, positionList, critiqueList, labelSnapshot);
-  const correctnessVerification = buildCorrectnessVerificationReport(releaseId, ratings, positionList, critiqueList);
-  const adjudicationMemoAudit = buildAdjudicationMemoAuditReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
-  const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
-  const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList);
-  const samePositionContext = buildSamePositionContextReport(releaseId, ratings, positionList, critiqueList);
-  const sanityBaselines = buildSanityBaselineReport(releaseId, labelSnapshot, positionList, critiqueList);
+  const correctnessVerification = buildCorrectnessVerificationReport(releaseId, ratings, positionList, critiqueList, effectiveVerificationRecords);
+  const adjudicationMemoAudit = buildAdjudicationMemoAuditReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
+  const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
+  const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
+    humanCeilingRuns: options.humanCeilingRuns ?? [],
+  });
+  const samePositionContext = buildSamePositionContextReport(releaseId, ratings, positionList, critiqueList, effectiveRatingContextSnapshots);
+  const sanityBaselines = buildSanityBaselineReport(releaseId, labelSnapshot, positionList, critiqueList, {
+    sanityBaselineRuns: options.sanityBaselineRuns ?? [],
+  });
   const recalibratedEvaluation = buildRecalibratedEvaluationReport(releaseId, labelSnapshot, fullRubricEvaluationRun, positionList);
   const evaluationRuns = [fullRubricEvaluationRun, overallOnlyEvaluationRun];
-  const itemTextViewParity = buildItemTextViewParityReport(releaseId, ratings, evaluationRuns, positionList, critiqueList);
-  const promptTrackSeparation = buildPromptTrackSeparationReport(releaseId, evaluationRuns, critiqueGenerationRuns);
+  const effectiveCritiqueGenerationRuns = buildEffectiveCritiqueGenerationRuns({
+    critiqueGenerationRuns: options.critiqueGenerationRuns ?? [],
+    generatedCritiqueSubmissions: options.generatedCritiqueSubmissions ?? [],
+    generatedCritiquePromotions: options.generatedCritiquePromotions ?? [],
+    generationEvaluationReports: options.generationEvaluationReports ?? [],
+  });
+  const itemTextViewParity = buildItemTextViewParityReport(
+    releaseId,
+    ratings,
+    evaluationRuns,
+    submittedTextArtifacts.positionList,
+    submittedTextArtifacts.critiqueList,
+  );
+  const promptTrackSeparation = buildPromptTrackSeparationReport(releaseId, evaluationRuns, effectiveCritiqueGenerationRuns);
+  const promptParserEvaluationRuns = [...evaluationRuns, ...(options.evaluationRuns ?? [])];
+  const promptParserProvenance = buildPromptParserProvenanceReport(releaseId, promptParserEvaluationRuns, effectiveCritiqueGenerationRuns, {
+    promptTemplates: options.promptTemplates ?? [],
+    parserConfigs: options.parserConfigs ?? [],
+    modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
+  });
   const evaluationPairs = critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id }));
-  const modelAssistedLabelOverlap = buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, ratings, evaluationRuns, evaluationPairs);
+  const modelAssistedLabelOverlap = buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, ratings, evaluationRuns, evaluationPairs, {
+    ratingChecks: options.ratingChecks ?? [],
+  });
   const leaderboardReport = buildUncertaintyAwareLeaderboardReport(releaseId, labelSnapshot, evaluationRuns, {
     ratings,
     pairs: evaluationPairs,
     modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
   });
-  const metricDirectionalityConfig = buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling);
+  const metricDirectionalityConfig = buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling, {
+    metricConfigs: options.metricConfigs ?? [],
+    derivedUtilityFormulas: options.derivedUtilityFormulas ?? [],
+  });
   const pairedTargetLabelSnapshots = buildPairedTargetLabelSnapshotReport(
     releaseId,
     labelSnapshot,
     ratings,
     evaluationPairs,
+    [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+    { primaryRaterAnchorPolicies: options.primaryRaterAnchorPolicies ?? [] },
   );
   const modelFailureAudits = [
     buildModelFailureAudit(releaseId, labelSnapshot, fullRubricEvaluationRun, positionList, critiqueList, {
       leaderboardReportId: leaderboardReport.id,
       ratings,
       modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+      sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
+      obfuscationStressRuns: options.obfuscationStressRuns ?? [],
     }),
     buildModelFailureAudit(releaseId, labelSnapshot, overallOnlyEvaluationRun, positionList, critiqueList, {
       leaderboardReportId: leaderboardReport.id,
       ratings,
       modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+      sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
+      obfuscationStressRuns: options.obfuscationStressRuns ?? [],
     }),
   ];
-  const certification = buildCertificationAudit();
+  const releaseGoldLibraryItems = buildReleaseGoldLibraryItems(options.goldItems ?? [], positionList);
+  const releaseRightsRecords = buildReleaseRightsRecords(options.rightsRecords ?? [], provenanceRightsRecords);
+  const certification = buildCertificationAudit(certificationPacks, releaseGoldLibraryItems, OCTOBER_RELEASE_TARGETS, {
+    releaseId,
+    certificationRecords: options.certificationRecords ?? [],
+  });
   const certificationReports = [...new Set(certificationAttempts.map((attempt) => attempt.raterId))].map((raterId) =>
     buildRaterCertificationReport(raterId, certificationAttempts),
   );
-  const protectedSplitIsolation = buildProtectedSplitIsolationReport(releaseId, positionList);
+  const protectedSplitIsolation = buildProtectedSplitIsolationReport(releaseId, positionList, certificationPacks, releaseGoldLibraryItems);
   const rubricDrift = buildRubricVersionDriftReport(releaseId, labelSnapshot, ratings, certificationAttempts);
-  const publicRights = auditProvenanceRights("public", positionList);
-  const hiddenBenchmarkRights = auditProvenanceRights("hidden_benchmark", positionList);
-  const activeLearning = buildActiveLearningAudit();
-  const candidateIntakeQualityAudit = buildCandidateIntakeQualityAudit(releaseId, critiqueList, positionList);
+  const publicRights = auditProvenanceRights("public", positionList, releaseRightsRecords);
+  const hiddenBenchmarkRights = auditProvenanceRights("hidden_benchmark", positionList, releaseRightsRecords);
+  const effectiveBenchmarkExposureEvents = buildEffectiveBenchmarkExposureEvents(benchmarkExposureEvents, options.exposureLogs ?? []);
+  const activeLearning = buildActiveLearningAudit(activeLearningBatches, options.activeLearningSelectionAudits ?? [], {
+    candidateBatches: options.candidateBatches ?? [],
+    candidateCritiques: options.candidateCritiques ?? [],
+    modelJudgeScores: options.modelJudgeScores ?? [],
+    candidateBatchModelJudgeScoreSubmissions: options.candidateBatchModelJudgeScoreSubmissions ?? [],
+    candidateReviews: options.candidateReviews ?? [],
+    candidatePromotions: options.candidatePromotions ?? [],
+  });
+  const candidateIntakeQualityAudit = buildCandidateIntakeQualityAudit(releaseId, critiqueList, positionList, effectiveCritiqueGenerationRuns, activeLearning.batches);
   const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList);
   const hiddenBenchmarkFreeze = buildHiddenBenchmarkFreezeReport(
     releaseId,
     labelSnapshot,
     positionList,
     critiqueList,
-    provenanceRightsRecords,
-    benchmarkExposureEvents,
-    { ratings },
+    releaseRightsRecords,
+    effectiveBenchmarkExposureEvents,
+    { ratings, benchmarkSplitMembers: options.benchmarkSplitMembers ?? [], artifactProbeRuns: options.artifactProbeRuns ?? [] },
   );
-  const critiqueGenerationEvaluation = buildCritiqueGenerationEvaluationReport(releaseId, labelSnapshot, undefined, ratings, positionList, critiqueList);
-  const trainingExport = buildTrainingExport(releaseId, labelSnapshot, positionList, critiqueList, ratings);
+  const critiqueGenerationEvaluation = buildCritiqueGenerationEvaluationReport(
+    releaseId,
+    labelSnapshot,
+    effectiveCritiqueGenerationRuns,
+    ratings,
+    positionList,
+    critiqueList,
+    effectiveAdjudicationMemos,
+  );
+  const trainingExport = buildTrainingExport(
+    releaseId,
+    labelSnapshot,
+    submittedTextArtifacts.positionList,
+    submittedTextArtifacts.critiqueList,
+    ratings,
+    effectiveRatingContextSnapshots,
+    { pairwiseComparisonSnapshots: options.pairwiseComparisonSnapshots ?? [] },
+  );
+  const publicExportManifest = createExportManifest("public", releaseId, positionList, critiqueList, labelSnapshot);
   const labelChannelSeparation = buildLabelChannelSeparationReport(releaseId, labelSnapshot, trainingExport, certification, rubricQaCoverage);
-  const comparabilityClaims = buildComparabilityClaimMatrix({ corpusManifest, metricEligibility, validationDesign, labelSnapshot });
+  const comparabilityClaims = buildComparabilityClaimMatrix({
+    corpusManifest,
+    metricEligibility,
+    validationDesign,
+    labelSnapshot,
+    submittedClaims: options.comparabilityClaims ?? [],
+  });
   const lmcaComparison = buildLmcaComparisonReport({ releaseId, corpusManifest, metricEligibility, validationDesign, labelSnapshot });
+  const appendixCScaleMet = validationDesign.status === "appendix_c_scale";
   const targetGaps = {
     positionsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.positions - corpusManifest.counts.positions),
     critiquesRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.critiques - corpusManifest.counts.critiques),
     blindInitialRatingsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.blindInitialRatings - corpusManifest.counts.blindInitialRatings),
     goldItemsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.goldLibraryItems - certification.loadedGoldLibraryItems),
+    validationCritiquesRemaining: appendixCScaleMet ? 0 : Math.max(0, OCTOBER_RELEASE_TARGETS.validationCritiques - validationDesign.currentScale.critiqueCount),
+    validationPositionsRemaining: appendixCScaleMet ? 0 : Math.max(0, OCTOBER_RELEASE_TARGETS.validationPositions - validationDesign.currentScale.positionCount),
+    validationCoreAllItemsRatersRemaining: appendixCScaleMet
+      ? 0
+      : Math.max(0, OCTOBER_RELEASE_TARGETS.coreAllItemsRaters - validationDesign.currentScale.fullCoverageRaterCount),
   };
+  const currentStatus = Object.values(targetGaps).some((value) => value > 0) ? "incomplete_against_october_target" : "target_scale_met";
+  const releaseVersionManifest = buildEffectiveReleaseVersionManifest(
+    releaseId,
+    { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps },
+    options.releaseVersions ?? [],
+    options.releaseFreezes ?? [],
+  );
+  const raterReliabilityWeightModelEvidence = buildRaterReliabilityWeightModelEvidence(
+    releaseId,
+    labelSnapshot,
+    options.raterReliabilityWeightModels ?? [],
+  );
+  const releaseArtifactEvidence = buildSubmittedReleaseArtifactEvidence(
+    releaseId,
+    { labelSnapshot, corpusManifest, trainingExport, publicExportManifest },
+    {
+      labelSnapshots: options.labelSnapshots ?? [],
+      corpusManifests: options.corpusManifests ?? [],
+      trainingExports: options.trainingExports ?? [],
+      exportManifests: options.exportManifests ?? [],
+    },
+  );
+  const modelEvaluationArtifactEvidence = buildSubmittedModelEvaluationArtifactEvidence(
+    releaseId,
+    { labelSnapshot, trainingExport, leaderboardReport, recalibratedEvaluation, modelFailureAudits },
+    {
+      modelImprovementRuns: options.modelImprovementRuns ?? [],
+      evaluationRuns: options.evaluationRuns ?? [],
+      modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
+      calibrationRuns: options.calibrationRuns ?? [],
+      leaderboards: options.leaderboards ?? [],
+      modelFailureAuditArtifacts: options.modelFailureAudits ?? [],
+    },
+  );
+  const uxSimplification = buildUXSimplificationEvidenceReport(releaseId, {
+    uxSimplificationPolicies: options.uxSimplificationPolicies ?? [],
+    uxSimplificationReviews: options.uxSimplificationReviews ?? [],
+    screenStatePayloads: options.screenStatePayloads ?? [],
+  });
   return {
     id: `release-report-${releaseId}`,
     releaseId,
     generatedAt: new Date().toISOString(),
     octoberTargets: OCTOBER_RELEASE_TARGETS,
-    currentStatus: Object.values(targetGaps).some((value) => value > 0) ? "incomplete_against_october_target" : "target_scale_met",
+    currentStatus,
     targetGaps,
+    releaseVersionManifest,
+    releaseArtifactEvidence,
+    modelEvaluationArtifactEvidence,
+    uxSimplification,
     corpusManifest,
+    releaseGateProfile,
+    releaseGateEvaluation,
     adminTagBlinding,
     positionIntakeReadiness,
     rubricQaCoverage,
@@ -6371,10 +9405,12 @@ export function buildOctoberReleaseReport(
     trainingExport,
     labelChannelSeparation,
     humanScoreDistribution,
+    raterReliabilityWeightModelEvidence,
     labelSnapshotReliability: {
       labelSnapshotId: labelSnapshot.id,
       targetLabelVersion: labelSnapshot.targetLabelVersion,
       reliabilityWeightModel: labelSnapshot.reliabilityWeightModel,
+      raterReliabilityWeightModelEvidence,
       aggregationSensitivity: labelSnapshot.aggregationSensitivity,
       includedRatingProvenance: labelSnapshot.includedRatingProvenance,
     },
@@ -6391,12 +9427,94 @@ export function buildOctoberReleaseReport(
     sanityBaselines,
     recalibratedEvaluation,
     promptTrackSeparation,
+    promptParserProvenance,
     leaderboardReport,
     metricDirectionalityConfig,
     reasoningModeSensitivity: leaderboardReport.reasoningModeSensitivity,
     pairedTargetLabelSnapshots,
     modelAssistedLabelOverlap,
     modelFailureAudits,
+    workflowActionArtifacts: {
+      rightsReviews: options.rightsReviews ?? [],
+      releaseFreezes: options.releaseFreezes ?? [],
+      assignmentFlags: options.assignmentFlags ?? [],
+      discussions: options.discussions ?? [],
+      adjudications: options.adjudications ?? [],
+      adjudicationFinalizations: options.adjudicationFinalizations ?? [],
+      verificationRecords: options.verificationRecords ?? [],
+      candidateBatchModelJudgeScoreSubmissions: options.candidateBatchModelJudgeScoreSubmissions ?? [],
+      candidateReviews: options.candidateReviews ?? [],
+      candidatePromotions: options.candidatePromotions ?? [],
+      generatedCritiquePromotions: options.generatedCritiquePromotions ?? [],
+    },
+    workflowAuditTrailArtifacts: {
+      certificationRecords: options.certificationRecords ?? [],
+      exposureLogs: options.exposureLogs ?? [],
+      revisionRecords: options.revisionRecords ?? [],
+      discussionThreads: options.discussionThreads ?? [],
+      adjudicationMemos: options.adjudicationMemos ?? [],
+      ratingChecks: options.ratingChecks ?? [],
+    },
+    workflowReproducibilityArtifacts: {
+      itemTextVersions: options.itemTextVersions ?? [],
+      ratingContextSnapshots: options.ratingContextSnapshots ?? [],
+      pairwiseComparisonSnapshots: options.pairwiseComparisonSnapshots ?? [],
+      raterReliabilityWeightModels: options.raterReliabilityWeightModels ?? [],
+    },
+    workflowOperationalArtifacts: {
+      raters: options.raters ?? [],
+      assignments: options.workflowAssignments ?? [],
+      candidateBatches: options.candidateBatches ?? [],
+      candidateCritiques: options.candidateCritiques ?? [],
+      modelJudgeScores: options.modelJudgeScores ?? [],
+      generatedCritiqueSubmissions: options.generatedCritiqueSubmissions ?? [],
+      modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
+    },
+    workflowModelEvaluationArtifacts: {
+      critiqueGenerationRuns: options.critiqueGenerationRuns ?? [],
+      generationEvaluationReports: options.generationEvaluationReports ?? [],
+      promptTemplates: options.promptTemplates ?? [],
+      parserConfigs: options.parserConfigs ?? [],
+      modelImprovementRuns: options.modelImprovementRuns ?? [],
+      evaluationRuns: options.evaluationRuns ?? [],
+      modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
+      calibrationRuns: options.calibrationRuns ?? [],
+      artifactProbeRuns: options.artifactProbeRuns ?? [],
+      sanityBaselineRuns: options.sanityBaselineRuns ?? [],
+      humanCeilingRuns: options.humanCeilingRuns ?? [],
+      leaderboards: options.leaderboards ?? [],
+      modelFailureAudits: options.modelFailureAudits ?? [],
+    },
+    workflowReleaseArtifacts: {
+      labelSnapshots: options.labelSnapshots ?? [],
+      corpusManifests: options.corpusManifests ?? [],
+      trainingExports: options.trainingExports ?? [],
+      exportManifests: options.exportManifests ?? [],
+      goldItems: options.goldItems ?? [],
+      sourceAnchorExamples: options.sourceAnchorExamples ?? [],
+      benchmarkSplitMembers: options.benchmarkSplitMembers ?? [],
+      rightsRecords: options.rightsRecords ?? [],
+      releaseVersions: options.releaseVersions ?? [],
+    },
+    workflowMetricArtifacts: {
+      metricConfigs: options.metricConfigs ?? [],
+      derivedUtilityFormulas: options.derivedUtilityFormulas ?? [],
+    },
+    workflowUxArtifacts: {
+      uxSimplificationPolicies: options.uxSimplificationPolicies ?? [],
+      uxSimplificationReviews: options.uxSimplificationReviews ?? [],
+      screenStatePayloads: options.screenStatePayloads ?? [],
+    },
+    workflowGovernanceArtifacts: {
+      releaseGateProfiles: options.releaseGateProfiles ?? [],
+      primaryRaterAnchorPolicies: options.primaryRaterAnchorPolicies ?? [],
+      comparabilityClaims: options.comparabilityClaims ?? [],
+      activeLearningSelectionAudits: options.activeLearningSelectionAudits ?? [],
+    },
+    claimGatedDiagnosticRuns: {
+      sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
+      obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+    },
     promptArtifacts: Object.values(promptArtifacts),
     metricEligibility,
     validationDesign,
@@ -6847,6 +9965,7 @@ function modelAssistedRatingRow(rating) {
   });
   return {
     ratingId: rating.id,
+    assistanceSource: "rating_row_model_assisted_exposure",
     itemId: makeItemId(rating.positionId, rating.critiqueId),
     positionId: rating.positionId,
     critiqueId: rating.critiqueId,
@@ -6868,6 +9987,62 @@ function modelAssistedRatingRow(rating) {
     ),
     assistanceDeltaSummary: exposure.deltaSummary ?? rating.modelAssistanceDeltaSummary ?? null,
     promptTemplateId: exposure.promptTemplateId ?? rating.assistingPromptTemplateId ?? null,
+    assistingModel,
+  };
+}
+
+function modelAssistedRatingCheckRow(check, ratingById) {
+  const checkType = check?.checkType ?? check?.checkKind ?? check?.kind;
+  const hasAssistingModel =
+    Boolean(check?.assistingModelRequestedAlias) ||
+    Boolean(check?.assistingModelAlias) ||
+    Boolean(check?.assistingModelResolvedSnapshot) ||
+    Boolean(check?.assistingResolvedModelSnapshot) ||
+    Boolean(check?.assistingModelFamily);
+  if (checkType !== "model_assisted_check" && check?.modelExposureTiming === "none" && !hasAssistingModel) return null;
+  if (checkType !== "model_assisted_check" && !hasAssistingModel) return null;
+  const rating = ratingById.get(check.ratingId);
+  const { positionId, critiqueId } = rating
+    ? { positionId: rating.positionId, critiqueId: rating.critiqueId }
+    : itemRefFromWorkflowArtifact(check);
+  if (!check?.id || !positionId || !critiqueId) return null;
+  const assistingModel = modelIdentityFromValues({
+    requestedModelAlias: firstDefined([check.assistingModelRequestedAlias, check.assistingModelAlias, check.requestedModelAlias, check.modelAlias]),
+    resolvedModelSnapshot: firstDefined([
+      check.assistingModelResolvedSnapshot,
+      check.assistingResolvedModelSnapshot,
+      check.resolvedModelSnapshot,
+      check.modelSnapshot,
+    ]),
+    provider: firstDefined([check.assistingModelProvider, check.modelProvider, check.provider]),
+    modelFamily: firstDefined([check.assistingModelFamily, check.modelFamily]),
+  });
+  return {
+    ratingId: check.ratingId ?? null,
+    ratingCheckId: check.id,
+    assistanceSource: "submitted_workflow_rating_check",
+    itemId: makeItemId(positionId, critiqueId),
+    positionId,
+    critiqueId,
+    ratingKind: checkType ?? "model_assisted_check",
+    raterId: firstDefined([check.checkerId, check.raterId, rating?.raterId]),
+    parentRatingId: rating?.parentRatingId ?? null,
+    preAssistanceRatingId: firstDefined([
+      check.preAssistanceRatingId,
+      check.preModelRatingCheckId,
+      check.lockedHumanOnlyRatingId,
+      rating?.preAssistanceRatingId,
+      rating?.parentRatingId,
+    ]),
+    exposureTiming: check.modelExposureTiming ?? check.exposureTiming ?? "recorded_model_assisted_rating_check",
+    humanOnlySelfCheckLockedBeforeExposure: Boolean(
+      check.humanOnlyCheckLockedBeforeModelExposure ??
+        check.humanOnlySelfCheckLockedBeforeModelExposure ??
+        check.preAssistanceRatingId ??
+        check.preModelRatingCheckId,
+    ),
+    assistanceDeltaSummary: check.modelAssistanceDeltaSummary ?? check.model_assistance_delta_summary ?? null,
+    promptTemplateId: firstDefined([check.assistingPromptTemplateId, check.promptTemplateId]),
     assistingModel,
   };
 }
@@ -7145,6 +10320,8 @@ function summarizeBenchmarkAccess(events = []) {
     totalEvents: normalized.length,
     authorizedAccessCount: authorized.length,
     unauthorizedAccessCount: unauthorized.length,
+    workflowExposureLogCount: normalized.filter((event) => event.exposureSource === "submitted_workflow_exposure_log").length,
+    byExposureSource: countBy(normalized, "exposureSource"),
     actions: countBy(normalized, "action"),
     purposes: countBy(normalized, "purpose"),
     lastAuthorizedAccessAt: authorized.map((event) => event.occurredAt ?? event.receivedAt).filter(Boolean).sort().at(-1) ?? null,
@@ -7152,13 +10329,58 @@ function summarizeBenchmarkAccess(events = []) {
   };
 }
 
-function buildArtifactProbeDiagnostics(events = []) {
+function buildArtifactProbeDiagnostics(events = [], artifactProbeRuns = [], context = {}) {
   const probeEvents = events.filter((event) => event.action === "artifact_probe_run");
+  const submittedRunRows = artifactProbeRuns
+    .filter((run) => !run?.releaseId || run.releaseId === context.releaseId)
+    .map((run) => {
+      const probeFamilies = run.probeFamilies ?? (run.inputView ? [run.inputView] : []);
+      const checks = [
+        optionalManifestCheck("targetLabelSnapshotId", context.labelSnapshot?.id, run.targetLabelSnapshotId ?? run.labelSnapshotId),
+        requiredNonEmptyCheck("inputView", run.inputView ?? probeFamilies),
+        requiredNonEmptyCheck("metricOutputs", run.metricOutputs),
+        requiredNonEmptyCheck("protectedMetadataHandling", run.protectedMetadataHandling),
+        requiredManifestCheck(
+          "authorizedProtectedMetadataHandling",
+          true,
+          ["authorized_admin_only_probe", "authorized_artifact_probe", "protected_metadata_redacted"].includes(run.protectedMetadataHandling),
+        ),
+      ];
+      const reviewChecks = checks.filter((check) => check.status !== "matches" && check.status !== "not_submitted_optional");
+      return {
+        id: run.id ?? null,
+        inputView: run.inputView ?? null,
+        splitEvaluated: run.splitEvaluated ?? null,
+        probeFamilies,
+        metricOutputs: run.metricOutputs ?? null,
+        protectedMetadataHandling: run.protectedMetadataHandling ?? null,
+        checks,
+        reviewChecks,
+        status: reviewChecks.length ? "submitted_artifact_probe_review_required" : "submitted_artifact_probe_authorized",
+      };
+    });
+  const reviewRows = submittedRunRows.filter((row) => row.reviewChecks.length > 0);
+  const completedProbeFamilies = [
+    ...new Set([...probeEvents.flatMap((event) => event.probeFamilies ?? []), ...submittedRunRows.flatMap((row) => row.probeFamilies ?? [])]),
+  ];
+  const requiredProbeFamilies = ["full_context", "critique_only", "metadata_style_only"];
+  const missingProbeFamilies = requiredProbeFamilies.filter((family) => !completedProbeFamilies.includes(family));
+  const hasProbeEvidence = probeEvents.length > 0 || submittedRunRows.length > 0;
+  const status = reviewRows.length
+    ? "artifact_probe_review_required"
+    : hasProbeEvidence
+      ? missingProbeFamilies.length
+        ? "partial"
+        : "pass"
+      : "not_run_documented";
   return {
-    status: probeEvents.length ? "pass" : "not_run_documented",
-    requiredProbeFamilies: ["full_context", "critique_only", "metadata_style_only"],
-    completedProbeFamilies: [...new Set(probeEvents.flatMap((event) => event.probeFamilies ?? []))],
-    notRunRationale: probeEvents.length ? null : "Seed fixture documents the required probes but blocks ordinary hidden-benchmark headline claims until authorized probes run.",
+    status,
+    requiredProbeFamilies,
+    completedProbeFamilies,
+    missingProbeFamilies,
+    submittedRunRows,
+    reviewRows,
+    notRunRationale: hasProbeEvidence ? null : "Seed fixture documents the required probes but blocks ordinary hidden-benchmark headline claims until authorized probes run.",
   };
 }
 

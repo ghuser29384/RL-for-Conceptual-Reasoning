@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,19 +10,28 @@ import {
   assignments,
   buildHiddenBenchmarkFreezeReport,
   buildRaterCertificationReport,
+  buildReleaseRightsRecords,
   buildTrainingExport,
   buildOctoberReleaseReport,
+  certificationPacks,
+  createBlindRatingView,
+  createExportManifest,
   createLabelSnapshot,
   critiques,
+  fullRubricEvaluationRun,
   isValidScore,
+  overallOnlyEvaluationRun,
   positions,
   postLockSourceStyleAudits,
+  promptArtifacts,
   ratingContextSnapshots,
   scoreCertificationAttempt,
   seedBenchmarkExposureEvents,
   seedCertificationAttempts,
   seedRatings,
 } from "./domain/core.mjs";
+import { createExternalJwtAuthConfig, verifyExternalJwtToken } from "./auth/external-jwt.mjs";
+import { createLocalAuditStore } from "./storage/local-audit-store.mjs";
 
 const releaseId = "october-2026-demo";
 export const demoUsers = [
@@ -50,6 +59,174 @@ const sourceStyleAuditSourceGuesses = new Set(["human_written", "expert_written"
 const sourceStyleAuditAuthorshipGuesses = new Set(["expert", "volunteer", "model", "adapted_source", "unknown"]);
 const ratingVerificationStatuses = new Set(["not_needed", "verified", "not_practicable", "unresolved"]);
 const allowedRatingFlagKeys = new Set(RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => definition.key));
+const adminRoles = ["admin"];
+const adminAuditRoles = ["admin", "auditor"];
+const expertWorkflowRoles = ["expert", "admin"];
+const expertAuditWorkflowRoles = ["expert", "admin", "auditor"];
+const ratingWorkflowRoles = ["rater", "graduate", "phd", "expert", "admin"];
+
+const workflowWriteEndpoints = [
+  workflowWriteSpec(/^\/api\/v1\/intake\/positions$/, "position_intake_submitted", "position", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredAnyFields: [["text", "textVersions"]],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/intake\/critiques$/, "critique_intake_submitted", "critique", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "positionId"],
+    requiredAnyFields: [["text", "textVersions"]],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rights\/review$/, "rights_review_submitted", "rightsReview", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/releases\/freeze$/, "release_freeze_submitted", "releaseFreeze", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/certification-records$/, "certification_record_submitted", "certificationRecord", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/exposure-logs$/, "exposure_log_submitted", "exposureLog", adminRoles, { rejectRawBenchmarkContent: true }),
+  workflowWriteSpec(/^\/api\/v1\/revisions$/, "revision_record_submitted", "revisionRecord", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/item-text-versions$/, "item_text_version_submitted", "itemTextVersion", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rating-context-snapshots$/, "rating_context_snapshot_submitted", "ratingContextSnapshot", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/pairwise-comparison-snapshots$/, "pairwise_comparison_snapshot_submitted", "pairwiseComparisonSnapshot", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/assignments$/, "assignment_submitted", "assignment", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/gold-items$/, "gold_item_submitted", "goldItem", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/source-anchor-examples$/, "source_anchor_example_submitted", "sourceAnchorExample", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/benchmark-split-members$/, "benchmark_split_member_submitted", "benchmarkSplitMember", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rights-records$/, "rights_record_submitted", "rightsRecord", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/release-versions$/, "release_version_submitted", "releaseVersion", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/release-gate-profiles$/, "release_gate_profile_submitted", "releaseGateProfile", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/primary-rater-anchor-policies$/, "primary_rater_anchor_policy_submitted", "primaryRaterAnchorPolicy", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/comparability-claims$/, "comparability_claim_submitted", "comparabilityClaim", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/candidate-batches$/, "candidate_batch_submitted", "candidateBatch", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/candidate-critiques$/, "candidate_critique_submitted", "candidateCritique", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/model-judge-scores$/, "model_judge_score_submitted", "modelJudgeScore", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/active-learning-selection-audits$/, "active_learning_selection_audit_submitted", "activeLearningSelectionAudit", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/candidate-batches\/(?<id>[^/]+)\/model-judge-scores$/, "candidate_batch_model_judge_scores_submitted", "modelJudgeScores", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "candidateBatchId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/candidates\/(?<id>[^/]+)\/review$/, "candidate_review_submitted", "candidateReview", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "candidateId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/candidates\/(?<id>[^/]+)\/promote$/, "candidate_promotion_submitted", "candidatePromotion", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "candidateId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/critique-generation-runs$/, "critique_generation_run_submitted", "critiqueGenerationRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/generated-critiques$/, "generated_critique_submitted", "generatedCritiqueSubmission", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/generated-critiques\/(?<id>[^/]+)\/promote$/, "generated_critique_promotion_submitted", "generatedCritiquePromotion", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "generatedCritiqueId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/generation-evaluation-reports$/, "generation_evaluation_report_submitted", "generationEvaluationReport", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/ratings\/(?<id>[^/]+)\/check$/, "rating_check_submitted", "ratingCheck", ratingWorkflowRoles, {
+    pathParamField: "ratingId",
+    requiredFields: ["id", "ratingId", "assignmentId", "raterId", "checkKind"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
+  }),
+  workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/flag$/, "assignment_flag_submitted", "assignmentFlag", ratingWorkflowRoles, {
+    pathParamField: "assignmentId",
+    requiredFields: ["id", "assignmentId", "raterId", "reasonCode"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
+  }),
+  workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/discussion-threads$/, "discussion_thread_submitted", "discussionThread", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/adjudications$/, "adjudication_submitted", "adjudication", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "adjudicationId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/adjudication-memos$/, "adjudication_memo_submitted", "adjudicationMemo", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
+    requiredFields: ["id", "ratingId", "checkerId", "checkType"],
+    requireActorField: "checkerId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/prompt-templates$/, "prompt_template_submitted", "promptTemplate", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/parser-configs$/, "parser_config_submitted", "parserConfig", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/metric-configs$/, "metric_config_submitted", "metricConfig", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/derived-utility-formulas$/, "derived_utility_formula_submitted", "derivedUtilityFormula", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/model-improvement-runs$/, "model_improvement_run_submitted", "modelImprovementRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/evaluations\/run$/, "evaluation_run_submitted", "evaluationRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/evaluations\/(?<id>[^/]+)\/predictions$/, "model_evaluation_prediction_submitted", "modelEvaluationPrediction", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "evaluationRunId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/evaluations\/(?<id>[^/]+)\/calibrate$/, "calibration_run_submitted", "calibrationRun", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "evaluationRunId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/artifact-probes\/run$/, "artifact_probe_run_submitted", "artifactProbeRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/sycophancy-probes\/run$/, "sycophancy_probe_run_submitted", "sycophancyProbeRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/obfuscation-stress-runs$/, "obfuscation_stress_run_submitted", "obfuscationStressRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/sanity-baselines\/run$/, "sanity_baseline_run_submitted", "sanityBaselineRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/human-ceiling-runs$/, "human_ceiling_run_submitted", "humanCeilingRun", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/leaderboards$/, "leaderboard_submitted", "leaderboard", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/evaluations\/(?<id>[^/]+)\/failure-audits$/, "model_failure_audit_submitted", "modelFailureAudit", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "evaluationRunId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/ux-simplification-policies$/, "ux_simplification_policy_submitted", "uxSimplificationPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "enabledSurfaces", "noFeatureLossChecklist"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/ux-simplification-reviews$/, "ux_simplification_review_submitted", "uxSimplificationReview", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyId", "reviewedSurfaces", "reviewStatus", "noFeatureLossChecklist"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/screen-state-payloads$/, "screen_state_payload_submitted", "screenStatePayload", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "surface", "payloadSource", "schemaVersion", "visibleFieldAllowlist", "enabledActionAllowlist"],
+  }),
+];
+
+const workflowReadEndpoints = [
+  workflowReadSpec(/^\/api\/v1\/certification-records\/(?<id>[^/]+)$/, "certificationRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/exposure-logs\/(?<id>[^/]+)$/, "exposureLog", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/revisions\/(?<id>[^/]+)$/, "revisionRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/item-text-versions\/(?<id>[^/]+)$/, "itemTextVersion", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rating-context-snapshots\/(?<id>[^/]+)$/, "ratingContextSnapshot", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/pairwise-comparison-snapshots\/(?<id>[^/]+)$/, "pairwiseComparisonSnapshot", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-reliability-weight-models\/(?<id>[^/]+)$/, "raterReliabilityWeightModel", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/raters\/(?<id>[^/]+)$/, "rater", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)$/, "assignment", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/gold-items\/(?<id>[^/]+)$/, "goldItem", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/source-anchor-examples\/(?<id>[^/]+)$/, "sourceAnchorExample", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/benchmark-split-members\/(?<id>[^/]+)$/, "benchmarkSplitMember", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rights-records\/(?<id>[^/]+)$/, "rightsRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/release-versions\/(?<id>[^/]+)$/, "releaseVersion", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/release-gate-profiles\/(?<id>[^/]+)$/, "releaseGateProfile", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/primary-rater-anchor-policies\/(?<id>[^/]+)$/, "primaryRaterAnchorPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/comparability-claims\/(?<id>[^/]+)$/, "comparabilityClaim", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/candidate-batches\/(?<id>[^/]+)$/, "candidateBatch", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/candidate-critiques\/(?<id>[^/]+)$/, "candidateCritique", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-judge-scores\/(?<id>[^/]+)$/, "modelJudgeScore", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/active-learning-selection-audits\/(?<id>[^/]+)$/, "activeLearningSelectionAudit", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/critique-generation-runs\/(?<id>[^/]+)$/, "critiqueGenerationRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/generated-critiques\/(?<id>[^/]+)$/, "generatedCritiqueSubmission", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/generation-evaluation-reports\/(?<id>[^/]+)$/, "generationEvaluationReport", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-evaluation-predictions\/(?<id>[^/]+)$/, "modelEvaluationPrediction", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)$/, "discussion", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/discussion-threads\/(?<id>[^/]+)$/, "discussionThread", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudication-memos\/(?<id>[^/]+)$/, "adjudicationMemo", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/verification-records\/(?<id>[^/]+)$/, "verificationRecord", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rating-checks\/(?<id>[^/]+)$/, "ratingCheck", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/parser-configs\/(?<id>[^/]+)$/, "parserConfig", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/metric-configs\/(?<id>[^/]+)$/, "metricConfig", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/derived-utility-formulas\/(?<id>[^/]+)$/, "derivedUtilityFormula", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-improvement-runs\/(?<id>[^/]+)$/, "modelImprovementRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/artifact-probes\/(?<id>[^/]+)$/, "artifactProbeRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/sycophancy-probes\/(?<id>[^/]+)$/, "sycophancyProbeRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/obfuscation-stress-runs\/(?<id>[^/]+)$/, "obfuscationStressRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/sanity-baselines\/(?<id>[^/]+)$/, "sanityBaselineRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/ux-simplification-policies\/(?<id>[^/]+)$/, "uxSimplificationPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/ux-simplification-reviews\/(?<id>[^/]+)$/, "uxSimplificationReview", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/screen-state-payloads\/(?<id>[^/]+)$/, "screenStatePayload", adminAuditRoles),
+];
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -61,19 +238,14 @@ const mimeTypes = {
 };
 
 export function createLmcaServer(options = {}) {
-  const rootDir = resolve(options.rootDir ?? resolve(import.meta.dirname, ".."));
-  const auditDir = resolve(options.auditDir ?? join(rootDir, "data", "audit"));
-  const auditLogPath = join(auditDir, "rating-events.jsonl");
-  const certificationLogPath = join(auditDir, "certification-events.jsonl");
-  const benchmarkLogPath = join(auditDir, "benchmark-exposure-events.jsonl");
-  const sourceStyleAuditLogPath = join(auditDir, "source-style-audit-events.jsonl");
-  const sessionSecret = options.sessionSecret ?? process.env.LMCA_SESSION_SECRET ?? "local-dev-session-secret-not-for-production";
+  const context = createApiContext(options);
+  const { rootDir } = context;
 
   return createHttpServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
       if (url.pathname.startsWith("/api/")) {
-        await handleApi(request, response, url, { auditDir, auditLogPath, certificationLogPath, benchmarkLogPath, sourceStyleAuditLogPath, sessionSecret });
+        await handleApiRequest(request, response, url, context);
         return;
       }
       await serveStatic(response, rootDir, url.pathname);
@@ -86,13 +258,105 @@ export function createLmcaServer(options = {}) {
   });
 }
 
-async function handleApi(request, response, url, context) {
+export function createApiContext(options = {}) {
+  const rootDir = resolve(options.rootDir ?? resolve(import.meta.dirname, ".."));
+  const auditDir = resolve(options.auditDir ?? join(rootDir, "data", "audit"));
+  const auditStore = options.auditStore ?? createLocalAuditStore({ auditDir });
+  const sessionSecret = options.sessionSecret ?? process.env.LMCA_SESSION_SECRET ?? "local-dev-session-secret-not-for-production";
+  const auth = createAuthConfig({ ...options, sessionSecret });
+  const publicAuth = createPublicAuthConfig(auth, options);
+  return { rootDir, auditStore, auth, publicAuth };
+}
+
+export async function createConfiguredApiContext(options = {}) {
+  const rootDir = resolve(options.rootDir ?? resolve(import.meta.dirname, ".."));
+  const sessionSecret = options.sessionSecret ?? process.env.LMCA_SESSION_SECRET ?? "local-dev-session-secret-not-for-production";
+  const auditStore = options.auditStore ?? (await createAuditStoreFromEnvironment(rootDir, options.auditDir));
+  const auth = createAuthConfig({ ...options, sessionSecret });
+  const publicAuth = createPublicAuthConfig(auth, options);
+  return { rootDir, auditStore, auth, publicAuth };
+}
+
+export function createAuthConfig(options = {}) {
+  const mode = options.authMode ?? process.env.LMCA_AUTH_MODE ?? "demo";
+  const requireRealAuth = options.requireRealAuth ?? process.env.LMCA_REQUIRE_REAL_AUTH === "true";
+  if (!["demo", "external_jwt"].includes(mode)) {
+    throw new Error(`Unsupported LMCA_AUTH_MODE: ${mode}`);
+  }
+  if (requireRealAuth && mode !== "external_jwt") {
+    throw new Error("LMCA_REQUIRE_REAL_AUTH=true requires LMCA_AUTH_MODE=external_jwt");
+  }
+  if (mode === "external_jwt") {
+    return {
+      mode,
+      description: "external_jwt_rbac",
+      externalJwt: createExternalJwtAuthConfig({
+        issuer: options.authIssuer,
+        audience: options.authAudience,
+        jwksUrl: options.authJwksUrl,
+        jwks: options.authJwks,
+        roleClaim: options.authRoleClaim,
+        assignmentsClaim: options.authAssignmentsClaim,
+        clockSkewSeconds: options.authClockSkewSeconds,
+        jwksCacheMs: options.authJwksCacheMs,
+      }),
+    };
+  }
+  return {
+    mode,
+    description: "signed_demo_sessions",
+    sessionSecret: options.sessionSecret,
+  };
+}
+
+export function createPublicAuthConfig(auth, options = {}) {
+  if (auth.mode === "external_jwt") {
+    return {
+      authMode: auth.description,
+      provider: "clerk",
+      clerkPublishableKey: options.clerkPublishableKey ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
+      clerkJwtTemplate: options.clerkJwtTemplate ?? process.env.LMCA_CLERK_JWT_TEMPLATE ?? "lmca",
+      roleClaim: auth.externalJwt.roleClaim,
+      assignmentsClaim: auth.externalJwt.assignmentsClaim,
+      demoSessionEndpointEnabled: false,
+    };
+  }
+  return {
+    authMode: auth.description,
+    provider: "demo",
+    clerkPublishableKey: null,
+    clerkJwtTemplate: null,
+    roleClaim: null,
+    assignmentsClaim: null,
+    demoSessionEndpointEnabled: true,
+  };
+}
+
+async function createAuditStoreFromEnvironment(rootDir, auditDir) {
+  if (process.env.LMCA_AUDIT_STORE === "postgres") {
+    const { createPostgresAuditStore } = await import("./storage/postgres-audit-store.mjs");
+    return createPostgresAuditStore();
+  }
+  if (process.env.LMCA_REQUIRE_PRODUCTION_STORAGE === "true") {
+    throw new Error("LMCA_REQUIRE_PRODUCTION_STORAGE=true requires LMCA_AUDIT_STORE=postgres");
+  }
+  const resolvedAuditDir = process.env.VERCEL
+    ? resolve(process.env.LMCA_AUDIT_DIR ?? "/tmp/rlhf-audit")
+    : resolve(auditDir ?? join(rootDir, "data", "audit"));
+  return createLocalAuditStore({
+    auditDir: resolvedAuditDir,
+    storageMode: process.env.VERCEL ? "local_jsonl_ephemeral_vercel_preview" : "local_jsonl_append_only",
+  });
+}
+
+export async function handleApiRequest(request, response, url, context) {
   if (request.method === "GET" && url.pathname === "/api/health") {
     sendJson(response, 200, {
       status: "ok",
       releaseId,
-      auditMode: "append_only_jsonl",
-      authMode: "signed_demo_sessions",
+      auditMode: context.auditStore.storageMode,
+      authMode: context.auth.description,
+      rbacPolicy: context.auth.mode === "external_jwt" ? "external_jwt_role_and_assignment_claims" : "local_demo_users_only",
       hiddenMetadataPolicy: "server_rejects_rater_submissions_with_admin_only_fields",
       benchmarkAccessPolicy: "admin_only_with_append_only_exposure_log",
       sourceStyleAuditPolicy: "optional_post_lock_diagnostic_only_append_log",
@@ -100,44 +364,211 @@ async function handleApi(request, response, url, context) {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/auth/config") {
+    sendJson(response, 200, {
+      ...context.publicAuth,
+      configured: context.auth.mode === "demo" || Boolean(context.publicAuth.clerkPublishableKey),
+    });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/v1/assignments/next") {
+    await nextAssignmentEndpoint(request, response, context);
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/v1/ratings") {
+    await recordRatingEndpoint(request, response, context, "blind_initial_submitted");
+    return;
+  }
+
+  const v1RevisionMatch = url.pathname.match(/^\/api\/v1\/ratings\/([^/]+)\/revise$/);
+  if (request.method === "POST" && v1RevisionMatch) {
+    await recordRatingEndpoint(request, response, context, "revision_submitted", { parentRatingId: decodeURIComponent(v1RevisionMatch[1]) });
+    return;
+  }
+
+  const v1CertificationStatusMatch = url.pathname.match(/^\/api\/v1\/certification\/([^/]+)\/status$/);
+  if (request.method === "POST" && url.pathname === "/api/v1/certification/start") {
+    await certificationStartEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "GET" && v1CertificationStatusMatch) {
+    await certificationStatusEndpoint(request, response, context, decodeURIComponent(v1CertificationStatusMatch[1]));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/qa/metrics") {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor", "expert"], (report) => ({
+      releaseId,
+      ratingEffortQuality: report.ratingEffortQuality,
+      correctnessVerification: report.correctnessVerification,
+      postDiscussionDisagreement: report.postDiscussionDisagreement,
+      rubricQaCoverage: report.rubricQaCoverage,
+      sourceStyleAudit: report.sourceStyleAudit,
+    }));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/qa/drift") {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor", "expert"], (report) => ({
+      releaseId,
+      rubricDrift: report.rubricDrift,
+      raterCompositionConflicts: report.raterCompositionConflicts,
+      ratingRevisionAudit: report.ratingRevisionAudit,
+    }));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/benchmark/candidates/freeze") {
+    await benchmarkFreezeReportEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/benchmark/exposure") {
+    await benchmarkExposureEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/label-snapshots") {
+    await labelSnapshotEndpoint(request, response, context);
+    return;
+  }
+  const v1LabelSnapshotMatch = url.pathname.match(/^\/api\/v1\/label-snapshots\/([^/]+)$/);
+  if (request.method === "GET" && v1LabelSnapshotMatch) {
+    await labelSnapshotEndpoint(request, response, context, decodeURIComponent(v1LabelSnapshotMatch[1]));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/corpus-manifests") {
+    await corpusManifestEndpoint(request, response, context);
+    return;
+  }
+  const v1CorpusManifestMatch = url.pathname.match(/^\/api\/v1\/corpus-manifests\/([^/]+)$/);
+  if (request.method === "GET" && v1CorpusManifestMatch) {
+    await corpusManifestEndpoint(request, response, context, decodeURIComponent(v1CorpusManifestMatch[1]));
+    return;
+  }
+  const v1ExportMatch = url.pathname.match(/^\/api\/v1\/exports\/(public|internal)$/);
+  if (request.method === "POST" && v1ExportMatch) {
+    await exportManifestEndpoint(request, response, context, v1ExportMatch[1]);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/training-exports") {
+    await trainingExportV1Endpoint(request, response, context);
+    return;
+  }
+  const v1TrainingExportMatch = url.pathname.match(/^\/api\/v1\/training-exports\/([^/]+)$/);
+  if (request.method === "GET" && v1TrainingExportMatch) {
+    await trainingExportV1Endpoint(request, response, context, decodeURIComponent(v1TrainingExportMatch[1]));
+    return;
+  }
+  const v1PromptTemplateMatch = url.pathname.match(/^\/api\/v1\/prompt-templates\/([^/]+)$/);
+  if (request.method === "GET" && v1PromptTemplateMatch) {
+    await protectedJsonEndpoint(request, response, context, ["admin", "auditor"], async () => {
+      const id = decodeURIComponent(v1PromptTemplateMatch[1]);
+      return promptArtifacts[id] ?? (await workflowResourceById(context, "promptTemplate", id));
+    });
+    return;
+  }
+  const v1EvaluationMatch = url.pathname.match(/^\/api\/v1\/evaluations\/([^/]+)$/);
+  if (request.method === "GET" && v1EvaluationMatch) {
+    await protectedJsonEndpoint(request, response, context, ["admin", "auditor"], async () => {
+      const id = decodeURIComponent(v1EvaluationMatch[1]);
+      return evaluationRunById(id) ?? (await workflowResourceById(context, "evaluationRun", id));
+    });
+    return;
+  }
+  const v1EvaluationPredictionsMatch = url.pathname.match(/^\/api\/v1\/evaluations\/([^/]+)\/predictions$/);
+  if (request.method === "GET" && v1EvaluationPredictionsMatch) {
+    await protectedJsonEndpoint(request, response, context, ["admin", "auditor"], async () => {
+      const evaluationRunId = decodeURIComponent(v1EvaluationPredictionsMatch[1]);
+      const run = evaluationRunById(evaluationRunId);
+      const persistedPredictions = await workflowResourcesByField(context, "modelEvaluationPrediction", "evaluationRunId", evaluationRunId);
+      if (!run && !persistedPredictions.length) return null;
+      return {
+        evaluationRunId,
+        predictions: [...(run?.predictions ?? []), ...persistedPredictions],
+      };
+    });
+    return;
+  }
+  const v1EvaluationReportMatch = url.pathname.match(/^\/api\/v1\/evaluations\/([^/]+)\/report$/);
+  if (request.method === "GET" && v1EvaluationReportMatch) {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      evaluationReportForId(report, decodeURIComponent(v1EvaluationReportMatch[1]), context),
+    );
+    return;
+  }
+  const v1CalibrationRunMatch = url.pathname.match(/^\/api\/v1\/calibration-runs\/([^/]+)$/);
+  if (request.method === "GET" && v1CalibrationRunMatch) {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (report) => {
+      const id = decodeURIComponent(v1CalibrationRunMatch[1]);
+      return findArtifactById(report.recalibratedEvaluation, id) ?? (await workflowResourceById(context, "calibrationRun", id));
+    });
+    return;
+  }
+  const v1HumanCeilingRunMatch = url.pathname.match(/^\/api\/v1\/human-ceiling-runs\/([^/]+)$/);
+  if (request.method === "GET" && v1HumanCeilingRunMatch) {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (report) => {
+      const id = decodeURIComponent(v1HumanCeilingRunMatch[1]);
+      return findArtifactById(report.humanCeiling, id) ?? (await workflowResourceById(context, "humanCeilingRun", id));
+    });
+    return;
+  }
+  const v1LeaderboardMatch = url.pathname.match(/^\/api\/v1\/leaderboards\/([^/]+)$/);
+  if (request.method === "GET" && v1LeaderboardMatch) {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (report) => {
+      const id = decodeURIComponent(v1LeaderboardMatch[1]);
+      return artifactIdMatches(report.leaderboardReport, id) ? report.leaderboardReport : await workflowResourceById(context, "leaderboard", id);
+    });
+    return;
+  }
+  const v1FailureAuditsMatch = url.pathname.match(/^\/api\/v1\/evaluations\/([^/]+)\/failure-audits$/);
+  if (request.method === "GET" && v1FailureAuditsMatch) {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (report) => {
+      const evaluationRunId = decodeURIComponent(v1FailureAuditsMatch[1]);
+      return {
+        evaluationRunId,
+        audits: [
+          ...report.modelFailureAudits.filter((audit) => audit.evaluationRunId === evaluationRunId),
+          ...(await workflowResourcesByField(context, "modelFailureAudit", "evaluationRunId", evaluationRunId)),
+        ],
+      };
+    });
+    return;
+  }
+
+  const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
+  if (workflowWriteMatch) {
+    await workflowWriteEndpoint(request, response, context, workflowWriteMatch);
+    return;
+  }
+
+  const workflowReadMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowReadEndpoints);
+  if (workflowReadMatch) {
+    await workflowReadEndpoint(request, response, context, workflowReadMatch);
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/sessions") {
+    if (context.auth.mode !== "demo") {
+      sendJson(response, 403, { error: "demo_sessions_disabled" });
+      return;
+    }
     const body = await readJsonBody(request);
     const user = demoUsers.find((item) => item.id === body.userId);
     if (!user) {
       sendJson(response, 401, { error: "unknown_demo_user" });
       return;
     }
-    const token = signSessionToken(user, context.sessionSecret);
+    const token = signSessionToken(user, context.auth.sessionSecret);
     sendJson(response, 201, { token, user, expiresInSeconds: 8 * 60 * 60 });
     return;
   }
 
   if (request.method === "GET" && url.pathname === "/api/release/report") {
-    const persistedRatings = await readPersistedRatings(context.auditLogPath);
-    const persistedCertificationAttempts = await readPersistedCertificationAttempts(context.certificationLogPath);
-    const persistedBenchmarkExposureEvents = await readPersistedBenchmarkExposureEvents(context.benchmarkLogPath);
-    const persistedSourceStyleAudits = await readPersistedSourceStyleAudits(context.sourceStyleAuditLogPath);
-    const ratings = [...seedRatings, ...persistedRatings];
-    const certificationAttempts = [...seedCertificationAttempts, ...persistedCertificationAttempts];
-    const benchmarkExposureEvents = [...seedBenchmarkExposureEvents, ...persistedBenchmarkExposureEvents];
-    const sourceStyleAudits = [...postLockSourceStyleAudits, ...persistedSourceStyleAudits];
-    const snapshot = createLabelSnapshot(
-      "snapshot-oct-api",
-      releaseId,
-      ratings,
-      critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
-      "initial_only",
-    );
-    sendJson(
-      response,
-      200,
-      buildOctoberReleaseReport(releaseId, snapshot, ratings, positions, critiques, certificationAttempts, benchmarkExposureEvents, sourceStyleAudits),
-    );
+    const { report } = await buildCurrentReleaseArtifacts(context);
+    sendJson(response, 200, report);
     return;
   }
 
   if (request.method === "GET" && url.pathname === "/api/certification/status") {
-    const session = authenticateRequest(request, context.sessionSecret);
+    const session = await authenticateRequest(request, context.auth);
     if (!session.ok) {
       sendJson(response, 401, { error: session.error });
       return;
@@ -147,7 +578,7 @@ async function handleApi(request, response, url, context) {
       sendJson(response, 403, { error: "admin_role_required_for_other_rater_certification" });
       return;
     }
-    const persistedCertificationAttempts = await readPersistedCertificationAttempts(context.certificationLogPath);
+    const persistedCertificationAttempts = await readPersistedCertificationAttempts(context.auditStore);
     sendJson(response, 200, buildRaterCertificationReport(requestedRaterId, [...seedCertificationAttempts, ...persistedCertificationAttempts]));
     return;
   }
@@ -173,16 +604,16 @@ async function handleApi(request, response, url, context) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/audit/events") {
-    const session = authenticateRequest(request, context.sessionSecret);
+    const session = await authenticateRequest(request, context.auth);
     if (!session.ok) {
       sendJson(response, 401, { error: session.error });
       return;
     }
-    if (session.user.role !== "admin") {
-      sendJson(response, 403, { error: "admin_role_required" });
+    if (!["admin", "auditor"].includes(session.user.role)) {
+      sendJson(response, 403, { error: "audit_reader_role_required" });
       return;
     }
-    const events = await readAuditEvents(context.auditLogPath);
+    const events = await context.auditStore.readRatingEvents();
     sendJson(response, 200, { events });
     return;
   }
@@ -205,8 +636,665 @@ async function handleApi(request, response, url, context) {
   sendJson(response, 404, { error: "not_found" });
 }
 
-async function recordRatingEndpoint(request, response, context, eventType) {
-  const session = authenticateRequest(request, context.sessionSecret);
+async function certificationStartEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!["rater", "graduate", "phd", "expert", "admin"].includes(session.user.role)) {
+    sendJson(response, 403, { error: "authorized_rater_role_required" });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const requestedRaterId = body.raterId ?? session.user.id;
+  if (requestedRaterId !== session.user.id && session.user.role !== "admin") {
+    sendJson(response, 403, { error: "admin_role_required_for_other_rater_certification" });
+    return;
+  }
+  const requestedPackId = body.packId;
+  const pack = requestedPackId ? certificationPacks.find((item) => item.id === requestedPackId) : certificationPacks.find((item) => item.status === "live");
+  if (!pack) {
+    sendJson(response, 404, { error: "certification_pack_not_found" });
+    return;
+  }
+  const persistedCertificationAttempts = await readPersistedCertificationAttempts(context.auditStore);
+  sendJson(response, 200, {
+    raterId: requestedRaterId,
+    pack,
+    currentStatus: buildRaterCertificationReport(requestedRaterId, [...seedCertificationAttempts, ...persistedCertificationAttempts]),
+  });
+}
+
+async function certificationStatusEndpoint(request, response, context, requestedRaterId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (requestedRaterId !== session.user.id && session.user.role !== "admin") {
+    sendJson(response, 403, { error: "admin_role_required_for_other_rater_certification" });
+    return;
+  }
+  const persistedCertificationAttempts = await readPersistedCertificationAttempts(context.auditStore);
+  sendJson(response, 200, buildRaterCertificationReport(requestedRaterId, [...seedCertificationAttempts, ...persistedCertificationAttempts]));
+}
+
+async function benchmarkExposureEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!["admin", "auditor"].includes(session.user.role)) {
+    sendJson(response, 403, { error: "benchmark_exposure_reader_role_required" });
+    return;
+  }
+  sendJson(response, 200, {
+    releaseId,
+    events: [...seedBenchmarkExposureEvents, ...(await readPersistedBenchmarkExposureEvents(context.auditStore))],
+  });
+}
+
+async function labelSnapshotEndpoint(request, response, context, requestedId = null) {
+  if (request.method === "POST") {
+    const persisted = await maybePersistSubmittedWorkflowArtifact(request, response, context, {
+      eventType: "label_snapshot_submitted",
+      resourceKey: "labelSnapshot",
+      roles: adminRoles,
+      route: "/api/v1/label-snapshots",
+    });
+    if (persisted) return;
+  }
+  await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (_report, { labelSnapshot }) => {
+    if (!requestedId) return labelSnapshot;
+    if (artifactIdMatches(labelSnapshot, requestedId)) return labelSnapshot;
+    return workflowResourceById(context, "labelSnapshot", requestedId);
+  });
+}
+
+async function corpusManifestEndpoint(request, response, context, requestedId = null) {
+  if (request.method === "POST") {
+    const persisted = await maybePersistSubmittedWorkflowArtifact(request, response, context, {
+      eventType: "corpus_manifest_submitted",
+      resourceKey: "corpusManifest",
+      roles: adminRoles,
+      route: "/api/v1/corpus-manifests",
+    });
+    if (persisted) return;
+  }
+  await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (report) => {
+    if (!requestedId) return report.corpusManifest;
+    if (artifactIdMatches(report.corpusManifest, requestedId)) return report.corpusManifest;
+    return workflowResourceById(context, "corpusManifest", requestedId);
+  });
+}
+
+async function exportManifestEndpoint(request, response, context, kind) {
+  if (request.method === "POST") {
+    const persisted = await maybePersistSubmittedWorkflowArtifact(request, response, context, {
+      eventType: "export_manifest_submitted",
+      resourceKey: "exportManifest",
+      roles: adminRoles,
+      route: `/api/v1/exports/${kind}`,
+      normalize: (resource) => ({ ...resource, kind: resource.kind ?? kind }),
+    });
+    if (persisted) return;
+  }
+  await protectedJsonEndpoint(request, response, context, ["admin", "auditor"], async () => {
+    const { labelSnapshot, positionList, critiqueList } = await buildCurrentReleaseArtifacts(context);
+    return createExportManifest(kind, releaseId, positionList, critiqueList, labelSnapshot);
+  });
+}
+
+async function trainingExportV1Endpoint(request, response, context, requestedId = null) {
+  if (request.method === "POST") {
+    const persisted = await maybePersistSubmittedWorkflowArtifact(request, response, context, {
+      eventType: "training_export_submitted",
+      resourceKey: "trainingExport",
+      roles: adminRoles,
+      route: "/api/v1/training-exports",
+    });
+    if (persisted) return;
+  }
+  await reportArtifactEndpoint(request, response, context, ["admin"], async (report) => {
+    if (!requestedId) return report.trainingExport;
+    if (artifactIdMatches(report.trainingExport, requestedId)) return report.trainingExport;
+    return workflowResourceById(context, "trainingExport", requestedId);
+  });
+}
+
+async function maybePersistSubmittedWorkflowArtifact(request, response, context, spec) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return true;
+  }
+  if (!spec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
+    return true;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body[spec.resourceKey] ?? body.resource;
+  if (!candidate) return false;
+  const normalizedCandidate = spec.normalize ? spec.normalize(candidate) : candidate;
+  const validation = validateWorkflowPayload(normalizedCandidate, session.user, spec, {});
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
+    return true;
+  }
+  const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, validation.resource, request, {
+    route: spec.route,
+    requiredRoles: spec.roles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: spec.resourceKey,
+    resourceId: validation.resource.id,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+  return true;
+}
+
+async function reportArtifactEndpoint(request, response, context, roles, selector) {
+  await protectedJsonEndpoint(request, response, context, roles, async () => {
+    const artifacts = await buildCurrentReleaseArtifacts(context);
+    return selector(artifacts.report, artifacts);
+  });
+}
+
+async function protectedJsonEndpoint(request, response, context, roles, buildPayload) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: roles });
+    return;
+  }
+  const payload = await buildPayload(session.user);
+  if (payload === null || payload === undefined) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, payload);
+}
+
+async function workflowWriteEndpoint(request, response, context, match) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const { spec, params } = match;
+  if (!spec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body[spec.resourceKey] ?? body.resource ?? body;
+  const validation = validateWorkflowPayload(candidate, session.user, spec, params);
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
+    return;
+  }
+  const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, validation.resource, request, {
+    route: spec.route,
+    params,
+    requiredRoles: spec.roles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: spec.resourceKey,
+    resourceId: validation.resource.id,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+async function workflowReadEndpoint(request, response, context, match) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const { spec, params } = match;
+  if (!spec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
+    return;
+  }
+  const resource = await workflowResourceById(context, spec.resourceKey, params.id);
+  if (!resource) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, resource);
+}
+
+async function buildCurrentReleaseArtifacts(context, options = {}) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const persistedRatings = await readPersistedRatings(context.auditStore);
+  const persistedCertificationAttempts = await readPersistedCertificationAttempts(context.auditStore);
+  const persistedBenchmarkExposureEvents = await readPersistedBenchmarkExposureEvents(context.auditStore);
+  const persistedSourceStyleAudits = await readPersistedSourceStyleAudits(context.auditStore);
+  const rightsReviews = latestWorkflowResources(workflowEvents, "rightsReview");
+  const releaseFreezes = latestWorkflowResources(workflowEvents, "releaseFreeze");
+  const certificationRecords = latestWorkflowResources(workflowEvents, "certificationRecord");
+  const exposureLogs = latestWorkflowResources(workflowEvents, "exposureLog");
+  const revisionRecords = latestWorkflowResources(workflowEvents, "revisionRecord");
+  const assignmentFlags = latestWorkflowResources(workflowEvents, "assignmentFlag");
+  const discussions = latestWorkflowResources(workflowEvents, "discussion");
+  const discussionThreads = latestWorkflowResources(workflowEvents, "discussionThread");
+  const adjudications = latestWorkflowResources(workflowEvents, "adjudication");
+  const adjudicationFinalizations = latestWorkflowResources(workflowEvents, "adjudicationFinalization");
+  const adjudicationMemos = latestWorkflowResources(workflowEvents, "adjudicationMemo");
+  const verificationRecords = latestWorkflowResources(workflowEvents, "verificationRecord");
+  const ratingChecks = latestWorkflowResources(workflowEvents, "ratingCheck");
+  const labelSnapshots = latestWorkflowResources(workflowEvents, "labelSnapshot");
+  const corpusManifests = latestWorkflowResources(workflowEvents, "corpusManifest");
+  const trainingExports = latestWorkflowResources(workflowEvents, "trainingExport");
+  const exportManifests = latestWorkflowResources(workflowEvents, "exportManifest");
+  const itemTextVersions = latestWorkflowResources(workflowEvents, "itemTextVersion");
+  const ratingContextSnapshotArtifacts = latestWorkflowResources(workflowEvents, "ratingContextSnapshot");
+  const pairwiseComparisonSnapshots = latestWorkflowResources(workflowEvents, "pairwiseComparisonSnapshot");
+  const raterReliabilityWeightModels = latestWorkflowResources(workflowEvents, "raterReliabilityWeightModel");
+  const raters = latestWorkflowResources(workflowEvents, "rater");
+  const workflowAssignments = latestWorkflowResources(workflowEvents, "assignment");
+  const candidateBatches = latestWorkflowResources(workflowEvents, "candidateBatch");
+  const candidateCritiques = latestWorkflowResources(workflowEvents, "candidateCritique");
+  const modelJudgeScores = latestWorkflowResources(workflowEvents, "modelJudgeScore");
+  const candidateBatchModelJudgeScoreSubmissions = latestWorkflowResources(workflowEvents, "modelJudgeScores");
+  const candidateReviews = latestWorkflowResources(workflowEvents, "candidateReview");
+  const candidatePromotions = latestWorkflowResources(workflowEvents, "candidatePromotion");
+  const critiqueGenerationRuns = latestWorkflowResources(workflowEvents, "critiqueGenerationRun");
+  const generatedCritiqueSubmissions = latestWorkflowResources(workflowEvents, "generatedCritiqueSubmission");
+  const generatedCritiquePromotions = latestWorkflowResources(workflowEvents, "generatedCritiquePromotion");
+  const generationEvaluationReports = latestWorkflowResources(workflowEvents, "generationEvaluationReport");
+  const promptTemplates = latestWorkflowResources(workflowEvents, "promptTemplate");
+  const parserConfigs = latestWorkflowResources(workflowEvents, "parserConfig");
+  const modelImprovementRuns = latestWorkflowResources(workflowEvents, "modelImprovementRun");
+  const evaluationRuns = latestWorkflowResources(workflowEvents, "evaluationRun");
+  const modelEvaluationPredictions = latestWorkflowResources(workflowEvents, "modelEvaluationPrediction");
+  const calibrationRuns = latestWorkflowResources(workflowEvents, "calibrationRun");
+  const artifactProbeRuns = latestWorkflowResources(workflowEvents, "artifactProbeRun");
+  const sanityBaselineRuns = latestWorkflowResources(workflowEvents, "sanityBaselineRun");
+  const humanCeilingRuns = latestWorkflowResources(workflowEvents, "humanCeilingRun");
+  const leaderboards = latestWorkflowResources(workflowEvents, "leaderboard");
+  const modelFailureAudits = latestWorkflowResources(workflowEvents, "modelFailureAudit");
+  const goldItems = latestWorkflowResources(workflowEvents, "goldItem");
+  const sourceAnchorExamples = latestWorkflowResources(workflowEvents, "sourceAnchorExample");
+  const benchmarkSplitMembers = latestWorkflowResources(workflowEvents, "benchmarkSplitMember");
+  const rightsRecords = latestWorkflowResources(workflowEvents, "rightsRecord");
+  const releaseVersions = latestWorkflowResources(workflowEvents, "releaseVersion");
+  const metricConfigs = latestWorkflowResources(workflowEvents, "metricConfig");
+  const derivedUtilityFormulas = latestWorkflowResources(workflowEvents, "derivedUtilityFormula");
+  const releaseGateProfiles = latestWorkflowResources(workflowEvents, "releaseGateProfile");
+  const primaryRaterAnchorPolicies = latestWorkflowResources(workflowEvents, "primaryRaterAnchorPolicy");
+  const comparabilityClaims = latestWorkflowResources(workflowEvents, "comparabilityClaim");
+  const activeLearningSelectionAudits = latestWorkflowResources(workflowEvents, "activeLearningSelectionAudit");
+  const sycophancyProbeRuns = latestWorkflowResources(workflowEvents, "sycophancyProbeRun");
+  const obfuscationStressRuns = latestWorkflowResources(workflowEvents, "obfuscationStressRun");
+  const uxSimplificationPolicies = latestWorkflowResources(workflowEvents, "uxSimplificationPolicy");
+  const uxSimplificationReviews = latestWorkflowResources(workflowEvents, "uxSimplificationReview");
+  const screenStatePayloads = latestWorkflowResources(workflowEvents, "screenStatePayload");
+  const ratings = [...seedRatings, ...persistedRatings];
+  const certificationAttempts = [...seedCertificationAttempts, ...persistedCertificationAttempts];
+  const benchmarkExposureEvents = [...seedBenchmarkExposureEvents, ...persistedBenchmarkExposureEvents];
+  const sourceStyleAudits = [...postLockSourceStyleAudits, ...persistedSourceStyleAudits];
+  const labelSnapshot = createLabelSnapshot(
+    options.snapshotId ?? "snapshot-oct-api",
+    releaseId,
+    ratings,
+    critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    options.targetLabelVersion ?? "initial_only",
+    positionList,
+  );
+  const report = buildOctoberReleaseReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, certificationAttempts, benchmarkExposureEvents, sourceStyleAudits, {
+    rightsReviews,
+    releaseFreezes,
+    certificationRecords,
+    exposureLogs,
+    revisionRecords,
+    assignmentFlags,
+    discussions,
+    discussionThreads,
+    adjudications,
+    adjudicationFinalizations,
+    adjudicationMemos,
+    verificationRecords,
+    ratingChecks,
+    labelSnapshots,
+    corpusManifests,
+    trainingExports,
+    exportManifests,
+    itemTextVersions,
+    ratingContextSnapshots: ratingContextSnapshotArtifacts,
+    pairwiseComparisonSnapshots,
+    raterReliabilityWeightModels,
+    raters,
+    workflowAssignments,
+    candidateBatches,
+    candidateCritiques,
+    modelJudgeScores,
+    candidateBatchModelJudgeScoreSubmissions,
+    candidateReviews,
+    candidatePromotions,
+    critiqueGenerationRuns,
+    generatedCritiqueSubmissions,
+    generatedCritiquePromotions,
+    generationEvaluationReports,
+    promptTemplates,
+    parserConfigs,
+    modelImprovementRuns,
+    evaluationRuns,
+    modelEvaluationPredictions,
+    calibrationRuns,
+    artifactProbeRuns,
+    sanityBaselineRuns,
+    humanCeilingRuns,
+    leaderboards,
+    modelFailureAudits,
+    goldItems,
+    sourceAnchorExamples,
+    benchmarkSplitMembers,
+    rightsRecords,
+    releaseVersions,
+    metricConfigs,
+    derivedUtilityFormulas,
+    releaseGateProfiles,
+    primaryRaterAnchorPolicies,
+    comparabilityClaims,
+    activeLearningSelectionAudits,
+    sycophancyProbeRuns,
+    obfuscationStressRuns,
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+  });
+  return {
+    report,
+    labelSnapshot,
+    ratings,
+    certificationAttempts,
+    benchmarkExposureEvents,
+    sourceStyleAudits,
+    positionList,
+    critiqueList,
+    rightsReviews,
+    releaseFreezes,
+    certificationRecords,
+    exposureLogs,
+    revisionRecords,
+    assignmentFlags,
+    discussions,
+    discussionThreads,
+    adjudications,
+    adjudicationFinalizations,
+    adjudicationMemos,
+    verificationRecords,
+    ratingChecks,
+    labelSnapshots,
+    corpusManifests,
+    trainingExports,
+    exportManifests,
+    itemTextVersions,
+    ratingContextSnapshots: ratingContextSnapshotArtifacts,
+    pairwiseComparisonSnapshots,
+    raterReliabilityWeightModels,
+    raters,
+    workflowAssignments,
+    candidateBatches,
+    candidateCritiques,
+    modelJudgeScores,
+    candidateBatchModelJudgeScoreSubmissions,
+    candidateReviews,
+    candidatePromotions,
+    critiqueGenerationRuns,
+    generatedCritiqueSubmissions,
+    generatedCritiquePromotions,
+    generationEvaluationReports,
+    promptTemplates,
+    parserConfigs,
+    modelImprovementRuns,
+    evaluationRuns,
+    modelEvaluationPredictions,
+    calibrationRuns,
+    artifactProbeRuns,
+    sanityBaselineRuns,
+    humanCeilingRuns,
+    leaderboards,
+    modelFailureAudits,
+    goldItems,
+    sourceAnchorExamples,
+    benchmarkSplitMembers,
+    rightsRecords,
+    releaseVersions,
+    metricConfigs,
+    derivedUtilityFormulas,
+    releaseGateProfiles,
+    primaryRaterAnchorPolicies,
+    comparabilityClaims,
+    activeLearningSelectionAudits,
+    sycophancyProbeRuns,
+    obfuscationStressRuns,
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+  };
+}
+
+function evaluationRunById(id) {
+  return [fullRubricEvaluationRun, overallOnlyEvaluationRun].find((run) => run.id === id) ?? null;
+}
+
+async function evaluationReportForId(report, id, context) {
+  const run = evaluationRunById(id) ?? (await workflowResourceById(context, "evaluationRun", id));
+  if (!run) return null;
+  const persistedPredictions = await workflowResourcesByField(context, "modelEvaluationPrediction", "evaluationRunId", id);
+  const persistedCalibrationRuns = await workflowResourcesByField(context, "calibrationRun", "evaluationRunId", id);
+  const persistedFailureAudits = await workflowResourcesByField(context, "modelFailureAudit", "evaluationRunId", id);
+  const staticFailureAudits = report.modelFailureAudits.filter((audit) => audit.evaluationRunId === id);
+  return {
+    evaluationRun: run,
+    predictions: [...(run.predictions ?? []), ...persistedPredictions],
+    metricEligibility: report.metricEligibility,
+    leaderboardReport: report.leaderboardReport.evaluationRunIds?.includes?.(id) ? report.leaderboardReport : null,
+    promptTrackSeparation: report.promptTrackSeparation,
+    recalibratedEvaluation: run.id === report.recalibratedEvaluation?.evaluationRunId ? report.recalibratedEvaluation : null,
+    calibrationRuns: persistedCalibrationRuns,
+    modelFailureAudits: [...staticFailureAudits, ...persistedFailureAudits],
+    humanScoreDistribution: report.humanScoreDistribution,
+    sanityBaselines: report.sanityBaselines,
+    modelAssistedLabelOverlap: report.modelAssistedLabelOverlap,
+  };
+}
+
+function artifactIdMatches(artifact, id) {
+  return artifact && typeof artifact === "object" && artifact.id === id;
+}
+
+function findArtifactById(value, id) {
+  if (!value || typeof value !== "object") return null;
+  if (value.id === id) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findArtifactById(item, id);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const item of Object.values(value)) {
+    const found = findArtifactById(item, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function hasWorkflowField(resource, field) {
+  if (field === "textVersions") {
+    return Array.isArray(resource.textVersions) && resource.textVersions.some((version) => typeof version?.text === "string" && version.text.trim());
+  }
+  return resource[field] !== undefined && resource[field] !== null && resource[field] !== "";
+}
+
+function workflowWriteSpec(pattern, eventType, resourceKey, roles, options = {}) {
+  return {
+    method: "POST",
+    pattern,
+    eventType,
+    resourceKey,
+    roles,
+    route: routeFromPattern(pattern),
+    ...options,
+  };
+}
+
+function workflowReadSpec(pattern, resourceKey, roles, options = {}) {
+  return {
+    method: "GET",
+    pattern,
+    resourceKey,
+    roles,
+    route: routeFromPattern(pattern),
+    ...options,
+  };
+}
+
+function matchWorkflowEndpoint(method, pathname, specs) {
+  for (const spec of specs) {
+    if (method !== spec.method) continue;
+    const match = pathname.match(spec.pattern);
+    if (!match) continue;
+    const groups = match.groups ?? {};
+    const params = Object.fromEntries(Object.entries(groups).map(([key, value]) => [key, decodeURIComponent(value)]));
+    return { spec, params };
+  }
+  return null;
+}
+
+function routeFromPattern(pattern) {
+  return String(pattern).replace(/^\/\^\\\//, "/").replace(/\\\/\$$/, "/").replace(/\\\//g, "/");
+}
+
+async function nextAssignmentEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!["rater", "graduate", "phd", "expert", "admin"].includes(session.user.role)) {
+    sendJson(response, 403, { error: "authorized_rater_role_required" });
+    return;
+  }
+  const assignment = assignments
+    .filter((item) => item.exposure === "blind_initial")
+    .find((item) => session.user.allowedAssignmentIds?.includes("*") || session.user.allowedAssignmentIds?.includes(item.id));
+  if (!assignment) {
+    sendJson(response, 404, { error: "no_blind_initial_assignment_available" });
+    return;
+  }
+  const visibleView = createBlindRatingView(assignment, positions, critiques);
+  const position = positions.find((item) => item.id === assignment.positionId);
+  const critique = critiques.find((item) => item.id === assignment.critiqueId);
+  const contextSnapshot = ratingContextSnapshots.find(
+    (snapshot) => snapshot.positionId === assignment.positionId && snapshot.visibleCritiqueIds.includes(assignment.critiqueId),
+  );
+  sendJson(response, 200, {
+    assignment: {
+      id: assignment.id,
+      positionId: assignment.positionId,
+      critiqueId: assignment.critiqueId,
+      positionTextVersionId: position?.textVersions.at(-1)?.id ?? null,
+      critiqueTextVersionId: critique?.textVersions.at(-1)?.id ?? null,
+      ratingContextSnapshotId: contextSnapshot?.id ?? null,
+      positionText: visibleView.positionText,
+      critiqueText: visibleView.critiqueText,
+      hiddenBeforeInitialSubmission: visibleView.hiddenMetadata,
+    },
+    screenState: {
+      id: `screen-state-${assignment.id}`,
+      assignmentId: assignment.id,
+      surface: "rating",
+      payloadSource: "server_derived",
+      schemaVersion: "screen-state-lmca-v1",
+      policyVersionProvenance: {
+        uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
+        visibilityPolicyId: `visibility-policy-${releaseId}`,
+        workflowProfileId: "ordinary-live-rating-profile",
+        assistPolicyId: `pre-submit-assist-${releaseId}`,
+        uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
+      },
+      taskStatement: "Rate how well the critique attacks the supplied position.",
+      primaryNextAction: "complete_required_scores",
+      visibleFieldAllowlist: [
+        "assignment.id",
+        "assignment.positionTextVersionId",
+        "assignment.critiqueTextVersionId",
+        "assignment.ratingContextSnapshotId",
+        "assignment.positionText",
+        "assignment.critiqueText",
+        "scoreFields",
+        "safeDecline",
+        "sourceRecognition",
+        "itemIssueReport",
+        "verificationControl",
+        "appendixFAnchorAccess",
+        "preSubmitLint",
+        "autosaveResume",
+      ],
+      enabledActionAllowlist: [
+        "score_fields",
+        "safe_decline",
+        "source_recognition",
+        "item_issue_report",
+        "verification_control",
+        "appendix_f_anchor_access",
+        "pre_submit_lint",
+        "autosave_resume",
+      ],
+      requiredControlKeys: [
+        "score_fields",
+        "safe_decline",
+        "source_recognition",
+        "item_issue_report",
+        "verification_control",
+        "appendix_f_anchor_access",
+        "pre_submit_lint",
+        "autosave_resume",
+      ],
+      optionalPanelKeys: ["rubric_glossary", "short_item_label", "appendix_f_anchor"],
+      hiddenFieldClasses: [
+        "source_metadata",
+        "admin_tags",
+        "benchmark_membership",
+        "gold_answers",
+        "peer_ratings",
+        "model_judge_scores",
+        "active_learning_selection_reasons",
+        "protected_split_status",
+        "rater_performance_metadata",
+      ],
+      rejectedUnknownKeys: true,
+      sanitized: true,
+    },
+    actor: {
+      id: session.user.id,
+      role: session.user.role,
+    },
+  });
+}
+
+async function recordRatingEndpoint(request, response, context, eventType, options = {}) {
+  const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
     sendJson(response, 401, { error: session.error });
     return;
@@ -219,6 +1307,10 @@ async function recordRatingEndpoint(request, response, context, eventType) {
 
   const body = await readJsonBody(request);
   const rating = body.rating;
+  if (options.parentRatingId && rating?.parentRatingId !== options.parentRatingId) {
+    sendJson(response, 400, { error: "revision_path_mismatch", detail: "rating.parentRatingId must match the v1 revision route id" });
+    return;
+  }
   const validation = validateRatingPayload(rating, eventType);
   if (!validation.ok) {
     sendJson(response, 400, { error: "invalid_rating_payload", detail: validation.detail });
@@ -231,8 +1323,7 @@ async function recordRatingEndpoint(request, response, context, eventType) {
   }
 
   const event = createAuditEvent(eventType, actor, rating, request);
-  await mkdir(context.auditDir, { recursive: true });
-  await appendFile(context.auditLogPath, `${JSON.stringify(event)}\n`, "utf8");
+  await context.auditStore.appendRatingEvent(event);
   sendJson(response, 201, {
     ok: true,
     eventId: event.id,
@@ -243,7 +1334,7 @@ async function recordRatingEndpoint(request, response, context, eventType) {
 }
 
 async function recordSourceStyleAuditEndpoint(request, response, context) {
-  const session = authenticateRequest(request, context.sessionSecret);
+  const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
     sendJson(response, 401, { error: session.error });
     return;
@@ -256,7 +1347,7 @@ async function recordSourceStyleAuditEndpoint(request, response, context) {
 
   const body = await readJsonBody(request);
   const audit = body.audit;
-  const ratings = [...seedRatings, ...(await readPersistedRatings(context.auditLogPath))];
+  const ratings = [...seedRatings, ...(await readPersistedRatings(context.auditStore))];
   const validation = validatePostLockSourceStyleAuditPayload(audit, ratings);
   if (!validation.ok) {
     sendJson(response, 400, { error: "invalid_source_style_audit", detail: validation.detail });
@@ -269,8 +1360,7 @@ async function recordSourceStyleAuditEndpoint(request, response, context) {
   }
 
   const event = createSourceStyleAuditEvent("post_lock_source_style_audit_submitted", actor, audit, request);
-  await mkdir(context.auditDir, { recursive: true });
-  await appendFile(context.sourceStyleAuditLogPath, `${JSON.stringify(event)}\n`, "utf8");
+  await context.auditStore.appendSourceStyleAuditEvent(event);
   sendJson(response, 201, {
     ok: true,
     eventId: event.id,
@@ -281,7 +1371,7 @@ async function recordSourceStyleAuditEndpoint(request, response, context) {
 }
 
 async function recordCertificationAttemptEndpoint(request, response, context) {
-  const session = authenticateRequest(request, context.sessionSecret);
+  const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
     sendJson(response, 401, { error: session.error });
     return;
@@ -299,9 +1389,8 @@ async function recordCertificationAttemptEndpoint(request, response, context) {
   }
   const scoredAttempt = scoreCertificationAttempt(attempt);
   const event = createCertificationAuditEvent("certification_attempt_submitted", session.user, attempt, scoredAttempt, request);
-  await mkdir(context.auditDir, { recursive: true });
-  await appendFile(context.certificationLogPath, `${JSON.stringify(event)}\n`, "utf8");
-  const persistedAttempts = await readPersistedCertificationAttempts(context.certificationLogPath);
+  await context.auditStore.appendCertificationEvent(event);
+  const persistedAttempts = await readPersistedCertificationAttempts(context.auditStore);
   sendJson(response, 201, {
     ok: true,
     eventId: event.id,
@@ -313,7 +1402,7 @@ async function recordCertificationAttemptEndpoint(request, response, context) {
 }
 
 async function benchmarkFreezeReportEndpoint(request, response, context) {
-  const session = authenticateRequest(request, context.sessionSecret);
+  const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
     await appendBenchmarkExposure(context, createBenchmarkExposureEvent("benchmark_access_denied", null, deniedBenchmarkExposure("freeze_report_read"), request, { allowed: false }));
     sendJson(response, 401, { error: session.error });
@@ -338,7 +1427,7 @@ async function benchmarkFreezeReportEndpoint(request, response, context) {
 }
 
 async function recordBenchmarkExposureEndpoint(request, response, context) {
-  const session = authenticateRequest(request, context.sessionSecret);
+  const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
     await appendBenchmarkExposure(context, createBenchmarkExposureEvent("benchmark_access_denied", null, deniedBenchmarkExposure("manual_exposure_record"), request, { allowed: false }));
     sendJson(response, 401, { error: session.error });
@@ -370,7 +1459,7 @@ async function recordBenchmarkExposureEndpoint(request, response, context) {
 }
 
 async function trainingExportEndpoint(request, response, context) {
-  const session = authenticateRequest(request, context.sessionSecret);
+  const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
     sendJson(response, 401, { error: session.error });
     return;
@@ -546,6 +1635,53 @@ export function validateBenchmarkExposurePayload(exposure) {
   return { ok: true };
 }
 
+export function validateWorkflowPayload(resource, actor, spec, params = {}) {
+  if (!resource || typeof resource !== "object" || Array.isArray(resource)) return invalid(`${spec.resourceKey} object is required`);
+  const normalized = structuredClone(resource);
+  if (spec.pathParamField) {
+    const pathValue = params.id;
+    if (!pathValue) return invalid(`${spec.pathParamField} route parameter is required`);
+    if (normalized[spec.pathParamField] !== undefined && normalized[spec.pathParamField] !== pathValue) {
+      return invalid(`${spec.resourceKey}.${spec.pathParamField} must match route id ${pathValue}`);
+    }
+    normalized[spec.pathParamField] = pathValue;
+  }
+  if (typeof normalized.id !== "string" || normalized.id.trim() === "") return invalid(`${spec.resourceKey}.id is required`);
+  const requiredFields = spec.requiredFields ?? ["id"];
+  const missing = requiredFields.filter((field) => normalized[field] === undefined || normalized[field] === null || normalized[field] === "");
+  if (missing.length) return invalid(`missing required fields: ${missing.join(", ")}`);
+  for (const fieldSet of spec.requiredAnyFields ?? []) {
+    if (!fieldSet.some((field) => hasWorkflowField(normalized, field))) {
+      return invalid(`one of these fields is required: ${fieldSet.join(", ")}`);
+    }
+  }
+
+  const hiddenKeys = findHiddenKeys(normalized);
+  if (spec.rejectHiddenMetadata && hiddenKeys.length) return invalid(`${spec.resourceKey} cannot include hidden metadata keys: ${hiddenKeys.join(", ")}`);
+  if (!spec.allowHiddenMetadata && actor.role !== "admin" && hiddenKeys.length) {
+    return invalid(`${spec.resourceKey} cannot include hidden metadata keys for non-admin actors: ${hiddenKeys.join(", ")}`);
+  }
+
+  const rawBenchmarkKeys = findRawBenchmarkContentKeys(normalized);
+  if (spec.rejectRawBenchmarkContent && rawBenchmarkKeys.length) {
+    return invalid(`${spec.resourceKey} cannot include raw benchmark content keys: ${rawBenchmarkKeys.join(", ")}`);
+  }
+
+  if (spec.requireActorField && actor.role !== "admin" && normalized[spec.requireActorField] !== actor.id) {
+    return { ok: false, statusCode: 403, error: "workflow_actor_not_authorized", detail: `${spec.resourceKey}.${spec.requireActorField} must match ${actor.id}` };
+  }
+  if (spec.requireAssignmentClaimField && !actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(normalized[spec.requireAssignmentClaimField])) {
+    return {
+      ok: false,
+      statusCode: 403,
+      error: "workflow_actor_not_authorized",
+      detail: `actor ${actor.id} is not assigned to ${normalized[spec.requireAssignmentClaimField]}`,
+    };
+  }
+
+  return { ok: true, resource: normalized };
+}
+
 export function validateRatingActor(rating, actor) {
   if (!actor || typeof actor !== "object") return invalid("actor session is required");
   if (actor.role !== "admin" && rating.raterId !== actor.id) return invalid(`rating.raterId must match the authenticated actor ${actor.id}`);
@@ -680,6 +1816,35 @@ export function createBenchmarkExposureEvent(type, actor, exposure, request, opt
   };
 }
 
+export function createWorkflowAuditEvent(type, actor, resourceKey, resource, request, options = {}) {
+  const receivedAt = new Date().toISOString();
+  const payloadHash = `sha256:${sha256(canonicalJson(resource))}`;
+  return {
+    id: randomUUID(),
+    type,
+    receivedAt,
+    actorRole: actor.role,
+    actorHash: `sha256:${sha256(String(actor.id))}`,
+    resourceKey,
+    resourceId: resource.id,
+    payloadHash,
+    payload: { [resourceKey]: resource },
+    workflow: {
+      appendOnly: true,
+      route: options.route ?? null,
+      pathParams: options.params ?? {},
+      requiredRoles: options.requiredRoles ?? [],
+    },
+    accessAudit: {
+      workflowAppendOnly: true,
+      hiddenMetadataAccepted: actor.role === "admin",
+      sourceMetadataAcceptedFromRater: false,
+      peerRatingsAcceptedFromRater: false,
+      remoteAddressHash: `sha256:${sha256(request.socket.remoteAddress ?? "unknown")}`,
+    },
+  };
+}
+
 export function signSessionToken(user, secret, options = {}) {
   const issuedAt = options.issuedAt ?? Date.now();
   const expiresAt = options.expiresAt ?? issuedAt + 8 * 60 * 60 * 1000;
@@ -714,67 +1879,199 @@ export function verifySessionToken(token, secret, nowMs = Date.now()) {
   return { ok: true, user };
 }
 
-async function readPersistedRatings(auditLogPath) {
-  const events = await readAuditEvents(auditLogPath);
+async function readPersistedRatings(auditStore) {
+  const events = await auditStore.readRatingEvents();
   return events.map((event) => event.payload?.rating).filter((rating) => rating && typeof rating === "object");
 }
 
-async function readPersistedCertificationAttempts(certificationLogPath) {
-  const events = await readAuditEvents(certificationLogPath);
+async function readPersistedCertificationAttempts(auditStore) {
+  const events = await auditStore.readCertificationEvents();
   return events.map((event) => event.payload?.attempt).filter((attempt) => attempt && typeof attempt === "object");
 }
 
-async function readPersistedBenchmarkExposureEvents(benchmarkLogPath) {
-  return readAuditEvents(benchmarkLogPath);
+async function readPersistedBenchmarkExposureEvents(auditStore) {
+  return auditStore.readBenchmarkExposureEvents();
 }
 
-async function readPersistedSourceStyleAudits(sourceStyleAuditLogPath) {
-  const events = await readAuditEvents(sourceStyleAuditLogPath);
+async function readPersistedSourceStyleAudits(auditStore) {
+  const events = await auditStore.readSourceStyleAuditEvents();
   return events.map((event) => event.payload?.audit).filter((audit) => audit && typeof audit === "object");
 }
 
+async function readPersistedWorkflowEvents(auditStore) {
+  if (typeof auditStore.readWorkflowEvents !== "function") return [];
+  return auditStore.readWorkflowEvents();
+}
+
+async function buildCurrentCorpus(context) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const basePositionsById = new Map(positions.map((position) => [position.id, position]));
+  const persistedPositions = latestWorkflowResources(workflowEvents, "position").map((resource) =>
+    normalizeWorkflowPosition(resource, basePositionsById.get(resource.id)),
+  );
+  const positionList = mergeById(positions, persistedPositions);
+  const positionIds = new Set(positionList.map((position) => position.id));
+  const baseCritiquesById = new Map(critiques.map((critique) => [critique.id, critique]));
+  const persistedCritiques = latestWorkflowResources(workflowEvents, "critique")
+    .map((resource) => normalizeWorkflowCritique(resource, baseCritiquesById.get(resource.id)))
+    .filter((critique) => positionIds.has(critique.positionId));
+  const critiqueList = mergeById(critiques, persistedCritiques).filter((critique) => positionIds.has(critique.positionId));
+  return { positionList, critiqueList };
+}
+
+function latestWorkflowResources(events, resourceKey) {
+  const resourcesById = new Map();
+  events.forEach((event) => {
+    const resource = event.payload?.[resourceKey];
+    if (resource && typeof resource === "object" && typeof resource.id === "string" && resource.id) {
+      resourcesById.set(resource.id, resource);
+    }
+  });
+  return [...resourcesById.values()];
+}
+
+function mergeById(baseItems, updateItems) {
+  const items = new Map(baseItems.map((item) => [item.id, item]));
+  updateItems.forEach((item) => {
+    items.set(item.id, item);
+  });
+  return [...items.values()];
+}
+
+function normalizeWorkflowPosition(resource, base = {}) {
+  const textVersions = normalizeWorkflowTextVersions(resource, base, "ptv");
+  const raterVisibleTextVersionId = resource.intakeScreening?.raterVisibleTextVersionId ?? base.intakeScreening?.raterVisibleTextVersionId ?? textVersions.at(-1)?.id;
+  const intakeScreening = {
+    originalTextPreserved: true,
+    normalizationStatus: "operator_intake_pending_review",
+    expertNormalizationRequired: false,
+    adminOnlyAmbiguityNotes: [],
+    adminOnlyIntendedConclusionNotes: [],
+    notesVisibleToInitialRaters: false,
+    contextGapFlags: [],
+    ordinaryHeadlineEligibility: "review_required",
+    ...(base.intakeScreening ?? {}),
+    ...(resource.intakeScreening ?? {}),
+    raterVisibleTextVersionId,
+  };
+  const { text: _text, originalText: _originalText, raterVisibleText: _raterVisibleText, textVersions: _textVersions, intakeScreening: _screening, ...rest } = resource;
+  return {
+    ...base,
+    ...rest,
+    id: resource.id,
+    clusterId: resource.clusterId ?? base.clusterId ?? `cluster-${resource.id}`,
+    title: resource.title ?? base.title ?? resource.id,
+    topicFamily: resource.topicFamily ?? base.topicFamily ?? "miscellaneous_topics",
+    split: resource.split ?? base.split ?? "public_train",
+    sourceCategory: resource.sourceCategory ?? base.sourceCategory ?? "unknown",
+    sourceLanguage: resource.sourceLanguage ?? base.sourceLanguage ?? "unknown",
+    translationStatus: resource.translationStatus ?? base.translationStatus ?? "unknown",
+    sourceTaskFormat: resource.sourceTaskFormat ?? base.sourceTaskFormat ?? "unknown",
+    authorshipRoute: resource.authorshipRoute ?? base.authorshipRoute ?? "operator_intake_append_only",
+    llmAssistance: resource.llmAssistance ?? base.llmAssistance ?? "unknown",
+    conceptualScope: resource.conceptualScope ?? base.conceptualScope ?? "pending_scope_review",
+    groundTruthAvailability: resource.groundTruthAvailability ?? base.groundTruthAvailability ?? "pending_ground_truth_review",
+    nonConceptualDependencyNotes: resource.nonConceptualDependencyNotes ?? base.nonConceptualDependencyNotes ?? "",
+    contextSufficiency: resource.contextSufficiency ?? base.contextSufficiency ?? "needs_review",
+    assumedBackgroundPolicy: resource.assumedBackgroundPolicy ?? base.assumedBackgroundPolicy ?? "",
+    pricedInContextNotes: resource.pricedInContextNotes ?? base.pricedInContextNotes ?? "",
+    intakeScreening,
+    textVersions,
+    adminTags: Array.isArray(resource.adminTags) ? resource.adminTags : base.adminTags ?? [],
+  };
+}
+
+function normalizeWorkflowCritique(resource, base = {}) {
+  const textVersions = normalizeWorkflowTextVersions(resource, base, "ctv");
+  const { text: _text, originalText: _originalText, raterVisibleText: _raterVisibleText, textVersions: _textVersions, ...rest } = resource;
+  return {
+    ...base,
+    ...rest,
+    id: resource.id,
+    positionId: resource.positionId ?? base.positionId,
+    sourceType: resource.sourceType ?? base.sourceType ?? "unknown",
+    authorshipType: resource.authorshipType ?? base.authorshipType ?? "unknown",
+    lengthBand: resource.lengthBand ?? base.lengthBand ?? "unknown",
+    styleBand: resource.styleBand ?? base.styleBand ?? "unknown",
+    marginalInformativeness: resource.marginalInformativeness ?? base.marginalInformativeness ?? "unknown",
+    textVersions,
+  };
+}
+
+function normalizeWorkflowTextVersions(resource, base, prefix) {
+  if (Array.isArray(resource.textVersions) && resource.textVersions.length) {
+    return resource.textVersions
+      .filter((version) => version && typeof version === "object" && typeof version.text === "string" && version.text)
+      .map((version, index) => normalizeWorkflowTextVersion(resource.id, version, prefix, index));
+  }
+  if (Array.isArray(base.textVersions) && base.textVersions.length && !resource.text && !resource.originalText && !resource.raterVisibleText) {
+    return base.textVersions;
+  }
+  const text = resource.raterVisibleText ?? resource.text ?? resource.originalText;
+  return [normalizeWorkflowTextVersion(resource.id, { id: `${prefix}-${resource.id}-v1`, text: String(text ?? "") }, prefix, 0)];
+}
+
+function normalizeWorkflowTextVersion(resourceId, version, prefix, index) {
+  const id = version.id ?? `${prefix}-${resourceId}-v${index + 1}`;
+  const text = version.text;
+  return {
+    id,
+    text,
+    canonicalHash: version.canonicalHash ?? `sha256:${sha256(canonicalJson({ id, text }))}`,
+    renderedHash: version.renderedHash ?? version.raterVisibleHash ?? `sha256:${sha256(canonicalJson({ id, text, view: "rendered" }))}`,
+    createdAt: version.createdAt ?? new Date().toISOString(),
+  };
+}
+
+async function workflowResourceById(context, resourceKey, id) {
+  const resources = await workflowResourcesByField(context, resourceKey, "id", id);
+  return resources.at(-1) ?? null;
+}
+
+async function workflowResourcesByField(context, resourceKey, field, value) {
+  const events = await readPersistedWorkflowEvents(context.auditStore);
+  return events
+    .map((event) => event.payload?.[resourceKey])
+    .filter((resource) => resource && typeof resource === "object" && resource[field] === value);
+}
+
 async function appendBenchmarkExposure(context, event) {
-  await mkdir(context.auditDir, { recursive: true });
-  await appendFile(context.benchmarkLogPath, `${JSON.stringify(event)}\n`, "utf8");
+  await context.auditStore.appendBenchmarkExposureEvent(event);
 }
 
 async function buildAdminBenchmarkFreezeReport(context) {
-  const persistedRatings = await readPersistedRatings(context.auditLogPath);
-  const exposureEvents = [...seedBenchmarkExposureEvents, ...(await readPersistedBenchmarkExposureEvents(context.benchmarkLogPath))];
+  const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const benchmarkSplitMembers = latestWorkflowResources(workflowEvents, "benchmarkSplitMember");
+  const rightsRecords = latestWorkflowResources(workflowEvents, "rightsRecord");
+  const persistedRatings = await readPersistedRatings(context.auditStore);
+  const exposureEvents = [...seedBenchmarkExposureEvents, ...(await readPersistedBenchmarkExposureEvents(context.auditStore))];
   const snapshot = createLabelSnapshot(
     "snapshot-oct-benchmark-api",
     releaseId,
     [...seedRatings, ...persistedRatings],
-    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
     "benchmark_frozen",
+    positionList,
   );
-  return buildHiddenBenchmarkFreezeReport(releaseId, snapshot, positions, critiques, undefined, exposureEvents, { includeRestrictedIds: true });
+  return buildHiddenBenchmarkFreezeReport(releaseId, snapshot, positionList, critiqueList, buildReleaseRightsRecords(rightsRecords), exposureEvents, {
+    includeRestrictedIds: true,
+    benchmarkSplitMembers,
+  });
 }
 
 async function buildAdminTrainingExport(context) {
-  const ratings = [...seedRatings, ...(await readPersistedRatings(context.auditLogPath))];
+  const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const ratings = [...seedRatings, ...(await readPersistedRatings(context.auditStore))];
   const snapshot = createLabelSnapshot(
     "snapshot-oct-training-api",
     releaseId,
     ratings,
-    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
     "initial_only",
+    positionList,
   );
-  return buildTrainingExport(releaseId, snapshot, positions, critiques, ratings, ratingContextSnapshots);
-}
-
-async function readAuditEvents(auditLogPath) {
-  let text = "";
-  try {
-    text = await readFile(auditLogPath, "utf8");
-  } catch (error) {
-    if (error && error.code === "ENOENT") return [];
-    throw error;
-  }
-  return text
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  return buildTrainingExport(releaseId, snapshot, positionList, critiqueList, ratings, ratingContextSnapshots);
 }
 
 async function serveStatic(response, rootDir, pathname) {
@@ -881,11 +2178,16 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function authenticateRequest(request, secret) {
-  const header = String(request.headers.authorization ?? "");
+export async function authenticateRequest(request, authConfigOrSecret) {
+  const header = String(getHeader(request.headers, "authorization") ?? "");
   const match = header.match(/^Bearer (.+)$/);
-  if (!match) return { ok: false, error: "missing_session_token" };
-  return verifySessionToken(match[1], secret);
+  if (!match) return { ok: false, error: "missing_bearer_token" };
+
+  if (typeof authConfigOrSecret === "string") return verifySessionToken(match[1], authConfigOrSecret);
+  const auth = authConfigOrSecret ?? createAuthConfig();
+  if (auth.mode === "demo") return verifySessionToken(match[1], auth.sessionSecret);
+  if (auth.mode === "external_jwt") return verifyExternalJwtToken(match[1], auth.externalJwt);
+  return { ok: false, error: "unsupported_auth_mode" };
 }
 
 function invalid(detail) {
@@ -904,6 +2206,12 @@ function constantTimeEqual(a, b) {
   const left = Buffer.from(String(a));
   const right = Buffer.from(String(b));
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function getHeader(headers, key) {
+  if (!headers) return null;
+  if (typeof headers.get === "function") return headers.get(key);
+  return headers[key] ?? headers[key.toLowerCase()] ?? null;
 }
 
 if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {

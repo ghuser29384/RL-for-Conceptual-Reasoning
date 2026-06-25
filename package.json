@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "postgres": "^3.4.7"
+  },
   "scripts": {
     "dev": "node src/server.mjs",
     "serve": "node src/server.mjs",
