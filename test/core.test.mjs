@@ -26,6 +26,7 @@ import {
   buildOctoberReleaseReport,
   buildPairwiseComparisonSnapshot,
   buildPairedTargetLabelSnapshotReport,
+  buildPolicyBundleEvidenceReport,
   buildPositionIntakeReadinessReport,
   buildPostDiscussionDisagreementReport,
   buildPostLockSourceStyleAuditReport,
@@ -33,6 +34,7 @@ import {
   buildPromptTrackSeparationReport,
   buildRaterCompositionConflictReport,
   buildRaterCertificationReport,
+  buildRaterDataGovernanceEvidenceReport,
   buildEffectivePrimaryRaterAnchorPolicy,
   buildReleaseGoldLibraryItems,
   buildEffectiveReleaseGateProfile,
@@ -52,9 +54,11 @@ import {
   buildSamePositionContextReport,
   buildUncertaintyAwareLeaderboardReport,
   buildRatingEffortQualityReport,
+  buildReleaseConfigManifestEvidenceReport,
   buildTrainingExport,
   buildUXSimplificationEvidenceReport,
   buildValidationTrancheReport,
+  buildWorkflowStateMachineEvidenceReport,
   buildValidationDesignReport,
   createBlindRatingView,
   createExportManifest,
@@ -127,6 +131,376 @@ const uxHiddenFieldClasses = [
 ];
 
 const uxScreenControlKeys = [...uxNoFeatureLossKeys, "post_lock_feedback"];
+
+const workflowStateTransitionFixtures = [
+  ["assignment", "assignment-state-release", "draft", "locked_initial_rating"],
+  ["rating", "rating-state-release", "draft", "locked_initial"],
+  ["discussion_thread", "discussion-state-release", "eligible_after_initial_locks", "object_level_discussion"],
+  ["post_lock_discussion_session", "post-lock-session-state-release", "object_level_discussion", "revision_window"],
+  ["adjudication_memo", "adjudication-state-release", "revision_window", "adjudication_finalized"],
+  ["verification_record", "verification-state-release", "in_progress", "verified"],
+  ["label_snapshot", "label-snapshot-state-release", "candidate", "frozen"],
+  ["pairwise_comparison_snapshot", "pairwise-state-release", "candidate", "frozen"],
+  ["evaluation_run", "evaluation-state-release", "contamination_checks_passed", "run"],
+  ["training_export", "training-export-state-release", "contamination_checks_passed", "run"],
+  ["release_version", "release-state-release", "gate_checks_passed", "frozen"],
+].map(([entityType, entityId, priorState, requestedNextState], index) => ({
+  id: `workflow-state-transition-${index + 1}`,
+  entityType,
+  entityId,
+  priorState,
+  requestedNextState,
+  acceptedNextState: requestedNextState,
+  actorId: "release-admin",
+  actorRole: "admin",
+  guardChecks: ["backend_guard_passed"],
+  failedGuardReasons: [],
+  lockFreezeArtifactIds: ["release-config-manifest-october-2026-demo"],
+  sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
+  timestamp: `2026-10-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+}));
+
+const raterDataCategories = [
+  "identity_profile",
+  "rating_performance",
+  "session_pacing",
+  "safe_decline_reasons",
+  "source_style_guesses",
+  "discussion_participation",
+  "calibration_results",
+  "reliability_profile",
+];
+
+const raterDataUseScopes = ["certification", "reliability_estimation", "research", "release_reporting", "operations"];
+
+const policyBundleFieldClasses = [
+  "source_metadata",
+  "admin_tags",
+  "benchmark_membership",
+  "gold_answers",
+  "peer_ratings",
+  "peer_rationales",
+  "model_judge_scores",
+  "active_learning_selection_reasons",
+  "rater_identity",
+  "rater_role",
+  "discussion_identity",
+  "verification_evidence",
+  "volunteer_performance_metadata",
+];
+
+const ratingWorkflowTaskModes = [
+  "ordinary_live",
+  "validation",
+  "gold_certification",
+  "hidden_benchmark",
+  "low_clarity",
+  "verification",
+  "interpretation_dispute",
+  "adjudication",
+];
+
+const protectedUiLaneClasses = ["validation", "hidden_benchmark", "gold_certification", "release_critical"];
+
+const blockedUiExperimentClasses = [
+  "score_controls",
+  "anchor_panel_copy",
+  "lint_behavior",
+  "issue_panel_requiredness",
+  "example_visibility",
+  "layout_density",
+  "accessibility_variant",
+  "score_affecting_wording",
+];
+
+const prohibitedAssistInputs = [
+  "target_scores",
+  "gold_answers",
+  "peer_scores",
+  "model_judge_scores",
+  "adjudicated_labels",
+  "benchmark_membership",
+  "protected_split_status",
+];
+
+const accessibilitySurfaces = ["rating", "practice", "discussion", "adjudication", "consent", "withdrawal"];
+const accessibilityChecks = ["keyboard", "screen_reader", "focus_order", "non_color_status", "zoom", "mobile_touch", "reduced_motion", "timeout_recovery", "locale_sensitive_dates", "readability"];
+const releaseConfigBindings = [
+  "code",
+  "rubric",
+  "scoring",
+  "visibility",
+  "workflow",
+  "ui_render",
+  "ux_simplification",
+  "lint",
+  "assist",
+  "queue",
+  "split",
+  "rights_provenance",
+  "item_text",
+  "rating_context",
+  "label",
+  "pairwise",
+  "parser",
+  "prompt",
+  "metric",
+  "score_input",
+  "export_policy",
+];
+const governedBundleFamilies = [
+  "rubric",
+  "scoring",
+  "visibility",
+  "workflow",
+  "ui_render",
+  "lint",
+  "assist",
+  "score_input",
+  "queue",
+  "split",
+  "output_schema",
+  "prompt",
+  "parser",
+  "metric",
+  "export_policy",
+  "phase_gate",
+];
+
+function completePolicyBundleFixtures() {
+  return {
+    visibilityPolicies: [
+      {
+        id: "visibility-policy-submitted",
+        policyVersion: "visibility-policy-rlhf88-v1",
+        roleClasses: ["rater", "graduate", "phd", "expert", "admin", "auditor"],
+        workflowStates: ["queued", "draft", "locked_initial", "post_lock", "adjudication", "release_review"],
+        fieldClasses: policyBundleFieldClasses,
+        allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment", "read_authorized_audit_summary"],
+        allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
+        sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters",
+        benchmarkGoldModelPeerVisibilityRules: "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
+        backendEnforced: true,
+        exposureLogRequired: true,
+      },
+    ],
+    ratingWorkflowProfiles: [
+      {
+        id: "rating-workflow-profile-submitted",
+        profileVersion: "rating-workflow-profile-rlhf88-v1",
+        taskModesCovered: ratingWorkflowTaskModes,
+        requiredScoreFields: ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"],
+        requiredRationaleFields: ["short_rationale", "low_clarity_explanation"],
+        requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
+        optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
+        safeDeclineAvailable: true,
+        preSubmitLintPolicy: "pre-submit-assist-submitted",
+      },
+    ],
+    uiExperimentPolicies: [
+      {
+        id: "ui-experiment-policy-submitted",
+        policyVersion: "ui-experiment-policy-rlhf88-v1",
+        coveredSplitLaneClasses: protectedUiLaneClasses,
+        blockedExperimentClasses: blockedUiExperimentClasses,
+        unregisteredMaterialChangesBlocked: true,
+        sensitivitySnapshotRequired: true,
+        uxSimplificationCompatibilityRule: "UX simplification requires passing review",
+      },
+    ],
+    preSubmitAssistPolicies: [
+      {
+        id: "pre-submit-assist-submitted",
+        policyVersion: "pre-submit-assist-rlhf88-v1",
+        rubricVersion: "appendix-f-operational-v1",
+        workflowProfileId: "rating-workflow-profile-submitted",
+        permittedAssistTypes: ["deterministic_completeness_check", "rubric_anchor_reminder", "non_directive_issue_prompt"],
+        prohibitedInputs: prohibitedAssistInputs,
+        deterministic: true,
+        labelBlind: true,
+        nonDirective: true,
+        targetScoreSuggestionsProhibited: true,
+        protectedSplitEligible: true,
+      },
+    ],
+    accessibilityConformanceReports: [
+      {
+        id: "accessibility-conformance-submitted",
+        workflowProfileIds: ["rating-workflow-profile-submitted"],
+        screenIds: accessibilitySurfaces,
+        raterInstructionRenderVersionIds: ["rater-instruction-render-submitted"],
+        uiExperimentPolicyId: "ui-experiment-policy-submitted",
+        uxSimplificationPolicyId: "ux-policy-submitted",
+        testedLocaleSet: ["en-US"],
+        checksPassed: accessibilityChecks,
+        readabilityReviewStatus: "passed",
+        failures: [],
+        mitigations: [],
+        nonStaffPromotionBlocker: false,
+      },
+    ],
+  };
+}
+
+function completeReleaseConfigManifestFixtures() {
+  const canonicalizationProfile = {
+    id: "canonicalization-profile-submitted",
+    name: "Submitted governed bundle canonicalization",
+    version: "canonical-json-sha256-v1",
+    hashAlgorithm: "sha256",
+    materializationQueryRules: "stable materialized query per governed bundle family",
+    includedFieldPolicy: "semantic fields only",
+    rowOrderingPolicy: "order by family, version, id",
+    arrayOrderingPolicy: "sort set-like arrays before hashing",
+    nullEmptyHandling: "preserve null and empty distinctions",
+    unicodeNormalization: "NFC",
+    timestampNumberEncoding: "UTC ISO timestamps and decimal-string numbers",
+    testVectorIds: ["governed-bundle-vector-v1"],
+    activatedAt: "2026-10-01T00:00:00.000Z",
+  };
+  const governedBundleRecords = governedBundleFamilies.map((bundleFamily, index) => ({
+    id: `governed-bundle-submitted-${bundleFamily}`,
+    bundleFamily,
+    semanticVersion: `rlhf88-${index + 1}`,
+    canonicalizationProfileId: canonicalizationProfile.id,
+    canonicalContentHash: `sha256:submitted-${bundleFamily}`,
+    materializedRowCount: index + 1,
+    appendOnlyActivationStatus: "activated",
+    activatedBy: "release-admin",
+    activatedAt: "2026-10-01T00:01:00.000Z",
+  }));
+  const releaseConfigManifest = {
+    id: "release-config-manifest-submitted",
+    releaseId: "october-2026-demo",
+    name: "Submitted October 2026 release config",
+    version: "release-config-rlhf88-v1",
+    canonicalManifestHash: "sha256:submitted-release-config",
+    codeCommitId: "commit-submitted",
+    buildId: "build-submitted",
+    rubricVersion: "appendix-f-operational-v1",
+    scoredDimensionSchemaVersion: "seven-dimension-lmca-v1",
+    releaseGateProfileId: "release-gate-workflow-new",
+    visibilityPolicyId: "visibility-policy-workflow-new",
+    uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
+    uxSimplificationPolicyIds: ["ux-policy-workflow-new"],
+    preSubmitAssistPolicyId: "pre-submit-assist-workflow-new",
+    scoreInputPolicyIds: ["score-input-policy-workflow-new"],
+    workflowProfileIds: ["rating-workflow-profile-workflow-new"],
+    raterInstructionRenderVersionIds: ["rater-instruction-render-workflow-new"],
+    rubricLintConfigIds: ["rubric-lint-config-workflow-new"],
+    queuePolicySnapshotId: "queue-policy-workflow-new",
+    labelSnapshotIds: ["snapshot-oct-api"],
+    pairwiseComparisonSnapshotIds: ["pairwise-snapshot-workflow-new"],
+    metricConfigIds: ["metric-config-workflow-new"],
+    scoringCodeChecksums: ["sha256:submitted-scoring"],
+    parserConfigIds: ["parser-workflow-new"],
+    promptTemplateIds: ["prompt-workflow-new"],
+    governedBundleIds: governedBundleRecords.map((bundle) => bundle.id),
+    bindingFamilies: releaseConfigBindings,
+    frozenAt: "2026-10-01T00:02:00.000Z",
+  };
+  return {
+    governedBundleCanonicalizationProfiles: [canonicalizationProfile],
+    governedBundleRecords,
+    releaseConfigManifests: [releaseConfigManifest],
+    releaseConfigManifestVerifications: [
+      {
+        id: "release-config-manifest-verification-submitted",
+        manifestId: releaseConfigManifest.id,
+        verificationStatus: "passed",
+        expectedHash: releaseConfigManifest.canonicalManifestHash,
+        observedHash: releaseConfigManifest.canonicalManifestHash,
+        verifiedAt: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+  };
+}
+
+test("policy bundle evidence gates visibility, workflow profile, UI experiments, assist, and accessibility", () => {
+  const report = buildPolicyBundleEvidenceReport("october-2026-demo", completePolicyBundleFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
+  assert.equal(report.counts.completePolicyGroupCount, 5);
+  assert.equal(report.counts.submittedVisibilityPolicyCount, 1);
+  assert.equal(report.counts.submittedAccessibilityConformanceReportCount, 1);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("release config manifest evidence gates governed bundle families and manifest verification", () => {
+  const report = buildReleaseConfigManifestEvidenceReport("october-2026-demo", completeReleaseConfigManifestFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_release_config_manifest_evidence_complete");
+  assert.equal(report.counts.submittedCanonicalizationProfileCount, 1);
+  assert.equal(report.counts.submittedGovernedBundleCount, governedBundleFamilies.length);
+  assert.equal(report.counts.passingBundleFamilyCount, governedBundleFamilies.length);
+  assert.equal(report.activeManifestId, "release-config-manifest-submitted");
+  assert.equal(report.activeManifestHash, "sha256:submitted-release-config");
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("rater data-governance evidence requires consent visibility and withdrawal handling", () => {
+  const report = buildRaterDataGovernanceEvidenceReport("october-2026-demo", {
+    raterDataConsents: [
+      {
+        id: "rater-data-consent-submitted",
+        raterId: "demo-rater",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        identifiableAccessRestriction: "approved operational or research role access only",
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+        consentedAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    raterDataRestrictionRequests: [
+      {
+        id: "rater-data-restriction-submitted",
+        raterId: "demo-rater",
+        requestType: "identifiable_access_review",
+        affectedDataCategories: ["session_pacing", "safe_decline_reasons"],
+        actionTaken: "review_opened",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:02:00.000Z",
+      },
+    ],
+    volunteerDataWithdrawalRequests: [
+      {
+        id: "withdrawal-submitted",
+        raterId: "demo-rater",
+        requestType: "future_training_export_exclusion",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export"],
+        actionTaken: "future_training_export_exclusion_recorded",
+        identifiableTelemetryRestricted: true,
+        publicAttributionRemoved: true,
+        privateLearningDashboardDeleted: true,
+        futureTrainingExportExcluded: true,
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+  });
+
+  assert.equal(report.releaseUseStatus, "submitted_rater_data_governance_evidence_complete");
+  assert.equal(report.counts.submittedConsentCount, 1);
+  assert.equal(report.counts.submittedWithdrawalRequestCount, 1);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("workflow state-machine evidence requires guarded append-only transitions for each release lifecycle", () => {
+  const report = buildWorkflowStateMachineEvidenceReport("october-2026-demo", {
+    workflowStateTransitionLogs: workflowStateTransitionFixtures,
+  });
+
+  assert.equal(report.releaseUseStatus, "submitted_workflow_state_machine_evidence_complete");
+  assert.equal(report.counts.submittedTransitionCount, workflowStateTransitionFixtures.length);
+  assert.equal(report.counts.passingEntityTypeCount, report.requiredEntityTypes.length);
+  assert.deepEqual(report.reviewSections, []);
+  assert.equal(report.entityRows.every((row) => row.status === "workflow_state_machine_entity_complete"), true);
+  assert.ok(report.stateMachineRules.rating.allowedTransitions.some((transition) => transition.priorState === "draft" && transition.nextState === "locked_initial"));
+});
 
 test("UX simplification evidence gates submitted server-derived screen states without feature loss", () => {
   const policyId = "ux-policy-submitted";

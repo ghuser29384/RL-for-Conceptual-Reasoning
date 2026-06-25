@@ -64,6 +64,95 @@ const adminAuditRoles = ["admin", "auditor"];
 const expertWorkflowRoles = ["expert", "admin"];
 const expertAuditWorkflowRoles = ["expert", "admin", "auditor"];
 const ratingWorkflowRoles = ["rater", "graduate", "phd", "expert", "admin"];
+const workflowStateReadRoles = ["rater", "graduate", "phd", "expert", "admin", "auditor"];
+const workflowStateTransitionRoles = ["rater", "graduate", "phd", "expert", "admin"];
+const participantDataWriteRoles = ["rater", "graduate", "phd", "expert", "admin"];
+const participantDataReadRoles = ["rater", "graduate", "phd", "expert", "admin", "auditor"];
+const raterDataGovernanceCategories = [
+  "identity_profile",
+  "rating_performance",
+  "session_pacing",
+  "safe_decline_reasons",
+  "source_style_guesses",
+  "discussion_participation",
+  "calibration_results",
+  "reliability_profile",
+];
+const raterDataUseScopes = ["certification", "reliability_estimation", "research", "release_reporting", "operations"];
+const volunteerWithdrawalRequestTypes = new Set([
+  "future_assignment_stop",
+  "account_deactivation",
+  "identifiable_telemetry_restriction",
+  "public_attribution_removal",
+  "learning_dashboard_deletion",
+  "future_training_export_exclusion",
+  "frozen_label_removal_request",
+]);
+const workflowStateMachineRules = {
+  assignment: [
+    ["queued", "accepted_or_declined"],
+    ["accepted_or_declined", "draft"],
+    ["draft", "locked_initial_rating"],
+    ["queued", "safe_declined"],
+    ["queued", "reassigned"],
+  ],
+  rating: [
+    ["draft", "locked_initial"],
+    ["locked_initial", "self_checked"],
+    ["locked_initial", "expert_checked"],
+    ["locked_initial", "model_assisted_checked"],
+    ["self_checked", "revision_proposed"],
+    ["expert_checked", "revision_proposed"],
+    ["model_assisted_checked", "revision_proposed"],
+    ["revision_proposed", "revised_rating_appended"],
+  ],
+  discussion_thread: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  post_lock_discussion_session: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  adjudication_memo: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  verification_record: [
+    ["not_needed", "requested"],
+    ["requested", "in_progress"],
+    ["in_progress", "verified"],
+    ["in_progress", "not_practicable"],
+    ["in_progress", "unresolved"],
+    ["verified", "adjudication_resolved"],
+    ["not_practicable", "adjudication_resolved"],
+    ["unresolved", "adjudication_resolved"],
+  ],
+  label_snapshot: [["candidate", "frozen"]],
+  pairwise_comparison_snapshot: [["candidate", "frozen"]],
+  evaluation_run: [
+    ["configured", "contamination_checks_passed"],
+    ["contamination_checks_passed", "run"],
+    ["run", "frozen"],
+  ],
+  training_export: [
+    ["configured", "contamination_checks_passed"],
+    ["contamination_checks_passed", "run"],
+    ["run", "frozen"],
+  ],
+  release_version: [
+    ["draft", "gate_checks_passed"],
+    ["gate_checks_passed", "frozen"],
+    ["frozen", "published"],
+    ["frozen", "internal_only"],
+  ],
+};
 
 const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/intake\/positions$/, "position_intake_submitted", "position", adminRoles, {
@@ -182,6 +271,53 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: ["id", "surface", "payloadSource", "schemaVersion", "visibleFieldAllowlist", "enabledActionAllowlist"],
   }),
+  workflowWriteSpec(/^\/api\/v1\/visibility-policies$/, "visibility_policy_submitted", "visibilityPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "fieldClasses", "allowedReadActions", "allowedWriteActions"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rating-workflow-profiles$/, "rating_workflow_profile_submitted", "ratingWorkflowProfile", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "profileVersion", "taskModesCovered", "requiredScoreFields"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/ui-experiment-policies$/, "ui_experiment_policy_submitted", "uiExperimentPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "coveredSplitLaneClasses", "blockedExperimentClasses"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/pre-submit-assist-policies$/, "pre_submit_assist_policy_submitted", "preSubmitAssistPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "rubricVersion", "workflowProfileId", "prohibitedInputs"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/accessibility-conformance-reports$/, "accessibility_conformance_report_submitted", "accessibilityConformanceReport", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "screenIds", "checksPassed", "readabilityReviewStatus"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "version", "hashAlgorithm", "materializationQueryRules", "activatedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/governed-bundles$/, "governed_bundle_submitted", "governedBundleRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "bundleFamily", "semanticVersion", "canonicalizationProfileId", "canonicalContentHash", "appendOnlyActivationStatus"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)\/verify$/, "governed_bundle_verification_submitted", "governedBundleVerification", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "governedBundleId",
+    requiredFields: ["id", "governedBundleId", "verificationStatus", "expectedHash", "observedHash"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/release-config-manifests$/, "release_config_manifest_submitted", "releaseConfigManifest", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "releaseId", "version", "canonicalManifestHash", "governedBundleIds", "bindingFamilies", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/freeze-config-manifest$/, "release_config_manifest_frozen", "releaseConfigManifest", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "releaseId",
+    requiredFields: ["id", "releaseId", "version", "canonicalManifestHash", "governedBundleIds", "bindingFamilies", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)\/verify$/, "release_config_manifest_verification_submitted", "releaseConfigManifestVerification", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "manifestId",
+    requiredFields: ["id", "manifestId", "verificationStatus", "expectedHash", "observedHash"],
+  }),
 ];
 
 const workflowReadEndpoints = [
@@ -226,6 +362,14 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/ux-simplification-policies\/(?<id>[^/]+)$/, "uxSimplificationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ux-simplification-reviews\/(?<id>[^/]+)$/, "uxSimplificationReview", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/screen-state-payloads\/(?<id>[^/]+)$/, "screenStatePayload", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/visibility-policies\/(?<id>[^/]+)$/, "visibilityPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rating-workflow-profiles\/(?<id>[^/]+)$/, "ratingWorkflowProfile", workflowStateReadRoles),
+  workflowReadSpec(/^\/api\/v1\/ui-experiment-policies\/(?<id>[^/]+)$/, "uiExperimentPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/pre-submit-assist-policies\/(?<id>[^/]+)$/, "preSubmitAssistPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/accessibility-conformance-reports\/(?<id>[^/]+)$/, "accessibilityConformanceReport", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles\/(?<id>[^/]+)$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)$/, "governedBundleRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)$/, "releaseConfigManifest", adminAuditRoles),
 ];
 
 const mimeTypes = {
@@ -530,6 +674,61 @@ export async function handleApiRequest(request, response, url, context) {
         ],
       };
     });
+    return;
+  }
+  const v1ReleaseConfigManifestMatch = url.pathname.match(/^\/api\/v1\/releases\/([^/]+)\/config-manifest$/);
+  if (request.method === "GET" && v1ReleaseConfigManifestMatch) {
+    await releaseConfigManifestForReleaseEndpoint(request, response, context, decodeURIComponent(v1ReleaseConfigManifestMatch[1]));
+    return;
+  }
+  const v1EvaluationConfigManifestMatch = url.pathname.match(/^\/api\/v1\/evaluations\/([^/]+)\/release-config-manifest$/);
+  if (request.method === "GET" && v1EvaluationConfigManifestMatch) {
+    await releaseConfigManifestForEvaluationEndpoint(request, response, context, decodeURIComponent(v1EvaluationConfigManifestMatch[1]));
+    return;
+  }
+
+  const v1WorkflowStateMatch = url.pathname.match(/^\/api\/v1\/state\/([^/]+)\/([^/]+)$/);
+  if (request.method === "GET" && v1WorkflowStateMatch) {
+    await workflowStateEndpoint(request, response, context, decodeURIComponent(v1WorkflowStateMatch[1]), decodeURIComponent(v1WorkflowStateMatch[2]));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/state-transitions") {
+    await workflowStateTransitionEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/raters/me/data-profile") {
+    await raterDataProfileEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/raters/me/data-consent") {
+    await participantDataWorkflowWriteEndpoint(request, response, context, "raterDataConsent", "rater_data_consent_submitted", validateRaterDataConsentPayload);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/raters/me/data-restriction-request") {
+    await participantDataWorkflowWriteEndpoint(
+      request,
+      response,
+      context,
+      "raterDataRestrictionRequest",
+      "rater_data_restriction_request_submitted",
+      validateRaterDataRestrictionPayload,
+    );
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/raters/me/withdrawal-requests") {
+    await participantDataWorkflowWriteEndpoint(
+      request,
+      response,
+      context,
+      "volunteerDataWithdrawalRequest",
+      "volunteer_data_withdrawal_request_submitted",
+      validateVolunteerDataWithdrawalPayload,
+    );
+    return;
+  }
+  const v1WithdrawalRequestMatch = url.pathname.match(/^\/api\/v1\/raters\/me\/withdrawal-requests\/([^/]+)$/);
+  if (request.method === "GET" && v1WithdrawalRequestMatch) {
+    await volunteerWithdrawalRequestEndpoint(request, response, context, decodeURIComponent(v1WithdrawalRequestMatch[1]));
     return;
   }
 
@@ -879,6 +1078,232 @@ async function workflowReadEndpoint(request, response, context, match) {
   sendJson(response, 200, resource);
 }
 
+async function releaseConfigManifestForReleaseEndpoint(request, response, context, requestedReleaseId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const manifests = await workflowResourcesByField(context, "releaseConfigManifest", "releaseId", requestedReleaseId);
+  const manifest = manifests.at(-1);
+  if (!manifest) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, manifest);
+}
+
+async function releaseConfigManifestForEvaluationEndpoint(request, response, context, evaluationRunId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const manifests = await workflowResourcesByField(context, "releaseConfigManifest", "evaluationRunId", evaluationRunId);
+  const manifest = manifests.at(-1);
+  if (!manifest) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, manifest);
+}
+
+async function workflowStateTransitionEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateTransitionRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateTransitionRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.workflowStateTransitionLog ?? body.stateTransition ?? body.transition ?? body;
+  const validation = validateWorkflowStateTransitionPayload(candidate, session.user);
+  if (!validation.resource) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_state_transition", detail: validation.detail });
+    return;
+  }
+  const eventType = validation.ok ? "workflow_state_transition_accepted" : "workflow_state_transition_rejected";
+  const event = createWorkflowAuditEvent(eventType, session.user, "workflowStateTransitionLog", validation.resource, request, {
+    route: "/api/v1/state-transitions",
+    requiredRoles: workflowStateTransitionRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 409, {
+      error: validation.error ?? "workflow_state_transition_guard_failed",
+      detail: validation.detail,
+      transitionId: validation.resource.id,
+      acceptedNextState: validation.resource.acceptedNextState,
+      failedGuardReasons: validation.resource.failedGuardReasons,
+      eventId: event.id,
+      accessAudit: event.accessAudit,
+    });
+    return;
+  }
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: event.resourceKey,
+    resourceId: validation.resource.id,
+    transitionId: validation.resource.id,
+    entityType: validation.resource.entityType,
+    entityId: validation.resource.entityId,
+    acceptedNextState: validation.resource.acceptedNextState,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+async function workflowStateEndpoint(request, response, context, entityTypeInput, entityId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  const entityType = normalizeWorkflowStateEntityType(entityTypeInput);
+  if (!workflowStateMachineRules[entityType]) {
+    sendJson(response, 404, { error: "unknown_workflow_state_entity_type" });
+    return;
+  }
+  if (["rater", "graduate", "phd"].includes(session.user.role) && entityType === "assignment" && !session.user.allowedAssignmentIds?.includes("*") && !session.user.allowedAssignmentIds?.includes(entityId)) {
+    sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${entityId}` });
+    return;
+  }
+  const transitions = (await workflowResourcesByField(context, "workflowStateTransitionLog", "entityId", entityId))
+    .filter((transition) => normalizeWorkflowStateEntityType(transition.entityType) === entityType)
+    .sort((left, right) => String(left.timestamp ?? "").localeCompare(String(right.timestamp ?? "")) || String(left.id).localeCompare(String(right.id)));
+  if (!transitions.length) {
+    sendJson(response, 404, { error: "workflow_state_not_found" });
+    return;
+  }
+  sendJson(response, 200, {
+    entityType,
+    entityId,
+    currentState: transitions.at(-1).acceptedNextState,
+    transitionCount: transitions.length,
+    transitions,
+    appendOnly: true,
+  });
+}
+
+async function raterDataProfileEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!participantDataReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: participantDataReadRoles });
+    return;
+  }
+  const raterId = session.user.id;
+  const [consents, restrictions, withdrawals] = await Promise.all([
+    workflowResourcesByField(context, "raterDataConsent", "raterId", raterId),
+    workflowResourcesByField(context, "raterDataRestrictionRequest", "raterId", raterId),
+    workflowResourcesByField(context, "volunteerDataWithdrawalRequest", "raterId", raterId),
+  ]);
+  sendJson(response, 200, {
+    raterId,
+    noticeVersion: "rater-data-use-v1",
+    categories: raterDataGovernanceCategories.map((category) => ({
+      category,
+      collected: true,
+      publicArtifacts: "deidentified_by_default",
+      identifiableAccess: "approved_operational_or_research_roles_only",
+    })),
+    useScopes: raterDataUseScopes,
+    deIdentificationPolicy: {
+      publicArtifactsDefault: "deidentified",
+      attributionRequiresExplicitAgreement: true,
+      privateLearningDataExcludedFromReleaseArtifacts: true,
+      privateLearningDataExcludedFromModelTrainingExports: true,
+    },
+    consent: {
+      latest: consents.at(-1) ?? null,
+      submittedCount: consents.length,
+    },
+    restrictionRequests: restrictions,
+    withdrawalRequests: withdrawals,
+  });
+}
+
+async function participantDataWorkflowWriteEndpoint(request, response, context, resourceKey, eventType, validator) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!participantDataWriteRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: participantDataWriteRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body[resourceKey] ?? body.resource ?? body;
+  const validation = validator(candidate, session.user);
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_participant_data_payload", detail: validation.detail });
+    return;
+  }
+  const event = createWorkflowAuditEvent(eventType, session.user, resourceKey, validation.resource, request, {
+    route: routeForParticipantDataResource(resourceKey),
+    requiredRoles: participantDataWriteRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey,
+    resourceId: validation.resource.id,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+async function volunteerWithdrawalRequestEndpoint(request, response, context, id) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!participantDataReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: participantDataReadRoles });
+    return;
+  }
+  const resource = await workflowResourceById(context, "volunteerDataWithdrawalRequest", id);
+  if (!resource) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  if (!["admin", "auditor"].includes(session.user.role) && resource.raterId !== session.user.id) {
+    sendJson(response, 403, { error: "participant_data_actor_not_authorized" });
+    return;
+  }
+  sendJson(response, 200, resource);
+}
+
+function routeForParticipantDataResource(resourceKey) {
+  if (resourceKey === "raterDataConsent") return "/api/v1/raters/me/data-consent";
+  if (resourceKey === "raterDataRestrictionRequest") return "/api/v1/raters/me/data-restriction-request";
+  return "/api/v1/raters/me/withdrawal-requests";
+}
+
 async function buildCurrentReleaseArtifacts(context, options = {}) {
   const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
   const { positionList, critiqueList } = await buildCurrentCorpus(context);
@@ -946,6 +1371,19 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const uxSimplificationPolicies = latestWorkflowResources(workflowEvents, "uxSimplificationPolicy");
   const uxSimplificationReviews = latestWorkflowResources(workflowEvents, "uxSimplificationReview");
   const screenStatePayloads = latestWorkflowResources(workflowEvents, "screenStatePayload");
+  const workflowStateTransitionLogs = latestWorkflowResources(workflowEvents, "workflowStateTransitionLog");
+  const raterDataConsents = latestWorkflowResources(workflowEvents, "raterDataConsent");
+  const raterDataRestrictionRequests = latestWorkflowResources(workflowEvents, "raterDataRestrictionRequest");
+  const volunteerDataWithdrawalRequests = latestWorkflowResources(workflowEvents, "volunteerDataWithdrawalRequest");
+  const visibilityPolicies = latestWorkflowResources(workflowEvents, "visibilityPolicy");
+  const ratingWorkflowProfiles = latestWorkflowResources(workflowEvents, "ratingWorkflowProfile");
+  const uiExperimentPolicies = latestWorkflowResources(workflowEvents, "uiExperimentPolicy");
+  const preSubmitAssistPolicies = latestWorkflowResources(workflowEvents, "preSubmitAssistPolicy");
+  const accessibilityConformanceReports = latestWorkflowResources(workflowEvents, "accessibilityConformanceReport");
+  const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
+  const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
+  const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
+  const releaseConfigManifestVerifications = latestWorkflowResources(workflowEvents, "releaseConfigManifestVerification");
   const ratings = [...seedRatings, ...persistedRatings];
   const certificationAttempts = [...seedCertificationAttempts, ...persistedCertificationAttempts];
   const benchmarkExposureEvents = [...seedBenchmarkExposureEvents, ...persistedBenchmarkExposureEvents];
@@ -1019,6 +1457,19 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     uxSimplificationPolicies,
     uxSimplificationReviews,
     screenStatePayloads,
+    workflowStateTransitionLogs,
+    raterDataConsents,
+    raterDataRestrictionRequests,
+    volunteerDataWithdrawalRequests,
+    visibilityPolicies,
+    ratingWorkflowProfiles,
+    uiExperimentPolicies,
+    preSubmitAssistPolicies,
+    accessibilityConformanceReports,
+    governedBundleCanonicalizationProfiles,
+    governedBundleRecords,
+    releaseConfigManifests,
+    releaseConfigManifestVerifications,
   });
   return {
     report,
@@ -1089,6 +1540,19 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     uxSimplificationPolicies,
     uxSimplificationReviews,
     screenStatePayloads,
+    workflowStateTransitionLogs,
+    raterDataConsents,
+    raterDataRestrictionRequests,
+    volunteerDataWithdrawalRequests,
+    visibilityPolicies,
+    ratingWorkflowProfiles,
+    uiExperimentPolicies,
+    preSubmitAssistPolicies,
+    accessibilityConformanceReports,
+    governedBundleCanonicalizationProfiles,
+    governedBundleRecords,
+    releaseConfigManifests,
+    releaseConfigManifestVerifications,
   };
 }
 
@@ -1635,6 +2099,188 @@ export function validateBenchmarkExposurePayload(exposure) {
   return { ok: true };
 }
 
+export function validateWorkflowStateTransitionPayload(transition, actor) {
+  if (!transition || typeof transition !== "object" || Array.isArray(transition)) return invalid("workflow state transition object is required");
+  const id = transition.id ?? transition.transitionId ?? transition.transition_id;
+  const entityType = normalizeWorkflowStateEntityType(transition.entityType ?? transition.entity_type);
+  const entityId = transition.entityId ?? transition.entity_id;
+  const priorState = transition.priorState ?? transition.prior_state;
+  const requestedNextState = transition.requestedNextState ?? transition.requested_next_state;
+  const acceptedNextState = transition.acceptedNextState ?? transition.accepted_next_state ?? requestedNextState;
+  const guardChecks = normalizeWorkflowGuardChecks(transition.guardChecks ?? transition.guard_checks ?? transition.guardChecksEvaluated);
+  const failedGuardReasons = normalizeWorkflowStringList(transition.failedGuardReasons ?? transition.failed_guard_reasons);
+  const actorId = transition.actorId ?? transition.transitionActorId ?? transition.transition_actor_id ?? actor.id;
+  const actorRole = transition.actorRole ?? transition.transitionActorRole ?? transition.transition_actor_role ?? actor.role;
+  const missing = [
+    ["id", id],
+    ["entityType", entityType],
+    ["entityId", entityId],
+    ["priorState", priorState],
+    ["requestedNextState", requestedNextState],
+    ["actorId", actorId],
+    ["actorRole", actorRole],
+  ].filter(([, value]) => value === undefined || value === null || value === "");
+  if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
+  const rules = workflowStateMachineRules[entityType];
+  if (!rules) return invalid(`unsupported workflow state entityType: ${entityType}`);
+  if (!guardChecks.length) return invalid("guardChecks must include at least one evaluated backend guard");
+  if (findHiddenKeys(transition).length || findRawBenchmarkContentKeys(transition).length) {
+    return invalid("workflow state transitions cannot include hidden source, benchmark, peer, model, or gold payload fields");
+  }
+  if (["rater", "graduate", "phd"].includes(actor.role)) {
+    const assignmentId = transition.assignmentId ?? transition.assignment_id ?? (entityType === "assignment" ? entityId : null);
+    if (assignmentId && !actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(assignmentId)) {
+      return { ok: false, statusCode: 403, error: "workflow_actor_not_authorized", detail: `actor ${actor.id} is not assigned to ${assignmentId}` };
+    }
+  }
+  const allowed = rules.some(([prior, next]) => prior === priorState && next === requestedNextState);
+  const normalized = {
+    id,
+    entityType,
+    entityId,
+    assignmentId: transition.assignmentId ?? transition.assignment_id ?? null,
+    priorState,
+    requestedNextState,
+    acceptedNextState: allowed && !failedGuardReasons.length ? acceptedNextState : priorState,
+    actorId,
+    actorRole,
+    guardChecks,
+    failedGuardReasons: allowed ? failedGuardReasons : [...failedGuardReasons, `transition_not_allowed:${priorState}->${requestedNextState}`],
+    lockFreezeArtifactIds: normalizeWorkflowStringList(transition.lockFreezeArtifactIds ?? transition.lock_freeze_artifact_ids),
+    sourceTagProtectedVisibilityState: transition.sourceTagProtectedVisibilityState ?? transition.source_tag_protected_visibility_state ?? "source_tag_protected_visibility_preserved",
+    timestamp: transition.timestamp ?? transition.createdAt ?? transition.created_at ?? new Date().toISOString(),
+  };
+  if (!allowed) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "workflow_state_transition_not_allowed",
+      detail: `${entityType} cannot transition ${priorState} -> ${requestedNextState}`,
+      resource: normalized,
+    };
+  }
+  if (failedGuardReasons.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "workflow_state_transition_guard_failed",
+      detail: failedGuardReasons.join(", "),
+      resource: normalized,
+    };
+  }
+  if (acceptedNextState !== requestedNextState) return invalid("acceptedNextState must match requestedNextState for accepted transitions");
+  return { ok: true, resource: normalized };
+}
+
+export function validateRaterDataConsentPayload(consent, actor) {
+  if (!consent || typeof consent !== "object" || Array.isArray(consent)) return invalid("rater data consent object is required");
+  const id = consent.id ?? consent.consentId;
+  const raterId = consent.raterId ?? actor.id;
+  const categories = normalizeWorkflowStringList(consent.dataCategoriesCovered ?? consent.consentedCategories ?? consent.dataCategories);
+  const useScopes = normalizeWorkflowStringList(consent.useScopesAcknowledged ?? consent.useScopes);
+  const missing = [
+    ["id", id],
+    ["noticeVersion", consent.noticeVersion],
+  ].filter(([, value]) => value === undefined || value === null || value === "");
+  if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
+  const actorCheck = validateParticipantRaterId(raterId, actor);
+  if (!actorCheck.ok) return actorCheck;
+  if (findHiddenKeys(consent).length || findRawBenchmarkContentKeys(consent).length) return invalid("rater data consent cannot include hidden or raw protected item fields");
+  const missingCategories = raterDataGovernanceCategories.filter((category) => !categories.includes(category));
+  if (missingCategories.length) return invalid(`dataCategoriesCovered missing: ${missingCategories.join(", ")}`);
+  const missingUseScopes = raterDataUseScopes.filter((scope) => !useScopes.includes(scope));
+  if (missingUseScopes.length) return invalid(`useScopesAcknowledged missing: ${missingUseScopes.join(", ")}`);
+  if (consent.publicArtifactsDeidentifiedByDefault !== true) return invalid("publicArtifactsDeidentifiedByDefault must be true");
+  if (consent.privateLearningDataExcludedFromReleaseAndTraining !== true) return invalid("privateLearningDataExcludedFromReleaseAndTraining must be true");
+  if (consent.dataProfileVisible !== true) return invalid("dataProfileVisible must be true");
+  const resource = {
+    id,
+    raterId,
+    noticeVersion: consent.noticeVersion,
+    dataCategoriesCovered: categories,
+    useScopesAcknowledged: useScopes,
+    dataProfileVisible: true,
+    publicArtifactsDeidentifiedByDefault: true,
+    identifiableAccessRestriction: consent.identifiableAccessRestriction ?? "approved_operational_or_research_roles_only",
+    privateLearningDataExcludedFromReleaseAndTraining: true,
+    consentedAt: consent.consentedAt ?? new Date().toISOString(),
+  };
+  return { ok: true, resource };
+}
+
+export function validateRaterDataRestrictionPayload(request, actor) {
+  if (!request || typeof request !== "object" || Array.isArray(request)) return invalid("rater data restriction request object is required");
+  const id = request.id ?? request.restrictionRequestId;
+  const raterId = request.raterId ?? actor.id;
+  const affectedDataCategories = normalizeWorkflowStringList(request.affectedDataCategories);
+  const missing = [
+    ["id", id],
+    ["requestType", request.requestType],
+  ].filter(([, value]) => value === undefined || value === null || value === "");
+  if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
+  const actorCheck = validateParticipantRaterId(raterId, actor);
+  if (!actorCheck.ok) return actorCheck;
+  if (!affectedDataCategories.length) return invalid("affectedDataCategories must be non-empty");
+  if (findHiddenKeys(request).length || findRawBenchmarkContentKeys(request).length) return invalid("rater data restriction request cannot include hidden or raw protected item fields");
+  return {
+    ok: true,
+    resource: {
+      id,
+      raterId,
+      requestType: request.requestType,
+      affectedDataCategories,
+      actionTaken: request.actionTaken ?? "pending_review",
+      requesterNotificationStatus: request.requesterNotificationStatus ?? "received",
+      timestamp: request.timestamp ?? new Date().toISOString(),
+    },
+  };
+}
+
+export function validateVolunteerDataWithdrawalPayload(request, actor) {
+  if (!request || typeof request !== "object" || Array.isArray(request)) return invalid("volunteer data withdrawal request object is required");
+  const id = request.id ?? request.withdrawalRequestId;
+  const raterId = request.raterId ?? actor.id;
+  const requestType = request.requestType;
+  const affectedDataCategories = normalizeWorkflowStringList(request.affectedDataCategories);
+  const missing = [
+    ["id", id],
+    ["requestType", requestType],
+  ].filter(([, value]) => value === undefined || value === null || value === "");
+  if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
+  const actorCheck = validateParticipantRaterId(raterId, actor);
+  if (!actorCheck.ok) return actorCheck;
+  if (!volunteerWithdrawalRequestTypes.has(requestType)) return invalid(`unsupported withdrawal requestType: ${requestType}`);
+  if (!affectedDataCategories.length) return invalid("affectedDataCategories must be non-empty");
+  if (findHiddenKeys(request).length || findRawBenchmarkContentKeys(request).length) return invalid("volunteer withdrawal request cannot include hidden or raw protected item fields");
+  return {
+    ok: true,
+    resource: {
+      id,
+      raterId,
+      requestType,
+      affectedDataCategories,
+      actionTaken: request.actionTaken ?? "pending_review",
+      futureAssignmentStop: request.futureAssignmentStop === true || requestType === "future_assignment_stop",
+      identifiableTelemetryRestricted: request.identifiableTelemetryRestricted !== false,
+      publicAttributionRemoved: request.publicAttributionRemoved !== false,
+      privateLearningDashboardDeleted: request.privateLearningDashboardDeleted !== false,
+      futureTrainingExportExcluded: request.futureTrainingExportExcluded !== false,
+      frozenSnapshotImpact: request.frozenSnapshotImpact ?? "already_frozen_deidentified_label_snapshots_preserved",
+      denominatorChangeArtifactId: request.denominatorChangeArtifactId ?? null,
+      requesterNotificationStatus: request.requesterNotificationStatus ?? "received",
+      timestamp: request.timestamp ?? new Date().toISOString(),
+    },
+  };
+}
+
+function validateParticipantRaterId(raterId, actor) {
+  if (!raterId) return invalid("raterId is required");
+  if (actor.role !== "admin" && raterId !== actor.id) {
+    return { ok: false, statusCode: 403, error: "participant_data_actor_not_authorized", detail: `raterId must match authenticated actor ${actor.id}` };
+  }
+  return { ok: true };
+}
+
 export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   if (!resource || typeof resource !== "object" || Array.isArray(resource)) return invalid(`${spec.resourceKey} object is required`);
   const normalized = structuredClone(resource);
@@ -2123,6 +2769,33 @@ function sendJson(response, statusCode, body) {
 function sendText(response, statusCode, body) {
   response.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
   response.end(body);
+}
+
+function normalizeWorkflowStateEntityType(value) {
+  return String(value ?? "").trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+}
+
+function normalizeWorkflowStringList(value) {
+  if (Array.isArray(value)) return value.filter((item) => typeof item === "string" && item).map((item) => item.trim());
+  if (typeof value === "string" && value) return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function normalizeWorkflowGuardChecks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((check) => {
+      if (typeof check === "string") return { id: check, status: "passed" };
+      if (!check || typeof check !== "object") return null;
+      const id = check.id ?? check.guardId ?? check.name ?? check.key;
+      if (!id) return null;
+      return {
+        id,
+        status: check.status ?? (check.passed === false ? "failed" : "passed"),
+        detail: check.detail ?? check.reason ?? null,
+      };
+    })
+    .filter(Boolean);
 }
 
 function findHiddenKeys(value, prefix = "") {

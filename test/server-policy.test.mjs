@@ -69,6 +69,287 @@ const uxHiddenFieldClasses = [
 
 const uxScreenControlKeys = [...uxNoFeatureLossKeys, "post_lock_feedback"];
 
+const workflowStateTransitionFixtures = [
+  ["assignment", "assignment-state-release", "draft", "locked_initial_rating"],
+  ["rating", "rating-state-release", "draft", "locked_initial"],
+  ["discussion_thread", "discussion-state-release", "eligible_after_initial_locks", "object_level_discussion"],
+  ["post_lock_discussion_session", "post-lock-session-state-release", "object_level_discussion", "revision_window"],
+  ["adjudication_memo", "adjudication-state-release", "revision_window", "adjudication_finalized"],
+  ["verification_record", "verification-state-release", "in_progress", "verified"],
+  ["label_snapshot", "label-snapshot-state-release", "candidate", "frozen"],
+  ["pairwise_comparison_snapshot", "pairwise-state-release", "candidate", "frozen"],
+  ["evaluation_run", "evaluation-state-release", "contamination_checks_passed", "run"],
+  ["training_export", "training-export-state-release", "contamination_checks_passed", "run"],
+  ["release_version", "release-state-release", "gate_checks_passed", "frozen"],
+].map(([entityType, entityId, priorState, requestedNextState], index) => ({
+  id: `workflow-state-transition-${index + 1}`,
+  entityType,
+  entityId,
+  priorState,
+  requestedNextState,
+  acceptedNextState: requestedNextState,
+  actorId: "demo-admin",
+  actorRole: "admin",
+  guardChecks: ["backend_guard_passed"],
+  failedGuardReasons: [],
+  lockFreezeArtifactIds: ["release-config-manifest-october-2026-demo"],
+  sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
+  timestamp: `2026-10-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+}));
+
+const raterDataCategories = [
+  "identity_profile",
+  "rating_performance",
+  "session_pacing",
+  "safe_decline_reasons",
+  "source_style_guesses",
+  "discussion_participation",
+  "calibration_results",
+  "reliability_profile",
+];
+
+const raterDataUseScopes = ["certification", "reliability_estimation", "research", "release_reporting", "operations"];
+
+const policyBundleFieldClasses = [
+  "source_metadata",
+  "admin_tags",
+  "benchmark_membership",
+  "gold_answers",
+  "peer_ratings",
+  "peer_rationales",
+  "model_judge_scores",
+  "active_learning_selection_reasons",
+  "rater_identity",
+  "rater_role",
+  "discussion_identity",
+  "verification_evidence",
+  "volunteer_performance_metadata",
+];
+
+const ratingWorkflowTaskModes = [
+  "ordinary_live",
+  "validation",
+  "gold_certification",
+  "hidden_benchmark",
+  "low_clarity",
+  "verification",
+  "interpretation_dispute",
+  "adjudication",
+];
+
+const protectedUiLaneClasses = ["validation", "hidden_benchmark", "gold_certification", "release_critical"];
+
+const blockedUiExperimentClasses = [
+  "score_controls",
+  "anchor_panel_copy",
+  "lint_behavior",
+  "issue_panel_requiredness",
+  "example_visibility",
+  "layout_density",
+  "accessibility_variant",
+  "score_affecting_wording",
+];
+
+const prohibitedAssistInputs = [
+  "target_scores",
+  "gold_answers",
+  "peer_scores",
+  "model_judge_scores",
+  "adjudicated_labels",
+  "benchmark_membership",
+  "protected_split_status",
+];
+
+const accessibilitySurfaces = ["rating", "practice", "discussion", "adjudication", "consent", "withdrawal"];
+const accessibilityChecks = ["keyboard", "screen_reader", "focus_order", "non_color_status", "zoom", "mobile_touch", "reduced_motion", "timeout_recovery", "locale_sensitive_dates", "readability"];
+const releaseConfigBindings = [
+  "code",
+  "rubric",
+  "scoring",
+  "visibility",
+  "workflow",
+  "ui_render",
+  "ux_simplification",
+  "lint",
+  "assist",
+  "queue",
+  "split",
+  "rights_provenance",
+  "item_text",
+  "rating_context",
+  "label",
+  "pairwise",
+  "parser",
+  "prompt",
+  "metric",
+  "score_input",
+  "export_policy",
+];
+const governedBundleFamilies = [
+  "rubric",
+  "scoring",
+  "visibility",
+  "workflow",
+  "ui_render",
+  "lint",
+  "assist",
+  "score_input",
+  "queue",
+  "split",
+  "output_schema",
+  "prompt",
+  "parser",
+  "metric",
+  "export_policy",
+  "phase_gate",
+];
+
+function completePolicyBundleFixtures() {
+  return {
+    visibilityPolicy: {
+      id: "visibility-policy-workflow-new",
+      policyVersion: "visibility-policy-rlhf88-v1",
+      roleClasses: ["rater", "graduate", "phd", "expert", "admin", "auditor"],
+      workflowStates: ["queued", "draft", "locked_initial", "post_lock", "adjudication", "release_review"],
+      fieldClasses: policyBundleFieldClasses,
+      allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment", "read_authorized_audit_summary"],
+      allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
+      sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters",
+      benchmarkGoldModelPeerVisibilityRules: "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
+      backendEnforced: true,
+      exposureLogRequired: true,
+    },
+    ratingWorkflowProfile: {
+      id: "rating-workflow-profile-workflow-new",
+      profileVersion: "rating-workflow-profile-rlhf88-v1",
+      taskModesCovered: ratingWorkflowTaskModes,
+      requiredScoreFields: ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"],
+      requiredRationaleFields: ["short_rationale", "low_clarity_explanation"],
+      requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
+      optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
+      safeDeclineAvailable: true,
+      preSubmitLintPolicy: "pre-submit-assist-workflow-new",
+    },
+    uiExperimentPolicy: {
+      id: "ui-experiment-policy-workflow-new",
+      policyVersion: "ui-experiment-policy-rlhf88-v1",
+      coveredSplitLaneClasses: protectedUiLaneClasses,
+      blockedExperimentClasses: blockedUiExperimentClasses,
+      unregisteredMaterialChangesBlocked: true,
+      sensitivitySnapshotRequired: true,
+      uxSimplificationCompatibilityRule: "UX simplification requires passing review",
+    },
+    preSubmitAssistPolicy: {
+      id: "pre-submit-assist-workflow-new",
+      policyVersion: "pre-submit-assist-rlhf88-v1",
+      rubricVersion: "appendix-f-operational-v1",
+      workflowProfileId: "rating-workflow-profile-workflow-new",
+      permittedAssistTypes: ["deterministic_completeness_check", "rubric_anchor_reminder", "non_directive_issue_prompt"],
+      prohibitedInputs: prohibitedAssistInputs,
+      deterministic: true,
+      labelBlind: true,
+      nonDirective: true,
+      targetScoreSuggestionsProhibited: true,
+      protectedSplitEligible: true,
+    },
+    accessibilityConformanceReport: {
+      id: "accessibility-conformance-workflow-new",
+      workflowProfileIds: ["rating-workflow-profile-workflow-new"],
+      screenIds: accessibilitySurfaces,
+      raterInstructionRenderVersionIds: ["rater-instruction-render-workflow-new"],
+      uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
+      uxSimplificationPolicyId: "ux-policy-workflow-new",
+      testedLocaleSet: ["en-US"],
+      checksPassed: accessibilityChecks,
+      readabilityReviewStatus: "passed",
+      failures: [],
+      mitigations: [],
+      nonStaffPromotionBlocker: false,
+    },
+  };
+}
+
+function completeReleaseConfigWorkflowFixtures() {
+  const governedBundleCanonicalizationProfile = {
+    id: "canonicalization-profile-workflow-new",
+    name: "Workflow governed bundle canonicalization",
+    version: "canonical-json-sha256-v1",
+    hashAlgorithm: "sha256",
+    materializationQueryRules: "stable materialized query per bundle family",
+    includedFieldPolicy: "semantic fields only",
+    rowOrderingPolicy: "order by family, version, id",
+    arrayOrderingPolicy: "sort set-like arrays before hashing",
+    nullEmptyHandling: "preserve null and empty distinctions",
+    unicodeNormalization: "NFC",
+    timestampNumberEncoding: "UTC ISO timestamps and decimal-string numbers",
+    testVectorIds: ["governed-bundle-vector-v1"],
+    activatedAt: "2026-10-01T00:07:00.000Z",
+  };
+  const governedBundleRecords = governedBundleFamilies.map((bundleFamily, index) => ({
+    id: `governed-bundle-workflow-${bundleFamily}`,
+    bundleFamily,
+    semanticVersion: `rlhf88-${index + 1}`,
+    canonicalizationProfileId: governedBundleCanonicalizationProfile.id,
+    canonicalContentHash: `sha256:workflow-${bundleFamily}`,
+    materializedRowCount: index + 1,
+    appendOnlyActivationStatus: "activated",
+    activatedBy: "demo-admin",
+    activatedAt: "2026-10-01T00:08:00.000Z",
+  }));
+  const releaseConfigManifest = {
+    id: "release-config-manifest-workflow-new",
+    releaseId: "october-2026-demo",
+    evaluationRunId: "eval-workflow-new",
+    name: "Workflow October 2026 release config",
+    version: "release-config-rlhf88-v1",
+    canonicalManifestHash: "sha256:workflow-release-config",
+    codeCommitId: "commit-workflow-new",
+    buildId: "build-workflow-new",
+    rubricVersion: "appendix-f-operational-v1",
+    scoredDimensionSchemaVersion: "seven-dimension-lmca-v1",
+    releaseGateProfileId: "release-gate-workflow-new",
+    visibilityPolicyId: "visibility-policy-workflow-new",
+    uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
+    uxSimplificationPolicyIds: ["ux-policy-workflow-new"],
+    preSubmitAssistPolicyId: "pre-submit-assist-workflow-new",
+    scoreInputPolicyIds: ["score-input-policy-workflow-new"],
+    workflowProfileIds: ["rating-workflow-profile-workflow-new"],
+    raterInstructionRenderVersionIds: ["rater-instruction-render-workflow-new"],
+    rubricLintConfigIds: ["rubric-lint-config-workflow-new"],
+    queuePolicySnapshotId: "queue-policy-workflow-new",
+    labelSnapshotIds: ["snapshot-oct-api"],
+    pairwiseComparisonSnapshotIds: ["pairwise-snapshot-workflow-new"],
+    metricConfigIds: ["metric-config-workflow-new"],
+    scoringCodeChecksums: ["sha256:workflow-scoring"],
+    parserConfigIds: ["parser-workflow-new"],
+    promptTemplateIds: ["prompt-workflow-new"],
+    governedBundleIds: governedBundleRecords.map((bundle) => bundle.id),
+    bindingFamilies: releaseConfigBindings,
+    frozenAt: "2026-10-01T00:09:00.000Z",
+  };
+  return {
+    governedBundleCanonicalizationProfile,
+    governedBundleRecords,
+    governedBundleVerification: {
+      id: "governed-bundle-verification-workflow-new",
+      governedBundleId: governedBundleRecords[0].id,
+      verificationStatus: "passed",
+      expectedHash: governedBundleRecords[0].canonicalContentHash,
+      observedHash: governedBundleRecords[0].canonicalContentHash,
+      verifiedAt: "2026-10-01T00:10:00.000Z",
+    },
+    releaseConfigManifest,
+    releaseConfigManifestVerification: {
+      id: "release-config-manifest-verification-workflow-new",
+      manifestId: releaseConfigManifest.id,
+      verificationStatus: "passed",
+      expectedHash: releaseConfigManifest.canonicalManifestHash,
+      observedHash: releaseConfigManifest.canonicalManifestHash,
+      verifiedAt: "2026-10-01T00:11:00.000Z",
+    },
+  };
+}
+
 test("Vercel function entrypoint serves API health without a long-running server", async () => {
   const response = await invokeVercelHandler(vercelHealthHandler, { method: "GET", url: "/api/health" });
   assert.equal(response.status, 200);
@@ -367,6 +648,34 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/ux-simplification-reviews/ux-review-smoke"],
     ["POST", "/api/v1/screen-state-payloads"],
     ["GET", "/api/v1/screen-state-payloads/screen-state-smoke"],
+    ["POST", "/api/v1/state-transitions"],
+    ["GET", "/api/v1/state/rating/rating-state-smoke"],
+    ["GET", "/api/v1/raters/me/data-profile"],
+    ["POST", "/api/v1/raters/me/data-consent"],
+    ["POST", "/api/v1/raters/me/data-restriction-request"],
+    ["POST", "/api/v1/raters/me/withdrawal-requests"],
+    ["GET", "/api/v1/raters/me/withdrawal-requests/withdrawal-smoke"],
+    ["POST", "/api/v1/visibility-policies"],
+    ["GET", "/api/v1/visibility-policies/visibility-policy-smoke"],
+    ["POST", "/api/v1/rating-workflow-profiles"],
+    ["GET", "/api/v1/rating-workflow-profiles/rating-profile-smoke"],
+    ["POST", "/api/v1/ui-experiment-policies"],
+    ["GET", "/api/v1/ui-experiment-policies/ui-experiment-smoke"],
+    ["POST", "/api/v1/pre-submit-assist-policies"],
+    ["GET", "/api/v1/pre-submit-assist-policies/pre-submit-assist-smoke"],
+    ["POST", "/api/v1/accessibility-conformance-reports"],
+    ["GET", "/api/v1/accessibility-conformance-reports/accessibility-smoke"],
+    ["POST", "/api/v1/governed-bundle-canonicalization-profiles"],
+    ["GET", "/api/v1/governed-bundle-canonicalization-profiles/profile-smoke"],
+    ["POST", "/api/v1/governed-bundles"],
+    ["GET", "/api/v1/governed-bundles/bundle-smoke"],
+    ["POST", "/api/v1/governed-bundles/bundle-smoke/verify"],
+    ["POST", "/api/v1/release-config-manifests"],
+    ["GET", "/api/v1/release-config-manifests/manifest-smoke"],
+    ["POST", "/api/v1/release-config-manifests/manifest-smoke/verify"],
+    ["POST", "/api/v1/releases/october-2026-demo/freeze-config-manifest"],
+    ["GET", "/api/v1/releases/october-2026-demo/config-manifest"],
+    ["GET", "/api/v1/evaluations/eval-smoke/release-config-manifest"],
     ["GET", "/api/v1/evaluations/eval-smoke/report"],
   ];
 
@@ -426,6 +735,134 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
   for (const snippet of requiredTemplateSnippets) {
     assert.ok(appSource.includes(snippet), snippet);
   }
+});
+
+test("state transition endpoint records rejected illegal transitions without advancing state", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const response = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/state-transitions",
+    headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      transition: {
+        id: "illegal-rating-transition",
+        entityType: "rating",
+        entityId: "rating-illegal-state",
+        priorState: "draft",
+        requestedNextState: "revision_proposed",
+        guardChecks: ["initial_rating_lock_missing"],
+        sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
+      },
+    }),
+  });
+  assert.equal(response.status, 409);
+  assert.equal(response.body.acceptedNextState, "draft");
+  assert.deepEqual(response.body.failedGuardReasons, ["transition_not_allowed:draft->revision_proposed"]);
+
+  const events = await auditStore.readWorkflowEvents();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "workflow_state_transition_rejected");
+  assert.equal(events[0].payload.workflowStateTransitionLog.acceptedNextState, "draft");
+});
+
+test("rater data-governance endpoints expose profile, consent, restrictions, and withdrawals for the authenticated rater", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const headers = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+
+  const profile = await invokeApi(context, { method: "GET", url: "/api/v1/raters/me/data-profile", headers });
+  assert.equal(profile.status, 200);
+  assert.equal(profile.body.raterId, "demo-rater");
+  assert.equal(profile.body.deIdentificationPolicy.publicArtifactsDefault, "deidentified");
+  assert.equal(profile.body.deIdentificationPolicy.privateLearningDataExcludedFromModelTrainingExports, true);
+
+  const consent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-consent",
+    headers,
+    body: JSON.stringify({
+      raterDataConsent: {
+        id: "rater-data-consent-api",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        identifiableAccessRestriction: "approved operational or research role access only",
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+      },
+    }),
+  });
+  assert.equal(consent.status, 201);
+
+  const impersonation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-consent",
+    headers,
+    body: JSON.stringify({
+      raterDataConsent: {
+        id: "rater-data-consent-impersonation",
+        raterId: "demo-expert",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+      },
+    }),
+  });
+  assert.equal(impersonation.status, 403);
+
+  const restriction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-restriction-request",
+    headers,
+    body: JSON.stringify({
+      raterDataRestrictionRequest: {
+        id: "rater-data-restriction-api",
+        requestType: "identifiable_access_review",
+        affectedDataCategories: ["session_pacing", "safe_decline_reasons"],
+        actionTaken: "review_opened",
+        requesterNotificationStatus: "notified",
+      },
+    }),
+  });
+  assert.equal(restriction.status, 201);
+
+  const withdrawal = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/withdrawal-requests",
+    headers,
+    body: JSON.stringify({
+      volunteerDataWithdrawalRequest: {
+        id: "withdrawal-api",
+        requestType: "future_training_export_exclusion",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export"],
+        actionTaken: "future_training_export_exclusion_recorded",
+        futureTrainingExportExcluded: true,
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+      },
+    }),
+  });
+  assert.equal(withdrawal.status, 201);
+
+  const withdrawalById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/raters/me/withdrawal-requests/withdrawal-api",
+    headers,
+  });
+  assert.equal(withdrawalById.status, 200);
+  assert.equal(withdrawalById.body.raterId, "demo-rater");
+
+  const updatedProfile = await invokeApi(context, { method: "GET", url: "/api/v1/raters/me/data-profile", headers });
+  assert.equal(updatedProfile.body.consent.submittedCount, 1);
+  assert.equal(updatedProfile.body.restrictionRequests.length, 1);
+  assert.equal(updatedProfile.body.withdrawalRequests.length, 1);
 });
 
 test("v1 rating endpoints persist blind ratings and enforce revision route identity", async () => {
@@ -2279,6 +2716,204 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(screenStateById.status, 200);
   assert.equal(screenStateById.body.surface, "rating");
 
+  for (const transition of workflowStateTransitionFixtures) {
+    const transitionResponse = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/state-transitions",
+      headers: adminHeaders,
+      body: JSON.stringify({ transition }),
+    });
+    assert.equal(transitionResponse.status, 201, transition.entityType);
+    assert.equal(transitionResponse.body.acceptedNextState, transition.acceptedNextState);
+  }
+
+  const ratingState = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/state/rating/rating-state-release",
+    headers: adminHeaders,
+  });
+  assert.equal(ratingState.status, 200);
+  assert.equal(ratingState.body.currentState, "locked_initial");
+  assert.equal(ratingState.body.appendOnly, true);
+
+  const raterDataConsent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-consent",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterDataConsent: {
+        id: "rater-data-consent-workflow-new",
+        raterId: "demo-rater",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        identifiableAccessRestriction: "approved operational or research role access only",
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+        consentedAt: "2026-10-01T00:04:00.000Z",
+      },
+    }),
+  });
+  assert.equal(raterDataConsent.status, 201);
+
+  const raterDataRestriction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-restriction-request",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterDataRestrictionRequest: {
+        id: "rater-data-restriction-workflow-new",
+        raterId: "demo-rater",
+        requestType: "identifiable_access_review",
+        affectedDataCategories: ["session_pacing", "safe_decline_reasons"],
+        actionTaken: "review_opened",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:05:00.000Z",
+      },
+    }),
+  });
+  assert.equal(raterDataRestriction.status, 201);
+
+  const volunteerWithdrawal = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/withdrawal-requests",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      volunteerDataWithdrawalRequest: {
+        id: "volunteer-withdrawal-workflow-new",
+        raterId: "demo-rater",
+        requestType: "future_training_export_exclusion",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export"],
+        actionTaken: "future_training_export_exclusion_recorded",
+        identifiableTelemetryRestricted: true,
+        publicAttributionRemoved: true,
+        privateLearningDashboardDeleted: true,
+        futureTrainingExportExcluded: true,
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:06:00.000Z",
+      },
+    }),
+  });
+  assert.equal(volunteerWithdrawal.status, 201);
+
+  const policyBundle = completePolicyBundleFixtures();
+  for (const [resourceKey, url] of [
+    ["visibilityPolicy", "/api/v1/visibility-policies"],
+    ["ratingWorkflowProfile", "/api/v1/rating-workflow-profiles"],
+    ["uiExperimentPolicy", "/api/v1/ui-experiment-policies"],
+    ["preSubmitAssistPolicy", "/api/v1/pre-submit-assist-policies"],
+    ["accessibilityConformanceReport", "/api/v1/accessibility-conformance-reports"],
+  ]) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url,
+      headers: adminHeaders,
+      body: JSON.stringify({ [resourceKey]: policyBundle[resourceKey] }),
+    });
+    assert.equal(response.status, 201, resourceKey);
+  }
+
+  const ratingWorkflowProfileById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rating-workflow-profiles/rating-workflow-profile-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(ratingWorkflowProfileById.status, 200);
+  assert.equal(ratingWorkflowProfileById.body.safeDeclineAvailable, true);
+
+  const visibilityPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/visibility-policies/visibility-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(visibilityPolicyById.status, 200);
+  assert.equal(visibilityPolicyById.body.backendEnforced, true);
+
+  const releaseConfig = completeReleaseConfigWorkflowFixtures();
+  const canonicalizationProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundle-canonicalization-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({ governedBundleCanonicalizationProfile: releaseConfig.governedBundleCanonicalizationProfile }),
+  });
+  assert.equal(canonicalizationProfile.status, 201);
+
+  const canonicalizationProfileById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/governed-bundle-canonicalization-profiles/canonicalization-profile-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(canonicalizationProfileById.status, 200);
+  assert.equal(canonicalizationProfileById.body.hashAlgorithm, "sha256");
+
+  for (const governedBundleRecord of releaseConfig.governedBundleRecords) {
+    const governedBundle = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/governed-bundles",
+      headers: adminHeaders,
+      body: JSON.stringify({ governedBundleRecord }),
+    });
+    assert.equal(governedBundle.status, 201, governedBundleRecord.bundleFamily);
+  }
+
+  const governedBundleById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/governed-bundles/governed-bundle-workflow-rubric",
+    headers: adminHeaders,
+  });
+  assert.equal(governedBundleById.status, 200);
+  assert.equal(governedBundleById.body.bundleFamily, "rubric");
+
+  const governedBundleVerification = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundles/governed-bundle-workflow-rubric/verify",
+    headers: adminHeaders,
+    body: JSON.stringify({ governedBundleVerification: releaseConfig.governedBundleVerification }),
+  });
+  assert.equal(governedBundleVerification.status, 201);
+
+  const releaseConfigManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-config-manifests",
+    headers: adminHeaders,
+    body: JSON.stringify({ releaseConfigManifest: releaseConfig.releaseConfigManifest }),
+  });
+  assert.equal(releaseConfigManifest.status, 201);
+
+  const releaseConfigManifestById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-config-manifests/release-config-manifest-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(releaseConfigManifestById.status, 200);
+  assert.equal(releaseConfigManifestById.body.releaseId, "october-2026-demo");
+
+  const releaseConfigManifestVerification = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-config-manifests/release-config-manifest-workflow-new/verify",
+    headers: adminHeaders,
+    body: JSON.stringify({ releaseConfigManifestVerification: releaseConfig.releaseConfigManifestVerification }),
+  });
+  assert.equal(releaseConfigManifestVerification.status, 201);
+
+  const manifestForRelease = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/releases/october-2026-demo/config-manifest",
+    headers: adminHeaders,
+  });
+  assert.equal(manifestForRelease.status, 200);
+  assert.equal(manifestForRelease.body.id, "release-config-manifest-workflow-new");
+
+  const manifestForEvaluation = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/evaluations/eval-workflow-new/release-config-manifest",
+    headers: adminHeaders,
+  });
+  assert.equal(manifestForEvaluation.status, 200);
+  assert.equal(manifestForEvaluation.body.id, "release-config-manifest-workflow-new");
+
   const releaseReport = await invokeApi(context, { method: "GET", url: "/api/release/report" });
   assert.equal(releaseReport.status, 200);
   assert.equal(releaseReport.body.corpusManifest.counts.positions, 4);
@@ -2502,6 +3137,37 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.uxSimplification.surfaceRows.every((row) => row.status === "ux_surface_simplification_gate_passed"),
     true,
   );
+  assert.equal(releaseReport.body.workflowStateArtifacts.workflowStateTransitionLogs.length, workflowStateTransitionFixtures.length);
+  assert.equal(releaseReport.body.workflowStateMachineEvidence.releaseUseStatus, "submitted_workflow_state_machine_evidence_complete");
+  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.passingEntityTypeCount, workflowStateTransitionFixtures.length);
+  assert.deepEqual(releaseReport.body.workflowStateMachineEvidence.reviewSections, []);
+  assert.equal(
+    releaseReport.body.workflowStateMachineEvidence.entityRows.every((row) => row.status === "workflow_state_machine_entity_complete"),
+    true,
+  );
+  assert.equal(releaseReport.body.workflowParticipantDataArtifacts.raterDataConsents.length, 1);
+  assert.equal(releaseReport.body.workflowParticipantDataArtifacts.raterDataRestrictionRequests.length, 1);
+  assert.equal(releaseReport.body.workflowParticipantDataArtifacts.volunteerDataWithdrawalRequests.length, 1);
+  assert.equal(releaseReport.body.raterDataGovernance.releaseUseStatus, "submitted_rater_data_governance_evidence_complete");
+  assert.equal(releaseReport.body.raterDataGovernance.counts.submittedConsentCount, 1);
+  assert.equal(releaseReport.body.raterDataGovernance.counts.submittedWithdrawalRequestCount, 1);
+  assert.deepEqual(releaseReport.body.raterDataGovernance.reviewSections, []);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.visibilityPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.ratingWorkflowProfiles.length, 1);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.uiExperimentPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.preSubmitAssistPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.accessibilityConformanceReports.length, 1);
+  assert.equal(releaseReport.body.policyBundleEvidence.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
+  assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 5);
+  assert.deepEqual(releaseReport.body.policyBundleEvidence.reviewSections, []);
+  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleCanonicalizationProfiles.length, 1);
+  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleRecords.length, governedBundleFamilies.length);
+  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifests.length, 1);
+  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifestVerifications.length, 1);
+  assert.equal(releaseReport.body.releaseConfigManifestEvidence.releaseUseStatus, "submitted_release_config_manifest_evidence_complete");
+  assert.equal(releaseReport.body.releaseConfigManifestEvidence.counts.passingBundleFamilyCount, governedBundleFamilies.length);
+  assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
+  assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.labelSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.corpusManifests.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.trainingExports.length, 1);
@@ -2584,7 +3250,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 71);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 110);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
