@@ -9499,7 +9499,7 @@ function defaultVolunteerWithdrawalRequest(releaseId) {
 }
 
 export function buildRaterDataGovernanceEvidenceReport(releaseId, options = {}) {
-  const submittedConsentRows = (options.raterDataConsents ?? [])
+  const submittedConsentRows = [...(options.raterDataConsents ?? []), ...(options.volunteerDataConsentProfiles ?? [])]
     .map((consent) => normalizeRaterDataConsent(consent, "submitted_workflow_rater_data_consent"))
     .filter(Boolean);
   const submittedRestrictionRows = (options.raterDataRestrictionRequests ?? [])
@@ -9542,10 +9542,12 @@ export function buildRaterDataGovernanceEvidenceReport(releaseId, options = {}) 
         "Withdrawal/deactivation requests stop future assignment or identifiable nonessential uses without silently mutating already frozen de-identified scientific snapshots.",
     },
     consentRows: [...seedConsentRows, ...submittedConsentRows],
+    volunteerDataConsentProfileRows: [...seedConsentRows, ...submittedConsentRows],
     restrictionRows: submittedRestrictionRows,
     withdrawalRows: [...seedWithdrawalRows, ...submittedWithdrawalRows],
     counts: {
       submittedConsentCount: submittedConsentRows.length,
+      submittedVolunteerDataConsentProfileCount: submittedConsentRows.length,
       submittedRestrictionRequestCount: submittedRestrictionRows.length,
       submittedWithdrawalRequestCount: submittedWithdrawalRows.length,
       completeConsentCount: completeConsentRows.length,
@@ -9581,6 +9583,7 @@ function normalizeRaterDataConsent(consent, rowSource) {
   return {
     id,
     rowSource,
+    entityType: "VolunteerDataConsentProfile",
     raterId: consent.raterId ?? null,
     noticeVersion: consent.noticeVersion ?? null,
     dataCategoriesCovered: categories,
@@ -11011,6 +11014,24 @@ function defaultScoreConfidenceAnnotation(releaseId) {
   };
 }
 
+function defaultRationaleEvidenceSpan(releaseId) {
+  return {
+    id: `rationale-evidence-span-${releaseId}`,
+    ratingId: "rating-seed-ai-base-rate-r1",
+    itemTextVersionId: "ctv-ai-base-rate-v1",
+    spanTarget: "critique",
+    startOffset: 0,
+    endOffset: 64,
+    normalizedSelectedTextHash: "sha256:seed-rationale-span",
+    linkedDimensionOrFlag: "centrality",
+    noteId: "rationale-note-seed",
+    visibilityState: "locked_initial_hidden",
+    hiddenUntilInitialRatingLock: true,
+    rawSelectedTextStored: false,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultSamePositionScratchpad(releaseId) {
   return {
     id: `same-position-scratchpad-${releaseId}`,
@@ -11107,10 +11128,14 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const seedRetentionRows = defaultProtectedArtifactRetentionRecords(releaseId).map((record) =>
     normalizeProtectedArtifactRetentionRecord(record, "seed_protected_artifact_retention_record"),
   );
-  const submittedConfidenceRows = (options.scoreConfidenceAnnotations ?? [])
+  const submittedConfidenceRows = [...(options.scoreConfidenceAnnotations ?? []), ...(options.raterScoreConfidences ?? [])]
     .map((annotation) => normalizeScoreConfidenceAnnotation(annotation, "submitted_workflow_score_confidence_annotation"))
     .filter(Boolean);
   const seedConfidenceRows = [normalizeScoreConfidenceAnnotation(defaultScoreConfidenceAnnotation(releaseId), "seed_score_confidence_annotation")];
+  const submittedRationaleSpanRows = (options.rationaleEvidenceSpans ?? [])
+    .map((span) => normalizeRationaleEvidenceSpan(span, "submitted_workflow_rationale_evidence_span"))
+    .filter(Boolean);
+  const seedRationaleSpanRows = [normalizeRationaleEvidenceSpan(defaultRationaleEvidenceSpan(releaseId), "seed_rationale_evidence_span")];
   const submittedScratchpadRows = (options.samePositionScratchpads ?? [])
     .map((scratchpad) => normalizeSamePositionScratchpad(scratchpad, "submitted_workflow_same_position_scratchpad"))
     .filter(Boolean);
@@ -11135,6 +11160,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ["rating_draft_session", submittedDraftRows.length ? submittedDraftRows : seedDraftRows],
     ["correctness_claim_weight_worksheet", submittedWorksheetRows.length ? submittedWorksheetRows : seedWorksheetRows],
     ["score_confidence_annotation", submittedConfidenceRows.length ? submittedConfidenceRows : seedConfidenceRows],
+    ["rationale_evidence_span", submittedRationaleSpanRows.length ? submittedRationaleSpanRows : seedRationaleSpanRows],
     ["same_position_scratchpad", submittedScratchpadRows.length ? submittedScratchpadRows : seedScratchpadRows],
     ["same_position_batch_review", submittedBatchReviewRows.length ? submittedBatchReviewRows : seedBatchReviewRows],
     ["external_assistance_declaration", submittedAssistanceRows.length ? submittedAssistanceRows : seedAssistanceRows],
@@ -11150,6 +11176,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ...submittedWorksheetRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "correctness_claim_weight_worksheet", artifactId: row.id, reason }))),
     ...submittedRetentionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "protected_artifact_retention_record", artifactId: row.id, reason }))),
     ...submittedConfidenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_confidence_annotation", artifactId: row.id, reason }))),
+    ...submittedRationaleSpanRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rationale_evidence_span", artifactId: row.id, reason }))),
     ...submittedScratchpadRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_scratchpad", artifactId: row.id, reason }))),
     ...submittedBatchReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review", artifactId: row.id, reason }))),
     ...submittedAssistanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "external_assistance_declaration", artifactId: row.id, reason }))),
@@ -11173,6 +11200,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedWorksheetRows.length > 0 &&
     submittedRetentionRows.length > 0 &&
     submittedConfidenceRows.length > 0 &&
+    submittedRationaleSpanRows.length > 0 &&
     submittedScratchpadRows.length > 0 &&
     submittedBatchReviewRows.length > 0 &&
     submittedAssistanceRows.length > 0 &&
@@ -11196,6 +11224,8 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     correctnessClaimWeightWorksheetRows: [...seedWorksheetRows, ...submittedWorksheetRows],
     protectedArtifactRetentionRows: [...seedRetentionRows, ...submittedRetentionRows],
     scoreConfidenceAnnotationRows: [...seedConfidenceRows, ...submittedConfidenceRows],
+    raterScoreConfidenceRows: [...seedConfidenceRows, ...submittedConfidenceRows],
+    rationaleEvidenceSpanRows: [...seedRationaleSpanRows, ...submittedRationaleSpanRows],
     samePositionScratchpadRows: [...seedScratchpadRows, ...submittedScratchpadRows],
     samePositionBatchReviewRows: [...seedBatchReviewRows, ...submittedBatchReviewRows],
     externalAssistanceDeclarationRows: [...seedAssistanceRows, ...submittedAssistanceRows],
@@ -11211,6 +11241,8 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedCorrectnessClaimWeightWorksheetCount: submittedWorksheetRows.length,
       submittedProtectedArtifactRetentionRecordCount: submittedRetentionRows.length,
       submittedScoreConfidenceAnnotationCount: submittedConfidenceRows.length,
+      submittedRaterScoreConfidenceCount: submittedConfidenceRows.length,
+      submittedRationaleEvidenceSpanCount: submittedRationaleSpanRows.length,
       submittedSamePositionScratchpadCount: submittedScratchpadRows.length,
       submittedSamePositionBatchReviewCount: submittedBatchReviewRows.length,
       submittedExternalAssistanceDeclarationCount: submittedAssistanceRows.length,
@@ -11514,7 +11546,7 @@ function normalizeProtectedArtifactRetentionRecord(record, rowSource) {
 }
 
 function normalizeScoreConfidenceAnnotation(annotation, rowSource) {
-  const id = annotation?.id ?? annotation?.scoreConfidenceAnnotationId ?? annotation?.confidenceAnnotationId;
+  const id = annotation?.id ?? annotation?.scoreConfidenceAnnotationId ?? annotation?.raterScoreConfidenceId ?? annotation?.confidenceAnnotationId;
   if (!id) return null;
   const dimensionConfidences = normalizeDimensionConfidenceMap(annotation.dimensionConfidences ?? annotation.confidences);
   const missingDimensions = RUBRIC_DIMENSIONS.filter((dimension) => !Object.hasOwn(dimensionConfidences, dimension));
@@ -11534,6 +11566,7 @@ function normalizeScoreConfidenceAnnotation(annotation, rowSource) {
   return {
     id,
     rowSource,
+    entityType: "RaterScoreConfidence",
     assignmentId: annotation.assignmentId ?? null,
     ratingId: annotation.ratingId ?? null,
     raterId: annotation.raterId ?? null,
@@ -11543,6 +11576,48 @@ function normalizeScoreConfidenceAnnotation(annotation, rowSource) {
     visibleToPeersBeforeLock: annotation.visibleToPeersBeforeLock === true,
     reviewReasons,
     status: reviewReasons.length ? "score_confidence_annotation_review_required" : "score_confidence_annotation_complete",
+  };
+}
+
+function normalizeRationaleEvidenceSpan(span, rowSource) {
+  const id = span?.id ?? span?.spanId ?? span?.rationaleEvidenceSpanId;
+  if (!id) return null;
+  const spanTarget = span.spanTarget ?? span.target ?? null;
+  const startOffset = Number(span.startOffset ?? span.start ?? span.characterStartOffset);
+  const endOffset = Number(span.endOffset ?? span.end ?? span.characterEndOffset);
+  const linkedDimensionOrFlag = span.linkedDimensionOrFlag ?? span.dimensionOrFlagLinked ?? span.dimension ?? span.flagKey ?? null;
+  const visibilityState = span.visibilityState ?? null;
+  const reviewReasons = [
+    span.ratingId || span.adjudicationMemoId ? null : "ratingIdOrAdjudicationMemoId",
+    requiredPromptFieldReason("itemTextVersionId", span.itemTextVersionId),
+    ["position", "critique"].includes(spanTarget) ? null : "spanTarget",
+    Number.isInteger(startOffset) && startOffset >= 0 ? null : "startOffset",
+    Number.isInteger(endOffset) && endOffset > startOffset ? null : "endOffset",
+    String(span.normalizedSelectedTextHash ?? "").startsWith("sha256:") ? null : "normalizedSelectedTextHash",
+    requiredPromptFieldReason("linkedDimensionOrFlag", linkedDimensionOrFlag),
+    requiredPromptFieldReason("noteId", span.noteId),
+    ["draft", "locked_initial_hidden", "post_lock_visible", "adjudication_visible"].includes(visibilityState) ? null : "visibilityState",
+    visibilityState === "locked_initial_hidden" ? (span.hiddenUntilInitialRatingLock === true ? null : "hiddenUntilInitialRatingLock") : null,
+    span.rawSelectedTextStored === false ? null : "rawSelectedTextStored",
+    requiredPromptFieldReason("timestamp", span.timestamp ?? span.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    ratingId: span.ratingId ?? null,
+    adjudicationMemoId: span.adjudicationMemoId ?? null,
+    itemTextVersionId: span.itemTextVersionId ?? null,
+    spanTarget,
+    startOffset: Number.isFinite(startOffset) ? startOffset : null,
+    endOffset: Number.isFinite(endOffset) ? endOffset : null,
+    normalizedSelectedTextHash: span.normalizedSelectedTextHash ?? null,
+    linkedDimensionOrFlag,
+    noteId: span.noteId ?? null,
+    visibilityState,
+    hiddenUntilInitialRatingLock: span.hiddenUntilInitialRatingLock === true,
+    rawSelectedTextStored: span.rawSelectedTextStored === true,
+    reviewReasons,
+    status: reviewReasons.length ? "rationale_evidence_span_review_required" : "rationale_evidence_span_complete",
   };
 }
 
@@ -12131,6 +12206,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
     raterPositionClusterExposureRows: [...seedExposureRows, ...submittedExposureRows],
     spotCheckQaRows: [...seedSpotCheckRows, ...submittedSpotCheckRows],
+    spotCheckQAItemRows: [...seedSpotCheckRows, ...submittedSpotCheckRows],
     adjudicationTriageQueueRows: [...seedTriageRows, ...submittedTriageRows],
     diagnosticDeferralRows: [...seedDeferralRows, ...submittedDeferralRows],
     queuePolicySnapshotRows: [...seedQueuePolicyRows, ...submittedQueuePolicyRows],
@@ -12149,6 +12225,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       submittedPartialTaskOutputCount: submittedPartialRows.length,
       submittedRaterPositionClusterExposureCount: submittedExposureRows.length,
       submittedSpotCheckQaItemCount: submittedSpotCheckRows.length,
+      submittedSpotCheckQAItemCount: submittedSpotCheckRows.length,
       submittedAdjudicationTriageQueueItemCount: submittedTriageRows.length,
       submittedDiagnosticDeferralRecordCount: submittedDeferralRows.length,
       submittedQueuePolicySnapshotCount: submittedQueuePolicyRows.length,
@@ -14089,6 +14166,7 @@ export function buildOctoberReleaseReport(
   });
   const raterDataGovernance = buildRaterDataGovernanceEvidenceReport(releaseId, {
     raterDataConsents: options.raterDataConsents ?? [],
+    volunteerDataConsentProfiles: options.volunteerDataConsentProfiles ?? [],
     raterDataRestrictionRequests: options.raterDataRestrictionRequests ?? [],
     volunteerDataWithdrawalRequests: options.volunteerDataWithdrawalRequests ?? [],
   });
@@ -14117,6 +14195,8 @@ export function buildOctoberReleaseReport(
     correctnessClaimWeightWorksheets: options.correctnessClaimWeightWorksheets ?? [],
     protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
     scoreConfidenceAnnotations: options.scoreConfidenceAnnotations ?? [],
+    raterScoreConfidences: options.raterScoreConfidences ?? [],
+    rationaleEvidenceSpans: options.rationaleEvidenceSpans ?? [],
     samePositionScratchpads: options.samePositionScratchpads ?? [],
     samePositionBatchReviews: options.samePositionBatchReviews ?? [],
     externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
@@ -14318,6 +14398,7 @@ export function buildOctoberReleaseReport(
     },
     workflowParticipantDataArtifacts: {
       raterDataConsents: options.raterDataConsents ?? [],
+      volunteerDataConsentProfiles: options.volunteerDataConsentProfiles ?? [],
       raterDataRestrictionRequests: options.raterDataRestrictionRequests ?? [],
       volunteerDataWithdrawalRequests: options.volunteerDataWithdrawalRequests ?? [],
     },
@@ -14346,6 +14427,8 @@ export function buildOctoberReleaseReport(
       correctnessClaimWeightWorksheets: options.correctnessClaimWeightWorksheets ?? [],
       protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
       scoreConfidenceAnnotations: options.scoreConfidenceAnnotations ?? [],
+      raterScoreConfidences: options.raterScoreConfidences ?? [],
+      rationaleEvidenceSpans: options.rationaleEvidenceSpans ?? [],
       samePositionScratchpads: options.samePositionScratchpads ?? [],
       samePositionBatchReviews: options.samePositionBatchReviews ?? [],
       externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],

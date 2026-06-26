@@ -745,6 +745,21 @@ function completeRatingExperienceWorkflowFixtures() {
       visibleToPeersBeforeLock: false,
       timestamp: "2026-10-01T00:26:30.000Z",
     },
+    rationaleEvidenceSpan: {
+      id: "rationale-evidence-span-workflow-new",
+      ratingId: "rating-seed-ai-base-rate-r1",
+      itemTextVersionId: "ctv-ai-base-rate-v1",
+      spanTarget: "critique",
+      startOffset: 0,
+      endOffset: 72,
+      normalizedSelectedTextHash: "sha256:workflow-rationale-evidence-span",
+      linkedDimensionOrFlag: "centrality",
+      noteId: "rationale-note-workflow-new",
+      visibilityState: "locked_initial_hidden",
+      hiddenUntilInitialRatingLock: true,
+      rawSelectedTextStored: false,
+      timestamp: "2026-10-01T00:26:35.000Z",
+    },
     samePositionScratchpad: {
       id: "same-position-scratchpad-workflow-new",
       raterId: "demo-rater",
@@ -1616,6 +1631,10 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/rating-draft-sessions/rating-draft-session-smoke"],
     ["POST", "/api/v1/score-confidence-annotations"],
     ["GET", "/api/v1/score-confidence-annotations/score-confidence-annotation-smoke"],
+    ["POST", "/api/v1/rater-score-confidences"],
+    ["GET", "/api/v1/rater-score-confidences/rater-score-confidence-smoke"],
+    ["POST", "/api/v1/rationale-evidence-spans"],
+    ["GET", "/api/v1/rationale-evidence-spans/rationale-evidence-span-smoke"],
     ["POST", "/api/v1/same-position-scratchpads"],
     ["GET", "/api/v1/same-position-scratchpads/same-position-scratchpad-smoke"],
     ["POST", "/api/v1/same-position-batch-reviews"],
@@ -2386,13 +2405,49 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       assignment: {
         id: "assignment-workflow-new",
         raterId: "demo-rater",
+        raterSessionId: "rater-session-workflow-new",
         positionId: "pos-ai-prior",
         critiqueId: "crit-ai-base-rate",
         assignmentType: "live",
+        workflowProfileId: "rating-workflow-profile-workflow-new",
+        workflowProfileVersion: "workflow-profile-rlhf88-v1",
+        scoreInputPolicyId: "score-input-policy-workflow-new",
+        requiredUiPanelSet: ["score_fields", "short_rationale", "safe_decline", "source_recognition", "item_issue_report"],
+        optionalUiPanelSet: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
+        preRatingSelfScreenStatus: "passed",
+        raterItemConflictCheckStatus: "no_conflict",
+        independentBlindEligibilityStatus: "eligible",
+        declineOrReassignmentStatus: "not_declined",
+        declineReasonCode: null,
         blindState: "blind_initial",
         sourceTagVisibilityState: "hidden_before_initial_lock",
+        topicRoutingBasisAdminOnly: "topic competence used without exposing source tags",
         validationMembershipBlindToRater: true,
         ratingContextSnapshotId: "rating-context-workflow-new",
+        samePositionSessionId: "same-position-session-workflow-new",
+        samePositionOrderPolicy: "counterbalanced",
+        orderCounterbalanceBucket: "bucket-a",
+        positionOrderIndex: 1,
+        siblingCritiquesSeenPriorCount: 0,
+        siblingCritiquesSeenPriorIds: [],
+        laterSiblingCritiquesAbsentAtSubmission: true,
+        positionLengthBand: "short",
+        critiqueLengthBand: "short",
+        expectedEffortBand: "ordinary_live",
+        startedAt: "2026-10-01T00:24:00.000Z",
+        submittedAt: null,
+        activeTimeSeconds: 0,
+        idleGapSummary: "not_started",
+        interruptionCount: 0,
+        draftAutosaveStatus: "not_started",
+        lastAutosavedAt: "2026-10-01T00:24:00.000Z",
+        draftDependencyStaleStatus: "current",
+        resumeCount: 0,
+        sessionPacingState: "within_target",
+        fatigueWarningState: "none",
+        uiMode: "task_first_simplified",
+        rubricAnchorPanelVersion: "appendix-f-anchor-v1",
+        preSubmitLintPolicyVersion: "rubric-lint-rlhf88-v1",
       },
     }),
   });
@@ -2405,6 +2460,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(assignmentById.status, 200);
   assert.equal(assignmentById.body.id, "assignment-workflow-new");
+  assert.equal(assignmentById.body.independentBlindEligibilityStatus, "eligible");
+  assert.equal(assignmentById.body.validationMembershipBlindToRater, true);
+
+  const incompleteAssignment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      assignment: {
+        id: "assignment-workflow-incomplete",
+        raterId: "demo-rater",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+      },
+    }),
+  });
+  assert.equal(incompleteAssignment.status, 400);
+  assert.equal(incompleteAssignment.body.error, "invalid_workflow_payload");
+  assert.match(incompleteAssignment.body.detail, /raterSessionId/);
 
   const goldItem = await invokeApi(context, {
     method: "POST",
@@ -3952,6 +4026,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["itemIssueReport", "/api/v1/item-issues"],
     ["ratingDraftSession", "/api/v1/rating-draft-sessions"],
     ["scoreConfidenceAnnotation", "/api/v1/score-confidence-annotations"],
+    ["rationaleEvidenceSpan", "/api/v1/rationale-evidence-spans"],
     ["samePositionScratchpad", "/api/v1/same-position-scratchpads"],
     ["samePositionBatchReview", "/api/v1/same-position-batch-reviews"],
     ["correctnessClaimWeightWorksheet", "/api/v1/correctness-claim-weight-worksheets"],
@@ -4007,6 +4082,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(scoreConfidenceById.status, 200);
   assert.equal(scoreConfidenceById.body.excludedFromScoreComputation, true);
+
+  const rationaleSpanById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rationale-evidence-spans/rationale-evidence-span-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(rationaleSpanById.status, 200);
+  assert.equal(rationaleSpanById.body.visibilityState, "locked_initial_hidden");
+  assert.equal(rationaleSpanById.body.rawSelectedTextStored, false);
 
   const scratchpadById = await invokeApi(context, {
     method: "GET",
@@ -4783,6 +4867,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.correctnessClaimWeightWorksheets.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.protectedArtifactRetentionRecords.length, protectedArtifactTypes.length);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreConfidenceAnnotations.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpans.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionScratchpads.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviews.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.externalAssistanceDeclarations.length, 1);
@@ -4795,6 +4880,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreConfidenceAnnotationCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterScoreConfidenceCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRows.at(-1).normalizedSelectedTextHash,
+    "sha256:workflow-rationale-evidence-span",
+  );
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedExternalAssistanceDeclarationCount, 1);
@@ -4819,6 +4910,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingModelRunProvenanceCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckQAItemCount, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterItemConflictCount, 2);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedReleaseErratumCount, 2);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
@@ -4951,7 +5043,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 246);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 247);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
@@ -4974,6 +5066,31 @@ test("server policy rejects endpoint/kind mismatches and incomplete full-rubric 
   const validation = validateRatingPayload(missingScore, "blind_initial_submitted");
   assert.equal(validation.ok, false);
   assert.match(validation.detail, /full-rubric rating requires valid scores/);
+});
+
+test("server policy requires rating score-input provenance and raw scores", () => {
+  const valid = validateRatingPayload(validBlindRating("rating-score-provenance-valid"), "blind_initial_submitted");
+  assert.equal(valid.ok, true);
+
+  const missingPolicy = validBlindRating("rating-score-provenance-missing-policy");
+  delete missingPolicy.scoreInputPolicyId;
+  const missingPolicyValidation = validateRatingPayload(missingPolicy, "blind_initial_submitted");
+  assert.equal(missingPolicyValidation.ok, false);
+  assert.match(missingPolicyValidation.detail, /scoreInputPolicyId/);
+
+  const missingRawScores = validBlindRating("rating-score-provenance-missing-raw");
+  delete missingRawScores.rawScores;
+  const missingRawValidation = validateRatingPayload(missingRawScores, "blind_initial_submitted");
+  assert.equal(missingRawValidation.ok, false);
+  assert.match(missingRawValidation.detail, /rawScores/);
+
+  const invalidExplicitness = {
+    ...validBlindRating("rating-score-provenance-bad-explicitness"),
+    scoreEntryExplicitnessStatus: "default_midpoint_used",
+  };
+  const invalidExplicitnessValidation = validateRatingPayload(invalidExplicitness, "blind_initial_submitted");
+  assert.equal(invalidExplicitnessValidation.ok, false);
+  assert.match(invalidExplicitnessValidation.detail, /unsupported scoreEntryExplicitnessStatus/);
 });
 
 test("server policy requires rating context snapshots to include the rated critique", () => {
@@ -5049,6 +5166,56 @@ test("server policy validates structured rater issue flags", () => {
   assert.match(nonBooleanFlag.detail, /rating flags must be boolean/);
 });
 
+test("server policy validates rating evidence-span references without raw protected text", () => {
+  const validWithSpans = validateRatingPayload(
+    {
+      ...validBlindRating("rating-evidence-spans"),
+      rationaleEvidenceSpanIds: ["rationale-evidence-span-rating-test"],
+      attackedClaimSpanRefs: ["position-claim-span-1"],
+      critiqueSupportSpanRefs: ["critique-support-span-1"],
+      wrongClaimSpanRefs: [],
+      deadWeightSpanRefs: [],
+      sideIssueSpanRefs: [],
+      unclearTextSpanRefs: [],
+      lockedBeforePeerExposure: true,
+      sourceTagVisibilityState: "hidden_from_initial_rater",
+    },
+    "blind_initial_submitted",
+  );
+  assert.equal(validWithSpans.ok, true);
+
+  const rawTextLeak = validateRatingPayload(
+    {
+      ...validBlindRating("rating-evidence-raw-text"),
+      positionText: "raw protected position text must never ride along with a rating payload",
+    },
+    "blind_initial_submitted",
+  );
+  assert.equal(rawTextLeak.ok, false);
+  assert.match(rawTextLeak.detail, /raw protected item content/);
+
+  const missingSpanIds = validateRatingPayload(
+    {
+      ...validBlindRating("rating-evidence-missing-span-id"),
+      attackedClaimSpanRefs: ["position-claim-span-1"],
+    },
+    "blind_initial_submitted",
+  );
+  assert.equal(missingSpanIds.ok, false);
+  assert.match(missingSpanIds.detail, /rationaleEvidenceSpanIds/);
+
+  const malformedRefs = validateRatingPayload(
+    {
+      ...validBlindRating("rating-evidence-malformed-refs"),
+      rationaleEvidenceSpanIds: ["rationale-evidence-span-rating-test"],
+      critiqueSupportSpanRefs: "critique-support-span-1",
+    },
+    "blind_initial_submitted",
+  );
+  assert.equal(malformedRefs.ok, false);
+  assert.match(malformedRefs.detail, /critiqueSupportSpanRefs must be an array/);
+});
+
 test("server policy accepts low-clarity branch with provisional non-clarity dimensions", () => {
   const rating = validBlindRating("rating-low-clarity");
   rating.scores = {
@@ -5060,6 +5227,10 @@ test("server policy accepts low-clarity branch with provisional non-clarity dime
     single_issue: null,
     overall: 0.12,
   };
+  rating.rawScores = { ...rating.scores };
+  rating.displayedScores = { ...rating.scores };
+  rating.scoreEntryExplicitnessStatus = "low_clarity_branch_explicit";
+  rating.scoreMissingFieldValidationStatus = "low_clarity_provisional_fields_allowed";
   rating.provisionalDimensions = ["centrality", "strength", "dead_weight", "single_issue"];
   const validation = validateRatingPayload(rating, "blind_initial_submitted");
   assert.equal(validation.ok, true);
@@ -5165,6 +5336,7 @@ function validBlindRating(id) {
     raterTier: "graduate",
     kind: "blind_initial",
     rubricVersion: "lmca-app-f-2026-10",
+    scoreInputPolicyId: "score-input-policy-workflow-new",
     positionTextVersionId: "ptv-ai-prior-v1",
     critiqueTextVersionId: "ctv-ai-base-rate-v1",
     ratingContextSnapshotId: "rc-target-only-1",
@@ -5177,6 +5349,27 @@ function validBlindRating(id) {
       single_issue: 0.92,
       overall: 0.62,
     },
+    rawScores: {
+      centrality: 0.7,
+      strength: 0.68,
+      correctness: 0.9,
+      clarity: 0.88,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.62,
+    },
+    displayedScores: {
+      centrality: 0.7,
+      strength: 0.68,
+      correctness: 0.9,
+      clarity: 0.88,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.62,
+    },
+    scoreQuantizationPolicy: "raw_0_1_scores_stored_to_0.001_display_precision",
+    scoreEntryExplicitnessStatus: "all_required_scores_explicit",
+    scoreMissingFieldValidationStatus: "passed_no_missing_required_fields",
     provisionalDimensions: [],
     rationale: "Server-side audit policy test rating.",
     flags: {},

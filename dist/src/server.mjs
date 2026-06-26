@@ -58,6 +58,18 @@ const hiddenMetadataKeys = new Set([
 const sourceStyleAuditSourceGuesses = new Set(["human_written", "expert_written", "llm_generated", "adapted_or_external", "unknown"]);
 const sourceStyleAuditAuthorshipGuesses = new Set(["expert", "volunteer", "model", "adapted_source", "unknown"]);
 const ratingVerificationStatuses = new Set(["not_needed", "verified", "not_practicable", "unresolved"]);
+const ratingEvidenceReferenceFields = [
+  ["rationaleEvidenceSpanIds", "rationale_evidence_span_ids"],
+  ["attackedClaimSpanRefs", "attacked_claim_span_refs"],
+  ["critiqueSupportSpanRefs", "critique_support_span_refs"],
+  ["wrongClaimSpanRefs", "wrong_claim_span_refs"],
+  ["deadWeightSpanRefs", "dead_weight_span_refs"],
+  ["sideIssueSpanRefs", "side_issue_span_refs"],
+  ["unclearTextSpanRefs", "unclear_text_span_refs"],
+];
+const ratingScoreEntryExplicitnessStatuses = new Set(["all_required_scores_explicit", "low_clarity_branch_explicit", "revision_scores_explicit"]);
+const ratingMissingFieldValidationStatuses = new Set(["passed_no_missing_required_fields", "low_clarity_provisional_fields_allowed"]);
+const lockedInitialSourceTagVisibilityStates = new Set(["hidden", "hidden_from_initial_rater", "source_tag_protected_visibility_preserved"]);
 const allowedRatingFlagKeys = new Set(RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => definition.key));
 const adminRoles = ["admin"];
 const adminAuditRoles = ["admin", "auditor"];
@@ -174,7 +186,54 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/pairwise-comparison-snapshots$/, "pairwise_comparison_snapshot_submitted", "pairwiseComparisonSnapshot", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/assignments$/, "assignment_submitted", "assignment", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/assignments$/, "assignment_submitted", "assignment", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "raterId",
+      "raterSessionId",
+      "positionId",
+      "critiqueId",
+      "assignmentType",
+      "workflowProfileId",
+      "workflowProfileVersion",
+      "scoreInputPolicyId",
+      "requiredUiPanelSet",
+      "optionalUiPanelSet",
+      "preRatingSelfScreenStatus",
+      "raterItemConflictCheckStatus",
+      "independentBlindEligibilityStatus",
+      "declineOrReassignmentStatus",
+      "blindState",
+      "sourceTagVisibilityState",
+      "topicRoutingBasisAdminOnly",
+      "validationMembershipBlindToRater",
+      "ratingContextSnapshotId",
+      "samePositionSessionId",
+      "samePositionOrderPolicy",
+      "orderCounterbalanceBucket",
+      "positionOrderIndex",
+      "siblingCritiquesSeenPriorCount",
+      "siblingCritiquesSeenPriorIds",
+      "laterSiblingCritiquesAbsentAtSubmission",
+      "positionLengthBand",
+      "critiqueLengthBand",
+      "expectedEffortBand",
+      "startedAt",
+      "activeTimeSeconds",
+      "idleGapSummary",
+      "interruptionCount",
+      "draftAutosaveStatus",
+      "lastAutosavedAt",
+      "draftDependencyStaleStatus",
+      "resumeCount",
+      "sessionPacingState",
+      "fatigueWarningState",
+      "uiMode",
+      "rubricAnchorPanelVersion",
+      "preSubmitLintPolicyVersion",
+    ],
+  }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions$/, "rater_session_submitted", "raterSession", ratingWorkflowRoles, {
     requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
     requireActorField: "raterId",
@@ -434,6 +493,29 @@ const workflowWriteEndpoints = [
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(/^\/api\/v1\/rater-score-confidences$/, "rater_score_confidence_submitted", "raterScoreConfidence", ratingWorkflowRoles, {
+    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rationale-evidence-spans$/, "rationale_evidence_span_submitted", "rationaleEvidenceSpan", ratingWorkflowRoles, {
+    requiredFields: [
+      "id",
+      "itemTextVersionId",
+      "spanTarget",
+      "startOffset",
+      "endOffset",
+      "normalizedSelectedTextHash",
+      "linkedDimensionOrFlag",
+      "noteId",
+      "visibilityState",
+      "hiddenUntilInitialRatingLock",
+      "rawSelectedTextStored",
+      "timestamp",
+    ],
+    requiredAnyFields: [["ratingId", "adjudicationMemoId"]],
+    rejectRawBenchmarkContent: true,
+  }),
   workflowWriteSpec(/^\/api\/v1\/same-position-scratchpads$/, "same_position_scratchpad_submitted", "samePositionScratchpad", ratingWorkflowRoles, {
     requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "visibilityState", "promotedToRationaleIds", "timestamp"],
     requireActorField: "raterId",
@@ -682,6 +764,8 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/item-issues\/(?<id>[^/]+)$/, "itemIssueReport", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-draft-sessions\/(?<id>[^/]+)$/, "ratingDraftSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/score-confidence-annotations\/(?<id>[^/]+)$/, "scoreConfidenceAnnotation", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-score-confidences\/(?<id>[^/]+)$/, "raterScoreConfidence", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rationale-evidence-spans\/(?<id>[^/]+)$/, "rationaleEvidenceSpan", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/same-position-scratchpads\/(?<id>[^/]+)$/, "samePositionScratchpad", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/same-position-batch-reviews\/(?<id>[^/]+)$/, "samePositionBatchReview", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/correctness-claim-weight-worksheets\/(?<id>[^/]+)$/, "correctnessClaimWeightWorksheet", expertAuditWorkflowRoles),
@@ -2414,6 +2498,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const screenStatePayloads = latestWorkflowResources(workflowEvents, "screenStatePayload");
   const workflowStateTransitionLogs = latestWorkflowResources(workflowEvents, "workflowStateTransitionLog");
   const raterDataConsents = latestWorkflowResources(workflowEvents, "raterDataConsent");
+  const volunteerDataConsentProfiles = latestWorkflowResources(workflowEvents, "volunteerDataConsentProfile");
   const raterDataRestrictionRequests = latestWorkflowResources(workflowEvents, "raterDataRestrictionRequest");
   const volunteerDataWithdrawalRequests = latestWorkflowResources(workflowEvents, "volunteerDataWithdrawalRequest");
   const visibilityPolicies = latestWorkflowResources(workflowEvents, "visibilityPolicy");
@@ -2436,6 +2521,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const correctnessClaimWeightWorksheets = latestWorkflowResources(workflowEvents, "correctnessClaimWeightWorksheet");
   const protectedArtifactRetentionRecords = latestWorkflowResources(workflowEvents, "protectedArtifactRetentionRecord");
   const scoreConfidenceAnnotations = latestWorkflowResources(workflowEvents, "scoreConfidenceAnnotation");
+  const raterScoreConfidences = latestWorkflowResources(workflowEvents, "raterScoreConfidence");
+  const rationaleEvidenceSpans = latestWorkflowResources(workflowEvents, "rationaleEvidenceSpan");
   const samePositionScratchpads = latestWorkflowResources(workflowEvents, "samePositionScratchpad");
   const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
   const externalAssistanceDeclarations = latestWorkflowResources(workflowEvents, "externalAssistanceDeclaration");
@@ -2558,6 +2645,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     screenStatePayloads,
     workflowStateTransitionLogs,
     raterDataConsents,
+    volunteerDataConsentProfiles,
     raterDataRestrictionRequests,
     volunteerDataWithdrawalRequests,
     visibilityPolicies,
@@ -2580,6 +2668,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     correctnessClaimWeightWorksheets,
     protectedArtifactRetentionRecords,
     scoreConfidenceAnnotations,
+    raterScoreConfidences,
+    rationaleEvidenceSpans,
     samePositionScratchpads,
     samePositionBatchReviews,
     externalAssistanceDeclarations,
@@ -2699,6 +2789,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     screenStatePayloads,
     workflowStateTransitionLogs,
     raterDataConsents,
+    volunteerDataConsentProfiles,
     raterDataRestrictionRequests,
     volunteerDataWithdrawalRequests,
     visibilityPolicies,
@@ -2721,6 +2812,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     correctnessClaimWeightWorksheets,
     protectedArtifactRetentionRecords,
     scoreConfidenceAnnotations,
+    raterScoreConfidences,
+    rationaleEvidenceSpans,
     samePositionScratchpads,
     samePositionBatchReviews,
     externalAssistanceDeclarations,
@@ -3154,6 +3247,8 @@ export function validateRatingPayload(rating, eventType) {
   if (!rating || typeof rating !== "object" || Array.isArray(rating)) return invalid("rating object is required");
   const hiddenKeys = findHiddenKeys(rating);
   if (hiddenKeys.length) return invalid(`rater submissions cannot contain hidden metadata keys: ${hiddenKeys.join(", ")}`);
+  const rawBenchmarkKeys = findRawBenchmarkContentKeys(rating);
+  if (rawBenchmarkKeys.length) return invalid(`rater submissions cannot contain raw protected item content keys: ${rawBenchmarkKeys.join(", ")}`);
   const required = [
     "id",
     "assignmentId",
@@ -3162,10 +3257,15 @@ export function validateRatingPayload(rating, eventType) {
     "raterId",
     "kind",
     "rubricVersion",
+    "scoreInputPolicyId",
     "positionTextVersionId",
     "critiqueTextVersionId",
     "ratingContextSnapshotId",
     "scores",
+    "rawScores",
+    "scoreQuantizationPolicy",
+    "scoreEntryExplicitnessStatus",
+    "scoreMissingFieldValidationStatus",
     "activeSeconds",
     "idleGapSeconds",
     "interruptionCount",
@@ -3187,11 +3287,27 @@ export function validateRatingPayload(rating, eventType) {
   if (!contextSnapshot) return invalid(`unknown ratingContextSnapshotId: ${rating.ratingContextSnapshotId}`);
   if (contextSnapshot.positionId !== rating.positionId) return invalid("ratingContextSnapshotId must belong to the rated position");
   if (!contextSnapshot.visibleCritiqueIds.includes(rating.critiqueId)) return invalid("ratingContextSnapshotId must include the rated critique");
-  if (!rating.scores || typeof rating.scores !== "object" || Array.isArray(rating.scores)) return invalid("scores object is required");
-  if (!isValidScore(rating.scores.clarity) || !isValidScore(rating.scores.overall)) return invalid("clarity and overall must be finite scores in [0, 1]");
-  if (rating.scores.clarity >= 0.5) {
-    const badFields = RUBRIC_DIMENSIONS.filter((dimension) => !isValidScore(rating.scores[dimension]));
-    if (badFields.length) return invalid(`full-rubric rating requires valid scores for: ${badFields.join(", ")}`);
+  const scoreValidation = validateRatingScoreObject(rating.scores, "scores");
+  if (!scoreValidation.ok) return scoreValidation;
+  const rawScoreValidation = validateRatingScoreObject(rating.rawScores, "rawScores");
+  if (!rawScoreValidation.ok) return rawScoreValidation;
+  if (rating.displayedScores !== undefined) {
+    const displayedScoreValidation = validateRatingScoreObject(rating.displayedScores, "displayedScores");
+    if (!displayedScoreValidation.ok) return displayedScoreValidation;
+  }
+  if (!String(rating.scoreInputPolicyId ?? "").trim()) return invalid("scoreInputPolicyId is required");
+  if (!String(rating.scoreQuantizationPolicy ?? "").trim()) return invalid("scoreQuantizationPolicy is required");
+  if (!ratingScoreEntryExplicitnessStatuses.has(rating.scoreEntryExplicitnessStatus)) {
+    return invalid(`unsupported scoreEntryExplicitnessStatus: ${rating.scoreEntryExplicitnessStatus}`);
+  }
+  if (!ratingMissingFieldValidationStatuses.has(rating.scoreMissingFieldValidationStatus)) {
+    return invalid(`unsupported scoreMissingFieldValidationStatus: ${rating.scoreMissingFieldValidationStatus}`);
+  }
+  if (rating.scores.clarity >= 0.5 && rating.scoreMissingFieldValidationStatus !== "passed_no_missing_required_fields") {
+    return invalid("full-rubric ratings must pass missing-field validation");
+  }
+  if (rating.scores.clarity < 0.5 && rating.scoreEntryExplicitnessStatus !== "low_clarity_branch_explicit") {
+    return invalid("low-clarity ratings must declare low_clarity_branch_explicit score entry");
   }
   if (!Array.isArray(rating.provisionalDimensions)) return invalid("provisionalDimensions must be an array");
   if (rating.flags !== undefined) {
@@ -3211,6 +3327,36 @@ export function validateRatingPayload(rating, eventType) {
   }
   if (rating.correctnessVerificationNote !== undefined && (typeof rating.correctnessVerificationNote !== "string" || rating.correctnessVerificationNote.length > 500)) {
     return invalid("correctnessVerificationNote must be a short string");
+  }
+  for (const [camelField, snakeField] of ratingEvidenceReferenceFields) {
+    const providedField = rating[camelField] !== undefined ? camelField : rating[snakeField] !== undefined ? snakeField : null;
+    if (!providedField) continue;
+    const value = rating[providedField];
+    if (!Array.isArray(value)) return invalid(`${providedField} must be an array`);
+    if (value.some((item) => typeof item !== "string" || !item.trim())) return invalid(`${providedField} must contain only non-empty string refs`);
+  }
+  const rationaleEvidenceSpanIds = rating.rationaleEvidenceSpanIds ?? rating.rationale_evidence_span_ids ?? [];
+  const hasAnySpanRefs = ratingEvidenceReferenceFields
+    .filter(([camelField]) => camelField !== "rationaleEvidenceSpanIds")
+    .some(([camelField, snakeField]) => (rating[camelField] ?? rating[snakeField] ?? []).length > 0);
+  if (hasAnySpanRefs && rationaleEvidenceSpanIds.length === 0) {
+    return invalid("rationaleEvidenceSpanIds must be provided when span reference fields are submitted");
+  }
+  const lockedBeforePeerExposure = rating.lockedBeforePeerExposure ?? rating.locked_before_peer_exposure;
+  if (lockedBeforePeerExposure !== undefined && lockedBeforePeerExposure !== true) return invalid("lockedBeforePeerExposure must be true when provided");
+  const sourceTagVisibilityState = rating.sourceTagVisibilityState ?? rating.source_tag_visibility_state;
+  if (sourceTagVisibilityState !== undefined && !lockedInitialSourceTagVisibilityStates.has(sourceTagVisibilityState)) {
+    return invalid(`unsupported sourceTagVisibilityState: ${sourceTagVisibilityState}`);
+  }
+  return { ok: true };
+}
+
+function validateRatingScoreObject(scores, fieldName) {
+  if (!scores || typeof scores !== "object" || Array.isArray(scores)) return invalid(`${fieldName} object is required`);
+  if (!isValidScore(scores.clarity) || !isValidScore(scores.overall)) return invalid(`${fieldName}.clarity and ${fieldName}.overall must be finite scores in [0, 1]`);
+  if (scores.clarity >= 0.5) {
+    const badFields = RUBRIC_DIMENSIONS.filter((dimension) => !isValidScore(scores[dimension]));
+    if (badFields.length) return invalid(`full-rubric rating requires valid ${fieldName} for: ${badFields.join(", ")}`);
   }
   return { ok: true };
 }

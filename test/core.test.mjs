@@ -846,6 +846,23 @@ function completeRatingExperienceFixtures() {
         timestamp: "2026-10-01T00:04:30.000Z",
       },
     ],
+    rationaleEvidenceSpans: [
+      {
+        id: "rationale-evidence-span-submitted",
+        ratingId: "rating-seed-ai-base-rate-r1",
+        itemTextVersionId: "ctv-ai-base-rate-v1",
+        spanTarget: "critique",
+        startOffset: 0,
+        endOffset: 72,
+        normalizedSelectedTextHash: "sha256:submitted-rationale-evidence-span",
+        linkedDimensionOrFlag: "centrality",
+        noteId: "rationale-note-submitted",
+        visibilityState: "locked_initial_hidden",
+        hiddenUntilInitialRatingLock: true,
+        rawSelectedTextStored: false,
+        timestamp: "2026-10-01T00:04:35.000Z",
+      },
+    ],
     samePositionScratchpads: [
       {
         id: "same-position-scratchpad-submitted",
@@ -1438,6 +1455,10 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
   assert.equal(report.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
   assert.equal(report.counts.submittedScoreConfidenceAnnotationCount, 1);
+  assert.equal(report.counts.submittedRaterScoreConfidenceCount, 1);
+  assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(report.raterScoreConfidenceRows.at(-1).entityType, "RaterScoreConfidence");
+  assert.equal(report.rationaleEvidenceSpanRows.at(-1).visibilityState, "locked_initial_hidden");
   assert.equal(report.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(report.counts.submittedSamePositionBatchReviewCount, 1);
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
@@ -1455,6 +1476,8 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.counts.submittedRaterPositionClusterExposureCount, 1);
   assert.equal(report.raterPositionClusterExposureRows.at(-1).blindEligibilityEffect, "excluded_from_fresh_blind_initial_on_cluster");
   assert.equal(report.counts.submittedSpotCheckQaItemCount, 1);
+  assert.equal(report.counts.submittedSpotCheckQAItemCount, 1);
+  assert.equal(report.spotCheckQAItemRows.at(-1).status, "spot_check_qa_item_complete");
   assert.equal(report.spotCheckQaRows.at(-1).excludedFromIndependentRaterCount, true);
   assert.equal(report.counts.submittedAdjudicationTriageQueueItemCount, 1);
   assert.equal(report.counts.submittedDiagnosticDeferralRecordCount, 1);
@@ -1560,6 +1583,8 @@ test("rater data-governance evidence requires consent visibility and withdrawal 
 
   assert.equal(report.releaseUseStatus, "submitted_rater_data_governance_evidence_complete");
   assert.equal(report.counts.submittedConsentCount, 1);
+  assert.equal(report.counts.submittedVolunteerDataConsentProfileCount, 1);
+  assert.equal(report.volunteerDataConsentProfileRows.at(-1).entityType, "VolunteerDataConsentProfile");
   assert.equal(report.counts.submittedWithdrawalRequestCount, 1);
   assert.deepEqual(report.reviewSections, []);
 });
