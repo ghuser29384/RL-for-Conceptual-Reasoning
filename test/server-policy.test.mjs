@@ -235,6 +235,11 @@ const prohibitedIncentiveSignals = [
   "leaderboard_rank",
 ];
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudication_label"];
+const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
+const rubricDimensions = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
+const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 
 function completePolicyBundleFixtures() {
   return {
@@ -583,6 +588,208 @@ function completeParticipantSafeguardWorkflowFixtures() {
   };
 }
 
+function completeRatingExperienceWorkflowFixtures() {
+  const scoreInputPolicy = {
+    id: "score-input-policy-workflow-new",
+    policyVersion: "score-input-rlhf85-v1",
+    coveredWorkflowSplitClasses: ratingScoreInputSplits,
+    scoreControlMode: "numeric_plus_slider",
+    manualNumericEntryAvailable: true,
+    initialDefaultState: "unset_required",
+    allowedPrecision: 0.001,
+    defaultStep: 0.01,
+    sliderSnapBehavior: "no_hidden_midpoint_default",
+    keyboardIncrement: 0.01,
+    displayRounding: 3,
+    rawStoragePrecision: 6,
+    exportQuantizationPolicy: "declare_quantization_per_export",
+    correctionOverridePolicy: "append_only_correction_with_reason",
+    protectedSplitCompatibilityClass: "fine_grained_unset_required_v1",
+    frozenAt: "2026-10-01T00:21:00.000Z",
+  };
+  const rubricLintConfig = {
+    id: "rubric-lint-config-workflow-new",
+    rubricVersion: "appendix-f-operational-v1",
+    workflowProfileId: "rating-workflow-profile-workflow-new",
+    preSubmitAssistPolicyId: "pre-submit-assist-workflow-new",
+    lintRuleIds: rubricLintRules,
+    triggerConditions: "deterministic rubric consistency checks only",
+    severityPolicy: "warn_acknowledge_or_route_to_qa",
+    requiredAcknowledgementExplanationPolicy: "rater must acknowledge or explain before lock",
+    qaRoutingPolicy: "route unresolved lint findings to QA without exposing labels",
+    protectedSplitEligible: true,
+    frozenAt: "2026-10-01T00:22:00.000Z",
+  };
+  const raterInstructionRenderVersion = {
+    id: "rater-instruction-render-workflow-new",
+    rubricVersion: "appendix-f-operational-v1",
+    workflowProfileId: "rating-workflow-profile-workflow-new",
+    renderedRubricAnchorChecksum: "sha256:workflow-rubric-anchor",
+    scoreInputPolicyId: scoreInputPolicy.id,
+    uxSimplificationPolicyId: "ux-policy-workflow-new",
+    scoreControlMode: "numeric_plus_slider",
+    scoreDefaultPolicy: "unset_required",
+    displayedExampleIds: ["source-anchor-ai-base-rate"],
+    workflowBannerTextVersion: "critique-not-position-v1",
+    issuePanelCopyVersion: "issue-panel-blind-safe-v1",
+    preSubmitAssistPolicyId: "pre-submit-assist-workflow-new",
+    rubricLintConfigId: rubricLintConfig.id,
+    accessibilityVisualVariant: "wcag-aa-task-first",
+    uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
+    protectedSplitEligibilityPolicy: "compatible_with_protected_splits",
+    frozenAt: "2026-10-01T00:23:00.000Z",
+  };
+  return {
+    taskOutputEligibilityPolicy: {
+      id: "task-output-eligibility-policy-workflow-new",
+      policyVersion: "task-output-eligibility-rlhf85-v1",
+      assignmentOutputClasses: ["blind_initial_rating", "revision", "expert_check", "adjudication_label", "model_assisted_check", "draft"],
+      eligibleLabelSnapshotUses: ratingTaskOutputUses,
+      excludedDenominatorClasses: ["draft", "safe_decline", "source_recognition_compromised", "model_assisted_check"],
+      promotionToLabelRequirements: ["locked_initial", "valid_score_input_policy", "current_instruction_render", "no_stale_dependencies"],
+      adjudicationEvidencePolicy: "adjudication labels require preserved original ratings and memo linkage",
+      pairwisePreferenceExportPolicy: "pairwise exports require frozen pairwise snapshot and non-tied target scores",
+      trainingExportEligibility: "exclude protected splits and high-uncertainty rows unless predeclared",
+      protectedSplitExclusions: ["hidden_benchmark", "protected_validation"],
+      frozenAt: "2026-10-01T00:20:00.000Z",
+    },
+    scoreInputPolicy,
+    raterInstructionRenderVersion,
+    rubricLintConfig,
+    rubricLintEvent: {
+      id: "rubric-lint-event-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      ratingId: "rating-seed-ai-base-rate-r1",
+      lintConfigId: rubricLintConfig.id,
+      lintRuleId: "centrality_strength_product_gap",
+      triggerState: "triggered",
+      severity: "warning",
+      acknowledgementNote: "Rater acknowledged the centrality-strength product diagnostic without score auto-change.",
+      resolvedStatus: "acknowledged",
+      timestamp: "2026-10-01T00:24:00.000Z",
+    },
+    itemIssueReport: {
+      id: "item-issue-workflow-new",
+      reporterId: "demo-rater",
+      reporterRole: "graduate",
+      positionId: "pos-ai-prior",
+      critiqueId: "crit-ai-base-rate",
+      assignmentId: "assign-ai-base-rate",
+      issueCategory: "missing_context",
+      severity: "medium",
+      blindSafeReporterNote: "Rater reports missing context without source, label, model, or protected-status visibility.",
+      reporterExposureState: "initial_blind",
+      labelVisibilityStateForTriage: "hidden",
+      modelResultVisibilityStateForTriage: "hidden",
+      triageState: "label_model_result_blind_review",
+      quarantineStalePropagationState: "quarantine_pending_review",
+      excludedFromLabelDenominator: true,
+      createdAt: "2026-10-01T00:25:00.000Z",
+    },
+    ratingDraftSession: {
+      id: "rating-draft-session-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      autosaveRevisionId: "autosave-workflow-1",
+      dependencyVersionSnapshot: {
+        itemTextVersionId: "ptv-ai-prior-v1",
+        rubricVersion: "appendix-f-operational-v1",
+        instructionRenderVersionId: raterInstructionRenderVersion.id,
+        workflowProfileId: "rating-workflow-profile-workflow-new",
+        assistPolicyId: "pre-submit-assist-workflow-new",
+        rubricLintConfigId: rubricLintConfig.id,
+        scoreInputPolicyId: scoreInputPolicy.id,
+        ratingContextSnapshotId: "rc-target-only-1",
+      },
+      staleDependencyStatus: "current",
+      staleSubmissionBlocked: true,
+      fieldCompletionState: "partial",
+      lastSavedAt: "2026-10-01T00:26:00.000Z",
+      resumeCount: 1,
+      recoveredAfterInterruption: true,
+      abandonedVsSubmittedStatus: "draft_not_submitted",
+      draftNotExportedAsLabel: true,
+      timestamp: "2026-10-01T00:26:00.000Z",
+    },
+    scoreConfidenceAnnotation: {
+      id: "score-confidence-annotation-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      ratingId: "rating-seed-ai-base-rate-r1",
+      raterId: "demo-rater",
+      dimensionConfidences: Object.fromEntries(rubricDimensions.map((dimension) => [dimension, 0.7])),
+      scaleVersion: "confidence-0-1-v1",
+      annotationUsePolicy: "adjudication uncertainty only, not an extra score dimension",
+      excludedFromScoreComputation: true,
+      visibleToPeersBeforeLock: false,
+      timestamp: "2026-10-01T00:26:30.000Z",
+    },
+    samePositionScratchpad: {
+      id: "same-position-scratchpad-workflow-new",
+      raterId: "demo-rater",
+      positionId: "pos-ai-prior",
+      samePositionSessionId: "same-position-session-workflow-new",
+      noteText: "Private continuity note about the position's base-rate premise.",
+      visibilityState: "private_rater_only",
+      promotedToRationaleIds: [],
+      excludedFromLabelAndExport: true,
+      timestamp: "2026-10-01T00:26:40.000Z",
+    },
+    samePositionBatchReview: {
+      id: "same-position-batch-review-workflow-new",
+      raterId: "demo-rater",
+      positionId: "pos-ai-prior",
+      samePositionSessionId: "same-position-session-workflow-new",
+      siblingRatingIdsReviewed: ["rating-seed-ai-base-rate-r1", "rating-seed-ai-base-rate-r2"],
+      productOverallDeltaSummary: "Post-lock self-consistency review checked centrality-strength product and overall deltas.",
+      revisionProposals: [],
+      revisionIds: [],
+      reviewStatus: "completed",
+      nonIndependentEvidenceFlag: true,
+      timestamp: "2026-10-01T00:26:50.000Z",
+    },
+    correctnessClaimWeightWorksheet: {
+      id: "correctness-claim-weight-worksheet-workflow-new",
+      ratingId: "rating-seed-ai-base-rate-r1",
+      verificationWorkspaceId: "verification-workspace-workflow-new",
+      claimSpanIds: ["claim-span-1", "claim-span-2"],
+      claimSignificanceWeights: [0.7, 0.3],
+      correctnessCredencesStatuses: ["verified:0.8", "unresolved:0.5"],
+      unclearClaimExclusionFlags: [false, false],
+      advisoryAggregateCorrectnessEstimate: 0.71,
+      submittedScoreOverrideFlag: true,
+      overrideExplanation: "Rater preserved the submitted correctness score after reviewing weighted claim evidence.",
+      exposureBlindingState: "blind_auxiliary_material_not_consulted",
+      createdBy: "demo-expert",
+      timestamp: "2026-10-01T00:27:00.000Z",
+    },
+    externalAssistanceDeclaration: {
+      id: "external-assistance-declaration-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      raterId: "demo-rater",
+      assistanceType: "LLM",
+      protectedTextEventFlag: true,
+      outsideSystemDescription: "Rater reported accidental external LLM paste before lock.",
+      contaminationRouting: "excluded_from_blind_initial_denominator_and_quarantined",
+      accessibilityExceptionStatus: "not_applicable",
+      timestamp: "2026-10-01T00:27:30.000Z",
+    },
+    protectedArtifactRetentionRecords: protectedArtifactTypes.map((artifactType) => ({
+      id: `protected-artifact-retention-workflow-${artifactType}`,
+      artifactType,
+      artifactIdOrStoragePointer: `${artifactType}-protected-artifact`,
+      sourceSplitProtectionClass: "hidden_benchmark",
+      releaseConfigManifestId: "release-config-manifest-workflow-new",
+      retentionDeletionPolicy: "bounded_retention_then_delete_or_anonymize",
+      cacheOutboxPurgeStatus: "purged_or_not_cached",
+      backupSnapshotCoverage: "inherits_split_policy",
+      developmentStagingEligibility: "not_eligible_without_revalidation",
+      restoreTimeRevalidationStatus: "passed_current_manifest_revalidation",
+      incidentErratumLinks: [],
+      createdAt: "2026-10-01T00:28:00.000Z",
+      expiresAt: "2026-12-31T00:00:00.000Z",
+    })),
+  };
+}
+
 test("Vercel function entrypoint serves API health without a long-running server", async () => {
   const response = await invokeVercelHandler(vercelHealthHandler, { method: "GET", url: "/api/health" });
   assert.equal(response.status, 200);
@@ -908,6 +1115,32 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/source-recognition-events/source-recognition-smoke"],
     ["POST", "/api/v1/model-provider-data-handling-policies"],
     ["GET", "/api/v1/model-provider-data-handling-policies/model-provider-policy-smoke"],
+    ["POST", "/api/v1/task-output-eligibility-policies"],
+    ["GET", "/api/v1/task-output-eligibility-policies/task-output-eligibility-smoke"],
+    ["POST", "/api/v1/score-input-policies"],
+    ["GET", "/api/v1/score-input-policies/score-input-policy-smoke"],
+    ["POST", "/api/v1/rater-instruction-render-versions"],
+    ["GET", "/api/v1/rater-instruction-render-versions/rater-instruction-render-smoke"],
+    ["POST", "/api/v1/rubric-lint-configs"],
+    ["GET", "/api/v1/rubric-lint-configs/rubric-lint-config-smoke"],
+    ["POST", "/api/v1/rubric-lint-events"],
+    ["GET", "/api/v1/rubric-lint-events/rubric-lint-event-smoke"],
+    ["POST", "/api/v1/item-issues"],
+    ["GET", "/api/v1/item-issues/item-issue-smoke"],
+    ["POST", "/api/v1/rating-draft-sessions"],
+    ["GET", "/api/v1/rating-draft-sessions/rating-draft-session-smoke"],
+    ["POST", "/api/v1/score-confidence-annotations"],
+    ["GET", "/api/v1/score-confidence-annotations/score-confidence-annotation-smoke"],
+    ["POST", "/api/v1/same-position-scratchpads"],
+    ["GET", "/api/v1/same-position-scratchpads/same-position-scratchpad-smoke"],
+    ["POST", "/api/v1/same-position-batch-reviews"],
+    ["GET", "/api/v1/same-position-batch-reviews/same-position-batch-review-smoke"],
+    ["POST", "/api/v1/correctness-claim-weight-worksheets"],
+    ["GET", "/api/v1/correctness-claim-weight-worksheets/correctness-claim-weight-worksheet-smoke"],
+    ["POST", "/api/v1/external-assistance-declarations"],
+    ["GET", "/api/v1/external-assistance-declarations/external-assistance-declaration-smoke"],
+    ["POST", "/api/v1/protected-artifact-retention-records"],
+    ["GET", "/api/v1/protected-artifact-retention-records/protected-artifact-retention-smoke"],
     ["POST", "/api/v1/governed-bundle-canonicalization-profiles"],
     ["GET", "/api/v1/governed-bundle-canonicalization-profiles/profile-smoke"],
     ["POST", "/api/v1/governed-bundles"],
@@ -3177,6 +3410,112 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(providerPolicyById.status, 200);
   assert.equal(providerPolicyById.body.protectedContentEligible, true);
 
+  const ratingExperience = completeRatingExperienceWorkflowFixtures();
+  for (const [resourceKey, url] of [
+    ["taskOutputEligibilityPolicy", "/api/v1/task-output-eligibility-policies"],
+    ["scoreInputPolicy", "/api/v1/score-input-policies"],
+    ["raterInstructionRenderVersion", "/api/v1/rater-instruction-render-versions"],
+    ["rubricLintConfig", "/api/v1/rubric-lint-configs"],
+    ["rubricLintEvent", "/api/v1/rubric-lint-events"],
+    ["itemIssueReport", "/api/v1/item-issues"],
+    ["ratingDraftSession", "/api/v1/rating-draft-sessions"],
+    ["scoreConfidenceAnnotation", "/api/v1/score-confidence-annotations"],
+    ["samePositionScratchpad", "/api/v1/same-position-scratchpads"],
+    ["samePositionBatchReview", "/api/v1/same-position-batch-reviews"],
+    ["correctnessClaimWeightWorksheet", "/api/v1/correctness-claim-weight-worksheets"],
+    ["externalAssistanceDeclaration", "/api/v1/external-assistance-declarations"],
+  ]) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url,
+      headers: adminHeaders,
+      body: JSON.stringify({ [resourceKey]: ratingExperience[resourceKey] }),
+    });
+    assert.equal(response.status, 201, resourceKey);
+  }
+
+  for (const protectedArtifactRetentionRecord of ratingExperience.protectedArtifactRetentionRecords) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/protected-artifact-retention-records",
+      headers: adminHeaders,
+      body: JSON.stringify({ protectedArtifactRetentionRecord }),
+    });
+    assert.equal(response.status, 201, protectedArtifactRetentionRecord.artifactType);
+  }
+
+  const scoreInputPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/score-input-policies/score-input-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(scoreInputPolicyById.status, 200);
+  assert.equal(scoreInputPolicyById.body.initialDefaultState, "unset_required");
+
+  const raterInstructionRenderById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rater-instruction-render-versions/rater-instruction-render-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(raterInstructionRenderById.status, 200);
+  assert.equal(raterInstructionRenderById.body.scoreInputPolicyId, "score-input-policy-workflow-new");
+
+  const itemIssueById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/item-issues/item-issue-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(itemIssueById.status, 200);
+  assert.equal(itemIssueById.body.labelVisibilityStateForTriage, "hidden");
+
+  const scoreConfidenceById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/score-confidence-annotations/score-confidence-annotation-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(scoreConfidenceById.status, 200);
+  assert.equal(scoreConfidenceById.body.excludedFromScoreComputation, true);
+
+  const scratchpadById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/same-position-scratchpads/same-position-scratchpad-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(scratchpadById.status, 200);
+  assert.equal(scratchpadById.body.visibilityState, "private_rater_only");
+
+  const batchReviewById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/same-position-batch-reviews/same-position-batch-review-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(batchReviewById.status, 200);
+  assert.equal(batchReviewById.body.nonIndependentEvidenceFlag, true);
+
+  const worksheetById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/correctness-claim-weight-worksheets/correctness-claim-weight-worksheet-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(worksheetById.status, 200);
+  assert.deepEqual(worksheetById.body.claimSignificanceWeights, [0.7, 0.3]);
+
+  const externalAssistanceById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/external-assistance-declarations/external-assistance-declaration-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(externalAssistanceById.status, 200);
+  assert.equal(externalAssistanceById.body.contaminationRouting, "excluded_from_blind_initial_denominator_and_quarantined");
+
+  const protectedRetentionById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/protected-artifact-retention-records/protected-artifact-retention-workflow-prompt",
+    headers: adminHeaders,
+  });
+  assert.equal(protectedRetentionById.status, 200);
+  assert.equal(protectedRetentionById.body.restoreTimeRevalidationStatus, "passed_current_manifest_revalidation");
+
   const releaseConfig = completeReleaseConfigWorkflowFixtures();
   const canonicalizationProfile = await invokeApi(context, {
     method: "POST",
@@ -3672,6 +4011,33 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingQualificationScopeCount, qualificationScopes.length);
   assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
   assert.deepEqual(releaseReport.body.participantSafeguardEvidence.reviewSections, []);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.taskOutputEligibilityPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreInputPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.raterInstructionRenderVersions.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintConfigs.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueReports.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.correctnessClaimWeightWorksheets.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.protectedArtifactRetentionRecords.length, protectedArtifactTypes.length);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreConfidenceAnnotations.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionScratchpads.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviews.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.externalAssistanceDeclarations.length, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.releaseUseStatus, "submitted_rating_experience_evidence_complete");
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreInputPolicyCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionRenderVersionCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueReportCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRatingDraftSessionCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreConfidenceAnnotationCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionScratchpadCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedExternalAssistanceDeclarationCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
+  assert.deepEqual(releaseReport.body.ratingExperienceEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleCanonicalizationProfiles.length, 1);
   assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleRecords.length, governedBundleFamilies.length);
   assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifests.length, 1);
@@ -3779,7 +4145,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 190);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 208);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

@@ -4,6 +4,7 @@ import {
   aggregateRatings,
   adjudicationMemos,
   appendRatingRevision,
+  RUBRIC_DIMENSIONS,
   buildAdjudicationMemoAuditReport,
   auditProvenanceRights,
   assignments,
@@ -37,6 +38,7 @@ import {
   buildRaterCompositionConflictReport,
   buildRaterCertificationReport,
   buildRaterDataGovernanceEvidenceReport,
+  buildRatingExperienceEvidenceReport,
   buildEffectivePrimaryRaterAnchorPolicy,
   buildReleaseGoldLibraryItems,
   buildEffectiveReleaseGateProfile,
@@ -300,6 +302,10 @@ const prohibitedIncentiveSignals = [
   "leaderboard_rank",
 ];
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudication_label"];
+const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
+const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 
 function completePolicyBundleFixtures() {
   return {
@@ -671,6 +677,226 @@ function completeParticipantSafeguardFixtures() {
   };
 }
 
+function completeRatingExperienceFixtures() {
+  const scoreInputPolicy = {
+    id: "score-input-policy-submitted",
+    policyVersion: "score-input-rlhf85-v1",
+    coveredWorkflowSplitClasses: ratingScoreInputSplits,
+    scoreControlMode: "numeric_plus_slider",
+    manualNumericEntryAvailable: true,
+    initialDefaultState: "unset_required",
+    allowedPrecision: 0.001,
+    defaultStep: 0.01,
+    sliderSnapBehavior: "no_hidden_midpoint_default",
+    keyboardIncrement: 0.01,
+    displayRounding: 3,
+    rawStoragePrecision: 6,
+    exportQuantizationPolicy: "declare_quantization_per_export",
+    correctionOverridePolicy: "append_only_correction_with_reason",
+    protectedSplitCompatibilityClass: "fine_grained_unset_required_v1",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+  const rubricLintConfig = {
+    id: "rubric-lint-config-submitted",
+    rubricVersion: "appendix-f-operational-v1",
+    workflowProfileId: "rating-workflow-profile-submitted",
+    preSubmitAssistPolicyId: "pre-submit-assist-submitted",
+    lintRuleIds: rubricLintRules,
+    triggerConditions: "deterministic rubric consistency checks only",
+    severityPolicy: "warn_acknowledge_or_route_to_qa",
+    requiredAcknowledgementExplanationPolicy: "rater must acknowledge or explain before lock",
+    qaRoutingPolicy: "route unresolved lint findings to QA without exposing labels",
+    protectedSplitEligible: true,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+  const renderVersion = {
+    id: "rater-instruction-render-submitted",
+    rubricVersion: "appendix-f-operational-v1",
+    workflowProfileId: "rating-workflow-profile-submitted",
+    renderedRubricAnchorChecksum: "sha256:submitted-rubric-anchor",
+    scoreInputPolicyId: scoreInputPolicy.id,
+    uxSimplificationPolicyId: "ux-policy-submitted",
+    scoreControlMode: "numeric_plus_slider",
+    scoreDefaultPolicy: "unset_required",
+    displayedExampleIds: ["source-anchor-ai-base-rate"],
+    workflowBannerTextVersion: "critique-not-position-v1",
+    issuePanelCopyVersion: "issue-panel-blind-safe-v1",
+    preSubmitAssistPolicyId: "pre-submit-assist-submitted",
+    rubricLintConfigId: rubricLintConfig.id,
+    accessibilityVisualVariant: "wcag-aa-task-first",
+    uiExperimentPolicyId: "ui-experiment-policy-submitted",
+    protectedSplitEligibilityPolicy: "compatible_with_protected_splits",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+  return {
+    taskOutputEligibilityPolicies: [
+      {
+        id: "task-output-eligibility-submitted",
+        policyVersion: "task-output-eligibility-rlhf85-v1",
+        assignmentOutputClasses: ["blind_initial_rating", "revision", "expert_check", "adjudication_label", "model_assisted_check", "draft"],
+        eligibleLabelSnapshotUses: ratingTaskOutputUses,
+        excludedDenominatorClasses: ["draft", "safe_decline", "source_recognition_compromised", "model_assisted_check"],
+        promotionToLabelRequirements: ["locked_initial", "valid_score_input_policy", "current_instruction_render", "no_stale_dependencies"],
+        adjudicationEvidencePolicy: "adjudication labels require preserved original ratings and memo linkage",
+        pairwisePreferenceExportPolicy: "pairwise exports require frozen pairwise snapshot and non-tied target scores",
+        trainingExportEligibility: "exclude protected splits and high-uncertainty rows unless predeclared",
+        protectedSplitExclusions: ["hidden_benchmark", "protected_validation"],
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    scoreInputPolicies: [scoreInputPolicy],
+    raterInstructionRenderVersions: [renderVersion],
+    rubricLintConfigs: [rubricLintConfig],
+    rubricLintEvents: [
+      {
+        id: "rubric-lint-event-submitted",
+        assignmentId: "assign-ai-base-rate",
+        ratingId: "rating-seed-ai-base-rate-r1",
+        lintConfigId: rubricLintConfig.id,
+        lintRuleId: "centrality_strength_product_gap",
+        triggerState: "triggered",
+        severity: "warning",
+        acknowledgementNote: "Rater acknowledged the centrality-strength product diagnostic without score auto-change.",
+        resolvedStatus: "acknowledged",
+        timestamp: "2026-10-01T00:01:00.000Z",
+      },
+    ],
+    itemIssueReports: [
+      {
+        id: "item-issue-submitted",
+        reporterId: "demo-rater",
+        reporterRole: "graduate",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        assignmentId: "assign-ai-base-rate",
+        issueCategory: "missing_context",
+        severity: "medium",
+        blindSafeReporterNote: "Rater reports missing context without source, label, model, or protected-status visibility.",
+        reporterExposureState: "initial_blind",
+        labelVisibilityStateForTriage: "hidden",
+        modelResultVisibilityStateForTriage: "hidden",
+        triageState: "label_model_result_blind_review",
+        quarantineStalePropagationState: "quarantine_pending_review",
+        excludedFromLabelDenominator: true,
+        createdAt: "2026-10-01T00:02:00.000Z",
+      },
+    ],
+    ratingDraftSessions: [
+      {
+        id: "rating-draft-session-submitted",
+        assignmentId: "assign-ai-base-rate",
+        autosaveRevisionId: "autosave-submitted-1",
+        dependencyVersionSnapshot: {
+          itemTextVersionId: "ptv-ai-prior-v1",
+          rubricVersion: "appendix-f-operational-v1",
+          instructionRenderVersionId: renderVersion.id,
+          workflowProfileId: "rating-workflow-profile-submitted",
+          assistPolicyId: "pre-submit-assist-submitted",
+          rubricLintConfigId: rubricLintConfig.id,
+          scoreInputPolicyId: scoreInputPolicy.id,
+          ratingContextSnapshotId: "rc-target-only-1",
+        },
+        staleDependencyStatus: "current",
+        staleSubmissionBlocked: true,
+        fieldCompletionState: "partial",
+        lastSavedAt: "2026-10-01T00:03:00.000Z",
+        resumeCount: 1,
+        recoveredAfterInterruption: true,
+        abandonedVsSubmittedStatus: "draft_not_submitted",
+        draftNotExportedAsLabel: true,
+        timestamp: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+    scoreConfidenceAnnotations: [
+      {
+        id: "score-confidence-annotation-submitted",
+        assignmentId: "assign-ai-base-rate",
+        ratingId: "rating-seed-ai-base-rate-r1",
+        raterId: "demo-rater",
+        dimensionConfidences: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, 0.7])),
+        scaleVersion: "confidence-0-1-v1",
+        annotationUsePolicy: "adjudication uncertainty only, not an extra score dimension",
+        excludedFromScoreComputation: true,
+        visibleToPeersBeforeLock: false,
+        timestamp: "2026-10-01T00:04:30.000Z",
+      },
+    ],
+    samePositionScratchpads: [
+      {
+        id: "same-position-scratchpad-submitted",
+        raterId: "demo-rater",
+        positionId: "pos-ai-prior",
+        samePositionSessionId: "same-position-session-submitted",
+        noteText: "Private continuity note about the position's base-rate premise.",
+        visibilityState: "private_rater_only",
+        promotedToRationaleIds: [],
+        excludedFromLabelAndExport: true,
+        timestamp: "2026-10-01T00:04:40.000Z",
+      },
+    ],
+    samePositionBatchReviews: [
+      {
+        id: "same-position-batch-review-submitted",
+        raterId: "demo-rater",
+        positionId: "pos-ai-prior",
+        samePositionSessionId: "same-position-session-submitted",
+        siblingRatingIdsReviewed: ["rating-seed-ai-base-rate-r1", "rating-seed-ai-base-rate-r2"],
+        productOverallDeltaSummary: "Post-lock self-consistency review checked centrality-strength product and overall deltas.",
+        revisionProposals: [],
+        revisionIds: [],
+        reviewStatus: "completed",
+        nonIndependentEvidenceFlag: true,
+        timestamp: "2026-10-01T00:04:50.000Z",
+      },
+    ],
+    correctnessClaimWeightWorksheets: [
+      {
+        id: "correctness-claim-weight-worksheet-submitted",
+        ratingId: "rating-seed-ai-base-rate-r1",
+        verificationWorkspaceId: "verification-workspace-submitted",
+        claimSpanIds: ["claim-span-1", "claim-span-2"],
+        claimSignificanceWeights: [0.7, 0.3],
+        correctnessCredencesStatuses: ["verified:0.8", "unresolved:0.5"],
+        unclearClaimExclusionFlags: [false, false],
+        advisoryAggregateCorrectnessEstimate: 0.71,
+        submittedScoreOverrideFlag: true,
+        overrideExplanation: "Rater preserved the submitted correctness score after reviewing weighted claim evidence.",
+        exposureBlindingState: "blind_auxiliary_material_not_consulted",
+        createdBy: "demo-expert",
+        timestamp: "2026-10-01T00:04:00.000Z",
+      },
+    ],
+    externalAssistanceDeclarations: [
+      {
+        id: "external-assistance-declaration-submitted",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        assistanceType: "LLM",
+        protectedTextEventFlag: true,
+        outsideSystemDescription: "Rater reported accidental external LLM paste before lock.",
+        contaminationRouting: "excluded_from_blind_initial_denominator_and_quarantined",
+        accessibilityExceptionStatus: "not_applicable",
+        timestamp: "2026-10-01T00:04:55.000Z",
+      },
+    ],
+    protectedArtifactRetentionRecords: protectedArtifactTypes.map((artifactType) => ({
+      id: `protected-artifact-retention-submitted-${artifactType}`,
+      artifactType,
+      artifactIdOrStoragePointer: `${artifactType}-protected-artifact`,
+      sourceSplitProtectionClass: "hidden_benchmark",
+      releaseConfigManifestId: "release-config-manifest-submitted",
+      retentionDeletionPolicy: "bounded_retention_then_delete_or_anonymize",
+      cacheOutboxPurgeStatus: "purged_or_not_cached",
+      backupSnapshotCoverage: "inherits_split_policy",
+      developmentStagingEligibility: "not_eligible_without_revalidation",
+      restoreTimeRevalidationStatus: "passed_current_manifest_revalidation",
+      incidentErratumLinks: [],
+      createdAt: "2026-10-01T00:05:00.000Z",
+      expiresAt: "2026-12-31T00:00:00.000Z",
+    })),
+  };
+}
+
 test("policy bundle evidence gates visibility, workflow profile, UI experiments, assist, and accessibility", () => {
   const report = buildPolicyBundleEvidenceReport("october-2026-demo", completePolicyBundleFixtures());
 
@@ -702,6 +928,27 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
   assert.equal(report.counts.submittedLanguageArtifactAssessmentCount, 1);
   assert.equal(report.counts.submittedSourceRecognitionEventCount, 1);
   assert.equal(report.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("rating experience evidence gates score provenance, linting, issue triage, drafts, worksheets, and retention", () => {
+  const report = buildRatingExperienceEvidenceReport("october-2026-demo", completeRatingExperienceFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_rating_experience_evidence_complete");
+  assert.equal(report.counts.submittedTaskOutputEligibilityPolicyCount, 1);
+  assert.equal(report.counts.submittedScoreInputPolicyCount, 1);
+  assert.equal(report.counts.submittedRaterInstructionRenderVersionCount, 1);
+  assert.equal(report.counts.submittedRubricLintConfigCount, 1);
+  assert.equal(report.counts.submittedRubricLintEventCount, 1);
+  assert.equal(report.counts.submittedItemIssueReportCount, 1);
+  assert.equal(report.counts.submittedRatingDraftSessionCount, 1);
+  assert.equal(report.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
+  assert.equal(report.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
+  assert.equal(report.counts.submittedScoreConfidenceAnnotationCount, 1);
+  assert.equal(report.counts.submittedSamePositionScratchpadCount, 1);
+  assert.equal(report.counts.submittedSamePositionBatchReviewCount, 1);
+  assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
+  assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
 });
 

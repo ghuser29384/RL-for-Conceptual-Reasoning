@@ -313,6 +313,60 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: ["id", "providerEndpointClass", "coveredRunClass", "approvedSplitContentClasses", "approvalStatus", "reviewer", "expiresAt"],
   }),
+  workflowWriteSpec(/^\/api\/v1\/task-output-eligibility-policies$/, "task_output_eligibility_policy_submitted", "taskOutputEligibilityPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "assignmentOutputClasses", "eligibleLabelSnapshotUses", "excludedDenominatorClasses", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/score-input-policies$/, "score_input_policy_submitted", "scoreInputPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "coveredWorkflowSplitClasses", "scoreControlMode", "initialDefaultState", "rawStoragePrecision", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-instruction-render-versions$/, "rater_instruction_render_version_submitted", "raterInstructionRenderVersion", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "rubricVersion", "workflowProfileId", "renderedRubricAnchorChecksum", "scoreInputPolicyId", "scoreDefaultPolicy", "rubricLintConfigId", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rubric-lint-configs$/, "rubric_lint_config_submitted", "rubricLintConfig", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "rubricVersion", "workflowProfileId", "preSubmitAssistPolicyId", "lintRuleIds", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rubric-lint-events$/, "rubric_lint_event_submitted", "rubricLintEvent", ratingWorkflowRoles, {
+    requiredFields: ["id", "assignmentId", "lintConfigId", "lintRuleId", "triggerState", "severity", "resolvedStatus"],
+    requireAssignmentClaimField: "assignmentId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/item-issues$/, "item_issue_report_submitted", "itemIssueReport", ratingWorkflowRoles, {
+    requiredFields: ["id", "reporterId", "reporterRole", "issueCategory", "severity", "blindSafeReporterNote", "labelVisibilityStateForTriage", "modelResultVisibilityStateForTriage"],
+    requireActorField: "reporterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rating-draft-sessions$/, "rating_draft_session_submitted", "ratingDraftSession", ratingWorkflowRoles, {
+    requiredFields: ["id", "assignmentId", "autosaveRevisionId", "dependencyVersionSnapshot", "staleDependencyStatus", "draftNotExportedAsLabel"],
+    requireAssignmentClaimField: "assignmentId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/score-confidence-annotations$/, "score_confidence_annotation_submitted", "scoreConfidenceAnnotation", ratingWorkflowRoles, {
+    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/same-position-scratchpads$/, "same_position_scratchpad_submitted", "samePositionScratchpad", ratingWorkflowRoles, {
+    requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "visibilityState", "promotedToRationaleIds", "timestamp"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/same-position-batch-reviews$/, "same_position_batch_review_submitted", "samePositionBatchReview", ratingWorkflowRoles, {
+    requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "siblingRatingIdsReviewed", "productOverallDeltaSummary", "reviewStatus", "nonIndependentEvidenceFlag"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/correctness-claim-weight-worksheets$/, "correctness_claim_weight_worksheet_submitted", "correctnessClaimWeightWorksheet", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "claimSpanIds", "claimSignificanceWeights", "correctnessCredencesStatuses", "advisoryAggregateCorrectnessEstimate", "exposureBlindingState", "createdBy"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/external-assistance-declarations$/, "external_assistance_declaration_submitted", "externalAssistanceDeclaration", ratingWorkflowRoles, {
+    requiredFields: ["id", "assignmentId", "raterId", "assistanceType", "protectedTextEventFlag", "contaminationRouting", "accessibilityExceptionStatus"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/protected-artifact-retention-records$/, "protected_artifact_retention_record_submitted", "protectedArtifactRetentionRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "artifactType", "artifactIdOrStoragePointer", "sourceSplitProtectionClass", "releaseConfigManifestId", "retentionDeletionPolicy", "restoreTimeRevalidationStatus"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "version", "hashAlgorithm", "materializationQueryRules", "activatedAt"],
@@ -428,6 +482,19 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/language-artifact-assessments\/(?<id>[^/]+)$/, "languageArtifactAssessment", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/source-recognition-events\/(?<id>[^/]+)$/, "sourceRecognitionEvent", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/model-provider-data-handling-policies\/(?<id>[^/]+)$/, "modelProviderDataHandlingPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/task-output-eligibility-policies\/(?<id>[^/]+)$/, "taskOutputEligibilityPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/score-input-policies\/(?<id>[^/]+)$/, "scoreInputPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-instruction-render-versions\/(?<id>[^/]+)$/, "raterInstructionRenderVersion", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rubric-lint-configs\/(?<id>[^/]+)$/, "rubricLintConfig", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rubric-lint-events\/(?<id>[^/]+)$/, "rubricLintEvent", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/item-issues\/(?<id>[^/]+)$/, "itemIssueReport", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rating-draft-sessions\/(?<id>[^/]+)$/, "ratingDraftSession", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/score-confidence-annotations\/(?<id>[^/]+)$/, "scoreConfidenceAnnotation", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/same-position-scratchpads\/(?<id>[^/]+)$/, "samePositionScratchpad", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/same-position-batch-reviews\/(?<id>[^/]+)$/, "samePositionBatchReview", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/correctness-claim-weight-worksheets\/(?<id>[^/]+)$/, "correctnessClaimWeightWorksheet", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/external-assistance-declarations\/(?<id>[^/]+)$/, "externalAssistanceDeclaration", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/protected-artifact-retention-records\/(?<id>[^/]+)$/, "protectedArtifactRetentionRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles\/(?<id>[^/]+)$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)$/, "governedBundleRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)$/, "releaseConfigManifest", adminAuditRoles),
@@ -1625,6 +1692,19 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const languageArtifactAssessments = latestWorkflowResources(workflowEvents, "languageArtifactAssessment");
   const sourceRecognitionEvents = latestWorkflowResources(workflowEvents, "sourceRecognitionEvent");
   const modelProviderDataHandlingPolicies = latestWorkflowResources(workflowEvents, "modelProviderDataHandlingPolicy");
+  const taskOutputEligibilityPolicies = latestWorkflowResources(workflowEvents, "taskOutputEligibilityPolicy");
+  const scoreInputPolicies = latestWorkflowResources(workflowEvents, "scoreInputPolicy");
+  const raterInstructionRenderVersions = latestWorkflowResources(workflowEvents, "raterInstructionRenderVersion");
+  const rubricLintConfigs = latestWorkflowResources(workflowEvents, "rubricLintConfig");
+  const rubricLintEvents = latestWorkflowResources(workflowEvents, "rubricLintEvent");
+  const itemIssueReports = latestWorkflowResources(workflowEvents, "itemIssueReport");
+  const ratingDraftSessions = latestWorkflowResources(workflowEvents, "ratingDraftSession");
+  const correctnessClaimWeightWorksheets = latestWorkflowResources(workflowEvents, "correctnessClaimWeightWorksheet");
+  const protectedArtifactRetentionRecords = latestWorkflowResources(workflowEvents, "protectedArtifactRetentionRecord");
+  const scoreConfidenceAnnotations = latestWorkflowResources(workflowEvents, "scoreConfidenceAnnotation");
+  const samePositionScratchpads = latestWorkflowResources(workflowEvents, "samePositionScratchpad");
+  const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
+  const externalAssistanceDeclarations = latestWorkflowResources(workflowEvents, "externalAssistanceDeclaration");
   const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
   const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
   const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
@@ -1726,6 +1806,19 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     languageArtifactAssessments,
     sourceRecognitionEvents,
     modelProviderDataHandlingPolicies,
+    taskOutputEligibilityPolicies,
+    scoreInputPolicies,
+    raterInstructionRenderVersions,
+    rubricLintConfigs,
+    rubricLintEvents,
+    itemIssueReports,
+    ratingDraftSessions,
+    correctnessClaimWeightWorksheets,
+    protectedArtifactRetentionRecords,
+    scoreConfidenceAnnotations,
+    samePositionScratchpads,
+    samePositionBatchReviews,
+    externalAssistanceDeclarations,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,
@@ -1824,6 +1917,19 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     languageArtifactAssessments,
     sourceRecognitionEvents,
     modelProviderDataHandlingPolicies,
+    taskOutputEligibilityPolicies,
+    scoreInputPolicies,
+    raterInstructionRenderVersions,
+    rubricLintConfigs,
+    rubricLintEvents,
+    itemIssueReports,
+    ratingDraftSessions,
+    correctnessClaimWeightWorksheets,
+    protectedArtifactRetentionRecords,
+    scoreConfidenceAnnotations,
+    samePositionScratchpads,
+    samePositionBatchReviews,
+    externalAssistanceDeclarations,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,

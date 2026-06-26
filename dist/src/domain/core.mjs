@@ -10996,6 +10996,65 @@ function defaultProtectedArtifactRetentionRecords(releaseId) {
   }));
 }
 
+function defaultScoreConfidenceAnnotation(releaseId) {
+  return {
+    id: `score-confidence-annotation-${releaseId}`,
+    assignmentId: "assign-ai-base-rate",
+    ratingId: "rating-seed-ai-base-rate-r1",
+    raterId: "demo-rater",
+    dimensionConfidences: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, 0.7])),
+    scaleVersion: "confidence-0-1-v1",
+    annotationUsePolicy: "adjudication_uncertainty_only_not_an_extra_score_dimension",
+    excludedFromScoreComputation: true,
+    visibleToPeersBeforeLock: false,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultSamePositionScratchpad(releaseId) {
+  return {
+    id: `same-position-scratchpad-${releaseId}`,
+    raterId: "demo-rater",
+    positionId: "pos-ai-prior",
+    samePositionSessionId: `same-position-session-${releaseId}`,
+    noteText: "Private continuity note about the position's base-rate premise.",
+    visibilityState: "private_rater_only",
+    promotedToRationaleIds: [],
+    excludedFromLabelAndExport: true,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultSamePositionBatchReview(releaseId) {
+  return {
+    id: `same-position-batch-review-${releaseId}`,
+    raterId: "demo-rater",
+    positionId: "pos-ai-prior",
+    samePositionSessionId: `same-position-session-${releaseId}`,
+    siblingRatingIdsReviewed: ["rating-seed-ai-base-rate-r1", "rating-seed-ai-base-rate-r2"],
+    productOverallDeltaSummary: "Post-lock self-consistency review checked centrality-strength product and overall deltas.",
+    revisionProposals: [],
+    revisionIds: [],
+    reviewStatus: "completed",
+    nonIndependentEvidenceFlag: true,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultExternalAssistanceDeclaration(releaseId) {
+  return {
+    id: `external-assistance-declaration-${releaseId}`,
+    assignmentId: "assign-ai-base-rate",
+    raterId: "demo-rater",
+    assistanceType: "LLM",
+    protectedTextEventFlag: true,
+    outsideSystemDescription: "Rater reported accidental external LLM paste before lock.",
+    contaminationRouting: "excluded_from_blind_initial_denominator_and_quarantined",
+    accessibilityExceptionStatus: "not_applicable",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const submittedTaskOutputRows = (options.taskOutputEligibilityPolicies ?? [])
     .map((policy) => normalizeTaskOutputEligibilityPolicy(policy, "submitted_workflow_task_output_eligibility_policy"))
@@ -11048,6 +11107,22 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const seedRetentionRows = defaultProtectedArtifactRetentionRecords(releaseId).map((record) =>
     normalizeProtectedArtifactRetentionRecord(record, "seed_protected_artifact_retention_record"),
   );
+  const submittedConfidenceRows = (options.scoreConfidenceAnnotations ?? [])
+    .map((annotation) => normalizeScoreConfidenceAnnotation(annotation, "submitted_workflow_score_confidence_annotation"))
+    .filter(Boolean);
+  const seedConfidenceRows = [normalizeScoreConfidenceAnnotation(defaultScoreConfidenceAnnotation(releaseId), "seed_score_confidence_annotation")];
+  const submittedScratchpadRows = (options.samePositionScratchpads ?? [])
+    .map((scratchpad) => normalizeSamePositionScratchpad(scratchpad, "submitted_workflow_same_position_scratchpad"))
+    .filter(Boolean);
+  const seedScratchpadRows = [normalizeSamePositionScratchpad(defaultSamePositionScratchpad(releaseId), "seed_same_position_scratchpad")];
+  const submittedBatchReviewRows = (options.samePositionBatchReviews ?? [])
+    .map((review) => normalizeSamePositionBatchReview(review, "submitted_workflow_same_position_batch_review"))
+    .filter(Boolean);
+  const seedBatchReviewRows = [normalizeSamePositionBatchReview(defaultSamePositionBatchReview(releaseId), "seed_same_position_batch_review")];
+  const submittedAssistanceRows = (options.externalAssistanceDeclarations ?? [])
+    .map((declaration) => normalizeExternalAssistanceDeclaration(declaration, "submitted_workflow_external_assistance_declaration"))
+    .filter(Boolean);
+  const seedAssistanceRows = [normalizeExternalAssistanceDeclaration(defaultExternalAssistanceDeclaration(releaseId), "seed_external_assistance_declaration")];
   const retentionRowsForGate = submittedRetentionRows.length ? submittedRetentionRows : seedRetentionRows;
   const protectedArtifactTypeRows = REQUIRED_PROTECTED_ARTIFACT_TYPES.map((artifactType) => protectedArtifactTypeEvidenceRow(artifactType, retentionRowsForGate));
   const gateGroups = [
@@ -11059,6 +11134,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ["item_issue_report", submittedItemIssueRows.length ? submittedItemIssueRows : seedItemIssueRows],
     ["rating_draft_session", submittedDraftRows.length ? submittedDraftRows : seedDraftRows],
     ["correctness_claim_weight_worksheet", submittedWorksheetRows.length ? submittedWorksheetRows : seedWorksheetRows],
+    ["score_confidence_annotation", submittedConfidenceRows.length ? submittedConfidenceRows : seedConfidenceRows],
+    ["same_position_scratchpad", submittedScratchpadRows.length ? submittedScratchpadRows : seedScratchpadRows],
+    ["same_position_batch_review", submittedBatchReviewRows.length ? submittedBatchReviewRows : seedBatchReviewRows],
+    ["external_assistance_declaration", submittedAssistanceRows.length ? submittedAssistanceRows : seedAssistanceRows],
   ];
   const reviewSections = [
     ...submittedTaskOutputRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "task_output_eligibility_policy", artifactId: row.id, reason }))),
@@ -11070,6 +11149,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ...submittedDraftRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rating_draft_session", artifactId: row.id, reason }))),
     ...submittedWorksheetRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "correctness_claim_weight_worksheet", artifactId: row.id, reason }))),
     ...submittedRetentionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "protected_artifact_retention_record", artifactId: row.id, reason }))),
+    ...submittedConfidenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_confidence_annotation", artifactId: row.id, reason }))),
+    ...submittedScratchpadRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_scratchpad", artifactId: row.id, reason }))),
+    ...submittedBatchReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review", artifactId: row.id, reason }))),
+    ...submittedAssistanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "external_assistance_declaration", artifactId: row.id, reason }))),
     ...gateGroups
       .filter(([, rows]) => !rows.some((row) => row.reviewReasons.length === 0))
       .map(([artifactType]) => ({ artifactType, artifactId: artifactType, reason: "missing_complete_rating_experience_artifact" })),
@@ -11089,6 +11172,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedDraftRows.length > 0 &&
     submittedWorksheetRows.length > 0 &&
     submittedRetentionRows.length > 0 &&
+    submittedConfidenceRows.length > 0 &&
+    submittedScratchpadRows.length > 0 &&
+    submittedBatchReviewRows.length > 0 &&
+    submittedAssistanceRows.length > 0 &&
     reviewSections.length === 0;
   return {
     id: `rating-experience-evidence-${releaseId}`,
@@ -11108,6 +11195,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ratingDraftSessionRows: [...seedDraftRows, ...submittedDraftRows],
     correctnessClaimWeightWorksheetRows: [...seedWorksheetRows, ...submittedWorksheetRows],
     protectedArtifactRetentionRows: [...seedRetentionRows, ...submittedRetentionRows],
+    scoreConfidenceAnnotationRows: [...seedConfidenceRows, ...submittedConfidenceRows],
+    samePositionScratchpadRows: [...seedScratchpadRows, ...submittedScratchpadRows],
+    samePositionBatchReviewRows: [...seedBatchReviewRows, ...submittedBatchReviewRows],
+    externalAssistanceDeclarationRows: [...seedAssistanceRows, ...submittedAssistanceRows],
     protectedArtifactTypeRows,
     counts: {
       submittedTaskOutputEligibilityPolicyCount: submittedTaskOutputRows.length,
@@ -11119,6 +11210,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedRatingDraftSessionCount: submittedDraftRows.length,
       submittedCorrectnessClaimWeightWorksheetCount: submittedWorksheetRows.length,
       submittedProtectedArtifactRetentionRecordCount: submittedRetentionRows.length,
+      submittedScoreConfidenceAnnotationCount: submittedConfidenceRows.length,
+      submittedSamePositionScratchpadCount: submittedScratchpadRows.length,
+      submittedSamePositionBatchReviewCount: submittedBatchReviewRows.length,
+      submittedExternalAssistanceDeclarationCount: submittedAssistanceRows.length,
       passingProtectedArtifactTypeCount: protectedArtifactTypeRows.filter((row) => row.status === "protected_artifact_type_complete").length,
       completeArtifactGroupCount: gateGroups.filter(([, rows]) => rows.some((row) => row.reviewReasons.length === 0)).length,
       reviewSectionCount: reviewSections.length,
@@ -11415,6 +11510,145 @@ function normalizeProtectedArtifactRetentionRecord(record, rowSource) {
     restoreTimeRevalidationStatus: record.restoreTimeRevalidationStatus ?? null,
     reviewReasons,
     status: reviewReasons.length ? "protected_artifact_retention_review_required" : "protected_artifact_retention_complete",
+  };
+}
+
+function normalizeScoreConfidenceAnnotation(annotation, rowSource) {
+  const id = annotation?.id ?? annotation?.scoreConfidenceAnnotationId ?? annotation?.confidenceAnnotationId;
+  if (!id) return null;
+  const dimensionConfidences = normalizeDimensionConfidenceMap(annotation.dimensionConfidences ?? annotation.confidences);
+  const missingDimensions = RUBRIC_DIMENSIONS.filter((dimension) => !Object.hasOwn(dimensionConfidences, dimension));
+  const confidenceValues = Object.values(dimensionConfidences);
+  const reviewReasons = [
+    requiredPromptFieldReason("assignmentId", annotation.assignmentId),
+    requiredPromptFieldReason("ratingId", annotation.ratingId),
+    requiredPromptFieldReason("raterId", annotation.raterId),
+    missingDimensions.length ? `dimensionConfidences:${missingDimensions.join(",")}` : null,
+    confidenceValues.every((value) => Number.isFinite(value) && value >= 0 && value <= 1) ? null : "dimensionConfidences:range",
+    requiredPromptFieldReason("scaleVersion", annotation.scaleVersion),
+    policyMentions(annotation.annotationUsePolicy, ["not"]) && policyMentions(annotation.annotationUsePolicy, ["score"]) ? null : "annotationUsePolicy",
+    annotation.excludedFromScoreComputation === true ? null : "excludedFromScoreComputation",
+    annotation.visibleToPeersBeforeLock === false ? null : "visibleToPeersBeforeLock",
+    requiredPromptFieldReason("timestamp", annotation.timestamp ?? annotation.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    assignmentId: annotation.assignmentId ?? null,
+    ratingId: annotation.ratingId ?? null,
+    raterId: annotation.raterId ?? null,
+    dimensionConfidences,
+    scaleVersion: annotation.scaleVersion ?? null,
+    excludedFromScoreComputation: annotation.excludedFromScoreComputation === true,
+    visibleToPeersBeforeLock: annotation.visibleToPeersBeforeLock === true,
+    reviewReasons,
+    status: reviewReasons.length ? "score_confidence_annotation_review_required" : "score_confidence_annotation_complete",
+  };
+}
+
+function normalizeDimensionConfidenceMap(value) {
+  if (Array.isArray(value)) {
+    return Object.fromEntries(
+      value
+        .map((item) => [item?.dimension, item?.confidence])
+        .filter(([dimension, confidence]) => RUBRIC_DIMENSIONS.includes(dimension) && Number.isFinite(confidence)),
+    );
+  }
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([dimension]) => RUBRIC_DIMENSIONS.includes(dimension))
+      .map(([dimension, confidence]) => [dimension, confidence]),
+  );
+}
+
+function normalizeSamePositionScratchpad(scratchpad, rowSource) {
+  const id = scratchpad?.id ?? scratchpad?.scratchpadId ?? scratchpad?.samePositionScratchpadId;
+  if (!id) return null;
+  const promotedToRationaleIds = normalizeStringArray(scratchpad.promotedToRationaleIds);
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", scratchpad.raterId),
+    requiredPromptFieldReason("positionId", scratchpad.positionId),
+    requiredPromptFieldReason("samePositionSessionId", scratchpad.samePositionSessionId),
+    scratchpad.noteText || scratchpad.encryptedNoteArtifact ? null : "noteTextOrEncryptedNoteArtifact",
+    policyMentions(scratchpad.visibilityState, ["private"]) ? null : "visibilityState",
+    Array.isArray(scratchpad.promotedToRationaleIds) ? null : "promotedToRationaleIds",
+    scratchpad.excludedFromLabelAndExport === true || scratchpad.excludedFromLabelExportFlag === true ? null : "excludedFromLabelAndExport",
+    requiredPromptFieldReason("timestamp", scratchpad.timestamp ?? scratchpad.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    raterId: scratchpad.raterId ?? null,
+    positionId: scratchpad.positionId ?? null,
+    samePositionSessionId: scratchpad.samePositionSessionId ?? null,
+    visibilityState: scratchpad.visibilityState ?? null,
+    promotedToRationaleIds,
+    excludedFromLabelAndExport: scratchpad.excludedFromLabelAndExport === true || scratchpad.excludedFromLabelExportFlag === true,
+    reviewReasons,
+    status: reviewReasons.length ? "same_position_scratchpad_review_required" : "same_position_scratchpad_complete",
+  };
+}
+
+function normalizeSamePositionBatchReview(review, rowSource) {
+  const id = review?.id ?? review?.batchReviewId ?? review?.samePositionBatchReviewId;
+  if (!id) return null;
+  const siblingRatingIdsReviewed = normalizeStringArray(review.siblingRatingIdsReviewed);
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", review.raterId),
+    requiredPromptFieldReason("positionId", review.positionId),
+    requiredPromptFieldReason("samePositionSessionId", review.samePositionSessionId),
+    siblingRatingIdsReviewed.length ? null : "siblingRatingIdsReviewed",
+    requiredPromptFieldReason("productOverallDeltaSummary", review.productOverallDeltaSummary),
+    Array.isArray(review.revisionProposals) ? null : "revisionProposals",
+    ["completed", "revision_proposed", "no_revision_needed"].includes(review.reviewStatus) ? null : "reviewStatus",
+    review.nonIndependentEvidenceFlag === true ? null : "nonIndependentEvidenceFlag",
+    requiredPromptFieldReason("timestamp", review.timestamp ?? review.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    raterId: review.raterId ?? null,
+    positionId: review.positionId ?? null,
+    samePositionSessionId: review.samePositionSessionId ?? null,
+    siblingRatingIdsReviewed,
+    reviewStatus: review.reviewStatus ?? null,
+    nonIndependentEvidenceFlag: review.nonIndependentEvidenceFlag === true,
+    reviewReasons,
+    status: reviewReasons.length ? "same_position_batch_review_review_required" : "same_position_batch_review_complete",
+  };
+}
+
+function normalizeExternalAssistanceDeclaration(declaration, rowSource) {
+  const id = declaration?.id ?? declaration?.assistanceDeclarationId ?? declaration?.externalAssistanceDeclarationId;
+  if (!id) return null;
+  const assistanceType = declaration.assistanceType ?? null;
+  const allowedTypes = ["none", "search", "LLM", "collaborator", "accessibility_tool", "other"];
+  const contaminationRequired = assistanceType !== "none" || declaration.protectedTextEventFlag === true;
+  const routingPreservesOrExcludes = contaminationRequired
+    ? policyMentions(declaration.contaminationRouting, ["excluded"]) || policyMentions(declaration.contaminationRouting, ["quarantine"])
+    : policyMentions(declaration.contaminationRouting, ["preserved"]) || policyMentions(declaration.contaminationRouting, ["none"]);
+  const reviewReasons = [
+    requiredPromptFieldReason("assignmentId", declaration.assignmentId),
+    requiredPromptFieldReason("raterId", declaration.raterId),
+    allowedTypes.includes(assistanceType) ? null : "assistanceType",
+    typeof declaration.protectedTextEventFlag === "boolean" ? null : "protectedTextEventFlag",
+    contaminationRequired ? requiredPromptFieldReason("outsideSystemDescription", declaration.outsideSystemDescription) : null,
+    routingPreservesOrExcludes ? null : "contaminationRouting",
+    requiredPromptFieldReason("accessibilityExceptionStatus", declaration.accessibilityExceptionStatus),
+    requiredPromptFieldReason("timestamp", declaration.timestamp ?? declaration.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    assignmentId: declaration.assignmentId ?? null,
+    raterId: declaration.raterId ?? null,
+    assistanceType,
+    protectedTextEventFlag: declaration.protectedTextEventFlag === true,
+    contaminationRouting: declaration.contaminationRouting ?? null,
+    accessibilityExceptionStatus: declaration.accessibilityExceptionStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "external_assistance_declaration_review_required" : "external_assistance_declaration_complete",
   };
 }
 
@@ -12384,6 +12618,21 @@ export function buildOctoberReleaseReport(
     sourceRecognitionEvents: options.sourceRecognitionEvents ?? [],
     modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
   });
+  const ratingExperienceEvidence = buildRatingExperienceEvidenceReport(releaseId, {
+    taskOutputEligibilityPolicies: options.taskOutputEligibilityPolicies ?? [],
+    scoreInputPolicies: options.scoreInputPolicies ?? [],
+    raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
+    rubricLintConfigs: options.rubricLintConfigs ?? [],
+    rubricLintEvents: options.rubricLintEvents ?? [],
+    itemIssueReports: options.itemIssueReports ?? [],
+    ratingDraftSessions: options.ratingDraftSessions ?? [],
+    correctnessClaimWeightWorksheets: options.correctnessClaimWeightWorksheets ?? [],
+    protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
+    scoreConfidenceAnnotations: options.scoreConfidenceAnnotations ?? [],
+    samePositionScratchpads: options.samePositionScratchpads ?? [],
+    samePositionBatchReviews: options.samePositionBatchReviews ?? [],
+    externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
+  });
   const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
     governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
     governedBundleRecords: options.governedBundleRecords ?? [],
@@ -12417,6 +12666,7 @@ export function buildOctoberReleaseReport(
     raterDataGovernance,
     policyBundleEvidence,
     participantSafeguardEvidence,
+    ratingExperienceEvidence,
     releaseConfigManifestEvidence,
     operationalControlEvidence,
     corpusManifest,
@@ -12560,6 +12810,21 @@ export function buildOctoberReleaseReport(
       languageArtifactAssessments: options.languageArtifactAssessments ?? [],
       sourceRecognitionEvents: options.sourceRecognitionEvents ?? [],
       modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
+    },
+    workflowRatingExperienceArtifacts: {
+      taskOutputEligibilityPolicies: options.taskOutputEligibilityPolicies ?? [],
+      scoreInputPolicies: options.scoreInputPolicies ?? [],
+      raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
+      rubricLintConfigs: options.rubricLintConfigs ?? [],
+      rubricLintEvents: options.rubricLintEvents ?? [],
+      itemIssueReports: options.itemIssueReports ?? [],
+      ratingDraftSessions: options.ratingDraftSessions ?? [],
+      correctnessClaimWeightWorksheets: options.correctnessClaimWeightWorksheets ?? [],
+      protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
+      scoreConfidenceAnnotations: options.scoreConfidenceAnnotations ?? [],
+      samePositionScratchpads: options.samePositionScratchpads ?? [],
+      samePositionBatchReviews: options.samePositionBatchReviews ?? [],
+      externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
     },
     workflowReleaseConfigArtifacts: {
       governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
