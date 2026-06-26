@@ -1076,11 +1076,15 @@ function completeInteractionWorkflowFixtures() {
       raterId: "demo-rater",
       sessionTarget: "ordinary_live_rating",
       startedAt: "2026-10-01T00:45:00.000Z",
+      endedAt: "2026-10-01T01:00:00.000Z",
       activeTimeSeconds: 900,
       completedAssignmentCount: 1,
       expectedEffortCompleted: "within_band",
+      breakPromptCount: 1,
+      breakTakenCount: 1,
       stopAfterCurrentItemState: "available",
       fatigueWarningState: "none",
+      interruptionSummary: "one pause; no label-quality penalty",
       qaRoutingStatus: "no_fatigue_qa_route",
       timestamp: "2026-10-01T00:45:00.000Z",
     },
@@ -1090,6 +1094,9 @@ function completeInteractionWorkflowFixtures() {
       raterId: "demo-rater",
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
       reasonCode: "conflict_or_prior_exposure",
+      freeTextNote: "Recognized source family before scoring.",
+      priorExposureConflictFlag: true,
+      topicFitUpdateSuggestion: "avoid same source family",
       reassignmentStatus: "reassigned_without_label",
       qaRoutingStatus: "monitor_only",
       sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
@@ -1118,11 +1125,14 @@ function completeInteractionWorkflowFixtures() {
     verificationWorkspaceSession: {
       id: "verification-workspace-workflow-new",
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+      relatedRatingIds: ["rating-seed-ai-base-rate-r1"],
       claimList: ["The critique says expert forecasts ignore base rates."],
       claimSpanRefs: ["claim-span-1"],
       claimType: "subjective_or_intuition_pump",
       verificationStatus: "not_practicable",
       evidenceMaterialRefs: ["adjudication-note"],
+      notPracticableJustification: "Normative forecast premise lacks direct empirical check.",
+      correctnessHalfEntireUnclearFlag: false,
       exposureBlindingState: "post_lock_expert_only",
       verifierId: "demo-expert",
       verifierRole: "expert",
@@ -1144,14 +1154,21 @@ function completeInteractionWorkflowFixtures() {
       discussionThreadId: "discussion-thread-workflow-new",
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
       participantIds: ["demo-rater", "demo-expert"],
+      participantRoles: ["graduate_rater", "expert_adjudicator"],
       initialRatingLockCheck: "all_initial_ratings_locked",
       identityStagingPolicy: "role_neutral_handles_first",
       identityMaskPhaseStatus: "completed_before_role_reveal",
       roleRevealPolicy: "moderator_exception_logged",
+      moderatorAdjudicatorVisibilityExceptions: "adjudicator can inspect pre-read notes only after initial locks",
       visibleMaterialPolicy: "peer_rationales_visible_post_lock_only",
+      peerScoreRationaleVisibilityTimestamp: "2026-10-01T00:50:00.000Z",
       objectLevelCommentRecords: ["comment-workflow-new"],
+      spanReferenceLinks: ["rationale-span-workflow-new"],
+      overlookedPointFlags: ["no_unanswered_central_objection"],
       revisionProposalIds: ["revision-proposal-workflow-new"],
+      majorityPressureWarningState: "displayed",
       transcriptArtifact: "discussion-transcript-workflow-new",
+      writtenFollowUpStatus: "not_required",
       discussionStatus: "object_level_discussion_complete",
       timestamp: "2026-10-01T00:50:00.000Z",
     },
@@ -2992,11 +3009,32 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         checkKind: "self_check",
         auxiliaryMaterialSeen: ["own_initial_rationale"],
         modelExposureTiming: "none",
+        humanOnlyCheckLockedBeforeModelExposure: true,
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        timestamp: "2026-10-01T00:31:00.000Z",
       },
     }),
   });
   assert.equal(ratingCheckAction.status, 201);
   assert.equal(ratingCheckAction.body.resourceId, "rating-check-action-workflow-new");
+
+  const incompleteRatingCheckAction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ratings/rating-seed-ai-base-rate-r1/check",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      ratingCheck: {
+        id: "rating-check-action-workflow-incomplete",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        checkKind: "self_check",
+        auxiliaryMaterialSeen: [],
+        modelExposureTiming: "none",
+      },
+    }),
+  });
+  assert.equal(incompleteRatingCheckAction.status, 400);
+  assert.match(incompleteRatingCheckAction.body.detail, /rubricVersionUsedForCheck/);
 
   const hiddenAssignmentFlag = await invokeApi(context, {
     method: "POST",
@@ -3063,10 +3101,28 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         issueType: "strength_centrality_allocation",
         disagreementTaxonomyCodes: ["strength_centrality_allocation"],
         status: "open_for_expert_adjudication",
+        createdAt: "2026-10-01T00:30:00.000Z",
+        updatedAt: "2026-10-01T00:31:00.000Z",
       },
     }),
   });
   assert.equal(discussionThread.status, 201);
+
+  const incompleteDiscussionThread = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussion-threads",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      discussionThread: {
+        id: "discussion-thread-workflow-incomplete",
+        itemId: "pos-workflow-new::crit-workflow-new",
+        issueType: "strength_centrality_allocation",
+        status: "open_for_expert_adjudication",
+      },
+    }),
+  });
+  assert.equal(incompleteDiscussionThread.status, 400);
+  assert.match(incompleteDiscussionThread.body.detail, /createdAt/);
 
   const discussionThreadById = await invokeApi(context, {
     method: "GET",
@@ -3104,8 +3160,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         contestedInterpretation: "Whether the critique attacks the central forecast or a side assumption.",
         plausibleInterpretationsConsidered: ["central_base_rate_attack", "side_assumption_only"],
         worstPlausibleInterpretationConsidered: "side_assumption_only",
+        interpretationPlausibilityNotes: "Both readings are plausible, but the central base-rate attack is release-relevant.",
+        multiInterpretationCoverageSummary: "Memo records the central and side-assumption readings before selecting the release-relevant target.",
         critiqueRefutesInterpretations: ["central_base_rate_attack"],
         adversarialPlausibilityWeightingDecision: "Treat the central forecast reading as the release-relevant interpretation.",
+        adversarialInterpretationWeightingSummary: "Adverse side-assumption reading kept visible but not treated as the strongest target.",
+        pricedInAssessment: "The supplied position already prices in generic expert overconfidence.",
+        backgroundKnowledgeAssessment: "No protected source knowledge is needed after the post-lock discussion.",
+        bottomLineDependenceSummary: "Resolution does not depend on accepting the position's bottom line.",
+        clearlyUnsatisfactoryImprecisionSummary: "Imprecision objection noted but not decisive.",
+        contentFreeDeadWeightSummary: "No content-free dead weight remains after target mapping.",
+        obfuscationSummary: "No obfuscated fallacy was found in the final interpretation.",
+        strengthCentralityAllocationSummary: "Strength was capped below centrality because part of the critique targets a side assumption.",
+        midRangeStrengthUncertaintySummary: "Residual mid-range uncertainty is preserved in the memo.",
+        correctnessWeightingSummary: "Correctness weight follows the verified central-claim interpretation.",
+        correctnessVerificationStatus: "not_practicable",
+        correctnessVerificationSummary: "Subjective forecast premise marked not practicable, with uncertainty preserved.",
+        clarityAfterEffortSummary: "The critique remains clear enough after adjudicator effort.",
         disagreementTaxonomyCodes: ["strength_centrality_allocation"],
         postDiscussionResolutionStatus: "resolved_with_minor_residual_spread",
         unresolvedDisagreementClass: "resolved_with_minor_residual_spread",
@@ -3113,10 +3184,31 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         splitDecision: "public_train",
         adjudicatorIds: ["demo-expert"],
         rubricVersionConsidered: "lmca-seven-dim-v1",
+        timestamp: "2026-10-01T00:33:00.000Z",
       },
     }),
   });
   assert.equal(adjudicationMemo.status, 201);
+
+  const incompleteAdjudicationMemo = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudication-memos",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudicationMemo: {
+        id: "adjudication-memo-workflow-incomplete",
+        discussionThreadId: "discussion-thread-workflow-new",
+        itemId: "pos-workflow-new::crit-workflow-new",
+        contestedInterpretation: "Thin memo should not pass.",
+        plausibleInterpretationsConsidered: ["central_base_rate_attack"],
+        disagreementTaxonomyCodes: ["strength_centrality_allocation"],
+        adjudicatorIds: ["demo-expert"],
+        timestamp: "2026-10-01T00:33:30.000Z",
+      },
+    }),
+  });
+  assert.equal(incompleteAdjudicationMemo.status, 400);
+  assert.match(incompleteAdjudicationMemo.body.detail, /worstPlausibleInterpretationConsidered/);
 
   const adjudicationMemoById = await invokeApi(context, {
     method: "GET",
@@ -3156,13 +3248,42 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         modelExposureTiming: "post_human_only_self_check_lock",
         assistingModelRequestedAlias: "gpt-demo-label-checker",
         assistingModelResolvedSnapshot: "gpt-demo-label-checker-2026-06-01",
+        assistingModelProvider: "approved-model-evaluation-endpoint",
         assistingModelFamily: "gpt_demo_family",
         assistingPromptTemplateId: "label-check-v1",
         humanOnlyCheckLockedBeforeModelExposure: true,
+        preModelRatingCheckId: "rating-check-action-workflow-new",
+        modelAssistanceDeltaSummary: "Assisting model suggested no score change after human-only lock.",
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        labelContaminationGroupId: "label-contamination-group-rating-check-workflow-new",
+        resultingRevisionId: null,
+        timestamp: "2026-10-01T00:32:00.000Z",
       },
     }),
   });
   assert.equal(ratingCheck.status, 201);
+
+  const incompleteModelAssistedRatingCheck = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-checks",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingCheck: {
+        id: "rating-check-workflow-incomplete",
+        ratingId: "rating-ai-base-rate-a",
+        checkerId: "demo-rater",
+        checkType: "model_assisted_check",
+        auxiliaryMaterialSeen: ["assisting_model_commentary"],
+        modelExposureTiming: "post_human_only_self_check_lock",
+        humanOnlyCheckLockedBeforeModelExposure: true,
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        labelContaminationGroupId: "label-contamination-group-rating-check-workflow-new",
+        timestamp: "2026-10-01T00:32:30.000Z",
+      },
+    }),
+  });
+  assert.equal(incompleteModelAssistedRatingCheck.status, 400);
+  assert.match(incompleteModelAssistedRatingCheck.body.detail, /assistingModelRequestedAlias/);
 
   const ratingCheckById = await invokeApi(context, {
     method: "GET",
@@ -3180,16 +3301,41 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       verificationRecord: {
         id: "verification-workflow-new",
         itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimChecked: "Whether the base-rate selectivity objection is externally verifiable or conceptual.",
+        verificationMaterials: ["Adjudicator reviewed the supplied position and critique after initial lock."],
         verificationStatus: "not_practicable",
         verifierId: "demo-expert",
         verifierRole: "expert",
         verificationType: "subjective_or_intuition_pump",
         verificationResult: "Expert adjudicator marked the conceptual forecast claim as not practicable to externally verify.",
+        confidence: 0.72,
+        exposureStatus: "post_initial_lock_adjudication",
+        timestamp: "2026-06-12T12:00:00.000Z",
         createdAt: "2026-06-12T12:00:00.000Z",
       },
     }),
   });
   assert.equal(verification.status, 201);
+
+  const incompleteVerification = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationRecord: {
+        id: "verification-workflow-incomplete",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        verificationStatus: "not_practicable",
+        verifierId: "demo-expert",
+        verifierRole: "expert",
+        verificationType: "subjective_or_intuition_pump",
+        verificationResult: "Thin record should not pass without claim, materials, confidence, and exposure metadata.",
+        timestamp: "2026-06-12T12:01:00.000Z",
+      },
+    }),
+  });
+  assert.equal(incompleteVerification.status, 400);
+  assert.match(incompleteVerification.body.detail, /claimChecked/);
 
   const verificationById = await invokeApi(context, {
     method: "GET",
@@ -4041,6 +4187,104 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     assert.equal(response.status, 201, resourceKey);
   }
 
+  const incompleteItemIssueReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      itemIssueReport: {
+        id: "item-issue-workflow-incomplete",
+        reporterId: "demo-rater",
+        reporterRole: "graduate",
+        assignmentId: "assign-ai-base-rate",
+        issueCategory: "missing_context",
+        severity: "medium",
+        blindSafeReporterNote: "Thin report should not pass without exposure and triage state.",
+      },
+    }),
+  });
+  assert.equal(incompleteItemIssueReport.status, 400);
+  assert.match(incompleteItemIssueReport.body.detail, /reporterExposureState/);
+
+  const nonBlindItemIssueReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      itemIssueReport: {
+        ...ratingExperience.itemIssueReport,
+        id: "item-issue-workflow-nonblind",
+        labelVisibilityStateForTriage: "visible",
+      },
+    }),
+  });
+  assert.equal(nonBlindItemIssueReport.status, 400);
+  assert.match(nonBlindItemIssueReport.body.detail, /labelVisibilityStateForTriage/);
+
+  const staleRatingDraftSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-draft-sessions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      ratingDraftSession: {
+        ...ratingExperience.ratingDraftSession,
+        id: "rating-draft-session-workflow-stale",
+        dependencyVersionSnapshot: {
+          ...ratingExperience.ratingDraftSession.dependencyVersionSnapshot,
+          scoreInputPolicyId: "",
+        },
+      },
+    }),
+  });
+  assert.equal(staleRatingDraftSession.status, 400);
+  assert.match(staleRatingDraftSession.body.detail, /dependencyVersionSnapshot\.scoreInputPolicyId/);
+
+  const exportedRatingDraftSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-draft-sessions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      ratingDraftSession: {
+        ...ratingExperience.ratingDraftSession,
+        id: "rating-draft-session-workflow-exported",
+        draftNotExportedAsLabel: false,
+      },
+    }),
+  });
+  assert.equal(exportedRatingDraftSession.status, 400);
+  assert.match(exportedRatingDraftSession.body.detail, /draftNotExportedAsLabel/);
+
+  const unlinkedCorrectnessWorksheet = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/correctness-claim-weight-worksheets",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      correctnessClaimWeightWorksheet: {
+        ...ratingExperience.correctnessClaimWeightWorksheet,
+        id: "correctness-claim-weight-worksheet-workflow-unlinked",
+        ratingId: undefined,
+        verificationWorkspaceId: undefined,
+      },
+    }),
+  });
+  assert.equal(unlinkedCorrectnessWorksheet.status, 400);
+  assert.match(unlinkedCorrectnessWorksheet.body.detail, /ratingId/);
+
+  const overrideWithoutExplanationWorksheet = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/correctness-claim-weight-worksheets",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      correctnessClaimWeightWorksheet: {
+        ...ratingExperience.correctnessClaimWeightWorksheet,
+        id: "correctness-claim-weight-worksheet-workflow-no-override-note",
+        overrideExplanation: "",
+      },
+    }),
+  });
+  assert.equal(overrideWithoutExplanationWorksheet.status, 400);
+  assert.match(overrideWithoutExplanationWorksheet.body.detail, /overrideExplanation/);
+
   for (const protectedArtifactRetentionRecord of ratingExperience.protectedArtifactRetentionRecords) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -4279,6 +4523,54 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     assert.equal(response.status, 201, resourceKey);
   }
 
+  const incompleteInterpretationTargetMap = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/interpretation-target-maps",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      interpretationTargetMap: {
+        ...interactionWorkflow.interpretationTargetMap,
+        id: "interpretation-target-map-workflow-incomplete",
+        critiqueCoverageByInterpretation: {},
+      },
+    }),
+  });
+  assert.equal(incompleteInterpretationTargetMap.status, 400);
+  assert.match(incompleteInterpretationTargetMap.body.detail, /critiqueCoverageByInterpretation/);
+
+  const incompleteVerificationWorkspaceSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-workspace-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationWorkspaceSession: {
+        ...interactionWorkflow.verificationWorkspaceSession,
+        id: "verification-workspace-workflow-incomplete",
+        evidenceMaterialRefs: [],
+        notPracticableJustification: "",
+      },
+    }),
+  });
+  assert.equal(incompleteVerificationWorkspaceSession.status, 400);
+  assert.match(incompleteVerificationWorkspaceSession.body.detail, /evidenceMaterialRefs/);
+
+  const incompletePostLockDiscussionSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions/discussion-thread-workflow-new/post-lock-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      postLockDiscussionSession: {
+        ...interactionWorkflow.postLockDiscussionSession,
+        id: "post-lock-discussion-workflow-incomplete",
+        participantRoles: [],
+        spanReferenceLinks: [],
+        writtenFollowUpStatus: "",
+      },
+    }),
+  });
+  assert.equal(incompletePostLockDiscussionSession.status, 400);
+  assert.match(incompletePostLockDiscussionSession.body.detail, /writtenFollowUpStatus/);
+
   const remediationCompletion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters/me/remediation/centrality-strength-product/complete",
@@ -4294,6 +4586,42 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(raterSessionById.status, 200);
   assert.equal(raterSessionById.body.expectedEffortCompleted, "within_band");
+
+  const incompleteRaterSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      raterSession: {
+        id: "rater-session-workflow-incomplete",
+        raterId: "demo-rater",
+        sessionTarget: "ordinary_live_rating",
+        startedAt: "2026-10-01T00:47:00.000Z",
+        activeTimeSeconds: 120,
+        stopAfterCurrentItemState: "available",
+        fatigueWarningState: "none",
+        qaRoutingStatus: "no_fatigue_qa_route",
+      },
+    }),
+  });
+  assert.equal(incompleteRaterSession.status, 400);
+  assert.match(incompleteRaterSession.body.detail, /endedAt/);
+
+  const incompleteAssignmentDecline = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/decline",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentDecline: {
+        id: "assignment-decline-workflow-incomplete",
+        raterId: "demo-rater",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        reasonCode: "conflict_or_prior_exposure",
+      },
+    }),
+  });
+  assert.equal(incompleteAssignmentDecline.status, 400);
+  assert.match(incompleteAssignmentDecline.body.detail, /freeTextNote/);
 
   const practiceSessionById = await invokeApi(context, {
     method: "GET",
@@ -4663,6 +4991,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowVerificationRow.latestRecordSource, "submitted_workflow_verification_record");
   assert.equal(workflowVerificationRow.verificationStatus, "not_practicable");
   assert.equal(workflowVerificationRow.verifierRole, "expert");
+  assert.equal(workflowVerificationRow.confidence, 0.72);
+  assert.deepEqual(workflowVerificationRow.verificationMaterials, ["Adjudicator reviewed the supplied position and critique after initial lock."]);
+  assert.equal(workflowVerificationRow.timestamp, "2026-06-12T12:00:00.000Z");
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateBatchModelJudgeScoreSubmissions.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateReviews.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidatePromotions.length, 1);
@@ -4690,15 +5021,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowMemoRow.memoSource, "submitted_workflow_adjudication_memo");
   assert.deepEqual(workflowMemoRow.plausibleInterpretations, ["central_base_rate_attack", "side_assumption_only"]);
   assert.deepEqual(workflowMemoRow.disagreementTaxonomy, ["strength_centrality_allocation"]);
+  assert.equal(workflowMemoRow.correctnessVerificationStatus, "not_practicable");
+  assert.equal(workflowMemoRow.rubricVersionConsidered, "lmca-seven-dim-v1");
+  assert.equal(workflowMemoRow.maxFinalRaterSpread, 0.18);
   assert.equal(releaseReport.body.workflowAuditTrailArtifacts.ratingChecks.length, 2);
   assert.equal(releaseReport.body.modelAssistedLabelOverlap.counts.submittedRatingCheckRows, 2);
   assert.equal(releaseReport.body.modelAssistedLabelOverlap.counts.submittedModelAssistedRatingCheckRows, 1);
-  assert.equal(
-    releaseReport.body.modelAssistedLabelOverlap.assistanceRows.some(
-      (row) => row.ratingCheckId === "rating-check-workflow-new" && row.assistanceSource === "submitted_workflow_rating_check",
-    ),
-    true,
+  const workflowRatingCheckOverlapRow = releaseReport.body.modelAssistedLabelOverlap.assistanceRows.find(
+    (row) => row.ratingCheckId === "rating-check-workflow-new" && row.assistanceSource === "submitted_workflow_rating_check",
   );
+  assert.equal(workflowRatingCheckOverlapRow.preModelRatingCheckId, "rating-check-action-workflow-new");
+  assert.equal(workflowRatingCheckOverlapRow.labelContaminationGroupId, "label-contamination-group-rating-check-workflow-new");
   assert.equal(
     releaseReport.body.modelAssistedLabelOverlap.runRows.find((row) => row.evaluationRunId === "eval-full-rubric-demo").status,
     "model_assisted_label_overlap_sensitive",
@@ -4864,7 +5197,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueReports.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
+  assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_pending_review");
+  assert.equal(releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).resumeCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).abandonedVsSubmittedStatus, "draft_not_submitted");
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.correctnessClaimWeightWorksheets.length, 1);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation,
+    "Rater preserved the submitted correctness score after reviewing weighted claim evidence.",
+  );
+  assert.equal(releaseReport.body.ratingExperienceEvidence.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.protectedArtifactRetentionRecords.length, protectedArtifactTypes.length);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreConfidenceAnnotations.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpans.length, 1);
@@ -4920,8 +5262,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowInteractionArtifacts.assignmentDeclines.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.interpretationTargetMaps.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.verificationWorkspaceSessions.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack,
+    "covered",
+  );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).notPracticableJustification,
+    "Normative forecast premise lacks direct empirical check.",
+  );
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicatorPreReads.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.postLockDiscussionSessions.length, 1);
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).participantRoles, [
+    "graduate_rater",
+    "expert_adjudicator",
+  ]);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicationReviewSessions.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.calibrationFeedbackEvents.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.governanceApprovalRecords.length, 1);

@@ -1203,11 +1203,15 @@ function completeInteractionWorkflowFixtures() {
         raterId: "demo-rater",
         sessionTarget: "ordinary_live_rating",
         startedAt: "2026-10-01T00:02:00.000Z",
+        endedAt: "2026-10-01T00:17:00.000Z",
         activeTimeSeconds: 900,
         completedAssignmentCount: 1,
         expectedEffortCompleted: "within_band",
+        breakPromptCount: 1,
+        breakTakenCount: 1,
         stopAfterCurrentItemState: "available",
         fatigueWarningState: "none",
+        interruptionSummary: "one pause; no label-quality penalty",
         qaRoutingStatus: "no_fatigue_qa_route",
         timestamp: "2026-10-01T00:02:00.000Z",
       },
@@ -1219,6 +1223,9 @@ function completeInteractionWorkflowFixtures() {
         raterId: "demo-rater",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         reasonCode: "conflict_or_prior_exposure",
+        freeTextNote: "Recognized source family before scoring.",
+        priorExposureConflictFlag: true,
+        topicFitUpdateSuggestion: "avoid same source family",
         reassignmentStatus: "reassigned_without_label",
         qaRoutingStatus: "monitor_only",
         sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
@@ -1250,11 +1257,14 @@ function completeInteractionWorkflowFixtures() {
       {
         id: "verification-workspace-submitted",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        relatedRatingIds: ["rating-seed-ai-base-rate-r1"],
         claimList: ["The critique says expert forecasts ignore base rates."],
         claimSpanRefs: ["claim-span-1"],
         claimType: "subjective_or_intuition_pump",
         verificationStatus: "not_practicable",
         evidenceMaterialRefs: ["adjudication-note"],
+        notPracticableJustification: "Normative forecast premise lacks direct empirical check.",
+        correctnessHalfEntireUnclearFlag: false,
         exposureBlindingState: "post_lock_expert_only",
         verifierId: "demo-expert",
         verifierRole: "expert",
@@ -1280,14 +1290,21 @@ function completeInteractionWorkflowFixtures() {
         discussionThreadId: "discussion-thread-workflow-new",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         participantIds: ["demo-rater", "demo-expert"],
+        participantRoles: ["graduate_rater", "expert_adjudicator"],
         initialRatingLockCheck: "all_initial_ratings_locked",
         identityStagingPolicy: "role_neutral_handles_first",
         identityMaskPhaseStatus: "completed_before_role_reveal",
         roleRevealPolicy: "moderator_exception_logged",
+        moderatorAdjudicatorVisibilityExceptions: "adjudicator can inspect pre-read notes only after initial locks",
         visibleMaterialPolicy: "peer_rationales_visible_post_lock_only",
+        peerScoreRationaleVisibilityTimestamp: "2026-10-01T00:07:00.000Z",
         objectLevelCommentRecords: ["comment-submitted"],
+        spanReferenceLinks: ["rationale-span-submitted"],
+        overlookedPointFlags: ["no_unanswered_central_objection"],
         revisionProposalIds: ["revision-proposal-submitted"],
+        majorityPressureWarningState: "displayed",
         transcriptArtifact: "discussion-transcript-submitted",
+        writtenFollowUpStatus: "not_required",
         discussionStatus: "object_level_discussion_complete",
         timestamp: "2026-10-01T00:07:00.000Z",
       },
@@ -1457,6 +1474,12 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedScoreConfidenceAnnotationCount, 1);
   assert.equal(report.counts.submittedRaterScoreConfidenceCount, 1);
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(report.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
+  assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_pending_review");
+  assert.equal(report.ratingDraftSessionRows.at(-1).resumeCount, 1);
+  assert.equal(report.ratingDraftSessionRows.at(-1).abandonedVsSubmittedStatus, "draft_not_submitted");
+  assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation, "Rater preserved the submitted correctness score after reviewing weighted claim evidence.");
+  assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
   assert.equal(report.raterScoreConfidenceRows.at(-1).entityType, "RaterScoreConfidence");
   assert.equal(report.rationaleEvidenceSpanRows.at(-1).visibilityState, "locked_initial_hidden");
   assert.equal(report.counts.submittedSamePositionScratchpadCount, 1);
@@ -1509,8 +1532,13 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.counts.submittedAssignmentDeclineCount, 1);
   assert.equal(report.counts.submittedInterpretationTargetMapCount, 1);
   assert.equal(report.counts.submittedVerificationWorkspaceSessionCount, 1);
+  assert.equal(report.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack, "covered");
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).notPracticableJustification, "Normative forecast premise lacks direct empirical check.");
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
   assert.equal(report.counts.submittedAdjudicatorPreReadCount, 1);
   assert.equal(report.counts.submittedPostLockDiscussionSessionCount, 1);
+  assert.deepEqual(report.postLockDiscussionSessionRows.at(-1).participantRoles, ["graduate_rater", "expert_adjudicator"]);
+  assert.equal(report.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
   assert.equal(report.counts.submittedAdjudicationReviewSessionCount, 1);
   assert.equal(report.counts.submittedCalibrationFeedbackEventCount, 1);
   assert.equal(report.counts.submittedGovernanceApprovalRecordCount, 1);
@@ -2229,26 +2257,50 @@ test("release report applies submitted adjudication and verification workflow ar
           itemId: "pos-voting::crit-voting-bullet",
           claimChecked: "Approval voting strategic incentives were verified by expert review.",
           verificationType: "logical",
+          verificationMaterials: ["Expert reviewed standard approval-voting incentive structure after initial rating lock."],
           verifierId: "expert-workflow",
           verifierRole: "expert",
           verificationStatus: "verified",
           verificationResult: "Expert review resolved the required conceptual incentive check.",
+          confidence: 0.86,
           exposureStatus: "post_initial_lock_adjudication",
+          timestamp: "2026-06-12T12:00:00.000Z",
           createdAt: "2026-06-12T12:00:00.000Z",
         },
       ],
       adjudicationMemos: [
         {
           id: "adjudication-memo-submitted-voting-bullet",
+          discussionThreadId: "discussion-thread-submitted-voting-bullet",
           itemId: "pos-voting::crit-voting-bullet",
           contestedInterpretation: "Whether the bullet-voting objection is conceptual or empirical.",
           plausibleInterpretationsConsidered: ["conceptual_incentive_objection", "empirical_behavior_claim"],
           worstPlausibleInterpretationConsidered: "empirical_behavior_claim",
+          interpretationPlausibilityNotes: "Both conceptual and empirical readings are plausible before adjudication.",
+          multiInterpretationCoverageSummary: "Memo covers both readings and selects the conceptual incentive objection.",
           critiqueRefutesInterpretations: ["conceptual_incentive_objection"],
           adversarialPlausibilityWeightingDecision: "Treat the conceptual incentive objection as the verified release-relevant reading.",
+          adversarialInterpretationWeightingSummary: "Empirical-behavior reading is recorded but not used as the release-critical target.",
+          pricedInAssessment: "The position did not price in this strategic incentive objection.",
+          backgroundKnowledgeAssessment: "Expert voting-theory knowledge was used after initial lock only.",
+          bottomLineDependenceSummary: "Final resolution does not depend on accepting the position's bottom line.",
+          clearlyUnsatisfactoryImprecisionSummary: "No decisive imprecision defect after adjudication.",
+          contentFreeDeadWeightSummary: "No content-free dead weight in the selected interpretation.",
+          obfuscationSummary: "No obfuscated fallacy in the conceptual incentive reading.",
+          strengthCentralityAllocationSummary: "Centrality remains high while strength is tied to the verified incentive claim.",
+          midRangeStrengthUncertaintySummary: "Residual strength uncertainty is retained.",
+          correctnessWeightingSummary: "Correctness weight follows the linked verification record.",
+          correctnessVerificationStatus: "verified",
+          correctnessVerificationSummary: "Linked verification record resolves the incentive check.",
+          clarityAfterEffortSummary: "Clear enough after adjudicator effort.",
           disagreementTaxonomyCodes: ["background_knowledge_dependence"],
+          postDiscussionResolutionStatus: "expert_verified_conceptual_incentive_check",
           unresolvedDisagreementClass: "expert_verified_conceptual_incentive_check",
+          maxFinalRaterSpread: 0.12,
           splitDecision: "internal_validation",
+          adjudicatorIds: ["expert-workflow"],
+          rubricVersionConsidered: "lmca-seven-dim-v1",
+          timestamp: "2026-06-12T12:10:00.000Z",
           createdAt: "2026-06-12T12:10:00.000Z",
         },
       ],
@@ -2260,6 +2312,8 @@ test("release report applies submitted adjudication and verification workflow ar
   assert.equal(verificationRow.latestRecordId, "verification-submitted-voting-bullet");
   assert.equal(verificationRow.latestRecordSource, "submitted_workflow_verification_record");
   assert.equal(verificationRow.verificationStatus, "verified");
+  assert.equal(verificationRow.confidence, 0.86);
+  assert.equal(verificationRow.timestamp, "2026-06-12T12:00:00.000Z");
   assert.equal(report.correctnessVerification.releaseUseStatus, "pass");
 
   const memoRow = report.adjudicationMemoAudit.memoRows.find((row) => row.memoId === "adjudication-memo-submitted-voting-bullet");
@@ -2267,6 +2321,9 @@ test("release report applies submitted adjudication and verification workflow ar
   assert.equal(memoRow.memoSource, "submitted_workflow_adjudication_memo");
   assert.deepEqual(memoRow.plausibleInterpretations, ["conceptual_incentive_objection", "empirical_behavior_claim"]);
   assert.deepEqual(memoRow.disagreementTaxonomy, ["background_knowledge_dependence"]);
+  assert.equal(memoRow.correctnessVerificationStatus, "verified");
+  assert.equal(memoRow.rubricVersionConsidered, "lmca-seven-dim-v1");
+  assert.equal(memoRow.maxFinalRaterSpread, 0.12);
 
   const issueTaxonomy = report.rubricIssueFlags.memoTaxonomyRows.find((row) => row.flag === "backgroundKnowledgeDependence");
   assert.equal(issueTaxonomy.memoIds.includes("adjudication-memo-submitted-voting-bullet"), true);
@@ -2813,10 +2870,17 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         checkerId: "expert-workflow",
         assistingModelRequestedAlias: "gpt-demo-label-checker",
         assistingModelResolvedSnapshot: "gpt-demo-label-checker-2026-06-01",
+        assistingModelProvider: "approved-model-evaluation-endpoint",
         assistingModelFamily: "gpt_demo_family",
         assistingPromptTemplateId: "label-check-v1",
         modelExposureTiming: "post_human_only_self_check_lock",
         humanOnlyCheckLockedBeforeModelExposure: true,
+        preModelRatingCheckId: "rating-check-submitted-human-only",
+        modelAssistanceDeltaSummary: "Assisting model suggested no score change after human-only lock.",
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        labelContaminationGroupId: "label-contamination-group-rating-check-submitted",
+        resultingRevisionId: null,
+        timestamp: "2026-10-01T00:31:00.000Z",
       },
     ],
   });
@@ -2827,6 +2891,8 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
   assert.equal(report.counts.submittedModelAssistedRatingCheckRows, 1);
   assert.equal(report.assistanceRows[0].assistanceSource, "submitted_workflow_rating_check");
   assert.equal(report.assistanceRows[0].ratingCheckId, "rating-check-submitted-model-assisted");
+  assert.equal(report.assistanceRows[0].preModelRatingCheckId, "rating-check-submitted-human-only");
+  assert.equal(report.assistanceRows[0].labelContaminationGroupId, "label-contamination-group-rating-check-submitted");
   assert.equal(fullRubricRow.status, "model_assisted_label_overlap_sensitive");
   assert.deepEqual(fullRubricRow.overlapItemIds, ["pos-voting::crit-voting-bullet"]);
   assert.equal(overallOnlyRow.status, "model_assisted_rows_present_no_evaluated_model_overlap");

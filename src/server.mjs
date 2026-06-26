@@ -80,6 +80,203 @@ const workflowStateReadRoles = ["rater", "graduate", "phd", "expert", "admin", "
 const workflowStateTransitionRoles = ["rater", "graduate", "phd", "expert", "admin"];
 const participantDataWriteRoles = ["rater", "graduate", "phd", "expert", "admin"];
 const participantDataReadRoles = ["rater", "graduate", "phd", "expert", "admin", "auditor"];
+const raterSessionRequiredFields = [
+  "id",
+  "raterId",
+  "sessionTarget",
+  "startedAt",
+  "endedAt",
+  "activeTimeSeconds",
+  "completedAssignmentCount",
+  "expectedEffortCompleted",
+  "breakPromptCount",
+  "breakTakenCount",
+  "stopAfterCurrentItemState",
+  "fatigueWarningState",
+  "interruptionSummary",
+  "qaRoutingStatus",
+  "timestamp",
+];
+const assignmentDeclineRequiredFields = [
+  "id",
+  "assignmentId",
+  "raterId",
+  "itemKeys",
+  "reasonCode",
+  "freeTextNote",
+  "priorExposureConflictFlag",
+  "topicFitUpdateSuggestion",
+  "reassignmentStatus",
+  "qaRoutingStatus",
+  "sourcePeerModelGoldProtectedLabelVisibilityState",
+  "excludedFromRatingDenominator",
+  "timestamp",
+];
+const itemIssueReportRequiredFields = [
+  "id",
+  "reporterId",
+  "reporterRole",
+  "issueCategory",
+  "severity",
+  "blindSafeReporterNote",
+  "reporterExposureState",
+  "labelVisibilityStateForTriage",
+  "modelResultVisibilityStateForTriage",
+  "triageState",
+  "quarantineStalePropagationState",
+  "excludedFromLabelDenominator",
+  "createdAt",
+];
+const ratingDraftSessionRequiredFields = [
+  "id",
+  "assignmentId",
+  "autosaveRevisionId",
+  "dependencyVersionSnapshot",
+  "staleDependencyStatus",
+  "staleSubmissionBlocked",
+  "fieldCompletionState",
+  "lastSavedAt",
+  "resumeCount",
+  "recoveredAfterInterruption",
+  "abandonedVsSubmittedStatus",
+  "draftNotExportedAsLabel",
+  "timestamp",
+];
+const ratingDraftSessionDependencyFields = [
+  "dependencyVersionSnapshot.itemTextVersionId",
+  "dependencyVersionSnapshot.rubricVersion",
+  "dependencyVersionSnapshot.instructionRenderVersionId",
+  "dependencyVersionSnapshot.workflowProfileId",
+  "dependencyVersionSnapshot.assistPolicyId",
+  "dependencyVersionSnapshot.rubricLintConfigId",
+  "dependencyVersionSnapshot.scoreInputPolicyId",
+  "dependencyVersionSnapshot.ratingContextSnapshotId",
+];
+const ratingCheckActionRequiredFields = [
+  "id",
+  "ratingId",
+  "assignmentId",
+  "raterId",
+  "checkKind",
+  "auxiliaryMaterialSeen",
+  "modelExposureTiming",
+  "humanOnlyCheckLockedBeforeModelExposure",
+  "rubricVersionUsedForCheck",
+  "timestamp",
+];
+const ratingCheckRecordRequiredFields = [
+  "id",
+  "ratingId",
+  "checkerId",
+  "checkType",
+  "auxiliaryMaterialSeen",
+  "modelExposureTiming",
+  "humanOnlyCheckLockedBeforeModelExposure",
+  "rubricVersionUsedForCheck",
+  "labelContaminationGroupId",
+  "timestamp",
+];
+const modelAssistedRatingCheckRequiredFields = [
+  "assistingModelRequestedAlias",
+  "assistingModelResolvedSnapshot",
+  "assistingModelProvider",
+  "assistingModelFamily",
+  "assistingPromptTemplateId",
+  "preModelRatingCheckId",
+  "modelAssistanceDeltaSummary",
+];
+const correctnessClaimWeightWorksheetRequiredFields = [
+  "id",
+  "claimSpanIds",
+  "claimSignificanceWeights",
+  "correctnessCredencesStatuses",
+  "unclearClaimExclusionFlags",
+  "advisoryAggregateCorrectnessEstimate",
+  "submittedScoreOverrideFlag",
+  "exposureBlindingState",
+  "createdBy",
+  "timestamp",
+];
+const verificationRecordRequiredFields = [
+  "id",
+  "claimChecked",
+  "verificationType",
+  "verifierId",
+  "verifierRole",
+  "verificationStatus",
+  "verificationResult",
+  "exposureStatus",
+];
+const interpretationTargetMapRequiredFields = [
+  "id",
+  "positionTextVersionId",
+  "critiqueTextVersionId",
+  "plausibilityNotes",
+  "pricedInBackgroundAssumptionStatus",
+  "productAllocationNote",
+  "visibilityState",
+  "createdBy",
+  "timestamp",
+];
+const verificationWorkspaceSessionRequiredFields = [
+  "id",
+  "claimType",
+  "verificationStatus",
+  "correctnessHalfEntireUnclearFlag",
+  "exposureBlindingState",
+  "verifierId",
+  "verifierRole",
+  "timestamp",
+];
+const discussionThreadRequiredFields = [
+  "id",
+  "issueType",
+  "status",
+  "createdAt",
+  "updatedAt",
+];
+const postLockDiscussionSessionRequiredFields = [
+  "id",
+  "discussionThreadId",
+  "initialRatingLockCheck",
+  "identityStagingPolicy",
+  "identityMaskPhaseStatus",
+  "roleRevealPolicy",
+  "moderatorAdjudicatorVisibilityExceptions",
+  "visibleMaterialPolicy",
+  "peerScoreRationaleVisibilityTimestamp",
+  "majorityPressureWarningState",
+  "transcriptArtifact",
+  "writtenFollowUpStatus",
+  "discussionStatus",
+  "timestamp",
+];
+const adjudicationMemoRequiredFields = [
+  "id",
+  "discussionThreadId",
+  "contestedInterpretation",
+  "worstPlausibleInterpretationConsidered",
+  "interpretationPlausibilityNotes",
+  "multiInterpretationCoverageSummary",
+  "adversarialInterpretationWeightingSummary",
+  "pricedInAssessment",
+  "backgroundKnowledgeAssessment",
+  "bottomLineDependenceSummary",
+  "clearlyUnsatisfactoryImprecisionSummary",
+  "contentFreeDeadWeightSummary",
+  "obfuscationSummary",
+  "strengthCentralityAllocationSummary",
+  "midRangeStrengthUncertaintySummary",
+  "correctnessWeightingSummary",
+  "correctnessVerificationStatus",
+  "correctnessVerificationSummary",
+  "clarityAfterEffortSummary",
+  "postDiscussionResolutionStatus",
+  "unresolvedDisagreementClass",
+  "splitDecision",
+  "rubricVersionConsidered",
+  "timestamp",
+];
 const raterDataGovernanceCategories = [
   "identity_profile",
   "rating_performance",
@@ -235,23 +432,23 @@ const workflowWriteEndpoints = [
     ],
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions$/, "rater_session_submitted", "raterSession", ratingWorkflowRoles, {
-    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requiredFields: raterSessionRequiredFields,
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)$/, "rater_session_updated", "raterSession", ratingWorkflowRoles, {
     method: "PATCH",
     pathParamField: "id",
-    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requiredFields: raterSessionRequiredFields,
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)\/pause$/, "rater_session_paused", "raterSession", ratingWorkflowRoles, {
     pathParamField: "id",
-    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requiredFields: raterSessionRequiredFields,
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)\/stop-after-current$/, "rater_session_stop_after_current", "raterSession", ratingWorkflowRoles, {
     pathParamField: "id",
-    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requiredFields: raterSessionRequiredFields,
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/practice-sessions$/, "public_example_practice_session_submitted", "publicExamplePracticeSession", ratingWorkflowRoles, {
@@ -295,7 +492,8 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/generation-evaluation-reports$/, "generation_evaluation_report_submitted", "generationEvaluationReport", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/ratings\/(?<id>[^/]+)\/check$/, "rating_check_submitted", "ratingCheck", ratingWorkflowRoles, {
     pathParamField: "ratingId",
-    requiredFields: ["id", "ratingId", "assignmentId", "raterId", "checkKind"],
+    requiredFields: ratingCheckActionRequiredFields,
+    requiredNonEmptyArrayFields: ["auxiliaryMaterialSeen"],
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
     rejectHiddenMetadata: true,
@@ -317,7 +515,7 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/decline$/, "assignment_decline_submitted", "assignmentDecline", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
-    requiredFields: ["id", "assignmentId", "raterId", "itemKeys", "reasonCode", "reassignmentStatus", "qaRoutingStatus", "sourcePeerModelGoldProtectedLabelVisibilityState", "excludedFromRatingDenominator"],
+    requiredFields: assignmentDeclineRequiredFields,
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
@@ -338,7 +536,16 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/post-lock-sessions$/, "post_lock_discussion_session_submitted", "postLockDiscussionSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "discussionThreadId",
-    requiredFields: ["id", "discussionThreadId", "itemKeys", "participantIds", "initialRatingLockCheck", "identityStagingPolicy", "visibleMaterialPolicy", "objectLevelCommentRecords", "discussionStatus"],
+    requiredFields: postLockDiscussionSessionRequiredFields,
+    requiredNonEmptyArrayFields: [
+      "itemKeys",
+      "participantIds",
+      "participantRoles",
+      "objectLevelCommentRecords",
+      "spanReferenceLinks",
+      "overlookedPointFlags",
+      "revisionProposalIds",
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/comments$/, "discussion_comment_submitted", "discussionComment", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -350,13 +557,24 @@ const workflowWriteEndpoints = [
     pathParamField: "discussionThreadId",
     requiredFields: ["id", "discussionThreadId", "proposedBy", "ratingIdPrior", "revisionRationale", "timestamp"],
   }),
-  workflowWriteSpec(/^\/api\/v1\/discussion-threads$/, "discussion_thread_submitted", "discussionThread", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/discussion-threads$/, "discussion_thread_submitted", "discussionThread", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: discussionThreadRequiredFields,
+    requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
+    requiredNonEmptyArrayFields: ["disagreementTaxonomyCodes"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/adjudications$/, "adjudication_submitted", "adjudication", expertWorkflowRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "adjudicationId",
   }),
-  workflowWriteSpec(/^\/api\/v1\/adjudication-memos$/, "adjudication_memo_submitted", "adjudicationMemo", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/adjudication-memos$/, "adjudication_memo_submitted", "adjudicationMemo", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: adjudicationMemoRequiredFields,
+    requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
+    requiredNonEmptyArrayFields: ["plausibleInterpretationsConsidered", "disagreementTaxonomyCodes", "adjudicatorIds"],
+    requiredFiniteNumberFields: ["maxFinalRaterSpread"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/adjudicator-pre-reads$/, "adjudicator_pre_read_submitted", "adjudicatorPreRead", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "adjudicatorId", "itemKeys", "visibleMaterialPolicy", "preReadNotes", "completedBeforePeerDistributionExposure", "linkedAdjudicationMemoId"],
@@ -365,17 +583,44 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: ["id", "discussionThreadId", "itemKeys", "scoreSpreadHeatmapVersion", "centXStrProductAllocationView", "rationaleSpanOverlayRefs", "verificationConflictSummary", "revisionTimelineRefs", "minorityRationaleFields", "finalizationStatus", "adjudicatorIds"],
   }),
-  workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: verificationRecordRequiredFields,
+    requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"]]],
+    requiredAnyFields: [["timestamp", "createdAt"]],
+    requiredNonEmptyArrayFields: ["verificationMaterials"],
+    requiredFiniteNumberFields: ["confidence"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretation_target_map_submitted", "interpretationTargetMap", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "itemKeys", "positionTextVersionId", "critiqueTextVersionId", "candidateIntendedConclusionSpans", "attackedClaimSpans", "plausiblePositionCritiqueInterpretations", "centralityTargetClaimSet", "strengthTargetClaimSet", "visibilityState", "createdBy"],
+    requiredFields: interpretationTargetMapRequiredFields,
+    requiredNonEmptyArrayFields: [
+      "itemKeys",
+      "candidateIntendedConclusionSpans",
+      "attackedClaimSpans",
+      "plausiblePositionCritiqueInterpretations",
+      "centralityTargetClaimSet",
+      "strengthTargetClaimSet",
+    ],
+    requiredObjectFields: ["critiqueCoverageByInterpretation"],
   }),
   workflowWriteSpec(/^\/api\/v1\/verification-workspace-sessions$/, "verification_workspace_session_submitted", "verificationWorkspaceSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "itemKeys", "claimList", "claimSpanRefs", "claimType", "verificationStatus", "exposureBlindingState", "verifierId", "verifierRole"],
+    requiredFields: verificationWorkspaceSessionRequiredFields,
+    requiredNonEmptyArrayFields: ["itemKeys", "claimList", "claimSpanRefs", "evidenceMaterialRefs"],
+    requiredWhen: [{ field: "verificationStatus", equals: "not_practicable", requiredFields: ["notPracticableJustification"] }],
   }),
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
-    requiredFields: ["id", "ratingId", "checkerId", "checkType"],
+    requiredFields: ratingCheckRecordRequiredFields,
+    requiredNonEmptyArrayFields: ["auxiliaryMaterialSeen"],
+    requiredWhen: [
+      {
+        field: "checkType",
+        equals: "model_assisted_check",
+        requiredFields: modelAssistedRatingCheckRequiredFields,
+        requiredExactFields: { humanOnlyCheckLockedBeforeModelExposure: true },
+      },
+    ],
     requireActorField: "checkerId",
   }),
   workflowWriteSpec(/^\/api\/v1\/calibration-feedback-events$/, "calibration_feedback_event_submitted", "calibrationFeedbackEvent", expertWorkflowRoles, {
@@ -481,11 +726,23 @@ const workflowWriteEndpoints = [
     requireAssignmentClaimField: "assignmentId",
   }),
   workflowWriteSpec(/^\/api\/v1\/item-issues$/, "item_issue_report_submitted", "itemIssueReport", ratingWorkflowRoles, {
-    requiredFields: ["id", "reporterId", "reporterRole", "issueCategory", "severity", "blindSafeReporterNote", "labelVisibilityStateForTriage", "modelResultVisibilityStateForTriage"],
+    requiredFields: itemIssueReportRequiredFields,
+    requiredAnyFields: [["positionId", "critiqueId", "assignmentId", "ratingId", "snapshotId", "evaluationId", "releaseId"]],
+    requiredExactFields: {
+      labelVisibilityStateForTriage: "hidden",
+      modelResultVisibilityStateForTriage: "hidden",
+    },
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
     requireActorField: "reporterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rating-draft-sessions$/, "rating_draft_session_submitted", "ratingDraftSession", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "autosaveRevisionId", "dependencyVersionSnapshot", "staleDependencyStatus", "draftNotExportedAsLabel"],
+    requiredFields: ratingDraftSessionRequiredFields,
+    requiredNestedFields: ratingDraftSessionDependencyFields,
+    requiredExactFields: {
+      staleSubmissionBlocked: true,
+      draftNotExportedAsLabel: true,
+    },
     requireAssignmentClaimField: "assignmentId",
   }),
   workflowWriteSpec(/^\/api\/v1\/score-confidence-annotations$/, "score_confidence_annotation_submitted", "scoreConfidenceAnnotation", ratingWorkflowRoles, {
@@ -526,7 +783,10 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/correctness-claim-weight-worksheets$/, "correctness_claim_weight_worksheet_submitted", "correctnessClaimWeightWorksheet", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "claimSpanIds", "claimSignificanceWeights", "correctnessCredencesStatuses", "advisoryAggregateCorrectnessEstimate", "exposureBlindingState", "createdBy"],
+    requiredFields: correctnessClaimWeightWorksheetRequiredFields,
+    requiredAnyFields: [["ratingId", "adjudicationId", "verificationWorkspaceId"]],
+    requiredNonEmptyArrayFields: ["claimSpanIds", "claimSignificanceWeights", "correctnessCredencesStatuses", "unclearClaimExclusionFlags"],
+    requiredWhen: [{ field: "submittedScoreOverrideFlag", equals: true, requiredFields: ["overrideExplanation"] }],
   }),
   workflowWriteSpec(/^\/api\/v1\/external-assistance-declarations$/, "external_assistance_declaration_submitted", "externalAssistanceDeclaration", ratingWorkflowRoles, {
     requiredFields: ["id", "assignmentId", "raterId", "assistanceType", "protectedTextEventFlag", "contaminationRouting", "accessibilityExceptionStatus"],
@@ -2915,7 +3175,8 @@ function hasWorkflowField(resource, field) {
   if (field === "textVersions") {
     return Array.isArray(resource.textVersions) && resource.textVersions.some((version) => typeof version?.text === "string" && version.text.trim());
   }
-  return resource[field] !== undefined && resource[field] !== null && resource[field] !== "";
+  const value = workflowFieldValue(resource, field);
+  return value !== undefined && value !== null && value !== "";
 }
 
 function workflowWriteSpec(pattern, eventType, resourceKey, roles, options = {}) {
@@ -3657,9 +3918,54 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   const requiredFields = spec.requiredFields ?? ["id"];
   const missing = requiredFields.filter((field) => normalized[field] === undefined || normalized[field] === null || normalized[field] === "");
   if (missing.length) return invalid(`missing required fields: ${missing.join(", ")}`);
+  const missingNested = (spec.requiredNestedFields ?? []).filter((fieldPath) => !hasWorkflowField(normalized, fieldPath));
+  if (missingNested.length) return invalid(`missing required fields: ${missingNested.join(", ")}`);
+  const missingArrays = (spec.requiredNonEmptyArrayFields ?? []).filter((fieldPath) => {
+    const value = workflowFieldValue(normalized, fieldPath);
+    return !Array.isArray(value) || value.length === 0;
+  });
+  if (missingArrays.length) return invalid(`missing required non-empty arrays: ${missingArrays.join(", ")}`);
+  const missingObjects = (spec.requiredObjectFields ?? []).filter((fieldPath) => {
+    const value = workflowFieldValue(normalized, fieldPath);
+    return !value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length;
+  });
+  if (missingObjects.length) return invalid(`missing required non-empty objects: ${missingObjects.join(", ")}`);
   for (const fieldSet of spec.requiredAnyFields ?? []) {
     if (!fieldSet.some((field) => hasWorkflowField(normalized, field))) {
       return invalid(`one of these fields is required: ${fieldSet.join(", ")}`);
+    }
+  }
+  for (const fieldSets of spec.requiredAnyFieldSets ?? []) {
+    if (!fieldSets.some((fieldSet) => fieldSet.every((field) => hasWorkflowField(normalized, field)))) {
+      return invalid(`one complete field set is required: ${fieldSets.map((fieldSet) => fieldSet.join("+")).join(" or ")}`);
+    }
+  }
+  const invalidNumbers = (spec.requiredFiniteNumberFields ?? []).filter((fieldPath) => !Number.isFinite(workflowFieldValue(normalized, fieldPath)));
+  if (invalidNumbers.length) return invalid(`required numeric fields must be finite numbers: ${invalidNumbers.join(", ")}`);
+  for (const [fieldPath, expectedValue] of Object.entries(spec.requiredExactFields ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    if (observedValue !== expectedValue) return invalid(`${spec.resourceKey}.${fieldPath} must equal ${JSON.stringify(expectedValue)}`);
+  }
+  for (const conditional of spec.requiredWhen ?? []) {
+    const observedValue = workflowFieldValue(normalized, conditional.field);
+    const matches = Object.hasOwn(conditional, "equals")
+      ? observedValue === conditional.equals
+      : conditional.values?.includes(observedValue);
+    if (!matches) continue;
+    const conditionalMissing = (conditional.requiredFields ?? []).filter((fieldPath) => !hasWorkflowField(normalized, fieldPath));
+    if (conditionalMissing.length) return invalid(`missing required fields when ${conditional.field}=${JSON.stringify(observedValue)}: ${conditionalMissing.join(", ")}`);
+    const conditionalMissingArrays = (conditional.requiredNonEmptyArrayFields ?? []).filter((fieldPath) => {
+      const value = workflowFieldValue(normalized, fieldPath);
+      return !Array.isArray(value) || value.length === 0;
+    });
+    if (conditionalMissingArrays.length) {
+      return invalid(`missing required non-empty arrays when ${conditional.field}=${JSON.stringify(observedValue)}: ${conditionalMissingArrays.join(", ")}`);
+    }
+    for (const [fieldPath, expectedValue] of Object.entries(conditional.requiredExactFields ?? {})) {
+      const conditionalObserved = workflowFieldValue(normalized, fieldPath);
+      if (conditionalObserved !== expectedValue) {
+        return invalid(`${spec.resourceKey}.${fieldPath} must equal ${JSON.stringify(expectedValue)} when ${conditional.field}=${JSON.stringify(observedValue)}`);
+      }
     }
   }
 
@@ -3687,6 +3993,15 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   }
 
   return { ok: true, resource: normalized };
+}
+
+function workflowFieldValue(resource, fieldPath) {
+  return String(fieldPath)
+    .split(".")
+    .reduce((current, segment) => {
+      if (!current || typeof current !== "object") return undefined;
+      return current[segment];
+    }, resource);
 }
 
 export function validateRatingActor(rating, actor) {
