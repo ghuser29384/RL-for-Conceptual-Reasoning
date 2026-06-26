@@ -277,6 +277,162 @@ const adjudicationMemoRequiredFields = [
   "rubricVersionConsidered",
   "timestamp",
 ];
+const adjudicatorPreReadRequiredFields = [
+  "id",
+  "adjudicatorId",
+  "visibleMaterialPolicy",
+  "preReadNotes",
+  "completedBeforePeerDistributionExposure",
+  "linkedAdjudicationMemoId",
+  "timestamp",
+];
+const adjudicationReviewSessionRequiredFields = [
+  "id",
+  "discussionThreadId",
+  "scoreSpreadHeatmapVersion",
+  "centXStrProductAllocationView",
+  "verificationConflictSummary",
+  "siblingContextDifferenceSummary",
+  "preSubmitLintSummary",
+  "finalizationStatus",
+  "timestamp",
+];
+const uxSimplificationPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "taskFirstCopyRequired",
+  "progressiveDisclosureRequired",
+  "glossarySupportRequired",
+  "serverDerivedScreenStateRequired",
+  "exactRubricSemanticsPreserved",
+  "appendixFAnchorAccess",
+  "protectedSplitVariantPolicy",
+  "hiddenMetadataLeakagePolicy",
+  "createdBy",
+  "frozenAt",
+  "timestamp",
+];
+const uxSimplificationReviewRequiredFields = [
+  "id",
+  "policyId",
+  "reviewStatus",
+  "reviewerRole",
+  "rubricSemanticsPreservationResult",
+  "blindingProtectedLabelLeakageResult",
+  "accessibilityReadabilityLinkage",
+  "userComprehensionOrExpertReviewNotes",
+  "blockersAndMitigations",
+  "promotionDecision",
+  "reviewer",
+  "timestamp",
+];
+const screenStatePayloadRequiredFields = [
+  "id",
+  "surface",
+  "role",
+  "payloadSource",
+  "schemaVersion",
+  "outputSchemaVersion",
+  "taskStatement",
+  "primaryNextAction",
+  "submissionConsequenceSummary",
+  "progressiveDisclosureState",
+  "createdAt",
+  "rejectedUnknownKeys",
+  "sanitized",
+];
+const uxNoFeatureLossKeys = [
+  "score_fields",
+  "safe_decline",
+  "source_recognition",
+  "item_issue_report",
+  "verification_control",
+  "adjudication_control",
+  "data_governance_withdrawal",
+  "protected_label_warning",
+  "audit_provenance_capture",
+  "release_governance_action",
+  "appendix_f_anchor_access",
+  "pre_submit_lint",
+  "autosave_resume",
+];
+const uxHiddenFieldClasses = [
+  "source_metadata",
+  "admin_tags",
+  "benchmark_membership",
+  "gold_answers",
+  "peer_ratings",
+  "model_judge_scores",
+  "active_learning_selection_reasons",
+  "protected_split_status",
+  "rater_performance_metadata",
+];
+const uxScreenControlRequirements = {
+  rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
+  practice: ["score_fields", "item_issue_report", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+  calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+  consent: ["data_governance_withdrawal", "audit_provenance_capture"],
+  withdrawal: ["data_governance_withdrawal", "audit_provenance_capture"],
+  discussion: ["item_issue_report", "adjudication_control", "audit_provenance_capture"],
+  adjudication: ["verification_control", "adjudication_control", "item_issue_report", "audit_provenance_capture"],
+  release_review: ["release_governance_action", "protected_label_warning", "audit_provenance_capture"],
+  admin_governance: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
+};
+const uxForbiddenVisibleFieldFragments = [
+  "sourcecategory",
+  "sourcetype",
+  "authorshiptype",
+  "styleband",
+  "admintags",
+  "split",
+  "sourcemodel",
+  "generatorpromptversion",
+  "modeljudgescore",
+  "peerratings",
+  "candidateselectionreason",
+  "benchmarkstatus",
+  "goldanswer",
+  "hiddenbenchmark",
+  "protectedsplit",
+  "raterperformance",
+];
+const screenFeatureParityRequiredControlKeys = ["score_fields", "safe_decline", "source_recognition"];
+const simplifiedCopyRequiredGlossaryTerms = ["centrality", "strength"];
+const uxPolicyRequiredObjectFields = [
+  "taskFirstLayoutRules",
+  "plainLanguageCopyRules",
+  "glossaryTooltipPolicy",
+  "progressiveDisclosureMapRequirements",
+  "exactRubricTermPreservationRules",
+  "prohibitedSimplifications",
+  "protectedSplitEligibility",
+];
+const uxPolicyRequiredArrayFields = [
+  "enabledSurfaces",
+  "coveredRoles",
+  "coveredLaneClasses",
+  "coveredSplitClasses",
+  "localeSet",
+  "requiredAlwaysVisibleControls",
+  "requiredOneClickAccessibleControls",
+  "noFeatureLossChecklist",
+  "associatedCopyBundleIds",
+  "associatedCopyBundleHashes",
+];
+const uxReviewRequiredObjectFields = [
+  "featureParityChecklistResults",
+  "requiredControlDiscoverabilityResults",
+  "rubricSemanticsPreservationResult",
+  "blindingProtectedLabelLeakageResult",
+  "accessibilityReadabilityLinkage",
+  "blockersAndMitigations",
+];
+const uxReviewRequiredArrayFields = [
+  "reviewedSurfaces",
+  "workflowProfileIds",
+  "reviewedLocaleSet",
+  "noFeatureLossChecklist",
+];
 const raterDataGovernanceCategories = [
   "identity_profile",
   "rating_performance",
@@ -577,11 +733,14 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudicator-pre-reads$/, "adjudicator_pre_read_submitted", "adjudicatorPreRead", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "adjudicatorId", "itemKeys", "visibleMaterialPolicy", "preReadNotes", "completedBeforePeerDistributionExposure", "linkedAdjudicationMemoId"],
+    requiredFields: adjudicatorPreReadRequiredFields,
+    requiredNonEmptyArrayFields: ["itemKeys", "preliminaryIssueTags"],
+    requiredExactFields: { completedBeforePeerDistributionExposure: true },
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-review-sessions$/, "adjudication_review_session_submitted", "adjudicationReviewSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "discussionThreadId", "itemKeys", "scoreSpreadHeatmapVersion", "centXStrProductAllocationView", "rationaleSpanOverlayRefs", "verificationConflictSummary", "revisionTimelineRefs", "minorityRationaleFields", "finalizationStatus", "adjudicatorIds"],
+    requiredFields: adjudicationReviewSessionRequiredFields,
+    requiredNonEmptyArrayFields: ["itemKeys", "rationaleSpanOverlayRefs", "revisionTimelineRefs", "targetMapIds", "minorityRationaleFields", "adjudicatorIds"],
   }),
   workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -653,15 +812,59 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/ux-simplification-policies$/, "ux_simplification_policy_submitted", "uxSimplificationPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "policyVersion", "enabledSurfaces", "noFeatureLossChecklist"],
+    requiredFields: uxSimplificationPolicyRequiredFields,
+    requiredNonEmptyArrayFields: uxPolicyRequiredArrayFields,
+    requiredObjectFields: uxPolicyRequiredObjectFields,
+    requiredArrayIncludes: { noFeatureLossChecklist: uxNoFeatureLossKeys },
+    requiredExactFields: {
+      taskFirstCopyRequired: true,
+      progressiveDisclosureRequired: true,
+      glossarySupportRequired: true,
+      serverDerivedScreenStateRequired: true,
+      exactRubricSemanticsPreserved: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/ux-simplification-reviews$/, "ux_simplification_review_submitted", "uxSimplificationReview", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "policyId", "reviewedSurfaces", "reviewStatus", "noFeatureLossChecklist"],
+    requiredFields: uxSimplificationReviewRequiredFields,
+    requiredAnyFields: [["screenStateIds", "screenSetIds"]],
+    requiredNonEmptyArrayFields: uxReviewRequiredArrayFields,
+    requiredObjectFields: uxReviewRequiredObjectFields,
+    requiredArrayIncludes: { noFeatureLossChecklist: uxNoFeatureLossKeys },
+    requiredExactFields: {
+      reviewStatus: "passed",
+      "rubricSemanticsPreservationResult.status": "passed",
+      "blindingProtectedLabelLeakageResult.status": "passed",
+      promotionDecision: "promote",
+      exactRubricSemanticsPreserved: true,
+      appendixFAnchorAccessVerified: true,
+      serverDerivedScreenStateVerified: true,
+      protectedLeakageReviewPassed: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/screen-state-payloads$/, "screen_state_payload_submitted", "screenStatePayload", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "surface", "payloadSource", "schemaVersion", "visibleFieldAllowlist", "enabledActionAllowlist"],
+    requiredFields: screenStatePayloadRequiredFields,
+    requiredNonEmptyArrayFields: ["visibleFieldAllowlist", "enabledActionAllowlist", "requiredControlKeys", "optionalPanelKeys", "hiddenFieldClasses"],
+    requiredNestedFields: [
+      "policyVersionProvenance.uxSimplificationPolicyId",
+      "policyVersionProvenance.visibilityPolicyId",
+      "policyVersionProvenance.workflowProfileId",
+      "policyVersionProvenance.assistPolicyId",
+      "policyVersionProvenance.uiExperimentPolicyId",
+    ],
+    requiredObjectFields: ["policyVersionProvenance", "requiredOptionalControlMap", "protectedGoldBenchmarkDisclosureState"],
+    requiredArrayIncludes: { hiddenFieldClasses: uxHiddenFieldClasses },
+    requiredArrayIncludesByFieldValue: [
+      { field: "surface", arrayField: "enabledActionAllowlist", values: uxScreenControlRequirements },
+      { field: "surface", arrayField: "requiredControlKeys", values: uxScreenControlRequirements },
+    ],
+    forbiddenArrayValueFragments: { visibleFieldAllowlist: uxForbiddenVisibleFieldFragments },
+    requiredExactFields: {
+      payloadSource: "server_derived",
+      rejectedUnknownKeys: true,
+      sanitized: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/visibility-policies$/, "visibility_policy_submitted", "visibilityPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -887,11 +1090,17 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     pathParamField: "screenId",
     requiredFields: ["id", "screenId", "uxSimplificationPolicyId", "requiredControlResults", "featureParityChecklistResults", "noFeatureLoss", "checkedAt"],
+    requiredObjectFields: ["requiredControlResults", "featureParityChecklistResults"],
+    requiredObjectKeys: { requiredControlResults: screenFeatureParityRequiredControlKeys },
+    requiredExactFields: { noFeatureLoss: true, "featureParityChecklistResults.no_feature_loss": "passed" },
   }),
   workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/simplified-copy-preview$/, "simplified_copy_preview_submitted", "simplifiedCopyPreview", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "screenId",
     requiredFields: ["id", "screenId", "copyBundleId", "glossaryTooltipIds", "exactRubricTermPreservation", "hiddenFieldLeakageCheck", "reviewerId", "reviewedAt"],
+    requiredNonEmptyArrayFields: ["glossaryTooltipIds"],
+    requiredArrayIncludes: { glossaryTooltipIds: simplifiedCopyRequiredGlossaryTerms },
+    requiredExactFields: { exactRubricTermPreservation: true, hiddenFieldLeakageCheck: "passed" },
   }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
@@ -2279,13 +2488,21 @@ function buildScreenStatePayload(surface, entityId, actor, options = {}) {
     id: `screen-state-${surface}-${entityId}`,
     surface,
     entityId,
+    role: actor.role,
     payloadSource: "server_derived",
     schemaVersion: "screen-state-lmca-v1",
+    outputSchemaVersion: "screen-state-output-lmca-v1",
     sanitized: true,
     rejectedUnknownKeys: true,
+    taskStatement: options.taskStatement ?? `Review the ${surface} workflow state.`,
     primaryNextAction: options.primaryNextAction ?? "review_required_fields",
+    submissionConsequenceSummary:
+      options.submissionConsequenceSummary ?? "Submitting records an append-only workflow event and does not expose hidden labels.",
+    progressiveDisclosureState: options.progressiveDisclosureState ?? "advanced_controls_collapsed_until_needed",
     visibleFieldAllowlist: options.visibleFieldAllowlist ?? [],
     enabledActionAllowlist: options.enabledActionAllowlist ?? [],
+    requiredControlKeys: options.requiredControlKeys ?? options.enabledActionAllowlist ?? [],
+    optionalPanelKeys: options.optionalPanelKeys ?? ["rubric_glossary", "provenance_summary"],
     hiddenFieldClasses: [
       "source_metadata",
       "admin_tags",
@@ -2297,12 +2514,26 @@ function buildScreenStatePayload(surface, entityId, actor, options = {}) {
       "protected_split_status",
       "rater_performance_metadata",
     ],
+    requiredOptionalControlMap:
+      options.requiredOptionalControlMap ?? {
+        requiredControls: options.requiredControlKeys ?? options.enabledActionAllowlist ?? [],
+        optionalPanels: options.optionalPanelKeys ?? ["rubric_glossary", "provenance_summary"],
+      },
+    protectedGoldBenchmarkDisclosureState:
+      options.protectedGoldBenchmarkDisclosureState ?? {
+        benchmarkMembership: "not_disclosed",
+        goldAnswer: "not_disclosed",
+        protectedSplitStatus: "not_disclosed",
+      },
     policyVersionProvenance: {
       uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
       visibilityPolicyId: `visibility-policy-${releaseId}`,
       workflowProfileId: `${surface}-workflow-profile`,
+      assistPolicyId: `pre-submit-assist-${releaseId}`,
+      uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
     },
     actor: { id: actor.id, role: actor.role },
+    createdAt: options.createdAt ?? new Date().toISOString(),
     ...options,
   };
 }
@@ -3257,8 +3488,10 @@ async function nextAssignmentEndpoint(request, response, context) {
       id: `screen-state-${assignment.id}`,
       assignmentId: assignment.id,
       surface: "rating",
+      role: session.user.role,
       payloadSource: "server_derived",
       schemaVersion: "screen-state-lmca-v1",
+      outputSchemaVersion: "screen-state-output-lmca-v1",
       policyVersionProvenance: {
         uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
         visibilityPolicyId: `visibility-policy-${releaseId}`,
@@ -3268,6 +3501,10 @@ async function nextAssignmentEndpoint(request, response, context) {
       },
       taskStatement: "Rate how well the critique attacks the supplied position.",
       primaryNextAction: "complete_required_scores",
+      submissionConsequenceSummary:
+        "Submitting locks an initial blind rating for audit and keeps source, peer, gold, model, and protected labels hidden.",
+      progressiveDisclosureState: "advanced_issue_panels_collapsed_until_needed",
+      createdAt: new Date().toISOString(),
       visibleFieldAllowlist: [
         "assignment.id",
         "assignment.positionTextVersionId",
@@ -3305,6 +3542,24 @@ async function nextAssignmentEndpoint(request, response, context) {
         "autosave_resume",
       ],
       optionalPanelKeys: ["rubric_glossary", "short_item_label", "appendix_f_anchor"],
+      requiredOptionalControlMap: {
+        requiredControls: [
+          "score_fields",
+          "safe_decline",
+          "source_recognition",
+          "item_issue_report",
+          "verification_control",
+          "appendix_f_anchor_access",
+          "pre_submit_lint",
+          "autosave_resume",
+        ],
+        optionalPanels: ["rubric_glossary", "short_item_label", "appendix_f_anchor"],
+      },
+      protectedGoldBenchmarkDisclosureState: {
+        benchmarkMembership: "not_disclosed",
+        goldAnswer: "not_disclosed",
+        protectedSplitStatus: "not_disclosed",
+      },
       hiddenFieldClasses: [
         "source_metadata",
         "admin_tags",
@@ -3930,6 +4185,36 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
     return !value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length;
   });
   if (missingObjects.length) return invalid(`missing required non-empty objects: ${missingObjects.join(", ")}`);
+  for (const [fieldPath, requiredValues] of Object.entries(spec.requiredArrayIncludes ?? {})) {
+    const value = workflowFieldValue(normalized, fieldPath);
+    const missingValues = requiredValues.filter((item) => !Array.isArray(value) || !value.includes(item));
+    if (missingValues.length) return invalid(`missing required array values in ${fieldPath}: ${missingValues.join(", ")}`);
+  }
+  for (const rule of spec.requiredArrayIncludesByFieldValue ?? []) {
+    const discriminator = workflowFieldValue(normalized, rule.field);
+    const requiredValues = rule.values?.[discriminator] ?? [];
+    const value = workflowFieldValue(normalized, rule.arrayField);
+    const missingValues = requiredValues.filter((item) => !Array.isArray(value) || !value.includes(item));
+    if (missingValues.length) {
+      return invalid(`missing required array values in ${rule.arrayField} for ${rule.field}=${JSON.stringify(discriminator)}: ${missingValues.join(", ")}`);
+    }
+  }
+  for (const [fieldPath, requiredKeys] of Object.entries(spec.requiredObjectKeys ?? {})) {
+    const value = workflowFieldValue(normalized, fieldPath);
+    const missingKeys = requiredKeys.filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key));
+    if (missingKeys.length) return invalid(`missing required object keys in ${fieldPath}: ${missingKeys.join(", ")}`);
+  }
+  for (const [fieldPath, forbiddenFragments] of Object.entries(spec.forbiddenArrayValueFragments ?? {})) {
+    const value = workflowFieldValue(normalized, fieldPath);
+    const normalizedFragments = forbiddenFragments.map((fragment) => normalizeFieldFragment(fragment));
+    const forbiddenValues = Array.isArray(value)
+      ? value.filter((item) => {
+          const normalizedItem = normalizeFieldFragment(item);
+          return normalizedFragments.some((fragment) => normalizedItem.includes(fragment));
+        })
+      : [];
+    if (forbiddenValues.length) return invalid(`forbidden array values in ${fieldPath}: ${forbiddenValues.join(", ")}`);
+  }
   for (const fieldSet of spec.requiredAnyFields ?? []) {
     if (!fieldSet.some((field) => hasWorkflowField(normalized, field))) {
       return invalid(`one of these fields is required: ${fieldSet.join(", ")}`);
@@ -4002,6 +4287,12 @@ function workflowFieldValue(resource, fieldPath) {
       if (!current || typeof current !== "object") return undefined;
       return current[segment];
     }, resource);
+}
+
+function normalizeFieldFragment(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export function validateRatingActor(rating, actor) {

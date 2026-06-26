@@ -1252,7 +1252,7 @@ function completeInteractionWorkflowFixtures() {
       screenId: "rating",
       uxSimplificationPolicyId: "ux-policy-workflow-new",
       workflowProfileId: "rating-workflow-profile-workflow-new",
-      requiredControlResults: { score_fields: "reachable", safe_decline: "reachable" },
+      requiredControlResults: { score_fields: "reachable", safe_decline: "reachable", source_recognition: "reachable" },
       featureParityChecklistResults: { no_feature_loss: "passed" },
       noFeatureLoss: true,
       checkedBy: "ux-reviewer",
@@ -3873,15 +3873,33 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "ux-policy-workflow-new",
         policyVersion: "rlhf88-feature-preserving-v1",
         enabledSurfaces: uxSimplificationSurfaces,
+        coveredRoles: ["graduate", "expert", "admin", "auditor"],
+        coveredLaneClasses: ["live_rating", "practice", "calibration", "discussion", "adjudication", "release_review", "admin_governance"],
+        coveredSplitClasses: ["public_train", "internal_validation", "hidden_benchmark", "gold_certification", "release_candidate"],
+        localeSet: ["en-US"],
         taskFirstCopyRequired: true,
         progressiveDisclosureRequired: true,
         glossarySupportRequired: true,
         serverDerivedScreenStateRequired: true,
         exactRubricSemanticsPreserved: true,
+        taskFirstLayoutRules: { taskStatement: "always_visible", primaryNextAction: "always_visible" },
+        plainLanguageCopyRules: { primarySurface: "short_plain_language", exactRubricTerms: "preserve_one_click_source_of_truth" },
+        glossaryTooltipPolicy: { requiredTerms: ["centrality", "strength", "dead_weight", "single_issue"], access: "one_click" },
+        progressiveDisclosureMapRequirements: { advancedControls: "collapsed_until_needed", mandatoryControls: "never_hidden_as_optional" },
+        requiredAlwaysVisibleControls: ["task_statement", "primary_next_action", "required_controls"],
+        requiredOneClickAccessibleControls: ["appendix_f_anchor_access", "rubric_glossary", "item_issue_report"],
         appendixFAnchorAccess: "one_click",
         protectedSplitVariantPolicy: "block or quarantine unregistered variants",
         hiddenMetadataLeakagePolicy: "forbid hidden metadata fields in sanitized payloads",
         noFeatureLossChecklist: uxNoFeatureLossKeys,
+        exactRubricTermPreservationRules: { dimensionNames: "exact_terms_visible_or_one_click", appendixF: "source_of_truth" },
+        prohibitedSimplifications: { mandatoryControlsOptionalized: false, rubricSemanticsChanged: false, blindingWeakened: false },
+        protectedSplitEligibility: { unregisteredCopyVariants: "blocked_or_quarantined", protectedLabels: "frozen_policy_required" },
+        associatedCopyBundleIds: ["ui-copy-bundle-workflow-new", "rubric-copy-bundle-workflow-new"],
+        associatedCopyBundleHashes: ["sha256-ui-copy-workflow-new", "sha256-rubric-copy-workflow-new"],
+        createdBy: "demo-admin",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+        timestamp: "2026-10-01T00:00:00.000Z",
       },
     }),
   });
@@ -3903,10 +3921,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       uxSimplificationReview: {
         id: "ux-review-workflow-new",
         policyId: "ux-policy-workflow-new",
+        screenSetIds: ["screen-set-workflow-new-enabled-surfaces"],
+        workflowProfileIds: uxSimplificationSurfaces.map((surface) => `${surface}-workflow-profile`),
         reviewedSurfaces: uxSimplificationSurfaces,
+        reviewedLocaleSet: ["en-US"],
         reviewStatus: "passed",
         reviewerRole: "release_admin",
         noFeatureLossChecklist: uxNoFeatureLossKeys,
+        featureParityChecklistResults: { no_feature_loss: "passed", required_controls_reachable: "passed" },
+        requiredControlDiscoverabilityResults: { required_controls_visible_or_one_click: "passed" },
+        rubricSemanticsPreservationResult: { status: "passed", exact_terms_preserved: true },
+        blindingProtectedLabelLeakageResult: { status: "passed", hidden_fields_absent: true },
+        accessibilityReadabilityLinkage: { accessibilityConformanceReportId: "accessibility-workflow-new", readabilityStatus: "passed" },
+        userComprehensionOrExpertReviewNotes: "Expert review found task-first copy clearer without changing rubric semantics.",
+        blockersAndMitigations: { blockers: [], mitigations: ["advanced_controls_progressively_disclosed"] },
+        promotionDecision: "promote",
+        reviewer: "ux-reviewer",
+        timestamp: "2026-10-01T00:01:00.000Z",
         exactRubricSemanticsPreserved: true,
         appendixFAnchorAccessVerified: true,
         serverDerivedScreenStateVerified: true,
@@ -3933,8 +3964,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         screenStatePayload: {
           id: `screen-state-workflow-${surface}`,
           surface,
+          role: surface === "rating" || surface === "practice" || surface === "calibration" ? "graduate" : "admin",
           payloadSource: "server_derived",
           schemaVersion: "screen-state-lmca-v1",
+          outputSchemaVersion: "screen-state-output-lmca-v1",
           policyVersionProvenance: {
             uxSimplificationPolicyId: "ux-policy-workflow-new",
             visibilityPolicyId: "visibility-policy-workflow-new",
@@ -3942,9 +3975,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
             assistPolicyId: "pre-submit-assist-workflow-new",
             uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
           },
+          taskStatement: `Complete the ${surface.replace(/_/g, " ")} workflow step without changing LMCA scoring semantics.`,
+          primaryNextAction: "complete_required_controls",
+          submissionConsequenceSummary: "Submitting records an append-only audit event and preserves hidden labels.",
+          progressiveDisclosureState: "advanced_controls_collapsed_until_needed",
+          createdAt: "2026-10-01T00:02:00.000Z",
           visibleFieldAllowlist: ["taskStatement", "primaryNextAction", "completionState", "scoreFields", "issueReport", "appendixFAnchor"],
           enabledActionAllowlist: uxScreenControlKeys,
           requiredControlKeys: uxScreenControlKeys,
+          optionalPanelKeys: ["rubric_glossary", "provenance_summary"],
+          requiredOptionalControlMap: {
+            requiredControls: uxScreenControlKeys,
+            optionalPanels: ["rubric_glossary", "provenance_summary"],
+          },
+          protectedGoldBenchmarkDisclosureState: {
+            benchmarkMembership: "not_disclosed",
+            goldAnswer: "not_disclosed",
+            protectedSplitStatus: "not_disclosed",
+          },
           hiddenFieldClasses: uxHiddenFieldClasses,
           rejectedUnknownKeys: true,
           sanitized: true,
@@ -3961,6 +4009,127 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(screenStateById.status, 200);
   assert.equal(screenStateById.body.surface, "rating");
+
+  const incompleteUxPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ux-simplification-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      uxSimplificationPolicy: {
+        id: "ux-policy-workflow-incomplete",
+        policyVersion: "rlhf88-feature-preserving-v1",
+        enabledSurfaces: ["rating"],
+        taskFirstCopyRequired: true,
+        noFeatureLossChecklist: ["score_fields"],
+      },
+    }),
+  });
+  assert.equal(incompleteUxPolicy.status, 400);
+  assert.match(incompleteUxPolicy.body.detail, /progressiveDisclosureRequired/);
+
+  const incompleteUxReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ux-simplification-reviews",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      uxSimplificationReview: {
+        id: "ux-review-workflow-incomplete",
+        policyId: "ux-policy-workflow-new",
+        screenSetIds: ["screen-set-workflow-new-enabled-surfaces"],
+        workflowProfileIds: uxSimplificationSurfaces.map((surface) => `${surface}-workflow-profile`),
+        reviewedSurfaces: ["rating"],
+        reviewedLocaleSet: ["en-US"],
+        reviewStatus: "needs_changes",
+        reviewerRole: "release_admin",
+        noFeatureLossChecklist: uxNoFeatureLossKeys,
+        featureParityChecklistResults: { no_feature_loss: "passed", required_controls_reachable: "passed" },
+        requiredControlDiscoverabilityResults: { required_controls_visible_or_one_click: "passed" },
+        rubricSemanticsPreservationResult: { status: "passed", exact_terms_preserved: true },
+        blindingProtectedLabelLeakageResult: { status: "passed", hidden_fields_absent: true },
+        accessibilityReadabilityLinkage: { accessibilityConformanceReportId: "accessibility-workflow-new", readabilityStatus: "passed" },
+        userComprehensionOrExpertReviewNotes: "Complete metadata with a failing review status.",
+        blockersAndMitigations: { blockers: [], mitigations: ["advanced_controls_progressively_disclosed"] },
+        promotionDecision: "promote",
+        reviewer: "ux-reviewer",
+        timestamp: "2026-10-01T00:01:00.000Z",
+        exactRubricSemanticsPreserved: true,
+        appendixFAnchorAccessVerified: true,
+        serverDerivedScreenStateVerified: true,
+        protectedLeakageReviewPassed: true,
+      },
+    }),
+  });
+  assert.equal(incompleteUxReview.status, 400);
+  assert.match(incompleteUxReview.body.detail, /reviewStatus/);
+
+  const incompleteScreenState = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screen-state-payloads",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      screenStatePayload: {
+        id: "screen-state-workflow-incomplete",
+        surface: "rating",
+        payloadSource: "client_inferred",
+        schemaVersion: "screen-state-lmca-v1",
+        visibleFieldAllowlist: ["taskStatement"],
+        enabledActionAllowlist: ["score_fields"],
+        requiredControlKeys: ["score_fields"],
+        hiddenFieldClasses: ["source_metadata"],
+        policyVersionProvenance: { uxSimplificationPolicyId: "ux-policy-workflow-new" },
+        rejectedUnknownKeys: false,
+        sanitized: false,
+      },
+    }),
+  });
+  assert.equal(incompleteScreenState.status, 400);
+  assert.match(incompleteScreenState.body.detail, /role|policyVersionProvenance\.visibilityPolicyId|payloadSource/);
+
+  const leakingScreenState = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screen-state-payloads",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      screenStatePayload: {
+        id: "screen-state-workflow-hidden-field-leak",
+        surface: "rating",
+        role: "graduate",
+        payloadSource: "server_derived",
+        schemaVersion: "screen-state-lmca-v1",
+        outputSchemaVersion: "screen-state-output-lmca-v1",
+        policyVersionProvenance: {
+          uxSimplificationPolicyId: "ux-policy-workflow-new",
+          visibilityPolicyId: "visibility-policy-workflow-new",
+          workflowProfileId: "rating-workflow-profile",
+          assistPolicyId: "pre-submit-assist-workflow-new",
+          uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
+        },
+        taskStatement: "Rate how well the critique attacks the supplied position.",
+        primaryNextAction: "complete_required_scores",
+        submissionConsequenceSummary: "Submitting records an append-only blind rating audit event.",
+        progressiveDisclosureState: "advanced_issue_panels_collapsed_until_needed",
+        createdAt: "2026-10-01T00:02:30.000Z",
+        visibleFieldAllowlist: ["taskStatement", "sourceType"],
+        enabledActionAllowlist: uxScreenControlKeys,
+        requiredControlKeys: uxScreenControlKeys,
+        optionalPanelKeys: ["rubric_glossary", "provenance_summary"],
+        requiredOptionalControlMap: {
+          requiredControls: uxScreenControlKeys,
+          optionalPanels: ["rubric_glossary", "provenance_summary"],
+        },
+        protectedGoldBenchmarkDisclosureState: {
+          benchmarkMembership: "not_disclosed",
+          goldAnswer: "not_disclosed",
+          protectedSplitStatus: "not_disclosed",
+        },
+        hiddenFieldClasses: uxHiddenFieldClasses,
+        rejectedUnknownKeys: true,
+        sanitized: true,
+      },
+    }),
+  });
+  assert.equal(leakingScreenState.status, 400);
+  assert.match(leakingScreenState.body.detail, /sourceType/);
 
   for (const transition of workflowStateTransitionFixtures) {
     const transitionResponse = await invokeApi(context, {
@@ -4571,6 +4740,68 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompletePostLockDiscussionSession.status, 400);
   assert.match(incompletePostLockDiscussionSession.body.detail, /writtenFollowUpStatus/);
 
+  const incompleteAdjudicatorPreRead = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudicator-pre-reads",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudicatorPreRead: {
+        ...interactionWorkflow.adjudicatorPreRead,
+        id: "adjudicator-pre-read-workflow-incomplete",
+        preliminaryIssueTags: [],
+        completedBeforePeerDistributionExposure: false,
+      },
+    }),
+  });
+  assert.equal(incompleteAdjudicatorPreRead.status, 400);
+  assert.match(incompleteAdjudicatorPreRead.body.detail, /preliminaryIssueTags/);
+
+  const incompleteAdjudicationReviewSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudication-review-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudicationReviewSession: {
+        ...interactionWorkflow.adjudicationReviewSession,
+        id: "adjudication-review-session-workflow-incomplete",
+        siblingContextDifferenceSummary: "",
+        targetMapIds: [],
+      },
+    }),
+  });
+  assert.equal(incompleteAdjudicationReviewSession.status, 400);
+  assert.match(incompleteAdjudicationReviewSession.body.detail, /siblingContextDifferenceSummary|targetMapIds/);
+
+  const incompleteScreenFeatureParityCheck = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screens/rating/feature-parity-check",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      screenFeatureParityCheck: {
+        ...interactionWorkflow.screenFeatureParityCheck,
+        id: "screen-feature-parity-workflow-incomplete",
+        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable" },
+      },
+    }),
+  });
+  assert.equal(incompleteScreenFeatureParityCheck.status, 400);
+  assert.match(incompleteScreenFeatureParityCheck.body.detail, /source_recognition/);
+
+  const incompleteSimplifiedCopyPreview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screens/rating/simplified-copy-preview",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      simplifiedCopyPreview: {
+        ...interactionWorkflow.simplifiedCopyPreview,
+        id: "simplified-copy-preview-workflow-incomplete",
+        glossaryTooltipIds: ["centrality"],
+      },
+    }),
+  });
+  assert.equal(incompleteSimplifiedCopyPreview.status, 400);
+  assert.match(incompleteSimplifiedCopyPreview.body.detail, /strength/);
+
   const remediationCompletion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters/me/remediation/centrality-strength-product/complete",
@@ -4639,6 +4870,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(assignmentScreenState.status, 200);
   assert.equal(assignmentScreenState.body.sanitized, true);
   assert.ok(assignmentScreenState.body.enabledActionAllowlist.includes("safe_decline"));
+  assert.equal(assignmentScreenState.body.policyVersionProvenance.assistPolicyId, "pre-submit-assist-october-2026-demo");
+  assert.equal(assignmentScreenState.body.policyVersionProvenance.uiExperimentPolicyId, "ui-experiment-policy-october-2026-demo");
+  assert.equal(assignmentScreenState.body.outputSchemaVersion, "screen-state-output-lmca-v1");
+  assert.equal(assignmentScreenState.body.protectedGoldBenchmarkDisclosureState.benchmarkMembership, "not_disclosed");
 
   const postLockSessionById = await invokeApi(context, {
     method: "GET",
@@ -4655,6 +4890,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(discussionScreenState.status, 200);
   assert.equal(discussionScreenState.body.surface, "discussion");
+  assert.equal(discussionScreenState.body.policyVersionProvenance.assistPolicyId, "pre-submit-assist-october-2026-demo");
+  assert.equal(discussionScreenState.body.policyVersionProvenance.uiExperimentPolicyId, "ui-experiment-policy-october-2026-demo");
+  assert.ok(discussionScreenState.body.requiredOptionalControlMap.requiredControls.includes("object_level_comment"));
 
   const adjudicationCockpit = await invokeApi(context, {
     method: "GET",
@@ -5154,6 +5392,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.uxSimplification.releaseUseStatus, "submitted_ux_simplification_evidence_complete");
   assert.equal(releaseReport.body.uxSimplification.counts.passingSurfaceCount, uxSimplificationSurfaces.length);
   assert.deepEqual(releaseReport.body.uxSimplification.reviewSections, []);
+  assert.ok(releaseReport.body.uxSimplification.activePolicy.coveredSplitClasses.includes("hidden_benchmark"));
+  assert.deepEqual(releaseReport.body.uxSimplification.activePolicy.associatedCopyBundleIds, [
+    "ui-copy-bundle-workflow-new",
+    "rubric-copy-bundle-workflow-new",
+  ]);
+  assert.equal(releaseReport.body.uxSimplification.reviewRows.at(-1).promotionDecision, "promote");
+  assert.equal(releaseReport.body.uxSimplification.reviewRows.at(-1).rubricSemanticsPreservationResult.status, "passed");
+  assert.equal(releaseReport.body.uxSimplification.screenStateRows.at(-1).outputSchemaVersion, "screen-state-output-lmca-v1");
+  assert.equal(
+    releaseReport.body.uxSimplification.screenStateRows.at(-1).protectedGoldBenchmarkDisclosureState.benchmarkMembership,
+    "not_disclosed",
+  );
   assert.equal(
     releaseReport.body.uxSimplification.surfaceRows.every((row) => row.status === "ux_surface_simplification_gate_passed"),
     true,
@@ -5272,6 +5522,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicatorPreReads.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).completedBeforePeerDistributionExposure,
+    true,
+  );
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).preliminaryIssueTags, [
+    "interpretation_dispute",
+  ]);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.postLockDiscussionSessions.length, 1);
   assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).participantRoles, [
     "graduate_rater",
@@ -5279,6 +5536,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   ]);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicationReviewSessions.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.adjudicationReviewSessionRows.at(-1).preSubmitLintSummary,
+    "centrality-strength warning acknowledged",
+  );
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.adjudicationReviewSessionRows.at(-1).targetMapIds, [
+    "interpretation-target-map-workflow-new",
+  ]);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.calibrationFeedbackEvents.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.governanceApprovalRecords.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.protectedArtifactRevalidations.length, 1);
@@ -5286,6 +5550,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowInteractionArtifacts.benchmarkSubmissions.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.screenFeatureParityChecks.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.simplifiedCopyPreviews.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.screenFeatureParityCheckRows.at(-1).requiredControlResults.source_recognition,
+    "reachable",
+  );
+  assert.ok(
+    releaseReport.body.interactionWorkflowEvidence.simplifiedCopyPreviewRows.at(-1).glossaryTooltipIds.includes("strength"),
+  );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 16);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 16);

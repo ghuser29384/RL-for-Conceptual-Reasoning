@@ -1402,7 +1402,7 @@ function completeInteractionWorkflowFixtures() {
         screenId: "rating",
         uxSimplificationPolicyId: "ux-policy-submitted",
         workflowProfileId: "rating-workflow-profile-submitted",
-        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable" },
+        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable", source_recognition: "reachable" },
         featureParityChecklistResults: { no_feature_loss: "passed" },
         noFeatureLoss: true,
         checkedBy: "ux-reviewer",
@@ -1536,10 +1536,14 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).notPracticableJustification, "Normative forecast premise lacks direct empirical check.");
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
   assert.equal(report.counts.submittedAdjudicatorPreReadCount, 1);
+  assert.equal(report.adjudicatorPreReadRows.at(-1).completedBeforePeerDistributionExposure, true);
+  assert.deepEqual(report.adjudicatorPreReadRows.at(-1).preliminaryIssueTags, ["interpretation_dispute"]);
   assert.equal(report.counts.submittedPostLockDiscussionSessionCount, 1);
   assert.deepEqual(report.postLockDiscussionSessionRows.at(-1).participantRoles, ["graduate_rater", "expert_adjudicator"]);
   assert.equal(report.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
   assert.equal(report.counts.submittedAdjudicationReviewSessionCount, 1);
+  assert.equal(report.adjudicationReviewSessionRows.at(-1).preSubmitLintSummary, "centrality-strength warning acknowledged");
+  assert.deepEqual(report.adjudicationReviewSessionRows.at(-1).targetMapIds, ["interpretation-target-map-submitted"]);
   assert.equal(report.counts.submittedCalibrationFeedbackEventCount, 1);
   assert.equal(report.counts.submittedGovernanceApprovalRecordCount, 1);
   assert.equal(report.counts.submittedProtectedArtifactRevalidationCount, 1);
@@ -1549,6 +1553,8 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.counts.submittedSimplifiedCopyPreviewCount, 1);
   assert.equal(report.benchmarkSubmissionRows.at(-1).perItemOutputIncluded, false);
   assert.equal(report.screenFeatureParityCheckRows.at(-1).noFeatureLoss, true);
+  assert.equal(report.screenFeatureParityCheckRows.at(-1).requiredControlResults.source_recognition, "reachable");
+  assert.ok(report.simplifiedCopyPreviewRows.at(-1).glossaryTooltipIds.includes("strength"));
   assert.deepEqual(report.reviewSections, []);
 });
 
@@ -1635,8 +1641,10 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   const screenStatePayloads = uxSimplificationSurfaces.map((surface) => ({
     id: `screen-state-${surface}`,
     surface,
+    role: surface === "rating" || surface === "practice" || surface === "calibration" ? "graduate" : "admin",
     payloadSource: "server_derived",
     schemaVersion: "screen-state-lmca-v1",
+    outputSchemaVersion: "screen-state-output-lmca-v1",
     policyVersionProvenance: {
       uxSimplificationPolicyId: policyId,
       visibilityPolicyId: "visibility-policy-submitted",
@@ -1644,45 +1652,94 @@ test("UX simplification evidence gates submitted server-derived screen states wi
       assistPolicyId: "pre-submit-assist-submitted",
       uiExperimentPolicyId: "ui-experiment-policy-submitted",
     },
+    taskStatement: `Complete the ${surface.replace(/_/g, " ")} workflow step without changing LMCA scoring semantics.`,
+    primaryNextAction: "complete_required_controls",
+    submissionConsequenceSummary: "Submitting records an append-only audit event and preserves hidden labels.",
+    progressiveDisclosureState: "advanced_controls_collapsed_until_needed",
+    createdAt: "2026-10-01T00:02:00.000Z",
     visibleFieldAllowlist: ["taskStatement", "primaryNextAction", "completionState", "scoreFields", "issueReport", "appendixFAnchor"],
     enabledActionAllowlist: uxScreenControlKeys,
     requiredControlKeys: uxScreenControlKeys,
+    optionalPanelKeys: ["rubric_glossary", "provenance_summary"],
+    requiredOptionalControlMap: {
+      requiredControls: uxScreenControlKeys,
+      optionalPanels: ["rubric_glossary", "provenance_summary"],
+    },
+    protectedGoldBenchmarkDisclosureState: {
+      benchmarkMembership: "not_disclosed",
+      goldAnswer: "not_disclosed",
+      protectedSplitStatus: "not_disclosed",
+    },
     hiddenFieldClasses: uxHiddenFieldClasses,
     rejectedUnknownKeys: true,
     sanitized: true,
   }));
 
+  const uxSimplificationPolicies = [
+    {
+      id: policyId,
+      policyVersion: "rlhf88-feature-preserving-v1",
+      enabledSurfaces: uxSimplificationSurfaces,
+      coveredRoles: ["graduate", "expert", "admin", "auditor"],
+      coveredLaneClasses: ["live_rating", "practice", "calibration", "discussion", "adjudication", "release_review", "admin_governance"],
+      coveredSplitClasses: ["public_train", "internal_validation", "hidden_benchmark", "gold_certification", "release_candidate"],
+      localeSet: ["en-US"],
+      taskFirstCopyRequired: true,
+      progressiveDisclosureRequired: true,
+      glossarySupportRequired: true,
+      serverDerivedScreenStateRequired: true,
+      exactRubricSemanticsPreserved: true,
+      taskFirstLayoutRules: { taskStatement: "always_visible", primaryNextAction: "always_visible" },
+      plainLanguageCopyRules: { primarySurface: "short_plain_language", exactRubricTerms: "preserve_one_click_source_of_truth" },
+      glossaryTooltipPolicy: { requiredTerms: ["centrality", "strength", "dead_weight", "single_issue"], access: "one_click" },
+      progressiveDisclosureMapRequirements: { advancedControls: "collapsed_until_needed", mandatoryControls: "never_hidden_as_optional" },
+      requiredAlwaysVisibleControls: ["task_statement", "primary_next_action", "required_controls"],
+      requiredOneClickAccessibleControls: ["appendix_f_anchor_access", "rubric_glossary", "item_issue_report"],
+      appendixFAnchorAccess: "one_click",
+      protectedSplitVariantPolicy: "block or quarantine unregistered variants",
+      hiddenMetadataLeakagePolicy: "forbid hidden metadata fields in sanitized payloads",
+      noFeatureLossChecklist: uxNoFeatureLossKeys,
+      exactRubricTermPreservationRules: { dimensionNames: "exact_terms_visible_or_one_click", appendixF: "source_of_truth" },
+      prohibitedSimplifications: { mandatoryControlsOptionalized: false, rubricSemanticsChanged: false, blindingWeakened: false },
+      protectedSplitEligibility: { unregisteredCopyVariants: "blocked_or_quarantined", protectedLabels: "frozen_policy_required" },
+      associatedCopyBundleIds: ["ui-copy-bundle-submitted", "rubric-copy-bundle-submitted"],
+      associatedCopyBundleHashes: ["sha256-ui-copy-submitted", "sha256-rubric-copy-submitted"],
+      createdBy: "demo-admin",
+      frozenAt: "2026-10-01T00:00:00.000Z",
+      timestamp: "2026-10-01T00:00:00.000Z",
+    },
+  ];
+  const uxSimplificationReviews = [
+    {
+      id: "ux-review-submitted",
+      policyId,
+      screenSetIds: ["screen-set-submitted-enabled-surfaces"],
+      workflowProfileIds: uxSimplificationSurfaces.map((surface) => `${surface}-workflow-profile`),
+      reviewedSurfaces: uxSimplificationSurfaces,
+      reviewedLocaleSet: ["en-US"],
+      reviewStatus: "passed",
+      reviewerRole: "release_admin",
+      noFeatureLossChecklist: uxNoFeatureLossKeys,
+      featureParityChecklistResults: { no_feature_loss: "passed", required_controls_reachable: "passed" },
+      requiredControlDiscoverabilityResults: { required_controls_visible_or_one_click: "passed" },
+      rubricSemanticsPreservationResult: { status: "passed", exact_terms_preserved: true },
+      blindingProtectedLabelLeakageResult: { status: "passed", hidden_fields_absent: true },
+      accessibilityReadabilityLinkage: { accessibilityConformanceReportId: "accessibility-submitted", readabilityStatus: "passed" },
+      userComprehensionOrExpertReviewNotes: "Expert review found task-first copy clearer without changing rubric semantics.",
+      blockersAndMitigations: { blockers: [], mitigations: ["advanced_controls_progressively_disclosed"] },
+      promotionDecision: "promote",
+      reviewer: "ux-reviewer",
+      timestamp: "2026-10-01T00:01:00.000Z",
+      exactRubricSemanticsPreserved: true,
+      appendixFAnchorAccessVerified: true,
+      serverDerivedScreenStateVerified: true,
+      protectedLeakageReviewPassed: true,
+    },
+  ];
+
   const report = buildUXSimplificationEvidenceReport("october-2026-demo", {
-    uxSimplificationPolicies: [
-      {
-        id: policyId,
-        policyVersion: "rlhf88-feature-preserving-v1",
-        enabledSurfaces: uxSimplificationSurfaces,
-        taskFirstCopyRequired: true,
-        progressiveDisclosureRequired: true,
-        glossarySupportRequired: true,
-        serverDerivedScreenStateRequired: true,
-        exactRubricSemanticsPreserved: true,
-        appendixFAnchorAccess: "one_click",
-        protectedSplitVariantPolicy: "block or quarantine unregistered variants",
-        hiddenMetadataLeakagePolicy: "forbid hidden metadata fields in sanitized payloads",
-        noFeatureLossChecklist: uxNoFeatureLossKeys,
-      },
-    ],
-    uxSimplificationReviews: [
-      {
-        id: "ux-review-submitted",
-        policyId,
-        reviewedSurfaces: uxSimplificationSurfaces,
-        reviewStatus: "passed",
-        reviewerRole: "release_admin",
-        noFeatureLossChecklist: uxNoFeatureLossKeys,
-        exactRubricSemanticsPreserved: true,
-        appendixFAnchorAccessVerified: true,
-        serverDerivedScreenStateVerified: true,
-        protectedLeakageReviewPassed: true,
-      },
-    ],
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
     screenStatePayloads,
   });
 
@@ -1692,7 +1749,73 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.equal(report.counts.submittedScreenStateCount, uxSimplificationSurfaces.length);
   assert.equal(report.counts.passingSurfaceCount, uxSimplificationSurfaces.length);
   assert.deepEqual(report.reviewSections, []);
+  assert.ok(report.activePolicy.coveredSplitClasses.includes("hidden_benchmark"));
+  assert.deepEqual(report.activePolicy.associatedCopyBundleIds, ["ui-copy-bundle-submitted", "rubric-copy-bundle-submitted"]);
+  assert.equal(report.reviewRows.at(-1).promotionDecision, "promote");
+  assert.equal(report.reviewRows.at(-1).rubricSemanticsPreservationResult.status, "passed");
+  assert.equal(report.screenStateRows.at(-1).outputSchemaVersion, "screen-state-output-lmca-v1");
+  assert.equal(report.screenStateRows.at(-1).protectedGoldBenchmarkDisclosureState.benchmarkMembership, "not_disclosed");
   assert.equal(report.screenStateRows.filter((row) => row.payloadSourceLabel === "submitted_workflow_screen_state_payload").every((row) => row.forbiddenVisibleFields.length === 0), true);
+
+  const incompleteScreenStateReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads: [
+      {
+        ...screenStatePayloads[0],
+        id: "screen-state-rating-incomplete-task-first-copy",
+        outputSchemaVersion: "",
+        taskStatement: "",
+        protectedGoldBenchmarkDisclosureState: {},
+        policyVersionProvenance: {
+          ...screenStatePayloads[0].policyVersionProvenance,
+          assistPolicyId: "",
+        },
+      },
+    ],
+  });
+
+  assert.equal(incompleteScreenStateReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(incompleteScreenStateReport.reviewSections.some((section) => section.reason === "outputSchemaVersion"));
+  assert.ok(incompleteScreenStateReport.reviewSections.some((section) => section.reason === "taskStatement"));
+  assert.ok(incompleteScreenStateReport.reviewSections.some((section) => section.reason === "protectedGoldBenchmarkDisclosureState"));
+  assert.ok(
+    incompleteScreenStateReport.reviewSections.some((section) => section.reason === "policyVersionProvenance.assistPolicyId"),
+  );
+
+  const incompletePolicyReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies: [
+      {
+        ...uxSimplificationPolicies[0],
+        id: "ux-policy-submitted-incomplete",
+        coveredRoles: [],
+        protectedSplitEligibility: {},
+      },
+    ],
+    uxSimplificationReviews,
+    screenStatePayloads,
+  });
+
+  assert.equal(incompletePolicyReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(incompletePolicyReport.reviewSections.some((section) => section.reason === "coveredRoles"));
+  assert.ok(incompletePolicyReport.reviewSections.some((section) => section.reason === "protectedSplitEligibility"));
+
+  const incompleteReviewReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews: [
+      {
+        ...uxSimplificationReviews[0],
+        id: "ux-review-submitted-incomplete",
+        reviewedLocaleSet: [],
+        promotionDecision: "hold",
+      },
+    ],
+    screenStatePayloads,
+  });
+
+  assert.equal(incompleteReviewReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(incompleteReviewReport.reviewSections.some((section) => section.reason === "reviewedLocaleSet"));
+  assert.ok(incompleteReviewReport.reviewSections.some((section) => section.reason === "promotionDecision"));
 });
 
 test("custom weighted loss uses low-clarity branch and ignores nullable non-clarity fields", () => {

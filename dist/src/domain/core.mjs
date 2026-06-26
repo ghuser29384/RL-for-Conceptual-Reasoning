@@ -8815,6 +8815,10 @@ function requiredPromptFieldReason(field, value) {
   return null;
 }
 
+function hasPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
 const UX_SIMPLIFICATION_SURFACES = [
   "rating",
   "practice",
@@ -8892,15 +8896,33 @@ function defaultUXSimplificationPolicy(releaseId) {
     policyVersion: "rlhf88-feature-preserving-v1",
     policySource: "seed_rlhf88_policy",
     enabledSurfaces: UX_SIMPLIFICATION_SURFACES,
+    coveredRoles: ["graduate", "expert", "admin", "auditor"],
+    coveredLaneClasses: ["live_rating", "practice", "calibration", "discussion", "adjudication", "release_review", "admin_governance"],
+    coveredSplitClasses: ["public_train", "internal_validation", "hidden_benchmark", "gold_certification", "release_candidate"],
+    localeSet: ["en-US"],
     taskFirstCopyRequired: true,
     progressiveDisclosureRequired: true,
     glossarySupportRequired: true,
     serverDerivedScreenStateRequired: true,
     exactRubricSemanticsPreserved: true,
+    taskFirstLayoutRules: { taskStatement: "always_visible", primaryNextAction: "always_visible", submissionConsequenceSummary: "always_visible" },
+    plainLanguageCopyRules: { primarySurface: "short_plain_language", exactRubricTerms: "preserve_one_click_source_of_truth" },
+    glossaryTooltipPolicy: { requiredTerms: ["centrality", "strength", "dead_weight", "single_issue"], access: "one_click" },
+    progressiveDisclosureMapRequirements: { advancedControls: "collapsed_until_needed", mandatoryControls: "never_hidden_as_optional" },
+    requiredAlwaysVisibleControls: ["task_statement", "primary_next_action", "required_controls"],
+    requiredOneClickAccessibleControls: ["appendix_f_anchor_access", "rubric_glossary", "item_issue_report", "data_governance_withdrawal"],
     appendixFAnchorAccess: "one_click",
     protectedSplitVariantPolicy: "block_or_quarantine_unregistered_variants",
     hiddenMetadataLeakagePolicy: "forbid_hidden_fields_in_sanitized_payloads",
     noFeatureLossChecklist: UX_NO_FEATURE_LOSS_KEYS,
+    exactRubricTermPreservationRules: { dimensionNames: "exact_terms_visible_or_one_click", appendixF: "source_of_truth" },
+    prohibitedSimplifications: { mandatoryControlsOptionalized: false, rubricSemanticsChanged: false, blindingWeakened: false },
+    protectedSplitEligibility: { unregisteredCopyVariants: "blocked_or_quarantined", protectedLabels: "frozen_policy_required" },
+    associatedCopyBundleIds: [`ui-copy-bundle-${releaseId}`, `rubric-copy-bundle-${releaseId}`],
+    associatedCopyBundleHashes: [`sha256-ui-copy-${releaseId}`, `sha256-rubric-copy-${releaseId}`],
+    createdBy: "seed-release-admin",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+    timestamp: "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -8909,10 +8931,23 @@ function defaultUXSimplificationReview(releaseId, policyId) {
     id: `ux-simplification-review-${releaseId}`,
     reviewSource: "seed_rlhf88_review",
     policyId,
+    screenSetIds: [`screen-set-${releaseId}-enabled-surfaces`],
+    workflowProfileIds: UX_SIMPLIFICATION_SURFACES.map((surface) => `${surface}-workflow-profile`),
     reviewedSurfaces: UX_SIMPLIFICATION_SURFACES,
+    reviewedLocaleSet: ["en-US"],
     reviewStatus: "passed",
     reviewerRole: "release_admin",
     noFeatureLossChecklist: UX_NO_FEATURE_LOSS_KEYS,
+    featureParityChecklistResults: { no_feature_loss: "passed", required_controls_reachable: "passed" },
+    requiredControlDiscoverabilityResults: { required_controls_visible_or_one_click: "passed" },
+    rubricSemanticsPreservationResult: { status: "passed", exact_terms_preserved: true },
+    blindingProtectedLabelLeakageResult: { status: "passed", hidden_fields_absent: true },
+    accessibilityReadabilityLinkage: { accessibilityConformanceReportId: `accessibility-${releaseId}`, readabilityStatus: "passed" },
+    userComprehensionOrExpertReviewNotes: "Expert review found the task-first copy clearer without changing rubric semantics.",
+    blockersAndMitigations: { blockers: [], mitigations: ["advanced_controls_progressively_disclosed"] },
+    promotionDecision: "promote",
+    reviewer: "seed-ux-reviewer",
+    timestamp: "2026-10-01T00:00:00.000Z",
     exactRubricSemanticsPreserved: true,
     appendixFAnchorAccessVerified: true,
     serverDerivedScreenStateVerified: true,
@@ -8925,7 +8960,9 @@ function defaultScreenStatePayloads(releaseId, policyId) {
     id: `screen-state-${releaseId}-${surface}`,
     payloadSource: "server_derived",
     surface,
+    role: surface === "rating" || surface === "practice" || surface === "calibration" ? "graduate" : "admin",
     schemaVersion: "screen-state-lmca-v1",
+    outputSchemaVersion: "screen-state-output-lmca-v1",
     policyId,
     policyVersionProvenance: {
       uxSimplificationPolicyId: policyId,
@@ -8934,9 +8971,24 @@ function defaultScreenStatePayloads(releaseId, policyId) {
       assistPolicyId: `pre-submit-assist-${releaseId}`,
       uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
     },
+    taskStatement: `Complete the ${surface.replace(/_/g, " ")} workflow step without changing LMCA scoring semantics.`,
+    primaryNextAction: "complete_required_controls",
+    submissionConsequenceSummary: "Submitting records an append-only audit event and preserves hidden labels.",
+    progressiveDisclosureState: "advanced_controls_collapsed_until_needed",
     visibleFieldAllowlist: ["taskStatement", "primaryNextAction", "completionState", "requiredControls", "optionalPanels", "shortItemLabel", "positionText", "critiqueText"],
     enabledActionAllowlist: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
     requiredControlKeys: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
+    optionalPanelKeys: ["rubric_glossary", "provenance_summary"],
+    requiredOptionalControlMap: {
+      requiredControls: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
+      optionalPanels: ["rubric_glossary", "provenance_summary"],
+    },
+    protectedGoldBenchmarkDisclosureState: {
+      benchmarkMembership: "not_disclosed",
+      goldAnswer: "not_disclosed",
+      protectedSplitStatus: "not_disclosed",
+    },
+    createdAt: "2026-10-01T00:00:00.000Z",
     hiddenFieldClasses: UX_HIDDEN_FIELD_CLASSES,
     rejectedUnknownKeys: true,
     sanitized: true,
@@ -9013,28 +9065,60 @@ function normalizeUXSimplificationPolicy(policy, policySource) {
   const id = policy?.id ?? policy?.policyId;
   if (!id) return null;
   const enabledSurfaces = normalizeStringArray(policy.enabledSurfaces ?? policy.surfaces);
+  const coveredRoles = normalizeStringArray(policy.coveredRoles);
+  const coveredLaneClasses = normalizeStringArray(policy.coveredLaneClasses);
+  const coveredSplitClasses = normalizeStringArray(policy.coveredSplitClasses);
+  const localeSet = normalizeStringArray(policy.localeSet ?? policy.locales);
+  const requiredAlwaysVisibleControls = normalizeStringArray(policy.requiredAlwaysVisibleControls);
+  const requiredOneClickAccessibleControls = normalizeStringArray(policy.requiredOneClickAccessibleControls);
   const noFeatureLossChecklist = normalizeStringArray(policy.noFeatureLossChecklist ?? policy.featureReachabilityChecklist);
+  const associatedCopyBundleIds = normalizeStringArray(policy.associatedCopyBundleIds ?? policy.copyBundleIds);
+  const associatedCopyBundleHashes = normalizeStringArray(policy.associatedCopyBundleHashes ?? policy.copyBundleHashes);
   const missingSurfaces = UX_SIMPLIFICATION_SURFACES.filter((surface) => !enabledSurfaces.includes(surface));
   const missingNoFeatureLossKeys = UX_NO_FEATURE_LOSS_KEYS.filter((key) => !noFeatureLossChecklist.includes(key));
   const reviewReasons = [
     requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
     missingSurfaces.length ? `enabledSurfaces:${missingSurfaces.join(",")}` : null,
+    requiredPromptFieldReason("coveredRoles", coveredRoles),
+    requiredPromptFieldReason("coveredLaneClasses", coveredLaneClasses),
+    requiredPromptFieldReason("coveredSplitClasses", coveredSplitClasses),
+    requiredPromptFieldReason("localeSet", localeSet),
     missingNoFeatureLossKeys.length ? `noFeatureLossChecklist:${missingNoFeatureLossKeys.join(",")}` : null,
     policy.taskFirstCopyRequired === true ? null : "taskFirstCopyRequired",
     policy.progressiveDisclosureRequired === true ? null : "progressiveDisclosureRequired",
     policy.glossarySupportRequired === true ? null : "glossarySupportRequired",
     policy.serverDerivedScreenStateRequired === true ? null : "serverDerivedScreenStateRequired",
     policy.exactRubricSemanticsPreserved === true ? null : "exactRubricSemanticsPreserved",
+    hasPlainObject(policy.taskFirstLayoutRules) ? null : "taskFirstLayoutRules",
+    hasPlainObject(policy.plainLanguageCopyRules) ? null : "plainLanguageCopyRules",
+    hasPlainObject(policy.glossaryTooltipPolicy) ? null : "glossaryTooltipPolicy",
+    hasPlainObject(policy.progressiveDisclosureMapRequirements) ? null : "progressiveDisclosureMapRequirements",
+    requiredPromptFieldReason("requiredAlwaysVisibleControls", requiredAlwaysVisibleControls),
+    requiredPromptFieldReason("requiredOneClickAccessibleControls", requiredOneClickAccessibleControls),
     String(policy.appendixFAnchorAccess ?? "").includes("one_click") ? null : "appendixFAnchorAccess",
     policyMentions(policy.protectedSplitVariantPolicy, ["block", "quarantine"]) ? null : "protectedSplitVariantPolicy",
     policyMentions(policy.hiddenMetadataLeakagePolicy, ["forbid", "hidden"]) ? null : "hiddenMetadataLeakagePolicy",
+    hasPlainObject(policy.exactRubricTermPreservationRules) ? null : "exactRubricTermPreservationRules",
+    hasPlainObject(policy.prohibitedSimplifications) ? null : "prohibitedSimplifications",
+    hasPlainObject(policy.protectedSplitEligibility) ? null : "protectedSplitEligibility",
+    requiredPromptFieldReason("associatedCopyBundleIds", associatedCopyBundleIds),
+    requiredPromptFieldReason("associatedCopyBundleHashes", associatedCopyBundleHashes),
+    requiredPromptFieldReason("createdBy", policy.createdBy),
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+    requiredPromptFieldReason("timestamp", policy.timestamp),
   ].filter(Boolean);
   return {
     id,
     policySource,
     policyVersion: policy.policyVersion ?? policy.version ?? null,
     enabledSurfaces,
+    coveredRoles,
+    coveredLaneClasses,
+    coveredSplitClasses,
+    localeSet,
     noFeatureLossChecklist,
+    associatedCopyBundleIds,
+    associatedCopyBundleHashes,
     missingSurfaces,
     missingNoFeatureLossKeys,
     taskFirstCopyRequired: policy.taskFirstCopyRequired === true,
@@ -9042,9 +9126,21 @@ function normalizeUXSimplificationPolicy(policy, policySource) {
     glossarySupportRequired: policy.glossarySupportRequired === true,
     serverDerivedScreenStateRequired: policy.serverDerivedScreenStateRequired === true,
     exactRubricSemanticsPreserved: policy.exactRubricSemanticsPreserved === true,
+    taskFirstLayoutRules: policy.taskFirstLayoutRules ?? null,
+    plainLanguageCopyRules: policy.plainLanguageCopyRules ?? null,
+    glossaryTooltipPolicy: policy.glossaryTooltipPolicy ?? null,
+    progressiveDisclosureMapRequirements: policy.progressiveDisclosureMapRequirements ?? null,
+    requiredAlwaysVisibleControls,
+    requiredOneClickAccessibleControls,
     appendixFAnchorAccess: policy.appendixFAnchorAccess ?? null,
     protectedSplitVariantPolicy: policy.protectedSplitVariantPolicy ?? null,
     hiddenMetadataLeakagePolicy: policy.hiddenMetadataLeakagePolicy ?? null,
+    exactRubricTermPreservationRules: policy.exactRubricTermPreservationRules ?? null,
+    prohibitedSimplifications: policy.prohibitedSimplifications ?? null,
+    protectedSplitEligibility: policy.protectedSplitEligibility ?? null,
+    createdBy: policy.createdBy ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    timestamp: policy.timestamp ?? null,
     reviewReasons,
     status: reviewReasons.length
       ? "ux_simplification_policy_review_required"
@@ -9058,14 +9154,31 @@ function normalizeUXSimplificationReview(review, activePolicyId, reviewSource) {
   const id = review?.id ?? review?.reviewId;
   if (!id) return null;
   const reviewedSurfaces = normalizeStringArray(review.reviewedSurfaces ?? review.surfaces);
+  const screenStateIds = normalizeStringArray(review.screenStateIds);
+  const screenSetIds = normalizeStringArray(review.screenSetIds);
+  const workflowProfileIds = normalizeStringArray(review.workflowProfileIds);
+  const reviewedLocaleSet = normalizeStringArray(review.reviewedLocaleSet ?? review.locales);
   const noFeatureLossChecklist = normalizeStringArray(review.noFeatureLossChecklist ?? review.featureReachabilityChecklist);
   const missingSurfaces = UX_SIMPLIFICATION_SURFACES.filter((surface) => !reviewedSurfaces.includes(surface));
   const missingNoFeatureLossKeys = UX_NO_FEATURE_LOSS_KEYS.filter((key) => !noFeatureLossChecklist.includes(key));
   const reviewReasons = [
     review.policyId === activePolicyId ? null : "policyId",
+    screenStateIds.length || screenSetIds.length ? null : "screenStateIds_or_screenSetIds",
+    requiredPromptFieldReason("workflowProfileIds", workflowProfileIds),
+    requiredPromptFieldReason("reviewedLocaleSet", reviewedLocaleSet),
     review.reviewStatus === "passed" ? null : "reviewStatus",
     missingSurfaces.length ? `reviewedSurfaces:${missingSurfaces.join(",")}` : null,
     missingNoFeatureLossKeys.length ? `noFeatureLossChecklist:${missingNoFeatureLossKeys.join(",")}` : null,
+    hasPlainObject(review.featureParityChecklistResults) ? null : "featureParityChecklistResults",
+    hasPlainObject(review.requiredControlDiscoverabilityResults) ? null : "requiredControlDiscoverabilityResults",
+    review.rubricSemanticsPreservationResult?.status === "passed" ? null : "rubricSemanticsPreservationResult",
+    review.blindingProtectedLabelLeakageResult?.status === "passed" ? null : "blindingProtectedLabelLeakageResult",
+    hasPlainObject(review.accessibilityReadabilityLinkage) ? null : "accessibilityReadabilityLinkage",
+    requiredPromptFieldReason("userComprehensionOrExpertReviewNotes", review.userComprehensionOrExpertReviewNotes),
+    hasPlainObject(review.blockersAndMitigations) ? null : "blockersAndMitigations",
+    review.promotionDecision === "promote" ? null : "promotionDecision",
+    requiredPromptFieldReason("reviewer", review.reviewer),
+    requiredPromptFieldReason("timestamp", review.timestamp),
     review.exactRubricSemanticsPreserved === true ? null : "exactRubricSemanticsPreserved",
     review.appendixFAnchorAccessVerified === true ? null : "appendixFAnchorAccessVerified",
     review.serverDerivedScreenStateVerified === true ? null : "serverDerivedScreenStateVerified",
@@ -9075,12 +9188,26 @@ function normalizeUXSimplificationReview(review, activePolicyId, reviewSource) {
     id,
     reviewSource,
     policyId: review.policyId ?? null,
+    screenStateIds,
+    screenSetIds,
+    workflowProfileIds,
     reviewedSurfaces,
+    reviewedLocaleSet,
     reviewStatus: review.reviewStatus ?? null,
     reviewerRole: review.reviewerRole ?? null,
     noFeatureLossChecklist,
     missingSurfaces,
     missingNoFeatureLossKeys,
+    featureParityChecklistResults: review.featureParityChecklistResults ?? null,
+    requiredControlDiscoverabilityResults: review.requiredControlDiscoverabilityResults ?? null,
+    rubricSemanticsPreservationResult: review.rubricSemanticsPreservationResult ?? null,
+    blindingProtectedLabelLeakageResult: review.blindingProtectedLabelLeakageResult ?? null,
+    accessibilityReadabilityLinkage: review.accessibilityReadabilityLinkage ?? null,
+    userComprehensionOrExpertReviewNotes: review.userComprehensionOrExpertReviewNotes ?? null,
+    blockersAndMitigations: review.blockersAndMitigations ?? null,
+    promotionDecision: review.promotionDecision ?? null,
+    reviewer: review.reviewer ?? null,
+    timestamp: review.timestamp ?? null,
     exactRubricSemanticsPreserved: review.exactRubricSemanticsPreserved === true,
     appendixFAnchorAccessVerified: review.appendixFAnchorAccessVerified === true,
     serverDerivedScreenStateVerified: review.serverDerivedScreenStateVerified === true,
@@ -9101,6 +9228,7 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
   const visibleFieldAllowlist = normalizeStringArray(payload.visibleFieldAllowlist);
   const enabledActionAllowlist = normalizeStringArray(payload.enabledActionAllowlist);
   const requiredControlKeys = normalizeStringArray(payload.requiredControlKeys ?? payload.applicableControlKeys);
+  const optionalPanelKeys = normalizeStringArray(payload.optionalPanelKeys);
   const hiddenFieldClasses = normalizeStringArray(payload.hiddenFieldClasses);
   const requiredControls = UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [];
   const availableControls = new Set([...enabledActionAllowlist, ...requiredControlKeys]);
@@ -9108,33 +9236,67 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
   const missingHiddenFieldClasses = UX_HIDDEN_FIELD_CLASSES.filter((fieldClass) => !hiddenFieldClasses.includes(fieldClass));
   const forbiddenVisibleFields = visibleFieldAllowlist.filter((field) => visibleFieldIsForbidden(field));
   const policyVersionProvenance = payload.policyVersionProvenance && typeof payload.policyVersionProvenance === "object" ? payload.policyVersionProvenance : {};
+  const requiredOptionalControlMap = hasPlainObject(payload.requiredOptionalControlMap) ? payload.requiredOptionalControlMap : null;
+  const protectedGoldBenchmarkDisclosureState = hasPlainObject(payload.protectedGoldBenchmarkDisclosureState)
+    ? payload.protectedGoldBenchmarkDisclosureState
+    : null;
+  const requiredPolicyProvenanceFields = [
+    "uxSimplificationPolicyId",
+    "visibilityPolicyId",
+    "workflowProfileId",
+    "assistPolicyId",
+    "uiExperimentPolicyId",
+  ];
+  const missingPolicyVersionProvenanceFields = requiredPolicyProvenanceFields.filter((field) => !policyVersionProvenance[field]);
   const reviewReasons = [
     UX_SIMPLIFICATION_SURFACES.includes(surface) ? null : "surface",
+    requiredPromptFieldReason("role", payload.role ?? payload.actorRole),
     payload.payloadSource === "server_derived" ? null : "payloadSource",
     requiredPromptFieldReason("schemaVersion", payload.schemaVersion),
+    requiredPromptFieldReason("outputSchemaVersion", payload.outputSchemaVersion),
+    requiredPromptFieldReason("taskStatement", payload.taskStatement),
+    requiredPromptFieldReason("primaryNextAction", payload.primaryNextAction),
+    requiredPromptFieldReason("submissionConsequenceSummary", payload.submissionConsequenceSummary),
+    requiredPromptFieldReason("progressiveDisclosureState", payload.progressiveDisclosureState),
+    requiredPromptFieldReason("createdAt", payload.createdAt),
     visibleFieldAllowlist.length ? null : "visibleFieldAllowlist",
     enabledActionAllowlist.length ? null : "enabledActionAllowlist",
+    requiredControlKeys.length ? null : "requiredControlKeys",
+    optionalPanelKeys.length ? null : "optionalPanelKeys",
+    requiredOptionalControlMap ? null : "requiredOptionalControlMap",
+    protectedGoldBenchmarkDisclosureState ? null : "protectedGoldBenchmarkDisclosureState",
     missingControls.length ? `enabledActionAllowlist:${missingControls.join(",")}` : null,
     missingHiddenFieldClasses.length ? `hiddenFieldClasses:${missingHiddenFieldClasses.join(",")}` : null,
     forbiddenVisibleFields.length ? `visibleFieldAllowlist_hidden:${forbiddenVisibleFields.join(",")}` : null,
     payload.rejectedUnknownKeys === true || payload.extraKeyRejection === true ? null : "rejectedUnknownKeys",
     payload.sanitized === true ? null : "sanitized",
-    policyVersionProvenance.uxSimplificationPolicyId ? null : "policyVersionProvenance.uxSimplificationPolicyId",
+    ...missingPolicyVersionProvenanceFields.map((field) => `policyVersionProvenance.${field}`),
   ].filter(Boolean);
   return {
     id,
     payloadSourceLabel,
     payloadSource: payload.payloadSource ?? null,
     surface,
+    role: payload.role ?? payload.actorRole ?? null,
     schemaVersion: payload.schemaVersion ?? null,
+    outputSchemaVersion: payload.outputSchemaVersion ?? null,
+    taskStatement: payload.taskStatement ?? null,
+    primaryNextAction: payload.primaryNextAction ?? null,
+    submissionConsequenceSummary: payload.submissionConsequenceSummary ?? null,
+    progressiveDisclosureState: payload.progressiveDisclosureState ?? null,
+    createdAt: payload.createdAt ?? null,
     policyId: payload.policyId ?? policyVersionProvenance.uxSimplificationPolicyId ?? null,
     policyVersionProvenance,
     visibleFieldAllowlist,
     enabledActionAllowlist,
     requiredControlKeys,
+    optionalPanelKeys,
+    requiredOptionalControlMap,
+    protectedGoldBenchmarkDisclosureState,
     hiddenFieldClasses,
     missingControls,
     missingHiddenFieldClasses,
+    missingPolicyVersionProvenanceFields,
     forbiddenVisibleFields,
     rejectedUnknownKeys: payload.rejectedUnknownKeys === true || payload.extraKeyRejection === true,
     sanitized: payload.sanitized === true,
