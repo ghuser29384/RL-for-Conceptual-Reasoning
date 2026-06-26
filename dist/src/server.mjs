@@ -396,7 +396,6 @@ const uxForbiddenVisibleFieldFragments = [
   "protectedsplit",
   "raterperformance",
 ];
-const screenFeatureParityRequiredControlKeys = ["score_fields", "safe_decline", "source_recognition"];
 const simplifiedCopyRequiredGlossaryTerms = ["centrality", "strength"];
 const uxPolicyRequiredObjectFields = [
   "taskFirstLayoutRules",
@@ -858,10 +857,14 @@ const workflowWriteEndpoints = [
     requiredArrayIncludesByFieldValue: [
       { field: "surface", arrayField: "enabledActionAllowlist", values: uxScreenControlRequirements },
       { field: "surface", arrayField: "requiredControlKeys", values: uxScreenControlRequirements },
+      { field: "surface", arrayField: "requiredOptionalControlMap.requiredControls", values: uxScreenControlRequirements },
     ],
     forbiddenArrayValueFragments: { visibleFieldAllowlist: uxForbiddenVisibleFieldFragments },
     requiredExactFields: {
       payloadSource: "server_derived",
+      "protectedGoldBenchmarkDisclosureState.benchmarkMembership": "not_disclosed",
+      "protectedGoldBenchmarkDisclosureState.goldAnswer": "not_disclosed",
+      "protectedGoldBenchmarkDisclosureState.protectedSplitStatus": "not_disclosed",
       rejectedUnknownKeys: true,
       sanitized: true,
     },
@@ -1091,8 +1094,14 @@ const workflowWriteEndpoints = [
     pathParamField: "screenId",
     requiredFields: ["id", "screenId", "uxSimplificationPolicyId", "requiredControlResults", "featureParityChecklistResults", "noFeatureLoss", "checkedAt"],
     requiredObjectFields: ["requiredControlResults", "featureParityChecklistResults"],
-    requiredObjectKeys: { requiredControlResults: screenFeatureParityRequiredControlKeys },
-    requiredExactFields: { noFeatureLoss: true, "featureParityChecklistResults.no_feature_loss": "passed" },
+    requiredObjectKeysByFieldValue: [
+      { field: "screenId", objectField: "requiredControlResults", values: uxScreenControlRequirements },
+    ],
+    requiredExactFields: {
+      noFeatureLoss: true,
+      "featureParityChecklistResults.no_feature_loss": "passed",
+      "featureParityChecklistResults.required_controls_reachable": "passed",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/simplified-copy-preview$/, "simplified_copy_preview_submitted", "simplifiedCopyPreview", adminRoles, {
     allowHiddenMetadata: true,
@@ -4203,6 +4212,15 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
     const value = workflowFieldValue(normalized, fieldPath);
     const missingKeys = requiredKeys.filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key));
     if (missingKeys.length) return invalid(`missing required object keys in ${fieldPath}: ${missingKeys.join(", ")}`);
+  }
+  for (const rule of spec.requiredObjectKeysByFieldValue ?? []) {
+    const discriminator = workflowFieldValue(normalized, rule.field);
+    const requiredKeys = rule.values?.[discriminator] ?? [];
+    const value = workflowFieldValue(normalized, rule.objectField);
+    const missingKeys = requiredKeys.filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key));
+    if (missingKeys.length) {
+      return invalid(`missing required object keys in ${rule.objectField} for ${rule.field}=${JSON.stringify(discriminator)}: ${missingKeys.join(", ")}`);
+    }
   }
   for (const [fieldPath, forbiddenFragments] of Object.entries(spec.forbiddenArrayValueFragments ?? {})) {
     const value = workflowFieldValue(normalized, fieldPath);

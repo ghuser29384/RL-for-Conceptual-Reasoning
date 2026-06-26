@@ -8871,6 +8871,8 @@ const UX_SCREEN_CONTROL_REQUIREMENTS = {
   admin_governance: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
 };
 
+const UX_SIMPLIFIED_COPY_REQUIRED_GLOSSARY_TERMS = ["centrality", "strength"];
+
 const UX_FORBIDDEN_VISIBLE_FIELD_FRAGMENTS = [
   "sourcecategory",
   "sourcetype",
@@ -9005,24 +9007,47 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
   const submittedScreenStateRows = (options.screenStatePayloads ?? [])
     .map((payload) => normalizeScreenStatePayload(payload, "submitted_workflow_screen_state_payload"))
     .filter(Boolean);
-  const hasSubmittedEvidence = submittedPolicyRows.length || submittedReviewRows.length || submittedScreenStateRows.length;
+  const submittedFeatureParityRows = (options.screenFeatureParityChecks ?? [])
+    .map((check) => normalizeUXScreenFeatureParityCheck(check, activePolicy.id, "submitted_workflow_screen_feature_parity_check"))
+    .filter(Boolean);
+  const submittedCopyPreviewRows = (options.simplifiedCopyPreviews ?? [])
+    .map((preview) => normalizeUXSimplifiedCopyPreview(preview, "submitted_workflow_simplified_copy_preview"))
+    .filter(Boolean);
+  const hasSubmittedEvidence =
+    submittedPolicyRows.length ||
+    submittedReviewRows.length ||
+    submittedScreenStateRows.length ||
+    submittedFeatureParityRows.length ||
+    submittedCopyPreviewRows.length;
   const seedReviewRows = [normalizeUXSimplificationReview(defaultUXSimplificationReview(releaseId, seedPolicy.id), seedPolicy.id, "seed_rlhf88_review")];
   const seedScreenStateRows = defaultScreenStatePayloads(releaseId, seedPolicy.id).map((payload) => normalizeScreenStatePayload(payload, "seed_server_derived_screen_state"));
+  const seedFeatureParityRows = defaultScreenFeatureParityChecks(releaseId, seedPolicy.id)
+    .map((check) => normalizeUXScreenFeatureParityCheck(check, seedPolicy.id, "seed_screen_feature_parity_check"))
+    .filter(Boolean);
+  const seedCopyPreviewRows = defaultSimplifiedCopyPreviews(releaseId)
+    .map((preview) => normalizeUXSimplifiedCopyPreview(preview, "seed_simplified_copy_preview"))
+    .filter(Boolean);
   const reviewRowsForGate = hasSubmittedEvidence ? submittedReviewRows : seedReviewRows;
   const screenStateRowsForGate = hasSubmittedEvidence ? submittedScreenStateRows : seedScreenStateRows;
+  const featureParityRowsForGate = hasSubmittedEvidence ? submittedFeatureParityRows : seedFeatureParityRows;
+  const copyPreviewRowsForGate = hasSubmittedEvidence ? submittedCopyPreviewRows : seedCopyPreviewRows;
   const surfaceRows = UX_SIMPLIFICATION_SURFACES.map((surface) =>
-    uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRowsForGate, screenStateRowsForGate),
+    uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRowsForGate, screenStateRowsForGate, featureParityRowsForGate, copyPreviewRowsForGate),
   );
   const reviewSections = [
     ...submittedPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ux_simplification_policy", artifactId: row.id, reason }))),
     ...submittedReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ux_simplification_review", artifactId: row.id, reason }))),
     ...submittedScreenStateRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "screen_state_payload", artifactId: row.id, reason }))),
+    ...submittedFeatureParityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "screen_feature_parity_check", artifactId: row.id, reason }))),
+    ...submittedCopyPreviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "simplified_copy_preview", artifactId: row.id, reason }))),
     ...surfaceRows.filter((row) => row.status !== "ux_surface_simplification_gate_passed").map((row) => ({ artifactType: "ux_surface", artifactId: row.surface, reason: row.status })),
   ];
   const submittedEvidenceComplete =
     submittedPolicyRows.length > 0 &&
     submittedReviewRows.length > 0 &&
     submittedScreenStateRows.length > 0 &&
+    submittedFeatureParityRows.length > 0 &&
+    submittedCopyPreviewRows.length > 0 &&
     reviewSections.length === 0 &&
     activePolicy.policySource === "submitted_workflow_ux_simplification_policy";
   return {
@@ -9044,11 +9069,15 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
     policyRows: [seedPolicy, ...submittedPolicyRows],
     reviewRows: [...seedReviewRows, ...submittedReviewRows],
     screenStateRows: [...seedScreenStateRows, ...submittedScreenStateRows],
+    screenFeatureParityCheckRows: [...seedFeatureParityRows, ...submittedFeatureParityRows],
+    simplifiedCopyPreviewRows: [...seedCopyPreviewRows, ...submittedCopyPreviewRows],
     surfaceRows,
     counts: {
       submittedPolicyCount: submittedPolicyRows.length,
       submittedReviewCount: submittedReviewRows.length,
       submittedScreenStateCount: submittedScreenStateRows.length,
+      submittedFeatureParityCheckCount: submittedFeatureParityRows.length,
+      submittedSimplifiedCopyPreviewCount: submittedCopyPreviewRows.length,
       passingSurfaceCount: surfaceRows.filter((row) => row.status === "ux_surface_simplification_gate_passed").length,
       reviewSectionCount: reviewSections.length,
     },
@@ -9240,6 +9269,14 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
   const protectedGoldBenchmarkDisclosureState = hasPlainObject(payload.protectedGoldBenchmarkDisclosureState)
     ? payload.protectedGoldBenchmarkDisclosureState
     : null;
+  const requiredOptionalControlMapControls = normalizeStringArray(requiredOptionalControlMap?.requiredControls);
+  const optionalPanelMapKeys = normalizeStringArray(requiredOptionalControlMap?.optionalPanels);
+  const missingRequiredOptionalControlMapControls = requiredControls.filter((control) => !requiredOptionalControlMapControls.includes(control));
+  const disclosureStateReasons = [
+    protectedGoldBenchmarkDisclosureState?.benchmarkMembership === "not_disclosed" ? null : "protectedGoldBenchmarkDisclosureState.benchmarkMembership",
+    protectedGoldBenchmarkDisclosureState?.goldAnswer === "not_disclosed" ? null : "protectedGoldBenchmarkDisclosureState.goldAnswer",
+    protectedGoldBenchmarkDisclosureState?.protectedSplitStatus === "not_disclosed" ? null : "protectedGoldBenchmarkDisclosureState.protectedSplitStatus",
+  ].filter(Boolean);
   const requiredPolicyProvenanceFields = [
     "uxSimplificationPolicyId",
     "visibilityPolicyId",
@@ -9264,7 +9301,11 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
     requiredControlKeys.length ? null : "requiredControlKeys",
     optionalPanelKeys.length ? null : "optionalPanelKeys",
     requiredOptionalControlMap ? null : "requiredOptionalControlMap",
+    requiredOptionalControlMap && !requiredOptionalControlMapControls.length ? "requiredOptionalControlMap.requiredControls" : null,
+    requiredOptionalControlMap && !optionalPanelMapKeys.length ? "requiredOptionalControlMap.optionalPanels" : null,
+    missingRequiredOptionalControlMapControls.length ? `requiredOptionalControlMap.requiredControls:${missingRequiredOptionalControlMapControls.join(",")}` : null,
     protectedGoldBenchmarkDisclosureState ? null : "protectedGoldBenchmarkDisclosureState",
+    ...disclosureStateReasons,
     missingControls.length ? `enabledActionAllowlist:${missingControls.join(",")}` : null,
     missingHiddenFieldClasses.length ? `hiddenFieldClasses:${missingHiddenFieldClasses.join(",")}` : null,
     forbiddenVisibleFields.length ? `visibleFieldAllowlist_hidden:${forbiddenVisibleFields.join(",")}` : null,
@@ -9292,7 +9333,11 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
     requiredControlKeys,
     optionalPanelKeys,
     requiredOptionalControlMap,
+    requiredOptionalControlMapControls,
+    optionalPanelMapKeys,
+    missingRequiredOptionalControlMapControls,
     protectedGoldBenchmarkDisclosureState,
+    disclosureStateReasons,
     hiddenFieldClasses,
     missingControls,
     missingHiddenFieldClasses,
@@ -9309,24 +9354,96 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
   };
 }
 
-function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, screenStateRows) {
+function normalizeUXScreenFeatureParityCheck(check, activePolicyId, rowSource) {
+  const id = check?.id ?? check?.checkId;
+  if (!id) return null;
+  const screenId = check.screenId ?? check.surface ?? null;
+  const requiredControls = UX_SCREEN_CONTROL_REQUIREMENTS[screenId] ?? [];
+  const requiredControlResults = hasPlainObject(check.requiredControlResults) ? check.requiredControlResults : null;
+  const featureParityChecklistResults = hasPlainObject(check.featureParityChecklistResults) ? check.featureParityChecklistResults : null;
+  const missingRequiredControls = requiredControls.filter((control) => !requiredControlResults?.[control]);
+  const unreachableRequiredControls = requiredControls.filter((control) => requiredControlResults?.[control] && !String(requiredControlResults[control]).includes("reachable"));
+  const reviewReasons = [
+    UX_SIMPLIFICATION_SURFACES.includes(screenId) ? null : "screenId",
+    check.uxSimplificationPolicyId === activePolicyId ? null : "uxSimplificationPolicyId",
+    requiredPromptFieldReason("workflowProfileId", check.workflowProfileId),
+    requiredControlResults ? null : "requiredControlResults",
+    featureParityChecklistResults ? null : "featureParityChecklistResults",
+    check.noFeatureLoss === true ? null : "noFeatureLoss",
+    featureParityChecklistResults?.no_feature_loss === "passed" ? null : "featureParityChecklistResults.no_feature_loss",
+    featureParityChecklistResults?.required_controls_reachable === "passed" ? null : "featureParityChecklistResults.required_controls_reachable",
+    requiredPromptFieldReason("checkedBy", check.checkedBy),
+    requiredPromptFieldReason("checkedAt", check.checkedAt),
+    ...missingRequiredControls.map((control) => `requiredControlResults.${control}`),
+    ...unreachableRequiredControls.map((control) => `requiredControlResults.${control}.reachable`),
+  ].filter(Boolean);
+  return {
+    ...check,
+    id,
+    rowSource,
+    screenId,
+    requiredControlResults,
+    featureParityChecklistResults,
+    missingRequiredControls,
+    unreachableRequiredControls,
+    reviewReasons,
+    status: reviewReasons.length ? "screen_feature_parity_check_review_required" : "screen_feature_parity_check_complete",
+  };
+}
+
+function normalizeUXSimplifiedCopyPreview(preview, rowSource) {
+  const id = preview?.id ?? preview?.previewId;
+  if (!id) return null;
+  const screenId = preview.screenId ?? preview.surface ?? null;
+  const glossaryTooltipIds = normalizeStringArray(preview.glossaryTooltipIds);
+  const missingGlossaryTerms = UX_SIMPLIFIED_COPY_REQUIRED_GLOSSARY_TERMS.filter((term) => !glossaryTooltipIds.includes(term));
+  const reviewReasons = [
+    UX_SIMPLIFICATION_SURFACES.includes(screenId) ? null : "screenId",
+    requiredPromptFieldReason("copyBundleId", preview.copyBundleId),
+    missingGlossaryTerms.length ? `glossaryTooltipIds:${missingGlossaryTerms.join(",")}` : null,
+    preview.exactRubricTermPreservation === true ? null : "exactRubricTermPreservation",
+    preview.hiddenFieldLeakageCheck === "passed" ? null : "hiddenFieldLeakageCheck",
+    requiredPromptFieldReason("reviewerId", preview.reviewerId),
+    requiredPromptFieldReason("reviewedAt", preview.reviewedAt),
+  ].filter(Boolean);
+  return {
+    ...preview,
+    id,
+    rowSource,
+    screenId,
+    glossaryTooltipIds,
+    missingGlossaryTerms,
+    reviewReasons,
+    status: reviewReasons.length ? "simplified_copy_preview_review_required" : "simplified_copy_preview_complete",
+  };
+}
+
+function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, screenStateRows, featureParityRows, copyPreviewRows) {
   const policyCoversSurface = activePolicy.enabledSurfaces.includes(surface) && activePolicy.reviewReasons.length === 0;
   const reviewCoversSurface = reviewRows.some((row) => row.reviewedSurfaces.includes(surface) && row.reviewReasons.length === 0);
   const screenStateCoversSurface = screenStateRows.some((row) => row.surface === surface && row.reviewReasons.length === 0);
+  const featureParityCoversSurface = featureParityRows.some((row) => row.screenId === surface && row.reviewReasons.length === 0);
+  const simplifiedCopyCoversSurface = copyPreviewRows.some((row) => row.screenId === surface && row.reviewReasons.length === 0);
   const status =
-    policyCoversSurface && reviewCoversSurface && screenStateCoversSurface
+    policyCoversSurface && reviewCoversSurface && screenStateCoversSurface && featureParityCoversSurface && simplifiedCopyCoversSurface
       ? "ux_surface_simplification_gate_passed"
       : !policyCoversSurface
         ? "ux_surface_missing_policy"
         : !reviewCoversSurface
           ? "ux_surface_missing_review"
-          : "ux_surface_missing_screen_state";
+          : !screenStateCoversSurface
+            ? "ux_surface_missing_screen_state"
+            : !featureParityCoversSurface
+              ? "ux_surface_missing_feature_parity_check"
+              : "ux_surface_missing_simplified_copy_preview";
   return {
     surface,
     policyId: activePolicy.id,
     policyCoversSurface,
     reviewCoversSurface,
     screenStateCoversSurface,
+    featureParityCoversSurface,
+    simplifiedCopyCoversSurface,
     requiredControls: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
     status,
   };
@@ -12951,6 +13068,37 @@ function objectHasEntries(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length);
 }
 
+function reachableUxControlResults(surface) {
+  return Object.fromEntries((UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? []).map((control) => [control, "reachable"]));
+}
+
+function defaultScreenFeatureParityChecks(releaseId, policyId = `ux-simplification-policy-${releaseId}`) {
+  return UX_SIMPLIFICATION_SURFACES.map((surface) => ({
+    id: `screen-feature-parity-${releaseId}-${surface}`,
+    screenId: surface,
+    uxSimplificationPolicyId: policyId,
+    workflowProfileId: `${surface}-workflow-profile-${releaseId}`,
+    requiredControlResults: reachableUxControlResults(surface),
+    featureParityChecklistResults: { no_feature_loss: "passed", required_controls_reachable: "passed" },
+    noFeatureLoss: true,
+    checkedBy: "seed-ux-reviewer",
+    checkedAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultSimplifiedCopyPreviews(releaseId) {
+  return UX_SIMPLIFICATION_SURFACES.map((surface) => ({
+    id: `simplified-copy-preview-${releaseId}-${surface}`,
+    screenId: surface,
+    copyBundleId: `copy-bundle-${releaseId}-${surface}`,
+    glossaryTooltipIds: ["centrality", "strength", "dead_weight", "single_issue"],
+    exactRubricTermPreservation: true,
+    hiddenFieldLeakageCheck: "passed",
+    reviewerId: "seed-ux-reviewer",
+    reviewedAt: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
 function defaultInteractionWorkflowArtifacts(releaseId) {
   return {
     publicExamplePracticeSessions: [
@@ -13188,31 +13336,8 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         submittedAt: "2026-10-01T00:00:00.000Z",
       },
     ],
-    screenFeatureParityChecks: [
-      {
-        id: `screen-feature-parity-${releaseId}`,
-        screenId: "rating",
-        uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
-        workflowProfileId: `rating-workflow-profile-${releaseId}`,
-        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable", source_recognition: "reachable" },
-        featureParityChecklistResults: { no_feature_loss: "passed" },
-        noFeatureLoss: true,
-        checkedBy: "seed-ux-reviewer",
-        checkedAt: "2026-10-01T00:00:00.000Z",
-      },
-    ],
-    simplifiedCopyPreviews: [
-      {
-        id: `simplified-copy-preview-${releaseId}`,
-        screenId: "rating",
-        copyBundleId: `copy-bundle-${releaseId}`,
-        glossaryTooltipIds: ["centrality", "strength", "dead_weight"],
-        exactRubricTermPreservation: true,
-        hiddenFieldLeakageCheck: "passed",
-        reviewerId: "seed-ux-reviewer",
-        reviewedAt: "2026-10-01T00:00:00.000Z",
-      },
-    ],
+    screenFeatureParityChecks: defaultScreenFeatureParityChecks(releaseId),
+    simplifiedCopyPreviews: defaultSimplifiedCopyPreviews(releaseId),
   };
 }
 
@@ -13403,7 +13528,10 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       artifactType: "screen_feature_parity_check",
       requiredFields: ["screenId", "uxSimplificationPolicyId", "workflowProfileId", "checkedBy", "checkedAt"],
       objectFields: ["requiredControlResults", "featureParityChecklistResults"],
+      objectKeysByFieldValue: [{ field: "screenId", objectField: "requiredControlResults", values: UX_SCREEN_CONTROL_REQUIREMENTS }],
       booleanTrueFields: ["noFeatureLoss"],
+      requiredCoverageField: "screenId",
+      requiredCoverageValues: UX_SIMPLIFICATION_SURFACES,
       seedRows: defaults.screenFeatureParityChecks,
     },
     {
@@ -13413,7 +13541,10 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       artifactType: "simplified_copy_preview",
       requiredFields: ["screenId", "copyBundleId", "hiddenFieldLeakageCheck", "reviewerId", "reviewedAt"],
       arrayFields: ["glossaryTooltipIds"],
+      arrayIncludes: { glossaryTooltipIds: UX_SIMPLIFIED_COPY_REQUIRED_GLOSSARY_TERMS },
       booleanTrueFields: ["exactRubricTermPreservation"],
+      requiredCoverageField: "screenId",
+      requiredCoverageValues: UX_SIMPLIFICATION_SURFACES,
       seedRows: defaults.simplifiedCopyPreviews,
     },
   ];
@@ -13426,7 +13557,11 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
       .filter(Boolean);
     const seedRows = spec.seedRows.map((resource) => normalizeInteractionWorkflowArtifact(resource, spec, `seed_${spec.artifactType}`)).filter(Boolean);
     const rowsForGate = submittedRows.length ? submittedRows : seedRows;
-    const complete = rowsForGate.some((row) => row.reviewReasons.length === 0);
+    const complete = spec.requiredCoverageField
+      ? (spec.requiredCoverageValues ?? []).every((value) =>
+          rowsForGate.some((row) => row.reviewReasons.length === 0 && row[spec.requiredCoverageField] === value),
+        )
+      : rowsForGate.some((row) => row.reviewReasons.length === 0);
     return {
       spec,
       submittedRows,
@@ -13476,6 +13611,18 @@ function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
     ...((spec.requiredFields ?? []).map((field) => requiredPromptFieldReason(field, resource[field]))),
     ...((spec.arrayFields ?? []).map((field) => normalizeStringArray(resource[field]).length ? null : field)),
     ...((spec.objectFields ?? []).map((field) => objectHasEntries(resource[field]) ? null : field)),
+    ...Object.entries(spec.arrayIncludes ?? {}).flatMap(([field, requiredValues]) => {
+      const value = normalizeStringArray(resource[field]);
+      return requiredValues.filter((item) => !value.includes(item)).map((item) => `${field}:${item}`);
+    }),
+    ...((spec.objectKeysByFieldValue ?? []).flatMap((rule) => {
+      const discriminator = resource[rule.field];
+      const requiredKeys = rule.values?.[discriminator] ?? [];
+      const value = resource[rule.objectField];
+      return requiredKeys
+        .filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key))
+        .map((key) => `${rule.objectField}:${key}`);
+    })),
     ...((spec.numericFields ?? []).map((field) => Number.isFinite(resource[field]) ? null : field)),
     ...((spec.booleanTrueFields ?? []).map((field) => resource[field] === true ? null : field)),
     ...((spec.booleanFalseFields ?? []).map((field) => resource[field] === false ? null : field)),
@@ -14425,6 +14572,8 @@ export function buildOctoberReleaseReport(
     uxSimplificationPolicies: options.uxSimplificationPolicies ?? [],
     uxSimplificationReviews: options.uxSimplificationReviews ?? [],
     screenStatePayloads: options.screenStatePayloads ?? [],
+    screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
+    simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
   });
   const workflowStateMachineEvidence = buildWorkflowStateMachineEvidenceReport(releaseId, {
     workflowStateTransitionLogs: options.workflowStateTransitionLogs ?? [],

@@ -138,6 +138,49 @@ const uxHiddenFieldClasses = [
 
 const uxScreenControlKeys = [...uxNoFeatureLossKeys, "post_lock_feedback"];
 
+const uxScreenControlRequirements = {
+  rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
+  practice: ["score_fields", "item_issue_report", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+  calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+  consent: ["data_governance_withdrawal", "audit_provenance_capture"],
+  withdrawal: ["data_governance_withdrawal", "audit_provenance_capture"],
+  discussion: ["item_issue_report", "adjudication_control", "audit_provenance_capture"],
+  adjudication: ["verification_control", "adjudication_control", "item_issue_report", "audit_provenance_capture"],
+  release_review: ["release_governance_action", "protected_label_warning", "audit_provenance_capture"],
+  admin_governance: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
+};
+
+function reachableUxControlResults(surface) {
+  return Object.fromEntries((uxScreenControlRequirements[surface] ?? []).map((control) => [control, "reachable"]));
+}
+
+function uxScreenFeatureParityChecks(policyId = "ux-policy-submitted") {
+  return uxSimplificationSurfaces.map((surface) => ({
+    id: `screen-feature-parity-submitted-${surface}`,
+    screenId: surface,
+    uxSimplificationPolicyId: policyId,
+    workflowProfileId: `${surface}-workflow-profile-submitted`,
+    requiredControlResults: reachableUxControlResults(surface),
+    featureParityChecklistResults: { no_feature_loss: "passed", required_controls_reachable: "passed" },
+    noFeatureLoss: true,
+    checkedBy: "ux-reviewer",
+    checkedAt: "2026-10-01T00:14:00.000Z",
+  }));
+}
+
+function simplifiedCopyPreviews() {
+  return uxSimplificationSurfaces.map((surface) => ({
+    id: `simplified-copy-preview-submitted-${surface}`,
+    screenId: surface,
+    copyBundleId: `copy-bundle-submitted-${surface}`,
+    glossaryTooltipIds: ["centrality", "strength", "dead_weight", "single_issue"],
+    exactRubricTermPreservation: true,
+    hiddenFieldLeakageCheck: "passed",
+    reviewerId: "ux-reviewer",
+    reviewedAt: "2026-10-01T00:15:00.000Z",
+  }));
+}
+
 const workflowStateTransitionFixtures = [
   ["assignment", "assignment-state-release", "draft", "locked_initial_rating"],
   ["rating", "rating-state-release", "draft", "locked_initial"],
@@ -1396,31 +1439,8 @@ function completeInteractionWorkflowFixtures() {
         submittedAt: "2026-10-01T00:13:00.000Z",
       },
     ],
-    screenFeatureParityChecks: [
-      {
-        id: "screen-feature-parity-submitted",
-        screenId: "rating",
-        uxSimplificationPolicyId: "ux-policy-submitted",
-        workflowProfileId: "rating-workflow-profile-submitted",
-        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable", source_recognition: "reachable" },
-        featureParityChecklistResults: { no_feature_loss: "passed" },
-        noFeatureLoss: true,
-        checkedBy: "ux-reviewer",
-        checkedAt: "2026-10-01T00:14:00.000Z",
-      },
-    ],
-    simplifiedCopyPreviews: [
-      {
-        id: "simplified-copy-preview-submitted",
-        screenId: "rating",
-        copyBundleId: "copy-bundle-submitted",
-        glossaryTooltipIds: ["centrality", "strength"],
-        exactRubricTermPreservation: true,
-        hiddenFieldLeakageCheck: "passed",
-        reviewerId: "ux-reviewer",
-        reviewedAt: "2026-10-01T00:15:00.000Z",
-      },
-    ],
+    screenFeatureParityChecks: uxScreenFeatureParityChecks(),
+    simplifiedCopyPreviews: simplifiedCopyPreviews(),
   };
 }
 
@@ -1549,12 +1569,15 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.counts.submittedProtectedArtifactRevalidationCount, 1);
   assert.equal(report.counts.submittedBenchmarkSubmissionPolicyCount, 1);
   assert.equal(report.counts.submittedBenchmarkSubmissionCount, 1);
-  assert.equal(report.counts.submittedScreenFeatureParityCheckCount, 1);
-  assert.equal(report.counts.submittedSimplifiedCopyPreviewCount, 1);
+  assert.equal(report.counts.submittedScreenFeatureParityCheckCount, uxSimplificationSurfaces.length);
+  assert.equal(report.counts.submittedSimplifiedCopyPreviewCount, uxSimplificationSurfaces.length);
   assert.equal(report.benchmarkSubmissionRows.at(-1).perItemOutputIncluded, false);
-  assert.equal(report.screenFeatureParityCheckRows.at(-1).noFeatureLoss, true);
-  assert.equal(report.screenFeatureParityCheckRows.at(-1).requiredControlResults.source_recognition, "reachable");
-  assert.ok(report.simplifiedCopyPreviewRows.at(-1).glossaryTooltipIds.includes("strength"));
+  assert.equal(report.screenFeatureParityCheckRows.every((row) => row.noFeatureLoss), true);
+  assert.equal(
+    report.screenFeatureParityCheckRows.find((row) => row.screenId === "rating").requiredControlResults.source_recognition,
+    "reachable",
+  );
+  assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
 });
 
@@ -1736,17 +1759,23 @@ test("UX simplification evidence gates submitted server-derived screen states wi
       protectedLeakageReviewPassed: true,
     },
   ];
+  const screenFeatureParityChecks = uxScreenFeatureParityChecks(policyId);
+  const copyPreviews = simplifiedCopyPreviews();
 
   const report = buildUXSimplificationEvidenceReport("october-2026-demo", {
     uxSimplificationPolicies,
     uxSimplificationReviews,
     screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
   });
 
   assert.equal(report.releaseUseStatus, "submitted_ux_simplification_evidence_complete");
   assert.equal(report.counts.submittedPolicyCount, 1);
   assert.equal(report.counts.submittedReviewCount, 1);
   assert.equal(report.counts.submittedScreenStateCount, uxSimplificationSurfaces.length);
+  assert.equal(report.counts.submittedFeatureParityCheckCount, uxSimplificationSurfaces.length);
+  assert.equal(report.counts.submittedSimplifiedCopyPreviewCount, uxSimplificationSurfaces.length);
   assert.equal(report.counts.passingSurfaceCount, uxSimplificationSurfaces.length);
   assert.deepEqual(report.reviewSections, []);
   assert.ok(report.activePolicy.coveredSplitClasses.includes("hidden_benchmark"));
@@ -1756,6 +1785,8 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.equal(report.screenStateRows.at(-1).outputSchemaVersion, "screen-state-output-lmca-v1");
   assert.equal(report.screenStateRows.at(-1).protectedGoldBenchmarkDisclosureState.benchmarkMembership, "not_disclosed");
   assert.equal(report.screenStateRows.filter((row) => row.payloadSourceLabel === "submitted_workflow_screen_state_payload").every((row) => row.forbiddenVisibleFields.length === 0), true);
+  assert.equal(report.screenFeatureParityCheckRows.find((row) => row.screenId === "adjudication").requiredControlResults.verification_control, "reachable");
+  assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("centrality")), true);
 
   const incompleteScreenStateReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
     uxSimplificationPolicies,
@@ -1773,6 +1804,8 @@ test("UX simplification evidence gates submitted server-derived screen states wi
         },
       },
     ],
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
   });
 
   assert.equal(incompleteScreenStateReport.releaseUseStatus, "ux_simplification_review_required");
@@ -1781,6 +1814,55 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.ok(incompleteScreenStateReport.reviewSections.some((section) => section.reason === "protectedGoldBenchmarkDisclosureState"));
   assert.ok(
     incompleteScreenStateReport.reviewSections.some((section) => section.reason === "policyVersionProvenance.assistPolicyId"),
+  );
+
+  const incompleteScreenStateControlMapReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads: [
+      {
+        ...screenStatePayloads[0],
+        id: "screen-state-rating-incomplete-control-map",
+        requiredOptionalControlMap: {
+          requiredControls: ["score_fields"],
+          optionalPanels: ["rubric_glossary"],
+        },
+      },
+    ],
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+  });
+
+  assert.equal(incompleteScreenStateControlMapReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    incompleteScreenStateControlMapReport.reviewSections.some((section) =>
+      section.reason.startsWith("requiredOptionalControlMap.requiredControls:"),
+    ),
+  );
+
+  const leakingScreenStateDisclosureReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads: [
+      {
+        ...screenStatePayloads[0],
+        id: "screen-state-rating-leaking-disclosure-state",
+        protectedGoldBenchmarkDisclosureState: {
+          benchmarkMembership: "hidden_benchmark",
+          goldAnswer: "not_disclosed",
+          protectedSplitStatus: "not_disclosed",
+        },
+      },
+    ],
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+  });
+
+  assert.equal(leakingScreenStateDisclosureReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    leakingScreenStateDisclosureReport.reviewSections.some(
+      (section) => section.reason === "protectedGoldBenchmarkDisclosureState.benchmarkMembership",
+    ),
   );
 
   const incompletePolicyReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
@@ -1794,6 +1876,8 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     ],
     uxSimplificationReviews,
     screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
   });
 
   assert.equal(incompletePolicyReport.releaseUseStatus, "ux_simplification_review_required");
@@ -1811,11 +1895,56 @@ test("UX simplification evidence gates submitted server-derived screen states wi
       },
     ],
     screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
   });
 
   assert.equal(incompleteReviewReport.releaseUseStatus, "ux_simplification_review_required");
   assert.ok(incompleteReviewReport.reviewSections.some((section) => section.reason === "reviewedLocaleSet"));
   assert.ok(incompleteReviewReport.reviewSections.some((section) => section.reason === "promotionDecision"));
+
+  const missingFeatureParityReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks: screenFeatureParityChecks.filter((row) => row.screenId !== "adjudication"),
+    simplifiedCopyPreviews: copyPreviews,
+  });
+
+  assert.equal(missingFeatureParityReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(missingFeatureParityReport.reviewSections.some((section) => section.reason === "ux_surface_missing_feature_parity_check"));
+
+  const incompleteFeatureParityReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks: screenFeatureParityChecks.map((check) =>
+      check.screenId === "rating"
+        ? { ...check, featureParityChecklistResults: { no_feature_loss: "passed" } }
+        : check,
+    ),
+    simplifiedCopyPreviews: copyPreviews,
+  });
+
+  assert.equal(incompleteFeatureParityReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    incompleteFeatureParityReport.reviewSections.some(
+      (section) => section.reason === "featureParityChecklistResults.required_controls_reachable",
+    ),
+  );
+
+  const incompleteCopyPreviewReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews.map((preview) =>
+      preview.screenId === "rating" ? { ...preview, glossaryTooltipIds: ["centrality"] } : preview,
+    ),
+  });
+
+  assert.equal(incompleteCopyPreviewReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(incompleteCopyPreviewReport.reviewSections.some((section) => section.reason === "glossaryTooltipIds:strength"));
 });
 
 test("custom weighted loss uses low-clarity branch and ignores nullable non-clarity fields", () => {
