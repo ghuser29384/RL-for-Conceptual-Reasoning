@@ -175,6 +175,34 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/assignments$/, "assignment_submitted", "assignment", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rater-sessions$/, "rater_session_submitted", "raterSession", ratingWorkflowRoles, {
+    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)$/, "rater_session_updated", "raterSession", ratingWorkflowRoles, {
+    method: "PATCH",
+    pathParamField: "id",
+    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)\/pause$/, "rater_session_paused", "raterSession", ratingWorkflowRoles, {
+    pathParamField: "id",
+    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)\/stop-after-current$/, "rater_session_stop_after_current", "raterSession", ratingWorkflowRoles, {
+    pathParamField: "id",
+    requiredFields: ["id", "raterId", "sessionTarget", "startedAt", "activeTimeSeconds", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/practice-sessions$/, "public_example_practice_session_submitted", "publicExamplePracticeSession", ratingWorkflowRoles, {
+    requiredFields: ["id", "raterId", "sourceAnchorExampleIds", "workflowProfileId", "attemptRatings", "lockedAt", "feedbackArtifactId", "trainingExposureStatus", "excludedFromRatingDenominator"],
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-learning-plans$/, "rater_learning_plan_submitted", "raterLearningPlan", ratingWorkflowRoles, {
+    requiredFields: ["id", "raterId", "rubricVersion", "certificationPackVersion", "practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary", "assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown", "protectedLabelExposureCheck", "timestamp"],
+    requireActorField: "raterId",
+  }),
   workflowWriteSpec(/^\/api\/v1\/gold-items$/, "gold_item_submitted", "goldItem", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/source-anchor-examples$/, "source_anchor_example_submitted", "sourceAnchorExample", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/benchmark-split-members$/, "benchmark_split_member_submitted", "benchmarkSplitMember", adminRoles, { allowHiddenMetadata: true }),
@@ -222,7 +250,47 @@ const workflowWriteEndpoints = [
     rejectHiddenMetadata: true,
     rejectRawBenchmarkContent: true,
   }),
+  workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/self-screen$/, "assignment_self_screen_submitted", "assignmentSelfScreen", ratingWorkflowRoles, {
+    pathParamField: "assignmentId",
+    requiredFields: ["id", "assignmentId", "raterId", "selfScreenStatus", "sourcePeerModelGoldProtectedLabelVisibilityState"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/decline$/, "assignment_decline_submitted", "assignmentDecline", ratingWorkflowRoles, {
+    pathParamField: "assignmentId",
+    requiredFields: ["id", "assignmentId", "raterId", "itemKeys", "reasonCode", "reassignmentStatus", "qaRoutingStatus", "sourcePeerModelGoldProtectedLabelVisibilityState", "excludedFromRatingDenominator"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/defer$/, "assignment_deferral_submitted", "assignmentDeferral", ratingWorkflowRoles, {
+    pathParamField: "assignmentId",
+    requiredFields: ["id", "assignmentId", "raterId", "deferReason", "resumePolicy", "sourcePeerModelGoldProtectedLabelVisibilityState"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/source-recognition-events$/, "source_recognition_event_submitted", "sourceRecognitionEvent", ratingWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "assignmentId",
+    requiredFields: ["id", "assignmentId", "raterId", "recognitionType", "raterAction", "independentBlindEligibilityEffect", "protectedStatusHiddenFromRater"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
   workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/post-lock-sessions$/, "post_lock_discussion_session_submitted", "postLockDiscussionSession", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "discussionThreadId",
+    requiredFields: ["id", "discussionThreadId", "itemKeys", "participantIds", "initialRatingLockCheck", "identityStagingPolicy", "visibleMaterialPolicy", "objectLevelCommentRecords", "discussionStatus"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/comments$/, "discussion_comment_submitted", "discussionComment", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "discussionThreadId",
+    requiredFields: ["id", "discussionThreadId", "authorId", "commentText", "objectLevelStatus", "timestamp"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/revision-proposals$/, "discussion_revision_proposal_submitted", "discussionRevisionProposal", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "discussionThreadId",
+    requiredFields: ["id", "discussionThreadId", "proposedBy", "ratingIdPrior", "revisionRationale", "timestamp"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/discussion-threads$/, "discussion_thread_submitted", "discussionThread", expertWorkflowRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/adjudications$/, "adjudication_submitted", "adjudication", expertWorkflowRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
@@ -230,10 +298,30 @@ const workflowWriteEndpoints = [
     pathParamField: "adjudicationId",
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-memos$/, "adjudication_memo_submitted", "adjudicationMemo", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/adjudicator-pre-reads$/, "adjudicator_pre_read_submitted", "adjudicatorPreRead", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "adjudicatorId", "itemKeys", "visibleMaterialPolicy", "preReadNotes", "completedBeforePeerDistributionExposure", "linkedAdjudicationMemoId"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/adjudication-review-sessions$/, "adjudication_review_session_submitted", "adjudicationReviewSession", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "discussionThreadId", "itemKeys", "scoreSpreadHeatmapVersion", "centXStrProductAllocationView", "rationaleSpanOverlayRefs", "verificationConflictSummary", "revisionTimelineRefs", "minorityRationaleFields", "finalizationStatus", "adjudicatorIds"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretation_target_map_submitted", "interpretationTargetMap", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "itemKeys", "positionTextVersionId", "critiqueTextVersionId", "candidateIntendedConclusionSpans", "attackedClaimSpans", "plausiblePositionCritiqueInterpretations", "centralityTargetClaimSet", "strengthTargetClaimSet", "visibilityState", "createdBy"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/verification-workspace-sessions$/, "verification_workspace_session_submitted", "verificationWorkspaceSession", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "itemKeys", "claimList", "claimSpanRefs", "claimType", "verificationStatus", "exposureBlindingState", "verifierId", "verifierRole"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
     requiredFields: ["id", "ratingId", "checkerId", "checkType"],
     requireActorField: "checkerId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/calibration-feedback-events$/, "calibration_feedback_event_submitted", "calibrationFeedbackEvent", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "raterId", "goldItemId", "attemptRatingId", "rubricVersion", "perDimensionDeviationSummary", "feedbackTextVersion", "shownAfterLock", "protectedSplitConflictCheck"],
   }),
   workflowWriteSpec(/^\/api\/v1\/prompt-templates$/, "prompt_template_submitted", "promptTemplate", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/parser-configs$/, "parser_config_submitted", "parserConfig", adminRoles, { allowHiddenMetadata: true }),
@@ -367,6 +455,102 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: ["id", "artifactType", "artifactIdOrStoragePointer", "sourceSplitProtectionClass", "releaseConfigManifestId", "retentionDeletionPolicy", "restoreTimeRevalidationStatus"],
   }),
+  workflowWriteSpec(/^\/api\/v1\/protected-artifacts\/(?<id>[^/]+)\/revalidate$/, "protected_artifact_revalidation_submitted", "protectedArtifactRevalidation", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "protectedArtifactId",
+    requiredFields: ["id", "protectedArtifactId", "releaseConfigManifestId", "revalidationStatus", "staleSupersededBehavior", "checkedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/blinding-preview-audits$/, "blinding_preview_audit_submitted", "blindingPreviewAudit", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "itemKeys", "itemTextVersionIds", "renderedRaterVisibleTextChecksum", "approvalStatus", "reviewerId"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/partial-task-outputs$/, "partial_task_output_submitted", "partialTaskOutput", ratingWorkflowRoles, {
+    requiredFields: ["id", "assignmentId", "raterId", "taskType", "itemKeys", "outputFields", "eligibleUses", "excludedDenominators"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/raters\/(?<id>[^/]+)\/position-cluster-exposures$/, "rater_position_cluster_exposure_submitted", "raterPositionClusterExposure", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "raterId",
+    requiredFields: ["id", "raterId", "positionClusterId", "exposureSource", "exposureTimestamp", "blindEligibilityEffect", "createdBy"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/spot-checks$/, "spot_check_qa_item_submitted", "spotCheckQaItem", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "itemKeys", "samplingStratum", "samplingSeedArtifact", "reviewerId", "checkResult", "excludedFromIndependentRaterCount"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/adjudication-triage-items$/, "adjudication_triage_queue_item_submitted", "adjudicationTriageQueueItem", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "itemKeys", "triggerType", "releaseBlockingStatus", "priority", "queueLane", "status", "routingRationale"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/diagnostic-deferrals$/, "diagnostic_deferral_record_submitted", "diagnosticDeferralRecord", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "diagnosticName", "claimAffected", "notRunReason", "approvedWeakerClaimWording", "reviewerId", "createdAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/queue-policy-snapshots$/, "queue_policy_snapshot_submitted", "queuePolicySnapshot", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "liveGoldDuplicateValidationMix", "topicRoutingRules", "tierRoutingRules", "safeDeclineReassignmentPolicy", "samePositionOrderPolicy", "randomizationStratificationSeedPolicy", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/assignment-selection-audits$/, "assignment_selection_audit_submitted", "assignmentSelectionAudit", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "queuePolicySnapshotId", "candidateAssignments", "servedAssignments", "declinesReassignmentsByReason", "raterTierDistribution", "selfSelectionIndicators", "createdAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/model-inference-configs$/, "model_inference_config_submitted", "modelInferenceConfig", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "evaluationRunId", "providerEndpoint", "modelSnapshot", "decodingParameters", "reasoningBudget", "toolAvailability", "messageStackTemplate", "retryPolicy"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/model-run-environments$/, "model_run_environment_submitted", "modelRunEnvironment", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "evaluationRunId", "runtimeOrchestratorVersion", "apiRouteDeploymentId", "libraryVersions", "parserExtractorVersionLinks"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-item-conflicts$/, "rater_item_conflict_submitted", "raterItemConflict", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "allowedNonBlindRoles", "reviewerResolution"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/conflict-screen$/, "assignment_conflict_screen_submitted", "raterItemConflict", ratingWorkflowRoles, {
+    pathParamField: "assignmentId",
+    requiredFields: ["id", "assignmentId", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "allowedNonBlindRoles", "reviewerResolution"],
+    requireAssignmentClaimField: "assignmentId",
+    requireActorField: "raterId",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rater-training-exposure-snapshots$/, "rater_training_exposure_snapshot_submitted", "raterTrainingExposureSnapshot", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "raterId", "assignmentId", "rubricVersion", "publicSourceAnchorExampleIdsPreviouslySeen", "protectedSplitConflictStatus", "createdAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/release-errata$/, "release_erratum_submitted", "releaseErratum", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "releaseId", "erratumType", "affectedArtifactIds", "defectSummary", "supersedingArtifactIds", "historicalArtifactsMutated", "status", "approvedBy", "createdAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/supersede$/, "release_supersession_erratum_submitted", "releaseErratum", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "releaseId",
+    requiredFields: ["id", "releaseId", "erratumType", "affectedArtifactIds", "defectSummary", "supersedingArtifactIds", "historicalArtifactsMutated", "status", "approvedBy", "createdAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/schedule-status-snapshots$/, "schedule_status_snapshot_submitted", "scheduleStatusSnapshot", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "releaseVersionOrProjectScope", "milestoneId", "milestoneName", "plannedStart", "plannedEnd", "status", "criticalPathImpact", "owner", "approvedBy"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/governance-approvals$/, "governance_approval_record_submitted", "governanceApprovalRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "actionKind", "affectedArtifactIds", "proposedBy", "approver1", "approver2", "independenceSeparationOfDutiesStatus", "reasonCode", "visibilitySplitMetricLeaderboardImpactSummary", "approvalTimestamp"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/benchmark-submission-policies$/, "benchmark_submission_policy_submitted", "benchmarkSubmissionPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "aggregateOnlyReport", "submissionBudget", "cooldownPolicy", "hiddenIdExposureProhibited", "perItemFeedbackProhibited", "frozenAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmark_submission_submitted", "benchmarkSubmission", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "benchmarkSubmissionPolicyId", "releaseId", "submittedAggregateReportId", "perItemOutputIncluded", "hiddenIdExposureIncluded", "budgetConsumptionStatus", "submittedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/feature-parity-check$/, "screen_feature_parity_check_submitted", "screenFeatureParityCheck", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "screenId",
+    requiredFields: ["id", "screenId", "uxSimplificationPolicyId", "requiredControlResults", "featureParityChecklistResults", "noFeatureLoss", "checkedAt"],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/simplified-copy-preview$/, "simplified_copy_preview_submitted", "simplifiedCopyPreview", adminRoles, {
+    allowHiddenMetadata: true,
+    pathParamField: "screenId",
+    requiredFields: ["id", "screenId", "copyBundleId", "glossaryTooltipIds", "exactRubricTermPreservation", "hiddenFieldLeakageCheck", "reviewerId", "reviewedAt"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "version", "hashAlgorithm", "materializationQueryRules", "activatedAt"],
@@ -440,6 +624,9 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rater-reliability-weight-models\/(?<id>[^/]+)$/, "raterReliabilityWeightModel", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/raters\/(?<id>[^/]+)$/, "rater", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)$/, "assignment", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)$/, "raterSession", workflowStateReadRoles),
+  workflowReadSpec(/^\/api\/v1\/practice-sessions\/(?<id>[^/]+)$/, "publicExamplePracticeSession", workflowStateReadRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-learning-plans\/(?<id>[^/]+)$/, "raterLearningPlan", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/gold-items\/(?<id>[^/]+)$/, "goldItem", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/source-anchor-examples\/(?<id>[^/]+)$/, "sourceAnchorExample", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/benchmark-split-members\/(?<id>[^/]+)$/, "benchmarkSplitMember", adminAuditRoles),
@@ -460,7 +647,12 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/discussion-threads\/(?<id>[^/]+)$/, "discussionThread", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-memos\/(?<id>[^/]+)$/, "adjudicationMemo", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-records\/(?<id>[^/]+)$/, "verificationRecord", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudicator-pre-reads\/(?<id>[^/]+)$/, "adjudicatorPreRead", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudication-review-sessions\/(?<id>[^/]+)$/, "adjudicationReviewSession", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/interpretation-target-maps\/(?<id>[^/]+)$/, "interpretationTargetMap", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/verification-workspace-sessions\/(?<id>[^/]+)$/, "verificationWorkspaceSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-checks\/(?<id>[^/]+)$/, "ratingCheck", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/calibration-feedback-events\/(?<id>[^/]+)$/, "calibrationFeedbackEvent", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/parser-configs\/(?<id>[^/]+)$/, "parserConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/metric-configs\/(?<id>[^/]+)$/, "metricConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/derived-utility-formulas\/(?<id>[^/]+)$/, "derivedUtilityFormula", adminAuditRoles),
@@ -495,6 +687,25 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/correctness-claim-weight-worksheets\/(?<id>[^/]+)$/, "correctnessClaimWeightWorksheet", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/external-assistance-declarations\/(?<id>[^/]+)$/, "externalAssistanceDeclaration", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/protected-artifact-retention-records\/(?<id>[^/]+)$/, "protectedArtifactRetentionRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/blinding-preview-audits\/(?<id>[^/]+)$/, "blindingPreviewAudit", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/partial-task-outputs\/(?<id>[^/]+)$/, "partialTaskOutput", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/spot-checks\/(?<id>[^/]+)$/, "spotCheckQaItem", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudication-triage-items\/(?<id>[^/]+)$/, "adjudicationTriageQueueItem", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/diagnostic-deferrals\/(?<id>[^/]+)$/, "diagnosticDeferralRecord", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/queue-policy-snapshots\/(?<id>[^/]+)$/, "queuePolicySnapshot", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/assignment-selection-audits\/(?<id>[^/]+)$/, "assignmentSelectionAudit", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-inference-configs\/(?<id>[^/]+)$/, "modelInferenceConfig", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-run-environments\/(?<id>[^/]+)$/, "modelRunEnvironment", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-item-conflicts\/(?<id>[^/]+)$/, "raterItemConflict", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-training-exposure-snapshots\/(?<id>[^/]+)$/, "raterTrainingExposureSnapshot", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/release-errata\/(?<id>[^/]+)$/, "releaseErratum", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/schedule-status-snapshots\/(?<id>[^/]+)$/, "scheduleStatusSnapshot", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/governance-approvals\/(?<id>[^/]+)$/, "governanceApprovalRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/protected-artifact-revalidations\/(?<id>[^/]+)$/, "protectedArtifactRevalidation", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/benchmark-submission-policies\/(?<id>[^/]+)$/, "benchmarkSubmissionPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/benchmark-submissions\/(?<id>[^/]+)$/, "benchmarkSubmission", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/screen-feature-parity-checks\/(?<id>[^/]+)$/, "screenFeatureParityCheck", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/simplified-copy-previews\/(?<id>[^/]+)$/, "simplifiedCopyPreview", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles\/(?<id>[^/]+)$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)$/, "governedBundleRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)$/, "releaseConfigManifest", adminAuditRoles),
@@ -882,6 +1093,89 @@ export async function handleApiRequest(request, response, url, context) {
     await volunteerWithdrawalRequestEndpoint(request, response, context, decodeURIComponent(v1WithdrawalRequestMatch[1]));
     return;
   }
+  if (request.method === "GET" && url.pathname === "/api/v1/raters/me/exposure-eligibility") {
+    await raterExposureEligibilityEndpoint(request, response, context, url);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/assignment-selection-audits") {
+    await assignmentSelectionAuditsEndpoint(request, response, context);
+    return;
+  }
+  const v1AssignmentTrainingExposureMatch = url.pathname.match(/^\/api\/v1\/assignments\/([^/]+)\/training-exposure-snapshot$/);
+  if (request.method === "GET" && v1AssignmentTrainingExposureMatch) {
+    await assignmentTrainingExposureSnapshotEndpoint(request, response, context, decodeURIComponent(v1AssignmentTrainingExposureMatch[1]));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/raters/me/training-exposure") {
+    await raterTrainingExposureEndpoint(request, response, context, url);
+    return;
+  }
+  const v1ReleaseScheduleStatusMatch = url.pathname.match(/^\/api\/v1\/releases\/([^/]+)\/schedule-status$/);
+  if (request.method === "GET" && v1ReleaseScheduleStatusMatch) {
+    await releaseScheduleStatusEndpoint(request, response, context, decodeURIComponent(v1ReleaseScheduleStatusMatch[1]));
+    return;
+  }
+  const v1AssignmentScreenStateMatch = url.pathname.match(/^\/api\/v1\/assignments\/([^/]+)\/screen-state$/);
+  if (request.method === "GET" && v1AssignmentScreenStateMatch) {
+    await assignmentScreenStateEndpoint(request, response, context, decodeURIComponent(v1AssignmentScreenStateMatch[1]));
+    return;
+  }
+  const v1DiscussionScreenStateMatch = url.pathname.match(/^\/api\/v1\/discussions\/([^/]+)\/screen-state$/);
+  if (request.method === "GET" && v1DiscussionScreenStateMatch) {
+    await genericWorkflowScreenStateEndpoint(request, response, context, "discussion", decodeURIComponent(v1DiscussionScreenStateMatch[1]));
+    return;
+  }
+  const v1PostLockDiscussionSessionMatch = url.pathname.match(/^\/api\/v1\/discussions\/([^/]+)\/post-lock-sessions\/([^/]+)$/);
+  if (request.method === "GET" && v1PostLockDiscussionSessionMatch) {
+    await postLockDiscussionSessionEndpoint(
+      request,
+      response,
+      context,
+      decodeURIComponent(v1PostLockDiscussionSessionMatch[1]),
+      decodeURIComponent(v1PostLockDiscussionSessionMatch[2]),
+    );
+    return;
+  }
+  const v1AdjudicationScreenStateMatch = url.pathname.match(/^\/api\/v1\/adjudications\/([^/]+)\/screen-state$/);
+  if (request.method === "GET" && v1AdjudicationScreenStateMatch) {
+    await genericWorkflowScreenStateEndpoint(request, response, context, "adjudication", decodeURIComponent(v1AdjudicationScreenStateMatch[1]));
+    return;
+  }
+  const v1AdjudicationCockpitMatch = url.pathname.match(/^\/api\/v1\/adjudications\/([^/]+)\/cockpit$/);
+  if (request.method === "GET" && v1AdjudicationCockpitMatch) {
+    await adjudicationCockpitEndpoint(request, response, context, decodeURIComponent(v1AdjudicationCockpitMatch[1]));
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/raters/me/calibration-dashboard") {
+    await raterCalibrationDashboardEndpoint(request, response, context, url);
+    return;
+  }
+  const v1RemediationCompleteMatch = url.pathname.match(/^\/api\/v1\/raters\/me\/remediation\/([^/]+)\/complete$/);
+  if (request.method === "POST" && v1RemediationCompleteMatch) {
+    await remediationCompleteEndpoint(request, response, context, decodeURIComponent(v1RemediationCompleteMatch[1]));
+    return;
+  }
+  const v1ItemIssueActionMatch = url.pathname.match(/^\/api\/v1\/item-issues\/([^/]+)\/(triage|resolve|quarantine)$/);
+  if (request.method === "POST" && v1ItemIssueActionMatch) {
+    await itemIssueActionEndpoint(
+      request,
+      response,
+      context,
+      decodeURIComponent(v1ItemIssueActionMatch[1]),
+      decodeURIComponent(v1ItemIssueActionMatch[2]),
+    );
+    return;
+  }
+  const v1BenchmarkSubmissionAggregateMatch = url.pathname.match(/^\/api\/v1\/benchmark-submissions\/([^/]+)\/aggregate-report$/);
+  if (request.method === "GET" && v1BenchmarkSubmissionAggregateMatch) {
+    await benchmarkSubmissionAggregateReportEndpoint(request, response, context, decodeURIComponent(v1BenchmarkSubmissionAggregateMatch[1]));
+    return;
+  }
+  const v1SimplifiedCopyPreviewMatch = url.pathname.match(/^\/api\/v1\/screens\/([^/]+)\/simplified-copy-preview$/);
+  if (request.method === "GET" && v1SimplifiedCopyPreviewMatch) {
+    await simplifiedCopyPreviewEndpoint(request, response, context, decodeURIComponent(v1SimplifiedCopyPreviewMatch[1]));
+    return;
+  }
 
   const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
   if (workflowWriteMatch) {
@@ -1227,6 +1521,446 @@ async function workflowReadEndpoint(request, response, context, match) {
     return;
   }
   sendJson(response, 200, resource);
+}
+
+async function raterExposureEligibilityEndpoint(request, response, context, url) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  const requestedRaterId = session.user.role === "admin" ? url.searchParams.get("raterId") ?? session.user.id : session.user.id;
+  const exposures = await workflowResourcesByField(context, "raterPositionClusterExposure", "raterId", requestedRaterId);
+  const blockedPositionClusterIds = [
+    ...new Set(
+      exposures
+        .filter((exposure) => {
+          const effect = String(exposure.blindEligibilityEffect ?? "").toLowerCase();
+          return effect.includes("excluded") || effect.includes("blocked") || effect.includes("non_blind");
+        })
+        .map((exposure) => exposure.positionClusterId)
+        .filter(Boolean),
+    ),
+  ];
+  sendJson(response, 200, {
+    raterId: requestedRaterId,
+    exposureCount: exposures.length,
+    blockedPositionClusterIds,
+    eligiblePositionClusterIds: [],
+    exposures,
+  });
+}
+
+async function assignmentSelectionAuditsEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const assignmentSelectionAudits = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "assignmentSelectionAudit");
+  sendJson(response, 200, { releaseId, assignmentSelectionAudits });
+}
+
+async function assignmentTrainingExposureSnapshotEndpoint(request, response, context, assignmentId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  const snapshots = await workflowResourcesByField(context, "raterTrainingExposureSnapshot", "assignmentId", assignmentId);
+  const visibleSnapshots = session.user.role === "admin" ? snapshots : snapshots.filter((snapshot) => snapshot.raterId === session.user.id);
+  const snapshot = visibleSnapshots.at(-1);
+  if (!snapshot) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, snapshot);
+}
+
+async function raterTrainingExposureEndpoint(request, response, context, url) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  const requestedRaterId = session.user.role === "admin" ? url.searchParams.get("raterId") ?? session.user.id : session.user.id;
+  const trainingExposureSnapshots = await workflowResourcesByField(context, "raterTrainingExposureSnapshot", "raterId", requestedRaterId);
+  sendJson(response, 200, { raterId: requestedRaterId, trainingExposureSnapshots });
+}
+
+async function releaseScheduleStatusEndpoint(request, response, context, requestedReleaseId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const scheduleStatusSnapshots = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "scheduleStatusSnapshot").filter(
+    (snapshot) =>
+      snapshot.releaseVersionOrProjectScope === requestedReleaseId ||
+      snapshot.releaseId === requestedReleaseId ||
+      snapshot.releaseVersion === requestedReleaseId ||
+      snapshot.projectScope === requestedReleaseId,
+  );
+  sendJson(response, 200, { releaseId: requestedReleaseId, scheduleStatusSnapshots });
+}
+
+async function assignmentScreenStateEndpoint(request, response, context, assignmentId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  if (["rater", "graduate", "phd"].includes(session.user.role) && !session.user.allowedAssignmentIds?.includes("*") && !session.user.allowedAssignmentIds?.includes(assignmentId)) {
+    sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${assignmentId}` });
+    return;
+  }
+  const assignment =
+    assignments.find((item) => item.id === assignmentId) ??
+    (await workflowResourceById(context, "assignment", assignmentId)) ??
+    { id: assignmentId, positionId: null, critiqueId: null };
+  sendJson(response, 200, buildScreenStatePayload("rating", assignment.id, session.user, {
+    assignmentId: assignment.id,
+    positionId: assignment.positionId ?? null,
+    critiqueId: assignment.critiqueId ?? null,
+    primaryNextAction: "complete_required_scores",
+    visibleFieldAllowlist: [
+      "assignment.id",
+      "assignment.positionTextVersionId",
+      "assignment.critiqueTextVersionId",
+      "assignment.ratingContextSnapshotId",
+      "scoreFields",
+      "safeDecline",
+      "sourceRecognition",
+      "itemIssueReport",
+      "verificationControl",
+      "appendixFAnchorAccess",
+      "preSubmitLint",
+      "autosaveResume",
+    ],
+    enabledActionAllowlist: [
+      "score_fields",
+      "safe_decline",
+      "source_recognition",
+      "item_issue_report",
+      "verification_control",
+      "appendix_f_anchor_access",
+      "pre_submit_lint",
+      "autosave_resume",
+    ],
+  }));
+}
+
+async function genericWorkflowScreenStateEndpoint(request, response, context, surface, id) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  const actionSets = {
+    discussion: ["object_level_comment", "revision_proposal", "majority_pressure_warning_ack"],
+    adjudication: ["review_score_spread", "review_target_map", "review_verification_conflicts", "finalize_memo"],
+  };
+  sendJson(response, 200, buildScreenStatePayload(surface, id, session.user, {
+    primaryNextAction: surface === "discussion" ? "add_object_level_comment" : "review_adjudication_cockpit",
+    visibleFieldAllowlist: [
+      `${surface}.id`,
+      "itemKeys",
+      "participantHandles",
+      "rationaleSpans",
+      "verificationSummary",
+      "revisionTimeline",
+      "minorityRationaleFields",
+    ],
+    enabledActionAllowlist: actionSets[surface] ?? [],
+  }));
+}
+
+async function postLockDiscussionSessionEndpoint(request, response, context, discussionThreadId, sessionId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!expertAuditWorkflowRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: expertAuditWorkflowRoles });
+    return;
+  }
+  const resource = await workflowResourceById(context, "postLockDiscussionSession", sessionId);
+  if (!resource || resource.discussionThreadId !== discussionThreadId) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, resource);
+}
+
+async function adjudicationCockpitEndpoint(request, response, context, adjudicationId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!expertAuditWorkflowRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: expertAuditWorkflowRoles });
+    return;
+  }
+  const allSessions = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "adjudicationReviewSession");
+  const reviewSessions = allSessions.filter(
+    (item) => item.adjudicationId === adjudicationId || item.discussionThreadId === adjudicationId || item.id === adjudicationId,
+  );
+  const latestSession = reviewSessions.at(-1) ?? null;
+  sendJson(response, 200, {
+    adjudicationId,
+    cockpitStatus: latestSession ? "adjudication_review_session_available" : "no_review_session_recorded",
+    reviewSession: latestSession,
+    screenState: buildScreenStatePayload("adjudication", adjudicationId, session.user, {
+      primaryNextAction: latestSession ? "finalize_or_request_revision" : "open_adjudication_review_session",
+      visibleFieldAllowlist: [
+        "scoreSpreadHeatmapVersion",
+        "centXStrProductAllocationView",
+        "rationaleSpanOverlayRefs",
+        "verificationConflictSummary",
+        "revisionTimelineRefs",
+        "minorityRationaleFields",
+      ],
+      enabledActionAllowlist: ["review_target_map", "review_verification_conflicts", "record_minority_rationale", "finalize_memo"],
+    }),
+  });
+}
+
+async function raterCalibrationDashboardEndpoint(request, response, context, url) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  const requestedRaterId = session.user.role === "admin" ? url.searchParams.get("raterId") ?? session.user.id : session.user.id;
+  const [learningPlans, calibrationFeedbackEvents, practiceSessions] = await Promise.all([
+    workflowResourcesByField(context, "raterLearningPlan", "raterId", requestedRaterId),
+    workflowResourcesByField(context, "calibrationFeedbackEvent", "raterId", requestedRaterId),
+    workflowResourcesByField(context, "publicExamplePracticeSession", "raterId", requestedRaterId),
+  ]);
+  sendJson(response, 200, {
+    raterId: requestedRaterId,
+    latestLearningPlan: learningPlans.at(-1) ?? null,
+    calibrationFeedbackEvents,
+    practiceSessions,
+    protectedLabelExposurePolicy: "no_live_or_hidden_labels_in_training_dashboard",
+  });
+}
+
+async function remediationCompleteEndpoint(request, response, context, moduleId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!participantDataWriteRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: participantDataWriteRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.raterLearningPlan ?? body.resource ?? {};
+  const raterId = session.user.role === "admin" ? candidate.raterId ?? body.raterId ?? session.user.id : session.user.id;
+  const resource = {
+    id: candidate.id ?? `rater-learning-plan-${raterId}-${moduleId}`,
+    raterId,
+    rubricVersion: candidate.rubricVersion ?? "appendix-f-operational-v1",
+    certificationPackVersion: candidate.certificationPackVersion ?? "pack-v1",
+    practiceGoldDuplicatePerformanceSummaries: candidate.practiceGoldDuplicatePerformanceSummaries ?? { remediation: "completed" },
+    perDimensionDriftSummary: candidate.perDimensionDriftSummary ?? { remediation: "completed" },
+    assignedRemediationModules: normalizeWorkflowStringList(candidate.assignedRemediationModules ?? [moduleId]),
+    completedModules: normalizeWorkflowStringList(candidate.completedModules ?? [moduleId]),
+    currentAssignmentRestrictionsUnlocks: normalizeWorkflowStringList(candidate.currentAssignmentRestrictionsUnlocks ?? ["ordinary_live_allowed"]),
+    feedbackArtifactsShown: normalizeWorkflowStringList(candidate.feedbackArtifactsShown ?? []),
+    protectedLabelExposureCheck: candidate.protectedLabelExposureCheck ?? "no_protected_or_live_labels_shown",
+    timestamp: candidate.timestamp ?? new Date().toISOString(),
+  };
+  const validation = validateWorkflowPayload(resource, session.user, {
+    resourceKey: "raterLearningPlan",
+    requiredFields: ["id", "raterId", "rubricVersion", "certificationPackVersion", "practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary", "assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown", "protectedLabelExposureCheck", "timestamp"],
+    requireActorField: "raterId",
+  });
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_remediation_completion", detail: validation.detail });
+    return;
+  }
+  const event = createWorkflowAuditEvent("rater_remediation_module_completed", session.user, "raterLearningPlan", validation.resource, request, {
+    route: "/api/v1/raters/me/remediation/{module_id}/complete",
+    params: { module_id: moduleId },
+    requiredRoles: participantDataWriteRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    moduleId,
+    resourceKey: "raterLearningPlan",
+    resourceId: validation.resource.id,
+    eventId: event.id,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+async function itemIssueActionEndpoint(request, response, context, itemIssueId, action) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!expertWorkflowRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: expertWorkflowRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.itemIssueAction ?? body.resource ?? body;
+  const resource = {
+    id: candidate.id ?? `item-issue-action-${itemIssueId}-${action}`,
+    itemIssueId,
+    action,
+    actorId: candidate.actorId ?? session.user.id,
+    resolutionStatus: candidate.resolutionStatus ?? action,
+    quarantineScope: candidate.quarantineScope ?? (action === "quarantine" ? "affected_item" : "none"),
+    labelVisibilityStateForTriage: candidate.labelVisibilityStateForTriage ?? "labels_hidden_from_triage",
+    modelResultVisibilityStateForTriage: candidate.modelResultVisibilityStateForTriage ?? "model_results_hidden_from_triage",
+    notes: candidate.notes ?? "",
+    timestamp: candidate.timestamp ?? new Date().toISOString(),
+  };
+  const validation = validateWorkflowPayload(resource, session.user, {
+    resourceKey: "itemIssueAction",
+    requiredFields: ["id", "itemIssueId", "action", "actorId", "resolutionStatus", "labelVisibilityStateForTriage", "modelResultVisibilityStateForTriage", "timestamp"],
+    allowHiddenMetadata: true,
+  });
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_item_issue_action", detail: validation.detail });
+    return;
+  }
+  const event = createWorkflowAuditEvent(`item_issue_${action}_submitted`, session.user, "itemIssueAction", validation.resource, request, {
+    route: `/api/v1/item-issues/{id}/${action}`,
+    params: { id: itemIssueId },
+    requiredRoles: expertWorkflowRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    itemIssueId,
+    action,
+    eventId: event.id,
+    resourceKey: "itemIssueAction",
+    resourceId: validation.resource.id,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+async function benchmarkSubmissionAggregateReportEndpoint(request, response, context, submissionId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const submission = await workflowResourceById(context, "benchmarkSubmission", submissionId);
+  if (!submission) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, {
+    id: submission.submittedAggregateReportId,
+    benchmarkSubmissionId: submission.id,
+    releaseId: submission.releaseId,
+    aggregateOnly: true,
+    perItemOutputIncluded: false,
+    hiddenIdExposureIncluded: false,
+    budgetConsumptionStatus: submission.budgetConsumptionStatus,
+    cooldownStatus: submission.cooldownStatus,
+  });
+}
+
+async function simplifiedCopyPreviewEndpoint(request, response, context, screenId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const previews = await workflowResourcesByField(context, "simplifiedCopyPreview", "screenId", screenId);
+  const preview = previews.at(-1);
+  if (!preview) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, preview);
+}
+
+function buildScreenStatePayload(surface, entityId, actor, options = {}) {
+  return {
+    id: `screen-state-${surface}-${entityId}`,
+    surface,
+    entityId,
+    payloadSource: "server_derived",
+    schemaVersion: "screen-state-lmca-v1",
+    sanitized: true,
+    rejectedUnknownKeys: true,
+    primaryNextAction: options.primaryNextAction ?? "review_required_fields",
+    visibleFieldAllowlist: options.visibleFieldAllowlist ?? [],
+    enabledActionAllowlist: options.enabledActionAllowlist ?? [],
+    hiddenFieldClasses: [
+      "source_metadata",
+      "admin_tags",
+      "benchmark_membership",
+      "gold_answers",
+      "peer_ratings",
+      "model_judge_scores",
+      "active_learning_selection_reasons",
+      "protected_split_status",
+      "rater_performance_metadata",
+    ],
+    policyVersionProvenance: {
+      uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
+      visibilityPolicyId: `visibility-policy-${releaseId}`,
+      workflowProfileId: `${surface}-workflow-profile`,
+    },
+    actor: { id: actor.id, role: actor.role },
+    ...options,
+  };
 }
 
 async function releaseConfigManifestForReleaseEndpoint(request, response, context, requestedReleaseId) {
@@ -1705,6 +2439,36 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const samePositionScratchpads = latestWorkflowResources(workflowEvents, "samePositionScratchpad");
   const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
   const externalAssistanceDeclarations = latestWorkflowResources(workflowEvents, "externalAssistanceDeclaration");
+  const blindingPreviewAudits = latestWorkflowResources(workflowEvents, "blindingPreviewAudit");
+  const partialTaskOutputs = latestWorkflowResources(workflowEvents, "partialTaskOutput");
+  const raterPositionClusterExposures = latestWorkflowResources(workflowEvents, "raterPositionClusterExposure");
+  const spotCheckQaItems = latestWorkflowResources(workflowEvents, "spotCheckQaItem");
+  const adjudicationTriageQueueItems = latestWorkflowResources(workflowEvents, "adjudicationTriageQueueItem");
+  const diagnosticDeferralRecords = latestWorkflowResources(workflowEvents, "diagnosticDeferralRecord");
+  const queuePolicySnapshots = latestWorkflowResources(workflowEvents, "queuePolicySnapshot");
+  const assignmentSelectionAudits = latestWorkflowResources(workflowEvents, "assignmentSelectionAudit");
+  const modelInferenceConfigs = latestWorkflowResources(workflowEvents, "modelInferenceConfig");
+  const modelRunEnvironments = latestWorkflowResources(workflowEvents, "modelRunEnvironment");
+  const raterItemConflicts = latestWorkflowResources(workflowEvents, "raterItemConflict");
+  const raterTrainingExposureSnapshots = latestWorkflowResources(workflowEvents, "raterTrainingExposureSnapshot");
+  const releaseErrata = latestWorkflowResources(workflowEvents, "releaseErratum");
+  const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
+  const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
+  const raterLearningPlans = latestWorkflowResources(workflowEvents, "raterLearningPlan");
+  const raterSessions = latestWorkflowResources(workflowEvents, "raterSession");
+  const assignmentDeclines = latestWorkflowResources(workflowEvents, "assignmentDecline");
+  const interpretationTargetMaps = latestWorkflowResources(workflowEvents, "interpretationTargetMap");
+  const verificationWorkspaceSessions = latestWorkflowResources(workflowEvents, "verificationWorkspaceSession");
+  const adjudicatorPreReads = latestWorkflowResources(workflowEvents, "adjudicatorPreRead");
+  const postLockDiscussionSessions = latestWorkflowResources(workflowEvents, "postLockDiscussionSession");
+  const adjudicationReviewSessions = latestWorkflowResources(workflowEvents, "adjudicationReviewSession");
+  const calibrationFeedbackEvents = latestWorkflowResources(workflowEvents, "calibrationFeedbackEvent");
+  const governanceApprovalRecords = latestWorkflowResources(workflowEvents, "governanceApprovalRecord");
+  const protectedArtifactRevalidations = latestWorkflowResources(workflowEvents, "protectedArtifactRevalidation");
+  const benchmarkSubmissionPolicies = latestWorkflowResources(workflowEvents, "benchmarkSubmissionPolicy");
+  const benchmarkSubmissions = latestWorkflowResources(workflowEvents, "benchmarkSubmission");
+  const screenFeatureParityChecks = latestWorkflowResources(workflowEvents, "screenFeatureParityCheck");
+  const simplifiedCopyPreviews = latestWorkflowResources(workflowEvents, "simplifiedCopyPreview");
   const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
   const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
   const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
@@ -1819,6 +2583,36 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     samePositionScratchpads,
     samePositionBatchReviews,
     externalAssistanceDeclarations,
+    blindingPreviewAudits,
+    partialTaskOutputs,
+    raterPositionClusterExposures,
+    spotCheckQaItems,
+    adjudicationTriageQueueItems,
+    diagnosticDeferralRecords,
+    queuePolicySnapshots,
+    assignmentSelectionAudits,
+    modelInferenceConfigs,
+    modelRunEnvironments,
+    raterItemConflicts,
+    raterTrainingExposureSnapshots,
+    releaseErrata,
+    scheduleStatusSnapshots,
+    publicExamplePracticeSessions,
+    raterLearningPlans,
+    raterSessions,
+    assignmentDeclines,
+    interpretationTargetMaps,
+    verificationWorkspaceSessions,
+    adjudicatorPreReads,
+    postLockDiscussionSessions,
+    adjudicationReviewSessions,
+    calibrationFeedbackEvents,
+    governanceApprovalRecords,
+    protectedArtifactRevalidations,
+    benchmarkSubmissionPolicies,
+    benchmarkSubmissions,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,
@@ -1930,6 +2724,36 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     samePositionScratchpads,
     samePositionBatchReviews,
     externalAssistanceDeclarations,
+    blindingPreviewAudits,
+    partialTaskOutputs,
+    raterPositionClusterExposures,
+    spotCheckQaItems,
+    adjudicationTriageQueueItems,
+    diagnosticDeferralRecords,
+    queuePolicySnapshots,
+    assignmentSelectionAudits,
+    modelInferenceConfigs,
+    modelRunEnvironments,
+    raterItemConflicts,
+    raterTrainingExposureSnapshots,
+    releaseErrata,
+    scheduleStatusSnapshots,
+    publicExamplePracticeSessions,
+    raterLearningPlans,
+    raterSessions,
+    assignmentDeclines,
+    interpretationTargetMaps,
+    verificationWorkspaceSessions,
+    adjudicatorPreReads,
+    postLockDiscussionSessions,
+    adjudicationReviewSessions,
+    calibrationFeedbackEvents,
+    governanceApprovalRecords,
+    protectedArtifactRevalidations,
+    benchmarkSubmissionPolicies,
+    benchmarkSubmissions,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,
@@ -2003,7 +2827,7 @@ function hasWorkflowField(resource, field) {
 
 function workflowWriteSpec(pattern, eventType, resourceKey, roles, options = {}) {
   return {
-    method: "POST",
+    method: options.method ?? "POST",
     pattern,
     eventType,
     resourceKey,

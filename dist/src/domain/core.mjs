@@ -11662,6 +11662,1494 @@ function protectedArtifactTypeEvidenceRow(artifactType, rows) {
   };
 }
 
+const REQUIRED_PARTIAL_TASK_OUTPUT_TYPES = [
+  "pairwise_preference_only",
+  "clarity_triage",
+  "dead_weight_triage",
+  "verification_only",
+  "practice",
+  "safe_decline",
+  "discussion_comment",
+];
+
+const PARTIAL_TASK_EXCLUDED_DENOMINATORS = [
+  "full_rubric_blind_rating_count",
+  "custom_loss_target",
+  "hidden_benchmark_label",
+  "human_ceiling_denominator",
+];
+
+const POSITION_CLUSTER_EXPOSURE_SOURCES = [
+  "own_rating",
+  "peer_score",
+  "peer_rationale",
+  "post_lock_discussion",
+  "adjudication_memo",
+  "gold_feedback",
+  "practice_feedback",
+  "source_metadata",
+  "model_judge_output",
+  "model_assisted_check",
+  "protected_label",
+  "hidden_benchmark_access",
+  "external_assistance",
+  "declared_custom",
+];
+
+const ADJUDICATION_TRIAGE_LANES = [
+  "release_blocking_disagreement",
+  "low_clarity",
+  "correctness_verification",
+  "interpretation_dispute",
+  "benchmark_candidate_review",
+  "spot_check_qa",
+  "training_feedback",
+];
+
+const REQUIRED_QUEUE_POLICY_COMPONENTS = [
+  "live_gold_duplicate_validation_mix",
+  "topic_routing",
+  "tier_routing",
+  "safe_decline_reassignment",
+  "same_position_order",
+  "randomization_stratification_seed",
+];
+
+const RATER_ITEM_CONFLICT_TYPES = [
+  "authored_position",
+  "authored_critique",
+  "generated_critique",
+  "submitted_source",
+  "selected_or_adapted_source",
+  "edited_item",
+  "source_family_exposure",
+  "public_example_exposure",
+  "close_collaboration_or_conflict",
+  "declared_custom",
+];
+
+const RELEASE_ERRATUM_TYPES = [
+  "scoring_bug",
+  "source_leakage_defect",
+  "rights_provenance_issue",
+  "corrupted_text",
+  "denominator_error",
+  "configuration_manifest_error",
+  "other",
+];
+
+const SCHEDULE_SNAPSHOT_STATUSES = ["not_started", "in_progress", "complete", "blocked", "rebaselined", "dropped"];
+
+function defaultBlindingPreviewAudit(releaseId) {
+  return {
+    id: `blinding-preview-audit-${releaseId}`,
+    itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+    itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
+    renderedRaterVisibleTextChecksum: "sha256:seed-rater-visible-text",
+    lintedSourceLeakagePatterns: ["author_name", "url", "source_title", "admin_tag"],
+    redactedSourceIdentifyingSpans: ["source-title"],
+    retainedSourceIdentifyingSpans: [],
+    substantiveNecessityRationale: "No source-identifying spans retained for initial blind rendering.",
+    reviewerId: "seed-blinding-reviewer",
+    reviewerRole: "expert",
+    approvalStatus: "passed",
+    sourceIdentifiabilitySensitive: false,
+    unresolvedSourceLeakagePatternCount: 0,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultPartialTaskOutputs(releaseId) {
+  return REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.map((taskType) => ({
+    id: `partial-task-output-${releaseId}-${taskType}`,
+    assignmentId: `assignment-${taskType}`,
+    raterId: "seed-rater",
+    taskType,
+    itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+    outputFields: {
+      taskType,
+      summary: `${taskType} auxiliary output preserved outside full-rubric labels`,
+    },
+    visibilityExposureState: taskType === "practice" ? "training_exposure_recorded" : "not_full_blind_initial_rating",
+    eligibleUses: ["routing", "calibration", "adjudication", "explicit_pairwise_export"],
+    excludedDenominators: PARTIAL_TASK_EXCLUDED_DENOMINATORS,
+    promotionAdjudicationLink: null,
+    countedAsFullRubricRating: false,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
+function defaultRaterPositionClusterExposure(releaseId) {
+  return {
+    id: `position-cluster-exposure-${releaseId}`,
+    raterId: "seed-rater",
+    positionClusterId: "lmca-public-is-ought-gap",
+    itemIds: ["pos-ai-prior"],
+    exposureSource: "post_lock_discussion",
+    exposureTimestamp: "2026-10-01T00:00:00.000Z",
+    exposureVisibilityScope: "same_position_cluster_peer_rationales",
+    blindEligibilityEffect: "excluded_from_fresh_blind_initial_on_cluster",
+    deprotectionTrainingExposureStatus: "training_exposure_recorded",
+    createdBy: "seed-release-admin",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultSpotCheckQaItem(releaseId) {
+  return {
+    id: `spot-check-qa-${releaseId}`,
+    itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+    ratingId: "rating-seed-ai-base-rate-r1",
+    samplingStratum: "non_escalated_release_critical",
+    samplingSeedArtifact: "sha256:seed-spot-check-sampling",
+    reviewerId: "seed-qa-reviewer",
+    reviewerRole: "expert",
+    checkResult: "passed_without_label_change",
+    revisionAdjudicationEscalationLink: null,
+    excludedFromIndependentRaterCount: true,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultAdjudicationTriageQueueItem(releaseId) {
+  return {
+    id: `adjudication-triage-${releaseId}`,
+    itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+    triggerType: "release_blocking_disagreement",
+    releaseBlockingStatus: "release_blocking",
+    priority: "high",
+    queueLane: "release_blocking_disagreement",
+    assignedReviewerId: "seed-adjudicator",
+    status: "queued_for_expert_review",
+    slaDeadline: "2026-10-05T00:00:00.000Z",
+    routingRationale: "Large centrality-strength spread requires object-level adjudication before release.",
+    priorityDoesNotMutateLabels: true,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultDiagnosticDeferralRecord(releaseId) {
+  return {
+    id: `diagnostic-deferral-${releaseId}`,
+    releaseId,
+    diagnosticName: "obfuscation_stress",
+    claimAffected: "robustness_to_obfuscated_arguments",
+    notRunReason: "Not enough obfuscation variants for the current internal milestone.",
+    approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+    strongerClaimSuppressed: true,
+    reviewerId: "seed-release-reviewer",
+    reviewerRole: "expert",
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultQueuePolicySnapshot(releaseId) {
+  return {
+    id: `queue-policy-snapshot-${releaseId}`,
+    policyVersion: "queue-policy-rlhf88-v1",
+    liveGoldDuplicateValidationMix: "live 70, gold 10, duplicate 10, validation 10 with protected membership hidden",
+    topicRoutingRules: "route by declared topic competence without exposing source or protected status",
+    tierRoutingRules: "balance graduate, phd, expert, and adjudicator lanes for release-critical labels",
+    safeDeclineReassignmentPolicy: "safe declines reassign without counting as ratings or revealing metadata",
+    samePositionOrderPolicy: "counterbalanced same-position order with later siblings absent at submission",
+    randomizationStratificationSeedPolicy: "manifest-bound stratified seed recorded before assignment",
+    createdBy: "seed-release-admin",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultAssignmentSelectionAudit(releaseId, queuePolicySnapshotId) {
+  return {
+    id: `assignment-selection-audit-${releaseId}`,
+    queuePolicySnapshotId,
+    splitReleaseId: releaseId,
+    candidateAssignments: ["assign-ai-base-rate", "assign-voting-bullet", "assign-mind-zombie"],
+    servedAssignments: ["assign-ai-base-rate", "assign-voting-bullet"],
+    declinesReassignmentsByReason: { lack_topic_expertise: 1, conflict_or_prior_exposure: 1 },
+    raterTierDistribution: { graduate: 1, expert: 1 },
+    topicSourceLengthDistribution: { "AI safety:short": 1, "politics:medium": 1 },
+    selfSelectionIndicators: ["volunteer_selected_from_eligible_blind_pool"],
+    compositionChangedLabelDenominators: false,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultModelInferenceConfig(releaseId) {
+  return {
+    id: `model-inference-config-${releaseId}`,
+    evaluationRunId: "eval-full-rubric-demo",
+    providerEndpoint: "approved-model-evaluation-endpoint",
+    modelSnapshot: "gpt-demo-2026-10-01",
+    decodingParameters: { temperature: 0, topP: 1 },
+    reasoningBudget: "bounded_hidden_chain_budget_v1",
+    toolAvailability: ["none"],
+    messageStackTemplate: "lmca-full-rubric-eval-template-v1",
+    retryPolicy: "single_retry_parse_failures_only",
+    seedDeterminismArtifact: "sha256:model-eval-seed",
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultModelRunEnvironment(releaseId) {
+  return {
+    id: `model-run-environment-${releaseId}`,
+    evaluationRunId: "eval-full-rubric-demo",
+    runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
+    apiRouteDeploymentId: "deployment-october-2026-demo",
+    libraryVersions: { node: "20.x", parser: "lmca-parser-v1" },
+    timestamp: "2026-10-01T00:00:00.000Z",
+    rateLimitRetryMetadata: "bounded retries with no prompt mutation",
+    parserExtractorVersionLinks: ["parser-config-demo", "prompt-template-demo"],
+  };
+}
+
+function defaultRaterItemConflict(releaseId) {
+  return {
+    id: `rater-item-conflict-${releaseId}`,
+    raterId: "seed-rater",
+    positionClusterId: "lmca-public-is-ought-gap",
+    critiqueId: "crit-ai-base-rate",
+    sourceFamilyId: "source-family-ai-base-rate",
+    conflictType: "source_family_exposure",
+    disclosureSource: "rater_self_screen",
+    independentBlindEligibilityEffect: "excluded_from_independent_blind_protected_denominators",
+    allowedNonBlindRoles: ["intake_review", "adjudication_context"],
+    reviewerResolution: "approved_non_blind_context_only",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRaterTrainingExposureSnapshot(releaseId) {
+  return {
+    id: `training-exposure-snapshot-${releaseId}`,
+    raterId: "seed-rater",
+    assignmentId: "assign-ai-base-rate",
+    certificationRecordId: "certification-seed",
+    certificationPackVersion: "pack-v1",
+    rubricVersion: "appendix-f-operational-v1",
+    publicSourceAnchorExampleIdsPreviouslySeen: ["source-anchor-ai-base-rate"],
+    goldItemIdsOrProtectedSafeSummariesPreviouslySeen: ["gold-category:centrality_strength"],
+    duplicateFeedbackSummary: "duplicate feedback shown after lock only",
+    calibrationFeedbackEventIds: ["calibration-feedback-seed"],
+    remediationModuleState: "not_required",
+    practiceSessionIds: ["practice-session-seed"],
+    samePositionPositionClusterExposureChecks: ["no_prior_same_position_exposure", "position_cluster_checked"],
+    protectedSplitConflictStatus: "no_conflict_for_current_assignment",
+    protectedClusterEligibilityEffect: "eligible_after_checks",
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultReleaseErratum(releaseId) {
+  return {
+    id: `release-erratum-${releaseId}`,
+    releaseId,
+    erratumType: "denominator_error",
+    affectedArtifactIds: [`release-report-${releaseId}`],
+    defectSummary: "Internal erratum template for denominator defects discovered after freeze.",
+    supersedingArtifactIds: [`release-report-${releaseId}-superseding-template`],
+    historicalArtifactsMutated: false,
+    historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
+    status: "issued",
+    approvedBy: "seed-release-admin",
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultScheduleStatusSnapshot(releaseId) {
+  return {
+    id: `schedule-status-${releaseId}`,
+    releaseVersionOrProjectScope: releaseId,
+    milestoneId: "october-internal-release",
+    milestoneName: "October internal LMCA release",
+    plannedStart: "2026-09-01",
+    plannedEnd: "2026-10-31",
+    actualStart: "2026-09-01",
+    actualEnd: null,
+    status: "in_progress",
+    evidenceArtifactIds: [`release-report-${releaseId}`],
+    criticalPathImpact: "release remains incomplete until target scale and evidence gates pass",
+    rebaselinedDate: null,
+    rebaselinedScope: null,
+    owner: "seed-release-admin",
+    approvedBy: "seed-release-reviewer",
+    supportsCompletionClaim: false,
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
+  const submittedBlindingRows = (options.blindingPreviewAudits ?? [])
+    .map((audit) => normalizeBlindingPreviewAudit(audit, "submitted_workflow_blinding_preview_audit"))
+    .filter(Boolean);
+  const seedBlindingRows = [normalizeBlindingPreviewAudit(defaultBlindingPreviewAudit(releaseId), "seed_blinding_preview_audit")];
+  const submittedPartialRows = (options.partialTaskOutputs ?? [])
+    .map((output) => normalizePartialTaskOutput(output, "submitted_workflow_partial_task_output"))
+    .filter(Boolean);
+  const seedPartialRows = defaultPartialTaskOutputs(releaseId).map((output) => normalizePartialTaskOutput(output, "seed_partial_task_output"));
+  const submittedExposureRows = (options.raterPositionClusterExposures ?? [])
+    .map((exposure) => normalizeRaterPositionClusterExposure(exposure, "submitted_workflow_rater_position_cluster_exposure"))
+    .filter(Boolean);
+  const seedExposureRows = [normalizeRaterPositionClusterExposure(defaultRaterPositionClusterExposure(releaseId), "seed_rater_position_cluster_exposure")];
+  const submittedSpotCheckRows = (options.spotCheckQaItems ?? [])
+    .map((item) => normalizeSpotCheckQaItem(item, "submitted_workflow_spot_check_qa_item"))
+    .filter(Boolean);
+  const seedSpotCheckRows = [normalizeSpotCheckQaItem(defaultSpotCheckQaItem(releaseId), "seed_spot_check_qa_item")];
+  const submittedTriageRows = (options.adjudicationTriageQueueItems ?? [])
+    .map((item) => normalizeAdjudicationTriageQueueItem(item, "submitted_workflow_adjudication_triage_queue_item"))
+    .filter(Boolean);
+  const seedTriageRows = [normalizeAdjudicationTriageQueueItem(defaultAdjudicationTriageQueueItem(releaseId), "seed_adjudication_triage_queue_item")];
+  const submittedDeferralRows = (options.diagnosticDeferralRecords ?? [])
+    .map((record) => normalizeDiagnosticDeferralRecord(record, "submitted_workflow_diagnostic_deferral_record"))
+    .filter(Boolean);
+  const seedDeferralRows = [normalizeDiagnosticDeferralRecord(defaultDiagnosticDeferralRecord(releaseId), "seed_diagnostic_deferral_record")];
+  const submittedQueuePolicyRows = (options.queuePolicySnapshots ?? [])
+    .map((snapshot) => normalizeQueuePolicySnapshot(snapshot, "submitted_workflow_queue_policy_snapshot"))
+    .filter(Boolean);
+  const seedQueuePolicyRows = [normalizeQueuePolicySnapshot(defaultQueuePolicySnapshot(releaseId), "seed_queue_policy_snapshot")];
+  const activeQueuePolicyId = submittedQueuePolicyRows.find((row) => row.reviewReasons.length === 0)?.id ?? seedQueuePolicyRows[0].id;
+  const submittedAssignmentAuditRows = (options.assignmentSelectionAudits ?? [])
+    .map((audit) => normalizeAssignmentSelectionAudit(audit, activeQueuePolicyId, "submitted_workflow_assignment_selection_audit"))
+    .filter(Boolean);
+  const seedAssignmentAuditRows = [
+    normalizeAssignmentSelectionAudit(defaultAssignmentSelectionAudit(releaseId, seedQueuePolicyRows[0].id), seedQueuePolicyRows[0].id, "seed_assignment_selection_audit"),
+  ];
+  const submittedInferenceRows = (options.modelInferenceConfigs ?? [])
+    .map((config) => normalizeModelInferenceConfig(config, "submitted_workflow_model_inference_config"))
+    .filter(Boolean);
+  const seedInferenceRows = [normalizeModelInferenceConfig(defaultModelInferenceConfig(releaseId), "seed_model_inference_config")];
+  const submittedEnvironmentRows = (options.modelRunEnvironments ?? [])
+    .map((environment) => normalizeModelRunEnvironment(environment, "submitted_workflow_model_run_environment"))
+    .filter(Boolean);
+  const seedEnvironmentRows = [normalizeModelRunEnvironment(defaultModelRunEnvironment(releaseId), "seed_model_run_environment")];
+  const submittedConflictRows = (options.raterItemConflicts ?? [])
+    .map((conflict) => normalizeRaterItemConflict(conflict, "submitted_workflow_rater_item_conflict"))
+    .filter(Boolean);
+  const seedConflictRows = [normalizeRaterItemConflict(defaultRaterItemConflict(releaseId), "seed_rater_item_conflict")];
+  const submittedTrainingExposureRows = (options.raterTrainingExposureSnapshots ?? [])
+    .map((snapshot) => normalizeRaterTrainingExposureSnapshot(snapshot, "submitted_workflow_rater_training_exposure_snapshot"))
+    .filter(Boolean);
+  const seedTrainingExposureRows = [normalizeRaterTrainingExposureSnapshot(defaultRaterTrainingExposureSnapshot(releaseId), "seed_rater_training_exposure_snapshot")];
+  const submittedErrataRows = (options.releaseErrata ?? [])
+    .map((erratum) => normalizeReleaseErratum(erratum, "submitted_workflow_release_erratum"))
+    .filter(Boolean);
+  const seedErrataRows = [normalizeReleaseErratum(defaultReleaseErratum(releaseId), "seed_release_erratum")];
+  const submittedScheduleRows = (options.scheduleStatusSnapshots ?? [])
+    .map((snapshot) => normalizeScheduleStatusSnapshot(snapshot, "submitted_workflow_schedule_status_snapshot"))
+    .filter(Boolean);
+  const seedScheduleRows = [normalizeScheduleStatusSnapshot(defaultScheduleStatusSnapshot(releaseId), "seed_schedule_status_snapshot")];
+
+  const partialTaskTypeRows = REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.map((taskType) =>
+    partialTaskOutputTypeEvidenceRow(taskType, submittedPartialRows.length ? submittedPartialRows : seedPartialRows),
+  );
+  const queuePolicyComponentRows = REQUIRED_QUEUE_POLICY_COMPONENTS.map((component) =>
+    queuePolicyComponentEvidenceRow(component, submittedQueuePolicyRows.length ? submittedQueuePolicyRows : seedQueuePolicyRows),
+  );
+  const modelRunProvenanceRows = modelRunProvenanceEvidenceRows(
+    submittedInferenceRows.length ? submittedInferenceRows : seedInferenceRows,
+    submittedEnvironmentRows.length ? submittedEnvironmentRows : seedEnvironmentRows,
+  );
+  const gateGroups = [
+    ["blinding_preview_audit", submittedBlindingRows.length ? submittedBlindingRows : seedBlindingRows],
+    ["rater_position_cluster_exposure", submittedExposureRows.length ? submittedExposureRows : seedExposureRows],
+    ["spot_check_qa_item", submittedSpotCheckRows.length ? submittedSpotCheckRows : seedSpotCheckRows],
+    ["adjudication_triage_queue_item", submittedTriageRows.length ? submittedTriageRows : seedTriageRows],
+    ["diagnostic_deferral_record", submittedDeferralRows.length ? submittedDeferralRows : seedDeferralRows],
+    ["queue_policy_snapshot", submittedQueuePolicyRows.length ? submittedQueuePolicyRows : seedQueuePolicyRows],
+    ["assignment_selection_audit", submittedAssignmentAuditRows.length ? submittedAssignmentAuditRows : seedAssignmentAuditRows],
+    ["model_inference_config", submittedInferenceRows.length ? submittedInferenceRows : seedInferenceRows],
+    ["model_run_environment", submittedEnvironmentRows.length ? submittedEnvironmentRows : seedEnvironmentRows],
+    ["rater_item_conflict", submittedConflictRows.length ? submittedConflictRows : seedConflictRows],
+    ["rater_training_exposure_snapshot", submittedTrainingExposureRows.length ? submittedTrainingExposureRows : seedTrainingExposureRows],
+    ["release_erratum", submittedErrataRows.length ? submittedErrataRows : seedErrataRows],
+    ["schedule_status_snapshot", submittedScheduleRows.length ? submittedScheduleRows : seedScheduleRows],
+  ];
+  const reviewSections = [
+    ...submittedBlindingRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "blinding_preview_audit", artifactId: row.id, reason }))),
+    ...submittedPartialRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "partial_task_output", artifactId: row.id, reason }))),
+    ...submittedExposureRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_position_cluster_exposure", artifactId: row.id, reason }))),
+    ...submittedSpotCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "spot_check_qa_item", artifactId: row.id, reason }))),
+    ...submittedTriageRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication_triage_queue_item", artifactId: row.id, reason }))),
+    ...submittedDeferralRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "diagnostic_deferral_record", artifactId: row.id, reason }))),
+    ...submittedQueuePolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_policy_snapshot", artifactId: row.id, reason }))),
+    ...submittedAssignmentAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "assignment_selection_audit", artifactId: row.id, reason }))),
+    ...submittedInferenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_inference_config", artifactId: row.id, reason }))),
+    ...submittedEnvironmentRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_run_environment", artifactId: row.id, reason }))),
+    ...submittedConflictRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_item_conflict", artifactId: row.id, reason }))),
+    ...submittedTrainingExposureRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_training_exposure_snapshot", artifactId: row.id, reason }))),
+    ...submittedErrataRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "release_erratum", artifactId: row.id, reason }))),
+    ...submittedScheduleRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "schedule_status_snapshot", artifactId: row.id, reason }))),
+    ...partialTaskTypeRows.filter((row) => row.status !== "partial_task_output_type_complete").map((row) => ({
+      artifactType: "partial_task_output_type",
+      artifactId: row.taskType,
+      reason: row.status,
+    })),
+    ...queuePolicyComponentRows.filter((row) => row.status !== "queue_policy_component_complete").map((row) => ({
+      artifactType: "queue_policy_component",
+      artifactId: row.component,
+      reason: row.status,
+    })),
+    ...modelRunProvenanceRows.filter((row) => row.status !== "model_run_provenance_complete").map((row) => ({
+      artifactType: "model_run_provenance",
+      artifactId: row.evaluationRunId,
+      reason: row.status,
+    })),
+    ...gateGroups
+      .filter(([, rows]) => !rows.some((row) => row.reviewReasons.length === 0))
+      .map(([artifactType]) => ({ artifactType, artifactId: artifactType, reason: "missing_complete_auxiliary_workflow_artifact" })),
+  ];
+  const submittedEvidenceComplete =
+    submittedBlindingRows.length > 0 &&
+    submittedPartialRows.length >= REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.length &&
+    submittedExposureRows.length > 0 &&
+    submittedSpotCheckRows.length > 0 &&
+    submittedTriageRows.length > 0 &&
+    submittedDeferralRows.length > 0 &&
+    submittedQueuePolicyRows.length > 0 &&
+    submittedAssignmentAuditRows.length > 0 &&
+    submittedInferenceRows.length > 0 &&
+    submittedEnvironmentRows.length > 0 &&
+    submittedConflictRows.length > 0 &&
+    submittedTrainingExposureRows.length > 0 &&
+    submittedErrataRows.length > 0 &&
+    submittedScheduleRows.length > 0 &&
+    reviewSections.length === 0;
+  return {
+    id: `auxiliary-workflow-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    requiredPartialTaskOutputTypes: REQUIRED_PARTIAL_TASK_OUTPUT_TYPES,
+    partialTaskExcludedDenominators: PARTIAL_TASK_EXCLUDED_DENOMINATORS,
+    positionClusterExposureSources: POSITION_CLUSTER_EXPOSURE_SOURCES,
+    adjudicationTriageLanes: ADJUDICATION_TRIAGE_LANES,
+    requiredQueuePolicyComponents: REQUIRED_QUEUE_POLICY_COMPONENTS,
+    raterItemConflictTypes: RATER_ITEM_CONFLICT_TYPES,
+    releaseErratumTypes: RELEASE_ERRATUM_TYPES,
+    scheduleSnapshotStatuses: SCHEDULE_SNAPSHOT_STATUSES,
+    blindingPreviewAuditRows: [...seedBlindingRows, ...submittedBlindingRows],
+    partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
+    raterPositionClusterExposureRows: [...seedExposureRows, ...submittedExposureRows],
+    spotCheckQaRows: [...seedSpotCheckRows, ...submittedSpotCheckRows],
+    adjudicationTriageQueueRows: [...seedTriageRows, ...submittedTriageRows],
+    diagnosticDeferralRows: [...seedDeferralRows, ...submittedDeferralRows],
+    queuePolicySnapshotRows: [...seedQueuePolicyRows, ...submittedQueuePolicyRows],
+    assignmentSelectionAuditRows: [...seedAssignmentAuditRows, ...submittedAssignmentAuditRows],
+    modelInferenceConfigRows: [...seedInferenceRows, ...submittedInferenceRows],
+    modelRunEnvironmentRows: [...seedEnvironmentRows, ...submittedEnvironmentRows],
+    raterItemConflictRows: [...seedConflictRows, ...submittedConflictRows],
+    raterTrainingExposureRows: [...seedTrainingExposureRows, ...submittedTrainingExposureRows],
+    releaseErrataRows: [...seedErrataRows, ...submittedErrataRows],
+    scheduleStatusRows: [...seedScheduleRows, ...submittedScheduleRows],
+    partialTaskTypeRows,
+    queuePolicyComponentRows,
+    modelRunProvenanceRows,
+    counts: {
+      submittedBlindingPreviewAuditCount: submittedBlindingRows.length,
+      submittedPartialTaskOutputCount: submittedPartialRows.length,
+      submittedRaterPositionClusterExposureCount: submittedExposureRows.length,
+      submittedSpotCheckQaItemCount: submittedSpotCheckRows.length,
+      submittedAdjudicationTriageQueueItemCount: submittedTriageRows.length,
+      submittedDiagnosticDeferralRecordCount: submittedDeferralRows.length,
+      submittedQueuePolicySnapshotCount: submittedQueuePolicyRows.length,
+      submittedAssignmentSelectionAuditCount: submittedAssignmentAuditRows.length,
+      submittedModelInferenceConfigCount: submittedInferenceRows.length,
+      submittedModelRunEnvironmentCount: submittedEnvironmentRows.length,
+      submittedRaterItemConflictCount: submittedConflictRows.length,
+      submittedRaterTrainingExposureSnapshotCount: submittedTrainingExposureRows.length,
+      submittedReleaseErratumCount: submittedErrataRows.length,
+      submittedScheduleStatusSnapshotCount: submittedScheduleRows.length,
+      passingPartialTaskTypeCount: partialTaskTypeRows.filter((row) => row.status === "partial_task_output_type_complete").length,
+      passingQueuePolicyComponentCount: queuePolicyComponentRows.filter((row) => row.status === "queue_policy_component_complete").length,
+      passingModelRunProvenanceCount: modelRunProvenanceRows.filter((row) => row.status === "model_run_provenance_complete").length,
+      completeArtifactGroupCount: gateGroups.filter(([, rows]) => rows.some((row) => row.reviewReasons.length === 0)).length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "auxiliary_workflow_evidence_review_required"
+      : submittedEvidenceComplete
+        ? "submitted_auxiliary_workflow_evidence_complete"
+        : "seed_auxiliary_workflow_evidence_complete",
+  };
+}
+
+function normalizeBlindingPreviewAudit(audit, rowSource) {
+  const id = audit?.id ?? audit?.blindingPreviewAuditId ?? audit?.blinding_preview_audit_id;
+  if (!id) return null;
+  const itemKeys = normalizeStringArray(audit.itemKeys ?? audit.item_keys);
+  const itemTextVersionIds = normalizeStringArray(audit.itemTextVersionIds ?? audit.item_text_version_ids);
+  const leakagePatterns = normalizeStringArray(audit.lintedSourceLeakagePatterns ?? audit.sourceLeakagePatterns ?? audit.linted_source_leakage_patterns);
+  const retainedSpans = normalizeStringArray(audit.retainedSourceIdentifyingSpans ?? audit.retained_source_identifying_spans);
+  const sourceSensitive = audit.sourceIdentifiabilitySensitive === true;
+  const reviewReasons = [
+    itemKeys.length ? null : "itemKeys",
+    itemTextVersionIds.length ? null : "itemTextVersionIds",
+    String(audit.renderedRaterVisibleTextChecksum ?? audit.rendered_rater_visible_text_checksum ?? "").startsWith("sha256:") ? null : "renderedRaterVisibleTextChecksum",
+    leakagePatterns.length ? null : "lintedSourceLeakagePatterns",
+    Number(audit.unresolvedSourceLeakagePatternCount ?? 0) === 0 ? null : "unresolvedSourceLeakagePatternCount",
+    sourceSensitive && retainedSpans.length ? requiredPromptFieldReason("substantiveNecessityRationale", audit.substantiveNecessityRationale) : null,
+    requiredPromptFieldReason("reviewerId", audit.reviewerId ?? audit.reviewer_id),
+    requiredPromptFieldReason("reviewerRole", audit.reviewerRole ?? audit.reviewer_role),
+    audit.approvalStatus === "passed" ? null : "approvalStatus",
+    requiredPromptFieldReason("createdAt", audit.createdAt ?? audit.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    itemKeys,
+    itemTextVersionIds,
+    renderedRaterVisibleTextChecksum: audit.renderedRaterVisibleTextChecksum ?? audit.rendered_rater_visible_text_checksum ?? null,
+    lintedSourceLeakagePatterns: leakagePatterns,
+    retainedSourceIdentifyingSpans: retainedSpans,
+    reviewerId: audit.reviewerId ?? audit.reviewer_id ?? null,
+    reviewerRole: audit.reviewerRole ?? audit.reviewer_role ?? null,
+    approvalStatus: audit.approvalStatus ?? null,
+    sourceIdentifiabilitySensitive: sourceSensitive,
+    reviewReasons,
+    status: reviewReasons.length ? "blinding_preview_audit_review_required" : "blinding_preview_audit_complete",
+  };
+}
+
+function normalizePartialTaskOutput(output, rowSource) {
+  const id = output?.id ?? output?.partialTaskOutputId ?? output?.partial_task_output_id;
+  if (!id) return null;
+  const taskType = output.taskType ?? output.task_type ?? null;
+  const itemKeys = normalizeStringArray(output.itemKeys ?? output.item_keys);
+  const eligibleUses = normalizeStringArray(output.eligibleUses ?? output.eligible_uses);
+  const excludedDenominators = normalizeStringArray(output.excludedDenominators ?? output.excluded_denominators);
+  const missingExcludedDenominators = PARTIAL_TASK_EXCLUDED_DENOMINATORS.filter((denominator) => !excludedDenominators.includes(denominator));
+  const outputFields = output.outputFields ?? output.output_fields ?? null;
+  const reviewReasons = [
+    requiredPromptFieldReason("assignmentId", output.assignmentId ?? output.assignment_id),
+    requiredPromptFieldReason("raterId", output.raterId ?? output.rater_id),
+    REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.includes(taskType) || taskType === "declared_custom" ? null : "taskType",
+    itemKeys.length ? null : "itemKeys",
+    outputFields && typeof outputFields === "object" && Object.keys(outputFields).length ? null : "outputFields",
+    requiredPromptFieldReason("visibilityExposureState", output.visibilityExposureState ?? output.visibility_exposure_state),
+    eligibleUses.length ? null : "eligibleUses",
+    missingExcludedDenominators.length ? `excludedDenominators:${missingExcludedDenominators.join(",")}` : null,
+    output.countedAsFullRubricRating === true || output.ordinaryFullRubricRatingRow === true ? "must_not_count_as_full_rubric_rating" : null,
+    requiredPromptFieldReason("timestamp", output.timestamp ?? output.createdAt ?? output.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    assignmentId: output.assignmentId ?? output.assignment_id ?? null,
+    raterId: output.raterId ?? output.rater_id ?? null,
+    taskType,
+    itemKeys,
+    eligibleUses,
+    excludedDenominators,
+    missingExcludedDenominators,
+    promotionAdjudicationLink: output.promotionAdjudicationLink ?? output.promotion_adjudication_link ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "partial_task_output_review_required" : "partial_task_output_complete",
+  };
+}
+
+function normalizeRaterPositionClusterExposure(exposure, rowSource) {
+  const id = exposure?.id ?? exposure?.exposureId ?? exposure?.exposure_id;
+  if (!id) return null;
+  const exposureSource = exposure.exposureSource ?? exposure.exposure_source ?? null;
+  const blindEligibilityEffect = exposure.blindEligibilityEffect ?? exposure.blind_eligibility_effect ?? null;
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", exposure.raterId ?? exposure.rater_id),
+    requiredPromptFieldReason("positionClusterId", exposure.positionClusterId ?? exposure.position_cluster_id),
+    POSITION_CLUSTER_EXPOSURE_SOURCES.includes(exposureSource) ? null : "exposureSource",
+    requiredPromptFieldReason("exposureTimestamp", exposure.exposureTimestamp ?? exposure.exposure_timestamp),
+    requiredPromptFieldReason("exposureVisibilityScope", exposure.exposureVisibilityScope ?? exposure.exposure_visibility_scope),
+    policyMentions(blindEligibilityEffect, ["excluded"]) || policyMentions(blindEligibilityEffect, ["blocked"]) || policyMentions(blindEligibilityEffect, ["non_blind"])
+      ? null
+      : "blindEligibilityEffect",
+    requiredPromptFieldReason("createdBy", exposure.createdBy ?? exposure.created_by),
+    requiredPromptFieldReason("timestamp", exposure.timestamp ?? exposure.createdAt ?? exposure.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    raterId: exposure.raterId ?? exposure.rater_id ?? null,
+    positionClusterId: exposure.positionClusterId ?? exposure.position_cluster_id ?? null,
+    itemIds: normalizeStringArray(exposure.itemIds ?? exposure.item_ids),
+    exposureSource,
+    exposureTimestamp: exposure.exposureTimestamp ?? exposure.exposure_timestamp ?? null,
+    exposureVisibilityScope: exposure.exposureVisibilityScope ?? exposure.exposure_visibility_scope ?? null,
+    blindEligibilityEffect,
+    deprotectionTrainingExposureStatus: exposure.deprotectionTrainingExposureStatus ?? exposure.deprotection_training_exposure_status ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rater_position_cluster_exposure_review_required" : "rater_position_cluster_exposure_complete",
+  };
+}
+
+function normalizeSpotCheckQaItem(item, rowSource) {
+  const id = item?.id ?? item?.spotCheckId ?? item?.spot_check_id;
+  if (!id) return null;
+  const itemKeys = normalizeStringArray(item.itemKeys ?? item.item_keys ?? (item.ratingId ? [item.ratingId] : []));
+  const reviewReasons = [
+    itemKeys.length ? null : "itemKeys",
+    requiredPromptFieldReason("samplingStratum", item.samplingStratum ?? item.sampling_stratum),
+    requiredPromptFieldReason("samplingSeedArtifact", item.samplingSeedArtifact ?? item.sampling_seed_artifact),
+    requiredPromptFieldReason("reviewerId", item.reviewerId ?? item.reviewer_id),
+    requiredPromptFieldReason("reviewerRole", item.reviewerRole ?? item.reviewer_role),
+    requiredPromptFieldReason("checkResult", item.checkResult ?? item.check_result),
+    item.excludedFromIndependentRaterCount === true || item.excluded_from_independent_rater_count === true ? null : "excludedFromIndependentRaterCount",
+    requiredPromptFieldReason("timestamp", item.timestamp ?? item.createdAt ?? item.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    itemKeys,
+    ratingId: item.ratingId ?? item.rating_id ?? null,
+    samplingStratum: item.samplingStratum ?? item.sampling_stratum ?? null,
+    samplingSeedArtifact: item.samplingSeedArtifact ?? item.sampling_seed_artifact ?? null,
+    reviewerId: item.reviewerId ?? item.reviewer_id ?? null,
+    reviewerRole: item.reviewerRole ?? item.reviewer_role ?? null,
+    checkResult: item.checkResult ?? item.check_result ?? null,
+    excludedFromIndependentRaterCount: item.excludedFromIndependentRaterCount === true || item.excluded_from_independent_rater_count === true,
+    reviewReasons,
+    status: reviewReasons.length ? "spot_check_qa_item_review_required" : "spot_check_qa_item_complete",
+  };
+}
+
+function normalizeAdjudicationTriageQueueItem(item, rowSource) {
+  const id = item?.id ?? item?.triageItemId ?? item?.triage_item_id;
+  if (!id) return null;
+  const itemKeys = normalizeStringArray(item.itemKeys ?? item.item_keys);
+  const queueLane = item.queueLane ?? item.queue_lane ?? null;
+  const reviewReasons = [
+    itemKeys.length ? null : "itemKeys",
+    requiredPromptFieldReason("triggerType", item.triggerType ?? item.trigger_type),
+    requiredPromptFieldReason("releaseBlockingStatus", item.releaseBlockingStatus ?? item.release_blocking_status),
+    requiredPromptFieldReason("priority", item.priority),
+    ADJUDICATION_TRIAGE_LANES.includes(queueLane) ? null : "queueLane",
+    requiredPromptFieldReason("assignedReviewerId", item.assignedReviewerId ?? item.assignedAdjudicatorId ?? item.assigned_reviewer_id),
+    requiredPromptFieldReason("status", item.status),
+    requiredPromptFieldReason("routingRationale", item.routingRationale ?? item.routing_rationale),
+    item.priorityDoesNotMutateLabels === true || item.labelMutationAllowed === false ? null : "priorityDoesNotMutateLabels",
+    requiredPromptFieldReason("timestamp", item.timestamp ?? item.createdAt ?? item.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    itemKeys,
+    triggerType: item.triggerType ?? item.trigger_type ?? null,
+    releaseBlockingStatus: item.releaseBlockingStatus ?? item.release_blocking_status ?? null,
+    priority: item.priority ?? null,
+    queueLane,
+    assignedReviewerId: item.assignedReviewerId ?? item.assignedAdjudicatorId ?? item.assigned_reviewer_id ?? null,
+    status: item.status ?? null,
+    reviewReasons,
+    evidenceStatus: reviewReasons.length ? "adjudication_triage_queue_item_review_required" : "adjudication_triage_queue_item_complete",
+  };
+}
+
+function normalizeDiagnosticDeferralRecord(record, rowSource) {
+  const id = record?.id ?? record?.diagnosticDeferralId ?? record?.diagnostic_deferral_id;
+  if (!id) return null;
+  const reviewReasons = [
+    record.releaseId || record.evaluationId ? null : "releaseIdOrEvaluationId",
+    requiredPromptFieldReason("diagnosticName", record.diagnosticName ?? record.diagnostic_name),
+    requiredPromptFieldReason("claimAffected", record.claimAffected ?? record.claim_affected),
+    requiredPromptFieldReason("notRunReason", record.notRunReason ?? record.not_run_reason),
+    requiredPromptFieldReason("approvedWeakerClaimWording", record.approvedWeakerClaimWording ?? record.approved_weaker_claim_wording),
+    record.strongerClaimSuppressed === false ? "strongerClaimSuppressed" : null,
+    requiredPromptFieldReason("reviewerId", record.reviewerId ?? record.reviewer_id),
+    requiredPromptFieldReason("reviewerRole", record.reviewerRole ?? record.reviewer_role),
+    requiredPromptFieldReason("createdAt", record.createdAt ?? record.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: record.releaseId ?? record.release_id ?? null,
+    evaluationId: record.evaluationId ?? record.evaluation_id ?? null,
+    diagnosticName: record.diagnosticName ?? record.diagnostic_name ?? null,
+    claimAffected: record.claimAffected ?? record.claim_affected ?? null,
+    approvedWeakerClaimWording: record.approvedWeakerClaimWording ?? record.approved_weaker_claim_wording ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "diagnostic_deferral_review_required" : "diagnostic_deferral_complete",
+  };
+}
+
+function normalizeQueuePolicySnapshot(snapshot, rowSource) {
+  const id = snapshot?.id ?? snapshot?.queuePolicySnapshotId ?? snapshot?.queue_policy_snapshot_id;
+  if (!id) return null;
+  const componentValues = queuePolicyComponentValues(snapshot);
+  const missingComponents = REQUIRED_QUEUE_POLICY_COMPONENTS.filter((component) => !componentValues[component]);
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", snapshot.policyVersion ?? snapshot.policy_version),
+    missingComponents.length ? `queuePolicyComponents:${missingComponents.join(",")}` : null,
+    requiredPromptFieldReason("createdBy", snapshot.createdBy ?? snapshot.created_by),
+    requiredPromptFieldReason("frozenAt", snapshot.frozenAt ?? snapshot.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: snapshot.policyVersion ?? snapshot.policy_version ?? null,
+    componentValues,
+    missingComponents,
+    createdBy: snapshot.createdBy ?? snapshot.created_by ?? null,
+    frozenAt: snapshot.frozenAt ?? snapshot.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "queue_policy_snapshot_review_required" : "queue_policy_snapshot_complete",
+  };
+}
+
+function queuePolicyComponentValues(snapshot) {
+  return {
+    live_gold_duplicate_validation_mix: snapshot.liveGoldDuplicateValidationMix ?? snapshot.live_gold_duplicate_validation_mix ?? null,
+    topic_routing: snapshot.topicRoutingRules ?? snapshot.topic_routing_rules ?? null,
+    tier_routing: snapshot.tierRoutingRules ?? snapshot.tier_routing_rules ?? null,
+    safe_decline_reassignment: snapshot.safeDeclineReassignmentPolicy ?? snapshot.safe_decline_reassignment_policy ?? null,
+    same_position_order: snapshot.samePositionOrderPolicy ?? snapshot.same_position_order_policy ?? null,
+    randomization_stratification_seed: snapshot.randomizationStratificationSeedPolicy ?? snapshot.randomization_stratification_seed_policy ?? null,
+  };
+}
+
+function normalizeAssignmentSelectionAudit(audit, activeQueuePolicyId, rowSource) {
+  const id = audit?.id ?? audit?.assignmentSelectionAuditId ?? audit?.assignment_selection_audit_id;
+  if (!id) return null;
+  const candidateAssignments = normalizeStringArray(audit.candidateAssignments ?? audit.candidate_assignments);
+  const servedAssignments = normalizeStringArray(audit.servedAssignments ?? audit.served_assignments);
+  const reviewReasons = [
+    audit.queuePolicySnapshotId === activeQueuePolicyId ? null : "queuePolicySnapshotId",
+    audit.splitReleaseId || audit.releaseId || audit.splitId ? null : "splitOrReleaseId",
+    candidateAssignments.length ? null : "candidateAssignments",
+    servedAssignments.length ? null : "servedAssignments",
+    objectHasEntries(audit.declinesReassignmentsByReason ?? audit.declines_reassignments_by_reason) ? null : "declinesReassignmentsByReason",
+    objectHasEntries(audit.raterTierDistribution ?? audit.rater_tier_distribution) ? null : "raterTierDistribution",
+    objectHasEntries(audit.topicSourceLengthDistribution ?? audit.topic_source_length_distribution) ? null : "topicSourceLengthDistribution",
+    normalizeStringArray(audit.selfSelectionIndicators ?? audit.self_selection_indicators).length ? null : "selfSelectionIndicators",
+    audit.compositionChangedLabelDenominators === true ? "compositionChangedLabelDenominators" : null,
+    requiredPromptFieldReason("createdAt", audit.createdAt ?? audit.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    queuePolicySnapshotId: audit.queuePolicySnapshotId ?? audit.queue_policy_snapshot_id ?? null,
+    splitReleaseId: audit.splitReleaseId ?? audit.releaseId ?? audit.splitId ?? null,
+    candidateAssignments,
+    servedAssignments,
+    selfSelectionIndicators: normalizeStringArray(audit.selfSelectionIndicators ?? audit.self_selection_indicators),
+    reviewReasons,
+    status: reviewReasons.length ? "assignment_selection_audit_review_required" : "assignment_selection_audit_complete",
+  };
+}
+
+function normalizeModelInferenceConfig(config, rowSource) {
+  const id = config?.id ?? config?.modelInferenceConfigId ?? config?.model_inference_config_id;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("evaluationRunId", config.evaluationRunId ?? config.evaluation_run_id),
+    requiredPromptFieldReason("providerEndpoint", config.providerEndpoint ?? config.provider_endpoint),
+    requiredPromptFieldReason("modelSnapshot", config.modelSnapshot ?? config.model_snapshot),
+    objectHasEntries(config.decodingParameters ?? config.decoding_parameters) ? null : "decodingParameters",
+    requiredPromptFieldReason("reasoningBudget", config.reasoningBudget ?? config.reasoning_budget),
+    normalizeStringArray(config.toolAvailability ?? config.tool_availability).length ? null : "toolAvailability",
+    requiredPromptFieldReason("messageStackTemplate", config.messageStackTemplate ?? config.message_stack_template),
+    requiredPromptFieldReason("retryPolicy", config.retryPolicy ?? config.retry_policy),
+    requiredPromptFieldReason("seedDeterminismArtifact", config.seedDeterminismArtifact ?? config.seed_determinism_artifact),
+    requiredPromptFieldReason("createdAt", config.createdAt ?? config.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    evaluationRunId: config.evaluationRunId ?? config.evaluation_run_id ?? null,
+    providerEndpoint: config.providerEndpoint ?? config.provider_endpoint ?? null,
+    modelSnapshot: config.modelSnapshot ?? config.model_snapshot ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_inference_config_review_required" : "model_inference_config_complete",
+  };
+}
+
+function normalizeModelRunEnvironment(environment, rowSource) {
+  const id = environment?.id ?? environment?.modelRunEnvironmentId ?? environment?.model_run_environment_id;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("evaluationRunId", environment.evaluationRunId ?? environment.evaluation_run_id),
+    requiredPromptFieldReason("runtimeOrchestratorVersion", environment.runtimeOrchestratorVersion ?? environment.runtime_orchestrator_version),
+    requiredPromptFieldReason("apiRouteDeploymentId", environment.apiRouteDeploymentId ?? environment.api_route_deployment_id),
+    objectHasEntries(environment.libraryVersions ?? environment.library_versions) ? null : "libraryVersions",
+    requiredPromptFieldReason("timestamp", environment.timestamp ?? environment.createdAt ?? environment.created_at),
+    requiredPromptFieldReason("rateLimitRetryMetadata", environment.rateLimitRetryMetadata ?? environment.rate_limit_retry_metadata),
+    normalizeStringArray(environment.parserExtractorVersionLinks ?? environment.parser_extractor_version_links).length ? null : "parserExtractorVersionLinks",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    evaluationRunId: environment.evaluationRunId ?? environment.evaluation_run_id ?? null,
+    runtimeOrchestratorVersion: environment.runtimeOrchestratorVersion ?? environment.runtime_orchestrator_version ?? null,
+    apiRouteDeploymentId: environment.apiRouteDeploymentId ?? environment.api_route_deployment_id ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_run_environment_review_required" : "model_run_environment_complete",
+  };
+}
+
+function normalizeRaterItemConflict(conflict, rowSource) {
+  const id = conflict?.id ?? conflict?.conflictId ?? conflict?.conflict_id;
+  if (!id) return null;
+  const conflictType = conflict.conflictType ?? conflict.conflict_type ?? null;
+  const independentEffect = conflict.independentBlindEligibilityEffect ?? conflict.independent_blind_eligibility_effect ?? null;
+  const itemScopePresent = [
+    conflict.positionId,
+    conflict.positionClusterId,
+    conflict.critiqueId,
+    conflict.sourceFamilyId,
+    conflict.adaptationClusterId,
+    conflict.nearDuplicateClusterId,
+  ].some(Boolean);
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", conflict.raterId ?? conflict.rater_id),
+    itemScopePresent ? null : "itemOrClusterScope",
+    RATER_ITEM_CONFLICT_TYPES.includes(conflictType) ? null : "conflictType",
+    requiredPromptFieldReason("disclosureSource", conflict.disclosureSource ?? conflict.disclosure_source),
+    policyMentions(independentEffect, ["excluded"]) || policyMentions(independentEffect, ["blocked"]) || policyMentions(independentEffect, ["non_independent"])
+      ? null
+      : "independentBlindEligibilityEffect",
+    normalizeStringArray(conflict.allowedNonBlindRoles ?? conflict.allowed_non_blind_roles).length ? null : "allowedNonBlindRoles",
+    requiredPromptFieldReason("reviewerResolution", conflict.reviewerResolution ?? conflict.reviewer_resolution),
+    requiredPromptFieldReason("timestamp", conflict.timestamp ?? conflict.createdAt ?? conflict.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    raterId: conflict.raterId ?? conflict.rater_id ?? null,
+    positionClusterId: conflict.positionClusterId ?? conflict.position_cluster_id ?? null,
+    conflictType,
+    independentBlindEligibilityEffect: independentEffect,
+    allowedNonBlindRoles: normalizeStringArray(conflict.allowedNonBlindRoles ?? conflict.allowed_non_blind_roles),
+    reviewReasons,
+    status: reviewReasons.length ? "rater_item_conflict_review_required" : "rater_item_conflict_complete",
+  };
+}
+
+function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
+  const id = snapshot?.id ?? snapshot?.trainingExposureSnapshotId ?? snapshot?.training_exposure_snapshot_id;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", snapshot.raterId ?? snapshot.rater_id),
+    requiredPromptFieldReason("assignmentId", snapshot.assignmentId ?? snapshot.assignment_id),
+    requiredPromptFieldReason("rubricVersion", snapshot.rubricVersion ?? snapshot.rubric_version),
+    normalizeStringArray(snapshot.publicSourceAnchorExampleIdsPreviouslySeen ?? snapshot.public_source_anchor_example_ids_previously_seen).length ? null : "publicSourceAnchorExampleIdsPreviouslySeen",
+    normalizeStringArray(snapshot.samePositionPositionClusterExposureChecks ?? snapshot.same_position_position_cluster_exposure_checks).length
+      ? null
+      : "samePositionPositionClusterExposureChecks",
+    requiredPromptFieldReason("protectedSplitConflictStatus", snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status),
+    requiredPromptFieldReason("createdAt", snapshot.createdAt ?? snapshot.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    raterId: snapshot.raterId ?? snapshot.rater_id ?? null,
+    assignmentId: snapshot.assignmentId ?? snapshot.assignment_id ?? null,
+    ratingId: snapshot.ratingId ?? snapshot.rating_id ?? null,
+    protectedSplitConflictStatus: snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status ?? null,
+    protectedClusterEligibilityEffect: snapshot.protectedClusterEligibilityEffect ?? snapshot.protected_cluster_eligibility_effect ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rater_training_exposure_snapshot_review_required" : "rater_training_exposure_snapshot_complete",
+  };
+}
+
+function normalizeReleaseErratum(erratum, rowSource) {
+  const id = erratum?.id ?? erratum?.releaseErratumId ?? erratum?.release_erratum_id;
+  if (!id) return null;
+  const affectedArtifactIds = normalizeStringArray(erratum.affectedArtifactIds ?? erratum.affected_artifact_ids);
+  const supersedingArtifactIds = normalizeStringArray(erratum.supersedingArtifactIds ?? erratum.superseding_artifact_ids);
+  const erratumType = erratum.erratumType ?? erratum.erratum_type ?? null;
+  const reviewReasons = [
+    requiredPromptFieldReason("releaseId", erratum.releaseId ?? erratum.release_id),
+    RELEASE_ERRATUM_TYPES.includes(erratumType) ? null : "erratumType",
+    affectedArtifactIds.length ? null : "affectedArtifactIds",
+    requiredPromptFieldReason("defectSummary", erratum.defectSummary ?? erratum.defect_summary),
+    supersedingArtifactIds.length ? null : "supersedingArtifactIds",
+    erratum.historicalArtifactsMutated === false || erratum.historical_artifacts_mutated === false ? null : "historicalArtifactsMutated",
+    policyMentions(erratum.historicalLeaderboardMutationPolicy ?? erratum.historical_leaderboard_mutation_policy, ["do not mutate"]) ||
+    policyMentions(erratum.historicalLeaderboardMutationPolicy ?? erratum.historical_leaderboard_mutation_policy, ["superseding"])
+      ? null
+      : "historicalLeaderboardMutationPolicy",
+    requiredPromptFieldReason("status", erratum.status),
+    requiredPromptFieldReason("approvedBy", erratum.approvedBy ?? erratum.approved_by),
+    requiredPromptFieldReason("createdAt", erratum.createdAt ?? erratum.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: erratum.releaseId ?? erratum.release_id ?? null,
+    erratumType,
+    affectedArtifactIds,
+    supersedingArtifactIds,
+    historicalArtifactsMutated: erratum.historicalArtifactsMutated === false || erratum.historical_artifacts_mutated === false ? false : true,
+    reviewReasons,
+    status: reviewReasons.length ? "release_erratum_review_required" : "release_erratum_complete",
+  };
+}
+
+function normalizeScheduleStatusSnapshot(snapshot, rowSource) {
+  const id = snapshot?.id ?? snapshot?.scheduleStatusSnapshotId ?? snapshot?.schedule_status_snapshot_id;
+  if (!id) return null;
+  const status = snapshot.status ?? null;
+  const evidenceArtifactIds = normalizeStringArray(snapshot.evidenceArtifactIds ?? snapshot.evidence_artifact_ids);
+  const approvedRebaseline =
+    status === "rebaselined" &&
+    Boolean(snapshot.rebaselinedDate ?? snapshot.re_baselined_date) &&
+    Boolean(snapshot.rebaselinedScope ?? snapshot.re_baselined_scope);
+  const reviewReasons = [
+    snapshot.releaseVersionOrProjectScope || snapshot.releaseVersion || snapshot.projectScope ? null : "releaseVersionOrProjectScope",
+    requiredPromptFieldReason("milestoneId", snapshot.milestoneId ?? snapshot.milestone_id),
+    requiredPromptFieldReason("milestoneName", snapshot.milestoneName ?? snapshot.milestone_name),
+    requiredPromptFieldReason("plannedStart", snapshot.plannedStart ?? snapshot.planned_start),
+    requiredPromptFieldReason("plannedEnd", snapshot.plannedEnd ?? snapshot.planned_end),
+    SCHEDULE_SNAPSHOT_STATUSES.includes(status) ? null : "status",
+    status === "complete" && !evidenceArtifactIds.length ? "evidenceArtifactIds" : null,
+    status !== "complete" && status !== "rebaselined" && snapshot.supportsCompletionClaim === true ? "supportsCompletionClaim" : null,
+    status === "rebaselined" && !approvedRebaseline ? "approvedRebaseline" : null,
+    requiredPromptFieldReason("criticalPathImpact", snapshot.criticalPathImpact ?? snapshot.critical_path_impact),
+    requiredPromptFieldReason("owner", snapshot.owner),
+    requiredPromptFieldReason("approvedBy", snapshot.approvedBy ?? snapshot.approved_by),
+    requiredPromptFieldReason("timestamp", snapshot.timestamp ?? snapshot.createdAt ?? snapshot.created_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseVersionOrProjectScope: snapshot.releaseVersionOrProjectScope ?? snapshot.releaseVersion ?? snapshot.projectScope ?? null,
+    milestoneId: snapshot.milestoneId ?? snapshot.milestone_id ?? null,
+    milestoneName: snapshot.milestoneName ?? snapshot.milestone_name ?? null,
+    status,
+    evidenceArtifactIds,
+    supportsCompletionClaim: snapshot.supportsCompletionClaim === true,
+    reviewReasons,
+    evidenceStatus: reviewReasons.length ? "schedule_status_snapshot_review_required" : "schedule_status_snapshot_complete",
+  };
+}
+
+function partialTaskOutputTypeEvidenceRow(taskType, rows) {
+  const latestRow = rows.find((row) => row.taskType === taskType && row.reviewReasons.length === 0) ?? null;
+  return {
+    taskType,
+    partialTaskOutputId: latestRow?.id ?? null,
+    excludedDenominators: latestRow?.excludedDenominators ?? [],
+    status: latestRow ? "partial_task_output_type_complete" : "partial_task_output_type_missing",
+  };
+}
+
+function queuePolicyComponentEvidenceRow(component, rows) {
+  const latestRow = rows.find((row) => row.reviewReasons.length === 0 && row.componentValues?.[component]) ?? null;
+  return {
+    component,
+    queuePolicySnapshotId: latestRow?.id ?? null,
+    status: latestRow ? "queue_policy_component_complete" : "queue_policy_component_missing",
+  };
+}
+
+function modelRunProvenanceEvidenceRows(configRows, environmentRows) {
+  const evaluationRunIds = [...new Set([...configRows.map((row) => row.evaluationRunId), ...environmentRows.map((row) => row.evaluationRunId)].filter(Boolean))];
+  return evaluationRunIds.map((evaluationRunId) => {
+    const config = configRows.find((row) => row.evaluationRunId === evaluationRunId && row.reviewReasons.length === 0) ?? null;
+    const environment = environmentRows.find((row) => row.evaluationRunId === evaluationRunId && row.reviewReasons.length === 0) ?? null;
+    return {
+      evaluationRunId,
+      modelInferenceConfigId: config?.id ?? null,
+      modelRunEnvironmentId: environment?.id ?? null,
+      status: config && environment ? "model_run_provenance_complete" : config ? "model_run_environment_missing" : "model_inference_config_missing",
+    };
+  });
+}
+
+function objectHasEntries(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length);
+}
+
+function defaultInteractionWorkflowArtifacts(releaseId) {
+  return {
+    publicExamplePracticeSessions: [
+      {
+        id: `practice-session-${releaseId}`,
+        raterId: "seed-rater",
+        sourceAnchorExampleIds: ["source-anchor-ai-base-rate"],
+        itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
+        workflowProfileId: `rating-workflow-profile-${releaseId}`,
+        attemptRatings: ["practice-rating-seed"],
+        lintsTriggered: ["centrality_strength_product_gap"],
+        lockedAt: "2026-10-01T00:00:00.000Z",
+        feedbackArtifactId: "calibration-feedback-seed",
+        rubricAnchorUsageSummary: "public anchors reviewed before feedback",
+        trainingExposureStatus: "training_exposure_recorded",
+        excludedFromRatingDenominator: true,
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    raterLearningPlans: [
+      {
+        id: `rater-learning-plan-${releaseId}`,
+        raterId: "seed-rater",
+        rubricVersion: "appendix-f-operational-v1",
+        certificationPackVersion: "pack-v1",
+        practiceGoldDuplicatePerformanceSummaries: { centrality: "calibrated", duplicate: "consistent" },
+        perDimensionDriftSummary: { correctness: "stable" },
+        assignedRemediationModules: ["centrality-strength-product"],
+        completedModules: [],
+        currentAssignmentRestrictionsUnlocks: ["ordinary_live_allowed"],
+        feedbackArtifactsShown: ["calibration-feedback-seed"],
+        protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    raterSessions: [
+      {
+        id: `rater-session-${releaseId}`,
+        raterId: "seed-rater",
+        sessionTarget: "complete_two_ordinary_live_items",
+        startedAt: "2026-10-01T00:00:00.000Z",
+        endedAt: null,
+        activeTimeSeconds: 900,
+        completedAssignmentCount: 1,
+        expectedEffortCompleted: "within_band",
+        breakPromptCount: 1,
+        breakTakenCount: 1,
+        stopAfterCurrentItemState: "available",
+        fatigueWarningState: "none",
+        interruptionSummary: "one pause; no label-quality penalty",
+        qaRoutingStatus: "no_fatigue_qa_route",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    assignmentDeclines: [
+      {
+        id: `assignment-decline-${releaseId}`,
+        assignmentId: "assign-ai-base-rate",
+        raterId: "seed-rater",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        reasonCode: "conflict_or_prior_exposure",
+        freeTextNote: "Recognized source family before scoring.",
+        priorExposureConflictFlag: true,
+        topicFitUpdateSuggestion: "avoid same source family",
+        reassignmentStatus: "reassigned_without_label",
+        qaRoutingStatus: "monitor_only",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+        excludedFromRatingDenominator: true,
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    interpretationTargetMaps: [
+      {
+        id: `interpretation-target-map-${releaseId}`,
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        assignmentId: "assign-ai-base-rate",
+        positionTextVersionId: "ptv-ai-prior-v1",
+        critiqueTextVersionId: "ctv-ai-base-rate-v1",
+        candidateIntendedConclusionSpans: ["position-conclusion-span"],
+        attackedClaimSpans: ["critique-attack-span"],
+        plausiblePositionCritiqueInterpretations: ["central_forecast_attack", "side_assumption_attack"],
+        plausibilityNotes: "central forecast attack is more release-relevant",
+        critiqueCoverageByInterpretation: { central_forecast_attack: "covered", side_assumption_attack: "partial" },
+        pricedInBackgroundAssumptionStatus: "not_priced_in",
+        centralityTargetClaimSet: ["central_forecast"],
+        strengthTargetClaimSet: ["base_rate_challenge"],
+        productAllocationNote: "centrality and strength allocation reviewed together",
+        visibilityState: "post_lock_or_adjudicator_only",
+        createdBy: "seed-adjudicator",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    verificationWorkspaceSessions: [
+      {
+        id: `verification-workspace-${releaseId}`,
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        relatedRatingIds: ["rating-seed-ai-base-rate-r1"],
+        claimList: ["The critique says expert forecasts ignore base rates."],
+        claimSpanRefs: ["claim-span-1"],
+        claimType: "subjective_or_intuition_pump",
+        verificationStatus: "not_practicable",
+        evidenceMaterialRefs: ["adjudication-note-seed"],
+        notPracticableJustification: "Normative forecast premise lacks direct empirical check.",
+        correctnessHalfEntireUnclearFlag: false,
+        exposureBlindingState: "post_lock_expert_only",
+        verifierId: "seed-verifier",
+        verifierRole: "expert",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    adjudicatorPreReads: [
+      {
+        id: `adjudicator-pre-read-${releaseId}`,
+        adjudicatorId: "seed-adjudicator",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        visibleMaterialPolicy: "rationales_without_peer_distribution",
+        preReadNotes: "Potential target-interpretation ambiguity identified.",
+        preliminaryIssueTags: ["interpretation_dispute"],
+        completedBeforePeerDistributionExposure: true,
+        linkedAdjudicationMemoId: `adjudication-memo-${releaseId}`,
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    postLockDiscussionSessions: [
+      {
+        id: `post-lock-discussion-${releaseId}`,
+        discussionThreadId: `discussion-thread-${releaseId}`,
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        participantIds: ["seed-rater", "seed-expert"],
+        initialRatingLockCheck: "all_initial_ratings_locked",
+        identityStagingPolicy: "role_neutral_handles_first",
+        identityMaskPhaseStatus: "completed_before_role_reveal",
+        roleRevealPolicy: "moderator_exception_logged",
+        visibleMaterialPolicy: "peer_rationales_visible_post_lock_only",
+        objectLevelCommentRecords: ["comment-seed"],
+        revisionProposalIds: ["revision-proposal-seed"],
+        majorityPressureWarningState: "displayed",
+        transcriptArtifact: "discussion-transcript-seed",
+        discussionStatus: "object_level_discussion_complete",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    adjudicationReviewSessions: [
+      {
+        id: `adjudication-review-session-${releaseId}`,
+        discussionThreadId: `discussion-thread-${releaseId}`,
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        scoreSpreadHeatmapVersion: "spread-heatmap-v1",
+        centXStrProductAllocationView: "product-allocation-v1",
+        rationaleSpanOverlayRefs: ["rationale-span-seed"],
+        verificationConflictSummary: "subjective claim not practicable",
+        siblingContextDifferenceSummary: "same-position sibling context checked",
+        preSubmitLintSummary: "centrality-strength product warning acknowledged",
+        revisionTimelineRefs: ["revision-timeline-seed"],
+        targetMapIds: [`interpretation-target-map-${releaseId}`],
+        minorityRationaleFields: ["minority-strength-reading"],
+        finalizationStatus: "ready_for_memo",
+        adjudicatorIds: ["seed-adjudicator"],
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    calibrationFeedbackEvents: [
+      {
+        id: `calibration-feedback-${releaseId}`,
+        certificationRecordId: "certification-seed",
+        raterId: "seed-rater",
+        goldItemId: "gold-item-seed",
+        attemptRatingId: "practice-rating-seed",
+        rubricVersion: "appendix-f-operational-v1",
+        perDimensionDeviationSummary: { centrality: "within_band", strength: "high_by_0.1" },
+        duplicateInconsistencySummary: "none",
+        feedbackTextVersion: "feedback-v1",
+        shownAfterLock: true,
+        protectedSplitConflictCheck: "training_approved_no_protected_cluster_conflict",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    governanceApprovalRecords: [
+      {
+        id: `governance-approval-${releaseId}`,
+        actionKind: "release_manifest_activation",
+        affectedArtifactIds: [`release-config-manifest-${releaseId}`],
+        proposedBy: "seed-release-admin",
+        approver1: "seed-independent-approver-a",
+        approver2: "seed-independent-approver-b",
+        independenceSeparationOfDutiesStatus: "independent_two_person_approval",
+        reasonCode: "manifest_activation",
+        beforePolicyManifestHash: "sha256:before-manifest",
+        afterPolicyManifestHash: "sha256:after-manifest",
+        visibilitySplitMetricLeaderboardImpactSummary: "no broadening of protected visibility or metric eligibility",
+        emergencyNarrowingExceptionFlag: false,
+        approvalTimestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    protectedArtifactRevalidations: [
+      {
+        id: `protected-artifact-revalidation-${releaseId}`,
+        protectedArtifactId: "protected-prompt-seed",
+        releaseConfigManifestId: `release-config-manifest-${releaseId}`,
+        revalidationStatus: "passed_current_manifest_revalidation",
+        staleSupersededBehavior: "fail_closed_if_stale_or_superseded",
+        checkedBy: "seed-release-admin",
+        checkedAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    benchmarkSubmissionPolicies: [
+      {
+        id: `benchmark-submission-policy-${releaseId}`,
+        policyVersion: "benchmark-submission-rlhf86-v1",
+        aggregateOnlyReport: true,
+        submissionBudget: { monthly: 2 },
+        cooldownPolicy: "cooldown_after_submission",
+        hiddenIdExposureProhibited: true,
+        perItemFeedbackProhibited: true,
+        createdBy: "seed-release-admin",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    benchmarkSubmissions: [
+      {
+        id: `benchmark-submission-${releaseId}`,
+        benchmarkSubmissionPolicyId: `benchmark-submission-policy-${releaseId}`,
+        releaseId,
+        submittedAggregateReportId: `benchmark-aggregate-report-${releaseId}`,
+        perItemOutputIncluded: false,
+        hiddenIdExposureIncluded: false,
+        budgetConsumptionStatus: "within_budget",
+        cooldownStatus: "cooldown_started",
+        submittedAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    screenFeatureParityChecks: [
+      {
+        id: `screen-feature-parity-${releaseId}`,
+        screenId: "rating",
+        uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
+        workflowProfileId: `rating-workflow-profile-${releaseId}`,
+        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable", source_recognition: "reachable" },
+        featureParityChecklistResults: { no_feature_loss: "passed" },
+        noFeatureLoss: true,
+        checkedBy: "seed-ux-reviewer",
+        checkedAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    simplifiedCopyPreviews: [
+      {
+        id: `simplified-copy-preview-${releaseId}`,
+        screenId: "rating",
+        copyBundleId: `copy-bundle-${releaseId}`,
+        glossaryTooltipIds: ["centrality", "strength", "dead_weight"],
+        exactRubricTermPreservation: true,
+        hiddenFieldLeakageCheck: "passed",
+        reviewerId: "seed-ux-reviewer",
+        reviewedAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  };
+}
+
+function interactionWorkflowArtifactSpecs(releaseId) {
+  const defaults = defaultInteractionWorkflowArtifacts(releaseId);
+  return [
+    {
+      label: "PublicExamplePracticeSession",
+      optionKey: "publicExamplePracticeSessions",
+      rowKey: "publicExamplePracticeSessionRows",
+      artifactType: "public_example_practice_session",
+      requiredFields: ["raterId", "workflowProfileId", "lockedAt", "feedbackArtifactId", "rubricAnchorUsageSummary", "trainingExposureStatus", "createdAt"],
+      arrayFields: ["sourceAnchorExampleIds", "itemTextVersionIds", "attemptRatings"],
+      booleanTrueFields: ["excludedFromRatingDenominator"],
+      seedRows: defaults.publicExamplePracticeSessions,
+    },
+    {
+      label: "RaterLearningPlan",
+      optionKey: "raterLearningPlans",
+      rowKey: "raterLearningPlanRows",
+      artifactType: "rater_learning_plan",
+      requiredFields: ["raterId", "rubricVersion", "certificationPackVersion", "protectedLabelExposureCheck", "timestamp"],
+      arrayFields: ["assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown"],
+      objectFields: ["practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary"],
+      seedRows: defaults.raterLearningPlans,
+    },
+    {
+      label: "RaterSession",
+      optionKey: "raterSessions",
+      rowKey: "raterSessionRows",
+      artifactType: "rater_session",
+      requiredFields: ["raterId", "sessionTarget", "startedAt", "expectedEffortCompleted", "stopAfterCurrentItemState", "fatigueWarningState", "qaRoutingStatus", "timestamp"],
+      numericFields: ["activeTimeSeconds", "completedAssignmentCount"],
+      seedRows: defaults.raterSessions,
+    },
+    {
+      label: "AssignmentDecline",
+      optionKey: "assignmentDeclines",
+      rowKey: "assignmentDeclineRows",
+      artifactType: "assignment_decline",
+      requiredFields: ["assignmentId", "raterId", "reassignmentStatus", "qaRoutingStatus", "sourcePeerModelGoldProtectedLabelVisibilityState", "timestamp"],
+      arrayFields: ["itemKeys"],
+      enumFields: { reasonCode: ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"] },
+      booleanTrueFields: ["excludedFromRatingDenominator"],
+      seedRows: defaults.assignmentDeclines,
+    },
+    {
+      label: "InterpretationTargetMap",
+      optionKey: "interpretationTargetMaps",
+      rowKey: "interpretationTargetMapRows",
+      artifactType: "interpretation_target_map",
+      requiredFields: ["positionTextVersionId", "critiqueTextVersionId", "plausibilityNotes", "pricedInBackgroundAssumptionStatus", "productAllocationNote", "visibilityState", "createdBy", "timestamp"],
+      arrayFields: ["itemKeys", "candidateIntendedConclusionSpans", "attackedClaimSpans", "plausiblePositionCritiqueInterpretations", "centralityTargetClaimSet", "strengthTargetClaimSet"],
+      objectFields: ["critiqueCoverageByInterpretation"],
+      seedRows: defaults.interpretationTargetMaps,
+    },
+    {
+      label: "VerificationWorkspaceSession",
+      optionKey: "verificationWorkspaceSessions",
+      rowKey: "verificationWorkspaceSessionRows",
+      artifactType: "verification_workspace_session",
+      requiredFields: ["claimType", "verificationStatus", "exposureBlindingState", "verifierId", "verifierRole", "timestamp"],
+      arrayFields: ["itemKeys", "claimList", "claimSpanRefs", "evidenceMaterialRefs"],
+      seedRows: defaults.verificationWorkspaceSessions,
+    },
+    {
+      label: "AdjudicatorPreRead",
+      optionKey: "adjudicatorPreReads",
+      rowKey: "adjudicatorPreReadRows",
+      artifactType: "adjudicator_pre_read",
+      requiredFields: ["adjudicatorId", "visibleMaterialPolicy", "preReadNotes", "linkedAdjudicationMemoId", "timestamp"],
+      arrayFields: ["itemKeys", "preliminaryIssueTags"],
+      booleanTrueFields: ["completedBeforePeerDistributionExposure"],
+      seedRows: defaults.adjudicatorPreReads,
+    },
+    {
+      label: "PostLockDiscussionSession",
+      optionKey: "postLockDiscussionSessions",
+      rowKey: "postLockDiscussionSessionRows",
+      artifactType: "post_lock_discussion_session",
+      requiredFields: ["discussionThreadId", "initialRatingLockCheck", "identityStagingPolicy", "identityMaskPhaseStatus", "roleRevealPolicy", "visibleMaterialPolicy", "transcriptArtifact", "discussionStatus", "timestamp"],
+      arrayFields: ["itemKeys", "participantIds", "objectLevelCommentRecords", "revisionProposalIds"],
+      seedRows: defaults.postLockDiscussionSessions,
+    },
+    {
+      label: "AdjudicationReviewSession",
+      optionKey: "adjudicationReviewSessions",
+      rowKey: "adjudicationReviewSessionRows",
+      artifactType: "adjudication_review_session",
+      requiredFields: ["discussionThreadId", "scoreSpreadHeatmapVersion", "centXStrProductAllocationView", "verificationConflictSummary", "siblingContextDifferenceSummary", "preSubmitLintSummary", "finalizationStatus", "timestamp"],
+      arrayFields: ["itemKeys", "rationaleSpanOverlayRefs", "revisionTimelineRefs", "targetMapIds", "minorityRationaleFields", "adjudicatorIds"],
+      seedRows: defaults.adjudicationReviewSessions,
+    },
+    {
+      label: "CalibrationFeedbackEvent",
+      optionKey: "calibrationFeedbackEvents",
+      rowKey: "calibrationFeedbackEventRows",
+      artifactType: "calibration_feedback_event",
+      requiredFields: ["raterId", "goldItemId", "attemptRatingId", "rubricVersion", "duplicateInconsistencySummary", "feedbackTextVersion", "protectedSplitConflictCheck", "timestamp"],
+      oneOfFields: [["certificationRecordId", "goldAssignmentId"]],
+      objectFields: ["perDimensionDeviationSummary"],
+      booleanTrueFields: ["shownAfterLock"],
+      seedRows: defaults.calibrationFeedbackEvents,
+    },
+    {
+      label: "GovernanceApprovalRecord",
+      optionKey: "governanceApprovalRecords",
+      rowKey: "governanceApprovalRecordRows",
+      artifactType: "governance_approval_record",
+      requiredFields: ["actionKind", "proposedBy", "approver1", "approver2", "independenceSeparationOfDutiesStatus", "reasonCode", "visibilitySplitMetricLeaderboardImpactSummary", "approvalTimestamp"],
+      arrayFields: ["affectedArtifactIds"],
+      seedRows: defaults.governanceApprovalRecords,
+    },
+    {
+      label: "ProtectedArtifactRevalidation",
+      optionKey: "protectedArtifactRevalidations",
+      rowKey: "protectedArtifactRevalidationRows",
+      artifactType: "protected_artifact_revalidation",
+      requiredFields: ["protectedArtifactId", "releaseConfigManifestId", "revalidationStatus", "staleSupersededBehavior", "checkedBy", "checkedAt"],
+      seedRows: defaults.protectedArtifactRevalidations,
+    },
+    {
+      label: "BenchmarkSubmissionPolicy",
+      optionKey: "benchmarkSubmissionPolicies",
+      rowKey: "benchmarkSubmissionPolicyRows",
+      artifactType: "benchmark_submission_policy",
+      requiredFields: ["policyVersion", "cooldownPolicy", "createdBy", "frozenAt"],
+      objectFields: ["submissionBudget"],
+      booleanTrueFields: ["aggregateOnlyReport", "hiddenIdExposureProhibited", "perItemFeedbackProhibited"],
+      seedRows: defaults.benchmarkSubmissionPolicies,
+    },
+    {
+      label: "BenchmarkSubmission",
+      optionKey: "benchmarkSubmissions",
+      rowKey: "benchmarkSubmissionRows",
+      artifactType: "benchmark_submission",
+      requiredFields: ["benchmarkSubmissionPolicyId", "releaseId", "submittedAggregateReportId", "budgetConsumptionStatus", "cooldownStatus", "submittedAt"],
+      booleanFalseFields: ["perItemOutputIncluded", "hiddenIdExposureIncluded"],
+      seedRows: defaults.benchmarkSubmissions,
+    },
+    {
+      label: "ScreenFeatureParityCheck",
+      optionKey: "screenFeatureParityChecks",
+      rowKey: "screenFeatureParityCheckRows",
+      artifactType: "screen_feature_parity_check",
+      requiredFields: ["screenId", "uxSimplificationPolicyId", "workflowProfileId", "checkedBy", "checkedAt"],
+      objectFields: ["requiredControlResults", "featureParityChecklistResults"],
+      booleanTrueFields: ["noFeatureLoss"],
+      seedRows: defaults.screenFeatureParityChecks,
+    },
+    {
+      label: "SimplifiedCopyPreview",
+      optionKey: "simplifiedCopyPreviews",
+      rowKey: "simplifiedCopyPreviewRows",
+      artifactType: "simplified_copy_preview",
+      requiredFields: ["screenId", "copyBundleId", "hiddenFieldLeakageCheck", "reviewerId", "reviewedAt"],
+      arrayFields: ["glossaryTooltipIds"],
+      booleanTrueFields: ["exactRubricTermPreservation"],
+      seedRows: defaults.simplifiedCopyPreviews,
+    },
+  ];
+}
+
+export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) {
+  const groups = interactionWorkflowArtifactSpecs(releaseId).map((spec) => {
+    const submittedRows = (options[spec.optionKey] ?? [])
+      .map((resource) => normalizeInteractionWorkflowArtifact(resource, spec, `submitted_workflow_${spec.artifactType}`))
+      .filter(Boolean);
+    const seedRows = spec.seedRows.map((resource) => normalizeInteractionWorkflowArtifact(resource, spec, `seed_${spec.artifactType}`)).filter(Boolean);
+    const rowsForGate = submittedRows.length ? submittedRows : seedRows;
+    const complete = rowsForGate.some((row) => row.reviewReasons.length === 0);
+    return {
+      spec,
+      submittedRows,
+      seedRows,
+      rowsForGate,
+      complete,
+    };
+  });
+  const reviewSections = groups.flatMap((group) => [
+    ...group.submittedRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: group.spec.artifactType, artifactId: row.id, reason }))),
+    group.complete
+      ? null
+      : { artifactType: group.spec.artifactType, artifactId: group.spec.artifactType, reason: "missing_complete_interaction_workflow_artifact" },
+  ]).filter(Boolean);
+  const counts = Object.fromEntries(
+    groups.flatMap((group) => [
+      [`submitted${group.spec.label}Count`, group.submittedRows.length],
+      [`complete${group.spec.label}Count`, group.rowsForGate.filter((row) => row.reviewReasons.length === 0).length],
+    ]),
+  );
+  const submittedEvidenceComplete = groups.every((group) => group.submittedRows.length > 0) && reviewSections.length === 0;
+  return {
+    id: `interaction-workflow-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    requiredArtifactTypes: groups.map((group) => group.spec.artifactType),
+    ...Object.fromEntries(groups.map((group) => [group.spec.rowKey, [...group.seedRows, ...group.submittedRows]])),
+    counts: {
+      ...counts,
+      submittedArtifactGroupCount: groups.filter((group) => group.submittedRows.length > 0).length,
+      completeArtifactGroupCount: groups.filter((group) => group.complete).length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "interaction_workflow_evidence_review_required"
+      : submittedEvidenceComplete
+        ? "submitted_interaction_workflow_evidence_complete"
+        : "seed_interaction_workflow_evidence_complete",
+  };
+}
+
+function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
+  const id = resource?.id;
+  if (!id) return null;
+  const reviewReasons = [
+    ...((spec.requiredFields ?? []).map((field) => requiredPromptFieldReason(field, resource[field]))),
+    ...((spec.arrayFields ?? []).map((field) => normalizeStringArray(resource[field]).length ? null : field)),
+    ...((spec.objectFields ?? []).map((field) => objectHasEntries(resource[field]) ? null : field)),
+    ...((spec.numericFields ?? []).map((field) => Number.isFinite(resource[field]) ? null : field)),
+    ...((spec.booleanTrueFields ?? []).map((field) => resource[field] === true ? null : field)),
+    ...((spec.booleanFalseFields ?? []).map((field) => resource[field] === false ? null : field)),
+    ...((spec.oneOfFields ?? []).map((fields) => fields.some((field) => resource[field] !== undefined && resource[field] !== null && resource[field] !== "") ? null : fields.join("|"))),
+    ...Object.entries(spec.enumFields ?? {}).map(([field, allowedValues]) => allowedValues.includes(resource[field]) ? null : field),
+  ].filter(Boolean);
+  return {
+    ...resource,
+    id,
+    rowSource,
+    artifactType: spec.artifactType,
+    reviewReasons,
+    evidenceStatus: reviewReasons.length ? `${spec.artifactType}_review_required` : `${spec.artifactType}_complete`,
+  };
+}
+
 const REQUIRED_POLICY_ACTION_KINDS = [
   "protected_render",
   "assignment_issue",
@@ -12633,6 +14121,40 @@ export function buildOctoberReleaseReport(
     samePositionBatchReviews: options.samePositionBatchReviews ?? [],
     externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
   });
+  const auxiliaryWorkflowEvidence = buildAuxiliaryWorkflowEvidenceReport(releaseId, {
+    blindingPreviewAudits: options.blindingPreviewAudits ?? [],
+    partialTaskOutputs: options.partialTaskOutputs ?? [],
+    raterPositionClusterExposures: options.raterPositionClusterExposures ?? [],
+    spotCheckQaItems: options.spotCheckQaItems ?? [],
+    adjudicationTriageQueueItems: options.adjudicationTriageQueueItems ?? [],
+    diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
+    queuePolicySnapshots: options.queuePolicySnapshots ?? [],
+    assignmentSelectionAudits: options.assignmentSelectionAudits ?? [],
+    modelInferenceConfigs: options.modelInferenceConfigs ?? [],
+    modelRunEnvironments: options.modelRunEnvironments ?? [],
+    raterItemConflicts: options.raterItemConflicts ?? [],
+    raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
+    releaseErrata: options.releaseErrata ?? [],
+    scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
+  });
+  const interactionWorkflowEvidence = buildInteractionWorkflowEvidenceReport(releaseId, {
+    publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
+    raterLearningPlans: options.raterLearningPlans ?? [],
+    raterSessions: options.raterSessions ?? [],
+    assignmentDeclines: options.assignmentDeclines ?? [],
+    interpretationTargetMaps: options.interpretationTargetMaps ?? [],
+    verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
+    adjudicatorPreReads: options.adjudicatorPreReads ?? [],
+    postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
+    adjudicationReviewSessions: options.adjudicationReviewSessions ?? [],
+    calibrationFeedbackEvents: options.calibrationFeedbackEvents ?? [],
+    governanceApprovalRecords: options.governanceApprovalRecords ?? [],
+    protectedArtifactRevalidations: options.protectedArtifactRevalidations ?? [],
+    benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
+    benchmarkSubmissions: options.benchmarkSubmissions ?? [],
+    screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
+    simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
+  });
   const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
     governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
     governedBundleRecords: options.governedBundleRecords ?? [],
@@ -12667,6 +14189,8 @@ export function buildOctoberReleaseReport(
     policyBundleEvidence,
     participantSafeguardEvidence,
     ratingExperienceEvidence,
+    auxiliaryWorkflowEvidence,
+    interactionWorkflowEvidence,
     releaseConfigManifestEvidence,
     operationalControlEvidence,
     corpusManifest,
@@ -12825,6 +14349,40 @@ export function buildOctoberReleaseReport(
       samePositionScratchpads: options.samePositionScratchpads ?? [],
       samePositionBatchReviews: options.samePositionBatchReviews ?? [],
       externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
+    },
+    workflowAuxiliaryArtifacts: {
+      blindingPreviewAudits: options.blindingPreviewAudits ?? [],
+      partialTaskOutputs: options.partialTaskOutputs ?? [],
+      raterPositionClusterExposures: options.raterPositionClusterExposures ?? [],
+      spotCheckQaItems: options.spotCheckQaItems ?? [],
+      adjudicationTriageQueueItems: options.adjudicationTriageQueueItems ?? [],
+      diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
+      queuePolicySnapshots: options.queuePolicySnapshots ?? [],
+      assignmentSelectionAudits: options.assignmentSelectionAudits ?? [],
+      modelInferenceConfigs: options.modelInferenceConfigs ?? [],
+      modelRunEnvironments: options.modelRunEnvironments ?? [],
+      raterItemConflicts: options.raterItemConflicts ?? [],
+      raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
+      releaseErrata: options.releaseErrata ?? [],
+      scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
+    },
+    workflowInteractionArtifacts: {
+      publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
+      raterLearningPlans: options.raterLearningPlans ?? [],
+      raterSessions: options.raterSessions ?? [],
+      assignmentDeclines: options.assignmentDeclines ?? [],
+      interpretationTargetMaps: options.interpretationTargetMaps ?? [],
+      verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
+      adjudicatorPreReads: options.adjudicatorPreReads ?? [],
+      postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
+      adjudicationReviewSessions: options.adjudicationReviewSessions ?? [],
+      calibrationFeedbackEvents: options.calibrationFeedbackEvents ?? [],
+      governanceApprovalRecords: options.governanceApprovalRecords ?? [],
+      protectedArtifactRevalidations: options.protectedArtifactRevalidations ?? [],
+      benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
+      benchmarkSubmissions: options.benchmarkSubmissions ?? [],
+      screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
+      simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
     },
     workflowReleaseConfigArtifacts: {
       governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],

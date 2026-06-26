@@ -10,6 +10,7 @@ import {
   assignments,
   buildAdminTagBlindingReport,
   buildActiveLearningAudit,
+  buildAuxiliaryWorkflowEvidenceReport,
   buildCandidateIntakeQualityAudit,
   buildCertificationAudit,
   buildComparabilityClaimMatrix,
@@ -49,6 +50,7 @@ import {
   buildRubricVersionDriftReport,
   buildHumanScoreDistributionReport,
   buildHumanCeilingAndSaturationReport,
+  buildInteractionWorkflowEvidenceReport,
   buildLmcaComparisonReport,
   buildReasoningModeSensitivityReport,
   buildMetricDirectionalityConfigReport,
@@ -229,6 +231,29 @@ const prohibitedAssistInputs = [
 
 const accessibilitySurfaces = ["rating", "practice", "discussion", "adjudication", "consent", "withdrawal"];
 const accessibilityChecks = ["keyboard", "screen_reader", "focus_order", "non_color_status", "zoom", "mobile_touch", "reduced_motion", "timeout_recovery", "locale_sensitive_dates", "readability"];
+const partialTaskOutputTypes = [
+  "pairwise_preference_only",
+  "clarity_triage",
+  "dead_weight_triage",
+  "verification_only",
+  "practice",
+  "safe_decline",
+  "discussion_comment",
+];
+const partialTaskExcludedDenominators = [
+  "full_rubric_blind_rating_count",
+  "custom_loss_target",
+  "hidden_benchmark_label",
+  "human_ceiling_denominator",
+];
+const queuePolicyComponents = [
+  "live_gold_duplicate_validation_mix",
+  "topic_routing",
+  "tier_routing",
+  "safe_decline_reassignment",
+  "same_position_order",
+  "randomization_stratification_seed",
+];
 const releaseConfigBindings = [
   "code",
   "rubric",
@@ -897,6 +922,474 @@ function completeRatingExperienceFixtures() {
   };
 }
 
+function completeAuxiliaryWorkflowFixtures() {
+  const queuePolicySnapshot = {
+    id: "queue-policy-snapshot-submitted",
+    policyVersion: "queue-policy-rlhf88-v1",
+    liveGoldDuplicateValidationMix: "live, gold, duplicate, and validation proportions are frozen before serving assignments",
+    topicRoutingRules: "topic routing uses declared competence without source/protected-status disclosure",
+    tierRoutingRules: "release-critical queues balance graduate, phd, expert, and adjudicator coverage",
+    safeDeclineReassignmentPolicy: "safe declines reassign silently and never count as ratings",
+    samePositionOrderPolicy: "same-position critique order is counterbalanced with later siblings absent at submission",
+    randomizationStratificationSeedPolicy: "manifest-bound stratified seed recorded before queue serving",
+    createdBy: "release-admin",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+  return {
+    blindingPreviewAudits: [
+      {
+        id: "blinding-preview-audit-submitted",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
+        renderedRaterVisibleTextChecksum: "sha256:submitted-rater-visible-text",
+        lintedSourceLeakagePatterns: ["author_name", "url", "source_title", "admin_tag"],
+        redactedSourceIdentifyingSpans: ["source-title"],
+        retainedSourceIdentifyingSpans: [],
+        substantiveNecessityRationale: "No source-identifying spans retained for initial blind rendering.",
+        reviewerId: "release-reviewer",
+        reviewerRole: "expert",
+        approvalStatus: "passed",
+        sourceIdentifiabilitySensitive: false,
+        unresolvedSourceLeakagePatternCount: 0,
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    partialTaskOutputs: partialTaskOutputTypes.map((taskType) => ({
+      id: `partial-task-output-submitted-${taskType}`,
+      assignmentId: "assign-ai-base-rate",
+      raterId: "demo-rater",
+      taskType,
+      itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+      outputFields: { taskType, note: `${taskType} is auxiliary, not a full-rubric label` },
+      visibilityExposureState: taskType === "practice" ? "training_exposure_recorded" : "not_full_blind_initial_rating",
+      eligibleUses: ["routing", "calibration", "adjudication", "explicit_pairwise_export"],
+      excludedDenominators: partialTaskExcludedDenominators,
+      promotionAdjudicationLink: null,
+      countedAsFullRubricRating: false,
+      timestamp: "2026-10-01T00:01:00.000Z",
+    })),
+    raterPositionClusterExposures: [
+      {
+        id: "position-cluster-exposure-submitted",
+        raterId: "demo-rater",
+        positionClusterId: "lmca-public-is-ought-gap",
+        itemIds: ["pos-ai-prior"],
+        exposureSource: "post_lock_discussion",
+        exposureTimestamp: "2026-10-01T00:02:00.000Z",
+        exposureVisibilityScope: "same_position_cluster_peer_rationales",
+        blindEligibilityEffect: "excluded_from_fresh_blind_initial_on_cluster",
+        deprotectionTrainingExposureStatus: "training_exposure_recorded",
+        createdBy: "release-admin",
+        timestamp: "2026-10-01T00:02:00.000Z",
+      },
+    ],
+    spotCheckQaItems: [
+      {
+        id: "spot-check-qa-submitted",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        ratingId: "rating-seed-ai-base-rate-r1",
+        samplingStratum: "non_escalated_release_critical",
+        samplingSeedArtifact: "sha256:submitted-spot-check-seed",
+        reviewerId: "release-reviewer",
+        reviewerRole: "expert",
+        checkResult: "passed_without_label_change",
+        revisionAdjudicationEscalationLink: null,
+        excludedFromIndependentRaterCount: true,
+        timestamp: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+    adjudicationTriageQueueItems: [
+      {
+        id: "adjudication-triage-submitted",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        triggerType: "release_blocking_disagreement",
+        releaseBlockingStatus: "release_blocking",
+        priority: "high",
+        queueLane: "release_blocking_disagreement",
+        assignedReviewerId: "demo-expert",
+        status: "queued_for_expert_review",
+        slaDeadline: "2026-10-05T00:00:00.000Z",
+        routingRationale: "Large centrality-strength spread requires object-level adjudication before release.",
+        priorityDoesNotMutateLabels: true,
+        timestamp: "2026-10-01T00:04:00.000Z",
+      },
+    ],
+    diagnosticDeferralRecords: [
+      {
+        id: "diagnostic-deferral-submitted",
+        releaseId: "october-2026-demo",
+        diagnosticName: "obfuscation_stress",
+        claimAffected: "robustness_to_obfuscated_arguments",
+        notRunReason: "Not enough obfuscation variants for the current internal milestone.",
+        approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+        strongerClaimSuppressed: true,
+        reviewerId: "release-reviewer",
+        reviewerRole: "expert",
+        createdAt: "2026-10-01T00:05:00.000Z",
+      },
+    ],
+    queuePolicySnapshots: [queuePolicySnapshot],
+    assignmentSelectionAudits: [
+      {
+        id: "assignment-selection-audit-submitted",
+        queuePolicySnapshotId: queuePolicySnapshot.id,
+        splitReleaseId: "october-2026-demo",
+        candidateAssignments: ["assign-ai-base-rate", "assign-voting-bullet", "assign-mind-zombie"],
+        servedAssignments: ["assign-ai-base-rate", "assign-voting-bullet"],
+        declinesReassignmentsByReason: { lack_topic_expertise: 1, conflict_or_prior_exposure: 1 },
+        raterTierDistribution: { graduate: 1, expert: 1 },
+        topicSourceLengthDistribution: { "AI safety:short": 1, "politics:medium": 1 },
+        selfSelectionIndicators: ["volunteer_selected_from_eligible_blind_pool"],
+        compositionChangedLabelDenominators: false,
+        createdAt: "2026-10-01T00:06:00.000Z",
+      },
+    ],
+    modelInferenceConfigs: [
+      {
+        id: "model-inference-config-submitted",
+        evaluationRunId: "eval-full-rubric-demo",
+        providerEndpoint: "approved-model-evaluation-endpoint",
+        modelSnapshot: "gpt-demo-2026-10-01",
+        decodingParameters: { temperature: 0, topP: 1 },
+        reasoningBudget: "bounded_hidden_chain_budget_v1",
+        toolAvailability: ["none"],
+        messageStackTemplate: "lmca-full-rubric-eval-template-v1",
+        retryPolicy: "single_retry_parse_failures_only",
+        seedDeterminismArtifact: "sha256:model-eval-seed",
+        createdAt: "2026-10-01T00:07:00.000Z",
+      },
+    ],
+    modelRunEnvironments: [
+      {
+        id: "model-run-environment-submitted",
+        evaluationRunId: "eval-full-rubric-demo",
+        runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
+        apiRouteDeploymentId: "deployment-october-2026-demo",
+        libraryVersions: { node: "20.x", parser: "lmca-parser-v1" },
+        timestamp: "2026-10-01T00:08:00.000Z",
+        rateLimitRetryMetadata: "bounded retries with no prompt mutation",
+        parserExtractorVersionLinks: ["parser-config-demo", "prompt-template-demo"],
+      },
+    ],
+    raterItemConflicts: [
+      {
+        id: "rater-item-conflict-submitted",
+        raterId: "demo-rater",
+        positionClusterId: "lmca-public-is-ought-gap",
+        critiqueId: "crit-ai-base-rate",
+        sourceFamilyId: "source-family-ai-base-rate",
+        conflictType: "source_family_exposure",
+        disclosureSource: "rater_self_screen",
+        independentBlindEligibilityEffect: "excluded_from_independent_blind_protected_denominators",
+        allowedNonBlindRoles: ["intake_review", "adjudication_context"],
+        reviewerResolution: "approved_non_blind_context_only",
+        timestamp: "2026-10-01T00:09:00.000Z",
+      },
+    ],
+    raterTrainingExposureSnapshots: [
+      {
+        id: "training-exposure-snapshot-submitted",
+        raterId: "demo-rater",
+        assignmentId: "assign-ai-base-rate",
+        certificationRecordId: "certification-workflow-new",
+        certificationPackVersion: "pack-v1",
+        rubricVersion: "appendix-f-operational-v1",
+        publicSourceAnchorExampleIdsPreviouslySeen: ["source-anchor-ai-base-rate"],
+        goldItemIdsOrProtectedSafeSummariesPreviouslySeen: ["gold-category:centrality_strength"],
+        duplicateFeedbackSummary: "duplicate feedback shown after lock only",
+        calibrationFeedbackEventIds: ["calibration-feedback-submitted"],
+        remediationModuleState: "not_required",
+        practiceSessionIds: ["practice-session-submitted"],
+        samePositionPositionClusterExposureChecks: ["no_prior_same_position_exposure", "position_cluster_checked"],
+        protectedSplitConflictStatus: "no_conflict_for_current_assignment",
+        protectedClusterEligibilityEffect: "eligible_after_checks",
+        createdAt: "2026-10-01T00:10:00.000Z",
+      },
+    ],
+    releaseErrata: [
+      {
+        id: "release-erratum-submitted",
+        releaseId: "october-2026-demo",
+        erratumType: "denominator_error",
+        affectedArtifactIds: ["release-report-october-2026-demo"],
+        defectSummary: "Erratum template for denominator defects discovered after freeze.",
+        supersedingArtifactIds: ["release-report-october-2026-demo-superseding-template"],
+        historicalArtifactsMutated: false,
+        historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
+        status: "issued",
+        approvedBy: "release-admin",
+        createdAt: "2026-10-01T00:11:00.000Z",
+      },
+    ],
+    scheduleStatusSnapshots: [
+      {
+        id: "schedule-status-submitted",
+        releaseVersionOrProjectScope: "october-2026-demo",
+        milestoneId: "october-internal-release",
+        milestoneName: "October internal LMCA release",
+        plannedStart: "2026-09-01",
+        plannedEnd: "2026-10-31",
+        actualStart: "2026-09-01",
+        actualEnd: null,
+        status: "in_progress",
+        evidenceArtifactIds: ["release-report-october-2026-demo"],
+        criticalPathImpact: "release remains incomplete until target scale and evidence gates pass",
+        rebaselinedDate: null,
+        rebaselinedScope: null,
+        owner: "release-admin",
+        approvedBy: "release-reviewer",
+        supportsCompletionClaim: false,
+        timestamp: "2026-10-01T00:12:00.000Z",
+      },
+    ],
+  };
+}
+
+function completeInteractionWorkflowFixtures() {
+  return {
+    publicExamplePracticeSessions: [
+      {
+        id: "practice-session-submitted",
+        raterId: "demo-rater",
+        sourceAnchorExampleIds: ["source-anchor-ai-base-rate"],
+        itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
+        workflowProfileId: "rating-workflow-profile-submitted",
+        attemptRatings: ["practice-rating-submitted"],
+        lockedAt: "2026-10-01T00:00:00.000Z",
+        feedbackArtifactId: "calibration-feedback-submitted",
+        rubricAnchorUsageSummary: "Public anchors reviewed before feedback.",
+        trainingExposureStatus: "training_exposure_recorded",
+        excludedFromRatingDenominator: true,
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    raterLearningPlans: [
+      {
+        id: "rater-learning-plan-submitted",
+        raterId: "demo-rater",
+        rubricVersion: "appendix-f-operational-v1",
+        certificationPackVersion: "pack-v1",
+        practiceGoldDuplicatePerformanceSummaries: { centrality: "calibrated" },
+        perDimensionDriftSummary: { correctness: "stable" },
+        assignedRemediationModules: ["centrality-strength-product"],
+        completedModules: ["centrality-strength-product"],
+        currentAssignmentRestrictionsUnlocks: ["ordinary_live_allowed"],
+        feedbackArtifactsShown: ["calibration-feedback-submitted"],
+        protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+        timestamp: "2026-10-01T00:01:00.000Z",
+      },
+    ],
+    raterSessions: [
+      {
+        id: "rater-session-submitted",
+        raterId: "demo-rater",
+        sessionTarget: "ordinary_live_rating",
+        startedAt: "2026-10-01T00:02:00.000Z",
+        activeTimeSeconds: 900,
+        completedAssignmentCount: 1,
+        expectedEffortCompleted: "within_band",
+        stopAfterCurrentItemState: "available",
+        fatigueWarningState: "none",
+        qaRoutingStatus: "no_fatigue_qa_route",
+        timestamp: "2026-10-01T00:02:00.000Z",
+      },
+    ],
+    assignmentDeclines: [
+      {
+        id: "assignment-decline-submitted",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        reasonCode: "conflict_or_prior_exposure",
+        reassignmentStatus: "reassigned_without_label",
+        qaRoutingStatus: "monitor_only",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+        excludedFromRatingDenominator: true,
+        timestamp: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+    interpretationTargetMaps: [
+      {
+        id: "interpretation-target-map-submitted",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        positionTextVersionId: "ptv-ai-prior-v1",
+        critiqueTextVersionId: "ctv-ai-base-rate-v1",
+        candidateIntendedConclusionSpans: ["position-conclusion"],
+        attackedClaimSpans: ["critique-attack"],
+        plausiblePositionCritiqueInterpretations: ["central_forecast_attack"],
+        plausibilityNotes: "Central forecast attack is release-relevant.",
+        critiqueCoverageByInterpretation: { central_forecast_attack: "covered" },
+        pricedInBackgroundAssumptionStatus: "not_priced_in",
+        centralityTargetClaimSet: ["central_forecast"],
+        strengthTargetClaimSet: ["base_rate_challenge"],
+        productAllocationNote: "Centrality and strength product checked together.",
+        visibilityState: "post_lock_or_adjudicator_only",
+        createdBy: "demo-expert",
+        timestamp: "2026-10-01T00:04:00.000Z",
+      },
+    ],
+    verificationWorkspaceSessions: [
+      {
+        id: "verification-workspace-submitted",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        claimList: ["The critique says expert forecasts ignore base rates."],
+        claimSpanRefs: ["claim-span-1"],
+        claimType: "subjective_or_intuition_pump",
+        verificationStatus: "not_practicable",
+        evidenceMaterialRefs: ["adjudication-note"],
+        exposureBlindingState: "post_lock_expert_only",
+        verifierId: "demo-expert",
+        verifierRole: "expert",
+        timestamp: "2026-10-01T00:05:00.000Z",
+      },
+    ],
+    adjudicatorPreReads: [
+      {
+        id: "adjudicator-pre-read-submitted",
+        adjudicatorId: "demo-expert",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        visibleMaterialPolicy: "rationales_without_peer_distribution",
+        preReadNotes: "Potential target ambiguity identified.",
+        preliminaryIssueTags: ["interpretation_dispute"],
+        completedBeforePeerDistributionExposure: true,
+        linkedAdjudicationMemoId: "adjudication-memo-workflow-new",
+        timestamp: "2026-10-01T00:06:00.000Z",
+      },
+    ],
+    postLockDiscussionSessions: [
+      {
+        id: "post-lock-discussion-submitted",
+        discussionThreadId: "discussion-thread-workflow-new",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        participantIds: ["demo-rater", "demo-expert"],
+        initialRatingLockCheck: "all_initial_ratings_locked",
+        identityStagingPolicy: "role_neutral_handles_first",
+        identityMaskPhaseStatus: "completed_before_role_reveal",
+        roleRevealPolicy: "moderator_exception_logged",
+        visibleMaterialPolicy: "peer_rationales_visible_post_lock_only",
+        objectLevelCommentRecords: ["comment-submitted"],
+        revisionProposalIds: ["revision-proposal-submitted"],
+        transcriptArtifact: "discussion-transcript-submitted",
+        discussionStatus: "object_level_discussion_complete",
+        timestamp: "2026-10-01T00:07:00.000Z",
+      },
+    ],
+    adjudicationReviewSessions: [
+      {
+        id: "adjudication-review-session-submitted",
+        adjudicationId: "adjudication-workflow-new",
+        discussionThreadId: "discussion-thread-workflow-new",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        scoreSpreadHeatmapVersion: "spread-heatmap-v1",
+        centXStrProductAllocationView: "product-allocation-v1",
+        rationaleSpanOverlayRefs: ["rationale-span-submitted"],
+        verificationConflictSummary: "subjective claim not practicable",
+        siblingContextDifferenceSummary: "same-position sibling context checked",
+        preSubmitLintSummary: "centrality-strength warning acknowledged",
+        revisionTimelineRefs: ["revision-timeline-submitted"],
+        targetMapIds: ["interpretation-target-map-submitted"],
+        minorityRationaleFields: ["minority-strength-reading"],
+        finalizationStatus: "ready_for_memo",
+        adjudicatorIds: ["demo-expert"],
+        timestamp: "2026-10-01T00:08:00.000Z",
+      },
+    ],
+    calibrationFeedbackEvents: [
+      {
+        id: "calibration-feedback-submitted",
+        certificationRecordId: "certification-record-workflow-new",
+        raterId: "demo-rater",
+        goldItemId: "gold-item-workflow-new",
+        attemptRatingId: "practice-rating-submitted",
+        rubricVersion: "appendix-f-operational-v1",
+        perDimensionDeviationSummary: { centrality: "within_band" },
+        duplicateInconsistencySummary: "none",
+        feedbackTextVersion: "feedback-v1",
+        shownAfterLock: true,
+        protectedSplitConflictCheck: "training_approved_no_protected_cluster_conflict",
+        timestamp: "2026-10-01T00:09:00.000Z",
+      },
+    ],
+    governanceApprovalRecords: [
+      {
+        id: "governance-approval-submitted",
+        actionKind: "release_manifest_activation",
+        affectedArtifactIds: ["release-config-manifest-submitted"],
+        proposedBy: "release-admin",
+        approver1: "independent-approver-a",
+        approver2: "independent-approver-b",
+        independenceSeparationOfDutiesStatus: "independent_two_person_approval",
+        reasonCode: "manifest_activation",
+        visibilitySplitMetricLeaderboardImpactSummary: "no broadening of protected visibility or metric eligibility",
+        approvalTimestamp: "2026-10-01T00:10:00.000Z",
+      },
+    ],
+    protectedArtifactRevalidations: [
+      {
+        id: "protected-artifact-revalidation-submitted",
+        protectedArtifactId: "protected-prompt-submitted",
+        releaseConfigManifestId: "release-config-manifest-submitted",
+        revalidationStatus: "passed_current_manifest_revalidation",
+        staleSupersededBehavior: "fail_closed_if_stale_or_superseded",
+        checkedBy: "release-admin",
+        checkedAt: "2026-10-01T00:11:00.000Z",
+      },
+    ],
+    benchmarkSubmissionPolicies: [
+      {
+        id: "benchmark-submission-policy-submitted",
+        policyVersion: "benchmark-submission-rlhf88-v1",
+        aggregateOnlyReport: true,
+        submissionBudget: { monthly: 2 },
+        cooldownPolicy: "cooldown_after_submission",
+        hiddenIdExposureProhibited: true,
+        perItemFeedbackProhibited: true,
+        createdBy: "release-admin",
+        frozenAt: "2026-10-01T00:12:00.000Z",
+      },
+    ],
+    benchmarkSubmissions: [
+      {
+        id: "benchmark-submission-submitted",
+        benchmarkSubmissionPolicyId: "benchmark-submission-policy-submitted",
+        releaseId: "october-2026-demo",
+        submittedAggregateReportId: "benchmark-aggregate-report-submitted",
+        perItemOutputIncluded: false,
+        hiddenIdExposureIncluded: false,
+        budgetConsumptionStatus: "within_budget",
+        cooldownStatus: "cooldown_started",
+        submittedAt: "2026-10-01T00:13:00.000Z",
+      },
+    ],
+    screenFeatureParityChecks: [
+      {
+        id: "screen-feature-parity-submitted",
+        screenId: "rating",
+        uxSimplificationPolicyId: "ux-policy-submitted",
+        workflowProfileId: "rating-workflow-profile-submitted",
+        requiredControlResults: { score_fields: "reachable", safe_decline: "reachable" },
+        featureParityChecklistResults: { no_feature_loss: "passed" },
+        noFeatureLoss: true,
+        checkedBy: "ux-reviewer",
+        checkedAt: "2026-10-01T00:14:00.000Z",
+      },
+    ],
+    simplifiedCopyPreviews: [
+      {
+        id: "simplified-copy-preview-submitted",
+        screenId: "rating",
+        copyBundleId: "copy-bundle-submitted",
+        glossaryTooltipIds: ["centrality", "strength"],
+        exactRubricTermPreservation: true,
+        hiddenFieldLeakageCheck: "passed",
+        reviewerId: "ux-reviewer",
+        reviewedAt: "2026-10-01T00:15:00.000Z",
+      },
+    ],
+  };
+}
+
 test("policy bundle evidence gates visibility, workflow profile, UI experiments, assist, and accessibility", () => {
   const report = buildPolicyBundleEvidenceReport("october-2026-demo", completePolicyBundleFixtures());
 
@@ -949,6 +1442,62 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedSamePositionBatchReviewCount, 1);
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("auxiliary workflow evidence gates blinding, partial outputs, exposure, queue selection, model provenance, conflicts, errata, and schedule state", () => {
+  const report = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", completeAuxiliaryWorkflowFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_auxiliary_workflow_evidence_complete");
+  assert.equal(report.counts.submittedBlindingPreviewAuditCount, 1);
+  assert.equal(report.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
+  assert.equal(report.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
+  assert.equal(report.counts.submittedRaterPositionClusterExposureCount, 1);
+  assert.equal(report.raterPositionClusterExposureRows.at(-1).blindEligibilityEffect, "excluded_from_fresh_blind_initial_on_cluster");
+  assert.equal(report.counts.submittedSpotCheckQaItemCount, 1);
+  assert.equal(report.spotCheckQaRows.at(-1).excludedFromIndependentRaterCount, true);
+  assert.equal(report.counts.submittedAdjudicationTriageQueueItemCount, 1);
+  assert.equal(report.counts.submittedDiagnosticDeferralRecordCount, 1);
+  assert.equal(report.counts.submittedQueuePolicySnapshotCount, 1);
+  assert.equal(report.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
+  assert.equal(report.counts.submittedAssignmentSelectionAuditCount, 1);
+  assert.equal(report.counts.submittedModelInferenceConfigCount, 1);
+  assert.equal(report.counts.submittedModelRunEnvironmentCount, 1);
+  assert.equal(report.counts.passingModelRunProvenanceCount, 1);
+  assert.equal(report.counts.submittedRaterItemConflictCount, 1);
+  assert.equal(report.raterItemConflictRows.at(-1).independentBlindEligibilityEffect, "excluded_from_independent_blind_protected_denominators");
+  assert.equal(report.counts.submittedRaterTrainingExposureSnapshotCount, 1);
+  assert.equal(report.counts.submittedReleaseErratumCount, 1);
+  assert.equal(report.releaseErrataRows.at(-1).historicalArtifactsMutated, false);
+  assert.equal(report.counts.submittedScheduleStatusSnapshotCount, 1);
+  assert.equal(report.scheduleStatusRows.at(-1).supportsCompletionClaim, false);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("interaction workflow evidence gates practice, sessions, discussion, adjudication, governance, benchmark, and simplified UI artifacts", () => {
+  const report = buildInteractionWorkflowEvidenceReport("october-2026-demo", completeInteractionWorkflowFixtures());
+
+  assert.equal(report.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
+  assert.equal(report.counts.submittedArtifactGroupCount, 16);
+  assert.equal(report.counts.completeArtifactGroupCount, 16);
+  assert.equal(report.counts.submittedPublicExamplePracticeSessionCount, 1);
+  assert.equal(report.counts.submittedRaterLearningPlanCount, 1);
+  assert.equal(report.counts.submittedRaterSessionCount, 1);
+  assert.equal(report.counts.submittedAssignmentDeclineCount, 1);
+  assert.equal(report.counts.submittedInterpretationTargetMapCount, 1);
+  assert.equal(report.counts.submittedVerificationWorkspaceSessionCount, 1);
+  assert.equal(report.counts.submittedAdjudicatorPreReadCount, 1);
+  assert.equal(report.counts.submittedPostLockDiscussionSessionCount, 1);
+  assert.equal(report.counts.submittedAdjudicationReviewSessionCount, 1);
+  assert.equal(report.counts.submittedCalibrationFeedbackEventCount, 1);
+  assert.equal(report.counts.submittedGovernanceApprovalRecordCount, 1);
+  assert.equal(report.counts.submittedProtectedArtifactRevalidationCount, 1);
+  assert.equal(report.counts.submittedBenchmarkSubmissionPolicyCount, 1);
+  assert.equal(report.counts.submittedBenchmarkSubmissionCount, 1);
+  assert.equal(report.counts.submittedScreenFeatureParityCheckCount, 1);
+  assert.equal(report.counts.submittedSimplifiedCopyPreviewCount, 1);
+  assert.equal(report.benchmarkSubmissionRows.at(-1).perItemOutputIncluded, false);
+  assert.equal(report.screenFeatureParityCheckRows.at(-1).noFeatureLoss, true);
   assert.deepEqual(report.reviewSections, []);
 });
 
