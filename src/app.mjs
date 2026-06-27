@@ -1718,6 +1718,7 @@ function header(gateSummary, labelSnapshot) {
       <div>
         <h1>October 2026 Method-Preserving Release</h1>
         <p>Claim-gated LMCA volunteer platform with blind ratings, frozen snapshots, and separate metric families.</p>
+        <p>Building a dataset to train AI to do better philosophy.</p>
         <p>What actually counts as a good philosophical argument?</p>
       </div>
       <div class="topbarStats">
