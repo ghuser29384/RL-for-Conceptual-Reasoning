@@ -350,7 +350,36 @@ const queueHealthChecks = [
 ];
 const queueStaleTransitionOutcomes = ["dependency_change_blocked", "age_window_enforced", "backpressure_window_enforced"];
 const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
+const clientSurfaceChecks = [
+  "no_third_party_analytics",
+  "no_third_party_pixels",
+  "no_third_party_resources",
+  "no_session_replay",
+  "no_heatmaps",
+  "no_dom_capture",
+  "no_keystroke_logging",
+  "no_sensitive_url_ids",
+  "referrer_policy",
+  "no_persistent_offline_cache",
+  "first_party_telemetry_allowlist",
+  "screen_state_output_schema_binding",
+  "csp",
+];
 const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
+const auditChainPolicyActionKindByEventKind = {
+  governance_approval: "manifest_activation",
+  manifest_activation: "manifest_activation",
+  protected_label_access: "protected_render",
+  hidden_benchmark_release: "hidden_benchmark_aggregate_report",
+  training_export_release: "training_export",
+};
+const auditChainProtectedDataExposureClassByEventKind = {
+  governance_approval: "redacted_metadata_only",
+  manifest_activation: "redacted_metadata_only",
+  protected_label_access: "protected_label_access_redacted",
+  hidden_benchmark_release: "hidden_benchmark_release_redacted",
+  training_export_release: "training_export_release_redacted",
+};
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
 const prohibitedIncentiveSignals = [
   "rating_direction",
@@ -503,23 +532,43 @@ function completeReleaseConfigWorkflowFixtures() {
     includedFieldPolicy: "semantic fields only",
     rowOrderingPolicy: "order by family, version, id",
     arrayOrderingPolicy: "sort set-like arrays before hashing",
-    nullEmptyHandling: "preserve null and empty distinctions",
-    unicodeNormalization: "NFC",
-    timestampNumberEncoding: "UTC ISO timestamps and decimal-string numbers",
-    testVectorIds: ["governed-bundle-vector-v1"],
-    activatedAt: "2026-10-01T00:07:00.000Z",
-  };
-  const governedBundleRecords = governedBundleFamilies.map((bundleFamily, index) => ({
+	    nullEmptyHandling: "preserve null and empty distinctions",
+	    unicodeNormalization: "NFC",
+	    timestampNumberEncoding: "UTC ISO timestamps and decimal-string numbers",
+	    environmentScopeFields: ["releaseId", "runtime", "buildId"],
+	    nonsemanticMetadataExclusionRules: ["receivedAt", "actorHash", "remoteAddressHash"],
+	    testVectorIds: ["governed-bundle-vector-v1"],
+	    createdBy: "demo-admin",
+	    activatedAt: "2026-10-01T00:07:00.000Z",
+	  };
+	  const governedBundleRecords = governedBundleFamilies.map((bundleFamily, index) => ({
     id: `governed-bundle-workflow-${bundleFamily}`,
     bundleFamily,
     semanticVersion: `rlhf88-${index + 1}`,
-    canonicalizationProfileId: governedBundleCanonicalizationProfile.id,
-    canonicalContentHash: `sha256:workflow-${bundleFamily}`,
-    materializedRowCount: index + 1,
-    appendOnlyActivationStatus: "activated",
-    activatedBy: "demo-admin",
-    activatedAt: "2026-10-01T00:08:00.000Z",
-  }));
+	    canonicalizationProfileId: governedBundleCanonicalizationProfile.id,
+	    canonicalContentHash: `sha256:workflow-${bundleFamily}`,
+	    materializedRowCount: index + 1,
+	    bundleContentSchemaVersion: `${bundleFamily}-bundle-schema-v1`,
+	    canonicalizationTestVectorId: "governed-bundle-vector-v1",
+	    semanticMutationPolicy: "new_version_required",
+	    manifestActivationPolicy: "verified_before_manifest_activation",
+	    appendOnlyActivationStatus: "activated",
+	    activatedBy: "demo-admin",
+	    activatedAt: "2026-10-01T00:08:00.000Z",
+	  }));
+	  const governedBundleVerifications = governedBundleRecords.map((bundle) => ({
+	    id: `governed-bundle-verification-workflow-${bundle.bundleFamily}`,
+	    governedBundleId: bundle.id,
+	    bundleFamily: bundle.bundleFamily,
+	    semanticVersion: bundle.semanticVersion,
+	    canonicalizationProfileId: bundle.canonicalizationProfileId,
+	    verificationStatus: "passed",
+	    expectedHash: bundle.canonicalContentHash,
+	    observedHash: bundle.canonicalContentHash,
+	    materializedRowCount: bundle.materializedRowCount,
+	    manifestActivationBlockedOnMismatch: true,
+	    verifiedAt: "2026-10-01T00:10:00.000Z",
+	  }));
   const releaseConfigManifest = {
     id: "release-config-manifest-workflow-new",
     releaseId: "october-2026-demo",
@@ -552,16 +601,10 @@ function completeReleaseConfigWorkflowFixtures() {
     frozenAt: "2026-10-01T00:09:00.000Z",
   };
   return {
-    governedBundleCanonicalizationProfile,
-    governedBundleRecords,
-    governedBundleVerification: {
-      id: "governed-bundle-verification-workflow-new",
-      governedBundleId: governedBundleRecords[0].id,
-      verificationStatus: "passed",
-      expectedHash: governedBundleRecords[0].canonicalContentHash,
-      observedHash: governedBundleRecords[0].canonicalContentHash,
-      verifiedAt: "2026-10-01T00:10:00.000Z",
-    },
+	    governedBundleCanonicalizationProfile,
+	    governedBundleRecords,
+	    governedBundleVerifications,
+	    governedBundleVerification: governedBundleVerifications[0],
     releaseConfigManifest,
     releaseConfigManifestVerification: {
       id: "release-config-manifest-verification-workflow-new",
@@ -581,12 +624,14 @@ function completeOperationalControlWorkflowFixtures() {
     sideEffecting: actionKind !== "protected_render",
     protectedRender: actionKind === "protected_render",
     requiresCurrentDecision: true,
-    requiresManifestBinding: true,
-    requiresActorBinding: true,
-    requiresOutputSchemaBinding: true,
-    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
-    wrongScopeBehavior: "fail_closed",
-    activatedAt: "2026-10-01T00:12:00.000Z",
+	    requiresManifestBinding: true,
+	    requiresActorBinding: true,
+	    requiresOutputSchemaBinding: true,
+	    requiresPhaseGateBinding: true,
+	    requiresIdempotencyBinding: true,
+	    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
+	    wrongScopeBehavior: "fail_closed",
+	    activatedAt: "2026-10-01T00:12:00.000Z",
   }));
   const policyDecisionRecords = policyActionKindRecords.map((actionKind) => ({
     id: `policy-decision-workflow-${actionKind.actionKind}`,
@@ -594,56 +639,85 @@ function completeOperationalControlWorkflowFixtures() {
     actionKind: actionKind.actionKind,
     decisionStatus: "allow",
     actorId: "demo-admin",
-    actorRole: "admin",
-    manifestId: "release-config-manifest-workflow-new",
-    releaseId: "october-2026-demo",
-    outputSchemaVersion: "lmca-policy-decision-v1",
-    idempotencyKey: `idempotency-${actionKind.actionKind}`,
-    singleUse: actionKind.actionKind !== "protected_render",
-    expiresAt: "2026-10-01T01:12:00.000Z",
-    decidedAt: "2026-10-01T00:12:00.000Z",
-  }));
+	    actorRole: "admin",
+	    manifestId: "release-config-manifest-workflow-new",
+	    manifestHash: "sha256:release-config-manifest-workflow-new",
+	    phaseGateBundleId: "implementation-phase-gate-workflow-new",
+	    phaseGateBundleHash: "sha256:implementation-phase-gate-workflow-new",
+	    releaseId: "october-2026-demo",
+	    outputSchemaVersion: "lmca-policy-decision-v1",
+	    outputSchemaHash: `sha256:output-schema-${actionKind.actionKind}`,
+	    targetArtifactIds: [`target-${actionKind.actionKind}`],
+	    idempotencyKey: `idempotency-${actionKind.actionKind}`,
+	    singleUse: actionKind.actionKind !== "protected_render",
+	    replayStatus: "unused",
+	    manifestBindingStatus: "matched",
+	    outputSchemaBindingStatus: "matched",
+	    phaseGateBindingStatus: "matched",
+	    idempotencyBindingStatus: "matched",
+	    expiresAt: "2026-10-01T01:12:00.000Z",
+	    decidedAt: "2026-10-01T00:12:00.000Z",
+	  }));
   const clientSurfaceIntegrityPolicies = clientSurfaces.map((surface) => ({
     id: `client-surface-integrity-workflow-${surface}`,
-    releaseId: "october-2026-demo",
-    surface,
-    thirdPartyAnalyticsProhibited: true,
-    sessionReplayProhibited: true,
-    domCaptureProhibited: true,
-    keystrokeLoggingProhibited: true,
-    sensitiveUrlIdsProhibited: true,
-    referrerLeakageBlocked: true,
-    persistentOfflineCacheProhibited: true,
-    cspEnforced: true,
-    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
-  }));
-  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
-    id: `sensitive-audit-chain-event-workflow-${index + 1}`,
-    releaseId: "october-2026-demo",
-    sequence: index + 1,
-    eventKind,
-    actorHash: `sha256:workflow-actor-${index + 1}`,
-    approverHashes: ["sha256:workflow-approver-a", "sha256:workflow-approver-b"],
-    affectedArtifactIds: [`artifact-${eventKind}`],
-    beforeHash: `sha256:workflow-before-${eventKind}`,
-    afterHash: `sha256:workflow-after-${eventKind}`,
-    previousEventHash: index === 0 ? null : `sha256:workflow-event-${index}`,
-    eventHash: `sha256:workflow-event-${index + 1}`,
-    redactionPolicy: "redact protected labels, hidden text, and private rater data",
-    occurredAt: "2026-10-01T00:17:00.000Z",
-  }));
+	    releaseId: "october-2026-demo",
+	    surface,
+	    thirdPartyAnalyticsProhibited: true,
+	    thirdPartyPixelsProhibited: true,
+	    thirdPartyResourcesProhibited: true,
+	    thirdPartyResourceAllowlist: [],
+	    sessionReplayProhibited: true,
+	    heatmapTrackingProhibited: true,
+	    domCaptureProhibited: true,
+	    keystrokeLoggingProhibited: true,
+	    sensitiveUrlIdsProhibited: true,
+	    referrerLeakageBlocked: true,
+	    persistentOfflineCacheProhibited: true,
+	    firstPartyTelemetryOnly: true,
+	    telemetryAllowlistEnforced: true,
+	    screenStateOutputSchemaBound: true,
+	    nonStaffPromotionBlockedOnViolation: true,
+	    cspEnforced: true,
+	    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
+	  }));
+	  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
+	    id: `sensitive-audit-chain-event-workflow-${index + 1}`,
+	    chainId: "sensitive-audit-chain-workflow",
+	    releaseId: "october-2026-demo",
+	    sequence: index + 1,
+	    eventKind,
+	    actionKind: eventKind,
+	    policyDecisionId: `policy-decision-workflow-${auditChainPolicyActionKindByEventKind[eventKind]}`,
+	    governanceApprovalRecordId: `governance-approval-workflow-${eventKind}`,
+	    actorHash: `sha256:workflow-actor-${index + 1}`,
+	    approverHashes: ["sha256:workflow-approver-a", "sha256:workflow-approver-b"],
+	    affectedArtifactIds: [`artifact-${eventKind}`],
+	    beforeHash: `sha256:workflow-before-${eventKind}`,
+	    afterHash: `sha256:workflow-after-${eventKind}`,
+	    previousEventHash: index === 0 ? null : `sha256:workflow-event-${index}`,
+	    eventHash: `sha256:workflow-event-${index + 1}`,
+	    redactedReasonClasses: ["high_impact_action", eventKind],
+	    protectedDataExposureClass: auditChainProtectedDataExposureClassByEventKind[eventKind],
+	    externalWormLedgerPointer: `worm:workflow:${index + 1}`,
+	    redactionPolicy: "redact protected labels, hidden text, raw source text, and private rater data",
+	    occurredAt: "2026-10-01T00:17:00.000Z",
+	  }));
   return {
     policyActionKindRecords,
     policyDecisionRecords,
     policyDecisionConsumption: {
       id: "policy-decision-consumption-workflow-new",
       decisionId: "policy-decision-workflow-rating_lock",
-      actionKind: "rating_lock",
-      manifestId: "release-config-manifest-workflow-new",
-      outputSchemaVersion: "lmca-policy-decision-v1",
-      idempotencyKey: "idempotency-rating_lock",
-      consumedAt: "2026-10-01T00:13:00.000Z",
-    },
+	      actionKind: "rating_lock",
+	      manifestId: "release-config-manifest-workflow-new",
+	      manifestHash: "sha256:release-config-manifest-workflow-new",
+	      phaseGateBundleId: "implementation-phase-gate-workflow-new",
+	      phaseGateBundleHash: "sha256:implementation-phase-gate-workflow-new",
+	      outputSchemaVersion: "lmca-policy-decision-v1",
+	      outputSchemaHash: "sha256:output-schema-rating_lock",
+	      idempotencyKey: "idempotency-rating_lock",
+	      consumedAt: "2026-10-01T00:13:00.000Z",
+	    },
     implementationPhaseGateBundle: {
       id: "implementation-phase-gate-workflow-new",
       releaseId: "october-2026-demo",
@@ -699,21 +773,13 @@ function completeOperationalControlWorkflowFixtures() {
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks: clientSurfaceIntegrityPolicies.map((policy) => ({
       id: `client-surface-integrity-check-workflow-${policy.surface}`,
-      clientSurfaceId: policy.id,
-      surface: policy.surface,
-      checkStatus: "passed",
-      checksPassed: [
-        "no_third_party_analytics",
-        "no_session_replay",
-        "no_dom_capture",
-        "no_sensitive_url_ids",
-        "referrer_policy",
-        "no_persistent_offline_cache",
-        "csp",
-      ],
-      failures: [],
-      checkedAt: "2026-10-01T00:16:00.000Z",
-    })),
+	    clientSurfaceId: policy.id,
+	    surface: policy.surface,
+	    checkStatus: "passed",
+	    checksPassed: clientSurfaceChecks,
+	    failures: [],
+	    checkedAt: "2026-10-01T00:16:00.000Z",
+	  })),
     sensitiveAuditChainEvents,
   };
 }
@@ -8002,10 +8068,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(weakCanonicalizationProfile.status, 400);
   assert.match(weakCanonicalizationProfile.body.detail, /hashAlgorithm/);
 
-  const incompleteCanonicalizationProfile = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/governed-bundle-canonicalization-profiles",
-    headers: adminHeaders,
+	  const incompleteCanonicalizationProfile = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/governed-bundle-canonicalization-profiles",
+	    headers: adminHeaders,
     body: JSON.stringify({
       governedBundleCanonicalizationProfile: {
         ...releaseConfig.governedBundleCanonicalizationProfile,
@@ -8014,12 +8080,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       },
     }),
   });
-  assert.equal(incompleteCanonicalizationProfile.status, 400);
-  assert.match(incompleteCanonicalizationProfile.body.detail, /testVectorIds/);
+	  assert.equal(incompleteCanonicalizationProfile.status, 400);
+	  assert.match(incompleteCanonicalizationProfile.body.detail, /testVectorIds/);
 
-  for (const governedBundleRecord of releaseConfig.governedBundleRecords) {
-    const governedBundle = await invokeApi(context, {
-      method: "POST",
+	  const unscopedCanonicalizationProfile = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/governed-bundle-canonicalization-profiles",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      governedBundleCanonicalizationProfile: {
+	        ...releaseConfig.governedBundleCanonicalizationProfile,
+	        id: "canonicalization-profile-workflow-unscoped",
+	        environmentScopeFields: [],
+	      },
+	    }),
+	  });
+	  assert.equal(unscopedCanonicalizationProfile.status, 400);
+	  assert.match(unscopedCanonicalizationProfile.body.detail, /environmentScopeFields/);
+
+	  for (const governedBundleRecord of releaseConfig.governedBundleRecords) {
+	    const governedBundle = await invokeApi(context, {
+	      method: "POST",
       url: "/api/v1/governed-bundles",
       headers: adminHeaders,
       body: JSON.stringify({ governedBundleRecord }),
@@ -8062,27 +8143,44 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       },
     }),
   });
-  assert.equal(incompleteGovernedBundle.status, 400);
-  assert.match(incompleteGovernedBundle.body.detail, /materializedRowCount/);
+	  assert.equal(incompleteGovernedBundle.status, 400);
+	  assert.match(incompleteGovernedBundle.body.detail, /materializedRowCount/);
 
-  const governedBundleVerification = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/governed-bundles/governed-bundle-workflow-rubric/verify",
-    headers: adminHeaders,
-    body: JSON.stringify({ governedBundleVerification: releaseConfig.governedBundleVerification }),
-  });
-  assert.equal(governedBundleVerification.status, 201);
+	  const mutableGovernedBundle = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/governed-bundles",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      governedBundleRecord: {
+	        ...releaseConfig.governedBundleRecords[0],
+	        id: "governed-bundle-workflow-mutable",
+	        semanticMutationPolicy: "mutate_in_place",
+	      },
+	    }),
+	  });
+	  assert.equal(mutableGovernedBundle.status, 400);
+	  assert.match(mutableGovernedBundle.body.detail, /semanticMutationPolicy/);
 
-  const mismatchedGovernedBundleVerification = await invokeApi(context, {
-    method: "POST",
+	  for (const governedBundleVerification of releaseConfig.governedBundleVerifications) {
+	    const response = await invokeApi(context, {
+	      method: "POST",
+	      url: `/api/v1/governed-bundles/${governedBundleVerification.governedBundleId}/verify`,
+	      headers: adminHeaders,
+	      body: JSON.stringify({ governedBundleVerification }),
+	    });
+	    assert.equal(response.status, 201, governedBundleVerification.bundleFamily);
+	  }
+
+	  const mismatchedGovernedBundleVerification = await invokeApi(context, {
+	    method: "POST",
     url: "/api/v1/governed-bundles/governed-bundle-workflow-rubric/verify",
     headers: adminHeaders,
     body: JSON.stringify({
       governedBundleVerification: {
-        ...releaseConfig.governedBundleVerification,
-        id: "governed-bundle-verification-workflow-mismatch",
-        observedHash: "sha256:wrong-bundle-hash",
-      },
+	        ...releaseConfig.governedBundleVerification,
+	        id: "governed-bundle-verification-workflow-mismatch",
+	        observedHash: "sha256:wrong-bundle-hash",
+	      },
     }),
   });
   assert.equal(mismatchedGovernedBundleVerification.status, 400);
@@ -8236,13 +8334,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     method: "GET",
     url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock",
     headers: adminHeaders,
-  });
-  assert.equal(policyDecisionById.status, 200);
-  assert.equal(policyDecisionById.body.manifestId, "release-config-manifest-workflow-new");
+	  });
+	  assert.equal(policyDecisionById.status, 200);
+	  assert.equal(policyDecisionById.body.manifestId, "release-config-manifest-workflow-new");
+	  assert.equal(policyDecisionById.body.manifestHash, "sha256:release-config-manifest-workflow-new");
 
-  const unsupportedPolicyDecision = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/policy-decisions",
+	  const unsupportedPolicyDecision = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/policy-decisions",
     headers: adminHeaders,
     body: JSON.stringify({
       policyDecisionRecord: {
@@ -8251,13 +8350,85 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         decisionStatus: "deny",
       },
     }),
-  });
-  assert.equal(unsupportedPolicyDecision.status, 400);
-  assert.match(unsupportedPolicyDecision.body.detail, /decisionStatus/);
+	  });
+	  assert.equal(unsupportedPolicyDecision.status, 400);
+	  assert.match(unsupportedPolicyDecision.body.detail, /decisionStatus/);
 
-  const policyDecisionConsumption = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock/consume",
+	  const replayedPolicyDecision = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/policy-decisions",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      policyDecisionRecord: {
+	        ...operationalControls.policyDecisionRecords[0],
+	        id: "policy-decision-workflow-replayed",
+	        replayStatus: "consumed",
+	      },
+	    }),
+	  });
+	  assert.equal(replayedPolicyDecision.status, 400);
+	  assert.match(replayedPolicyDecision.body.detail, /replayStatus/);
+
+	  const expiredDecisionRecord = {
+	    ...operationalControls.policyDecisionRecords[0],
+	    id: "policy-decision-workflow-expired",
+	    expiresAt: "2000-01-01T00:00:00.000Z",
+	  };
+	  const expiredDecisionContext = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+	  const expiredPolicyDecision = await invokeApi(expiredDecisionContext, {
+	    method: "POST",
+	    url: "/api/v1/policy-decisions",
+	    headers: adminHeaders,
+	    body: JSON.stringify({ policyDecisionRecord: expiredDecisionRecord }),
+	  });
+	  assert.equal(expiredPolicyDecision.status, 201);
+
+	  const expiredPolicyDecisionConsumption = await invokeApi(expiredDecisionContext, {
+	    method: "POST",
+	    url: "/api/v1/policy-decisions/policy-decision-workflow-expired/consume",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      policyDecisionConsumption: {
+	        ...operationalControls.policyDecisionConsumption,
+	        id: "policy-decision-consumption-expired",
+	        decisionId: "policy-decision-workflow-expired",
+	        actionKind: expiredDecisionRecord.actionKind,
+	        manifestId: expiredDecisionRecord.manifestId,
+	        manifestHash: expiredDecisionRecord.manifestHash,
+	        phaseGateBundleId: expiredDecisionRecord.phaseGateBundleId,
+	        phaseGateBundleHash: expiredDecisionRecord.phaseGateBundleHash,
+	        outputSchemaVersion: expiredDecisionRecord.outputSchemaVersion,
+	        outputSchemaHash: expiredDecisionRecord.outputSchemaHash,
+	        idempotencyKey: expiredDecisionRecord.idempotencyKey,
+	      },
+	    }),
+	  });
+	  assert.equal(expiredPolicyDecisionConsumption.status, 409);
+	  assert.equal(expiredPolicyDecisionConsumption.body.error, "policy_decision_not_current");
+	  assert.deepEqual(expiredPolicyDecisionConsumption.body.failClosedReasons, ["expiresAt"]);
+
+	  const wrongScopePolicyDecisionConsumption = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock/consume",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      policyDecisionConsumption: {
+	        ...operationalControls.policyDecisionConsumption,
+	        id: "policy-decision-consumption-wrong-scope",
+	        manifestHash: "sha256:wrong-manifest",
+	        phaseGateBundleId: "wrong-phase-gate",
+	        outputSchemaHash: "sha256:wrong-output-schema",
+	        idempotencyKey: "wrong-idempotency-key",
+	      },
+	    }),
+	  });
+	  assert.equal(wrongScopePolicyDecisionConsumption.status, 409);
+	  assert.equal(wrongScopePolicyDecisionConsumption.body.error, "policy_decision_scope_mismatch");
+	  assert.deepEqual(wrongScopePolicyDecisionConsumption.body.scopeMismatches, ["manifestHash", "phaseGateBundleId", "outputSchemaHash", "idempotencyKey"]);
+
+	  const policyDecisionConsumption = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock/consume",
     headers: adminHeaders,
     body: JSON.stringify({ policyDecisionConsumption: operationalControls.policyDecisionConsumption }),
   });
@@ -8452,13 +8623,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       },
     }),
   });
-  assert.equal(weakClientSurfacePolicy.status, 400);
-  assert.match(weakClientSurfacePolicy.body.detail, /sessionReplayProhibited/);
+	  assert.equal(weakClientSurfacePolicy.status, 400);
+	  assert.match(weakClientSurfacePolicy.body.detail, /sessionReplayProhibited/);
 
-  const failingClientSurfaceCheck = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/client-surfaces/client-surface-integrity-workflow-rating/integrity-check",
-    headers: adminHeaders,
+	  const thirdPartyClientSurfacePolicy = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/client-surface-integrity-policies",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      clientSurfaceIntegrityPolicy: {
+	        ...operationalControls.clientSurfaceIntegrityPolicies[0],
+	        id: "client-surface-integrity-workflow-third-party",
+	        thirdPartyResourceAllowlist: ["https://analytics.example.test/pixel.js"],
+	        heatmapTrackingProhibited: false,
+	        telemetryAllowlistEnforced: false,
+	      },
+	    }),
+	  });
+	  assert.equal(thirdPartyClientSurfacePolicy.status, 400);
+	  assert.match(thirdPartyClientSurfacePolicy.body.detail, /thirdPartyResourceAllowlist|heatmapTrackingProhibited|telemetryAllowlistEnforced/);
+
+	  const failingClientSurfaceCheck = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/client-surfaces/client-surface-integrity-workflow-rating/integrity-check",
+	    headers: adminHeaders,
     body: JSON.stringify({
       clientSurfaceIntegrityCheck: {
         ...operationalControls.clientSurfaceIntegrityChecks[0],
@@ -8466,12 +8654,29 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         failures: ["third_party_analytics_detected"],
       },
     }),
-  });
-  assert.equal(failingClientSurfaceCheck.status, 400);
-  assert.match(failingClientSurfaceCheck.body.detail, /failures/);
+	  });
+	  assert.equal(failingClientSurfaceCheck.status, 400);
+	  assert.match(failingClientSurfaceCheck.body.detail, /failures/);
 
-  for (const sensitiveAuditChainEvent of operationalControls.sensitiveAuditChainEvents) {
-    const response = await invokeApi(context, {
+	  const incompleteClientSurfaceCheck = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/client-surfaces/client-surface-integrity-workflow-rating/integrity-check",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      clientSurfaceIntegrityCheck: {
+	        ...operationalControls.clientSurfaceIntegrityChecks[0],
+	        id: "client-surface-integrity-check-workflow-incomplete",
+	        checksPassed: operationalControls.clientSurfaceIntegrityChecks[0].checksPassed.filter(
+	          (item) => !["no_heatmaps", "no_third_party_pixels", "screen_state_output_schema_binding"].includes(item)
+	        ),
+	      },
+	    }),
+	  });
+	  assert.equal(incompleteClientSurfaceCheck.status, 400);
+	  assert.match(incompleteClientSurfaceCheck.body.detail, /no_heatmaps|no_third_party_pixels|screen_state_output_schema_binding/);
+
+	  for (const sensitiveAuditChainEvent of operationalControls.sensitiveAuditChainEvents) {
+	    const response = await invokeApi(context, {
       method: "POST",
       url: "/api/v1/sensitive-audit-chain/events",
       headers: adminHeaders,
@@ -8488,10 +8693,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(auditChainEvents.status, 200);
   assert.equal(auditChainEvents.body.events.length, auditChainEventKinds.length);
 
-  const invalidSensitiveAuditChainEvent = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/sensitive-audit-chain/events",
-    headers: adminHeaders,
+	  const invalidSensitiveAuditChainEvent = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/sensitive-audit-chain/events",
+	    headers: adminHeaders,
     body: JSON.stringify({
       sensitiveAuditChainEvent: {
         ...operationalControls.sensitiveAuditChainEvents[0],
@@ -8500,12 +8705,57 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       },
     }),
   });
-  assert.equal(invalidSensitiveAuditChainEvent.status, 400);
-  assert.match(invalidSensitiveAuditChainEvent.body.detail, /eventHash/);
+	  assert.equal(invalidSensitiveAuditChainEvent.status, 400);
+	  assert.match(invalidSensitiveAuditChainEvent.body.detail, /eventHash/);
 
-  const auditChainVerification = await invokeApi(context, {
-    method: "POST",
-    url: "/api/v1/sensitive-audit-chain/verify",
+	  const weakSensitiveAuditChainEvent = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/sensitive-audit-chain/events",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      sensitiveAuditChainEvent: {
+	        ...operationalControls.sensitiveAuditChainEvents[0],
+	        id: "sensitive-audit-chain-event-workflow-weak",
+	        approverHashes: ["plain-approver"],
+	      },
+	    }),
+	  });
+	  assert.equal(weakSensitiveAuditChainEvent.status, 400);
+	  assert.match(weakSensitiveAuditChainEvent.body.detail, /approverHashes/);
+
+	  const tamperedAuditContext = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+	  const firstTamperedAuditEvent = await invokeApi(tamperedAuditContext, {
+	    method: "POST",
+	    url: "/api/v1/sensitive-audit-chain/events",
+	    headers: adminHeaders,
+	    body: JSON.stringify({ sensitiveAuditChainEvent: operationalControls.sensitiveAuditChainEvents[0] }),
+	  });
+	  assert.equal(firstTamperedAuditEvent.status, 201);
+	  const secondTamperedAuditEvent = await invokeApi(tamperedAuditContext, {
+	    method: "POST",
+	    url: "/api/v1/sensitive-audit-chain/events",
+	    headers: adminHeaders,
+	    body: JSON.stringify({
+	      sensitiveAuditChainEvent: {
+	        ...operationalControls.sensitiveAuditChainEvents[1],
+	        previousEventHash: "sha256:wrong-previous-event",
+	      },
+	    }),
+	  });
+	  assert.equal(secondTamperedAuditEvent.status, 201);
+	  const tamperedAuditChainVerification = await invokeApi(tamperedAuditContext, {
+	    method: "POST",
+	    url: "/api/v1/sensitive-audit-chain/verify",
+	    headers: adminHeaders,
+	    body: JSON.stringify({ id: "sensitive-audit-chain-verification-tampered", verifiedAt: "2026-10-01T00:18:30.000Z" }),
+	  });
+	  assert.equal(tamperedAuditChainVerification.status, 201);
+	  assert.equal(tamperedAuditChainVerification.body.chainStatus, "failed");
+	  assert.ok(tamperedAuditChainVerification.body.failures.some((failure) => failure.startsWith("previousEventHash:")));
+
+	  const auditChainVerification = await invokeApi(context, {
+	    method: "POST",
+	    url: "/api/v1/sensitive-audit-chain/verify",
     headers: adminHeaders,
     body: JSON.stringify({ id: "sensitive-audit-chain-verification-workflow-new", verifiedAt: "2026-10-01T00:18:00.000Z" }),
   });
@@ -8958,13 +9208,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedBenchmarkSubmissionCount, 1);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedScreenFeatureParityCheckCount, uxSimplificationSurfaces.length);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedSimplifiedCopyPreviewCount, uxSimplificationSurfaces.length);
-  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.reviewSections, []);
-  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleCanonicalizationProfiles.length, 1);
-  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleRecords.length, governedBundleFamilies.length);
-  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifests.length, 1);
-  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifestVerifications.length, 1);
-  assert.equal(releaseReport.body.releaseConfigManifestEvidence.releaseUseStatus, "submitted_release_config_manifest_evidence_complete");
-  assert.equal(releaseReport.body.releaseConfigManifestEvidence.counts.passingBundleFamilyCount, governedBundleFamilies.length);
+	  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.reviewSections, []);
+	  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleCanonicalizationProfiles.length, 1);
+	  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleRecords.length, governedBundleFamilies.length);
+	  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.governedBundleVerifications.length, governedBundleFamilies.length);
+	  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifests.length, 1);
+	  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.releaseConfigManifestVerifications.length, 1);
+	  assert.equal(releaseReport.body.releaseConfigManifestEvidence.releaseUseStatus, "submitted_release_config_manifest_evidence_complete");
+	  assert.equal(releaseReport.body.releaseConfigManifestEvidence.counts.submittedGovernedBundleVerificationCount, governedBundleFamilies.length);
+	  assert.equal(releaseReport.body.releaseConfigManifestEvidence.counts.passingBundleFamilyCount, governedBundleFamilies.length);
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
   assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyActionKinds.length, policyActionKinds.length);
@@ -9066,7 +9318,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 241 + uxSimplificationSurfaces.length * 3);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 241 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

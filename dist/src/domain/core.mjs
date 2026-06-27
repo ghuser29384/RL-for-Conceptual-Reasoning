@@ -11149,11 +11149,12 @@ function defaultGovernedBundleCanonicalizationProfile(releaseId) {
     nullEmptyHandling: "preserve_null_and_empty_distinction",
     unicodeNormalization: "NFC",
     timestampNumberEncoding: "iso8601_utc_and_decimal_string_numbers",
-    environmentScopeFields: ["releaseId", "runtime", "buildId"],
-    nonsemanticMetadataExclusionRules: ["receivedAt", "actorHash", "remoteAddressHash"],
-    testVectorIds: ["governed-bundle-canonical-json-v1"],
-    activatedAt: "2026-10-01T00:00:00.000Z",
-  };
+	    environmentScopeFields: ["releaseId", "runtime", "buildId"],
+	    nonsemanticMetadataExclusionRules: ["receivedAt", "actorHash", "remoteAddressHash"],
+	    testVectorIds: ["governed-bundle-canonical-json-v1"],
+	    createdBy: "seed-release-admin",
+	    activatedAt: "2026-10-01T00:00:00.000Z",
+	  };
 }
 
 function defaultGovernedBundleRecords(releaseId, profileId) {
@@ -11161,12 +11162,32 @@ function defaultGovernedBundleRecords(releaseId, profileId) {
     id: `governed-bundle-${releaseId}-${bundleFamily}`,
     bundleFamily,
     semanticVersion: "rlhf88-v1",
-    canonicalizationProfileId: profileId,
-    canonicalContentHash: `sha256:seed-${releaseId}-${bundleFamily}`,
-    materializedRowCount: 1,
-    appendOnlyActivationStatus: "activated",
-    activatedBy: "seed-release-admin",
-    activatedAt: "2026-10-01T00:00:00.000Z",
+	    canonicalizationProfileId: profileId,
+	    canonicalContentHash: `sha256:seed-${releaseId}-${bundleFamily}`,
+	    materializedRowCount: 1,
+	    bundleContentSchemaVersion: `${bundleFamily}-bundle-schema-v1`,
+	    canonicalizationTestVectorId: "governed-bundle-canonical-json-v1",
+	    semanticMutationPolicy: "new_version_required",
+	    manifestActivationPolicy: "verified_before_manifest_activation",
+	    appendOnlyActivationStatus: "activated",
+	    activatedBy: "seed-release-admin",
+	    activatedAt: "2026-10-01T00:00:00.000Z",
+	  }));
+}
+
+function defaultGovernedBundleVerifications(releaseId, bundleRecords) {
+  return bundleRecords.map((bundle) => ({
+    id: `governed-bundle-verification-${releaseId}-${bundle.bundleFamily}`,
+    governedBundleId: bundle.id,
+    bundleFamily: bundle.bundleFamily,
+    semanticVersion: bundle.semanticVersion,
+    canonicalizationProfileId: bundle.canonicalizationProfileId,
+    verificationStatus: "passed",
+    expectedHash: bundle.canonicalContentHash,
+    observedHash: bundle.canonicalContentHash,
+    materializedRowCount: bundle.materializedRowCount,
+    manifestActivationBlockedOnMismatch: true,
+    verifiedAt: "2026-10-01T00:00:00.000Z",
   }));
 }
 
@@ -11217,30 +11238,38 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
     .filter(Boolean);
   const seedProfile = normalizeGovernedBundleCanonicalizationProfile(defaultGovernedBundleCanonicalizationProfile(releaseId), "seed_canonicalization_profile");
   const activeProfile = submittedProfileRows.find((row) => row.reviewReasons.length === 0) ?? seedProfile;
-  const submittedBundleRows = (options.governedBundleRecords ?? [])
-    .map((bundle) => normalizeGovernedBundleRecord(bundle, activeProfile.id, "submitted_workflow_governed_bundle"))
-    .filter(Boolean);
-  const seedBundleRows = defaultGovernedBundleRecords(releaseId, seedProfile.id).map((bundle) =>
-    normalizeGovernedBundleRecord(bundle, seedProfile.id, "seed_governed_bundle"),
-  );
-  const bundleRowsForGate = submittedBundleRows.length ? submittedBundleRows : seedBundleRows;
-  const submittedManifestRows = (options.releaseConfigManifests ?? [])
-    .map((manifest) => normalizeReleaseConfigManifest(manifest, bundleRowsForGate, "submitted_workflow_release_config_manifest"))
-    .filter(Boolean);
-  const seedManifest = normalizeReleaseConfigManifest(defaultReleaseConfigManifest(releaseId, seedBundleRows), seedBundleRows, "seed_release_config_manifest");
-  const manifestRowsForGate = submittedManifestRows.length ? submittedManifestRows : [seedManifest];
-  const submittedVerificationRows = (options.releaseConfigManifestVerifications ?? [])
-    .map((verification) => normalizeReleaseConfigManifestVerification(verification, "submitted_workflow_release_config_manifest_verification"))
-    .filter(Boolean);
-  const bundleFamilyRows = REQUIRED_GOVERNED_BUNDLE_FAMILIES.map((family) => governedBundleFamilyEvidenceRow(family, bundleRowsForGate));
+	  const submittedBundleRows = (options.governedBundleRecords ?? [])
+	    .map((bundle) => normalizeGovernedBundleRecord(bundle, activeProfile.id, "submitted_workflow_governed_bundle"))
+	    .filter(Boolean);
+	  const seedBundleRows = defaultGovernedBundleRecords(releaseId, seedProfile.id).map((bundle) =>
+	    normalizeGovernedBundleRecord(bundle, seedProfile.id, "seed_governed_bundle"),
+	  );
+	  const bundleRowsForGate = submittedBundleRows.length ? submittedBundleRows : seedBundleRows;
+	  const submittedBundleVerificationRows = (options.governedBundleVerifications ?? [])
+	    .map((verification) => normalizeGovernedBundleVerification(verification, bundleRowsForGate, "submitted_workflow_governed_bundle_verification"))
+	    .filter(Boolean);
+	  const seedBundleVerificationRows = defaultGovernedBundleVerifications(releaseId, defaultGovernedBundleRecords(releaseId, seedProfile.id)).map((verification) =>
+	    normalizeGovernedBundleVerification(verification, seedBundleRows, "seed_governed_bundle_verification"),
+	  );
+	  const bundleVerificationRowsForGate = submittedBundleVerificationRows.length ? submittedBundleVerificationRows : seedBundleVerificationRows;
+	  const submittedManifestRows = (options.releaseConfigManifests ?? [])
+	    .map((manifest) => normalizeReleaseConfigManifest(manifest, bundleRowsForGate, bundleVerificationRowsForGate, "submitted_workflow_release_config_manifest"))
+	    .filter(Boolean);
+	  const seedManifest = normalizeReleaseConfigManifest(defaultReleaseConfigManifest(releaseId, seedBundleRows), seedBundleRows, seedBundleVerificationRows, "seed_release_config_manifest");
+	  const manifestRowsForGate = submittedManifestRows.length ? submittedManifestRows : [seedManifest];
+	  const submittedVerificationRows = (options.releaseConfigManifestVerifications ?? [])
+	    .map((verification) => normalizeReleaseConfigManifestVerification(verification, "submitted_workflow_release_config_manifest_verification"))
+	    .filter(Boolean);
+	  const bundleFamilyRows = REQUIRED_GOVERNED_BUNDLE_FAMILIES.map((family) => governedBundleFamilyEvidenceRow(family, bundleRowsForGate, bundleVerificationRowsForGate));
   const activeManifest = manifestRowsForGate.find((row) => row.reviewReasons.length === 0) ?? null;
   const manifestVerificationRow = activeManifest
     ? submittedVerificationRows.find((row) => row.manifestId === activeManifest.id && row.reviewReasons.length === 0) ?? null
     : null;
   const reviewSections = [
-    ...submittedProfileRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle_canonicalization_profile", artifactId: row.id, reason }))),
-    ...submittedBundleRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle", artifactId: row.id, reason }))),
-    ...submittedManifestRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "release_config_manifest", artifactId: row.id, reason }))),
+	    ...submittedProfileRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle_canonicalization_profile", artifactId: row.id, reason }))),
+	    ...submittedBundleRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle", artifactId: row.id, reason }))),
+	    ...submittedBundleVerificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle_verification", artifactId: row.id, reason }))),
+	    ...submittedManifestRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "release_config_manifest", artifactId: row.id, reason }))),
     ...submittedVerificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "release_config_manifest_verification", artifactId: row.id, reason }))),
     ...bundleFamilyRows.filter((row) => row.status !== "governed_bundle_family_complete").map((row) => ({
       artifactType: "governed_bundle_family",
@@ -11253,10 +11282,11 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
       : null,
   ].filter(Boolean);
   const submittedEvidenceComplete =
-    submittedProfileRows.length > 0 &&
-    submittedBundleRows.length > 0 &&
-    submittedManifestRows.length > 0 &&
-    submittedVerificationRows.length > 0 &&
+	    submittedProfileRows.length > 0 &&
+	    submittedBundleRows.length > 0 &&
+	    submittedBundleVerificationRows.length > 0 &&
+	    submittedManifestRows.length > 0 &&
+	    submittedVerificationRows.length > 0 &&
     reviewSections.length === 0;
   return {
     id: `release-config-manifest-evidence-${releaseId}`,
@@ -11264,17 +11294,19 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
     generatedAt: new Date().toISOString(),
     requiredManifestBindings: REQUIRED_RELEASE_CONFIG_BINDINGS,
     requiredGovernedBundleFamilies: REQUIRED_GOVERNED_BUNDLE_FAMILIES,
-    canonicalizationProfiles: [seedProfile, ...submittedProfileRows],
-    governedBundleRows: [...seedBundleRows, ...submittedBundleRows],
-    releaseConfigManifestRows: [seedManifest, ...submittedManifestRows],
+	    canonicalizationProfiles: [seedProfile, ...submittedProfileRows],
+	    governedBundleRows: [...seedBundleRows, ...submittedBundleRows],
+	    governedBundleVerificationRows: [...seedBundleVerificationRows, ...submittedBundleVerificationRows],
+	    releaseConfigManifestRows: [seedManifest, ...submittedManifestRows],
     releaseConfigManifestVerificationRows: submittedVerificationRows,
     bundleFamilyRows,
     activeManifestId: activeManifest?.id ?? null,
     activeManifestHash: activeManifest?.canonicalManifestHash ?? null,
     counts: {
-      submittedCanonicalizationProfileCount: submittedProfileRows.length,
-      submittedGovernedBundleCount: submittedBundleRows.length,
-      submittedReleaseConfigManifestCount: submittedManifestRows.length,
+	      submittedCanonicalizationProfileCount: submittedProfileRows.length,
+	      submittedGovernedBundleCount: submittedBundleRows.length,
+	      submittedGovernedBundleVerificationCount: submittedBundleVerificationRows.length,
+	      submittedReleaseConfigManifestCount: submittedManifestRows.length,
       submittedVerificationCount: submittedVerificationRows.length,
       passingBundleFamilyCount: bundleFamilyRows.filter((row) => row.status === "governed_bundle_family_complete").length,
       reviewSectionCount: reviewSections.length,
@@ -11296,14 +11328,17 @@ function normalizeGovernedBundleCanonicalizationProfile(profile, rowSource) {
     String(profile.hashAlgorithm ?? "").toLowerCase() === "sha256" ? null : "hashAlgorithm",
     requiredPromptFieldReason("materializationQueryRules", profile.materializationQueryRules),
     requiredPromptFieldReason("includedFieldPolicy", profile.includedFieldPolicy),
-    requiredPromptFieldReason("rowOrderingPolicy", profile.rowOrderingPolicy),
-    requiredPromptFieldReason("arrayOrderingPolicy", profile.arrayOrderingPolicy),
-    requiredPromptFieldReason("nullEmptyHandling", profile.nullEmptyHandling),
-    requiredPromptFieldReason("unicodeNormalization", profile.unicodeNormalization),
-    requiredPromptFieldReason("timestampNumberEncoding", profile.timestampNumberEncoding),
-    normalizeStringArray(profile.testVectorIds).length ? null : "testVectorIds",
-    requiredPromptFieldReason("activatedAt", profile.activatedAt),
-  ].filter(Boolean);
+	    requiredPromptFieldReason("rowOrderingPolicy", profile.rowOrderingPolicy),
+	    requiredPromptFieldReason("arrayOrderingPolicy", profile.arrayOrderingPolicy),
+	    requiredPromptFieldReason("nullEmptyHandling", profile.nullEmptyHandling),
+	    requiredPromptFieldReason("unicodeNormalization", profile.unicodeNormalization),
+	    requiredPromptFieldReason("timestampNumberEncoding", profile.timestampNumberEncoding),
+	    normalizeStringArray(profile.environmentScopeFields).length ? null : "environmentScopeFields",
+	    normalizeStringArray(profile.nonsemanticMetadataExclusionRules).length ? null : "nonsemanticMetadataExclusionRules",
+	    normalizeStringArray(profile.testVectorIds).length ? null : "testVectorIds",
+	    requiredPromptFieldReason("createdBy", profile.createdBy),
+	    requiredPromptFieldReason("activatedAt", profile.activatedAt),
+	  ].filter(Boolean);
   return {
     id,
     rowSource,
@@ -11314,12 +11349,15 @@ function normalizeGovernedBundleCanonicalizationProfile(profile, rowSource) {
     includedFieldPolicy: profile.includedFieldPolicy ?? null,
     rowOrderingPolicy: profile.rowOrderingPolicy ?? null,
     arrayOrderingPolicy: profile.arrayOrderingPolicy ?? null,
-    nullEmptyHandling: profile.nullEmptyHandling ?? null,
-    unicodeNormalization: profile.unicodeNormalization ?? null,
-    timestampNumberEncoding: profile.timestampNumberEncoding ?? null,
-    testVectorIds: normalizeStringArray(profile.testVectorIds),
-    activatedAt: profile.activatedAt ?? null,
-    reviewReasons,
+	    nullEmptyHandling: profile.nullEmptyHandling ?? null,
+	    unicodeNormalization: profile.unicodeNormalization ?? null,
+	    timestampNumberEncoding: profile.timestampNumberEncoding ?? null,
+	    environmentScopeFields: normalizeStringArray(profile.environmentScopeFields),
+	    nonsemanticMetadataExclusionRules: normalizeStringArray(profile.nonsemanticMetadataExclusionRules),
+	    testVectorIds: normalizeStringArray(profile.testVectorIds),
+	    createdBy: profile.createdBy ?? null,
+	    activatedAt: profile.activatedAt ?? null,
+	    reviewReasons,
     status: reviewReasons.length ? "canonicalization_profile_review_required" : "canonicalization_profile_complete",
   };
 }
@@ -11331,40 +11369,103 @@ function normalizeGovernedBundleRecord(bundle, activeProfileId, rowSource) {
   const reviewReasons = [
     REQUIRED_GOVERNED_BUNDLE_FAMILIES.includes(bundleFamily) ? null : "bundleFamily",
     requiredPromptFieldReason("semanticVersion", bundle.semanticVersion),
-    bundle.canonicalizationProfileId === activeProfileId ? null : "canonicalizationProfileId",
-    String(bundle.canonicalContentHash ?? "").startsWith("sha256:") ? null : "canonicalContentHash",
-    Number.isFinite(bundle.materializedRowCount) && bundle.materializedRowCount > 0 ? null : "materializedRowCount",
-    bundle.appendOnlyActivationStatus === "activated" ? null : "appendOnlyActivationStatus",
-    requiredPromptFieldReason("activatedBy", bundle.activatedBy),
-    requiredPromptFieldReason("activatedAt", bundle.activatedAt),
+	    bundle.canonicalizationProfileId === activeProfileId ? null : "canonicalizationProfileId",
+	    String(bundle.canonicalContentHash ?? "").startsWith("sha256:") ? null : "canonicalContentHash",
+	    Number.isFinite(bundle.materializedRowCount) && bundle.materializedRowCount > 0 ? null : "materializedRowCount",
+	    requiredPromptFieldReason("bundleContentSchemaVersion", bundle.bundleContentSchemaVersion),
+	    requiredPromptFieldReason("canonicalizationTestVectorId", bundle.canonicalizationTestVectorId),
+	    bundle.semanticMutationPolicy === "new_version_required" ? null : "semanticMutationPolicy",
+	    bundle.manifestActivationPolicy === "verified_before_manifest_activation" ? null : "manifestActivationPolicy",
+	    bundle.appendOnlyActivationStatus === "activated" ? null : "appendOnlyActivationStatus",
+	    requiredPromptFieldReason("activatedBy", bundle.activatedBy),
+	    requiredPromptFieldReason("activatedAt", bundle.activatedAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
     bundleFamily,
     semanticVersion: bundle.semanticVersion ?? null,
-    canonicalizationProfileId: bundle.canonicalizationProfileId ?? null,
-    canonicalContentHash: bundle.canonicalContentHash ?? null,
-    materializedRowCount: bundle.materializedRowCount ?? null,
-    appendOnlyActivationStatus: bundle.appendOnlyActivationStatus ?? null,
-    activatedBy: bundle.activatedBy ?? null,
+	    canonicalizationProfileId: bundle.canonicalizationProfileId ?? null,
+	    canonicalContentHash: bundle.canonicalContentHash ?? null,
+	    materializedRowCount: bundle.materializedRowCount ?? null,
+	    bundleContentSchemaVersion: bundle.bundleContentSchemaVersion ?? null,
+	    canonicalizationTestVectorId: bundle.canonicalizationTestVectorId ?? null,
+	    semanticMutationPolicy: bundle.semanticMutationPolicy ?? null,
+	    manifestActivationPolicy: bundle.manifestActivationPolicy ?? null,
+	    appendOnlyActivationStatus: bundle.appendOnlyActivationStatus ?? null,
+	    parentBundleId: bundle.parentBundleId ?? null,
+	    supersededBy: bundle.supersededBy ?? null,
+	    mutationAttemptAuditId: bundle.mutationAttemptAuditId ?? null,
+	    activatedBy: bundle.activatedBy ?? null,
     activatedAt: bundle.activatedAt ?? null,
     reviewReasons,
-    status: reviewReasons.length ? "governed_bundle_review_required" : "governed_bundle_complete",
+	    status: reviewReasons.length ? "governed_bundle_review_required" : "governed_bundle_complete",
+	  };
+}
+
+function normalizeGovernedBundleVerification(verification, bundleRows, rowSource) {
+  const id = verification?.id ?? verification?.verificationId;
+  if (!id) return null;
+  const governedBundleId = verification.governedBundleId ?? verification.bundleId ?? null;
+  const bundleRow = bundleRows.find((row) => row.id === governedBundleId) ?? null;
+  const reviewReasons = [
+    bundleRow && bundleRow.reviewReasons.length === 0 ? null : "governedBundleId",
+    verification.bundleFamily === bundleRow?.bundleFamily ? null : "bundleFamily",
+    verification.semanticVersion === bundleRow?.semanticVersion ? null : "semanticVersion",
+    verification.canonicalizationProfileId === bundleRow?.canonicalizationProfileId ? null : "canonicalizationProfileId",
+    verification.verificationStatus === "passed" ? null : "verificationStatus",
+    verification.expectedHash === bundleRow?.canonicalContentHash ? null : "expectedHash",
+    verification.observedHash === verification.expectedHash ? null : "observedHash",
+    verification.materializedRowCount === bundleRow?.materializedRowCount ? null : "materializedRowCount",
+    verification.manifestActivationBlockedOnMismatch === true ? null : "manifestActivationBlockedOnMismatch",
+    requiredPromptFieldReason("verifiedAt", verification.verifiedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    governedBundleId,
+    bundleFamily: verification.bundleFamily ?? null,
+    semanticVersion: verification.semanticVersion ?? null,
+    canonicalizationProfileId: verification.canonicalizationProfileId ?? null,
+    verificationStatus: verification.verificationStatus ?? null,
+    expectedHash: verification.expectedHash ?? null,
+    observedHash: verification.observedHash ?? null,
+    materializedRowCount: verification.materializedRowCount ?? null,
+    manifestActivationBlockedOnMismatch: verification.manifestActivationBlockedOnMismatch === true,
+    verifiedAt: verification.verifiedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "governed_bundle_verification_review_required" : "governed_bundle_verification_passed",
   };
 }
 
-function normalizeReleaseConfigManifest(manifest, bundleRows, rowSource) {
+function normalizeReleaseConfigManifest(manifest, bundleRows, bundleVerificationRows, rowSource) {
   const id = manifest?.id ?? manifest?.releaseConfigManifestId;
   if (!id) return null;
   const bindingFamilies = normalizeStringArray(manifest.bindingFamilies);
   const governedBundleIds = normalizeStringArray(manifest.governedBundleIds);
   const completeBundleIds = new Set(bundleRows.filter((row) => row.reviewReasons.length === 0).map((row) => row.id));
+  const verifiedBundleIds = new Set(bundleVerificationRows.filter((row) => row.reviewReasons.length === 0).map((row) => row.governedBundleId));
   const missingBindings = REQUIRED_RELEASE_CONFIG_BINDINGS.filter((binding) => !bindingFamilies.includes(binding));
   const missingBundleFamilies = REQUIRED_GOVERNED_BUNDLE_FAMILIES.filter(
     (family) => !bundleRows.some((row) => row.bundleFamily === family && row.reviewReasons.length === 0 && governedBundleIds.includes(row.id)),
   );
   const unknownBundleIds = governedBundleIds.filter((bundleId) => !completeBundleIds.has(bundleId));
+  const unverifiedBundleIds = governedBundleIds.filter((bundleId) => completeBundleIds.has(bundleId) && !verifiedBundleIds.has(bundleId));
+  const semanticMutationAttempts = bundleRows
+    .filter((row) => row.reviewReasons.length === 0)
+    .filter((row, index, rows) =>
+      rows.some(
+        (candidate, candidateIndex) =>
+          candidateIndex !== index &&
+          candidate.bundleFamily === row.bundleFamily &&
+          candidate.semanticVersion === row.semanticVersion &&
+          candidate.canonicalContentHash !== row.canonicalContentHash &&
+          !candidate.parentBundleId &&
+          !candidate.supersededBy &&
+          !candidate.mutationAttemptAuditId,
+      )
+    )
+    .map((row) => row.id);
   const reviewReasons = [
     requiredPromptFieldReason("releaseId", manifest.releaseId),
     requiredPromptFieldReason("version", manifest.version),
@@ -11391,6 +11492,8 @@ function normalizeReleaseConfigManifest(manifest, bundleRows, rowSource) {
     missingBindings.length ? `bindingFamilies:${missingBindings.join(",")}` : null,
     missingBundleFamilies.length ? `governedBundleFamilies:${missingBundleFamilies.join(",")}` : null,
     unknownBundleIds.length ? `governedBundleIds:${unknownBundleIds.join(",")}` : null,
+    unverifiedBundleIds.length ? `governedBundleVerifications:${unverifiedBundleIds.join(",")}` : null,
+    semanticMutationAttempts.length ? `semanticMutationAttempt:${semanticMutationAttempts.join(",")}` : null,
     requiredPromptFieldReason("frozenAt", manifest.frozenAt),
   ].filter(Boolean);
   return {
@@ -11404,6 +11507,8 @@ function normalizeReleaseConfigManifest(manifest, bundleRows, rowSource) {
     missingBindings,
     missingBundleFamilies,
     unknownBundleIds,
+    unverifiedBundleIds,
+    semanticMutationAttempts,
     frozenAt: manifest.frozenAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "release_config_manifest_review_required" : "release_config_manifest_complete",
@@ -11434,16 +11539,24 @@ function normalizeReleaseConfigManifestVerification(verification, rowSource) {
   };
 }
 
-function governedBundleFamilyEvidenceRow(bundleFamily, rows) {
+function governedBundleFamilyEvidenceRow(bundleFamily, rows, verificationRows) {
   const completeRows = rows.filter((row) => row.bundleFamily === bundleFamily && row.reviewReasons.length === 0);
   const latestRow = completeRows.at(-1) ?? null;
+  const verificationRow = latestRow
+    ? verificationRows.find((row) => row.governedBundleId === latestRow.id && row.reviewReasons.length === 0) ?? null
+    : null;
   return {
     bundleFamily,
     latestGovernedBundleId: latestRow?.id ?? null,
+    latestGovernedBundleVerificationId: verificationRow?.id ?? null,
     canonicalContentHash: latestRow?.canonicalContentHash ?? null,
     materializedRowCount: latestRow?.materializedRowCount ?? null,
     appendOnlyActivationStatus: latestRow?.appendOnlyActivationStatus ?? null,
-    status: latestRow ? "governed_bundle_family_complete" : "governed_bundle_family_missing",
+    status: latestRow && verificationRow
+      ? "governed_bundle_family_complete"
+      : latestRow
+        ? "governed_bundle_verification_missing"
+        : "governed_bundle_family_missing",
   };
 }
 
@@ -14698,6 +14811,22 @@ const REQUIRED_QUEUE_STALE_TRANSITION_OUTCOMES = ["dependency_change_blocked", "
 
 const REQUIRED_CLIENT_SURFACES = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
 
+const REQUIRED_CLIENT_SURFACE_CHECKS = [
+  "no_third_party_analytics",
+  "no_third_party_pixels",
+  "no_third_party_resources",
+  "no_session_replay",
+  "no_heatmaps",
+  "no_dom_capture",
+  "no_keystroke_logging",
+  "no_sensitive_url_ids",
+  "referrer_policy",
+  "no_persistent_offline_cache",
+  "first_party_telemetry_allowlist",
+  "screen_state_output_schema_binding",
+  "csp",
+];
+
 const REQUIRED_AUDIT_CHAIN_EVENT_KINDS = [
   "governance_approval",
   "manifest_activation",
@@ -14706,6 +14835,24 @@ const REQUIRED_AUDIT_CHAIN_EVENT_KINDS = [
   "training_export_release",
 ];
 
+const AUDIT_CHAIN_POLICY_ACTION_KIND_BY_EVENT_KIND = {
+  governance_approval: "manifest_activation",
+  manifest_activation: "manifest_activation",
+  protected_label_access: "protected_render",
+  hidden_benchmark_release: "hidden_benchmark_aggregate_report",
+  training_export_release: "training_export",
+};
+
+const AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND = {
+  governance_approval: "redacted_metadata_only",
+  manifest_activation: "redacted_metadata_only",
+  protected_label_access: "protected_label_access_redacted",
+  hidden_benchmark_release: "hidden_benchmark_release_redacted",
+  training_export_release: "training_export_release_redacted",
+};
+
+const REQUIRED_AUDIT_CHAIN_EXPOSURE_CLASSES = Object.values(AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND);
+
 function defaultPolicyActionKindRecords(releaseId) {
   return REQUIRED_POLICY_ACTION_KINDS.map((actionKind) => ({
     id: `policy-action-kind-${releaseId}-${actionKind}`,
@@ -14713,12 +14860,14 @@ function defaultPolicyActionKindRecords(releaseId) {
     sideEffecting: actionKind !== "protected_render",
     protectedRender: actionKind === "protected_render",
     requiresCurrentDecision: true,
-    requiresManifestBinding: true,
-    requiresActorBinding: true,
-    requiresOutputSchemaBinding: true,
-    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
-    wrongScopeBehavior: "fail_closed",
-    activatedAt: "2026-10-01T00:00:00.000Z",
+	    requiresManifestBinding: true,
+	    requiresActorBinding: true,
+	    requiresOutputSchemaBinding: true,
+	    requiresPhaseGateBinding: true,
+	    requiresIdempotencyBinding: true,
+	    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
+	    wrongScopeBehavior: "fail_closed",
+	    activatedAt: "2026-10-01T00:00:00.000Z",
   }));
 }
 
@@ -14729,15 +14878,25 @@ function defaultPolicyDecisionRecords(releaseId, actionKindRows) {
     actionKind: row.actionKind,
     decisionStatus: "allow",
     actorId: "seed-release-admin",
-    actorRole: "admin",
-    manifestId: `release-config-manifest-${releaseId}`,
-    releaseId,
-    outputSchemaVersion: "lmca-policy-decision-v1",
-    idempotencyKey: `seed-${row.actionKind}`,
-    singleUse: row.sideEffecting,
-    expiresAt: "2026-10-01T01:00:00.000Z",
-    decidedAt: "2026-10-01T00:00:00.000Z",
-  }));
+	    actorRole: "admin",
+	    manifestId: `release-config-manifest-${releaseId}`,
+	    manifestHash: `sha256:manifest-${releaseId}`,
+	    phaseGateBundleId: `implementation-phase-gate-bundle-${releaseId}`,
+	    phaseGateBundleHash: `sha256:phase-gate-${releaseId}`,
+	    releaseId,
+	    outputSchemaVersion: "lmca-policy-decision-v1",
+	    outputSchemaHash: `sha256:output-schema-${row.actionKind}`,
+	    targetArtifactIds: [`target-${row.actionKind}`],
+	    idempotencyKey: `seed-${row.actionKind}`,
+	    singleUse: row.sideEffecting,
+	    replayStatus: "unused",
+	    manifestBindingStatus: "matched",
+	    outputSchemaBindingStatus: "matched",
+	    phaseGateBindingStatus: "matched",
+	    idempotencyBindingStatus: "matched",
+	    expiresAt: "2026-10-01T01:00:00.000Z",
+	    decidedAt: "2026-10-01T00:00:00.000Z",
+	  }));
 }
 
 function defaultImplementationPhaseGateBundle(releaseId) {
@@ -14785,61 +14944,67 @@ function defaultQueueFreshnessPolicies(releaseId) {
 function defaultClientSurfaceIntegrityPolicies(releaseId) {
   return REQUIRED_CLIENT_SURFACES.map((surface) => ({
     id: `client-surface-integrity-${releaseId}-${surface}`,
-    releaseId,
-    surface,
-    thirdPartyAnalyticsProhibited: true,
-    sessionReplayProhibited: true,
-    domCaptureProhibited: true,
-    keystrokeLoggingProhibited: true,
-    sensitiveUrlIdsProhibited: true,
-    referrerLeakageBlocked: true,
-    persistentOfflineCacheProhibited: true,
-    cspEnforced: true,
-    firstPartyTelemetryAllowlist: ["page_load", "submit_click", "validation_error"],
-    promotedToNonStaffAt: "2026-10-01T00:00:00.000Z",
-  }));
+	    releaseId,
+	    surface,
+	    thirdPartyAnalyticsProhibited: true,
+	    thirdPartyPixelsProhibited: true,
+	    thirdPartyResourcesProhibited: true,
+	    thirdPartyResourceAllowlist: [],
+	    sessionReplayProhibited: true,
+	    heatmapTrackingProhibited: true,
+	    domCaptureProhibited: true,
+	    keystrokeLoggingProhibited: true,
+	    sensitiveUrlIdsProhibited: true,
+	    referrerLeakageBlocked: true,
+	    persistentOfflineCacheProhibited: true,
+	    firstPartyTelemetryOnly: true,
+	    telemetryAllowlistEnforced: true,
+	    screenStateOutputSchemaBound: true,
+	    nonStaffPromotionBlockedOnViolation: true,
+	    cspEnforced: true,
+	    firstPartyTelemetryAllowlist: ["page_load", "submit_click", "validation_error"],
+	    promotedToNonStaffAt: "2026-10-01T00:00:00.000Z",
+	  }));
 }
 
 function defaultClientSurfaceIntegrityChecks(releaseId, policies) {
   return policies.map((policy) => ({
     id: `client-surface-integrity-check-${releaseId}-${policy.surface}`,
     clientSurfaceId: policy.id,
-    surface: policy.surface,
-    checkStatus: "passed",
-    checksPassed: [
-      "no_third_party_analytics",
-      "no_session_replay",
-      "no_dom_capture",
-      "no_sensitive_url_ids",
-      "referrer_policy",
-      "no_persistent_offline_cache",
-      "csp",
-    ],
-    failures: [],
-    checkedAt: "2026-10-01T00:00:00.000Z",
-  }));
+	    surface: policy.surface,
+	    checkStatus: "passed",
+	    checksPassed: REQUIRED_CLIENT_SURFACE_CHECKS,
+	    failures: [],
+	    checkedAt: "2026-10-01T00:00:00.000Z",
+	  }));
 }
 
 function defaultSensitiveAuditChainEvents(releaseId) {
   let previousEventHash = null;
   return REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind, index) => {
     const eventHash = `sha256:seed-audit-chain-${releaseId}-${index + 1}-${eventKind}`;
-    const row = {
-      id: `sensitive-audit-chain-event-${releaseId}-${index + 1}`,
-      releaseId,
-      sequence: index + 1,
-      eventKind,
-      actionKind: eventKind,
-      actorHash: `sha256:seed-actor-${index + 1}`,
-      approverHashes: ["sha256:seed-approver-a", "sha256:seed-approver-b"],
-      affectedArtifactIds: [`artifact-${eventKind}-${releaseId}`],
-      beforeHash: `sha256:before-${eventKind}`,
-      afterHash: `sha256:after-${eventKind}`,
-      previousEventHash,
-      eventHash,
-      redactionPolicy: "no_protected_labels_no_hidden_text_no_private_rater_data",
-      occurredAt: "2026-10-01T00:00:00.000Z",
-    };
+	    const row = {
+	      id: `sensitive-audit-chain-event-${releaseId}-${index + 1}`,
+	      chainId: `sensitive-audit-chain-${releaseId}`,
+	      releaseId,
+	      sequence: index + 1,
+	      eventKind,
+	      actionKind: eventKind,
+	      policyDecisionId: `policy-decision-${releaseId}-${AUDIT_CHAIN_POLICY_ACTION_KIND_BY_EVENT_KIND[eventKind]}`,
+	      governanceApprovalRecordId: `governance-approval-${releaseId}-${eventKind}`,
+	      actorHash: `sha256:seed-actor-${index + 1}`,
+	      approverHashes: ["sha256:seed-approver-a", "sha256:seed-approver-b"],
+	      affectedArtifactIds: [`artifact-${eventKind}-${releaseId}`],
+	      beforeHash: `sha256:before-${eventKind}`,
+	      afterHash: `sha256:after-${eventKind}`,
+	      previousEventHash,
+	      eventHash,
+	      redactedReasonClasses: ["high_impact_action", eventKind],
+	      protectedDataExposureClass: AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND[eventKind],
+	      externalWormLedgerPointer: `worm:${releaseId}:${index + 1}`,
+	      redactionPolicy: "no_protected_labels_no_hidden_text_no_raw_source_text_no_private_rater_data",
+	      occurredAt: "2026-10-01T00:00:00.000Z",
+	    };
     previousEventHash = eventHash;
     return row;
   });
@@ -14972,10 +15137,11 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     generatedAt: new Date().toISOString(),
     requiredPolicyActionKinds: REQUIRED_POLICY_ACTION_KINDS,
     requiredPhaseGateLaneKinds: REQUIRED_PHASE_GATE_LANE_KINDS,
-    requiredQueueFreshnessLanes: REQUIRED_QUEUE_FRESHNESS_LANES,
-    requiredQueueRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
-    requiredClientSurfaces: REQUIRED_CLIENT_SURFACES,
-    requiredAuditChainEventKinds: REQUIRED_AUDIT_CHAIN_EVENT_KINDS,
+	    requiredQueueFreshnessLanes: REQUIRED_QUEUE_FRESHNESS_LANES,
+	    requiredQueueRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
+	    requiredClientSurfaces: REQUIRED_CLIENT_SURFACES,
+	    requiredClientSurfaceChecks: REQUIRED_CLIENT_SURFACE_CHECKS,
+	    requiredAuditChainEventKinds: REQUIRED_AUDIT_CHAIN_EVENT_KINDS,
     policyActionKindRows: [...seedActionRows, ...submittedActionRows],
     policyDecisionRows: [...seedDecisionRows, ...submittedDecisionRows],
     policyDecisionConsumptionRows: submittedConsumptionRows,
@@ -15025,12 +15191,14 @@ function normalizePolicyActionKind(record, rowSource) {
   const reviewReasons = [
     REQUIRED_POLICY_ACTION_KINDS.includes(actionKind) ? null : "actionKind",
     record.requiresCurrentDecision === true ? null : "requiresCurrentDecision",
-    record.requiresManifestBinding === true ? null : "requiresManifestBinding",
-    record.requiresActorBinding === true ? null : "requiresActorBinding",
-    record.requiresOutputSchemaBinding === true ? null : "requiresOutputSchemaBinding",
-    ["single_use", "idempotency_bound"].includes(record.replayProtection) ? null : "replayProtection",
-    record.wrongScopeBehavior === "fail_closed" ? null : "wrongScopeBehavior",
-    requiredPromptFieldReason("activatedAt", record.activatedAt),
+	    record.requiresManifestBinding === true ? null : "requiresManifestBinding",
+	    record.requiresActorBinding === true ? null : "requiresActorBinding",
+	    record.requiresOutputSchemaBinding === true ? null : "requiresOutputSchemaBinding",
+	    record.requiresPhaseGateBinding === true ? null : "requiresPhaseGateBinding",
+	    record.requiresIdempotencyBinding === true ? null : "requiresIdempotencyBinding",
+	    ["single_use", "idempotency_bound"].includes(record.replayProtection) ? null : "replayProtection",
+	    record.wrongScopeBehavior === "fail_closed" ? null : "wrongScopeBehavior",
+	    requiredPromptFieldReason("activatedAt", record.activatedAt),
   ].filter(Boolean);
   return {
     id,
@@ -15052,15 +15220,25 @@ function normalizePolicyDecisionRecord(record, actionRows, rowSource) {
   const actionRow = actionRows.find((row) => row.id === actionKindId || row.actionKind === actionKind);
   const reviewReasons = [
     actionRow && actionRow.reviewReasons.length === 0 ? null : "actionKindId",
-    record.decisionStatus === "allow" ? null : "decisionStatus",
-    requiredPromptFieldReason("actorId", record.actorId),
-    requiredPromptFieldReason("manifestId", record.manifestId),
-    requiredPromptFieldReason("releaseId", record.releaseId),
-    requiredPromptFieldReason("outputSchemaVersion", record.outputSchemaVersion),
-    record.singleUse === true || requiredPromptFieldReason("idempotencyKey", record.idempotencyKey) === null ? null : "idempotencyKey",
-    requiredPromptFieldReason("expiresAt", record.expiresAt),
-    requiredPromptFieldReason("decidedAt", record.decidedAt),
-  ].filter(Boolean);
+	    record.decisionStatus === "allow" ? null : "decisionStatus",
+	    requiredPromptFieldReason("actorId", record.actorId),
+	    requiredPromptFieldReason("manifestId", record.manifestId),
+	    typeof record.manifestHash === "string" && record.manifestHash.startsWith("sha256:") ? null : "manifestHash",
+	    requiredPromptFieldReason("phaseGateBundleId", record.phaseGateBundleId),
+	    typeof record.phaseGateBundleHash === "string" && record.phaseGateBundleHash.startsWith("sha256:") ? null : "phaseGateBundleHash",
+	    requiredPromptFieldReason("releaseId", record.releaseId),
+	    requiredPromptFieldReason("outputSchemaVersion", record.outputSchemaVersion),
+	    typeof record.outputSchemaHash === "string" && record.outputSchemaHash.startsWith("sha256:") ? null : "outputSchemaHash",
+	    normalizeStringArray(record.targetArtifactIds).length ? null : "targetArtifactIds",
+	    record.singleUse === true || requiredPromptFieldReason("idempotencyKey", record.idempotencyKey) === null ? null : "idempotencyKey",
+	    record.replayStatus === "unused" ? null : "replayStatus",
+	    record.manifestBindingStatus === "matched" ? null : "manifestBindingStatus",
+	    record.outputSchemaBindingStatus === "matched" ? null : "outputSchemaBindingStatus",
+	    record.phaseGateBindingStatus === "matched" ? null : "phaseGateBindingStatus",
+	    record.idempotencyBindingStatus === "matched" ? null : "idempotencyBindingStatus",
+	    requiredPromptFieldReason("expiresAt", record.expiresAt),
+	    requiredPromptFieldReason("decidedAt", record.decidedAt),
+	  ].filter(Boolean);
   return {
     id,
     rowSource,
@@ -15068,15 +15246,25 @@ function normalizePolicyDecisionRecord(record, actionRows, rowSource) {
     actionKind,
     decisionStatus: record.decisionStatus ?? null,
     actorId: record.actorId ?? null,
-    actorRole: record.actorRole ?? null,
-    manifestId: record.manifestId ?? null,
-    releaseId: record.releaseId ?? null,
-    outputSchemaVersion: record.outputSchemaVersion ?? null,
-    idempotencyKey: record.idempotencyKey ?? null,
-    singleUse: record.singleUse === true,
-    expiresAt: record.expiresAt ?? null,
-    consumedAt: record.consumedAt ?? null,
-    reviewReasons,
+	    actorRole: record.actorRole ?? null,
+	    manifestId: record.manifestId ?? null,
+	    manifestHash: record.manifestHash ?? null,
+	    phaseGateBundleId: record.phaseGateBundleId ?? null,
+	    phaseGateBundleHash: record.phaseGateBundleHash ?? null,
+	    releaseId: record.releaseId ?? null,
+	    outputSchemaVersion: record.outputSchemaVersion ?? null,
+	    outputSchemaHash: record.outputSchemaHash ?? null,
+	    targetArtifactIds: normalizeStringArray(record.targetArtifactIds),
+	    idempotencyKey: record.idempotencyKey ?? null,
+	    singleUse: record.singleUse === true,
+	    replayStatus: record.replayStatus ?? null,
+	    manifestBindingStatus: record.manifestBindingStatus ?? null,
+	    outputSchemaBindingStatus: record.outputSchemaBindingStatus ?? null,
+	    phaseGateBindingStatus: record.phaseGateBindingStatus ?? null,
+	    idempotencyBindingStatus: record.idempotencyBindingStatus ?? null,
+	    expiresAt: record.expiresAt ?? null,
+	    consumedAt: record.consumedAt ?? null,
+	    reviewReasons,
     status: reviewReasons.length ? "policy_decision_review_required" : "policy_decision_allow_current",
   };
 }
@@ -15086,19 +15274,34 @@ function normalizePolicyDecisionConsumption(record, decisionRows, rowSource) {
   if (!id) return null;
   const decisionId = record.decisionId ?? record.policyDecisionId ?? null;
   const decisionRow = decisionRows.find((row) => row.id === decisionId);
-  const reviewReasons = [
-    decisionRow && decisionRow.reviewReasons.length === 0 ? null : "decisionId",
-    record.replayRejected === false ? null : "replayRejected",
-    record.scopeMatched === true ? null : "scopeMatched",
-    requiredPromptFieldReason("consumedAt", record.consumedAt),
+	  const reviewReasons = [
+	    decisionRow && decisionRow.reviewReasons.length === 0 ? null : "decisionId",
+	    record.actionKind === decisionRow?.actionKind ? null : "actionKind",
+	    record.manifestId === decisionRow?.manifestId ? null : "manifestId",
+	    record.manifestHash === decisionRow?.manifestHash ? null : "manifestHash",
+	    record.phaseGateBundleId === decisionRow?.phaseGateBundleId ? null : "phaseGateBundleId",
+	    record.phaseGateBundleHash === decisionRow?.phaseGateBundleHash ? null : "phaseGateBundleHash",
+	    record.outputSchemaVersion === decisionRow?.outputSchemaVersion ? null : "outputSchemaVersion",
+	    record.outputSchemaHash === decisionRow?.outputSchemaHash ? null : "outputSchemaHash",
+	    record.idempotencyKey === decisionRow?.idempotencyKey ? null : "idempotencyKey",
+	    record.replayRejected === false ? null : "replayRejected",
+	    record.scopeMatched === true ? null : "scopeMatched",
+	    requiredPromptFieldReason("consumedAt", record.consumedAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
-    decisionId,
-    actionKind: record.actionKind ?? decisionRow?.actionKind ?? null,
-    replayRejected: record.replayRejected === true,
-    scopeMatched: record.scopeMatched === true,
+	    decisionId,
+	    actionKind: record.actionKind ?? decisionRow?.actionKind ?? null,
+	    manifestId: record.manifestId ?? null,
+	    manifestHash: record.manifestHash ?? null,
+	    phaseGateBundleId: record.phaseGateBundleId ?? null,
+	    phaseGateBundleHash: record.phaseGateBundleHash ?? null,
+	    outputSchemaVersion: record.outputSchemaVersion ?? null,
+	    outputSchemaHash: record.outputSchemaHash ?? null,
+	    idempotencyKey: record.idempotencyKey ?? null,
+	    replayRejected: record.replayRejected === true,
+	    scopeMatched: record.scopeMatched === true,
     consumedAt: record.consumedAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "policy_decision_consumption_review_required" : "policy_decision_consumed_once",
@@ -15245,27 +15448,36 @@ function normalizeClientSurfaceIntegrityPolicy(policy, rowSource) {
   const id = policy?.id ?? policy?.clientSurfaceIntegrityPolicyId;
   if (!id) return null;
   const surface = policy.surface ?? policy.screenKind ?? null;
-  const reviewReasons = [
-    REQUIRED_CLIENT_SURFACES.includes(surface) ? null : "surface",
-    policy.thirdPartyAnalyticsProhibited === true ? null : "thirdPartyAnalyticsProhibited",
-    policy.sessionReplayProhibited === true ? null : "sessionReplayProhibited",
-    policy.domCaptureProhibited === true ? null : "domCaptureProhibited",
-    policy.keystrokeLoggingProhibited === true ? null : "keystrokeLoggingProhibited",
-    policy.sensitiveUrlIdsProhibited === true ? null : "sensitiveUrlIdsProhibited",
-    policy.referrerLeakageBlocked === true ? null : "referrerLeakageBlocked",
-    policy.persistentOfflineCacheProhibited === true ? null : "persistentOfflineCacheProhibited",
-    policy.cspEnforced === true ? null : "cspEnforced",
-    normalizeStringArray(policy.firstPartyTelemetryAllowlist).length ? null : "firstPartyTelemetryAllowlist",
-  ].filter(Boolean);
+	  const reviewReasons = [
+	    REQUIRED_CLIENT_SURFACES.includes(surface) ? null : "surface",
+	    policy.thirdPartyAnalyticsProhibited === true ? null : "thirdPartyAnalyticsProhibited",
+	    policy.thirdPartyPixelsProhibited === true ? null : "thirdPartyPixelsProhibited",
+	    policy.thirdPartyResourcesProhibited === true ? null : "thirdPartyResourcesProhibited",
+	    Array.isArray(policy.thirdPartyResourceAllowlist) && policy.thirdPartyResourceAllowlist.length === 0 ? null : "thirdPartyResourceAllowlist",
+	    policy.sessionReplayProhibited === true ? null : "sessionReplayProhibited",
+	    policy.heatmapTrackingProhibited === true ? null : "heatmapTrackingProhibited",
+	    policy.domCaptureProhibited === true ? null : "domCaptureProhibited",
+	    policy.keystrokeLoggingProhibited === true ? null : "keystrokeLoggingProhibited",
+	    policy.sensitiveUrlIdsProhibited === true ? null : "sensitiveUrlIdsProhibited",
+	    policy.referrerLeakageBlocked === true ? null : "referrerLeakageBlocked",
+	    policy.persistentOfflineCacheProhibited === true ? null : "persistentOfflineCacheProhibited",
+	    policy.firstPartyTelemetryOnly === true ? null : "firstPartyTelemetryOnly",
+	    policy.telemetryAllowlistEnforced === true ? null : "telemetryAllowlistEnforced",
+	    policy.screenStateOutputSchemaBound === true ? null : "screenStateOutputSchemaBound",
+	    policy.nonStaffPromotionBlockedOnViolation === true ? null : "nonStaffPromotionBlockedOnViolation",
+	    policy.cspEnforced === true ? null : "cspEnforced",
+	    normalizeStringArray(policy.firstPartyTelemetryAllowlist).length ? null : "firstPartyTelemetryAllowlist",
+	  ].filter(Boolean);
   return {
     id,
     rowSource,
-    releaseId: policy.releaseId ?? null,
-    surface,
-    firstPartyTelemetryAllowlist: normalizeStringArray(policy.firstPartyTelemetryAllowlist),
-    reviewReasons,
-    status: reviewReasons.length ? "client_surface_integrity_policy_review_required" : "client_surface_integrity_policy_complete",
-  };
+	    releaseId: policy.releaseId ?? null,
+	    surface,
+	    thirdPartyResourceAllowlist: normalizeStringArray(policy.thirdPartyResourceAllowlist),
+	    firstPartyTelemetryAllowlist: normalizeStringArray(policy.firstPartyTelemetryAllowlist),
+	    reviewReasons,
+	    status: reviewReasons.length ? "client_surface_integrity_policy_review_required" : "client_surface_integrity_policy_complete",
+	  };
 }
 
 function normalizeClientSurfaceIntegrityCheck(check, policyRows, rowSource) {
@@ -15274,21 +15486,16 @@ function normalizeClientSurfaceIntegrityCheck(check, policyRows, rowSource) {
   const clientSurfaceId = check.clientSurfaceId ?? check.policyId ?? null;
   const surface = check.surface ?? policyRows.find((row) => row.id === clientSurfaceId)?.surface ?? null;
   const policyRow = policyRows.find((row) => row.id === clientSurfaceId || row.surface === surface);
-  const failures = Array.isArray(check.failures) ? check.failures : [];
-  const checksPassed = normalizeStringArray(check.checksPassed);
-  const reviewReasons = [
-    policyRow && policyRow.reviewReasons.length === 0 ? null : "clientSurfaceId",
-    check.checkStatus === "passed" ? null : "checkStatus",
-    checksPassed.includes("no_third_party_analytics") ? null : "no_third_party_analytics",
-    checksPassed.includes("no_session_replay") ? null : "no_session_replay",
-    checksPassed.includes("no_dom_capture") ? null : "no_dom_capture",
-    checksPassed.includes("no_sensitive_url_ids") ? null : "no_sensitive_url_ids",
-    checksPassed.includes("referrer_policy") ? null : "referrer_policy",
-    checksPassed.includes("no_persistent_offline_cache") ? null : "no_persistent_offline_cache",
-    checksPassed.includes("csp") ? null : "csp",
-    failures.length ? "failures" : null,
-    requiredPromptFieldReason("checkedAt", check.checkedAt),
-  ].filter(Boolean);
+	  const failures = Array.isArray(check.failures) ? check.failures : [];
+	  const checksPassed = normalizeStringArray(check.checksPassed);
+	  const missingChecks = REQUIRED_CLIENT_SURFACE_CHECKS.filter((requiredCheck) => !checksPassed.includes(requiredCheck));
+	  const reviewReasons = [
+	    policyRow && policyRow.reviewReasons.length === 0 ? null : "clientSurfaceId",
+	    check.checkStatus === "passed" ? null : "checkStatus",
+	    ...missingChecks,
+	    failures.length ? "failures" : null,
+	    requiredPromptFieldReason("checkedAt", check.checkedAt),
+	  ].filter(Boolean);
   return {
     id,
     rowSource,
@@ -15307,32 +15514,50 @@ function normalizeSensitiveAuditChainEvent(event, rowSource) {
   const id = event?.id ?? event?.sensitiveAuditChainEventId;
   if (!id) return null;
   const eventKind = event.eventKind ?? event.actionKind ?? null;
+  const approverHashes = normalizeStringArray(event.approverHashes);
+  const redactedReasonClasses = normalizeStringArray(event.redactedReasonClasses);
+  const redactionPolicy = String(event.redactionPolicy ?? "").toLowerCase();
   const reviewReasons = [
     REQUIRED_AUDIT_CHAIN_EVENT_KINDS.includes(eventKind) ? null : "eventKind",
+    requiredPromptFieldReason("chainId", event.chainId),
+    event.actionKind === eventKind ? null : "actionKind",
+    requiredPromptFieldReason("policyDecisionId", event.policyDecisionId),
+    requiredPromptFieldReason("governanceApprovalRecordId", event.governanceApprovalRecordId),
     Number.isInteger(event.sequence) && event.sequence > 0 ? null : "sequence",
     String(event.eventHash ?? "").startsWith("sha256:") ? null : "eventHash",
-    event.sequence === 1 || String(event.previousEventHash ?? "").startsWith("sha256:") ? null : "previousEventHash",
-    requiredPromptFieldReason("actorHash", event.actorHash),
-    normalizeStringArray(event.approverHashes).length >= 1 ? null : "approverHashes",
+    event.sequence === 1 ? (event.previousEventHash ? "previousEventHash" : null) : String(event.previousEventHash ?? "").startsWith("sha256:") ? null : "previousEventHash",
+    String(event.actorHash ?? "").startsWith("sha256:") ? null : "actorHash",
+    approverHashes.length >= 2 && approverHashes.every((hash) => hash.startsWith("sha256:")) ? null : "approverHashes",
     normalizeStringArray(event.affectedArtifactIds).length ? null : "affectedArtifactIds",
     String(event.beforeHash ?? "").startsWith("sha256:") ? null : "beforeHash",
     String(event.afterHash ?? "").startsWith("sha256:") ? null : "afterHash",
-    policyMentions(event.redactionPolicy, ["protected"]) && policyMentions(event.redactionPolicy, ["private"]) ? null : "redactionPolicy",
+    event.beforeHash && event.afterHash && event.beforeHash !== event.afterHash ? null : "beforeAfterHash",
+    redactedReasonClasses.length ? null : "redactedReasonClasses",
+    REQUIRED_AUDIT_CHAIN_EXPOSURE_CLASSES.includes(event.protectedDataExposureClass) ? null : "protectedDataExposureClass",
+    String(event.externalWormLedgerPointer ?? "").startsWith("worm:") ? null : "externalWormLedgerPointer",
+    ["protected", "hidden", "raw", "private"].every((fragment) => redactionPolicy.includes(fragment)) ? null : "redactionPolicy",
     requiredPromptFieldReason("occurredAt", event.occurredAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    chainId: event.chainId ?? null,
     releaseId: event.releaseId ?? null,
     sequence: event.sequence ?? null,
     eventKind,
+    actionKind: event.actionKind ?? null,
+    policyDecisionId: event.policyDecisionId ?? null,
+    governanceApprovalRecordId: event.governanceApprovalRecordId ?? null,
     actorHash: event.actorHash ?? null,
-    approverHashes: normalizeStringArray(event.approverHashes),
+    approverHashes,
     affectedArtifactIds: normalizeStringArray(event.affectedArtifactIds),
     beforeHash: event.beforeHash ?? null,
     afterHash: event.afterHash ?? null,
     previousEventHash: event.previousEventHash ?? null,
     eventHash: event.eventHash ?? null,
+    redactedReasonClasses,
+    protectedDataExposureClass: event.protectedDataExposureClass ?? null,
+    externalWormLedgerPointer: event.externalWormLedgerPointer ?? null,
     redactionPolicy: event.redactionPolicy ?? null,
     occurredAt: event.occurredAt ?? null,
     reviewReasons,
@@ -15344,8 +15569,10 @@ function normalizeSensitiveAuditChainVerification(verification, eventRows, rowSo
   const id = verification?.id ?? verification?.sensitiveAuditChainVerificationId;
   if (!id) return null;
   const completeEventCount = eventRows.filter((row) => row.reviewReasons.length === 0).length;
+  const failures = normalizeStringArray(verification.failures);
   const reviewReasons = [
     verification.chainStatus === "passed" ? null : "chainStatus",
+    failures.length === 0 ? null : "failures",
     verification.verifiedEventCount === completeEventCount ? null : "verifiedEventCount",
     requiredPromptFieldReason("verifiedAt", verification.verifiedAt),
   ].filter(Boolean);
@@ -15356,6 +15583,7 @@ function normalizeSensitiveAuditChainVerification(verification, eventRows, rowSo
     chainStatus: verification.chainStatus ?? null,
     verifiedEventCount: verification.verifiedEventCount ?? null,
     expectedEventCount: completeEventCount,
+    failures,
     verifiedAt: verification.verifiedAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "sensitive_audit_chain_verification_review_required" : "sensitive_audit_chain_verification_passed",
@@ -15725,12 +15953,13 @@ export function buildOctoberReleaseReport(
     screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
     simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
   });
-  const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
-    governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
-    governedBundleRecords: options.governedBundleRecords ?? [],
-    releaseConfigManifests: options.releaseConfigManifests ?? [],
-    releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
-  });
+	  const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
+	    governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
+	    governedBundleRecords: options.governedBundleRecords ?? [],
+	    governedBundleVerifications: options.governedBundleVerifications ?? [],
+	    releaseConfigManifests: options.releaseConfigManifests ?? [],
+	    releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
+	  });
   const operationalControlEvidence = buildOperationalControlEvidenceReport(releaseId, {
     policyActionKinds: options.policyActionKinds ?? [],
     policyDecisionRecords: options.policyDecisionRecords ?? [],
@@ -15961,10 +16190,11 @@ export function buildOctoberReleaseReport(
       screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
       simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
     },
-    workflowReleaseConfigArtifacts: {
-      governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
-      governedBundleRecords: options.governedBundleRecords ?? [],
-      releaseConfigManifests: options.releaseConfigManifests ?? [],
+	    workflowReleaseConfigArtifacts: {
+	      governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
+	      governedBundleRecords: options.governedBundleRecords ?? [],
+	      governedBundleVerifications: options.governedBundleVerifications ?? [],
+	      releaseConfigManifests: options.releaseConfigManifests ?? [],
       releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
     },
     workflowOperationalControlArtifacts: {

@@ -421,7 +421,36 @@ const queueHealthChecks = [
 ];
 const queueStaleTransitionOutcomes = ["dependency_change_blocked", "age_window_enforced", "backpressure_window_enforced"];
 const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
+const clientSurfaceChecks = [
+  "no_third_party_analytics",
+  "no_third_party_pixels",
+  "no_third_party_resources",
+  "no_session_replay",
+  "no_heatmaps",
+  "no_dom_capture",
+  "no_keystroke_logging",
+  "no_sensitive_url_ids",
+  "referrer_policy",
+  "no_persistent_offline_cache",
+  "first_party_telemetry_allowlist",
+  "screen_state_output_schema_binding",
+  "csp",
+];
 const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
+const auditChainPolicyActionKindByEventKind = {
+  governance_approval: "manifest_activation",
+  manifest_activation: "manifest_activation",
+  protected_label_access: "protected_render",
+  hidden_benchmark_release: "hidden_benchmark_aggregate_report",
+  training_export_release: "training_export",
+};
+const auditChainProtectedDataExposureClassByEventKind = {
+  governance_approval: "redacted_metadata_only",
+  manifest_activation: "redacted_metadata_only",
+  protected_label_access: "protected_label_access_redacted",
+  hidden_benchmark_release: "hidden_benchmark_release_redacted",
+  training_export_release: "training_export_release_redacted",
+};
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
 const prohibitedIncentiveSignals = [
   "rating_direction",
@@ -565,23 +594,43 @@ function completeReleaseConfigManifestFixtures() {
     includedFieldPolicy: "semantic fields only",
     rowOrderingPolicy: "order by family, version, id",
     arrayOrderingPolicy: "sort set-like arrays before hashing",
-    nullEmptyHandling: "preserve null and empty distinctions",
-    unicodeNormalization: "NFC",
-    timestampNumberEncoding: "UTC ISO timestamps and decimal-string numbers",
-    testVectorIds: ["governed-bundle-vector-v1"],
-    activatedAt: "2026-10-01T00:00:00.000Z",
-  };
-  const governedBundleRecords = governedBundleFamilies.map((bundleFamily, index) => ({
+	    nullEmptyHandling: "preserve null and empty distinctions",
+	    unicodeNormalization: "NFC",
+	    timestampNumberEncoding: "UTC ISO timestamps and decimal-string numbers",
+	    environmentScopeFields: ["releaseId", "runtime", "buildId"],
+	    nonsemanticMetadataExclusionRules: ["receivedAt", "actorHash", "remoteAddressHash"],
+	    testVectorIds: ["governed-bundle-vector-v1"],
+	    createdBy: "release-admin",
+	    activatedAt: "2026-10-01T00:00:00.000Z",
+	  };
+	  const governedBundleRecords = governedBundleFamilies.map((bundleFamily, index) => ({
     id: `governed-bundle-submitted-${bundleFamily}`,
     bundleFamily,
     semanticVersion: `rlhf88-${index + 1}`,
-    canonicalizationProfileId: canonicalizationProfile.id,
-    canonicalContentHash: `sha256:submitted-${bundleFamily}`,
-    materializedRowCount: index + 1,
-    appendOnlyActivationStatus: "activated",
-    activatedBy: "release-admin",
-    activatedAt: "2026-10-01T00:01:00.000Z",
-  }));
+	    canonicalizationProfileId: canonicalizationProfile.id,
+	    canonicalContentHash: `sha256:submitted-${bundleFamily}`,
+	    materializedRowCount: index + 1,
+	    bundleContentSchemaVersion: `${bundleFamily}-bundle-schema-v1`,
+	    canonicalizationTestVectorId: "governed-bundle-vector-v1",
+	    semanticMutationPolicy: "new_version_required",
+	    manifestActivationPolicy: "verified_before_manifest_activation",
+	    appendOnlyActivationStatus: "activated",
+	    activatedBy: "release-admin",
+	    activatedAt: "2026-10-01T00:01:00.000Z",
+	  }));
+	  const governedBundleVerifications = governedBundleRecords.map((bundle) => ({
+	    id: `governed-bundle-verification-submitted-${bundle.bundleFamily}`,
+	    governedBundleId: bundle.id,
+	    bundleFamily: bundle.bundleFamily,
+	    semanticVersion: bundle.semanticVersion,
+	    canonicalizationProfileId: bundle.canonicalizationProfileId,
+	    verificationStatus: "passed",
+	    expectedHash: bundle.canonicalContentHash,
+	    observedHash: bundle.canonicalContentHash,
+	    materializedRowCount: bundle.materializedRowCount,
+	    manifestActivationBlockedOnMismatch: true,
+	    verifiedAt: "2026-10-01T00:01:30.000Z",
+	  }));
   const releaseConfigManifest = {
     id: "release-config-manifest-submitted",
     releaseId: "october-2026-demo",
@@ -612,10 +661,11 @@ function completeReleaseConfigManifestFixtures() {
     bindingFamilies: releaseConfigBindings,
     frozenAt: "2026-10-01T00:02:00.000Z",
   };
-  return {
-    governedBundleCanonicalizationProfiles: [canonicalizationProfile],
-    governedBundleRecords,
-    releaseConfigManifests: [releaseConfigManifest],
+	  return {
+	    governedBundleCanonicalizationProfiles: [canonicalizationProfile],
+	    governedBundleRecords,
+	    governedBundleVerifications,
+	    releaseConfigManifests: [releaseConfigManifest],
     releaseConfigManifestVerifications: [
       {
         id: "release-config-manifest-verification-submitted",
@@ -636,12 +686,14 @@ function completeOperationalControlFixtures() {
     sideEffecting: actionKind !== "protected_render",
     protectedRender: actionKind === "protected_render",
     requiresCurrentDecision: true,
-    requiresManifestBinding: true,
-    requiresActorBinding: true,
-    requiresOutputSchemaBinding: true,
-    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
-    wrongScopeBehavior: "fail_closed",
-    activatedAt: "2026-10-01T00:00:00.000Z",
+	    requiresManifestBinding: true,
+	    requiresActorBinding: true,
+	    requiresOutputSchemaBinding: true,
+	    requiresPhaseGateBinding: true,
+	    requiresIdempotencyBinding: true,
+	    replayProtection: actionKind === "protected_render" ? "idempotency_bound" : "single_use",
+	    wrongScopeBehavior: "fail_closed",
+	    activatedAt: "2026-10-01T00:00:00.000Z",
   }));
   const policyDecisionRecords = policyActionKindsSubmitted.map((actionKind) => ({
     id: `policy-decision-submitted-${actionKind.actionKind}`,
@@ -649,44 +701,69 @@ function completeOperationalControlFixtures() {
     actionKind: actionKind.actionKind,
     decisionStatus: "allow",
     actorId: "release-admin",
-    actorRole: "admin",
-    manifestId: "release-config-manifest-submitted",
-    releaseId: "october-2026-demo",
-    outputSchemaVersion: "lmca-policy-decision-v1",
-    idempotencyKey: `idempotency-${actionKind.actionKind}`,
-    singleUse: actionKind.actionKind !== "protected_render",
-    expiresAt: "2026-10-01T01:00:00.000Z",
-    decidedAt: "2026-10-01T00:01:00.000Z",
-  }));
+	    actorRole: "admin",
+	    manifestId: "release-config-manifest-submitted",
+	    manifestHash: "sha256:release-config-manifest-submitted",
+	    phaseGateBundleId: "implementation-phase-gate-submitted",
+	    phaseGateBundleHash: "sha256:implementation-phase-gate-submitted",
+	    releaseId: "october-2026-demo",
+	    outputSchemaVersion: "lmca-policy-decision-v1",
+	    outputSchemaHash: `sha256:output-schema-${actionKind.actionKind}`,
+	    targetArtifactIds: [`target-${actionKind.actionKind}`],
+	    idempotencyKey: `idempotency-${actionKind.actionKind}`,
+	    singleUse: actionKind.actionKind !== "protected_render",
+	    replayStatus: "unused",
+	    manifestBindingStatus: "matched",
+	    outputSchemaBindingStatus: "matched",
+	    phaseGateBindingStatus: "matched",
+	    idempotencyBindingStatus: "matched",
+	    expiresAt: "2026-10-01T01:00:00.000Z",
+	    decidedAt: "2026-10-01T00:01:00.000Z",
+	  }));
   const clientSurfaceIntegrityPolicies = clientSurfaces.map((surface) => ({
     id: `client-surface-integrity-submitted-${surface}`,
-    releaseId: "october-2026-demo",
-    surface,
-    thirdPartyAnalyticsProhibited: true,
-    sessionReplayProhibited: true,
-    domCaptureProhibited: true,
-    keystrokeLoggingProhibited: true,
-    sensitiveUrlIdsProhibited: true,
-    referrerLeakageBlocked: true,
-    persistentOfflineCacheProhibited: true,
-    cspEnforced: true,
-    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
-  }));
-  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
-    id: `sensitive-audit-event-submitted-${index + 1}`,
-    releaseId: "october-2026-demo",
-    sequence: index + 1,
-    eventKind,
-    actorHash: `sha256:actor-${index + 1}`,
-    approverHashes: ["sha256:approver-a", "sha256:approver-b"],
-    affectedArtifactIds: [`artifact-${eventKind}`],
-    beforeHash: `sha256:before-${eventKind}`,
-    afterHash: `sha256:after-${eventKind}`,
-    previousEventHash: index === 0 ? null : `sha256:event-${index}`,
-    eventHash: `sha256:event-${index + 1}`,
-    redactionPolicy: "redact protected labels, hidden text, and private rater data",
-    occurredAt: "2026-10-01T00:02:00.000Z",
-  }));
+	    releaseId: "october-2026-demo",
+	    surface,
+	    thirdPartyAnalyticsProhibited: true,
+	    thirdPartyPixelsProhibited: true,
+	    thirdPartyResourcesProhibited: true,
+	    thirdPartyResourceAllowlist: [],
+	    sessionReplayProhibited: true,
+	    heatmapTrackingProhibited: true,
+	    domCaptureProhibited: true,
+	    keystrokeLoggingProhibited: true,
+	    sensitiveUrlIdsProhibited: true,
+	    referrerLeakageBlocked: true,
+	    persistentOfflineCacheProhibited: true,
+	    firstPartyTelemetryOnly: true,
+	    telemetryAllowlistEnforced: true,
+	    screenStateOutputSchemaBound: true,
+	    nonStaffPromotionBlockedOnViolation: true,
+	    cspEnforced: true,
+	    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
+	  }));
+	  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
+	    id: `sensitive-audit-event-submitted-${index + 1}`,
+	    chainId: "sensitive-audit-chain-submitted",
+	    releaseId: "october-2026-demo",
+	    sequence: index + 1,
+	    eventKind,
+	    actionKind: eventKind,
+	    policyDecisionId: `policy-decision-submitted-${auditChainPolicyActionKindByEventKind[eventKind]}`,
+	    governanceApprovalRecordId: `governance-approval-submitted-${eventKind}`,
+	    actorHash: `sha256:actor-${index + 1}`,
+	    approverHashes: ["sha256:approver-a", "sha256:approver-b"],
+	    affectedArtifactIds: [`artifact-${eventKind}`],
+	    beforeHash: `sha256:before-${eventKind}`,
+	    afterHash: `sha256:after-${eventKind}`,
+	    previousEventHash: index === 0 ? null : `sha256:event-${index}`,
+	    eventHash: `sha256:event-${index + 1}`,
+	    redactedReasonClasses: ["high_impact_action", eventKind],
+	    protectedDataExposureClass: auditChainProtectedDataExposureClassByEventKind[eventKind],
+	    externalWormLedgerPointer: `worm:submitted:${index + 1}`,
+	    redactionPolicy: "redact protected labels, hidden text, raw source text, and private rater data",
+	    occurredAt: "2026-10-01T00:02:00.000Z",
+	  }));
   return {
     policyActionKinds: policyActionKindsSubmitted,
     policyDecisionRecords,
@@ -694,11 +771,16 @@ function completeOperationalControlFixtures() {
       {
         id: "policy-decision-consumption-submitted",
         decisionId: policyDecisionRecords[1].id,
-        actionKind: policyDecisionRecords[1].actionKind,
-        manifestId: policyDecisionRecords[1].manifestId,
-        outputSchemaVersion: policyDecisionRecords[1].outputSchemaVersion,
-        replayRejected: false,
-        scopeMatched: true,
+	        actionKind: policyDecisionRecords[1].actionKind,
+	        manifestId: policyDecisionRecords[1].manifestId,
+	        manifestHash: policyDecisionRecords[1].manifestHash,
+	        phaseGateBundleId: policyDecisionRecords[1].phaseGateBundleId,
+	        phaseGateBundleHash: policyDecisionRecords[1].phaseGateBundleHash,
+	        outputSchemaVersion: policyDecisionRecords[1].outputSchemaVersion,
+	        outputSchemaHash: policyDecisionRecords[1].outputSchemaHash,
+	        idempotencyKey: policyDecisionRecords[1].idempotencyKey,
+	        replayRejected: false,
+	        scopeMatched: true,
         consumedAt: "2026-10-01T00:03:00.000Z",
       },
     ],
@@ -762,30 +844,23 @@ function completeOperationalControlFixtures() {
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks: clientSurfaceIntegrityPolicies.map((policy) => ({
       id: `client-surface-integrity-check-submitted-${policy.surface}`,
-      clientSurfaceId: policy.id,
-      surface: policy.surface,
-      checkStatus: "passed",
-      checksPassed: [
-        "no_third_party_analytics",
-        "no_session_replay",
-        "no_dom_capture",
-        "no_sensitive_url_ids",
-        "referrer_policy",
-        "no_persistent_offline_cache",
-        "csp",
-      ],
-      failures: [],
-      checkedAt: "2026-10-01T00:06:00.000Z",
-    })),
+	    clientSurfaceId: policy.id,
+	    surface: policy.surface,
+	    checkStatus: "passed",
+	    checksPassed: clientSurfaceChecks,
+	    failures: [],
+	    checkedAt: "2026-10-01T00:06:00.000Z",
+	  })),
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications: [
       {
         id: "sensitive-audit-chain-verification-submitted",
-        releaseId: "october-2026-demo",
-        chainStatus: "passed",
-        verifiedEventCount: sensitiveAuditChainEvents.length,
-        verifiedAt: "2026-10-01T00:07:00.000Z",
-      },
+	        releaseId: "october-2026-demo",
+	        chainStatus: "passed",
+	        verifiedEventCount: sensitiveAuditChainEvents.length,
+	        failures: [],
+	        verifiedAt: "2026-10-01T00:07:00.000Z",
+	      },
     ],
   };
 }
@@ -1772,12 +1847,57 @@ test("release config manifest evidence gates governed bundle families and manife
   const report = buildReleaseConfigManifestEvidenceReport("october-2026-demo", completeReleaseConfigManifestFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_release_config_manifest_evidence_complete");
-  assert.equal(report.counts.submittedCanonicalizationProfileCount, 1);
-  assert.equal(report.counts.submittedGovernedBundleCount, governedBundleFamilies.length);
-  assert.equal(report.counts.passingBundleFamilyCount, governedBundleFamilies.length);
-  assert.equal(report.activeManifestId, "release-config-manifest-submitted");
-  assert.equal(report.activeManifestHash, "sha256:submitted-release-config");
-  assert.deepEqual(report.reviewSections, []);
+	  assert.equal(report.counts.submittedCanonicalizationProfileCount, 1);
+	  assert.equal(report.counts.submittedGovernedBundleCount, governedBundleFamilies.length);
+	  assert.equal(report.counts.submittedGovernedBundleVerificationCount, governedBundleFamilies.length);
+	  assert.equal(report.counts.passingBundleFamilyCount, governedBundleFamilies.length);
+	  assert.equal(report.activeManifestId, "release-config-manifest-submitted");
+	  assert.equal(report.activeManifestHash, "sha256:submitted-release-config");
+	  assert.deepEqual(report.reviewSections, []);
+});
+
+test("release config manifest evidence rejects unverified or semantically mutated governed bundles", () => {
+  const fixtures = completeReleaseConfigManifestFixtures();
+  fixtures.governedBundleCanonicalizationProfiles = [
+    ...fixtures.governedBundleCanonicalizationProfiles,
+    {
+      ...fixtures.governedBundleCanonicalizationProfiles[0],
+      id: "canonicalization-profile-submitted-unscoped",
+      environmentScopeFields: [],
+    },
+  ];
+  fixtures.governedBundleRecords = [
+    ...fixtures.governedBundleRecords,
+    {
+      ...fixtures.governedBundleRecords[0],
+      id: "governed-bundle-submitted-rubric-mutated",
+      canonicalContentHash: "sha256:mutated-rubric",
+    },
+  ];
+  fixtures.releaseConfigManifests = fixtures.releaseConfigManifests.map((manifest) => ({
+    ...manifest,
+    governedBundleIds: [...manifest.governedBundleIds, "governed-bundle-submitted-rubric-mutated"],
+  }));
+  fixtures.governedBundleVerifications = fixtures.governedBundleVerifications
+    .filter((verification) => verification.bundleFamily !== "metric")
+    .map((verification) =>
+      verification.bundleFamily === "rubric"
+        ? {
+            ...verification,
+            observedHash: "sha256:wrong-rubric",
+            manifestActivationBlockedOnMismatch: false,
+          }
+        : verification
+    );
+  const report = buildReleaseConfigManifestEvidenceReport("october-2026-demo", fixtures);
+
+  assert.equal(report.releaseUseStatus, "release_config_manifest_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_canonicalization_profile" && section.reason === "environmentScopeFields"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_verification" && section.reason === "observedHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_verification" && section.reason === "manifestActivationBlockedOnMismatch"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_family" && section.artifactId === "metric" && section.reason === "governed_bundle_verification_missing"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "release_config_manifest" && section.reason.includes("governedBundleVerifications:")));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "release_config_manifest" && section.reason.includes("semanticMutationAttempt:")));
 });
 
 test("participant safeguard evidence gates qualification, incentives, recognition, language artifacts, and provider data handling", () => {
@@ -2084,6 +2204,54 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
   assert.deepEqual(report.reviewSections, []);
 });
 
+test("operational control evidence rejects stale or wrong-scope policy decisions", () => {
+  const unsafeFixtures = completeOperationalControlFixtures();
+  unsafeFixtures.policyActionKinds = unsafeFixtures.policyActionKinds.map((actionKind, index) =>
+    index === 0
+      ? {
+          ...actionKind,
+          requiresPhaseGateBinding: false,
+        }
+      : actionKind
+  );
+  unsafeFixtures.policyDecisionRecords = unsafeFixtures.policyDecisionRecords.map((decision, index) => {
+    if (index === 0) return { ...decision, replayStatus: "consumed" };
+    if (index === 2) return { ...decision, manifestBindingStatus: "wrong_manifest" };
+    if (index === 3) return { ...decision, outputSchemaBindingStatus: "wrong_output_schema" };
+    if (index === 4) return { ...decision, phaseGateBindingStatus: "wrong_phase" };
+    if (index === 5) return { ...decision, idempotencyBindingStatus: "wrong_idempotency" };
+    if (index === 6) return { ...decision, targetArtifactIds: [] };
+    if (index === 7) return { ...decision, manifestHash: "not-a-sha256-hash" };
+    return decision;
+  });
+  unsafeFixtures.policyDecisionConsumptions = unsafeFixtures.policyDecisionConsumptions.map((consumption) => ({
+    ...consumption,
+    manifestHash: "sha256:wrong-manifest",
+    phaseGateBundleId: "wrong-phase-gate",
+    outputSchemaHash: "sha256:wrong-output-schema",
+    idempotencyKey: "wrong-idempotency-key",
+    replayRejected: true,
+    scopeMatched: false,
+  }));
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", unsafeFixtures);
+
+  assert.equal(report.releaseUseStatus, "operational_control_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_action_kind" && section.reason === "requiresPhaseGateBinding"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "replayStatus"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "manifestBindingStatus"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "outputSchemaBindingStatus"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "phaseGateBindingStatus"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "idempotencyBindingStatus"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "targetArtifactIds"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision" && section.reason === "manifestHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "manifestHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "phaseGateBundleId"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "outputSchemaHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "idempotencyKey"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "replayRejected"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "scopeMatched"));
+});
+
 test("operational control evidence rejects incomplete queue stale-by-delay and backpressure proof", () => {
   const missingHealthFixtures = completeOperationalControlFixtures();
   missingHealthFixtures.queueFreshnessPolicies = missingHealthFixtures.queueFreshnessPolicies.map((policy, index) =>
@@ -2120,6 +2288,92 @@ test("operational control evidence rejects incomplete queue stale-by-delay and b
   assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason.includes("dependencyRevalidationChecks")));
   assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason.includes("staleTransitionOutcomes")));
   assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason === "sideEffectSuppressionConfirmed"));
+});
+
+test("operational control evidence rejects client-surface telemetry and instrumentation gaps", () => {
+  const unsafeFixtures = completeOperationalControlFixtures();
+  unsafeFixtures.clientSurfaceIntegrityPolicies = unsafeFixtures.clientSurfaceIntegrityPolicies.map((policy, index) =>
+    index === 0
+      ? {
+          ...policy,
+          thirdPartyPixelsProhibited: false,
+          thirdPartyResourceAllowlist: ["https://analytics.example.test/pixel.js"],
+          heatmapTrackingProhibited: false,
+          firstPartyTelemetryOnly: false,
+          screenStateOutputSchemaBound: false,
+        }
+      : policy
+  );
+  unsafeFixtures.clientSurfaceIntegrityChecks = unsafeFixtures.clientSurfaceIntegrityChecks.map((check, index) =>
+    index === 0
+      ? {
+          ...check,
+          checksPassed: check.checksPassed.filter(
+            (item) => !["no_heatmaps", "no_third_party_pixels", "first_party_telemetry_allowlist", "screen_state_output_schema_binding"].includes(item)
+          ),
+        }
+      : check
+  );
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", unsafeFixtures);
+
+  assert.equal(report.releaseUseStatus, "operational_control_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "thirdPartyPixelsProhibited"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "thirdPartyResourceAllowlist"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "heatmapTrackingProhibited"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "firstPartyTelemetryOnly"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "screenStateOutputSchemaBound"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "no_heatmaps"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "no_third_party_pixels"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "first_party_telemetry_allowlist"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "screen_state_output_schema_binding"));
+});
+
+test("operational control evidence rejects incomplete or failed sensitive audit chains", () => {
+  const unsafeFixtures = completeOperationalControlFixtures();
+  unsafeFixtures.sensitiveAuditChainEvents = unsafeFixtures.sensitiveAuditChainEvents.map((event, index) => {
+    if (index === 0) {
+      return {
+        ...event,
+        previousEventHash: "sha256:should-not-exist-on-first-event",
+        actorHash: "plain-actor-id",
+        approverHashes: ["sha256:approver-a", "plain-approver"],
+        beforeHash: event.afterHash,
+        redactedReasonClasses: [],
+        protectedDataExposureClass: "raw_hidden_text",
+        externalWormLedgerPointer: "ordinary-db-row",
+        redactionPolicy: "redact private rater data only",
+      };
+    }
+    if (index === 1) {
+      return {
+        ...event,
+        actionKind: "training_export_release",
+        policyDecisionId: "",
+        governanceApprovalRecordId: "",
+      };
+    }
+    return event;
+  });
+  unsafeFixtures.sensitiveAuditChainVerifications = unsafeFixtures.sensitiveAuditChainVerifications.map((verification) => ({
+    ...verification,
+    chainStatus: "passed",
+    failures: ["previousEventHash:sensitive-audit-event-submitted-1"],
+  }));
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", unsafeFixtures);
+
+  assert.equal(report.releaseUseStatus, "operational_control_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "previousEventHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "actorHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "approverHashes"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "beforeAfterHash"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "redactedReasonClasses"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "protectedDataExposureClass"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "externalWormLedgerPointer"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "redactionPolicy"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "actionKind"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "policyDecisionId"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "governanceApprovalRecordId"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_verification" && section.reason === "failures"));
 });
 
 test("rater data-governance evidence requires consent visibility and withdrawal handling", () => {

@@ -782,11 +782,17 @@ const queueStaleBehaviors = ["stale", "paused", "pause", "cancel", "cancelled", 
 const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
 const clientSurfaceRequiredChecks = [
   "no_third_party_analytics",
+  "no_third_party_pixels",
+  "no_third_party_resources",
   "no_session_replay",
+  "no_heatmaps",
   "no_dom_capture",
+  "no_keystroke_logging",
   "no_sensitive_url_ids",
   "referrer_policy",
   "no_persistent_offline_cache",
+  "first_party_telemetry_allowlist",
+  "screen_state_output_schema_binding",
   "csp",
 ];
 const auditChainEventKinds = [
@@ -795,6 +801,12 @@ const auditChainEventKinds = [
   "protected_label_access",
   "hidden_benchmark_release",
   "training_export_release",
+];
+const auditChainProtectedDataExposureClasses = [
+  "redacted_metadata_only",
+  "protected_label_access_redacted",
+  "hidden_benchmark_release_redacted",
+  "training_export_release_redacted",
 ];
 const releaseConfigBindings = [
   "code",
@@ -2733,40 +2745,51 @@ const workflowWriteEndpoints = [
       releaseCriticalUseStatus: "frozen_for_release_critical_screens",
     },
   }),
-  workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: [
-      "id",
-      "version",
-      "hashAlgorithm",
-      "materializationQueryRules",
-      "includedFieldPolicy",
-      "rowOrderingPolicy",
-      "arrayOrderingPolicy",
-      "nullEmptyHandling",
-      "unicodeNormalization",
-      "timestampNumberEncoding",
-      "activatedAt",
-    ],
-    requiredNonEmptyArrayFields: ["testVectorIds"],
-    requiredExactFields: { hashAlgorithm: "sha256" },
-  }),
-  workflowWriteSpec(/^\/api\/v1\/governed-bundles$/, "governed_bundle_submitted", "governedBundleRecord", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: ["id", "bundleFamily", "semanticVersion", "canonicalizationProfileId", "canonicalContentHash", "materializedRowCount", "appendOnlyActivationStatus", "activatedBy", "activatedAt"],
-    requiredPositiveIntegerFields: ["materializedRowCount"],
-    requiredStringPrefixes: { canonicalContentHash: "sha256:" },
-    allowedValues: { bundleFamily: governedBundleFamilies },
-    requiredExactFields: { appendOnlyActivationStatus: "activated" },
-  }),
-  workflowWriteSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)\/verify$/, "governed_bundle_verification_submitted", "governedBundleVerification", adminRoles, {
-    allowHiddenMetadata: true,
-    pathParamField: "governedBundleId",
-    requiredFields: ["id", "governedBundleId", "verificationStatus", "expectedHash", "observedHash"],
-    requiredStringPrefixes: { expectedHash: "sha256:", observedHash: "sha256:" },
-    requiredFieldMatches: [{ field: "observedHash", matchesField: "expectedHash" }],
-    requiredExactFields: { verificationStatus: "passed" },
-  }),
+	  workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
+	    allowHiddenMetadata: true,
+	    requiredFields: [
+	      "id",
+	      "version",
+	      "hashAlgorithm",
+	      "materializationQueryRules",
+	      "includedFieldPolicy",
+	      "rowOrderingPolicy",
+	      "arrayOrderingPolicy",
+	      "nullEmptyHandling",
+	      "unicodeNormalization",
+	      "timestampNumberEncoding",
+	      "environmentScopeFields",
+	      "nonsemanticMetadataExclusionRules",
+	      "createdBy",
+	      "activatedAt",
+	    ],
+	    requiredNonEmptyArrayFields: ["environmentScopeFields", "nonsemanticMetadataExclusionRules", "testVectorIds"],
+	    requiredExactFields: { hashAlgorithm: "sha256" },
+	  }),
+	  workflowWriteSpec(/^\/api\/v1\/governed-bundles$/, "governed_bundle_submitted", "governedBundleRecord", adminRoles, {
+	    allowHiddenMetadata: true,
+	    requiredFields: ["id", "bundleFamily", "semanticVersion", "canonicalizationProfileId", "canonicalContentHash", "materializedRowCount", "bundleContentSchemaVersion", "canonicalizationTestVectorId", "semanticMutationPolicy", "manifestActivationPolicy", "appendOnlyActivationStatus", "activatedBy", "activatedAt"],
+	    requiredPositiveIntegerFields: ["materializedRowCount"],
+	    requiredStringPrefixes: { canonicalContentHash: "sha256:" },
+	    allowedValues: { bundleFamily: governedBundleFamilies },
+	    requiredExactFields: {
+	      appendOnlyActivationStatus: "activated",
+	      semanticMutationPolicy: "new_version_required",
+	      manifestActivationPolicy: "verified_before_manifest_activation",
+	    },
+	  }),
+	  workflowWriteSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)\/verify$/, "governed_bundle_verification_submitted", "governedBundleVerification", adminRoles, {
+	    allowHiddenMetadata: true,
+	    pathParamField: "governedBundleId",
+	    requiredFields: ["id", "governedBundleId", "bundleFamily", "semanticVersion", "canonicalizationProfileId", "verificationStatus", "expectedHash", "observedHash", "materializedRowCount", "manifestActivationBlockedOnMismatch", "verifiedAt"],
+	    requiredPositiveIntegerFields: ["materializedRowCount"],
+	    requiredStringPrefixes: { expectedHash: "sha256:", observedHash: "sha256:" },
+	    requiredFieldMatches: [{ field: "observedHash", matchesField: "expectedHash" }],
+	    requiredExactFields: {
+	      verificationStatus: "passed",
+	      manifestActivationBlockedOnMismatch: true,
+	    },
+	  }),
   workflowWriteSpec(/^\/api\/v1\/release-config-manifests$/, "release_config_manifest_submitted", "releaseConfigManifest", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -2850,28 +2873,39 @@ const workflowWriteEndpoints = [
     requiredFieldMatches: [{ field: "observedHash", matchesField: "expectedHash" }],
     requiredExactFields: { verificationStatus: "passed" },
   }),
-  workflowWriteSpec(/^\/api\/v1\/policy-action-kinds$/, "policy_action_kind_submitted", "policyActionKind", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: ["id", "actionKind", "requiresCurrentDecision", "requiresManifestBinding", "requiresActorBinding", "requiresOutputSchemaBinding", "replayProtection", "wrongScopeBehavior", "activatedAt"],
-    allowedValues: {
-      actionKind: policyActionKinds,
-      replayProtection: ["single_use", "idempotency_bound"],
-    },
-    requiredExactFields: {
-      requiresCurrentDecision: true,
-      requiresManifestBinding: true,
-      requiresActorBinding: true,
-      requiresOutputSchemaBinding: true,
-      wrongScopeBehavior: "fail_closed",
-    },
-  }),
-  workflowWriteSpec(/^\/api\/v1\/policy-decisions$/, "policy_decision_submitted", "policyDecisionRecord", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: ["id", "actionKindId", "actionKind", "decisionStatus", "actorId", "manifestId", "releaseId", "outputSchemaVersion", "expiresAt", "decidedAt"],
-    requiredAnyFields: [["idempotencyKey", "singleUse"]],
-    allowedValues: { actionKind: policyActionKinds },
-    requiredExactFields: { decisionStatus: "allow" },
-  }),
+	  workflowWriteSpec(/^\/api\/v1\/policy-action-kinds$/, "policy_action_kind_submitted", "policyActionKind", adminRoles, {
+	    allowHiddenMetadata: true,
+	    requiredFields: ["id", "actionKind", "requiresCurrentDecision", "requiresManifestBinding", "requiresActorBinding", "requiresOutputSchemaBinding", "requiresPhaseGateBinding", "requiresIdempotencyBinding", "replayProtection", "wrongScopeBehavior", "activatedAt"],
+	    allowedValues: {
+	      actionKind: policyActionKinds,
+	      replayProtection: ["single_use", "idempotency_bound"],
+	    },
+	    requiredExactFields: {
+	      requiresCurrentDecision: true,
+	      requiresManifestBinding: true,
+	      requiresActorBinding: true,
+	      requiresOutputSchemaBinding: true,
+	      requiresPhaseGateBinding: true,
+	      requiresIdempotencyBinding: true,
+	      wrongScopeBehavior: "fail_closed",
+	    },
+	  }),
+	  workflowWriteSpec(/^\/api\/v1\/policy-decisions$/, "policy_decision_submitted", "policyDecisionRecord", adminRoles, {
+	    allowHiddenMetadata: true,
+	    requiredFields: ["id", "actionKindId", "actionKind", "decisionStatus", "actorId", "manifestId", "manifestHash", "phaseGateBundleId", "phaseGateBundleHash", "releaseId", "outputSchemaVersion", "outputSchemaHash", "expiresAt", "decidedAt", "replayStatus", "manifestBindingStatus", "outputSchemaBindingStatus", "phaseGateBindingStatus", "idempotencyBindingStatus"],
+	    requiredAnyFields: [["idempotencyKey", "singleUse"]],
+	    requiredNonEmptyArrayFields: ["targetArtifactIds"],
+	    allowedValues: { actionKind: policyActionKinds },
+	    requiredStringPrefixes: { manifestHash: "sha256:", phaseGateBundleHash: "sha256:", outputSchemaHash: "sha256:" },
+	    requiredExactFields: {
+	      decisionStatus: "allow",
+	      replayStatus: "unused",
+	      manifestBindingStatus: "matched",
+	      outputSchemaBindingStatus: "matched",
+	      phaseGateBindingStatus: "matched",
+	      idempotencyBindingStatus: "matched",
+	    },
+	  }),
   workflowWriteSpec(/^\/api\/v1\/implementation-phase-gate-bundles$/, "implementation_phase_gate_bundle_submitted", "implementationPhaseGateBundle", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "releaseId", "manifestId", "version", "laneStates", "futurePhaseDefault", "frozenAt"],
@@ -2957,17 +2991,25 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/client-surface-integrity-policies$/, "client_surface_integrity_policy_submitted", "clientSurfaceIntegrityPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "surface", "thirdPartyAnalyticsProhibited", "sessionReplayProhibited", "domCaptureProhibited", "keystrokeLoggingProhibited", "sensitiveUrlIdsProhibited", "referrerLeakageBlocked", "persistentOfflineCacheProhibited", "cspEnforced"],
+    requiredFields: ["id", "surface", "thirdPartyAnalyticsProhibited", "thirdPartyPixelsProhibited", "thirdPartyResourcesProhibited", "sessionReplayProhibited", "heatmapTrackingProhibited", "domCaptureProhibited", "keystrokeLoggingProhibited", "sensitiveUrlIdsProhibited", "referrerLeakageBlocked", "persistentOfflineCacheProhibited", "firstPartyTelemetryOnly", "telemetryAllowlistEnforced", "screenStateOutputSchemaBound", "nonStaffPromotionBlockedOnViolation", "cspEnforced"],
     requiredNonEmptyArrayFields: ["firstPartyTelemetryAllowlist"],
+    requiredEmptyArrayFields: ["thirdPartyResourceAllowlist"],
     allowedValues: { surface: clientSurfaces },
     requiredExactFields: {
       thirdPartyAnalyticsProhibited: true,
+      thirdPartyPixelsProhibited: true,
+      thirdPartyResourcesProhibited: true,
       sessionReplayProhibited: true,
+      heatmapTrackingProhibited: true,
       domCaptureProhibited: true,
       keystrokeLoggingProhibited: true,
       sensitiveUrlIdsProhibited: true,
       referrerLeakageBlocked: true,
       persistentOfflineCacheProhibited: true,
+      firstPartyTelemetryOnly: true,
+      telemetryAllowlistEnforced: true,
+      screenStateOutputSchemaBound: true,
+      nonStaffPromotionBlockedOnViolation: true,
       cspEnforced: true,
     },
   }),
@@ -2981,19 +3023,27 @@ const workflowWriteEndpoints = [
     allowedValues: { surface: clientSurfaces },
     requiredExactFields: { checkStatus: "passed" },
   }),
-  workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: ["id", "sequence", "eventKind", "actorHash", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "occurredAt"],
-    requiredPositiveIntegerFields: ["sequence"],
-    requiredNonEmptyArrayFields: ["affectedArtifactIds", "approverHashes"],
-    requiredStringPrefixes: {
-      actorHash: "sha256:",
-      beforeHash: "sha256:",
-      afterHash: "sha256:",
-      eventHash: "sha256:",
-    },
-    allowedValues: { eventKind: auditChainEventKinds },
-  }),
+	  workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
+	    allowHiddenMetadata: true,
+	    requiredFields: ["id", "chainId", "sequence", "eventKind", "actionKind", "policyDecisionId", "governanceApprovalRecordId", "actorHash", "protectedDataExposureClass", "externalWormLedgerPointer", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "redactionPolicy", "occurredAt"],
+	    requiredPositiveIntegerFields: ["sequence"],
+	    requiredNonEmptyArrayFields: ["affectedArtifactIds", "approverHashes", "redactedReasonClasses"],
+	    requiredStringPrefixes: {
+	      actorHash: "sha256:",
+	      beforeHash: "sha256:",
+	      afterHash: "sha256:",
+	      eventHash: "sha256:",
+	      externalWormLedgerPointer: "worm:",
+	    },
+	    requiredArrayValuePrefixes: { approverHashes: "sha256:" },
+	    requiredStringIncludes: { redactionPolicy: ["protected", "hidden", "raw", "private"] },
+	    requiredFieldMatches: [{ field: "actionKind", matchesField: "eventKind" }],
+	    allowedValues: {
+	      eventKind: auditChainEventKinds,
+	      actionKind: auditChainEventKinds,
+	      protectedDataExposureClass: auditChainProtectedDataExposureClasses,
+	    },
+	  }),
 ];
 
 const workflowReadEndpoints = [
@@ -5008,43 +5058,75 @@ async function policyDecisionConsumeEndpoint(request, response, context, request
     return;
   }
   const decision = await workflowResourceById(context, "policyDecisionRecord", requestedDecisionId);
-  if (!decision) {
-    sendJson(response, 404, { error: "policy_decision_not_found" });
-    return;
-  }
-  const priorConsumptions = await workflowResourcesByField(context, "policyDecisionConsumption", "decisionId", requestedDecisionId);
-  if (priorConsumptions.length) {
-    sendJson(response, 409, { error: "policy_decision_already_consumed", decisionId: requestedDecisionId });
+	  if (!decision) {
+	    sendJson(response, 404, { error: "policy_decision_not_found" });
+	    return;
+	  }
+	  const policyDecisionFailClosedReasons = [
+	    decision.decisionStatus === "allow" ? null : "decisionStatus",
+	    decision.replayStatus === "unused" ? null : "replayStatus",
+	    decision.manifestBindingStatus === "matched" ? null : "manifestBindingStatus",
+	    decision.outputSchemaBindingStatus === "matched" ? null : "outputSchemaBindingStatus",
+	    decision.phaseGateBindingStatus === "matched" ? null : "phaseGateBindingStatus",
+	    decision.idempotencyBindingStatus === "matched" ? null : "idempotencyBindingStatus",
+	    typeof decision.manifestHash === "string" && decision.manifestHash.startsWith("sha256:") ? null : "manifestHash",
+	    typeof decision.phaseGateBundleId === "string" && decision.phaseGateBundleId.trim() ? null : "phaseGateBundleId",
+	    typeof decision.phaseGateBundleHash === "string" && decision.phaseGateBundleHash.startsWith("sha256:") ? null : "phaseGateBundleHash",
+	    typeof decision.outputSchemaHash === "string" && decision.outputSchemaHash.startsWith("sha256:") ? null : "outputSchemaHash",
+	    Array.isArray(decision.targetArtifactIds) && decision.targetArtifactIds.length ? null : "targetArtifactIds",
+	    Date.parse(decision.expiresAt) > Date.now() ? null : "expiresAt",
+	  ].filter(Boolean);
+	  if (policyDecisionFailClosedReasons.length) {
+	    sendJson(response, 409, {
+	      error: "policy_decision_not_current",
+	      decisionId: requestedDecisionId,
+	      failClosedReasons: policyDecisionFailClosedReasons,
+	    });
+	    return;
+	  }
+	  const priorConsumptions = await workflowResourcesByField(context, "policyDecisionConsumption", "decisionId", requestedDecisionId);
+	  if (priorConsumptions.length) {
+	    sendJson(response, 409, { error: "policy_decision_already_consumed", decisionId: requestedDecisionId });
     return;
   }
   const body = await readJsonBody(request);
   const candidate = body.policyDecisionConsumption ?? body.resource ?? body;
   const consumption = {
     ...candidate,
-    decisionId: requestedDecisionId,
-    actionKind: candidate.actionKind ?? decision.actionKind,
-    manifestId: candidate.manifestId ?? decision.manifestId,
-    outputSchemaVersion: candidate.outputSchemaVersion ?? decision.outputSchemaVersion,
-    idempotencyKey: candidate.idempotencyKey ?? decision.idempotencyKey,
-    replayRejected: false,
-    scopeMatched: true,
+	    decisionId: requestedDecisionId,
+	    actionKind: candidate.actionKind ?? decision.actionKind,
+	    manifestId: candidate.manifestId ?? decision.manifestId,
+	    manifestHash: candidate.manifestHash ?? decision.manifestHash,
+	    phaseGateBundleId: candidate.phaseGateBundleId ?? decision.phaseGateBundleId,
+	    phaseGateBundleHash: candidate.phaseGateBundleHash ?? decision.phaseGateBundleHash,
+	    outputSchemaVersion: candidate.outputSchemaVersion ?? decision.outputSchemaVersion,
+	    outputSchemaHash: candidate.outputSchemaHash ?? decision.outputSchemaHash,
+	    idempotencyKey: candidate.idempotencyKey ?? decision.idempotencyKey,
+	    replayRejected: false,
+	    scopeMatched: true,
     consumedAt: candidate.consumedAt ?? new Date().toISOString(),
   };
   const scopeMismatches = [
-    consumption.actionKind !== decision.actionKind ? "actionKind" : null,
-    consumption.manifestId !== decision.manifestId ? "manifestId" : null,
-    consumption.outputSchemaVersion !== decision.outputSchemaVersion ? "outputSchemaVersion" : null,
-    decision.idempotencyKey && consumption.idempotencyKey !== decision.idempotencyKey ? "idempotencyKey" : null,
-  ].filter(Boolean);
+	    consumption.actionKind !== decision.actionKind ? "actionKind" : null,
+	    consumption.manifestId !== decision.manifestId ? "manifestId" : null,
+	    consumption.manifestHash !== decision.manifestHash ? "manifestHash" : null,
+	    consumption.phaseGateBundleId !== decision.phaseGateBundleId ? "phaseGateBundleId" : null,
+	    consumption.phaseGateBundleHash !== decision.phaseGateBundleHash ? "phaseGateBundleHash" : null,
+	    consumption.outputSchemaVersion !== decision.outputSchemaVersion ? "outputSchemaVersion" : null,
+	    consumption.outputSchemaHash !== decision.outputSchemaHash ? "outputSchemaHash" : null,
+	    decision.idempotencyKey && consumption.idempotencyKey !== decision.idempotencyKey ? "idempotencyKey" : null,
+	  ].filter(Boolean);
   if (scopeMismatches.length) {
     sendJson(response, 409, { error: "policy_decision_scope_mismatch", decisionId: requestedDecisionId, scopeMismatches });
     return;
   }
-  const validation = validateWorkflowPayload(consumption, session.user, {
-    resourceKey: "policyDecisionConsumption",
-    requiredFields: ["id", "decisionId", "actionKind", "manifestId", "outputSchemaVersion", "consumedAt"],
-    allowHiddenMetadata: true,
-  });
+	  const validation = validateWorkflowPayload(consumption, session.user, {
+	    resourceKey: "policyDecisionConsumption",
+	    requiredFields: ["id", "decisionId", "actionKind", "manifestId", "manifestHash", "phaseGateBundleId", "phaseGateBundleHash", "outputSchemaVersion", "outputSchemaHash", "idempotencyKey", "consumedAt"],
+	    requiredStringPrefixes: { manifestHash: "sha256:", phaseGateBundleHash: "sha256:", outputSchemaHash: "sha256:" },
+	    requiredExactFields: { replayRejected: false, scopeMatched: true },
+	    allowHiddenMetadata: true,
+	  });
   if (!validation.ok) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_policy_decision_consumption", detail: validation.detail });
     return;
@@ -5123,14 +5205,33 @@ async function sensitiveAuditChainVerifyEndpoint(request, response, context) {
     (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0) || String(left.id).localeCompare(String(right.id)),
   );
   const failures = [];
-  events.forEach((event, index) => {
-    const expectedSequence = index + 1;
-    const previous = events[index - 1] ?? null;
-    if (event.sequence !== expectedSequence) failures.push(`sequence:${event.id}`);
-    if (index === 0 && event.previousEventHash) failures.push(`previousEventHash:${event.id}`);
-    if (index > 0 && event.previousEventHash !== previous.eventHash) failures.push(`previousEventHash:${event.id}`);
-    if (!String(event.eventHash ?? "").startsWith("sha256:")) failures.push(`eventHash:${event.id}`);
-  });
+	  events.forEach((event, index) => {
+	    const expectedSequence = index + 1;
+	    const previous = events[index - 1] ?? null;
+	    const approverHashes = Array.isArray(event.approverHashes) ? event.approverHashes : [];
+	    const affectedArtifactIds = Array.isArray(event.affectedArtifactIds) ? event.affectedArtifactIds : [];
+	    const redactedReasonClasses = Array.isArray(event.redactedReasonClasses) ? event.redactedReasonClasses : [];
+	    if (event.sequence !== expectedSequence) failures.push(`sequence:${event.id}`);
+	    if (index === 0 && event.previousEventHash) failures.push(`previousEventHash:${event.id}`);
+	    if (index > 0 && event.previousEventHash !== previous.eventHash) failures.push(`previousEventHash:${event.id}`);
+	    if (!String(event.chainId ?? "").trim()) failures.push(`chainId:${event.id}`);
+	    if (event.actionKind !== event.eventKind) failures.push(`actionKind:${event.id}`);
+	    if (!String(event.policyDecisionId ?? "").trim()) failures.push(`policyDecisionId:${event.id}`);
+	    if (!String(event.governanceApprovalRecordId ?? "").trim()) failures.push(`governanceApprovalRecordId:${event.id}`);
+	    if (!String(event.actorHash ?? "").startsWith("sha256:")) failures.push(`actorHash:${event.id}`);
+	    if (approverHashes.length < 2 || approverHashes.some((hash) => !String(hash ?? "").startsWith("sha256:"))) failures.push(`approverHashes:${event.id}`);
+	    if (!affectedArtifactIds.length) failures.push(`affectedArtifactIds:${event.id}`);
+	    if (!String(event.beforeHash ?? "").startsWith("sha256:")) failures.push(`beforeHash:${event.id}`);
+	    if (!String(event.afterHash ?? "").startsWith("sha256:")) failures.push(`afterHash:${event.id}`);
+	    if (event.beforeHash === event.afterHash) failures.push(`beforeAfterHash:${event.id}`);
+	    if (!String(event.eventHash ?? "").startsWith("sha256:")) failures.push(`eventHash:${event.id}`);
+	    if (!redactedReasonClasses.length) failures.push(`redactedReasonClasses:${event.id}`);
+	    if (!auditChainProtectedDataExposureClasses.includes(event.protectedDataExposureClass)) failures.push(`protectedDataExposureClass:${event.id}`);
+	    if (!String(event.externalWormLedgerPointer ?? "").startsWith("worm:")) failures.push(`externalWormLedgerPointer:${event.id}`);
+	    const redactionPolicy = String(event.redactionPolicy ?? "").toLowerCase();
+	    if (!["protected", "hidden", "raw", "private"].every((fragment) => redactionPolicy.includes(fragment))) failures.push(`redactionPolicy:${event.id}`);
+	    if (!Number.isFinite(Date.parse(event.occurredAt))) failures.push(`occurredAt:${event.id}`);
+	  });
   const verification = {
     id: body.id ?? body.sensitiveAuditChainVerification?.id ?? `sensitive-audit-chain-verification-${Date.now()}`,
     releaseId,
@@ -5471,11 +5572,12 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const benchmarkSubmissions = latestWorkflowResources(workflowEvents, "benchmarkSubmission");
   const screenFeatureParityChecks = latestWorkflowResources(workflowEvents, "screenFeatureParityCheck");
   const simplifiedCopyPreviews = latestWorkflowResources(workflowEvents, "simplifiedCopyPreview");
-  const rubricCopyTraceabilityMaps = latestWorkflowResources(workflowEvents, "rubricCopyTraceabilityMap");
-  const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
-  const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
-  const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
-  const releaseConfigManifestVerifications = latestWorkflowResources(workflowEvents, "releaseConfigManifestVerification");
+	  const rubricCopyTraceabilityMaps = latestWorkflowResources(workflowEvents, "rubricCopyTraceabilityMap");
+	  const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
+	  const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
+	  const governedBundleVerifications = latestWorkflowResources(workflowEvents, "governedBundleVerification");
+	  const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
+	  const releaseConfigManifestVerifications = latestWorkflowResources(workflowEvents, "releaseConfigManifestVerification");
   const policyActionKinds = latestWorkflowResources(workflowEvents, "policyActionKind");
   const policyDecisionRecords = latestWorkflowResources(workflowEvents, "policyDecisionRecord");
   const policyDecisionConsumptions = latestWorkflowResources(workflowEvents, "policyDecisionConsumption");
@@ -5622,11 +5724,12 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     benchmarkSubmissions,
     screenFeatureParityChecks,
     simplifiedCopyPreviews,
-    rubricCopyTraceabilityMaps,
-    governedBundleCanonicalizationProfiles,
-    governedBundleRecords,
-    releaseConfigManifests,
-    releaseConfigManifestVerifications,
+	    rubricCopyTraceabilityMaps,
+	    governedBundleCanonicalizationProfiles,
+	    governedBundleRecords,
+	    governedBundleVerifications,
+	    releaseConfigManifests,
+	    releaseConfigManifestVerifications,
     policyActionKinds,
     policyDecisionRecords,
     policyDecisionConsumptions,
@@ -6683,14 +6786,20 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
     const missingValues = requiredValues.filter((item) => !Array.isArray(value) || !value.includes(item));
     if (missingValues.length) return invalid(`missing required array values in ${fieldPath}: ${missingValues.join(", ")}`);
   }
-  for (const [fieldPath, allowedValues] of Object.entries(spec.allowedArrayValues ?? {})) {
-    const value = workflowFieldValue(normalized, fieldPath);
-    if (!Array.isArray(value)) return invalid(`${fieldPath} must be an array`);
-    const invalidValues = value.filter((item) => !allowedValues.includes(item));
-    if (invalidValues.length) return invalid(`${fieldPath} must contain only: ${allowedValues.join(", ")}`);
-  }
-  for (const rule of spec.requiredArrayIncludesByFieldValue ?? []) {
-    const discriminator = workflowFieldValue(normalized, rule.field);
+	  for (const [fieldPath, allowedValues] of Object.entries(spec.allowedArrayValues ?? {})) {
+	    const value = workflowFieldValue(normalized, fieldPath);
+	    if (!Array.isArray(value)) return invalid(`${fieldPath} must be an array`);
+	    const invalidValues = value.filter((item) => !allowedValues.includes(item));
+	    if (invalidValues.length) return invalid(`${fieldPath} must contain only: ${allowedValues.join(", ")}`);
+	  }
+	  for (const [fieldPath, requiredPrefix] of Object.entries(spec.requiredArrayValuePrefixes ?? {})) {
+	    const value = workflowFieldValue(normalized, fieldPath);
+	    if (!Array.isArray(value)) return invalid(`${fieldPath} must be an array`);
+	    const invalidValues = value.filter((item) => typeof item !== "string" || !item.startsWith(requiredPrefix));
+	    if (invalidValues.length) return invalid(`${fieldPath} values must start with ${JSON.stringify(requiredPrefix)}`);
+	  }
+	  for (const rule of spec.requiredArrayIncludesByFieldValue ?? []) {
+	    const discriminator = workflowFieldValue(normalized, rule.field);
     const requiredValues = rule.values?.[discriminator] ?? [];
     const value = workflowFieldValue(normalized, rule.arrayField);
     const missingValues = requiredValues.filter((item) => !Array.isArray(value) || !value.includes(item));
