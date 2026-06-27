@@ -1859,6 +1859,45 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
   }
 });
 
+test("rating UI starts score controls unset and requires explicit values before submission", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  assert.match(appSource, /draftScores:\s*Object\.fromEntries\(RUBRIC_DIMENSIONS\.map\(\(dimension\) => \[dimension, null\]\)\)/);
+  assert.ok(appSource.includes("const missingScores = missingDraftScoreDimensions();"));
+  assert.ok(appSource.includes('title: "Required scores missing"'));
+  assert.ok(appSource.includes('scoreInputPolicyId: "score-input-policy-ui-unset-required"'));
+  assert.ok(appSource.includes('scoreEntryExplicitnessStatus: clarity < 0.5 ? "low_clarity_branch_explicit" : "all_required_scores_explicit"'));
+  assert.ok(appSource.includes('hasValue ? value.toFixed(2) : "unset"'));
+  assert.ok(appSource.includes('if (state.lastPersistenceStatus.tone === "good") state.ratings.push(newRating);'));
+});
+
+test("practice sandbox is a public-anchor training surface excluded from release denominators", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  assert.ok(appSource.includes('["practice", "Practice", "sliders"]'));
+  assert.ok(appSource.includes('if (section === "practice") return practicePanel(context.releaseReport.sourceExampleAnchors);'));
+  assert.ok(appSource.includes('const anchorRows = sourceExampleAnchors.anchorRows.filter((row) => row.exposurePolicy === "public_training_qa_only");'));
+  assert.ok(appSource.includes("Practice attempts record training exposure only."));
+  assert.ok(appSource.includes("excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators"));
+  assert.ok(appSource.includes("Feedback after lock"));
+  assert.ok(appSource.includes("data-practice-dimension"));
+  assert.ok(appSource.includes("missingPracticeScoreDimensions"));
+  assert.ok(appSource.includes('state.practiceSubmittedScores = { ...state.practiceScores };'));
+});
+
+test("rater data-governance UI exposes consent, restriction, and withdrawal actions", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  assert.ok(appSource.includes('["data", "My Data", "database"]'));
+  assert.ok(appSource.includes('if (section === "data") return raterDataGovernancePanel(context.releaseReport.raterDataGovernance);'));
+  assert.ok(appSource.includes('"/api/v1/raters/me/data-profile"'));
+  assert.ok(appSource.includes('"/api/v1/raters/me/data-consent"'));
+  assert.ok(appSource.includes('"/api/v1/raters/me/data-restriction-request"'));
+  assert.ok(appSource.includes('"/api/v1/raters/me/withdrawal-requests"'));
+  assert.ok(appSource.includes('identifiableAccessRestriction: "approved operational or research role access only"'));
+  assert.ok(appSource.includes("privateLearningDataExcludedFromReleaseAndTraining: true"));
+  assert.ok(appSource.includes('requesterNotificationStatus: "notified"'));
+  assert.ok(appSource.includes('frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved"'));
+  assert.ok(appSource.includes("Public artifacts are de-identified by default"));
+});
+
 test("state transition endpoint records rejected illegal transitions without advancing state", async () => {
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });

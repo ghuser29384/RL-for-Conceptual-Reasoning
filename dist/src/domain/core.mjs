@@ -9777,7 +9777,7 @@ function normalizeGuardChecks(value) {
     .filter(Boolean);
 }
 
-const RATER_DATA_GOVERNANCE_CATEGORIES = [
+export const RATER_DATA_GOVERNANCE_CATEGORIES = [
   "identity_profile",
   "rating_performance",
   "session_pacing",
@@ -9788,7 +9788,7 @@ const RATER_DATA_GOVERNANCE_CATEGORIES = [
   "reliability_profile",
 ];
 
-const RATER_DATA_USE_SCOPES = ["certification", "reliability_estimation", "research", "release_reporting", "operations"];
+export const RATER_DATA_USE_SCOPES = ["certification", "reliability_estimation", "research", "release_reporting", "operations"];
 
 const VOLUNTEER_WITHDRAWAL_REQUEST_TYPES = [
   "future_assignment_stop",

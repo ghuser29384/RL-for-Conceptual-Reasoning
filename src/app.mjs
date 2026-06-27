@@ -1,5 +1,7 @@
 import {
   RATER_ISSUE_FLAG_DEFINITIONS,
+  RATER_DATA_GOVERNANCE_CATEGORIES,
+  RATER_DATA_USE_SCOPES,
   RUBRIC_DIMENSIONS,
   adjudicationMemos,
   appendRatingRevision,
@@ -19,6 +21,7 @@ import {
   dimensionGuidance,
   evaluateReleaseGateProfile,
   fullRubricEvaluationRun,
+  lmcaSourceExampleAnchors,
   overallOnlyEvaluationRun,
   pairwiseMarginDistribution,
   positions,
@@ -49,15 +52,12 @@ const state = {
   selectedAssignmentId: assignments[0].id,
   ratings: structuredClone(seedRatings),
   sourceStyleAudits: structuredClone(postLockSourceStyleAudits),
-  draftScores: {
-    centrality: 0.5,
-    strength: 0.5,
-    correctness: 0.75,
-    clarity: 0.8,
-    dead_weight: 0.1,
-    single_issue: 0.85,
-    overall: 0.5,
-  },
+  draftScores: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null])),
+  selectedPracticeAnchorId: lmcaSourceExampleAnchors[0]?.id ?? null,
+  practiceScores: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null])),
+  practiceAttemptLocked: false,
+  practiceSubmittedScores: null,
+  lastPracticeStatus: null,
   draftFlags: {
     needsVerification: false,
     correctnessNotAssessableDueToClarity: false,
@@ -97,6 +97,8 @@ const state = {
   selectedContributionTargetId: positions[0]?.id ?? null,
   lastContributionStatus: null,
   myContributionSubmissions: [],
+  raterDataProfile: null,
+  lastDataGovernanceStatus: null,
   lastPersistenceStatus: null,
   lastSourceStyleAuditStatus: null,
 };
@@ -104,6 +106,8 @@ const state = {
 const navItems = [
   ["queue", "Queue", "clipboard"],
   ["rating", "Blind Rating", "eye"],
+  ["practice", "Practice", "sliders"],
+  ["data", "My Data", "database"],
   ["contribute", "Contribute", "branch"],
   ["workflow", "Workflow", "branch"],
   ["adjudication", "Adjudication", "scale"],
@@ -1639,6 +1643,8 @@ function render() {
 function sectionHtml(section, context) {
   if (section === "queue") return queuePanel();
   if (section === "contribute") return contributePanel();
+  if (section === "practice") return practicePanel(context.releaseReport.sourceExampleAnchors);
+  if (section === "data") return raterDataGovernancePanel(context.releaseReport.raterDataGovernance);
   if (section === "rating") {
     return ratingPanel(
       context.selectedAssignment,
@@ -1710,6 +1716,154 @@ function queuePanel() {
       </div>
       ${assignmentTable()}
     </section>
+  `;
+}
+
+function practicePanel(sourceExampleAnchors) {
+  const anchor = selectedPracticeAnchor();
+  const anchorRows = sourceExampleAnchors.anchorRows.filter((row) => row.exposurePolicy === "public_training_qa_only");
+  return `
+    <div class="twoColumn">
+      <section class="panel">
+        ${panelTitle("sliders", "Practice Sandbox", "Use public training anchors to learn the rubric before live blind rating.")}
+        ${statusLine(state.lastPracticeStatus, "persistenceLine")}
+        <div class="practiceNotice">
+          ${icon("shield")}
+          <span>Practice attempts record training exposure only. They are excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators.</span>
+        </div>
+        <div class="practiceAnchorList">
+          ${anchorRows
+            .map(
+              (row) => `
+                <button class="practiceAnchor ${row.anchorId === anchor?.id ? "active" : ""}" data-practice-anchor-id="${escapeHtml(row.anchorId)}" type="button">
+                  <strong>${escapeHtml(humanize(row.sourceExampleFamily))}</strong>
+                  <span>${escapeHtml(row.publicSourceReference)}</span>
+                </button>
+              `,
+            )
+            .join("")}
+        </div>
+        ${anchor ? practiceAttemptForm(anchor) : `<div class="emptyState">No public practice anchors are available.</div>`}
+      </section>
+      <aside class="rightRail">
+        <section class="panel compactPanel">
+          ${panelTitle("key", "Practice Policy", "Feedback appears only after the attempt is locked.")}
+          ${metricList([
+            ["Anchor suite", sourceExampleAnchors.suiteVersions.join(", ")],
+            ["Public anchors", String(sourceExampleAnchors.counts.anchorCount)],
+            ["Protected leakage", String(sourceExampleAnchors.counts.exposureViolationCount)],
+            ["Release use", humanize(sourceExampleAnchors.releaseUseStatus)],
+          ])}
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("archive", "Denominator Boundary", "Practice is onboarding evidence, not release-label evidence.")}
+          <div class="gateList">
+            <div>${statusChip("pass")}<span>Hidden benchmark eligible: no</span></div>
+            <div>${statusChip("pass")}<span>Protected validation eligible: no</span></div>
+            <div>${statusChip("pass")}<span>Human-ceiling eligible: no</span></div>
+            <div>${statusChip("pass")}<span>Training exposure recorded</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `;
+}
+
+function selectedPracticeAnchor() {
+  return lmcaSourceExampleAnchors.find((anchor) => anchor.id === state.selectedPracticeAnchorId) ?? lmcaSourceExampleAnchors[0] ?? null;
+}
+
+function practiceAttemptForm(anchor) {
+  return `
+    <section class="practiceAttempt">
+      <div class="pinnedTarget">
+        <strong>${escapeHtml(anchor.publicSourceReference)}</strong>
+        <p>${escapeHtml(humanize(anchor.expectedLabelSummary))}</p>
+      </div>
+      <div class="rubricGrid">${RUBRIC_DIMENSIONS.map((dimension) => scoreSliderRow("practice", dimension, state.practiceScores)).join("")}</div>
+      <div class="actionRow">
+        <button class="primaryButton" id="lockPracticeAttempt" type="button">${icon("check")}Lock practice attempt</button>
+        <button class="secondaryButton" id="resetPracticeAttempt" type="button">${icon("branch")}Reset practice</button>
+      </div>
+      ${state.practiceAttemptLocked ? practiceFeedback(anchor) : ""}
+    </section>
+  `;
+}
+
+function practiceFeedback(anchor) {
+  const submitted = state.practiceSubmittedScores ?? {};
+  const product =
+    Number.isFinite(submitted.centrality) && Number.isFinite(submitted.strength) ? formatNumber(submitted.centrality * submitted.strength) : "unset";
+  return `
+    <section class="practiceFeedback">
+      <h3>Feedback after lock</h3>
+      <p>This public anchor trains ${escapeHtml(anchor.targetDimensions.map(humanize).join(", "))}. Compare your locked scores to the anchor summary before moving to live rating.</p>
+      ${metricList([
+        ["Expected pattern", humanize(anchor.expectedLabelSummary)],
+        ["Your overall", formatNumber(submitted.overall)],
+        ["Your centrality x strength", product],
+        ["Denominator use", "training exposure only"],
+      ])}
+    </section>
+  `;
+}
+
+function raterDataGovernancePanel(raterDataGovernance) {
+  const profile = state.raterDataProfile;
+  const categoryRows = profile?.categories ?? RATER_DATA_GOVERNANCE_CATEGORIES.map((category) => ({ category, collected: true }));
+  return `
+    <div class="twoColumn">
+      <section class="panel">
+        ${panelTitle("database", "My Data", "Review consent, identifiable-access limits, and withdrawal controls for rater data.")}
+        ${statusLine(state.sessionStatus, "sessionLine")}
+        ${authControls()}
+        ${statusLine(state.lastDataGovernanceStatus, "persistenceLine")}
+        <div class="practiceNotice">
+          ${icon("shield")}
+          <span>Your private learning data stays separate from release artifacts and model-training exports. Public artifacts are de-identified by default unless you explicitly agree to attribution.</span>
+        </div>
+        <div class="actionRow">
+          <button class="secondaryButton" id="refreshRaterDataProfile" type="button">${icon("database")}Refresh profile</button>
+          <button class="primaryButton" id="submitRaterDataConsent" type="button">${icon("check")}Acknowledge data-use notice</button>
+          <button class="secondaryButton" id="requestRaterDataAccessReview" type="button">${icon("key")}Request access review</button>
+          <button class="secondaryButton" id="stopFutureAssignments" type="button">${icon("shield")}Stop future assignments</button>
+          <button class="secondaryButton" id="excludeFutureTrainingExport" type="button">${icon("download")}Exclude future training exports</button>
+        </div>
+        <div class="dataCategoryGrid">
+          ${categoryRows
+            .map(
+              (row) => `
+                <article>
+                  <strong>${escapeHtml(humanize(row.category))}</strong>
+                  <span>${row.publicArtifacts ?? "deidentified_by_default"}</span>
+                  <em>${row.identifiableAccess ?? "approved_operational_or_research_roles_only"}</em>
+                </article>
+              `,
+            )
+            .join("")}
+        </div>
+      </section>
+      <aside class="rightRail">
+        <section class="panel compactPanel">
+          ${panelTitle("key", "Consent Profile", "Rater-visible transparency state from the participant-data API.")}
+          ${metricList([
+            ["Notice", profile?.noticeVersion ?? "not loaded"],
+            ["Consent rows", String(profile?.consent?.submittedCount ?? raterDataGovernance.counts.submittedConsentCount)],
+            ["Restriction requests", String(profile?.restrictionRequests?.length ?? raterDataGovernance.counts.submittedRestrictionRequestCount)],
+            ["Withdrawal requests", String(profile?.withdrawalRequests?.length ?? raterDataGovernance.counts.submittedWithdrawalRequestCount)],
+          ])}
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("archive", "Release Boundary", "Participant data controls cannot silently rewrite frozen scientific denominators.")}
+          <div class="gateList">
+            <div>${statusChip("pass")}<span>Public artifacts de-identified by default</span></div>
+            <div>${statusChip("pass")}<span>Identifiable access limited to approved roles</span></div>
+            <div>${statusChip("pass")}<span>Private learning data excluded from releases/training</span></div>
+            <div>${statusChip("pass")}<span>Frozen de-identified labels preserved</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
   `;
 }
 
@@ -3510,13 +3664,126 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       render();
     });
   });
+  document.querySelectorAll("[data-practice-anchor-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedPracticeAnchorId = button.getAttribute("data-practice-anchor-id");
+      state.practiceScores = Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null]));
+      state.practiceAttemptLocked = false;
+      state.practiceSubmittedScores = null;
+      state.lastPracticeStatus = null;
+      render();
+    });
+  });
   document.querySelectorAll("[data-dimension]").forEach((input) => {
     input.addEventListener("input", () => {
       const dimension = input.getAttribute("data-dimension");
       state.draftScores[dimension] = Number(input.value);
       const output = document.querySelector(`[data-output="${dimension}"]`);
       if (output) output.textContent = Number(input.value).toFixed(2);
+      input.classList.remove("unsetScore");
     });
+  });
+  document.querySelectorAll("[data-practice-dimension]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const dimension = input.getAttribute("data-practice-dimension");
+      state.practiceScores[dimension] = Number(input.value);
+      const output = document.querySelector(`[data-practice-output="${dimension}"]`);
+      if (output) output.textContent = Number(input.value).toFixed(2);
+      input.classList.remove("unsetScore");
+      state.practiceAttemptLocked = false;
+      state.practiceSubmittedScores = null;
+    });
+  });
+  document.getElementById("lockPracticeAttempt")?.addEventListener("click", () => {
+    const missingScores = missingPracticeScoreDimensions();
+    if (missingScores.length) {
+      state.lastPracticeStatus = {
+        tone: "bad",
+        title: "Practice scores missing",
+        detail: `Enter explicit values for ${missingScores.map(humanize).join(", ")} before locking feedback.`,
+      };
+      render();
+      return;
+    }
+    state.practiceAttemptLocked = true;
+    state.practiceSubmittedScores = { ...state.practiceScores };
+    state.lastPracticeStatus = {
+      tone: "good",
+      title: "Practice attempt locked",
+      detail: "Feedback is now visible; this attempt remains training exposure only.",
+    };
+    render();
+  });
+  document.getElementById("resetPracticeAttempt")?.addEventListener("click", () => {
+    state.practiceScores = Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null]));
+    state.practiceAttemptLocked = false;
+    state.practiceSubmittedScores = null;
+    state.lastPracticeStatus = null;
+    render();
+  });
+  document.getElementById("refreshRaterDataProfile")?.addEventListener("click", async () => {
+    state.lastDataGovernanceStatus = { tone: "warn", title: "Loading data profile", detail: "Reading your rater-data transparency profile." };
+    render();
+    const result = await fetchRaterDataProfile();
+    state.lastDataGovernanceStatus = result.status;
+    if (result.profile) state.raterDataProfile = result.profile;
+    render();
+  });
+  document.getElementById("submitRaterDataConsent")?.addEventListener("click", async () => {
+    state.lastDataGovernanceStatus = { tone: "warn", title: "Submitting consent", detail: "Recording data-use notice acknowledgement." };
+    render();
+    const result = await persistParticipantDataEvent("/api/v1/raters/me/data-consent", "raterDataConsent", createRaterDataConsentPayload());
+    state.lastDataGovernanceStatus = result;
+    if (result.tone === "good") {
+      const profileResult = await fetchRaterDataProfile();
+      if (profileResult.profile) state.raterDataProfile = profileResult.profile;
+    }
+    render();
+  });
+  document.getElementById("requestRaterDataAccessReview")?.addEventListener("click", async () => {
+    state.lastDataGovernanceStatus = { tone: "warn", title: "Requesting access review", detail: "Opening an identifiable-access review request." };
+    render();
+    const result = await persistParticipantDataEvent(
+      "/api/v1/raters/me/data-restriction-request",
+      "raterDataRestrictionRequest",
+      createRaterDataRestrictionPayload(),
+    );
+    state.lastDataGovernanceStatus = result;
+    if (result.tone === "good") {
+      const profileResult = await fetchRaterDataProfile();
+      if (profileResult.profile) state.raterDataProfile = profileResult.profile;
+    }
+    render();
+  });
+  document.getElementById("stopFutureAssignments")?.addEventListener("click", async () => {
+    state.lastDataGovernanceStatus = { tone: "warn", title: "Stopping future assignments", detail: "Submitting a future-assignment stop request." };
+    render();
+    const result = await persistParticipantDataEvent(
+      "/api/v1/raters/me/withdrawal-requests",
+      "volunteerDataWithdrawalRequest",
+      createVolunteerWithdrawalPayload("future_assignment_stop"),
+    );
+    state.lastDataGovernanceStatus = result;
+    if (result.tone === "good") {
+      const profileResult = await fetchRaterDataProfile();
+      if (profileResult.profile) state.raterDataProfile = profileResult.profile;
+    }
+    render();
+  });
+  document.getElementById("excludeFutureTrainingExport")?.addEventListener("click", async () => {
+    state.lastDataGovernanceStatus = { tone: "warn", title: "Excluding future training exports", detail: "Submitting a future-export exclusion request." };
+    render();
+    const result = await persistParticipantDataEvent(
+      "/api/v1/raters/me/withdrawal-requests",
+      "volunteerDataWithdrawalRequest",
+      createVolunteerWithdrawalPayload("future_training_export_exclusion"),
+    );
+    state.lastDataGovernanceStatus = result;
+    if (result.tone === "good") {
+      const profileResult = await fetchRaterDataProfile();
+      if (profileResult.profile) state.raterDataProfile = profileResult.profile;
+    }
+    render();
   });
   document.querySelectorAll("[data-flag]").forEach((input) => {
     input.addEventListener("change", () => {
@@ -3549,10 +3816,21 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     render();
   });
   document.getElementById("submitRating")?.addEventListener("click", async () => {
+    const missingScores = missingDraftScoreDimensions();
+    if (missingScores.length) {
+      state.lastPersistenceStatus = {
+        tone: "bad",
+        title: "Required scores missing",
+        detail: `Enter explicit values for ${missingScores.map(humanize).join(", ")} before submitting.`,
+      };
+      render();
+      return;
+    }
     const position = positions.find((item) => item.id === selectedAssignment.positionId);
     const critique = critiques.find((item) => item.id === selectedAssignment.critiqueId);
-    const clarity = state.draftScores.clarity ?? 1;
+    const clarity = state.draftScores.clarity;
     const actor = state.session?.user ?? { id: "demo-rater", role: "graduate" };
+    const scores = { ...state.draftScores };
     const newRating = {
       id: `rating-demo-${Date.now()}`,
       assignmentId: selectedAssignment.id,
@@ -3562,10 +3840,16 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       raterTier: actor.role,
       kind: "blind_initial",
       rubricVersion: "lmca-app-f-2026-10",
+      scoreInputPolicyId: "score-input-policy-ui-unset-required",
       positionTextVersionId: position?.textVersions.at(-1)?.id ?? "",
       critiqueTextVersionId: critique?.textVersions.at(-1)?.id ?? "",
       ratingContextSnapshotId: contextSnapshotForAssignment(selectedAssignment)?.id ?? "rc-target-only-1",
-      scores: { ...state.draftScores },
+      scores,
+      rawScores: { ...scores },
+      displayedScores: { ...scores },
+      scoreQuantizationPolicy: "raw_0_1_scores_stored_to_0.001_display_precision",
+      scoreEntryExplicitnessStatus: clarity < 0.5 ? "low_clarity_branch_explicit" : "all_required_scores_explicit",
+      scoreMissingFieldValidationStatus: clarity < 0.5 ? "low_clarity_provisional_fields_allowed" : "passed_no_missing_required_fields",
       provisionalDimensions: clarity < 0.5 ? RUBRIC_DIMENSIONS.filter((dimension) => !["clarity", "overall", "correctness"].includes(dimension)) : [],
       correctnessVerificationStatus: state.draftVerification.status,
       correctnessVerificationNote: state.draftVerification.note,
@@ -3577,10 +3861,10 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       submittedAt: new Date().toISOString(),
       lockedAt: new Date().toISOString(),
     };
-    state.ratings.push(newRating);
     state.lastPersistenceStatus = { tone: "warn", title: "Audit persistence pending", detail: "Submitting append-only rating event." };
     render();
     state.lastPersistenceStatus = await persistRating("/api/ratings/blind", newRating);
+    if (state.lastPersistenceStatus.tone === "good") state.ratings.push(newRating);
     render();
   });
   document.getElementById("appendRevision")?.addEventListener("click", async () => {
@@ -3593,10 +3877,10 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       revisionReasonCode: "human_only_self_check",
       revisionComment: "Locked first rating preserved; self-check appends a separate revision.",
     });
-    state.ratings.push(revision);
     state.lastPersistenceStatus = { tone: "warn", title: "Audit persistence pending", detail: "Submitting append-only revision event." };
     render();
     state.lastPersistenceStatus = await persistRating("/api/ratings/revisions", revision);
+    if (state.lastPersistenceStatus.tone === "good") state.ratings.push(revision);
     render();
   });
   document.getElementById("submitSourceStyleAudit")?.addEventListener("click", async () => {
@@ -3663,14 +3947,29 @@ function navButton(id, label, iconName) {
 }
 
 function sliderRow(dimension) {
-  const value = state.draftScores[dimension];
+  return scoreSliderRow("rating", dimension, state.draftScores);
+}
+
+function scoreSliderRow(scope, dimension, scoreState) {
+  const value = scoreState[dimension];
+  const hasValue = typeof value === "number";
+  const dimensionAttribute = scope === "practice" ? "data-practice-dimension" : "data-dimension";
+  const outputAttribute = scope === "practice" ? "data-practice-output" : "data-output";
   return `
-    <label class="sliderRow">
+    <label class="sliderRow ${hasValue ? "scoreSet" : "scoreUnset"}">
       <span><strong>${humanize(dimension)}</strong><em>${escapeHtml(dimensionGuidance[dimension])}</em></span>
-      <input data-dimension="${dimension}" max="1" min="0" step="0.01" type="range" value="${typeof value === "number" ? value : 0}" />
-      <output data-output="${dimension}">${typeof value === "number" ? value.toFixed(2) : "null"}</output>
+      <input aria-label="${escapeHtml(`${humanize(dimension)} ${scope} score${hasValue ? "" : " unset; move slider to set"}`)}" class="${hasValue ? "" : "unsetScore"}" ${dimensionAttribute}="${dimension}" max="1" min="0" step="0.01" type="range" value="${hasValue ? value : 0.5}" />
+      <output ${outputAttribute}="${dimension}">${hasValue ? value.toFixed(2) : "unset"}</output>
     </label>
   `;
+}
+
+function missingDraftScoreDimensions() {
+  return RUBRIC_DIMENSIONS.filter((dimension) => !Number.isFinite(state.draftScores[dimension]));
+}
+
+function missingPracticeScoreDimensions() {
+  return RUBRIC_DIMENSIONS.filter((dimension) => !Number.isFinite(state.practiceScores[dimension]));
 }
 
 function issueFlagControls() {
@@ -4002,6 +4301,121 @@ async function ensureAdminSession() {
   return state.adminSession;
 }
 
+async function fetchRaterDataProfile() {
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch("/api/v1/raters/me/data-profile", {
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        status: {
+          tone: "bad",
+          title: "Data profile rejected",
+          detail: body.detail ?? body.error ?? "Server rejected the data-profile request.",
+        },
+      };
+    }
+    return {
+      profile: body,
+      status: {
+        tone: "good",
+        title: "Data profile loaded",
+        detail: `${body.categories?.length ?? 0} rater-data categories visible.`,
+      },
+    };
+  } catch {
+    return {
+      status: {
+        tone: "warn",
+        title: "Data profile unavailable",
+        detail: "Server API unavailable; retry before treating profile controls as submitted.",
+      },
+    };
+  }
+}
+
+async function persistParticipantDataEvent(endpoint, resourceKey, resource) {
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ [resourceKey]: resource }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Data governance rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the participant-data event.",
+      };
+    }
+    return {
+      tone: "good",
+      title: "Data governance event recorded",
+      detail: `${body.resourceId} recorded with ${body.payloadHash.slice(0, 18)}...`,
+    };
+  } catch {
+    return {
+      tone: "warn",
+      title: "Data governance unavailable",
+      detail: "Server API unavailable; retry before treating this request as submitted.",
+    };
+  }
+}
+
+function createRaterDataConsentPayload() {
+  return {
+    id: `rater-data-consent-ui-${Date.now()}`,
+    noticeVersion: "rater-data-use-v1",
+    dataCategoriesCovered: RATER_DATA_GOVERNANCE_CATEGORIES,
+    useScopesAcknowledged: RATER_DATA_USE_SCOPES,
+    dataProfileVisible: true,
+    publicArtifactsDeidentifiedByDefault: true,
+    identifiableAccessRestriction: "approved operational or research role access only",
+    privateLearningDataExcludedFromReleaseAndTraining: true,
+    consentedAt: new Date().toISOString(),
+  };
+}
+
+function createRaterDataRestrictionPayload() {
+  return {
+    id: `rater-data-restriction-ui-${Date.now()}`,
+    requestType: "identifiable_access_review",
+    affectedDataCategories: ["session_pacing", "safe_decline_reasons", "source_style_guesses"],
+    actionTaken: "review_opened",
+    requesterNotificationStatus: "notified",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createVolunteerWithdrawalPayload(requestType) {
+  const futureAssignmentStop = requestType === "future_assignment_stop";
+  return {
+    id: `withdrawal-ui-${requestType}-${Date.now()}`,
+    requestType,
+    affectedDataCategories: futureAssignmentStop
+      ? ["identity_profile", "rating_performance"]
+      : ["private_learning_dashboard", "future_training_export"],
+    actionTaken: futureAssignmentStop ? "future_assignments_stopped" : "future_training_export_exclusion_recorded",
+    futureAssignmentStop,
+    futureTrainingExportExcluded: true,
+    identifiableTelemetryRestricted: true,
+    publicAttributionRemoved: true,
+    privateLearningDashboardDeleted: true,
+    frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+    requesterNotificationStatus: "notified",
+    timestamp: new Date().toISOString(),
+  };
+}
+
 async function persistRating(endpoint, rating) {
   try {
     const session = await ensureSession();
@@ -4031,7 +4445,7 @@ async function persistRating(endpoint, rating) {
     return {
       tone: "warn",
       title: "Local session only",
-      detail: "Server API unavailable; this event remains in browser memory.",
+      detail: "Server API unavailable; retry before treating this event as submitted.",
     };
   }
 }
