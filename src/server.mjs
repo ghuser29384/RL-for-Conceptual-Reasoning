@@ -203,6 +203,7 @@ const modelAssistedRatingCheckRequiredFields = [
   "preModelRatingCheckId",
   "modelAssistanceDeltaSummary",
 ];
+const ratingCheckTypes = ["self_check", "expert_check", "model_assisted_check"];
 const correctnessClaimWeightWorksheetRequiredFields = [
   "id",
   "claimSpanIds",
@@ -224,6 +225,15 @@ const verificationRecordRequiredFields = [
   "verificationStatus",
   "verificationResult",
   "exposureStatus",
+];
+const correctnessVerificationStatuses = [
+  "not_needed",
+  "requested",
+  "in_progress",
+  "verified",
+  "not_practicable",
+  "unresolved",
+  "adjudication_resolved",
 ];
 const interpretationTargetMapRequiredFields = [
   "id",
@@ -613,6 +623,103 @@ const sourceRecognitionTypes = [
 ];
 const sourceRecognitionActions = ["safe_decline", "continue_nonblind", "request_review"];
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+const policyActionKinds = [
+  "protected_render",
+  "assignment_issue",
+  "rating_lock",
+  "revision_submit",
+  "discussion_open",
+  "adjudication_finalize",
+  "label_snapshot_freeze",
+  "pairwise_snapshot_freeze",
+  "evaluation_run",
+  "hidden_benchmark_aggregate_report",
+  "release_freeze",
+  "training_export",
+  "manifest_activation",
+];
+const phaseGateLaneKinds = [
+  "route",
+  "worker",
+  "queue",
+  "ui_panel",
+  "export_path",
+  "evaluation_lane",
+  "hidden_benchmark_submission_lane",
+  "governance_action",
+];
+const phaseGateStates = ["enabled", "staff_only", "shadow", "disabled_stub", "blocked"];
+const queueFreshnessLanes = [
+  "assignment",
+  "draft",
+  "discussion",
+  "adjudication",
+  "model_evaluation_job",
+  "hidden_benchmark_submission",
+  "export",
+  "outbox",
+  "delayed_report",
+];
+const queueRevalidationChecks = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const queueStaleBehaviors = ["stale", "paused", "pause", "cancel", "cancelled", "recompute", "suppress"];
+const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
+const clientSurfaceRequiredChecks = [
+  "no_third_party_analytics",
+  "no_session_replay",
+  "no_dom_capture",
+  "no_sensitive_url_ids",
+  "referrer_policy",
+  "no_persistent_offline_cache",
+  "csp",
+];
+const auditChainEventKinds = [
+  "governance_approval",
+  "manifest_activation",
+  "protected_label_access",
+  "hidden_benchmark_release",
+  "training_export_release",
+];
+const releaseConfigBindings = [
+  "code",
+  "rubric",
+  "scoring",
+  "visibility",
+  "workflow",
+  "ui_render",
+  "ux_simplification",
+  "lint",
+  "assist",
+  "queue",
+  "split",
+  "rights_provenance",
+  "item_text",
+  "rating_context",
+  "label",
+  "pairwise",
+  "parser",
+  "prompt",
+  "metric",
+  "score_input",
+  "export_policy",
+];
+const governedBundleFamilies = [
+  "rubric",
+  "scoring",
+  "visibility",
+  "workflow",
+  "ui_render",
+  "lint",
+  "assist",
+  "score_input",
+  "queue",
+  "split",
+  "output_schema",
+  "prompt",
+  "parser",
+  "metric",
+  "export_policy",
+  "phase_gate",
+];
 const raterDataGovernanceCategories = [
   "identity_profile",
   "rating_performance",
@@ -1114,6 +1221,7 @@ const workflowWriteEndpoints = [
     requiredAnyFields: [["timestamp", "createdAt"]],
     requiredNonEmptyArrayFields: ["verificationMaterials"],
     requiredFiniteNumberFields: ["confidence"],
+    allowedValues: { verificationStatus: correctnessVerificationStatuses },
   }),
   workflowWriteSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretation_target_map_submitted", "interpretationTargetMap", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -1132,11 +1240,13 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: verificationWorkspaceSessionRequiredFields,
     requiredNonEmptyArrayFields: ["itemKeys", "claimList", "claimSpanRefs", "evidenceMaterialRefs"],
+    allowedValues: { verificationStatus: correctnessVerificationStatuses },
     requiredWhen: [{ field: "verificationStatus", equals: "not_practicable", requiredFields: ["notPracticableJustification"] }],
   }),
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
     requiredFields: ratingCheckRecordRequiredFields,
     requiredNonEmptyArrayFields: ["auxiliaryMaterialSeen"],
+    allowedValues: { checkType: ratingCheckTypes },
     requiredWhen: [
       {
         field: "checkType",
@@ -1541,6 +1651,7 @@ const workflowWriteEndpoints = [
       { field: "surface", arrayField: "requiredOptionalControlMap.requiredControls", values: uxScreenControlRequirements },
     ],
     forbiddenArrayValueFragments: { visibleFieldAllowlist: uxForbiddenVisibleFieldFragments },
+    allowedValues: { surface: uxSimplificationSurfaces },
     requiredExactFields: {
       payloadSource: "server_derived",
       "protectedGoldBenchmarkDisclosureState.benchmarkMembership": "not_disclosed",
@@ -1655,6 +1766,15 @@ const workflowWriteEndpoints = [
     ],
     requiredNonEmptyArrayFields: ["allowedCompensationCreditInputs", "prohibitedIncentiveSignals"],
     requiredArrayIncludes: { prohibitedIncentiveSignals },
+    requiredStringIncludes: {
+      speedEffortGuardrails: ["qa"],
+      privateProgressDashboardPolicy: ["private", "non-gamified"],
+      hiddenBenchmarkGoldPerformanceExclusionPolicy: ["hidden", "never"],
+    },
+    requiredStringIncludesAny: {
+      publicRecognitionPolicy: ["without", "no"],
+      leaderboardBadgeRestrictions: ["no", "prohibit"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-qualification-records$/, "rater_qualification_record_submitted", "raterQualificationRecord", adminRoles, {
     allowHiddenMetadata: true,
@@ -1711,12 +1831,24 @@ const workflowWriteEndpoints = [
     requiredExactFields: {
       protectedStatusHiddenFromRater: true,
     },
+    requiredWhen: [
+      {
+        field: "raterAction",
+        equals: "continue_nonblind",
+        requiredFields: ["reviewerResolution"],
+        requiredStringIncludesAny: {
+          independentBlindEligibilityEffect: ["excluded", "nonblind"],
+          reviewerResolution: ["review", "expert"],
+        },
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/model-provider-data-handling-policies$/, "model_provider_data_handling_policy_submitted", "modelProviderDataHandlingPolicy", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "providerEndpointClass", "coveredRunClass", "subprocessorsSummary", "approvalStatus", "reviewer", "expiresAt"],
     requiredNonEmptyArrayFields: ["approvedSplitContentClasses"],
     requiredFiniteNumberFields: ["logRetentionWindowDays"],
+    requiredNumberRanges: [{ field: "logRetentionWindowDays", min: 0, max: 30 }],
     requiredArrayIncludes: { approvedSplitContentClasses: ["protected_validation", "hidden_benchmark"] },
     allowedValues: { coveredRunClass: modelProviderRunClasses },
     requiredExactFields: {
@@ -2113,6 +2245,7 @@ const workflowWriteEndpoints = [
     requiredObjectKeysByFieldValue: [
       { field: "screenId", objectField: "requiredControlResults", values: uxScreenControlRequirements },
     ],
+    allowedValues: { screenId: uxSimplificationSurfaces },
     requiredExactFields: {
       noFeatureLoss: true,
       "featureParityChecklistResults.no_feature_loss": "passed",
@@ -2125,7 +2258,10 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "screenId", "copyBundleId", "glossaryTooltipIds", "exactRubricTermPreservation", "hiddenFieldLeakageCheck", "uiExperimentPolicyId", "raterInstructionRenderVersionId", "releaseConfigManifestId", "protectedSplitVariantDisposition", "reviewerId", "reviewedAt"],
     requiredNonEmptyArrayFields: ["glossaryTooltipIds"],
     requiredArrayIncludes: { glossaryTooltipIds: simplifiedCopyRequiredGlossaryTerms },
-    allowedValues: { protectedSplitVariantDisposition: simplifiedCopyProtectedSplitVariantDispositions },
+    allowedValues: {
+      screenId: uxSimplificationSurfaces,
+      protectedSplitVariantDisposition: simplifiedCopyProtectedSplitVariantDispositions,
+    },
     requiredExactFields: { exactRubricTermPreservation: true, hiddenFieldLeakageCheck: "passed" },
     requiredWhen: [
       {
@@ -2137,64 +2273,229 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "version", "hashAlgorithm", "materializationQueryRules", "activatedAt"],
+    requiredFields: [
+      "id",
+      "version",
+      "hashAlgorithm",
+      "materializationQueryRules",
+      "includedFieldPolicy",
+      "rowOrderingPolicy",
+      "arrayOrderingPolicy",
+      "nullEmptyHandling",
+      "unicodeNormalization",
+      "timestampNumberEncoding",
+      "activatedAt",
+    ],
+    requiredNonEmptyArrayFields: ["testVectorIds"],
+    requiredExactFields: { hashAlgorithm: "sha256" },
   }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundles$/, "governed_bundle_submitted", "governedBundleRecord", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "bundleFamily", "semanticVersion", "canonicalizationProfileId", "canonicalContentHash", "appendOnlyActivationStatus"],
+    requiredFields: ["id", "bundleFamily", "semanticVersion", "canonicalizationProfileId", "canonicalContentHash", "materializedRowCount", "appendOnlyActivationStatus", "activatedBy", "activatedAt"],
+    requiredPositiveIntegerFields: ["materializedRowCount"],
+    requiredStringPrefixes: { canonicalContentHash: "sha256:" },
+    allowedValues: { bundleFamily: governedBundleFamilies },
+    requiredExactFields: { appendOnlyActivationStatus: "activated" },
   }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)\/verify$/, "governed_bundle_verification_submitted", "governedBundleVerification", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "governedBundleId",
     requiredFields: ["id", "governedBundleId", "verificationStatus", "expectedHash", "observedHash"],
+    requiredStringPrefixes: { expectedHash: "sha256:", observedHash: "sha256:" },
+    requiredFieldMatches: [{ field: "observedHash", matchesField: "expectedHash" }],
+    requiredExactFields: { verificationStatus: "passed" },
   }),
   workflowWriteSpec(/^\/api\/v1\/release-config-manifests$/, "release_config_manifest_submitted", "releaseConfigManifest", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "releaseId", "version", "canonicalManifestHash", "governedBundleIds", "bindingFamilies", "frozenAt"],
+    requiredFields: [
+      "id",
+      "releaseId",
+      "version",
+      "canonicalManifestHash",
+      "codeCommitId",
+      "rubricVersion",
+      "scoredDimensionSchemaVersion",
+      "releaseGateProfileId",
+      "visibilityPolicyId",
+      "uiExperimentPolicyId",
+      "preSubmitAssistPolicyId",
+      "queuePolicySnapshotId",
+      "governedBundleIds",
+      "bindingFamilies",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: [
+      "governedBundleIds",
+      "bindingFamilies",
+      "uxSimplificationPolicyIds",
+      "scoreInputPolicyIds",
+      "workflowProfileIds",
+      "raterInstructionRenderVersionIds",
+      "rubricLintConfigIds",
+      "labelSnapshotIds",
+      "pairwiseComparisonSnapshotIds",
+      "metricConfigIds",
+      "scoringCodeChecksums",
+      "parserConfigIds",
+      "promptTemplateIds",
+    ],
+    requiredArrayIncludes: { bindingFamilies: releaseConfigBindings },
+    requiredStringPrefixes: { canonicalManifestHash: "sha256:" },
   }),
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/freeze-config-manifest$/, "release_config_manifest_frozen", "releaseConfigManifest", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "releaseId",
-    requiredFields: ["id", "releaseId", "version", "canonicalManifestHash", "governedBundleIds", "bindingFamilies", "frozenAt"],
+    requiredFields: [
+      "id",
+      "releaseId",
+      "version",
+      "canonicalManifestHash",
+      "codeCommitId",
+      "rubricVersion",
+      "scoredDimensionSchemaVersion",
+      "releaseGateProfileId",
+      "visibilityPolicyId",
+      "uiExperimentPolicyId",
+      "preSubmitAssistPolicyId",
+      "queuePolicySnapshotId",
+      "governedBundleIds",
+      "bindingFamilies",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: [
+      "governedBundleIds",
+      "bindingFamilies",
+      "uxSimplificationPolicyIds",
+      "scoreInputPolicyIds",
+      "workflowProfileIds",
+      "raterInstructionRenderVersionIds",
+      "rubricLintConfigIds",
+      "labelSnapshotIds",
+      "pairwiseComparisonSnapshotIds",
+      "metricConfigIds",
+      "scoringCodeChecksums",
+      "parserConfigIds",
+      "promptTemplateIds",
+    ],
+    requiredArrayIncludes: { bindingFamilies: releaseConfigBindings },
+    requiredStringPrefixes: { canonicalManifestHash: "sha256:" },
   }),
   workflowWriteSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)\/verify$/, "release_config_manifest_verification_submitted", "releaseConfigManifestVerification", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "manifestId",
-    requiredFields: ["id", "manifestId", "verificationStatus", "expectedHash", "observedHash"],
+    requiredFields: ["id", "manifestId", "verificationStatus", "expectedHash", "observedHash", "verifiedAt"],
+    requiredStringPrefixes: { expectedHash: "sha256:", observedHash: "sha256:" },
+    requiredFieldMatches: [{ field: "observedHash", matchesField: "expectedHash" }],
+    requiredExactFields: { verificationStatus: "passed" },
   }),
   workflowWriteSpec(/^\/api\/v1\/policy-action-kinds$/, "policy_action_kind_submitted", "policyActionKind", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "actionKind", "requiresCurrentDecision", "requiresManifestBinding", "replayProtection", "wrongScopeBehavior"],
+    requiredFields: ["id", "actionKind", "requiresCurrentDecision", "requiresManifestBinding", "requiresActorBinding", "requiresOutputSchemaBinding", "replayProtection", "wrongScopeBehavior", "activatedAt"],
+    allowedValues: {
+      actionKind: policyActionKinds,
+      replayProtection: ["single_use", "idempotency_bound"],
+    },
+    requiredExactFields: {
+      requiresCurrentDecision: true,
+      requiresManifestBinding: true,
+      requiresActorBinding: true,
+      requiresOutputSchemaBinding: true,
+      wrongScopeBehavior: "fail_closed",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/policy-decisions$/, "policy_decision_submitted", "policyDecisionRecord", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "actionKindId", "decisionStatus", "actorId", "manifestId", "releaseId", "outputSchemaVersion", "expiresAt", "decidedAt"],
+    requiredFields: ["id", "actionKindId", "actionKind", "decisionStatus", "actorId", "manifestId", "releaseId", "outputSchemaVersion", "expiresAt", "decidedAt"],
+    requiredAnyFields: [["idempotencyKey", "singleUse"]],
+    allowedValues: { actionKind: policyActionKinds },
+    requiredExactFields: { decisionStatus: "allow" },
   }),
   workflowWriteSpec(/^\/api\/v1\/implementation-phase-gate-bundles$/, "implementation_phase_gate_bundle_submitted", "implementationPhaseGateBundle", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "releaseId", "manifestId", "version", "laneStates", "futurePhaseDefault", "frozenAt"],
+    requiredNonEmptyArrayFields: ["laneStates"],
+    requiredObjectArrayFieldValues: [{ arrayField: "laneStates", valueField: "laneKind", requiredValues: phaseGateLaneKinds }],
+    allowedObjectArrayFieldValues: [
+      { arrayField: "laneStates", valueField: "laneKind", allowedValues: phaseGateLaneKinds },
+      { arrayField: "laneStates", valueField: "phaseState", allowedValues: phaseGateStates },
+    ],
+    requiredObjectArrayExactFields: [
+      {
+        arrayField: "laneStates",
+        exactFields: {
+          failClosed: true,
+          noSideEffectsWhenDisabled: true,
+          labelsExposedWhenDisabled: false,
+          supportsReleaseClaimsWhenDisabled: false,
+        },
+      },
+    ],
+    requiredExactFields: {
+      futurePhaseDefault: "blocked",
+      broadeningRequiresManifestActivation: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/queue-freshness-policies$/, "queue_freshness_policy_submitted", "queueFreshnessPolicy", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "lane", "freshnessWindowMinutes", "dependencyRevalidationChecks", "staleBehavior"],
+    requiredFiniteNumberFields: ["freshnessWindowMinutes"],
+    requiredNonEmptyArrayFields: ["dependencyRevalidationChecks"],
+    requiredArrayIncludes: { dependencyRevalidationChecks: queueRevalidationChecks },
+    allowedValues: { lane: queueFreshnessLanes, staleBehavior: queueStaleBehaviors },
+    requiredExactFields: {
+      workerConsumeRevalidationRequired: true,
+      renderRevalidationRequired: true,
+      submitRevalidationRequired: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/queues\/(?<id>[^/]+)\/stale-by-delay-scan$/, "queue_stale_by_delay_scan_submitted", "queueStaleByDelayScan", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "lane",
     requiredFields: ["id", "lane", "scanStatus", "staleCount", "dependencyRevalidationChecks", "scannedAt"],
+    requiredFiniteNumberFields: ["staleCount"],
+    requiredNonEmptyArrayFields: ["dependencyRevalidationChecks"],
+    requiredArrayIncludes: { dependencyRevalidationChecks: queueRevalidationChecks },
+    allowedValues: { lane: queueFreshnessLanes },
+    requiredExactFields: { scanStatus: "passed" },
   }),
   workflowWriteSpec(/^\/api\/v1\/client-surface-integrity-policies$/, "client_surface_integrity_policy_submitted", "clientSurfaceIntegrityPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "surface", "thirdPartyAnalyticsProhibited", "sessionReplayProhibited", "domCaptureProhibited", "cspEnforced"],
+    requiredFields: ["id", "surface", "thirdPartyAnalyticsProhibited", "sessionReplayProhibited", "domCaptureProhibited", "keystrokeLoggingProhibited", "sensitiveUrlIdsProhibited", "referrerLeakageBlocked", "persistentOfflineCacheProhibited", "cspEnforced"],
+    requiredNonEmptyArrayFields: ["firstPartyTelemetryAllowlist"],
+    allowedValues: { surface: clientSurfaces },
+    requiredExactFields: {
+      thirdPartyAnalyticsProhibited: true,
+      sessionReplayProhibited: true,
+      domCaptureProhibited: true,
+      keystrokeLoggingProhibited: true,
+      sensitiveUrlIdsProhibited: true,
+      referrerLeakageBlocked: true,
+      persistentOfflineCacheProhibited: true,
+      cspEnforced: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/client-surfaces\/(?<id>[^/]+)\/integrity-check$/, "client_surface_integrity_check_submitted", "clientSurfaceIntegrityCheck", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "clientSurfaceId",
     requiredFields: ["id", "clientSurfaceId", "surface", "checkStatus", "checksPassed", "checkedAt"],
+    requiredNonEmptyArrayFields: ["checksPassed"],
+    requiredEmptyArrayFields: ["failures"],
+    requiredArrayIncludes: { checksPassed: clientSurfaceRequiredChecks },
+    allowedValues: { surface: clientSurfaces },
+    requiredExactFields: { checkStatus: "passed" },
   }),
   workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "sequence", "eventKind", "actorHash", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "occurredAt"],
+    requiredPositiveIntegerFields: ["sequence"],
+    requiredNonEmptyArrayFields: ["affectedArtifactIds", "approverHashes"],
+    requiredStringPrefixes: {
+      actorHash: "sha256:",
+      beforeHash: "sha256:",
+      afterHash: "sha256:",
+      eventHash: "sha256:",
+    },
+    allowedValues: { eventKind: auditChainEventKinds },
   }),
 ];
 
@@ -5558,6 +5859,7 @@ export function validateRaterDataConsentPayload(consent, actor) {
   const missing = [
     ["id", id],
     ["noticeVersion", consent.noticeVersion],
+    ["identifiableAccessRestriction", consent.identifiableAccessRestriction],
   ].filter(([, value]) => value === undefined || value === null || value === "");
   if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
   const actorCheck = validateParticipantRaterId(raterId, actor);
@@ -5567,6 +5869,10 @@ export function validateRaterDataConsentPayload(consent, actor) {
   if (missingCategories.length) return invalid(`dataCategoriesCovered missing: ${missingCategories.join(", ")}`);
   const missingUseScopes = raterDataUseScopes.filter((scope) => !useScopes.includes(scope));
   if (missingUseScopes.length) return invalid(`useScopesAcknowledged missing: ${missingUseScopes.join(", ")}`);
+  const accessRestriction = String(consent.identifiableAccessRestriction).toLowerCase();
+  if (!accessRestriction.includes("approved") || !accessRestriction.includes("role")) {
+    return invalid("identifiableAccessRestriction must limit access to approved roles");
+  }
   if (consent.publicArtifactsDeidentifiedByDefault !== true) return invalid("publicArtifactsDeidentifiedByDefault must be true");
   if (consent.privateLearningDataExcludedFromReleaseAndTraining !== true) return invalid("privateLearningDataExcludedFromReleaseAndTraining must be true");
   if (consent.dataProfileVisible !== true) return invalid("dataProfileVisible must be true");
@@ -5578,7 +5884,7 @@ export function validateRaterDataConsentPayload(consent, actor) {
     useScopesAcknowledged: useScopes,
     dataProfileVisible: true,
     publicArtifactsDeidentifiedByDefault: true,
-    identifiableAccessRestriction: consent.identifiableAccessRestriction ?? "approved_operational_or_research_roles_only",
+    identifiableAccessRestriction: consent.identifiableAccessRestriction,
     privateLearningDataExcludedFromReleaseAndTraining: true,
     consentedAt: consent.consentedAt ?? new Date().toISOString(),
   };
@@ -5593,6 +5899,7 @@ export function validateRaterDataRestrictionPayload(request, actor) {
   const missing = [
     ["id", id],
     ["requestType", request.requestType],
+    ["requesterNotificationStatus", request.requesterNotificationStatus],
   ].filter(([, value]) => value === undefined || value === null || value === "");
   if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
   const actorCheck = validateParticipantRaterId(raterId, actor);
@@ -5607,7 +5914,7 @@ export function validateRaterDataRestrictionPayload(request, actor) {
       requestType: request.requestType,
       affectedDataCategories,
       actionTaken: request.actionTaken ?? "pending_review",
-      requesterNotificationStatus: request.requesterNotificationStatus ?? "received",
+      requesterNotificationStatus: request.requesterNotificationStatus,
       timestamp: request.timestamp ?? new Date().toISOString(),
     },
   };
@@ -5622,6 +5929,9 @@ export function validateVolunteerDataWithdrawalPayload(request, actor) {
   const missing = [
     ["id", id],
     ["requestType", requestType],
+    ["actionTaken", request.actionTaken],
+    ["frozenSnapshotImpact", request.frozenSnapshotImpact],
+    ["requesterNotificationStatus", request.requesterNotificationStatus],
   ].filter(([, value]) => value === undefined || value === null || value === "");
   if (missing.length) return invalid(`missing required fields: ${missing.map(([field]) => field).join(", ")}`);
   const actorCheck = validateParticipantRaterId(raterId, actor);
@@ -5642,9 +5952,9 @@ export function validateVolunteerDataWithdrawalPayload(request, actor) {
       publicAttributionRemoved: request.publicAttributionRemoved !== false,
       privateLearningDashboardDeleted: request.privateLearningDashboardDeleted !== false,
       futureTrainingExportExcluded: request.futureTrainingExportExcluded !== false,
-      frozenSnapshotImpact: request.frozenSnapshotImpact ?? "already_frozen_deidentified_label_snapshots_preserved",
+      frozenSnapshotImpact: request.frozenSnapshotImpact,
       denominatorChangeArtifactId: request.denominatorChangeArtifactId ?? null,
-      requesterNotificationStatus: request.requesterNotificationStatus ?? "received",
+      requesterNotificationStatus: request.requesterNotificationStatus,
       timestamp: request.timestamp ?? new Date().toISOString(),
     },
   };
@@ -5680,6 +5990,11 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
     return !Array.isArray(value) || value.length === 0;
   });
   if (missingArrays.length) return invalid(`missing required non-empty arrays: ${missingArrays.join(", ")}`);
+  const nonEmptyArrays = (spec.requiredEmptyArrayFields ?? []).filter((fieldPath) => {
+    const value = workflowFieldValue(normalized, fieldPath);
+    return !Array.isArray(value) || value.length !== 0;
+  });
+  if (nonEmptyArrays.length) return invalid(`required arrays must be empty: ${nonEmptyArrays.join(", ")}`);
   const missingObjects = (spec.requiredObjectFields ?? []).filter((fieldPath) => {
     const value = workflowFieldValue(normalized, fieldPath);
     return !value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length;
@@ -5713,6 +6028,32 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
       return invalid(`missing required object keys in ${rule.objectField} for ${rule.field}=${JSON.stringify(discriminator)}: ${missingKeys.join(", ")}`);
     }
   }
+  for (const rule of spec.requiredObjectArrayFieldValues ?? []) {
+    const arrayValue = workflowFieldValue(normalized, rule.arrayField);
+    if (!Array.isArray(arrayValue)) return invalid(`${rule.arrayField} must be an array`);
+    const missingValues = rule.requiredValues.filter((requiredValue) =>
+      !arrayValue.some((item) => item && typeof item === "object" && workflowFieldValue(item, rule.valueField) === requiredValue)
+    );
+    if (missingValues.length) return invalid(`missing required ${rule.valueField} values in ${rule.arrayField}: ${missingValues.join(", ")}`);
+  }
+  for (const rule of spec.allowedObjectArrayFieldValues ?? []) {
+    const arrayValue = workflowFieldValue(normalized, rule.arrayField);
+    if (!Array.isArray(arrayValue)) return invalid(`${rule.arrayField} must be an array`);
+    const invalidValues = arrayValue
+      .map((item) => item && typeof item === "object" ? workflowFieldValue(item, rule.valueField) : undefined)
+      .filter((value) => !rule.allowedValues.includes(value));
+    if (invalidValues.length) return invalid(`${rule.arrayField}.${rule.valueField} must be one of: ${rule.allowedValues.join(", ")}`);
+  }
+  for (const rule of spec.requiredObjectArrayExactFields ?? []) {
+    const arrayValue = workflowFieldValue(normalized, rule.arrayField);
+    if (!Array.isArray(arrayValue)) return invalid(`${rule.arrayField} must be an array`);
+    for (const [fieldPath, expectedValue] of Object.entries(rule.exactFields ?? {})) {
+      const invalidIndexes = arrayValue
+        .map((item, index) => item && typeof item === "object" && workflowFieldValue(item, fieldPath) === expectedValue ? null : index)
+        .filter((index) => index !== null);
+      if (invalidIndexes.length) return invalid(`${rule.arrayField}.${fieldPath} must equal ${JSON.stringify(expectedValue)} at indexes: ${invalidIndexes.join(", ")}`);
+    }
+  }
   for (const [fieldPath, forbiddenFragments] of Object.entries(spec.forbiddenArrayValueFragments ?? {})) {
     const value = workflowFieldValue(normalized, fieldPath);
     const normalizedFragments = forbiddenFragments.map((fragment) => normalizeFieldFragment(fragment));
@@ -5736,10 +6077,43 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   }
   const invalidNumbers = (spec.requiredFiniteNumberFields ?? []).filter((fieldPath) => !Number.isFinite(workflowFieldValue(normalized, fieldPath)));
   if (invalidNumbers.length) return invalid(`required numeric fields must be finite numbers: ${invalidNumbers.join(", ")}`);
+  for (const rule of spec.requiredNumberRanges ?? []) {
+    const value = workflowFieldValue(normalized, rule.field);
+    const min = rule.min ?? Number.NEGATIVE_INFINITY;
+    const max = rule.max ?? Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(value) || value < min || value > max) {
+      return invalid(`${spec.resourceKey}.${rule.field} must be a finite number in [${min}, ${max}]`);
+    }
+  }
+  const invalidPositiveIntegers = (spec.requiredPositiveIntegerFields ?? []).filter((fieldPath) => {
+    const value = workflowFieldValue(normalized, fieldPath);
+    return !Number.isInteger(value) || value <= 0;
+  });
+  if (invalidPositiveIntegers.length) return invalid(`required fields must be positive integers: ${invalidPositiveIntegers.join(", ")}`);
   for (const [fieldPath, requiredPrefix] of Object.entries(spec.requiredStringPrefixes ?? {})) {
     const observedValue = workflowFieldValue(normalized, fieldPath);
     if (typeof observedValue !== "string" || !observedValue.startsWith(requiredPrefix)) {
       return invalid(`${spec.resourceKey}.${fieldPath} must start with ${JSON.stringify(requiredPrefix)}`);
+    }
+  }
+  for (const [fieldPath, requiredFragments] of Object.entries(spec.requiredStringIncludes ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    const normalizedObserved = typeof observedValue === "string" ? observedValue.toLowerCase() : "";
+    const missingFragments = requiredFragments.filter((fragment) => !normalizedObserved.includes(String(fragment).toLowerCase()));
+    if (missingFragments.length) return invalid(`${spec.resourceKey}.${fieldPath} must include: ${missingFragments.join(", ")}`);
+  }
+  for (const [fieldPath, allowedFragments] of Object.entries(spec.requiredStringIncludesAny ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    const normalizedObserved = typeof observedValue === "string" ? observedValue.toLowerCase() : "";
+    if (!allowedFragments.some((fragment) => normalizedObserved.includes(String(fragment).toLowerCase()))) {
+      return invalid(`${spec.resourceKey}.${fieldPath} must include one of: ${allowedFragments.join(", ")}`);
+    }
+  }
+  for (const rule of spec.requiredFieldMatches ?? []) {
+    const observedValue = workflowFieldValue(normalized, rule.field);
+    const expectedValue = workflowFieldValue(normalized, rule.matchesField);
+    if (observedValue !== expectedValue) {
+      return invalid(`${spec.resourceKey}.${rule.field} must match ${rule.matchesField}`);
     }
   }
   for (const [fieldPath, allowedValues] of Object.entries(spec.allowedValues ?? {})) {
@@ -5771,6 +6145,21 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
       const conditionalObserved = workflowFieldValue(normalized, fieldPath);
       if (conditionalObserved !== expectedValue) {
         return invalid(`${spec.resourceKey}.${fieldPath} must equal ${JSON.stringify(expectedValue)} when ${conditional.field}=${JSON.stringify(observedValue)}`);
+      }
+    }
+    for (const [fieldPath, requiredFragments] of Object.entries(conditional.requiredStringIncludes ?? {})) {
+      const conditionalObserved = workflowFieldValue(normalized, fieldPath);
+      const normalizedObserved = typeof conditionalObserved === "string" ? conditionalObserved.toLowerCase() : "";
+      const missingFragments = requiredFragments.filter((fragment) => !normalizedObserved.includes(String(fragment).toLowerCase()));
+      if (missingFragments.length) {
+        return invalid(`${spec.resourceKey}.${fieldPath} must include ${missingFragments.join(", ")} when ${conditional.field}=${JSON.stringify(observedValue)}`);
+      }
+    }
+    for (const [fieldPath, allowedFragments] of Object.entries(conditional.requiredStringIncludesAny ?? {})) {
+      const conditionalObserved = workflowFieldValue(normalized, fieldPath);
+      const normalizedObserved = typeof conditionalObserved === "string" ? conditionalObserved.toLowerCase() : "";
+      if (!allowedFragments.some((fragment) => normalizedObserved.includes(String(fragment).toLowerCase()))) {
+        return invalid(`${spec.resourceKey}.${fieldPath} must include one of ${allowedFragments.join(", ")} when ${conditional.field}=${JSON.stringify(observedValue)}`);
       }
     }
   }

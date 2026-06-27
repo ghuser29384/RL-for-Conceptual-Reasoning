@@ -1920,6 +1920,45 @@ test("rater data-governance endpoints expose profile, consent, restrictions, and
   });
   assert.equal(consent.status, 201);
 
+  const incompleteConsent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-consent",
+    headers,
+    body: JSON.stringify({
+      raterDataConsent: {
+        id: "rater-data-consent-incomplete",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+      },
+    }),
+  });
+  assert.equal(incompleteConsent.status, 400);
+  assert.match(incompleteConsent.body.detail, /identifiableAccessRestriction/);
+
+  const unsafeConsent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-consent",
+    headers,
+    body: JSON.stringify({
+      raterDataConsent: {
+        id: "rater-data-consent-unsafe",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        identifiableAccessRestriction: "any staff member may inspect identifiable data",
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+      },
+    }),
+  });
+  assert.equal(unsafeConsent.status, 400);
+  assert.match(unsafeConsent.body.detail, /identifiableAccessRestriction/);
+
   const impersonation = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters/me/data-consent",
@@ -1933,6 +1972,7 @@ test("rater data-governance endpoints expose profile, consent, restrictions, and
         useScopesAcknowledged: raterDataUseScopes,
         dataProfileVisible: true,
         publicArtifactsDeidentifiedByDefault: true,
+        identifiableAccessRestriction: "approved operational or research role access only",
         privateLearningDataExcludedFromReleaseAndTraining: true,
       },
     }),
@@ -1955,6 +1995,22 @@ test("rater data-governance endpoints expose profile, consent, restrictions, and
   });
   assert.equal(restriction.status, 201);
 
+  const unacknowledgedRestriction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/data-restriction-request",
+    headers,
+    body: JSON.stringify({
+      raterDataRestrictionRequest: {
+        id: "rater-data-restriction-unacknowledged",
+        requestType: "identifiable_access_review",
+        affectedDataCategories: ["session_pacing"],
+        actionTaken: "review_opened",
+      },
+    }),
+  });
+  assert.equal(unacknowledgedRestriction.status, 400);
+  assert.match(unacknowledgedRestriction.body.detail, /requesterNotificationStatus/);
+
   const withdrawal = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters/me/withdrawal-requests",
@@ -1972,6 +2028,22 @@ test("rater data-governance endpoints expose profile, consent, restrictions, and
     }),
   });
   assert.equal(withdrawal.status, 201);
+
+  const incompleteWithdrawal = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/withdrawal-requests",
+    headers,
+    body: JSON.stringify({
+      volunteerDataWithdrawalRequest: {
+        id: "withdrawal-incomplete",
+        requestType: "future_training_export_exclusion",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export"],
+        futureTrainingExportExcluded: true,
+      },
+    }),
+  });
+  assert.equal(incompleteWithdrawal.status, 400);
+  assert.match(incompleteWithdrawal.body.detail, /actionTaken|frozenSnapshotImpact|requesterNotificationStatus/);
 
   const withdrawalById = await invokeApi(context, {
     method: "GET",
@@ -3656,6 +3728,28 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteModelAssistedRatingCheck.status, 400);
   assert.match(incompleteModelAssistedRatingCheck.body.detail, /assistingModelRequestedAlias/);
 
+  const unsupportedRatingCheckType = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-checks",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingCheck: {
+        id: "rating-check-workflow-unsupported-type",
+        ratingId: "rating-ai-base-rate-a",
+        checkerId: "demo-rater",
+        checkType: "peer_consensus_check",
+        auxiliaryMaterialSeen: ["own_initial_rationale"],
+        modelExposureTiming: "none",
+        humanOnlyCheckLockedBeforeModelExposure: true,
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        labelContaminationGroupId: "label-contamination-group-rating-check-workflow-new",
+        timestamp: "2026-10-01T00:32:45.000Z",
+      },
+    }),
+  });
+  assert.equal(unsupportedRatingCheckType.status, 400);
+  assert.match(unsupportedRatingCheckType.body.detail, /checkType/);
+
   const ratingCheckById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/rating-checks/rating-check-workflow-new",
@@ -3707,6 +3801,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompleteVerification.status, 400);
   assert.match(incompleteVerification.body.detail, /claimChecked/);
+
+  const unsupportedVerificationStatus = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationRecord: {
+        id: "verification-workflow-unsupported-status",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimChecked: "Whether the claim has an approved correctness status.",
+        verificationMaterials: ["Expert reviewed the supplied position and critique after initial lock."],
+        verificationStatus: "accepted",
+        verifierId: "demo-expert",
+        verifierRole: "expert",
+        verificationType: "subjective_or_intuition_pump",
+        verificationResult: "Unsupported status should be rejected before audit storage.",
+        confidence: 0.7,
+        exposureStatus: "post_initial_lock_adjudication",
+        timestamp: "2026-06-12T12:01:30.000Z",
+      },
+    }),
+  });
+  assert.equal(unsupportedVerificationStatus.status, 400);
+  assert.match(unsupportedVerificationStatus.body.detail, /verificationStatus/);
 
   const verificationById = await invokeApi(context, {
     method: "GET",
@@ -5018,6 +5136,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(leakingDisclosureScreenState.status, 400);
   assert.match(leakingDisclosureScreenState.body.detail, /protectedGoldBenchmarkDisclosureState\.benchmarkMembership/);
 
+  const unsupportedSurfaceScreenState = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screen-state-payloads",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      screenStatePayload: {
+        ...validRatingScreenStatePayload,
+        id: "screen-state-workflow-unsupported-surface",
+        surface: "operator_debug",
+      },
+    }),
+  });
+  assert.equal(unsupportedSurfaceScreenState.status, 400);
+  assert.match(unsupportedSurfaceScreenState.body.detail, /surface/);
+
   for (const transition of workflowStateTransitionFixtures) {
     const transitionResponse = await invokeApi(context, {
       method: "POST",
@@ -5237,6 +5370,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteVolunteerIncentivePolicy.status, 400);
   assert.match(incompleteVolunteerIncentivePolicy.body.detail, /speedEffortGuardrails|publicRecognitionPolicy|privateProgressDashboardPolicy/);
 
+  const weakVolunteerIncentivePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/volunteer-incentive-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      volunteerIncentivePolicy: {
+        ...participantSafeguards.volunteerIncentivePolicy,
+        id: "volunteer-incentive-weak",
+        privateProgressDashboardPolicy: "public progress and challenge badges",
+      },
+    }),
+  });
+  assert.equal(weakVolunteerIncentivePolicy.status, 400);
+  assert.match(weakVolunteerIncentivePolicy.body.detail, /privateProgressDashboardPolicy/);
+
   const incompleteRaterQualificationRecord = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rater-qualification-records",
@@ -5288,6 +5436,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeSourceRecognition.status, 400);
   assert.match(unsafeSourceRecognition.body.detail, /protectedStatusHiddenFromRater/);
 
+  const unreviewedContinuedSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...participantSafeguards.sourceRecognitionEvent,
+        id: "source-recognition-continue-unreviewed",
+        raterAction: "continue_nonblind",
+        independentBlindEligibilityEffect: "count_as_independent_blind_rating",
+        reviewerResolution: "allow_continue",
+      },
+    }),
+  });
+  assert.equal(unreviewedContinuedSourceRecognition.status, 400);
+  assert.match(unreviewedContinuedSourceRecognition.body.detail, /independentBlindEligibilityEffect|reviewerResolution/);
+
   const incompleteModelProviderPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/model-provider-data-handling-policies",
@@ -5306,6 +5471,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompleteModelProviderPolicy.status, 400);
   assert.match(incompleteModelProviderPolicy.body.detail, /subprocessorsSummary|approvedSplitContentClasses|logRetentionWindowDays/);
+
+  const overRetainedModelProviderPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-provider-data-handling-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelProviderDataHandlingPolicy: {
+        ...participantSafeguards.modelProviderDataHandlingPolicies[0],
+        id: "model-provider-policy-over-retained",
+        logRetentionWindowDays: 90,
+      },
+    }),
+  });
+  assert.equal(overRetainedModelProviderPolicy.status, 400);
+  assert.match(overRetainedModelProviderPolicy.body.detail, /logRetentionWindowDays/);
 
   const volunteerIncentivePolicy = await invokeApi(context, {
     method: "POST",
@@ -6122,6 +6302,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteVerificationWorkspaceSession.status, 400);
   assert.match(incompleteVerificationWorkspaceSession.body.detail, /evidenceMaterialRefs/);
 
+  const unsupportedVerificationWorkspaceStatus = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-workspace-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationWorkspaceSession: {
+        ...interactionWorkflow.verificationWorkspaceSession,
+        id: "verification-workspace-workflow-unsupported-status",
+        verificationStatus: "accepted",
+      },
+    }),
+  });
+  assert.equal(unsupportedVerificationWorkspaceStatus.status, 400);
+  assert.match(unsupportedVerificationWorkspaceStatus.body.detail, /verificationStatus/);
+
   const incompletePostLockDiscussionSession = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/discussions/discussion-thread-workflow-new/post-lock-sessions",
@@ -6201,6 +6396,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteScreenFeatureParityChecklist.status, 400);
   assert.match(incompleteScreenFeatureParityChecklist.body.detail, /required_controls_reachable/);
 
+  const unsupportedScreenFeatureParityCheck = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screens/operator_debug/feature-parity-check",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      screenFeatureParityCheck: {
+        ...interactionWorkflow.screenFeatureParityCheck,
+        id: "screen-feature-parity-workflow-unsupported-screen",
+        screenId: "operator_debug",
+      },
+    }),
+  });
+  assert.equal(unsupportedScreenFeatureParityCheck.status, 400);
+  assert.match(unsupportedScreenFeatureParityCheck.body.detail, /screenId/);
+
   const incompleteSimplifiedCopyPreview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/screens/rating/simplified-copy-preview",
@@ -6246,6 +6456,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unclassifiedSimplifiedCopyVariant.status, 400);
   assert.match(unclassifiedSimplifiedCopyVariant.body.detail, /protectedSplitVariantDisposition/);
+
+  const unsupportedScreenSimplifiedCopyPreview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/screens/operator_debug/simplified-copy-preview",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      simplifiedCopyPreview: {
+        ...interactionWorkflow.simplifiedCopyPreview,
+        id: "simplified-copy-preview-workflow-unsupported-screen",
+        screenId: "operator_debug",
+      },
+    }),
+  });
+  assert.equal(unsupportedScreenSimplifiedCopyPreview.status, 400);
+  assert.match(unsupportedScreenSimplifiedCopyPreview.body.detail, /screenId/);
 
   const unquarantinedSimplifiedCopyVariant = await invokeApi(context, {
     method: "POST",
@@ -6438,6 +6663,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(canonicalizationProfileById.status, 200);
   assert.equal(canonicalizationProfileById.body.hashAlgorithm, "sha256");
 
+  const weakCanonicalizationProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundle-canonicalization-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governedBundleCanonicalizationProfile: {
+        ...releaseConfig.governedBundleCanonicalizationProfile,
+        id: "canonicalization-profile-workflow-weak",
+        hashAlgorithm: "md5",
+      },
+    }),
+  });
+  assert.equal(weakCanonicalizationProfile.status, 400);
+  assert.match(weakCanonicalizationProfile.body.detail, /hashAlgorithm/);
+
+  const incompleteCanonicalizationProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundle-canonicalization-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governedBundleCanonicalizationProfile: {
+        ...releaseConfig.governedBundleCanonicalizationProfile,
+        id: "canonicalization-profile-workflow-incomplete",
+        testVectorIds: [],
+      },
+    }),
+  });
+  assert.equal(incompleteCanonicalizationProfile.status, 400);
+  assert.match(incompleteCanonicalizationProfile.body.detail, /testVectorIds/);
+
   for (const governedBundleRecord of releaseConfig.governedBundleRecords) {
     const governedBundle = await invokeApi(context, {
       method: "POST",
@@ -6456,6 +6711,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(governedBundleById.status, 200);
   assert.equal(governedBundleById.body.bundleFamily, "rubric");
 
+  const unsupportedGovernedBundle = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governedBundleRecord: {
+        ...releaseConfig.governedBundleRecords[0],
+        id: "governed-bundle-workflow-unsupported",
+        bundleFamily: "analytics",
+      },
+    }),
+  });
+  assert.equal(unsupportedGovernedBundle.status, 400);
+  assert.match(unsupportedGovernedBundle.body.detail, /bundleFamily/);
+
+  const incompleteGovernedBundle = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governedBundleRecord: {
+        ...releaseConfig.governedBundleRecords[0],
+        id: "governed-bundle-workflow-incomplete",
+        materializedRowCount: 0,
+      },
+    }),
+  });
+  assert.equal(incompleteGovernedBundle.status, 400);
+  assert.match(incompleteGovernedBundle.body.detail, /materializedRowCount/);
+
   const governedBundleVerification = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/governed-bundles/governed-bundle-workflow-rubric/verify",
@@ -6463,6 +6748,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({ governedBundleVerification: releaseConfig.governedBundleVerification }),
   });
   assert.equal(governedBundleVerification.status, 201);
+
+  const mismatchedGovernedBundleVerification = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governed-bundles/governed-bundle-workflow-rubric/verify",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governedBundleVerification: {
+        ...releaseConfig.governedBundleVerification,
+        id: "governed-bundle-verification-workflow-mismatch",
+        observedHash: "sha256:wrong-bundle-hash",
+      },
+    }),
+  });
+  assert.equal(mismatchedGovernedBundleVerification.status, 400);
+  assert.match(mismatchedGovernedBundleVerification.body.detail, /observedHash/);
 
   const releaseConfigManifest = await invokeApi(context, {
     method: "POST",
@@ -6480,6 +6780,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseConfigManifestById.status, 200);
   assert.equal(releaseConfigManifestById.body.releaseId, "october-2026-demo");
 
+  const incompleteReleaseConfigManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-config-manifests",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseConfigManifest: {
+        ...releaseConfig.releaseConfigManifest,
+        id: "release-config-manifest-workflow-incomplete",
+        bindingFamilies: releaseConfig.releaseConfigManifest.bindingFamilies.filter((binding) => binding !== "export_policy"),
+      },
+    }),
+  });
+  assert.equal(incompleteReleaseConfigManifest.status, 400);
+  assert.match(incompleteReleaseConfigManifest.body.detail, /export_policy/);
+
+  const weakFrozenReleaseConfigManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/releases/october-2026-demo/freeze-config-manifest",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseConfigManifest: {
+        ...releaseConfig.releaseConfigManifest,
+        id: "release-config-manifest-workflow-weak-freeze",
+        canonicalManifestHash: "not-a-sha",
+      },
+    }),
+  });
+  assert.equal(weakFrozenReleaseConfigManifest.status, 400);
+  assert.match(weakFrozenReleaseConfigManifest.body.detail, /canonicalManifestHash/);
+
   const releaseConfigManifestVerification = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/release-config-manifests/release-config-manifest-workflow-new/verify",
@@ -6487,6 +6817,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({ releaseConfigManifestVerification: releaseConfig.releaseConfigManifestVerification }),
   });
   assert.equal(releaseConfigManifestVerification.status, 201);
+
+  const failedReleaseConfigManifestVerification = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-config-manifests/release-config-manifest-workflow-new/verify",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseConfigManifestVerification: {
+        ...releaseConfig.releaseConfigManifestVerification,
+        id: "release-config-manifest-verification-workflow-failed",
+        verificationStatus: "failed",
+      },
+    }),
+  });
+  assert.equal(failedReleaseConfigManifestVerification.status, 400);
+  assert.match(failedReleaseConfigManifestVerification.body.detail, /verificationStatus/);
 
   const manifestForRelease = await invokeApi(context, {
     method: "GET",
@@ -6523,6 +6868,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(policyActionKindById.status, 200);
   assert.equal(policyActionKindById.body.wrongScopeBehavior, "fail_closed");
 
+  const unsupportedPolicyActionKind = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-action-kinds",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      policyActionKind: {
+        ...operationalControls.policyActionKindRecords[0],
+        id: "policy-action-kind-workflow-unsupported",
+        actionKind: "raw_label_dump",
+      },
+    }),
+  });
+  assert.equal(unsupportedPolicyActionKind.status, 400);
+  assert.match(unsupportedPolicyActionKind.body.detail, /actionKind/);
+
+  const weakPolicyActionKind = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-action-kinds",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      policyActionKind: {
+        ...operationalControls.policyActionKindRecords[0],
+        id: "policy-action-kind-workflow-weak",
+        requiresActorBinding: false,
+      },
+    }),
+  });
+  assert.equal(weakPolicyActionKind.status, 400);
+  assert.match(weakPolicyActionKind.body.detail, /requiresActorBinding/);
+
   for (const policyDecisionRecord of operationalControls.policyDecisionRecords) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -6540,6 +6915,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(policyDecisionById.status, 200);
   assert.equal(policyDecisionById.body.manifestId, "release-config-manifest-workflow-new");
+
+  const unsupportedPolicyDecision = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-decisions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      policyDecisionRecord: {
+        ...operationalControls.policyDecisionRecords[0],
+        id: "policy-decision-workflow-deny",
+        decisionStatus: "deny",
+      },
+    }),
+  });
+  assert.equal(unsupportedPolicyDecision.status, 400);
+  assert.match(unsupportedPolicyDecision.body.detail, /decisionStatus/);
 
   const policyDecisionConsumption = await invokeApi(context, {
     method: "POST",
@@ -6580,6 +6970,38 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(implementationPhase.body.futurePhaseDefault, "blocked");
   assert.equal(implementationPhase.body.laneStates.length, phaseGateLaneKinds.length);
 
+  const incompleteImplementationPhaseGate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/implementation-phase-gate-bundles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      implementationPhaseGateBundle: {
+        ...operationalControls.implementationPhaseGateBundle,
+        id: "implementation-phase-gate-workflow-incomplete",
+        laneStates: operationalControls.implementationPhaseGateBundle.laneStates.filter((lane) => lane.laneKind !== "governance_action"),
+      },
+    }),
+  });
+  assert.equal(incompleteImplementationPhaseGate.status, 400);
+  assert.match(incompleteImplementationPhaseGate.body.detail, /governance_action/);
+
+  const unsafeImplementationPhaseGate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/implementation-phase-gate-bundles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      implementationPhaseGateBundle: {
+        ...operationalControls.implementationPhaseGateBundle,
+        id: "implementation-phase-gate-workflow-unsafe",
+        laneStates: operationalControls.implementationPhaseGateBundle.laneStates.map((lane) =>
+          lane.laneKind === "hidden_benchmark_submission_lane" ? { ...lane, failClosed: false } : lane
+        ),
+      },
+    }),
+  });
+  assert.equal(unsafeImplementationPhaseGate.status, 400);
+  assert.match(unsafeImplementationPhaseGate.body.detail, /failClosed/);
+
   for (const queueFreshnessPolicy of operationalControls.queueFreshnessPolicies) {
     const policyResponse = await invokeApi(context, {
       method: "POST",
@@ -6606,6 +7028,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(queueFreshnessById.status, 200);
   assert.equal(queueFreshnessById.body.workerConsumeRevalidationRequired, true);
+
+  const incompleteQueueFreshnessPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/queue-freshness-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      queueFreshnessPolicy: {
+        ...operationalControls.queueFreshnessPolicies[0],
+        id: "queue-freshness-workflow-incomplete",
+        dependencyRevalidationChecks: ["item_text", "rubric"],
+      },
+    }),
+  });
+  assert.equal(incompleteQueueFreshnessPolicy.status, 400);
+  assert.match(incompleteQueueFreshnessPolicy.body.detail, /dependencyRevalidationChecks/);
 
   for (const clientSurfaceIntegrityPolicy of operationalControls.clientSurfaceIntegrityPolicies) {
     const policyResponse = await invokeApi(context, {
@@ -6634,6 +7071,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(clientSurfacePolicyById.status, 200);
   assert.equal(clientSurfacePolicyById.body.sessionReplayProhibited, true);
 
+  const weakClientSurfacePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/client-surface-integrity-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      clientSurfaceIntegrityPolicy: {
+        ...operationalControls.clientSurfaceIntegrityPolicies[0],
+        id: "client-surface-integrity-workflow-weak",
+        sessionReplayProhibited: false,
+      },
+    }),
+  });
+  assert.equal(weakClientSurfacePolicy.status, 400);
+  assert.match(weakClientSurfacePolicy.body.detail, /sessionReplayProhibited/);
+
+  const failingClientSurfaceCheck = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/client-surfaces/client-surface-integrity-workflow-rating/integrity-check",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      clientSurfaceIntegrityCheck: {
+        ...operationalControls.clientSurfaceIntegrityChecks[0],
+        id: "client-surface-integrity-check-workflow-failing",
+        failures: ["third_party_analytics_detected"],
+      },
+    }),
+  });
+  assert.equal(failingClientSurfaceCheck.status, 400);
+  assert.match(failingClientSurfaceCheck.body.detail, /failures/);
+
   for (const sensitiveAuditChainEvent of operationalControls.sensitiveAuditChainEvents) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -6651,6 +7118,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(auditChainEvents.status, 200);
   assert.equal(auditChainEvents.body.events.length, auditChainEventKinds.length);
+
+  const invalidSensitiveAuditChainEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sensitive-audit-chain/events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sensitiveAuditChainEvent: {
+        ...operationalControls.sensitiveAuditChainEvents[0],
+        id: "sensitive-audit-chain-event-workflow-invalid",
+        eventHash: "not-a-sha",
+      },
+    }),
+  });
+  assert.equal(invalidSensitiveAuditChainEvent.status, 400);
+  assert.match(invalidSensitiveAuditChainEvent.body.detail, /eventHash/);
 
   const auditChainVerification = await invokeApi(context, {
     method: "POST",
