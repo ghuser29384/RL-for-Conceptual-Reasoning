@@ -5630,6 +5630,7 @@ function createDiscussionRevisionProposalPayload(threadId, revisionRationale) {
     discussionThreadId: threadId,
     proposedBy: state.adminSession?.user?.id ?? "demo-admin",
     ratingIdPrior: "rating-seed-ai-base-rate-r1",
+    revisionReasonCode: "overlooked_object_level_point",
     revisionRationale,
     originalRatingPreservation: "original_rating_preserved_append_only",
     timestamp: new Date().toISOString(),

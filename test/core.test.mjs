@@ -479,6 +479,7 @@ const scoreExplanationTriggerRules = [
   "exposure_familiarity_conflict_uncertainty",
 ];
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
+const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
 
 function completePolicyBundleFixtures() {
   return {
@@ -1271,7 +1272,10 @@ function completeAuxiliaryWorkflowFixtures() {
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         ratingId: "rating-seed-ai-base-rate-r1",
         samplingStratum: "non_escalated_release_critical",
+        samplingDimensions: spotCheckSamplingDimensions,
         samplingSeedArtifact: "sha256:submitted-spot-check-seed",
+        selectionMethod: "stratified_random",
+        ordinaryRatingStatus: "apparently_ordinary_non_escalated",
         reviewerId: "release-reviewer",
         reviewerRole: "expert",
         checkResult: "passed_without_label_change",
@@ -2020,6 +2024,9 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.counts.submittedSpotCheckQAItemCount, 1);
   assert.equal(report.spotCheckQAItemRows.at(-1).status, "spot_check_qa_item_complete");
   assert.equal(report.spotCheckQaRows.at(-1).excludedFromIndependentRaterCount, true);
+  assert.deepEqual(report.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
+  assert.equal(report.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
+  assert.deepEqual(report.spotCheckRequiredSamplingDimensions, spotCheckSamplingDimensions);
   assert.equal(report.counts.submittedAdjudicationTriageQueueItemCount, 1);
   assert.equal(report.counts.submittedDiagnosticDeferralRecordCount, 1);
   assert.equal(report.counts.submittedQueuePolicySnapshotCount, 1);
@@ -2048,6 +2055,21 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   });
   assert.equal(unsafePositionClusterExposureReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
   assert.ok(unsafePositionClusterExposureReport.reviewSections.some((section) => section.reason === "blindEligibilityEffect"));
+
+  const incompleteSpotCheckReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    spotCheckQaItems: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().spotCheckQaItems[0],
+        id: "spot-check-qa-missing-sampling-dimensions",
+        samplingDimensions: ["topic", "rater_tier"],
+        ordinaryRatingStatus: "escalated_disagreement",
+      },
+    ],
+  });
+  assert.equal(incompleteSpotCheckReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(incompleteSpotCheckReport.reviewSections.some((section) => section.reason === "samplingDimensions:source_family,item_length,score_band"));
+  assert.ok(incompleteSpotCheckReport.reviewSections.some((section) => section.reason === "ordinaryRatingStatus"));
 
   const unsafeTrainingExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),
@@ -2082,7 +2104,10 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.deepEqual(report.adjudicatorPreReadRows.at(-1).preliminaryIssueTags, ["interpretation_dispute"]);
   assert.equal(report.counts.submittedPostLockDiscussionSessionCount, 1);
   assert.deepEqual(report.postLockDiscussionSessionRows.at(-1).participantRoles, ["graduate_rater", "expert_adjudicator"]);
+  assert.equal(report.postLockDiscussionSessionRows.at(-1).identityStagingPolicy, "role_neutral_handles_first");
+  assert.equal(report.postLockDiscussionSessionRows.at(-1).roleRevealPolicy, "moderator_exception_logged");
   assert.equal(report.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
+  assert.deepEqual(report.discussionIdentityStagingPolicies, ["role_neutral_handles_first", "moderator_exception_immediate"]);
   assert.equal(report.counts.submittedAdjudicationReviewSessionCount, 1);
   assert.equal(report.adjudicationReviewSessionRows.at(-1).preSubmitLintSummary, "centrality-strength warning acknowledged");
   assert.deepEqual(report.adjudicationReviewSessionRows.at(-1).targetMapIds, ["interpretation-target-map-submitted"]);
@@ -2123,6 +2148,28 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
     ),
   );
   assert.ok(unsafeDeclineReport.reviewSections.some((section) => section.artifactType === "assignment_decline" && section.reason === "repeatedOrStrategicDeclineQaPolicy:repeated"));
+
+  const unsafeDiscussionIdentityReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    postLockDiscussionSessions: [
+      {
+        ...completeInteractionWorkflowFixtures().postLockDiscussionSessions[0],
+        identityStagingPolicy: "real_names_visible_immediately",
+        identityMaskPhaseStatus: "skipped",
+        roleRevealPolicy: "seniority_visible_before_comments",
+        initialRatingLockCheck: "ratings_still_draft",
+        visibleMaterialPolicy: "peer_rationales_visible_before_lock",
+        majorityPressureWarningState: "hidden",
+      },
+    ],
+  });
+  assert.equal(unsafeDiscussionIdentityReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeDiscussionIdentityReport.reviewSections.some((section) => section.artifactType === "post_lock_discussion_session" && section.reason === "identityStagingPolicy"));
+  assert.ok(unsafeDiscussionIdentityReport.reviewSections.some((section) => section.artifactType === "post_lock_discussion_session" && section.reason === "identityMaskPhaseStatus"));
+  assert.ok(unsafeDiscussionIdentityReport.reviewSections.some((section) => section.artifactType === "post_lock_discussion_session" && section.reason === "roleRevealPolicy"));
+  assert.ok(unsafeDiscussionIdentityReport.reviewSections.some((section) => section.artifactType === "post_lock_discussion_session" && section.reason === "initialRatingLockCheck"));
+  assert.ok(unsafeDiscussionIdentityReport.reviewSections.some((section) => section.artifactType === "post_lock_discussion_session" && section.reason === "visibleMaterialPolicy:post_lock"));
+  assert.ok(unsafeDiscussionIdentityReport.reviewSections.some((section) => section.artifactType === "post_lock_discussion_session" && section.reason === "majorityPressureWarningState"));
 
   const unsafeBenchmarkSubmissionReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
@@ -4077,6 +4124,7 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         assistingModelProvider: "approved-model-evaluation-endpoint",
         assistingModelFamily: "gpt_demo_family",
         assistingPromptTemplateId: "label-check-v1",
+        auxiliaryMaterialSeen: ["own_initial_rationale", "assisting_model_commentary"],
         modelExposureTiming: "post_human_only_self_check_lock",
         humanOnlyCheckLockedBeforeModelExposure: true,
         preModelRatingCheckId: "rating-check-submitted-human-only",
@@ -4093,14 +4141,48 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
   assert.equal(report.counts.targetModelAssistedRatingRows, 1);
   assert.equal(report.counts.submittedRatingCheckRows, 1);
   assert.equal(report.counts.submittedModelAssistedRatingCheckRows, 1);
+  assert.equal(report.counts.submittedModelAssistedRatingCheckReviewRows, 0);
   assert.equal(report.assistanceRows[0].assistanceSource, "submitted_workflow_rating_check");
   assert.equal(report.assistanceRows[0].ratingCheckId, "rating-check-submitted-model-assisted");
   assert.equal(report.assistanceRows[0].preModelRatingCheckId, "rating-check-submitted-human-only");
   assert.equal(report.assistanceRows[0].labelContaminationGroupId, "label-contamination-group-rating-check-submitted");
+  assert.deepEqual(report.assistanceRows[0].reviewReasons, []);
+  assert.deepEqual(report.reviewSections, []);
   assert.equal(fullRubricRow.status, "model_assisted_label_overlap_sensitive");
   assert.deepEqual(fullRubricRow.overlapItemIds, ["pos-voting::crit-voting-bullet"]);
   assert.equal(overallOnlyRow.status, "model_assisted_rows_present_no_evaluated_model_overlap");
   assert.equal(report.releaseUseStatus, "model_assisted_overlap_sensitive_reports_require_human_only_target");
+
+  const unstagedReport = buildModelAssistedLabelOverlapReport("release-test", snapshot, seedRatings, [fullRubricEvaluationRun, overallOnlyEvaluationRun], pairs, {
+    ratingChecks: [
+      {
+        id: "rating-check-submitted-unstaged-model-assisted",
+        ratingId: "rating-voting-bullet-a",
+        checkType: "model_assisted_check",
+        checkerId: "expert-workflow",
+        assistingModelRequestedAlias: "gpt-demo-label-checker",
+        assistingModelResolvedSnapshot: "gpt-demo-label-checker-2026-06-01",
+        assistingModelProvider: "approved-model-evaluation-endpoint",
+        assistingModelFamily: "gpt_demo_family",
+        assistingPromptTemplateId: "label-check-v1",
+        modelExposureTiming: "before_human_only_lock",
+        humanOnlyCheckLockedBeforeModelExposure: false,
+        auxiliaryMaterialSeen: ["assisting_model_commentary"],
+        preModelRatingCheckId: "",
+        modelAssistanceDeltaSummary: "Assisting model suggested no score change.",
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        labelContaminationGroupId: "label-contamination-group-rating-check-submitted",
+        timestamp: "2026-10-01T00:31:30.000Z",
+      },
+    ],
+  });
+  assert.equal(unstagedReport.releaseUseStatus, "model_assisted_rating_check_review_required");
+  assert.equal(unstagedReport.counts.submittedModelAssistedRatingCheckReviewRows, 1);
+  assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "modelExposureTiming"));
+  assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "humanOnlyCheckLockedBeforeModelExposure"));
+  assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "preModelRatingCheckId"));
+  assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "auxiliaryMaterialSeen:own_initial_rationale"));
+  assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "modelAssistanceDeltaSummary:human-only"));
 });
 
 test("model failure audits preserve raw outputs and enforce protected-split handling", () => {

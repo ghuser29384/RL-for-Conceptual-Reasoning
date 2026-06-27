@@ -409,6 +409,7 @@ const scoreExplanationTriggerRules = [
   "exposure_familiarity_conflict_uncertainty",
 ];
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
+const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
 
 function completePolicyBundleFixtures() {
   return {
@@ -1160,7 +1161,10 @@ function completeAuxiliaryWorkflowFixtures() {
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
       ratingId: "rating-seed-ai-base-rate-r1",
       samplingStratum: "non_escalated_release_critical",
+      samplingDimensions: spotCheckSamplingDimensions,
       samplingSeedArtifact: "sha256:workflow-spot-check-seed",
+      selectionMethod: "stratified_random",
+      ordinaryRatingStatus: "apparently_ordinary_non_escalated",
       reviewerId: "demo-expert",
       reviewerRole: "expert",
       checkResult: "passed_without_label_change",
@@ -2238,6 +2242,7 @@ test("post-lock discussion room UI exposes screen-state, comment, and revision w
   assert.ok(appSource.includes('originalRatingPreservation: "original_rating_preserved_append_only"'));
   assert.ok(appSource.includes("Role identity starts masked where feasible"));
   assert.ok(appSource.includes("Append-only discussion audit events"));
+  assert.ok(appSource.includes('revisionReasonCode: "overlooked_object_level_point"'));
 });
 
 test("adjudication cockpit UI exposes screen-state, cockpit, memo, review-session, and finalization workflows", () => {
@@ -4028,6 +4033,80 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(discussionThreadById.status, 200);
   assert.equal(discussionThreadById.body.id, "discussion-thread-workflow-new");
 
+  const discussionComment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions/discussion-thread-workflow-new/comments",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      discussionComment: {
+        id: "discussion-comment-workflow-new",
+        discussionThreadId: "discussion-thread-workflow-new",
+        authorId: "demo-expert",
+        commentText: "Object-level point preserved with a span-linked target clarification.",
+        objectLevelStatus: "object_level_point_preserved",
+        timestamp: "2026-10-01T00:31:30.000Z",
+      },
+    }),
+  });
+  assert.equal(discussionComment.status, 201);
+
+  const unsafeDiscussionComment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions/discussion-thread-workflow-new/comments",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      discussionComment: {
+        id: "discussion-comment-majority-pressure",
+        discussionThreadId: "discussion-thread-workflow-new",
+        authorId: "demo-expert",
+        commentText: "Revise because everyone else scored it higher.",
+        objectLevelStatus: "majority_pressure_only",
+        timestamp: "2026-10-01T00:31:40.000Z",
+      },
+    }),
+  });
+  assert.equal(unsafeDiscussionComment.status, 400);
+  assert.match(unsafeDiscussionComment.body.detail, /objectLevelStatus/);
+
+  const discussionRevisionProposal = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions/discussion-thread-workflow-new/revision-proposals",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      discussionRevisionProposal: {
+        id: "discussion-revision-proposal-workflow-new",
+        discussionThreadId: "discussion-thread-workflow-new",
+        proposedBy: "demo-expert",
+        ratingIdPrior: "rating-seed-ai-base-rate-r1",
+        revisionReasonCode: "overlooked_object_level_point",
+        revisionRationale: "The post-lock discussion identified a target-mapping point missed in the original rating.",
+        originalRatingPreservation: "original_rating_preserved_append_only",
+        timestamp: "2026-10-01T00:31:50.000Z",
+      },
+    }),
+  });
+  assert.equal(discussionRevisionProposal.status, 201);
+
+  const unsafeDiscussionRevisionProposal = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions/discussion-thread-workflow-new/revision-proposals",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      discussionRevisionProposal: {
+        id: "discussion-revision-proposal-majority-pressure",
+        discussionThreadId: "discussion-thread-workflow-new",
+        proposedBy: "demo-expert",
+        ratingIdPrior: "rating-seed-ai-base-rate-r1",
+        revisionReasonCode: "majority_pressure",
+        revisionRationale: "The score should follow the senior reviewer.",
+        originalRatingPreservation: "overwrite_original_rating",
+        timestamp: "2026-10-01T00:31:55.000Z",
+      },
+    }),
+  });
+  assert.equal(unsafeDiscussionRevisionProposal.status, 400);
+  assert.match(unsafeDiscussionRevisionProposal.body.detail, /revisionReasonCode|originalRatingPreservation/);
+
   const adjudication = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/adjudications",
@@ -4180,6 +4259,35 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompleteModelAssistedRatingCheck.status, 400);
   assert.match(incompleteModelAssistedRatingCheck.body.detail, /assistingModelRequestedAlias/);
+
+  const unstagedModelAssistedRatingCheck = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-checks",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingCheck: {
+        id: "rating-check-workflow-unstaged-model-assist",
+        ratingId: "rating-ai-base-rate-a",
+        checkerId: "demo-rater",
+        checkType: "model_assisted_check",
+        auxiliaryMaterialSeen: ["assisting_model_commentary"],
+        modelExposureTiming: "before_human_only_lock",
+        assistingModelRequestedAlias: "gpt-demo-label-checker",
+        assistingModelResolvedSnapshot: "gpt-demo-label-checker-2026-06-01",
+        assistingModelProvider: "approved-model-evaluation-endpoint",
+        assistingModelFamily: "gpt_demo_family",
+        assistingPromptTemplateId: "label-check-v1",
+        humanOnlyCheckLockedBeforeModelExposure: true,
+        preModelRatingCheckId: "rating-check-action-workflow-new",
+        modelAssistanceDeltaSummary: "Assisting model suggested no score change.",
+        rubricVersionUsedForCheck: "appendix-f-operational-v1",
+        labelContaminationGroupId: "label-contamination-group-rating-check-workflow-new",
+        timestamp: "2026-10-01T00:32:40.000Z",
+      },
+    }),
+  });
+  assert.equal(unstagedModelAssistedRatingCheck.status, 400);
+  assert.match(unstagedModelAssistedRatingCheck.body.detail, /modelExposureTiming|auxiliaryMaterialSeen|modelAssistanceDeltaSummary/);
 
   const unsupportedRatingCheckType = await invokeApi(context, {
     method: "POST",
@@ -7268,6 +7376,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeTrainingExposureSnapshot.status, 400);
   assert.match(unsafeTrainingExposureSnapshot.body.detail, /protectedClusterEligibilityEffect/);
 
+  const incompleteSpotCheck = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/spot-checks",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      spotCheckQaItem: {
+        ...auxiliaryWorkflow.spotCheckQaItem,
+        id: "spot-check-missing-sampling-dimensions",
+        samplingDimensions: ["topic", "rater_tier"],
+        ordinaryRatingStatus: "escalated_disagreement",
+      },
+    }),
+  });
+  assert.equal(incompleteSpotCheck.status, 400);
+  assert.match(incompleteSpotCheck.body.detail, /samplingDimensions|ordinaryRatingStatus/);
+
   for (const [resourceKey, url] of [
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
@@ -7633,6 +7757,29 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompletePostLockDiscussionSession.status, 400);
   assert.match(incompletePostLockDiscussionSession.body.detail, /writtenFollowUpStatus/);
+
+  const unsafePostLockDiscussionIdentity = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions/discussion-thread-workflow-new/post-lock-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      postLockDiscussionSession: {
+        ...interactionWorkflow.postLockDiscussionSession,
+        id: "post-lock-discussion-unsafe-identity-staging",
+        identityStagingPolicy: "real_names_visible_immediately",
+        identityMaskPhaseStatus: "skipped",
+        roleRevealPolicy: "seniority_visible_before_comments",
+        initialRatingLockCheck: "ratings_still_draft",
+        visibleMaterialPolicy: "peer_rationales_visible_before_lock",
+        majorityPressureWarningState: "hidden",
+      },
+    }),
+  });
+  assert.equal(unsafePostLockDiscussionIdentity.status, 400);
+  assert.match(
+    unsafePostLockDiscussionIdentity.body.detail,
+    /visibleMaterialPolicy|identityStagingPolicy|identityMaskPhaseStatus|roleRevealPolicy|initialRatingLockCheck|majorityPressureWarningState/,
+  );
 
   const incompleteAdjudicatorPreRead = await invokeApi(context, {
     method: "POST",
@@ -9143,6 +9290,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingModelRunProvenanceCount, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckQAItemCount, 1);
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterItemConflictCount, 2);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedReleaseErratumCount, 2);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
@@ -9174,7 +9323,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "graduate_rater",
     "expert_adjudicator",
   ]);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).identityStagingPolicy,
+    "role_neutral_handles_first",
+  );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).roleRevealPolicy,
+    "moderator_exception_logged",
+  );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.discussionIdentityStagingPolicies, [
+    "role_neutral_handles_first",
+    "moderator_exception_immediate",
+  ]);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicationReviewSessions.length, 1);
   assert.equal(
     releaseReport.body.interactionWorkflowEvidence.adjudicationReviewSessionRows.at(-1).preSubmitLintSummary,
@@ -9318,7 +9479,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 241 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
@@ -9410,6 +9571,26 @@ test("server policy requires rating confidence and trigger-based score explanati
   const missingExplanationValidation = validateRatingPayload(extremeWithoutExplanation, "blind_initial_submitted");
   assert.equal(missingExplanationValidation.ok, false);
   assert.match(missingExplanationValidation.detail, /scoreExplanationRequired/);
+
+  const ordinaryWithInventedTrigger = {
+    ...validBlindRating("rating-ordinary-invented-trigger"),
+    scoreExplanationTriggers: ["high_stakes_workflow"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "The client invented a requiredness trigger for an ordinary rating.",
+  };
+  const inventedTriggerValidation = validateRatingPayload(ordinaryWithInventedTrigger, "blind_initial_submitted");
+  assert.equal(inventedTriggerValidation.ok, false);
+  assert.match(inventedTriggerValidation.detail, /unexpected scoreExplanationTriggers/);
+
+  const ordinaryWithTriggeredExplanation = {
+    ...validBlindRating("rating-ordinary-triggered-explanation-field"),
+    scoreExplanation: "This ordinary note belongs in generalRatingNote, not the triggered explanation field.",
+  };
+  const ordinaryTriggeredExplanationValidation = validateRatingPayload(ordinaryWithTriggeredExplanation, "blind_initial_submitted");
+  assert.equal(ordinaryTriggeredExplanationValidation.ok, false);
+  assert.match(ordinaryTriggeredExplanationValidation.detail, /only allowed when ScoreExplanationPolicy triggers/);
+
+  assert.equal(validateRatingPayload(validBlindRating("rating-ordinary-general-note-only"), "blind_initial_submitted").ok, true);
 
   const surprisingScoreWithoutTrigger = {
     ...validBlindRating("rating-surprising-score-missing-trigger"),

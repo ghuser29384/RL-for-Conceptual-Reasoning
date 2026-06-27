@@ -281,6 +281,8 @@ const modelAssistedRatingCheckRequiredFields = [
   "modelAssistanceDeltaSummary",
 ];
 const ratingCheckTypes = ["self_check", "expert_check", "model_assisted_check"];
+const ratingCheckModelExposureTimings = ["none", "post_human_only_self_check_lock"];
+const modelAssistedAuxiliaryMaterialRequirements = ["own_initial_rationale", "assisting_model_commentary"];
 const correctnessClaimWeightWorksheetRequiredFields = [
   "id",
   "claimSpanIds",
@@ -348,6 +350,27 @@ const discussionThreadRequiredFields = [
   "status",
   "createdAt",
   "updatedAt",
+];
+const discussionIdentityStagingPolicies = ["role_neutral_handles_first", "moderator_exception_immediate"];
+const discussionIdentityMaskPhaseStatuses = ["pending_role_neutral_comment_phase", "completed_before_role_reveal", "not_feasible_moderator_exception_logged"];
+const discussionRoleRevealPolicies = [
+  "no_role_reveal_until_object_level_comment_phase_complete",
+  "moderator_exception_logged",
+  "adjudicator_visibility_exception_logged",
+];
+const discussionObjectLevelStatuses = [
+  "object_level_point_preserved",
+  "overlooked_point_flagged",
+  "span_reference_added",
+  "verification_conflict_noted",
+  "revision_proposal_supported_by_object_level_reason",
+];
+const discussionRevisionReasonCodes = [
+  "overlooked_object_level_point",
+  "target_mapping_correction",
+  "span_evidence_correction",
+  "verification_update",
+  "post_discussion_revision",
 ];
 const postLockDiscussionSessionRequiredFields = [
   "id",
@@ -552,6 +575,9 @@ const partialTaskExcludedDenominators = [
   "hidden_benchmark_label",
   "human_ceiling_denominator",
 ];
+const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
+const spotCheckSelectionMethods = ["random", "stratified_random"];
+const spotCheckResultStatuses = ["passed_without_label_change", "routed_to_revision", "routed_to_adjudication", "escalated_quality_issue"];
 const positionClusterExposureSources = [
   "own_rating",
   "peer_score",
@@ -1325,6 +1351,19 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     pathParamField: "discussionThreadId",
     requiredFields: postLockDiscussionSessionRequiredFields,
+    allowedValues: {
+      identityStagingPolicy: discussionIdentityStagingPolicies,
+      identityMaskPhaseStatus: discussionIdentityMaskPhaseStatuses,
+      roleRevealPolicy: discussionRoleRevealPolicies,
+    },
+    requiredExactFields: {
+      initialRatingLockCheck: "all_initial_ratings_locked",
+      majorityPressureWarningState: "displayed",
+    },
+    requiredStringIncludes: {
+      visibleMaterialPolicy: ["post_lock"],
+      moderatorAdjudicatorVisibilityExceptions: ["adjudicator", "initial locks"],
+    },
     requiredNonEmptyArrayFields: [
       "itemKeys",
       "participantIds",
@@ -1339,11 +1378,14 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     pathParamField: "discussionThreadId",
     requiredFields: ["id", "discussionThreadId", "authorId", "commentText", "objectLevelStatus", "timestamp"],
+    allowedValues: { objectLevelStatus: discussionObjectLevelStatuses },
   }),
   workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/revision-proposals$/, "discussion_revision_proposal_submitted", "discussionRevisionProposal", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "discussionThreadId",
-    requiredFields: ["id", "discussionThreadId", "proposedBy", "ratingIdPrior", "revisionRationale", "timestamp"],
+    requiredFields: ["id", "discussionThreadId", "proposedBy", "ratingIdPrior", "revisionReasonCode", "revisionRationale", "originalRatingPreservation", "timestamp"],
+    allowedValues: { revisionReasonCode: discussionRevisionReasonCodes },
+    requiredExactFields: { originalRatingPreservation: "original_rating_preserved_append_only" },
   }),
   workflowWriteSpec(/^\/api\/v1\/discussion-threads$/, "discussion_thread_submitted", "discussionThread", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -1468,13 +1510,18 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
     requiredFields: ratingCheckRecordRequiredFields,
     requiredNonEmptyArrayFields: ["auxiliaryMaterialSeen"],
-    allowedValues: { checkType: ratingCheckTypes },
+    allowedValues: { checkType: ratingCheckTypes, modelExposureTiming: ratingCheckModelExposureTimings },
     requiredWhen: [
       {
         field: "checkType",
         equals: "model_assisted_check",
         requiredFields: modelAssistedRatingCheckRequiredFields,
-        requiredExactFields: { humanOnlyCheckLockedBeforeModelExposure: true },
+        requiredArrayIncludes: { auxiliaryMaterialSeen: modelAssistedAuxiliaryMaterialRequirements },
+        requiredExactFields: {
+          humanOnlyCheckLockedBeforeModelExposure: true,
+          modelExposureTiming: "post_human_only_self_check_lock",
+        },
+        requiredStringIncludes: { modelAssistanceDeltaSummary: ["human-only"] },
       },
     ],
     requireActorField: "checkerId",
@@ -2513,9 +2560,13 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/spot-checks$/, "spot_check_qa_item_submitted", "spotCheckQaItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "samplingStratum", "samplingSeedArtifact", "reviewerId", "reviewerRole", "checkResult", "timestamp"],
-    requiredNonEmptyArrayFields: ["itemKeys"],
-    requiredExactFields: { excludedFromIndependentRaterCount: true },
+    requiredFields: ["id", "samplingStratum", "samplingSeedArtifact", "selectionMethod", "ordinaryRatingStatus", "reviewerId", "reviewerRole", "checkResult", "timestamp"],
+    requiredNonEmptyArrayFields: ["itemKeys", "samplingDimensions"],
+    requiredArrayIncludes: { samplingDimensions: spotCheckSamplingDimensions },
+    allowedArrayValues: { samplingDimensions: spotCheckSamplingDimensions },
+    allowedValues: { selectionMethod: spotCheckSelectionMethods, checkResult: spotCheckResultStatuses },
+    requiredStringPrefixes: { samplingSeedArtifact: "sha256:" },
+    requiredExactFields: { excludedFromIndependentRaterCount: true, ordinaryRatingStatus: "apparently_ordinary_non_escalated" },
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-triage-items$/, "adjudication_triage_queue_item_submitted", "adjudicationTriageQueueItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -6393,7 +6444,9 @@ export function validateRatingPayload(rating, eventType) {
   });
   const missingExplanationTriggers = expectedExplanationTriggers.filter((trigger) => !rating.scoreExplanationTriggers.includes(trigger));
   if (missingExplanationTriggers.length) return invalid(`missing scoreExplanationTriggers: ${missingExplanationTriggers.join(", ")}`);
-  const explanationRequired = [...new Set([...expectedExplanationTriggers, ...rating.scoreExplanationTriggers])].length > 0;
+  const unexpectedExplanationTriggers = rating.scoreExplanationTriggers.filter((trigger) => !expectedExplanationTriggers.includes(trigger));
+  if (unexpectedExplanationTriggers.length) return invalid(`unexpected scoreExplanationTriggers: ${unexpectedExplanationTriggers.join(", ")}`);
+  const explanationRequired = expectedExplanationTriggers.length > 0;
   if (rating.generalRatingNote !== undefined && (typeof rating.generalRatingNote !== "string" || rating.generalRatingNote.length > 1000)) {
     return invalid("generalRatingNote must be a short string when provided");
   }
@@ -6409,6 +6462,8 @@ export function validateRatingPayload(rating, eventType) {
     if (!triggeredExplanationValidation.ok) return invalid(triggeredExplanationValidation.detail);
   } else if (rating.scoreExplanationRequired === true) {
     return invalid("scoreExplanationRequired cannot be true without ScoreExplanationPolicy triggers");
+  } else if (typeof rating.scoreExplanation === "string" && rating.scoreExplanation.trim()) {
+    return invalid("scoreExplanation is only allowed when ScoreExplanationPolicy triggers; use generalRatingNote for optional ordinary notes");
   }
   if (!Number.isFinite(rating.activeSeconds) || rating.activeSeconds <= 0) return invalid("activeSeconds must be a positive number");
   if (!Number.isFinite(rating.idleGapSeconds) || rating.idleGapSeconds < 0) return invalid("idleGapSeconds must be a non-negative number");

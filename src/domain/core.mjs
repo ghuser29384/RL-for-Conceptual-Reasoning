@@ -7507,6 +7507,9 @@ export function buildPairedTargetLabelSnapshotReport(
   };
 }
 
+const MODEL_ASSISTED_CHECK_REQUIRED_AUXILIARY_MATERIALS = ["own_initial_rationale", "assisting_model_commentary"];
+const MODEL_ASSISTED_CHECK_REQUIRED_EXPOSURE_TIMING = "post_human_only_self_check_lock";
+
 export function buildModelAssistedLabelOverlapReport(
   releaseId,
   labelSnapshot,
@@ -7566,6 +7569,13 @@ export function buildModelAssistedLabelOverlapReport(
     };
   });
   const overlapRunRows = runRows.filter((row) => row.status === "model_assisted_label_overlap_sensitive");
+  const reviewSections = targetModelAssistedRows.flatMap((row) =>
+    (row.reviewReasons ?? []).map((reason) => ({
+      artifactType: row.assistanceSource,
+      artifactId: row.ratingCheckId ?? row.ratingId,
+      reason,
+    })),
+  );
   return {
     id: `model-assisted-label-overlap-${releaseId}-${labelSnapshot.id}`,
     releaseId,
@@ -7586,11 +7596,16 @@ export function buildModelAssistedLabelOverlapReport(
       targetModelAssistedRatingRows: targetModelAssistedRows.length,
       submittedRatingCheckRows: options.ratingChecks?.length ?? 0,
       submittedModelAssistedRatingCheckRows: targetModelAssistedRows.filter((row) => row.assistanceSource === "submitted_workflow_rating_check").length,
+      submittedModelAssistedRatingCheckReviewRows: targetModelAssistedRows.filter(
+        (row) => row.assistanceSource === "submitted_workflow_rating_check" && (row.reviewReasons ?? []).length,
+      ).length,
       evaluatedRunCount: runRows.length,
       overlapSensitiveRunCount: overlapRunRows.length,
+      reviewSectionCount: reviewSections.length,
     },
     assistanceRows: targetModelAssistedRows,
     runRows,
+    reviewSections,
     humanOnlyPreAssistanceTarget: {
       id: humanOnlySnapshot.id,
       targetLabelVersion: humanOnlySnapshot.targetLabelVersion,
@@ -7601,7 +7616,9 @@ export function buildModelAssistedLabelOverlapReport(
       sameAsTargetLabelSnapshot: targetModelAssistedRows.length === 0,
     },
     releaseUseStatus:
-      overlapRunRows.length > 0
+      reviewSections.length > 0
+        ? "model_assisted_rating_check_review_required"
+        : overlapRunRows.length > 0
         ? "model_assisted_overlap_sensitive_reports_require_human_only_target"
         : targetModelAssistedRows.length > 0
           ? "model_assisted_rows_disclosed_no_evaluated_model_overlap"
@@ -13058,6 +13075,11 @@ const PARTIAL_TASK_EXCLUDED_DENOMINATORS = [
   "human_ceiling_denominator",
 ];
 
+const SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
+const SPOT_CHECK_SELECTION_METHODS = ["random", "stratified_random"];
+const SPOT_CHECK_RESULT_STATUSES = ["passed_without_label_change", "routed_to_revision", "routed_to_adjudication", "escalated_quality_issue"];
+const SPOT_CHECK_ORDINARY_RATING_STATUS = "apparently_ordinary_non_escalated";
+
 const POSITION_CLUSTER_EXPOSURE_SOURCES = [
   "own_rating",
   "peer_score",
@@ -13083,6 +13105,14 @@ const ADJUDICATION_TRIAGE_LANES = [
   "benchmark_candidate_review",
   "spot_check_qa",
   "training_feedback",
+];
+
+const DISCUSSION_IDENTITY_STAGING_POLICIES = ["role_neutral_handles_first", "moderator_exception_immediate"];
+const DISCUSSION_IDENTITY_MASK_PHASE_STATUSES = ["pending_role_neutral_comment_phase", "completed_before_role_reveal", "not_feasible_moderator_exception_logged"];
+const DISCUSSION_ROLE_REVEAL_POLICIES = [
+  "no_role_reveal_until_object_level_comment_phase_complete",
+  "moderator_exception_logged",
+  "adjudicator_visibility_exception_logged",
 ];
 
 const REQUIRED_QUEUE_POLICY_COMPONENTS = [
@@ -13184,7 +13214,10 @@ function defaultSpotCheckQaItem(releaseId) {
     itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
     ratingId: "rating-seed-ai-base-rate-r1",
     samplingStratum: "non_escalated_release_critical",
+    samplingDimensions: SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS,
     samplingSeedArtifact: "sha256:seed-spot-check-sampling",
+    selectionMethod: "stratified_random",
+    ordinaryRatingStatus: SPOT_CHECK_ORDINARY_RATING_STATUS,
     reviewerId: "seed-qa-reviewer",
     reviewerRole: "expert",
     checkResult: "passed_without_label_change",
@@ -13507,6 +13540,8 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     positionClusterExposureSources: POSITION_CLUSTER_EXPOSURE_SOURCES,
     adjudicationTriageLanes: ADJUDICATION_TRIAGE_LANES,
     requiredQueuePolicyComponents: REQUIRED_QUEUE_POLICY_COMPONENTS,
+    spotCheckRequiredSamplingDimensions: SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS,
+    spotCheckSelectionMethods: SPOT_CHECK_SELECTION_METHODS,
     raterItemConflictTypes: RATER_ITEM_CONFLICT_TYPES,
     releaseErratumTypes: RELEASE_ERRATUM_TYPES,
     scheduleSnapshotStatuses: SCHEDULE_SNAPSHOT_STATUSES,
@@ -13670,13 +13705,24 @@ function normalizeSpotCheckQaItem(item, rowSource) {
   const id = item?.id ?? item?.spotCheckId ?? item?.spot_check_id;
   if (!id) return null;
   const itemKeys = normalizeStringArray(item.itemKeys ?? item.item_keys ?? (item.ratingId ? [item.ratingId] : []));
+  const samplingDimensions = normalizeStringArray(item.samplingDimensions ?? item.sampling_dimensions);
+  const missingSamplingDimensions = SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS.filter((dimension) => !samplingDimensions.includes(dimension));
+  const unexpectedSamplingDimensions = samplingDimensions.filter((dimension) => !SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS.includes(dimension));
+  const samplingSeedArtifact = item.samplingSeedArtifact ?? item.sampling_seed_artifact ?? null;
+  const selectionMethod = item.selectionMethod ?? item.selection_method ?? null;
+  const ordinaryRatingStatus = item.ordinaryRatingStatus ?? item.ordinary_rating_status ?? null;
+  const checkResult = item.checkResult ?? item.check_result ?? null;
   const reviewReasons = [
     itemKeys.length ? null : "itemKeys",
     requiredPromptFieldReason("samplingStratum", item.samplingStratum ?? item.sampling_stratum),
-    requiredPromptFieldReason("samplingSeedArtifact", item.samplingSeedArtifact ?? item.sampling_seed_artifact),
+    missingSamplingDimensions.length ? `samplingDimensions:${missingSamplingDimensions.join(",")}` : null,
+    unexpectedSamplingDimensions.length ? `samplingDimensions:unexpected:${unexpectedSamplingDimensions.join(",")}` : null,
+    String(samplingSeedArtifact ?? "").startsWith("sha256:") ? null : "samplingSeedArtifact",
+    SPOT_CHECK_SELECTION_METHODS.includes(selectionMethod) ? null : "selectionMethod",
+    ordinaryRatingStatus === SPOT_CHECK_ORDINARY_RATING_STATUS ? null : "ordinaryRatingStatus",
     requiredPromptFieldReason("reviewerId", item.reviewerId ?? item.reviewer_id),
     requiredPromptFieldReason("reviewerRole", item.reviewerRole ?? item.reviewer_role),
-    requiredPromptFieldReason("checkResult", item.checkResult ?? item.check_result),
+    SPOT_CHECK_RESULT_STATUSES.includes(checkResult) ? null : "checkResult",
     item.excludedFromIndependentRaterCount === true || item.excluded_from_independent_rater_count === true ? null : "excludedFromIndependentRaterCount",
     requiredPromptFieldReason("timestamp", item.timestamp ?? item.createdAt ?? item.created_at),
   ].filter(Boolean);
@@ -13686,10 +13732,16 @@ function normalizeSpotCheckQaItem(item, rowSource) {
     itemKeys,
     ratingId: item.ratingId ?? item.rating_id ?? null,
     samplingStratum: item.samplingStratum ?? item.sampling_stratum ?? null,
-    samplingSeedArtifact: item.samplingSeedArtifact ?? item.sampling_seed_artifact ?? null,
+    samplingDimensions,
+    missingSamplingDimensions,
+    unexpectedSamplingDimensions,
+    samplingSeedArtifact,
+    selectionMethod,
+    ordinaryRatingStatus,
     reviewerId: item.reviewerId ?? item.reviewer_id ?? null,
     reviewerRole: item.reviewerRole ?? item.reviewer_role ?? null,
-    checkResult: item.checkResult ?? item.check_result ?? null,
+    checkResult,
+    revisionAdjudicationEscalationLink: item.revisionAdjudicationEscalationLink ?? item.revision_adjudication_escalation_link ?? null,
     excludedFromIndependentRaterCount: item.excludedFromIndependentRaterCount === true || item.excluded_from_independent_rater_count === true,
     reviewReasons,
     status: reviewReasons.length ? "spot_check_qa_item_review_required" : "spot_check_qa_item_complete",
@@ -14484,6 +14536,19 @@ function interactionWorkflowArtifactSpecs(releaseId) {
         "timestamp",
       ],
       arrayFields: ["itemKeys", "participantIds", "participantRoles", "objectLevelCommentRecords", "spanReferenceLinks", "overlookedPointFlags", "revisionProposalIds"],
+      enumFields: {
+        identityStagingPolicy: DISCUSSION_IDENTITY_STAGING_POLICIES,
+        identityMaskPhaseStatus: DISCUSSION_IDENTITY_MASK_PHASE_STATUSES,
+        roleRevealPolicy: DISCUSSION_ROLE_REVEAL_POLICIES,
+      },
+      exactFields: {
+        initialRatingLockCheck: "all_initial_ratings_locked",
+        majorityPressureWarningState: "displayed",
+      },
+      stringIncludes: {
+        visibleMaterialPolicy: ["post_lock"],
+        moderatorAdjudicatorVisibilityExceptions: ["adjudicator", "initial locks"],
+      },
       seedRows: defaults.postLockDiscussionSessions,
     },
     {
@@ -14665,6 +14730,9 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
     releaseId,
     generatedAt: new Date().toISOString(),
     requiredArtifactTypes: groups.map((group) => group.spec.artifactType),
+    discussionIdentityStagingPolicies: DISCUSSION_IDENTITY_STAGING_POLICIES,
+    discussionIdentityMaskPhaseStatuses: DISCUSSION_IDENTITY_MASK_PHASE_STATUSES,
+    discussionRoleRevealPolicies: DISCUSSION_ROLE_REVEAL_POLICIES,
     ...Object.fromEntries(groups.map((group) => [group.spec.rowKey, [...group.seedRows, ...group.submittedRows]])),
     counts: {
       ...counts,
@@ -16721,6 +16789,24 @@ function modelAssistedRatingCheckRow(check, ratingById) {
     provider: firstDefined([check.assistingModelProvider, check.modelProvider, check.provider]),
     modelFamily: firstDefined([check.assistingModelFamily, check.modelFamily]),
   });
+  const auxiliaryMaterialSeen = normalizeStringArray(check.auxiliaryMaterialSeen);
+  const exposureTiming = check.modelExposureTiming ?? check.exposureTiming ?? "recorded_model_assisted_rating_check";
+  const humanOnlySelfCheckLockedBeforeExposure = Boolean(
+    check.humanOnlyCheckLockedBeforeModelExposure ??
+      check.humanOnlySelfCheckLockedBeforeModelExposure ??
+      check.preAssistanceRatingId ??
+      check.preModelRatingCheckId,
+  );
+  const assistanceDeltaSummary = check.modelAssistanceDeltaSummary ?? check.model_assistance_delta_summary ?? null;
+  const missingAuxiliaryMaterials = MODEL_ASSISTED_CHECK_REQUIRED_AUXILIARY_MATERIALS.filter((material) => !auxiliaryMaterialSeen.includes(material));
+  const reviewReasons = [
+    checkType === "model_assisted_check" ? null : "checkType",
+    exposureTiming === MODEL_ASSISTED_CHECK_REQUIRED_EXPOSURE_TIMING ? null : "modelExposureTiming",
+    humanOnlySelfCheckLockedBeforeExposure ? null : "humanOnlyCheckLockedBeforeModelExposure",
+    check.preModelRatingCheckId ? null : "preModelRatingCheckId",
+    missingAuxiliaryMaterials.length ? `auxiliaryMaterialSeen:${missingAuxiliaryMaterials.join(",")}` : null,
+    String(assistanceDeltaSummary ?? "").toLowerCase().includes("human-only") ? null : "modelAssistanceDeltaSummary:human-only",
+  ].filter(Boolean);
   return {
     ratingId: check.ratingId ?? null,
     ratingCheckId: check.id,
@@ -16729,7 +16815,7 @@ function modelAssistedRatingCheckRow(check, ratingById) {
     positionId,
     critiqueId,
     ratingKind: checkType ?? "model_assisted_check",
-    auxiliaryMaterialSeen: normalizeStringArray(check.auxiliaryMaterialSeen),
+    auxiliaryMaterialSeen,
     raterId: firstDefined([check.checkerId, check.raterId, rating?.raterId]),
     parentRatingId: rating?.parentRatingId ?? null,
     preModelRatingCheckId: check.preModelRatingCheckId ?? null,
@@ -16740,14 +16826,11 @@ function modelAssistedRatingCheckRow(check, ratingById) {
       rating?.preAssistanceRatingId,
       rating?.parentRatingId,
     ]),
-    exposureTiming: check.modelExposureTiming ?? check.exposureTiming ?? "recorded_model_assisted_rating_check",
-    humanOnlySelfCheckLockedBeforeExposure: Boolean(
-      check.humanOnlyCheckLockedBeforeModelExposure ??
-        check.humanOnlySelfCheckLockedBeforeModelExposure ??
-        check.preAssistanceRatingId ??
-        check.preModelRatingCheckId,
-    ),
-    assistanceDeltaSummary: check.modelAssistanceDeltaSummary ?? check.model_assistance_delta_summary ?? null,
+    exposureTiming,
+    humanOnlySelfCheckLockedBeforeExposure,
+    assistanceDeltaSummary,
+    missingAuxiliaryMaterials,
+    reviewReasons,
     promptTemplateId: firstDefined([check.assistingPromptTemplateId, check.promptTemplateId]),
     rubricVersionUsedForCheck: check.rubricVersionUsedForCheck ?? check.rubricVersion ?? null,
     labelContaminationGroupId: check.labelContaminationGroupId ?? null,
