@@ -1870,6 +1870,31 @@ test("rating UI starts score controls unset and requires explicit values before 
   assert.ok(appSource.includes('if (state.lastPersistenceStatus.tone === "good") state.ratings.push(newRating);'));
 });
 
+test("rating UI exposes RLHF88 task-first simplification, safe actions, and glossary affordances", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  const styleSource = readFileSync("src/styles.css", "utf8");
+  assert.ok(appSource.includes("ratingTaskFirstSummary(assignment)"));
+  assert.ok(appSource.includes("${escapeHtml(assignment.positionId)} / ${escapeHtml(assignment.critiqueId)}"));
+  assert.ok(appSource.includes("Rate the critique's attack on the supplied position."));
+  assert.ok(appSource.includes("Do not grade whether you agree with the position itself."));
+  assert.ok(appSource.includes("ratingSelfScreenControls()"));
+  assert.ok(appSource.includes('"safe_decline_reassign"'));
+  assert.ok(appSource.includes('"item_issue_report"'));
+  assert.ok(appSource.includes('"source_recognition"'));
+  assert.ok(appSource.includes("sessionPacingControls(assignment)"));
+  assert.ok(appSource.includes('"stop_after_current"'));
+  assert.ok(appSource.includes("rubricQuickAccessPanel()"));
+  assert.ok(appSource.includes("<strong>Dead weight</strong> Badness field: 0 is best, 1 is worst."));
+  assert.ok(appSource.includes("preSubmitLintPanel()"));
+  assert.ok(appSource.includes("diagnostic only, never auto-submitted"));
+  assert.ok(appSource.includes("ratingWorkflowActionStatus(action)"));
+  assert.ok(styleSource.includes(".taskFirstPanel"));
+  assert.ok(styleSource.includes(".selfScreenPanel"));
+  assert.ok(styleSource.includes(".sessionPacingPanel"));
+  assert.ok(styleSource.includes(".rubricQuickAccess"));
+  assert.ok(styleSource.includes(".preSubmitLintPanel"));
+});
+
 test("practice sandbox is a public-anchor training surface excluded from release denominators", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   assert.ok(appSource.includes('["practice", "Practice", "sliders"]'));
@@ -1912,6 +1937,32 @@ test("post-lock discussion room UI exposes screen-state, comment, and revision w
   assert.ok(appSource.includes('originalRatingPreservation: "original_rating_preserved_append_only"'));
   assert.ok(appSource.includes("Role identity starts masked where feasible"));
   assert.ok(appSource.includes("Append-only discussion audit events"));
+});
+
+test("adjudication cockpit UI exposes screen-state, cockpit, memo, review-session, and finalization workflows", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  const styleSource = readFileSync("src/styles.css", "utf8");
+  assert.ok(appSource.includes('["adjudication", "Adjudication", "scale"]'));
+  assert.ok(appSource.includes('if (section === "adjudication") return adjudicationPanel(context.releaseReport);'));
+  assert.ok(appSource.includes("fallbackAdjudicationCockpit(releaseReport)"));
+  assert.ok(appSource.includes("/api/v1/adjudications/${encodeURIComponent(adjudicationId)}/screen-state"));
+  assert.ok(appSource.includes("/api/v1/adjudications/${encodeURIComponent(adjudicationId)}/cockpit"));
+  assert.ok(appSource.includes('"/api/v1/adjudication-review-sessions"'));
+  assert.ok(appSource.includes('"/api/v1/adjudication-memos"'));
+  assert.ok(appSource.includes("/api/v1/adjudications/${encodeURIComponent(cockpit.adjudicationId)}/finalize"));
+  assert.ok(appSource.includes("createAdjudicationReviewSessionPayload"));
+  assert.ok(appSource.includes("createAdjudicationMemoPayload"));
+  assert.ok(appSource.includes("createAdjudicationFinalizationPayload"));
+  assert.ok(appSource.includes("scoreSpreadHeatmapVersion"));
+  assert.ok(appSource.includes("centXStrProductAllocationView"));
+  assert.ok(appSource.includes("rationaleSpanOverlayRefs"));
+  assert.ok(appSource.includes("verificationConflictSummary"));
+  assert.ok(appSource.includes("siblingContextDifferenceSummary"));
+  assert.ok(appSource.includes("revisionTimelineRefs"));
+  assert.ok(appSource.includes("minorityRationaleFields"));
+  assert.ok(appSource.includes("without changing the original blind ratings"));
+  assert.ok(styleSource.includes(".adjudicationCockpitGrid"));
+  assert.ok(styleSource.includes(".adjudicationCompose"));
 });
 
 test("rater data-governance UI exposes consent, restriction, and withdrawal actions", () => {

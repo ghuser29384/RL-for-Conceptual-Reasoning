@@ -108,6 +108,15 @@ const state = {
     "Preserve the original rating and open a revised-rating proposal because the post-lock discussion clarified the critique's target claim.",
   localDiscussionEvents: [],
   lastDiscussionStatus: null,
+  adjudicationScreenState: null,
+  adjudicationCockpit: null,
+  adjudicationMemoText:
+    "The adjudication turns on whether the critique attacks the position's central forecast or only a side assumption. Preserve minority rationale and classify the remaining spread.",
+  adjudicationMinorityRationaleText:
+    "Minority reading: the base-rate objection is a side-assumption challenge rather than a direct attack on the main slowdown conclusion.",
+  localAdjudicationEvents: [],
+  lastAdjudicationStatus: null,
+  lastRatingWorkflowStatus: null,
   lastPersistenceStatus: null,
   lastSourceStyleAuditStatus: null,
 };
@@ -1669,7 +1678,7 @@ function sectionHtml(section, context) {
     );
   }
   if (section === "workflow") return workflowPanel(context.releaseReport, state.sessionStatus, state.lastWorkflowStatus);
-  if (section === "adjudication") return adjudicationPanel(context.releaseReport.adjudicationMemoAudit);
+  if (section === "adjudication") return adjudicationPanel(context.releaseReport);
   if (section === "releases") return releasePanel(context.releaseGateProfile, context.labelSnapshot, context.marginDistribution, context.releaseReport);
   if (section === "evaluation") {
     return evaluationPanel(
@@ -2437,14 +2446,20 @@ function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, s
     <div class="ratingLayout">
       <section class="panel ratingEditor">
         ${panelTitle("eye", "Blind Rating Workspace", "Rater-visible text excludes source, tags, benchmark status, peer ratings, model-judge scores, and intake reasons.")}
+        ${ratingTaskFirstSummary(assignment)}
         <div class="blindNotice">${icon("eye")}<span>Hidden before initial submission: ${escapeHtml(activeView.hiddenMetadata.join(", "))}.</span></div>
         ${statusLine(sessionStatus, "sessionLine")}
         ${authControls()}
+        ${statusLine(state.lastRatingWorkflowStatus, "persistenceLine")}
+        ${ratingSelfScreenControls()}
+        ${sessionPacingControls(assignment)}
         <div class="textPair">
           <article><h2>Position</h2><p>${escapeHtml(activeView.positionText)}</p></article>
           <article><h2>Critique</h2><p>${escapeHtml(activeView.critiqueText)}</p></article>
         </div>
+        ${rubricQuickAccessPanel()}
         <div class="rubricGrid">${RUBRIC_DIMENSIONS.map(sliderRow).join("")}</div>
+        ${preSubmitLintPanel()}
         ${issueFlagControls()}
         ${verificationControls()}
         <div class="actionRow">
@@ -2479,6 +2494,108 @@ function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, s
         </section>
       </aside>
     </div>
+  `;
+}
+
+function ratingTaskFirstSummary(assignment) {
+  return `
+    <section class="taskFirstPanel" aria-label="Task-first rating summary">
+      <article>
+        <span>Task</span>
+        <strong>Rate the critique's attack on the supplied position.</strong>
+        <p>Do not grade whether you agree with the position itself.</p>
+      </article>
+      <article>
+        <span>Primary next action</span>
+        <strong>Enter all seven LMCA scores, then submit and lock.</strong>
+        <p>Scores start unset; the centrality x strength preview is diagnostic only.</p>
+      </article>
+      <article>
+        <span>Workflow profile</span>
+        <strong>${escapeHtml(humanize(assignment.queueType ?? "ordinary_live"))}</strong>
+        <p>Required: seven scores, short rationale, pre-submit lint acknowledgement.</p>
+      </article>
+      <article>
+        <span>Item reference</span>
+        <strong>${escapeHtml(assignment.positionId)} / ${escapeHtml(assignment.critiqueId)}</strong>
+        <p>Short labels only; full hashes stay in audit metadata.</p>
+      </article>
+    </section>
+  `;
+}
+
+function ratingSelfScreenControls() {
+  const actions = [
+    ["continueRating", "Continue rating", "safe_continue"],
+    ["pauseRating", "Pause", "pause_for_later"],
+    ["requestReassignment", "Request reassignment", "safe_decline_reassign"],
+    ["reportItemIssue", "Report item issue", "item_issue_report"],
+    ["recognizeSource", "I recognize this item", "source_recognition"],
+  ];
+  return `
+    <section class="selfScreenPanel" aria-label="Pre-rating self screen">
+      <div>
+        <strong>Before scoring</strong>
+        <span>Use these blind-safe paths for conflicts, prior exposure, wrong/unreadable items, source recognition, or insufficient time.</span>
+      </div>
+      <div class="selfScreenActions">
+        ${actions
+          .map(
+            ([id, label, action]) =>
+              `<button class="${id === "continueRating" ? "primaryButton" : "secondaryButton"}" id="${id}" data-rating-workflow-action="${action}" type="button">${icon(id === "continueRating" ? "check" : id === "reportItemIssue" ? "alert" : "shield")}${escapeHtml(label)}</button>`,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function sessionPacingControls(assignment) {
+  return `
+    <section class="sessionPacingPanel" aria-label="Session pacing">
+      <div><span>Session target</span><strong>60 min</strong></div>
+      <div><span>Expected effort</span><strong>${escapeHtml(humanize(assignment.expectedEffortBand ?? "5_to_15_minutes"))}</strong></div>
+      <div><span>Break reminder</span><strong>available</strong></div>
+      <button class="secondaryButton" id="stopAfterCurrent" data-rating-workflow-action="stop_after_current" type="button">${icon("shield")}Stop after current item</button>
+    </section>
+  `;
+}
+
+function rubricQuickAccessPanel() {
+  return `
+    <section class="rubricQuickAccess" aria-label="Rubric anchors and glossary">
+      <details open>
+        <summary>Rubric anchors and glossary</summary>
+        <div>
+          <span><strong>Centrality</strong> How much the critique targets important parts of the position.</span>
+          <span><strong>Strength</strong> How well the critique weakens what it targets.</span>
+          <span><strong>Dead weight</strong> Badness field: 0 is best, 1 is worst.</span>
+          <span><strong>Single issue</strong> Focus/cleanliness, not a direct quality score.</span>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
+function preSubmitLintPanel() {
+  const missingScores = missingDraftScoreDimensions();
+  const productReady = Number.isFinite(state.draftScores.centrality) && Number.isFinite(state.draftScores.strength);
+  const productText = productReady ? formatNumber(state.draftScores.centrality * state.draftScores.strength) : "available after centrality and strength";
+  return `
+    <section class="preSubmitLintPanel" aria-label="Pre-submit rubric lints">
+      <div>
+        <strong>Pre-submit lint</strong>
+        <span>${missingScores.length ? `Still unset: ${missingScores.map(humanize).join(", ")}.` : "All required score fields have explicit values."}</span>
+      </div>
+      <div>
+        <strong>centrality x strength</strong>
+        <span>${productText}; diagnostic only, never auto-submitted.</span>
+      </div>
+      <div>
+        <strong>Blind boundary</strong>
+        <span>No peer, gold, source, model-judge, or protected-label hints are used here.</span>
+      </div>
+    </section>
   `;
 }
 
@@ -2589,25 +2706,104 @@ function workflowPanel(releaseReport, sessionStatus, workflowStatus) {
   `;
 }
 
-function adjudicationPanel(adjudicationAudit) {
-  adjudicationAudit ??= buildAdjudicationMemoAuditReport(
-    releaseId,
-    createLabelSnapshot(
-      "snapshot-oct-demo",
+function adjudicationPanel(releaseReport) {
+  const adjudicationAudit =
+    releaseReport.adjudicationMemoAudit ??
+    buildAdjudicationMemoAuditReport(
       releaseId,
+      createLabelSnapshot(
+        "snapshot-oct-demo",
+        releaseId,
+        state.ratings,
+        critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+        "initial_only",
+      ),
       state.ratings,
-      critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
-      "initial_only",
-    ),
-    state.ratings,
-    positions,
-    critiques,
-  );
+      positions,
+      critiques,
+    );
   const taxonomy = summarizeAdjudication(adjudicationMemos);
+  const cockpit = state.adjudicationCockpit ?? fallbackAdjudicationCockpit(releaseReport);
+  const screenState = state.adjudicationScreenState ?? cockpit.screenState;
+  const reviewSession = cockpit.reviewSession;
+  const adjudicationId = cockpit.adjudicationId;
   return `
     <div class="twoColumn">
       <section class="panel">
         ${panelTitle("scale", "Escalation And Adjudication", "Disagreement is preserved with structured taxonomy instead of hidden by averaging.")}
+        ${statusLine(state.sessionStatus, "sessionLine")}
+        ${authControls()}
+        ${statusLine(state.lastAdjudicationStatus, "persistenceLine")}
+        <div class="practiceNotice">
+          ${icon("shield")}
+          <span>Adjudication happens after lock. The cockpit surfaces spread, target-map, verification, sibling-context, revision, and minority-rationale evidence without changing the original blind ratings.</span>
+        </div>
+        <div class="actionRow">
+          <button class="secondaryButton" id="refreshAdjudicationCockpit" type="button">${icon("database")}Refresh cockpit</button>
+          <button class="secondaryButton" id="recordAdjudicationReviewSession" type="button">${icon("branch")}Record review session</button>
+          <button class="primaryButton" id="appendAdjudicationMemo" type="button">${icon("check")}Append memo</button>
+          <button class="secondaryButton" id="finalizeAdjudication" type="button">${icon("shield")}Finalize adjudication</button>
+        </div>
+        <div class="adjudicationCockpitGrid">
+          <article>
+            <span>Adjudication</span>
+            <strong>${escapeHtml(adjudicationId)}</strong>
+          </article>
+          <article>
+            <span>Primary next action</span>
+            <strong>${escapeHtml(humanize(screenState?.primaryNextAction ?? "open_adjudication_review_session"))}</strong>
+          </article>
+          <article>
+            <span>Score-spread heatmap</span>
+            <strong>${escapeHtml(reviewSession?.scoreSpreadHeatmapVersion ?? "spread-heatmap-v1")}</strong>
+          </article>
+          <article>
+            <span>Centrality x strength allocation</span>
+            <strong>${escapeHtml(reviewSession?.centXStrProductAllocationView ?? "product-allocation-v1")}</strong>
+          </article>
+          <article>
+            <span>Span overlays</span>
+            <strong>${escapeHtml((reviewSession?.rationaleSpanOverlayRefs ?? ["rationale-span-seed"]).join(", "))}</strong>
+          </article>
+          <article>
+            <span>Verification conflicts</span>
+            <strong>${escapeHtml(reviewSession?.verificationConflictSummary ?? "subjective claim not practicable")}</strong>
+          </article>
+          <article>
+            <span>Sibling-context differences</span>
+            <strong>${escapeHtml(reviewSession?.siblingContextDifferenceSummary ?? "same-position sibling context checked")}</strong>
+          </article>
+          <article>
+            <span>Revision timeline</span>
+            <strong>${escapeHtml((reviewSession?.revisionTimelineRefs ?? ["revision-timeline-seed"]).join(", "))}</strong>
+          </article>
+          <article>
+            <span>Target maps</span>
+            <strong>${escapeHtml((reviewSession?.targetMapIds ?? ["interpretation-target-map-seed"]).join(", "))}</strong>
+          </article>
+          <article>
+            <span>Minority rationales</span>
+            <strong>${escapeHtml((reviewSession?.minorityRationaleFields ?? ["minority-strength-reading"]).join(", "))}</strong>
+          </article>
+        </div>
+        <section class="adjudicationCompose">
+          <label>
+            <span>Contested interpretation memo</span>
+            <textarea id="adjudicationMemoText" rows="4">${escapeHtml(state.adjudicationMemoText)}</textarea>
+          </label>
+          <label>
+            <span>Minority rationale to preserve</span>
+            <textarea id="adjudicationMinorityRationaleText" rows="4">${escapeHtml(state.adjudicationMinorityRationaleText)}</textarea>
+          </label>
+        </section>
+        <section class="calibrationSection">
+          <h3>Local adjudication events this session</h3>
+          ${
+            state.localAdjudicationEvents.length
+              ? `<div class="feedbackList">${state.localAdjudicationEvents.map(discussionEventCard).join("")}</div>`
+              : `<div class="emptyState">No local adjudication event submitted in this browser session yet.</div>`
+          }
+        </section>
         <div class="metricCards benchmarkMetricCards">
           ${metricCard("Memos", String(adjudicationAudit.counts.memoCount), humanize(adjudicationAudit.releaseUseStatus))}
           ${metricCard("Ambiguity complete", `${adjudicationAudit.counts.completeAmbiguityMemoCount}/${adjudicationAudit.counts.ambiguousMemoCount}`, "worst-plausible fields")}
@@ -2637,6 +2833,15 @@ function adjudicationPanel(adjudicationAudit) {
       </section>
       <section class="panel">
         ${panelTitle("alert", "Routing Triggers", "Default thresholds are configurable project policies, not hidden hard-coded LMCA claims.")}
+        <section class="compactPanelSubsection">
+          <h3>Server Screen State</h3>
+          ${metricList([
+            ["Surface", screenState?.surface ?? "adjudication"],
+            ["Schema", screenState?.outputSchemaVersion ?? "screen-state-output-lmca-v1"],
+            ["Actions", (screenState?.enabledActionAllowlist ?? ["review_target_map", "review_verification_conflicts", "record_minority_rationale", "finalize_memo"]).map(humanize).join(", ")],
+            ["Visible fields", (screenState?.visibleFieldAllowlist ?? ["scoreSpreadHeatmapVersion", "centXStrProductAllocationView", "rationaleSpanOverlayRefs", "verificationConflictSummary", "revisionTimelineRefs", "minorityRationaleFields"]).map(humanize).join(", ")],
+          ])}
+        </section>
         <div class="triggerTable">
           ${critiques
             .map((critique) => {
@@ -2653,6 +2858,34 @@ function adjudicationPanel(adjudicationAudit) {
       </section>
     </div>
   `;
+}
+
+function fallbackAdjudicationCockpit(releaseReport) {
+  const interactionEvidence = releaseReport.interactionWorkflowEvidence ?? {};
+  const reviewSession =
+    releaseReport.workflowInteractionArtifacts?.adjudicationReviewSessions?.at(-1) ??
+    interactionEvidence.adjudicationReviewSessionRows?.at(-1) ??
+    null;
+  const adjudicationId = reviewSession?.adjudicationId ?? "adjudication-demo";
+  return {
+    adjudicationId,
+    cockpitStatus: reviewSession ? "adjudication_review_session_available" : "seed_review_session_fallback",
+    reviewSession,
+    screenState: {
+      surface: "adjudication",
+      primaryNextAction: reviewSession ? "finalize_or_request_revision" : "open_adjudication_review_session",
+      outputSchemaVersion: "screen-state-output-lmca-v1",
+      enabledActionAllowlist: ["review_target_map", "review_verification_conflicts", "record_minority_rationale", "finalize_memo"],
+      visibleFieldAllowlist: [
+        "scoreSpreadHeatmapVersion",
+        "centXStrProductAllocationView",
+        "rationaleSpanOverlayRefs",
+        "verificationConflictSummary",
+        "revisionTimelineRefs",
+        "minorityRationaleFields",
+      ],
+    },
+  };
 }
 
 function releasePanel(profile, labelSnapshot, marginDistribution, releaseReport) {
@@ -4040,6 +4273,67 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (result.tone === "good") state.localDiscussionEvents.push({ kind: "discussion_revision_proposal", resourceId: result.resourceId, detail: "original rating preserved" });
     render();
   });
+  document.getElementById("adjudicationMemoText")?.addEventListener("input", (event) => {
+    state.adjudicationMemoText = event.target.value;
+  });
+  document.getElementById("adjudicationMinorityRationaleText")?.addEventListener("input", (event) => {
+    state.adjudicationMinorityRationaleText = event.target.value;
+  });
+  document.getElementById("refreshAdjudicationCockpit")?.addEventListener("click", async () => {
+    const cockpit = fallbackAdjudicationCockpit(releaseReport);
+    state.lastAdjudicationStatus = { tone: "warn", title: "Loading adjudication cockpit", detail: "Reading sanitized screen state and cockpit evidence." };
+    render();
+    const result = await fetchAdjudicationCockpit(cockpit.adjudicationId);
+    state.lastAdjudicationStatus = result.status;
+    if (result.cockpit) state.adjudicationCockpit = result.cockpit;
+    if (result.screenState) state.adjudicationScreenState = result.screenState;
+    render();
+  });
+  document.getElementById("recordAdjudicationReviewSession")?.addEventListener("click", async () => {
+    const cockpit = state.adjudicationCockpit ?? fallbackAdjudicationCockpit(releaseReport);
+    state.lastAdjudicationStatus = { tone: "warn", title: "Recording review session", detail: "Appending cockpit evidence for score spread, target map, verification, revision, and minority-rationale review." };
+    render();
+    const result = await persistExpertWorkflowResource(
+      "/api/v1/adjudication-review-sessions",
+      "adjudicationReviewSession",
+      createAdjudicationReviewSessionPayload(cockpit),
+    );
+    state.lastAdjudicationStatus = result;
+    if (result.tone === "good") state.localAdjudicationEvents.push({ kind: "adjudication_review_session", resourceId: result.resourceId, detail: "cockpit evidence recorded" });
+    render();
+  });
+  document.getElementById("appendAdjudicationMemo")?.addEventListener("click", async () => {
+    const cockpit = state.adjudicationCockpit ?? fallbackAdjudicationCockpit(releaseReport);
+    const contestedInterpretation = state.adjudicationMemoText.trim();
+    if (!contestedInterpretation) {
+      state.lastAdjudicationStatus = { tone: "bad", title: "Memo missing", detail: "Enter the contested interpretation before appending an adjudication memo." };
+      render();
+      return;
+    }
+    state.lastAdjudicationStatus = { tone: "warn", title: "Appending adjudication memo", detail: "Recording interpretation, verification, split, and minority-rationale fields." };
+    render();
+    const result = await persistExpertWorkflowResource(
+      "/api/v1/adjudication-memos",
+      "adjudicationMemo",
+      createAdjudicationMemoPayload(cockpit, contestedInterpretation, state.adjudicationMinorityRationaleText.trim()),
+    );
+    state.lastAdjudicationStatus = result;
+    if (result.tone === "good") state.localAdjudicationEvents.push({ kind: "adjudication_memo", resourceId: result.resourceId, detail: "Appendix-F adjudication memo recorded" });
+    render();
+  });
+  document.getElementById("finalizeAdjudication")?.addEventListener("click", async () => {
+    const cockpit = state.adjudicationCockpit ?? fallbackAdjudicationCockpit(releaseReport);
+    state.lastAdjudicationStatus = { tone: "warn", title: "Finalizing adjudication", detail: "Appending finalization without mutating original blind ratings." };
+    render();
+    const result = await persistExpertWorkflowResource(
+      `/api/v1/adjudications/${encodeURIComponent(cockpit.adjudicationId)}/finalize`,
+      "adjudicationFinalization",
+      createAdjudicationFinalizationPayload(cockpit.adjudicationId),
+    );
+    state.lastAdjudicationStatus = result;
+    if (result.tone === "good") state.localAdjudicationEvents.push({ kind: "adjudication_finalization", resourceId: result.resourceId, detail: "finalization event recorded" });
+    render();
+  });
   document.getElementById("refreshRaterDataProfile")?.addEventListener("click", async () => {
     state.lastDataGovernanceStatus = { tone: "warn", title: "Loading data profile", detail: "Reading your rater-data transparency profile." };
     render();
@@ -4103,6 +4397,13 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       if (profileResult.profile) state.raterDataProfile = profileResult.profile;
     }
     render();
+  });
+  document.querySelectorAll("[data-rating-workflow-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.getAttribute("data-rating-workflow-action");
+      state.lastRatingWorkflowStatus = ratingWorkflowActionStatus(action);
+      render();
+    });
   });
   document.querySelectorAll("[data-flag]").forEach((input) => {
     input.addEventListener("change", () => {
@@ -4263,6 +4564,46 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
 
 function navButton(id, label, iconName) {
   return `<button class="navItem ${state.section === id ? "active" : ""}" data-section="${id}" type="button">${icon(iconName)}${escapeHtml(label)}</button>`;
+}
+
+function ratingWorkflowActionStatus(action) {
+  const statuses = {
+    safe_continue: {
+      tone: "good",
+      title: "Self-screen complete",
+      detail: "Continue scoring without exposing source, gold, peer, model, or protected-status metadata.",
+    },
+    pause_for_later: {
+      tone: "warn",
+      title: "Draft paused",
+      detail: "Autosaved drafts remain outside labels and denominators until explicit submission.",
+    },
+    safe_decline_reassign: {
+      tone: "warn",
+      title: "Reassignment path selected",
+      detail: "Safe-decline or reassignment is logged separately and excluded from rating denominators.",
+    },
+    item_issue_report: {
+      tone: "warn",
+      title: "Item issue report path selected",
+      detail: "Use this for source leakage, missing context, malformed text, duplicate content, rights, or UI/rubric defects.",
+    },
+    source_recognition: {
+      tone: "warn",
+      title: "Source-recognition path selected",
+      detail: "Prior exposure pauses independent blind use unless a documented review preserves the claim.",
+    },
+    stop_after_current: {
+      tone: "good",
+      title: "Stop-after-current set",
+      detail: "Session pacing helps avoid rushed ratings without penalizing ordinary breaks.",
+    },
+  };
+  return statuses[action] ?? {
+    tone: "warn",
+    title: "Workflow action selected",
+    detail: "No label mutation was performed.",
+  };
 }
 
 function sliderRow(dimension) {
@@ -4746,6 +5087,57 @@ async function fetchDiscussionScreenState(threadId) {
   }
 }
 
+async function fetchAdjudicationCockpit(adjudicationId) {
+  try {
+    const session = await ensureAdminSession();
+    if (!session?.token) throw new Error("expert/admin session unavailable");
+    const headers = { authorization: `Bearer ${session.token}` };
+    const [screenStateResponse, cockpitResponse] = await Promise.all([
+      fetch(`/api/v1/adjudications/${encodeURIComponent(adjudicationId)}/screen-state`, { headers }),
+      fetch(`/api/v1/adjudications/${encodeURIComponent(adjudicationId)}/cockpit`, { headers }),
+    ]);
+    const [screenStateBody, cockpitBody] = await Promise.all([
+      screenStateResponse.json().catch(() => ({})),
+      cockpitResponse.json().catch(() => ({})),
+    ]);
+    if (!screenStateResponse.ok) {
+      return {
+        status: {
+          tone: "bad",
+          title: "Adjudication screen state rejected",
+          detail: screenStateBody.detail ?? screenStateBody.error ?? "Server rejected the adjudication screen-state request.",
+        },
+      };
+    }
+    if (!cockpitResponse.ok) {
+      return {
+        status: {
+          tone: "bad",
+          title: "Adjudication cockpit rejected",
+          detail: cockpitBody.detail ?? cockpitBody.error ?? "Server rejected the adjudication cockpit request.",
+        },
+      };
+    }
+    return {
+      screenState: screenStateBody,
+      cockpit: { ...cockpitBody, screenState: cockpitBody.screenState ?? screenStateBody },
+      status: {
+        tone: "good",
+        title: "Adjudication cockpit loaded",
+        detail: `${cockpitBody.cockpitStatus ?? "cockpit"}; ${screenStateBody.enabledActionAllowlist?.length ?? 0} enabled action(s).`,
+      },
+    };
+  } catch (error) {
+    return {
+      status: {
+        tone: "warn",
+        title: "Adjudication cockpit unavailable",
+        detail: error instanceof Error ? error.message : "Server API unavailable.",
+      },
+    };
+  }
+}
+
 async function persistExpertWorkflowResource(endpoint, resourceKey, resource) {
   try {
     const session = await ensureAdminSession();
@@ -4762,20 +5154,20 @@ async function persistExpertWorkflowResource(endpoint, resourceKey, resource) {
     if (!response.ok) {
       return {
         tone: "bad",
-        title: "Discussion event rejected",
-        detail: body.detail ?? body.error ?? "Server rejected the discussion workflow event.",
+        title: "Workflow event rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the workflow event.",
       };
     }
     return {
       tone: "good",
-      title: "Discussion event recorded",
+      title: "Workflow event recorded",
       detail: `${body.resourceId} recorded with ${body.payloadHash.slice(0, 18)}...`,
       resourceId: body.resourceId,
     };
   } catch (error) {
     return {
       tone: "warn",
-      title: "Discussion event not persisted",
+      title: "Workflow event not persisted",
       detail: error instanceof Error ? error.message : "Server API unavailable.",
     };
   }
@@ -4801,6 +5193,93 @@ function createDiscussionRevisionProposalPayload(threadId, revisionRationale) {
     revisionRationale,
     originalRatingPreservation: "original_rating_preserved_append_only",
     timestamp: new Date().toISOString(),
+  };
+}
+
+function createAdjudicationReviewSessionPayload(cockpit) {
+  const reviewSession = cockpit.reviewSession ?? {};
+  const itemKeys = reviewSession.itemKeys?.length ? reviewSession.itemKeys : ["pos-ai-prior::crit-ai-base-rate"];
+  return {
+    id: `adjudication-review-session-ui-${Date.now()}`,
+    adjudicationId: cockpit.adjudicationId,
+    discussionThreadId: reviewSession.discussionThreadId ?? "discussion-thread-demo",
+    itemKeys,
+    scoreSpreadHeatmapVersion: reviewSession.scoreSpreadHeatmapVersion ?? "spread-heatmap-v1",
+    centXStrProductAllocationView: reviewSession.centXStrProductAllocationView ?? "centrality-strength-product-allocation-v1",
+    rationaleSpanOverlayRefs: reviewSession.rationaleSpanOverlayRefs?.length ? reviewSession.rationaleSpanOverlayRefs : ["rationale-span-overlay-base-rate"],
+    verificationConflictSummary:
+      reviewSession.verificationConflictSummary ?? "Correctness disagreement is mostly interpretive; no easy empirical check resolves the base-rate challenge.",
+    siblingContextDifferenceSummary:
+      reviewSession.siblingContextDifferenceSummary ?? "Same-position siblings distinguish central forecast attacks from side-assumption objections.",
+    preSubmitLintSummary:
+      reviewSession.preSubmitLintSummary ?? "Required adjudication memo fields, target-map references, verification status, and minority rationale fields are present.",
+    revisionTimelineRefs: reviewSession.revisionTimelineRefs?.length ? reviewSession.revisionTimelineRefs : ["revision-timeline-base-rate"],
+    targetMapIds: reviewSession.targetMapIds?.length ? reviewSession.targetMapIds : ["target-map-base-rate"],
+    minorityRationaleFields: reviewSession.minorityRationaleFields?.length ? reviewSession.minorityRationaleFields : ["minority-strength-reading"],
+    adjudicatorIds: reviewSession.adjudicatorIds?.length ? reviewSession.adjudicatorIds : [state.adminSession?.user?.id ?? "demo-admin"],
+    finalizationStatus: "review_session_recorded_pending_memo_finalization",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createAdjudicationMemoPayload(cockpit, contestedInterpretation, minorityRationale) {
+  const reviewSession = cockpit.reviewSession ?? {};
+  return {
+    id: `adjudication-memo-ui-${Date.now()}`,
+    adjudicationId: cockpit.adjudicationId,
+    discussionThreadId: reviewSession.discussionThreadId ?? "discussion-thread-demo",
+    itemId: "pos-ai-prior::crit-ai-base-rate",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    itemKeys: reviewSession.itemKeys?.length ? reviewSession.itemKeys : ["pos-ai-prior::crit-ai-base-rate"],
+    contestedInterpretation,
+    plausibleInterpretationsConsidered: [
+      "critique directly attacks the main capability-forecast conclusion",
+      "critique attacks a side assumption and should reduce centrality",
+    ],
+    worstPlausibleInterpretationConsidered:
+      "The critique may only gesture at alternate priors without changing the position's bottom-line forecast.",
+    interpretationPlausibilityNotes: "Both readings remain plausible after post-lock discussion; centrality drives the residual spread.",
+    multiInterpretationCoverageSummary: "Memo records the central-forecast reading, side-assumption reading, and minority rationale instead of averaging them away.",
+    adversarialInterpretationWeightingSummary: "Worst-plausible interpretation receives explicit weight before final label use.",
+    pricedInAssessment: "Base-rate uncertainty was partially priced into strength but not fully into centrality.",
+    backgroundKnowledgeAssessment: "Background priors about AI timelines affect correctness but are not treated as hidden source metadata.",
+    bottomLineDependenceSummary: "Bottom-line label depends on whether the objection changes the main forecast rather than a peripheral assumption.",
+    clearlyUnsatisfactoryImprecisionSummary: "The critique is not dismissed as imprecise; imprecision is separated from centrality disagreement.",
+    contentFreeDeadWeightSummary: "No content-free dead-weight flag is used for the substantive base-rate claim.",
+    obfuscationSummary: "No obfuscation finding; the remaining ambiguity is ordinary interpretive spread.",
+    strengthCentralityAllocationSummary: reviewSession.centXStrProductAllocationView ?? "Centrality receives lower weight than strength under the side-assumption reading.",
+    midRangeStrengthUncertaintySummary: "Strength remains mid-range because the base-rate challenge is relevant but not decisive.",
+    correctnessWeightingSummary: "Correctness is weighted after accounting for practical verification limits and interpretive dependence.",
+    correctnessVerificationStatus: "not_practicable",
+    correctnessVerificationSummary: reviewSession.verificationConflictSummary ?? "No practical empirical check resolves the competing priors in this item.",
+    clarityAfterEffortSummary: "After reasonable effort, the critique is clear enough to adjudicate but still admits two plausible targets.",
+    postDiscussionResolutionStatus: "partially_resolved_minor_spread_remaining",
+    unresolvedDisagreementClass: "target_interpretation_and_strength_centrality_allocation",
+    disagreementTaxonomyCodes: ["target_interpretation", "strength_centrality_allocation", "verification_limit"],
+    minorityRationales: [
+      {
+        authorId: state.adminSession?.user?.id ?? "demo-admin",
+        rationale: minorityRationale || "Minority rationale preserved for the side-assumption reading.",
+      },
+    ],
+    splitDecision: "adjudicated_with_preserved_minority_rationale",
+    maxFinalRaterSpread: 0.18,
+    adjudicatorIds: reviewSession.adjudicatorIds?.length ? reviewSession.adjudicatorIds : [state.adminSession?.user?.id ?? "demo-admin"],
+    rubricVersionConsidered: "lmca-app-f-2026-10",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createAdjudicationFinalizationPayload(adjudicationId) {
+  return {
+    id: `adjudication-finalization-ui-${Date.now()}`,
+    adjudicationId,
+    memoId: `adjudication-memo-ui-${Date.now()}`,
+    finalizationStatus: "finalized_with_append_only_audit",
+    originalRatingMutationPolicy: "original_blind_ratings_preserved",
+    finalizedBy: state.adminSession?.user?.id ?? "demo-admin",
+    finalizedAt: new Date().toISOString(),
   };
 }
 

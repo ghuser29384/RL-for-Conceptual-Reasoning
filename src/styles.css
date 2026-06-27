@@ -318,6 +318,7 @@ nav {
 
 .blindNotice {
   width: 100%;
+  margin-top: 12px;
   padding: 10px 12px;
   border: 1px solid #b8d4d0;
   border-radius: 6px;
@@ -330,6 +331,133 @@ nav {
 .blindNotice span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.taskFirstPanel,
+.sessionPacingPanel,
+.preSubmitLintPanel {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.taskFirstPanel {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.taskFirstPanel article,
+.sessionPacingPanel,
+.preSubmitLintPanel,
+.rubricQuickAccess,
+.selfScreenPanel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.taskFirstPanel article {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 12px;
+}
+
+.taskFirstPanel span,
+.sessionPacingPanel span,
+.preSubmitLintPanel span,
+.selfScreenPanel span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.taskFirstPanel strong,
+.sessionPacingPanel strong,
+.preSubmitLintPanel strong,
+.selfScreenPanel strong {
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.taskFirstPanel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.selfScreenPanel {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.selfScreenPanel > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.selfScreenActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sessionPacingPanel {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: center;
+  padding: 12px;
+}
+
+.sessionPacingPanel > div,
+.preSubmitLintPanel > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rubricQuickAccess {
+  margin-top: 14px;
+  padding: 0;
+}
+
+.rubricQuickAccess details {
+  padding: 10px 12px;
+}
+
+.rubricQuickAccess summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.rubricQuickAccess div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+
+.rubricQuickAccess span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.rubricQuickAccess strong {
+  color: var(--text);
+}
+
+.preSubmitLintPanel {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 12px;
 }
 
 .practiceNotice {
@@ -424,6 +552,7 @@ nav {
 
 .calibrationGrid,
 .discussionGrid,
+.adjudicationCockpitGrid,
 .feedbackList,
 .summaryList,
 .compactSummary {
@@ -432,13 +561,15 @@ nav {
 }
 
 .calibrationGrid,
-.discussionGrid {
+.discussionGrid,
+.adjudicationCockpitGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 16px;
 }
 
 .calibrationGrid article,
 .discussionGrid article,
+.adjudicationCockpitGrid article,
 .feedbackList article {
   display: grid;
   min-width: 0;
@@ -451,6 +582,7 @@ nav {
 
 .calibrationGrid span,
 .discussionGrid span,
+.adjudicationCockpitGrid span,
 .feedbackList span,
 .feedbackList em,
 .summaryList span,
@@ -463,6 +595,7 @@ nav {
 
 .calibrationGrid strong,
 .discussionGrid strong,
+.adjudicationCockpitGrid strong,
 .feedbackList strong,
 .summaryList strong,
 .compactSummary strong {
@@ -498,25 +631,29 @@ nav {
   margin-top: 2px;
 }
 
-.discussionCompose {
+.discussionCompose,
+.adjudicationCompose {
   display: grid;
   gap: 12px;
   margin-top: 16px;
 }
 
-.discussionCompose label {
+.discussionCompose label,
+.adjudicationCompose label {
   display: grid;
   gap: 6px;
 }
 
-.discussionCompose span {
+.discussionCompose span,
+.adjudicationCompose span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 720;
   line-height: 1.35;
 }
 
-.discussionCompose textarea {
+.discussionCompose textarea,
+.adjudicationCompose textarea {
   width: 100%;
   min-height: 96px;
   resize: vertical;
@@ -528,6 +665,20 @@ nav {
   font: inherit;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.compactPanelSubsection {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.compactPanelSubsection h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
 }
 
 .textPair {
@@ -1716,6 +1867,12 @@ tbody tr:last-child td {
     min-width: 0;
   }
 
+  .taskFirstPanel,
+  .sessionPacingPanel,
+  .preSubmitLintPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .releaseLayout .rightRail {
     position: static;
   }
@@ -1845,6 +2002,10 @@ tbody tr:last-child td {
 
   .topbarStats,
   .queueGrid,
+  .taskFirstPanel,
+  .sessionPacingPanel,
+  .preSubmitLintPanel,
+  .rubricQuickAccess div,
   .contributionCards,
   .submissionRow,
   .textPair,
@@ -1857,6 +2018,7 @@ tbody tr:last-child td {
   .dataCategoryGrid,
   .calibrationGrid,
   .discussionGrid,
+  .adjudicationCockpitGrid,
   .summaryList div,
   .compactSummary div,
   .metricCards,
