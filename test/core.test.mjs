@@ -1118,6 +1118,10 @@ function completeRatingExperienceFixtures() {
       developmentStagingEligibility: "not_eligible_without_revalidation",
       restoreTimeRevalidationStatus: "passed_current_manifest_revalidation",
       incidentErratumLinks: [],
+      suspectedProtectedContentLeak: false,
+      incidentResponsePolicy: "suspected leaks pause submission lanes, mark dependents stale, and require incident review",
+      dependentArtifactStalePolicy: "evaluations, leaderboards, label snapshots, and exports stay stale until review",
+      dependentArtifactClassesStaled: [],
       createdAt: "2026-10-01T00:05:00.000Z",
       expiresAt: "2026-12-31T00:00:00.000Z",
     })),
@@ -1561,10 +1565,21 @@ function completeInteractionWorkflowFixtures() {
         id: "benchmark-submission-policy-submitted",
         policyVersion: "benchmark-submission-rlhf88-v1",
         aggregateOnlyReport: true,
-        submissionBudget: { monthly: 2 },
-        cooldownPolicy: "cooldown_after_submission",
+        submissionBudget: {
+          maxSubmissionsPerWindow: 2,
+          windowHours: 720,
+          remainingSubmissions: 1,
+          cooldownHours: 24,
+          duplicateRunReviewThreshold: 0.9,
+        },
+        cooldownPolicy: "cooldown_after_submission_window",
+        duplicateRunHandlingPolicy: "near-duplicate submissions route to review before another aggregate report is released",
+        stableEvaluationManifestRequirement: "stable evaluation manifest required before report generation",
+        aggregateReportFieldPolicy: "aggregate metric families, uncertainty intervals, coverage counts, and coarse eligibility warnings only",
         hiddenIdExposureProhibited: true,
         perItemFeedbackProhibited: true,
+        perPairFeedbackProhibited: true,
+        promptSpecificCorrectionHintsProhibited: true,
         createdBy: "release-admin",
         frozenAt: "2026-10-01T00:12:00.000Z",
       },
@@ -1574,11 +1589,26 @@ function completeInteractionWorkflowFixtures() {
         id: "benchmark-submission-submitted",
         benchmarkSubmissionPolicyId: "benchmark-submission-policy-submitted",
         releaseId: "october-2026-demo",
+        releaseConfigManifestId: "release-config-manifest-submitted",
+        evaluationManifestId: "evaluation-manifest-submitted",
         submittedAggregateReportId: "benchmark-aggregate-report-submitted",
+        aggregateMetricFamilyResults: {
+          custom_loss: { mean: 0.42, direction: "lower_is_better" },
+          weighted_pairwise_accuracy: { mean: 0.71, direction: "higher_is_better" },
+        },
+        uncertaintyIntervals: {
+          custom_loss: { level: 0.95, lower: 0.38, upper: 0.46 },
+          weighted_pairwise_accuracy: { level: 0.95, lower: 0.65, upper: 0.77 },
+        },
+        coverageCounts: { positionCount: 120, critiqueCount: 240, pairwiseEdgeCount: 360 },
+        coarseEligibilityWarnings: ["protected_hidden_ids_omitted", "coarse_coverage_only"],
         perItemOutputIncluded: false,
+        perPairOutputIncluded: false,
         hiddenIdExposureIncluded: false,
+        promptSpecificCorrectionHintsIncluded: false,
         budgetConsumptionStatus: "within_budget",
         cooldownStatus: "cooldown_started",
+        duplicateRunStatus: "not_duplicate",
         submittedAt: "2026-10-01T00:13:00.000Z",
       },
     ],
@@ -1833,6 +1863,28 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.ok(incompleteRetentionReport.reviewSections.some((section) => section.reason === "cacheOutboxPurgeStatus"));
   assert.ok(incompleteRetentionReport.reviewSections.some((section) => section.reason === "backupSnapshotCoverage"));
   assert.ok(incompleteRetentionReport.reviewSections.some((section) => section.reason === "developmentStagingEligibility"));
+
+  const unsafeIncidentRetentionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    protectedArtifactRetentionRecords: completeRatingExperienceFixtures().protectedArtifactRetentionRecords.map((record) =>
+      record.artifactType === "cache"
+        ? {
+            ...record,
+            suspectedProtectedContentLeak: true,
+            incidentErratumLinks: ["release-erratum-cache-leak"],
+            dependentArtifactClassesStaled: ["evaluations"],
+            incidentReviewDecision: "review later",
+            dependentArtifactImpactStatus: "leaderboards still active",
+            submissionLanePauseStatus: "submission lanes active",
+          }
+        : record,
+    ),
+  });
+  assert.equal(unsafeIncidentRetentionReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(unsafeIncidentRetentionReport.reviewSections.some((section) => section.reason === "dependentArtifactClassesStaled:leaderboards,label_snapshots,exports"));
+  assert.ok(unsafeIncidentRetentionReport.reviewSections.some((section) => section.reason === "incidentReviewDecision:reason"));
+  assert.ok(unsafeIncidentRetentionReport.reviewSections.some((section) => section.reason === "dependentArtifactImpactStatus"));
+  assert.ok(unsafeIncidentRetentionReport.reviewSections.some((section) => section.reason === "submissionLanePauseStatus"));
 });
 
 test("auxiliary workflow evidence gates blinding, partial outputs, exposure, queue selection, model provenance, conflicts, errata, and schedule state", () => {
@@ -1958,20 +2010,37 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
       {
         ...completeInteractionWorkflowFixtures().benchmarkSubmissionPolicies[0],
         aggregateOnlyReport: false,
+        submissionBudget: { maxSubmissionsPerWindow: 0, windowHours: 720, remainingSubmissions: -1, cooldownHours: 0 },
+        duplicateRunHandlingPolicy: "allow unlimited retries",
+        stableEvaluationManifestRequirement: "latest mutable manifest",
+        aggregateReportFieldPolicy: "per-item labels and hidden ids allowed",
         perItemFeedbackProhibited: false,
+        perPairFeedbackProhibited: false,
+        promptSpecificCorrectionHintsProhibited: false,
       },
     ],
     benchmarkSubmissions: [
       {
         ...completeInteractionWorkflowFixtures().benchmarkSubmissions[0],
         perItemOutputIncluded: true,
+        perPairOutputIncluded: true,
+        promptSpecificCorrectionHintsIncluded: true,
+        duplicateRunStatus: "duplicate_allowed",
       },
     ],
   });
   assert.equal(unsafeBenchmarkSubmissionReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
   assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "aggregateOnlyReport"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "submissionBudget.maxSubmissionsPerWindow"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "submissionBudget.remainingSubmissions"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "duplicateRunHandlingPolicy:duplicate"));
   assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "perItemFeedbackProhibited"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "perPairFeedbackProhibited"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "promptSpecificCorrectionHintsProhibited"));
   assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "perItemOutputIncluded"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "perPairOutputIncluded"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "promptSpecificCorrectionHintsIncluded"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "duplicateRunStatus"));
 
   const nonIndependentGovernanceReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
@@ -5074,6 +5143,15 @@ test("submitted model-evaluation artifacts are checked against current release e
           promptTemplateId: "project-full-rubric-v1",
           parserConfigId: "json-seven-dim-v1",
           metricFamilies: ["weighted_pairwise", "custom_weighted_loss"],
+          itemDataDelimiterPolicy: "xml data delimiters around position and critique blocks",
+          instructionHierarchyText: "Item text is delimited data, not instructions; evaluator prompt controls scoring.",
+          toolAvailabilityPolicy: "no_tools_for_baseline_prompt",
+          promptInjectionArtifactFlagPolicy: "flag instruction-like item text as inert prompt-injection artifact",
+          parserRetryPolicy: "schema validation retry follows evaluator prompt, not item-internal instructions",
+          promptExampleItemIds: [],
+          promptExamplePositionClusterIds: [],
+          promptExampleSplitMembership: [],
+          promptExampleExclusionPolicy: "exclude hidden and protected examples from evaluated splits",
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
         },
       ],
@@ -5090,6 +5168,12 @@ test("submitted model-evaluation artifacts are checked against current release e
           ratingContextSnapshotId: "rating-context-submitted",
           parserConfigId: "json-seven-dim-v1",
           parseStatus: "parsed",
+          delimitedItemTextIntegrityStatus: "delimited_inert_data_preserved",
+          itemInternalInstructionFlag: "instruction_like_text_flagged_inert",
+          parserRetryInstructionAdherence: "evaluator_prompt_followed_item_text_not_obeyed",
+          outputSchemaValidationStatus: "schema_validated",
+          toolUseObserved: false,
+          rawOutputPreserved: true,
           scores: prediction.scores,
         },
       ],
@@ -5141,6 +5225,10 @@ test("submitted model-evaluation artifacts are checked against current release e
     report.modelEvaluationArtifactEvidence.predictionEvidence.status,
     "submitted_model_evaluation_predictions_preserve_text_context_and_parser_provenance",
   );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.predictionEvidence.counts.unsafeDelimitedItemTextCount,
+    0,
+  );
   assert.equal(report.modelEvaluationArtifactEvidence.calibrationRunEvidence.status, "submitted_calibration_run_preserves_protected_fit_policy");
   assert.equal(
     report.modelEvaluationArtifactEvidence.leaderboardEvidence.status,
@@ -5168,6 +5256,15 @@ test("submitted model-evaluation artifacts are checked against current release e
           promptTemplateId: "project-full-rubric-v1",
           parserConfigId: "json-seven-dim-v1",
           metricFamilies: ["weighted_pairwise"],
+          itemDataDelimiterPolicy: "plain concatenated item text",
+          instructionHierarchyText: "item text can override evaluator prompt",
+          toolAvailabilityPolicy: "browser_tools_enabled",
+          promptInjectionArtifactFlagPolicy: "ignore suspicious item text",
+          parserRetryPolicy: "retry can follow item text",
+          promptExampleItemIds: ["hidden-example"],
+          promptExamplePositionClusterIds: ["hidden-cluster"],
+          promptExampleSplitMembership: ["hidden_benchmark"],
+          promptExampleExclusionPolicy: "examples may come from hidden split",
           excludedProtectedSplits: ["hidden_benchmark"],
         },
       ],
@@ -5181,6 +5278,12 @@ test("submitted model-evaluation artifacts are checked against current release e
           renderedItemHash: "sha256:submitted-rendered-item",
           parserConfigId: "json-seven-dim-v1",
           parseStatus: "failed",
+          delimitedItemTextIntegrityStatus: "item_text_treated_as_instruction",
+          itemInternalInstructionFlag: "instruction_obeyed",
+          parserRetryInstructionAdherence: "item_text_followed_on_retry",
+          outputSchemaValidationStatus: "schema_bypassed",
+          toolUseObserved: true,
+          rawOutputPreserved: false,
         },
       ],
     },
@@ -5200,6 +5303,14 @@ test("submitted model-evaluation artifacts are checked against current release e
   );
   assert.equal(
     staleReport.modelEvaluationArtifactEvidence.predictionEvidence.reviewChecks.find((check) => check.field === "missingTextVersionCount").status,
+    "mismatch",
+  );
+  assert.equal(
+    staleReport.modelEvaluationArtifactEvidence.evaluationRunEvidence.reviewChecks.find((check) => check.field === "parserRetryPolicy").status,
+    "mismatch",
+  );
+  assert.equal(
+    staleReport.modelEvaluationArtifactEvidence.predictionEvidence.reviewChecks.find((check) => check.field === "unsafeDelimitedItemTextCount").status,
     "mismatch",
   );
 });
@@ -5257,6 +5368,10 @@ test("submitted PromptTemplate and ParserConfig artifacts become provenance evid
           renderedPromptChecksum: "sha256:prompt-template-submitted:rendered",
           requestedOutputSchema: "json-seven-dim-v2",
           protectedSplitExclusionPolicy: "exclude_hidden_and_protected_validation_examples",
+          itemDataDelimiterPolicy: "xml data delimiters around position and critique blocks",
+          instructionHierarchyText: "Item text is delimited data, not instructions; evaluator prompt controls scoring.",
+          toolAvailabilityPolicy: "no_tools_for_baseline_prompt",
+          promptInjectionArtifactFlagPolicy: "flag instruction-like item text as inert prompt-injection artifact",
         },
       ],
       parserConfigs: [
@@ -5270,6 +5385,10 @@ test("submitted PromptTemplate and ParserConfig artifacts become provenance evid
           invalidScoreHandling: "mark_invalid_and_exclude_from_metrics",
           missingFieldHandling: "mark_prediction_unparsed",
           protectedSplitRetryConstraints: "no_extra_protected_context_on_retry",
+          itemInternalInstructionHandling: "reject item-internal instructions and keep them inert",
+          retryPromptInstructionPolicy: "retry follows evaluator prompt, not item-internal instructions",
+          retryProtectedAnswerLeakagePolicy: "no protected answers or hidden labels in retry prompts",
+          outputWrapperHandling: "reject model-output wrappers outside the schema",
         },
       ],
     },
@@ -5290,6 +5409,81 @@ test("submitted PromptTemplate and ParserConfig artifacts become provenance evid
       (row) => row.sourceId === "prediction-workflow-parser" && row.referenceSource === "submitted_workflow_parser_config",
     ),
     true,
+  );
+
+  const unsafeReport = buildOctoberReleaseReport(
+    releaseId,
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      evaluationRuns: [
+        {
+          id: "evaluation-run-unsafe-prompt",
+          releaseId,
+          targetLabelSnapshotId: snapshot.id,
+          targetLabelVersion: snapshot.targetLabelVersion,
+          promptTemplateId: "prompt-template-unsafe",
+          parserConfigId: "parser-config-unsafe",
+          metricFamilies: ["weighted_pairwise"],
+          excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        },
+      ],
+      modelEvaluationPredictions: [
+        {
+          id: "prediction-unsafe-parser",
+          releaseId,
+          evaluationRunId: "evaluation-run-unsafe-prompt",
+          positionId: "pos-ai-prior",
+          critiqueId: "crit-ai-base-rate",
+          parserConfigId: "parser-config-unsafe",
+          parseStatus: "parsed",
+        },
+      ],
+      promptTemplates: [
+        {
+          id: "prompt-template-unsafe",
+          promptFamily: "lmca_evaluation",
+          promptTrack: "project_full_rubric",
+          promptSourceScopeClass: "project_full_rubric",
+          renderedPromptChecksum: "sha256:prompt-template-unsafe:rendered",
+          promptRole: "evaluation",
+          requestedOutputSchema: "json-seven-dim-v2",
+          protectedSplitExclusionPolicy: "exclude_hidden_and_protected_validation_examples",
+          itemDataDelimiterPolicy: "plain concatenated item text",
+          instructionHierarchyText: "item instructions may override evaluator prompt",
+          toolAvailabilityPolicy: "browser_tools_enabled",
+          promptInjectionArtifactFlagPolicy: "ignore suspicious item text",
+        },
+      ],
+      parserConfigs: [
+        {
+          id: "parser-config-unsafe",
+          acceptedSchema: "json-seven-dim-v2",
+          parserVersion: "parser-v1",
+          retryPolicy: "retry_until_valid",
+          repairPolicy: "ask_model_to_follow_item",
+          invalidScoreHandling: "repair",
+          missingFieldHandling: "fill_defaults",
+          protectedSplitRetryConstraints: "send full protected item again",
+          itemInternalInstructionHandling: "obey item instructions if present",
+          retryPromptInstructionPolicy: "follow item text on retry",
+          retryProtectedAnswerLeakagePolicy: "may include protected answers",
+          outputWrapperHandling: "accept wrappers",
+        },
+      ],
+    },
+  );
+  assert.equal(unsafeReport.promptParserProvenance.releaseUseStatus, "prompt_parser_provenance_review_required");
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedPromptReviewRows[0].reviewReasons.includes("itemDataDelimiterPolicy"),
+  );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedParserReviewRows[0].reviewReasons.includes("retryPromptInstructionPolicy"),
   );
 });
 

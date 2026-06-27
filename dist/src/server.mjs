@@ -176,6 +176,51 @@ const itemIssueSeverities = ["low", "medium", "high", "critical"];
 const itemIssueActionKinds = ["triage", "resolve", "quarantine"];
 const itemIssueResolutionStatuses = ["triage_opened", "resolved", "quarantined"];
 const itemIssueQuarantineScopes = ["none", "affected_item", "dependent_artifacts", "affected_item_and_dependent_artifacts"];
+const benchmarkSubmissionBudgetKeys = [
+  "maxSubmissionsPerWindow",
+  "windowHours",
+  "remainingSubmissions",
+  "cooldownHours",
+  "duplicateRunReviewThreshold",
+];
+const benchmarkBudgetConsumptionStatuses = ["within_budget", "budget_depleted_routed_to_review"];
+const benchmarkCooldownStatuses = ["cooldown_started", "cooldown_satisfied", "cooldown_review_required"];
+const benchmarkDuplicateRunStatuses = ["not_duplicate", "near_duplicate_routed_to_review"];
+const benchmarkSubmissionPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "aggregateOnlyReport",
+  "submissionBudget",
+  "cooldownPolicy",
+  "duplicateRunHandlingPolicy",
+  "stableEvaluationManifestRequirement",
+  "aggregateReportFieldPolicy",
+  "hiddenIdExposureProhibited",
+  "perItemFeedbackProhibited",
+  "perPairFeedbackProhibited",
+  "promptSpecificCorrectionHintsProhibited",
+  "frozenAt",
+];
+const benchmarkSubmissionRequiredFields = [
+  "id",
+  "benchmarkSubmissionPolicyId",
+  "releaseId",
+  "releaseConfigManifestId",
+  "evaluationManifestId",
+  "submittedAggregateReportId",
+  "aggregateMetricFamilyResults",
+  "uncertaintyIntervals",
+  "coverageCounts",
+  "coarseEligibilityWarnings",
+  "perItemOutputIncluded",
+  "perPairOutputIncluded",
+  "hiddenIdExposureIncluded",
+  "promptSpecificCorrectionHintsIncluded",
+  "budgetConsumptionStatus",
+  "cooldownStatus",
+  "duplicateRunStatus",
+  "submittedAt",
+];
 const ratingDraftSessionRequiredFields = [
   "id",
   "assignmentId",
@@ -1460,6 +1505,14 @@ const workflowWriteEndpoints = [
     requiredExactFields: {
       protectedSplitExclusionPolicy: "exclude_hidden_benchmark_and_internal_validation_examples",
     },
+    requiredStringIncludes: {
+      itemDataDelimiterPolicy: ["delimiter"],
+      instructionHierarchyText: ["data", "not instruction"],
+      promptInjectionArtifactFlagPolicy: ["flag"],
+    },
+    requiredStringIncludesAny: {
+      toolAvailabilityPolicy: ["no_tools", "disabled", "diagnostic"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/parser-configs$/, "parser_config_submitted", "parserConfig", adminRoles, {
     allowHiddenMetadata: true,
@@ -1474,10 +1527,21 @@ const workflowWriteEndpoints = [
       "outOfRangeHandling",
       "missingFieldHandling",
       "protectedSplitRetryConstraints",
+      "itemInternalInstructionHandling",
+      "retryPromptInstructionPolicy",
+      "retryProtectedAnswerLeakagePolicy",
+      "outputWrapperHandling",
       "createdBy",
       "timestamp",
     ],
     requiredNonEmptyArrayFields: ["scoreFieldRequirements"],
+    requiredStringIncludes: {
+      itemInternalInstructionHandling: ["reject", "item"],
+      retryPromptInstructionPolicy: ["not", "item"],
+      retryProtectedAnswerLeakagePolicy: ["no", "protected"],
+      outputWrapperHandling: ["reject", "wrapper"],
+      protectedSplitRetryConstraints: ["no", "protected"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/metric-configs$/, "metric_config_submitted", "metricConfig", adminRoles, {
     allowHiddenMetadata: true,
@@ -1589,6 +1653,15 @@ const workflowWriteEndpoints = [
       "modelPredictionTiePolicy",
       "answerExtractionPolicy",
       "reasoningMode",
+      "itemDataDelimiterPolicy",
+      "instructionHierarchyText",
+      "toolAvailabilityPolicy",
+      "promptInjectionArtifactFlagPolicy",
+      "parserRetryPolicy",
+      "promptExampleItemIds",
+      "promptExamplePositionClusterIds",
+      "promptExampleSplitMembership",
+      "promptExampleExclusionPolicy",
       "createdBy",
       "timestamp",
     ],
@@ -1596,6 +1669,16 @@ const workflowWriteEndpoints = [
     requiredObjectFields: ["modelParameterSettings"],
     requiredArrayIncludes: {
       excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+    },
+    requiredStringIncludes: {
+      itemDataDelimiterPolicy: ["delimiter"],
+      instructionHierarchyText: ["data", "not instruction"],
+      promptInjectionArtifactFlagPolicy: ["flag"],
+      parserRetryPolicy: ["schema", "not item"],
+      promptExampleExclusionPolicy: ["hidden", "protected"],
+    },
+    requiredStringIncludesAny: {
+      toolAvailabilityPolicy: ["no_tools", "disabled", "diagnostic"],
     },
   }),
   workflowWriteSpec(/^\/api\/v1\/evaluations\/(?<id>[^/]+)\/predictions$/, "model_evaluation_prediction_submitted", "modelEvaluationPrediction", adminRoles, {
@@ -1619,10 +1702,26 @@ const workflowWriteEndpoints = [
       "parseStatus",
       "answerExtractionPolicy",
       "reasoningMode",
+      "delimitedItemTextIntegrityStatus",
+      "itemInternalInstructionFlag",
+      "parserRetryInstructionAdherence",
+      "outputSchemaValidationStatus",
+      "toolUseObserved",
+      "rawOutputPreserved",
       "timestamp",
     ],
     requiredObjectFields: ["modelParameterSettings"],
     requiredAnyFields: [["scores", "parsedFullRubricScores", "parsedOverallScore"]],
+    allowedValues: {
+      itemInternalInstructionFlag: ["none_detected", "instruction_like_text_flagged_inert", "model_output_wrapper_flagged_inert"],
+    },
+    requiredExactFields: {
+      delimitedItemTextIntegrityStatus: "delimited_inert_data_preserved",
+      parserRetryInstructionAdherence: "evaluator_prompt_followed_item_text_not_obeyed",
+      outputSchemaValidationStatus: "schema_validated",
+      toolUseObserved: false,
+      rawOutputPreserved: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/evaluations\/(?<id>[^/]+)\/calibrate$/, "calibration_run_submitted", "calibrationRun", adminRoles, {
     allowHiddenMetadata: true,
@@ -2313,6 +2412,9 @@ const workflowWriteEndpoints = [
       "backupSnapshotCoverage",
       "developmentStagingEligibility",
       "restoreTimeRevalidationStatus",
+      "suspectedProtectedContentLeak",
+      "incidentResponsePolicy",
+      "dependentArtifactStalePolicy",
       "createdAt",
       "expiresAt",
     ],
@@ -2324,6 +2426,26 @@ const workflowWriteEndpoints = [
       developmentStagingEligibility: ["revalidation"],
       restoreTimeRevalidationStatus: ["passed"],
     },
+    requiredStringIncludes: {
+      incidentResponsePolicy: ["pause", "stale", "review"],
+      dependentArtifactStalePolicy: ["evaluation", "leaderboard", "label", "export"],
+    },
+    requiredWhen: [
+      {
+        field: "suspectedProtectedContentLeak",
+        equals: true,
+        requiredFields: ["incidentReviewDecision", "dependentArtifactImpactStatus", "submissionLanePauseStatus"],
+        requiredNonEmptyArrayFields: ["incidentErratumLinks", "dependentArtifactClassesStaled"],
+        requiredArrayIncludes: {
+          dependentArtifactClassesStaled: ["evaluations", "leaderboards", "label_snapshots", "exports"],
+        },
+        requiredStringIncludes: {
+          incidentReviewDecision: ["reason"],
+          dependentArtifactImpactStatus: ["stale"],
+          submissionLanePauseStatus: ["pause"],
+        },
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/protected-artifacts\/(?<id>[^/]+)\/revalidate$/, "protected_artifact_revalidation_submitted", "protectedArtifactRevalidation", adminRoles, {
     allowHiddenMetadata: true,
@@ -2497,22 +2619,51 @@ const workflowWriteEndpoints = [
     requiredExactFields: { independenceSeparationOfDutiesStatus: "independent_two_person_approval" },
   }),
   workflowWriteSpec(/^\/api\/v1\/benchmark-submission-policies$/, "benchmark_submission_policy_submitted", "benchmarkSubmissionPolicy", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: ["id", "policyVersion", "aggregateOnlyReport", "submissionBudget", "cooldownPolicy", "hiddenIdExposureProhibited", "perItemFeedbackProhibited", "frozenAt"],
+    requiredFields: benchmarkSubmissionPolicyRequiredFields,
     requiredObjectFields: ["submissionBudget"],
+    requiredObjectKeys: { submissionBudget: benchmarkSubmissionBudgetKeys },
+    requiredPositiveIntegerFields: [
+      "submissionBudget.maxSubmissionsPerWindow",
+      "submissionBudget.windowHours",
+      "submissionBudget.cooldownHours",
+    ],
+    requiredNumberRanges: [
+      { field: "submissionBudget.remainingSubmissions", min: 0 },
+      { field: "submissionBudget.duplicateRunReviewThreshold", min: 0, max: 1 },
+    ],
+    requiredStringIncludes: {
+      cooldownPolicy: ["cooldown"],
+      duplicateRunHandlingPolicy: ["duplicate", "review"],
+      stableEvaluationManifestRequirement: ["stable", "manifest"],
+      aggregateReportFieldPolicy: ["aggregate", "uncertainty", "coverage", "coarse"],
+    },
     requiredExactFields: {
       aggregateOnlyReport: true,
       hiddenIdExposureProhibited: true,
       perItemFeedbackProhibited: true,
+      perPairFeedbackProhibited: true,
+      promptSpecificCorrectionHintsProhibited: true,
     },
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmark_submission_submitted", "benchmarkSubmission", adminRoles, {
-    allowHiddenMetadata: true,
-    requiredFields: ["id", "benchmarkSubmissionPolicyId", "releaseId", "submittedAggregateReportId", "perItemOutputIncluded", "hiddenIdExposureIncluded", "budgetConsumptionStatus", "cooldownStatus", "submittedAt"],
+    requiredFields: benchmarkSubmissionRequiredFields,
+    requiredObjectFields: ["aggregateMetricFamilyResults", "uncertaintyIntervals", "coverageCounts"],
+    requiredNonEmptyArrayFields: ["coarseEligibilityWarnings"],
+    allowedValues: {
+      budgetConsumptionStatus: benchmarkBudgetConsumptionStatuses,
+      cooldownStatus: benchmarkCooldownStatuses,
+      duplicateRunStatus: benchmarkDuplicateRunStatuses,
+    },
     requiredExactFields: {
       perItemOutputIncluded: false,
+      perPairOutputIncluded: false,
       hiddenIdExposureIncluded: false,
+      promptSpecificCorrectionHintsIncluded: false,
     },
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/feature-parity-check$/, "screen_feature_parity_check_submitted", "screenFeatureParityCheck", adminRoles, {
     allowHiddenMetadata: true,
@@ -4666,11 +4817,20 @@ async function benchmarkSubmissionAggregateReportEndpoint(request, response, con
     id: submission.submittedAggregateReportId,
     benchmarkSubmissionId: submission.id,
     releaseId: submission.releaseId,
+    releaseConfigManifestId: submission.releaseConfigManifestId,
+    evaluationManifestId: submission.evaluationManifestId,
     aggregateOnly: true,
     perItemOutputIncluded: false,
+    perPairOutputIncluded: false,
     hiddenIdExposureIncluded: false,
+    promptSpecificCorrectionHintsIncluded: false,
+    aggregateMetricFamilyResults: submission.aggregateMetricFamilyResults,
+    uncertaintyIntervals: submission.uncertaintyIntervals,
+    coverageCounts: submission.coverageCounts,
+    coarseEligibilityWarnings: submission.coarseEligibilityWarnings,
     budgetConsumptionStatus: submission.budgetConsumptionStatus,
     cooldownStatus: submission.cooldownStatus,
+    duplicateRunStatus: submission.duplicateRunStatus,
   });
 }
 
@@ -6664,6 +6824,13 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
     });
     if (conditionalMissingArrays.length) {
       return invalid(`missing required non-empty arrays when ${conditional.field}=${JSON.stringify(observedValue)}: ${conditionalMissingArrays.join(", ")}`);
+    }
+    for (const [fieldPath, requiredValues] of Object.entries(conditional.requiredArrayIncludes ?? {})) {
+      const value = workflowFieldValue(normalized, fieldPath);
+      const missingValues = requiredValues.filter((item) => !Array.isArray(value) || !value.includes(item));
+      if (missingValues.length) {
+        return invalid(`missing required array values in ${fieldPath} when ${conditional.field}=${JSON.stringify(observedValue)}: ${missingValues.join(", ")}`);
+      }
     }
     for (const [fieldPath, expectedValue] of Object.entries(conditional.requiredExactFields ?? {})) {
       const conditionalObserved = workflowFieldValue(normalized, fieldPath);
