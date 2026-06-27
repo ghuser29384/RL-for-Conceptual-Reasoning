@@ -2093,6 +2093,8 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.counts.submittedPublicExamplePracticeSessionCount, 1);
   assert.equal(report.counts.submittedRaterLearningPlanCount, 1);
   assert.equal(report.counts.submittedRaterSessionCount, 1);
+  assert.equal(report.raterSessionRows.at(-1).expectedEffortCompleted, "within_band");
+  assert.equal(report.raterSessionRows.at(-1).qaRoutingStatus, "no_fatigue_qa_route");
   assert.equal(report.counts.submittedAssignmentDeclineCount, 1);
   assert.equal(report.counts.submittedInterpretationTargetMapCount, 1);
   assert.equal(report.counts.submittedVerificationWorkspaceSessionCount, 1);
@@ -2126,6 +2128,26 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
+
+  const unsafeRaterSessionReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    raterSessions: [
+      {
+        ...completeInteractionWorkflowFixtures().raterSessions[0],
+        activeTimeSeconds: -5,
+        expectedEffortCompleted: "rushed_but_accepted",
+        stopAfterCurrentItemState: "ignored",
+        fatigueWarningState: "penalize_label",
+        qaRoutingStatus: "delete_rating",
+      },
+    ],
+  });
+  assert.equal(unsafeRaterSessionReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "activeTimeSeconds"));
+  assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "expectedEffortCompleted"));
+  assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "stopAfterCurrentItemState"));
+  assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "fatigueWarningState"));
+  assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "qaRoutingStatus"));
 
   const unsafeDeclineReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),

@@ -1612,6 +1612,105 @@ test("RLHF90 documented v1 API endpoints route through auth instead of falling t
   assert.deepEqual(misses, []);
 });
 
+test("rater-session pacing endpoints constrain workload states and action-specific transitions", async () => {
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+  const token = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  const baseSession = completeInteractionWorkflowFixtures().raterSession;
+
+  const invalidNegativeTelemetry = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions",
+    headers,
+    body: JSON.stringify({
+      raterSession: {
+        ...baseSession,
+        id: "rater-session-negative-telemetry",
+        activeTimeSeconds: -1,
+      },
+    }),
+  });
+  assert.equal(invalidNegativeTelemetry.status, 400);
+  assert.match(invalidNegativeTelemetry.body.detail, /activeTimeSeconds/);
+
+  const invalidPacingStates = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions",
+    headers,
+    body: JSON.stringify({
+      raterSession: {
+        ...baseSession,
+        id: "rater-session-invalid-states",
+        expectedEffortCompleted: "rushed_but_accepted",
+        stopAfterCurrentItemState: "ignored",
+        fatigueWarningState: "penalize_label",
+        qaRoutingStatus: "delete_rating",
+      },
+    }),
+  });
+  assert.equal(invalidPacingStates.status, 400);
+  assert.match(invalidPacingStates.body.detail, /expectedEffortCompleted|stopAfterCurrentItemState|fatigueWarningState|qaRoutingStatus/);
+
+  const validPause = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions/rater-session-workflow-new/pause",
+    headers,
+    body: JSON.stringify({
+      raterSession: {
+        ...baseSession,
+        id: "rater-session-workflow-new",
+        breakTakenCount: 2,
+        interruptionSummary: "pause requested; ordinary break is not a label-quality penalty",
+      },
+    }),
+  });
+  assert.equal(validPause.status, 201);
+
+  const invalidPause = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions/rater-session-workflow-new/pause",
+    headers,
+    body: JSON.stringify({
+      raterSession: {
+        ...baseSession,
+        id: "rater-session-workflow-new",
+        interruptionSummary: "continued without recording an interruption",
+      },
+    }),
+  });
+  assert.equal(invalidPause.status, 400);
+  assert.match(invalidPause.body.detail, /interruptionSummary/);
+
+  const invalidStopAfterCurrent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions/rater-session-workflow-new/stop-after-current",
+    headers,
+    body: JSON.stringify({
+      raterSession: {
+        ...baseSession,
+        id: "rater-session-workflow-new",
+        stopAfterCurrentItemState: "available",
+      },
+    }),
+  });
+  assert.equal(invalidStopAfterCurrent.status, 400);
+  assert.match(invalidStopAfterCurrent.body.detail, /stopAfterCurrentItemState/);
+
+  const validStopAfterCurrent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-sessions/rater-session-workflow-new/stop-after-current",
+    headers,
+    body: JSON.stringify({
+      raterSession: {
+        ...baseSession,
+        id: "rater-session-workflow-new",
+        stopAfterCurrentItemState: "requested",
+      },
+    }),
+  });
+  assert.equal(validStopAfterCurrent.status, 201);
+});
+
 test("server policy accepts valid blind ratings and hashes audit payloads", () => {
   const rating = validBlindRating("rating-policy-test");
   const validation = validateRatingPayload(rating, "blind_initial_submitted");
@@ -2169,8 +2268,20 @@ test("rating UI exposes RLHF88 task-first simplification, safe actions, and glos
   assert.ok(appSource.includes('"safe_decline_reassign"'));
   assert.ok(appSource.includes('"item_issue_report"'));
   assert.ok(appSource.includes('"source_recognition"'));
+  assert.ok(appSource.includes("persistRatingSelfScreenAction(selectedAssignment, action)"));
+  assert.ok(appSource.includes("createAssignmentSelfScreenPayload(assignment)"));
+  assert.ok(appSource.includes("createAssignmentDeclinePayload(assignment)"));
+  assert.ok(appSource.includes("createItemIssueReportPayload(assignment)"));
+  assert.ok(appSource.includes("createSourceRecognitionPayload(assignment)"));
+  assert.ok(appSource.includes("/api/v1/assignments/${encodeURIComponent(assignment?.id ?? state.selectedAssignmentId)}/decline"));
+  assert.ok(appSource.includes('endpoint: "/api/v1/item-issues"'));
+  assert.ok(appSource.includes("/api/v1/assignments/${encodeURIComponent(assignment?.id ?? state.selectedAssignmentId)}/source-recognition-events"));
   assert.ok(appSource.includes("sessionPacingControls(assignment)"));
   assert.ok(appSource.includes('"stop_after_current"'));
+  assert.ok(appSource.includes("persistRaterSessionAction(selectedAssignment, action)"));
+  assert.ok(appSource.includes("createRaterSessionActionPayload(assignment, action)"));
+  assert.ok(appSource.includes('action === "pause_for_later" ? "pause" : "stop-after-current"'));
+  assert.ok(appSource.includes("/api/v1/rater-sessions/${encodeURIComponent(raterSession.id)}/${pathSuffix}"));
   assert.ok(appSource.includes("rubricQuickAccessPanel()"));
   assert.ok(appSource.includes("<strong>Dead weight</strong> Badness field: 0 is best, 1 is worst."));
   assert.ok(appSource.includes("preSubmitLintPanel()"));

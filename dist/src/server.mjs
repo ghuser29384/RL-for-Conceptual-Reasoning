@@ -127,6 +127,17 @@ const raterSessionRequiredFields = [
   "qaRoutingStatus",
   "timestamp",
 ];
+const raterSessionExpectedEffortStatuses = ["below_band", "within_band", "above_band", "not_enough_data"];
+const raterSessionStopAfterCurrentStates = ["available", "requested", "completed", "not_available"];
+const raterSessionFatigueWarningStates = ["none", "break_recommended", "fatigue_risk_flagged", "routed_to_qa_review"];
+const raterSessionQaRoutingStatuses = [
+  "no_fatigue_qa_route",
+  "monitor_only",
+  "routed_to_qa_fatigue_risk",
+  "routed_to_qa_suspicious_low_effort",
+  "routed_to_qa_repeated_interruption",
+];
+const raterSessionNonNegativeNumberFields = ["activeTimeSeconds", "completedAssignmentCount", "breakPromptCount", "breakTakenCount"];
 const assignmentDeclineRequiredFields = [
   "id",
   "assignmentId",
@@ -1031,22 +1042,52 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions$/, "rater_session_submitted", "raterSession", ratingWorkflowRoles, {
     requiredFields: raterSessionRequiredFields,
+    requiredNumberRanges: raterSessionNonNegativeNumberFields.map((field) => ({ field, min: 0 })),
+    allowedValues: {
+      expectedEffortCompleted: raterSessionExpectedEffortStatuses,
+      stopAfterCurrentItemState: raterSessionStopAfterCurrentStates,
+      fatigueWarningState: raterSessionFatigueWarningStates,
+      qaRoutingStatus: raterSessionQaRoutingStatuses,
+    },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)$/, "rater_session_updated", "raterSession", ratingWorkflowRoles, {
     method: "PATCH",
     pathParamField: "id",
     requiredFields: raterSessionRequiredFields,
+    requiredNumberRanges: raterSessionNonNegativeNumberFields.map((field) => ({ field, min: 0 })),
+    allowedValues: {
+      expectedEffortCompleted: raterSessionExpectedEffortStatuses,
+      stopAfterCurrentItemState: raterSessionStopAfterCurrentStates,
+      fatigueWarningState: raterSessionFatigueWarningStates,
+      qaRoutingStatus: raterSessionQaRoutingStatuses,
+    },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)\/pause$/, "rater_session_paused", "raterSession", ratingWorkflowRoles, {
     pathParamField: "id",
     requiredFields: raterSessionRequiredFields,
+    requiredNumberRanges: raterSessionNonNegativeNumberFields.map((field) => ({ field, min: 0 })),
+    allowedValues: {
+      expectedEffortCompleted: raterSessionExpectedEffortStatuses,
+      stopAfterCurrentItemState: raterSessionStopAfterCurrentStates,
+      fatigueWarningState: raterSessionFatigueWarningStates,
+      qaRoutingStatus: raterSessionQaRoutingStatuses,
+    },
+    requiredStringIncludes: { interruptionSummary: ["pause"] },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)\/stop-after-current$/, "rater_session_stop_after_current", "raterSession", ratingWorkflowRoles, {
     pathParamField: "id",
     requiredFields: raterSessionRequiredFields,
+    requiredNumberRanges: raterSessionNonNegativeNumberFields.map((field) => ({ field, min: 0 })),
+    allowedValues: {
+      expectedEffortCompleted: raterSessionExpectedEffortStatuses,
+      stopAfterCurrentItemState: raterSessionStopAfterCurrentStates,
+      fatigueWarningState: raterSessionFatigueWarningStates,
+      qaRoutingStatus: raterSessionQaRoutingStatuses,
+    },
+    requiredExactFields: { stopAfterCurrentItemState: "requested" },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/practice-sessions$/, "public_example_practice_session_submitted", "publicExamplePracticeSession", ratingWorkflowRoles, {

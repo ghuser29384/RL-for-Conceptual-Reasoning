@@ -92,6 +92,10 @@ const state = {
     status: "not_needed",
     note: "No separate check needed.",
   },
+  ratingSessionStartedAt: new Date().toISOString(),
+  ratingSessionStartedAtMs: Date.now(),
+  ratingSessionBreakTakenCount: 0,
+  ratingSessionStopAfterCurrentItemState: "available",
   authConfig: null,
   clerk: null,
   clerkSubscribed: false,
@@ -4737,8 +4741,30 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     render();
   });
   document.querySelectorAll("[data-rating-workflow-action]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const action = button.getAttribute("data-rating-workflow-action");
+      if (["safe_continue", "safe_decline_reassign", "item_issue_report", "source_recognition"].includes(action)) {
+        state.lastRatingWorkflowStatus = {
+          tone: "warn",
+          title: "Recording self-screen action",
+          detail: `Submitting ${humanize(action)} to the assignment workflow.`,
+        };
+        render();
+        state.lastRatingWorkflowStatus = await persistRatingSelfScreenAction(selectedAssignment, action);
+        render();
+        return;
+      }
+      if (action === "pause_for_later" || action === "stop_after_current") {
+        state.lastRatingWorkflowStatus = {
+          tone: "warn",
+          title: "Recording session pacing",
+          detail: `Submitting ${humanize(action)} to the rater-session workflow.`,
+        };
+        render();
+        state.lastRatingWorkflowStatus = await persistRaterSessionAction(selectedAssignment, action);
+        render();
+        return;
+      }
       state.lastRatingWorkflowStatus = ratingWorkflowActionStatus(action);
       render();
     });
@@ -5011,6 +5037,107 @@ function ratingWorkflowActionStatus(action) {
     tone: "warn",
     title: "Workflow action selected",
     detail: "No label mutation was performed.",
+  };
+}
+
+function currentRaterSessionId(assignment) {
+  return `rater-session-ui-${assignment?.id ?? state.selectedAssignmentId}`;
+}
+
+function createRaterSessionActionPayload(assignment, action) {
+  const now = new Date().toISOString();
+  const activeTimeSeconds = Math.max(0, Math.round((Date.now() - state.ratingSessionStartedAtMs) / 1000));
+  const sessionId = currentRaterSessionId(assignment);
+  const stopAfterCurrentItemState = action === "stop_after_current" ? "requested" : state.ratingSessionStopAfterCurrentItemState;
+  const breakTakenCount = action === "pause_for_later" ? state.ratingSessionBreakTakenCount + 1 : state.ratingSessionBreakTakenCount;
+  return {
+    id: sessionId,
+    raterId: state.session?.user?.id ?? "demo-rater",
+    sessionTarget: "ordinary_live_rating_60_minutes",
+    startedAt: state.ratingSessionStartedAt,
+    endedAt: now,
+    activeTimeSeconds,
+    completedAssignmentCount: state.ratings.filter((rating) => rating.kind === "blind_initial" && rating.raterId === (state.session?.user?.id ?? "demo-rater")).length,
+    expectedEffortCompleted: activeTimeSeconds < 300 ? "below_band" : activeTimeSeconds > 3600 ? "above_band" : "within_band",
+    breakPromptCount: 1,
+    breakTakenCount,
+    stopAfterCurrentItemState,
+    fatigueWarningState: activeTimeSeconds > 3600 ? "break_recommended" : "none",
+    interruptionSummary:
+      action === "pause_for_later"
+        ? "pause requested; ordinary break is not a label-quality penalty"
+        : "stop-after-current requested; ordinary pacing is not a label-quality penalty",
+    qaRoutingStatus: activeTimeSeconds > 7200 ? "monitor_only" : "no_fatigue_qa_route",
+    timestamp: now,
+  };
+}
+
+function itemKeyForAssignment(assignment) {
+  return `${assignment?.positionId ?? "unknown-position"}::${assignment?.critiqueId ?? "unknown-critique"}`;
+}
+
+function createAssignmentSelfScreenPayload(assignment, status = "safe_continue") {
+  return {
+    id: `assignment-self-screen-ui-${assignment?.id ?? state.selectedAssignmentId}-${Date.now()}`,
+    assignmentId: assignment?.id ?? state.selectedAssignmentId,
+    raterId: state.session?.user?.id ?? "demo-rater",
+    selfScreenStatus: status,
+    sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createAssignmentDeclinePayload(assignment) {
+  return {
+    id: `assignment-decline-ui-${assignment?.id ?? state.selectedAssignmentId}-${Date.now()}`,
+    assignmentId: assignment?.id ?? state.selectedAssignmentId,
+    raterId: state.session?.user?.id ?? "demo-rater",
+    itemKeys: [itemKeyForAssignment(assignment)],
+    reasonCode: "insufficient_time",
+    freeTextNote: "Rater requested reassignment before scoring through the blind-safe self-screen.",
+    priorExposureConflictFlag: false,
+    topicFitUpdateSuggestion: "route to another eligible rater without exposing labels or protected status",
+    reassignmentStatus: "reassigned_without_label",
+    qaRoutingStatus: "monitor_only",
+    repeatedOrStrategicDeclineQaPolicy: "repeated or suspicious safe-decline patterns route to QA review",
+    sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+    excludedFromRatingDenominator: true,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createItemIssueReportPayload(assignment) {
+  return {
+    id: `item-issue-ui-${assignment?.id ?? state.selectedAssignmentId}-${Date.now()}`,
+    reporterId: state.session?.user?.id ?? "demo-rater",
+    reporterRole: state.session?.user?.role ?? "graduate",
+    positionId: assignment?.positionId ?? null,
+    critiqueId: assignment?.critiqueId ?? null,
+    assignmentId: assignment?.id ?? state.selectedAssignmentId,
+    issueCategory: "missing_context",
+    severity: "medium",
+    blindSafeReporterNote: "Rater opened the blind-safe item issue path without source, label, model, or protected-status visibility.",
+    reporterExposureState: "initial_blind",
+    labelVisibilityStateForTriage: "hidden",
+    modelResultVisibilityStateForTriage: "hidden",
+    triageState: "label_model_result_blind_review",
+    quarantineStalePropagationState: "quarantine_stale_propagation_pending_review",
+    excludedFromLabelDenominator: true,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function createSourceRecognitionPayload(assignment) {
+  return {
+    id: `source-recognition-ui-${assignment?.id ?? state.selectedAssignmentId}-${Date.now()}`,
+    assignmentId: assignment?.id ?? state.selectedAssignmentId,
+    raterId: state.session?.user?.id ?? "demo-rater",
+    recognitionType: "source_recognized",
+    raterAction: "safe_decline",
+    independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator",
+    protectedStatusHiddenFromRater: true,
+    reviewerResolution: "paused_and_reassigned",
+    timestamp: new Date().toISOString(),
   };
 }
 
@@ -5862,6 +5989,116 @@ function createVolunteerWithdrawalPayload(requestType) {
     requesterNotificationStatus: "notified",
     timestamp: new Date().toISOString(),
   };
+}
+
+async function persistRaterSessionAction(assignment, action) {
+  const raterSession = createRaterSessionActionPayload(assignment, action);
+  const pathSuffix = action === "pause_for_later" ? "pause" : "stop-after-current";
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch(`/api/v1/rater-sessions/${encodeURIComponent(raterSession.id)}/${pathSuffix}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ raterSession }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Session pacing rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the rater-session event.",
+      };
+    }
+    if (action === "pause_for_later") state.ratingSessionBreakTakenCount = raterSession.breakTakenCount;
+    if (action === "stop_after_current") state.ratingSessionStopAfterCurrentItemState = "requested";
+    return {
+      tone: "good",
+      title: action === "pause_for_later" ? "Pause recorded" : "Stop-after-current recorded",
+      detail: `${body.resourceId} stored as ${body.eventId.slice(0, 8)} with ${body.payloadHash.slice(0, 18)}...`,
+    };
+  } catch (error) {
+    return {
+      tone: "warn",
+      title: "Session pacing not persisted",
+      detail: error instanceof Error ? error.message : "Server API unavailable.",
+    };
+  }
+}
+
+function ratingSelfScreenRequest(assignment, action) {
+  if (action === "safe_continue") {
+    return {
+      endpoint: `/api/v1/assignments/${encodeURIComponent(assignment?.id ?? state.selectedAssignmentId)}/self-screen`,
+      resourceKey: "assignmentSelfScreen",
+      resource: createAssignmentSelfScreenPayload(assignment),
+      successTitle: "Self-screen recorded",
+    };
+  }
+  if (action === "safe_decline_reassign") {
+    return {
+      endpoint: `/api/v1/assignments/${encodeURIComponent(assignment?.id ?? state.selectedAssignmentId)}/decline`,
+      resourceKey: "assignmentDecline",
+      resource: createAssignmentDeclinePayload(assignment),
+      successTitle: "Reassignment request recorded",
+    };
+  }
+  if (action === "item_issue_report") {
+    return {
+      endpoint: "/api/v1/item-issues",
+      resourceKey: "itemIssueReport",
+      resource: createItemIssueReportPayload(assignment),
+      successTitle: "Item issue recorded",
+    };
+  }
+  if (action === "source_recognition") {
+    return {
+      endpoint: `/api/v1/assignments/${encodeURIComponent(assignment?.id ?? state.selectedAssignmentId)}/source-recognition-events`,
+      resourceKey: "sourceRecognitionEvent",
+      resource: createSourceRecognitionPayload(assignment),
+      successTitle: "Source recognition recorded",
+    };
+  }
+  return null;
+}
+
+async function persistRatingSelfScreenAction(assignment, action) {
+  const request = ratingSelfScreenRequest(assignment, action);
+  if (!request) return ratingWorkflowActionStatus(action);
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch(request.endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ [request.resourceKey]: request.resource }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Self-screen action rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the self-screen workflow event.",
+      };
+    }
+    return {
+      tone: "good",
+      title: request.successTitle,
+      detail: `${body.resourceKey}:${body.resourceId} stored as ${body.eventId.slice(0, 8)} with ${body.payloadHash.slice(0, 18)}...`,
+    };
+  } catch (error) {
+    return {
+      tone: "warn",
+      title: "Self-screen action not persisted",
+      detail: error instanceof Error ? error.message : "Server API unavailable.",
+    };
+  }
 }
 
 async function persistRating(endpoint, rating) {

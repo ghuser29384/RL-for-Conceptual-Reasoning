@@ -13115,6 +13115,17 @@ const DISCUSSION_ROLE_REVEAL_POLICIES = [
   "adjudicator_visibility_exception_logged",
 ];
 
+const RATER_SESSION_EXPECTED_EFFORT_STATUSES = ["below_band", "within_band", "above_band", "not_enough_data"];
+const RATER_SESSION_STOP_AFTER_CURRENT_STATES = ["available", "requested", "completed", "not_available"];
+const RATER_SESSION_FATIGUE_WARNING_STATES = ["none", "break_recommended", "fatigue_risk_flagged", "routed_to_qa_review"];
+const RATER_SESSION_QA_ROUTING_STATUSES = [
+  "no_fatigue_qa_route",
+  "monitor_only",
+  "routed_to_qa_fatigue_risk",
+  "routed_to_qa_suspicious_low_effort",
+  "routed_to_qa_repeated_interruption",
+];
+
 const REQUIRED_QUEUE_POLICY_COMPONENTS = [
   "live_gold_duplicate_validation_mix",
   "topic_routing",
@@ -14447,6 +14458,18 @@ function interactionWorkflowArtifactSpecs(releaseId) {
         "timestamp",
       ],
       numericFields: ["activeTimeSeconds", "completedAssignmentCount", "breakPromptCount", "breakTakenCount"],
+      numericRanges: [
+        { field: "activeTimeSeconds", min: 0 },
+        { field: "completedAssignmentCount", min: 0 },
+        { field: "breakPromptCount", min: 0 },
+        { field: "breakTakenCount", min: 0 },
+      ],
+      enumFields: {
+        expectedEffortCompleted: RATER_SESSION_EXPECTED_EFFORT_STATUSES,
+        stopAfterCurrentItemState: RATER_SESSION_STOP_AFTER_CURRENT_STATES,
+        fatigueWarningState: RATER_SESSION_FATIGUE_WARNING_STATES,
+        qaRoutingStatus: RATER_SESSION_QA_ROUTING_STATUSES,
+      },
       seedRows: defaults.raterSessions,
     },
     {
