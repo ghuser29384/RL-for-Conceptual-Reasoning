@@ -11748,7 +11748,17 @@ const REQUIRED_SCORE_INPUT_SPLITS = ["release_critical", "validation", "hidden_b
 const REQUIRED_SERVER_SIDE_DRAFT_LANES = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const PROHIBITED_DRAFT_CLIENT_PERSISTENCE = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const REQUIRED_RUBRIC_LINT_RULES = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
-const REQUIRED_ITEM_ISSUE_CATEGORIES = ["source_leakage", "missing_context", "malformed_text", "duplicate_or_near_duplicate", "nonconceptual_or_scope", "translation_or_adaptation_error", "rights_or_provenance", "rubric_or_ui_render_defect"];
+const REQUIRED_ITEM_ISSUE_CATEGORIES = [
+  "source_leakage",
+  "missing_context",
+  "malformed_text",
+  "duplicate_or_near_duplicate",
+  "nonconceptual_or_scope",
+  "translation_or_adaptation_error",
+  "rights_or_provenance",
+  "rubric_or_ui_render_defect",
+  "external_assistance_or_exfiltration",
+];
 const REQUIRED_PROTECTED_ARTIFACT_TYPES = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 
 function defaultTaskOutputEligibilityPolicy(releaseId) {
@@ -11877,7 +11887,7 @@ function defaultItemIssueReport(releaseId) {
     labelVisibilityStateForTriage: "hidden",
     modelResultVisibilityStateForTriage: "hidden",
     triageState: "label_model_result_blind_review",
-    quarantineStalePropagationState: "quarantine_pending_review",
+    quarantineStalePropagationState: "quarantine_stale_propagation_pending_review",
     excludedFromLabelDenominator: true,
     createdAt: "2026-10-01T00:00:00.000Z",
   };
@@ -12439,8 +12449,8 @@ function normalizeItemIssueReport(report, rowSource) {
     report.labelVisibilityStateForTriage === "hidden" ? null : "labelVisibilityStateForTriage",
     report.modelResultVisibilityStateForTriage === "hidden" ? null : "modelResultVisibilityStateForTriage",
     policyMentions(report.triageState, ["blind"]) ? null : "triageState",
-    requiredPromptFieldReason("quarantineStalePropagationState", report.quarantineStalePropagationState),
-    typeof report.excludedFromLabelDenominator === "boolean" ? null : "excludedFromLabelDenominator",
+    policyMentions(report.quarantineStalePropagationState, ["quarantine", "stale", "propagation"]) ? null : "quarantineStalePropagationState",
+    report.excludedFromLabelDenominator === true ? null : "excludedFromLabelDenominator",
   ].filter(Boolean);
   return {
     id,
@@ -12827,6 +12837,10 @@ const REQUIRED_QUEUE_POLICY_COMPONENTS = [
   "same_position_order",
   "randomization_stratification_seed",
 ];
+
+const ASSIGNMENT_DECLINE_REASON_CODES = ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"];
+const ASSIGNMENT_DECLINE_REASSIGNMENT_STATUSES = ["reassigned_without_label", "paused_for_topic_fit_review", "closed_no_reassignment_needed"];
+const ASSIGNMENT_DECLINE_QA_ROUTING_STATUSES = ["monitor_only", "routed_to_qa_repeated_decline", "routed_to_qa_suspicious_pattern"];
 
 const RATER_ITEM_CONFLICT_TYPES = [
   "authored_position",
@@ -13882,6 +13896,7 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         topicFitUpdateSuggestion: "avoid same source family",
         reassignmentStatus: "reassigned_without_label",
         qaRoutingStatus: "monitor_only",
+        repeatedOrStrategicDeclineQaPolicy: "repeated or suspicious safe-decline patterns route to QA review",
         sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
         excludedFromRatingDenominator: true,
         timestamp: "2026-10-01T00:00:00.000Z",
@@ -14113,12 +14128,19 @@ function interactionWorkflowArtifactSpecs(releaseId) {
         "topicFitUpdateSuggestion",
         "reassignmentStatus",
         "qaRoutingStatus",
+        "repeatedOrStrategicDeclineQaPolicy",
         "sourcePeerModelGoldProtectedLabelVisibilityState",
         "timestamp",
       ],
       arrayFields: ["itemKeys"],
-      enumFields: { reasonCode: ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"] },
+      enumFields: {
+        reasonCode: ASSIGNMENT_DECLINE_REASON_CODES,
+        reassignmentStatus: ASSIGNMENT_DECLINE_REASSIGNMENT_STATUSES,
+        qaRoutingStatus: ASSIGNMENT_DECLINE_QA_ROUTING_STATUSES,
+      },
       booleanTrueFields: ["excludedFromRatingDenominator"],
+      exactFields: { sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden" },
+      stringIncludes: { repeatedOrStrategicDeclineQaPolicy: ["repeated", "suspicious", "qa"] },
       seedRows: defaults.assignmentDeclines,
     },
     {
@@ -14349,6 +14371,11 @@ function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
     ...((spec.numericFields ?? []).map((field) => Number.isFinite(resource[field]) ? null : field)),
     ...((spec.booleanTrueFields ?? []).map((field) => resource[field] === true ? null : field)),
     ...((spec.booleanFalseFields ?? []).map((field) => resource[field] === false ? null : field)),
+    ...Object.entries(spec.exactFields ?? {}).map(([field, expectedValue]) => resource[field] === expectedValue ? null : field),
+    ...Object.entries(spec.stringIncludes ?? {}).flatMap(([field, requiredFragments]) => {
+      const normalized = String(resource[field] ?? "").toLowerCase();
+      return requiredFragments.filter((fragment) => !normalized.includes(String(fragment).toLowerCase())).map((fragment) => `${field}:${fragment}`);
+    }),
     ...((spec.oneOfFields ?? []).map((fields) => fields.some((field) => resource[field] !== undefined && resource[field] !== null && resource[field] !== "") ? null : fields.join("|"))),
     ...Object.entries(spec.enumFields ?? {}).map(([field, allowedValues]) => allowedValues.includes(resource[field]) ? null : field),
     ...((spec.distinctFieldSets ?? []).map((fields) => {
@@ -14406,7 +14433,26 @@ const REQUIRED_QUEUE_FRESHNESS_LANES = [
   "delayed_report",
 ];
 
-const REQUIRED_QUEUE_REVALIDATION_CHECKS = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const REQUIRED_QUEUE_REVALIDATION_CHECKS = [
+  "item_text",
+  "rubric",
+  "ui_render",
+  "workflow",
+  "split_protection",
+  "release_config_manifest",
+  "rater_eligibility",
+  "artifact_dependency",
+];
+
+const REQUIRED_QUEUE_HEALTH_CHECKS = [
+  "dependency_version_drift",
+  "age_window",
+  "backpressure_depth",
+  "authorization_current",
+  "side_effect_suppression",
+];
+
+const REQUIRED_QUEUE_STALE_TRANSITION_OUTCOMES = ["dependency_change_blocked", "age_window_enforced", "backpressure_window_enforced"];
 
 const REQUIRED_CLIENT_SURFACES = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
 
@@ -14480,11 +14526,16 @@ function defaultQueueFreshnessPolicies(releaseId) {
     lane,
     freshnessWindowMinutes: 60 + index,
     dependencyRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
+    backpressureThreshold: 100 + index,
     staleBehavior: lane === "outbox" ? "suppress" : "stale",
+    sideChannelSafeNotificationBehavior: "generic delay or unavailable notification with no protected-status detail",
+    queueHealthChecks: REQUIRED_QUEUE_HEALTH_CHECKS,
     workerConsumeRevalidationRequired: true,
     renderRevalidationRequired: true,
     submitRevalidationRequired: true,
     backpressureBehavior: "pause_or_recompute_before_side_effect",
+    createdBy: "seed-release-admin",
+    frozenAt: "2026-10-01T00:00:00.000Z",
     activatedAt: "2026-10-01T00:00:00.000Z",
   }));
 }
@@ -14852,16 +14903,25 @@ function normalizeQueueFreshnessPolicy(policy, rowSource) {
   if (!id) return null;
   const lane = policy.lane ?? policy.queueLane ?? null;
   const dependencyRevalidationChecks = normalizeStringArray(policy.dependencyRevalidationChecks);
+  const queueHealthChecks = normalizeStringArray(policy.queueHealthChecks);
   const missingChecks = REQUIRED_QUEUE_REVALIDATION_CHECKS.filter((check) => !dependencyRevalidationChecks.includes(check));
+  const missingHealthChecks = REQUIRED_QUEUE_HEALTH_CHECKS.filter((check) => !queueHealthChecks.includes(check));
   const reviewReasons = [
     REQUIRED_QUEUE_FRESHNESS_LANES.includes(lane) ? null : "lane",
     Number.isFinite(policy.freshnessWindowMinutes) && policy.freshnessWindowMinutes > 0 ? null : "freshnessWindowMinutes",
     missingChecks.length ? `dependencyRevalidationChecks:${missingChecks.join(",")}` : null,
+    Number.isFinite(policy.backpressureThreshold) && policy.backpressureThreshold > 0 ? null : "backpressureThreshold",
     ["stale", "paused", "pause", "cancel", "cancelled", "recompute", "suppress"].includes(policy.staleBehavior) ? null : "staleBehavior",
+    policyMentions(policy.sideChannelSafeNotificationBehavior, ["generic"]) && policyMentions(policy.sideChannelSafeNotificationBehavior, ["protected"])
+      ? null
+      : "sideChannelSafeNotificationBehavior",
+    missingHealthChecks.length ? `queueHealthChecks:${missingHealthChecks.join(",")}` : null,
     policy.workerConsumeRevalidationRequired === true ? null : "workerConsumeRevalidationRequired",
     policy.renderRevalidationRequired === true ? null : "renderRevalidationRequired",
     policy.submitRevalidationRequired === true ? null : "submitRevalidationRequired",
     policyMentions(policy.backpressureBehavior, ["pause"]) || policyMentions(policy.backpressureBehavior, ["recompute"]) ? null : "backpressureBehavior",
+    requiredPromptFieldReason("createdBy", policy.createdBy ?? policy.created_by),
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
   ].filter(Boolean);
   return {
     id,
@@ -14871,10 +14931,16 @@ function normalizeQueueFreshnessPolicy(policy, rowSource) {
     freshnessWindowMinutes: policy.freshnessWindowMinutes ?? null,
     dependencyRevalidationChecks,
     missingChecks,
+    backpressureThreshold: policy.backpressureThreshold ?? null,
     staleBehavior: policy.staleBehavior ?? null,
+    sideChannelSafeNotificationBehavior: policy.sideChannelSafeNotificationBehavior ?? null,
+    queueHealthChecks,
+    missingHealthChecks,
     workerConsumeRevalidationRequired: policy.workerConsumeRevalidationRequired === true,
     renderRevalidationRequired: policy.renderRevalidationRequired === true,
     submitRevalidationRequired: policy.submitRevalidationRequired === true,
+    createdBy: policy.createdBy ?? policy.created_by ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
     reviewReasons,
     status: reviewReasons.length ? "queue_freshness_policy_review_required" : "queue_freshness_policy_complete",
   };
@@ -14886,20 +14952,47 @@ function normalizeQueueStaleByDelayScan(scan, policyRows, rowSource) {
   const lane = scan.lane ?? null;
   const policyRow = policyRows.find((row) => row.lane === lane && row.reviewReasons.length === 0);
   const staleCount = Number(scan.staleCount ?? 0);
+  const dependencyRevalidationChecks = normalizeStringArray(scan.dependencyRevalidationChecks);
+  const queueHealthChecks = normalizeStringArray(scan.queueHealthChecks);
+  const staleTransitionOutcomes = normalizeStringArray(scan.staleTransitionOutcomes);
+  const missingChecks = REQUIRED_QUEUE_REVALIDATION_CHECKS.filter((check) => !dependencyRevalidationChecks.includes(check));
+  const missingHealthChecks = REQUIRED_QUEUE_HEALTH_CHECKS.filter((check) => !queueHealthChecks.includes(check));
+  const missingTransitionOutcomes = REQUIRED_QUEUE_STALE_TRANSITION_OUTCOMES.filter((outcome) => !staleTransitionOutcomes.includes(outcome));
   const reviewReasons = [
     policyRow ? null : "lane",
+    policyRow && scan.policyId === policyRow.id ? null : "policyId",
     scan.scanStatus === "passed" ? null : "scanStatus",
-    Number.isFinite(staleCount) ? null : "staleCount",
-    normalizeStringArray(scan.dependencyRevalidationChecks).length ? null : "dependencyRevalidationChecks",
+    Number.isFinite(staleCount) && staleCount > 0 ? null : "staleCount",
+    policyRow && Number.isFinite(scan.maxObservedAgeMinutes) && scan.maxObservedAgeMinutes >= policyRow.freshnessWindowMinutes ? null : "maxObservedAgeMinutes",
+    policyRow && scan.backpressureThreshold === policyRow.backpressureThreshold ? null : "backpressureThreshold",
+    missingChecks.length ? `dependencyRevalidationChecks:${missingChecks.join(",")}` : null,
+    scan.staleTransitionBehavior === policyRow?.staleBehavior ? null : "staleTransitionBehavior",
+    missingTransitionOutcomes.length ? `staleTransitionOutcomes:${missingTransitionOutcomes.join(",")}` : null,
+    missingHealthChecks.length ? `queueHealthChecks:${missingHealthChecks.join(",")}` : null,
+    scan.workerConsumeRevalidationConfirmed === true ? null : "workerConsumeRevalidationConfirmed",
+    scan.sideEffectSuppressionConfirmed === true ? null : "sideEffectSuppressionConfirmed",
+    scan.sideChannelSafeNotificationConfirmed === true ? null : "sideChannelSafeNotificationConfirmed",
     requiredPromptFieldReason("scannedAt", scan.scannedAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    policyId: scan.policyId ?? null,
     lane,
     scanStatus: scan.scanStatus ?? null,
     staleCount,
-    dependencyRevalidationChecks: normalizeStringArray(scan.dependencyRevalidationChecks),
+    maxObservedAgeMinutes: scan.maxObservedAgeMinutes ?? null,
+    backpressureThreshold: scan.backpressureThreshold ?? null,
+    dependencyRevalidationChecks,
+    missingChecks,
+    staleTransitionBehavior: scan.staleTransitionBehavior ?? null,
+    staleTransitionOutcomes,
+    missingTransitionOutcomes,
+    queueHealthChecks,
+    missingHealthChecks,
+    workerConsumeRevalidationConfirmed: scan.workerConsumeRevalidationConfirmed === true,
+    sideEffectSuppressionConfirmed: scan.sideEffectSuppressionConfirmed === true,
+    sideChannelSafeNotificationConfirmed: scan.sideChannelSafeNotificationConfirmed === true,
     scannedAt: scan.scannedAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "queue_stale_by_delay_scan_review_required" : "queue_stale_by_delay_scan_complete",
@@ -15059,7 +15152,9 @@ function queueFreshnessLaneEvidenceRow(lane, policyRows, scanRows) {
     queueFreshnessPolicyId: policyRow?.id ?? null,
     queueStaleByDelayScanId: scanRow?.id ?? null,
     freshnessWindowMinutes: policyRow?.freshnessWindowMinutes ?? null,
+    backpressureThreshold: policyRow?.backpressureThreshold ?? null,
     staleBehavior: policyRow?.staleBehavior ?? null,
+    staleTransitionBehavior: scanRow?.staleTransitionBehavior ?? null,
     status: policyRow && scanRow ? "queue_freshness_lane_complete" : policyRow ? "queue_stale_by_delay_scan_missing" : "queue_freshness_policy_missing",
   };
 }

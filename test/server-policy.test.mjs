@@ -331,7 +331,24 @@ const policyActionKinds = [
 ];
 const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
 const queueFreshnessLanes = ["assignment", "draft", "discussion", "adjudication", "model_evaluation_job", "hidden_benchmark_submission", "export", "outbox", "delayed_report"];
-const queueRevalidationChecks = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const queueRevalidationChecks = [
+  "item_text",
+  "rubric",
+  "ui_render",
+  "workflow",
+  "split_protection",
+  "release_config_manifest",
+  "rater_eligibility",
+  "artifact_dependency",
+];
+const queueHealthChecks = [
+  "dependency_version_drift",
+  "age_window",
+  "backpressure_depth",
+  "authorization_current",
+  "side_effect_suppression",
+];
+const queueStaleTransitionOutcomes = ["dependency_change_blocked", "age_window_enforced", "backpressure_window_enforced"];
 const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
 const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
@@ -651,18 +668,32 @@ function completeOperationalControlWorkflowFixtures() {
       lane,
       freshnessWindowMinutes: 45 + index,
       dependencyRevalidationChecks: queueRevalidationChecks,
+      backpressureThreshold: 90 + index,
       staleBehavior: lane === "outbox" ? "suppress" : "stale",
+      sideChannelSafeNotificationBehavior: "generic delay notice with no protected-status detail",
+      queueHealthChecks,
       workerConsumeRevalidationRequired: true,
       renderRevalidationRequired: true,
       submitRevalidationRequired: true,
       backpressureBehavior: "pause or recompute before side effects",
+      createdBy: "release-admin",
+      frozenAt: "2026-10-01T00:14:30.000Z",
     })),
-    queueStaleByDelayScans: queueFreshnessLanes.map((lane) => ({
+    queueStaleByDelayScans: queueFreshnessLanes.map((lane, index) => ({
       id: `queue-stale-scan-workflow-${lane}`,
+      policyId: `queue-freshness-workflow-${lane}`,
       lane,
       scanStatus: "passed",
-      staleCount: 0,
+      staleCount: 1,
+      maxObservedAgeMinutes: 50 + index,
+      backpressureThreshold: 90 + index,
       dependencyRevalidationChecks: queueRevalidationChecks,
+      staleTransitionBehavior: lane === "outbox" ? "suppress" : "stale",
+      staleTransitionOutcomes: queueStaleTransitionOutcomes,
+      queueHealthChecks,
+      workerConsumeRevalidationConfirmed: true,
+      sideEffectSuppressionConfirmed: true,
+      sideChannelSafeNotificationConfirmed: true,
       scannedAt: "2026-10-01T00:15:00.000Z",
     })),
     clientSurfaceIntegrityPolicies,
@@ -872,7 +903,7 @@ function completeRatingExperienceWorkflowFixtures() {
       labelVisibilityStateForTriage: "hidden",
       modelResultVisibilityStateForTriage: "hidden",
       triageState: "label_model_result_blind_review",
-      quarantineStalePropagationState: "quarantine_pending_review",
+      quarantineStalePropagationState: "quarantine_stale_propagation_pending_review",
       excludedFromLabelDenominator: true,
       createdAt: "2026-10-01T00:25:00.000Z",
     },
@@ -1270,6 +1301,7 @@ function completeInteractionWorkflowFixtures() {
       topicFitUpdateSuggestion: "avoid same source family",
       reassignmentStatus: "reassigned_without_label",
       qaRoutingStatus: "monitor_only",
+      repeatedOrStrategicDeclineQaPolicy: "repeated or suspicious safe-decline patterns route to QA review",
       sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
       excludedFromRatingDenominator: true,
       timestamp: "2026-10-01T00:46:00.000Z",
@@ -6407,6 +6439,66 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(nonBlindItemIssueReport.status, 400);
   assert.match(nonBlindItemIssueReport.body.detail, /labelVisibilityStateForTriage/);
 
+  const modelVisibleItemIssueReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      itemIssueReport: {
+        ...ratingExperience.itemIssueReport,
+        id: "item-issue-workflow-model-visible",
+        modelResultVisibilityStateForTriage: "visible",
+      },
+    }),
+  });
+  assert.equal(modelVisibleItemIssueReport.status, 400);
+  assert.match(modelVisibleItemIssueReport.body.detail, /modelResultVisibilityStateForTriage/);
+
+  const weakQuarantineItemIssueReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      itemIssueReport: {
+        ...ratingExperience.itemIssueReport,
+        id: "item-issue-workflow-weak-quarantine",
+        quarantineStalePropagationState: "quarantine_pending_review",
+      },
+    }),
+  });
+  assert.equal(weakQuarantineItemIssueReport.status, 400);
+  assert.match(weakQuarantineItemIssueReport.body.detail, /quarantineStalePropagationState/);
+
+  const denominatorItemIssueReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      itemIssueReport: {
+        ...ratingExperience.itemIssueReport,
+        id: "item-issue-workflow-denominator",
+        excludedFromLabelDenominator: false,
+      },
+    }),
+  });
+  assert.equal(denominatorItemIssueReport.status, 400);
+  assert.match(denominatorItemIssueReport.body.detail, /excludedFromLabelDenominator/);
+
+  const invalidCategoryItemIssueReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      itemIssueReport: {
+        ...ratingExperience.itemIssueReport,
+        id: "item-issue-workflow-invalid-category",
+        issueCategory: "benchmark_too_hard",
+      },
+    }),
+  });
+  assert.equal(invalidCategoryItemIssueReport.status, 400);
+  assert.match(invalidCategoryItemIssueReport.body.detail, /issueCategory/);
+
   const staleRatingDraftSession = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rating-draft-sessions",
@@ -6582,6 +6674,61 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(itemIssueById.status, 200);
   assert.equal(itemIssueById.body.labelVisibilityStateForTriage, "hidden");
+
+  const itemIssueTriageAction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues/item-issue-workflow-new/triage",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueAction: {
+        id: "item-issue-action-workflow-triage",
+        notes: "Open blind triage without label or model-result visibility.",
+      },
+    }),
+  });
+  assert.equal(itemIssueTriageAction.status, 201);
+
+  const visibleItemIssueAction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues/item-issue-workflow-new/triage",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueAction: {
+        id: "item-issue-action-workflow-visible",
+        labelVisibilityStateForTriage: "labels_visible_to_triage",
+      },
+    }),
+  });
+  assert.equal(visibleItemIssueAction.status, 400);
+  assert.match(visibleItemIssueAction.body.detail, /labelVisibilityStateForTriage/);
+
+  const hiddenMetadataItemIssueAction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues/item-issue-workflow-new/triage",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueAction: {
+        id: "item-issue-action-workflow-hidden-metadata",
+        sourceCategory: "coursework_derived",
+      },
+    }),
+  });
+  assert.equal(hiddenMetadataItemIssueAction.status, 400);
+  assert.match(hiddenMetadataItemIssueAction.body.detail, /hidden metadata keys/);
+
+  const weakQuarantineAction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues/item-issue-workflow-new/quarantine",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueAction: {
+        id: "item-issue-action-workflow-weak-quarantine",
+        quarantineScope: "none",
+      },
+    }),
+  });
+  assert.equal(weakQuarantineAction.status, 400);
+  assert.match(weakQuarantineAction.body.detail, /quarantineScope/);
 
   const scoreConfidenceById = await invokeApi(context, {
     method: "GET",
@@ -7402,6 +7549,51 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteAssignmentDecline.status, 400);
   assert.match(incompleteAssignmentDecline.body.detail, /freeTextNote/);
 
+  const unsupportedAssignmentDeclineReason = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/decline",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentDecline: {
+        ...interactionWorkflow.assignmentDecline,
+        id: "assignment-decline-workflow-unsupported-reason",
+        reasonCode: "benchmark_too_hard",
+      },
+    }),
+  });
+  assert.equal(unsupportedAssignmentDeclineReason.status, 400);
+  assert.match(unsupportedAssignmentDeclineReason.body.detail, /reasonCode/);
+
+  const denominatorAssignmentDecline = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/decline",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentDecline: {
+        ...interactionWorkflow.assignmentDecline,
+        id: "assignment-decline-workflow-denominator",
+        excludedFromRatingDenominator: false,
+      },
+    }),
+  });
+  assert.equal(denominatorAssignmentDecline.status, 400);
+  assert.match(denominatorAssignmentDecline.body.detail, /excludedFromRatingDenominator/);
+
+  const leakingAssignmentDecline = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/decline",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentDecline: {
+        ...interactionWorkflow.assignmentDecline,
+        id: "assignment-decline-workflow-hidden-metadata",
+        sourceCategory: "coursework_derived",
+      },
+    }),
+  });
+  assert.equal(leakingAssignmentDecline.status, 400);
+  assert.match(leakingAssignmentDecline.body.detail, /hidden metadata keys/);
+
   const practiceSessionById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/practice-sessions/practice-session-workflow-new",
@@ -7896,6 +8088,51 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteQueueFreshnessPolicy.status, 400);
   assert.match(incompleteQueueFreshnessPolicy.body.detail, /dependencyRevalidationChecks/);
 
+  const missingQueueHealthPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/queue-freshness-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      queueFreshnessPolicy: {
+        ...operationalControls.queueFreshnessPolicies[0],
+        id: "queue-freshness-workflow-missing-health",
+        queueHealthChecks: ["age_window"],
+      },
+    }),
+  });
+  assert.equal(missingQueueHealthPolicy.status, 400);
+  assert.match(missingQueueHealthPolicy.body.detail, /queueHealthChecks/);
+
+  const incompleteQueueScan = await invokeApi(context, {
+    method: "POST",
+    url: `/api/v1/queues/${operationalControls.queueStaleByDelayScans[0].lane}/stale-by-delay-scan`,
+    headers: adminHeaders,
+    body: JSON.stringify({
+      queueStaleByDelayScan: {
+        ...operationalControls.queueStaleByDelayScans[0],
+        id: "queue-stale-scan-workflow-incomplete",
+        dependencyRevalidationChecks: ["item_text", "rubric"],
+      },
+    }),
+  });
+  assert.equal(incompleteQueueScan.status, 400);
+  assert.match(incompleteQueueScan.body.detail, /dependencyRevalidationChecks/);
+
+  const zeroOutcomeQueueScan = await invokeApi(context, {
+    method: "POST",
+    url: `/api/v1/queues/${operationalControls.queueStaleByDelayScans[0].lane}/stale-by-delay-scan`,
+    headers: adminHeaders,
+    body: JSON.stringify({
+      queueStaleByDelayScan: {
+        ...operationalControls.queueStaleByDelayScans[0],
+        id: "queue-stale-scan-workflow-zero-outcome",
+        staleCount: 0,
+      },
+    }),
+  });
+  assert.equal(zeroOutcomeQueueScan.status, 400);
+  assert.match(zeroOutcomeQueueScan.body.detail, /positive integers: staleCount/);
+
   for (const clientSurfaceIntegrityPolicy of operationalControls.clientSurfaceIntegrityPolicies) {
     const policyResponse = await invokeApi(context, {
       method: "POST",
@@ -8314,7 +8551,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueReports.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
-  assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_pending_review");
+  assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
   assert.equal(releaseReport.body.ratingExperienceEvidence.draftStoragePolicyRows.at(-1).serverSidePersistenceDefault, true);
   assert.equal(releaseReport.body.ratingExperienceEvidence.draftStoragePolicyRows.at(-1).clientStatePolicy, "ephemeral_in_memory_only");
   assert.equal(releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).resumeCount, 1);
@@ -8544,7 +8781,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 240 + uxSimplificationSurfaces.length * 3);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 241 + uxSimplificationSurfaces.length * 3);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

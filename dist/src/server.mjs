@@ -138,10 +138,14 @@ const assignmentDeclineRequiredFields = [
   "topicFitUpdateSuggestion",
   "reassignmentStatus",
   "qaRoutingStatus",
+  "repeatedOrStrategicDeclineQaPolicy",
   "sourcePeerModelGoldProtectedLabelVisibilityState",
   "excludedFromRatingDenominator",
   "timestamp",
 ];
+const assignmentDeclineReasonCodes = ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"];
+const assignmentDeclineReassignmentStatuses = ["reassigned_without_label", "paused_for_topic_fit_review", "closed_no_reassignment_needed"];
+const assignmentDeclineQaRoutingStatuses = ["monitor_only", "routed_to_qa_repeated_decline", "routed_to_qa_suspicious_pattern"];
 const itemIssueReportRequiredFields = [
   "id",
   "reporterId",
@@ -157,6 +161,21 @@ const itemIssueReportRequiredFields = [
   "excludedFromLabelDenominator",
   "createdAt",
 ];
+const itemIssueCategories = [
+  "source_leakage",
+  "missing_context",
+  "malformed_text",
+  "duplicate_or_near_duplicate",
+  "nonconceptual_or_scope",
+  "translation_or_adaptation_error",
+  "rights_or_provenance",
+  "rubric_or_ui_render_defect",
+  "external_assistance_or_exfiltration",
+];
+const itemIssueSeverities = ["low", "medium", "high", "critical"];
+const itemIssueActionKinds = ["triage", "resolve", "quarantine"];
+const itemIssueResolutionStatuses = ["triage_opened", "resolved", "quarantined"];
+const itemIssueQuarantineScopes = ["none", "affected_item", "dependent_artifacts", "affected_item_and_dependent_artifacts"];
 const ratingDraftSessionRequiredFields = [
   "id",
   "assignmentId",
@@ -696,7 +715,24 @@ const queueFreshnessLanes = [
   "outbox",
   "delayed_report",
 ];
-const queueRevalidationChecks = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const queueRevalidationChecks = [
+  "item_text",
+  "rubric",
+  "ui_render",
+  "workflow",
+  "split_protection",
+  "release_config_manifest",
+  "rater_eligibility",
+  "artifact_dependency",
+];
+const queueHealthChecks = [
+  "dependency_version_drift",
+  "age_window",
+  "backpressure_depth",
+  "authorization_current",
+  "side_effect_suppression",
+];
+const queueStaleTransitionOutcomes = ["dependency_change_blocked", "age_window_enforced", "backpressure_window_enforced"];
 const queueStaleBehaviors = ["stale", "paused", "pause", "cancel", "cancelled", "recompute", "suppress"];
 const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
 const clientSurfaceRequiredChecks = [
@@ -1180,8 +1216,21 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/decline$/, "assignment_decline_submitted", "assignmentDecline", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
     requiredFields: assignmentDeclineRequiredFields,
+    requiredNonEmptyArrayFields: ["itemKeys"],
+    allowedValues: {
+      reasonCode: assignmentDeclineReasonCodes,
+      reassignmentStatus: assignmentDeclineReassignmentStatuses,
+      qaRoutingStatus: assignmentDeclineQaRoutingStatuses,
+    },
+    requiredStringIncludes: { repeatedOrStrategicDeclineQaPolicy: ["repeated", "suspicious", "qa"] },
+    requiredExactFields: {
+      excludedFromRatingDenominator: true,
+      sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+    },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/defer$/, "assignment_deferral_submitted", "assignmentDeferral", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
@@ -2151,9 +2200,12 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/item-issues$/, "item_issue_report_submitted", "itemIssueReport", ratingWorkflowRoles, {
     requiredFields: itemIssueReportRequiredFields,
     requiredAnyFields: [["positionId", "critiqueId", "assignmentId", "ratingId", "snapshotId", "evaluationId", "releaseId"]],
+    allowedValues: { issueCategory: itemIssueCategories, severity: itemIssueSeverities },
+    requiredStringIncludes: { quarantineStalePropagationState: ["quarantine", "stale", "propagation"] },
     requiredExactFields: {
       labelVisibilityStateForTriage: "hidden",
       modelResultVisibilityStateForTriage: "hidden",
+      excludedFromLabelDenominator: true,
     },
     rejectHiddenMetadata: true,
     rejectRawBenchmarkContent: true,
@@ -2696,11 +2748,23 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/queue-freshness-policies$/, "queue_freshness_policy_submitted", "queueFreshnessPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "lane", "freshnessWindowMinutes", "dependencyRevalidationChecks", "staleBehavior"],
-    requiredFiniteNumberFields: ["freshnessWindowMinutes"],
-    requiredNonEmptyArrayFields: ["dependencyRevalidationChecks"],
-    requiredArrayIncludes: { dependencyRevalidationChecks: queueRevalidationChecks },
+    requiredFields: [
+      "id",
+      "lane",
+      "freshnessWindowMinutes",
+      "dependencyRevalidationChecks",
+      "backpressureThreshold",
+      "staleBehavior",
+      "sideChannelSafeNotificationBehavior",
+      "queueHealthChecks",
+      "createdBy",
+      "frozenAt",
+    ],
+    requiredFiniteNumberFields: ["freshnessWindowMinutes", "backpressureThreshold"],
+    requiredNonEmptyArrayFields: ["dependencyRevalidationChecks", "queueHealthChecks"],
+    requiredArrayIncludes: { dependencyRevalidationChecks: queueRevalidationChecks, queueHealthChecks },
     allowedValues: { lane: queueFreshnessLanes, staleBehavior: queueStaleBehaviors },
+    requiredStringIncludes: { sideChannelSafeNotificationBehavior: ["generic", "protected"] },
     requiredExactFields: {
       workerConsumeRevalidationRequired: true,
       renderRevalidationRequired: true,
@@ -2710,12 +2774,35 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/queues\/(?<id>[^/]+)\/stale-by-delay-scan$/, "queue_stale_by_delay_scan_submitted", "queueStaleByDelayScan", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "lane",
-    requiredFields: ["id", "lane", "scanStatus", "staleCount", "dependencyRevalidationChecks", "scannedAt"],
-    requiredFiniteNumberFields: ["staleCount"],
-    requiredNonEmptyArrayFields: ["dependencyRevalidationChecks"],
-    requiredArrayIncludes: { dependencyRevalidationChecks: queueRevalidationChecks },
-    allowedValues: { lane: queueFreshnessLanes },
-    requiredExactFields: { scanStatus: "passed" },
+    requiredFields: [
+      "id",
+      "policyId",
+      "lane",
+      "scanStatus",
+      "staleCount",
+      "maxObservedAgeMinutes",
+      "backpressureThreshold",
+      "dependencyRevalidationChecks",
+      "staleTransitionBehavior",
+      "staleTransitionOutcomes",
+      "queueHealthChecks",
+      "scannedAt",
+    ],
+    requiredFiniteNumberFields: ["staleCount", "maxObservedAgeMinutes", "backpressureThreshold"],
+    requiredPositiveIntegerFields: ["staleCount"],
+    requiredNonEmptyArrayFields: ["dependencyRevalidationChecks", "staleTransitionOutcomes", "queueHealthChecks"],
+    requiredArrayIncludes: {
+      dependencyRevalidationChecks: queueRevalidationChecks,
+      staleTransitionOutcomes: queueStaleTransitionOutcomes,
+      queueHealthChecks,
+    },
+    allowedValues: { lane: queueFreshnessLanes, staleTransitionBehavior: queueStaleBehaviors },
+    requiredExactFields: {
+      scanStatus: "passed",
+      workerConsumeRevalidationConfirmed: true,
+      sideEffectSuppressionConfirmed: true,
+      sideChannelSafeNotificationConfirmed: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/client-surface-integrity-policies$/, "client_surface_integrity_policy_submitted", "clientSurfaceIntegrityPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -4503,11 +4590,12 @@ async function itemIssueActionEndpoint(request, response, context, itemIssueId, 
   const body = await readJsonBody(request);
   const candidate = body.itemIssueAction ?? body.resource ?? body;
   const resource = {
+    ...candidate,
     id: candidate.id ?? `item-issue-action-${itemIssueId}-${action}`,
     itemIssueId,
     action,
     actorId: candidate.actorId ?? session.user.id,
-    resolutionStatus: candidate.resolutionStatus ?? action,
+    resolutionStatus: candidate.resolutionStatus ?? (action === "triage" ? "triage_opened" : action === "resolve" ? "resolved" : "quarantined"),
     quarantineScope: candidate.quarantineScope ?? (action === "quarantine" ? "affected_item" : "none"),
     labelVisibilityStateForTriage: candidate.labelVisibilityStateForTriage ?? "labels_hidden_from_triage",
     modelResultVisibilityStateForTriage: candidate.modelResultVisibilityStateForTriage ?? "model_results_hidden_from_triage",
@@ -4516,8 +4604,26 @@ async function itemIssueActionEndpoint(request, response, context, itemIssueId, 
   };
   const validation = validateWorkflowPayload(resource, session.user, {
     resourceKey: "itemIssueAction",
-    requiredFields: ["id", "itemIssueId", "action", "actorId", "resolutionStatus", "labelVisibilityStateForTriage", "modelResultVisibilityStateForTriage", "timestamp"],
-    allowHiddenMetadata: true,
+    requiredFields: ["id", "itemIssueId", "action", "actorId", "resolutionStatus", "quarantineScope", "labelVisibilityStateForTriage", "modelResultVisibilityStateForTriage", "timestamp"],
+    allowedValues: {
+      action: itemIssueActionKinds,
+      resolutionStatus: itemIssueResolutionStatuses,
+      quarantineScope: itemIssueQuarantineScopes,
+    },
+    requiredExactFields: {
+      labelVisibilityStateForTriage: "labels_hidden_from_triage",
+      modelResultVisibilityStateForTriage: "model_results_hidden_from_triage",
+    },
+    requiredWhen: [
+      {
+        field: "action",
+        equals: "quarantine",
+        requiredStringIncludesAny: { quarantineScope: ["affected", "dependent"] },
+      },
+    ],
+    requireActorField: "actorId",
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   });
   if (!validation.ok) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_item_issue_action", detail: validation.detail });

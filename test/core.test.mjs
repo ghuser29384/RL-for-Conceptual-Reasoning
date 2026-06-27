@@ -402,7 +402,24 @@ const policyActionKinds = [
 ];
 const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
 const queueFreshnessLanes = ["assignment", "draft", "discussion", "adjudication", "model_evaluation_job", "hidden_benchmark_submission", "export", "outbox", "delayed_report"];
-const queueRevalidationChecks = ["item_text", "rubric", "workflow", "split", "manifest", "actor_eligibility", "artifact_dependency"];
+const queueRevalidationChecks = [
+  "item_text",
+  "rubric",
+  "ui_render",
+  "workflow",
+  "split_protection",
+  "release_config_manifest",
+  "rater_eligibility",
+  "artifact_dependency",
+];
+const queueHealthChecks = [
+  "dependency_version_drift",
+  "age_window",
+  "backpressure_depth",
+  "authorization_current",
+  "side_effect_suppression",
+];
+const queueStaleTransitionOutcomes = ["dependency_change_blocked", "age_window_enforced", "backpressure_window_enforced"];
 const clientSurfaces = ["rating", "practice", "discussion", "adjudication", "calibration", "release_review", "hidden_benchmark_submission", "rater_data_governance"];
 const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
@@ -711,20 +728,37 @@ function completeOperationalControlFixtures() {
       lane,
       freshnessWindowMinutes: 30 + index,
       dependencyRevalidationChecks: queueRevalidationChecks,
+      backpressureThreshold: 80 + index,
       staleBehavior: lane === "outbox" ? "suppress" : "stale",
+      sideChannelSafeNotificationBehavior: "generic delay notice with no protected-status detail",
+      queueHealthChecks,
       workerConsumeRevalidationRequired: true,
       renderRevalidationRequired: true,
       submitRevalidationRequired: true,
       backpressureBehavior: "pause or recompute before side effects",
+      createdBy: "release-admin",
+      frozenAt: "2026-10-01T00:04:30.000Z",
     })),
-    queueStaleByDelayScans: queueFreshnessLanes.map((lane) => ({
-      id: `queue-stale-scan-submitted-${lane}`,
-      lane,
-      scanStatus: "passed",
-      staleCount: 0,
-      dependencyRevalidationChecks: queueRevalidationChecks,
-      scannedAt: "2026-10-01T00:05:00.000Z",
-    })),
+    queueStaleByDelayScans: queueFreshnessLanes.map((lane, index) => {
+      const policyId = `queue-freshness-submitted-${lane}`;
+      return {
+        id: `queue-stale-scan-submitted-${lane}`,
+        policyId,
+        lane,
+        scanStatus: "passed",
+        staleCount: 1,
+        maxObservedAgeMinutes: 35 + index,
+        backpressureThreshold: 80 + index,
+        dependencyRevalidationChecks: queueRevalidationChecks,
+        staleTransitionBehavior: lane === "outbox" ? "suppress" : "stale",
+        staleTransitionOutcomes: queueStaleTransitionOutcomes,
+        queueHealthChecks,
+        workerConsumeRevalidationConfirmed: true,
+        sideEffectSuppressionConfirmed: true,
+        sideChannelSafeNotificationConfirmed: true,
+        scannedAt: "2026-10-01T00:05:00.000Z",
+      };
+    }),
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks: clientSurfaceIntegrityPolicies.map((policy) => ({
       id: `client-surface-integrity-check-submitted-${policy.surface}`,
@@ -951,7 +985,7 @@ function completeRatingExperienceFixtures() {
         labelVisibilityStateForTriage: "hidden",
         modelResultVisibilityStateForTriage: "hidden",
         triageState: "label_model_result_blind_review",
-        quarantineStalePropagationState: "quarantine_pending_review",
+        quarantineStalePropagationState: "quarantine_stale_propagation_pending_review",
         excludedFromLabelDenominator: true,
         createdAt: "2026-10-01T00:02:00.000Z",
       },
@@ -1379,6 +1413,7 @@ function completeInteractionWorkflowFixtures() {
         topicFitUpdateSuggestion: "avoid same source family",
         reassignmentStatus: "reassigned_without_label",
         qaRoutingStatus: "monitor_only",
+        repeatedOrStrategicDeclineQaPolicy: "repeated or suspicious safe-decline patterns route to QA review",
         sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
         excludedFromRatingDenominator: true,
         timestamp: "2026-10-01T00:03:00.000Z",
@@ -1745,7 +1780,7 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRaterScoreConfidenceCount, 1);
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
   assert.equal(report.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
-  assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_pending_review");
+  assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
   assert.equal(report.draftStoragePolicyRows.at(-1).serverSidePersistenceDefault, true);
   assert.equal(report.draftStoragePolicyRows.at(-1).clientStatePolicy, "ephemeral_in_memory_only");
   assert.equal(report.ratingDraftSessionRows.at(-1).resumeCount, 1);
@@ -1760,6 +1795,26 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const unsafeItemIssueReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    itemIssueReports: [
+      {
+        ...completeRatingExperienceFixtures().itemIssueReports[0],
+        issueCategory: "benchmark_too_hard",
+        labelVisibilityStateForTriage: "visible",
+        modelResultVisibilityStateForTriage: "visible",
+        quarantineStalePropagationState: "quarantine_pending_review",
+        excludedFromLabelDenominator: false,
+      },
+    ],
+  });
+  assert.equal(unsafeItemIssueReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "issueCategory"));
+  assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "labelVisibilityStateForTriage"));
+  assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "modelResultVisibilityStateForTriage"));
+  assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "quarantineStalePropagationState"));
+  assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "excludedFromLabelDenominator"));
 
   const incompleteRetentionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
@@ -1875,6 +1930,28 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
 
+  const unsafeDeclineReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    assignmentDeclines: [
+      {
+        ...completeInteractionWorkflowFixtures().assignmentDeclines[0],
+        reasonCode: "benchmark_too_hard",
+        excludedFromRatingDenominator: false,
+        sourcePeerModelGoldProtectedLabelVisibilityState: "benchmark_status_visible",
+        repeatedOrStrategicDeclineQaPolicy: "monitor ordinary declines only",
+      },
+    ],
+  });
+  assert.equal(unsafeDeclineReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeDeclineReport.reviewSections.some((section) => section.artifactType === "assignment_decline" && section.reason === "reasonCode"));
+  assert.ok(unsafeDeclineReport.reviewSections.some((section) => section.artifactType === "assignment_decline" && section.reason === "excludedFromRatingDenominator"));
+  assert.ok(
+    unsafeDeclineReport.reviewSections.some(
+      (section) => section.artifactType === "assignment_decline" && section.reason === "sourcePeerModelGoldProtectedLabelVisibilityState",
+    ),
+  );
+  assert.ok(unsafeDeclineReport.reviewSections.some((section) => section.artifactType === "assignment_decline" && section.reason === "repeatedOrStrategicDeclineQaPolicy:repeated"));
+
   const unsafeBenchmarkSubmissionReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
     benchmarkSubmissionPolicies: [
@@ -1936,6 +2013,44 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
   assert.equal(report.counts.passingClientSurfaceCount, clientSurfaces.length);
   assert.equal(report.counts.passingAuditChainKindCount, auditChainEventKinds.length);
   assert.deepEqual(report.reviewSections, []);
+});
+
+test("operational control evidence rejects incomplete queue stale-by-delay and backpressure proof", () => {
+  const missingHealthFixtures = completeOperationalControlFixtures();
+  missingHealthFixtures.queueFreshnessPolicies = missingHealthFixtures.queueFreshnessPolicies.map((policy, index) =>
+    index === 0
+      ? {
+          ...policy,
+          backpressureThreshold: undefined,
+          queueHealthChecks: ["age_window"],
+        }
+      : policy
+  );
+  const missingHealthReport = buildOperationalControlEvidenceReport("october-2026-demo", missingHealthFixtures);
+
+  assert.equal(missingHealthReport.releaseUseStatus, "operational_control_review_required");
+  assert.ok(missingHealthReport.reviewSections.some((section) => section.artifactType === "queue_freshness_policy" && section.reason === "backpressureThreshold"));
+  assert.ok(missingHealthReport.reviewSections.some((section) => section.artifactType === "queue_freshness_policy" && section.reason.includes("queueHealthChecks")));
+
+  const incompleteScanFixtures = completeOperationalControlFixtures();
+  incompleteScanFixtures.queueStaleByDelayScans = incompleteScanFixtures.queueStaleByDelayScans.map((scan, index) =>
+    index === 0
+      ? {
+          ...scan,
+          staleCount: 0,
+          dependencyRevalidationChecks: ["item_text", "rubric"],
+          staleTransitionOutcomes: ["age_window_enforced"],
+          sideEffectSuppressionConfirmed: false,
+        }
+      : scan
+  );
+  const incompleteScanReport = buildOperationalControlEvidenceReport("october-2026-demo", incompleteScanFixtures);
+
+  assert.equal(incompleteScanReport.releaseUseStatus, "operational_control_review_required");
+  assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason === "staleCount"));
+  assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason.includes("dependencyRevalidationChecks")));
+  assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason.includes("staleTransitionOutcomes")));
+  assert.ok(incompleteScanReport.reviewSections.some((section) => section.artifactType === "queue_stale_by_delay_scan" && section.reason === "sideEffectSuppressionConfirmed"));
 });
 
 test("rater data-governance evidence requires consent visibility and withdrawal handling", () => {
