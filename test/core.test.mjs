@@ -1514,6 +1514,24 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const incompleteRetentionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    protectedArtifactRetentionRecords: completeRatingExperienceFixtures().protectedArtifactRetentionRecords.map((record) =>
+      record.artifactType === "cache"
+        ? {
+            ...record,
+            cacheOutboxPurgeStatus: "",
+            backupSnapshotCoverage: "",
+            developmentStagingEligibility: "",
+          }
+        : record,
+    ),
+  });
+  assert.equal(incompleteRetentionReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(incompleteRetentionReport.reviewSections.some((section) => section.reason === "cacheOutboxPurgeStatus"));
+  assert.ok(incompleteRetentionReport.reviewSections.some((section) => section.reason === "backupSnapshotCoverage"));
+  assert.ok(incompleteRetentionReport.reviewSections.some((section) => section.reason === "developmentStagingEligibility"));
 });
 
 test("auxiliary workflow evidence gates blinding, partial outputs, exposure, queue selection, model provenance, conflicts, errata, and schedule state", () => {

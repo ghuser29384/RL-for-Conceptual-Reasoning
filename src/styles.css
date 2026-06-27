@@ -1007,6 +1007,305 @@ tbody tr:last-child td {
   overflow-wrap: anywhere;
 }
 
+.contributionPanel {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+.contributionCards,
+.contributionTwoPanel,
+.submissionRow {
+  display: grid;
+  gap: 12px;
+}
+
+.contributionCards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0 16px 16px;
+}
+
+.contributionCard,
+.positionPreview,
+.submissionConfirmation,
+.reviewDrawer,
+.optionalDrawer,
+.originPanel,
+.pinnedTarget,
+.submissionRow {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+}
+
+.contributionCard {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 178px;
+  padding: 14px;
+}
+
+.contributionCard h3,
+.positionPreview strong,
+.submissionConfirmation h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.contributionCard p,
+.positionPreview p,
+.submissionConfirmation p,
+.reviewDrawer p,
+.pinnedTarget p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.contributionCard .primaryButton,
+.contributionPanel a.primaryButton,
+.contributionPanel a.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  text-decoration: none;
+}
+
+.contributionNotice {
+  display: grid;
+  gap: 4px;
+  margin: 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.contributionNotice p {
+  margin: 0;
+}
+
+.collapsedType,
+.segmentedTypeSelector,
+.stickySubmitBar,
+.contributionSingleForm,
+.contributionTwoPanel,
+.contributionTable,
+.positionPreviewList {
+  margin: 0 16px;
+}
+
+.collapsedType {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.secondaryInline {
+  color: var(--teal-strong);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.segmentedTypeSelector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segmentedTypeSelector a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.segmentedTypeSelector a.active {
+  border-color: var(--teal-strong);
+  background: #e9f7f4;
+  color: var(--teal-strong);
+}
+
+.contributionSingleForm,
+.contributionTwoPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.contributionTwoPanel {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.contributionSingleForm label,
+.contributionTwoPanel label,
+.optionalDrawer label {
+  display: grid;
+  gap: 6px;
+}
+
+.contributionPanel label span,
+.originPanel legend {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.contributionPanel input,
+.contributionPanel select,
+.contributionPanel textarea,
+.fullInput {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.contributionPanel textarea {
+  min-height: 150px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.contributionPanel small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.originPanel,
+.optionalDrawer,
+.reviewDrawer,
+.submissionConfirmation,
+.pinnedTarget {
+  padding: 12px;
+}
+
+.originPanel {
+  display: grid;
+  gap: 9px;
+}
+
+.originChoice {
+  display: flex !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px !important;
+}
+
+.originChoice input {
+  width: auto;
+  min-height: 0;
+}
+
+.optionalDrawer summary,
+.reviewDrawer summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 740;
+}
+
+.positionPreviewList {
+  display: grid;
+  gap: 10px;
+  max-height: 540px;
+  overflow: auto;
+}
+
+.positionPreview {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.positionPreview.selected {
+  border-color: var(--teal);
+  background: #eefaf7;
+}
+
+.positionPreview span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stickySubmitBar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+}
+
+.stickySubmitBar span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.submissionConfirmation {
+  margin: 0 16px;
+}
+
+.contributionTable {
+  display: grid;
+  gap: 8px;
+}
+
+.submissionRow {
+  grid-template-columns: minmax(0, 1.4fr) 140px 190px 180px;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.submissionRow strong,
+.submissionRow span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.submissionRow span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.emptyState {
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .workflowSummary {
   margin: 0 0 12px;
   color: var(--muted);
@@ -1185,6 +1484,7 @@ tbody tr:last-child td {
   .evaluationLayout,
   .governanceLayout,
   .workflowLayout,
+  .contributionTwoPanel,
   .exportsLayout,
   .twoColumn {
     grid-template-columns: 1fr;
@@ -1245,6 +1545,7 @@ tbody tr:last-child td {
   .panel,
   .ratingLayout,
   .workflowLayout,
+  .contributionTwoPanel,
   .exportsLayout,
   .manifestGrid,
   .textPair {
@@ -1336,6 +1637,8 @@ tbody tr:last-child td {
 
   .topbarStats,
   .queueGrid,
+  .contributionCards,
+  .submissionRow,
   .textPair,
   .flagGrid,
   .verificationControls,

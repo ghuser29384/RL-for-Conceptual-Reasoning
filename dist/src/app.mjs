@@ -30,10 +30,19 @@ import {
   verificationRecords,
   weightedPairwiseErrorRateByPosition,
 } from "./domain/core.mjs";
+import {
+  CONTRIBUTION_PART_SCHEMAS,
+  CONTRIBUTION_TEMPLATES,
+  ORIGIN_CHOICES,
+  contributionTemplateForType,
+  eligibleContributionPositions,
+} from "./domain/contributions.mjs";
 
 const releaseId = "october-2026-demo";
 const root = document.getElementById("root");
-const initialSection = new URLSearchParams(window.location.search).get("section") ?? "rating";
+const initialSection = window.location.pathname.startsWith("/contribute")
+  ? "contribute"
+  : new URLSearchParams(window.location.search).get("section") ?? "rating";
 
 const state = {
   section: initialSection,
@@ -84,6 +93,10 @@ const state = {
   workflowTemplateId: "position-intake",
   workflowPayloadText: "",
   lastWorkflowStatus: null,
+  contributionTemplateKey: contributionTemplateForQueryType(new URLSearchParams(window.location.search).get("type")).templateKey,
+  selectedContributionTargetId: positions[0]?.id ?? null,
+  lastContributionStatus: null,
+  myContributionSubmissions: [],
   lastPersistenceStatus: null,
   lastSourceStyleAuditStatus: null,
 };
@@ -91,6 +104,7 @@ const state = {
 const navItems = [
   ["queue", "Queue", "clipboard"],
   ["rating", "Blind Rating", "eye"],
+  ["contribute", "Contribute", "branch"],
   ["workflow", "Workflow", "branch"],
   ["adjudication", "Adjudication", "scale"],
   ["releases", "Releases", "shield"],
@@ -1505,6 +1519,7 @@ function render() {
 
 function sectionHtml(section, context) {
   if (section === "queue") return queuePanel();
+  if (section === "contribute") return contributePanel();
   if (section === "rating") {
     return ratingPanel(
       context.selectedAssignment,
@@ -1577,6 +1592,318 @@ function queuePanel() {
       ${assignmentTable()}
     </section>
   `;
+}
+
+function contributePanel() {
+  if (window.location.pathname === "/contribute/my-submissions") return contributionDashboardPanel();
+  if (window.location.pathname === "/contribute/new") return contributionNewPanel();
+  return contributionLandingPanel();
+}
+
+function contributionLandingPanel() {
+  const cards = [
+    {
+      title: "Submit an argument",
+      description: "Share a claim or argument that someone else could critique.",
+      button: "Submit argument",
+      href: "/contribute/new?type=position",
+    },
+    {
+      title: "Submit a critique",
+      description: "Critique an existing argument, or paste a new argument and critique it.",
+      button: "Submit critique",
+      href: "/contribute/new?type=critique",
+    },
+    {
+      title: "Suggest a source",
+      description: "Suggest a book, article, blog post, forum post, paper, or dataset we should look at.",
+      button: "Suggest source",
+      href: "/contribute/new?type=source",
+    },
+  ];
+  return `
+    <section class="panel contributionPanel">
+      ${panelTitle("branch", "Contribute", "Submissions are reviewed, prepared, and gated before any corpus or rating use.")}
+      <div class="contributionCards">
+        ${cards
+          .map(
+            (card) => `
+              <article class="contributionCard">
+                <h3>${escapeHtml(card.title)}</h3>
+                <p>${escapeHtml(card.description)}</p>
+                <a class="primaryButton contributionLink" href="${escapeHtml(card.href)}">${escapeHtml(card.button)}</a>
+              </article>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="contributionNotice">
+        <p>Submissions are reviewed before use.</p>
+        <p>Raters will not see who submitted the item or where it came from.</p>
+        <p>Reviewers may prepare submitted text before it is used.</p>
+      </div>
+    </section>
+  `;
+}
+
+function contributionTemplateForQueryType(type) {
+  if (type === "position-critique") return CONTRIBUTION_TEMPLATES.position_and_critique;
+  return contributionTemplateForType(type);
+}
+
+function contributionNewPanel() {
+  const queryType = new URLSearchParams(window.location.search).get("type");
+  const preselected = contributionTemplateForQueryType(queryType);
+  const template = CONTRIBUTION_TEMPLATES[state.contributionTemplateKey] ?? preselected;
+  const collapsedSelector = Boolean(queryType);
+  return `
+    <section class="panel contributionPanel">
+      ${panelTitle("branch", "New Contribution", template.userFacingHelper)}
+      ${statusLine(state.sessionStatus, "sessionLine")}
+      ${authControls()}
+      <form id="contributionForm" data-template-key="${escapeHtml(template.templateKey)}">
+        ${
+          collapsedSelector
+            ? `<div class="collapsedType">Submitting: <strong>${escapeHtml(typeLabelForTemplate(template.templateKey))}</strong><a class="secondaryInline contributionLink" href="/contribute/new">Change</a></div>`
+            : contributionTypeSelector(template.templateKey)
+        }
+        ${contributionTemplateFields(template)}
+        ${contributionReviewDrawer(template)}
+        <div class="stickySubmitBar">
+          <span id="contributionSaveState">${state.lastContributionStatus?.title ?? "Saved"}</span>
+          <button class="secondaryButton" id="saveContributionDraft" type="button">${icon("database")}Save draft</button>
+          <button class="primaryButton" id="submitContribution" type="button">${icon("check")}Submit for review</button>
+        </div>
+      </form>
+      ${statusLine(state.lastContributionStatus, "persistenceLine")}
+      ${state.lastContributionStatus?.tone === "good" ? contributionConfirmation() : ""}
+    </section>
+  `;
+}
+
+function contributionDashboardPanel() {
+  return `
+    <section class="panel contributionPanel">
+      ${panelTitle("clipboard", "My Submissions", "Only your own submissions are listed here with plain-language statuses.")}
+      ${statusLine(state.sessionStatus, "sessionLine")}
+      ${authControls()}
+      <div class="actionRow">
+        <button class="secondaryButton" id="refreshContributions" type="button">${icon("database")}Refresh</button>
+        <a class="primaryButton contributionLink" href="/contribute/new?type=position">${icon("branch")}New submission</a>
+      </div>
+      <div class="contributionTable">
+        ${
+          state.myContributionSubmissions.length
+            ? state.myContributionSubmissions.map(contributionSubmissionRow).join("")
+            : `<div class="emptyState">No submissions found.</div>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function contributionTypeSelector(activeTemplateKey) {
+  const options = [
+    ["position_only", "Argument", "/contribute/new?type=position"],
+    ["critique_existing", "Critique", "/contribute/new?type=critique"],
+    ["source_suggestion", "Source suggestion", "/contribute/new?type=source"],
+  ];
+  return `
+    <div class="segmentedTypeSelector">
+      ${options
+        .map(
+          ([templateKey, label, href]) =>
+            `<a class="contributionLink ${activeTemplateKey === templateKey ? "active" : ""}" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function contributionTemplateFields(template) {
+  if (template.templateKey === "position_only") return contributionPositionFields("position", "Argument", true);
+  if (template.templateKey === "critique_existing") return contributionCritiqueExistingFields();
+  if (template.templateKey === "position_and_critique") {
+    return `
+      <div class="contributionTwoPanel">
+        <section>
+          <h3>Argument</h3>
+          ${contributionTextField("position_submitted_text", "Argument", CONTRIBUTION_PART_SCHEMAS.position_text.requiredVisibleFields[0])}
+          ${originPanel("position")}
+        </section>
+        <section>
+          <h3>Critique</h3>
+          ${contributionTextField("critique_submitted_text", "Critique", CONTRIBUTION_PART_SCHEMAS.critique_text.requiredVisibleFields[0])}
+          ${originPanel("critique")}
+        </section>
+      </div>
+      ${positionOptionalDrawer()}
+    `;
+  }
+  return contributionSourceFields();
+}
+
+function contributionPositionFields(prefix, title, includeOptionalDrawer) {
+  return `
+    <div class="contributionSingleForm">
+      ${contributionTextField(`${prefix}_submitted_text`, title, CONTRIBUTION_PART_SCHEMAS.position_text.requiredVisibleFields[0])}
+      ${originPanel(prefix)}
+      ${includeOptionalDrawer ? positionOptionalDrawer() : ""}
+    </div>
+  `;
+}
+
+function contributionCritiqueExistingFields() {
+  const eligible = eligibleContributionPositions(positions);
+  const selected = eligible.find((item) => item.id === state.selectedContributionTargetId) ?? eligible[0];
+  return `
+    <div class="contributionTwoPanel">
+      <section>
+        <h3>Choose argument</h3>
+        <input class="fullInput" placeholder="Search arguments to critique" type="search" />
+        <input id="targetExistingPositionId" name="targetExistingPositionId" type="hidden" value="${escapeHtml(selected?.id ?? "")}" />
+        <div class="positionPreviewList">
+          ${
+            eligible.length
+              ? eligible
+                  .map(
+                    (position) => `
+                      <article class="positionPreview ${position.id === selected?.id ? "selected" : ""}">
+                        <strong>${escapeHtml(position.title || position.preview.slice(0, 120))}</strong>
+                        <span>${escapeHtml(position.topic ?? "Topic pending")}</span>
+                        <p>${escapeHtml(position.preview)}</p>
+                        <button class="secondaryButton selectContributionTarget" data-position-id="${escapeHtml(position.id)}" type="button">Critique this argument</button>
+                      </article>
+                    `,
+                  )
+                  .join("")
+              : `<div class="emptyState">No matching arguments found.<a class="secondaryButton contributionLink" href="/contribute/new?type=position-critique">Paste a new argument and critique it</a></div>`
+          }
+        </div>
+      </section>
+      <section>
+        <h3>Write critique</h3>
+        ${
+          selected
+            ? `<div class="pinnedTarget"><strong>Argument being critiqued</strong><p>${escapeHtml(selected.preview)}</p></div>`
+            : ""
+        }
+        ${contributionTextField("critique_submitted_text", "Critique", CONTRIBUTION_PART_SCHEMAS.critique_text.requiredVisibleFields[0])}
+        ${originPanel("critique")}
+        <details class="optionalDrawer"><summary>Add note to reviewers</summary><textarea name="critique_submitter_note_optional"></textarea></details>
+      </section>
+    </div>
+    <div class="actionRow">
+      <a class="secondaryButton contributionLink" href="/contribute/new?type=position-critique">Paste a new argument and critique it</a>
+    </div>
+  `;
+}
+
+function contributionSourceFields() {
+  const schema = CONTRIBUTION_PART_SCHEMAS.source_suggestion;
+  return `
+    <div class="contributionSingleForm">
+      <label><span>Source title</span><input name="source_title" required /></label>
+      <label><span>What kind of source is it?</span>
+        <select name="source_type_simple" required>
+          ${schema.requiredVisibleFields[1].options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}
+        </select>
+      </label>
+      <label><span>Why might this source be useful?</span><textarea name="why_relevant" required></textarea><small>One or two sentences is enough.</small></label>
+      <details class="optionalDrawer">
+        <summary>Add details if you know them</summary>
+        ${["author", "publisher_or_site", "publication_year", "chapter_or_section", "page_or_locator", "source_url", "possible_argument_summary"]
+          .map((name) => `<label><span>${escapeHtml(humanize(name))}</span><input name="${escapeHtml(name)}" /></label>`)
+          .join("")}
+      </details>
+    </div>
+  `;
+}
+
+function contributionTextField(name, label, config) {
+  return `
+    <label>
+      <span>${escapeHtml(label)}</span>
+      <textarea name="${escapeHtml(name)}" placeholder="${escapeHtml(config.placeholder ?? "")}" required></textarea>
+      <small>${escapeHtml(config.helper ?? "")}</small>
+    </label>
+  `;
+}
+
+function originPanel(prefix) {
+  return `
+    <fieldset class="originPanel">
+      <legend>Where did this come from?</legend>
+      ${ORIGIN_CHOICES.map(
+        (choice) => `
+          <label class="originChoice">
+            <input name="${escapeHtml(prefix)}_origin_choice" value="${escapeHtml(choice.key)}" type="radio" ${choice.key === "self_written" ? "checked" : ""} />
+            <span>${escapeHtml(choice.label)}</span>
+          </label>
+        `,
+      ).join("")}
+      <details class="optionalDrawer">
+        <summary>Add source or origin details if relevant</summary>
+        ${["source_title_optional", "author_optional", "publisher_optional", "publication_year_optional", "page_or_locator_optional", "source_url_optional", "minimal_raw_excerpt_optional", "llm_assistance_description", "origin_note_optional"]
+          .map((name) => `<label><span>${escapeHtml(humanize(name))}</span><input name="${escapeHtml(prefix)}_${escapeHtml(name)}" /></label>`)
+          .join("")}
+      </details>
+    </fieldset>
+  `;
+}
+
+function positionOptionalDrawer() {
+  return `
+    <details class="optionalDrawer">
+      <summary>Add title, topic, or note</summary>
+      <label><span>Title</span><input name="submission_title_optional" /></label>
+      <label><span>Topic</span><input name="topic_hint_optional" /></label>
+      <label><span>Note to reviewers</span><textarea name="submitter_note_optional"></textarea></label>
+    </details>
+  `;
+}
+
+function contributionReviewDrawer(template) {
+  return `
+    <details class="reviewDrawer" open>
+      <summary>Review before submitting</summary>
+      <div>${escapeHtml(template.userFacingLabel)}</div>
+      <p>Raters will not see your identity, source details, AI-assistance details, or reviewer notes.</p>
+    </details>
+  `;
+}
+
+function contributionConfirmation() {
+  return `
+    <section class="submissionConfirmation">
+      <h3>Submission received</h3>
+      <p>Your submission will be reviewed before it is used.</p>
+      <p>If accepted, reviewers may prepare it into a rater-safe candidate version.</p>
+      <p>If accepted, source details and your identity will be hidden from raters.</p>
+      <p>Because you submitted this item, you will not be assigned as an independent blind rater for it.</p>
+      <div class="actionRow">
+        <a class="secondaryButton contributionLink" href="/contribute/new?type=position">Submit another</a>
+        <a class="secondaryButton contributionLink" href="/contribute/my-submissions">View my submissions</a>
+      </div>
+    </section>
+  `;
+}
+
+function contributionSubmissionRow(submission) {
+  return `
+    <article class="submissionRow">
+      <div><strong>${escapeHtml(submission.titleOrPreview || submission.type)}</strong><span>${escapeHtml(submission.type)}</span></div>
+      <div>${escapeHtml(formatDate(submission.createdAt))}</div>
+      <div>${statusChip(submission.status)}${escapeHtml(submission.statusLabel)}</div>
+      <div>${submission.status === "draft" ? "continue draft" : submission.status === "needs_clarification" ? "respond to clarification request" : "view"}</div>
+    </article>
+  `;
+}
+
+function typeLabelForTemplate(templateKey) {
+  if (templateKey === "position_only") return "Argument";
+  if (templateKey === "critique_existing" || templateKey === "position_and_critique") return "Critique";
+  return "Source suggestion";
 }
 
 function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, sessionStatus, sourceStyleStatus) {
@@ -3010,8 +3337,52 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   document.querySelectorAll("[data-section]").forEach((button) => {
     button.addEventListener("click", () => {
       state.section = button.getAttribute("data-section");
+      if (state.section === "contribute" && !window.location.pathname.startsWith("/contribute")) {
+        window.history.pushState({}, "", "/contribute");
+      }
       render();
     });
+  });
+  document.querySelectorAll(".contributionLink").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const href = link.getAttribute("href") ?? "/contribute";
+      window.history.pushState({}, "", href);
+      state.section = "contribute";
+      state.contributionTemplateKey = contributionTemplateForQueryType(new URL(href, window.location.origin).searchParams.get("type")).templateKey;
+      state.lastContributionStatus = null;
+      render();
+    });
+  });
+  document.querySelectorAll(".selectContributionTarget").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedContributionTargetId = button.getAttribute("data-position-id");
+      render();
+    });
+  });
+  document.getElementById("saveContributionDraft")?.addEventListener("click", async () => {
+    const payload = buildContributionSubmissionPayload(true);
+    state.lastContributionStatus = { tone: "warn", title: "Saving...", detail: "Saving a private contribution draft." };
+    render();
+    state.lastContributionStatus = await persistContributionSubmission(payload);
+    render();
+  });
+  document.getElementById("submitContribution")?.addEventListener("click", async () => {
+    const form = document.getElementById("contributionForm");
+    if (form && !form.reportValidity()) return;
+    const payload = buildContributionSubmissionPayload(false);
+    state.lastContributionStatus = { tone: "warn", title: "Submitting contribution", detail: "Submitting for review without creating candidate or live records." };
+    render();
+    state.lastContributionStatus = await persistContributionSubmission(payload);
+    render();
+  });
+  document.getElementById("refreshContributions")?.addEventListener("click", async () => {
+    state.lastContributionStatus = { tone: "warn", title: "Loading submissions", detail: "Reading your contribution dashboard." };
+    render();
+    const result = await fetchMyContributionSubmissions();
+    state.lastContributionStatus = result.status;
+    state.myContributionSubmissions = result.submissions ?? state.myContributionSubmissions;
+    render();
   });
   document.querySelectorAll(".openAssignment").forEach((button) => {
     button.addEventListener("click", () => {
@@ -3715,6 +4086,191 @@ async function persistWorkflowEvent(template, payloadText) {
   }
 }
 
+function buildContributionSubmissionPayload(draft) {
+  const form = document.getElementById("contributionForm");
+  const data = form ? new FormData(form) : new FormData();
+  const templateKey = form?.dataset.templateKey ?? state.contributionTemplateKey;
+  const status = draft ? "draft" : "submitted_pending_review";
+  if (templateKey === "position_only") {
+    return {
+      templateKey,
+      reviewStatus: status,
+      parts: [
+        {
+          clientPartId: "position",
+          type: "position_text",
+          fields: {
+            submitted_text: String(data.get("position_submitted_text") ?? ""),
+            submission_title_optional: String(data.get("submission_title_optional") ?? ""),
+            topic_hint_optional: String(data.get("topic_hint_optional") ?? ""),
+            submitter_note_optional: String(data.get("submitter_note_optional") ?? ""),
+          },
+          originDisclosure: originPayload(data, "position"),
+        },
+      ],
+    };
+  }
+  if (templateKey === "critique_existing") {
+    return {
+      templateKey,
+      reviewStatus: status,
+      parts: [
+        {
+          clientPartId: "critique",
+          type: "critique_text",
+          targetExistingPositionId: String(data.get("targetExistingPositionId") || state.selectedContributionTargetId || positions[0]?.id || ""),
+          fields: {
+            submitted_text: String(data.get("critique_submitted_text") ?? ""),
+            submitter_note_optional: String(data.get("critique_submitter_note_optional") ?? ""),
+          },
+          originDisclosure: originPayload(data, "critique"),
+        },
+      ],
+    };
+  }
+  if (templateKey === "position_and_critique") {
+    return {
+      templateKey,
+      reviewStatus: status,
+      parts: [
+        {
+          clientPartId: "position",
+          type: "position_text",
+          fields: {
+            submitted_text: String(data.get("position_submitted_text") ?? ""),
+            submission_title_optional: String(data.get("submission_title_optional") ?? ""),
+            topic_hint_optional: String(data.get("topic_hint_optional") ?? ""),
+            submitter_note_optional: String(data.get("submitter_note_optional") ?? ""),
+          },
+          originDisclosure: originPayload(data, "position"),
+        },
+        {
+          clientPartId: "critique",
+          type: "critique_text",
+          fields: {
+            submitted_text: String(data.get("critique_submitted_text") ?? ""),
+            submitter_note_optional: String(data.get("submitter_note_optional") ?? ""),
+          },
+          originDisclosure: originPayload(data, "critique"),
+        },
+      ],
+    };
+  }
+  return {
+    templateKey: "source_suggestion",
+    reviewStatus: status,
+    parts: [
+      {
+        clientPartId: "source",
+        type: "source_suggestion",
+        fields: {
+          source_title: String(data.get("source_title") ?? ""),
+          source_type_simple: String(data.get("source_type_simple") ?? ""),
+          why_relevant: String(data.get("why_relevant") ?? ""),
+          author: String(data.get("author") ?? ""),
+          publisher_or_site: String(data.get("publisher_or_site") ?? ""),
+          publication_year: String(data.get("publication_year") ?? ""),
+          chapter_or_section: String(data.get("chapter_or_section") ?? ""),
+          page_or_locator: String(data.get("page_or_locator") ?? ""),
+          source_url: String(data.get("source_url") ?? ""),
+          possible_argument_summary: String(data.get("possible_argument_summary") ?? ""),
+        },
+      },
+    ],
+  };
+}
+
+function originPayload(data, prefix) {
+  const origin = {
+    origin_choice: String(data.get(`${prefix}_origin_choice`) ?? "self_written"),
+  };
+  [
+    "source_title_optional",
+    "author_optional",
+    "publisher_optional",
+    "publication_year_optional",
+    "page_or_locator_optional",
+    "source_url_optional",
+    "minimal_raw_excerpt_optional",
+    "llm_assistance_description",
+    "origin_note_optional",
+  ].forEach((field) => {
+    const value = String(data.get(`${prefix}_${field}`) ?? "");
+    if (value) origin[field] = value;
+  });
+  return origin;
+}
+
+async function persistContributionSubmission(contributionSubmission) {
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch("/api/v1/contributions/submissions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ contributionSubmission }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Contribution rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the contribution.",
+      };
+    }
+    return {
+      tone: "good",
+      title: contributionSubmission.reviewStatus === "draft" ? "Saved" : "Submission received",
+      detail: `${body.submission?.statusLabel ?? "Pending review"}; no candidate or live corpus records created.`,
+    };
+  } catch (error) {
+    return {
+      tone: "warn",
+      title: "Contribution not persisted",
+      detail: error instanceof Error ? error.message : "Server API unavailable.",
+    };
+  }
+}
+
+async function fetchMyContributionSubmissions() {
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch("/api/v1/contributions/my-submissions", {
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        status: {
+          tone: "bad",
+          title: "Submissions unavailable",
+          detail: body.detail ?? body.error ?? "Server rejected the dashboard request.",
+        },
+      };
+    }
+    return {
+      submissions: body.submissions ?? [],
+      status: {
+        tone: "good",
+        title: "Submissions loaded",
+        detail: `${body.submissions?.length ?? 0} contribution submission(s).`,
+      },
+    };
+  } catch (error) {
+    return {
+      status: {
+        tone: "warn",
+        title: "Submissions not loaded",
+        detail: error instanceof Error ? error.message : "Server API unavailable.",
+      },
+    };
+  }
+}
+
 function createDemoCertificationAttempt() {
   return {
     id: `cert-demo-${Date.now()}`,
@@ -3872,6 +4428,12 @@ function humanize(value) {
 function formatNumber(value) {
   if (typeof value !== "number" || Number.isNaN(value)) return "n/a";
   return value.toFixed(3);
+}
+
+function formatDate(value) {
+  if (!value) return "n/a";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatPercent(value) {

@@ -30,6 +30,22 @@ import {
   seedCertificationAttempts,
   seedRatings,
 } from "./domain/core.mjs";
+import {
+  CONTRIBUTION_ARCHITECTURE,
+  CONTRIBUTION_PART_SCHEMAS,
+  CONTRIBUTION_TEMPLATES,
+  ORIGIN_CHOICES,
+  WORKFLOW_GATES,
+  WORKFLOW_POLICIES,
+  createContributionSubmissionResources,
+  createGateDecisionResource,
+  createPreparedDraftFromPart,
+  eligibleContributionPositions,
+  gatesSatisfiedForPolicy,
+  promotePreparedDraftToCandidateItem,
+  requiredGateIdsForPolicy,
+  sanitizeContributionSubmissionForUser,
+} from "./domain/contributions.mjs";
 import { createExternalJwtAuthConfig, verifyExternalJwtToken } from "./auth/external-jwt.mjs";
 import { createLocalAuditStore } from "./storage/local-audit-store.mjs";
 
@@ -80,6 +96,8 @@ const workflowStateReadRoles = ["rater", "graduate", "phd", "expert", "admin", "
 const workflowStateTransitionRoles = ["rater", "graduate", "phd", "expert", "admin"];
 const participantDataWriteRoles = ["rater", "graduate", "phd", "expert", "admin"];
 const participantDataReadRoles = ["rater", "graduate", "phd", "expert", "admin", "auditor"];
+const contributionSubmissionRoles = ["rater", "graduate", "phd", "expert", "admin"];
+const contributionAdminRoles = ["admin"];
 const raterSessionRequiredFields = [
   "id",
   "raterId",
@@ -1015,7 +1033,20 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/protected-artifact-retention-records$/, "protected_artifact_retention_record_submitted", "protectedArtifactRetentionRecord", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "artifactType", "artifactIdOrStoragePointer", "sourceSplitProtectionClass", "releaseConfigManifestId", "retentionDeletionPolicy", "restoreTimeRevalidationStatus"],
+    requiredFields: [
+      "id",
+      "artifactType",
+      "artifactIdOrStoragePointer",
+      "sourceSplitProtectionClass",
+      "releaseConfigManifestId",
+      "retentionDeletionPolicy",
+      "cacheOutboxPurgeStatus",
+      "backupSnapshotCoverage",
+      "developmentStagingEligibility",
+      "restoreTimeRevalidationStatus",
+      "createdAt",
+      "expiresAt",
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/protected-artifacts\/(?<id>[^/]+)\/revalidate$/, "protected_artifact_revalidation_submitted", "protectedArtifactRevalidation", adminRoles, {
     allowHiddenMetadata: true,
@@ -1319,6 +1350,16 @@ export function createLmcaServer(options = {}) {
       const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
       if (url.pathname.startsWith("/api/")) {
         await handleApiRequest(request, response, url, context);
+        return;
+      }
+      const contributeRedirects = {
+        "/contribute/positions/new": "/contribute/new?type=position",
+        "/contribute/critiques/new": "/contribute/new?type=critique",
+        "/contribute/sources/new": "/contribute/new?type=source",
+      };
+      if (request.method === "GET" && contributeRedirects[url.pathname]) {
+        response.writeHead(308, { location: contributeRedirects[url.pathname], "cache-control": "no-store" });
+        response.end();
         return;
       }
       await serveStatic(response, rootDir, url.pathname);
@@ -1761,6 +1802,49 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/v1/contributions/config") {
+    contributionConfigEndpoint(response);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/contributions/eligible-positions") {
+    sendJson(response, 200, { positions: eligibleContributionPositions(positions) });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/contributions/submissions") {
+    await contributionSubmissionEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/contributions/my-submissions") {
+    await contributionMySubmissionsEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/user-submissions") {
+    await adminContributionQueueEndpoint(request, response, context, "user-submissions");
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/prepared-drafts") {
+    await adminContributionQueueEndpoint(request, response, context, "prepared-drafts");
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/candidate-batches") {
+    await adminContributionQueueEndpoint(request, response, context, "candidate-batches");
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/admin/gate-decisions") {
+    await contributionGateDecisionEndpoint(request, response, context);
+    return;
+  }
+  const contributionPreparedDraftMatch = url.pathname.match(/^\/api\/v1\/admin\/user-submissions\/([^/]+)\/prepared-drafts$/);
+  if (request.method === "POST" && contributionPreparedDraftMatch) {
+    await contributionPreparedDraftEndpoint(request, response, context, decodeURIComponent(contributionPreparedDraftMatch[1]));
+    return;
+  }
+  const contributionPromoteMatch = url.pathname.match(/^\/api\/v1\/admin\/prepared-drafts\/([^/]+)\/promote$/);
+  if (request.method === "POST" && contributionPromoteMatch) {
+    await contributionPreparedDraftPromotionEndpoint(request, response, context, decodeURIComponent(contributionPromoteMatch[1]));
+    return;
+  }
+
   const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
   if (workflowWriteMatch) {
     await workflowWriteEndpoint(request, response, context, workflowWriteMatch);
@@ -2105,6 +2189,418 @@ async function workflowReadEndpoint(request, response, context, match) {
     return;
   }
   sendJson(response, 200, resource);
+}
+
+function contributionConfigEndpoint(response) {
+  sendJson(response, 200, {
+    architecture: CONTRIBUTION_ARCHITECTURE,
+    partSchemas: CONTRIBUTION_PART_SCHEMAS,
+    templates: CONTRIBUTION_TEMPLATES,
+    originChoices: ORIGIN_CHOICES,
+    workflowGates: WORKFLOW_GATES,
+    workflowPolicies: WORKFLOW_POLICIES,
+    userFacingRoutes: {
+      contribute: "/contribute",
+      newContribution: "/contribute/new",
+      mySubmissions: "/contribute/my-submissions",
+      legacyRedirects: {
+        "/contribute/positions/new": "/contribute/new?type=position",
+        "/contribute/critiques/new": "/contribute/new?type=critique",
+        "/contribute/sources/new": "/contribute/new?type=source",
+      },
+    },
+  });
+}
+
+async function contributionSubmissionEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionSubmissionRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionSubmissionRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.contributionSubmission ?? body.submission ?? body.resource ?? body;
+  const result = createContributionSubmissionResources(candidate, session.user, {
+    eligiblePositionIds: positions.map((position) => position.id),
+  });
+  if (!result.ok) {
+    sendJson(response, 400, { error: result.error, detail: result.detail });
+    return;
+  }
+  const events = await appendContributionWorkflowResources(context, request, session.user, result.resources, {
+    eventSuffix: result.submission.reviewStatus === "draft" ? "draft_saved" : "submitted",
+    route: "/api/v1/contributions/submissions",
+    requiredRoles: contributionSubmissionRoles,
+  });
+  sendJson(response, 201, {
+    ok: true,
+    submission: result.userView,
+    eventIds: events.map((event) => event.id),
+    resourcesCreated: contributionResourceCounts(result.resources),
+    safety: {
+      trustStatus: "untrusted_user_submission",
+      createdCandidateItems: false,
+      createdCandidateBatches: false,
+      createdLiveCorpusRecords: false,
+      reviewSignalsHiddenFromUser: true,
+    },
+  });
+}
+
+async function contributionMySubmissionsEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionSubmissionRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionSubmissionRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const submissions = model.contributionSubmissions
+    .filter((submission) => submission.submitterId === session.user.id)
+    .map((submission) =>
+      sanitizeContributionSubmissionForUser(submission, {
+        contributionParts: model.contributionParts,
+        preparedDrafts: model.preparedDrafts,
+        clarificationRequests: model.clarificationRequests,
+      }),
+    );
+  sendJson(response, 200, {
+    submissions,
+    privacy: {
+      userVisibleOnly: true,
+      reviewerControlPlaneWithheld: true,
+      raterOnlyMaterialWithheld: true,
+    },
+  });
+}
+
+async function adminContributionQueueEndpoint(request, response, context, queueName) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  if (queueName === "prepared-drafts") {
+    sendJson(response, 200, {
+      tabs: [
+        "All drafts",
+        "Has review signals",
+        "Needs blinding review",
+        "Needs context review",
+        "Needs duplicate review",
+        "Blocked by gate",
+        "Ready for candidate-item creation",
+        "Promoted to candidate item",
+        "Rejected",
+      ],
+      rows: model.preparedDrafts.map((draft) => adminPreparedDraftRow(draft, model)),
+    });
+    return;
+  }
+  if (queueName === "candidate-batches") {
+    const batchingEnabled = model.candidateBatches.length > 0;
+    sendJson(response, 200, {
+      batchingEnabled,
+      tabs: batchingEnabled
+        ? ["All batches", "Draft batches", "Ready for review", "Has review signals", "Blocked by gate", "Under review", "Ready for downstream promotion", "Closed"]
+        : [],
+      rows: model.candidateBatches.map((batch) => adminCandidateBatchRow(batch, model)),
+    });
+    return;
+  }
+  sendJson(response, 200, {
+    tabs: [
+      "All pending",
+      "Needs clarification",
+      "Positions",
+      "Critiques",
+      "Sources",
+      "Multi-part submissions",
+      "Has review signals",
+      "Blocked by gate",
+      "Possible duplicates",
+      "Possible source leakage",
+      "AI-assisted",
+      "Direct quotes",
+    ],
+    filters: [
+      "contribution type",
+      "template key",
+      "part type",
+      "source-origin choice",
+      "review-signal type",
+      "review-signal source",
+      "gate status",
+      "direct quote flag",
+      "adapted-source flag",
+      "conceptual-scope gate status",
+      "context-sufficiency gate status",
+      "likely source leakage",
+      "duplicate/near-duplicate status",
+      "LLM-assisted/model-generated status",
+      "submitter history",
+    ],
+    rows: model.contributionSubmissions.map((submission) => adminContributionSubmissionRow(submission, model)),
+  });
+}
+
+async function contributionGateDecisionEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.gateDecision ?? body.resource ?? body;
+  const validation = createGateDecisionResource(candidate, session.user);
+  if (!validation.ok) {
+    sendJson(response, 400, { error: validation.error, detail: validation.detail });
+    return;
+  }
+  const [event] = await appendContributionWorkflowResources(
+    context,
+    request,
+    session.user,
+    { gateDecision: [validation.resource] },
+    { eventSuffix: "recorded", route: "/api/v1/admin/gate-decisions", requiredRoles: contributionAdminRoles },
+  );
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    resourceKey: "gateDecision",
+    resourceId: validation.resource.id,
+    gateDecision: validation.resource,
+  });
+}
+
+async function contributionPreparedDraftEndpoint(request, response, context, submissionId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const submission = model.contributionSubmissions.find((item) => item.id === submissionId);
+  if (!submission) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.preparedDraft ?? body.resource ?? body;
+  const partId = candidate.sourceContributionPartId ?? candidate.sourcePartId ?? candidate.contributionPartId;
+  const part = model.contributionParts.find((item) => item.id === partId && item.submissionId === submission.id);
+  if (!part) {
+    sendJson(response, 400, { error: "source_contribution_part_not_found", detail: `No ContributionPart ${partId} exists on ${submission.id}.` });
+    return;
+  }
+  const validation = createPreparedDraftFromPart(part, candidate, model.gateDecisions, session.user);
+  if (!validation.ok) {
+    sendJson(response, 400, { error: validation.error, detail: validation.detail });
+    return;
+  }
+  const [event] = await appendContributionWorkflowResources(
+    context,
+    request,
+    session.user,
+    { preparedDraft: [validation.resource] },
+    { eventSuffix: "created", route: `/api/v1/admin/user-submissions/${submissionId}/prepared-drafts`, requiredRoles: contributionAdminRoles },
+  );
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    preparedDraft: validation.resource,
+    requiredPreparedDraftGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
+  });
+}
+
+async function contributionPreparedDraftPromotionEndpoint(request, response, context, preparedDraftId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const preparedDraft = model.preparedDrafts.find((item) => item.id === preparedDraftId);
+  if (!preparedDraft) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.promotion ?? body.resource ?? body;
+  const validation = promotePreparedDraftToCandidateItem(preparedDraft, candidate, model.gateDecisions, session.user);
+  if (!validation.ok) {
+    sendJson(response, 400, { error: validation.error, detail: validation.detail });
+    return;
+  }
+  const events = await appendContributionWorkflowResources(context, request, session.user, validation.resources, {
+    eventSuffix: "created",
+    route: `/api/v1/admin/prepared-drafts/${preparedDraftId}/promote`,
+    requiredRoles: contributionAdminRoles,
+  });
+  sendJson(response, 201, {
+    ok: true,
+    eventIds: events.map((event) => event.id),
+    candidateItem: validation.candidateItem,
+    promotionRecord: validation.promotionRecord,
+    safety: {
+      createdCandidateBatch: false,
+      createdLivePosition: false,
+      createdLiveCritique: false,
+    },
+  });
+}
+
+async function appendContributionWorkflowResources(context, request, actor, resources, options = {}) {
+  const orderedKeys = [
+    "contributionSubmission",
+    "contributionPart",
+    "originDisclosure",
+    "contributionPartLink",
+    "reviewSignal",
+    "exposureConflict",
+    "gateDecision",
+    "clarificationRequest",
+    "reviewDecision",
+    "preparedDraft",
+    "candidateItem",
+    "promotionRecord",
+    "candidateBatchMembership",
+  ];
+  const events = [];
+  for (const resourceKey of orderedKeys) {
+    for (const resource of resources[resourceKey] ?? []) {
+      const event = createWorkflowAuditEvent(`${snakeCase(resourceKey)}_${options.eventSuffix ?? "recorded"}`, actor, resourceKey, resource, request, {
+        route: options.route ?? null,
+        requiredRoles: options.requiredRoles ?? [],
+      });
+      await context.auditStore.appendWorkflowEvent(event);
+      events.push(event);
+    }
+  }
+  return events;
+}
+
+async function contributionReadModel(context) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  return {
+    contributionSubmissions: latestWorkflowResources(workflowEvents, "contributionSubmission"),
+    contributionParts: latestWorkflowResources(workflowEvents, "contributionPart"),
+    originDisclosures: latestWorkflowResources(workflowEvents, "originDisclosure"),
+    contributionPartLinks: latestWorkflowResources(workflowEvents, "contributionPartLink"),
+    reviewSignals: latestWorkflowResources(workflowEvents, "reviewSignal"),
+    workflowGates: latestWorkflowResources(workflowEvents, "workflowGate"),
+    workflowPolicies: latestWorkflowResources(workflowEvents, "workflowPolicy"),
+    gateDecisions: latestWorkflowResources(workflowEvents, "gateDecision"),
+    clarificationRequests: latestWorkflowResources(workflowEvents, "clarificationRequest"),
+    reviewDecisions: latestWorkflowResources(workflowEvents, "reviewDecision"),
+    preparedDrafts: latestWorkflowResources(workflowEvents, "preparedDraft"),
+    candidateItems: latestWorkflowResources(workflowEvents, "candidateItem"),
+    promotionRecords: latestWorkflowResources(workflowEvents, "promotionRecord"),
+    candidateBatches: latestWorkflowResources(workflowEvents, "candidateBatch"),
+    candidateBatchMemberships: latestWorkflowResources(workflowEvents, "candidateBatchMembership"),
+    exposureConflicts: latestWorkflowResources(workflowEvents, "exposureConflict"),
+  };
+}
+
+function contributionResourceCounts(resources) {
+  return Object.fromEntries(Object.entries(resources).map(([key, rows]) => [key, rows.length]));
+}
+
+function adminContributionSubmissionRow(submission, model) {
+  const parts = model.contributionParts.filter((part) => part.submissionId === submission.id);
+  const origins = model.originDisclosures.filter((origin) => parts.some((part) => part.id === origin.contributionPartId));
+  const signals = model.reviewSignals.filter((signal) => parts.some((part) => part.id === signal.affectedObjectId));
+  const gateSummary = contributionGateSummary(model.gateDecisions, parts.map((part) => part.id), "raw_intake_acceptance");
+  return {
+    id: submission.id,
+    contributionType: submission.templateKey,
+    templateKey: submission.templateKey,
+    partsIncluded: parts.map((part) => part.partType),
+    preview: parts.map((part) => part.submittedText ?? part.rawFields?.source_title).filter(Boolean).join(" / ").slice(0, 120),
+    submitterTrustTier: submission.submitterTrustTier,
+    sourceOriginChoiceSummary: origins.map((origin) => origin.origin_choice),
+    reviewSignalBadges: [...new Set(signals.map((signal) => signal.signalType))],
+    requiredGateSummary: gateSummary,
+    createdDate: submission.createdAt,
+    currentRollupStatus: submission.reviewStatus,
+    primaryAction: "Review submission",
+  };
+}
+
+function adminPreparedDraftRow(draft, model) {
+  const sourcePart = model.contributionParts.find((part) => part.id === draft.sourceContributionPartId);
+  const origin = model.originDisclosures.find((item) => item.contributionPartId === draft.sourceContributionPartId);
+  const signals = model.reviewSignals.filter((signal) => signal.affectedObjectId === draft.id || signal.affectedObjectId === draft.sourceContributionPartId);
+  return {
+    id: draft.id,
+    preparedDraftType: draft.draftType,
+    sourceContributionPart: draft.sourceContributionPartId,
+    preview: String(draft.preparedText ?? draft.preparedSourceCardContent?.source_title ?? sourcePart?.submittedText ?? "").slice(0, 120),
+    sourceOriginSummary: origin?.origin_choice ?? "none",
+    reviewSignalBadges: [...new Set(signals.map((signal) => signal.signalType))],
+    requiredGateSummary: contributionGateSummary(model.gateDecisions, [draft.id], "prepared_draft_readiness"),
+    candidateItemReadiness: draft.candidateItemReadiness,
+    primaryAction: "Review prepared draft",
+  };
+}
+
+function adminCandidateBatchRow(batch, model) {
+  const memberships = model.candidateBatchMemberships.filter((membership) => membership.candidateBatchId === batch.id);
+  const itemIds = new Set(memberships.map((membership) => membership.candidateItemId));
+  const items = model.candidateItems.filter((item) => itemIds.has(item.id));
+  return {
+    id: batch.id,
+    batchTitle: batch.title ?? batch.id,
+    batchPurpose: batch.batchPurpose ?? batch.purpose ?? null,
+    candidateItemCount: items.length,
+    includedItemTypes: [...new Set(items.map((item) => item.itemType))],
+    batchReviewSignalSummary: model.reviewSignals.filter((signal) => signal.affectedObjectId === batch.id).map((signal) => signal.signalType),
+    batchGateSummary: contributionGateSummary(model.gateDecisions, [batch.id], "candidate_batch_downstream_handoff"),
+    batchStatus: batch.batchStatus ?? "draft",
+    createdDate: batch.createdAt ?? null,
+    primaryAction: "Review batch",
+  };
+}
+
+function contributionGateSummary(gateDecisions, objectIds, policyId) {
+  const summaries = objectIds.map((objectId) => gatesSatisfiedForPolicy(policyId, objectId, gateDecisions));
+  const missingGateIds = [...new Set(summaries.flatMap((summary) => summary.missingGateIds))];
+  const blockingGateIds = [...new Set(summaries.flatMap((summary) => summary.blockingGateIds))];
+  return {
+    policyId,
+    status: missingGateIds.length || blockingGateIds.length ? "blocked_or_pending" : "satisfied",
+    requiredGateIds: requiredGateIdsForPolicy(policyId),
+    missingGateIds,
+    blockingGateIds,
+  };
+}
+
+function snakeCase(value) {
+  return String(value).replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
 }
 
 async function raterExposureEligibilityEndpoint(request, response, context, url) {

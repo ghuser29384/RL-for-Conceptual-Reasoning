@@ -2131,6 +2131,220 @@ test("v1 artifact endpoints expose existing report artifacts with role checks", 
   assert.equal(failureAudits.body.audits.length, 1);
 });
 
+test("contribution intake keeps user submissions gated before candidate promotion", async () => {
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+
+  const config = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/contributions/config",
+    headers: raterHeaders,
+  });
+  assert.equal(config.status, 200);
+  assert.ok(config.body.templates.position_and_critique.workflowPolicyKeys.includes("raw_intake_acceptance"));
+  assert.deepEqual(config.body.userFacingRoutes.legacyRedirects["/contribute/positions/new"], "/contribute/new?type=position");
+
+  const forbiddenRightsSubmission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/contributions/submissions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      contributionSubmission: {
+        templateKey: "position_only",
+        parts: [
+          {
+            id: "contribution-part-forbidden-rights",
+            type: "position_text",
+            submitted_text: "A short argument with a rights field that should not be accepted.",
+            rights_review_status: "cleared",
+            originDisclosure: { origin_choice: "self_written" },
+          },
+        ],
+      },
+    }),
+  });
+  assert.equal(forbiddenRightsSubmission.status, 400);
+  assert.match(forbiddenRightsSubmission.body.detail, /rights_review_status/);
+
+  const submission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/contributions/submissions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      contributionSubmission: {
+        id: "contribution-submission-workflow-new",
+        templateKey: "position_and_critique",
+        parts: [
+          {
+            id: "contribution-part-position-workflow-new",
+            clientPartId: "position-draft",
+            type: "position_text",
+            submitted_text:
+              "According to chapter 3, ideal deliberation proves the policy is legitimate whenever every affected person could accept the rule.",
+            originDisclosure: {
+              origin_choice: "adapted_from_source",
+            },
+          },
+          {
+            id: "contribution-part-critique-workflow-new",
+            clientPartId: "critique-draft",
+            type: "critique_text",
+            submitted_text:
+              "The argument moves from hypothetical acceptance to actual legitimacy without explaining why the hypothetical test is action-guiding.",
+            originDisclosure: {
+              origin_choice: "ai_assisted",
+              llm_assistance_description: "The submitter used an LLM to tighten wording after writing the critique.",
+            },
+          },
+        ],
+      },
+    }),
+  });
+  assert.equal(submission.status, 201);
+  assert.equal(submission.body.safety.trustStatus, "untrusted_user_submission");
+  assert.equal(submission.body.safety.createdCandidateItems, false);
+  assert.equal(submission.body.safety.createdCandidateBatches, false);
+  assert.equal(submission.body.safety.createdLiveCorpusRecords, false);
+  assert.equal(submission.body.resourcesCreated.contributionPart, 2);
+  assert.equal(submission.body.resourcesCreated.reviewSignal > 0, true);
+  assert.equal(submission.body.resourcesCreated.exposureConflict, 1);
+  assert.equal(submission.body.submission.parts.length, 2);
+  assert.equal(Object.hasOwn(submission.body.submission, "reviewSignalIds"), false);
+
+  const mySubmissions = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/contributions/my-submissions",
+    headers: raterHeaders,
+  });
+  assert.equal(mySubmissions.status, 200);
+  assert.equal(mySubmissions.body.submissions[0].id, "contribution-submission-workflow-new");
+  assert.equal(mySubmissions.body.privacy.userVisibleOnly, true);
+  assert.equal(mySubmissions.body.privacy.reviewerControlPlaneWithheld, true);
+
+  const adminQueue = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/admin/user-submissions",
+    headers: adminHeaders,
+  });
+  assert.equal(adminQueue.status, 200);
+  const adminRow = adminQueue.body.rows.find((row) => row.id === "contribution-submission-workflow-new");
+  assert.ok(adminRow.reviewSignalBadges.includes("missing_source_locator"));
+  assert.ok(adminRow.reviewSignalBadges.includes("likely_source_leakage"));
+  assert.ok(adminRow.reviewSignalBadges.includes("llm_assistance_signal"));
+  assert.equal(adminRow.requiredGateSummary.status, "blocked_or_pending");
+
+  const prematurePreparedDraft = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/admin/user-submissions/contribution-submission-workflow-new/prepared-drafts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      preparedDraft: {
+        id: "prepared-draft-premature",
+        sourceContributionPartId: "contribution-part-position-workflow-new",
+        draftType: "prepared_position_draft",
+        preparedText: "Prepared text should not be created before raw-intake gates pass.",
+      },
+    }),
+  });
+  assert.equal(prematurePreparedDraft.status, 400);
+  assert.equal(prematurePreparedDraft.body.error, "raw_intake_gates_not_satisfied");
+
+  for (const gateId of config.body.workflowPolicies.raw_intake_acceptance.requiredGateIds) {
+    const gate = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/admin/gate-decisions",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        gateDecision: {
+          id: `gate-decision-raw-${gateId}`,
+          gateId,
+          workflowPolicyId: "raw_intake_acceptance",
+          objectType: "ContributionPart",
+          objectId: "contribution-part-position-workflow-new",
+          gateStatus: gateId === "source_locator_gate" ? "waived_with_reason" : "passed",
+          waiverReason: gateId === "source_locator_gate" ? "Reviewer prepared a non-source-identifying excerpt before draft creation." : undefined,
+          decisionNote: "Raw intake gate reviewed before prepared draft creation.",
+        },
+      }),
+    });
+    assert.equal(gate.status, 201, gateId);
+  }
+
+  const preparedDraft = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/admin/user-submissions/contribution-submission-workflow-new/prepared-drafts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      preparedDraft: {
+        id: "prepared-draft-workflow-new",
+        sourceContributionPartId: "contribution-part-position-workflow-new",
+        draftType: "prepared_position_draft",
+        preparedText:
+          "Ideal deliberation can justify a policy when every affected person could accept the rule under shared public reasons.",
+        preparedDraftStatus: "ready_for_candidate_item_creation",
+      },
+    }),
+  });
+  assert.equal(preparedDraft.status, 201);
+  assert.equal(preparedDraft.body.preparedDraft.candidateItemReadiness, "ready_for_candidate_item_creation");
+
+  const prematurePromotion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/admin/prepared-drafts/prepared-draft-workflow-new/promote",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      promotion: {
+        candidateItemId: "candidate-item-premature",
+        candidateRaterVisibleText: "Candidate text cannot be promoted before prepared-draft gates pass.",
+      },
+    }),
+  });
+  assert.equal(prematurePromotion.status, 400);
+  assert.equal(prematurePromotion.body.error, "prepared_draft_gates_not_satisfied");
+
+  for (const gateId of preparedDraft.body.requiredPreparedDraftGateIds) {
+    const gate = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/admin/gate-decisions",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        gateDecision: {
+          id: `gate-decision-prepared-${gateId}`,
+          gateId,
+          workflowPolicyId: "prepared_draft_readiness",
+          objectType: "PreparedDraft",
+          objectId: "prepared-draft-workflow-new",
+          gateStatus: "passed",
+          decisionNote: "Prepared draft gate reviewed before candidate item creation.",
+        },
+      }),
+    });
+    assert.equal(gate.status, 201, gateId);
+  }
+
+  const promotion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/admin/prepared-drafts/prepared-draft-workflow-new/promote",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      promotion: {
+        candidateItemId: "candidate-item-workflow-new",
+        candidateRaterVisibleText:
+          "Ideal deliberation can justify a policy when every affected person could accept the rule under shared public reasons.",
+      },
+    }),
+  });
+  assert.equal(promotion.status, 201);
+  assert.equal(promotion.body.candidateItem.downstreamPromotionStatus, "not_promoted_to_live");
+  assert.equal(promotion.body.candidateItem.assignmentExclusionRequired, true);
+  assert.equal(promotion.body.safety.createdCandidateBatch, false);
+  assert.equal(promotion.body.safety.createdLivePosition, false);
+  assert.equal(promotion.body.safety.createdLiveCritique, false);
+});
+
 test("v1 workflow endpoints persist lifecycle events with role and assignment checks", async () => {
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
@@ -4620,6 +4834,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(overrideWithoutExplanationWorksheet.status, 400);
   assert.match(overrideWithoutExplanationWorksheet.body.detail, /overrideExplanation/);
+
+  const incompleteProtectedRetention = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/protected-artifact-retention-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      protectedArtifactRetentionRecord: {
+        ...ratingExperience.protectedArtifactRetentionRecords[0],
+        id: "protected-artifact-retention-workflow-incomplete-cache-paths",
+        cacheOutboxPurgeStatus: "",
+        backupSnapshotCoverage: "",
+        developmentStagingEligibility: "",
+      },
+    }),
+  });
+  assert.equal(incompleteProtectedRetention.status, 400);
+  assert.match(incompleteProtectedRetention.body.detail, /cacheOutboxPurgeStatus|backupSnapshotCoverage|developmentStagingEligibility/);
 
   for (const protectedArtifactRetentionRecord of ratingExperience.protectedArtifactRetentionRecords) {
     const response = await invokeApi(context, {
