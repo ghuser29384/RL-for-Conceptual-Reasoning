@@ -1965,6 +1965,25 @@ test("adjudication cockpit UI exposes screen-state, cockpit, memo, review-sessio
   assert.ok(styleSource.includes(".adjudicationCompose"));
 });
 
+test("release review and admin governance screens expose RLHF88 task-first no-feature-loss summaries", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  const styleSource = readFileSync("src/styles.css", "utf8");
+  assert.ok(appSource.includes("surfaceTaskFirstPanel(releaseReport, \"release_review\""));
+  assert.ok(appSource.includes("surfaceTaskFirstPanel(report, \"admin_governance\""));
+  assert.ok(appSource.includes("uxSurfaceEvidence(releaseReport, surface)"));
+  assert.ok(appSource.includes("Screen-state, glossary, and no-feature-loss evidence"));
+  assert.ok(appSource.includes('"release_governance_action"'));
+  assert.ok(appSource.includes('"protected_label_warning"'));
+  assert.ok(appSource.includes('"data_governance_withdrawal"'));
+  assert.ok(appSource.includes('"audit_provenance_capture"'));
+  assert.ok(appSource.includes("screenState?.policyVersionProvenance?.uxSimplificationPolicyId"));
+  assert.ok(appSource.includes("featureParityCoversSurface"));
+  assert.ok(appSource.includes("glossaryTooltipIds"));
+  assert.ok(appSource.includes("hiddenFieldClasses"));
+  assert.ok(styleSource.includes(".surfaceTaskPanel"));
+  assert.ok(styleSource.includes(".surfaceDisclosure"));
+});
+
 test("rater data-governance UI exposes consent, restriction, and withdrawal actions", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   assert.ok(appSource.includes('["data", "My Data", "database"]'));

@@ -334,6 +334,7 @@ nav {
 }
 
 .taskFirstPanel,
+.surfaceTaskPanel,
 .sessionPacingPanel,
 .preSubmitLintPanel {
   display: grid;
@@ -341,21 +342,25 @@ nav {
   margin-top: 14px;
 }
 
-.taskFirstPanel {
+.taskFirstPanel,
+.surfaceTaskPanel {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .taskFirstPanel article,
+.surfaceTaskPanel article,
 .sessionPacingPanel,
 .preSubmitLintPanel,
 .rubricQuickAccess,
-.selfScreenPanel {
+.selfScreenPanel,
+.surfaceDisclosure {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fbfcfd;
 }
 
-.taskFirstPanel article {
+.taskFirstPanel article,
+.surfaceTaskPanel article {
   display: grid;
   min-width: 0;
   gap: 5px;
@@ -363,6 +368,7 @@ nav {
 }
 
 .taskFirstPanel span,
+.surfaceTaskPanel span,
 .sessionPacingPanel span,
 .preSubmitLintPanel span,
 .selfScreenPanel span {
@@ -373,6 +379,7 @@ nav {
 }
 
 .taskFirstPanel strong,
+.surfaceTaskPanel strong,
 .sessionPacingPanel strong,
 .preSubmitLintPanel strong,
 .selfScreenPanel strong {
@@ -381,12 +388,30 @@ nav {
   overflow-wrap: anywhere;
 }
 
-.taskFirstPanel p {
+.taskFirstPanel p,
+.surfaceTaskPanel p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.surfaceDisclosure {
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.surfaceDisclosure summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.surfaceDisclosure .metricList {
+  margin-top: 10px;
 }
 
 .selfScreenPanel {
@@ -2003,6 +2028,7 @@ tbody tr:last-child td {
   .topbarStats,
   .queueGrid,
   .taskFirstPanel,
+  .surfaceTaskPanel,
   .sessionPacingPanel,
   .preSubmitLintPanel,
   .rubricQuickAccess div,

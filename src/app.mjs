@@ -2706,6 +2706,64 @@ function workflowPanel(releaseReport, sessionStatus, workflowStatus) {
   `;
 }
 
+function uxSurfaceEvidence(releaseReport, surface) {
+  const ux = releaseReport.uxSimplification ?? {};
+  return {
+    surfaceRow: ux.surfaceRows?.find((row) => row.surface === surface) ?? null,
+    screenState: ux.screenStateRows?.find((row) => row.surface === surface) ?? null,
+    copyPreview: ux.simplifiedCopyPreviewRows?.find((row) => row.screenId === surface) ?? null,
+    activePolicy: ux.activePolicy ?? ux.policy ?? null,
+    releaseUseStatus: ux.releaseUseStatus ?? "ux_simplification_evidence_missing",
+  };
+}
+
+function surfaceTaskFirstPanel(releaseReport, surface, options) {
+  const evidence = uxSurfaceEvidence(releaseReport, surface);
+  const screenState = evidence.screenState;
+  const surfaceRow = evidence.surfaceRow;
+  const copyPreview = evidence.copyPreview;
+  const requiredControls = surfaceRow?.requiredControls ?? screenState?.requiredControlKeys ?? options.requiredControls ?? [];
+  const optionalPanels = screenState?.optionalPanelKeys ?? [];
+  const glossaryTerms = copyPreview?.glossaryTooltipIds ?? ["centrality", "strength", "dead_weight", "single_issue"];
+  const status = surfaceRow?.status ?? evidence.releaseUseStatus;
+  return `
+    <section class="surfaceTaskPanel" aria-label="${escapeHtml(options.label)} task-first summary">
+      <article>
+        <span>Task</span>
+        <strong>${escapeHtml(screenState?.taskStatement ?? options.task)}</strong>
+        <p>${escapeHtml(options.scope)}</p>
+      </article>
+      <article>
+        <span>Primary next action</span>
+        <strong>${escapeHtml(humanize(screenState?.primaryNextAction ?? options.primaryAction))}</strong>
+        <p>${escapeHtml(screenState?.submissionConsequenceSummary ?? "Actions append audit evidence without changing labels.")}</p>
+      </article>
+      <article>
+        <span>Completion state</span>
+        <strong>${escapeHtml(humanize(status))}</strong>
+        <p>${escapeHtml(options.completion)}</p>
+      </article>
+      <article>
+        <span>Required controls</span>
+        <strong>${escapeHtml(requiredControls.map(humanize).join(", ") || "review required")}</strong>
+        <p>${escapeHtml(optionalPanels.length ? `Advanced panels: ${optionalPanels.map(humanize).join(", ")}.` : "No advanced panels declared.")}</p>
+      </article>
+    </section>
+    <details class="surfaceDisclosure">
+      <summary>Screen-state, glossary, and no-feature-loss evidence</summary>
+      ${metricList([
+        ["Surface", screenState?.surface ?? surface],
+        ["Schema", screenState?.outputSchemaVersion ?? "screen-state-output-lmca-v1"],
+        ["Policy", screenState?.policyVersionProvenance?.uxSimplificationPolicyId ?? surfaceRow?.policyId ?? "not recorded"],
+        ["Allowlisted actions", (screenState?.enabledActionAllowlist ?? requiredControls).map(humanize).join(", ")],
+        ["Glossary", glossaryTerms.join(", ")],
+        ["Hidden fields", screenState?.hiddenFieldClasses?.length ? `${screenState.hiddenFieldClasses.length} classes not disclosed` : "not recorded"],
+        ["No feature loss", surfaceRow?.featureParityCoversSurface ? "passed" : "review required"],
+      ])}
+    </details>
+  `;
+}
+
 function adjudicationPanel(releaseReport) {
   const adjudicationAudit =
     releaseReport.adjudicationMemoAudit ??
@@ -2905,6 +2963,14 @@ function releasePanel(profile, labelSnapshot, marginDistribution, releaseReport)
     <div class="releaseLayout">
       <section class="panel">
         ${panelTitle("shield", "Release Gate Profile", "Source-critical core, benchmark-quality safeguards, and claim-gated diagnostics are tracked separately.")}
+        ${surfaceTaskFirstPanel(releaseReport, "release_review", {
+          label: "Release review",
+          task: "Review release gates without upgrading partial work into LMCA-scale completion claims.",
+          primaryAction: "review_release_governance_action",
+          completion: "Release review remains descriptive until every gate and artifact link is backed by evidence.",
+          scope: "Protected-label warnings, release-governance actions, and audit provenance stay reachable from this screen.",
+          requiredControls: ["release_governance_action", "protected_label_warning", "audit_provenance_capture"],
+        })}
         <div class="gateGrid">
           ${checks
             .map(
@@ -3374,6 +3440,14 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
     <div class="governanceLayout">
       <section class="panel">
         ${panelTitle("database", "October Completion Audit", "Current evidence is compared against the full October target without upgrading partial work into completion claims.")}
+        ${surfaceTaskFirstPanel(report, "admin_governance", {
+          label: "Admin governance",
+          task: "Review release, participant, and protected-split governance before enabling stronger claims.",
+          primaryAction: "review_governance_actions",
+          completion: "Governance evidence remains append-only; missing gates stay visible instead of being hidden by summary metrics.",
+          scope: "Release-governance actions, data-governance controls, and audit provenance remain reachable for authorized admins.",
+          requiredControls: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
+        })}
         <div class="metricCards">
           ${metricCard("Positions", `${report.corpusManifest.counts.positions}/${report.octoberTargets.positions}`, `${report.targetGaps.positionsRemaining} remaining`)}
           ${metricCard("Critiques", `${report.corpusManifest.counts.critiques}/${report.octoberTargets.critiques}`, `${report.targetGaps.critiquesRemaining} remaining`)}
