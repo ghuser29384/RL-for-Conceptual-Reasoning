@@ -399,6 +399,9 @@ const policyActionKinds = [
   "hidden_benchmark_aggregate_report",
   "release_freeze",
   "training_export",
+  "unblinding",
+  "deprotection",
+  "governance_action",
   "manifest_activation",
 ];
 const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
@@ -437,11 +440,21 @@ const clientSurfaceChecks = [
   "screen_state_output_schema_binding",
   "csp",
 ];
-const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
+const auditChainEventKinds = [
+  "governance_approval",
+  "manifest_activation",
+  "protected_label_access",
+  "unblinding",
+  "deprotection",
+  "hidden_benchmark_release",
+  "training_export_release",
+];
 const auditChainPolicyActionKindByEventKind = {
-  governance_approval: "manifest_activation",
+  governance_approval: "governance_action",
   manifest_activation: "manifest_activation",
   protected_label_access: "protected_render",
+  unblinding: "unblinding",
+  deprotection: "deprotection",
   hidden_benchmark_release: "hidden_benchmark_aggregate_report",
   training_export_release: "training_export",
 };
@@ -449,6 +462,8 @@ const auditChainProtectedDataExposureClassByEventKind = {
   governance_approval: "redacted_metadata_only",
   manifest_activation: "redacted_metadata_only",
   protected_label_access: "protected_label_access_redacted",
+  unblinding: "unblinding_redacted",
+  deprotection: "deprotection_redacted",
   hidden_benchmark_release: "hidden_benchmark_release_redacted",
   training_export_release: "training_export_release_redacted",
 };
@@ -1808,21 +1823,60 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
 });
 
 test("score explanation triggers include surprising score flags", () => {
+  const ordinaryScores = {
+    centrality: 0.5,
+    strength: 0.5,
+    correctness: 0.5,
+    clarity: 0.8,
+    dead_weight: 0.1,
+    single_issue: 0.8,
+    overall: 0.25,
+  };
   assert.deepEqual(
     scoreExplanationTriggersForRating({
-      scores: {
-        centrality: 0.5,
-        strength: 0.5,
-        correctness: 0.5,
-        clarity: 0.8,
-        dead_weight: 0.1,
-        single_issue: 0.8,
-        overall: 0.25,
-      },
+      scores: ordinaryScores,
       flags: { surprisingScore: true },
       assignment: { queueType: "ordinary" },
     }),
     ["surprising_score"],
+  );
+  assert.deepEqual(
+    scoreExplanationTriggersForRating({
+      scores: { ...ordinaryScores, strength: 0.75, correctness: 0.25, overall: 0.38 },
+      assignment: { queueType: "ordinary" },
+    }),
+    ["score_inconsistency"],
+  );
+  assert.deepEqual(
+    scoreExplanationTriggersForRating({
+      scores: { ...ordinaryScores, centrality: 0.9, strength: 0.9, overall: 0.5 },
+      assignment: { queueType: "ordinary" },
+    }),
+    ["overall_product_gap"],
+  );
+  assert.deepEqual(
+    scoreExplanationTriggersForRating({
+      scores: ordinaryScores,
+      flags: { targetUnclear: true },
+      assignment: { queueType: "ordinary" },
+    }),
+    ["unclear_target"],
+  );
+  assert.deepEqual(
+    scoreExplanationTriggersForRating({
+      scores: ordinaryScores,
+      assignment: { queueType: "ordinary" },
+      kind: "revision",
+      revisionReasonCode: "post_discussion_revision",
+    }),
+    ["post_discussion_revision"],
+  );
+  assert.deepEqual(
+    scoreExplanationTriggersForRating({
+      scores: ordinaryScores,
+      assignment: { queueType: "hidden_benchmark" },
+    }),
+    ["high_stakes_workflow"],
   );
   assert.deepEqual(validateTriggeredScoreExplanation("One blind-safe sentence. Another short sentence.").ok, true);
   assert.deepEqual(validateTriggeredScoreExplanation("One sentence. Two sentence. Third sentence.").ok, false);
@@ -1830,15 +1884,7 @@ test("score explanation triggers include surprising score flags", () => {
   for (const flag of ["sourceExposureUncertainty", "priorFamiliarityUncertainty", "conflictUncertainty"]) {
     assert.deepEqual(
       scoreExplanationTriggersForRating({
-        scores: {
-          centrality: 0.5,
-          strength: 0.5,
-          correctness: 0.5,
-          clarity: 0.8,
-          dead_weight: 0.1,
-          single_issue: 0.8,
-          overall: 0.25,
-        },
+        scores: ordinaryScores,
         flags: { [flag]: true },
         assignment: { queueType: "ordinary" },
       }),

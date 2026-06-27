@@ -773,6 +773,9 @@ const policyActionKinds = [
   "hidden_benchmark_aggregate_report",
   "release_freeze",
   "training_export",
+  "unblinding",
+  "deprotection",
+  "governance_action",
   "manifest_activation",
 ];
 const phaseGateLaneKinds = [
@@ -837,12 +840,25 @@ const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
   "protected_label_access",
+  "unblinding",
+  "deprotection",
   "hidden_benchmark_release",
   "training_export_release",
 ];
+const auditChainPolicyActionKindByEventKind = {
+  governance_approval: "governance_action",
+  manifest_activation: "manifest_activation",
+  protected_label_access: "protected_render",
+  unblinding: "unblinding",
+  deprotection: "deprotection",
+  hidden_benchmark_release: "hidden_benchmark_aggregate_report",
+  training_export_release: "training_export",
+};
 const auditChainProtectedDataExposureClasses = [
   "redacted_metadata_only",
   "protected_label_access_redacted",
+  "unblinding_redacted",
+  "deprotection_redacted",
   "hidden_benchmark_release_redacted",
   "training_export_release_redacted",
 ];
@@ -2734,6 +2750,13 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/governance-approvals$/, "governance_approval_record_submitted", "governanceApprovalRecord", adminRoles, {
     allowHiddenMetadata: true,
+    policyActionKind: "governance_action",
+    policyActionKindField: "actionKind",
+    policyActionKindMap: {
+      unblinding: "unblinding",
+      deprotection: "deprotection",
+    },
+    phaseGateLaneKind: "governance_action",
     requiredFields: ["id", "actionKind", "affectedArtifactIds", "proposedBy", "approver1", "approver2", "independenceSeparationOfDutiesStatus", "reasonCode", "visibilitySplitMetricLeaderboardImpactSummary", "approvalTimestamp"],
     requiredNonEmptyArrayFields: ["affectedArtifactIds"],
     requiredDistinctFieldSets: [["proposedBy", "approver1", "approver2"]],
@@ -3138,6 +3161,7 @@ const workflowWriteEndpoints = [
   }),
 	  workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
 	    allowHiddenMetadata: true,
+	    validateSensitiveAuditChainBindings: true,
 	    requiredFields: ["id", "chainId", "sequence", "eventKind", "actionKind", "policyDecisionId", "governanceApprovalRecordId", "actorHash", "protectedDataExposureClass", "externalWormLedgerPointer", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "redactionPolicy", "occurredAt"],
 	    requiredPositiveIntegerFields: ["sequence"],
 	    requiredNonEmptyArrayFields: ["affectedArtifactIds", "approverHashes", "redactedReasonClasses"],
@@ -4061,6 +4085,15 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
       policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
     };
   }
+  const bindingValidation = await validateWorkflowResourceBindings(context, resource, spec);
+  if (!bindingValidation.ok) {
+    sendJson(response, bindingValidation.statusCode ?? 409, {
+      error: bindingValidation.error ?? "workflow_resource_binding_failed",
+      detail: bindingValidation.detail,
+      ...(bindingValidation.extra ?? {}),
+    });
+    return true;
+  }
   const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, resource, request, {
     route: spec.route,
     requiredRoles: spec.roles,
@@ -4143,6 +4176,15 @@ async function workflowWriteEndpoint(request, response, context, match) {
       policyDecisionConsumptionId: policyGate.consumption.id,
       policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
     };
+  }
+  const bindingValidation = await validateWorkflowResourceBindings(context, resource, spec);
+  if (!bindingValidation.ok) {
+    sendJson(response, bindingValidation.statusCode ?? 409, {
+      error: bindingValidation.error ?? "workflow_resource_binding_failed",
+      detail: bindingValidation.detail,
+      ...(bindingValidation.extra ?? {}),
+    });
+    return;
   }
   const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, resource, request, {
     route: spec.route,
@@ -6234,6 +6276,32 @@ async function nextAssignmentEndpoint(request, response, context) {
   const contextSnapshot = ratingContextSnapshots.find(
     (snapshot) => snapshot.positionId === assignment.positionId && snapshot.visibleCritiqueIds.includes(assignment.critiqueId),
   );
+  const assignmentIssueRoles = ["rater", "graduate", "phd", "expert", "admin"];
+  const policyGate = await appendWorkflowPolicyDecisionGate(
+    context,
+    request,
+    session.user,
+    {
+      id: `assignment-issue-${assignment.id}-${session.user.id}`,
+      assignmentId: assignment.id,
+      positionId: assignment.positionId,
+      critiqueId: assignment.critiqueId,
+      ratingContextSnapshotId: contextSnapshot?.id ?? null,
+      outputSchemaVersion: "assignment-issue-output-lmca-v1",
+    },
+    {
+      eventType: "assignment_issue",
+      resourceKey: "assignmentIssue",
+      route: "/api/v1/assignments/next",
+      roles: assignmentIssueRoles,
+      policyActionKind: "assignment_issue",
+      phaseGateLaneKind: "queue",
+    },
+  );
+  if (!policyGate.ok) {
+    sendJson(response, policyGate.statusCode ?? 409, { error: policyGate.error, detail: policyGate.detail, ...(policyGate.extra ?? {}) });
+    return;
+  }
   sendJson(response, 200, {
     assignment: {
       id: assignment.id,
@@ -6335,12 +6403,19 @@ async function nextAssignmentEndpoint(request, response, context) {
         "rater_performance_metadata",
       ],
       rejectedUnknownKeys: true,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
       sanitized: true,
     },
     actor: {
       id: session.user.id,
       role: session.user.role,
     },
+    policyActionKind: policyGate.actionKind,
+    policyDecisionId: policyGate.decision.id,
+    policyDecisionConsumptionId: policyGate.consumption.id,
   });
 }
 
@@ -6416,7 +6491,7 @@ async function appendWorkflowPolicyDecisionGate(context, request, actor, resourc
       },
     };
   }
-  const actionKind = spec.policyActionKind;
+  const actionKind = resolveWorkflowPolicyActionKind(spec, resource);
   const decidedAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   const idempotencyKey = `${actionKind}:${spec.eventType}:${resource.id}:${params.id ?? "root"}`;
@@ -6588,12 +6663,69 @@ function workflowPolicyGateTargetArtifactIds(resource, params = {}) {
     resource.id,
     params.id,
     resource.targetArtifactId,
+    resource.assignmentId,
     resource.itemId,
+    ...(Array.isArray(resource.affectedArtifactIds) ? resource.affectedArtifactIds : []),
     resource.positionId && resource.critiqueId ? `${resource.positionId}::${resource.critiqueId}` : null,
     resource.discussionThreadId,
     resource.adjudicationId,
     resource.memoId,
   ].filter((value, index, values) => typeof value === "string" && value.trim() && values.indexOf(value) === index);
+}
+
+function resolveWorkflowPolicyActionKind(spec, resource) {
+  if (!spec.policyActionKindField) return spec.policyActionKind;
+  const resourceValue = resource?.[spec.policyActionKindField];
+  return spec.policyActionKindMap?.[resourceValue] ?? spec.policyActionKind;
+}
+
+async function validateWorkflowResourceBindings(context, resource, spec) {
+  if (spec.validateSensitiveAuditChainBindings) {
+    return validateSensitiveAuditChainEventBindings(context, resource);
+  }
+  return { ok: true };
+}
+
+async function validateSensitiveAuditChainEventBindings(context, event) {
+  const failures = [];
+  const expectedPolicyActionKind = auditChainPolicyActionKindByEventKind[event.eventKind];
+  if (!expectedPolicyActionKind) failures.push("eventKind");
+
+  const decision = await workflowResourceById(context, "policyDecisionRecord", event.policyDecisionId);
+  if (!decision) {
+    failures.push("policyDecisionId:not_found");
+  } else {
+    if (decision.actionKind !== expectedPolicyActionKind) failures.push("policyDecisionId:actionKind");
+    if (decision.decisionStatus !== "allow") failures.push("policyDecisionId:decisionStatus");
+    if (decision.manifestBindingStatus !== "matched") failures.push("policyDecisionId:manifestBindingStatus");
+    if (decision.outputSchemaBindingStatus !== "matched") failures.push("policyDecisionId:outputSchemaBindingStatus");
+    if (decision.phaseGateBindingStatus !== "matched") failures.push("policyDecisionId:phaseGateBindingStatus");
+    if (decision.idempotencyBindingStatus !== "matched") failures.push("policyDecisionId:idempotencyBindingStatus");
+  }
+
+  const governanceApproval = await workflowResourceById(context, "governanceApprovalRecord", event.governanceApprovalRecordId);
+  if (!governanceApproval) {
+    failures.push("governanceApprovalRecordId:not_found");
+  } else {
+    if (governanceApproval.actionKind !== expectedPolicyActionKind) failures.push("governanceApprovalRecordId:actionKind");
+    if (governanceApproval.independenceSeparationOfDutiesStatus !== "independent_two_person_approval") {
+      failures.push("governanceApprovalRecordId:independenceSeparationOfDutiesStatus");
+    }
+    const approvedArtifactIds = new Set(Array.isArray(governanceApproval.affectedArtifactIds) ? governanceApproval.affectedArtifactIds : []);
+    const uncoveredArtifactIds = (Array.isArray(event.affectedArtifactIds) ? event.affectedArtifactIds : []).filter((id) => !approvedArtifactIds.has(id));
+    if (uncoveredArtifactIds.length) failures.push("governanceApprovalRecordId:affectedArtifactIds");
+  }
+
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "sensitive_audit_chain_binding_failed",
+      detail: failures.join(", "),
+      extra: { bindingFailures: failures },
+    };
+  }
+  return { ok: true };
 }
 
 async function appendRatingPolicyDecisionGate(context, request, actor, rating, eventType) {

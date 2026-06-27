@@ -4959,7 +4959,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       scoreExplanationPromptVisibility: "label_source_protected_status_blind",
       scoreExplanation: revisionExplanationTriggers.length
         ? (original.scoreExplanation ?? "Self-check revision keeps a blind-safe explanation for the triggered score policy.")
-        : (original.scoreExplanation ?? ""),
+        : "",
       generalRatingNote: original.generalRatingNote ?? "",
       revisionReasonCode: "human_only_self_check",
       revisionComment: "Locked first rating preserved; self-check appends a separate revision.",

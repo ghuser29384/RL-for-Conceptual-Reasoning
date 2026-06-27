@@ -327,6 +327,9 @@ const policyActionKinds = [
   "hidden_benchmark_aggregate_report",
   "release_freeze",
   "training_export",
+  "unblinding",
+  "deprotection",
+  "governance_action",
   "manifest_activation",
 ];
 const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
@@ -365,11 +368,21 @@ const clientSurfaceChecks = [
   "screen_state_output_schema_binding",
   "csp",
 ];
-const auditChainEventKinds = ["governance_approval", "manifest_activation", "protected_label_access", "hidden_benchmark_release", "training_export_release"];
+const auditChainEventKinds = [
+  "governance_approval",
+  "manifest_activation",
+  "protected_label_access",
+  "unblinding",
+  "deprotection",
+  "hidden_benchmark_release",
+  "training_export_release",
+];
 const auditChainPolicyActionKindByEventKind = {
-  governance_approval: "manifest_activation",
+  governance_approval: "governance_action",
   manifest_activation: "manifest_activation",
   protected_label_access: "protected_render",
+  unblinding: "unblinding",
+  deprotection: "deprotection",
   hidden_benchmark_release: "hidden_benchmark_aggregate_report",
   training_export_release: "training_export",
 };
@@ -377,6 +390,8 @@ const auditChainProtectedDataExposureClassByEventKind = {
   governance_approval: "redacted_metadata_only",
   manifest_activation: "redacted_metadata_only",
   protected_label_access: "protected_label_access_redacted",
+  unblinding: "unblinding_redacted",
+  deprotection: "deprotection_redacted",
   hidden_benchmark_release: "hidden_benchmark_release_redacted",
   training_export_release: "training_export_release_redacted",
 };
@@ -703,6 +718,18 @@ function completeOperationalControlWorkflowFixtures() {
 	    redactionPolicy: "redact protected labels, hidden text, raw source text, and private rater data",
 	    occurredAt: "2026-10-01T00:17:00.000Z",
 	  }));
+  const sensitiveAuditChainGovernanceApprovalRecords = auditChainEventKinds.map((eventKind) => ({
+    id: `governance-approval-workflow-${eventKind}`,
+    actionKind: auditChainPolicyActionKindByEventKind[eventKind],
+    affectedArtifactIds: [`artifact-${eventKind}`],
+    proposedBy: "demo-admin",
+    approver1: "independent-approver-a",
+    approver2: "independent-approver-b",
+    independenceSeparationOfDutiesStatus: "independent_two_person_approval",
+    reasonCode: `${eventKind}_audit_chain_approval`,
+    visibilitySplitMetricLeaderboardImpactSummary: "redacted high-impact audit-chain approval covers the affected artifact ids",
+    approvalTimestamp: "2026-10-01T00:16:30.000Z",
+  }));
   return {
     policyActionKindRecords,
     policyDecisionRecords,
@@ -782,6 +809,7 @@ function completeOperationalControlWorkflowFixtures() {
 	    checkedAt: "2026-10-01T00:16:00.000Z",
 	  })),
     sensitiveAuditChainEvents,
+    sensitiveAuditChainGovernanceApprovalRecords,
   };
 }
 
@@ -1857,6 +1885,11 @@ test("v1 assignment endpoint returns source-blind next assignment", async () => 
   assert.equal(response.body.screenState.payloadSource, "server_derived");
   assert.equal(response.body.screenState.surface, "rating");
   assert.equal(response.body.screenState.sanitized, true);
+  assert.equal(response.body.policyActionKind, "assignment_issue");
+  assert.match(response.body.policyDecisionId, /^policy-decision-assignment_issue-/);
+  assert.match(response.body.policyDecisionConsumptionId, /^policy-decision-consumption-assignment_issue-/);
+  assert.equal(response.body.screenState.policyActionKind, "assignment_issue");
+  assert.equal(response.body.screenState.policyDecisionId, response.body.policyDecisionId);
   assert.ok(response.body.screenState.enabledActionAllowlist.includes("safe_decline"));
   assert.ok(response.body.screenState.enabledActionAllowlist.includes("source_recognition"));
   assert.ok(response.body.screenState.policyVersionProvenance.uxSimplificationPolicyId);
@@ -1865,6 +1898,13 @@ test("v1 assignment endpoint returns source-blind next assignment", async () => 
     response.body.screenState.visibleFieldAllowlist.some((field) => /sourceType|benchmarkStatus|modelJudgeScore|peerRatings/i.test(field)),
     false,
   );
+  const workflowEvents = await context.auditStore.readWorkflowEvents();
+  assert.equal(workflowEvents.length, 2);
+  assert.equal(workflowEvents[0].type, "policy_decision_submitted");
+  assert.equal(workflowEvents[0].payload.policyDecisionRecord.actionKind, "assignment_issue");
+  assert.ok(workflowEvents[0].payload.policyDecisionRecord.targetArtifactIds.includes("assign-ai-base-rate"));
+  assert.equal(workflowEvents[1].type, "policy_decision_consumed");
+  assert.equal(workflowEvents[1].payload.policyDecisionConsumption.decisionId, response.body.policyDecisionId);
 });
 
 test("v1 API surface from RLHF77 routes through auth instead of falling through", async () => {
@@ -2248,6 +2288,7 @@ test("rating UI starts score controls unset and requires explicit values before 
   assert.ok(appSource.includes("scoreExplanationTriggersForRating({"));
   assert.ok(appSource.includes('scoreExplanationPolicyId: `score-explanation-policy-${releaseId}`'));
   assert.ok(appSource.includes('scoreExplanationPromptVisibility: "label_source_protected_status_blind"'));
+  assert.ok(appSource.includes('scoreExplanation: revisionExplanationTriggers.length\n        ? (original.scoreExplanation ?? "Self-check revision keeps a blind-safe explanation for the triggered score policy.")\n        : ""'));
   assert.ok(appSource.includes("General note (optional)"));
   assert.ok(appSource.includes("Short explanation required"));
   assert.ok(appSource.includes("Score Explanation Audit"));
@@ -2711,12 +2752,14 @@ test("workflow and snapshot side effects require current policy decisions and re
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
   const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
   const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
   const blockedPhaseBundle = {
     ...completeOperationalControlWorkflowFixtures().implementationPhaseGateBundle,
     id: "implementation-phase-gate-workflow-route-blocked",
     laneStates: completeOperationalControlWorkflowFixtures().implementationPhaseGateBundle.laneStates.map((lane) =>
-      ["route", "ui_panel", "governance_action", "export_path", "hidden_benchmark_submission_lane"].includes(lane.laneKind)
+      ["route", "queue", "ui_panel", "governance_action", "export_path", "hidden_benchmark_submission_lane"].includes(lane.laneKind)
         ? { ...lane, phaseState: "blocked" }
         : lane
     ),
@@ -2816,6 +2859,15 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(benchmarkSubmission.body.error, "implementation_phase_lane_unavailable");
   assert.equal(benchmarkSubmission.body.laneKind, "hidden_benchmark_submission_lane");
 
+  const assignmentIssue = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/assignments/next",
+    headers: raterHeaders,
+  });
+  assert.equal(assignmentIssue.status, 409);
+  assert.equal(assignmentIssue.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(assignmentIssue.body.laneKind, "queue");
+
   const assignmentScreenState = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/assignments/assign-ai-base-rate/screen-state",
@@ -2824,6 +2876,21 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(assignmentScreenState.status, 409);
   assert.equal(assignmentScreenState.body.error, "implementation_phase_lane_unavailable");
   assert.equal(assignmentScreenState.body.laneKind, "ui_panel");
+
+  const governanceApproval = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governance-approvals",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governanceApprovalRecord: {
+        ...completeInteractionWorkflowFixtures().governanceApprovalRecord,
+        id: "governance-approval-lane-blocked",
+      },
+    }),
+  });
+  assert.equal(governanceApproval.status, 409);
+  assert.equal(governanceApproval.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(governanceApproval.body.laneKind, "governance_action");
 
   const workflowEvents = await auditStore.readWorkflowEvents();
   assert.equal(workflowEvents.length, 1);
@@ -2836,6 +2903,53 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(workflowEvents.some((event) => event.type === "release_freeze_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "training_export_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "benchmark_submission_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "governance_approval_record_submitted"), false);
+});
+
+test("governance approval policy gates use exact unblinding and deprotection action kinds", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const baseGovernanceApproval = completeInteractionWorkflowFixtures().governanceApprovalRecord;
+
+  for (const actionKind of ["unblinding", "deprotection"]) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/governance-approvals",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        governanceApprovalRecord: {
+          ...baseGovernanceApproval,
+          id: `governance-approval-${actionKind}-policy-gated`,
+          actionKind,
+          affectedArtifactIds: [`protected-artifact-${actionKind}`],
+          reasonCode: `${actionKind}_review`,
+        },
+      }),
+    });
+    assert.equal(response.status, 201, actionKind);
+    assert.equal(response.body.policyActionKind, actionKind);
+    assert.match(response.body.policyDecisionId, new RegExp(`^policy-decision-${actionKind}-`));
+    assert.match(response.body.policyDecisionConsumptionId, new RegExp(`^policy-decision-consumption-${actionKind}-`));
+  }
+
+  const workflowEvents = await auditStore.readWorkflowEvents();
+  assert.equal(workflowEvents.filter((event) => event.type === "policy_decision_submitted").length, 2);
+  assert.equal(workflowEvents.filter((event) => event.type === "policy_decision_consumed").length, 2);
+  assert.equal(workflowEvents.filter((event) => event.type === "governance_approval_record_submitted").length, 2);
+  for (const actionKind of ["unblinding", "deprotection"]) {
+    const decisionEvent = workflowEvents.find(
+      (event) => event.type === "policy_decision_submitted" && event.payload.policyDecisionRecord.actionKind === actionKind,
+    );
+    assert.ok(decisionEvent, actionKind);
+    assert.ok(decisionEvent.payload.policyDecisionRecord.targetArtifactIds.includes(`protected-artifact-${actionKind}`));
+    const approvalEvent = workflowEvents.find(
+      (event) => event.type === "governance_approval_record_submitted" && event.payload.governanceApprovalRecord.actionKind === actionKind,
+    );
+    assert.equal(approvalEvent.accessAudit.policyActionKind, actionKind);
+    assert.equal(approvalEvent.accessAudit.policyDecisionConsumed, true);
+  }
 });
 
 test("v1 artifact endpoints expose existing report artifacts with role checks", async () => {
@@ -6583,6 +6697,11 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       assert.match(response.body.policyDecisionConsumptionId, /^policy-decision-consumption-hidden_benchmark_aggregate_report-/);
       assert.equal(response.body.policyActionKind, "hidden_benchmark_aggregate_report");
     }
+    if (resourceKey === "governanceApprovalRecord") {
+      assert.match(response.body.policyDecisionId, /^policy-decision-governance_action-/);
+      assert.match(response.body.policyDecisionConsumptionId, /^policy-decision-consumption-governance_action-/);
+      assert.equal(response.body.policyActionKind, "governance_action");
+    }
   }
 
   const ratingWorkflowProfileById = await invokeApi(context, {
@@ -9159,6 +9278,48 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 	  assert.equal(incompleteClientSurfaceCheck.status, 400);
 	  assert.match(incompleteClientSurfaceCheck.body.detail, /no_heatmaps|no_third_party_pixels|screen_state_output_schema_binding/);
 
+  for (const governanceApprovalRecord of operationalControls.sensitiveAuditChainGovernanceApprovalRecords) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/governance-approvals",
+      headers: adminHeaders,
+      body: JSON.stringify({ governanceApprovalRecord }),
+    });
+    assert.equal(response.status, 201, governanceApprovalRecord.actionKind);
+  }
+
+  const wrongDecisionAuditChainEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sensitive-audit-chain/events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sensitiveAuditChainEvent: {
+        ...operationalControls.sensitiveAuditChainEvents[0],
+        id: "sensitive-audit-chain-event-workflow-wrong-decision",
+        policyDecisionId: "policy-decision-workflow-training_export",
+      },
+    }),
+  });
+  assert.equal(wrongDecisionAuditChainEvent.status, 409);
+  assert.equal(wrongDecisionAuditChainEvent.body.error, "sensitive_audit_chain_binding_failed");
+  assert.match(wrongDecisionAuditChainEvent.body.detail, /policyDecisionId:actionKind/);
+
+  const wrongGovernanceApprovalAuditChainEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sensitive-audit-chain/events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sensitiveAuditChainEvent: {
+        ...operationalControls.sensitiveAuditChainEvents[0],
+        id: "sensitive-audit-chain-event-workflow-wrong-governance-approval",
+        governanceApprovalRecordId: "governance-approval-workflow-training_export_release",
+      },
+    }),
+  });
+  assert.equal(wrongGovernanceApprovalAuditChainEvent.status, 409);
+  assert.equal(wrongGovernanceApprovalAuditChainEvent.body.error, "sensitive_audit_chain_binding_failed");
+  assert.match(wrongGovernanceApprovalAuditChainEvent.body.detail, /governanceApprovalRecordId:actionKind/);
+
 	  for (const sensitiveAuditChainEvent of operationalControls.sensitiveAuditChainEvents) {
 	    const response = await invokeApi(context, {
       method: "POST",
@@ -9208,6 +9369,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 	  assert.match(weakSensitiveAuditChainEvent.body.detail, /approverHashes/);
 
 	  const tamperedAuditContext = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+  for (const policyDecisionRecord of operationalControls.policyDecisionRecords) {
+    const response = await invokeApi(tamperedAuditContext, {
+      method: "POST",
+      url: "/api/v1/policy-decisions",
+      headers: adminHeaders,
+      body: JSON.stringify({ policyDecisionRecord }),
+    });
+    assert.equal(response.status, 201, policyDecisionRecord.actionKind);
+  }
+  for (const governanceApprovalRecord of operationalControls.sensitiveAuditChainGovernanceApprovalRecords) {
+    const response = await invokeApi(tamperedAuditContext, {
+      method: "POST",
+      url: "/api/v1/governance-approvals",
+      headers: adminHeaders,
+      body: JSON.stringify({ governanceApprovalRecord }),
+    });
+    assert.equal(response.status, 201, governanceApprovalRecord.actionKind);
+  }
 	  const firstTamperedAuditEvent = await invokeApi(tamperedAuditContext, {
 	    method: "POST",
 	    url: "/api/v1/sensitive-audit-chain/events",
@@ -9689,7 +9868,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "interpretation-target-map-workflow-new",
   ]);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.calibrationFeedbackEvents.length, 1);
-  assert.equal(releaseReport.body.workflowInteractionArtifacts.governanceApprovalRecords.length, 1);
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.governanceApprovalRecords.length, 1 + auditChainEventKinds.length);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.protectedArtifactRevalidations.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.benchmarkSubmissionPolicies.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.benchmarkSubmissions.length, 1);
@@ -9725,8 +9904,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
   assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyActionKinds.length, policyActionKinds.length);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 11);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 12);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 19);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 20);
   assert.equal(
     releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
       (record) => record.actionKind === "protected_render" && String(record.id).startsWith("policy-decision-protected_render-"),
@@ -9780,6 +9959,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       (record) =>
         record.actionKind === "hidden_benchmark_aggregate_report" &&
         String(record.id).startsWith("policy-decision-hidden_benchmark_aggregate_report-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "governance_action" && String(record.id).startsWith("policy-decision-governance_action-"),
+    ).length,
+    6,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "unblinding" && String(record.id).startsWith("policy-decision-unblinding-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "deprotection" && String(record.id).startsWith("policy-decision-deprotection-"),
     ).length,
     1,
   );
@@ -9885,7 +10082,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 23);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 54);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
@@ -9998,6 +10195,25 @@ test("server policy requires rating confidence and trigger-based score explanati
 
   assert.equal(validateRatingPayload(validBlindRating("rating-ordinary-general-note-only"), "blind_initial_submitted").ok, true);
 
+  const ordinaryRevisionWithCopiedExplanation = {
+    ...validBlindRating("rating-ordinary-revision-copied-explanation"),
+    kind: "revision",
+    parentRatingId: "rating-ordinary-original",
+    revisionReasonCode: "human_only_self_check",
+    generalRatingNote: "Optional ordinary self-check note remains allowed.",
+    scoreExplanation: "A copied triggered explanation must not survive onto an untriggered ordinary revision.",
+  };
+  const copiedRevisionExplanationValidation = validateRatingPayload(ordinaryRevisionWithCopiedExplanation, "revision_submitted");
+  assert.equal(copiedRevisionExplanationValidation.ok, false);
+  assert.match(copiedRevisionExplanationValidation.detail, /only allowed when ScoreExplanationPolicy triggers/);
+
+  const ordinaryRevisionWithGeneralNote = {
+    ...ordinaryRevisionWithCopiedExplanation,
+    id: "rating-ordinary-revision-general-note",
+    scoreExplanation: "",
+  };
+  assert.equal(validateRatingPayload(ordinaryRevisionWithGeneralNote, "revision_submitted").ok, true);
+
   const surprisingScoreWithoutTrigger = {
     ...validBlindRating("rating-surprising-score-missing-trigger"),
     flags: { surprisingScore: true },
@@ -10014,6 +10230,94 @@ test("server policy requires rating confidence and trigger-based score explanati
     scoreExplanation: "The score pattern is unusual enough that I am adding a blind-safe explanation.",
   };
   assert.equal(validateRatingPayload(surprisingScoreWithExplanation, "blind_initial_submitted").ok, true);
+
+  const inconsistentScoreWithoutTrigger = {
+    ...validBlindRating("rating-inconsistent-score-missing-trigger"),
+    scores: {
+      centrality: 0.5,
+      strength: 0.75,
+      correctness: 0.25,
+      clarity: 0.8,
+      dead_weight: 0.1,
+      single_issue: 0.8,
+      overall: 0.38,
+    },
+    rawScores: {
+      centrality: 0.5,
+      strength: 0.75,
+      correctness: 0.25,
+      clarity: 0.8,
+      dead_weight: 0.1,
+      single_issue: 0.8,
+      overall: 0.38,
+    },
+    displayedScores: {
+      centrality: 0.5,
+      strength: 0.75,
+      correctness: 0.25,
+      clarity: 0.8,
+      dead_weight: 0.1,
+      single_issue: 0.8,
+      overall: 0.38,
+    },
+  };
+  const missingInconsistencyTriggerValidation = validateRatingPayload(inconsistentScoreWithoutTrigger, "blind_initial_submitted");
+  assert.equal(missingInconsistencyTriggerValidation.ok, false);
+  assert.match(missingInconsistencyTriggerValidation.detail, /score_inconsistency/);
+
+  const overallProductGapWithExplanation = {
+    ...validBlindRating("rating-overall-product-gap-explanation"),
+    scores: {
+      centrality: 0.9,
+      strength: 0.9,
+      correctness: 0.5,
+      clarity: 0.8,
+      dead_weight: 0.1,
+      single_issue: 0.8,
+      overall: 0.5,
+    },
+    rawScores: {
+      centrality: 0.9,
+      strength: 0.9,
+      correctness: 0.5,
+      clarity: 0.8,
+      dead_weight: 0.1,
+      single_issue: 0.8,
+      overall: 0.5,
+    },
+    displayedScores: {
+      centrality: 0.9,
+      strength: 0.9,
+      correctness: 0.5,
+      clarity: 0.8,
+      dead_weight: 0.1,
+      single_issue: 0.8,
+      overall: 0.5,
+    },
+    scoreExplanationTriggers: ["overall_product_gap"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "The overall score diverges from centrality times strength enough to require a note.",
+  };
+  assert.equal(validateRatingPayload(overallProductGapWithExplanation, "blind_initial_submitted").ok, true);
+
+  const unclearTargetWithoutTrigger = {
+    ...validBlindRating("rating-unclear-target-missing-trigger"),
+    flags: { targetUnclear: true },
+  };
+  const missingUnclearTargetTriggerValidation = validateRatingPayload(unclearTargetWithoutTrigger, "blind_initial_submitted");
+  assert.equal(missingUnclearTargetTriggerValidation.ok, false);
+  assert.match(missingUnclearTargetTriggerValidation.detail, /unclear_target/);
+
+  const postDiscussionRevisionWithExplanation = {
+    ...validBlindRating("rating-post-discussion-revision-explanation"),
+    kind: "revision",
+    parentRatingId: "rating-post-discussion-original",
+    revisionReasonCode: "post_discussion_revision",
+    scoreExplanationTriggers: ["post_discussion_revision"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "This post-discussion revision needs a blind-safe explanation for the changed judgment.",
+  };
+  assert.equal(validateRatingPayload(postDiscussionRevisionWithExplanation, "revision_submitted").ok, true);
 
   const priorFamiliarityWithoutTrigger = {
     ...validBlindRating("rating-prior-familiarity-missing-trigger"),

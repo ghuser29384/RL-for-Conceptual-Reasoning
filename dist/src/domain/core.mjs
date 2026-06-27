@@ -14986,6 +14986,9 @@ const REQUIRED_POLICY_ACTION_KINDS = [
   "hidden_benchmark_aggregate_report",
   "release_freeze",
   "training_export",
+  "unblinding",
+  "deprotection",
+  "governance_action",
   "manifest_activation",
 ];
 
@@ -15055,14 +15058,18 @@ const REQUIRED_AUDIT_CHAIN_EVENT_KINDS = [
   "governance_approval",
   "manifest_activation",
   "protected_label_access",
+  "unblinding",
+  "deprotection",
   "hidden_benchmark_release",
   "training_export_release",
 ];
 
 const AUDIT_CHAIN_POLICY_ACTION_KIND_BY_EVENT_KIND = {
-  governance_approval: "manifest_activation",
+  governance_approval: "governance_action",
   manifest_activation: "manifest_activation",
   protected_label_access: "protected_render",
+  unblinding: "unblinding",
+  deprotection: "deprotection",
   hidden_benchmark_release: "hidden_benchmark_aggregate_report",
   training_export_release: "training_export",
 };
@@ -15071,6 +15078,8 @@ const AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND = {
   governance_approval: "redacted_metadata_only",
   manifest_activation: "redacted_metadata_only",
   protected_label_access: "protected_label_access_redacted",
+  unblinding: "unblinding_redacted",
+  deprotection: "deprotection_redacted",
   hidden_benchmark_release: "hidden_benchmark_release_redacted",
   training_export_release: "training_export_release_redacted",
 };
