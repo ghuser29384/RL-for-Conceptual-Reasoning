@@ -814,6 +814,16 @@ function buildEffectiveVerificationRecords(submittedRecords = [], baseRecords = 
   return mergeByArtifactId(baseRecords, normalizedSubmittedRecords);
 }
 
+const VERIFICATION_EVIDENCE_SOURCE_EXPOSURE_STATUSES = ["source_blind", "post_lock_source_visible", "source_identifiable", "not_applicable"];
+const VERIFICATION_EVIDENCE_PROTECTED_CONTENT_STATUSES = ["none", "protected_content_absent", "protected_content_redacted", "protected_content_present_authorized"];
+const VERIFICATION_EVIDENCE_MODEL_ASSISTANCE_STATUSES = ["none", "model_assisted_retrieval", "model_generated_summary", "model_suggested_source"];
+const VERIFICATION_EVIDENCE_BLINDING_IMPACT_STATUSES = [
+  "source_blind_release_safe",
+  "post_lock_nonblind_evidence",
+  "source_assisted_review_required",
+  "protected_content_quarantined",
+];
+
 function normalizeSubmittedVerificationRecord(record) {
   const { positionId, critiqueId } = itemRefFromWorkflowArtifact(record);
   if (!record?.id || !positionId || !critiqueId) return null;
@@ -834,8 +844,106 @@ function normalizeSubmittedVerificationRecord(record) {
     verificationResult: firstDefined([record.verificationResult, record.resultSummary, record.note, "Submitted workflow verification record attached."]),
     confidence: record.confidence,
     exposureStatus: firstDefined([record.exposureStatus, record.exposurePolicy, "post_initial_lock_adjudication"]),
+    evidenceArtifactIds: optionalStringArray(record.evidenceArtifactIds) ?? [],
     timestamp: firstDefined([record.timestamp, record.createdAt, record.submittedAt, record.finalizedAt]),
     createdAt: firstDefined([record.createdAt, record.submittedAt, record.finalizedAt]),
+  };
+}
+
+function buildEffectiveVerificationEvidenceArtifacts(submittedArtifacts = [], records = verificationRecords) {
+  const seedArtifacts = records.flatMap((record) => defaultVerificationEvidenceArtifactsForRecord(record));
+  const normalizedSubmittedArtifacts = submittedArtifacts.map((artifact) => normalizeSubmittedVerificationEvidenceArtifact(artifact)).filter(Boolean);
+  return mergeByArtifactId(seedArtifacts, normalizedSubmittedArtifacts);
+}
+
+function defaultVerificationEvidenceArtifactsForRecord(record) {
+  const materials = optionalStringArray(record.verificationMaterials) ?? [];
+  return materials.map((material, index) =>
+    normalizeSubmittedVerificationEvidenceArtifact({
+      id: `verification-evidence-${record.id}-${index + 1}`,
+      verificationRecordId: record.id,
+      itemId: makeItemId(record.positionId, record.critiqueId),
+      claimRef: record.claimChecked ?? record.claim ?? record.id,
+      citation: material,
+      snapshotContentHash: `sha256:verification-evidence-${record.id}-${index + 1}`,
+      retrievedAt: record.createdAt ?? record.timestamp ?? "2026-10-01T00:00:00.000Z",
+      sourceExposureStatus: String(record.exposureStatus ?? "").includes("post_initial_lock") ? "post_lock_source_visible" : "source_blind",
+      protectedContentExposureStatus: "protected_content_absent",
+      modelAssistanceStatus: "none",
+      nonblindEvidenceFlag: String(record.exposureStatus ?? "").includes("post_initial_lock"),
+      sourceAssistedFlag: false,
+      sourceIdentifiabilityFlag: false,
+      protectedContentFlag: false,
+      blindingImpactStatus: String(record.exposureStatus ?? "").includes("post_initial_lock") ? "post_lock_nonblind_evidence" : "source_blind_release_safe",
+      evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
+      createdBy: record.verifierId ?? "seed-verifier",
+      createdAt: record.createdAt ?? record.timestamp ?? "2026-10-01T00:00:00.000Z",
+    }, "seed_verification_evidence_artifact"),
+  );
+}
+
+function normalizeSubmittedVerificationEvidenceArtifact(artifact, rowSource = "submitted_workflow_verification_evidence_artifact") {
+  const { positionId, critiqueId } = itemRefFromWorkflowArtifact(artifact);
+  if (!artifact?.id || !positionId || !critiqueId) return null;
+  const sourceExposureStatus = artifact.sourceExposureStatus ?? artifact.sourceIdentifiabilityExposureStatus ?? null;
+  const protectedContentExposureStatus = artifact.protectedContentExposureStatus ?? artifact.protectedContentStatus ?? null;
+  const modelAssistanceStatus = artifact.modelAssistanceStatus ?? artifact.modelAssistedStatus ?? null;
+  const blindingImpactStatus = artifact.blindingImpactStatus ?? artifact.blindingStatus ?? null;
+  const citation = firstDefined([artifact.citation, artifact.sourceCitation, artifact.evidenceCitation, artifact.url]);
+  const snapshotContentHash = firstDefined([artifact.snapshotContentHash, artifact.snapshotHash, artifact.sourceSnapshotHash]);
+  const nonblindEvidenceFlag = artifact.nonblindEvidenceFlag === true;
+  const sourceAssistedFlag = artifact.sourceAssistedFlag === true;
+  const sourceIdentifiabilityFlag = artifact.sourceIdentifiabilityFlag === true;
+  const protectedContentFlag = artifact.protectedContentFlag === true;
+  const reviewReasons = [
+    requiredPromptFieldReason("claimRef", artifact.claimRef ?? artifact.claimChecked ?? artifact.claimId),
+    requiredPromptFieldReason("citation", citation),
+    requiredPromptFieldReason("snapshotContentHash", snapshotContentHash),
+    String(snapshotContentHash ?? "").startsWith("sha256:") ? null : "snapshotContentHash",
+    requiredPromptFieldReason("retrievedAt", artifact.retrievedAt ?? artifact.retrievalTime),
+    VERIFICATION_EVIDENCE_SOURCE_EXPOSURE_STATUSES.includes(sourceExposureStatus) ? null : "sourceExposureStatus",
+    VERIFICATION_EVIDENCE_PROTECTED_CONTENT_STATUSES.includes(protectedContentExposureStatus) ? null : "protectedContentExposureStatus",
+    VERIFICATION_EVIDENCE_MODEL_ASSISTANCE_STATUSES.includes(modelAssistanceStatus) ? null : "modelAssistanceStatus",
+    typeof artifact.nonblindEvidenceFlag === "boolean" ? null : "nonblindEvidenceFlag",
+    typeof artifact.sourceAssistedFlag === "boolean" ? null : "sourceAssistedFlag",
+    typeof artifact.sourceIdentifiabilityFlag === "boolean" ? null : "sourceIdentifiabilityFlag",
+    typeof artifact.protectedContentFlag === "boolean" ? null : "protectedContentFlag",
+    sourceExposureStatus && !["source_blind", "not_applicable"].includes(sourceExposureStatus) && !nonblindEvidenceFlag ? "nonblindEvidenceFlag" : null,
+    sourceExposureStatus === "source_identifiable" && !sourceIdentifiabilityFlag ? "sourceIdentifiabilityFlag" : null,
+    modelAssistanceStatus && modelAssistanceStatus !== "none" && !sourceAssistedFlag ? "sourceAssistedFlag" : null,
+    protectedContentExposureStatus === "protected_content_present_authorized" && !protectedContentFlag ? "protectedContentFlag" : null,
+    VERIFICATION_EVIDENCE_BLINDING_IMPACT_STATUSES.includes(blindingImpactStatus) ? null : "blindingImpactStatus",
+    requiredPromptFieldReason("evidenceUsePolicy", artifact.evidenceUsePolicy),
+    requiredPromptFieldReason("createdBy", artifact.createdBy ?? artifact.verifierId),
+    requiredPromptFieldReason("createdAt", artifact.createdAt ?? artifact.timestamp),
+  ].filter(Boolean);
+  return {
+    ...artifact,
+    id: artifact.id,
+    rowSource,
+    positionId,
+    critiqueId,
+    itemId: makeItemId(positionId, critiqueId),
+    verificationRecordId: artifact.verificationRecordId ?? artifact.recordId ?? null,
+    verificationWorkspaceId: artifact.verificationWorkspaceId ?? artifact.workspaceId ?? null,
+    claimRef: artifact.claimRef ?? artifact.claimChecked ?? artifact.claimId ?? null,
+    citation,
+    snapshotArtifactId: artifact.snapshotArtifactId ?? null,
+    snapshotContentHash,
+    retrievedAt: artifact.retrievedAt ?? artifact.retrievalTime ?? null,
+    sourceExposureStatus,
+    protectedContentExposureStatus,
+    modelAssistanceStatus,
+    nonblindEvidenceFlag,
+    sourceAssistedFlag,
+    sourceIdentifiabilityFlag,
+    protectedContentFlag,
+    blindingImpactStatus,
+    evidenceUsePolicy: artifact.evidenceUsePolicy ?? null,
+    createdBy: artifact.createdBy ?? artifact.verifierId ?? null,
+    createdAt: artifact.createdAt ?? artifact.timestamp ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "verification_evidence_artifact_review_required" : "verification_evidence_artifact_complete",
   };
 }
 
@@ -6325,12 +6433,19 @@ export function buildCorrectnessVerificationReport(
   positionList = positions,
   critiqueList = critiques,
   records = verificationRecords,
+  evidenceArtifacts = buildEffectiveVerificationEvidenceArtifacts([], records),
 ) {
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const recordsByItem = records.reduce((acc, record) => {
     const itemId = makeItemId(record.positionId, record.critiqueId);
     acc[itemId] ??= [];
     acc[itemId].push(record);
+    return acc;
+  }, {});
+  const evidenceArtifactsByItem = evidenceArtifacts.reduce((acc, artifact) => {
+    const itemId = artifact.itemId ?? makeItemId(artifact.positionId, artifact.critiqueId);
+    acc[itemId] ??= [];
+    acc[itemId].push(artifact);
     return acc;
   }, {});
   const rows = critiqueList.map((critique) => {
@@ -6343,10 +6458,33 @@ export function buildCorrectnessVerificationReport(
     if (correctnessSpread !== null && correctnessSpread > 0.35) requirementReasons.push("correctness_spread_above_0_35");
     const itemRecords = recordsByItem[itemId] ?? [];
     const latestRecord = latestVerificationRecord(itemRecords);
+    const itemEvidenceArtifacts = evidenceArtifactsByItem[itemId] ?? [];
+    const explicitEvidenceArtifactIds = new Set(latestRecord?.evidenceArtifactIds ?? []);
+    const linkedEvidenceArtifacts = itemEvidenceArtifacts.filter((artifact) => {
+      if (!latestRecord) return !artifact.verificationRecordId;
+      if (explicitEvidenceArtifactIds.size) return explicitEvidenceArtifactIds.has(artifact.id);
+      return artifact.verificationRecordId ? artifact.verificationRecordId === latestRecord.id : true;
+    });
+    const completeEvidenceArtifacts = linkedEvidenceArtifacts.filter((artifact) => artifact.reviewReasons.length === 0);
+    const latestRecordNeedsEvidence = latestRecord && ["verified", "adjudication_resolved"].includes(latestRecord.verificationStatus);
+    const evidenceProvenanceStatus =
+      !latestRecord
+        ? "not_applicable"
+        : linkedEvidenceArtifacts.some((artifact) => artifact.reviewReasons.length)
+          ? "verification_evidence_artifact_review_required"
+          : latestRecordNeedsEvidence && !completeEvidenceArtifacts.length
+            ? "verification_evidence_artifact_missing"
+            : completeEvidenceArtifacts.length
+              ? "verification_evidence_artifact_complete"
+              : "not_applicable";
     const verificationStatus = latestRecord?.verificationStatus ?? (requirementReasons.length ? "missing" : "not_needed");
     const notPracticableResolved = verificationStatus === "not_practicable" && ["expert", "admin"].includes(latestRecord?.verifierRole);
     const resolved = !requirementReasons.length || ["verified", "not_needed"].includes(verificationStatus) || notPracticableResolved;
     const releaseCritical = ["public_train", "public_dev", "internal_validation", "hidden_benchmark"].includes(position?.split);
+    const evidenceReleaseBlocking =
+      releaseCritical &&
+      latestRecordNeedsEvidence &&
+      evidenceProvenanceStatus !== "verification_evidence_artifact_complete";
     return {
       itemHash: `sha256:${itemId}:verification`,
       itemId,
@@ -6363,16 +6501,27 @@ export function buildCorrectnessVerificationReport(
       verificationStatus,
       verificationType: latestRecord?.verificationType ?? "not_applicable",
       verificationMaterials: latestRecord?.verificationMaterials ?? [],
+      linkedEvidenceArtifactCount: linkedEvidenceArtifacts.length,
+      completeEvidenceArtifactCount: completeEvidenceArtifacts.length,
+      verificationEvidenceArtifactIds: linkedEvidenceArtifacts.map((artifact) => artifact.id),
+      verificationEvidenceProvenanceStatus: evidenceProvenanceStatus,
+      nonblindEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.nonblindEvidenceFlag),
+      sourceAssistedEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.sourceAssistedFlag),
+      protectedContentEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.protectedContentFlag),
+      modelAssistedEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.modelAssistanceStatus && artifact.modelAssistanceStatus !== "none"),
       confidence: latestRecord?.confidence ?? null,
       verifierRole: latestRecord?.verifierRole ?? null,
       exposureStatus: latestRecord?.exposureStatus ?? "not_applicable",
       timestamp: latestRecord?.timestamp ?? latestRecord?.createdAt ?? null,
-      releaseBlocking: requirementReasons.length > 0 && !resolved && releaseCritical,
+      releaseBlocking: (requirementReasons.length > 0 && !resolved && releaseCritical) || evidenceReleaseBlocking,
       resultSummary: latestRecord?.verificationResult ?? (requirementReasons.length ? "Verification required but no linked VerificationRecord is resolved." : "No correctness-sensitive verification required."),
     };
   });
   const requiredRows = rows.filter((row) => row.verificationRequired);
   const releaseBlockingRows = rows.filter((row) => row.releaseBlocking);
+  const evidenceReviewSections = evidenceArtifacts
+    .filter((artifact) => artifact.reviewReasons.length)
+    .flatMap((artifact) => artifact.reviewReasons.map((reason) => ({ artifactType: "verification_evidence_artifact", artifactId: artifact.id, reason })));
   return {
     id: `correctness-verification-${releaseId}`,
     releaseId,
@@ -6382,16 +6531,23 @@ export function buildCorrectnessVerificationReport(
       requiredWhen: ["rater_needs_verification_flag", "correctness_spread_above_0_35"],
       releaseRule: "Correctness-sensitive benchmark, validation, or public-release items must be verified or explicitly marked not_practicable by an expert/admin adjudicator.",
       ratingPreservation: "Verification materials are linked records and do not overwrite blind initial ratings.",
+      evidenceArtifactRule:
+        "VerificationEvidenceArtifact rows preserve citation/snapshot, retrieval time, source/protected/model-assistance exposure status, and nonblind/source-assisted flags.",
     },
     requiredItemCount: requiredRows.length,
     linkedRecordCount: records.length,
+    linkedEvidenceArtifactCount: evidenceArtifacts.length,
+    submittedEvidenceArtifactCount: evidenceArtifacts.filter((artifact) => artifact.rowSource === "submitted_workflow_verification_evidence_artifact").length,
+    evidenceReviewSections,
     unresolvedRequiredItems: requiredRows.filter((row) => ["missing", "unresolved"].includes(row.verificationStatus)),
     releaseBlockingItems: releaseBlockingRows,
     byVerificationStatus: countBy(rows, "verificationStatus"),
     byVerificationType: countBy(rows, "verificationType"),
     byExposureStatus: countBy(rows, "exposureStatus"),
+    byEvidenceProvenanceStatus: countBy(rows, "verificationEvidenceProvenanceStatus"),
+    verificationEvidenceArtifactRows: evidenceArtifacts,
     verificationRows: rows,
-    releaseUseStatus: releaseBlockingRows.length ? "verification_review_required_before_benchmark_or_public_release" : "pass",
+    releaseUseStatus: releaseBlockingRows.length || evidenceReviewSections.length ? "verification_review_required_before_benchmark_or_public_release" : "pass",
   };
 }
 
@@ -8957,6 +9113,17 @@ const UX_SIMPLIFIED_COPY_REQUIRED_GLOSSARY_TERMS = ["centrality", "strength"];
 const UX_COPY_VARIANT_PROTECTED_SPLIT_DISPOSITIONS = new Set(["frozen_compatible", "quarantined_sensitivity_snapshot"]);
 const UX_REQUIRED_ALWAYS_VISIBLE_CONTROLS = ["task_statement", "primary_next_action", "required_controls"];
 const UX_REQUIRED_ONE_CLICK_ACCESSIBLE_CONTROLS = ["appendix_f_anchor_access", "rubric_glossary", "item_issue_report"];
+const RUBRIC_COPY_TRACEABILITY_RELEASE_CRITICAL_SCREENS = ["rating", "practice", "calibration", "adjudication", "release_review"];
+const RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
+const RUBRIC_COPY_TRACEABILITY_REQUIRED_CLAUSES = [
+  "appendix_f.centrality",
+  "appendix_f.strength",
+  "appendix_f.correctness",
+  "appendix_f.clarity",
+  "appendix_f.dead_weight",
+  "appendix_f.single_issue",
+  "appendix_f.overall",
+];
 
 const UX_FORBIDDEN_VISIBLE_FIELD_FRAGMENTS = [
   "sourcecategory",
@@ -9083,6 +9250,33 @@ function defaultScreenStatePayloads(releaseId, policyId) {
   }));
 }
 
+function defaultRubricCopyTraceabilityMap(releaseId) {
+  return {
+    id: `rubric-copy-traceability-map-${releaseId}`,
+    releaseId,
+    mapVersion: "rubric-copy-traceability-rlhf89-v1",
+    rubricVersion: "appendix-f-operational-v1",
+    copyBundleId: `rubric-copy-bundle-${releaseId}`,
+    coveredScreenIds: RUBRIC_COPY_TRACEABILITY_RELEASE_CRITICAL_SCREENS,
+    simplifiedCopyEntryIds: RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES,
+    mappedRubricClauseIds: RUBRIC_COPY_TRACEABILITY_REQUIRED_CLAUSES,
+    clauseMap: Object.fromEntries(
+      RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES.map((entryId, index) => [entryId, RUBRIC_COPY_TRACEABILITY_REQUIRED_CLAUSES[index]]),
+    ),
+    semanticDriftTestIds: RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES.map((entryId) => `semantic-drift-${entryId}`),
+    semanticDriftTestStatus: "passed",
+    semanticDriftFailureBlocker: true,
+    exactRubricClauseMapping: true,
+    appendixFAnchorAccess: "one_click",
+    hiddenFieldLeakageCheck: "passed",
+    releaseCriticalUseStatus: "frozen_for_release_critical_screens",
+    releaseConfigManifestId: `release-config-manifest-${releaseId}`,
+    reviewerId: "seed-rubric-copy-reviewer",
+    reviewedAt: "2026-10-01T00:00:00.000Z",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
   const submittedPolicyRows = (options.uxSimplificationPolicies ?? []).map((policy) => normalizeUXSimplificationPolicy(policy, "submitted_workflow_ux_simplification_policy")).filter(Boolean);
   const seedPolicy = normalizeUXSimplificationPolicy(defaultUXSimplificationPolicy(releaseId), "seed_rlhf88_policy");
@@ -9099,12 +9293,16 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
   const submittedCopyPreviewRows = (options.simplifiedCopyPreviews ?? [])
     .map((preview) => normalizeUXSimplifiedCopyPreview(preview, "submitted_workflow_simplified_copy_preview"))
     .filter(Boolean);
+  const submittedTraceabilityRows = (options.rubricCopyTraceabilityMaps ?? [])
+    .map((map) => normalizeRubricCopyTraceabilityMap(map, "submitted_workflow_rubric_copy_traceability_map"))
+    .filter(Boolean);
   const hasSubmittedEvidence =
     submittedPolicyRows.length ||
     submittedReviewRows.length ||
     submittedScreenStateRows.length ||
     submittedFeatureParityRows.length ||
-    submittedCopyPreviewRows.length;
+    submittedCopyPreviewRows.length ||
+    submittedTraceabilityRows.length;
   const seedReviewRows = [normalizeUXSimplificationReview(defaultUXSimplificationReview(releaseId, seedPolicy.id), seedPolicy.id, "seed_rlhf88_review")];
   const seedScreenStateRows = defaultScreenStatePayloads(releaseId, seedPolicy.id).map((payload) => normalizeScreenStatePayload(payload, "seed_server_derived_screen_state"));
   const seedFeatureParityRows = defaultScreenFeatureParityChecks(releaseId, seedPolicy.id)
@@ -9113,12 +9311,22 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
   const seedCopyPreviewRows = defaultSimplifiedCopyPreviews(releaseId)
     .map((preview) => normalizeUXSimplifiedCopyPreview(preview, "seed_simplified_copy_preview"))
     .filter(Boolean);
+  const seedTraceabilityRows = [normalizeRubricCopyTraceabilityMap(defaultRubricCopyTraceabilityMap(releaseId), "seed_rubric_copy_traceability_map")];
   const reviewRowsForGate = hasSubmittedEvidence ? submittedReviewRows : seedReviewRows;
   const screenStateRowsForGate = hasSubmittedEvidence ? submittedScreenStateRows : seedScreenStateRows;
   const featureParityRowsForGate = hasSubmittedEvidence ? submittedFeatureParityRows : seedFeatureParityRows;
   const copyPreviewRowsForGate = hasSubmittedEvidence ? submittedCopyPreviewRows : seedCopyPreviewRows;
+  const traceabilityRowsForGate = hasSubmittedEvidence ? submittedTraceabilityRows : seedTraceabilityRows;
   const surfaceRows = UX_SIMPLIFICATION_SURFACES.map((surface) =>
-    uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRowsForGate, screenStateRowsForGate, featureParityRowsForGate, copyPreviewRowsForGate),
+    uxSimplificationSurfaceEvidenceRow(
+      surface,
+      activePolicy,
+      reviewRowsForGate,
+      screenStateRowsForGate,
+      featureParityRowsForGate,
+      copyPreviewRowsForGate,
+      traceabilityRowsForGate,
+    ),
   );
   const reviewSections = [
     ...submittedPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ux_simplification_policy", artifactId: row.id, reason }))),
@@ -9126,6 +9334,7 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
     ...submittedScreenStateRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "screen_state_payload", artifactId: row.id, reason }))),
     ...submittedFeatureParityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "screen_feature_parity_check", artifactId: row.id, reason }))),
     ...submittedCopyPreviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "simplified_copy_preview", artifactId: row.id, reason }))),
+    ...submittedTraceabilityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_copy_traceability_map", artifactId: row.id, reason }))),
     ...surfaceRows.filter((row) => row.status !== "ux_surface_simplification_gate_passed").map((row) => ({ artifactType: "ux_surface", artifactId: row.surface, reason: row.status })),
   ];
   const submittedEvidenceComplete =
@@ -9134,6 +9343,7 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
     submittedScreenStateRows.length > 0 &&
     submittedFeatureParityRows.length > 0 &&
     submittedCopyPreviewRows.length > 0 &&
+    submittedTraceabilityRows.length > 0 &&
     reviewSections.length === 0 &&
     activePolicy.policySource === "submitted_workflow_ux_simplification_policy";
   return {
@@ -9141,6 +9351,9 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
     releaseId,
     generatedAt: new Date().toISOString(),
     requiredSurfaces: UX_SIMPLIFICATION_SURFACES,
+    releaseCriticalRubricCopyScreens: RUBRIC_COPY_TRACEABILITY_RELEASE_CRITICAL_SCREENS,
+    requiredRubricCopyEntries: RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES,
+    requiredRubricClauseIds: RUBRIC_COPY_TRACEABILITY_REQUIRED_CLAUSES,
     requiredNoFeatureLossChecklist: UX_NO_FEATURE_LOSS_KEYS,
     requiredHiddenFieldClasses: UX_HIDDEN_FIELD_CLASSES,
     policy: {
@@ -9157,6 +9370,7 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
     screenStateRows: [...seedScreenStateRows, ...submittedScreenStateRows],
     screenFeatureParityCheckRows: [...seedFeatureParityRows, ...submittedFeatureParityRows],
     simplifiedCopyPreviewRows: [...seedCopyPreviewRows, ...submittedCopyPreviewRows],
+    rubricCopyTraceabilityMapRows: [...seedTraceabilityRows, ...submittedTraceabilityRows],
     surfaceRows,
     counts: {
       submittedPolicyCount: submittedPolicyRows.length,
@@ -9164,6 +9378,7 @@ export function buildUXSimplificationEvidenceReport(releaseId, options = {}) {
       submittedScreenStateCount: submittedScreenStateRows.length,
       submittedFeatureParityCheckCount: submittedFeatureParityRows.length,
       submittedSimplifiedCopyPreviewCount: submittedCopyPreviewRows.length,
+      submittedRubricCopyTraceabilityMapCount: submittedTraceabilityRows.length,
       passingSurfaceCount: surfaceRows.filter((row) => row.status === "ux_surface_simplification_gate_passed").length,
       reviewSectionCount: reviewSections.length,
     },
@@ -9527,14 +9742,87 @@ function normalizeUXSimplifiedCopyPreview(preview, rowSource) {
   };
 }
 
-function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, screenStateRows, featureParityRows, copyPreviewRows) {
+function normalizeRubricCopyTraceabilityMap(map, rowSource) {
+  const id = map?.id ?? map?.rubricCopyTraceabilityMapId;
+  if (!id) return null;
+  const coveredScreenIds = normalizeStringArray(map.coveredScreenIds ?? map.screenIds);
+  const simplifiedCopyEntryIds = normalizeStringArray(map.simplifiedCopyEntryIds ?? map.copyEntryIds);
+  const mappedRubricClauseIds = normalizeStringArray(map.mappedRubricClauseIds ?? map.rubricClauseIds);
+  const semanticDriftTestIds = normalizeStringArray(map.semanticDriftTestIds);
+  const clauseMap = hasPlainObject(map.clauseMap) ? map.clauseMap : null;
+  const missingScreens = RUBRIC_COPY_TRACEABILITY_RELEASE_CRITICAL_SCREENS.filter((screenId) => !coveredScreenIds.includes(screenId));
+  const missingCopyEntries = RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES.filter((entryId) => !simplifiedCopyEntryIds.includes(entryId));
+  const missingClauseIds = RUBRIC_COPY_TRACEABILITY_REQUIRED_CLAUSES.filter((clauseId) => !mappedRubricClauseIds.includes(clauseId));
+  const missingClauseMapEntries = RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES.filter((entryId) => !clauseMap?.[entryId]);
+  const invalidClauseMapEntries = Object.entries(clauseMap ?? {})
+    .filter(([entryId, clauseId]) =>
+      RUBRIC_COPY_TRACEABILITY_REQUIRED_COPY_ENTRIES.includes(entryId) && !RUBRIC_COPY_TRACEABILITY_REQUIRED_CLAUSES.includes(clauseId),
+    )
+    .map(([entryId]) => entryId);
+  const reviewReasons = [
+    requiredPromptFieldReason("releaseId", map.releaseId),
+    requiredPromptFieldReason("mapVersion", map.mapVersion ?? map.version),
+    requiredPromptFieldReason("rubricVersion", map.rubricVersion),
+    requiredPromptFieldReason("copyBundleId", map.copyBundleId),
+    missingScreens.length ? `coveredScreenIds:${missingScreens.join(",")}` : null,
+    missingCopyEntries.length ? `simplifiedCopyEntryIds:${missingCopyEntries.join(",")}` : null,
+    missingClauseIds.length ? `mappedRubricClauseIds:${missingClauseIds.join(",")}` : null,
+    clauseMap ? null : "clauseMap",
+    missingClauseMapEntries.length ? `clauseMap:${missingClauseMapEntries.join(",")}` : null,
+    invalidClauseMapEntries.length ? `clauseMap.invalid:${invalidClauseMapEntries.join(",")}` : null,
+    semanticDriftTestIds.length ? null : "semanticDriftTestIds",
+    map.semanticDriftTestStatus === "passed" ? null : "semanticDriftTestStatus",
+    map.semanticDriftFailureBlocker === true ? null : "semanticDriftFailureBlocker",
+    map.exactRubricClauseMapping === true ? null : "exactRubricClauseMapping",
+    policyMentions(map.appendixFAnchorAccess, ["one_click"]) ? null : "appendixFAnchorAccess",
+    map.hiddenFieldLeakageCheck === "passed" ? null : "hiddenFieldLeakageCheck",
+    map.releaseCriticalUseStatus === "frozen_for_release_critical_screens" ? null : "releaseCriticalUseStatus",
+    requiredPromptFieldReason("releaseConfigManifestId", map.releaseConfigManifestId),
+    requiredPromptFieldReason("reviewerId", map.reviewerId),
+    requiredPromptFieldReason("reviewedAt", map.reviewedAt),
+    requiredPromptFieldReason("frozenAt", map.frozenAt),
+  ].filter(Boolean);
+  return {
+    ...map,
+    id,
+    rowSource,
+    releaseId: map.releaseId ?? null,
+    mapVersion: map.mapVersion ?? map.version ?? null,
+    rubricVersion: map.rubricVersion ?? null,
+    copyBundleId: map.copyBundleId ?? null,
+    coveredScreenIds,
+    simplifiedCopyEntryIds,
+    mappedRubricClauseIds,
+    clauseMap: clauseMap ?? null,
+    semanticDriftTestIds,
+    semanticDriftTestStatus: map.semanticDriftTestStatus ?? null,
+    missingScreens,
+    missingCopyEntries,
+    missingClauseIds,
+    missingClauseMapEntries,
+    invalidClauseMapEntries,
+    reviewReasons,
+    status: reviewReasons.length ? "rubric_copy_traceability_review_required" : "rubric_copy_traceability_complete",
+  };
+}
+
+function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, screenStateRows, featureParityRows, copyPreviewRows, traceabilityRows) {
   const policyCoversSurface = activePolicy.enabledSurfaces.includes(surface) && activePolicy.reviewReasons.length === 0;
   const reviewCoversSurface = reviewRows.some((row) => row.reviewedSurfaces.includes(surface) && row.reviewReasons.length === 0);
   const screenStateCoversSurface = screenStateRows.some((row) => row.surface === surface && row.reviewReasons.length === 0);
   const featureParityCoversSurface = featureParityRows.some((row) => row.screenId === surface && row.reviewReasons.length === 0);
   const simplifiedCopyCoversSurface = copyPreviewRows.some((row) => row.screenId === surface && row.reviewReasons.length === 0);
+  const rubricCopyTraceabilityRequired = RUBRIC_COPY_TRACEABILITY_RELEASE_CRITICAL_SCREENS.includes(surface);
+  const rubricCopyTraceabilityCoversSurface =
+    !rubricCopyTraceabilityRequired ||
+    traceabilityRows.some((row) => row.coveredScreenIds.includes(surface) && row.reviewReasons.length === 0);
   const status =
-    policyCoversSurface && reviewCoversSurface && screenStateCoversSurface && featureParityCoversSurface && simplifiedCopyCoversSurface
+    policyCoversSurface &&
+    reviewCoversSurface &&
+    screenStateCoversSurface &&
+    featureParityCoversSurface &&
+    simplifiedCopyCoversSurface &&
+    rubricCopyTraceabilityCoversSurface
       ? "ux_surface_simplification_gate_passed"
       : !policyCoversSurface
         ? "ux_surface_missing_policy"
@@ -9543,8 +9831,10 @@ function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, s
           : !screenStateCoversSurface
             ? "ux_surface_missing_screen_state"
             : !featureParityCoversSurface
-              ? "ux_surface_missing_feature_parity_check"
-              : "ux_surface_missing_simplified_copy_preview";
+            ? "ux_surface_missing_feature_parity_check"
+              : !simplifiedCopyCoversSurface
+                ? "ux_surface_missing_simplified_copy_preview"
+                : "ux_surface_missing_rubric_copy_traceability_map";
   return {
     surface,
     policyId: activePolicy.id,
@@ -9553,6 +9843,8 @@ function uxSimplificationSurfaceEvidenceRow(surface, activePolicy, reviewRows, s
     screenStateCoversSurface,
     featureParityCoversSurface,
     simplifiedCopyCoversSurface,
+    rubricCopyTraceabilityRequired,
+    rubricCopyTraceabilityCoversSurface,
     requiredControls: UX_SCREEN_CONTROL_REQUIREMENTS[surface] ?? [],
     status,
   };
@@ -14664,6 +14956,7 @@ export function buildOctoberReleaseReport(
   const submittedTextArtifacts = applySubmittedItemTextVersions(positionList, critiqueList, options.itemTextVersions ?? []);
   const effectiveAdjudicationMemos = buildEffectiveAdjudicationMemos(options.adjudicationMemos ?? []);
   const effectiveVerificationRecords = buildEffectiveVerificationRecords(options.verificationRecords ?? []);
+  const effectiveVerificationEvidenceArtifacts = buildEffectiveVerificationEvidenceArtifacts(options.verificationEvidenceArtifacts ?? [], effectiveVerificationRecords);
   const effectiveRatingContextSnapshots = buildEffectiveRatingContextSnapshots(options.ratingContextSnapshots ?? []);
   const corpusManifest = buildCorpusCompositionManifest(releaseId, positionList, critiqueList, ratings);
   const releaseGateProfile = buildEffectiveReleaseGateProfile(releaseId, options.releaseGateProfiles ?? []);
@@ -14684,7 +14977,14 @@ export function buildOctoberReleaseReport(
   const ratingEffortQuality = buildRatingEffortQualityReport(releaseId, ratings, positionList, critiqueList);
   const rubricIssueFlags = buildRubricIssueFlagReport(releaseId, ratings, effectiveAdjudicationMemos, positionList);
   const sourceStyleAudit = buildPostLockSourceStyleAuditReport(releaseId, sourceStyleAudits, ratings, positionList, critiqueList, labelSnapshot);
-  const correctnessVerification = buildCorrectnessVerificationReport(releaseId, ratings, positionList, critiqueList, effectiveVerificationRecords);
+  const correctnessVerification = buildCorrectnessVerificationReport(
+    releaseId,
+    ratings,
+    positionList,
+    critiqueList,
+    effectiveVerificationRecords,
+    effectiveVerificationEvidenceArtifacts,
+  );
   const adjudicationMemoAudit = buildAdjudicationMemoAuditReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
   const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
   const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
@@ -14866,6 +15166,7 @@ export function buildOctoberReleaseReport(
     screenStatePayloads: options.screenStatePayloads ?? [],
     screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
     simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
+    rubricCopyTraceabilityMaps: options.rubricCopyTraceabilityMaps ?? [],
   });
   const workflowStateMachineEvidence = buildWorkflowStateMachineEvidenceReport(releaseId, {
     workflowStateTransitionLogs: options.workflowStateTransitionLogs ?? [],
@@ -15038,6 +15339,7 @@ export function buildOctoberReleaseReport(
       adjudications: options.adjudications ?? [],
       adjudicationFinalizations: options.adjudicationFinalizations ?? [],
       verificationRecords: options.verificationRecords ?? [],
+      verificationEvidenceArtifacts: options.verificationEvidenceArtifacts ?? [],
       candidateBatchModelJudgeScoreSubmissions: options.candidateBatchModelJudgeScoreSubmissions ?? [],
       candidateReviews: options.candidateReviews ?? [],
       candidatePromotions: options.candidatePromotions ?? [],
@@ -15100,6 +15402,7 @@ export function buildOctoberReleaseReport(
       uxSimplificationPolicies: options.uxSimplificationPolicies ?? [],
       uxSimplificationReviews: options.uxSimplificationReviews ?? [],
       screenStatePayloads: options.screenStatePayloads ?? [],
+      rubricCopyTraceabilityMaps: options.rubricCopyTraceabilityMaps ?? [],
     },
     workflowStateArtifacts: {
       workflowStateTransitionLogs: options.workflowStateTransitionLogs ?? [],

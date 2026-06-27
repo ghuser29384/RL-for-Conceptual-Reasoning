@@ -139,6 +139,17 @@ const uxHiddenFieldClasses = [
 ];
 
 const uxScreenControlKeys = [...uxNoFeatureLossKeys, "post_lock_feedback"];
+const rubricCopyTraceabilityScreens = ["rating", "practice", "calibration", "adjudication", "release_review"];
+const rubricCopyTraceabilityEntries = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
+const rubricCopyTraceabilityClauses = [
+  "appendix_f.centrality",
+  "appendix_f.strength",
+  "appendix_f.correctness",
+  "appendix_f.clarity",
+  "appendix_f.dead_weight",
+  "appendix_f.single_issue",
+  "appendix_f.overall",
+];
 
 const uxScreenControlRequirements = {
   rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
@@ -186,6 +197,33 @@ function simplifiedCopyPreviews() {
     reviewerId: "ux-reviewer",
     reviewedAt: "2026-10-01T00:15:00.000Z",
   }));
+}
+
+function rubricCopyTraceabilityMaps() {
+  return [
+    {
+      id: "rubric-copy-traceability-map-submitted",
+      releaseId: "october-2026-demo",
+      mapVersion: "rubric-copy-traceability-rlhf89-v1",
+      rubricVersion: "appendix-f-operational-v1",
+      copyBundleId: "rubric-copy-bundle-submitted",
+      coveredScreenIds: rubricCopyTraceabilityScreens,
+      simplifiedCopyEntryIds: rubricCopyTraceabilityEntries,
+      mappedRubricClauseIds: rubricCopyTraceabilityClauses,
+      clauseMap: Object.fromEntries(rubricCopyTraceabilityEntries.map((entryId, index) => [entryId, rubricCopyTraceabilityClauses[index]])),
+      semanticDriftTestIds: rubricCopyTraceabilityEntries.map((entryId) => `semantic-drift-${entryId}`),
+      semanticDriftTestStatus: "passed",
+      semanticDriftFailureBlocker: true,
+      exactRubricClauseMapping: true,
+      appendixFAnchorAccess: "one_click",
+      hiddenFieldLeakageCheck: "passed",
+      releaseCriticalUseStatus: "frozen_for_release_critical_screens",
+      releaseConfigManifestId: "release-config-manifest-submitted",
+      reviewerId: "ux-reviewer",
+      reviewedAt: "2026-10-01T00:16:00.000Z",
+      frozenAt: "2026-10-01T00:16:00.000Z",
+    },
+  ];
 }
 
 const workflowStateTransitionFixtures = [
@@ -1848,6 +1886,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   ];
   const screenFeatureParityChecks = uxScreenFeatureParityChecks(policyId);
   const copyPreviews = simplifiedCopyPreviews();
+  const traceabilityMaps = rubricCopyTraceabilityMaps();
 
   const report = buildUXSimplificationEvidenceReport("october-2026-demo", {
     uxSimplificationPolicies,
@@ -1855,6 +1894,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     screenStatePayloads,
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(report.releaseUseStatus, "submitted_ux_simplification_evidence_complete");
@@ -1863,6 +1903,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.equal(report.counts.submittedScreenStateCount, uxSimplificationSurfaces.length);
   assert.equal(report.counts.submittedFeatureParityCheckCount, uxSimplificationSurfaces.length);
   assert.equal(report.counts.submittedSimplifiedCopyPreviewCount, uxSimplificationSurfaces.length);
+  assert.equal(report.counts.submittedRubricCopyTraceabilityMapCount, 1);
   assert.equal(report.counts.passingSurfaceCount, uxSimplificationSurfaces.length);
   assert.deepEqual(report.reviewSections, []);
   assert.ok(report.activePolicy.coveredSplitClasses.includes("hidden_benchmark"));
@@ -1887,6 +1928,9 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     "rater-instruction-render-submitted",
   );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("centrality")), true);
+  assert.equal(report.rubricCopyTraceabilityMapRows.at(-1).semanticDriftTestStatus, "passed");
+  assert.equal(report.rubricCopyTraceabilityMapRows.at(-1).clauseMap.centrality, "appendix_f.centrality");
+  assert.equal(report.surfaceRows.find((row) => row.surface === "rating").rubricCopyTraceabilityCoversSurface, true);
 
   const incompleteScreenStateReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
     uxSimplificationPolicies,
@@ -1907,6 +1951,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     ],
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompleteScreenStateReport.releaseUseStatus, "ux_simplification_review_required");
@@ -1935,6 +1980,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     ],
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompleteScreenStateControlMapReport.releaseUseStatus, "ux_simplification_review_required");
@@ -1960,6 +2006,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     ],
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(leakingScreenStateDisclosureReport.releaseUseStatus, "ux_simplification_review_required");
@@ -1982,6 +2029,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     screenStatePayloads,
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompletePolicyReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2001,6 +2049,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     screenStatePayloads,
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompletePolicyCoverageReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2026,6 +2075,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     screenStatePayloads,
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompleteReviewReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2044,6 +2094,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     screenStatePayloads,
     screenFeatureParityChecks,
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(failedReadabilityReviewReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2059,6 +2110,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     screenStatePayloads,
     screenFeatureParityChecks: screenFeatureParityChecks.filter((row) => row.screenId !== "adjudication"),
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(missingFeatureParityReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2074,6 +2126,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
         : check,
     ),
     simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompleteFeatureParityReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2091,6 +2144,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
     simplifiedCopyPreviews: copyPreviews.map((preview) =>
       preview.screenId === "rating" ? { ...preview, glossaryTooltipIds: ["centrality"] } : preview,
     ),
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(incompleteCopyPreviewReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2106,6 +2160,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
         ? { ...preview, raterInstructionRenderVersionId: "", releaseConfigManifestId: "" }
         : preview,
     ),
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(missingCopyProvenanceReport.releaseUseStatus, "ux_simplification_review_required");
@@ -2122,10 +2177,36 @@ test("UX simplification evidence gates submitted server-derived screen states wi
         ? { ...preview, protectedSplitVariantDisposition: "quarantined_sensitivity_snapshot", uiSensitivitySnapshotId: "" }
         : preview,
     ),
+    rubricCopyTraceabilityMaps: traceabilityMaps,
   });
 
   assert.equal(unquarantinedProtectedCopyVariantReport.releaseUseStatus, "ux_simplification_review_required");
   assert.ok(unquarantinedProtectedCopyVariantReport.reviewSections.some((section) => section.reason === "uiSensitivitySnapshotId"));
+
+  const semanticDriftTraceabilityReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps.map((map) => ({
+      ...map,
+      id: "rubric-copy-traceability-map-semantic-drift",
+      coveredScreenIds: map.coveredScreenIds.filter((screenId) => screenId !== "release_review"),
+      clauseMap: { ...map.clauseMap, centrality: "appendix_f.unapproved_centrality_rewrite" },
+      semanticDriftTestStatus: "failed",
+    })),
+  });
+
+  assert.equal(semanticDriftTraceabilityReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(semanticDriftTraceabilityReport.reviewSections.some((section) => section.reason === "semanticDriftTestStatus"));
+  assert.ok(semanticDriftTraceabilityReport.reviewSections.some((section) => section.reason === "coveredScreenIds:release_review"));
+  assert.ok(semanticDriftTraceabilityReport.reviewSections.some((section) => section.reason === "clauseMap.invalid:centrality"));
+  assert.ok(
+    semanticDriftTraceabilityReport.reviewSections.some(
+      (section) => section.reason === "ux_surface_missing_rubric_copy_traceability_map",
+    ),
+  );
 });
 
 test("custom weighted loss uses low-clarity branch and ignores nullable non-clarity fields", () => {
@@ -2651,11 +2732,14 @@ test("correctness verification report links VerificationRecords and blocks unres
   const report = buildCorrectnessVerificationReport("release-test", seedRatings, positions, critiques, verificationRecords);
   assert.equal(report.requiredItemCount, 1);
   assert.equal(report.linkedRecordCount, 3);
+  assert.equal(report.linkedEvidenceArtifactCount, 4);
   assert.equal(report.unresolvedRequiredItems.length, 1);
   assert.equal(report.releaseBlockingItems[0].critiqueId, "crit-voting-bullet");
   assert.equal(report.releaseUseStatus, "verification_review_required_before_benchmark_or_public_release");
   assert.equal(report.byVerificationStatus.unresolved, 1);
   assert.equal(report.byVerificationStatus.not_practicable, 1);
+  assert.equal(report.verificationEvidenceArtifactRows.every((row) => row.snapshotContentHash.startsWith("sha256:")), true);
+  assert.equal(report.verificationRows.find((row) => row.itemId === "pos-voting::crit-voting-bullet").linkedEvidenceArtifactCount, 2);
 
   const resolvedRecords = verificationRecords.map((record) =>
     record.id === "verify-voting-bullet-strategy"
@@ -2664,6 +2748,7 @@ test("correctness verification report links VerificationRecords and blocks unres
   );
   const resolvedReport = buildCorrectnessVerificationReport("release-test", seedRatings, positions, critiques, resolvedRecords);
   assert.equal(resolvedReport.releaseBlockingItems.length, 0);
+  assert.equal(resolvedReport.byEvidenceProvenanceStatus.verification_evidence_artifact_complete >= 1, true);
   assert.equal(resolvedReport.releaseUseStatus, "pass");
 });
 
@@ -2688,6 +2773,7 @@ test("release report applies submitted adjudication and verification workflow ar
         {
           id: "verification-submitted-voting-bullet",
           itemId: "pos-voting::crit-voting-bullet",
+          evidenceArtifactIds: ["verification-evidence-submitted-voting-bullet"],
           claimChecked: "Approval voting strategic incentives were verified by expert review.",
           verificationType: "logical",
           verificationMaterials: ["Expert reviewed standard approval-voting incentive structure after initial rating lock."],
@@ -2699,6 +2785,28 @@ test("release report applies submitted adjudication and verification workflow ar
           exposureStatus: "post_initial_lock_adjudication",
           timestamp: "2026-06-12T12:00:00.000Z",
           createdAt: "2026-06-12T12:00:00.000Z",
+        },
+      ],
+      verificationEvidenceArtifacts: [
+        {
+          id: "verification-evidence-submitted-voting-bullet",
+          verificationRecordId: "verification-submitted-voting-bullet",
+          itemId: "pos-voting::crit-voting-bullet",
+          claimRef: "Approval voting strategic incentives were verified by expert review.",
+          citation: "Expert voting-theory review note, post-lock source-blind snapshot.",
+          snapshotContentHash: "sha256:verification-evidence-submitted-voting-bullet",
+          retrievedAt: "2026-06-12T11:59:00.000Z",
+          sourceExposureStatus: "source_blind",
+          protectedContentExposureStatus: "protected_content_absent",
+          modelAssistanceStatus: "none",
+          nonblindEvidenceFlag: false,
+          sourceAssistedFlag: false,
+          sourceIdentifiabilityFlag: false,
+          protectedContentFlag: false,
+          blindingImpactStatus: "source_blind_release_safe",
+          evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
+          createdBy: "expert-workflow",
+          createdAt: "2026-06-12T11:59:00.000Z",
         },
       ],
       adjudicationMemos: [
@@ -2746,7 +2854,11 @@ test("release report applies submitted adjudication and verification workflow ar
   assert.equal(verificationRow.latestRecordSource, "submitted_workflow_verification_record");
   assert.equal(verificationRow.verificationStatus, "verified");
   assert.equal(verificationRow.confidence, 0.86);
+  assert.deepEqual(verificationRow.verificationEvidenceArtifactIds, ["verification-evidence-submitted-voting-bullet"]);
+  assert.equal(verificationRow.verificationEvidenceProvenanceStatus, "verification_evidence_artifact_complete");
   assert.equal(verificationRow.timestamp, "2026-06-12T12:00:00.000Z");
+  assert.equal(report.correctnessVerification.submittedEvidenceArtifactCount, 1);
+  assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).sourceExposureStatus, "source_blind");
   assert.equal(report.correctnessVerification.releaseUseStatus, "pass");
 
   const memoRow = report.adjudicationMemoAudit.memoRows.find((row) => row.memoId === "adjudication-memo-submitted-voting-bullet");

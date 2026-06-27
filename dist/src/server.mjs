@@ -241,6 +241,15 @@ const correctnessVerificationStatuses = [
   "unresolved",
   "adjudication_resolved",
 ];
+const verificationEvidenceSourceExposureStatuses = ["source_blind", "post_lock_source_visible", "source_identifiable", "not_applicable"];
+const verificationEvidenceProtectedContentStatuses = ["none", "protected_content_absent", "protected_content_redacted", "protected_content_present_authorized"];
+const verificationEvidenceModelAssistanceStatuses = ["none", "model_assisted_retrieval", "model_generated_summary", "model_suggested_source"];
+const verificationEvidenceBlindingImpactStatuses = [
+  "source_blind_release_safe",
+  "post_lock_nonblind_evidence",
+  "source_assisted_review_required",
+  "protected_content_quarantined",
+];
 const interpretationTargetMapRequiredFields = [
   "id",
   "positionTextVersionId",
@@ -437,6 +446,17 @@ const uxForbiddenVisibleFieldFragments = [
 ];
 const simplifiedCopyRequiredGlossaryTerms = ["centrality", "strength"];
 const simplifiedCopyProtectedSplitVariantDispositions = ["frozen_compatible", "quarantined_sensitivity_snapshot"];
+const rubricCopyTraceabilityReleaseCriticalScreens = ["rating", "practice", "calibration", "adjudication", "release_review"];
+const rubricCopyTraceabilityRequiredEntries = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
+const rubricCopyTraceabilityRequiredClauses = [
+  "appendix_f.centrality",
+  "appendix_f.strength",
+  "appendix_f.correctness",
+  "appendix_f.clarity",
+  "appendix_f.dead_weight",
+  "appendix_f.single_issue",
+  "appendix_f.overall",
+];
 const ratingTaskOutputUses = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
 const ratingTaskOutputClasses = ["blind_initial_rating", "revision", "expert_check", "adjudication_label", "model_assisted_check", "draft"];
 const ratingExcludedDenominatorClasses = ["draft", "safe_decline", "source_recognition_compromised", "model_assisted_check"];
@@ -1230,6 +1250,68 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["verificationMaterials"],
     requiredFiniteNumberFields: ["confidence"],
     allowedValues: { verificationStatus: correctnessVerificationStatuses },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/verification-evidence-artifacts$/, "verification_evidence_artifact_submitted", "verificationEvidenceArtifact", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "claimRef",
+      "citation",
+      "snapshotContentHash",
+      "retrievedAt",
+      "sourceExposureStatus",
+      "protectedContentExposureStatus",
+      "modelAssistanceStatus",
+      "nonblindEvidenceFlag",
+      "sourceAssistedFlag",
+      "sourceIdentifiabilityFlag",
+      "protectedContentFlag",
+      "blindingImpactStatus",
+      "evidenceUsePolicy",
+      "createdBy",
+      "createdAt",
+    ],
+    requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"]]],
+    requiredAnyFields: [["verificationRecordId", "verificationWorkspaceId"]],
+    requiredStringPrefixes: { snapshotContentHash: "sha256:" },
+    allowedValues: {
+      sourceExposureStatus: verificationEvidenceSourceExposureStatuses,
+      protectedContentExposureStatus: verificationEvidenceProtectedContentStatuses,
+      modelAssistanceStatus: verificationEvidenceModelAssistanceStatuses,
+      blindingImpactStatus: verificationEvidenceBlindingImpactStatuses,
+    },
+    requiredWhen: [
+      {
+        field: "sourceExposureStatus",
+        equals: "post_lock_source_visible",
+        requiredExactFields: { nonblindEvidenceFlag: true },
+      },
+      {
+        field: "sourceExposureStatus",
+        equals: "source_identifiable",
+        requiredExactFields: { nonblindEvidenceFlag: true, sourceIdentifiabilityFlag: true },
+      },
+      {
+        field: "modelAssistanceStatus",
+        equals: "model_assisted_retrieval",
+        requiredExactFields: { sourceAssistedFlag: true },
+      },
+      {
+        field: "modelAssistanceStatus",
+        equals: "model_generated_summary",
+        requiredExactFields: { sourceAssistedFlag: true },
+      },
+      {
+        field: "modelAssistanceStatus",
+        equals: "model_suggested_source",
+        requiredExactFields: { sourceAssistedFlag: true },
+      },
+      {
+        field: "protectedContentExposureStatus",
+        equals: "protected_content_present_authorized",
+        requiredExactFields: { protectedContentFlag: true },
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretation_target_map_submitted", "interpretationTargetMap", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -2334,6 +2416,40 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
+  workflowWriteSpec(/^\/api\/v1\/rubric-copy-traceability-maps$/, "rubric_copy_traceability_map_submitted", "rubricCopyTraceabilityMap", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "mapVersion",
+      "rubricVersion",
+      "copyBundleId",
+      "semanticDriftTestStatus",
+      "appendixFAnchorAccess",
+      "hiddenFieldLeakageCheck",
+      "releaseCriticalUseStatus",
+      "releaseConfigManifestId",
+      "reviewerId",
+      "reviewedAt",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["coveredScreenIds", "simplifiedCopyEntryIds", "mappedRubricClauseIds", "semanticDriftTestIds"],
+    requiredObjectFields: ["clauseMap"],
+    requiredObjectKeys: { clauseMap: rubricCopyTraceabilityRequiredEntries },
+    requiredArrayIncludes: {
+      coveredScreenIds: rubricCopyTraceabilityReleaseCriticalScreens,
+      simplifiedCopyEntryIds: rubricCopyTraceabilityRequiredEntries,
+      mappedRubricClauseIds: rubricCopyTraceabilityRequiredClauses,
+    },
+    requiredStringIncludes: { appendixFAnchorAccess: ["one_click"] },
+    requiredExactFields: {
+      semanticDriftTestStatus: "passed",
+      semanticDriftFailureBlocker: true,
+      exactRubricClauseMapping: true,
+      hiddenFieldLeakageCheck: "passed",
+      releaseCriticalUseStatus: "frozen_for_release_critical_screens",
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -2595,6 +2711,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/discussion-threads\/(?<id>[^/]+)$/, "discussionThread", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-memos\/(?<id>[^/]+)$/, "adjudicationMemo", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-records\/(?<id>[^/]+)$/, "verificationRecord", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/verification-evidence-artifacts\/(?<id>[^/]+)$/, "verificationEvidenceArtifact", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudicator-pre-reads\/(?<id>[^/]+)$/, "adjudicatorPreRead", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-review-sessions\/(?<id>[^/]+)$/, "adjudicationReviewSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/interpretation-target-maps\/(?<id>[^/]+)$/, "interpretationTargetMap", expertAuditWorkflowRoles),
@@ -2658,6 +2775,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/benchmark-submissions\/(?<id>[^/]+)$/, "benchmarkSubmission", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/screen-feature-parity-checks\/(?<id>[^/]+)$/, "screenFeatureParityCheck", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/simplified-copy-previews\/(?<id>[^/]+)$/, "simplifiedCopyPreview", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rubric-copy-traceability-maps\/(?<id>[^/]+)$/, "rubricCopyTraceabilityMap", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles\/(?<id>[^/]+)$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)$/, "governedBundleRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)$/, "releaseConfigManifest", adminAuditRoles),
@@ -4804,6 +4922,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const adjudicationFinalizations = latestWorkflowResources(workflowEvents, "adjudicationFinalization");
   const adjudicationMemos = latestWorkflowResources(workflowEvents, "adjudicationMemo");
   const verificationRecords = latestWorkflowResources(workflowEvents, "verificationRecord");
+  const verificationEvidenceArtifacts = latestWorkflowResources(workflowEvents, "verificationEvidenceArtifact");
   const ratingChecks = latestWorkflowResources(workflowEvents, "ratingCheck");
   const labelSnapshots = latestWorkflowResources(workflowEvents, "labelSnapshot");
   const corpusManifests = latestWorkflowResources(workflowEvents, "corpusManifest");
@@ -4914,6 +5033,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const benchmarkSubmissions = latestWorkflowResources(workflowEvents, "benchmarkSubmission");
   const screenFeatureParityChecks = latestWorkflowResources(workflowEvents, "screenFeatureParityCheck");
   const simplifiedCopyPreviews = latestWorkflowResources(workflowEvents, "simplifiedCopyPreview");
+  const rubricCopyTraceabilityMaps = latestWorkflowResources(workflowEvents, "rubricCopyTraceabilityMap");
   const governedBundleCanonicalizationProfiles = latestWorkflowResources(workflowEvents, "governedBundleCanonicalizationProfile");
   const governedBundleRecords = latestWorkflowResources(workflowEvents, "governedBundleRecord");
   const releaseConfigManifests = latestWorkflowResources(workflowEvents, "releaseConfigManifest");
@@ -4953,6 +5073,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     adjudicationFinalizations,
     adjudicationMemos,
     verificationRecords,
+    verificationEvidenceArtifacts,
     ratingChecks,
     labelSnapshots,
     corpusManifests,
@@ -5063,6 +5184,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     benchmarkSubmissions,
     screenFeatureParityChecks,
     simplifiedCopyPreviews,
+    rubricCopyTraceabilityMaps,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,
@@ -5099,6 +5221,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     adjudicationFinalizations,
     adjudicationMemos,
     verificationRecords,
+    verificationEvidenceArtifacts,
     ratingChecks,
     labelSnapshots,
     corpusManifests,
@@ -5209,6 +5332,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     benchmarkSubmissions,
     screenFeatureParityChecks,
     simplifiedCopyPreviews,
+    rubricCopyTraceabilityMaps,
     governedBundleCanonicalizationProfiles,
     governedBundleRecords,
     releaseConfigManifests,

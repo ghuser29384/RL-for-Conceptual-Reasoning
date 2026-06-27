@@ -70,6 +70,17 @@ const uxHiddenFieldClasses = [
 ];
 
 const uxScreenControlKeys = [...uxNoFeatureLossKeys, "post_lock_feedback"];
+const rubricCopyTraceabilityScreens = ["rating", "practice", "calibration", "adjudication", "release_review"];
+const rubricCopyTraceabilityEntries = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
+const rubricCopyTraceabilityClauses = [
+  "appendix_f.centrality",
+  "appendix_f.strength",
+  "appendix_f.correctness",
+  "appendix_f.clarity",
+  "appendix_f.dead_weight",
+  "appendix_f.single_issue",
+  "appendix_f.overall",
+];
 
 const uxScreenControlRequirements = {
   rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
@@ -117,6 +128,33 @@ function uxSimplifiedCopyPreviews() {
     reviewerId: "ux-reviewer",
     reviewedAt: "2026-10-01T00:58:00.000Z",
   }));
+}
+
+function uxRubricCopyTraceabilityMaps() {
+  return [
+    {
+      id: "rubric-copy-traceability-map-workflow-new",
+      releaseId: "october-2026-demo",
+      mapVersion: "rubric-copy-traceability-rlhf89-v1",
+      rubricVersion: "appendix-f-operational-v1",
+      copyBundleId: "rubric-copy-bundle-workflow-new",
+      coveredScreenIds: rubricCopyTraceabilityScreens,
+      simplifiedCopyEntryIds: rubricCopyTraceabilityEntries,
+      mappedRubricClauseIds: rubricCopyTraceabilityClauses,
+      clauseMap: Object.fromEntries(rubricCopyTraceabilityEntries.map((entryId, index) => [entryId, rubricCopyTraceabilityClauses[index]])),
+      semanticDriftTestIds: rubricCopyTraceabilityEntries.map((entryId) => `semantic-drift-${entryId}`),
+      semanticDriftTestStatus: "passed",
+      semanticDriftFailureBlocker: true,
+      exactRubricClauseMapping: true,
+      appendixFAnchorAccess: "one_click",
+      hiddenFieldLeakageCheck: "passed",
+      releaseCriticalUseStatus: "frozen_for_release_critical_screens",
+      releaseConfigManifestId: "release-config-manifest-workflow-new",
+      reviewerId: "ux-reviewer",
+      reviewedAt: "2026-10-01T00:59:00.000Z",
+      frozenAt: "2026-10-01T00:59:00.000Z",
+    },
+  ];
 }
 
 const workflowStateTransitionFixtures = [
@@ -1169,6 +1207,7 @@ function completeAuxiliaryWorkflowFixtures() {
 function completeInteractionWorkflowFixtures() {
   const screenFeatureParityChecks = uxScreenFeatureParityChecks();
   const simplifiedCopyPreviews = uxSimplifiedCopyPreviews();
+  const rubricCopyTraceabilityMaps = uxRubricCopyTraceabilityMaps();
   return {
     publicExamplePracticeSession: {
       id: "practice-session-workflow-new",
@@ -1380,8 +1419,12 @@ function completeInteractionWorkflowFixtures() {
     simplifiedCopyPreview: {
       ...simplifiedCopyPreviews[0],
     },
+    rubricCopyTraceabilityMap: {
+      ...rubricCopyTraceabilityMaps[0],
+    },
     screenFeatureParityChecks,
     simplifiedCopyPreviews,
+    rubricCopyTraceabilityMaps,
   };
 }
 
@@ -1656,6 +1699,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/adjudication-review-sessions/adjudication-review-session-smoke"],
     ["POST", "/api/v1/verification-records"],
     ["GET", "/api/v1/verification-records/verification-smoke"],
+    ["POST", "/api/v1/verification-evidence-artifacts"],
+    ["GET", "/api/v1/verification-evidence-artifacts/verification-evidence-smoke"],
     ["POST", "/api/v1/interpretation-target-maps"],
     ["GET", "/api/v1/interpretation-target-maps/interpretation-target-map-smoke"],
     ["POST", "/api/v1/verification-workspace-sessions"],
@@ -1715,6 +1760,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/ux-simplification-reviews/ux-review-smoke"],
     ["POST", "/api/v1/screen-state-payloads"],
     ["GET", "/api/v1/screen-state-payloads/screen-state-smoke"],
+    ["POST", "/api/v1/rubric-copy-traceability-maps"],
+    ["GET", "/api/v1/rubric-copy-traceability-maps/rubric-copy-traceability-smoke"],
     ["POST", "/api/v1/state-transitions"],
     ["GET", "/api/v1/state/rating/rating-state-smoke"],
     ["GET", "/api/v1/raters/me/data-profile"],
@@ -4001,6 +4048,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         itemId: "pos-ai-prior::crit-ai-base-rate",
         claimChecked: "Whether the base-rate selectivity objection is externally verifiable or conceptual.",
         verificationMaterials: ["Adjudicator reviewed the supplied position and critique after initial lock."],
+        evidenceArtifactIds: ["verification-evidence-workflow-new"],
         verificationStatus: "not_practicable",
         verifierId: "demo-expert",
         verifierRole: "expert",
@@ -4014,6 +4062,35 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(verification.status, 201);
+
+  const verificationEvidence = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-evidence-artifacts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationEvidenceArtifact: {
+        id: "verification-evidence-workflow-new",
+        verificationRecordId: "verification-workflow-new",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimRef: "Whether the base-rate selectivity objection is externally verifiable or conceptual.",
+        citation: "Adjudicator reviewed the supplied position and critique after initial lock.",
+        snapshotContentHash: "sha256:verification-evidence-workflow-new",
+        retrievedAt: "2026-06-12T11:58:00.000Z",
+        sourceExposureStatus: "post_lock_source_visible",
+        protectedContentExposureStatus: "protected_content_absent",
+        modelAssistanceStatus: "none",
+        nonblindEvidenceFlag: true,
+        sourceAssistedFlag: false,
+        sourceIdentifiabilityFlag: false,
+        protectedContentFlag: false,
+        blindingImpactStatus: "post_lock_nonblind_evidence",
+        evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
+        createdBy: "demo-expert",
+        createdAt: "2026-06-12T11:58:00.000Z",
+      },
+    }),
+  });
+  assert.equal(verificationEvidence.status, 201);
 
   const incompleteVerification = await invokeApi(context, {
     method: "POST",
@@ -4059,6 +4136,66 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsupportedVerificationStatus.status, 400);
   assert.match(unsupportedVerificationStatus.body.detail, /verificationStatus/);
 
+  const invalidVerificationEvidenceHash = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-evidence-artifacts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationEvidenceArtifact: {
+        id: "verification-evidence-invalid-hash",
+        verificationRecordId: "verification-workflow-new",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimRef: "Whether the evidence artifact has a canonical hash.",
+        citation: "Expert-reviewed verification note.",
+        snapshotContentHash: "verification-evidence-invalid-hash",
+        retrievedAt: "2026-06-12T11:58:00.000Z",
+        sourceExposureStatus: "source_blind",
+        protectedContentExposureStatus: "protected_content_absent",
+        modelAssistanceStatus: "none",
+        nonblindEvidenceFlag: false,
+        sourceAssistedFlag: false,
+        sourceIdentifiabilityFlag: false,
+        protectedContentFlag: false,
+        blindingImpactStatus: "source_blind_release_safe",
+        evidenceUsePolicy: "Source-blind evidence must preserve a snapshot hash before release review.",
+        createdBy: "demo-expert",
+        createdAt: "2026-06-12T11:58:30.000Z",
+      },
+    }),
+  });
+  assert.equal(invalidVerificationEvidenceHash.status, 400);
+  assert.match(invalidVerificationEvidenceHash.body.detail, /snapshotContentHash/);
+
+  const invalidVerificationEvidenceFlag = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-evidence-artifacts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationEvidenceArtifact: {
+        id: "verification-evidence-invalid-flag",
+        verificationRecordId: "verification-workflow-new",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimRef: "Whether source-identifiable evidence must be marked nonblind.",
+        citation: "Source-identifiable adjudicator note.",
+        snapshotContentHash: "sha256:verification-evidence-invalid-flag",
+        retrievedAt: "2026-06-12T11:59:00.000Z",
+        sourceExposureStatus: "source_identifiable",
+        protectedContentExposureStatus: "protected_content_absent",
+        modelAssistanceStatus: "none",
+        nonblindEvidenceFlag: false,
+        sourceAssistedFlag: false,
+        sourceIdentifiabilityFlag: false,
+        protectedContentFlag: false,
+        blindingImpactStatus: "post_lock_nonblind_evidence",
+        evidenceUsePolicy: "Source-identifiable evidence must be quarantined from blind rating.",
+        createdBy: "demo-expert",
+        createdAt: "2026-06-12T11:59:00.000Z",
+      },
+    }),
+  });
+  assert.equal(invalidVerificationEvidenceFlag.status, 400);
+  assert.match(invalidVerificationEvidenceFlag.body.detail, /nonblindEvidenceFlag|sourceIdentifiabilityFlag/);
+
   const verificationById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/verification-records/verification-workflow-new",
@@ -4066,6 +4203,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(verificationById.status, 200);
   assert.equal(verificationById.body.id, "verification-workflow-new");
+
+  const verificationEvidenceById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/verification-evidence-artifacts/verification-evidence-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(verificationEvidenceById.status, 200);
+  assert.equal(verificationEvidenceById.body.id, "verification-evidence-workflow-new");
+  assert.equal(verificationEvidenceById.body.snapshotContentHash, "sha256:verification-evidence-workflow-new");
 
   const incompletePromptTemplateWorkflow = await invokeApi(context, {
     method: "POST",
@@ -6558,6 +6704,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     assert.equal(response.status, 201, simplifiedCopyPreview.screenId);
   }
 
+  for (const rubricCopyTraceabilityMap of interactionWorkflow.rubricCopyTraceabilityMaps) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/rubric-copy-traceability-maps",
+      headers: adminHeaders,
+      body: JSON.stringify({ rubricCopyTraceabilityMap }),
+    });
+    assert.equal(response.status, 201, rubricCopyTraceabilityMap.id);
+  }
+
   const incompleteInterpretationTargetMap = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/interpretation-target-maps",
@@ -6805,6 +6961,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(rubricChangingSimplifiedCopyPreview.status, 400);
   assert.match(rubricChangingSimplifiedCopyPreview.body.detail, /exactRubricTermPreservation/);
 
+  const driftedRubricCopyTraceabilityMap = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rubric-copy-traceability-maps",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rubricCopyTraceabilityMap: {
+        ...interactionWorkflow.rubricCopyTraceabilityMap,
+        id: "rubric-copy-traceability-map-drifted",
+        coveredScreenIds: rubricCopyTraceabilityScreens.filter((screenId) => screenId !== "release_review"),
+        semanticDriftTestStatus: "failed",
+      },
+    }),
+  });
+  assert.equal(driftedRubricCopyTraceabilityMap.status, 400);
+  assert.match(driftedRubricCopyTraceabilityMap.body.detail, /coveredScreenIds|semanticDriftTestStatus/);
+
   const remediationCompletion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters/me/remediation/centrality-strength-product/complete",
@@ -6932,6 +7104,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(simplifiedCopyPreview.status, 200);
   assert.equal(simplifiedCopyPreview.body.exactRubricTermPreservation, true);
+
+  const rubricCopyTraceabilityMapById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rubric-copy-traceability-maps/rubric-copy-traceability-map-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(rubricCopyTraceabilityMapById.status, 200);
+  assert.equal(rubricCopyTraceabilityMapById.body.semanticDriftTestStatus, "passed");
+  assert.equal(rubricCopyTraceabilityMapById.body.clauseMap.centrality, "appendix_f.centrality");
 
   const releaseConfig = completeReleaseConfigWorkflowFixtures();
   const canonicalizationProfile = await invokeApi(context, {
@@ -7486,6 +7667,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowActionArtifacts.adjudications.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.adjudicationFinalizations.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.verificationRecords.length, 1);
+  assert.equal(releaseReport.body.workflowActionArtifacts.verificationEvidenceArtifacts.length, 1);
   const workflowVerificationRow = releaseReport.body.correctnessVerification.verificationRows.find((row) => row.itemId === "pos-ai-prior::crit-ai-base-rate");
   assert.equal(workflowVerificationRow.latestRecordId, "verification-workflow-new");
   assert.equal(workflowVerificationRow.latestRecordSource, "submitted_workflow_verification_record");
@@ -7494,6 +7676,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowVerificationRow.confidence, 0.72);
   assert.deepEqual(workflowVerificationRow.verificationMaterials, ["Adjudicator reviewed the supplied position and critique after initial lock."]);
   assert.equal(workflowVerificationRow.timestamp, "2026-06-12T12:00:00.000Z");
+  assert.deepEqual(workflowVerificationRow.verificationEvidenceArtifactIds, ["verification-evidence-workflow-new"]);
+  assert.equal(workflowVerificationRow.verificationEvidenceProvenanceStatus, "verification_evidence_artifact_complete");
+  assert.equal(workflowVerificationRow.nonblindEvidenceFlag, true);
+  assert.equal(releaseReport.body.correctnessVerification.submittedEvidenceArtifactCount, 1);
+  assert.equal(
+    releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).retrievedAt,
+    "2026-06-12T11:58:00.000Z",
+  );
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateBatchModelJudgeScoreSubmissions.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateReviews.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidatePromotions.length, 1);
@@ -7651,9 +7841,11 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowUxArtifacts.uxSimplificationPolicies.length, 1);
   assert.equal(releaseReport.body.workflowUxArtifacts.uxSimplificationReviews.length, 1);
   assert.equal(releaseReport.body.workflowUxArtifacts.screenStatePayloads.length, uxSimplificationSurfaces.length);
+  assert.equal(releaseReport.body.workflowUxArtifacts.rubricCopyTraceabilityMaps.length, 1);
   assert.equal(releaseReport.body.uxSimplification.releaseUseStatus, "submitted_ux_simplification_evidence_complete");
   assert.equal(releaseReport.body.uxSimplification.counts.submittedFeatureParityCheckCount, uxSimplificationSurfaces.length);
   assert.equal(releaseReport.body.uxSimplification.counts.submittedSimplifiedCopyPreviewCount, uxSimplificationSurfaces.length);
+  assert.equal(releaseReport.body.uxSimplification.counts.submittedRubricCopyTraceabilityMapCount, 1);
   assert.equal(releaseReport.body.uxSimplification.counts.passingSurfaceCount, uxSimplificationSurfaces.length);
   assert.deepEqual(releaseReport.body.uxSimplification.reviewSections, []);
   assert.ok(releaseReport.body.uxSimplification.activePolicy.coveredSplitClasses.includes("hidden_benchmark"));
@@ -7673,6 +7865,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "reachable",
   );
   assert.equal(releaseReport.body.uxSimplification.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
+  assert.equal(releaseReport.body.uxSimplification.rubricCopyTraceabilityMapRows.at(-1).semanticDriftTestStatus, "passed");
+  assert.equal(releaseReport.body.uxSimplification.rubricCopyTraceabilityMapRows.at(-1).clauseMap.strength, "appendix_f.strength");
   assert.equal(
     releaseReport.body.uxSimplification.surfaceRows.every((row) => row.status === "ux_surface_simplification_gate_passed"),
     true,
@@ -7966,7 +8160,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 238 + uxSimplificationSurfaces.length * 3);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 240 + uxSimplificationSurfaces.length * 3);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
