@@ -651,6 +651,7 @@ const sourceRecognitionTypes = [
 ];
 const sourceRecognitionActions = ["safe_decline", "continue_nonblind", "request_review"];
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const policyActionKinds = [
   "protected_render",
   "assignment_issue",
@@ -1837,6 +1838,9 @@ const workflowWriteEndpoints = [
       optionalFields: ["general_rating_note"],
       triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
     },
+    allowedArrayValues: {
+      ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
+    },
     requiredFiniteNumberFields: ["extremeScoreThresholdLow", "extremeScoreThresholdHigh", "overallVsCentralityStrengthGapThreshold"],
     requiredExactFields: {
       targetUnclearTrigger: true,
@@ -2240,11 +2244,23 @@ const workflowWriteEndpoints = [
       "createdAt",
       "expiresAt",
     ],
+    allowedValues: { artifactType: protectedArtifactTypes },
+    requiredStringIncludesAny: {
+      retentionDeletionPolicy: ["delete", "anonymize"],
+      cacheOutboxPurgeStatus: ["purged", "not_cached"],
+      backupSnapshotCoverage: ["split"],
+      developmentStagingEligibility: ["revalidation"],
+      restoreTimeRevalidationStatus: ["passed"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/protected-artifacts\/(?<id>[^/]+)\/revalidate$/, "protected_artifact_revalidation_submitted", "protectedArtifactRevalidation", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "protectedArtifactId",
-    requiredFields: ["id", "protectedArtifactId", "releaseConfigManifestId", "revalidationStatus", "staleSupersededBehavior", "checkedAt"],
+    requiredFields: ["id", "protectedArtifactId", "releaseConfigManifestId", "revalidationStatus", "staleSupersededBehavior", "checkedBy", "checkedAt"],
+    requiredExactFields: {
+      revalidationStatus: "passed_current_manifest_revalidation",
+      staleSupersededBehavior: "fail_closed_if_stale_or_superseded",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/blinding-preview-audits$/, "blinding_preview_audit_submitted", "blindingPreviewAudit", adminRoles, {
     allowHiddenMetadata: true,
@@ -2287,6 +2303,7 @@ const workflowWriteEndpoints = [
     pathParamField: "raterId",
     requiredFields: ["id", "raterId", "positionClusterId", "exposureSource", "exposureTimestamp", "exposureVisibilityScope", "blindEligibilityEffect", "createdBy", "timestamp"],
     allowedValues: { exposureSource: positionClusterExposureSources },
+    requiredStringIncludesAny: { blindEligibilityEffect: ["excluded", "blocked", "non_blind"] },
   }),
   workflowWriteSpec(/^\/api\/v1\/spot-checks$/, "spot_check_qa_item_submitted", "spotCheckQaItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -2364,6 +2381,9 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: ["id", "raterId", "assignmentId", "rubricVersion", "protectedSplitConflictStatus", "protectedClusterEligibilityEffect", "createdAt"],
     requiredNonEmptyArrayFields: ["publicSourceAnchorExampleIdsPreviouslySeen", "samePositionPositionClusterExposureChecks"],
+    requiredStringIncludesAny: {
+      protectedClusterEligibilityEffect: ["eligible_after_checks", "excluded", "blocked", "non_blind", "reassign"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/release-errata$/, "release_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
@@ -2400,14 +2420,27 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/governance-approvals$/, "governance_approval_record_submitted", "governanceApprovalRecord", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "actionKind", "affectedArtifactIds", "proposedBy", "approver1", "approver2", "independenceSeparationOfDutiesStatus", "reasonCode", "visibilitySplitMetricLeaderboardImpactSummary", "approvalTimestamp"],
+    requiredNonEmptyArrayFields: ["affectedArtifactIds"],
+    requiredDistinctFieldSets: [["proposedBy", "approver1", "approver2"]],
+    requiredExactFields: { independenceSeparationOfDutiesStatus: "independent_two_person_approval" },
   }),
   workflowWriteSpec(/^\/api\/v1\/benchmark-submission-policies$/, "benchmark_submission_policy_submitted", "benchmarkSubmissionPolicy", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "policyVersion", "aggregateOnlyReport", "submissionBudget", "cooldownPolicy", "hiddenIdExposureProhibited", "perItemFeedbackProhibited", "frozenAt"],
+    requiredObjectFields: ["submissionBudget"],
+    requiredExactFields: {
+      aggregateOnlyReport: true,
+      hiddenIdExposureProhibited: true,
+      perItemFeedbackProhibited: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmark_submission_submitted", "benchmarkSubmission", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "benchmarkSubmissionPolicyId", "releaseId", "submittedAggregateReportId", "perItemOutputIncluded", "hiddenIdExposureIncluded", "budgetConsumptionStatus", "submittedAt"],
+    requiredFields: ["id", "benchmarkSubmissionPolicyId", "releaseId", "submittedAggregateReportId", "perItemOutputIncluded", "hiddenIdExposureIncluded", "budgetConsumptionStatus", "cooldownStatus", "submittedAt"],
+    requiredExactFields: {
+      perItemOutputIncluded: false,
+      hiddenIdExposureIncluded: false,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/feature-parity-check$/, "screen_feature_parity_check_submitted", "screenFeatureParityCheck", adminRoles, {
     allowHiddenMetadata: true,
@@ -6261,10 +6294,23 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
     return !value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length;
   });
   if (missingObjects.length) return invalid(`missing required non-empty objects: ${missingObjects.join(", ")}`);
+  for (const fieldSet of spec.requiredDistinctFieldSets ?? []) {
+    const values = fieldSet.map((fieldPath) => workflowFieldValue(normalized, fieldPath));
+    const normalizedValues = values.map((value) => (typeof value === "string" ? value.trim() : value)).filter((value) => value !== undefined && value !== null && value !== "");
+    if (normalizedValues.length !== fieldSet.length || new Set(normalizedValues).size !== normalizedValues.length) {
+      return invalid(`${fieldSet.join(", ")} must be distinct`);
+    }
+  }
   for (const [fieldPath, requiredValues] of Object.entries(spec.requiredArrayIncludes ?? {})) {
     const value = workflowFieldValue(normalized, fieldPath);
     const missingValues = requiredValues.filter((item) => !Array.isArray(value) || !value.includes(item));
     if (missingValues.length) return invalid(`missing required array values in ${fieldPath}: ${missingValues.join(", ")}`);
+  }
+  for (const [fieldPath, allowedValues] of Object.entries(spec.allowedArrayValues ?? {})) {
+    const value = workflowFieldValue(normalized, fieldPath);
+    if (!Array.isArray(value)) return invalid(`${fieldPath} must be an array`);
+    const invalidValues = value.filter((item) => !allowedValues.includes(item));
+    if (invalidValues.length) return invalid(`${fieldPath} must contain only: ${allowedValues.join(", ")}`);
   }
   for (const rule of spec.requiredArrayIncludesByFieldValue ?? []) {
     const discriminator = workflowFieldValue(normalized, rule.field);

@@ -482,6 +482,7 @@ function completePolicyBundleFixtures() {
         postDiscussionRevisionTrigger: true,
         exposureFamiliarityConflictUncertaintyTrigger: true,
         protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
+        sentenceGuidance: "one_or_two_sentences",
         protectedSplitCompatible: true,
       },
     ],
@@ -1554,6 +1555,18 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
   assert.deepEqual(report.scoreExplanationPolicyRows.at(-1).triggerList, scoreExplanationTriggerRules);
   assert.equal(report.counts.submittedAccessibilityConformanceReportCount, 1);
   assert.deepEqual(report.reviewSections, []);
+
+  const ordinaryExplanationRequiredReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high", "score_explanation"],
+      },
+    ],
+  });
+  assert.equal(ordinaryExplanationRequiredReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(ordinaryExplanationRequiredReport.reviewSections.some((section) => section.reason === "ordinaryRequiredFields:unexpected:score_explanation"));
 });
 
 test("release config manifest evidence gates governed bundle families and manifest verification", () => {
@@ -1662,6 +1675,30 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.counts.submittedScheduleStatusSnapshotCount, 1);
   assert.equal(report.scheduleStatusRows.at(-1).supportsCompletionClaim, false);
   assert.deepEqual(report.reviewSections, []);
+
+  const unsafePositionClusterExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    raterPositionClusterExposures: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().raterPositionClusterExposures[0],
+        blindEligibilityEffect: "count_as_fresh_blind_initial_after_peer_exposure",
+      },
+    ],
+  });
+  assert.equal(unsafePositionClusterExposureReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(unsafePositionClusterExposureReport.reviewSections.some((section) => section.reason === "blindEligibilityEffect"));
+
+  const unsafeTrainingExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    raterTrainingExposureSnapshots: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().raterTrainingExposureSnapshots[0],
+        protectedClusterEligibilityEffect: "count_as_independent_blind_after_training_exposure",
+      },
+    ],
+  });
+  assert.equal(unsafeTrainingExposureReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(unsafeTrainingExposureReport.reviewSections.some((section) => section.reason === "protectedClusterEligibilityEffect"));
 });
 
 test("interaction workflow evidence gates practice, sessions, discussion, adjudication, governance, benchmark, and simplified UI artifacts", () => {
@@ -1703,6 +1740,56 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
+
+  const unsafeBenchmarkSubmissionReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    benchmarkSubmissionPolicies: [
+      {
+        ...completeInteractionWorkflowFixtures().benchmarkSubmissionPolicies[0],
+        aggregateOnlyReport: false,
+        perItemFeedbackProhibited: false,
+      },
+    ],
+    benchmarkSubmissions: [
+      {
+        ...completeInteractionWorkflowFixtures().benchmarkSubmissions[0],
+        perItemOutputIncluded: true,
+      },
+    ],
+  });
+  assert.equal(unsafeBenchmarkSubmissionReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "aggregateOnlyReport"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "perItemFeedbackProhibited"));
+  assert.ok(unsafeBenchmarkSubmissionReport.reviewSections.some((section) => section.reason === "perItemOutputIncluded"));
+
+  const nonIndependentGovernanceReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    governanceApprovalRecords: [
+      {
+        ...completeInteractionWorkflowFixtures().governanceApprovalRecords[0],
+        approver1: "release-admin",
+        approver2: "release-admin",
+        independenceSeparationOfDutiesStatus: "single_operator_approval",
+      },
+    ],
+  });
+  assert.equal(nonIndependentGovernanceReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(nonIndependentGovernanceReport.reviewSections.some((section) => section.reason === "independenceSeparationOfDutiesStatus"));
+  assert.ok(nonIndependentGovernanceReport.reviewSections.some((section) => section.reason === "proposedBy|approver1|approver2:distinct"));
+
+  const unsafeProtectedRevalidationReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    protectedArtifactRevalidations: [
+      {
+        ...completeInteractionWorkflowFixtures().protectedArtifactRevalidations[0],
+        revalidationStatus: "not_checked",
+        staleSupersededBehavior: "allow_cached_restore",
+      },
+    ],
+  });
+  assert.equal(unsafeProtectedRevalidationReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeProtectedRevalidationReport.reviewSections.some((section) => section.reason === "revalidationStatus"));
+  assert.ok(unsafeProtectedRevalidationReport.reviewSections.some((section) => section.reason === "staleSupersededBehavior"));
 });
 
 test("operational control evidence gates policy decisions, phase gates, queue freshness, client surfaces, and audit chain", () => {

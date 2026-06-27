@@ -10722,10 +10722,12 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
   const coveredWorkflowSplitClasses = normalizeStringArray(policy.coveredWorkflowSplitClasses);
   const missingTriggers = SCORE_EXPLANATION_TRIGGER_RULES.filter((trigger) => !triggerList.includes(trigger));
   const missingRequiredFields = ["seven_scores", "confidence_low_medium_high"].filter((field) => !ordinaryRequiredFields.includes(field));
+  const unexpectedOrdinaryRequiredFields = ordinaryRequiredFields.filter((field) => !["seven_scores", "confidence_low_medium_high"].includes(field));
   const reviewReasons = [
     requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
     coveredWorkflowSplitClasses.length ? null : "coveredWorkflowSplitClasses",
     missingRequiredFields.length ? `ordinaryRequiredFields:${missingRequiredFields.join(",")}` : null,
+    unexpectedOrdinaryRequiredFields.length ? `ordinaryRequiredFields:unexpected:${unexpectedOrdinaryRequiredFields.join(",")}` : null,
     optionalFields.includes("general_rating_note") ? null : "optionalFields:general_rating_note",
     missingTriggers.length ? `triggerList:${missingTriggers.join(",")}` : null,
     Number.isFinite(policy.extremeScoreThresholdLow) ? null : "extremeScoreThresholdLow",
@@ -10736,6 +10738,7 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
     policy.postDiscussionRevisionTrigger === true ? null : "postDiscussionRevisionTrigger",
     policy.exposureFamiliarityConflictUncertaintyTrigger === true ? null : "exposureFamiliarityConflictUncertaintyTrigger",
     policyMentions(policy.protectedStatusBlindPromptCopy, ["workflow", "policy"]) ? null : "protectedStatusBlindPromptCopy",
+    policyMentions(policy.sentenceGuidance, ["one"]) && policyMentions(policy.sentenceGuidance, ["two"]) ? null : "sentenceGuidance",
     policy.protectedSplitCompatible === true ? null : "protectedSplitCompatible",
   ].filter(Boolean);
   return {
@@ -10751,6 +10754,7 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
     extremeScoreThresholdHigh: policy.extremeScoreThresholdHigh ?? null,
     overallVsCentralityStrengthGapThreshold: policy.overallVsCentralityStrengthGapThreshold ?? null,
     protectedStatusBlindPromptCopy: policy.protectedStatusBlindPromptCopy ?? null,
+    sentenceGuidance: policy.sentenceGuidance ?? null,
     protectedSplitCompatible: policy.protectedSplitCompatible === true,
     reviewReasons,
     status: reviewReasons.length ? "score_explanation_policy_review_required" : "score_explanation_policy_complete",
@@ -13515,6 +13519,13 @@ function normalizeRaterItemConflict(conflict, rowSource) {
 function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
   const id = snapshot?.id ?? snapshot?.trainingExposureSnapshotId ?? snapshot?.training_exposure_snapshot_id;
   if (!id) return null;
+  const protectedClusterEligibilityEffect = snapshot.protectedClusterEligibilityEffect ?? snapshot.protected_cluster_eligibility_effect ?? null;
+  const safeProtectedClusterEligibilityEffect =
+    protectedClusterEligibilityEffect === "eligible_after_checks" ||
+    policyMentions(protectedClusterEligibilityEffect, ["excluded"]) ||
+    policyMentions(protectedClusterEligibilityEffect, ["blocked"]) ||
+    policyMentions(protectedClusterEligibilityEffect, ["non_blind"]) ||
+    policyMentions(protectedClusterEligibilityEffect, ["reassign"]);
   const reviewReasons = [
     requiredPromptFieldReason("raterId", snapshot.raterId ?? snapshot.rater_id),
     requiredPromptFieldReason("assignmentId", snapshot.assignmentId ?? snapshot.assignment_id),
@@ -13524,6 +13535,7 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
       ? null
       : "samePositionPositionClusterExposureChecks",
     requiredPromptFieldReason("protectedSplitConflictStatus", snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status),
+    safeProtectedClusterEligibilityEffect ? null : "protectedClusterEligibilityEffect",
     requiredPromptFieldReason("createdAt", snapshot.createdAt ?? snapshot.created_at),
   ].filter(Boolean);
   return {
@@ -13533,7 +13545,7 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
     assignmentId: snapshot.assignmentId ?? snapshot.assignment_id ?? null,
     ratingId: snapshot.ratingId ?? snapshot.rating_id ?? null,
     protectedSplitConflictStatus: snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status ?? null,
-    protectedClusterEligibilityEffect: snapshot.protectedClusterEligibilityEffect ?? snapshot.protected_cluster_eligibility_effect ?? null,
+    protectedClusterEligibilityEffect,
     reviewReasons,
     status: reviewReasons.length ? "rater_training_exposure_snapshot_review_required" : "rater_training_exposure_snapshot_complete",
   };
@@ -14076,6 +14088,8 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       artifactType: "governance_approval_record",
       requiredFields: ["actionKind", "proposedBy", "approver1", "approver2", "independenceSeparationOfDutiesStatus", "reasonCode", "visibilitySplitMetricLeaderboardImpactSummary", "approvalTimestamp"],
       arrayFields: ["affectedArtifactIds"],
+      enumFields: { independenceSeparationOfDutiesStatus: ["independent_two_person_approval"] },
+      distinctFieldSets: [["proposedBy", "approver1", "approver2"]],
       seedRows: defaults.governanceApprovalRecords,
     },
     {
@@ -14084,6 +14098,10 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       rowKey: "protectedArtifactRevalidationRows",
       artifactType: "protected_artifact_revalidation",
       requiredFields: ["protectedArtifactId", "releaseConfigManifestId", "revalidationStatus", "staleSupersededBehavior", "checkedBy", "checkedAt"],
+      enumFields: {
+        revalidationStatus: ["passed_current_manifest_revalidation"],
+        staleSupersededBehavior: ["fail_closed_if_stale_or_superseded"],
+      },
       seedRows: defaults.protectedArtifactRevalidations,
     },
     {
@@ -14212,6 +14230,11 @@ function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
     ...((spec.booleanFalseFields ?? []).map((field) => resource[field] === false ? null : field)),
     ...((spec.oneOfFields ?? []).map((fields) => fields.some((field) => resource[field] !== undefined && resource[field] !== null && resource[field] !== "") ? null : fields.join("|"))),
     ...Object.entries(spec.enumFields ?? {}).map(([field, allowedValues]) => allowedValues.includes(resource[field]) ? null : field),
+    ...((spec.distinctFieldSets ?? []).map((fields) => {
+      const values = fields.map((field) => resource[field]);
+      const normalizedValues = values.map((value) => (typeof value === "string" ? value.trim() : value)).filter((value) => value !== undefined && value !== null && value !== "");
+      return normalizedValues.length === fields.length && new Set(normalizedValues).size === normalizedValues.length ? null : `${fields.join("|")}:distinct`;
+    })),
   ].filter(Boolean);
   return {
     ...resource,

@@ -5698,6 +5698,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteAccessibilityReport.status, 400);
   assert.match(incompleteAccessibilityReport.body.detail, /uiExperimentPolicyId|uxSimplificationPolicyId|reviewer/);
 
+  const ordinaryExplanationRequiredPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-explanation-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreExplanationPolicy: {
+        ...policyBundle.scoreExplanationPolicy,
+        id: "score-explanation-policy-ordinary-explanation-required",
+        ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high", "score_explanation"],
+      },
+    }),
+  });
+  assert.equal(ordinaryExplanationRequiredPolicy.status, 400);
+  assert.match(ordinaryExplanationRequiredPolicy.body.detail, /ordinaryRequiredFields/);
+
   for (const [resourceKey, url] of [
     ["visibilityPolicy", "/api/v1/visibility-policies"],
     ["ratingWorkflowProfile", "/api/v1/rating-workflow-profiles"],
@@ -6361,6 +6376,28 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteProtectedRetention.status, 400);
   assert.match(incompleteProtectedRetention.body.detail, /cacheOutboxPurgeStatus|backupSnapshotCoverage|developmentStagingEligibility/);
 
+  const unsafeProtectedRetention = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/protected-artifact-retention-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      protectedArtifactRetentionRecord: {
+        ...ratingExperience.protectedArtifactRetentionRecords[0],
+        id: "protected-artifact-retention-workflow-unsafe-retention-paths",
+        retentionDeletionPolicy: "retain_indefinitely",
+        cacheOutboxPurgeStatus: "retained_in_cache",
+        backupSnapshotCoverage: "global_backup_without_policy",
+        developmentStagingEligibility: "eligible_for_staging_without_checks",
+        restoreTimeRevalidationStatus: "not_checked",
+      },
+    }),
+  });
+  assert.equal(unsafeProtectedRetention.status, 400);
+  assert.match(
+    unsafeProtectedRetention.body.detail,
+    /retentionDeletionPolicy|cacheOutboxPurgeStatus|backupSnapshotCoverage|developmentStagingEligibility|restoreTimeRevalidationStatus/,
+  );
+
   for (const protectedArtifactRetentionRecord of ratingExperience.protectedArtifactRetentionRecords) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -6511,6 +6548,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompletePositionClusterExposure.status, 400);
   assert.match(incompletePositionClusterExposure.body.detail, /exposureSource|exposureVisibilityScope/);
 
+  const unsafePositionClusterExposure = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/demo-rater/position-cluster-exposures",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterPositionClusterExposure: {
+        ...auxiliaryWorkflow.raterPositionClusterExposure,
+        id: "position-cluster-exposure-unsafe-blind-effect",
+        blindEligibilityEffect: "count_as_fresh_blind_initial_after_peer_exposure",
+      },
+    }),
+  });
+  assert.equal(unsafePositionClusterExposure.status, 400);
+  assert.match(unsafePositionClusterExposure.body.detail, /blindEligibilityEffect/);
+
   const incompleteAssignmentSelectionAudit = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/assignment-selection-audits",
@@ -6622,6 +6674,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unsupportedCompleteSchedule.status, 400);
   assert.match(unsupportedCompleteSchedule.body.detail, /evidenceArtifactIds/);
+
+  const unsafeTrainingExposureSnapshot = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-training-exposure-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterTrainingExposureSnapshot: {
+        ...auxiliaryWorkflow.raterTrainingExposureSnapshot,
+        id: "training-exposure-snapshot-unsafe-eligibility",
+        protectedClusterEligibilityEffect: "count_as_independent_blind_after_training_exposure",
+      },
+    }),
+  });
+  assert.equal(unsafeTrainingExposureSnapshot.status, 400);
+  assert.match(unsafeTrainingExposureSnapshot.body.detail, /protectedClusterEligibilityEffect/);
 
   for (const [resourceKey, url] of [
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
@@ -6758,6 +6825,72 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseScheduleStatus.body.scheduleStatusSnapshots.length, 1);
 
   const interactionWorkflow = completeInteractionWorkflowFixtures();
+  const nonIndependentGovernanceApproval = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/governance-approvals",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      governanceApprovalRecord: {
+        ...interactionWorkflow.governanceApprovalRecord,
+        id: "governance-approval-non-independent",
+        approver1: "demo-admin",
+        approver2: "demo-admin",
+        independenceSeparationOfDutiesStatus: "single_operator_approval",
+      },
+    }),
+  });
+  assert.equal(nonIndependentGovernanceApproval.status, 400);
+  assert.match(nonIndependentGovernanceApproval.body.detail, /proposedBy|approver1|approver2|independenceSeparationOfDutiesStatus/);
+
+  const unsafeBenchmarkSubmissionPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark-submission-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      benchmarkSubmissionPolicy: {
+        ...interactionWorkflow.benchmarkSubmissionPolicy,
+        id: "benchmark-submission-policy-unsafe-feedback",
+        aggregateOnlyReport: false,
+        hiddenIdExposureProhibited: false,
+        perItemFeedbackProhibited: false,
+      },
+    }),
+  });
+  assert.equal(unsafeBenchmarkSubmissionPolicy.status, 400);
+  assert.match(unsafeBenchmarkSubmissionPolicy.body.detail, /aggregateOnlyReport|hiddenIdExposureProhibited|perItemFeedbackProhibited/);
+
+  const unsafeBenchmarkSubmission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark-submissions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      benchmarkSubmission: {
+        ...interactionWorkflow.benchmarkSubmission,
+        id: "benchmark-submission-unsafe-per-item",
+        perItemOutputIncluded: true,
+        hiddenIdExposureIncluded: true,
+      },
+    }),
+  });
+  assert.equal(unsafeBenchmarkSubmission.status, 400);
+  assert.match(unsafeBenchmarkSubmission.body.detail, /perItemOutputIncluded|hiddenIdExposureIncluded/);
+
+  const unsafeProtectedArtifactRevalidation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/protected-artifacts/protected-prompt-workflow-new/revalidate",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      protectedArtifactRevalidation: {
+        ...interactionWorkflow.protectedArtifactRevalidation,
+        id: "protected-artifact-revalidation-unsafe-restore",
+        revalidationStatus: "not_checked",
+        staleSupersededBehavior: "allow_cached_restore",
+      },
+    }),
+  });
+  assert.equal(unsafeProtectedArtifactRevalidation.status, 400);
+  assert.match(unsafeProtectedArtifactRevalidation.body.detail, /revalidationStatus|staleSupersededBehavior/);
+
   for (const [resourceKey, url] of [
     ["publicExamplePracticeSession", "/api/v1/practice-sessions"],
     ["raterSession", "/api/v1/rater-sessions"],
