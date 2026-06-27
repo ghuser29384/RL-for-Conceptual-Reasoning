@@ -1874,6 +1874,7 @@ test("rating UI exposes RLHF88 task-first simplification, safe actions, and glos
   const appSource = readFileSync("src/app.mjs", "utf8");
   const styleSource = readFileSync("src/styles.css", "utf8");
   assert.ok(appSource.includes("ratingTaskFirstSummary(assignment)"));
+  assert.ok(appSource.includes('surfaceEvidenceDisclosure(releaseReport, "rating"'));
   assert.ok(appSource.includes("${escapeHtml(assignment.positionId)} / ${escapeHtml(assignment.critiqueId)}"));
   assert.ok(appSource.includes("Rate the critique's attack on the supplied position."));
   assert.ok(appSource.includes("Do not grade whether you agree with the position itself."));
@@ -1887,18 +1888,28 @@ test("rating UI exposes RLHF88 task-first simplification, safe actions, and glos
   assert.ok(appSource.includes("<strong>Dead weight</strong> Badness field: 0 is best, 1 is worst."));
   assert.ok(appSource.includes("preSubmitLintPanel()"));
   assert.ok(appSource.includes("diagnostic only, never auto-submitted"));
+  assert.ok(appSource.includes("correctnessWorksheetPanel({"));
+  assert.ok(appSource.includes('scope: "rating"'));
+  assert.ok(appSource.includes("/api/v1/correctness-claim-weight-worksheets"));
+  assert.ok(appSource.includes("claimSignificanceWeights: [0.65, 0.35]"));
+  assert.ok(appSource.includes("correctnessCredencesStatuses"));
+  assert.ok(appSource.includes("unclearClaimExclusionFlags"));
+  assert.ok(appSource.includes("advisoryAggregateCorrectnessEstimate"));
+  assert.ok(appSource.includes("submittedScoreOverrideFlag: true"));
+  assert.ok(appSource.includes("exposureBlindingState"));
   assert.ok(appSource.includes("ratingWorkflowActionStatus(action)"));
   assert.ok(styleSource.includes(".taskFirstPanel"));
   assert.ok(styleSource.includes(".selfScreenPanel"));
   assert.ok(styleSource.includes(".sessionPacingPanel"));
   assert.ok(styleSource.includes(".rubricQuickAccess"));
   assert.ok(styleSource.includes(".preSubmitLintPanel"));
+  assert.ok(styleSource.includes(".correctnessWorksheetPanel"));
 });
 
 test("practice sandbox is a public-anchor training surface excluded from release denominators", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   assert.ok(appSource.includes('["practice", "Practice", "sliders"]'));
-  assert.ok(appSource.includes('if (section === "practice") return practicePanel(context.releaseReport.sourceExampleAnchors);'));
+  assert.ok(appSource.includes('if (section === "practice") return practicePanel(context.releaseReport);'));
   assert.ok(appSource.includes('const anchorRows = sourceExampleAnchors.anchorRows.filter((row) => row.exposurePolicy === "public_training_qa_only");'));
   assert.ok(appSource.includes("Practice attempts record training exposure only."));
   assert.ok(appSource.includes("excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators"));
@@ -1906,6 +1917,8 @@ test("practice sandbox is a public-anchor training surface excluded from release
   assert.ok(appSource.includes("data-practice-dimension"));
   assert.ok(appSource.includes("missingPracticeScoreDimensions"));
   assert.ok(appSource.includes('state.practiceSubmittedScores = { ...state.practiceScores };'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "practice"'));
+  assert.ok(appSource.includes('"post_lock_feedback"'));
 });
 
 test("private calibration dashboard UI exposes protected-label-safe remediation flow", () => {
@@ -1921,6 +1934,8 @@ test("private calibration dashboard UI exposes protected-label-safe remediation 
   assert.ok(appSource.includes("releaseReport.interactionWorkflowEvidence"));
   assert.ok(appSource.includes("interactionEvidence.raterLearningPlanRows?.at(-1)"));
   assert.ok(appSource.includes("Complete next module"));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "calibration"'));
+  assert.ok(appSource.includes("complete_calibration_remediation"));
 });
 
 test("post-lock discussion room UI exposes screen-state, comment, and revision workflows", () => {
@@ -1934,6 +1949,7 @@ test("post-lock discussion room UI exposes screen-state, comment, and revision w
   assert.ok(appSource.includes("/api/v1/discussions/${encodeURIComponent(room.threadId)}/revision-proposals"));
   assert.ok(appSource.includes("persistExpertWorkflowResource"));
   assert.ok(appSource.includes("Discussion opens only after initial ratings lock."));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "discussion"'));
   assert.ok(appSource.includes('originalRatingPreservation: "original_rating_preserved_append_only"'));
   assert.ok(appSource.includes("Role identity starts masked where feasible"));
   assert.ok(appSource.includes("Append-only discussion audit events"));
@@ -1961,13 +1977,23 @@ test("adjudication cockpit UI exposes screen-state, cockpit, memo, review-sessio
   assert.ok(appSource.includes("revisionTimelineRefs"));
   assert.ok(appSource.includes("minorityRationaleFields"));
   assert.ok(appSource.includes("without changing the original blind ratings"));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "adjudication"'));
+  assert.ok(appSource.includes('scope: "adjudication"'));
+  assert.ok(appSource.includes("Append correctness worksheet"));
   assert.ok(styleSource.includes(".adjudicationCockpitGrid"));
   assert.ok(styleSource.includes(".adjudicationCompose"));
 });
 
-test("release review and admin governance screens expose RLHF88 task-first no-feature-loss summaries", () => {
+test("non-rating RLHF88 screens expose task-first no-feature-loss summaries", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   const styleSource = readFileSync("src/styles.css", "utf8");
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "practice"'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "calibration"'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "discussion"'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "adjudication"'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "consent"'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "withdrawal"'));
+  assert.ok(appSource.includes('surfaceEvidenceDisclosure(releaseReport, "rating"'));
   assert.ok(appSource.includes("surfaceTaskFirstPanel(releaseReport, \"release_review\""));
   assert.ok(appSource.includes("surfaceTaskFirstPanel(report, \"admin_governance\""));
   assert.ok(appSource.includes("uxSurfaceEvidence(releaseReport, surface)"));
@@ -1987,7 +2013,7 @@ test("release review and admin governance screens expose RLHF88 task-first no-fe
 test("rater data-governance UI exposes consent, restriction, and withdrawal actions", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   assert.ok(appSource.includes('["data", "My Data", "database"]'));
-  assert.ok(appSource.includes('if (section === "data") return raterDataGovernancePanel(context.releaseReport.raterDataGovernance);'));
+  assert.ok(appSource.includes('if (section === "data") return raterDataGovernancePanel(context.releaseReport);'));
   assert.ok(appSource.includes('"/api/v1/raters/me/data-profile"'));
   assert.ok(appSource.includes('"/api/v1/raters/me/data-consent"'));
   assert.ok(appSource.includes('"/api/v1/raters/me/data-restriction-request"'));
@@ -1997,6 +2023,8 @@ test("rater data-governance UI exposes consent, restriction, and withdrawal acti
   assert.ok(appSource.includes('requesterNotificationStatus: "notified"'));
   assert.ok(appSource.includes('frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved"'));
   assert.ok(appSource.includes("Public artifacts are de-identified by default"));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "consent"'));
+  assert.ok(appSource.includes('surfaceTaskFirstPanel(releaseReport, "withdrawal"'));
 });
 
 test("state transition endpoint records rejected illegal transitions without advancing state", async () => {

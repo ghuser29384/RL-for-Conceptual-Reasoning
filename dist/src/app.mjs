@@ -117,6 +117,7 @@ const state = {
   localAdjudicationEvents: [],
   lastAdjudicationStatus: null,
   lastRatingWorkflowStatus: null,
+  lastCorrectnessWorksheetStatus: null,
   lastPersistenceStatus: null,
   lastSourceStyleAuditStatus: null,
 };
@@ -1663,10 +1664,10 @@ function render() {
 function sectionHtml(section, context) {
   if (section === "queue") return queuePanel();
   if (section === "contribute") return contributePanel();
-  if (section === "practice") return practicePanel(context.releaseReport.sourceExampleAnchors);
+  if (section === "practice") return practicePanel(context.releaseReport);
   if (section === "calibration") return calibrationPanel(context.releaseReport);
   if (section === "discussion") return discussionPanel(context.releaseReport);
-  if (section === "data") return raterDataGovernancePanel(context.releaseReport.raterDataGovernance);
+  if (section === "data") return raterDataGovernancePanel(context.releaseReport);
   if (section === "rating") {
     return ratingPanel(
       context.selectedAssignment,
@@ -1675,6 +1676,7 @@ function sectionHtml(section, context) {
       state.lastPersistenceStatus,
       state.sessionStatus,
       state.lastSourceStyleAuditStatus,
+      context.releaseReport,
     );
   }
   if (section === "workflow") return workflowPanel(context.releaseReport, state.sessionStatus, state.lastWorkflowStatus);
@@ -1741,7 +1743,8 @@ function queuePanel() {
   `;
 }
 
-function practicePanel(sourceExampleAnchors) {
+function practicePanel(releaseReport) {
+  const sourceExampleAnchors = releaseReport.sourceExampleAnchors ?? releaseReport;
   const anchor = selectedPracticeAnchor();
   const anchorRows = sourceExampleAnchors.anchorRows.filter((row) => row.exposurePolicy === "public_training_qa_only");
   return `
@@ -1753,6 +1756,14 @@ function practicePanel(sourceExampleAnchors) {
           ${icon("shield")}
           <span>Practice attempts record training exposure only. They are excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators.</span>
         </div>
+        ${surfaceTaskFirstPanel(releaseReport, "practice", {
+          label: "Practice",
+          task: "Lock a public practice attempt before viewing training feedback.",
+          primaryAction: "lock_practice_attempt",
+          completion: "Practice feedback remains training-only and never counts toward release labels, validation, hidden benchmarks, or human-ceiling denominators.",
+          scope: "Public anchors, Appendix-F glossary access, score controls, post-lock feedback, and audit provenance remain reachable.",
+          requiredControls: ["score_fields", "item_issue_report", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+        })}
         <div class="practiceAnchorList">
           ${anchorRows
             .map(
@@ -1849,6 +1860,14 @@ function calibrationPanel(releaseReport) {
           ${icon("shield")}
           <span>Only training-approved gold, practice, and duplicate feedback appears here. Live peer labels, hidden-benchmark labels, model-judge scores, source metadata, and protected split status stay hidden.</span>
         </div>
+        ${surfaceTaskFirstPanel(releaseReport, "calibration", {
+          label: "Calibration",
+          task: "Review private training feedback and complete remediation without exposing protected labels.",
+          primaryAction: "complete_calibration_remediation",
+          completion: "Calibration can unlock appropriate work while keeping live peer labels, source metadata, hidden-benchmark labels, and model-judge scores hidden.",
+          scope: "Remediation actions, Appendix-F anchors, post-lock training feedback, and audit provenance remain reachable.",
+          requiredControls: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
+        })}
         <div class="actionRow">
           <button class="secondaryButton" id="refreshCalibrationDashboard" type="button">${icon("database")}Refresh dashboard</button>
           ${pendingModules.length ? `<button class="primaryButton" id="completeNextRemediation" data-module-id="${escapeHtml(pendingModules[0])}" type="button">${icon("check")}Complete next module</button>` : ""}
@@ -1963,6 +1982,14 @@ function discussionPanel(releaseReport) {
           ${icon("shield")}
           <span>Discussion opens only after initial ratings lock. Role identity starts masked where feasible, peer-score pressure is warned against, and original ratings stay preserved when revision proposals are recorded.</span>
         </div>
+        ${surfaceTaskFirstPanel(releaseReport, "discussion", {
+          label: "Discussion",
+          task: "Record post-lock object-level discussion without mutating the initial rating.",
+          primaryAction: "record_object_level_comment",
+          completion: "Discussion events can support revision proposals and adjudication while preserving original blind ratings.",
+          scope: "Comment, revision proposal, issue escalation, adjudication routing, and audit provenance remain reachable after initial lock.",
+          requiredControls: ["item_issue_report", "adjudication_control", "audit_provenance_capture"],
+        })}
         <div class="actionRow">
           <button class="secondaryButton" id="refreshDiscussionScreenState" type="button">${icon("database")}Refresh screen state</button>
           <button class="primaryButton" id="submitDiscussionComment" type="button">${icon("check")}Record object-level comment</button>
@@ -2062,7 +2089,8 @@ function discussionEventCard(event) {
   `;
 }
 
-function raterDataGovernancePanel(raterDataGovernance) {
+function raterDataGovernancePanel(releaseReport) {
+  const raterDataGovernance = releaseReport.raterDataGovernance ?? releaseReport;
   const profile = state.raterDataProfile;
   const categoryRows = profile?.categories ?? RATER_DATA_GOVERNANCE_CATEGORIES.map((category) => ({ category, collected: true }));
   return `
@@ -2076,6 +2104,22 @@ function raterDataGovernancePanel(raterDataGovernance) {
           ${icon("shield")}
           <span>Your private learning data stays separate from release artifacts and model-training exports. Public artifacts are de-identified by default unless you explicitly agree to attribution.</span>
         </div>
+        ${surfaceTaskFirstPanel(releaseReport, "consent", {
+          label: "Consent",
+          task: "Review the data-use notice and acknowledge only the consent scopes shown on this screen.",
+          primaryAction: "acknowledge_data_use_notice",
+          completion: "Consent records update participant-data audit evidence without exposing private learning data to release artifacts.",
+          scope: "Data-use notice acknowledgement, profile visibility, access-review request, and audit provenance remain reachable.",
+          requiredControls: ["data_governance_withdrawal", "audit_provenance_capture"],
+        })}
+        ${surfaceTaskFirstPanel(releaseReport, "withdrawal", {
+          label: "Withdrawal",
+          task: "Choose withdrawal controls without silently changing frozen de-identified label snapshots.",
+          primaryAction: "submit_withdrawal_request",
+          completion: "Future assignments and future training-export use can be stopped while existing frozen denominators stay explicitly governed.",
+          scope: "Future-assignment stop, future-export exclusion, access-review request, denominator impact notes, and audit provenance remain reachable.",
+          requiredControls: ["data_governance_withdrawal", "audit_provenance_capture"],
+        })}
         <div class="actionRow">
           <button class="secondaryButton" id="refreshRaterDataProfile" type="button">${icon("database")}Refresh profile</button>
           <button class="primaryButton" id="submitRaterDataConsent" type="button">${icon("check")}Acknowledge data-use notice</button>
@@ -2433,7 +2477,7 @@ function typeLabelForTemplate(templateKey) {
   return "Source suggestion";
 }
 
-function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, sessionStatus, sourceStyleStatus) {
+function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, sessionStatus, sourceStyleStatus, releaseReport) {
   const activeView = createBlindRatingView(assignment, positions, critiques);
   const itemRatings = state.ratings.filter((rating) => rating.positionId === assignment.positionId && rating.critiqueId === assignment.critiqueId);
   const triggers = detectEscalations(itemRatings);
@@ -2447,6 +2491,16 @@ function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, s
       <section class="panel ratingEditor">
         ${panelTitle("eye", "Blind Rating Workspace", "Rater-visible text excludes source, tags, benchmark status, peer ratings, model-judge scores, and intake reasons.")}
         ${ratingTaskFirstSummary(assignment)}
+        ${surfaceEvidenceDisclosure(releaseReport, "rating", [
+          "score_fields",
+          "safe_decline",
+          "source_recognition",
+          "item_issue_report",
+          "verification_control",
+          "appendix_f_anchor_access",
+          "pre_submit_lint",
+          "autosave_resume",
+        ])}
         <div class="blindNotice">${icon("eye")}<span>Hidden before initial submission: ${escapeHtml(activeView.hiddenMetadata.join(", "))}.</span></div>
         ${statusLine(sessionStatus, "sessionLine")}
         ${authControls()}
@@ -2462,6 +2516,12 @@ function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, s
         ${preSubmitLintPanel()}
         ${issueFlagControls()}
         ${verificationControls()}
+        ${correctnessWorksheetPanel({
+          scope: "rating",
+          assignment,
+          ratingId: itemRatings.at(-1)?.id ?? null,
+          verificationStatus: itemVerification?.verificationStatus ?? state.draftVerification.status,
+        })}
         <div class="actionRow">
           <button class="primaryButton" id="submitRating" type="button">${icon("check")}Submit blind rating</button>
           <button class="secondaryButton" id="appendRevision" type="button">${icon("branch")}Append self-check revision</button>
@@ -2707,7 +2767,7 @@ function workflowPanel(releaseReport, sessionStatus, workflowStatus) {
 }
 
 function uxSurfaceEvidence(releaseReport, surface) {
-  const ux = releaseReport.uxSimplification ?? {};
+  const ux = releaseReport?.uxSimplification ?? {};
   return {
     surfaceRow: ux.surfaceRows?.find((row) => row.surface === surface) ?? null,
     screenState: ux.screenStateRows?.find((row) => row.surface === surface) ?? null,
@@ -2715,6 +2775,29 @@ function uxSurfaceEvidence(releaseReport, surface) {
     activePolicy: ux.activePolicy ?? ux.policy ?? null,
     releaseUseStatus: ux.releaseUseStatus ?? "ux_simplification_evidence_missing",
   };
+}
+
+function surfaceEvidenceDisclosure(releaseReport, surface, fallbackRequiredControls = []) {
+  const evidence = uxSurfaceEvidence(releaseReport, surface);
+  const screenState = evidence.screenState;
+  const surfaceRow = evidence.surfaceRow;
+  const copyPreview = evidence.copyPreview;
+  const requiredControls = surfaceRow?.requiredControls ?? screenState?.requiredControlKeys ?? fallbackRequiredControls;
+  const glossaryTerms = copyPreview?.glossaryTooltipIds ?? ["centrality", "strength", "dead_weight", "single_issue"];
+  return `
+    <details class="surfaceDisclosure">
+      <summary>Screen-state, glossary, and no-feature-loss evidence</summary>
+      ${metricList([
+        ["Surface", screenState?.surface ?? surface],
+        ["Schema", screenState?.outputSchemaVersion ?? "screen-state-output-lmca-v1"],
+        ["Policy", screenState?.policyVersionProvenance?.uxSimplificationPolicyId ?? surfaceRow?.policyId ?? "not recorded"],
+        ["Allowlisted actions", (screenState?.enabledActionAllowlist ?? requiredControls).map(humanize).join(", ")],
+        ["Glossary", glossaryTerms.join(", ")],
+        ["Hidden fields", screenState?.hiddenFieldClasses?.length ? `${screenState.hiddenFieldClasses.length} classes not disclosed` : "not recorded"],
+        ["No feature loss", surfaceRow?.featureParityCoversSurface ? "passed" : "review required"],
+      ])}
+    </details>
+  `;
 }
 
 function surfaceTaskFirstPanel(releaseReport, surface, options) {
@@ -2749,18 +2832,7 @@ function surfaceTaskFirstPanel(releaseReport, surface, options) {
         <p>${escapeHtml(optionalPanels.length ? `Advanced panels: ${optionalPanels.map(humanize).join(", ")}.` : "No advanced panels declared.")}</p>
       </article>
     </section>
-    <details class="surfaceDisclosure">
-      <summary>Screen-state, glossary, and no-feature-loss evidence</summary>
-      ${metricList([
-        ["Surface", screenState?.surface ?? surface],
-        ["Schema", screenState?.outputSchemaVersion ?? "screen-state-output-lmca-v1"],
-        ["Policy", screenState?.policyVersionProvenance?.uxSimplificationPolicyId ?? surfaceRow?.policyId ?? "not recorded"],
-        ["Allowlisted actions", (screenState?.enabledActionAllowlist ?? requiredControls).map(humanize).join(", ")],
-        ["Glossary", glossaryTerms.join(", ")],
-        ["Hidden fields", screenState?.hiddenFieldClasses?.length ? `${screenState.hiddenFieldClasses.length} classes not disclosed` : "not recorded"],
-        ["No feature loss", surfaceRow?.featureParityCoversSurface ? "passed" : "review required"],
-      ])}
-    </details>
+    ${surfaceEvidenceDisclosure(releaseReport, surface, requiredControls)}
   `;
 }
 
@@ -2796,6 +2868,20 @@ function adjudicationPanel(releaseReport) {
           ${icon("shield")}
           <span>Adjudication happens after lock. The cockpit surfaces spread, target-map, verification, sibling-context, revision, and minority-rationale evidence without changing the original blind ratings.</span>
         </div>
+        ${surfaceTaskFirstPanel(releaseReport, "adjudication", {
+          label: "Adjudication",
+          task: "Resolve high-disagreement cases while preserving original ratings and minority rationales.",
+          primaryAction: "append_adjudication_memo",
+          completion: "Adjudication can finalize a release-critical decision only after memo, verification, target-map, and provenance fields remain available.",
+          scope: "Verification, adjudication, item-issue, rationale, minority-rationale, and audit controls remain reachable.",
+          requiredControls: ["verification_control", "adjudication_control", "item_issue_report", "audit_provenance_capture"],
+        })}
+        ${correctnessWorksheetPanel({
+          scope: "adjudication",
+          adjudicationId,
+          ratingId: reviewSession?.ratingIds?.at?.(-1) ?? "rating-seed-ai-base-rate-r1",
+          verificationStatus: reviewSession?.verificationConflictSummary ? "not_practicable" : "unresolved",
+        })}
         <div class="actionRow">
           <button class="secondaryButton" id="refreshAdjudicationCockpit" type="button">${icon("database")}Refresh cockpit</button>
           <button class="secondaryButton" id="recordAdjudicationReviewSession" type="button">${icon("branch")}Record review session</button>
@@ -3433,6 +3519,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
   const candidateIntake = report.candidateIntakeQualityAudit;
   const rubricDrift = report.rubricDrift;
   const protectedSplitIsolation = report.protectedSplitIsolation;
+  const operationalControls = report.operationalControlEvidence;
   const blindInitialCeiling = humanCeiling.comparisonRows.find((row) => row.ratingKind === "blind_initial");
   const expertCheckCeiling = humanCeiling.comparisonRows.find((row) => row.ratingKind === "expert_check");
   const samePositionContext = report.samePositionContext;
@@ -3458,6 +3545,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
           <button class="secondaryButton" id="downloadReleaseReport" type="button">${icon("download")}Download release report</button>
         </div>
       </section>
+      ${operationalControlPanel(operationalControls)}
       <section class="panel">
         ${panelTitle("sliders", "Rating Effort QA", "Length-adjusted active time, idle gaps, and interruptions are audited before sensitive release use.")}
         <div class="metricCards benchmarkMetricCards">
@@ -4001,6 +4089,94 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
   `;
 }
 
+function operationalControlPanel(operationalControls) {
+  const controls = operationalControls ?? {};
+  const counts = controls.counts ?? {};
+  const requiredPolicyActionCount = controls.requiredPolicyActionKinds?.length ?? 0;
+  const requiredPhaseLaneCount = controls.requiredPhaseGateLaneKinds?.length ?? 0;
+  const requiredQueueLaneCount = controls.requiredQueueFreshnessLanes?.length ?? 0;
+  const requiredClientSurfaceCount = controls.requiredClientSurfaces?.length ?? 0;
+  const requiredAuditKindCount = controls.requiredAuditChainEventKinds?.length ?? 0;
+  const auditVerification = controls.sensitiveAuditChainVerificationRows?.at(-1);
+  const reviewSections = controls.reviewSections ?? [];
+  return `
+    <section class="panel">
+      ${panelTitle("lock", "Operational Control Gates", "Phase gates, queue freshness, client-surface isolation, and audit-chain evidence stay visible before release claims are strengthened.")}
+      <div class="metricCards benchmarkMetricCards">
+        ${metricCard("Policy actions", `${counts.passingPolicyActionKindCount ?? 0}/${requiredPolicyActionCount}`, "decision + replay protection")}
+        ${metricCard("Phase lanes", `${counts.passingPhaseLaneCount ?? 0}/${requiredPhaseLaneCount}`, "future lanes fail closed")}
+        ${metricCard("Queue freshness", `${counts.passingQueueFreshnessLaneCount ?? 0}/${requiredQueueLaneCount}`, "policy + stale scan")}
+        ${metricCard("Client surfaces", `${counts.passingClientSurfaceCount ?? 0}/${requiredClientSurfaceCount}`, "instrumentation blocked")}
+        ${metricCard("Audit chain", `${counts.passingAuditChainKindCount ?? 0}/${requiredAuditKindCount}`, humanize(auditVerification?.chainStatus ?? "not verified"))}
+      </div>
+      <div class="metricTable">
+        <div><span>Release use</span><strong>${humanize(controls.releaseUseStatus ?? "operational_control_missing")}</strong></div>
+        <div><span>Review sections</span><strong>${String(counts.reviewSectionCount ?? reviewSections.length)}</strong></div>
+        <div><span>Queue revalidation</span><strong>${(controls.requiredQueueRevalidationChecks ?? []).map(humanize).join(", ") || "not recorded"}</strong></div>
+        <div><span>Audit verification</span><strong>${auditVerification ? `${humanize(auditVerification.chainStatus)} / ${auditVerification.verifiedEventCount ?? 0} events` : "not recorded"}</strong></div>
+      </div>
+      <div class="failureList operationalControlList">
+        ${operationalControlPreview("Implementation phase lanes", controls.phaseLaneRows ?? [], (row) => row.laneKind, (row) => [
+          ["State", humanize(row.phaseState ?? "missing")],
+          ["Fail closed", row.failClosed ? "yes" : "no"],
+          ["Bundle", row.bundleId ?? "missing"],
+        ])}
+        ${operationalControlPreview("Queue freshness lanes", controls.queueLaneRows ?? [], (row) => row.lane, (row) => [
+          ["Window", Number.isFinite(row.freshnessWindowMinutes) ? `${row.freshnessWindowMinutes} min` : "missing"],
+          ["Stale behavior", humanize(row.staleBehavior ?? "missing")],
+          ["Scan", row.queueStaleByDelayScanId ?? "missing"],
+        ])}
+        ${operationalControlPreview("Client-surface integrity", controls.clientSurfaceRows ?? [], (row) => row.surface, (row) => [
+          ["Policy", row.clientSurfaceIntegrityPolicyId ?? "missing"],
+          ["Check", row.clientSurfaceIntegrityCheckId ?? "missing"],
+          ["Protection", "no analytics, replay, DOM capture, sensitive URLs, referrer leakage, or offline cache"],
+        ])}
+        ${operationalControlPreview("Sensitive audit chain", controls.auditKindRows ?? [], (row) => row.eventKind, (row) => [
+          ["Sequence", String(row.sequence ?? "missing")],
+          ["Event hash", row.eventHash ?? "missing"],
+          ["Event", row.sensitiveAuditChainEventId ?? "missing"],
+        ])}
+        ${
+          reviewSections.length
+            ? `<article class="claimRow">
+                <header>${statusChip("warn")}<strong>Operational review sections</strong></header>
+                ${metricList(reviewSections.slice(0, 6).map((row) => [row.artifactType, `${row.artifactId}: ${row.reason}`]))}
+              </article>`
+            : `<article class="claimRow">
+                <header>${statusChip("pass")}<strong>No operational-control review sections</strong></header>
+                <p>Release-report evidence currently has no missing phase, queue, client-surface, or audit-chain gate sections.</p>
+              </article>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function operationalControlPreview(title, rows, labelForRow, metricsForRow) {
+  const previewRows = rows.slice(0, 4);
+  if (!previewRows.length) {
+    return `
+      <article class="claimRow">
+        <header>${statusChip("warn")}<strong>${escapeHtml(title)}</strong></header>
+        <p>No rows recorded in the release report.</p>
+      </article>
+    `;
+  }
+  return `
+    <article class="claimRow">
+      <header>${statusChip(previewRows.every((row) => String(row.status).includes("complete")) ? "pass" : "warn")}<strong>${escapeHtml(title)}</strong></header>
+      ${metricList(
+        previewRows.map((row) => [
+          humanize(labelForRow(row)),
+          `${humanize(row.status ?? "missing")}; ${metricsForRow(row)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join("; ")}`,
+        ]),
+      )}
+    </article>
+  `;
+}
+
 function exportsPanel(manifests, labelSnapshot, trainingExport, labelChannelSeparation, rubricQaCoverage, sourceExampleAnchors) {
   return `
     <div class="exportsLayout">
@@ -4408,6 +4584,38 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (result.tone === "good") state.localAdjudicationEvents.push({ kind: "adjudication_finalization", resourceId: result.resourceId, detail: "finalization event recorded" });
     render();
   });
+  document.querySelectorAll("[data-correctness-worksheet-scope]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const scope = button.getAttribute("data-correctness-worksheet-scope");
+      const cockpit = state.adjudicationCockpit ?? fallbackAdjudicationCockpit(releaseReport);
+      const selectedRatings = state.ratings.filter(
+        (rating) => rating.positionId === selectedAssignment.positionId && rating.critiqueId === selectedAssignment.critiqueId,
+      );
+      const worksheet = createCorrectnessWorksheetPayload({
+        scope,
+        assignment: selectedAssignment,
+        adjudicationId: scope === "adjudication" ? cockpit.adjudicationId : null,
+        ratingId: selectedRatings.at(-1)?.id ?? "rating-seed-ai-base-rate-r1",
+        verificationStatus: scope === "adjudication" ? "not_practicable" : state.draftVerification.status,
+      });
+      state.lastCorrectnessWorksheetStatus = {
+        tone: "warn",
+        title: "Appending correctness worksheet",
+        detail: "Recording claim spans, significance weights, advisory aggregate, override note, and blinding provenance.",
+      };
+      render();
+      const result = await persistExpertWorkflowResource(
+        "/api/v1/correctness-claim-weight-worksheets",
+        "correctnessClaimWeightWorksheet",
+        worksheet,
+      );
+      state.lastCorrectnessWorksheetStatus = result;
+      if (result.tone === "good" && scope === "adjudication") {
+        state.localAdjudicationEvents.push({ kind: "correctness_claim_weight_worksheet", resourceId: result.resourceId, detail: "claim-weight worksheet recorded" });
+      }
+      render();
+    });
+  });
   document.getElementById("refreshRaterDataProfile")?.addEventListener("click", async () => {
     state.lastDataGovernanceStatus = { tone: "warn", title: "Loading data profile", detail: "Reading your rater-data transparency profile." };
     render();
@@ -4735,6 +4943,38 @@ function verificationControls() {
         <input id="verificationNote" type="text" value="${escapeHtml(state.draftVerification.note)}" />
       </label>
     </div>
+  `;
+}
+
+function correctnessWorksheetPanel({ scope, assignment, adjudicationId, ratingId, verificationStatus }) {
+  const worksheet = createCorrectnessWorksheetPayload({
+    scope,
+    assignment,
+    adjudicationId,
+    ratingId,
+    verificationStatus,
+    previewOnly: true,
+  });
+  return `
+    <section class="correctnessWorksheetPanel" aria-label="Correctness claim-weight worksheet">
+      <div>
+        <strong>Correctness claim-weight worksheet</strong>
+        <span>Use for release-critical, validation, adjudication, or high-disagreement correctness cases when a single correctness score would hide claim weighting.</span>
+      </div>
+      ${metricList([
+        ["Claim spans", worksheet.claimSpanIds.join(", ")],
+        ["Significance weights", worksheet.claimSignificanceWeights.map(formatNumber).join(", ")],
+        ["Correctness statuses", worksheet.correctnessCredencesStatuses.join(", ")],
+        ["Excluded unclear claims", worksheet.unclearClaimExclusionFlags.filter(Boolean).length ? `${worksheet.unclearClaimExclusionFlags.filter(Boolean).length} excluded` : "none"],
+        ["Advisory aggregate", formatNumber(worksheet.advisoryAggregateCorrectnessEstimate)],
+        ["Submitted-score override", worksheet.submittedScoreOverrideFlag ? worksheet.overrideExplanation : "not used"],
+        ["Exposure/blinding", humanize(worksheet.exposureBlindingState)],
+      ])}
+      <div class="actionRow">
+        <button class="secondaryButton" data-correctness-worksheet-scope="${escapeHtml(scope)}" type="button">${icon("check")}Append correctness worksheet</button>
+      </div>
+      ${statusLine(state.lastCorrectnessWorksheetStatus, "persistenceLine")}
+    </section>
   `;
 }
 
@@ -5341,6 +5581,31 @@ function createAdjudicationMemoPayload(cockpit, contestedInterpretation, minorit
     maxFinalRaterSpread: 0.18,
     adjudicatorIds: reviewSession.adjudicatorIds?.length ? reviewSession.adjudicatorIds : [state.adminSession?.user?.id ?? "demo-admin"],
     rubricVersionConsidered: "lmca-app-f-2026-10",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createCorrectnessWorksheetPayload({ scope, assignment, adjudicationId, ratingId, verificationStatus, previewOnly = false }) {
+  const itemKey = assignment ? `${assignment.positionId}::${assignment.critiqueId}` : "pos-ai-prior::crit-ai-base-rate";
+  const status = verificationStatus === "verified" ? "verified:0.82" : verificationStatus === "not_practicable" ? "not_practicable:0.55" : "unresolved:0.5";
+  return {
+    id: `correctness-claim-weight-worksheet-ui-${scope ?? "rating"}-${previewOnly ? "preview" : Date.now()}`,
+    ratingId: ratingId ?? null,
+    adjudicationId: adjudicationId ?? null,
+    verificationWorkspaceId: `verification-workspace-${itemKey.replaceAll(":", "-")}`,
+    claimSpanIds: [`${itemKey}#claim-span-main`, `${itemKey}#claim-span-supporting`],
+    claimSignificanceWeights: [0.65, 0.35],
+    correctnessCredencesStatuses: [status, "context_dependent:0.62"],
+    unclearClaimExclusionFlags: [false, false],
+    advisoryAggregateCorrectnessEstimate: verificationStatus === "verified" ? 0.75 : 0.58,
+    submittedScoreOverrideFlag: true,
+    overrideExplanation:
+      scope === "adjudication"
+        ? "Adjudicator preserved the final correctness score after reviewing claim weights and verification limits."
+        : "Rater preserves the submitted correctness score after reviewing weighted claim evidence.",
+    exposureBlindingState:
+      scope === "adjudication" ? "post_lock_adjudication_no_hidden_benchmark_labels_exposed" : "blind_auxiliary_material_not_consulted",
+    createdBy: state.adminSession?.user?.id ?? state.session?.user?.id ?? "demo-expert",
     timestamp: new Date().toISOString(),
   };
 }
