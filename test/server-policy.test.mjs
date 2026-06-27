@@ -310,8 +310,19 @@ const prohibitedIncentiveSignals = [
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 const ratingTaskOutputUses = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
+const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
+const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const rubricDimensions = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
 const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const scoreExplanationTriggerRules = [
+  "extreme_score",
+  "score_inconsistency",
+  "overall_product_gap",
+  "unclear_target",
+  "high_stakes_workflow",
+  "post_discussion_revision",
+  "exposure_familiarity_conflict_uncertainty",
+];
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 
 function completePolicyBundleFixtures() {
@@ -336,10 +347,14 @@ function completePolicyBundleFixtures() {
     },
     ratingWorkflowProfile: {
       id: "rating-workflow-profile-workflow-new",
-      profileVersion: "rating-workflow-profile-rlhf88-v1",
+      profileVersion: "rating-workflow-profile-rlhf90-v1",
       taskModesCovered: ratingWorkflowTaskModes,
       requiredScoreFields: ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"],
-      requiredRationaleFields: ["short_rationale", "low_clarity_explanation"],
+      requiredConfidenceJudgment: true,
+      requiredConfidenceValues: ["low", "medium", "high"],
+      scoreExplanationPolicyId: "score-explanation-policy-workflow-new",
+      optionalRationaleFields: ["general_rating_note"],
+      triggerRequiredRationaleFields: ["score_explanation"],
       requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
       optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
       disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
@@ -349,6 +364,26 @@ function completePolicyBundleFixtures() {
       safeDeclineAvailable: true,
       preSubmitLintPolicy: "pre-submit-assist-workflow-new",
       releaseGateProfileLinkage: "release-gate-october-2026-demo",
+      frozenAt: "2026-10-01T00:00:00.000Z",
+    },
+    scoreExplanationPolicy: {
+      id: "score-explanation-policy-workflow-new",
+      policyVersion: "score-explanation-policy-rlhf90-v1",
+      coveredWorkflowSplitClasses: [...ratingWorkflowTaskModes, ...protectedUiLaneClasses],
+      ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
+      optionalFields: ["general_rating_note", "optional_evidence_spans"],
+      triggerList: scoreExplanationTriggerRules,
+      extremeScoreThresholdLow: 0.1,
+      extremeScoreThresholdHigh: 0.9,
+      inconsistencyRules: ["correctness_lte_0_25_and_strength_gte_0_75"],
+      overallVsCentralityStrengthGapThreshold: 0.25,
+      targetUnclearTrigger: true,
+      highStakesWorkflowTrigger: true,
+      postDiscussionRevisionTrigger: true,
+      exposureFamiliarityConflictUncertaintyTrigger: true,
+      protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
+      sentenceGuidance: "one_or_two_sentences",
+      protectedSplitCompatible: true,
       frozenAt: "2026-10-01T00:00:00.000Z",
     },
     uiExperimentPolicy: {
@@ -700,6 +735,24 @@ function completeRatingExperienceWorkflowFixtures() {
     protectedSplitCompatibilityClass: "fine_grained_unset_required_v1",
     frozenAt: "2026-10-01T00:21:00.000Z",
   };
+  const draftStoragePolicy = {
+    id: "draft-storage-policy-workflow-new",
+    policyVersion: "draft-storage-rlhf89-v1",
+    coveredWorkflowSplitClasses: draftStorageLanes,
+    serverSidePersistenceDefault: true,
+    protectedLanePersistence: "server_side_by_assignment_id",
+    clientStatePolicy: "ephemeral_in_memory_only",
+    prohibitedClientPersistenceMechanisms: prohibitedDraftClientPersistence,
+    localStorageProhibited: true,
+    sessionStorageProhibited: true,
+    indexedDbProhibited: true,
+    persistentOfflineCacheProhibited: true,
+    downloadedRecoveryBlobProhibited: true,
+    clearOnLogoutRevocation: true,
+    staleDraftDependencyBlocker: true,
+    ordinaryPracticeExceptionPolicy: "allowed only when declared by ClientSurfaceIntegrityPolicy and excluded from protected lanes",
+    frozenAt: "2026-10-01T00:21:30.000Z",
+  };
   const rubricLintConfig = {
     id: "rubric-lint-config-workflow-new",
     rubricVersion: "appendix-f-operational-v1",
@@ -747,6 +800,7 @@ function completeRatingExperienceWorkflowFixtures() {
       frozenAt: "2026-10-01T00:20:00.000Z",
     },
     scoreInputPolicy,
+    draftStoragePolicy,
     raterInstructionRenderVersion,
     rubricLintConfig,
     rubricLintEvent: {
@@ -791,6 +845,7 @@ function completeRatingExperienceWorkflowFixtures() {
         assistPolicyId: "pre-submit-assist-workflow-new",
         rubricLintConfigId: rubricLintConfig.id,
         scoreInputPolicyId: scoreInputPolicy.id,
+        draftStoragePolicyId: draftStoragePolicy.id,
         ratingContextSnapshotId: "rc-target-only-1",
       },
       staleDependencyStatus: "current",
@@ -1864,6 +1919,14 @@ test("rating UI starts score controls unset and requires explicit values before 
   assert.match(appSource, /draftScores:\s*Object\.fromEntries\(RUBRIC_DIMENSIONS\.map\(\(dimension\) => \[dimension, null\]\)\)/);
   assert.ok(appSource.includes("const missingScores = missingDraftScoreDimensions();"));
   assert.ok(appSource.includes('title: "Required scores missing"'));
+  assert.ok(appSource.includes("draftConfidenceJudgment"));
+  assert.ok(appSource.includes('title: "Confidence missing"'));
+  assert.ok(appSource.includes("scoreExplanationPolicyPanel(assignment)"));
+  assert.ok(appSource.includes("scoreExplanationTriggersForRating({"));
+  assert.ok(appSource.includes('scoreExplanationPolicyId: `score-explanation-policy-${releaseId}`'));
+  assert.ok(appSource.includes('scoreExplanationPromptVisibility: "label_source_protected_status_blind"'));
+  assert.ok(appSource.includes("General note (optional)"));
+  assert.ok(appSource.includes("Short explanation required"));
   assert.ok(appSource.includes('scoreInputPolicyId: "score-input-policy-ui-unset-required"'));
   assert.ok(appSource.includes('scoreEntryExplicitnessStatus: clarity < 0.5 ? "low_clarity_branch_explicit" : "all_required_scores_explicit"'));
   assert.ok(appSource.includes('hasValue ? value.toFixed(2) : "unset"'));
@@ -1903,6 +1966,8 @@ test("rating UI exposes RLHF88 task-first simplification, safe actions, and glos
   assert.ok(styleSource.includes(".sessionPacingPanel"));
   assert.ok(styleSource.includes(".rubricQuickAccess"));
   assert.ok(styleSource.includes(".preSubmitLintPanel"));
+  assert.ok(styleSource.includes(".scoreExplanationPanel"));
+  assert.ok(styleSource.includes(".confidenceChoices"));
   assert.ok(styleSource.includes(".correctnessWorksheetPanel"));
 });
 
@@ -5490,6 +5555,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   for (const [resourceKey, url] of [
     ["visibilityPolicy", "/api/v1/visibility-policies"],
     ["ratingWorkflowProfile", "/api/v1/rating-workflow-profiles"],
+    ["scoreExplanationPolicy", "/api/v1/score-explanation-policies"],
     ["uiExperimentPolicy", "/api/v1/ui-experiment-policies"],
     ["preSubmitAssistPolicy", "/api/v1/pre-submit-assist-policies"],
     ["accessibilityConformanceReport", "/api/v1/accessibility-conformance-reports"],
@@ -5510,6 +5576,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(ratingWorkflowProfileById.status, 200);
   assert.equal(ratingWorkflowProfileById.body.safeDeclineAvailable, true);
+  assert.equal(ratingWorkflowProfileById.body.requiredConfidenceJudgment, true);
+
+  const scoreExplanationPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/score-explanation-policies/score-explanation-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(scoreExplanationPolicyById.status, 200);
+  assert.deepEqual(scoreExplanationPolicyById.body.triggerList, scoreExplanationTriggerRules);
 
   const visibilityPolicyById = await invokeApi(context, {
     method: "GET",
@@ -5775,6 +5850,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeScoreInputPolicy.status, 400);
   assert.match(unsafeScoreInputPolicy.body.detail, /manualNumericEntryAvailable|initialDefaultState/);
 
+  const unsafeDraftStoragePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/draft-storage-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      draftStoragePolicy: {
+        ...ratingExperience.draftStoragePolicy,
+        id: "draft-storage-policy-client-cache",
+        prohibitedClientPersistenceMechanisms: prohibitedDraftClientPersistence.filter((mechanism) => mechanism !== "persistent_offline_cache"),
+        localStorageProhibited: false,
+      },
+    }),
+  });
+  assert.equal(unsafeDraftStoragePolicy.status, 400);
+  assert.match(unsafeDraftStoragePolicy.body.detail, /prohibitedClientPersistenceMechanisms|localStorageProhibited/);
+
   const incompleteRenderVersion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rater-instruction-render-versions",
@@ -5901,6 +5992,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   for (const [resourceKey, url] of [
     ["taskOutputEligibilityPolicy", "/api/v1/task-output-eligibility-policies"],
     ["scoreInputPolicy", "/api/v1/score-input-policies"],
+    ["draftStoragePolicy", "/api/v1/draft-storage-policies"],
     ["raterInstructionRenderVersion", "/api/v1/rater-instruction-render-versions"],
     ["rubricLintConfig", "/api/v1/rubric-lint-configs"],
     ["rubricLintEvent", "/api/v1/rubric-lint-events"],
@@ -5973,6 +6065,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(staleRatingDraftSession.status, 400);
   assert.match(staleRatingDraftSession.body.detail, /dependencyVersionSnapshot\.scoreInputPolicyId/);
+
+  const staleStorageRatingDraftSession = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-draft-sessions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      ratingDraftSession: {
+        ...ratingExperience.ratingDraftSession,
+        id: "rating-draft-session-workflow-stale-storage",
+        dependencyVersionSnapshot: {
+          ...ratingExperience.ratingDraftSession.dependencyVersionSnapshot,
+          draftStoragePolicyId: "",
+        },
+      },
+    }),
+  });
+  assert.equal(staleStorageRatingDraftSession.status, 400);
+  assert.match(staleStorageRatingDraftSession.body.detail, /dependencyVersionSnapshot\.draftStoragePolicyId/);
 
   const exportedRatingDraftSession = await invokeApi(context, {
     method: "POST",
@@ -6054,6 +6164,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(scoreInputPolicyById.status, 200);
   assert.equal(scoreInputPolicyById.body.initialDefaultState, "unset_required");
+
+  const draftStoragePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/draft-storage-policies/draft-storage-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(draftStoragePolicyById.status, 200);
+  assert.equal(draftStoragePolicyById.body.serverSidePersistenceDefault, true);
+  assert.equal(draftStoragePolicyById.body.clientStatePolicy, "ephemeral_in_memory_only");
 
   const raterInstructionRenderById = await invokeApi(context, {
     method: "GET",
@@ -7591,11 +7710,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(releaseReport.body.raterDataGovernance.reviewSections, []);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.visibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.ratingWorkflowProfiles.length, 1);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.scoreExplanationPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.uiExperimentPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.preSubmitAssistPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.accessibilityConformanceReports.length, 1);
   assert.equal(releaseReport.body.policyBundleEvidence.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
-  assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 5);
+  assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 6);
+  assert.equal(releaseReport.body.policyBundleEvidence.counts.submittedScoreExplanationPolicyCount, 1);
   assert.deepEqual(releaseReport.body.policyBundleEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.volunteerIncentivePolicies.length, 1);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.raterQualificationRecords.length, qualificationScopes.length);
@@ -7608,6 +7729,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(releaseReport.body.participantSafeguardEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.taskOutputEligibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreInputPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.draftStoragePolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.raterInstructionRenderVersions.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintConfigs.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 1);
@@ -7615,8 +7737,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_pending_review");
+  assert.equal(releaseReport.body.ratingExperienceEvidence.draftStoragePolicyRows.at(-1).serverSidePersistenceDefault, true);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.draftStoragePolicyRows.at(-1).clientStatePolicy, "ephemeral_in_memory_only");
   assert.equal(releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).resumeCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).abandonedVsSubmittedStatus, "draft_not_submitted");
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).dependencyVersionSnapshot.draftStoragePolicyId,
+    "draft-storage-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.correctnessClaimWeightWorksheets.length, 1);
   assert.equal(
     releaseReport.body.ratingExperienceEvidence.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation,
@@ -7631,6 +7759,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.externalAssistanceDeclarations.length, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.releaseUseStatus, "submitted_rating_experience_evidence_complete");
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreInputPolicyCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedDraftStoragePolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionRenderVersionCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueReportCount, 1);
@@ -7837,7 +7966,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 236 + uxSimplificationSurfaces.length * 3);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 238 + uxSimplificationSurfaces.length * 3);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
@@ -7885,6 +8014,65 @@ test("server policy requires rating score-input provenance and raw scores", () =
   const invalidExplicitnessValidation = validateRatingPayload(invalidExplicitness, "blind_initial_submitted");
   assert.equal(invalidExplicitnessValidation.ok, false);
   assert.match(invalidExplicitnessValidation.detail, /unsupported scoreEntryExplicitnessStatus/);
+});
+
+test("server policy requires rating confidence and trigger-based score explanations", () => {
+  const missingConfidence = validBlindRating("rating-confidence-missing");
+  delete missingConfidence.scoreConfidenceJudgment;
+  const missingConfidenceValidation = validateRatingPayload(missingConfidence, "blind_initial_submitted");
+  assert.equal(missingConfidenceValidation.ok, false);
+  assert.match(missingConfidenceValidation.detail, /scoreConfidenceJudgment/);
+
+  const extremeWithoutExplanation = {
+    ...validBlindRating("rating-extreme-no-explanation"),
+    scores: {
+      centrality: 0.95,
+      strength: 0.68,
+      correctness: 0.9,
+      clarity: 0.88,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.62,
+    },
+    rawScores: {
+      centrality: 0.95,
+      strength: 0.68,
+      correctness: 0.9,
+      clarity: 0.88,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.62,
+    },
+    displayedScores: {
+      centrality: 0.95,
+      strength: 0.68,
+      correctness: 0.9,
+      clarity: 0.88,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.62,
+    },
+    scoreExplanationTriggers: ["extreme_score"],
+    scoreExplanationRequired: false,
+  };
+  const missingExplanationValidation = validateRatingPayload(extremeWithoutExplanation, "blind_initial_submitted");
+  assert.equal(missingExplanationValidation.ok, false);
+  assert.match(missingExplanationValidation.detail, /scoreExplanationRequired/);
+
+  const validationSubset = {
+    ...validBlindRating("rating-high-stakes-explanation"),
+    assignmentId: "assign-voting-bullet",
+    positionId: "pos-voting",
+    critiqueId: "crit-voting-bullet",
+    positionTextVersionId: "ptv-voting-v1",
+    critiqueTextVersionId: "ctv-voting-bullet-v1",
+    ratingContextSnapshotId: "rc-counterbalanced-voting",
+    scoreExplanationTriggers: ["high_stakes_workflow"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "The workflow policy requires a blind-safe explanation for this release-sensitive item.",
+    generalRatingNote: "",
+  };
+  assert.equal(validateRatingPayload(validationSubset, "blind_initial_submitted").ok, true);
 });
 
 test("server policy requires rating context snapshots to include the rated critique", () => {
@@ -8131,6 +8319,8 @@ function validBlindRating(id) {
     kind: "blind_initial",
     rubricVersion: "lmca-app-f-2026-10",
     scoreInputPolicyId: "score-input-policy-workflow-new",
+    workflowProfileId: "rating-workflow-profile-workflow-new",
+    scoreExplanationPolicyId: "score-explanation-policy-workflow-new",
     positionTextVersionId: "ptv-ai-prior-v1",
     critiqueTextVersionId: "ctv-ai-base-rate-v1",
     ratingContextSnapshotId: "rc-target-only-1",
@@ -8162,6 +8352,12 @@ function validBlindRating(id) {
       overall: 0.62,
     },
     scoreQuantizationPolicy: "raw_0_1_scores_stored_to_0.001_display_precision",
+    scoreConfidenceJudgment: "medium",
+    generalRatingNote: "Optional ordinary rating note.",
+    scoreExplanation: "",
+    scoreExplanationRequired: false,
+    scoreExplanationTriggers: [],
+    scoreExplanationPromptVisibility: "label_source_protected_status_blind",
     scoreEntryExplicitnessStatus: "all_required_scores_explicit",
     scoreMissingFieldValidationStatus: "passed_no_missing_required_fields",
     provisionalDimensions: [],

@@ -379,7 +379,18 @@ const prohibitedIncentiveSignals = [
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudication_label"];
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
+const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
+const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const scoreExplanationTriggerRules = [
+  "extreme_score",
+  "score_inconsistency",
+  "overall_product_gap",
+  "unclear_target",
+  "high_stakes_workflow",
+  "post_discussion_revision",
+  "exposure_familiarity_conflict_uncertainty",
+];
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 
 function completePolicyBundleFixtures() {
@@ -402,14 +413,38 @@ function completePolicyBundleFixtures() {
     ratingWorkflowProfiles: [
       {
         id: "rating-workflow-profile-submitted",
-        profileVersion: "rating-workflow-profile-rlhf88-v1",
+        profileVersion: "rating-workflow-profile-rlhf90-v1",
         taskModesCovered: ratingWorkflowTaskModes,
         requiredScoreFields: ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"],
-        requiredRationaleFields: ["short_rationale", "low_clarity_explanation"],
+        requiredConfidenceJudgment: true,
+        requiredConfidenceValues: ["low", "medium", "high"],
+        scoreExplanationPolicyId: "score-explanation-policy-submitted",
+        optionalRationaleFields: ["general_rating_note"],
+        triggerRequiredRationaleFields: ["score_explanation"],
         requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
         optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
         safeDeclineAvailable: true,
         preSubmitLintPolicy: "pre-submit-assist-submitted",
+      },
+    ],
+    scoreExplanationPolicies: [
+      {
+        id: "score-explanation-policy-submitted",
+        policyVersion: "score-explanation-policy-rlhf90-v1",
+        coveredWorkflowSplitClasses: [...ratingWorkflowTaskModes, ...protectedUiLaneClasses],
+        ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
+        optionalFields: ["general_rating_note", "optional_evidence_spans"],
+        triggerList: scoreExplanationTriggerRules,
+        extremeScoreThresholdLow: 0.1,
+        extremeScoreThresholdHigh: 0.9,
+        inconsistencyRules: ["correctness_lte_0_25_and_strength_gte_0_75"],
+        overallVsCentralityStrengthGapThreshold: 0.25,
+        targetUnclearTrigger: true,
+        highStakesWorkflowTrigger: true,
+        postDiscussionRevisionTrigger: true,
+        exposureFamiliarityConflictUncertaintyTrigger: true,
+        protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
+        protectedSplitCompatible: true,
       },
     ],
     uiExperimentPolicies: [
@@ -771,6 +806,24 @@ function completeRatingExperienceFixtures() {
     protectedSplitCompatibilityClass: "fine_grained_unset_required_v1",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
+  const draftStoragePolicy = {
+    id: "draft-storage-policy-submitted",
+    policyVersion: "draft-storage-rlhf89-v1",
+    coveredWorkflowSplitClasses: draftStorageLanes,
+    serverSidePersistenceDefault: true,
+    protectedLanePersistence: "server_side_by_assignment_id",
+    clientStatePolicy: "ephemeral_in_memory_only",
+    prohibitedClientPersistenceMechanisms: prohibitedDraftClientPersistence,
+    localStorageProhibited: true,
+    sessionStorageProhibited: true,
+    indexedDbProhibited: true,
+    persistentOfflineCacheProhibited: true,
+    downloadedRecoveryBlobProhibited: true,
+    clearOnLogoutRevocation: true,
+    staleDraftDependencyBlocker: true,
+    ordinaryPracticeExceptionPolicy: "allowed only when declared by ClientSurfaceIntegrityPolicy and excluded from protected lanes",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
   const rubricLintConfig = {
     id: "rubric-lint-config-submitted",
     rubricVersion: "appendix-f-operational-v1",
@@ -820,6 +873,7 @@ function completeRatingExperienceFixtures() {
       },
     ],
     scoreInputPolicies: [scoreInputPolicy],
+    draftStoragePolicies: [draftStoragePolicy],
     raterInstructionRenderVersions: [renderVersion],
     rubricLintConfigs: [rubricLintConfig],
     rubricLintEvents: [
@@ -869,6 +923,7 @@ function completeRatingExperienceFixtures() {
           assistPolicyId: "pre-submit-assist-submitted",
           rubricLintConfigId: rubricLintConfig.id,
           scoreInputPolicyId: scoreInputPolicy.id,
+          draftStoragePolicyId: draftStoragePolicy.id,
           ratingContextSnapshotId: "rc-target-only-1",
         },
         staleDependencyStatus: "current",
@@ -1455,8 +1510,10 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
   const report = buildPolicyBundleEvidenceReport("october-2026-demo", completePolicyBundleFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
-  assert.equal(report.counts.completePolicyGroupCount, 5);
+  assert.equal(report.counts.completePolicyGroupCount, 6);
   assert.equal(report.counts.submittedVisibilityPolicyCount, 1);
+  assert.equal(report.counts.submittedScoreExplanationPolicyCount, 1);
+  assert.deepEqual(report.scoreExplanationPolicyRows.at(-1).triggerList, scoreExplanationTriggerRules);
   assert.equal(report.counts.submittedAccessibilityConformanceReportCount, 1);
   assert.deepEqual(report.reviewSections, []);
 });
@@ -1491,6 +1548,7 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.releaseUseStatus, "submitted_rating_experience_evidence_complete");
   assert.equal(report.counts.submittedTaskOutputEligibilityPolicyCount, 1);
   assert.equal(report.counts.submittedScoreInputPolicyCount, 1);
+  assert.equal(report.counts.submittedDraftStoragePolicyCount, 1);
   assert.equal(report.counts.submittedRaterInstructionRenderVersionCount, 1);
   assert.equal(report.counts.submittedRubricLintConfigCount, 1);
   assert.equal(report.counts.submittedRubricLintEventCount, 1);
@@ -1503,8 +1561,11 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
   assert.equal(report.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_pending_review");
+  assert.equal(report.draftStoragePolicyRows.at(-1).serverSidePersistenceDefault, true);
+  assert.equal(report.draftStoragePolicyRows.at(-1).clientStatePolicy, "ephemeral_in_memory_only");
   assert.equal(report.ratingDraftSessionRows.at(-1).resumeCount, 1);
   assert.equal(report.ratingDraftSessionRows.at(-1).abandonedVsSubmittedStatus, "draft_not_submitted");
+  assert.equal(report.ratingDraftSessionRows.at(-1).dependencyVersionSnapshot.draftStoragePolicyId, "draft-storage-policy-submitted");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation, "Rater preserved the submitted correctness score after reviewing weighted claim evidence.");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
   assert.equal(report.raterScoreConfidenceRows.at(-1).entityType, "RaterScoreConfidence");

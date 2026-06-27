@@ -3,6 +3,7 @@ import {
   RATER_DATA_GOVERNANCE_CATEGORIES,
   RATER_DATA_USE_SCOPES,
   RUBRIC_DIMENSIONS,
+  SCORE_CONFIDENCE_LEVELS,
   adjudicationMemos,
   appendRatingRevision,
   assignments,
@@ -27,6 +28,7 @@ import {
   positions,
   postLockSourceStyleAudits,
   ratingContextSnapshots,
+  scoreExplanationTriggersForRating,
   seedRatings,
   summarizeAdjudication,
   unweightedPairwiseErrorRateByPosition,
@@ -53,6 +55,9 @@ const state = {
   ratings: structuredClone(seedRatings),
   sourceStyleAudits: structuredClone(postLockSourceStyleAudits),
   draftScores: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null])),
+  draftConfidenceJudgment: "",
+  draftGeneralRatingNote: "",
+  draftScoreExplanation: "",
   selectedPracticeAnchorId: lmcaSourceExampleAnchors[0]?.id ?? null,
   practiceScores: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null])),
   practiceAttemptLocked: false,
@@ -73,6 +78,8 @@ const state = {
     bottomLineDependence: false,
     midRangeStrengthUncertainty: false,
     backgroundKnowledgeDependence: false,
+    targetUnclear: false,
+    sourceExposureConflictUncertainty: false,
     vagueGoodObjectionGesture: false,
     disagreementTaxonomyReview: false,
   },
@@ -2514,6 +2521,7 @@ function ratingPanel(assignment, labelSnapshot, gateChecks, persistenceStatus, s
         </div>
         ${rubricQuickAccessPanel()}
         <div class="rubricGrid">${RUBRIC_DIMENSIONS.map(sliderRow).join("")}</div>
+        ${scoreExplanationPolicyPanel(assignment)}
         ${preSubmitLintPanel()}
         ${issueFlagControls()}
         ${verificationControls()}
@@ -2568,13 +2576,13 @@ function ratingTaskFirstSummary(assignment) {
       </article>
       <article>
         <span>Primary next action</span>
-        <strong>Enter all seven LMCA scores, then submit and lock.</strong>
-        <p>Scores start unset; the centrality x strength preview is diagnostic only.</p>
+        <strong>Enter all seven LMCA scores and confidence, then submit and lock.</strong>
+        <p>Scores start unset; notes stay optional unless the explanation policy triggers.</p>
       </article>
       <article>
         <span>Workflow profile</span>
         <strong>${escapeHtml(humanize(assignment.queueType ?? "ordinary_live"))}</strong>
-        <p>Required: seven scores, short rationale, pre-submit lint acknowledgement.</p>
+        <p>Required by default: seven scores and low/medium/high confidence. Short explanations are trigger-required only.</p>
       </article>
       <article>
         <span>Item reference</span>
@@ -2656,6 +2664,48 @@ function preSubmitLintPanel() {
         <strong>Blind boundary</strong>
         <span>No peer, gold, source, model-judge, or protected-label hints are used here.</span>
       </div>
+    </section>
+  `;
+}
+
+function scoreExplanationPolicyPanel(assignment) {
+  const triggers = scoreExplanationTriggersForRating({
+    scores: state.draftScores,
+    flags: state.draftFlags,
+    assignment,
+    kind: "blind_initial",
+    workflowProfileId: `rating-workflow-profile-${releaseId}`,
+  });
+  const explanationRequired = triggers.length > 0;
+  return `
+    <section class="scoreExplanationPanel" aria-label="Confidence and score explanation policy">
+      <div>
+        <strong>Confidence</strong>
+        <span>Required for every ordinary rating; it is not an eighth LMCA score.</span>
+      </div>
+      <div class="confidenceChoices" role="radiogroup" aria-label="Score confidence">
+        ${SCORE_CONFIDENCE_LEVELS.map(
+          (level) => `
+            <label>
+              <input type="radio" name="scoreConfidenceJudgment" value="${escapeHtml(level)}" ${state.draftConfidenceJudgment === level ? "checked" : ""} />
+              <span>${escapeHtml(humanize(level))}</span>
+            </label>
+          `,
+        ).join("")}
+      </div>
+      <label>
+        <span>General note (optional)</span>
+        <textarea id="generalRatingNote" rows="2" placeholder="Optional note for yourself or reviewers.">${escapeHtml(state.draftGeneralRatingNote)}</textarea>
+      </label>
+      <label>
+        <span>${explanationRequired ? "Short explanation required" : "Short explanation (only required when triggered)"}</span>
+        <textarea id="scoreExplanation" rows="3" placeholder="${escapeHtml(explanationRequired ? "One or two blind-safe sentences; do not mention source, peers, model outputs, or protected status." : "Optional unless the policy triggers.")}">${escapeHtml(state.draftScoreExplanation)}</textarea>
+      </label>
+      <div>
+        <strong>ScoreExplanationPolicy</strong>
+        <span>${triggers.length ? `Triggered: ${triggers.map(humanize).join(", ")}.` : "No explanation trigger for the current ordinary draft."}</span>
+      </div>
+      <p>Trigger prompts are label-blind, source-blind, and protected-status-blind.</p>
     </section>
   `;
 }
@@ -4691,7 +4741,19 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   document.querySelectorAll("[data-flag]").forEach((input) => {
     input.addEventListener("change", () => {
       state.draftFlags[input.getAttribute("data-flag")] = input.checked;
+      render();
     });
+  });
+  document.querySelectorAll('input[name="scoreConfidenceJudgment"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      state.draftConfidenceJudgment = input.value;
+    });
+  });
+  document.getElementById("generalRatingNote")?.addEventListener("input", (event) => {
+    state.draftGeneralRatingNote = event.target.value;
+  });
+  document.getElementById("scoreExplanation")?.addEventListener("input", (event) => {
+    state.draftScoreExplanation = event.target.value;
   });
   document.getElementById("verificationStatus")?.addEventListener("change", (event) => {
     state.draftVerification.status = event.target.value;
@@ -4729,11 +4791,37 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       render();
       return;
     }
+    if (!SCORE_CONFIDENCE_LEVELS.includes(state.draftConfidenceJudgment)) {
+      state.lastPersistenceStatus = {
+        tone: "bad",
+        title: "Confidence missing",
+        detail: "Choose low, medium, or high confidence before submitting.",
+      };
+      render();
+      return;
+    }
     const position = positions.find((item) => item.id === selectedAssignment.positionId);
     const critique = critiques.find((item) => item.id === selectedAssignment.critiqueId);
     const clarity = state.draftScores.clarity;
     const actor = state.session?.user ?? { id: "demo-rater", role: "graduate" };
     const scores = { ...state.draftScores };
+    const scoreExplanationTriggers = scoreExplanationTriggersForRating({
+      scores,
+      flags: state.draftFlags,
+      assignment: selectedAssignment,
+      kind: "blind_initial",
+      workflowProfileId: `rating-workflow-profile-${releaseId}`,
+    });
+    const scoreExplanationRequired = scoreExplanationTriggers.length > 0;
+    if (scoreExplanationRequired && state.draftScoreExplanation.trim().length < 12) {
+      state.lastPersistenceStatus = {
+        tone: "bad",
+        title: "Short explanation required",
+        detail: `Add one or two blind-safe sentences for: ${scoreExplanationTriggers.map(humanize).join(", ")}.`,
+      };
+      render();
+      return;
+    }
     const newRating = {
       id: `rating-demo-${Date.now()}`,
       assignmentId: selectedAssignment.id,
@@ -4744,6 +4832,8 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       kind: "blind_initial",
       rubricVersion: "lmca-app-f-2026-10",
       scoreInputPolicyId: "score-input-policy-ui-unset-required",
+      workflowProfileId: `rating-workflow-profile-${releaseId}`,
+      scoreExplanationPolicyId: `score-explanation-policy-${releaseId}`,
       positionTextVersionId: position?.textVersions.at(-1)?.id ?? "",
       critiqueTextVersionId: critique?.textVersions.at(-1)?.id ?? "",
       ratingContextSnapshotId: contextSnapshotForAssignment(selectedAssignment)?.id ?? "rc-target-only-1",
@@ -4751,6 +4841,12 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       rawScores: { ...scores },
       displayedScores: { ...scores },
       scoreQuantizationPolicy: "raw_0_1_scores_stored_to_0.001_display_precision",
+      scoreConfidenceJudgment: state.draftConfidenceJudgment,
+      generalRatingNote: state.draftGeneralRatingNote.trim(),
+      scoreExplanation: state.draftScoreExplanation.trim(),
+      scoreExplanationRequired,
+      scoreExplanationTriggers,
+      scoreExplanationPromptVisibility: "label_source_protected_status_blind",
       scoreEntryExplicitnessStatus: clarity < 0.5 ? "low_clarity_branch_explicit" : "all_required_scores_explicit",
       scoreMissingFieldValidationStatus: clarity < 0.5 ? "low_clarity_provisional_fields_allowed" : "passed_no_missing_required_fields",
       provisionalDimensions: clarity < 0.5 ? RUBRIC_DIMENSIONS.filter((dimension) => !["clarity", "overall", "correctness"].includes(dimension)) : [],
@@ -4774,9 +4870,30 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     const original = state.ratings.find((rating) => rating.positionId === selectedAssignment.positionId && rating.critiqueId === selectedAssignment.critiqueId);
     if (!original) return;
     const overall = original.scores.overall;
+    const revisedScores = { ...original.scores, overall: typeof overall === "number" ? Math.min(1, Math.round((overall + 0.02) * 100) / 100) : overall };
+    const revisionExplanationTriggers = scoreExplanationTriggersForRating({
+      scores: revisedScores,
+      flags: original.flags ?? {},
+      assignment: selectedAssignment,
+      kind: "revision",
+      workflowProfileId: original.workflowProfileId ?? `rating-workflow-profile-${releaseId}`,
+      revisionReasonCode: "human_only_self_check",
+    });
     const revision = appendRatingRevision(original, {
       id: `${original.id}-self-check-${Date.now()}`,
-      scores: { ...original.scores, overall: typeof overall === "number" ? Math.min(1, Math.round((overall + 0.02) * 100) / 100) : overall },
+      scores: revisedScores,
+      rawScores: { ...revisedScores },
+      displayedScores: { ...revisedScores },
+      workflowProfileId: original.workflowProfileId ?? `rating-workflow-profile-${releaseId}`,
+      scoreConfidenceJudgment: original.scoreConfidenceJudgment || state.draftConfidenceJudgment || "medium",
+      scoreExplanationPolicyId: original.scoreExplanationPolicyId ?? `score-explanation-policy-${releaseId}`,
+      scoreExplanationTriggers: revisionExplanationTriggers,
+      scoreExplanationRequired: revisionExplanationTriggers.length > 0,
+      scoreExplanationPromptVisibility: "label_source_protected_status_blind",
+      scoreExplanation: revisionExplanationTriggers.length
+        ? (original.scoreExplanation ?? "Self-check revision keeps a blind-safe explanation for the triggered score policy.")
+        : (original.scoreExplanation ?? ""),
+      generalRatingNote: original.generalRatingNote ?? "",
       revisionReasonCode: "human_only_self_check",
       revisionComment: "Locked first rating preserved; self-check appends a separate revision.",
     });

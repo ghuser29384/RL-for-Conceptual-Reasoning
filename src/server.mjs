@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   RATER_ISSUE_FLAG_DEFINITIONS,
   RUBRIC_DIMENSIONS,
+  SCORE_CONFIDENCE_LEVELS,
+  SCORE_EXPLANATION_TRIGGER_RULES,
   assignments,
   buildHiddenBenchmarkFreezeReport,
   buildRaterCertificationReport,
@@ -26,6 +28,7 @@ import {
   promptArtifacts,
   ratingContextSnapshots,
   scoreCertificationAttempt,
+  scoreExplanationTriggersForRating,
   seedBenchmarkExposureEvents,
   seedCertificationAttempts,
   seedRatings,
@@ -87,6 +90,8 @@ const ratingScoreEntryExplicitnessStatuses = new Set(["all_required_scores_expli
 const ratingMissingFieldValidationStatuses = new Set(["passed_no_missing_required_fields", "low_clarity_provisional_fields_allowed"]);
 const lockedInitialSourceTagVisibilityStates = new Set(["hidden", "hidden_from_initial_rater", "source_tag_protected_visibility_preserved"]);
 const allowedRatingFlagKeys = new Set(RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => definition.key));
+const ratingConfidenceJudgmentValues = new Set(SCORE_CONFIDENCE_LEVELS);
+const allowedScoreExplanationTriggers = new Set(SCORE_EXPLANATION_TRIGGER_RULES);
 const adminRoles = ["admin"];
 const adminAuditRoles = ["admin", "auditor"];
 const expertWorkflowRoles = ["expert", "admin"];
@@ -168,6 +173,7 @@ const ratingDraftSessionDependencyFields = [
   "dependencyVersionSnapshot.assistPolicyId",
   "dependencyVersionSnapshot.rubricLintConfigId",
   "dependencyVersionSnapshot.scoreInputPolicyId",
+  "dependencyVersionSnapshot.draftStoragePolicyId",
   "dependencyVersionSnapshot.ratingContextSnapshotId",
 ];
 const ratingCheckActionRequiredFields = [
@@ -437,6 +443,8 @@ const ratingExcludedDenominatorClasses = ["draft", "safe_decline", "source_recog
 const ratingPromotionRequirements = ["locked_initial", "valid_score_input_policy", "current_instruction_render", "no_stale_dependencies"];
 const ratingProtectedSplitExclusions = ["hidden_benchmark", "protected_validation"];
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
+const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
+const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
 const partialTaskOutputTypes = [
   "pairwise_preference_only",
@@ -1686,6 +1694,7 @@ const workflowWriteEndpoints = [
     requiredFields: [
       "id",
       "profileVersion",
+      "scoreExplanationPolicyId",
       "evidenceSpanRequirednessPolicy",
       "verificationWorkspaceRequirednessPolicy",
       "interpretationTargetMapRequirednessPolicy",
@@ -1693,14 +1702,49 @@ const workflowWriteEndpoints = [
       "releaseGateProfileLinkage",
       "frozenAt",
     ],
-    requiredNonEmptyArrayFields: ["taskModesCovered", "requiredScoreFields", "requiredRationaleFields", "requiredIssuePanels", "optionalIssuePanels", "disabledControls"],
+    requiredNonEmptyArrayFields: [
+      "taskModesCovered",
+      "requiredScoreFields",
+      "requiredConfidenceValues",
+      "triggerRequiredRationaleFields",
+      "requiredIssuePanels",
+      "optionalIssuePanels",
+      "disabledControls",
+    ],
     requiredArrayIncludes: {
       taskModesCovered: ratingWorkflowTaskModes,
       requiredScoreFields: rubricDimensions,
+      requiredConfidenceValues: SCORE_CONFIDENCE_LEVELS,
+      triggerRequiredRationaleFields: ["score_explanation"],
       requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
       disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
     },
-    requiredExactFields: { safeDeclineAvailable: true },
+    requiredExactFields: { safeDeclineAvailable: true, requiredConfidenceJudgment: true },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/score-explanation-policies$/, "score_explanation_policy_submitted", "scoreExplanationPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "protectedStatusBlindPromptCopy",
+      "sentenceGuidance",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["coveredWorkflowSplitClasses", "ordinaryRequiredFields", "optionalFields", "triggerList", "inconsistencyRules"],
+    requiredArrayIncludes: {
+      coveredWorkflowSplitClasses: ratingWorkflowTaskModes,
+      ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
+      optionalFields: ["general_rating_note"],
+      triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
+    },
+    requiredFiniteNumberFields: ["extremeScoreThresholdLow", "extremeScoreThresholdHigh", "overallVsCentralityStrengthGapThreshold"],
+    requiredExactFields: {
+      targetUnclearTrigger: true,
+      highStakesWorkflowTrigger: true,
+      postDiscussionRevisionTrigger: true,
+      exposureFamiliarityConflictUncertaintyTrigger: true,
+      protectedSplitCompatible: true,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/ui-experiment-policies$/, "ui_experiment_policy_submitted", "uiExperimentPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -1903,6 +1947,25 @@ const workflowWriteEndpoints = [
     requiredExactFields: {
       manualNumericEntryAvailable: true,
       initialDefaultState: "unset_required",
+    },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/draft-storage-policies$/, "draft_storage_policy_submitted", "draftStoragePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "protectedLanePersistence", "clientStatePolicy", "ordinaryPracticeExceptionPolicy", "frozenAt"],
+    requiredNonEmptyArrayFields: ["coveredWorkflowSplitClasses", "prohibitedClientPersistenceMechanisms"],
+    requiredArrayIncludes: {
+      coveredWorkflowSplitClasses: draftStorageLanes,
+      prohibitedClientPersistenceMechanisms: prohibitedDraftClientPersistence,
+    },
+    requiredExactFields: {
+      serverSidePersistenceDefault: true,
+      localStorageProhibited: true,
+      sessionStorageProhibited: true,
+      indexedDbProhibited: true,
+      persistentOfflineCacheProhibited: true,
+      downloadedRecoveryBlobProhibited: true,
+      clearOnLogoutRevocation: true,
+      staleDraftDependencyBlocker: true,
     },
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-instruction-render-versions$/, "rater_instruction_render_version_submitted", "raterInstructionRenderVersion", adminRoles, {
@@ -2551,6 +2614,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/screen-state-payloads\/(?<id>[^/]+)$/, "screenStatePayload", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/visibility-policies\/(?<id>[^/]+)$/, "visibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rating-workflow-profiles\/(?<id>[^/]+)$/, "ratingWorkflowProfile", workflowStateReadRoles),
+  workflowReadSpec(/^\/api\/v1\/score-explanation-policies\/(?<id>[^/]+)$/, "scoreExplanationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ui-experiment-policies\/(?<id>[^/]+)$/, "uiExperimentPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/pre-submit-assist-policies\/(?<id>[^/]+)$/, "preSubmitAssistPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/accessibility-conformance-reports\/(?<id>[^/]+)$/, "accessibilityConformanceReport", adminAuditRoles),
@@ -2561,6 +2625,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/model-provider-data-handling-policies\/(?<id>[^/]+)$/, "modelProviderDataHandlingPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/task-output-eligibility-policies\/(?<id>[^/]+)$/, "taskOutputEligibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/score-input-policies\/(?<id>[^/]+)$/, "scoreInputPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/draft-storage-policies\/(?<id>[^/]+)$/, "draftStoragePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-instruction-render-versions\/(?<id>[^/]+)$/, "raterInstructionRenderVersion", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-configs\/(?<id>[^/]+)$/, "rubricLintConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-events\/(?<id>[^/]+)$/, "rubricLintEvent", expertAuditWorkflowRoles),
@@ -4794,6 +4859,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const volunteerDataWithdrawalRequests = latestWorkflowResources(workflowEvents, "volunteerDataWithdrawalRequest");
   const visibilityPolicies = latestWorkflowResources(workflowEvents, "visibilityPolicy");
   const ratingWorkflowProfiles = latestWorkflowResources(workflowEvents, "ratingWorkflowProfile");
+  const scoreExplanationPolicies = latestWorkflowResources(workflowEvents, "scoreExplanationPolicy");
   const uiExperimentPolicies = latestWorkflowResources(workflowEvents, "uiExperimentPolicy");
   const preSubmitAssistPolicies = latestWorkflowResources(workflowEvents, "preSubmitAssistPolicy");
   const accessibilityConformanceReports = latestWorkflowResources(workflowEvents, "accessibilityConformanceReport");
@@ -4804,6 +4870,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const modelProviderDataHandlingPolicies = latestWorkflowResources(workflowEvents, "modelProviderDataHandlingPolicy");
   const taskOutputEligibilityPolicies = latestWorkflowResources(workflowEvents, "taskOutputEligibilityPolicy");
   const scoreInputPolicies = latestWorkflowResources(workflowEvents, "scoreInputPolicy");
+  const draftStoragePolicies = latestWorkflowResources(workflowEvents, "draftStoragePolicy");
   const raterInstructionRenderVersions = latestWorkflowResources(workflowEvents, "raterInstructionRenderVersion");
   const rubricLintConfigs = latestWorkflowResources(workflowEvents, "rubricLintConfig");
   const rubricLintEvents = latestWorkflowResources(workflowEvents, "rubricLintEvent");
@@ -4941,6 +5008,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     volunteerDataWithdrawalRequests,
     visibilityPolicies,
     ratingWorkflowProfiles,
+    scoreExplanationPolicies,
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
@@ -4951,6 +5019,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelProviderDataHandlingPolicies,
     taskOutputEligibilityPolicies,
     scoreInputPolicies,
+    draftStoragePolicies,
     raterInstructionRenderVersions,
     rubricLintConfigs,
     rubricLintEvents,
@@ -5085,6 +5154,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     volunteerDataWithdrawalRequests,
     visibilityPolicies,
     ratingWorkflowProfiles,
+    scoreExplanationPolicies,
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
@@ -5095,6 +5165,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelProviderDataHandlingPolicies,
     taskOutputEligibilityPolicies,
     scoreInputPolicies,
+    draftStoragePolicies,
     raterInstructionRenderVersions,
     rubricLintConfigs,
     rubricLintEvents,
@@ -5581,6 +5652,9 @@ export function validateRatingPayload(rating, eventType) {
     "scores",
     "rawScores",
     "scoreQuantizationPolicy",
+    "scoreConfidenceJudgment",
+    "scoreExplanationPolicyId",
+    "scoreExplanationTriggers",
     "scoreEntryExplicitnessStatus",
     "scoreMissingFieldValidationStatus",
     "activeSeconds",
@@ -5595,7 +5669,8 @@ export function validateRatingPayload(rating, eventType) {
   if (eventType === "revision_submitted" && (rating.kind !== "revision" || !rating.parentRatingId)) {
     return invalid("revision endpoint requires kind=revision and parentRatingId");
   }
-  if (!assignments.some((assignment) => assignment.id === rating.assignmentId)) return invalid(`unknown assignmentId: ${rating.assignmentId}`);
+  const assignment = assignments.find((item) => item.id === rating.assignmentId);
+  if (!assignment) return invalid(`unknown assignmentId: ${rating.assignmentId}`);
   if (!positions.some((position) => position.id === rating.positionId)) return invalid(`unknown positionId: ${rating.positionId}`);
   if (!critiques.some((critique) => critique.id === rating.critiqueId && critique.positionId === rating.positionId)) {
     return invalid(`critiqueId ${rating.critiqueId} does not belong to positionId ${rating.positionId}`);
@@ -5614,6 +5689,13 @@ export function validateRatingPayload(rating, eventType) {
   }
   if (!String(rating.scoreInputPolicyId ?? "").trim()) return invalid("scoreInputPolicyId is required");
   if (!String(rating.scoreQuantizationPolicy ?? "").trim()) return invalid("scoreQuantizationPolicy is required");
+  if (!ratingConfidenceJudgmentValues.has(rating.scoreConfidenceJudgment)) {
+    return invalid("scoreConfidenceJudgment must be one of: low, medium, high");
+  }
+  if (!String(rating.scoreExplanationPolicyId ?? "").trim()) return invalid("scoreExplanationPolicyId is required");
+  if (!Array.isArray(rating.scoreExplanationTriggers)) return invalid("scoreExplanationTriggers must be an array");
+  const unsupportedExplanationTriggers = rating.scoreExplanationTriggers.filter((trigger) => !allowedScoreExplanationTriggers.has(trigger));
+  if (unsupportedExplanationTriggers.length) return invalid(`unsupported scoreExplanationTriggers: ${unsupportedExplanationTriggers.join(", ")}`);
   if (!ratingScoreEntryExplicitnessStatuses.has(rating.scoreEntryExplicitnessStatus)) {
     return invalid(`unsupported scoreEntryExplicitnessStatus: ${rating.scoreEntryExplicitnessStatus}`);
   }
@@ -5635,6 +5717,34 @@ export function validateRatingPayload(rating, eventType) {
       .filter(([, value]) => typeof value !== "boolean")
       .map(([flag]) => flag);
     if (nonBooleanFlags.length) return invalid(`rating flags must be boolean: ${nonBooleanFlags.join(", ")}`);
+  }
+  const expectedExplanationTriggers = scoreExplanationTriggersForRating({
+    scores: rating.scores,
+    flags: rating.flags ?? {},
+    assignment,
+    kind: rating.kind,
+    workflowProfileId: rating.workflowProfileId,
+    revisionReasonCode: rating.revisionReasonCode,
+  });
+  const missingExplanationTriggers = expectedExplanationTriggers.filter((trigger) => !rating.scoreExplanationTriggers.includes(trigger));
+  if (missingExplanationTriggers.length) return invalid(`missing scoreExplanationTriggers: ${missingExplanationTriggers.join(", ")}`);
+  const explanationRequired = [...new Set([...expectedExplanationTriggers, ...rating.scoreExplanationTriggers])].length > 0;
+  if (rating.generalRatingNote !== undefined && (typeof rating.generalRatingNote !== "string" || rating.generalRatingNote.length > 1000)) {
+    return invalid("generalRatingNote must be a short string when provided");
+  }
+  if (rating.scoreExplanation !== undefined && (typeof rating.scoreExplanation !== "string" || rating.scoreExplanation.length > 1200)) {
+    return invalid("scoreExplanation must be a short string when provided");
+  }
+  if (explanationRequired) {
+    if (rating.scoreExplanationRequired !== true) return invalid("scoreExplanationRequired must be true when ScoreExplanationPolicy triggers");
+    if (rating.scoreExplanationPromptVisibility !== "label_source_protected_status_blind") {
+      return invalid("scoreExplanationPromptVisibility must preserve label/source/protected-status blinding");
+    }
+    if (!String(rating.scoreExplanation ?? "").trim() || String(rating.scoreExplanation).trim().length < 12) {
+      return invalid("scoreExplanation is required when ScoreExplanationPolicy triggers");
+    }
+  } else if (rating.scoreExplanationRequired === true) {
+    return invalid("scoreExplanationRequired cannot be true without ScoreExplanationPolicy triggers");
   }
   if (!Number.isFinite(rating.activeSeconds) || rating.activeSeconds <= 0) return invalid("activeSeconds must be a positive number");
   if (!Number.isFinite(rating.idleGapSeconds) || rating.idleGapSeconds < 0) return invalid("idleGapSeconds must be a non-negative number");

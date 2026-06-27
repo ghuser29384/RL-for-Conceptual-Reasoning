@@ -337,6 +337,7 @@ nav {
 .surfaceTaskPanel,
 .sessionPacingPanel,
 .preSubmitLintPanel,
+.scoreExplanationPanel,
 .correctnessWorksheetPanel {
   display: grid;
   gap: 10px;
@@ -352,6 +353,7 @@ nav {
 .surfaceTaskPanel article,
 .sessionPacingPanel,
 .preSubmitLintPanel,
+.scoreExplanationPanel,
 .correctnessWorksheetPanel,
 .rubricQuickAccess,
 .selfScreenPanel,
@@ -373,6 +375,7 @@ nav {
 .surfaceTaskPanel span,
 .sessionPacingPanel span,
 .preSubmitLintPanel span,
+.scoreExplanationPanel span,
 .correctnessWorksheetPanel span,
 .selfScreenPanel span {
   color: var(--muted);
@@ -385,6 +388,7 @@ nav {
 .surfaceTaskPanel strong,
 .sessionPacingPanel strong,
 .preSubmitLintPanel strong,
+.scoreExplanationPanel strong,
 .correctnessWorksheetPanel strong,
 .selfScreenPanel strong {
   font-size: 13px;
@@ -416,6 +420,42 @@ nav {
 
 .surfaceDisclosure .metricList {
   margin-top: 10px;
+}
+
+.scoreExplanationPanel {
+  padding: 12px;
+}
+
+.scoreExplanationPanel label {
+  display: grid;
+  gap: 6px;
+}
+
+.scoreExplanationPanel textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.scoreExplanationPanel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.confidenceChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.confidenceChoices label {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px 10px;
 }
 
 .correctnessWorksheetPanel {

@@ -2253,6 +2253,67 @@ export function detectEscalations(ratings) {
   return triggers;
 }
 
+export const SCORE_CONFIDENCE_LEVELS = ["low", "medium", "high"];
+export const SCORE_EXPLANATION_TRIGGER_RULES = [
+  "extreme_score",
+  "score_inconsistency",
+  "overall_product_gap",
+  "unclear_target",
+  "high_stakes_workflow",
+  "post_discussion_revision",
+  "exposure_familiarity_conflict_uncertainty",
+];
+
+const SCORE_EXPLANATION_EXTREME_DIMENSIONS = ["centrality", "strength", "correctness", "overall"];
+const SCORE_EXPLANATION_HIGH_STAKES_QUEUE_TYPES = new Set([
+  "validation_subset",
+  "benchmark_candidate_review",
+  "hidden_benchmark",
+  "hidden_benchmark_review",
+  "gold_certification",
+  "release_critical",
+  "release_review",
+]);
+
+export function scoreExplanationTriggersForRating({ scores = {}, flags = {}, assignment = {}, kind = "blind_initial", workflowProfileId = "", revisionReasonCode = "" } = {}) {
+  const triggers = [];
+  if (
+    SCORE_EXPLANATION_EXTREME_DIMENSIONS.some(
+      (dimension) => Number.isFinite(scores?.[dimension]) && (scores[dimension] < 0.1 || scores[dimension] > 0.9),
+    )
+  ) {
+    triggers.push("extreme_score");
+  }
+  if (Number.isFinite(scores?.correctness) && Number.isFinite(scores?.strength) && scores.correctness <= 0.25 && scores.strength >= 0.75) {
+    triggers.push("score_inconsistency");
+  }
+  if (Number.isFinite(scores?.overall) && Number.isFinite(scores?.centrality) && Number.isFinite(scores?.strength)) {
+    const productGap = Math.abs(scores.overall - scores.centrality * scores.strength);
+    if (productGap >= 0.25) triggers.push("overall_product_gap");
+  }
+  if (flags?.targetUnclear === true || flags?.clarityAfterEffortIssue === true || flags?.strengthCentralityAllocationAmbiguity === true) {
+    triggers.push("unclear_target");
+  }
+  const queueType = assignment?.queueType ?? assignment?.assignmentType ?? "";
+  if (
+    SCORE_EXPLANATION_HIGH_STAKES_QUEUE_TYPES.has(queueType) ||
+    /validation|benchmark|gold|certification|release/.test(String(workflowProfileId))
+  ) {
+    triggers.push("high_stakes_workflow");
+  }
+  if (kind === "revision" && (revisionReasonCode === "post_discussion_revision" || assignment?.exposure === "post_lock_discussion")) {
+    triggers.push("post_discussion_revision");
+  }
+  if (flags?.sourceExposureConflictUncertainty === true) {
+    triggers.push("exposure_familiarity_conflict_uncertainty");
+  }
+  return [...new Set(triggers)];
+}
+
+export function scoreExplanationRequiredForRating(input) {
+  return scoreExplanationTriggersForRating(input).length > 0;
+}
+
 export const RATER_ISSUE_FLAG_DEFINITIONS = [
   {
     key: "needsVerification",
@@ -2307,6 +2368,15 @@ export const RATER_ISSUE_FLAG_DEFINITIONS = [
     taxonomyCodes: ["clarity_after_effort", "low_clarity_handling"],
     policy:
       "Record when the critique remains hard to pin down after effort, separately from rater topic expertise or mere unfamiliarity.",
+  },
+  {
+    key: "targetUnclear",
+    label: "Cannot tell what is attacked",
+    detail: "Use when the target of the critique remains unclear after reasonable effort.",
+    issueType: "target_unclear_score_explanation_trigger",
+    taxonomyCodes: ["critique_interpretation_vagueness", "clarity_after_effort", "low_clarity_handling"],
+    policy:
+      "Unclear-target flags require a short, blind-safe score explanation while preserving ordinary scores and avoiding hidden status disclosure.",
   },
   {
     key: "clearlyUnsatisfactoryImprecision",
@@ -2379,6 +2449,15 @@ export const RATER_ISSUE_FLAG_DEFINITIONS = [
     taxonomyCodes: ["background_knowledge_dependence"],
     policy:
       "Background-knowledge dependence records whether assumptions are reasonably priced in, too specialized, or need expert adjudication.",
+  },
+  {
+    key: "sourceExposureConflictUncertainty",
+    label: "Exposure, familiarity, or conflict uncertainty",
+    detail: "Use when prior familiarity or possible source exposure may affect blind eligibility.",
+    issueType: "source_exposure_conflict_uncertainty",
+    taxonomyCodes: ["source_style_exposure", "conflict_review_required"],
+    policy:
+      "Exposure, familiarity, or conflict uncertainty requires a blind-safe explanation and routes eligibility review without revealing source, split, or protected-label metadata.",
   },
   {
     key: "vagueGoodObjectionGesture",
@@ -10084,10 +10163,14 @@ function defaultVisibilityPolicy(releaseId) {
 function defaultRatingWorkflowProfile(releaseId) {
   return {
     id: `rating-workflow-profile-${releaseId}`,
-    profileVersion: "rating-workflow-profile-rlhf88-v1",
+    profileVersion: "rating-workflow-profile-rlhf90-v1",
     taskModesCovered: RATING_WORKFLOW_TASK_MODES,
     requiredScoreFields: RUBRIC_DIMENSIONS,
-    requiredRationaleFields: ["short_rationale", "low_clarity_explanation"],
+    requiredConfidenceJudgment: true,
+    requiredConfidenceValues: SCORE_CONFIDENCE_LEVELS,
+    scoreExplanationPolicyId: `score-explanation-policy-${releaseId}`,
+    optionalRationaleFields: ["general_rating_note"],
+    triggerRequiredRationaleFields: ["score_explanation"],
     requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
     optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
     disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
@@ -10097,6 +10180,29 @@ function defaultRatingWorkflowProfile(releaseId) {
     preSubmitLintPolicy: `pre-submit-assist-${releaseId}`,
     safeDeclineAvailable: true,
     releaseGateProfileLinkage: `release-gate-${releaseId}`,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultScoreExplanationPolicy(releaseId) {
+  return {
+    id: `score-explanation-policy-${releaseId}`,
+    policyVersion: "score-explanation-policy-rlhf90-v1",
+    coveredWorkflowSplitClasses: [...RATING_WORKFLOW_TASK_MODES, ...PROTECTED_UI_LANE_CLASSES],
+    ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
+    optionalFields: ["general_rating_note", "optional_evidence_spans"],
+    triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
+    extremeScoreThresholdLow: 0.1,
+    extremeScoreThresholdHigh: 0.9,
+    inconsistencyRules: ["correctness_lte_0_25_and_strength_gte_0_75"],
+    overallVsCentralityStrengthGapThreshold: 0.25,
+    targetUnclearTrigger: true,
+    highStakesWorkflowTrigger: true,
+    postDiscussionRevisionTrigger: true,
+    exposureFamiliarityConflictUncertaintyTrigger: true,
+    protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
+    sentenceGuidance: "one_or_two_sentences",
+    protectedSplitCompatible: true,
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -10158,6 +10264,9 @@ function defaultAccessibilityConformanceReport(releaseId) {
 export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
   const submittedVisibilityRows = (options.visibilityPolicies ?? []).map((policy) => normalizeVisibilityPolicy(policy, "submitted_workflow_visibility_policy")).filter(Boolean);
   const submittedProfileRows = (options.ratingWorkflowProfiles ?? []).map((profile) => normalizeRatingWorkflowProfile(profile, "submitted_workflow_rating_profile")).filter(Boolean);
+  const submittedScoreExplanationRows = (options.scoreExplanationPolicies ?? [])
+    .map((policy) => normalizeScoreExplanationPolicy(policy, "submitted_workflow_score_explanation_policy"))
+    .filter(Boolean);
   const submittedUiPolicyRows = (options.uiExperimentPolicies ?? []).map((policy) => normalizeUIExperimentPolicy(policy, "submitted_workflow_ui_experiment_policy")).filter(Boolean);
   const submittedAssistRows = (options.preSubmitAssistPolicies ?? []).map((policy) => normalizePreSubmitAssistPolicy(policy, "submitted_workflow_pre_submit_assist_policy")).filter(Boolean);
   const submittedAccessibilityRows = (options.accessibilityConformanceReports ?? [])
@@ -10165,12 +10274,14 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     .filter(Boolean);
   const seedVisibilityRows = [normalizeVisibilityPolicy(defaultVisibilityPolicy(releaseId), "seed_visibility_policy")];
   const seedProfileRows = [normalizeRatingWorkflowProfile(defaultRatingWorkflowProfile(releaseId), "seed_rating_workflow_profile")];
+  const seedScoreExplanationRows = [normalizeScoreExplanationPolicy(defaultScoreExplanationPolicy(releaseId), "seed_score_explanation_policy")];
   const seedUiPolicyRows = [normalizeUIExperimentPolicy(defaultUIExperimentPolicy(releaseId), "seed_ui_experiment_policy")];
   const seedAssistRows = [normalizePreSubmitAssistPolicy(defaultPreSubmitAssistPolicy(releaseId), "seed_pre_submit_assist_policy")];
   const seedAccessibilityRows = [normalizeAccessibilityConformanceReport(defaultAccessibilityConformanceReport(releaseId), "seed_accessibility_conformance_report")];
   const gateGroups = [
     ["visibility_policy", submittedVisibilityRows.length ? submittedVisibilityRows : seedVisibilityRows],
     ["rating_workflow_profile", submittedProfileRows.length ? submittedProfileRows : seedProfileRows],
+    ["score_explanation_policy", submittedScoreExplanationRows.length ? submittedScoreExplanationRows : seedScoreExplanationRows],
     ["ui_experiment_policy", submittedUiPolicyRows.length ? submittedUiPolicyRows : seedUiPolicyRows],
     ["pre_submit_assist_policy", submittedAssistRows.length ? submittedAssistRows : seedAssistRows],
     ["accessibility_conformance_report", submittedAccessibilityRows.length ? submittedAccessibilityRows : seedAccessibilityRows],
@@ -10178,6 +10289,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
   const reviewSections = [
     ...submittedVisibilityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "visibility_policy", artifactId: row.id, reason }))),
     ...submittedProfileRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rating_workflow_profile", artifactId: row.id, reason }))),
+    ...submittedScoreExplanationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_explanation_policy", artifactId: row.id, reason }))),
     ...submittedUiPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ui_experiment_policy", artifactId: row.id, reason }))),
     ...submittedAssistRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "pre_submit_assist_policy", artifactId: row.id, reason }))),
     ...submittedAccessibilityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "accessibility_conformance_report", artifactId: row.id, reason }))),
@@ -10188,6 +10300,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
   const submittedEvidenceComplete =
     submittedVisibilityRows.length > 0 &&
     submittedProfileRows.length > 0 &&
+    submittedScoreExplanationRows.length > 0 &&
     submittedUiPolicyRows.length > 0 &&
     submittedAssistRows.length > 0 &&
     submittedAccessibilityRows.length > 0 &&
@@ -10205,12 +10318,14 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     accessibilityRequiredChecks: ACCESSIBILITY_REQUIRED_CHECKS,
     visibilityPolicyRows: [...seedVisibilityRows, ...submittedVisibilityRows],
     ratingWorkflowProfileRows: [...seedProfileRows, ...submittedProfileRows],
+    scoreExplanationPolicyRows: [...seedScoreExplanationRows, ...submittedScoreExplanationRows],
     uiExperimentPolicyRows: [...seedUiPolicyRows, ...submittedUiPolicyRows],
     preSubmitAssistPolicyRows: [...seedAssistRows, ...submittedAssistRows],
     accessibilityConformanceRows: [...seedAccessibilityRows, ...submittedAccessibilityRows],
     counts: {
       submittedVisibilityPolicyCount: submittedVisibilityRows.length,
       submittedRatingWorkflowProfileCount: submittedProfileRows.length,
+      submittedScoreExplanationPolicyCount: submittedScoreExplanationRows.length,
       submittedUiExperimentPolicyCount: submittedUiPolicyRows.length,
       submittedPreSubmitAssistPolicyCount: submittedAssistRows.length,
       submittedAccessibilityConformanceReportCount: submittedAccessibilityRows.length,
@@ -10265,13 +10380,19 @@ function normalizeRatingWorkflowProfile(profile, rowSource) {
   if (!id) return null;
   const taskModesCovered = normalizeStringArray(profile.taskModesCovered ?? profile.assignmentTypesCovered);
   const requiredScoreFields = normalizeStringArray(profile.requiredScoreFields);
+  const requiredConfidenceValues = normalizeStringArray(profile.requiredConfidenceValues);
+  const triggerRequiredRationaleFields = normalizeStringArray(profile.triggerRequiredRationaleFields);
   const missingTaskModes = RATING_WORKFLOW_TASK_MODES.filter((mode) => !taskModesCovered.includes(mode));
   const missingScoreFields = RUBRIC_DIMENSIONS.filter((field) => !requiredScoreFields.includes(field));
+  const missingConfidenceValues = SCORE_CONFIDENCE_LEVELS.filter((value) => !requiredConfidenceValues.includes(value));
   const reviewReasons = [
     requiredPromptFieldReason("profileVersion", profile.profileVersion ?? profile.version),
     missingTaskModes.length ? `taskModesCovered:${missingTaskModes.join(",")}` : null,
     missingScoreFields.length ? `requiredScoreFields:${missingScoreFields.join(",")}` : null,
-    normalizeStringArray(profile.requiredRationaleFields).length ? null : "requiredRationaleFields",
+    profile.requiredConfidenceJudgment === true ? null : "requiredConfidenceJudgment",
+    missingConfidenceValues.length ? `requiredConfidenceValues:${missingConfidenceValues.join(",")}` : null,
+    requiredPromptFieldReason("scoreExplanationPolicyId", profile.scoreExplanationPolicyId),
+    triggerRequiredRationaleFields.includes("score_explanation") ? null : "triggerRequiredRationaleFields",
     normalizeStringArray(profile.requiredIssuePanels).length ? null : "requiredIssuePanels",
     normalizeStringArray(profile.optionalIssuePanels).length ? null : "optionalIssuePanels",
     profile.safeDeclineAvailable === true ? null : "safeDeclineAvailable",
@@ -10285,12 +10406,62 @@ function normalizeRatingWorkflowProfile(profile, rowSource) {
     missingTaskModes,
     requiredScoreFields,
     missingScoreFields,
+    requiredConfidenceJudgment: profile.requiredConfidenceJudgment === true,
+    requiredConfidenceValues,
+    missingConfidenceValues,
+    scoreExplanationPolicyId: profile.scoreExplanationPolicyId ?? null,
+    optionalRationaleFields: normalizeStringArray(profile.optionalRationaleFields),
+    triggerRequiredRationaleFields,
     requiredIssuePanels: normalizeStringArray(profile.requiredIssuePanels),
     optionalIssuePanels: normalizeStringArray(profile.optionalIssuePanels),
     safeDeclineAvailable: profile.safeDeclineAvailable === true,
     preSubmitLintPolicy: profile.preSubmitLintPolicy ?? null,
     reviewReasons,
     status: reviewReasons.length ? "rating_workflow_profile_review_required" : "rating_workflow_profile_complete",
+  };
+}
+
+function normalizeScoreExplanationPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.scoreExplanationPolicyId;
+  if (!id) return null;
+  const ordinaryRequiredFields = normalizeStringArray(policy.ordinaryRequiredFields);
+  const optionalFields = normalizeStringArray(policy.optionalFields);
+  const triggerList = normalizeStringArray(policy.triggerList ?? policy.triggers);
+  const coveredWorkflowSplitClasses = normalizeStringArray(policy.coveredWorkflowSplitClasses);
+  const missingTriggers = SCORE_EXPLANATION_TRIGGER_RULES.filter((trigger) => !triggerList.includes(trigger));
+  const missingRequiredFields = ["seven_scores", "confidence_low_medium_high"].filter((field) => !ordinaryRequiredFields.includes(field));
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    coveredWorkflowSplitClasses.length ? null : "coveredWorkflowSplitClasses",
+    missingRequiredFields.length ? `ordinaryRequiredFields:${missingRequiredFields.join(",")}` : null,
+    optionalFields.includes("general_rating_note") ? null : "optionalFields:general_rating_note",
+    missingTriggers.length ? `triggerList:${missingTriggers.join(",")}` : null,
+    Number.isFinite(policy.extremeScoreThresholdLow) ? null : "extremeScoreThresholdLow",
+    Number.isFinite(policy.extremeScoreThresholdHigh) ? null : "extremeScoreThresholdHigh",
+    Number.isFinite(policy.overallVsCentralityStrengthGapThreshold) ? null : "overallVsCentralityStrengthGapThreshold",
+    policy.targetUnclearTrigger === true ? null : "targetUnclearTrigger",
+    policy.highStakesWorkflowTrigger === true ? null : "highStakesWorkflowTrigger",
+    policy.postDiscussionRevisionTrigger === true ? null : "postDiscussionRevisionTrigger",
+    policy.exposureFamiliarityConflictUncertaintyTrigger === true ? null : "exposureFamiliarityConflictUncertaintyTrigger",
+    policyMentions(policy.protectedStatusBlindPromptCopy, ["workflow", "policy"]) ? null : "protectedStatusBlindPromptCopy",
+    policy.protectedSplitCompatible === true ? null : "protectedSplitCompatible",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    coveredWorkflowSplitClasses,
+    ordinaryRequiredFields,
+    optionalFields,
+    triggerList,
+    missingTriggers,
+    extremeScoreThresholdLow: policy.extremeScoreThresholdLow ?? null,
+    extremeScoreThresholdHigh: policy.extremeScoreThresholdHigh ?? null,
+    overallVsCentralityStrengthGapThreshold: policy.overallVsCentralityStrengthGapThreshold ?? null,
+    protectedStatusBlindPromptCopy: policy.protectedStatusBlindPromptCopy ?? null,
+    protectedSplitCompatible: policy.protectedSplitCompatible === true,
+    reviewReasons,
+    status: reviewReasons.length ? "score_explanation_policy_review_required" : "score_explanation_policy_complete",
   };
 }
 
@@ -11157,6 +11328,8 @@ function modelProviderRunClassEvidenceRow(coveredRunClass, rows) {
 
 const REQUIRED_TASK_OUTPUT_USES = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
 const REQUIRED_SCORE_INPUT_SPLITS = ["release_critical", "validation", "hidden_benchmark"];
+const REQUIRED_SERVER_SIDE_DRAFT_LANES = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
+const PROHIBITED_DRAFT_CLIENT_PERSISTENCE = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const REQUIRED_RUBRIC_LINT_RULES = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
 const REQUIRED_ITEM_ISSUE_CATEGORIES = ["source_leakage", "missing_context", "malformed_text", "duplicate_or_near_duplicate", "nonconceptual_or_scope", "translation_or_adaptation_error", "rights_or_provenance", "rubric_or_ui_render_defect"];
 const REQUIRED_PROTECTED_ARTIFACT_TYPES = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
@@ -11194,6 +11367,27 @@ function defaultScoreInputPolicy(releaseId) {
     exportQuantizationPolicy: "declare_quantization_per_export",
     correctionOverridePolicy: "append_only_correction_with_reason",
     protectedSplitCompatibilityClass: "fine_grained_unset_required_v1",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultDraftStoragePolicy(releaseId) {
+  return {
+    id: `draft-storage-policy-${releaseId}`,
+    policyVersion: "draft-storage-rlhf89-v1",
+    coveredWorkflowSplitClasses: REQUIRED_SERVER_SIDE_DRAFT_LANES,
+    serverSidePersistenceDefault: true,
+    protectedLanePersistence: "server_side_by_assignment_id",
+    clientStatePolicy: "ephemeral_in_memory_only",
+    prohibitedClientPersistenceMechanisms: PROHIBITED_DRAFT_CLIENT_PERSISTENCE,
+    localStorageProhibited: true,
+    sessionStorageProhibited: true,
+    indexedDbProhibited: true,
+    persistentOfflineCacheProhibited: true,
+    downloadedRecoveryBlobProhibited: true,
+    clearOnLogoutRevocation: true,
+    staleDraftDependencyBlocker: true,
+    ordinaryPracticeExceptionPolicy: "allowed only when declared by ClientSurfaceIntegrityPolicy and excluded from protected lanes",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -11272,7 +11466,7 @@ function defaultItemIssueReport(releaseId) {
   };
 }
 
-function defaultRatingDraftSession(releaseId, renderVersionId, scoreInputPolicyId, lintConfigId) {
+function defaultRatingDraftSession(releaseId, renderVersionId, scoreInputPolicyId, draftStoragePolicyId, lintConfigId) {
   return {
     id: `rating-draft-session-${releaseId}`,
     assignmentId: "assign-ai-base-rate",
@@ -11285,6 +11479,7 @@ function defaultRatingDraftSession(releaseId, renderVersionId, scoreInputPolicyI
       assistPolicyId: `pre-submit-assist-${releaseId}`,
       rubricLintConfigId: lintConfigId,
       scoreInputPolicyId,
+      draftStoragePolicyId,
       ratingContextSnapshotId: "rc-target-only-1",
     },
     staleDependencyStatus: "current",
@@ -11422,6 +11617,11 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     .filter(Boolean);
   const seedScoreInputRows = [normalizeScoreInputPolicy(defaultScoreInputPolicy(releaseId), "seed_score_input_policy")];
   const activeScoreInput = submittedScoreInputRows.find((row) => row.reviewReasons.length === 0) ?? seedScoreInputRows[0];
+  const submittedDraftStorageRows = (options.draftStoragePolicies ?? [])
+    .map((policy) => normalizeDraftStoragePolicy(policy, "submitted_workflow_draft_storage_policy"))
+    .filter(Boolean);
+  const seedDraftStorageRows = [normalizeDraftStoragePolicy(defaultDraftStoragePolicy(releaseId), "seed_draft_storage_policy")];
+  const activeDraftStorage = submittedDraftStorageRows.find((row) => row.reviewReasons.length === 0) ?? seedDraftStorageRows[0];
   const submittedRenderRows = (options.raterInstructionRenderVersions ?? [])
     .map((version) => normalizeRaterInstructionRenderVersion(version, activeScoreInput.id, "submitted_workflow_rater_instruction_render_version"))
     .filter(Boolean);
@@ -11443,13 +11643,16 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     .filter(Boolean);
   const seedItemIssueRows = [normalizeItemIssueReport(defaultItemIssueReport(releaseId), "seed_item_issue_report")];
   const submittedDraftRows = (options.ratingDraftSessions ?? [])
-    .map((draft) => normalizeRatingDraftSession(draft, activeRender.id, activeScoreInput.id, activeLintConfig.id, "submitted_workflow_rating_draft_session"))
+    .map((draft) =>
+      normalizeRatingDraftSession(draft, activeRender.id, activeScoreInput.id, activeDraftStorage.id, activeLintConfig.id, "submitted_workflow_rating_draft_session"),
+    )
     .filter(Boolean);
   const seedDraftRows = [
     normalizeRatingDraftSession(
-      defaultRatingDraftSession(releaseId, seedRenderRows[0].id, seedScoreInputRows[0].id, seedLintConfigRows[0].id),
+      defaultRatingDraftSession(releaseId, seedRenderRows[0].id, seedScoreInputRows[0].id, seedDraftStorageRows[0].id, seedLintConfigRows[0].id),
       seedRenderRows[0].id,
       seedScoreInputRows[0].id,
+      seedDraftStorageRows[0].id,
       seedLintConfigRows[0].id,
       "seed_rating_draft_session",
     ),
@@ -11489,6 +11692,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const gateGroups = [
     ["task_output_eligibility_policy", submittedTaskOutputRows.length ? submittedTaskOutputRows : seedTaskOutputRows],
     ["score_input_policy", submittedScoreInputRows.length ? submittedScoreInputRows : seedScoreInputRows],
+    ["draft_storage_policy", submittedDraftStorageRows.length ? submittedDraftStorageRows : seedDraftStorageRows],
     ["rater_instruction_render_version", submittedRenderRows.length ? submittedRenderRows : seedRenderRows],
     ["rubric_lint_config", submittedLintConfigRows.length ? submittedLintConfigRows : seedLintConfigRows],
     ["rubric_lint_event", submittedLintEventRows.length ? submittedLintEventRows : seedLintEventRows],
@@ -11504,6 +11708,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const reviewSections = [
     ...submittedTaskOutputRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "task_output_eligibility_policy", artifactId: row.id, reason }))),
     ...submittedScoreInputRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_input_policy", artifactId: row.id, reason }))),
+    ...submittedDraftStorageRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "draft_storage_policy", artifactId: row.id, reason }))),
     ...submittedRenderRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_instruction_render_version", artifactId: row.id, reason }))),
     ...submittedLintConfigRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_config", artifactId: row.id, reason }))),
     ...submittedLintEventRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_event", artifactId: row.id, reason }))),
@@ -11528,6 +11733,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const submittedEvidenceComplete =
     submittedTaskOutputRows.length > 0 &&
     submittedScoreInputRows.length > 0 &&
+    submittedDraftStorageRows.length > 0 &&
     submittedRenderRows.length > 0 &&
     submittedLintConfigRows.length > 0 &&
     submittedLintEventRows.length > 0 &&
@@ -11547,11 +11753,14 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     generatedAt: new Date().toISOString(),
     requiredTaskOutputUses: REQUIRED_TASK_OUTPUT_USES,
     requiredScoreInputSplits: REQUIRED_SCORE_INPUT_SPLITS,
+    requiredServerSideDraftLanes: REQUIRED_SERVER_SIDE_DRAFT_LANES,
+    prohibitedDraftClientPersistence: PROHIBITED_DRAFT_CLIENT_PERSISTENCE,
     requiredRubricLintRules: REQUIRED_RUBRIC_LINT_RULES,
     requiredItemIssueCategories: REQUIRED_ITEM_ISSUE_CATEGORIES,
     requiredProtectedArtifactTypes: REQUIRED_PROTECTED_ARTIFACT_TYPES,
     taskOutputEligibilityPolicyRows: [...seedTaskOutputRows, ...submittedTaskOutputRows],
     scoreInputPolicyRows: [...seedScoreInputRows, ...submittedScoreInputRows],
+    draftStoragePolicyRows: [...seedDraftStorageRows, ...submittedDraftStorageRows],
     raterInstructionRenderVersionRows: [...seedRenderRows, ...submittedRenderRows],
     rubricLintConfigRows: [...seedLintConfigRows, ...submittedLintConfigRows],
     rubricLintEventRows: [...seedLintEventRows, ...submittedLintEventRows],
@@ -11569,6 +11778,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     counts: {
       submittedTaskOutputEligibilityPolicyCount: submittedTaskOutputRows.length,
       submittedScoreInputPolicyCount: submittedScoreInputRows.length,
+      submittedDraftStoragePolicyCount: submittedDraftStorageRows.length,
       submittedRaterInstructionRenderVersionCount: submittedRenderRows.length,
       submittedRubricLintConfigCount: submittedLintConfigRows.length,
       submittedRubricLintEventCount: submittedLintEventRows.length,
@@ -11659,6 +11869,53 @@ function normalizeScoreInputPolicy(policy, rowSource) {
     displayRounding: policy.displayRounding ?? null,
     reviewReasons,
     status: reviewReasons.length ? "score_input_policy_review_required" : "score_input_policy_complete",
+  };
+}
+
+function normalizeDraftStoragePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.draftStoragePolicyId;
+  if (!id) return null;
+  const coveredWorkflowSplitClasses = normalizeStringArray(policy.coveredWorkflowSplitClasses);
+  const prohibitedClientPersistenceMechanisms = normalizeStringArray(policy.prohibitedClientPersistenceMechanisms);
+  const missingLanes = REQUIRED_SERVER_SIDE_DRAFT_LANES.filter((lane) => !coveredWorkflowSplitClasses.includes(lane));
+  const missingProhibitedMechanisms = PROHIBITED_DRAFT_CLIENT_PERSISTENCE.filter((mechanism) => !prohibitedClientPersistenceMechanisms.includes(mechanism));
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    missingLanes.length ? `coveredWorkflowSplitClasses:${missingLanes.join(",")}` : null,
+    policy.serverSidePersistenceDefault === true ? null : "serverSidePersistenceDefault",
+    policyMentions(policy.protectedLanePersistence, ["server", "assignment"]) ? null : "protectedLanePersistence",
+    policyMentions(policy.clientStatePolicy, ["ephemeral"]) && policyMentions(policy.clientStatePolicy, ["memory"]) ? null : "clientStatePolicy",
+    missingProhibitedMechanisms.length ? `prohibitedClientPersistenceMechanisms:${missingProhibitedMechanisms.join(",")}` : null,
+    policy.localStorageProhibited === true ? null : "localStorageProhibited",
+    policy.sessionStorageProhibited === true ? null : "sessionStorageProhibited",
+    policy.indexedDbProhibited === true ? null : "indexedDbProhibited",
+    policy.persistentOfflineCacheProhibited === true ? null : "persistentOfflineCacheProhibited",
+    policy.downloadedRecoveryBlobProhibited === true ? null : "downloadedRecoveryBlobProhibited",
+    policy.clearOnLogoutRevocation === true ? null : "clearOnLogoutRevocation",
+    policy.staleDraftDependencyBlocker === true ? null : "staleDraftDependencyBlocker",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    coveredWorkflowSplitClasses,
+    missingLanes,
+    serverSidePersistenceDefault: policy.serverSidePersistenceDefault === true,
+    protectedLanePersistence: policy.protectedLanePersistence ?? null,
+    clientStatePolicy: policy.clientStatePolicy ?? null,
+    prohibitedClientPersistenceMechanisms,
+    missingProhibitedMechanisms,
+    localStorageProhibited: policy.localStorageProhibited === true,
+    sessionStorageProhibited: policy.sessionStorageProhibited === true,
+    indexedDbProhibited: policy.indexedDbProhibited === true,
+    persistentOfflineCacheProhibited: policy.persistentOfflineCacheProhibited === true,
+    downloadedRecoveryBlobProhibited: policy.downloadedRecoveryBlobProhibited === true,
+    clearOnLogoutRevocation: policy.clearOnLogoutRevocation === true,
+    staleDraftDependencyBlocker: policy.staleDraftDependencyBlocker === true,
+    ordinaryPracticeExceptionPolicy: policy.ordinaryPracticeExceptionPolicy ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "draft_storage_policy_review_required" : "draft_storage_policy_complete",
   };
 }
 
@@ -11797,7 +12054,7 @@ function normalizeItemIssueReport(report, rowSource) {
   };
 }
 
-function normalizeRatingDraftSession(draft, activeRenderVersionId, activeScoreInputPolicyId, activeLintConfigId, rowSource) {
+function normalizeRatingDraftSession(draft, activeRenderVersionId, activeScoreInputPolicyId, activeDraftStoragePolicyId, activeLintConfigId, rowSource) {
   const id = draft?.id ?? draft?.draftSessionId ?? draft?.ratingDraftSessionId;
   if (!id) return null;
   const snapshot = draft.dependencyVersionSnapshot ?? {};
@@ -11811,6 +12068,7 @@ function normalizeRatingDraftSession(draft, activeRenderVersionId, activeScoreIn
     requiredPromptFieldReason("dependencyVersionSnapshot.assistPolicyId", snapshot.assistPolicyId),
     snapshot.rubricLintConfigId === activeLintConfigId ? null : "dependencyVersionSnapshot.rubricLintConfigId",
     snapshot.scoreInputPolicyId === activeScoreInputPolicyId ? null : "dependencyVersionSnapshot.scoreInputPolicyId",
+    snapshot.draftStoragePolicyId === activeDraftStoragePolicyId ? null : "dependencyVersionSnapshot.draftStoragePolicyId",
     requiredPromptFieldReason("dependencyVersionSnapshot.ratingContextSnapshotId", snapshot.ratingContextSnapshotId),
     ["current", "stale_blocked", "stale_requires_rerender"].includes(draft.staleDependencyStatus) ? null : "staleDependencyStatus",
     draft.staleSubmissionBlocked === true ? null : "staleSubmissionBlocked",
@@ -14621,6 +14879,7 @@ export function buildOctoberReleaseReport(
   const policyBundleEvidence = buildPolicyBundleEvidenceReport(releaseId, {
     visibilityPolicies: options.visibilityPolicies ?? [],
     ratingWorkflowProfiles: options.ratingWorkflowProfiles ?? [],
+    scoreExplanationPolicies: options.scoreExplanationPolicies ?? [],
     uiExperimentPolicies: options.uiExperimentPolicies ?? [],
     preSubmitAssistPolicies: options.preSubmitAssistPolicies ?? [],
     accessibilityConformanceReports: options.accessibilityConformanceReports ?? [],
@@ -14635,6 +14894,7 @@ export function buildOctoberReleaseReport(
   const ratingExperienceEvidence = buildRatingExperienceEvidenceReport(releaseId, {
     taskOutputEligibilityPolicies: options.taskOutputEligibilityPolicies ?? [],
     scoreInputPolicies: options.scoreInputPolicies ?? [],
+    draftStoragePolicies: options.draftStoragePolicies ?? [],
     raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
     rubricLintConfigs: options.rubricLintConfigs ?? [],
     rubricLintEvents: options.rubricLintEvents ?? [],
@@ -14853,6 +15113,7 @@ export function buildOctoberReleaseReport(
     workflowPolicyArtifacts: {
       visibilityPolicies: options.visibilityPolicies ?? [],
       ratingWorkflowProfiles: options.ratingWorkflowProfiles ?? [],
+      scoreExplanationPolicies: options.scoreExplanationPolicies ?? [],
       uiExperimentPolicies: options.uiExperimentPolicies ?? [],
       preSubmitAssistPolicies: options.preSubmitAssistPolicies ?? [],
       accessibilityConformanceReports: options.accessibilityConformanceReports ?? [],
@@ -14867,6 +15128,7 @@ export function buildOctoberReleaseReport(
     workflowRatingExperienceArtifacts: {
       taskOutputEligibilityPolicies: options.taskOutputEligibilityPolicies ?? [],
       scoreInputPolicies: options.scoreInputPolicies ?? [],
+      draftStoragePolicies: options.draftStoragePolicies ?? [],
       raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
       rubricLintConfigs: options.rubricLintConfigs ?? [],
       rubricLintEvents: options.rubricLintEvents ?? [],
