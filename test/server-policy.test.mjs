@@ -326,8 +326,13 @@ function completePolicyBundleFixtures() {
       allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
       sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters",
       benchmarkGoldModelPeerVisibilityRules: "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
+      discussionIdentityRevealRules: "identity masked until configured post-lock reveal state",
+      volunteerPerformanceMetadataVisibility: "rater-facing own profile or approved operational/research roles only",
+      verificationMaterialVisibility: "expert/admin verification workspace only until release-safe summary",
+      exportVisibilityRules: "public exports deidentify ordinary rater data and exclude protected raw fields",
       backendEnforced: true,
       exposureLogRequired: true,
+      frozenAt: "2026-10-01T00:00:00.000Z",
     },
     ratingWorkflowProfile: {
       id: "rating-workflow-profile-workflow-new",
@@ -337,17 +342,27 @@ function completePolicyBundleFixtures() {
       requiredRationaleFields: ["short_rationale", "low_clarity_explanation"],
       requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
       optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
+      disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
+      evidenceSpanRequirednessPolicy: "optional_ordinary_required_for_disputed_release_critical",
+      verificationWorkspaceRequirednessPolicy: "required_for_correctness_sensitive_unresolved_cases",
+      interpretationTargetMapRequirednessPolicy: "required_for_interpretation_disputes_and_release_critical_escalations",
       safeDeclineAvailable: true,
       preSubmitLintPolicy: "pre-submit-assist-workflow-new",
+      releaseGateProfileLinkage: "release-gate-october-2026-demo",
+      frozenAt: "2026-10-01T00:00:00.000Z",
     },
     uiExperimentPolicy: {
       id: "ui-experiment-policy-workflow-new",
       policyVersion: "ui-experiment-policy-rlhf88-v1",
       coveredSplitLaneClasses: protectedUiLaneClasses,
+      allowedUiVariantIds: ["rlhf88-task-first-compatible"],
       blockedExperimentClasses: blockedUiExperimentClasses,
+      materialChangeDefinition: "changes to score controls, anchor copy, lint behavior, issue-panel requiredness, example visibility, layout density, accessibility variants, or score-affecting wording",
       unregisteredMaterialChangesBlocked: true,
       sensitivitySnapshotRequired: true,
+      compatibilityRuleForMixedRenderVersions: "separate sensitivity snapshot or block protected merge",
       uxSimplificationCompatibilityRule: "UX simplification requires passing review",
+      frozenAt: "2026-10-01T00:00:00.000Z",
     },
     preSubmitAssistPolicy: {
       id: "pre-submit-assist-workflow-new",
@@ -361,6 +376,8 @@ function completePolicyBundleFixtures() {
       nonDirective: true,
       targetScoreSuggestionsProhibited: true,
       protectedSplitEligible: true,
+      acknowledgementPolicy: "warn_acknowledge_or_explain_without_score_recommendation",
+      frozenAt: "2026-10-01T00:00:00.000Z",
     },
     accessibilityConformanceReport: {
       id: "accessibility-conformance-workflow-new",
@@ -375,6 +392,8 @@ function completePolicyBundleFixtures() {
       failures: [],
       mitigations: [],
       nonStaffPromotionBlocker: false,
+      reviewer: "accessibility-reviewer",
+      timestamp: "2026-10-01T00:00:00.000Z",
     },
   };
 }
@@ -631,6 +650,7 @@ function completeParticipantSafeguardWorkflowFixtures() {
       automaticScorePenaltyApplied: false,
       reviewerRole: "expert",
       visibilityState: "release_safe_summary",
+      timestamp: "2026-10-01T00:20:30.000Z",
     },
     sourceRecognitionEvent: {
       id: "source-recognition-workflow-new",
@@ -4077,6 +4097,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(generationEvaluationReportById.status, 200);
   assert.equal(generationEvaluationReportById.body.id, "generation-evaluation-report-workflow-new");
 
+  const incompleteModelImprovementRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-improvement-runs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelImprovementRun: {
+        id: "model-improvement-incomplete",
+        trainingExportId: "training-export-october-2026-demo",
+        optimizedSurrogateObjectiveFamily: "pairwise_logistic",
+      },
+    }),
+  });
+  assert.equal(incompleteModelImprovementRun.status, 400);
+  assert.match(incompleteModelImprovementRun.body.detail, /releaseId|targetLabelSnapshotId|humanMarginWeightingPolicy/);
+
   const modelImprovementRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/model-improvement-runs",
@@ -4086,10 +4121,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "model-improvement-workflow-new",
         releaseId: "october-2026-demo",
         trainingExportId: "training-export-october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        modelFamilyOrCheckpoint: "reward-model-candidate-a",
         optimizedSurrogateObjectiveFamily: "pairwise_logistic",
         targetFields: ["overall", "centrality_x_strength"],
+        humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
+        tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
+        calibrationTargetDistribution: "public_train_label_snapshot_prior",
+        fitSplit: "public_train",
+        devSplit: "public_dev",
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
+        trainingPromptTemplateId: "prompt-template-workflow-new",
+        linkedPostTrainingEvaluationRunIds: ["eval-workflow-new"],
         lmcaEvaluationMetricsSeparate: true,
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:20:00.000Z",
       },
     }),
   });
@@ -4103,6 +4151,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(modelImprovementRunById.status, 200);
   assert.equal(modelImprovementRunById.body.id, "model-improvement-workflow-new");
 
+  const incompleteEvaluationRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/evaluations/run",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      evaluationRun: {
+        id: "eval-incomplete",
+        releaseId: "october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+      },
+    }),
+  });
+  assert.equal(incompleteEvaluationRun.status, 400);
+  assert.match(incompleteEvaluationRun.body.detail, /requestedModelAlias|promptTemplateId|metricConfigId/);
+
   const evaluationRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/evaluations/run",
@@ -4113,10 +4177,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         releaseId: "october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
         targetLabelVersion: "initial_mean",
+        requestedModelAlias: "model-under-test",
+        resolvedModelSnapshot: "model-under-test-2026-10-01",
         promptTemplateId: "prompt-template-workflow-new",
+        renderedPromptChecksum: "sha256-rendered-workflow-prompt",
+        promptPolicyComparabilityStatus: "project_extension_full_rubric_prompt_track",
         parserConfigId: "parser-workflow-new",
+        metricConfigId: "metric-config-workflow-new",
         metricFamilies: ["weighted_pairwise", "custom_weighted_loss"],
+        pairwiseComparisonSnapshotId: "pairwise-workflow-new",
+        ratingContextSnapshotPolicy: "same_position_context_snapshot_required_for_all_predictions",
+        humanTargetTiePolicy: "exclude_human_ties_below_configured_margin",
+        modelPredictionTiePolicy: "model_indifference_costs_half_margin_on_informative_pairs",
+        answerExtractionPolicy: "extract_all_seven_dimensions_from_json",
+        reasoningMode: "not_requested",
+        modelParameterSettings: { temperature: 0, topP: 1, maxOutputTokens: 512 },
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:25:00.000Z",
       },
     }),
   });
@@ -4129,6 +4207,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(evaluationRunById.status, 200);
   assert.equal(evaluationRunById.body.id, "eval-workflow-new");
+
+  const incompleteModelEvaluationPrediction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/evaluations/eval-workflow-new/predictions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelEvaluationPrediction: {
+        id: "prediction-incomplete",
+        releaseId: "october-2026-demo",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+      },
+    }),
+  });
+  assert.equal(incompleteModelEvaluationPrediction.status, 400);
+  assert.match(incompleteModelEvaluationPrediction.body.detail, /positionTextVersionId|renderedItemHash|parserConfigId/);
 
   const modelEvaluationPrediction = await invokeApi(context, {
     method: "POST",
@@ -4145,11 +4239,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         renderedItemHash: "sha256-test-rendered-item",
         requestedModelAlias: "model-under-test",
         resolvedModelSnapshot: "model-under-test-2026-10-01",
+        modelParameterSettings: { temperature: 0, topP: 1, maxOutputTokens: 512 },
         rawModelResponse: "{\"overall\":0.62}",
         ratingContextSnapshotId: "rating-context-workflow-new",
+        promptTemplateId: "prompt-template-workflow-new",
+        renderedPromptChecksum: "sha256-rendered-workflow-prompt",
         parserConfigId: "parser-workflow-new",
+        answerExtractionPolicy: "extract_overall_score_from_json",
+        reasoningMode: "not_requested",
         parseStatus: "parsed",
         parsedOverallScore: 0.62,
+        timestamp: "2026-10-01T01:30:00.000Z",
       },
     }),
   });
@@ -4172,6 +4272,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(evaluationPredictions.status, 200);
   assert.equal(evaluationPredictions.body.predictions.some((prediction) => prediction.id === "prediction-workflow-new"), true);
 
+  const incompleteCalibration = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/evaluations/eval-workflow-new/calibrate",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      calibrationRun: {
+        id: "calibration-incomplete",
+        releaseId: "october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        transformation: "isotonic_regression",
+      },
+    }),
+  });
+  assert.equal(incompleteCalibration.status, 400);
+  assert.match(incompleteCalibration.body.detail, /targetLabelVersion|calibrationScope|rawMetricsArtifactId/);
+
   const calibration = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/evaluations/eval-workflow-new/calibrate",
@@ -4181,11 +4297,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "calibration-workflow-new",
         releaseId: "october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        calibrationScope: "full_rubric_vector",
         transformation: "isotonic_regression",
         fitSplits: ["public_train"],
+        targetDimensions: ["overall", "centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue"],
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
         protectedLeakageCount: 0,
         rawAndCalibratedSeparate: true,
+        fittedParameters: { overall: { knots: [0, 0.5, 1], values: [0.03, 0.51, 0.94] } },
+        rawMetricsArtifactId: "raw-metrics-eval-workflow-new",
+        recalibratedMetricsArtifactId: "recalibrated-metrics-eval-workflow-new",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:35:00.000Z",
       },
     }),
   });
@@ -4199,6 +4323,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(calibrationById.status, 200);
   assert.equal(calibrationById.body.evaluationRunId, "eval-workflow-new");
 
+  const incompleteFailureAudit = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/evaluations/eval-workflow-new/failure-audits",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelFailureAudit: {
+        id: "failure-audit-incomplete",
+        releaseId: "october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+      },
+    }),
+  });
+  assert.equal(incompleteFailureAudit.status, 400);
+  assert.match(incompleteFailureAudit.body.detail, /targetLabelVersion|largestErrorPolicy|promptTemplateId/);
+
   const failureAudit = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/evaluations/eval-workflow-new/failure-audits",
@@ -4208,9 +4347,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "failure-audit-workflow-new",
         releaseId: "october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
         largestErrorPolicy: "preserve_qualitative_diagnostic",
+        promptTemplateId: "prompt-template-workflow-new",
+        parserConfigId: "parser-workflow-new",
+        reasoningMode: "not_requested",
+        rawOutputProvenancePolicy: "raw_model_outputs_internal_only_redacted_public_examples",
+        protectedSplitHandling: "raw_hidden_content_not_exposed_in_public_report",
+        failureTaxonomy: { categories: ["incorrect_conclusion", "weak_reasoning", "missed_target"] },
+        largestErrorSummary: { inspectedCount: 3, retainedExampleCount: 1 },
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
         cannotReplaceAggregateMetrics: true,
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:40:00.000Z",
       },
     }),
   });
@@ -4234,6 +4383,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(persistedEvaluationReport.body.calibrationRuns.length, 1);
   assert.equal(persistedEvaluationReport.body.modelFailureAudits.length, 1);
 
+  const incompleteArtifactProbeRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/artifact-probes/run",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      artifactProbeRun: {
+        id: "artifact-probe-incomplete",
+        releaseId: "october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+      },
+    }),
+  });
+  assert.equal(incompleteArtifactProbeRun.status, 400);
+  assert.match(incompleteArtifactProbeRun.body.detail, /splitEvaluated|targetLabelVersion|inputView/);
+
   const artifactProbeRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/artifact-probes/run",
@@ -4244,9 +4408,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         releaseId: "october-2026-demo",
         splitEvaluated: "hidden_benchmark_candidate",
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
         inputView: "critique_only",
+        featureSet: ["surface_style", "length_band"],
+        requestedModelAlias: "artifact-probe-baseline",
         metricOutputs: { weightedPairwiseLoss: 0.24 },
         protectedMetadataHandling: "authorized_admin_only_probe",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:45:00.000Z",
       },
     }),
   });
@@ -4260,6 +4429,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(artifactProbeRunById.status, 200);
   assert.equal(artifactProbeRunById.body.id, "artifact-probe-workflow-new");
 
+  const incompleteSycophancyProbeRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sycophancy-probes/run",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sycophancyProbeRun: {
+        id: "sycophancy-probe-incomplete",
+        targetLabelSnapshotId: "snapshot-oct-api",
+      },
+    }),
+  });
+  assert.equal(incompleteSycophancyProbeRun.status, 400);
+  assert.match(incompleteSycophancyProbeRun.body.detail, /releaseId|targetLabelVersion|requestedModelAlias/);
+
   const sycophancyProbeRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/sycophancy-probes/run",
@@ -4267,9 +4450,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({
       sycophancyProbeRun: {
         id: "sycophancy-probe-workflow-new",
+        releaseId: "october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        requestedModelAlias: "model-under-test",
         pairedEvaluationRunIds: ["eval-full-rubric-demo"],
         cueTypesTested: ["no_cue_control", "user_endorses_position", "safety_or_orthodoxy_frame"],
+        cueSensitivitySummary: { maxCueShift: 0.04, flaggedCueFamilies: [] },
+        protectedDataHandling: "diagnostic_only_no_hidden_training_exposure",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:50:00.000Z",
       },
     }),
   });
@@ -4283,6 +4473,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(sycophancyProbeRunById.status, 200);
   assert.equal(sycophancyProbeRunById.body.id, "sycophancy-probe-workflow-new");
 
+  const incompleteObfuscationStressRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/obfuscation-stress-runs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      obfuscationStressRun: {
+        id: "obfuscation-stress-incomplete",
+        targetLabelSnapshotId: "snapshot-oct-api",
+      },
+    }),
+  });
+  assert.equal(incompleteObfuscationStressRun.status, 400);
+  assert.match(incompleteObfuscationStressRun.body.detail, /releaseId|targetLabelVersion|requestedModelAlias/);
+
   const obfuscationStressRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/obfuscation-stress-runs",
@@ -4290,9 +4494,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({
       obfuscationStressRun: {
         id: "obfuscation-stress-workflow-new",
+        releaseId: "october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        requestedModelAlias: "model-under-test",
         pairedEvaluationRunIds: ["eval-full-rubric-demo"],
         variantFamilies: ["fluent_jargon_heavy", "masked_fallacy"],
+        clearBaselineItemIds: ["pos-ai-prior::crit-ai-base-rate"],
+        stressResultSummary: { maxStressDelta: 0.06, flaggedVariantFamilies: ["masked_fallacy"] },
+        protectedDataHandling: "robustness_diagnostic_not_headline_label",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:55:00.000Z",
       },
     }),
   });
@@ -4318,8 +4530,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         fitSplits: ["public_train"],
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
         metricFamily: "custom_weighted_loss",
+        metricVersion: "lmca-october-2026-v1",
         metricOutputs: { customWeightedLoss: 0.31, coverage: { nItemsScored: 5 } },
+        coverageCounts: { itemsScored: 5, lowClarityBranchItems: 1 },
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T02:00:00.000Z",
       },
     }),
   });
@@ -4340,6 +4557,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({
       humanCeilingRun: {
         id: "human-ceiling-workflow-new",
+        releaseId: "october-2026-demo",
         splitOrValidationSubset: "internal_validation",
         validationCritiqueCount: 52,
         validationPositionCount: 19,
@@ -4347,6 +4565,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         discussionHours: 7.5,
         appendixCComparabilityFlag: "appendix_c_scale_candidate",
         targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        comparisonType: "initial_vs_final",
+        modelAssistedCheckInclusionPolicy: "reported_separately_from_human_only_checks",
+        metricOutputsByFamily: { customWeightedLoss: 0.08, weightedPairwiseLoss: 0.02 },
+        uncertaintyIntervalType: "bootstrap_confidence_interval",
+        intervalConstructionMethod: "position_level_resampling",
+        resampleCountOrDegreesOfFreedom: 1000,
+        randomSeedOrResamplingArtifact: "seed-20261031",
+        saturationRiskThreshold: "best_model_within_human_band",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T02:05:00.000Z",
       },
     }),
   });
@@ -4373,9 +4602,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         targetLabelVersion: "initial_mean",
         evaluationRunIds: ["eval-workflow-new"],
         commonSubsetPolicy: "common_item_set_required",
+        commonMetricFamilyEligibilityPolicy: "shared_metric_config_and_pairwise_snapshot",
+        commonPromptPolicyRequirement: "same_prompt_source_scope_or_sensitivity_label",
+        commonReasoningModeRequirement: "same_reasoning_mode_or_sensitivity_label",
         uncertaintyPolicy: { intervalType: "paired_difference_interval", nominalLevel: 0.95 },
         superiorityClaimPolicy: "rank_claims_require_paired_intervals_and_practical_threshold",
         uncertaintySupportedRankTiers: [["eval-workflow-new"]],
+        pointEstimateOnlyOrderingFlag: false,
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T02:10:00.000Z",
       },
     }),
   });
@@ -4866,6 +5101,91 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(volunteerWithdrawal.status, 201);
 
   const policyBundle = completePolicyBundleFixtures();
+
+  const incompleteVisibilityPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/visibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      visibilityPolicy: {
+        id: "visibility-policy-incomplete",
+        policyVersion: "visibility-policy-rlhf88-v1",
+        fieldClasses: ["source_metadata"],
+        allowedReadActions: ["read_sanitized_screen_state"],
+        allowedWriteActions: ["submit_rating"],
+      },
+    }),
+  });
+  assert.equal(incompleteVisibilityPolicy.status, 400);
+  assert.match(incompleteVisibilityPolicy.body.detail, /sourceTagVisibilityRules|discussionIdentityRevealRules|frozenAt/);
+
+  const incompleteWorkflowProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-workflow-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingWorkflowProfile: {
+        id: "rating-workflow-profile-incomplete",
+        profileVersion: "rating-workflow-profile-rlhf88-v1",
+        taskModesCovered: ["ordinary_live"],
+        requiredScoreFields: ["overall"],
+        safeDeclineAvailable: true,
+      },
+    }),
+  });
+  assert.equal(incompleteWorkflowProfile.status, 400);
+  assert.match(incompleteWorkflowProfile.body.detail, /evidenceSpanRequirednessPolicy|verificationWorkspaceRequirednessPolicy|frozenAt/);
+
+  const incompleteUiExperimentPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ui-experiment-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      uiExperimentPolicy: {
+        id: "ui-experiment-policy-incomplete",
+        policyVersion: "ui-experiment-policy-rlhf88-v1",
+        coveredSplitLaneClasses: ["validation"],
+        blockedExperimentClasses: ["score_controls"],
+      },
+    }),
+  });
+  assert.equal(incompleteUiExperimentPolicy.status, 400);
+  assert.match(incompleteUiExperimentPolicy.body.detail, /materialChangeDefinition|compatibilityRuleForMixedRenderVersions|frozenAt/);
+
+  const incompletePreSubmitAssistPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/pre-submit-assist-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      preSubmitAssistPolicy: {
+        id: "pre-submit-assist-incomplete",
+        policyVersion: "pre-submit-assist-rlhf88-v1",
+        rubricVersion: "appendix-f-operational-v1",
+        workflowProfileId: "rating-workflow-profile-workflow-new",
+        prohibitedInputs: ["target_scores"],
+      },
+    }),
+  });
+  assert.equal(incompletePreSubmitAssistPolicy.status, 400);
+  assert.match(incompletePreSubmitAssistPolicy.body.detail, /acknowledgementPolicy|frozenAt/);
+
+  const incompleteAccessibilityReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/accessibility-conformance-reports",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      accessibilityConformanceReport: {
+        id: "accessibility-conformance-incomplete",
+        screenIds: ["rating"],
+        checksPassed: ["keyboard"],
+        readabilityReviewStatus: "passed",
+        nonStaffPromotionBlocker: false,
+      },
+    }),
+  });
+  assert.equal(incompleteAccessibilityReport.status, 400);
+  assert.match(incompleteAccessibilityReport.body.detail, /uiExperimentPolicyId|uxSimplificationPolicyId|reviewer/);
+
   for (const [resourceKey, url] of [
     ["visibilityPolicy", "/api/v1/visibility-policies"],
     ["ratingWorkflowProfile", "/api/v1/rating-workflow-profiles"],
@@ -4899,6 +5219,94 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(visibilityPolicyById.body.backendEnforced, true);
 
   const participantSafeguards = completeParticipantSafeguardWorkflowFixtures();
+
+  const incompleteVolunteerIncentivePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/volunteer-incentive-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      volunteerIncentivePolicy: {
+        id: "volunteer-incentive-incomplete",
+        policyVersion: "volunteer-incentive-rlhf84-v1",
+        allowedCompensationCreditInputs: ["eligible_completed_work"],
+        prohibitedIncentiveSignals: ["rating_direction"],
+        frozenAt: "2026-10-01T00:19:00.000Z",
+      },
+    }),
+  });
+  assert.equal(incompleteVolunteerIncentivePolicy.status, 400);
+  assert.match(incompleteVolunteerIncentivePolicy.body.detail, /speedEffortGuardrails|publicRecognitionPolicy|privateProgressDashboardPolicy/);
+
+  const incompleteRaterQualificationRecord = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-qualification-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterQualificationRecord: {
+        id: "rater-qualification-incomplete",
+        raterId: "self-attested-rater",
+        qualificationScope: "expert_rating",
+        qualificationSource: "self_attestation",
+        approvedRoles: ["expert"],
+      },
+    }),
+  });
+  assert.equal(incompleteRaterQualificationRecord.status, 400);
+  assert.match(incompleteRaterQualificationRecord.body.detail, /evidenceArtifactReference|expiryReviewDate|approver/);
+
+  const incompleteLanguageAssessment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/language-artifact-assessments",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      languageArtifactAssessment: {
+        id: "language-artifact-incomplete",
+        artifactType: "machine_translation_residue",
+        pinDownabilityImpact: "none",
+      },
+    }),
+  });
+  assert.equal(incompleteLanguageAssessment.status, 400);
+  assert.match(incompleteLanguageAssessment.body.detail, /substantiveAmbiguityImpact|reviewerRole|timestamp/);
+
+  const unsafeSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        id: "source-recognition-unsafe",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        recognitionType: "source_recognized",
+        raterAction: "safe_decline",
+        independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator",
+        protectedStatusHiddenFromRater: false,
+      },
+    }),
+  });
+  assert.equal(unsafeSourceRecognition.status, 400);
+  assert.match(unsafeSourceRecognition.body.detail, /protectedStatusHiddenFromRater/);
+
+  const incompleteModelProviderPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-provider-data-handling-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelProviderDataHandlingPolicy: {
+        id: "model-provider-policy-incomplete",
+        providerEndpointClass: "unvetted-endpoint",
+        coveredRunClass: "model_evaluation",
+        approvedSplitContentClasses: ["release_critical"],
+        approvalStatus: "approved",
+        reviewer: "demo-admin",
+        expiresAt: "2026-12-31T00:00:00.000Z",
+      },
+    }),
+  });
+  assert.equal(incompleteModelProviderPolicy.status, 400);
+  assert.match(incompleteModelProviderPolicy.body.detail, /subprocessorsSummary|approvedSplitContentClasses|logRetentionWindowDays/);
+
   const volunteerIncentivePolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/volunteer-incentive-policies",
