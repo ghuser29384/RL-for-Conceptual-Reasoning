@@ -102,6 +102,7 @@ const uxSimplificationSurfaces = [
   "calibration",
   "consent",
   "withdrawal",
+  "rater_data_governance",
   "discussion",
   "adjudication",
   "release_review",
@@ -116,6 +117,7 @@ const uxNoFeatureLossKeys = [
   "verification_control",
   "adjudication_control",
   "data_governance_withdrawal",
+  "rater_data_profile_visibility",
   "protected_label_warning",
   "audit_provenance_capture",
   "release_governance_action",
@@ -144,6 +146,7 @@ const uxScreenControlRequirements = {
   calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
   consent: ["data_governance_withdrawal", "audit_provenance_capture"],
   withdrawal: ["data_governance_withdrawal", "audit_provenance_capture"],
+  rater_data_governance: ["rater_data_profile_visibility", "data_governance_withdrawal", "audit_provenance_capture"],
   discussion: ["item_issue_report", "adjudication_control", "audit_provenance_capture"],
   adjudication: ["verification_control", "adjudication_control", "item_issue_report", "audit_provenance_capture"],
   release_review: ["release_governance_action", "protected_label_warning", "audit_provenance_capture"],
@@ -176,6 +179,10 @@ function simplifiedCopyPreviews() {
     glossaryTooltipIds: ["centrality", "strength", "dead_weight", "single_issue"],
     exactRubricTermPreservation: true,
     hiddenFieldLeakageCheck: "passed",
+    uiExperimentPolicyId: "ui-experiment-policy-submitted",
+    raterInstructionRenderVersionId: "rater-instruction-render-submitted",
+    releaseConfigManifestId: "release-config-manifest-submitted",
+    protectedSplitVariantDisposition: "frozen_compatible",
     reviewerId: "ux-reviewer",
     reviewedAt: "2026-10-01T00:15:00.000Z",
   }));
@@ -1664,7 +1671,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   const screenStatePayloads = uxSimplificationSurfaces.map((surface) => ({
     id: `screen-state-${surface}`,
     surface,
-    role: surface === "rating" || surface === "practice" || surface === "calibration" ? "graduate" : "admin",
+    role: ["rating", "practice", "calibration", "consent", "withdrawal", "rater_data_governance"].includes(surface) ? "graduate" : "admin",
     payloadSource: "server_derived",
     schemaVersion: "screen-state-lmca-v1",
     outputSchemaVersion: "screen-state-output-lmca-v1",
@@ -1674,6 +1681,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
       workflowProfileId: `${surface}-workflow-profile`,
       assistPolicyId: "pre-submit-assist-submitted",
       uiExperimentPolicyId: "ui-experiment-policy-submitted",
+      rubricLintConfigId: "rubric-lint-config-submitted",
     },
     taskStatement: `Complete the ${surface.replace(/_/g, " ")} workflow step without changing LMCA scoring semantics.`,
     primaryNextAction: "complete_required_controls",
@@ -1786,6 +1794,19 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.equal(report.screenStateRows.at(-1).protectedGoldBenchmarkDisclosureState.benchmarkMembership, "not_disclosed");
   assert.equal(report.screenStateRows.filter((row) => row.payloadSourceLabel === "submitted_workflow_screen_state_payload").every((row) => row.forbiddenVisibleFields.length === 0), true);
   assert.equal(report.screenFeatureParityCheckRows.find((row) => row.screenId === "adjudication").requiredControlResults.verification_control, "reachable");
+  assert.equal(report.surfaceRows.find((row) => row.surface === "rater_data_governance").status, "ux_surface_simplification_gate_passed");
+  assert.equal(
+    report.screenFeatureParityCheckRows.find((row) => row.screenId === "rater_data_governance").requiredControlResults.rater_data_profile_visibility,
+    "reachable",
+  );
+  assert.equal(
+    report.simplifiedCopyPreviewRows.find((row) => row.screenId === "rating" && row.rowSource === "submitted_workflow_simplified_copy_preview").protectedSplitVariantDisposition,
+    "frozen_compatible",
+  );
+  assert.equal(
+    report.simplifiedCopyPreviewRows.find((row) => row.screenId === "rating" && row.rowSource === "submitted_workflow_simplified_copy_preview").raterInstructionRenderVersionId,
+    "rater-instruction-render-submitted",
+  );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("centrality")), true);
 
   const incompleteScreenStateReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
@@ -1801,6 +1822,7 @@ test("UX simplification evidence gates submitted server-derived screen states wi
         policyVersionProvenance: {
           ...screenStatePayloads[0].policyVersionProvenance,
           assistPolicyId: "",
+          rubricLintConfigId: "",
         },
       },
     ],
@@ -1814,6 +1836,9 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.ok(incompleteScreenStateReport.reviewSections.some((section) => section.reason === "protectedGoldBenchmarkDisclosureState"));
   assert.ok(
     incompleteScreenStateReport.reviewSections.some((section) => section.reason === "policyVersionProvenance.assistPolicyId"),
+  );
+  assert.ok(
+    incompleteScreenStateReport.reviewSections.some((section) => section.reason === "policyVersionProvenance.rubricLintConfigId"),
   );
 
   const incompleteScreenStateControlMapReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
@@ -1884,6 +1909,31 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.ok(incompletePolicyReport.reviewSections.some((section) => section.reason === "coveredRoles"));
   assert.ok(incompletePolicyReport.reviewSections.some((section) => section.reason === "protectedSplitEligibility"));
 
+  const incompletePolicyCoverageReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies: [
+      {
+        ...uxSimplificationPolicies[0],
+        id: "ux-policy-submitted-incomplete-coverage",
+        enabledSurfaces: uxSimplificationSurfaces.filter((surface) => surface !== "rater_data_governance"),
+        requiredOneClickAccessibleControls: ["rubric_glossary"],
+      },
+    ],
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+  });
+
+  assert.equal(incompletePolicyCoverageReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    incompletePolicyCoverageReport.reviewSections.some((section) => section.reason === "enabledSurfaces:rater_data_governance"),
+  );
+  assert.ok(
+    incompletePolicyCoverageReport.reviewSections.some(
+      (section) => section.reason === "requiredOneClickAccessibleControls:appendix_f_anchor_access,item_issue_report",
+    ),
+  );
+
   const incompleteReviewReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
     uxSimplificationPolicies,
     uxSimplificationReviews: [
@@ -1902,6 +1952,27 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.equal(incompleteReviewReport.releaseUseStatus, "ux_simplification_review_required");
   assert.ok(incompleteReviewReport.reviewSections.some((section) => section.reason === "reviewedLocaleSet"));
   assert.ok(incompleteReviewReport.reviewSections.some((section) => section.reason === "promotionDecision"));
+
+  const failedReadabilityReviewReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews: [
+      {
+        ...uxSimplificationReviews[0],
+        id: "ux-review-submitted-failed-readability",
+        accessibilityReadabilityLinkage: { accessibilityConformanceReportId: "accessibility-submitted", readabilityStatus: "failed" },
+      },
+    ],
+    screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+  });
+
+  assert.equal(failedReadabilityReviewReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    failedReadabilityReviewReport.reviewSections.some(
+      (section) => section.reason === "accessibilityReadabilityLinkage.readabilityStatus",
+    ),
+  );
 
   const missingFeatureParityReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
     uxSimplificationPolicies,
@@ -1945,6 +2016,37 @@ test("UX simplification evidence gates submitted server-derived screen states wi
 
   assert.equal(incompleteCopyPreviewReport.releaseUseStatus, "ux_simplification_review_required");
   assert.ok(incompleteCopyPreviewReport.reviewSections.some((section) => section.reason === "glossaryTooltipIds:strength"));
+
+  const missingCopyProvenanceReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews.map((preview) =>
+      preview.screenId === "rating"
+        ? { ...preview, raterInstructionRenderVersionId: "", releaseConfigManifestId: "" }
+        : preview,
+    ),
+  });
+
+  assert.equal(missingCopyProvenanceReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(missingCopyProvenanceReport.reviewSections.some((section) => section.reason === "raterInstructionRenderVersionId"));
+  assert.ok(missingCopyProvenanceReport.reviewSections.some((section) => section.reason === "releaseConfigManifestId"));
+
+  const unquarantinedProtectedCopyVariantReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads,
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews.map((preview) =>
+      preview.screenId === "rating"
+        ? { ...preview, protectedSplitVariantDisposition: "quarantined_sensitivity_snapshot", uiSensitivitySnapshotId: "" }
+        : preview,
+    ),
+  });
+
+  assert.equal(unquarantinedProtectedCopyVariantReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(unquarantinedProtectedCopyVariantReport.reviewSections.some((section) => section.reason === "uiSensitivitySnapshotId"));
 });
 
 test("custom weighted loss uses low-clarity branch and ignores nullable non-clarity fields", () => {

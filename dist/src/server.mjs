@@ -349,6 +349,7 @@ const uxNoFeatureLossKeys = [
   "verification_control",
   "adjudication_control",
   "data_governance_withdrawal",
+  "rater_data_profile_visibility",
   "protected_label_warning",
   "audit_provenance_capture",
   "release_governance_action",
@@ -373,11 +374,15 @@ const uxScreenControlRequirements = {
   calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
   consent: ["data_governance_withdrawal", "audit_provenance_capture"],
   withdrawal: ["data_governance_withdrawal", "audit_provenance_capture"],
+  rater_data_governance: ["rater_data_profile_visibility", "data_governance_withdrawal", "audit_provenance_capture"],
   discussion: ["item_issue_report", "adjudication_control", "audit_provenance_capture"],
   adjudication: ["verification_control", "adjudication_control", "item_issue_report", "audit_provenance_capture"],
   release_review: ["release_governance_action", "protected_label_warning", "audit_provenance_capture"],
   admin_governance: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
 };
+const uxSimplificationSurfaces = Object.keys(uxScreenControlRequirements);
+const uxRequiredAlwaysVisibleControls = ["task_statement", "primary_next_action", "required_controls"];
+const uxRequiredOneClickAccessibleControls = ["appendix_f_anchor_access", "rubric_glossary", "item_issue_report"];
 const uxForbiddenVisibleFieldFragments = [
   "sourcecategory",
   "sourcetype",
@@ -397,6 +402,7 @@ const uxForbiddenVisibleFieldFragments = [
   "raterperformance",
 ];
 const simplifiedCopyRequiredGlossaryTerms = ["centrality", "strength"];
+const simplifiedCopyProtectedSplitVariantDispositions = ["frozen_compatible", "quarantined_sensitivity_snapshot"];
 const uxPolicyRequiredObjectFields = [
   "taskFirstLayoutRules",
   "plainLanguageCopyRules",
@@ -814,7 +820,12 @@ const workflowWriteEndpoints = [
     requiredFields: uxSimplificationPolicyRequiredFields,
     requiredNonEmptyArrayFields: uxPolicyRequiredArrayFields,
     requiredObjectFields: uxPolicyRequiredObjectFields,
-    requiredArrayIncludes: { noFeatureLossChecklist: uxNoFeatureLossKeys },
+    requiredArrayIncludes: {
+      enabledSurfaces: uxSimplificationSurfaces,
+      requiredAlwaysVisibleControls: uxRequiredAlwaysVisibleControls,
+      requiredOneClickAccessibleControls: uxRequiredOneClickAccessibleControls,
+      noFeatureLossChecklist: uxNoFeatureLossKeys,
+    },
     requiredExactFields: {
       taskFirstCopyRequired: true,
       progressiveDisclosureRequired: true,
@@ -827,6 +838,7 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: uxSimplificationReviewRequiredFields,
     requiredAnyFields: [["screenStateIds", "screenSetIds"]],
+    requiredNestedFields: ["accessibilityReadabilityLinkage.accessibilityConformanceReportId"],
     requiredNonEmptyArrayFields: uxReviewRequiredArrayFields,
     requiredObjectFields: uxReviewRequiredObjectFields,
     requiredArrayIncludes: { noFeatureLossChecklist: uxNoFeatureLossKeys },
@@ -834,6 +846,7 @@ const workflowWriteEndpoints = [
       reviewStatus: "passed",
       "rubricSemanticsPreservationResult.status": "passed",
       "blindingProtectedLabelLeakageResult.status": "passed",
+      "accessibilityReadabilityLinkage.readabilityStatus": "passed",
       promotionDecision: "promote",
       exactRubricSemanticsPreserved: true,
       appendixFAnchorAccessVerified: true,
@@ -851,6 +864,7 @@ const workflowWriteEndpoints = [
       "policyVersionProvenance.workflowProfileId",
       "policyVersionProvenance.assistPolicyId",
       "policyVersionProvenance.uiExperimentPolicyId",
+      "policyVersionProvenance.rubricLintConfigId",
     ],
     requiredObjectFields: ["policyVersionProvenance", "requiredOptionalControlMap", "protectedGoldBenchmarkDisclosureState"],
     requiredArrayIncludes: { hiddenFieldClasses: uxHiddenFieldClasses },
@@ -1106,10 +1120,18 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/screens\/(?<id>[^/]+)\/simplified-copy-preview$/, "simplified_copy_preview_submitted", "simplifiedCopyPreview", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "screenId",
-    requiredFields: ["id", "screenId", "copyBundleId", "glossaryTooltipIds", "exactRubricTermPreservation", "hiddenFieldLeakageCheck", "reviewerId", "reviewedAt"],
+    requiredFields: ["id", "screenId", "copyBundleId", "glossaryTooltipIds", "exactRubricTermPreservation", "hiddenFieldLeakageCheck", "uiExperimentPolicyId", "raterInstructionRenderVersionId", "releaseConfigManifestId", "protectedSplitVariantDisposition", "reviewerId", "reviewedAt"],
     requiredNonEmptyArrayFields: ["glossaryTooltipIds"],
     requiredArrayIncludes: { glossaryTooltipIds: simplifiedCopyRequiredGlossaryTerms },
+    allowedValues: { protectedSplitVariantDisposition: simplifiedCopyProtectedSplitVariantDispositions },
     requiredExactFields: { exactRubricTermPreservation: true, hiddenFieldLeakageCheck: "passed" },
+    requiredWhen: [
+      {
+        field: "protectedSplitVariantDisposition",
+        equals: "quarantined_sensitivity_snapshot",
+        requiredFields: ["uiSensitivitySnapshotId"],
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governed_bundle_canonicalization_profile_submitted", "governedBundleCanonicalizationProfile", adminRoles, {
     allowHiddenMetadata: true,
@@ -2540,6 +2562,7 @@ function buildScreenStatePayload(surface, entityId, actor, options = {}) {
       workflowProfileId: `${surface}-workflow-profile`,
       assistPolicyId: `pre-submit-assist-${releaseId}`,
       uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
+      rubricLintConfigId: `rubric-lint-config-${releaseId}`,
     },
     actor: { id: actor.id, role: actor.role },
     createdAt: options.createdAt ?? new Date().toISOString(),
@@ -3507,6 +3530,7 @@ async function nextAssignmentEndpoint(request, response, context) {
         workflowProfileId: "ordinary-live-rating-profile",
         assistPolicyId: `pre-submit-assist-${releaseId}`,
         uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
+        rubricLintConfigId: `rubric-lint-config-${releaseId}`,
       },
       taskStatement: "Rate how well the critique attacks the supplied position.",
       primaryNextAction: "complete_required_scores",
@@ -4245,6 +4269,12 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   }
   const invalidNumbers = (spec.requiredFiniteNumberFields ?? []).filter((fieldPath) => !Number.isFinite(workflowFieldValue(normalized, fieldPath)));
   if (invalidNumbers.length) return invalid(`required numeric fields must be finite numbers: ${invalidNumbers.join(", ")}`);
+  for (const [fieldPath, allowedValues] of Object.entries(spec.allowedValues ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    if (!allowedValues.includes(observedValue)) {
+      return invalid(`${spec.resourceKey}.${fieldPath} must be one of: ${allowedValues.join(", ")}`);
+    }
+  }
   for (const [fieldPath, expectedValue] of Object.entries(spec.requiredExactFields ?? {})) {
     const observedValue = workflowFieldValue(normalized, fieldPath);
     if (observedValue !== expectedValue) return invalid(`${spec.resourceKey}.${fieldPath} must equal ${JSON.stringify(expectedValue)}`);
