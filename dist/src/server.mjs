@@ -421,6 +421,75 @@ const uxForbiddenVisibleFieldFragments = [
 ];
 const simplifiedCopyRequiredGlossaryTerms = ["centrality", "strength"];
 const simplifiedCopyProtectedSplitVariantDispositions = ["frozen_compatible", "quarantined_sensitivity_snapshot"];
+const ratingTaskOutputUses = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
+const ratingTaskOutputClasses = ["blind_initial_rating", "revision", "expert_check", "adjudication_label", "model_assisted_check", "draft"];
+const ratingExcludedDenominatorClasses = ["draft", "safe_decline", "source_recognition_compromised", "model_assisted_check"];
+const ratingPromotionRequirements = ["locked_initial", "valid_score_input_policy", "current_instruction_render", "no_stale_dependencies"];
+const ratingProtectedSplitExclusions = ["hidden_benchmark", "protected_validation"];
+const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
+const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const partialTaskOutputTypes = [
+  "pairwise_preference_only",
+  "clarity_triage",
+  "dead_weight_triage",
+  "verification_only",
+  "practice",
+  "safe_decline",
+  "discussion_comment",
+];
+const partialTaskExcludedDenominators = [
+  "full_rubric_blind_rating_count",
+  "custom_loss_target",
+  "hidden_benchmark_label",
+  "human_ceiling_denominator",
+];
+const positionClusterExposureSources = [
+  "own_rating",
+  "peer_score",
+  "peer_rationale",
+  "post_lock_discussion",
+  "adjudication_memo",
+  "gold_feedback",
+  "practice_feedback",
+  "source_metadata",
+  "model_judge_output",
+  "model_assisted_check",
+  "protected_label",
+  "hidden_benchmark_access",
+  "external_assistance",
+  "declared_custom",
+];
+const adjudicationTriageLanes = [
+  "release_blocking_disagreement",
+  "low_clarity",
+  "correctness_verification",
+  "interpretation_dispute",
+  "benchmark_candidate_review",
+  "spot_check_qa",
+  "training_feedback",
+];
+const raterItemConflictTypes = [
+  "authored_position",
+  "authored_critique",
+  "generated_critique",
+  "submitted_source",
+  "selected_or_adapted_source",
+  "edited_item",
+  "source_family_exposure",
+  "public_example_exposure",
+  "close_collaboration_or_conflict",
+  "declared_custom",
+];
+const releaseErratumTypes = [
+  "scoring_bug",
+  "source_leakage_defect",
+  "rights_provenance_issue",
+  "corrupted_text",
+  "denominator_error",
+  "configuration_manifest_error",
+  "other",
+];
+const scheduleSnapshotStatuses = ["not_started", "in_progress", "complete", "blocked", "rebaselined", "dropped"];
 const uxPolicyRequiredObjectFields = [
   "taskFirstLayoutRules",
   "plainLanguageCopyRules",
@@ -1661,23 +1730,104 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/task-output-eligibility-policies$/, "task_output_eligibility_policy_submitted", "taskOutputEligibilityPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "policyVersion", "assignmentOutputClasses", "eligibleLabelSnapshotUses", "excludedDenominatorClasses", "frozenAt"],
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "adjudicationEvidencePolicy",
+      "pairwisePreferenceExportPolicy",
+      "trainingExportEligibility",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: [
+      "assignmentOutputClasses",
+      "eligibleLabelSnapshotUses",
+      "excludedDenominatorClasses",
+      "promotionToLabelRequirements",
+      "protectedSplitExclusions",
+    ],
+    requiredArrayIncludes: {
+      assignmentOutputClasses: ratingTaskOutputClasses,
+      eligibleLabelSnapshotUses: ratingTaskOutputUses,
+      excludedDenominatorClasses: ratingExcludedDenominatorClasses,
+      promotionToLabelRequirements: ratingPromotionRequirements,
+      protectedSplitExclusions: ratingProtectedSplitExclusions,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/score-input-policies$/, "score_input_policy_submitted", "scoreInputPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "policyVersion", "coveredWorkflowSplitClasses", "scoreControlMode", "initialDefaultState", "rawStoragePrecision", "frozenAt"],
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "scoreControlMode",
+      "sliderSnapBehavior",
+      "exportQuantizationPolicy",
+      "correctionOverridePolicy",
+      "protectedSplitCompatibilityClass",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["coveredWorkflowSplitClasses"],
+    requiredArrayIncludes: { coveredWorkflowSplitClasses: ratingScoreInputSplits },
+    requiredFiniteNumberFields: ["allowedPrecision", "defaultStep", "keyboardIncrement", "displayRounding", "rawStoragePrecision"],
+    requiredExactFields: {
+      manualNumericEntryAvailable: true,
+      initialDefaultState: "unset_required",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-instruction-render-versions$/, "rater_instruction_render_version_submitted", "raterInstructionRenderVersion", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "rubricVersion", "workflowProfileId", "renderedRubricAnchorChecksum", "scoreInputPolicyId", "scoreDefaultPolicy", "rubricLintConfigId", "frozenAt"],
+    requiredFields: [
+      "id",
+      "rubricVersion",
+      "workflowProfileId",
+      "renderedRubricAnchorChecksum",
+      "scoreInputPolicyId",
+      "uxSimplificationPolicyId",
+      "scoreControlMode",
+      "workflowBannerTextVersion",
+      "issuePanelCopyVersion",
+      "preSubmitAssistPolicyId",
+      "rubricLintConfigId",
+      "accessibilityVisualVariant",
+      "uiExperimentPolicyId",
+      "protectedSplitEligibilityPolicy",
+      "frozenAt",
+    ],
+    requiredStringPrefixes: { renderedRubricAnchorChecksum: "sha256:" },
+    requiredExactFields: { scoreDefaultPolicy: "unset_required" },
   }),
   workflowWriteSpec(/^\/api\/v1\/rubric-lint-configs$/, "rubric_lint_config_submitted", "rubricLintConfig", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "rubricVersion", "workflowProfileId", "preSubmitAssistPolicyId", "lintRuleIds", "frozenAt"],
+    requiredFields: [
+      "id",
+      "rubricVersion",
+      "workflowProfileId",
+      "preSubmitAssistPolicyId",
+      "triggerConditions",
+      "severityPolicy",
+      "requiredAcknowledgementExplanationPolicy",
+      "qaRoutingPolicy",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["lintRuleIds"],
+    requiredArrayIncludes: { lintRuleIds: rubricLintRules },
+    requiredExactFields: { protectedSplitEligible: true },
   }),
   workflowWriteSpec(/^\/api\/v1\/rubric-lint-events$/, "rubric_lint_event_submitted", "rubricLintEvent", ratingWorkflowRoles, {
     requiredFields: ["id", "assignmentId", "lintConfigId", "lintRuleId", "triggerState", "severity", "resolvedStatus"],
     requireAssignmentClaimField: "assignmentId",
+    allowedValues: {
+      lintRuleId: rubricLintRules,
+      triggerState: ["triggered", "not_triggered", "acknowledged"],
+      severity: ["info", "warning", "blocker"],
+      resolvedStatus: ["acknowledged", "resolved", "overridden", "not_applicable"],
+    },
+    requiredWhen: [
+      {
+        field: "triggerState",
+        equals: "triggered",
+        requiredFields: ["acknowledgementNote"],
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/item-issues$/, "item_issue_report_submitted", "itemIssueReport", ratingWorkflowRoles, {
     requiredFields: itemIssueReportRequiredFields,
@@ -1700,12 +1850,24 @@ const workflowWriteEndpoints = [
     requireAssignmentClaimField: "assignmentId",
   }),
   workflowWriteSpec(/^\/api\/v1\/score-confidence-annotations$/, "score_confidence_annotation_submitted", "scoreConfidenceAnnotation", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy"],
+    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy", "timestamp"],
+    requiredObjectFields: ["dimensionConfidences"],
+    requiredObjectKeys: { dimensionConfidences: RUBRIC_DIMENSIONS },
+    requiredExactFields: {
+      excludedFromScoreComputation: true,
+      visibleToPeersBeforeLock: false,
+    },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-score-confidences$/, "rater_score_confidence_submitted", "raterScoreConfidence", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy"],
+    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy", "timestamp"],
+    requiredObjectFields: ["dimensionConfidences"],
+    requiredObjectKeys: { dimensionConfidences: RUBRIC_DIMENSIONS },
+    requiredExactFields: {
+      excludedFromScoreComputation: true,
+      visibleToPeersBeforeLock: false,
+    },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
@@ -1729,10 +1891,15 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/same-position-scratchpads$/, "same_position_scratchpad_submitted", "samePositionScratchpad", ratingWorkflowRoles, {
     requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "visibilityState", "promotedToRationaleIds", "timestamp"],
+    requiredAnyFields: [["noteText", "encryptedNoteArtifact"]],
+    requiredExactFields: { excludedFromLabelAndExport: true },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/same-position-batch-reviews$/, "same_position_batch_review_submitted", "samePositionBatchReview", ratingWorkflowRoles, {
-    requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "siblingRatingIdsReviewed", "productOverallDeltaSummary", "reviewStatus", "nonIndependentEvidenceFlag"],
+    requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "productOverallDeltaSummary", "revisionProposals", "reviewStatus", "nonIndependentEvidenceFlag", "timestamp"],
+    requiredNonEmptyArrayFields: ["siblingRatingIdsReviewed"],
+    allowedValues: { reviewStatus: ["completed", "revision_proposed", "no_revision_needed"] },
+    requiredExactFields: { nonIndependentEvidenceFlag: true },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/correctness-claim-weight-worksheets$/, "correctness_claim_weight_worksheet_submitted", "correctnessClaimWeightWorksheet", expertWorkflowRoles, {
@@ -1743,7 +1910,15 @@ const workflowWriteEndpoints = [
     requiredWhen: [{ field: "submittedScoreOverrideFlag", equals: true, requiredFields: ["overrideExplanation"] }],
   }),
   workflowWriteSpec(/^\/api\/v1\/external-assistance-declarations$/, "external_assistance_declaration_submitted", "externalAssistanceDeclaration", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "raterId", "assistanceType", "protectedTextEventFlag", "contaminationRouting", "accessibilityExceptionStatus"],
+    requiredFields: ["id", "assignmentId", "raterId", "assistanceType", "protectedTextEventFlag", "contaminationRouting", "accessibilityExceptionStatus", "timestamp"],
+    allowedValues: { assistanceType: ["none", "search", "LLM", "collaborator", "accessibility_tool", "other"] },
+    requiredWhen: [
+      {
+        field: "assistanceType",
+        values: ["search", "LLM", "collaborator", "accessibility_tool", "other"],
+        requiredFields: ["outsideSystemDescription"],
+      },
+    ],
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
@@ -1771,72 +1946,152 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/blinding-preview-audits$/, "blinding_preview_audit_submitted", "blindingPreviewAudit", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "itemKeys", "itemTextVersionIds", "renderedRaterVisibleTextChecksum", "approvalStatus", "reviewerId"],
+    requiredFields: [
+      "id",
+      "renderedRaterVisibleTextChecksum",
+      "reviewerId",
+      "reviewerRole",
+      "approvalStatus",
+      "unresolvedSourceLeakagePatternCount",
+      "createdAt",
+    ],
+    requiredNonEmptyArrayFields: ["itemKeys", "itemTextVersionIds", "lintedSourceLeakagePatterns"],
+    requiredStringPrefixes: { renderedRaterVisibleTextChecksum: "sha256:" },
+    requiredExactFields: {
+      approvalStatus: "passed",
+      unresolvedSourceLeakagePatternCount: 0,
+    },
+    requiredWhen: [
+      {
+        field: "sourceIdentifiabilitySensitive",
+        equals: true,
+        requiredFields: ["substantiveNecessityRationale"],
+        requiredNonEmptyArrayFields: ["retainedSourceIdentifyingSpans"],
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/partial-task-outputs$/, "partial_task_output_submitted", "partialTaskOutput", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "raterId", "taskType", "itemKeys", "outputFields", "eligibleUses", "excludedDenominators"],
+    requiredFields: ["id", "assignmentId", "raterId", "taskType", "visibilityExposureState", "timestamp"],
+    requiredNonEmptyArrayFields: ["itemKeys", "eligibleUses", "excludedDenominators"],
+    requiredObjectFields: ["outputFields"],
+    requiredArrayIncludes: { excludedDenominators: partialTaskExcludedDenominators },
+    allowedValues: { taskType: partialTaskOutputTypes },
+    requiredExactFields: { countedAsFullRubricRating: false },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/raters\/(?<id>[^/]+)\/position-cluster-exposures$/, "rater_position_cluster_exposure_submitted", "raterPositionClusterExposure", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "raterId",
-    requiredFields: ["id", "raterId", "positionClusterId", "exposureSource", "exposureTimestamp", "blindEligibilityEffect", "createdBy"],
+    requiredFields: ["id", "raterId", "positionClusterId", "exposureSource", "exposureTimestamp", "exposureVisibilityScope", "blindEligibilityEffect", "createdBy", "timestamp"],
+    allowedValues: { exposureSource: positionClusterExposureSources },
   }),
   workflowWriteSpec(/^\/api\/v1\/spot-checks$/, "spot_check_qa_item_submitted", "spotCheckQaItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "itemKeys", "samplingStratum", "samplingSeedArtifact", "reviewerId", "checkResult", "excludedFromIndependentRaterCount"],
+    requiredFields: ["id", "samplingStratum", "samplingSeedArtifact", "reviewerId", "reviewerRole", "checkResult", "timestamp"],
+    requiredNonEmptyArrayFields: ["itemKeys"],
+    requiredExactFields: { excludedFromIndependentRaterCount: true },
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-triage-items$/, "adjudication_triage_queue_item_submitted", "adjudicationTriageQueueItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "itemKeys", "triggerType", "releaseBlockingStatus", "priority", "queueLane", "status", "routingRationale"],
+    requiredFields: ["id", "triggerType", "releaseBlockingStatus", "priority", "queueLane", "assignedReviewerId", "status", "routingRationale", "timestamp"],
+    requiredNonEmptyArrayFields: ["itemKeys"],
+    allowedValues: { queueLane: adjudicationTriageLanes },
+    requiredExactFields: { priorityDoesNotMutateLabels: true },
   }),
   workflowWriteSpec(/^\/api\/v1\/diagnostic-deferrals$/, "diagnostic_deferral_record_submitted", "diagnosticDeferralRecord", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "diagnosticName", "claimAffected", "notRunReason", "approvedWeakerClaimWording", "reviewerId", "createdAt"],
+    requiredFields: ["id", "diagnosticName", "claimAffected", "notRunReason", "approvedWeakerClaimWording", "reviewerId", "reviewerRole", "createdAt"],
+    requiredAnyFields: [["releaseId", "evaluationId"]],
+    requiredExactFields: { strongerClaimSuppressed: true },
   }),
   workflowWriteSpec(/^\/api\/v1\/queue-policy-snapshots$/, "queue_policy_snapshot_submitted", "queuePolicySnapshot", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "policyVersion", "liveGoldDuplicateValidationMix", "topicRoutingRules", "tierRoutingRules", "safeDeclineReassignmentPolicy", "samePositionOrderPolicy", "randomizationStratificationSeedPolicy", "frozenAt"],
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "liveGoldDuplicateValidationMix",
+      "topicRoutingRules",
+      "tierRoutingRules",
+      "safeDeclineReassignmentPolicy",
+      "samePositionOrderPolicy",
+      "randomizationStratificationSeedPolicy",
+      "createdBy",
+      "frozenAt",
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/assignment-selection-audits$/, "assignment_selection_audit_submitted", "assignmentSelectionAudit", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "queuePolicySnapshotId", "candidateAssignments", "servedAssignments", "declinesReassignmentsByReason", "raterTierDistribution", "selfSelectionIndicators", "createdAt"],
+    requiredFields: ["id", "queuePolicySnapshotId", "createdAt"],
+    requiredAnyFields: [["splitReleaseId", "releaseId", "splitId"]],
+    requiredNonEmptyArrayFields: ["candidateAssignments", "servedAssignments", "selfSelectionIndicators"],
+    requiredObjectFields: ["declinesReassignmentsByReason", "raterTierDistribution", "topicSourceLengthDistribution"],
+    requiredExactFields: { compositionChangedLabelDenominators: false },
   }),
   workflowWriteSpec(/^\/api\/v1\/model-inference-configs$/, "model_inference_config_submitted", "modelInferenceConfig", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "evaluationRunId", "providerEndpoint", "modelSnapshot", "decodingParameters", "reasoningBudget", "toolAvailability", "messageStackTemplate", "retryPolicy"],
+    requiredFields: ["id", "evaluationRunId", "providerEndpoint", "modelSnapshot", "reasoningBudget", "messageStackTemplate", "retryPolicy", "seedDeterminismArtifact", "createdAt"],
+    requiredNonEmptyArrayFields: ["toolAvailability"],
+    requiredObjectFields: ["decodingParameters"],
   }),
   workflowWriteSpec(/^\/api\/v1\/model-run-environments$/, "model_run_environment_submitted", "modelRunEnvironment", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "evaluationRunId", "runtimeOrchestratorVersion", "apiRouteDeploymentId", "libraryVersions", "parserExtractorVersionLinks"],
+    requiredFields: ["id", "evaluationRunId", "runtimeOrchestratorVersion", "apiRouteDeploymentId", "timestamp", "rateLimitRetryMetadata"],
+    requiredNonEmptyArrayFields: ["parserExtractorVersionLinks"],
+    requiredObjectFields: ["libraryVersions"],
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-item-conflicts$/, "rater_item_conflict_submitted", "raterItemConflict", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "allowedNonBlindRoles", "reviewerResolution"],
+    requiredFields: ["id", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "reviewerResolution", "timestamp"],
+    requiredAnyFields: [["positionId", "positionClusterId", "critiqueId", "sourceFamilyId", "adaptationClusterId", "nearDuplicateClusterId"]],
+    requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
+    allowedValues: { conflictType: raterItemConflictTypes },
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/conflict-screen$/, "assignment_conflict_screen_submitted", "raterItemConflict", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
-    requiredFields: ["id", "assignmentId", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "allowedNonBlindRoles", "reviewerResolution"],
+    requiredFields: ["id", "assignmentId", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "reviewerResolution", "timestamp"],
+    requiredAnyFields: [["positionId", "positionClusterId", "critiqueId", "sourceFamilyId", "adaptationClusterId", "nearDuplicateClusterId"]],
+    requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
+    allowedValues: { conflictType: raterItemConflictTypes },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-training-exposure-snapshots$/, "rater_training_exposure_snapshot_submitted", "raterTrainingExposureSnapshot", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "raterId", "assignmentId", "rubricVersion", "publicSourceAnchorExampleIdsPreviouslySeen", "protectedSplitConflictStatus", "createdAt"],
+    requiredFields: ["id", "raterId", "assignmentId", "rubricVersion", "protectedSplitConflictStatus", "protectedClusterEligibilityEffect", "createdAt"],
+    requiredNonEmptyArrayFields: ["publicSourceAnchorExampleIdsPreviouslySeen", "samePositionPositionClusterExposureChecks"],
   }),
   workflowWriteSpec(/^\/api\/v1\/release-errata$/, "release_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "releaseId", "erratumType", "affectedArtifactIds", "defectSummary", "supersedingArtifactIds", "historicalArtifactsMutated", "status", "approvedBy", "createdAt"],
+    requiredFields: ["id", "releaseId", "erratumType", "defectSummary", "historicalLeaderboardMutationPolicy", "status", "approvedBy", "createdAt"],
+    requiredNonEmptyArrayFields: ["affectedArtifactIds", "supersedingArtifactIds"],
+    allowedValues: { erratumType: releaseErratumTypes },
+    requiredExactFields: { historicalArtifactsMutated: false },
   }),
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/supersede$/, "release_supersession_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "releaseId",
-    requiredFields: ["id", "releaseId", "erratumType", "affectedArtifactIds", "defectSummary", "supersedingArtifactIds", "historicalArtifactsMutated", "status", "approvedBy", "createdAt"],
+    requiredFields: ["id", "releaseId", "erratumType", "defectSummary", "historicalLeaderboardMutationPolicy", "status", "approvedBy", "createdAt"],
+    requiredNonEmptyArrayFields: ["affectedArtifactIds", "supersedingArtifactIds"],
+    allowedValues: { erratumType: releaseErratumTypes },
+    requiredExactFields: { historicalArtifactsMutated: false },
   }),
   workflowWriteSpec(/^\/api\/v1\/schedule-status-snapshots$/, "schedule_status_snapshot_submitted", "scheduleStatusSnapshot", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "releaseVersionOrProjectScope", "milestoneId", "milestoneName", "plannedStart", "plannedEnd", "status", "criticalPathImpact", "owner", "approvedBy"],
+    requiredFields: ["id", "releaseVersionOrProjectScope", "milestoneId", "milestoneName", "plannedStart", "plannedEnd", "status", "criticalPathImpact", "owner", "approvedBy", "timestamp"],
+    allowedValues: { status: scheduleSnapshotStatuses },
+    requiredWhen: [
+      {
+        field: "status",
+        equals: "complete",
+        requiredNonEmptyArrayFields: ["evidenceArtifactIds"],
+      },
+      {
+        field: "status",
+        equals: "rebaselined",
+        requiredFields: ["rebaselinedDate", "rebaselinedScope"],
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/governance-approvals$/, "governance_approval_record_submitted", "governanceApprovalRecord", adminRoles, {
     allowHiddenMetadata: true,
@@ -5481,6 +5736,12 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   }
   const invalidNumbers = (spec.requiredFiniteNumberFields ?? []).filter((fieldPath) => !Number.isFinite(workflowFieldValue(normalized, fieldPath)));
   if (invalidNumbers.length) return invalid(`required numeric fields must be finite numbers: ${invalidNumbers.join(", ")}`);
+  for (const [fieldPath, requiredPrefix] of Object.entries(spec.requiredStringPrefixes ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    if (typeof observedValue !== "string" || !observedValue.startsWith(requiredPrefix)) {
+      return invalid(`${spec.resourceKey}.${fieldPath} must start with ${JSON.stringify(requiredPrefix)}`);
+    }
+  }
   for (const [fieldPath, allowedValues] of Object.entries(spec.allowedValues ?? {})) {
     const observedValue = workflowFieldValue(normalized, fieldPath);
     if (!allowedValues.includes(observedValue)) {

@@ -308,7 +308,7 @@ const prohibitedIncentiveSignals = [
   "leaderboard_rank",
 ];
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
-const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudication_label"];
+const ratingTaskOutputUses = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
 const rubricDimensions = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
 const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
@@ -5392,6 +5392,164 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(providerPolicyById.body.protectedContentEligible, true);
 
   const ratingExperience = completeRatingExperienceWorkflowFixtures();
+
+  const incompleteTaskOutputEligibilityPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/task-output-eligibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      taskOutputEligibilityPolicy: {
+        id: "task-output-eligibility-incomplete",
+        policyVersion: "task-output-eligibility-rlhf85-v1",
+        assignmentOutputClasses: ["blind_initial_rating"],
+        eligibleLabelSnapshotUses: ["label_snapshot"],
+        excludedDenominatorClasses: ["draft"],
+        frozenAt: "2026-10-01T00:20:00.000Z",
+      },
+    }),
+  });
+  assert.equal(incompleteTaskOutputEligibilityPolicy.status, 400);
+  assert.match(incompleteTaskOutputEligibilityPolicy.body.detail, /promotionToLabelRequirements|eligibleLabelSnapshotUses|adjudicationEvidencePolicy/);
+
+  const unsafeScoreInputPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-input-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreInputPolicy: {
+        ...ratingExperience.scoreInputPolicy,
+        id: "score-input-policy-defaulted",
+        initialDefaultState: "midpoint_default",
+        manualNumericEntryAvailable: false,
+      },
+    }),
+  });
+  assert.equal(unsafeScoreInputPolicy.status, 400);
+  assert.match(unsafeScoreInputPolicy.body.detail, /manualNumericEntryAvailable|initialDefaultState/);
+
+  const incompleteRenderVersion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-instruction-render-versions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterInstructionRenderVersion: {
+        ...ratingExperience.raterInstructionRenderVersion,
+        id: "rater-instruction-render-incomplete",
+        renderedRubricAnchorChecksum: "not-a-hash",
+        uxSimplificationPolicyId: "",
+      },
+    }),
+  });
+  assert.equal(incompleteRenderVersion.status, 400);
+  assert.match(incompleteRenderVersion.body.detail, /uxSimplificationPolicyId|renderedRubricAnchorChecksum/);
+
+  const incompleteRubricLintConfig = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rubric-lint-configs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rubricLintConfig: {
+        ...ratingExperience.rubricLintConfig,
+        id: "rubric-lint-config-incomplete",
+        lintRuleIds: ["missing_required_score"],
+        protectedSplitEligible: false,
+      },
+    }),
+  });
+  assert.equal(incompleteRubricLintConfig.status, 400);
+  assert.match(incompleteRubricLintConfig.body.detail, /lintRuleIds|protectedSplitEligible/);
+
+  const unacknowledgedLintEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rubric-lint-events",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      rubricLintEvent: {
+        ...ratingExperience.rubricLintEvent,
+        id: "rubric-lint-event-unacknowledged",
+        acknowledgementNote: "",
+      },
+    }),
+  });
+  assert.equal(unacknowledgedLintEvent.status, 400);
+  assert.match(unacknowledgedLintEvent.body.detail, /acknowledgementNote/);
+
+  const incompleteScoreConfidence = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-confidence-annotations",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      scoreConfidenceAnnotation: {
+        ...ratingExperience.scoreConfidenceAnnotation,
+        id: "score-confidence-incomplete",
+        dimensionConfidences: { overall: 0.8 },
+      },
+    }),
+  });
+  assert.equal(incompleteScoreConfidence.status, 400);
+  assert.match(incompleteScoreConfidence.body.detail, /centrality|strength|correctness/);
+
+  const peerVisibleScoreConfidence = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-confidence-annotations",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      scoreConfidenceAnnotation: {
+        ...ratingExperience.scoreConfidenceAnnotation,
+        id: "score-confidence-peer-visible",
+        visibleToPeersBeforeLock: true,
+      },
+    }),
+  });
+  assert.equal(peerVisibleScoreConfidence.status, 400);
+  assert.match(peerVisibleScoreConfidence.body.detail, /visibleToPeersBeforeLock/);
+
+  const exportingScratchpad = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/same-position-scratchpads",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      samePositionScratchpad: {
+        ...ratingExperience.samePositionScratchpad,
+        id: "same-position-scratchpad-exporting",
+        excludedFromLabelAndExport: false,
+      },
+    }),
+  });
+  assert.equal(exportingScratchpad.status, 400);
+  assert.match(exportingScratchpad.body.detail, /excludedFromLabelAndExport/);
+
+  const independentBatchReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/same-position-batch-reviews",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      samePositionBatchReview: {
+        ...ratingExperience.samePositionBatchReview,
+        id: "same-position-batch-review-independent",
+        siblingRatingIdsReviewed: [],
+        nonIndependentEvidenceFlag: false,
+      },
+    }),
+  });
+  assert.equal(independentBatchReview.status, 400);
+  assert.match(independentBatchReview.body.detail, /siblingRatingIdsReviewed|nonIndependentEvidenceFlag/);
+
+  const undeclaredExternalAssistance = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/external-assistance-declarations",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      externalAssistanceDeclaration: {
+        ...ratingExperience.externalAssistanceDeclaration,
+        id: "external-assistance-no-system",
+        outsideSystemDescription: "",
+      },
+    }),
+  });
+  assert.equal(undeclaredExternalAssistance.status, 400);
+  assert.match(undeclaredExternalAssistance.body.detail, /outsideSystemDescription/);
+
   for (const [resourceKey, url] of [
     ["taskOutputEligibilityPolicy", "/api/v1/task-output-eligibility-policies"],
     ["scoreInputPolicy", "/api/v1/score-input-policies"],
@@ -5623,6 +5781,152 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(protectedRetentionById.body.restoreTimeRevalidationStatus, "passed_current_manifest_revalidation");
 
   const auxiliaryWorkflow = completeAuxiliaryWorkflowFixtures();
+
+  const incompleteBlindingPreview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/blinding-preview-audits",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      blindingPreviewAudit: {
+        ...auxiliaryWorkflow.blindingPreviewAudit,
+        id: "blinding-preview-audit-incomplete",
+        renderedRaterVisibleTextChecksum: "not-a-hash",
+        lintedSourceLeakagePatterns: [],
+      },
+    }),
+  });
+  assert.equal(incompleteBlindingPreview.status, 400);
+  assert.match(incompleteBlindingPreview.body.detail, /lintedSourceLeakagePatterns|renderedRaterVisibleTextChecksum/);
+
+  const unsafePartialTaskOutput = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/partial-task-outputs",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      partialTaskOutput: {
+        ...auxiliaryWorkflow.partialTaskOutputs[0],
+        id: "partial-task-output-unsafe-denominator",
+        excludedDenominators: ["full_rubric_blind_rating_count"],
+        countedAsFullRubricRating: true,
+      },
+    }),
+  });
+  assert.equal(unsafePartialTaskOutput.status, 400);
+  assert.match(unsafePartialTaskOutput.body.detail, /excludedDenominators|countedAsFullRubricRating/);
+
+  const incompletePositionClusterExposure = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/demo-rater/position-cluster-exposures",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterPositionClusterExposure: {
+        ...auxiliaryWorkflow.raterPositionClusterExposure,
+        id: "position-cluster-exposure-incomplete",
+        exposureSource: "unknown_source",
+        exposureVisibilityScope: "",
+      },
+    }),
+  });
+  assert.equal(incompletePositionClusterExposure.status, 400);
+  assert.match(incompletePositionClusterExposure.body.detail, /exposureSource|exposureVisibilityScope/);
+
+  const incompleteAssignmentSelectionAudit = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignment-selection-audits",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      assignmentSelectionAudit: {
+        ...auxiliaryWorkflow.assignmentSelectionAudit,
+        id: "assignment-selection-audit-incomplete",
+        topicSourceLengthDistribution: {},
+        compositionChangedLabelDenominators: true,
+      },
+    }),
+  });
+  assert.equal(incompleteAssignmentSelectionAudit.status, 400);
+  assert.match(incompleteAssignmentSelectionAudit.body.detail, /topicSourceLengthDistribution|compositionChangedLabelDenominators/);
+
+  const incompleteModelInferenceConfig = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-inference-configs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelInferenceConfig: {
+        ...auxiliaryWorkflow.modelInferenceConfig,
+        id: "model-inference-config-incomplete",
+        seedDeterminismArtifact: "",
+        decodingParameters: {},
+      },
+    }),
+  });
+  assert.equal(incompleteModelInferenceConfig.status, 400);
+  assert.match(incompleteModelInferenceConfig.body.detail, /seedDeterminismArtifact|decodingParameters/);
+
+  const incompleteModelRunEnvironment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-run-environments",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelRunEnvironment: {
+        ...auxiliaryWorkflow.modelRunEnvironment,
+        id: "model-run-environment-incomplete",
+        rateLimitRetryMetadata: "",
+        parserExtractorVersionLinks: [],
+      },
+    }),
+  });
+  assert.equal(incompleteModelRunEnvironment.status, 400);
+  assert.match(incompleteModelRunEnvironment.body.detail, /rateLimitRetryMetadata|parserExtractorVersionLinks/);
+
+  const unscopedRaterConflict = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-item-conflicts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterItemConflict: {
+        ...auxiliaryWorkflow.raterItemConflict,
+        id: "rater-item-conflict-unscoped",
+        positionClusterId: undefined,
+        critiqueId: undefined,
+        sourceFamilyId: undefined,
+        allowedNonBlindRoles: [],
+      },
+    }),
+  });
+  assert.equal(unscopedRaterConflict.status, 400);
+  assert.match(unscopedRaterConflict.body.detail, /positionId|allowedNonBlindRoles/);
+
+  const mutableReleaseErratum = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-errata",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseErratum: {
+        ...auxiliaryWorkflow.releaseErratum,
+        id: "release-erratum-mutable",
+        historicalArtifactsMutated: true,
+      },
+    }),
+  });
+  assert.equal(mutableReleaseErratum.status, 400);
+  assert.match(mutableReleaseErratum.body.detail, /historicalArtifactsMutated/);
+
+  const unsupportedCompleteSchedule = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/schedule-status-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scheduleStatusSnapshot: {
+        ...auxiliaryWorkflow.scheduleStatusSnapshot,
+        id: "schedule-status-complete-without-evidence",
+        status: "complete",
+        evidenceArtifactIds: [],
+      },
+    }),
+  });
+  assert.equal(unsupportedCompleteSchedule.status, 400);
+  assert.match(unsupportedCompleteSchedule.body.detail, /evidenceArtifactIds/);
+
   for (const [resourceKey, url] of [
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
