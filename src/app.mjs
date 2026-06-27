@@ -99,6 +99,15 @@ const state = {
   myContributionSubmissions: [],
   raterDataProfile: null,
   lastDataGovernanceStatus: null,
+  calibrationDashboard: null,
+  lastCalibrationStatus: null,
+  discussionScreenState: null,
+  discussionCommentText:
+    "The centrality/strength disagreement turns on whether the base-rate challenge attacks the position's main forecast or only a side assumption.",
+  discussionRevisionText:
+    "Preserve the original rating and open a revised-rating proposal because the post-lock discussion clarified the critique's target claim.",
+  localDiscussionEvents: [],
+  lastDiscussionStatus: null,
   lastPersistenceStatus: null,
   lastSourceStyleAuditStatus: null,
 };
@@ -107,6 +116,8 @@ const navItems = [
   ["queue", "Queue", "clipboard"],
   ["rating", "Blind Rating", "eye"],
   ["practice", "Practice", "sliders"],
+  ["calibration", "Calibration", "flask"],
+  ["discussion", "Discussion", "branch"],
   ["data", "My Data", "database"],
   ["contribute", "Contribute", "branch"],
   ["workflow", "Workflow", "branch"],
@@ -1644,6 +1655,8 @@ function sectionHtml(section, context) {
   if (section === "queue") return queuePanel();
   if (section === "contribute") return contributePanel();
   if (section === "practice") return practicePanel(context.releaseReport.sourceExampleAnchors);
+  if (section === "calibration") return calibrationPanel(context.releaseReport);
+  if (section === "discussion") return discussionPanel(context.releaseReport);
   if (section === "data") return raterDataGovernancePanel(context.releaseReport.raterDataGovernance);
   if (section === "rating") {
     return ratingPanel(
@@ -1805,6 +1818,238 @@ function practiceFeedback(anchor) {
         ["Denominator use", "training exposure only"],
       ])}
     </section>
+  `;
+}
+
+function calibrationPanel(releaseReport) {
+  const dashboard = state.calibrationDashboard ?? fallbackCalibrationDashboard(releaseReport);
+  const learningPlan = dashboard.latestLearningPlan;
+  const assignedModules = learningPlan?.assignedRemediationModules ?? [];
+  const completedModules = learningPlan?.completedModules ?? [];
+  const pendingModules = assignedModules.filter((moduleId) => !completedModules.includes(moduleId));
+  const feedbackEvents = dashboard.calibrationFeedbackEvents ?? [];
+  const practiceSessions = dashboard.practiceSessions ?? [];
+  return `
+    <div class="twoColumn">
+      <section class="panel">
+        ${panelTitle("flask", "Calibration", "Review private training feedback and clear remediation modules before harder live work.")}
+        ${statusLine(state.sessionStatus, "sessionLine")}
+        ${authControls()}
+        ${statusLine(state.lastCalibrationStatus, "persistenceLine")}
+        <div class="practiceNotice">
+          ${icon("shield")}
+          <span>Only training-approved gold, practice, and duplicate feedback appears here. Live peer labels, hidden-benchmark labels, model-judge scores, source metadata, and protected split status stay hidden.</span>
+        </div>
+        <div class="actionRow">
+          <button class="secondaryButton" id="refreshCalibrationDashboard" type="button">${icon("database")}Refresh dashboard</button>
+          ${pendingModules.length ? `<button class="primaryButton" id="completeNextRemediation" data-module-id="${escapeHtml(pendingModules[0])}" type="button">${icon("check")}Complete next module</button>` : ""}
+        </div>
+        <div class="calibrationGrid">
+          <article>
+            <span>Rubric version</span>
+            <strong>${escapeHtml(learningPlan?.rubricVersion ?? "not loaded")}</strong>
+          </article>
+          <article>
+            <span>Assigned modules</span>
+            <strong>${escapeHtml(assignedModules.length ? assignedModules.map(humanize).join(", ") : "none")}</strong>
+          </article>
+          <article>
+            <span>Completed modules</span>
+            <strong>${escapeHtml(completedModules.length ? completedModules.map(humanize).join(", ") : "none")}</strong>
+          </article>
+          <article>
+            <span>Assignment unlocks</span>
+            <strong>${escapeHtml((learningPlan?.currentAssignmentRestrictionsUnlocks ?? []).map(humanize).join(", ") || "not loaded")}</strong>
+          </article>
+        </div>
+        <section class="calibrationSection">
+          <h3>Per-dimension drift</h3>
+          ${objectSummary(learningPlan?.perDimensionDriftSummary, "No private drift summary loaded yet.")}
+        </section>
+        <section class="calibrationSection">
+          <h3>Training feedback</h3>
+          ${
+            feedbackEvents.length
+              ? `<div class="feedbackList">${feedbackEvents.map(calibrationFeedbackCard).join("")}</div>`
+              : `<div class="emptyState">No training-approved feedback events loaded yet.</div>`
+          }
+        </section>
+      </section>
+      <aside class="rightRail">
+        <section class="panel compactPanel">
+          ${panelTitle("key", "Private Boundary", "This screen is for rater development, not release evidence inspection.")}
+          ${metricList([
+            ["Rater", dashboard.raterId ?? state.session?.user?.id ?? "not loaded"],
+            ["Learning plan", learningPlan?.id ?? "not loaded"],
+            ["Feedback rows", String(feedbackEvents.length)],
+            ["Practice sessions", String(practiceSessions.length)],
+          ])}
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("archive", "Release Boundary", "Calibration helps the rater without leaking protected labels.")}
+          <div class="gateList">
+            <div>${statusChip("pass")}<span>Protected labels excluded</span></div>
+            <div>${statusChip("pass")}<span>Live peer/model/source labels hidden</span></div>
+            <div>${statusChip("pass")}<span>Feedback shown after lock only</span></div>
+            <div>${statusChip("pass")}<span>Remediation updates append workflow evidence</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `;
+}
+
+function fallbackCalibrationDashboard(releaseReport) {
+  const interactionArtifacts = releaseReport.workflowInteractionArtifacts ?? {};
+  const interactionEvidence = releaseReport.interactionWorkflowEvidence ?? {};
+  return {
+    raterId: state.session?.user?.id ?? "seed-rater",
+    latestLearningPlan: interactionArtifacts.raterLearningPlans?.at(-1) ?? interactionEvidence.raterLearningPlanRows?.at(-1) ?? null,
+    calibrationFeedbackEvents: interactionArtifacts.calibrationFeedbackEvents?.length
+      ? interactionArtifacts.calibrationFeedbackEvents
+      : interactionEvidence.calibrationFeedbackEventRows ?? [],
+    practiceSessions: interactionArtifacts.publicExamplePracticeSessions?.length
+      ? interactionArtifacts.publicExamplePracticeSessions
+      : interactionEvidence.publicExamplePracticeSessionRows ?? [],
+    protectedLabelExposurePolicy: "no_live_or_hidden_labels_in_training_dashboard",
+  };
+}
+
+function calibrationFeedbackCard(event) {
+  return `
+    <article>
+      <strong>${escapeHtml(event.feedbackTextVersion ?? event.id ?? "feedback")}</strong>
+      <span>${escapeHtml(humanize(event.protectedSplitConflictCheck ?? "training approved"))}</span>
+      <em>${event.shownAfterLock ? "Shown after lock" : "Review visibility before use"}</em>
+      ${objectSummary(event.perDimensionDeviationSummary, "No dimension detail.", "compactSummary")}
+    </article>
+  `;
+}
+
+function objectSummary(value, emptyText, className = "summaryList") {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length) {
+    return `<div class="emptyState">${escapeHtml(emptyText)}</div>`;
+  }
+  return `
+    <div class="${escapeHtml(className)}">
+      ${Object.entries(value)
+        .map(([key, item]) => `<div><span>${escapeHtml(humanize(key))}</span><strong>${escapeHtml(humanize(item))}</strong></div>`)
+        .join("")}
+    </div>
+  `;
+}
+
+function discussionPanel(releaseReport) {
+  const room = fallbackDiscussionRoom(releaseReport);
+  const screenState = state.discussionScreenState;
+  const session = room.session;
+  return `
+    <div class="twoColumn">
+      <section class="panel">
+        ${panelTitle("branch", "Discussion Room", "Post-lock, object-level discussion for large disagreements and validation cases.")}
+        ${statusLine(state.sessionStatus, "sessionLine")}
+        ${authControls()}
+        ${statusLine(state.lastDiscussionStatus, "persistenceLine")}
+        <div class="practiceNotice">
+          ${icon("shield")}
+          <span>Discussion opens only after initial ratings lock. Role identity starts masked where feasible, peer-score pressure is warned against, and original ratings stay preserved when revision proposals are recorded.</span>
+        </div>
+        <div class="actionRow">
+          <button class="secondaryButton" id="refreshDiscussionScreenState" type="button">${icon("database")}Refresh screen state</button>
+          <button class="primaryButton" id="submitDiscussionComment" type="button">${icon("check")}Record object-level comment</button>
+          <button class="secondaryButton" id="submitRevisionProposal" type="button">${icon("branch")}Propose revision</button>
+        </div>
+        <div class="discussionGrid">
+          <article>
+            <span>Thread</span>
+            <strong>${escapeHtml(room.threadId)}</strong>
+          </article>
+          <article>
+            <span>Initial rating lock</span>
+            <strong>${escapeHtml(humanize(session?.initialRatingLockCheck ?? "not loaded"))}</strong>
+          </article>
+          <article>
+            <span>Identity phase</span>
+            <strong>${escapeHtml(humanize(session?.identityMaskPhaseStatus ?? "not loaded"))}</strong>
+          </article>
+          <article>
+            <span>Discussion status</span>
+            <strong>${escapeHtml(humanize(session?.discussionStatus ?? "not loaded"))}</strong>
+          </article>
+        </div>
+        <section class="discussionCompose">
+          <label>
+            <span>Object-level comment</span>
+            <textarea id="discussionCommentText" rows="4">${escapeHtml(state.discussionCommentText)}</textarea>
+          </label>
+          <label>
+            <span>Revision proposal rationale</span>
+            <textarea id="discussionRevisionText" rows="4">${escapeHtml(state.discussionRevisionText)}</textarea>
+          </label>
+        </section>
+        <section class="calibrationSection">
+          <h3>Thread evidence</h3>
+          ${metricList([
+            ["Item keys", (session?.itemKeys ?? room.itemKeys).join(", ")],
+            ["Object-level comment records", String(session?.objectLevelCommentRecords?.length ?? 0)],
+            ["Revision proposals", String(session?.revisionProposalIds?.length ?? 0)],
+            ["Majority-pressure warning", humanize(session?.majorityPressureWarningState ?? "not loaded")],
+          ])}
+        </section>
+        <section class="calibrationSection">
+          <h3>Local submissions this session</h3>
+          ${
+            state.localDiscussionEvents.length
+              ? `<div class="feedbackList">${state.localDiscussionEvents.map(discussionEventCard).join("")}</div>`
+              : `<div class="emptyState">No local discussion event submitted in this browser session yet.</div>`
+          }
+        </section>
+      </section>
+      <aside class="rightRail">
+        <section class="panel compactPanel">
+          ${panelTitle("key", "Server Screen State", "Sanitized server-derived action and field allowlists.")}
+          ${metricList([
+            ["Primary action", humanize(screenState?.primaryNextAction ?? "not loaded")],
+            ["Surface", screenState?.surface ?? "discussion"],
+            ["Actions", (screenState?.enabledActionAllowlist ?? ["object_level_comment", "revision_proposal"]).map(humanize).join(", ")],
+            ["Schema", screenState?.outputSchemaVersion ?? "screen-state-output-lmca-v1"],
+          ])}
+        </section>
+        <section class="panel compactPanel">
+          ${panelTitle("archive", "Blinding Boundary", "Discussion is after lock and cannot retroactively mutate initial labels.")}
+          <div class="gateList">
+            <div>${statusChip("pass")}<span>Initial ratings locked before peer exposure</span></div>
+            <div>${statusChip("pass")}<span>Role-neutral handles first where feasible</span></div>
+            <div>${statusChip("pass")}<span>Revision proposals preserve original ratings</span></div>
+            <div>${statusChip("pass")}<span>Append-only discussion audit events</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `;
+}
+
+function fallbackDiscussionRoom(releaseReport) {
+  const interactionEvidence = releaseReport.interactionWorkflowEvidence ?? {};
+  const session =
+    releaseReport.workflowInteractionArtifacts?.postLockDiscussionSessions?.at(-1) ??
+    interactionEvidence.postLockDiscussionSessionRows?.at(-1) ??
+    null;
+  const itemKeys = session?.itemKeys ?? ["pos-ai-prior::crit-ai-base-rate"];
+  return {
+    threadId: session?.discussionThreadId ?? "discussion-thread-demo",
+    session,
+    itemKeys,
+  };
+}
+
+function discussionEventCard(event) {
+  return `
+    <article>
+      <strong>${escapeHtml(humanize(event.kind))}</strong>
+      <span>${escapeHtml(event.resourceId)}</span>
+      <em>${escapeHtml(event.detail)}</em>
+    </article>
   `;
 }
 
@@ -3721,6 +3966,80 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     state.lastPracticeStatus = null;
     render();
   });
+  document.getElementById("refreshCalibrationDashboard")?.addEventListener("click", async () => {
+    state.lastCalibrationStatus = { tone: "warn", title: "Loading calibration", detail: "Reading your private training dashboard." };
+    render();
+    const result = await fetchCalibrationDashboard();
+    state.lastCalibrationStatus = result.status;
+    if (result.dashboard) state.calibrationDashboard = result.dashboard;
+    render();
+  });
+  document.getElementById("completeNextRemediation")?.addEventListener("click", async (event) => {
+    const moduleId = event.currentTarget.getAttribute("data-module-id");
+    if (!moduleId) return;
+    state.lastCalibrationStatus = { tone: "warn", title: "Completing remediation", detail: `Recording ${humanize(moduleId)} as complete.` };
+    render();
+    const result = await completeRemediationModule(moduleId, createRemediationCompletionPayload(moduleId));
+    state.lastCalibrationStatus = result;
+    if (result.tone === "good") {
+      const dashboardResult = await fetchCalibrationDashboard();
+      if (dashboardResult.dashboard) state.calibrationDashboard = dashboardResult.dashboard;
+    }
+    render();
+  });
+  document.getElementById("discussionCommentText")?.addEventListener("input", (event) => {
+    state.discussionCommentText = event.target.value;
+  });
+  document.getElementById("discussionRevisionText")?.addEventListener("input", (event) => {
+    state.discussionRevisionText = event.target.value;
+  });
+  document.getElementById("refreshDiscussionScreenState")?.addEventListener("click", async () => {
+    const room = fallbackDiscussionRoom(releaseReport);
+    state.lastDiscussionStatus = { tone: "warn", title: "Loading discussion state", detail: "Reading the sanitized server-derived discussion screen state." };
+    render();
+    const result = await fetchDiscussionScreenState(room.threadId);
+    state.lastDiscussionStatus = result.status;
+    if (result.screenState) state.discussionScreenState = result.screenState;
+    render();
+  });
+  document.getElementById("submitDiscussionComment")?.addEventListener("click", async () => {
+    const room = fallbackDiscussionRoom(releaseReport);
+    const commentText = state.discussionCommentText.trim();
+    if (!commentText) {
+      state.lastDiscussionStatus = { tone: "bad", title: "Comment missing", detail: "Enter an object-level comment before submitting." };
+      render();
+      return;
+    }
+    state.lastDiscussionStatus = { tone: "warn", title: "Submitting comment", detail: "Recording an object-level post-lock discussion comment." };
+    render();
+    const result = await persistExpertWorkflowResource(
+      `/api/v1/discussions/${encodeURIComponent(room.threadId)}/comments`,
+      "discussionComment",
+      createDiscussionCommentPayload(room.threadId, commentText),
+    );
+    state.lastDiscussionStatus = result;
+    if (result.tone === "good") state.localDiscussionEvents.push({ kind: "discussion_comment", resourceId: result.resourceId, detail: "object-level comment recorded" });
+    render();
+  });
+  document.getElementById("submitRevisionProposal")?.addEventListener("click", async () => {
+    const room = fallbackDiscussionRoom(releaseReport);
+    const revisionRationale = state.discussionRevisionText.trim();
+    if (!revisionRationale) {
+      state.lastDiscussionStatus = { tone: "bad", title: "Revision rationale missing", detail: "Enter an object-level revision rationale before submitting." };
+      render();
+      return;
+    }
+    state.lastDiscussionStatus = { tone: "warn", title: "Submitting revision proposal", detail: "Recording a proposal that preserves the original rating." };
+    render();
+    const result = await persistExpertWorkflowResource(
+      `/api/v1/discussions/${encodeURIComponent(room.threadId)}/revision-proposals`,
+      "discussionRevisionProposal",
+      createDiscussionRevisionProposalPayload(room.threadId, revisionRationale),
+    );
+    state.lastDiscussionStatus = result;
+    if (result.tone === "good") state.localDiscussionEvents.push({ kind: "discussion_revision_proposal", resourceId: result.resourceId, detail: "original rating preserved" });
+    render();
+  });
   document.getElementById("refreshRaterDataProfile")?.addEventListener("click", async () => {
     state.lastDataGovernanceStatus = { tone: "warn", title: "Loading data profile", detail: "Reading your rater-data transparency profile." };
     render();
@@ -4299,6 +4618,190 @@ async function ensureAdminSession() {
   if (!response.ok) throw new Error(body.error ?? "admin session request failed");
   state.adminSession = { token: body.token, user: body.user };
   return state.adminSession;
+}
+
+async function fetchCalibrationDashboard() {
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch("/api/v1/raters/me/calibration-dashboard", {
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        status: {
+          tone: "bad",
+          title: "Calibration dashboard rejected",
+          detail: body.detail ?? body.error ?? "Server rejected the calibration-dashboard request.",
+        },
+      };
+    }
+    return {
+      dashboard: body,
+      status: {
+        tone: "good",
+        title: "Calibration dashboard loaded",
+        detail: `${body.calibrationFeedbackEvents?.length ?? 0} training feedback event(s), ${body.practiceSessions?.length ?? 0} practice session(s).`,
+      },
+    };
+  } catch (error) {
+    return {
+      status: {
+        tone: "warn",
+        title: "Calibration dashboard unavailable",
+        detail: error instanceof Error ? error.message : "Server API unavailable.",
+      },
+    };
+  }
+}
+
+async function completeRemediationModule(moduleId, raterLearningPlan) {
+  try {
+    const session = await ensureSession();
+    if (!session?.token) throw new Error("session unavailable");
+    const response = await fetch(`/api/v1/raters/me/remediation/${encodeURIComponent(moduleId)}/complete`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ raterLearningPlan }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Remediation rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the remediation completion.",
+      };
+    }
+    return {
+      tone: "good",
+      title: "Remediation recorded",
+      detail: `${body.resourceId} recorded with ${body.payloadHash.slice(0, 18)}...`,
+    };
+  } catch (error) {
+    return {
+      tone: "warn",
+      title: "Remediation not persisted",
+      detail: error instanceof Error ? error.message : "Server API unavailable.",
+    };
+  }
+}
+
+function createRemediationCompletionPayload(moduleId) {
+  const existingPlan = state.calibrationDashboard?.latestLearningPlan;
+  const assignedModules = existingPlan?.assignedRemediationModules?.length ? existingPlan.assignedRemediationModules : [moduleId];
+  const completedModules = Array.from(new Set([...(existingPlan?.completedModules ?? []), moduleId]));
+  return {
+    id: `rater-learning-plan-ui-${moduleId}-${Date.now()}`,
+    raterId: state.session?.user?.id ?? "demo-rater",
+    rubricVersion: existingPlan?.rubricVersion ?? "appendix-f-operational-v1",
+    certificationPackVersion: existingPlan?.certificationPackVersion ?? "pack-v1",
+    practiceGoldDuplicatePerformanceSummaries: existingPlan?.practiceGoldDuplicatePerformanceSummaries ?? { remediation: "completed" },
+    perDimensionDriftSummary: existingPlan?.perDimensionDriftSummary ?? { remediation: "completed" },
+    assignedRemediationModules: assignedModules,
+    completedModules,
+    currentAssignmentRestrictionsUnlocks: existingPlan?.currentAssignmentRestrictionsUnlocks ?? ["ordinary_live_allowed"],
+    feedbackArtifactsShown: existingPlan?.feedbackArtifactsShown ?? [],
+    protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+async function fetchDiscussionScreenState(threadId) {
+  try {
+    const session = await ensureAdminSession();
+    if (!session?.token) throw new Error("expert/admin session unavailable");
+    const response = await fetch(`/api/v1/discussions/${encodeURIComponent(threadId)}/screen-state`, {
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        status: {
+          tone: "bad",
+          title: "Discussion screen state rejected",
+          detail: body.detail ?? body.error ?? "Server rejected the discussion screen-state request.",
+        },
+      };
+    }
+    return {
+      screenState: body,
+      status: {
+        tone: "good",
+        title: "Discussion state loaded",
+        detail: `${body.enabledActionAllowlist?.length ?? 0} enabled action(s), ${body.hiddenFieldClasses?.length ?? 0} hidden field class(es).`,
+      },
+    };
+  } catch (error) {
+    return {
+      status: {
+        tone: "warn",
+        title: "Discussion state unavailable",
+        detail: error instanceof Error ? error.message : "Server API unavailable.",
+      },
+    };
+  }
+}
+
+async function persistExpertWorkflowResource(endpoint, resourceKey, resource) {
+  try {
+    const session = await ensureAdminSession();
+    if (!session?.token) throw new Error("expert/admin session unavailable");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ [resourceKey]: resource }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        tone: "bad",
+        title: "Discussion event rejected",
+        detail: body.detail ?? body.error ?? "Server rejected the discussion workflow event.",
+      };
+    }
+    return {
+      tone: "good",
+      title: "Discussion event recorded",
+      detail: `${body.resourceId} recorded with ${body.payloadHash.slice(0, 18)}...`,
+      resourceId: body.resourceId,
+    };
+  } catch (error) {
+    return {
+      tone: "warn",
+      title: "Discussion event not persisted",
+      detail: error instanceof Error ? error.message : "Server API unavailable.",
+    };
+  }
+}
+
+function createDiscussionCommentPayload(threadId, commentText) {
+  return {
+    id: `discussion-comment-ui-${Date.now()}`,
+    discussionThreadId: threadId,
+    authorId: state.adminSession?.user?.id ?? "demo-admin",
+    commentText,
+    objectLevelStatus: "object_level_point_preserved",
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function createDiscussionRevisionProposalPayload(threadId, revisionRationale) {
+  return {
+    id: `discussion-revision-proposal-ui-${Date.now()}`,
+    discussionThreadId: threadId,
+    proposedBy: state.adminSession?.user?.id ?? "demo-admin",
+    ratingIdPrior: "rating-seed-ai-base-rate-r1",
+    revisionRationale,
+    originalRatingPreservation: "original_rating_preserved_append_only",
+    timestamp: new Date().toISOString(),
+  };
 }
 
 async function fetchRaterDataProfile() {

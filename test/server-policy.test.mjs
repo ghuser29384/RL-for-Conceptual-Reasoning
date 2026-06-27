@@ -1883,6 +1883,37 @@ test("practice sandbox is a public-anchor training surface excluded from release
   assert.ok(appSource.includes('state.practiceSubmittedScores = { ...state.practiceScores };'));
 });
 
+test("private calibration dashboard UI exposes protected-label-safe remediation flow", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  assert.ok(appSource.includes('["calibration", "Calibration", "flask"]'));
+  assert.ok(appSource.includes('if (section === "calibration") return calibrationPanel(context.releaseReport);'));
+  assert.ok(appSource.includes('"/api/v1/raters/me/calibration-dashboard"'));
+  assert.ok(appSource.includes("/api/v1/raters/me/remediation/${encodeURIComponent(moduleId)}/complete"));
+  assert.ok(appSource.includes("Only training-approved gold, practice, and duplicate feedback appears here."));
+  assert.ok(appSource.includes("Live peer labels, hidden-benchmark labels, model-judge scores, source metadata, and protected split status stay hidden."));
+  assert.ok(appSource.includes('protectedLabelExposureCheck: "no_protected_or_live_labels_shown"'));
+  assert.ok(appSource.includes("fallbackCalibrationDashboard(releaseReport)"));
+  assert.ok(appSource.includes("releaseReport.interactionWorkflowEvidence"));
+  assert.ok(appSource.includes("interactionEvidence.raterLearningPlanRows?.at(-1)"));
+  assert.ok(appSource.includes("Complete next module"));
+});
+
+test("post-lock discussion room UI exposes screen-state, comment, and revision workflows", () => {
+  const appSource = readFileSync("src/app.mjs", "utf8");
+  assert.ok(appSource.includes('["discussion", "Discussion", "branch"]'));
+  assert.ok(appSource.includes('if (section === "discussion") return discussionPanel(context.releaseReport);'));
+  assert.ok(appSource.includes("releaseReport.interactionWorkflowEvidence"));
+  assert.ok(appSource.includes("interactionEvidence.postLockDiscussionSessionRows?.at(-1)"));
+  assert.ok(appSource.includes("/api/v1/discussions/${encodeURIComponent(threadId)}/screen-state"));
+  assert.ok(appSource.includes("/api/v1/discussions/${encodeURIComponent(room.threadId)}/comments"));
+  assert.ok(appSource.includes("/api/v1/discussions/${encodeURIComponent(room.threadId)}/revision-proposals"));
+  assert.ok(appSource.includes("persistExpertWorkflowResource"));
+  assert.ok(appSource.includes("Discussion opens only after initial ratings lock."));
+  assert.ok(appSource.includes('originalRatingPreservation: "original_rating_preserved_append_only"'));
+  assert.ok(appSource.includes("Role identity starts masked where feasible"));
+  assert.ok(appSource.includes("Append-only discussion audit events"));
+});
+
 test("rater data-governance UI exposes consent, restriction, and withdrawal actions", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   assert.ok(appSource.includes('["data", "My Data", "database"]'));
