@@ -2707,6 +2707,137 @@ test("v1 rating endpoints persist blind ratings and enforce revision route ident
   assert.equal(releaseReport.body.operationalControlEvidence.policyDecisionConsumptionRows.length, 2);
 });
 
+test("workflow and snapshot side effects require current policy decisions and respect disabled phase lanes", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const blockedPhaseBundle = {
+    ...completeOperationalControlWorkflowFixtures().implementationPhaseGateBundle,
+    id: "implementation-phase-gate-workflow-route-blocked",
+    laneStates: completeOperationalControlWorkflowFixtures().implementationPhaseGateBundle.laneStates.map((lane) =>
+      ["route", "ui_panel", "governance_action", "export_path", "hidden_benchmark_submission_lane"].includes(lane.laneKind)
+        ? { ...lane, phaseState: "blocked" }
+        : lane
+    ),
+  };
+  const phaseGate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/implementation-phase-gate-bundles",
+    headers: adminHeaders,
+    body: JSON.stringify({ implementationPhaseGateBundle: blockedPhaseBundle }),
+  });
+  assert.equal(phaseGate.status, 201);
+
+  const discussion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/discussions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      discussion: {
+        id: "discussion-route-blocked",
+        itemId: "pos-workflow-new::crit-workflow-new",
+        disagreementTaxonomy: ["strength_centrality_allocation"],
+      },
+    }),
+  });
+  assert.equal(discussion.status, 409);
+  assert.equal(discussion.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(discussion.body.laneKind, "route");
+  assert.equal(discussion.body.phaseState, "blocked");
+
+  const adjudicationFinalization = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudications/adjudication-route-blocked/finalize",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudicationFinalization: {
+        id: "adjudication-finalization-route-blocked",
+        memoId: "adjudication-memo-workflow-new",
+        finalizationStatus: "finalized_for_release_candidate",
+        finalizedBy: "demo-expert",
+      },
+    }),
+  });
+  assert.equal(adjudicationFinalization.status, 409);
+  assert.equal(adjudicationFinalization.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(adjudicationFinalization.body.laneKind, "route");
+
+  const pairwiseSnapshot = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/pairwise-comparison-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({ pairwiseComparisonSnapshot: { id: "pairwise-snapshot-route-blocked" } }),
+  });
+  assert.equal(pairwiseSnapshot.status, 409);
+  assert.equal(pairwiseSnapshot.body.error, "implementation_phase_lane_unavailable");
+
+  const labelSnapshot = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/label-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({ labelSnapshot: { id: "label-snapshot-route-blocked" } }),
+  });
+  assert.equal(labelSnapshot.status, 409);
+  assert.equal(labelSnapshot.body.error, "implementation_phase_lane_unavailable");
+
+  const releaseFreeze = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/releases/freeze",
+    headers: adminHeaders,
+    body: JSON.stringify({ releaseFreeze: { id: "release-freeze-lane-blocked" } }),
+  });
+  assert.equal(releaseFreeze.status, 409);
+  assert.equal(releaseFreeze.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(releaseFreeze.body.laneKind, "governance_action");
+
+  const trainingExport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/training-exports",
+    headers: adminHeaders,
+    body: JSON.stringify({ trainingExport: { id: "training-export-lane-blocked" } }),
+  });
+  assert.equal(trainingExport.status, 409);
+  assert.equal(trainingExport.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(trainingExport.body.laneKind, "export_path");
+
+  const benchmarkSubmission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark-submissions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      benchmarkSubmission: {
+        ...completeInteractionWorkflowFixtures().benchmarkSubmission,
+        id: "benchmark-submission-lane-blocked",
+      },
+    }),
+  });
+  assert.equal(benchmarkSubmission.status, 409);
+  assert.equal(benchmarkSubmission.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(benchmarkSubmission.body.laneKind, "hidden_benchmark_submission_lane");
+
+  const assignmentScreenState = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/assignments/assign-ai-base-rate/screen-state",
+    headers: adminHeaders,
+  });
+  assert.equal(assignmentScreenState.status, 409);
+  assert.equal(assignmentScreenState.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(assignmentScreenState.body.laneKind, "ui_panel");
+
+  const workflowEvents = await auditStore.readWorkflowEvents();
+  assert.equal(workflowEvents.length, 1);
+  assert.equal(workflowEvents[0].type, "implementation_phase_gate_bundle_submitted");
+  assert.equal(workflowEvents.some((event) => event.type === "policy_decision_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "discussion_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "adjudication_finalized"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "pairwise_comparison_snapshot_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "label_snapshot_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "release_freeze_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "training_export_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "benchmark_submission_submitted"), false);
+});
+
 test("v1 artifact endpoints expose existing report artifacts with role checks", async () => {
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
   const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
@@ -3127,6 +3258,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(releaseFreeze.status, 201);
+  assert.match(releaseFreeze.body.policyDecisionId, /^policy-decision-release_freeze-/);
+  assert.match(releaseFreeze.body.policyDecisionConsumptionId, /^policy-decision-consumption-release_freeze-/);
+  assert.equal(releaseFreeze.body.policyActionKind, "release_freeze");
 
   const emptyPosition = await invokeApi(context, {
     method: "POST",
@@ -3298,6 +3432,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(pairwiseComparisonSnapshot.status, 201);
+  assert.match(pairwiseComparisonSnapshot.body.policyDecisionId, /^policy-decision-pairwise_snapshot_freeze-/);
+  assert.match(pairwiseComparisonSnapshot.body.policyDecisionConsumptionId, /^policy-decision-consumption-pairwise_snapshot_freeze-/);
+  assert.equal(pairwiseComparisonSnapshot.body.policyActionKind, "pairwise_snapshot_freeze");
 
   const pairwiseComparisonSnapshotById = await invokeApi(context, {
     method: "GET",
@@ -3306,6 +3443,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(pairwiseComparisonSnapshotById.status, 200);
   assert.equal(pairwiseComparisonSnapshotById.body.id, "pairwise-snapshot-workflow-new");
+  assert.equal(pairwiseComparisonSnapshotById.body.policyDecisionId, pairwiseComparisonSnapshot.body.policyDecisionId);
 
   const raterReliabilityWeightModel = await invokeApi(context, {
     method: "POST",
@@ -3612,6 +3750,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(labelSnapshotArtifact.status, 201);
+  assert.match(labelSnapshotArtifact.body.policyDecisionId, /^policy-decision-label_snapshot_freeze-/);
+  assert.match(labelSnapshotArtifact.body.policyDecisionConsumptionId, /^policy-decision-consumption-label_snapshot_freeze-/);
+  assert.equal(labelSnapshotArtifact.body.policyActionKind, "label_snapshot_freeze");
 
   const labelSnapshotArtifactById = await invokeApi(context, {
     method: "GET",
@@ -3620,6 +3761,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(labelSnapshotArtifactById.status, 200);
   assert.equal(labelSnapshotArtifactById.body.id, "label-snapshot-workflow-new");
+  assert.equal(labelSnapshotArtifactById.body.policyDecisionId, labelSnapshotArtifact.body.policyDecisionId);
 
   const corpusManifestArtifact = await invokeApi(context, {
     method: "POST",
@@ -3667,6 +3809,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(trainingExportArtifact.status, 201);
+  assert.match(trainingExportArtifact.body.policyDecisionId, /^policy-decision-training_export-/);
+  assert.match(trainingExportArtifact.body.policyDecisionConsumptionId, /^policy-decision-consumption-training_export-/);
+  assert.equal(trainingExportArtifact.body.policyActionKind, "training_export");
 
   const trainingExportArtifactById = await invokeApi(context, {
     method: "GET",
@@ -3675,6 +3820,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(trainingExportArtifactById.status, 200);
   assert.equal(trainingExportArtifactById.body.id, "training-export-workflow-new");
+  assert.equal(trainingExportArtifactById.body.policyDecisionId, trainingExportArtifact.body.policyDecisionId);
 
   const exportManifestArtifact = await invokeApi(context, {
     method: "POST",
@@ -4128,6 +4274,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(discussion.status, 201);
+  assert.match(discussion.body.policyDecisionId, /^policy-decision-discussion_open-/);
+  assert.match(discussion.body.policyDecisionConsumptionId, /^policy-decision-consumption-discussion_open-/);
+  assert.equal(discussion.body.policyActionKind, "discussion_open");
 
   const discussionById = await invokeApi(context, {
     method: "GET",
@@ -4136,6 +4285,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(discussionById.status, 200);
   assert.equal(discussionById.body.id, "discussion-workflow-new");
+  assert.equal(discussionById.body.policyDecisionId, discussion.body.policyDecisionId);
 
   const discussionThread = await invokeApi(context, {
     method: "POST",
@@ -4356,6 +4506,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(adjudicationFinalization.status, 201);
   assert.equal(adjudicationFinalization.body.resourceId, "adjudication-finalization-workflow-new");
+  assert.match(adjudicationFinalization.body.policyDecisionId, /^policy-decision-adjudication_finalize-/);
+  assert.match(adjudicationFinalization.body.policyDecisionConsumptionId, /^policy-decision-consumption-adjudication_finalize-/);
+  assert.equal(adjudicationFinalization.body.policyActionKind, "adjudication_finalize");
+  const policyGatedWorkflowEvents = await auditStore.readWorkflowEvents();
+  const discussionSubmittedEvent = policyGatedWorkflowEvents.find((event) => event.type === "discussion_submitted");
+  assert.equal(discussionSubmittedEvent.accessAudit.policyActionKind, "discussion_open");
+  assert.equal(discussionSubmittedEvent.accessAudit.policyDecisionId, discussion.body.policyDecisionId);
+  assert.equal(discussionSubmittedEvent.accessAudit.policyDecisionConsumed, true);
+  const adjudicationFinalizedEvent = policyGatedWorkflowEvents.find((event) => event.type === "adjudication_finalized");
+  assert.equal(adjudicationFinalizedEvent.accessAudit.policyActionKind, "adjudication_finalize");
+  assert.equal(adjudicationFinalizedEvent.accessAudit.policyDecisionId, adjudicationFinalization.body.policyDecisionId);
+  assert.equal(adjudicationFinalizedEvent.accessAudit.policyDecisionConsumed, true);
 
   const ratingCheck = await invokeApi(context, {
     method: "POST",
@@ -5205,6 +5367,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(evaluationRun.status, 201);
+  assert.match(evaluationRun.body.policyDecisionId, /^policy-decision-evaluation_run-/);
+  assert.match(evaluationRun.body.policyDecisionConsumptionId, /^policy-decision-consumption-evaluation_run-/);
+  assert.equal(evaluationRun.body.policyActionKind, "evaluation_run");
 
   const unsafeEvaluationRun = await invokeApi(context, {
     method: "POST",
@@ -5256,6 +5421,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(evaluationRunById.status, 200);
   assert.equal(evaluationRunById.body.id, "eval-workflow-new");
+  assert.equal(evaluationRunById.body.policyDecisionId, evaluationRun.body.policyDecisionId);
 
   const incompleteModelEvaluationPrediction = await invokeApi(context, {
     method: "POST",
@@ -6412,6 +6578,11 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       body: JSON.stringify({ [resourceKey]: policyBundle[resourceKey] }),
     });
     assert.equal(response.status, 201, resourceKey);
+    if (resourceKey === "benchmarkSubmission") {
+      assert.match(response.body.policyDecisionId, /^policy-decision-hidden_benchmark_aggregate_report-/);
+      assert.match(response.body.policyDecisionConsumptionId, /^policy-decision-consumption-hidden_benchmark_aggregate_report-/);
+      assert.equal(response.body.policyActionKind, "hidden_benchmark_aggregate_report");
+    }
   }
 
   const ratingWorkflowProfileById = await invokeApi(context, {
@@ -8241,6 +8412,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(assignmentScreenState.status, 200);
   assert.equal(assignmentScreenState.body.sanitized, true);
+  assert.equal(assignmentScreenState.body.policyActionKind, "protected_render");
+  assert.match(assignmentScreenState.body.policyDecisionId, /^policy-decision-protected_render-/);
+  assert.match(assignmentScreenState.body.policyDecisionConsumptionId, /^policy-decision-consumption-protected_render-/);
   assert.ok(assignmentScreenState.body.enabledActionAllowlist.includes("safe_decline"));
   assert.equal(assignmentScreenState.body.policyVersionProvenance.assistPolicyId, "pre-submit-assist-october-2026-demo");
   assert.equal(assignmentScreenState.body.policyVersionProvenance.uiExperimentPolicyId, "ui-experiment-policy-october-2026-demo");
@@ -8263,6 +8437,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(discussionScreenState.status, 200);
   assert.equal(discussionScreenState.body.surface, "discussion");
+  assert.equal(discussionScreenState.body.policyActionKind, "protected_render");
+  assert.match(discussionScreenState.body.policyDecisionId, /^policy-decision-protected_render-/);
+  assert.match(discussionScreenState.body.policyDecisionConsumptionId, /^policy-decision-consumption-protected_render-/);
   assert.equal(discussionScreenState.body.policyVersionProvenance.assistPolicyId, "pre-submit-assist-october-2026-demo");
   assert.equal(discussionScreenState.body.policyVersionProvenance.uiExperimentPolicyId, "ui-experiment-policy-october-2026-demo");
   assert.equal(discussionScreenState.body.policyVersionProvenance.rubricLintConfigId, "rubric-lint-config-october-2026-demo");
@@ -8497,6 +8674,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseConfigManifestById.status, 200);
   assert.equal(releaseConfigManifestById.body.releaseId, "october-2026-demo");
 
+  const frozenReleaseConfigManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/releases/october-2026-demo/freeze-config-manifest",
+    headers: adminHeaders,
+    body: JSON.stringify({ releaseConfigManifest: releaseConfig.releaseConfigManifest }),
+  });
+  assert.equal(frozenReleaseConfigManifest.status, 201);
+  assert.match(frozenReleaseConfigManifest.body.policyDecisionId, /^policy-decision-manifest_activation-/);
+  assert.match(frozenReleaseConfigManifest.body.policyDecisionConsumptionId, /^policy-decision-consumption-manifest_activation-/);
+  assert.equal(frozenReleaseConfigManifest.body.policyActionKind, "manifest_activation");
+
   const incompleteReleaseConfigManifest = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/release-config-manifests",
@@ -8557,6 +8745,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(manifestForRelease.status, 200);
   assert.equal(manifestForRelease.body.id, "release-config-manifest-workflow-new");
+  assert.equal(manifestForRelease.body.policyDecisionId, frozenReleaseConfigManifest.body.policyDecisionId);
 
   const manifestForEvaluation = await invokeApi(context, {
     method: "GET",
@@ -9536,8 +9725,70 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
   assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyActionKinds.length, policyActionKinds.length);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 1);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 11);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 12);
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "protected_render" && String(record.id).startsWith("policy-decision-protected_render-"),
+    ).length,
+    2,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "discussion_open" && String(record.id).startsWith("policy-decision-discussion_open-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "adjudication_finalize" && String(record.id).startsWith("policy-decision-adjudication_finalize-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "pairwise_snapshot_freeze" && String(record.id).startsWith("policy-decision-pairwise_snapshot_freeze-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "label_snapshot_freeze" && String(record.id).startsWith("policy-decision-label_snapshot_freeze-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "release_freeze" && String(record.id).startsWith("policy-decision-release_freeze-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "training_export" && String(record.id).startsWith("policy-decision-training_export-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "evaluation_run" && String(record.id).startsWith("policy-decision-evaluation_run-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) =>
+        record.actionKind === "hidden_benchmark_aggregate_report" &&
+        String(record.id).startsWith("policy-decision-hidden_benchmark_aggregate_report-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "manifest_activation" && String(record.id).startsWith("policy-decision-manifest_activation-"),
+    ).length,
+    1,
+  );
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.implementationPhaseGateBundles.length, 1);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.queueFreshnessPolicies.length, queueFreshnessLanes.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.queueStaleByDelayScans.length, queueFreshnessLanes.length);
@@ -9634,7 +9885,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 23);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

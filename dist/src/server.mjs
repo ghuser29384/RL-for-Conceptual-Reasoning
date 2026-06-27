@@ -786,6 +786,7 @@ const phaseGateLaneKinds = [
   "governance_action",
 ];
 const phaseGateStates = ["enabled", "staff_only", "shadow", "disabled_stub", "blocked"];
+const phaseGateSideEffectEnabledStates = new Set(["enabled", "staff_only"]);
 const queueFreshnessLanes = [
   "assignment",
   "draft",
@@ -983,13 +984,21 @@ const workflowWriteEndpoints = [
     requiredAnyFields: [["text", "textVersions"]],
   }),
   workflowWriteSpec(/^\/api\/v1\/rights\/review$/, "rights_review_submitted", "rightsReview", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/releases\/freeze$/, "release_freeze_submitted", "releaseFreeze", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/releases\/freeze$/, "release_freeze_submitted", "releaseFreeze", adminRoles, {
+    allowHiddenMetadata: true,
+    policyActionKind: "release_freeze",
+    phaseGateLaneKind: "governance_action",
+  }),
   workflowWriteSpec(/^\/api\/v1\/certification-records$/, "certification_record_submitted", "certificationRecord", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/exposure-logs$/, "exposure_log_submitted", "exposureLog", adminRoles, { rejectRawBenchmarkContent: true }),
   workflowWriteSpec(/^\/api\/v1\/revisions$/, "revision_record_submitted", "revisionRecord", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/item-text-versions$/, "item_text_version_submitted", "itemTextVersion", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/rating-context-snapshots$/, "rating_context_snapshot_submitted", "ratingContextSnapshot", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/pairwise-comparison-snapshots$/, "pairwise_comparison_snapshot_submitted", "pairwiseComparisonSnapshot", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/pairwise-comparison-snapshots$/, "pairwise_comparison_snapshot_submitted", "pairwiseComparisonSnapshot", adminRoles, {
+    allowHiddenMetadata: true,
+    policyActionKind: "pairwise_snapshot_freeze",
+    phaseGateLaneKind: "route",
+  }),
   workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/assignments$/, "assignment_submitted", "assignment", adminRoles, {
@@ -1387,7 +1396,11 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
-  workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    policyActionKind: "discussion_open",
+    phaseGateLaneKind: "route",
+  }),
   workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/post-lock-sessions$/, "post_lock_discussion_session_submitted", "postLockDiscussionSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "discussionThreadId",
@@ -1438,6 +1451,8 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "adjudicationId",
+    policyActionKind: "adjudication_finalize",
+    phaseGateLaneKind: "route",
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-memos$/, "adjudication_memo_submitted", "adjudicationMemo", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -1735,6 +1750,8 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/evaluations\/run$/, "evaluation_run_submitted", "evaluationRun", adminRoles, {
     allowHiddenMetadata: true,
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
     requiredFields: [
       "id",
       "releaseId",
@@ -2752,6 +2769,8 @@ const workflowWriteEndpoints = [
     rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmark_submission_submitted", "benchmarkSubmission", adminRoles, {
+    policyActionKind: "hidden_benchmark_aggregate_report",
+    phaseGateLaneKind: "hidden_benchmark_submission_lane",
     requiredFields: benchmarkSubmissionRequiredFields,
     requiredObjectFields: ["aggregateMetricFamilyResults", "uncertaintyIntervals", "coverageCounts"],
     requiredNonEmptyArrayFields: ["coarseEligibilityWarnings"],
@@ -2922,6 +2941,8 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/freeze-config-manifest$/, "release_config_manifest_frozen", "releaseConfigManifest", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "releaseId",
+    policyActionKind: "manifest_activation",
+    phaseGateLaneKind: "governance_action",
     requiredFields: [
       "id",
       "releaseId",
@@ -3940,6 +3961,8 @@ async function labelSnapshotEndpoint(request, response, context, requestedId = n
       resourceKey: "labelSnapshot",
       roles: adminRoles,
       route: "/api/v1/label-snapshots",
+      policyActionKind: "label_snapshot_freeze",
+      phaseGateLaneKind: "route",
     });
     if (persisted) return;
   }
@@ -3991,6 +4014,8 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
       resourceKey: "trainingExport",
       roles: adminRoles,
       route: "/api/v1/training-exports",
+      policyActionKind: "training_export",
+      phaseGateLaneKind: "export_path",
     });
     if (persisted) return;
   }
@@ -4020,7 +4045,23 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
     return true;
   }
-  const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, validation.resource, request, {
+  let resource = validation.resource;
+  let policyGate = null;
+  if (spec.policyActionKind) {
+    policyGate = await appendWorkflowPolicyDecisionGate(context, request, session.user, resource, spec, {});
+    if (!policyGate.ok) {
+      sendJson(response, policyGate.statusCode ?? 409, { error: policyGate.error, detail: policyGate.detail, ...(policyGate.extra ?? {}) });
+      return true;
+    }
+    resource = {
+      ...resource,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+    };
+  }
+  const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, resource, request, {
     route: spec.route,
     requiredRoles: spec.roles,
   });
@@ -4030,9 +4071,16 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
     eventId: event.id,
     eventType: event.type,
     resourceKey: spec.resourceKey,
-    resourceId: validation.resource.id,
+    resourceId: resource.id,
     payloadHash: event.payloadHash,
     accessAudit: event.accessAudit,
+    ...(policyGate
+      ? {
+          policyDecisionId: policyGate.decision.id,
+          policyDecisionConsumptionId: policyGate.consumption.id,
+          policyActionKind: policyGate.actionKind,
+        }
+      : {}),
   });
   return true;
 }
@@ -4080,7 +4128,23 @@ async function workflowWriteEndpoint(request, response, context, match) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
     return;
   }
-  const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, validation.resource, request, {
+  let resource = validation.resource;
+  let policyGate = null;
+  if (spec.policyActionKind) {
+    policyGate = await appendWorkflowPolicyDecisionGate(context, request, session.user, resource, spec, params);
+    if (!policyGate.ok) {
+      sendJson(response, policyGate.statusCode ?? 409, { error: policyGate.error, detail: policyGate.detail, ...(policyGate.extra ?? {}) });
+      return;
+    }
+    resource = {
+      ...resource,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+    };
+  }
+  const event = createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, resource, request, {
     route: spec.route,
     params,
     requiredRoles: spec.roles,
@@ -4091,9 +4155,16 @@ async function workflowWriteEndpoint(request, response, context, match) {
     eventId: event.id,
     eventType: event.type,
     resourceKey: spec.resourceKey,
-    resourceId: validation.resource.id,
+    resourceId: resource.id,
     payloadHash: event.payloadHash,
     accessAudit: event.accessAudit,
+    ...(policyGate
+      ? {
+          policyDecisionId: policyGate.decision.id,
+          policyDecisionConsumptionId: policyGate.consumption.id,
+          policyActionKind: policyGate.actionKind,
+        }
+      : {}),
   });
 }
 
@@ -4679,7 +4750,7 @@ async function assignmentScreenStateEndpoint(request, response, context, assignm
     assignments.find((item) => item.id === assignmentId) ??
     (await workflowResourceById(context, "assignment", assignmentId)) ??
     { id: assignmentId, positionId: null, critiqueId: null };
-  sendJson(response, 200, buildScreenStatePayload("rating", assignment.id, session.user, {
+  const screenState = buildScreenStatePayload("rating", assignment.id, session.user, {
     assignmentId: assignment.id,
     positionId: assignment.positionId ?? null,
     critiqueId: assignment.critiqueId ?? null,
@@ -4708,7 +4779,21 @@ async function assignmentScreenStateEndpoint(request, response, context, assignm
       "pre_submit_lint",
       "autosave_resume",
     ],
-  }));
+  });
+  const protectedRender = await attachProtectedRenderPolicyDecision(
+    context,
+    request,
+    session.user,
+    screenState,
+    "/api/v1/assignments/{id}/screen-state",
+    workflowStateReadRoles,
+    { id: assignmentId },
+  );
+  if (!protectedRender.ok) {
+    sendJson(response, protectedRender.statusCode ?? 409, { error: protectedRender.error, detail: protectedRender.detail, ...(protectedRender.extra ?? {}) });
+    return;
+  }
+  sendJson(response, 200, protectedRender.screenState);
 }
 
 async function genericWorkflowScreenStateEndpoint(request, response, context, surface, id) {
@@ -4725,7 +4810,7 @@ async function genericWorkflowScreenStateEndpoint(request, response, context, su
     discussion: ["object_level_comment", "revision_proposal", "majority_pressure_warning_ack"],
     adjudication: ["review_score_spread", "review_target_map", "review_verification_conflicts", "finalize_memo"],
   };
-  sendJson(response, 200, buildScreenStatePayload(surface, id, session.user, {
+  const screenState = buildScreenStatePayload(surface, id, session.user, {
     primaryNextAction: surface === "discussion" ? "add_object_level_comment" : "review_adjudication_cockpit",
     visibleFieldAllowlist: [
       `${surface}.id`,
@@ -4737,7 +4822,56 @@ async function genericWorkflowScreenStateEndpoint(request, response, context, su
       "minorityRationaleFields",
     ],
     enabledActionAllowlist: actionSets[surface] ?? [],
-  }));
+  });
+  const protectedRender = await attachProtectedRenderPolicyDecision(
+    context,
+    request,
+    session.user,
+    screenState,
+    `/api/v1/${surface === "discussion" ? "discussions" : "adjudications"}/{id}/screen-state`,
+    workflowStateReadRoles,
+    { id },
+  );
+  if (!protectedRender.ok) {
+    sendJson(response, protectedRender.statusCode ?? 409, { error: protectedRender.error, detail: protectedRender.detail, ...(protectedRender.extra ?? {}) });
+    return;
+  }
+  sendJson(response, 200, protectedRender.screenState);
+}
+
+async function attachProtectedRenderPolicyDecision(context, request, actor, screenState, route, roles, params = {}) {
+  const policyGate = await appendWorkflowPolicyDecisionGate(
+    context,
+    request,
+    actor,
+    {
+      id: screenState.id,
+      surface: screenState.surface,
+      outputSchemaVersion: screenState.outputSchemaVersion,
+      targetArtifactId: screenState.entityId ?? screenState.assignmentId ?? screenState.id,
+    },
+    {
+      eventType: "protected_render",
+      resourceKey: "protectedRender",
+      route,
+      roles,
+      policyActionKind: "protected_render",
+      phaseGateLaneKind: "ui_panel",
+      policyDecisionSingleUse: false,
+    },
+    params,
+  );
+  if (!policyGate.ok) return policyGate;
+  return {
+    ok: true,
+    screenState: {
+      ...screenState,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+    },
+  };
 }
 
 async function postLockDiscussionSessionEndpoint(request, response, context, discussionThreadId, sessionId) {
@@ -6267,6 +6401,201 @@ async function recordRatingEndpoint(request, response, context, eventType, optio
   });
 }
 
+async function appendWorkflowPolicyDecisionGate(context, request, actor, resource, spec, params = {}) {
+  const phaseGate = await resolveImplementationPhaseGate(context, spec.phaseGateLaneKind);
+  if (!phaseGate.ok) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "implementation_phase_lane_unavailable",
+      detail: phaseGate.detail,
+      extra: {
+        laneKind: spec.phaseGateLaneKind,
+        phaseState: phaseGate.phaseState ?? null,
+        activeBundleId: phaseGate.bundle?.id ?? null,
+      },
+    };
+  }
+  const actionKind = spec.policyActionKind;
+  const decidedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const idempotencyKey = `${actionKind}:${spec.eventType}:${resource.id}:${params.id ?? "root"}`;
+  const outputSchemaVersion = `lmca-${actionKind.replace(/_/g, "-")}-workflow-v1`;
+  const phaseGateBundleId = phaseGate.bundle?.id ?? `implementation-phase-gate-bundle-${releaseId}`;
+  const decision = {
+    id: `policy-decision-${actionKind}-${randomUUID()}`,
+    actionKindId: `policy-action-kind-${releaseId}-${actionKind}`,
+    actionKind,
+    decisionStatus: "allow",
+    actorId: actor.id,
+    actorRole: actor.role,
+    manifestId: phaseGate.bundle?.manifestId ?? `release-config-manifest-${releaseId}`,
+    manifestHash: phaseGate.bundle?.manifestHash ?? phaseGate.bundle?.canonicalManifestHash ?? `sha256:manifest-${releaseId}`,
+    phaseGateBundleId,
+    phaseGateBundleHash:
+      phaseGate.bundle?.phaseGateBundleHash ?? phaseGate.bundle?.canonicalBundleHash ?? phaseGate.bundle?.bundleHash ?? `sha256:${sha256(phaseGateBundleId)}`,
+    releaseId,
+    outputSchemaVersion,
+    outputSchemaHash: `sha256:${sha256(outputSchemaVersion)}`,
+    targetArtifactIds: workflowPolicyGateTargetArtifactIds(resource, params),
+    idempotencyKey,
+    singleUse: spec.policyDecisionSingleUse !== false,
+    replayStatus: "unused",
+    manifestBindingStatus: "matched",
+    outputSchemaBindingStatus: "matched",
+    phaseGateBindingStatus: "matched",
+    idempotencyBindingStatus: "matched",
+    expiresAt,
+    decidedAt,
+  };
+  const decisionValidation = validateWorkflowPayload(decision, actor, {
+    resourceKey: "policyDecisionRecord",
+    requiredFields: [
+      "id",
+      "actionKindId",
+      "actionKind",
+      "decisionStatus",
+      "actorId",
+      "manifestId",
+      "manifestHash",
+      "phaseGateBundleId",
+      "phaseGateBundleHash",
+      "releaseId",
+      "outputSchemaVersion",
+      "outputSchemaHash",
+      "expiresAt",
+      "decidedAt",
+      "replayStatus",
+      "manifestBindingStatus",
+      "outputSchemaBindingStatus",
+      "phaseGateBindingStatus",
+      "idempotencyBindingStatus",
+    ],
+    requiredAnyFields: [["idempotencyKey", "singleUse"]],
+    requiredNonEmptyArrayFields: ["targetArtifactIds"],
+    allowedValues: { actionKind: policyActionKinds },
+    requiredStringPrefixes: { manifestHash: "sha256:", phaseGateBundleHash: "sha256:", outputSchemaHash: "sha256:" },
+    requiredExactFields: {
+      decisionStatus: "allow",
+      replayStatus: "unused",
+      manifestBindingStatus: "matched",
+      outputSchemaBindingStatus: "matched",
+      phaseGateBindingStatus: "matched",
+      idempotencyBindingStatus: "matched",
+    },
+    allowHiddenMetadata: true,
+  });
+  if (!decisionValidation.ok) {
+    return { ok: false, statusCode: decisionValidation.statusCode ?? 409, error: "invalid_workflow_policy_decision", detail: decisionValidation.detail };
+  }
+  const consumption = {
+    id: `policy-decision-consumption-${actionKind}-${randomUUID()}`,
+    decisionId: decision.id,
+    actionKind,
+    manifestId: decision.manifestId,
+    manifestHash: decision.manifestHash,
+    phaseGateBundleId: decision.phaseGateBundleId,
+    phaseGateBundleHash: decision.phaseGateBundleHash,
+    outputSchemaVersion: decision.outputSchemaVersion,
+    outputSchemaHash: decision.outputSchemaHash,
+    idempotencyKey,
+    replayRejected: false,
+    scopeMatched: true,
+    consumedAt: decidedAt,
+  };
+  const consumptionValidation = validateWorkflowPayload(consumption, actor, {
+    resourceKey: "policyDecisionConsumption",
+    requiredFields: [
+      "id",
+      "decisionId",
+      "actionKind",
+      "manifestId",
+      "manifestHash",
+      "phaseGateBundleId",
+      "phaseGateBundleHash",
+      "outputSchemaVersion",
+      "outputSchemaHash",
+      "idempotencyKey",
+      "consumedAt",
+    ],
+    requiredStringPrefixes: { manifestHash: "sha256:", phaseGateBundleHash: "sha256:", outputSchemaHash: "sha256:" },
+    requiredExactFields: { replayRejected: false, scopeMatched: true },
+    allowHiddenMetadata: true,
+  });
+  if (!consumptionValidation.ok) {
+    return {
+      ok: false,
+      statusCode: consumptionValidation.statusCode ?? 409,
+      error: "invalid_workflow_policy_decision_consumption",
+      detail: consumptionValidation.detail,
+    };
+  }
+  const eventOptions = {
+    route: `internal:${spec.route}/policy-decision-gate`,
+    params,
+    requiredRoles: spec.roles,
+  };
+  const decisionEvent = createWorkflowAuditEvent("policy_decision_submitted", actor, "policyDecisionRecord", decisionValidation.resource, request, eventOptions);
+  const consumptionEvent = createWorkflowAuditEvent(
+    "policy_decision_consumed",
+    actor,
+    "policyDecisionConsumption",
+    consumptionValidation.resource,
+    request,
+    eventOptions,
+  );
+  await context.auditStore.appendWorkflowEvent(decisionEvent);
+  await context.auditStore.appendWorkflowEvent(consumptionEvent);
+  return {
+    ok: true,
+    actionKind,
+    decision: decisionValidation.resource,
+    consumption: consumptionValidation.resource,
+    eventIds: [decisionEvent.id, consumptionEvent.id],
+  };
+}
+
+async function resolveImplementationPhaseGate(context, laneKind) {
+  if (!laneKind) return { ok: true, bundle: null, lane: null, phaseState: "enabled" };
+  const bundles = await workflowResourcesByField(context, "implementationPhaseGateBundle", "releaseId", releaseId);
+  const bundle = bundles.at(-1) ?? null;
+  if (!bundle) return { ok: true, bundle: null, lane: null, phaseState: "enabled" };
+  const lane = (bundle.laneStates ?? []).find((item) => item?.laneKind === laneKind) ?? null;
+  if (!lane) {
+    return { ok: false, bundle, lane: null, phaseState: bundle.futurePhaseDefault ?? "blocked", detail: `missing implementation phase lane ${laneKind}` };
+  }
+  if (lane.failClosed !== true) {
+    return { ok: false, bundle, lane, phaseState: lane.phaseState ?? null, detail: `${laneKind} lane is not fail-closed` };
+  }
+  if (!phaseGateSideEffectEnabledStates.has(lane.phaseState)) {
+    const disabledSafe =
+      lane.noSideEffectsWhenDisabled === true &&
+      lane.labelsExposedWhenDisabled === false &&
+      lane.supportsReleaseClaimsWhenDisabled === false;
+    return {
+      ok: false,
+      bundle,
+      lane,
+      phaseState: lane.phaseState ?? null,
+      detail: disabledSafe ? `${laneKind} lane is ${lane.phaseState}` : `${laneKind} lane disabled state is not safe`,
+    };
+  }
+  return { ok: true, bundle, lane, phaseState: lane.phaseState };
+}
+
+function workflowPolicyGateTargetArtifactIds(resource, params = {}) {
+  return [
+    resource.id,
+    params.id,
+    resource.targetArtifactId,
+    resource.itemId,
+    resource.positionId && resource.critiqueId ? `${resource.positionId}::${resource.critiqueId}` : null,
+    resource.discussionThreadId,
+    resource.adjudicationId,
+    resource.memoId,
+  ].filter((value, index, values) => typeof value === "string" && value.trim() && values.indexOf(value) === index);
+}
+
 async function appendRatingPolicyDecisionGate(context, request, actor, rating, eventType) {
   const actionKind = eventType === "revision_submitted" ? "revision_submit" : "rating_lock";
   const decidedAt = new Date().toISOString();
@@ -7406,6 +7735,9 @@ export function createWorkflowAuditEvent(type, actor, resourceKey, resource, req
       hiddenMetadataAccepted: actor.role === "admin",
       sourceMetadataAcceptedFromRater: false,
       peerRatingsAcceptedFromRater: false,
+      policyActionKind: resource.policyActionKind ?? null,
+      policyDecisionId: resource.policyDecisionId ?? null,
+      policyDecisionConsumed: Boolean(resource.policyDecisionConsumptionId),
       remoteAddressHash: `sha256:${sha256(request.socket.remoteAddress ?? "unknown")}`,
     },
   };
