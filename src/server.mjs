@@ -3266,6 +3266,11 @@ export async function handleApiRequest(request, response, url, context) {
     await assignmentTrainingExposureSnapshotEndpoint(request, response, context, decodeURIComponent(v1AssignmentTrainingExposureMatch[1]));
     return;
   }
+  const v1AssignmentDraftStoragePolicyMatch = url.pathname.match(/^\/api\/v1\/assignments\/([^/]+)\/draft-storage-policy$/);
+  if (request.method === "GET" && v1AssignmentDraftStoragePolicyMatch) {
+    await assignmentDraftStoragePolicyEndpoint(request, response, context, decodeURIComponent(v1AssignmentDraftStoragePolicyMatch[1]));
+    return;
+  }
   if (request.method === "GET" && url.pathname === "/api/v1/raters/me/training-exposure") {
     await raterTrainingExposureEndpoint(request, response, context, url);
     return;
@@ -3334,6 +3339,11 @@ export async function handleApiRequest(request, response, url, context) {
   const v1SimplifiedCopyPreviewMatch = url.pathname.match(/^\/api\/v1\/screens\/([^/]+)\/simplified-copy-preview$/);
   if (request.method === "GET" && v1SimplifiedCopyPreviewMatch) {
     await simplifiedCopyPreviewEndpoint(request, response, context, decodeURIComponent(v1SimplifiedCopyPreviewMatch[1]));
+    return;
+  }
+  const v1RubricCopyTraceabilityMatch = url.pathname.match(/^\/api\/v1\/rubric-copy-traceability\/([^/]+)$/);
+  if (request.method === "GET" && v1RubricCopyTraceabilityMatch) {
+    await rubricCopyTraceabilityForScreenStateEndpoint(request, response, context, decodeURIComponent(v1RubricCopyTraceabilityMatch[1]));
     return;
   }
 
@@ -4204,6 +4214,38 @@ async function assignmentTrainingExposureSnapshotEndpoint(request, response, con
   sendJson(response, 200, snapshot);
 }
 
+async function assignmentDraftStoragePolicyEndpoint(request, response, context, assignmentId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!workflowStateReadRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
+    return;
+  }
+  if (["rater", "graduate", "phd"].includes(session.user.role) && !session.user.allowedAssignmentIds?.includes("*") && !session.user.allowedAssignmentIds?.includes(assignmentId)) {
+    sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${assignmentId}` });
+    return;
+  }
+  const artifacts = await buildCurrentReleaseArtifacts(context);
+  const submittedPolicy = artifacts.draftStoragePolicies.at(-1) ?? null;
+  const policy = submittedPolicy ?? artifacts.report.ratingExperienceEvidence?.draftStoragePolicyRows?.at(-1) ?? null;
+  if (!policy) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, {
+    assignmentId,
+    draftStoragePolicy: policy,
+    policySource: submittedPolicy ? "submitted_workflow_draft_storage_policy" : "seed_draft_storage_policy",
+    serverSidePersistenceDefault: policy.serverSidePersistenceDefault === true,
+    clientStatePolicy: policy.clientStatePolicy ?? null,
+    localStorageProhibited: policy.localStorageProhibited === true,
+    staleDraftDependencyBlocker: policy.staleDraftDependencyBlocker === true,
+  });
+}
+
 async function raterTrainingExposureEndpoint(request, response, context, url) {
   const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
@@ -4543,6 +4585,56 @@ async function simplifiedCopyPreviewEndpoint(request, response, context, screenI
     return;
   }
   sendJson(response, 200, preview);
+}
+
+async function rubricCopyTraceabilityForScreenStateEndpoint(request, response, context, screenStateId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const screenState = await workflowResourceById(context, "screenStatePayload", screenStateId);
+  const surface = inferScreenStateSurface(screenStateId, screenState);
+  if (!surface) {
+    sendJson(response, 404, { error: "screen_state_surface_not_found" });
+    return;
+  }
+  const artifacts = await buildCurrentReleaseArtifacts(context);
+  const submittedMap = [...artifacts.rubricCopyTraceabilityMaps].reverse().find((map) => normalizeWorkflowStringList(map.coveredScreenIds).includes(surface)) ?? null;
+  const seedMap =
+    [...(artifacts.report.uxSimplification?.rubricCopyTraceabilityMapRows ?? [])]
+      .reverse()
+      .find((map) => normalizeWorkflowStringList(map.coveredScreenIds).includes(surface)) ?? null;
+  const map = submittedMap ?? seedMap;
+  if (!map) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, {
+    screenStateId,
+    surface,
+    screenState: screenState ?? null,
+    rubricCopyTraceabilityMap: map,
+    traceabilitySource: submittedMap ? "submitted_workflow_rubric_copy_traceability_map" : "seed_rubric_copy_traceability_map",
+    semanticDriftTestStatus: map.semanticDriftTestStatus ?? null,
+    releaseCriticalUseStatus: map.releaseCriticalUseStatus ?? null,
+  });
+}
+
+function inferScreenStateSurface(screenStateId, screenState) {
+  const explicitSurface = screenState?.surface ?? screenState?.screenId ?? screenState?.screenKind;
+  if (typeof explicitSurface === "string" && explicitSurface) return explicitSurface;
+  const normalized = String(screenStateId ?? "");
+  if (normalized.startsWith("screen-state-rating-")) return "rating";
+  if (normalized.startsWith("screen-state-discussion-")) return "discussion";
+  if (normalized.startsWith("screen-state-adjudication-")) return "adjudication";
+  if (normalized.startsWith("screen-state-practice-")) return "practice";
+  if (assignments.some((assignment) => `screen-state-${assignment.id}` === normalized || assignment.id === normalized)) return "rating";
+  return null;
 }
 
 function buildScreenStatePayload(surface, entityId, actor, options = {}) {

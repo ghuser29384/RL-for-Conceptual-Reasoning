@@ -1449,6 +1449,37 @@ test("Vercel API wrappers are importable", async () => {
   }
 });
 
+test("workflow API specs have deployable Vercel wrappers", () => {
+  const serverSource = readFileSync("src/server.mjs", "utf8");
+  const missing = workflowApiRoutesFromServerSource(serverSource).filter((route) => !apiRouteFileExists(route));
+
+  assert.deepEqual(missing, []);
+});
+
+test("RLHF90 documented v1 API endpoints have deployable Vercel wrappers", () => {
+  const specSource = readFileSync("RLHF Conceptual Reasoning90.md", "utf8");
+  const documentedRoutes = documentedV1ApiRoutesFromSpec(specSource);
+  const missing = documentedRoutes.filter((route) => !apiRouteFileExists(route));
+
+  assert.ok(documentedRoutes.length >= 180);
+  assert.deepEqual(missing, []);
+});
+
+test("RLHF90 documented v1 API endpoints route through auth instead of falling through", async () => {
+  const specSource = readFileSync("RLHF Conceptual Reasoning90.md", "utf8");
+  const context = createApiContext({ sessionSecret: "unit-test-secret" });
+  const misses = [];
+
+  for (const endpoint of documentedV1ApiEndpointsFromSpec(specSource)) {
+    const method = documentedEndpointMethod(endpoint);
+    const url = concreteDocumentedEndpointUrl(endpoint.route);
+    const response = await invokeApi(context, { method, url });
+    if (response.status === 404) misses.push(`${method} ${endpoint.route}`);
+  }
+
+  assert.deepEqual(misses, []);
+});
+
 test("server policy accepts valid blind ratings and hashes audit payloads", () => {
   const rating = validBlindRating("rating-policy-test");
   const validation = validateRatingPayload(rating, "blind_initial_submitted");
@@ -1767,6 +1798,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/screen-state-payloads/screen-state-smoke"],
     ["POST", "/api/v1/rubric-copy-traceability-maps"],
     ["GET", "/api/v1/rubric-copy-traceability-maps/rubric-copy-traceability-smoke"],
+    ["GET", "/api/v1/rubric-copy-traceability/screen-state-rating-assign-ai-base-rate"],
     ["POST", "/api/v1/state-transitions"],
     ["GET", "/api/v1/state/rating/rating-state-smoke"],
     ["GET", "/api/v1/raters/me/data-profile"],
@@ -1800,6 +1832,10 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/task-output-eligibility-policies/task-output-eligibility-smoke"],
     ["POST", "/api/v1/score-input-policies"],
     ["GET", "/api/v1/score-input-policies/score-input-policy-smoke"],
+    ["POST", "/api/v1/score-explanation-policies"],
+    ["GET", "/api/v1/score-explanation-policies/score-explanation-policy-smoke"],
+    ["POST", "/api/v1/draft-storage-policies"],
+    ["GET", "/api/v1/draft-storage-policies/draft-storage-policy-smoke"],
     ["POST", "/api/v1/rater-instruction-render-versions"],
     ["GET", "/api/v1/rater-instruction-render-versions/rater-instruction-render-smoke"],
     ["POST", "/api/v1/rubric-lint-configs"],
@@ -1856,6 +1892,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/rater-training-exposure-snapshots"],
     ["GET", "/api/v1/rater-training-exposure-snapshots/training-exposure-smoke"],
     ["GET", "/api/v1/assignments/assign-ai-base-rate/training-exposure-snapshot"],
+    ["GET", "/api/v1/assignments/assign-ai-base-rate/draft-storage-policy"],
     ["GET", "/api/v1/raters/me/training-exposure"],
     ["POST", "/api/v1/release-errata"],
     ["GET", "/api/v1/release-errata/release-erratum-smoke"],
@@ -1913,6 +1950,9 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     assert.notEqual(response.status, 404, `${method} ${url}`);
     assert.equal(response.body.error, "missing_bearer_token", `${method} ${url}`);
   }
+
+  const missingVercelWrappers = [...new Set(routes.map(([, url]) => url))].filter((url) => !apiRouteFileExists(url));
+  assert.deepEqual(missingVercelWrappers, []);
 });
 
 test("Workflow console exposes templates for RLHF77 operator action endpoints", () => {
@@ -6515,6 +6555,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(draftStoragePolicyById.body.serverSidePersistenceDefault, true);
   assert.equal(draftStoragePolicyById.body.clientStatePolicy, "ephemeral_in_memory_only");
 
+  const assignmentDraftStoragePolicy = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/assignments/assign-ai-base-rate/draft-storage-policy",
+    headers: raterHeaders,
+  });
+  assert.equal(assignmentDraftStoragePolicy.status, 200);
+  assert.equal(assignmentDraftStoragePolicy.body.assignmentId, "assign-ai-base-rate");
+  assert.equal(assignmentDraftStoragePolicy.body.policySource, "submitted_workflow_draft_storage_policy");
+  assert.equal(assignmentDraftStoragePolicy.body.draftStoragePolicy.id, "draft-storage-policy-workflow-new");
+  assert.equal(assignmentDraftStoragePolicy.body.serverSidePersistenceDefault, true);
+  assert.equal(assignmentDraftStoragePolicy.body.localStorageProhibited, true);
+
   const raterInstructionRenderById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/rater-instruction-render-versions/rater-instruction-render-workflow-new",
@@ -7434,6 +7486,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(rubricCopyTraceabilityMapById.status, 200);
   assert.equal(rubricCopyTraceabilityMapById.body.semanticDriftTestStatus, "passed");
   assert.equal(rubricCopyTraceabilityMapById.body.clauseMap.centrality, "appendix_f.centrality");
+
+  const screenStateRubricTraceability = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rubric-copy-traceability/screen-state-rating-assign-ai-base-rate",
+    headers: adminHeaders,
+  });
+  assert.equal(screenStateRubricTraceability.status, 200);
+  assert.equal(screenStateRubricTraceability.body.surface, "rating");
+  assert.equal(screenStateRubricTraceability.body.traceabilitySource, "submitted_workflow_rubric_copy_traceability_map");
+  assert.equal(screenStateRubricTraceability.body.rubricCopyTraceabilityMap.id, "rubric-copy-traceability-map-workflow-new");
+  assert.equal(screenStateRubricTraceability.body.semanticDriftTestStatus, "passed");
 
   const releaseConfig = completeReleaseConfigWorkflowFixtures();
   const canonicalizationProfile = await invokeApi(context, {
@@ -9034,6 +9097,79 @@ function apiModuleFiles(dir = "api") {
     const path = join(dir, name);
     return statSync(path).isDirectory() ? apiModuleFiles(path) : path.endsWith(".mjs") ? [path] : [];
   });
+}
+
+function workflowApiRoutesFromServerSource(source) {
+  const routePatterns = [...source.matchAll(/workflow(?:Write|Read)Spec\((\/\^.*?\$\/)/gs)].map((match) => match[1]);
+  return [...new Set(routePatterns.map((pattern) => routeFromWorkflowRegexLiteral(pattern)).filter((route) => route.startsWith("/api/v1/")))].sort();
+}
+
+function documentedV1ApiRoutesFromSpec(source) {
+  return documentedV1ApiEndpointsFromSpec(source).map((endpoint) => endpoint.route.replace(/\{([^}]+)\}/g, ":$1"));
+}
+
+function documentedV1ApiEndpointsFromSpec(source) {
+  const endpointMatches = [...source.matchAll(/`((?:GET|POST|PUT|PATCH|DELETE)\s+)?(\/api\/v1\/[^`\s,|]+)`/g)];
+  const endpointsByRoute = new Map();
+  for (const match of endpointMatches) {
+    endpointsByRoute.set(match[2], { declaredMethod: match[1]?.trim() ?? "", route: match[2] });
+  }
+  return [...endpointsByRoute.values()].sort((a, b) => a.route.localeCompare(b.route));
+}
+
+function documentedEndpointMethod(endpoint) {
+  if (endpoint.declaredMethod) return endpoint.declaredMethod;
+  if (documentedEndpointDefaultsToGet(endpoint.route)) return "GET";
+  return "POST";
+}
+
+function documentedEndpointDefaultsToGet(route) {
+  return (
+    route.includes("/next") ||
+    route.includes("/me/") ||
+    route.includes("/status") ||
+    route.includes("/config") ||
+    route.includes("/exposure") ||
+    route.includes("/report") ||
+    route.includes("/dashboard") ||
+    route.includes("/screen-state") ||
+    route.includes("/draft-storage-policy") ||
+    route.includes("/training-exposure") ||
+    route.includes("/simplified-copy-preview") ||
+    route.includes("/aggregate-report") ||
+    route.includes("/release-config-manifest") ||
+    /\/\{[^}]+\}$/.test(route)
+  );
+}
+
+function concreteDocumentedEndpointUrl(route) {
+  const placeholderValues = {
+    entity_type: "rating",
+    id: "smoke-id",
+    lane: "assignment",
+    module_id: "module-smoke",
+    rater_id: "demo-rater",
+    screen_state_id: "screen-state-rating-assign-ai-base-rate",
+    session_id: "session-smoke",
+  };
+  return route.replace(/\{([^}]+)\}/g, (_match, key) => placeholderValues[key] ?? `${key}-smoke`);
+}
+
+function routeFromWorkflowRegexLiteral(pattern) {
+  return pattern
+    .slice(3, -2)
+    .replaceAll("\\/", "/")
+    .replace(/\(\?<([^>]+)>\[\^\/\]\+\)/g, ":$1");
+}
+
+function apiRouteFileExists(route) {
+  return apiModuleFiles().some((file) => apiFileRouteMatches(route, `/${file.replace(/\.mjs$/, "").replace(/\[(.*?)\]/g, ":$1")}`));
+}
+
+function apiFileRouteMatches(route, fileRoute) {
+  const routeParts = route.split("/").filter(Boolean);
+  const fileParts = fileRoute.split("/").filter(Boolean);
+  return routeParts.length === fileParts.length && fileParts.every((part, index) => part.startsWith(":") || part === routeParts[index]);
 }
 
 function requestFixture({ method = "GET", url = "/", headers = {}, body = "" } = {}) {
