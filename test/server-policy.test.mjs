@@ -2250,6 +2250,9 @@ test("rating UI starts score controls unset and requires explicit values before 
   assert.ok(appSource.includes('scoreExplanationPromptVisibility: "label_source_protected_status_blind"'));
   assert.ok(appSource.includes("General note (optional)"));
   assert.ok(appSource.includes("Short explanation required"));
+  assert.ok(appSource.includes("Score Explanation Audit"));
+  assert.ok(appSource.includes("scoreExplanationAudit.counts.triggerRequiredRows"));
+  assert.ok(appSource.includes("scoreExplanationAudit.policy.blindPromptRule"));
   assert.ok(appSource.includes('scoreInputPolicyId: "score-input-policy-ui-unset-required"'));
   assert.ok(appSource.includes('scoreEntryExplicitnessStatus: clarity < 0.5 ? "low_clarity_branch_explicit" : "all_required_scores_explicit"'));
   assert.ok(appSource.includes('hasValue ? value.toFixed(2) : "unset"'));
@@ -2641,7 +2644,19 @@ test("v1 rating endpoints persist blind ratings and enforce revision route ident
   });
   assert.equal(blindResponse.status, 201);
   assert.equal(blindResponse.body.ratingId, "rating-v1-blind");
+  assert.match(blindResponse.body.policyDecisionId, /^policy-decision-rating_lock-/);
+  assert.match(blindResponse.body.policyDecisionConsumptionId, /^policy-decision-consumption-rating_lock-/);
   assert.equal((await auditStore.readRatingEvents()).length, 1);
+  let workflowEvents = await auditStore.readWorkflowEvents();
+  assert.equal(workflowEvents.length, 2);
+  assert.equal(workflowEvents[0].type, "policy_decision_submitted");
+  assert.equal(workflowEvents[0].payload.policyDecisionRecord.actionKind, "rating_lock");
+  assert.equal(workflowEvents[1].type, "policy_decision_consumed");
+  assert.equal(workflowEvents[1].payload.policyDecisionConsumption.decisionId, blindResponse.body.policyDecisionId);
+  let ratingEvents = await auditStore.readRatingEvents();
+  assert.equal(ratingEvents[0].accessAudit.policyActionKind, "rating_lock");
+  assert.equal(ratingEvents[0].accessAudit.policyDecisionId, blindResponse.body.policyDecisionId);
+  assert.equal(ratingEvents[0].accessAudit.policyDecisionConsumed, true);
 
   const revision = {
     ...validBlindRating("rating-v1-revision"),
@@ -2667,7 +2682,29 @@ test("v1 rating endpoints persist blind ratings and enforce revision route ident
   });
   assert.equal(revisionResponse.status, 201);
   assert.equal(revisionResponse.body.ratingId, "rating-v1-revision");
+  assert.match(revisionResponse.body.policyDecisionId, /^policy-decision-revision_submit-/);
+  assert.match(revisionResponse.body.policyDecisionConsumptionId, /^policy-decision-consumption-revision_submit-/);
   assert.equal((await auditStore.readRatingEvents()).length, 2);
+  workflowEvents = await auditStore.readWorkflowEvents();
+  assert.equal(workflowEvents.length, 4);
+  assert.equal(workflowEvents[2].payload.policyDecisionRecord.actionKind, "revision_submit");
+  assert.equal(workflowEvents[3].payload.policyDecisionConsumption.decisionId, revisionResponse.body.policyDecisionId);
+  ratingEvents = await auditStore.readRatingEvents();
+  assert.equal(ratingEvents[1].accessAudit.policyActionKind, "revision_submit");
+  assert.equal(ratingEvents[1].accessAudit.policyDecisionId, revisionResponse.body.policyDecisionId);
+  assert.equal(ratingEvents[1].accessAudit.policyDecisionConsumed, true);
+
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const releaseReport = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseReport.status, 200);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedPolicyDecisionCount, 2);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedPolicyDecisionConsumptionCount, 2);
+  assert.equal(releaseReport.body.operationalControlEvidence.policyDecisionRows.filter((row) => row.rowSource === "submitted_workflow_policy_decision").length, 2);
+  assert.equal(releaseReport.body.operationalControlEvidence.policyDecisionConsumptionRows.length, 2);
 });
 
 test("v1 artifact endpoints expose existing report artifacts with role checks", async () => {
@@ -9321,6 +9358,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 6);
   assert.equal(releaseReport.body.policyBundleEvidence.counts.submittedScoreExplanationPolicyCount, 1);
   assert.deepEqual(releaseReport.body.policyBundleEvidence.reviewSections, []);
+  assert.equal(releaseReport.body.scoreExplanationAudit.releaseUseStatus, "score_explanation_audit_passed");
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.ratingRows, 7);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.triggerRequiredRows, 5);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.triggerExplanationCompleteRows, 5);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.triggerMismatchRows, 0);
+  assert.equal(releaseReport.body.scoreExplanationAudit.byExpectedTrigger.high_stakes_workflow, 3);
+  assert.equal(releaseReport.body.scoreExplanationAudit.byExpectedTrigger.unclear_target, 2);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.volunteerIncentivePolicies.length, 1);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.raterQualificationRecords.length, qualificationScopes.length);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.languageArtifactAssessments.length, 1);

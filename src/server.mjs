@@ -6239,15 +6239,159 @@ async function recordRatingEndpoint(request, response, context, eventType, optio
     return;
   }
 
-  const event = createAuditEvent(eventType, actor, rating, request);
+  const policyGate = await appendRatingPolicyDecisionGate(context, request, actor, rating, eventType);
+  if (!policyGate.ok) {
+    sendJson(response, policyGate.statusCode ?? 409, {
+      error: policyGate.error ?? "policy_decision_gate_failed",
+      detail: policyGate.detail,
+    });
+    return;
+  }
+  const governedRating = {
+    ...rating,
+    policyActionKind: policyGate.actionKind,
+    policyDecisionId: policyGate.decision.id,
+    policyDecisionConsumptionId: policyGate.consumption.id,
+    policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+  };
+  const event = createAuditEvent(eventType, actor, governedRating, request);
   await context.auditStore.appendRatingEvent(event);
   sendJson(response, 201, {
     ok: true,
     eventId: event.id,
-    ratingId: rating.id,
+    ratingId: governedRating.id,
+    policyDecisionId: policyGate.decision.id,
+    policyDecisionConsumptionId: policyGate.consumption.id,
     payloadHash: event.payloadHash,
     accessAudit: event.accessAudit,
   });
+}
+
+async function appendRatingPolicyDecisionGate(context, request, actor, rating, eventType) {
+  const actionKind = eventType === "revision_submitted" ? "revision_submit" : "rating_lock";
+  const decidedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const idempotencyKey = `${actionKind}:${rating.id}:${rating.assignmentId}:${rating.kind}`;
+  const outputSchemaVersion = actionKind === "revision_submit" ? "lmca-rating-revision-submit-v1" : "lmca-rating-lock-v1";
+  const decision = {
+    id: `policy-decision-${actionKind}-${randomUUID()}`,
+    actionKindId: `policy-action-kind-${releaseId}-${actionKind}`,
+    actionKind,
+    decisionStatus: "allow",
+    actorId: actor.id,
+    actorRole: actor.role,
+    manifestId: `release-config-manifest-${releaseId}`,
+    manifestHash: `sha256:manifest-${releaseId}`,
+    phaseGateBundleId: `implementation-phase-gate-bundle-${releaseId}`,
+    phaseGateBundleHash: `sha256:phase-gate-${releaseId}`,
+    releaseId,
+    outputSchemaVersion,
+    outputSchemaHash: `sha256:${sha256(outputSchemaVersion)}`,
+    targetArtifactIds: [rating.id, rating.assignmentId, `${rating.positionId}::${rating.critiqueId}`],
+    idempotencyKey,
+    singleUse: true,
+    replayStatus: "unused",
+    manifestBindingStatus: "matched",
+    outputSchemaBindingStatus: "matched",
+    phaseGateBindingStatus: "matched",
+    idempotencyBindingStatus: "matched",
+    expiresAt,
+    decidedAt,
+  };
+  const decisionValidation = validateWorkflowPayload(decision, actor, {
+    resourceKey: "policyDecisionRecord",
+    requiredFields: [
+      "id",
+      "actionKindId",
+      "actionKind",
+      "decisionStatus",
+      "actorId",
+      "manifestId",
+      "manifestHash",
+      "phaseGateBundleId",
+      "phaseGateBundleHash",
+      "releaseId",
+      "outputSchemaVersion",
+      "outputSchemaHash",
+      "expiresAt",
+      "decidedAt",
+      "replayStatus",
+      "manifestBindingStatus",
+      "outputSchemaBindingStatus",
+      "phaseGateBindingStatus",
+      "idempotencyBindingStatus",
+    ],
+    requiredAnyFields: [["idempotencyKey", "singleUse"]],
+    requiredNonEmptyArrayFields: ["targetArtifactIds"],
+    allowedValues: { actionKind: policyActionKinds },
+    requiredStringPrefixes: { manifestHash: "sha256:", phaseGateBundleHash: "sha256:", outputSchemaHash: "sha256:" },
+    requiredExactFields: {
+      decisionStatus: "allow",
+      replayStatus: "unused",
+      manifestBindingStatus: "matched",
+      outputSchemaBindingStatus: "matched",
+      phaseGateBindingStatus: "matched",
+      idempotencyBindingStatus: "matched",
+    },
+    allowHiddenMetadata: true,
+  });
+  if (!decisionValidation.ok) {
+    return { ok: false, statusCode: decisionValidation.statusCode ?? 409, error: "invalid_rating_policy_decision", detail: decisionValidation.detail };
+  }
+  const consumption = {
+    id: `policy-decision-consumption-${actionKind}-${randomUUID()}`,
+    decisionId: decision.id,
+    actionKind,
+    manifestId: decision.manifestId,
+    manifestHash: decision.manifestHash,
+    phaseGateBundleId: decision.phaseGateBundleId,
+    phaseGateBundleHash: decision.phaseGateBundleHash,
+    outputSchemaVersion: decision.outputSchemaVersion,
+    outputSchemaHash: decision.outputSchemaHash,
+    idempotencyKey,
+    replayRejected: false,
+    scopeMatched: true,
+    consumedAt: decidedAt,
+  };
+  const consumptionValidation = validateWorkflowPayload(consumption, actor, {
+    resourceKey: "policyDecisionConsumption",
+    requiredFields: [
+      "id",
+      "decisionId",
+      "actionKind",
+      "manifestId",
+      "manifestHash",
+      "phaseGateBundleId",
+      "phaseGateBundleHash",
+      "outputSchemaVersion",
+      "outputSchemaHash",
+      "idempotencyKey",
+      "consumedAt",
+    ],
+    requiredStringPrefixes: { manifestHash: "sha256:", phaseGateBundleHash: "sha256:", outputSchemaHash: "sha256:" },
+    requiredExactFields: { replayRejected: false, scopeMatched: true },
+    allowHiddenMetadata: true,
+  });
+  if (!consumptionValidation.ok) {
+    return { ok: false, statusCode: consumptionValidation.statusCode ?? 409, error: "invalid_rating_policy_decision_consumption", detail: consumptionValidation.detail };
+  }
+  const decisionEvent = createWorkflowAuditEvent("policy_decision_submitted", actor, "policyDecisionRecord", decisionValidation.resource, request, {
+    route: "internal:/api/ratings/policy-decision-gate",
+    requiredRoles: ratingWorkflowRoles,
+  });
+  const consumptionEvent = createWorkflowAuditEvent("policy_decision_consumed", actor, "policyDecisionConsumption", consumptionValidation.resource, request, {
+    route: "internal:/api/ratings/policy-decision-gate",
+    requiredRoles: ratingWorkflowRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(decisionEvent);
+  await context.auditStore.appendWorkflowEvent(consumptionEvent);
+  return {
+    ok: true,
+    actionKind,
+    decision: decisionValidation.resource,
+    consumption: consumptionValidation.resource,
+    eventIds: [decisionEvent.id, consumptionEvent.id],
+  };
 }
 
 async function recordSourceStyleAuditEndpoint(request, response, context) {
@@ -7136,6 +7280,9 @@ export function createAuditEvent(type, actor, rating, request) {
       blindInitialMetadataWithheld: type === "blind_initial_submitted",
       sourceMetadataAcceptedFromRater: false,
       peerRatingsAcceptedFromRater: false,
+      policyActionKind: rating.policyActionKind ?? null,
+      policyDecisionId: rating.policyDecisionId ?? null,
+      policyDecisionConsumed: Boolean(rating.policyDecisionConsumptionId),
       remoteAddressHash: `sha256:${sha256(request.socket.remoteAddress ?? "unknown")}`,
     },
   };

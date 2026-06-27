@@ -60,6 +60,7 @@ import {
   buildSamePositionContextReport,
   buildUncertaintyAwareLeaderboardReport,
   buildRatingEffortQualityReport,
+  buildScoreExplanationAuditReport,
   buildReleaseConfigManifestEvidenceReport,
   buildTrainingExport,
   buildUXSimplificationEvidenceReport,
@@ -1845,6 +1846,46 @@ test("score explanation triggers include surprising score flags", () => {
       flag,
     );
   }
+});
+
+test("score explanation audit recomputes trigger requiredness from rating context", () => {
+  const report = buildScoreExplanationAuditReport("october-2026-demo", seedRatings);
+
+  assert.equal(report.releaseUseStatus, "score_explanation_audit_passed");
+  assert.equal(report.counts.ratingRows, seedRatings.length);
+  assert.equal(report.counts.missingConfidenceJudgmentRows, 0);
+  assert.equal(report.counts.triggerRequiredRows, 5);
+  assert.equal(report.counts.triggerExplanationCompleteRows, 5);
+  assert.equal(report.counts.triggerMismatchRows, 0);
+  assert.equal(report.byExpectedTrigger.high_stakes_workflow, 3);
+  assert.equal(report.byExpectedTrigger.unclear_target, 2);
+
+  const incompleteRatings = seedRatings.map((rating) =>
+    rating.id === "rating-voting-bullet-a"
+      ? {
+          ...rating,
+          scoreExplanation: "",
+          scoreExplanationRequired: false,
+          scoreExplanationTriggers: [],
+        }
+      : rating,
+  );
+  const incompleteReport = buildScoreExplanationAuditReport("october-2026-demo", incompleteRatings);
+
+  assert.equal(incompleteReport.releaseUseStatus, "score_explanation_audit_review_required");
+  assert.equal(incompleteReport.counts.triggerMismatchRows, 1);
+  assert.ok(
+    incompleteReport.reviewSections.some(
+      (section) =>
+        section.artifactId === "rating-voting-bullet-a" &&
+        section.reason === "scoreExplanationTriggers:missing:high_stakes_workflow",
+    ),
+  );
+  assert.ok(
+    incompleteReport.reviewSections.some(
+      (section) => section.artifactId === "rating-voting-bullet-a" && section.reason === "scoreExplanationRequired",
+    ),
+  );
 });
 
 test("release config manifest evidence gates governed bundle families and manifest verification", () => {

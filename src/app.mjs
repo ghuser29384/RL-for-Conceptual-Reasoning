@@ -3563,6 +3563,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
   const raterCompositionConflicts = report.raterCompositionConflicts;
   const ratingRevisionAudit = report.ratingRevisionAudit;
   const ratingEffort = report.ratingEffortQuality;
+  const scoreExplanationAudit = report.scoreExplanationAudit;
   const rubricIssueFlags = report.rubricIssueFlags;
   const effortBlocks = ratingEffort.protectedUseBlockSummary;
   const sourceStyleAudit = report.sourceStyleAudit;
@@ -3619,6 +3620,38 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
           <div><span>Medium expected band</span><strong>${ratingEffort.byExpectedEffortBand.medium_pair_10_to_25_minutes ?? 0} rows</strong></div>
           <div><span>Idle policy</span><strong>${ratingEffort.policy.idleGapPolicy}</strong></div>
           <div><span>Protected-use policy</span><strong>QA-routed rows blocked until reviewed</strong></div>
+        </div>
+      </section>
+      <section class="panel">
+        ${panelTitle("message", "Score Explanation Audit", "RLHF90 requires confidence on every rating and short explanations only when server-derived triggers fire.")}
+        <div class="metricCards benchmarkMetricCards">
+          ${metricCard("Confidence", `${scoreExplanationAudit.counts.confidenceJudgmentRows}/${scoreExplanationAudit.counts.ratingRows}`, "low / medium / high")}
+          ${metricCard("Triggered rows", String(scoreExplanationAudit.counts.triggerRequiredRows), `${scoreExplanationAudit.counts.triggerExplanationCompleteRows} complete`)}
+          ${metricCard("Trigger mismatches", String(scoreExplanationAudit.counts.triggerMismatchRows), `${scoreExplanationAudit.counts.reviewSectionCount} review items`)}
+          ${metricCard("Release use", humanize(scoreExplanationAudit.releaseUseStatus), `${scoreExplanationAudit.counts.ordinaryRowsWithDisallowedScoreExplanation} ordinary explanation violations`)}
+        </div>
+        <div class="metricTable">
+          <div><span>Ordinary required</span><strong>${scoreExplanationAudit.policy.ordinaryRequiredFields.map(humanize).join(", ")}</strong></div>
+          <div><span>Optional ordinary fields</span><strong>${scoreExplanationAudit.policy.optionalFields.map(humanize).join(", ")}</strong></div>
+          <div><span>Blind prompt rule</span><strong>${scoreExplanationAudit.policy.blindPromptRule}</strong></div>
+        </div>
+        <div class="failureList">
+          ${scoreExplanationAudit.rows
+            .filter((row) => row.explanationRequired || row.reviewReasons.length)
+            .map(
+              (row) => `
+                <article class="claimRow">
+                  <header>${statusChip(row.explanationStatus)}<strong>${escapeHtml(row.ratingId)}</strong></header>
+                  ${metricList([
+                    ["Triggers", row.expectedTriggers.length ? row.expectedTriggers.map(humanize).join(", ") : "none"],
+                    ["Submitted", row.submittedTriggers.length ? row.submittedTriggers.map(humanize).join(", ") : "none"],
+                    ["Confidence", row.scoreConfidenceJudgment ?? "missing"],
+                    ["Review", row.reviewReasons.length ? row.reviewReasons.join(", ") : "none"],
+                  ])}
+                </article>
+              `,
+            )
+            .join("")}
         </div>
       </section>
       <section class="panel">

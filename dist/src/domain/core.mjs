@@ -399,6 +399,15 @@ export const ratingContextSnapshots = [
 
 const baseRating = {
   rubricVersion: "lmca-app-f-2026-10",
+  scoreInputPolicyId: "score-input-policy-october-2026-demo",
+  workflowProfileId: "rating-workflow-profile-october-2026-demo",
+  scoreExplanationPolicyId: "score-explanation-policy-october-2026-demo",
+  scoreConfidenceJudgment: "medium",
+  generalRatingNote: "",
+  scoreExplanation: "",
+  scoreExplanationRequired: false,
+  scoreExplanationTriggers: [],
+  scoreExplanationPromptVisibility: "label_source_protected_status_blind",
   submittedAt: now,
   lockedAt: now,
   activeSeconds: 760,
@@ -458,6 +467,9 @@ export const seedRatings = [
     provisionalDimensions: [],
     rationale: "Good but not decisive because the original may only need asymmetric downside, not selective forecast trust.",
     flags: { strengthCentralityAllocationAmbiguity: true },
+    scoreExplanationRequired: true,
+    scoreExplanationTriggers: ["unclear_target"],
+    scoreExplanation: "The strength and centrality allocation is ambiguous after rereading the critique.",
   }),
   rating({
     id: "rating-ai-generic-a",
@@ -506,6 +518,9 @@ export const seedRatings = [
     provisionalDimensions: [],
     rationale: "Directly undercuts the near-immunity claim but leaves comparison with plurality intact.",
     flags: { needsVerification: true, correctnessWeightingIssue: true },
+    scoreExplanationRequired: true,
+    scoreExplanationTriggers: ["high_stakes_workflow"],
+    scoreExplanation: "This validation-subset rating affects release evidence, so I am recording a blind-safe explanation.",
   }),
   rating({
     id: "rating-voting-bullet-b",
@@ -530,6 +545,9 @@ export const seedRatings = [
     provisionalDimensions: [],
     rationale: "The strategic manipulation point is standard and materially central.",
     flags: {},
+    scoreExplanationRequired: true,
+    scoreExplanationTriggers: ["high_stakes_workflow"],
+    scoreExplanation: "This validation-subset expert check is release-sensitive and needs a blind-safe score explanation.",
   }),
   rating({
     id: "rating-voting-style-a",
@@ -559,6 +577,9 @@ export const seedRatings = [
       contentFreePseudoSubstance: true,
       clarityAfterEffortIssue: true,
     },
+    scoreExplanationRequired: true,
+    scoreExplanationTriggers: ["unclear_target"],
+    scoreExplanation: "The target objection remains unclear after effort, so the low scores need a blind-safe explanation.",
   }),
   rating({
     id: "rating-mind-zombie-a",
@@ -583,6 +604,9 @@ export const seedRatings = [
     provisionalDimensions: [],
     rationale: "It identifies a central modal challenge but mostly demands an argument rather than proving the challenge succeeds.",
     flags: { backgroundKnowledgeDependence: true, midRangeStrengthUncertainty: true },
+    scoreExplanationRequired: true,
+    scoreExplanationTriggers: ["high_stakes_workflow"],
+    scoreExplanation: "This benchmark-candidate review is high-stakes, so I am recording the required blind-safe explanation.",
   }),
 ];
 
@@ -2511,6 +2535,115 @@ export function validateTriggeredScoreExplanation(text) {
     return { ok: false, detail: "scoreExplanation must be one or two sentences when ScoreExplanationPolicy triggers" };
   }
   return { ok: true };
+}
+
+export function buildScoreExplanationAuditReport(releaseId, ratings = seedRatings, options = {}) {
+  const assignmentRows = [...assignments, ...(options.assignments ?? []), ...(options.workflowAssignments ?? [])].filter((assignment) => assignment?.id);
+  const assignmentById = new Map(assignmentRows.map((assignment) => [assignment.id, assignment]));
+  const rows = ratings.map((rating) => normalizeScoreExplanationAuditRow(rating, assignmentById.get(rating.assignmentId) ?? null));
+  const reviewSections = rows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({
+      artifactType: "rating_score_explanation",
+      artifactId: row.ratingId,
+      reason,
+    })),
+  );
+  const byExpectedTrigger = Object.fromEntries(
+    SCORE_EXPLANATION_TRIGGER_RULES.map((trigger) => [trigger, rows.filter((row) => row.expectedTriggers.includes(trigger)).length]),
+  );
+  const bySubmittedTrigger = Object.fromEntries(
+    SCORE_EXPLANATION_TRIGGER_RULES.map((trigger) => [trigger, rows.filter((row) => row.submittedTriggers.includes(trigger)).length]),
+  );
+  return {
+    id: `score-explanation-audit-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      ordinaryRequiredFields: SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
+      optionalFields: SCORE_EXPLANATION_OPTIONAL_FIELDS,
+      triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
+      explanationRequirednessRule:
+        "Ordinary ratings require seven scores plus low/medium/high confidence; scoreExplanation is required only when the server-derived trigger set is non-empty.",
+      blindPromptRule: "Triggered explanations must be short, blind-safe, and hidden from source, peer, model, gold, and protected-status context.",
+    },
+    rows,
+    byExpectedTrigger,
+    bySubmittedTrigger,
+    counts: {
+      ratingRows: rows.length,
+      confidenceJudgmentRows: rows.filter((row) => row.confidenceJudgmentPresent).length,
+      missingConfidenceJudgmentRows: rows.filter((row) => !row.confidenceJudgmentPresent).length,
+      triggerRequiredRows: rows.filter((row) => row.explanationRequired).length,
+      triggerExplanationCompleteRows: rows.filter((row) => row.explanationRequired && row.explanationStatus === "triggered_explanation_complete").length,
+      missingTriggeredExplanationRows: rows.filter((row) => row.reviewReasons.some((reason) => reason.startsWith("scoreExplanation"))).length,
+      ordinaryRows: rows.filter((row) => !row.explanationRequired).length,
+      ordinaryRowsWithGeneralNotes: rows.filter((row) => !row.explanationRequired && row.generalRatingNotePresent).length,
+      ordinaryRowsWithDisallowedScoreExplanation: rows.filter((row) => row.reviewReasons.includes("scoreExplanation:ordinary_not_allowed")).length,
+      triggerMismatchRows: rows.filter((row) => row.missingExpectedTriggers.length || row.unexpectedSubmittedTriggers.length).length,
+      promptVisibilityViolationRows: rows.filter((row) => row.reviewReasons.includes("scoreExplanationPromptVisibility")).length,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length ? "score_explanation_audit_review_required" : "score_explanation_audit_passed",
+  };
+}
+
+function normalizeScoreExplanationAuditRow(rating, assignment) {
+  const submittedTriggers = normalizeStringArray(rating.scoreExplanationTriggers);
+  const expectedTriggers = scoreExplanationTriggersForRating({
+    scores: rating.scores ?? {},
+    flags: rating.flags ?? {},
+    assignment: assignment ?? {},
+    kind: rating.kind,
+    workflowProfileId: rating.workflowProfileId,
+    revisionReasonCode: rating.revisionReasonCode,
+  });
+  const missingExpectedTriggers = expectedTriggers.filter((trigger) => !submittedTriggers.includes(trigger));
+  const unexpectedSubmittedTriggers = submittedTriggers.filter((trigger) => !expectedTriggers.includes(trigger));
+  const explanationRequired = expectedTriggers.length > 0;
+  const explanationText = typeof rating.scoreExplanation === "string" ? rating.scoreExplanation.trim() : "";
+  const triggeredExplanationValidation = explanationRequired ? validateTriggeredScoreExplanation(explanationText) : { ok: true };
+  const confidenceJudgmentPresent = SCORE_CONFIDENCE_LEVELS.includes(rating.scoreConfidenceJudgment);
+  const reviewReasons = [
+    confidenceJudgmentPresent ? null : "scoreConfidenceJudgment",
+    missingExpectedTriggers.length ? `scoreExplanationTriggers:missing:${missingExpectedTriggers.join(",")}` : null,
+    unexpectedSubmittedTriggers.length ? `scoreExplanationTriggers:unexpected:${unexpectedSubmittedTriggers.join(",")}` : null,
+    explanationRequired && rating.scoreExplanationRequired !== true ? "scoreExplanationRequired" : null,
+    explanationRequired && rating.scoreExplanationPromptVisibility !== "label_source_protected_status_blind" ? "scoreExplanationPromptVisibility" : null,
+    explanationRequired && !triggeredExplanationValidation.ok ? `scoreExplanation:${triggeredExplanationValidation.detail}` : null,
+    !explanationRequired && rating.scoreExplanationRequired === true ? "scoreExplanationRequired:ordinary_not_allowed" : null,
+    !explanationRequired && explanationText ? "scoreExplanation:ordinary_not_allowed" : null,
+  ].filter(Boolean);
+  const explanationStatus = explanationRequired
+    ? triggeredExplanationValidation.ok && rating.scoreExplanationRequired === true
+      ? "triggered_explanation_complete"
+      : "triggered_explanation_review_required"
+    : explanationText || rating.scoreExplanationRequired === true
+      ? "ordinary_explanation_not_allowed"
+      : "ordinary_note_optional";
+  return {
+    ratingId: rating.id,
+    assignmentId: rating.assignmentId ?? null,
+    itemId: makeItemId(rating.positionId, rating.critiqueId),
+    kind: rating.kind ?? null,
+    raterId: rating.raterId ?? null,
+    queueType: assignment?.queueType ?? null,
+    workflowProfileId: rating.workflowProfileId ?? null,
+    scoreExplanationPolicyId: rating.scoreExplanationPolicyId ?? null,
+    scoreConfidenceJudgment: rating.scoreConfidenceJudgment ?? null,
+    confidenceJudgmentPresent,
+    expectedTriggers,
+    submittedTriggers,
+    missingExpectedTriggers,
+    unexpectedSubmittedTriggers,
+    explanationRequired,
+    scoreExplanationRequired: rating.scoreExplanationRequired === true,
+    scoreExplanationPresent: Boolean(explanationText),
+    generalRatingNotePresent: typeof rating.generalRatingNote === "string" && Boolean(rating.generalRatingNote.trim()),
+    promptVisibility: rating.scoreExplanationPromptVisibility ?? null,
+    explanationStatus,
+    reviewReasons,
+  };
 }
 
 export const RATER_ISSUE_FLAG_DEFINITIONS = [
@@ -15123,7 +15256,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const seedDecisionRows = defaultPolicyDecisionRecords(releaseId, seedActionRows).map((record) =>
     normalizePolicyDecisionRecord(record, seedActionRows, "seed_policy_decision"),
   );
-  const decisionRowsForGate = submittedDecisionRows.length ? submittedDecisionRows : seedDecisionRows;
+  const decisionRowsForGate = [...seedDecisionRows, ...submittedDecisionRows];
   const submittedConsumptionRows = (options.policyDecisionConsumptions ?? [])
     .map((record) => normalizePolicyDecisionConsumption(record, decisionRowsForGate, "submitted_workflow_policy_decision_consumption"))
     .filter(Boolean);
@@ -15164,7 +15297,9 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const seedAuditVerificationRows = [
     normalizeSensitiveAuditChainVerification(defaultSensitiveAuditChainVerification(releaseId, seedAuditRows), seedAuditRows, "seed_sensitive_audit_chain_verification"),
   ];
-  const actionKindRows = REQUIRED_POLICY_ACTION_KINDS.map((actionKind) => policyActionKindEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate));
+  const actionKindRows = REQUIRED_POLICY_ACTION_KINDS.map((actionKind) =>
+    policyActionKindEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate, submittedConsumptionRows),
+  );
   const phaseLaneRows = REQUIRED_PHASE_GATE_LANE_KINDS.map((laneKind) => implementationPhaseLaneEvidenceRow(laneKind, submittedPhaseRows.length ? submittedPhaseRows : seedPhaseRows));
   const queueLaneRows = REQUIRED_QUEUE_FRESHNESS_LANES.map((lane) => queueFreshnessLaneEvidenceRow(lane, queueRowsForGate, submittedScanRows));
   const clientSurfaceRows = REQUIRED_CLIENT_SURFACES.map((surface) => clientSurfaceEvidenceRow(surface, clientPolicyRowsForGate, clientCheckRowsForGate));
@@ -15681,9 +15816,18 @@ function normalizeSensitiveAuditChainVerification(verification, eventRows, rowSo
   };
 }
 
-function policyActionKindEvidenceRow(actionKind, actionRows, decisionRows) {
+function policyActionKindEvidenceRow(actionKind, actionRows, decisionRows, consumptionRows = []) {
   const actionRow = actionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0) ?? null;
-  const decisionRow = decisionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0) ?? null;
+  const currentDecisionRow = decisionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0 && row.replayStatus === "unused") ?? null;
+  const consumedDecisionRow =
+    decisionRows.find(
+      (row) =>
+        row.actionKind === actionKind &&
+        row.reviewReasons.length === 0 &&
+        row.singleUse === true &&
+        consumptionRows.some((consumption) => consumption.decisionId === row.id && consumption.reviewReasons.length === 0),
+    ) ?? null;
+  const decisionRow = currentDecisionRow ?? consumedDecisionRow;
   return {
     actionKind,
     policyActionKindId: actionRow?.id ?? null,
@@ -16010,6 +16154,9 @@ export function buildOctoberReleaseReport(
     samePositionBatchReviews: options.samePositionBatchReviews ?? [],
     externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
   });
+  const scoreExplanationAudit = buildScoreExplanationAuditReport(releaseId, ratings, {
+    workflowAssignments: options.workflowAssignments ?? [],
+  });
   const auxiliaryWorkflowEvidence = buildAuxiliaryWorkflowEvidenceReport(releaseId, {
     blindingPreviewAudits: options.blindingPreviewAudits ?? [],
     partialTaskOutputs: options.partialTaskOutputs ?? [],
@@ -16079,6 +16226,7 @@ export function buildOctoberReleaseReport(
     policyBundleEvidence,
     participantSafeguardEvidence,
     ratingExperienceEvidence,
+    scoreExplanationAudit,
     auxiliaryWorkflowEvidence,
     interactionWorkflowEvidence,
     releaseConfigManifestEvidence,
