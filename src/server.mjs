@@ -8,6 +8,12 @@ import {
   RATER_ISSUE_FLAG_DEFINITIONS,
   RUBRIC_DIMENSIONS,
   SCORE_CONFIDENCE_LEVELS,
+  SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH,
+  SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW,
+  SCORE_EXPLANATION_INCONSISTENCY_RULES,
+  SCORE_EXPLANATION_OPTIONAL_FIELDS,
+  SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
+  SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD,
   SCORE_EXPLANATION_TRIGGER_RULES,
   assignments,
   buildHiddenBenchmarkFreezeReport,
@@ -29,6 +35,7 @@ import {
   ratingContextSnapshots,
   scoreCertificationAttempt,
   scoreExplanationTriggersForRating,
+  validateTriggeredScoreExplanation,
   seedBenchmarkExposureEvents,
   seedCertificationAttempts,
   seedRatings,
@@ -1829,25 +1836,38 @@ const workflowWriteEndpoints = [
       "policyVersion",
       "protectedStatusBlindPromptCopy",
       "sentenceGuidance",
+      "qaRoutingPolicy",
+      "protectedSplitCompatibilityClass",
+      "createdBy",
       "frozenAt",
+      "timestamp",
     ],
     requiredNonEmptyArrayFields: ["coveredWorkflowSplitClasses", "ordinaryRequiredFields", "optionalFields", "triggerList", "inconsistencyRules"],
     requiredArrayIncludes: {
       coveredWorkflowSplitClasses: ratingWorkflowTaskModes,
-      ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
-      optionalFields: ["general_rating_note"],
+      ordinaryRequiredFields: SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
+      optionalFields: SCORE_EXPLANATION_OPTIONAL_FIELDS,
       triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
+      inconsistencyRules: SCORE_EXPLANATION_INCONSISTENCY_RULES,
     },
     allowedArrayValues: {
-      ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
+      ordinaryRequiredFields: SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
+      optionalFields: SCORE_EXPLANATION_OPTIONAL_FIELDS,
+      triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
+      inconsistencyRules: SCORE_EXPLANATION_INCONSISTENCY_RULES,
     },
-    requiredFiniteNumberFields: ["extremeScoreThresholdLow", "extremeScoreThresholdHigh", "overallVsCentralityStrengthGapThreshold"],
     requiredExactFields: {
+      extremeScoreThresholdLow: SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW,
+      extremeScoreThresholdHigh: SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH,
+      overallVsCentralityStrengthGapThreshold: SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD,
       targetUnclearTrigger: true,
       highStakesWorkflowTrigger: true,
       postDiscussionRevisionTrigger: true,
       exposureFamiliarityConflictUncertaintyTrigger: true,
       protectedSplitCompatible: true,
+    },
+    requiredStringIncludesAny: {
+      qaRoutingPolicy: ["qa"],
     },
   }),
   workflowWriteSpec(/^\/api\/v1\/ui-experiment-policies$/, "ui_experiment_policy_submitted", "uiExperimentPolicy", adminRoles, {
@@ -5924,9 +5944,8 @@ export function validateRatingPayload(rating, eventType) {
     if (rating.scoreExplanationPromptVisibility !== "label_source_protected_status_blind") {
       return invalid("scoreExplanationPromptVisibility must preserve label/source/protected-status blinding");
     }
-    if (!String(rating.scoreExplanation ?? "").trim() || String(rating.scoreExplanation).trim().length < 12) {
-      return invalid("scoreExplanation is required when ScoreExplanationPolicy triggers");
-    }
+    const triggeredExplanationValidation = validateTriggeredScoreExplanation(rating.scoreExplanation);
+    if (!triggeredExplanationValidation.ok) return invalid(triggeredExplanationValidation.detail);
   } else if (rating.scoreExplanationRequired === true) {
     return invalid("scoreExplanationRequired cannot be true without ScoreExplanationPolicy triggers");
   }

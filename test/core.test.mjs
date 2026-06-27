@@ -87,10 +87,12 @@ import {
   ratingContextSnapshots,
   seedRatings,
   scoreCertificationAttempt,
+  scoreExplanationTriggersForRating,
   certificationPacks,
   seedBenchmarkExposureEvents,
   seedCertificationAttempts,
   unweightedPairwiseErrorRateByPosition,
+  validateTriggeredScoreExplanation,
   verificationRecords,
   weightedPairwiseErrorRateByPosition,
   weightedPairwiseLossForPosition,
@@ -424,6 +426,7 @@ const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
   "overall_product_gap",
+  "surprising_score",
   "unclear_target",
   "high_stakes_workflow",
   "post_discussion_revision",
@@ -483,7 +486,11 @@ function completePolicyBundleFixtures() {
         exposureFamiliarityConflictUncertaintyTrigger: true,
         protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
         sentenceGuidance: "one_or_two_sentences",
+        qaRoutingPolicy: "route triggered explanations to QA without source, label, peer, model, or protected-status disclosure",
+        protectedSplitCompatibilityClass: "protected_split_compatible_trigger_required_v1",
         protectedSplitCompatible: true,
+        createdBy: "policy-admin",
+        timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
     uiExperimentPolicies: [
@@ -1567,6 +1574,133 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
   });
   assert.equal(ordinaryExplanationRequiredReport.releaseUseStatus, "policy_bundle_review_required");
   assert.ok(ordinaryExplanationRequiredReport.reviewSections.some((section) => section.reason === "ordinaryRequiredFields:unexpected:score_explanation"));
+
+  const missingOptionalEvidenceSpanReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        optionalFields: ["general_rating_note"],
+      },
+    ],
+  });
+  assert.equal(missingOptionalEvidenceSpanReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(missingOptionalEvidenceSpanReport.reviewSections.some((section) => section.reason === "optionalFields:optional_evidence_spans"));
+
+  const unsupportedOptionalScoreExplanationFieldReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        optionalFields: ["general_rating_note", "optional_evidence_spans", "private_peer_note"],
+      },
+    ],
+  });
+  assert.equal(unsupportedOptionalScoreExplanationFieldReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(unsupportedOptionalScoreExplanationFieldReport.reviewSections.some((section) => section.reason === "optionalFields:unexpected:private_peer_note"));
+
+  const missingSurprisingTriggerReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        triggerList: scoreExplanationTriggerRules.filter((trigger) => trigger !== "surprising_score"),
+      },
+    ],
+  });
+  assert.equal(missingSurprisingTriggerReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(missingSurprisingTriggerReport.reviewSections.some((section) => section.reason === "triggerList:surprising_score"));
+
+  const missingScoreExplanationMetadataReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        qaRoutingPolicy: "",
+        protectedSplitCompatibilityClass: "",
+        createdBy: "",
+        timestamp: "",
+      },
+    ],
+  });
+  assert.equal(missingScoreExplanationMetadataReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(missingScoreExplanationMetadataReport.reviewSections.some((section) => section.reason === "qaRoutingPolicy"));
+  assert.ok(missingScoreExplanationMetadataReport.reviewSections.some((section) => section.reason === "protectedSplitCompatibilityClass"));
+  assert.ok(missingScoreExplanationMetadataReport.reviewSections.some((section) => section.reason === "createdBy"));
+  assert.ok(missingScoreExplanationMetadataReport.reviewSections.some((section) => section.reason === "timestamp"));
+
+  const mismatchedScoreExplanationThresholdReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        extremeScoreThresholdLow: 0.2,
+        extremeScoreThresholdHigh: 0.8,
+        inconsistencyRules: [],
+        overallVsCentralityStrengthGapThreshold: 0.4,
+      },
+    ],
+  });
+  assert.equal(mismatchedScoreExplanationThresholdReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(mismatchedScoreExplanationThresholdReport.reviewSections.some((section) => section.reason === "extremeScoreThresholdLow:0.1"));
+  assert.ok(mismatchedScoreExplanationThresholdReport.reviewSections.some((section) => section.reason === "extremeScoreThresholdHigh:0.9"));
+  assert.ok(mismatchedScoreExplanationThresholdReport.reviewSections.some((section) => section.reason === "inconsistencyRules:correctness_lte_0_25_and_strength_gte_0_75"));
+  assert.ok(mismatchedScoreExplanationThresholdReport.reviewSections.some((section) => section.reason === "overallVsCentralityStrengthGapThreshold:0.25"));
+
+  const unsupportedScoreExplanationVocabularyReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        triggerList: [...scoreExplanationTriggerRules, "peer_disagreement"],
+        inconsistencyRules: ["correctness_lte_0_25_and_strength_gte_0_75", "private_model_disagreement"],
+      },
+    ],
+  });
+  assert.equal(unsupportedScoreExplanationVocabularyReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(unsupportedScoreExplanationVocabularyReport.reviewSections.some((section) => section.reason === "triggerList:unexpected:peer_disagreement"));
+  assert.ok(unsupportedScoreExplanationVocabularyReport.reviewSections.some((section) => section.reason === "inconsistencyRules:unexpected:private_model_disagreement"));
+});
+
+test("score explanation triggers include surprising score flags", () => {
+  assert.deepEqual(
+    scoreExplanationTriggersForRating({
+      scores: {
+        centrality: 0.5,
+        strength: 0.5,
+        correctness: 0.5,
+        clarity: 0.8,
+        dead_weight: 0.1,
+        single_issue: 0.8,
+        overall: 0.25,
+      },
+      flags: { surprisingScore: true },
+      assignment: { queueType: "ordinary" },
+    }),
+    ["surprising_score"],
+  );
+  assert.deepEqual(validateTriggeredScoreExplanation("One blind-safe sentence. Another short sentence.").ok, true);
+  assert.deepEqual(validateTriggeredScoreExplanation("One sentence. Two sentence. Third sentence.").ok, false);
+
+  for (const flag of ["sourceExposureUncertainty", "priorFamiliarityUncertainty", "conflictUncertainty"]) {
+    assert.deepEqual(
+      scoreExplanationTriggersForRating({
+        scores: {
+          centrality: 0.5,
+          strength: 0.5,
+          correctness: 0.5,
+          clarity: 0.8,
+          dead_weight: 0.1,
+          single_issue: 0.8,
+          overall: 0.25,
+        },
+        flags: { [flag]: true },
+        assignment: { queueType: "ordinary" },
+      }),
+      ["exposure_familiarity_conflict_uncertainty"],
+      flag,
+    );
+  }
 });
 
 test("release config manifest evidence gates governed bundle families and manifest verification", () => {

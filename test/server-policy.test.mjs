@@ -356,6 +356,7 @@ const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
   "overall_product_gap",
+  "surprising_score",
   "unclear_target",
   "high_stakes_workflow",
   "post_discussion_revision",
@@ -421,8 +422,12 @@ function completePolicyBundleFixtures() {
       exposureFamiliarityConflictUncertaintyTrigger: true,
       protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
       sentenceGuidance: "one_or_two_sentences",
+      qaRoutingPolicy: "route triggered explanations to QA without source, label, peer, model, or protected-status disclosure",
+      protectedSplitCompatibilityClass: "protected_split_compatible_trigger_required_v1",
       protectedSplitCompatible: true,
+      createdBy: "policy-admin",
       frozenAt: "2026-10-01T00:00:00.000Z",
+      timestamp: "2026-10-01T00:00:00.000Z",
     },
     uiExperimentPolicy: {
       id: "ui-experiment-policy-workflow-new",
@@ -5713,6 +5718,91 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(ordinaryExplanationRequiredPolicy.status, 400);
   assert.match(ordinaryExplanationRequiredPolicy.body.detail, /ordinaryRequiredFields/);
 
+  const missingOptionalEvidenceSpanPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-explanation-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreExplanationPolicy: {
+        ...policyBundle.scoreExplanationPolicy,
+        id: "score-explanation-policy-missing-optional-evidence",
+        optionalFields: ["general_rating_note"],
+      },
+    }),
+  });
+  assert.equal(missingOptionalEvidenceSpanPolicy.status, 400);
+  assert.match(missingOptionalEvidenceSpanPolicy.body.detail, /optionalFields/);
+
+  const unsupportedOptionalScoreExplanationFieldPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-explanation-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreExplanationPolicy: {
+        ...policyBundle.scoreExplanationPolicy,
+        id: "score-explanation-policy-unsupported-optional-field",
+        optionalFields: ["general_rating_note", "optional_evidence_spans", "private_peer_note"],
+      },
+    }),
+  });
+  assert.equal(unsupportedOptionalScoreExplanationFieldPolicy.status, 400);
+  assert.match(unsupportedOptionalScoreExplanationFieldPolicy.body.detail, /optionalFields/);
+
+  const incompleteScoreExplanationPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-explanation-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreExplanationPolicy: {
+        ...policyBundle.scoreExplanationPolicy,
+        id: "score-explanation-policy-incomplete-metadata",
+        qaRoutingPolicy: "",
+        protectedSplitCompatibilityClass: "",
+        createdBy: "",
+        timestamp: "",
+      },
+    }),
+  });
+  assert.equal(incompleteScoreExplanationPolicy.status, 400);
+  assert.match(incompleteScoreExplanationPolicy.body.detail, /qaRoutingPolicy|protectedSplitCompatibilityClass|createdBy|timestamp/);
+
+  const mismatchedScoreExplanationPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-explanation-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreExplanationPolicy: {
+        ...policyBundle.scoreExplanationPolicy,
+        id: "score-explanation-policy-mismatched-thresholds",
+        extremeScoreThresholdLow: 0.2,
+        extremeScoreThresholdHigh: 0.8,
+        inconsistencyRules: [],
+        overallVsCentralityStrengthGapThreshold: 0.4,
+      },
+    }),
+  });
+  assert.equal(mismatchedScoreExplanationPolicy.status, 400);
+  assert.match(
+    mismatchedScoreExplanationPolicy.body.detail,
+    /extremeScoreThresholdLow|extremeScoreThresholdHigh|inconsistencyRules|overallVsCentralityStrengthGapThreshold/,
+  );
+
+  const unsupportedScoreExplanationVocabulary = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-explanation-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreExplanationPolicy: {
+        ...policyBundle.scoreExplanationPolicy,
+        id: "score-explanation-policy-unsupported-vocabulary",
+        triggerList: [...scoreExplanationTriggerRules, "peer_disagreement"],
+        inconsistencyRules: ["correctness_lte_0_25_and_strength_gte_0_75", "private_model_disagreement"],
+      },
+    }),
+  });
+  assert.equal(unsupportedScoreExplanationVocabulary.status, 400);
+  assert.match(unsupportedScoreExplanationVocabulary.body.detail, /triggerList|inconsistencyRules/);
+
   for (const [resourceKey, url] of [
     ["visibilityPolicy", "/api/v1/visibility-policies"],
     ["ratingWorkflowProfile", "/api/v1/rating-workflow-profiles"],
@@ -8483,6 +8573,49 @@ test("server policy requires rating confidence and trigger-based score explanati
   const missingExplanationValidation = validateRatingPayload(extremeWithoutExplanation, "blind_initial_submitted");
   assert.equal(missingExplanationValidation.ok, false);
   assert.match(missingExplanationValidation.detail, /scoreExplanationRequired/);
+
+  const surprisingScoreWithoutTrigger = {
+    ...validBlindRating("rating-surprising-score-missing-trigger"),
+    flags: { surprisingScore: true },
+  };
+  const missingSurprisingTriggerValidation = validateRatingPayload(surprisingScoreWithoutTrigger, "blind_initial_submitted");
+  assert.equal(missingSurprisingTriggerValidation.ok, false);
+  assert.match(missingSurprisingTriggerValidation.detail, /surprising_score/);
+
+  const surprisingScoreWithExplanation = {
+    ...validBlindRating("rating-surprising-score-explanation"),
+    flags: { surprisingScore: true },
+    scoreExplanationTriggers: ["surprising_score"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "The score pattern is unusual enough that I am adding a blind-safe explanation.",
+  };
+  assert.equal(validateRatingPayload(surprisingScoreWithExplanation, "blind_initial_submitted").ok, true);
+
+  const priorFamiliarityWithoutTrigger = {
+    ...validBlindRating("rating-prior-familiarity-missing-trigger"),
+    flags: { priorFamiliarityUncertainty: true },
+  };
+  const missingPriorFamiliarityTriggerValidation = validateRatingPayload(priorFamiliarityWithoutTrigger, "blind_initial_submitted");
+  assert.equal(missingPriorFamiliarityTriggerValidation.ok, false);
+  assert.match(missingPriorFamiliarityTriggerValidation.detail, /exposure_familiarity_conflict_uncertainty/);
+
+  const conflictUncertaintyWithExplanation = {
+    ...validBlindRating("rating-conflict-uncertainty-explanation"),
+    flags: { conflictUncertainty: true },
+    scoreExplanationTriggers: ["exposure_familiarity_conflict_uncertainty"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "A possible conflict affects blind eligibility, so this blind-safe note documents the uncertainty.",
+  };
+  assert.equal(validateRatingPayload(conflictUncertaintyWithExplanation, "blind_initial_submitted").ok, true);
+
+  const verboseTriggeredExplanation = {
+    ...surprisingScoreWithExplanation,
+    id: "rating-surprising-score-verbose-explanation",
+    scoreExplanation: "First blind-safe sentence. Second blind-safe sentence. Third sentence turns the response into a mini review.",
+  };
+  const verboseTriggeredExplanationValidation = validateRatingPayload(verboseTriggeredExplanation, "blind_initial_submitted");
+  assert.equal(verboseTriggeredExplanationValidation.ok, false);
+  assert.match(verboseTriggeredExplanationValidation.detail, /one or two sentences/);
 
   const validationSubset = {
     ...validBlindRating("rating-high-stakes-explanation"),

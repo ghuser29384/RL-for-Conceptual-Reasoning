@@ -32,6 +32,7 @@ import {
   seedRatings,
   summarizeAdjudication,
   unweightedPairwiseErrorRateByPosition,
+  validateTriggeredScoreExplanation,
   verificationRecords,
   weightedPairwiseErrorRateByPosition,
 } from "./domain/core.mjs";
@@ -79,7 +80,11 @@ const state = {
     midRangeStrengthUncertainty: false,
     backgroundKnowledgeDependence: false,
     targetUnclear: false,
+    surprisingScore: false,
     sourceExposureConflictUncertainty: false,
+    sourceExposureUncertainty: false,
+    priorFamiliarityUncertainty: false,
+    conflictUncertainty: false,
     vagueGoodObjectionGesture: false,
     disagreementTaxonomyReview: false,
   },
@@ -4813,11 +4818,14 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       workflowProfileId: `rating-workflow-profile-${releaseId}`,
     });
     const scoreExplanationRequired = scoreExplanationTriggers.length > 0;
-    if (scoreExplanationRequired && state.draftScoreExplanation.trim().length < 12) {
+    const triggeredExplanationValidation = scoreExplanationRequired
+      ? validateTriggeredScoreExplanation(state.draftScoreExplanation)
+      : { ok: true };
+    if (!triggeredExplanationValidation.ok) {
       state.lastPersistenceStatus = {
         tone: "bad",
         title: "Short explanation required",
-        detail: `Add one or two blind-safe sentences for: ${scoreExplanationTriggers.map(humanize).join(", ")}.`,
+        detail: `${triggeredExplanationValidation.detail}: ${scoreExplanationTriggers.map(humanize).join(", ")}.`,
       };
       render();
       return;

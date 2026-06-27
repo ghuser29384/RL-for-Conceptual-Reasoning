@@ -2366,11 +2366,21 @@ export const SCORE_EXPLANATION_TRIGGER_RULES = [
   "extreme_score",
   "score_inconsistency",
   "overall_product_gap",
+  "surprising_score",
   "unclear_target",
   "high_stakes_workflow",
   "post_discussion_revision",
   "exposure_familiarity_conflict_uncertainty",
 ];
+
+export const SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW = 0.1;
+export const SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH = 0.9;
+export const SCORE_EXPLANATION_CORRECTNESS_INCONSISTENCY_MAX = 0.25;
+export const SCORE_EXPLANATION_STRENGTH_INCONSISTENCY_MIN = 0.75;
+export const SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD = 0.25;
+export const SCORE_EXPLANATION_INCONSISTENCY_RULES = ["correctness_lte_0_25_and_strength_gte_0_75"];
+export const SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS = ["seven_scores", "confidence_low_medium_high"];
+export const SCORE_EXPLANATION_OPTIONAL_FIELDS = ["general_rating_note", "optional_evidence_spans"];
 
 const SCORE_EXPLANATION_EXTREME_DIMENSIONS = ["centrality", "strength", "correctness", "overall"];
 const SCORE_EXPLANATION_HIGH_STAKES_QUEUE_TYPES = new Set([
@@ -2387,17 +2397,27 @@ export function scoreExplanationTriggersForRating({ scores = {}, flags = {}, ass
   const triggers = [];
   if (
     SCORE_EXPLANATION_EXTREME_DIMENSIONS.some(
-      (dimension) => Number.isFinite(scores?.[dimension]) && (scores[dimension] < 0.1 || scores[dimension] > 0.9),
+      (dimension) =>
+        Number.isFinite(scores?.[dimension]) &&
+        (scores[dimension] < SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW || scores[dimension] > SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH),
     )
   ) {
     triggers.push("extreme_score");
   }
-  if (Number.isFinite(scores?.correctness) && Number.isFinite(scores?.strength) && scores.correctness <= 0.25 && scores.strength >= 0.75) {
+  if (
+    Number.isFinite(scores?.correctness) &&
+    Number.isFinite(scores?.strength) &&
+    scores.correctness <= SCORE_EXPLANATION_CORRECTNESS_INCONSISTENCY_MAX &&
+    scores.strength >= SCORE_EXPLANATION_STRENGTH_INCONSISTENCY_MIN
+  ) {
     triggers.push("score_inconsistency");
   }
   if (Number.isFinite(scores?.overall) && Number.isFinite(scores?.centrality) && Number.isFinite(scores?.strength)) {
     const productGap = Math.abs(scores.overall - scores.centrality * scores.strength);
-    if (productGap >= 0.25) triggers.push("overall_product_gap");
+    if (productGap >= SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD) triggers.push("overall_product_gap");
+  }
+  if (flags?.surprisingScore === true) {
+    triggers.push("surprising_score");
   }
   if (flags?.targetUnclear === true || flags?.clarityAfterEffortIssue === true || flags?.strengthCentralityAllocationAmbiguity === true) {
     triggers.push("unclear_target");
@@ -2412,7 +2432,12 @@ export function scoreExplanationTriggersForRating({ scores = {}, flags = {}, ass
   if (kind === "revision" && (revisionReasonCode === "post_discussion_revision" || assignment?.exposure === "post_lock_discussion")) {
     triggers.push("post_discussion_revision");
   }
-  if (flags?.sourceExposureConflictUncertainty === true) {
+  if (
+    flags?.sourceExposureConflictUncertainty === true ||
+    flags?.sourceExposureUncertainty === true ||
+    flags?.priorFamiliarityUncertainty === true ||
+    flags?.conflictUncertainty === true
+  ) {
     triggers.push("exposure_familiarity_conflict_uncertainty");
   }
   return [...new Set(triggers)];
@@ -2420,6 +2445,32 @@ export function scoreExplanationTriggersForRating({ scores = {}, flags = {}, ass
 
 export function scoreExplanationRequiredForRating(input) {
   return scoreExplanationTriggersForRating(input).length > 0;
+}
+
+const SCORE_EXPLANATION_MIN_CHARS = 12;
+const SCORE_EXPLANATION_MAX_CHARS = 360;
+const SCORE_EXPLANATION_MAX_SENTENCES = 2;
+
+function scoreExplanationSentenceCount(text) {
+  const normalized = String(text)
+    .replace(/\b(e\.g|i\.e)\./gi, (match) => match.replaceAll(".", ""))
+    .replace(/\betc\./gi, "etc");
+  const terminalMarks = normalized.match(/[.!?]+(?=\s|$)/g);
+  return terminalMarks?.length ?? 1;
+}
+
+export function validateTriggeredScoreExplanation(text) {
+  const value = typeof text === "string" ? text.trim() : "";
+  if (value.length < SCORE_EXPLANATION_MIN_CHARS) {
+    return { ok: false, detail: "scoreExplanation is required when ScoreExplanationPolicy triggers" };
+  }
+  if (value.length > SCORE_EXPLANATION_MAX_CHARS) {
+    return { ok: false, detail: "scoreExplanation must be brief one- or two-sentence text" };
+  }
+  if (scoreExplanationSentenceCount(value) > SCORE_EXPLANATION_MAX_SENTENCES) {
+    return { ok: false, detail: "scoreExplanation must be one or two sentences when ScoreExplanationPolicy triggers" };
+  }
+  return { ok: true };
 }
 
 export const RATER_ISSUE_FLAG_DEFINITIONS = [
@@ -2485,6 +2536,15 @@ export const RATER_ISSUE_FLAG_DEFINITIONS = [
     taxonomyCodes: ["critique_interpretation_vagueness", "clarity_after_effort", "low_clarity_handling"],
     policy:
       "Unclear-target flags require a short, blind-safe score explanation while preserving ordinary scores and avoiding hidden status disclosure.",
+  },
+  {
+    key: "surprisingScore",
+    label: "Surprising score",
+    detail: "Use when the submitted score pattern is unexpected enough to need a short blind-safe explanation.",
+    issueType: "surprising_score_explanation_trigger",
+    taxonomyCodes: ["score_explanation_required", "rating_quality_review"],
+    policy:
+      "Surprising score patterns require a short explanation without converting ordinary ratings into universally required notes or revealing hidden workflow status.",
   },
   {
     key: "clearlyUnsatisfactoryImprecision",
@@ -2566,6 +2626,33 @@ export const RATER_ISSUE_FLAG_DEFINITIONS = [
     taxonomyCodes: ["source_style_exposure", "conflict_review_required"],
     policy:
       "Exposure, familiarity, or conflict uncertainty requires a blind-safe explanation and routes eligibility review without revealing source, split, or protected-label metadata.",
+  },
+  {
+    key: "sourceExposureUncertainty",
+    label: "Source exposure uncertainty",
+    detail: "Use when possible source, author, style, or cluster exposure may affect blind eligibility.",
+    issueType: "source_exposure_uncertainty",
+    taxonomyCodes: ["source_style_exposure", "conflict_review_required"],
+    policy:
+      "Possible source exposure requires a blind-safe explanation and eligibility review without revealing source, split, or protected-label metadata.",
+  },
+  {
+    key: "priorFamiliarityUncertainty",
+    label: "Prior familiarity uncertainty",
+    detail: "Use when prior familiarity with the item, objection, or source family may affect blind eligibility.",
+    issueType: "prior_familiarity_uncertainty",
+    taxonomyCodes: ["rater_familiarity_non_penalization", "source_style_exposure"],
+    policy:
+      "Prior familiarity routes eligibility review and requires blind-safe explanation without treating familiarity as lower critique strength or clarity.",
+  },
+  {
+    key: "conflictUncertainty",
+    label: "Conflict uncertainty",
+    detail: "Use when a possible conflict of interest may affect blind eligibility.",
+    issueType: "conflict_uncertainty",
+    taxonomyCodes: ["conflict_review_required"],
+    policy:
+      "Conflict uncertainty requires a blind-safe explanation and review before the row can support independent blind-denominator claims.",
   },
   {
     key: "vagueGoodObjectionGesture",
@@ -10481,21 +10568,25 @@ function defaultScoreExplanationPolicy(releaseId) {
     id: `score-explanation-policy-${releaseId}`,
     policyVersion: "score-explanation-policy-rlhf90-v1",
     coveredWorkflowSplitClasses: [...RATING_WORKFLOW_TASK_MODES, ...PROTECTED_UI_LANE_CLASSES],
-    ordinaryRequiredFields: ["seven_scores", "confidence_low_medium_high"],
-    optionalFields: ["general_rating_note", "optional_evidence_spans"],
+    ordinaryRequiredFields: SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
+    optionalFields: SCORE_EXPLANATION_OPTIONAL_FIELDS,
     triggerList: SCORE_EXPLANATION_TRIGGER_RULES,
-    extremeScoreThresholdLow: 0.1,
-    extremeScoreThresholdHigh: 0.9,
-    inconsistencyRules: ["correctness_lte_0_25_and_strength_gte_0_75"],
-    overallVsCentralityStrengthGapThreshold: 0.25,
+    extremeScoreThresholdLow: SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW,
+    extremeScoreThresholdHigh: SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH,
+    inconsistencyRules: SCORE_EXPLANATION_INCONSISTENCY_RULES,
+    overallVsCentralityStrengthGapThreshold: SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD,
     targetUnclearTrigger: true,
     highStakesWorkflowTrigger: true,
     postDiscussionRevisionTrigger: true,
     exposureFamiliarityConflictUncertaintyTrigger: true,
     protectedStatusBlindPromptCopy: "A short explanation is required by the active workflow policy for this item.",
     sentenceGuidance: "one_or_two_sentences",
+    qaRoutingPolicy: "route triggered explanations to QA without source, label, peer, model, or protected-status disclosure",
+    protectedSplitCompatibilityClass: "protected_split_compatible_trigger_required_v1",
     protectedSplitCompatible: true,
+    createdBy: "seed-policy-admin",
     frozenAt: "2026-10-01T00:00:00.000Z",
+    timestamp: "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -10720,26 +10811,46 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
   const optionalFields = normalizeStringArray(policy.optionalFields);
   const triggerList = normalizeStringArray(policy.triggerList ?? policy.triggers);
   const coveredWorkflowSplitClasses = normalizeStringArray(policy.coveredWorkflowSplitClasses);
+  const inconsistencyRules = normalizeStringArray(policy.inconsistencyRules);
   const missingTriggers = SCORE_EXPLANATION_TRIGGER_RULES.filter((trigger) => !triggerList.includes(trigger));
-  const missingRequiredFields = ["seven_scores", "confidence_low_medium_high"].filter((field) => !ordinaryRequiredFields.includes(field));
-  const unexpectedOrdinaryRequiredFields = ordinaryRequiredFields.filter((field) => !["seven_scores", "confidence_low_medium_high"].includes(field));
+  const unexpectedTriggers = triggerList.filter((trigger) => !SCORE_EXPLANATION_TRIGGER_RULES.includes(trigger));
+  const missingInconsistencyRules = SCORE_EXPLANATION_INCONSISTENCY_RULES.filter((rule) => !inconsistencyRules.includes(rule));
+  const unexpectedInconsistencyRules = inconsistencyRules.filter((rule) => !SCORE_EXPLANATION_INCONSISTENCY_RULES.includes(rule));
+  const missingRequiredFields = SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS.filter((field) => !ordinaryRequiredFields.includes(field));
+  const unexpectedOrdinaryRequiredFields = ordinaryRequiredFields.filter((field) => !SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS.includes(field));
+  const missingOptionalFields = SCORE_EXPLANATION_OPTIONAL_FIELDS.filter((field) => !optionalFields.includes(field));
+  const unexpectedOptionalFields = optionalFields.filter((field) => !SCORE_EXPLANATION_OPTIONAL_FIELDS.includes(field));
   const reviewReasons = [
     requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
     coveredWorkflowSplitClasses.length ? null : "coveredWorkflowSplitClasses",
     missingRequiredFields.length ? `ordinaryRequiredFields:${missingRequiredFields.join(",")}` : null,
     unexpectedOrdinaryRequiredFields.length ? `ordinaryRequiredFields:unexpected:${unexpectedOrdinaryRequiredFields.join(",")}` : null,
-    optionalFields.includes("general_rating_note") ? null : "optionalFields:general_rating_note",
+    missingOptionalFields.length ? `optionalFields:${missingOptionalFields.join(",")}` : null,
+    unexpectedOptionalFields.length ? `optionalFields:unexpected:${unexpectedOptionalFields.join(",")}` : null,
     missingTriggers.length ? `triggerList:${missingTriggers.join(",")}` : null,
-    Number.isFinite(policy.extremeScoreThresholdLow) ? null : "extremeScoreThresholdLow",
-    Number.isFinite(policy.extremeScoreThresholdHigh) ? null : "extremeScoreThresholdHigh",
-    Number.isFinite(policy.overallVsCentralityStrengthGapThreshold) ? null : "overallVsCentralityStrengthGapThreshold",
+    unexpectedTriggers.length ? `triggerList:unexpected:${unexpectedTriggers.join(",")}` : null,
+    policy.extremeScoreThresholdLow === SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW
+      ? null
+      : `extremeScoreThresholdLow:${SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW}`,
+    policy.extremeScoreThresholdHigh === SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH
+      ? null
+      : `extremeScoreThresholdHigh:${SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH}`,
+    missingInconsistencyRules.length ? `inconsistencyRules:${missingInconsistencyRules.join(",")}` : null,
+    unexpectedInconsistencyRules.length ? `inconsistencyRules:unexpected:${unexpectedInconsistencyRules.join(",")}` : null,
+    policy.overallVsCentralityStrengthGapThreshold === SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD
+      ? null
+      : `overallVsCentralityStrengthGapThreshold:${SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD}`,
     policy.targetUnclearTrigger === true ? null : "targetUnclearTrigger",
     policy.highStakesWorkflowTrigger === true ? null : "highStakesWorkflowTrigger",
     policy.postDiscussionRevisionTrigger === true ? null : "postDiscussionRevisionTrigger",
     policy.exposureFamiliarityConflictUncertaintyTrigger === true ? null : "exposureFamiliarityConflictUncertaintyTrigger",
     policyMentions(policy.protectedStatusBlindPromptCopy, ["workflow", "policy"]) ? null : "protectedStatusBlindPromptCopy",
     policyMentions(policy.sentenceGuidance, ["one"]) && policyMentions(policy.sentenceGuidance, ["two"]) ? null : "sentenceGuidance",
+    policyMentions(policy.qaRoutingPolicy, ["qa", "route"]) ? null : "qaRoutingPolicy",
+    requiredPromptFieldReason("protectedSplitCompatibilityClass", policy.protectedSplitCompatibilityClass),
     policy.protectedSplitCompatible === true ? null : "protectedSplitCompatible",
+    requiredPromptFieldReason("createdBy", policy.createdBy ?? policy.created_by),
+    requiredPromptFieldReason("timestamp", policy.timestamp),
   ].filter(Boolean);
   return {
     id,
@@ -10748,14 +10859,24 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
     coveredWorkflowSplitClasses,
     ordinaryRequiredFields,
     optionalFields,
+    missingOptionalFields,
+    unexpectedOptionalFields,
     triggerList,
+    inconsistencyRules,
     missingTriggers,
+    unexpectedTriggers,
+    missingInconsistencyRules,
+    unexpectedInconsistencyRules,
     extremeScoreThresholdLow: policy.extremeScoreThresholdLow ?? null,
     extremeScoreThresholdHigh: policy.extremeScoreThresholdHigh ?? null,
     overallVsCentralityStrengthGapThreshold: policy.overallVsCentralityStrengthGapThreshold ?? null,
     protectedStatusBlindPromptCopy: policy.protectedStatusBlindPromptCopy ?? null,
     sentenceGuidance: policy.sentenceGuidance ?? null,
+    qaRoutingPolicy: policy.qaRoutingPolicy ?? null,
+    protectedSplitCompatibilityClass: policy.protectedSplitCompatibilityClass ?? null,
     protectedSplitCompatible: policy.protectedSplitCompatible === true,
+    createdBy: policy.createdBy ?? policy.created_by ?? null,
+    timestamp: policy.timestamp ?? null,
     reviewReasons,
     status: reviewReasons.length ? "score_explanation_policy_review_required" : "score_explanation_policy_complete",
   };
