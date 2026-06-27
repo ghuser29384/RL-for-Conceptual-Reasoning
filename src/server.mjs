@@ -1187,6 +1187,24 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "assignmentId", "raterId", "recognitionType", "raterAction", "independentBlindEligibilityEffect", "protectedStatusHiddenFromRater"],
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
+    allowedValues: {
+      recognitionType: sourceRecognitionTypes,
+      raterAction: sourceRecognitionActions,
+    },
+    requiredExactFields: {
+      protectedStatusHiddenFromRater: true,
+    },
+    requiredWhen: [
+      {
+        field: "raterAction",
+        equals: "continue_nonblind",
+        requiredFields: ["reviewerResolution"],
+        requiredStringIncludesAny: {
+          independentBlindEligibilityEffect: ["excluded", "nonblind"],
+          reviewerResolution: ["review", "expert"],
+        },
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)\/post-lock-sessions$/, "post_lock_discussion_session_submitted", "postLockDiscussionSession", expertWorkflowRoles, {
@@ -2194,6 +2212,13 @@ const workflowWriteEndpoints = [
         field: "assistanceType",
         values: ["search", "LLM", "collaborator", "accessibility_tool", "other"],
         requiredFields: ["outsideSystemDescription"],
+        requiredStringIncludesAny: { contaminationRouting: ["excluded", "quarantine"] },
+      },
+      {
+        field: "protectedTextEventFlag",
+        equals: true,
+        requiredFields: ["outsideSystemDescription"],
+        requiredStringIncludesAny: { contaminationRouting: ["excluded", "quarantine"] },
       },
     ],
     requireAssignmentClaimField: "assignmentId",
@@ -2323,6 +2348,7 @@ const workflowWriteEndpoints = [
     requiredAnyFields: [["positionId", "positionClusterId", "critiqueId", "sourceFamilyId", "adaptationClusterId", "nearDuplicateClusterId"]],
     requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
     allowedValues: { conflictType: raterItemConflictTypes },
+    requiredStringIncludesAny: { independentBlindEligibilityEffect: ["excluded", "blocked", "non_independent"] },
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/conflict-screen$/, "assignment_conflict_screen_submitted", "raterItemConflict", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
@@ -2330,6 +2356,7 @@ const workflowWriteEndpoints = [
     requiredAnyFields: [["positionId", "positionClusterId", "critiqueId", "sourceFamilyId", "adaptationClusterId", "nearDuplicateClusterId"]],
     requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
     allowedValues: { conflictType: raterItemConflictTypes },
+    requiredStringIncludesAny: { independentBlindEligibilityEffect: ["excluded", "blocked", "non_independent"] },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),

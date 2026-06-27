@@ -5825,6 +5825,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeSourceRecognition.status, 400);
   assert.match(unsafeSourceRecognition.body.detail, /protectedStatusHiddenFromRater/);
 
+  const scopedUnsafeSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        id: "source-recognition-scoped-unsafe",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        recognitionType: "source_recognized",
+        raterAction: "safe_decline",
+        independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator",
+        protectedStatusHiddenFromRater: false,
+      },
+    }),
+  });
+  assert.equal(scopedUnsafeSourceRecognition.status, 400);
+  assert.match(scopedUnsafeSourceRecognition.body.detail, /protectedStatusHiddenFromRater/);
+
   const unreviewedContinuedSourceRecognition = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/source-recognition-events",
@@ -5841,6 +5860,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unreviewedContinuedSourceRecognition.status, 400);
   assert.match(unreviewedContinuedSourceRecognition.body.detail, /independentBlindEligibilityEffect|reviewerResolution/);
+
+  const scopedUnreviewedContinuedSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...participantSafeguards.sourceRecognitionEvent,
+        id: "source-recognition-scoped-continue-unreviewed",
+        raterAction: "continue_nonblind",
+        independentBlindEligibilityEffect: "count_as_independent_blind_rating",
+        reviewerResolution: "allow_continue",
+      },
+    }),
+  });
+  assert.equal(scopedUnreviewedContinuedSourceRecognition.status, 400);
+  assert.match(scopedUnreviewedContinuedSourceRecognition.body.detail, /independentBlindEligibilityEffect|reviewerResolution/);
 
   const incompleteModelProviderPolicy = await invokeApi(context, {
     method: "POST",
@@ -6134,6 +6170,38 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(undeclaredExternalAssistance.status, 400);
   assert.match(undeclaredExternalAssistance.body.detail, /outsideSystemDescription/);
+
+  const unquarantinedExternalAssistance = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/external-assistance-declarations",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      externalAssistanceDeclaration: {
+        ...ratingExperience.externalAssistanceDeclaration,
+        id: "external-assistance-unquarantined",
+        contaminationRouting: "preserved_in_blind_initial_denominator",
+      },
+    }),
+  });
+  assert.equal(unquarantinedExternalAssistance.status, 400);
+  assert.match(unquarantinedExternalAssistance.body.detail, /contaminationRouting/);
+
+  const unquarantinedProtectedTextEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/external-assistance-declarations",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      externalAssistanceDeclaration: {
+        ...ratingExperience.externalAssistanceDeclaration,
+        id: "external-assistance-protected-text-unquarantined",
+        assistanceType: "none",
+        protectedTextEventFlag: true,
+        contaminationRouting: "preserved_in_blind_initial_denominator",
+      },
+    }),
+  });
+  assert.equal(unquarantinedProtectedTextEvent.status, 400);
+  assert.match(unquarantinedProtectedTextEvent.body.detail, /contaminationRouting/);
 
   for (const [resourceKey, url] of [
     ["taskOutputEligibilityPolicy", "/api/v1/task-output-eligibility-policies"],
@@ -6509,6 +6577,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unscopedRaterConflict.status, 400);
   assert.match(unscopedRaterConflict.body.detail, /positionId|allowedNonBlindRoles/);
 
+  const nonBlockingRaterConflict = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-item-conflicts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterItemConflict: {
+        ...auxiliaryWorkflow.raterItemConflict,
+        id: "rater-item-conflict-non-blocking",
+        independentBlindEligibilityEffect: "count_as_independent_blind_rating",
+      },
+    }),
+  });
+  assert.equal(nonBlockingRaterConflict.status, 400);
+  assert.match(nonBlockingRaterConflict.body.detail, /independentBlindEligibilityEffect/);
+
   const mutableReleaseErratum = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/release-errata",
@@ -6581,6 +6664,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({ raterItemConflict: auxiliaryWorkflow.assignmentConflictScreen }),
   });
   assert.equal(assignmentConflictScreen.status, 201);
+
+  const nonBlockingAssignmentConflictScreen = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/conflict-screen",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      raterItemConflict: {
+        ...auxiliaryWorkflow.assignmentConflictScreen,
+        id: "assignment-conflict-screen-non-blocking",
+        independentBlindEligibilityEffect: "count_as_independent_blind_rating",
+      },
+    }),
+  });
+  assert.equal(nonBlockingAssignmentConflictScreen.status, 400);
+  assert.match(nonBlockingAssignmentConflictScreen.body.detail, /independentBlindEligibilityEffect/);
 
   const releaseSupersession = await invokeApi(context, {
     method: "POST",
