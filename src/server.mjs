@@ -164,6 +164,14 @@ const assignmentDeclineRequiredFields = [
 const assignmentDeclineReasonCodes = ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"];
 const assignmentDeclineReassignmentStatuses = ["reassigned_without_label", "paused_for_topic_fit_review", "closed_no_reassignment_needed"];
 const assignmentDeclineQaRoutingStatuses = ["monitor_only", "routed_to_qa_repeated_decline", "routed_to_qa_suspicious_pattern"];
+const assignmentFlagReasonCodes = [
+  "insufficient_topic_expertise",
+  "conflict_or_prior_exposure",
+  "text_unreadable_or_wrong_item",
+  "source_recognition_or_prior_exposure",
+  "time_or_fatigue_risk",
+  "other",
+];
 const itemIssueReportRequiredFields = [
   "id",
   "reporterId",
@@ -1006,7 +1014,11 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "positionId"],
     requiredAnyFields: [["text", "textVersions"]],
   }),
-  workflowWriteSpec(/^\/api\/v1\/rights\/review$/, "rights_review_submitted", "rightsReview", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rights\/review$/, "rights_review_submitted", "rightsReview", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "reviewerId", "rightsStatus", "releaseScope"],
+    requiredAnyFields: [["positionId", "itemId", "artifactId"]],
+  }),
   workflowWriteSpec(/^\/api\/v1\/releases\/freeze$/, "release_freeze_submitted", "releaseFreeze", adminRoles, {
     allowHiddenMetadata: true,
     policyActionKind: "release_freeze",
@@ -1362,6 +1374,9 @@ const workflowWriteEndpoints = [
     requireActorField: "raterId",
     rejectHiddenMetadata: true,
     rejectRawBenchmarkContent: true,
+    allowedValues: {
+      reasonCode: assignmentFlagReasonCodes,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/self-screen$/, "assignment_self_screen_submitted", "assignmentSelfScreen", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
@@ -1474,6 +1489,8 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "adjudicationId",
+    requiredFields: ["id", "adjudicationId", "memoId", "finalizationStatus", "finalizedBy", "timestamp"],
+    allowedValues: { finalizationStatus: ["finalized_for_release_candidate"] },
     policyActionKind: "adjudication_finalize",
     phaseGateLaneKind: "route",
   }),

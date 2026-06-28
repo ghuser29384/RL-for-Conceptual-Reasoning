@@ -2891,6 +2891,7 @@ test("workflow and snapshot side effects require current policy decisions and re
         memoId: "adjudication-memo-workflow-new",
         finalizationStatus: "finalized_for_release_candidate",
         finalizedBy: "demo-expert",
+        timestamp: "2026-10-01T00:34:00.000Z",
       },
     }),
   });
@@ -3444,6 +3445,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(rightsReview.status, 201);
+
+  const incompleteRightsReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rights/review",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rightsReview: {
+        id: "rights-review-incomplete",
+        itemId: "pos-workflow-new::crit-workflow-new",
+        rightsStatus: "cleared_internal",
+      },
+    }),
+  });
+  assert.equal(incompleteRightsReview.status, 400);
+  assert.match(incompleteRightsReview.body.detail, /reviewerId|releaseScope/);
 
   const releaseFreeze = await invokeApi(context, {
     method: "POST",
@@ -4407,6 +4423,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(assignmentFlag.status, 201);
   assert.equal(assignmentFlag.body.resourceId, "flag-topic-fit");
 
+  const unsupportedAssignmentFlag = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/flag",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentFlag: {
+        id: "flag-unsupported-reason",
+        raterId: "demo-rater",
+        reasonCode: "hidden_benchmark_guess",
+      },
+    }),
+  });
+  assert.equal(unsupportedAssignmentFlag.status, 400);
+  assert.match(unsupportedAssignmentFlag.body.detail, /reasonCode/);
+
   const ratingCheckAction = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/ratings/rating-seed-ai-base-rate-r1/check",
@@ -4707,6 +4738,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(adjudicationMemoById.status, 200);
   assert.equal(adjudicationMemoById.body.id, "adjudication-memo-workflow-new");
 
+  const incompleteAdjudicationFinalization = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudications/adjudication-workflow-new/finalize",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudicationFinalization: {
+        id: "adjudication-finalization-workflow-incomplete",
+        memoId: "adjudication-memo-workflow-new",
+        finalizationStatus: "draft",
+        finalizedBy: "demo-expert",
+      },
+    }),
+  });
+  assert.equal(incompleteAdjudicationFinalization.status, 400);
+  assert.match(incompleteAdjudicationFinalization.body.detail, /finalizationStatus|timestamp/);
+
   const adjudicationFinalization = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/adjudications/adjudication-workflow-new/finalize",
@@ -4717,6 +4764,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         memoId: "adjudication-memo-workflow-new",
         finalizationStatus: "finalized_for_release_candidate",
         finalizedBy: "demo-expert",
+        timestamp: "2026-10-01T00:34:00.000Z",
       },
     }),
   });
@@ -9958,11 +10006,28 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.rightsStatus.releaseScopeFailures.includes("pos-ai-prior"), false);
   assert.equal(releaseReport.body.positionIntakeReadiness.rows.some((row) => row.positionId === "pos-workflow-new"), true);
   assert.equal(releaseReport.body.workflowActionArtifacts.rightsReviews.length, 1);
+  assert.equal(releaseReport.body.rightsReviewEvidence.counts.submittedReviewCount, 1);
+  assert.equal(releaseReport.body.rightsReviewEvidence.counts.unmatchedRightsRecordCount, 1);
+  assert.equal(releaseReport.body.rightsReviewEvidence.releaseUseStatus, "rights_review_evidence_review_required");
+  assert.equal(releaseReport.body.rightsReviewEvidence.rows[0].reviewReasons.includes("matching_rights_record"), true);
   assert.equal(releaseReport.body.workflowActionArtifacts.releaseFreezes.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.assignmentFlags.length, 1);
+  assert.equal(releaseReport.body.assignmentFlagEvidence.counts.submittedFlagCount, 1);
+  assert.equal(releaseReport.body.assignmentFlagEvidence.counts.completeFlagCount, 1);
+  assert.equal(releaseReport.body.assignmentFlagEvidence.counts.topicFitFlagCount, 1);
+  assert.equal(releaseReport.body.assignmentFlagEvidence.rows[0].excludedFromRatingDenominator, true);
+  assert.equal(releaseReport.body.assignmentFlagEvidence.releaseUseStatus, "submitted_assignment_flag_evidence_complete");
   assert.equal(releaseReport.body.workflowActionArtifacts.discussions.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.adjudications.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.adjudicationFinalizations.length, 1);
+  assert.equal(releaseReport.body.adjudicationFinalizationEvidence.counts.submittedFinalizationCount, 1);
+  assert.equal(releaseReport.body.adjudicationFinalizationEvidence.counts.completeFinalizationCount, 1);
+  assert.equal(releaseReport.body.adjudicationFinalizationEvidence.rows[0].memoFound, true);
+  assert.equal(releaseReport.body.adjudicationFinalizationEvidence.rows[0].finalizedByMemoAdjudicator, true);
+  assert.equal(
+    releaseReport.body.adjudicationFinalizationEvidence.releaseUseStatus,
+    "submitted_adjudication_finalization_evidence_complete",
+  );
   assert.equal(releaseReport.body.workflowActionArtifacts.verificationRecords.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.verificationEvidenceArtifacts.length, 1);
   const workflowVerificationRow = releaseReport.body.correctnessVerification.verificationRows.find((row) => row.itemId === "pos-ai-prior::crit-ai-base-rate");
@@ -9977,6 +10042,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowVerificationRow.verificationEvidenceProvenanceStatus, "verification_evidence_artifact_complete");
   assert.equal(workflowVerificationRow.nonblindEvidenceFlag, true);
   assert.equal(releaseReport.body.correctnessVerification.submittedEvidenceArtifactCount, 1);
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.reviewRequiredArtifactCount, 0);
+  assert.equal(
+    releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.postLockNonblindArtifactIds.includes("verification-evidence-workflow-new"),
+    true,
+  );
+  assert.equal(
+    releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.releaseUseStatus,
+    "post_lock_nonblind_verification_evidence_disclosed",
+  );
   assert.equal(
     releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).retrievedAt,
     "2026-06-12T11:58:00.000Z",

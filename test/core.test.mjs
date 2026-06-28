@@ -3741,6 +3741,13 @@ test("correctness verification report links VerificationRecords and blocks unres
   assert.equal(report.byVerificationStatus.not_practicable, 1);
   assert.equal(report.verificationEvidenceArtifactRows.every((row) => row.snapshotContentHash.startsWith("sha256:")), true);
   assert.equal(report.verificationRows.find((row) => row.itemId === "pos-voting::crit-voting-bullet").linkedEvidenceArtifactCount, 2);
+  assert.equal(report.verificationEvidenceProvenanceSummary.totalArtifactCount, 4);
+  assert.equal(report.verificationEvidenceProvenanceSummary.completeArtifactCount, 4);
+  assert.equal(report.verificationEvidenceProvenanceSummary.reviewRequiredArtifactCount, 0);
+  assert.equal(report.verificationEvidenceProvenanceSummary.sourceBlindEvidenceCount, 1);
+  assert.equal(report.verificationEvidenceProvenanceSummary.postLockNonblindEvidenceCount, 3);
+  assert.equal(report.verificationEvidenceProvenanceSummary.bySourceExposureStatus.post_lock_source_visible, 3);
+  assert.equal(report.verificationEvidenceProvenanceSummary.releaseUseStatus, "post_lock_nonblind_verification_evidence_disclosed");
 
   const resolvedRecords = verificationRecords.map((record) =>
     record.id === "verify-voting-bullet-strategy"
@@ -3750,6 +3757,8 @@ test("correctness verification report links VerificationRecords and blocks unres
   const resolvedReport = buildCorrectnessVerificationReport("release-test", seedRatings, positions, critiques, resolvedRecords);
   assert.equal(resolvedReport.releaseBlockingItems.length, 0);
   assert.equal(resolvedReport.byEvidenceProvenanceStatus.verification_evidence_artifact_complete >= 1, true);
+  assert.equal(resolvedReport.verificationEvidenceProvenanceSummary.reviewSections.length, 0);
+  assert.equal(resolvedReport.verificationEvidenceProvenanceSummary.postLockNonblindArtifactIds.includes("verification-evidence-verify-voting-bullet-resolved-1"), true);
   assert.equal(resolvedReport.releaseUseStatus, "pass");
 });
 
@@ -3860,6 +3869,14 @@ test("release report applies submitted adjudication and verification workflow ar
   assert.equal(verificationRow.timestamp, "2026-06-12T12:00:00.000Z");
   assert.equal(report.correctnessVerification.submittedEvidenceArtifactCount, 1);
   assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).sourceExposureStatus, "source_blind");
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.totalArtifactCount, 6);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.sourceBlindEvidenceCount, 2);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.postLockNonblindEvidenceCount, 4);
+  assert.equal(
+    report.correctnessVerification.verificationEvidenceProvenanceSummary.completeArtifactIds.includes("verification-evidence-submitted-voting-bullet"),
+    true,
+  );
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.releaseUseStatus, "post_lock_nonblind_verification_evidence_disclosed");
   assert.equal(report.correctnessVerification.releaseUseStatus, "pass");
 
   const memoRow = report.adjudicationMemoAudit.memoRows.find((row) => row.memoId === "adjudication-memo-submitted-voting-bullet");
@@ -3883,6 +3900,75 @@ test("release report applies submitted adjudication and verification workflow ar
   );
   assert.equal(trancheMemoRow.unresolvedDisagreementClass, "expert_verified_conceptual_incentive_check");
   assert.deepEqual(trancheMemoRow.disagreementTaxonomy, ["background_knowledge_dependence"]);
+});
+
+test("release report derives adjudication finalization evidence from submitted workflow actions", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-adjudication-finalization-evidence",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      adjudicationMemos: [
+        {
+          id: "adjudication-memo-finalized-core",
+          discussionThreadId: "discussion-thread-finalized-core",
+          itemId: "pos-voting::crit-voting-bullet",
+          contestedInterpretation: "Whether the voting critique attacks a central strategic claim.",
+          plausibleInterpretationsConsidered: ["central_strategy_attack", "side_style_attack"],
+          worstPlausibleInterpretationConsidered: "side_style_attack",
+          critiqueRefutesInterpretations: ["central_strategy_attack"],
+          adversarialPlausibilityWeightingDecision: "Use the central strategic reading for release.",
+          disagreementTaxonomyCodes: ["strength_centrality_allocation"],
+          postDiscussionResolutionStatus: "resolved_for_release_candidate",
+          unresolvedDisagreementClass: "resolved_for_release_candidate",
+          splitDecision: "internal_validation",
+          adjudicatorIds: ["expert-finalizer"],
+          timestamp: "2026-06-12T12:15:00.000Z",
+        },
+      ],
+      adjudicationFinalizations: [
+        {
+          id: "adjudication-finalization-complete-core",
+          adjudicationId: "adjudication-core",
+          memoId: "adjudication-memo-finalized-core",
+          finalizationStatus: "finalized_for_release_candidate",
+          finalizedBy: "expert-finalizer",
+          timestamp: "2026-06-12T12:20:00.000Z",
+        },
+        {
+          id: "adjudication-finalization-review-core",
+          adjudicationId: "adjudication-core",
+          memoId: "missing-memo-core",
+          finalizationStatus: "draft",
+          finalizedBy: "other-expert",
+        },
+      ],
+    },
+  );
+
+  assert.equal(report.adjudicationFinalizationEvidence.counts.submittedFinalizationCount, 2);
+  assert.equal(report.adjudicationFinalizationEvidence.counts.completeFinalizationCount, 1);
+  assert.equal(report.adjudicationFinalizationEvidence.counts.reviewRequiredCount, 1);
+  assert.equal(report.adjudicationFinalizationEvidence.releaseUseStatus, "adjudication_finalization_evidence_review_required");
+  const completeRow = report.adjudicationFinalizationEvidence.rows.find((row) => row.id === "adjudication-finalization-complete-core");
+  assert.equal(completeRow.status, "adjudication_finalization_evidence_complete");
+  assert.equal(completeRow.memoFound, true);
+  assert.equal(completeRow.finalizedByMemoAdjudicator, true);
+  const reviewRow = report.adjudicationFinalizationEvidence.rows.find((row) => row.id === "adjudication-finalization-review-core");
+  assert.equal(reviewRow.reviewReasons.includes("matching_adjudication_memo"), true);
+  assert.equal(reviewRow.reviewReasons.includes("finalizationStatus:not_finalized_for_release_candidate"), true);
+  assert.equal(reviewRow.reviewReasons.includes("timestamp"), true);
 });
 
 test("same-position context report freezes sibling exposure and model-context parity", () => {
@@ -5228,6 +5314,104 @@ test("submitted rights records update release rights audits without broadening s
   assert.equal(hiddenAudit.status, "pass");
   assert.deepEqual(hiddenAudit.releaseScopeFailures, []);
   assert.deepEqual(hiddenAudit.unclearedRecords, []);
+});
+
+test("release report derives rights-review evidence from submitted workflow actions", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-rights-review-evidence",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      rightsReviews: [
+        {
+          id: "rights-review-public-ai-prior",
+          itemId: "pos-ai-prior::crit-ai-base-rate",
+          reviewerId: "rights-admin",
+          rightsStatus: "public_export_allowed",
+          releaseScope: "public_export",
+          reviewedAt: "2026-06-12T10:00:00.000Z",
+        },
+        {
+          id: "rights-review-public-voting-mismatch",
+          itemId: "pos-voting::crit-voting-bullet",
+          reviewerId: "rights-admin",
+          rightsStatus: "public_export_allowed",
+          releaseScope: "public_export",
+          reviewedAt: "2026-06-12T10:05:00.000Z",
+        },
+      ],
+    },
+  );
+
+  assert.equal(report.rightsReviewEvidence.counts.submittedReviewCount, 2);
+  assert.equal(report.rightsReviewEvidence.counts.completeReviewCount, 1);
+  assert.equal(report.rightsReviewEvidence.counts.reviewRequiredCount, 1);
+  assert.equal(report.rightsReviewEvidence.releaseUseStatus, "rights_review_evidence_review_required");
+  const completeRow = report.rightsReviewEvidence.rows.find((row) => row.id === "rights-review-public-ai-prior");
+  assert.equal(completeRow.status, "rights_review_evidence_complete");
+  assert.equal(completeRow.rightsRecordId, "rights-pos-ai-prior");
+  const mismatchRow = report.rightsReviewEvidence.rows.find((row) => row.id === "rights-review-public-voting-mismatch");
+  assert.equal(mismatchRow.releaseScopeCovered, false);
+  assert.equal(mismatchRow.reviewReasons.includes("release_scope_not_covered_by_rights_record"), true);
+});
+
+test("release report derives assignment-flag evidence from blind-safe workflow actions", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-assignment-flag-evidence",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      assignmentFlags: [
+        {
+          id: "flag-topic-fit-core",
+          assignmentId: "assign-ai-base-rate",
+          raterId: "rater-a",
+          reasonCode: "insufficient_topic_expertise",
+          notes: "Blind-safe topic-fit review request.",
+        },
+        {
+          id: "flag-unsupported-core",
+          assignmentId: "assign-missing",
+          raterId: "rater-a",
+          reasonCode: "hidden_benchmark_guess",
+        },
+      ],
+    },
+  );
+
+  assert.equal(report.assignmentFlagEvidence.counts.submittedFlagCount, 2);
+  assert.equal(report.assignmentFlagEvidence.counts.completeFlagCount, 1);
+  assert.equal(report.assignmentFlagEvidence.counts.reviewRequiredCount, 1);
+  assert.equal(report.assignmentFlagEvidence.counts.topicFitFlagCount, 1);
+  assert.equal(report.assignmentFlagEvidence.releaseUseStatus, "assignment_flag_evidence_review_required");
+  const topicFitRow = report.assignmentFlagEvidence.rows.find((row) => row.id === "flag-topic-fit-core");
+  assert.equal(topicFitRow.status, "assignment_flag_evidence_complete");
+  assert.equal(topicFitRow.excludedFromRatingDenominator, true);
+  const unsupportedRow = report.assignmentFlagEvidence.rows.find((row) => row.id === "flag-unsupported-core");
+  assert.equal(unsupportedRow.reviewReasons.includes("assignment_not_found"), true);
+  assert.equal(unsupportedRow.reviewReasons.includes("reasonCode:unsupported"), true);
 });
 
 test("active-learning audit reports denominator flow and preserves blinding", () => {

@@ -980,6 +980,56 @@ function itemRefFromWorkflowArtifact(artifact) {
   return { positionId, critiqueId };
 }
 
+function buildVerificationEvidenceProvenanceSummary(evidenceArtifacts = [], evidenceReviewSections = []) {
+  const artifactIds = (predicate) => evidenceArtifacts.filter(predicate).map((artifact) => artifact.id);
+  const completeArtifactIds = artifactIds((artifact) => artifact.reviewReasons.length === 0);
+  const reviewRequiredArtifactIds = artifactIds((artifact) => artifact.reviewReasons.length > 0);
+  const postLockNonblindArtifactIds = artifactIds(
+    (artifact) =>
+      artifact.nonblindEvidenceFlag === true ||
+      (artifact.sourceExposureStatus && !["source_blind", "not_applicable"].includes(artifact.sourceExposureStatus)),
+  );
+  const sourceIdentifiableArtifactIds = artifactIds((artifact) => artifact.sourceExposureStatus === "source_identifiable" || artifact.sourceIdentifiabilityFlag === true);
+  const sourceAssistedArtifactIds = artifactIds((artifact) => artifact.sourceAssistedFlag === true);
+  const protectedContentArtifactIds = artifactIds(
+    (artifact) => artifact.protectedContentFlag === true || artifact.protectedContentExposureStatus === "protected_content_present_authorized",
+  );
+  const modelAssistedArtifactIds = artifactIds((artifact) => artifact.modelAssistanceStatus && artifact.modelAssistanceStatus !== "none");
+  const totalArtifactCount = evidenceArtifacts.length;
+  const releaseUseStatus =
+    !totalArtifactCount
+      ? "verification_evidence_provenance_not_applicable"
+      : reviewRequiredArtifactIds.length || protectedContentArtifactIds.length
+        ? "verification_evidence_provenance_review_required"
+        : postLockNonblindArtifactIds.length || sourceIdentifiableArtifactIds.length || sourceAssistedArtifactIds.length || modelAssistedArtifactIds.length
+          ? "post_lock_nonblind_verification_evidence_disclosed"
+          : "source_blind_verification_evidence_ready";
+  return {
+    totalArtifactCount,
+    completeArtifactCount: completeArtifactIds.length,
+    reviewRequiredArtifactCount: reviewRequiredArtifactIds.length,
+    sourceBlindEvidenceCount: evidenceArtifacts.filter((artifact) => artifact.sourceExposureStatus === "source_blind").length,
+    postLockNonblindEvidenceCount: postLockNonblindArtifactIds.length,
+    sourceIdentifiableEvidenceCount: sourceIdentifiableArtifactIds.length,
+    sourceAssistedEvidenceCount: sourceAssistedArtifactIds.length,
+    protectedContentEvidenceCount: protectedContentArtifactIds.length,
+    modelAssistedEvidenceCount: modelAssistedArtifactIds.length,
+    bySourceExposureStatus: countBy(evidenceArtifacts, "sourceExposureStatus"),
+    byProtectedContentExposureStatus: countBy(evidenceArtifacts, "protectedContentExposureStatus"),
+    byModelAssistanceStatus: countBy(evidenceArtifacts, "modelAssistanceStatus"),
+    byBlindingImpactStatus: countBy(evidenceArtifacts, "blindingImpactStatus"),
+    completeArtifactIds,
+    reviewRequiredArtifactIds,
+    postLockNonblindArtifactIds,
+    sourceIdentifiableArtifactIds,
+    sourceAssistedArtifactIds,
+    protectedContentArtifactIds,
+    modelAssistedArtifactIds,
+    reviewSections: evidenceReviewSections,
+    releaseUseStatus,
+  };
+}
+
 function optionalStringArray(value) {
   if (Array.isArray(value)) return value.filter((entry) => typeof entry === "string" && entry);
   if (typeof value === "string" && value) return [value];
@@ -4261,6 +4311,74 @@ export function buildAdjudicationMemoAuditReport(
   };
 }
 
+function buildAdjudicationFinalizationEvidenceReport(releaseId, finalizations = [], memos = adjudicationMemos) {
+  const memoById = new Map(memos.map((memo) => [memo.id, memo]));
+  const rows = finalizations.map((finalization) => normalizeAdjudicationFinalizationEvidenceRow(finalization, memoById)).filter(Boolean);
+  const reviewRows = rows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `adjudication-finalization-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      requiredArtifact: "AdjudicationFinalization",
+      releaseRule:
+        "Release-critical adjudication finalizations must name the governed adjudication, matching memo, finalized status, finalizer, and timestamp before final labels can rely on them.",
+      preservedOriginalsRule: "Finalization evidence confirms memo handoff only; preserved original ratings remain enforced by revision and label-snapshot evidence.",
+    },
+    rows,
+    counts: {
+      submittedFinalizationCount: rows.length,
+      completeFinalizationCount: rows.length - reviewRows.length,
+      reviewRequiredCount: reviewRows.length,
+      matchedMemoCount: rows.filter((row) => row.memoFound).length,
+      finalizedForReleaseCandidateCount: rows.filter((row) => row.finalizationStatus === "finalized_for_release_candidate").length,
+    },
+    byFinalizationStatus: countBy(rows, "finalizationStatus"),
+    reviewRows,
+    releaseUseStatus: !rows.length
+      ? "no_submitted_adjudication_finalizations"
+      : reviewRows.length
+        ? "adjudication_finalization_evidence_review_required"
+        : "submitted_adjudication_finalization_evidence_complete",
+  };
+}
+
+function normalizeAdjudicationFinalizationEvidenceRow(finalization, memoById) {
+  if (!finalization || typeof finalization !== "object") return null;
+  const memoId = finalization.memoId ?? finalization.adjudicationMemoId ?? null;
+  const memo = memoById.get(memoId);
+  const adjudicatorIds = Array.isArray(memo?.adjudicatorIds) ? memo.adjudicatorIds : [];
+  const finalizedBy = finalization.finalizedBy ?? finalization.adjudicatorId ?? finalization.createdBy ?? null;
+  const timestamp = finalization.timestamp ?? finalization.finalizedAt ?? finalization.createdAt ?? null;
+  const reviewReasons = [
+    finalization.id ? null : "id",
+    finalization.adjudicationId ? null : "adjudicationId",
+    memoId ? null : "memoId",
+    memoId && !memo ? "matching_adjudication_memo" : null,
+    finalization.finalizationStatus ? null : "finalizationStatus",
+    finalization.finalizationStatus && finalization.finalizationStatus !== "finalized_for_release_candidate" ? "finalizationStatus:not_finalized_for_release_candidate" : null,
+    finalizedBy ? null : "finalizedBy",
+    memo && adjudicatorIds.length && finalizedBy && !adjudicatorIds.includes(finalizedBy) ? "finalizedBy:not_memo_adjudicator" : null,
+    timestamp ? null : "timestamp",
+  ].filter(Boolean);
+  return {
+    id: finalization.id ?? null,
+    rowSource: "submitted_workflow_adjudication_finalization",
+    adjudicationId: finalization.adjudicationId ?? null,
+    memoId,
+    memoFound: Boolean(memo),
+    discussionThreadId: finalization.discussionThreadId ?? memo?.discussionThreadId ?? null,
+    itemId: memo?.itemId ?? (memo ? makeItemId(memo.positionId, memo.critiqueId) : null),
+    finalizationStatus: finalization.finalizationStatus ?? null,
+    finalizedBy,
+    memoAdjudicatorIds: adjudicatorIds,
+    finalizedByMemoAdjudicator: Boolean(memo && finalizedBy && (!adjudicatorIds.length || adjudicatorIds.includes(finalizedBy))),
+    timestamp,
+    reviewReasons,
+    status: reviewReasons.length ? "adjudication_finalization_evidence_review_required" : "adjudication_finalization_evidence_complete",
+  };
+}
+
 export function buildPostDiscussionDisagreementReport(
   releaseId,
   labelSnapshot,
@@ -5055,6 +5173,153 @@ function normalizeRightsStatus(status, releaseScopes, baseStatus) {
   if (status === "cleared_internal") return "cleared_internal_only";
   if (status === "cleared" && releaseScopes.includes("hidden_benchmark")) return "cleared";
   return status;
+}
+
+function buildRightsReviewEvidenceReport(releaseId, positionList = positions, rightsRecords = provenanceRightsRecords, rightsReviews = []) {
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const rightsRecordByPosition = new Map(rightsRecords.map((record) => [record.positionId, record]));
+  const rows = rightsReviews.map((review) => normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPosition)).filter(Boolean);
+  const reviewRows = rows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `rights-review-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      requiredArtifact: "RightsReview",
+      releaseRule:
+        "Submitted rights reviews must name the reviewed position or item, reviewer, status, and release scope, and must be matched by a current RightsRecord before they count as release evidence.",
+      nonOverrideRule: "RightsReview actions do not broaden release scopes unless a matching RightsRecord is also present.",
+    },
+    rows,
+    counts: {
+      submittedReviewCount: rows.length,
+      completeReviewCount: rows.length - reviewRows.length,
+      reviewRequiredCount: reviewRows.length,
+      matchedRightsRecordCount: rows.filter((row) => row.matchedCurrentRightsRecord).length,
+      unmatchedRightsRecordCount: rows.filter((row) => !row.matchedCurrentRightsRecord).length,
+      releaseScopeCoveredCount: rows.filter((row) => row.releaseScopeCovered).length,
+      rightsStatusCompatibleCount: rows.filter((row) => row.rightsStatusCompatible).length,
+    },
+    byReviewStatus: countBy(rows, "status"),
+    byNormalizedRightsStatus: countBy(rows, "normalizedRightsStatus"),
+    reviewRows,
+    releaseUseStatus: !rows.length
+      ? "no_submitted_rights_reviews"
+      : reviewRows.length
+        ? "rights_review_evidence_review_required"
+        : "submitted_rights_review_evidence_complete",
+  };
+}
+
+function normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPosition) {
+  if (!review || typeof review !== "object") return null;
+  const artifactId = review.artifactId ?? review.itemId ?? null;
+  const positionId =
+    review.positionId ??
+    parsePositionIdFromItemId(artifactId) ??
+    (typeof artifactId === "string" && positionById.has(artifactId) ? artifactId : null);
+  const rightsRecord = rightsRecordByPosition.get(positionId);
+  const releaseScopes = normalizeRightsReleaseScopes(review, rightsRecord ?? {});
+  const normalizedRightsStatus = normalizeRightsStatus(review.rightsStatus, releaseScopes, rightsRecord?.rightsStatus);
+  const reviewerId = review.reviewerId ?? review.reviewedBy ?? review.createdBy ?? null;
+  const releaseScopeCovered = Boolean(rightsRecord && releaseScopes.length && releaseScopes.every((scope) => rightsRecord.releaseScopes?.includes(scope)));
+  const rightsStatusCompatible = Boolean(rightsRecord && releaseScopes.length && releaseScopes.every((scope) => isRightsStatusAllowed(scope, rightsRecord.rightsStatus)));
+  const reviewReasons = [
+    positionId ? null : "positionId_or_itemId",
+    positionId && !positionById.has(positionId) ? "position_not_in_current_corpus" : null,
+    reviewerId ? null : "reviewerId",
+    review.rightsStatus ? null : "rightsStatus",
+    releaseScopes.length ? null : "releaseScope",
+    rightsRecord ? null : "matching_rights_record",
+    rightsRecord && !releaseScopeCovered ? "release_scope_not_covered_by_rights_record" : null,
+    rightsRecord && !rightsStatusCompatible ? "rights_status_not_compatible_with_requested_scope" : null,
+  ].filter(Boolean);
+  return {
+    id: review.id,
+    rowSource: "submitted_workflow_rights_review",
+    artifactId,
+    positionId,
+    itemId: review.itemId ?? null,
+    reviewerId,
+    rightsStatus: review.rightsStatus ?? null,
+    normalizedRightsStatus,
+    releaseScopes,
+    rightsRecordId: rightsRecord?.id ?? null,
+    matchedCurrentRightsRecord: Boolean(rightsRecord),
+    releaseScopeCovered,
+    rightsStatusCompatible,
+    reviewedAt: review.reviewedAt ?? review.createdAt ?? review.timestamp ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rights_review_evidence_review_required" : "rights_review_evidence_complete",
+  };
+}
+
+function buildAssignmentFlagEvidenceReport(releaseId, assignmentFlags = [], assignmentList = assignments) {
+  const assignmentById = new Map(assignmentList.map((assignment) => [assignment.id, assignment]));
+  const rows = assignmentFlags.map((flag) => normalizeAssignmentFlagEvidenceRow(flag, assignmentById)).filter(Boolean);
+  const reviewRows = rows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `assignment-flag-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      requiredArtifact: "AssignmentFlag",
+      releaseRule:
+        "Assignment flags are blind-safe routing and review artifacts; they never count as ratings and must be linked to a current assignment with an accepted reason code.",
+      allowedReasonCodes: ASSIGNMENT_FLAG_REASON_CODES,
+    },
+    rows,
+    counts: {
+      submittedFlagCount: rows.length,
+      completeFlagCount: rows.length - reviewRows.length,
+      reviewRequiredCount: reviewRows.length,
+      knownAssignmentCount: rows.filter((row) => row.assignmentKnown).length,
+      topicFitFlagCount: rows.filter((row) => row.reasonCode === "insufficient_topic_expertise").length,
+      conflictOrExposureFlagCount: rows.filter((row) => ["conflict_or_prior_exposure", "source_recognition_or_prior_exposure"].includes(row.reasonCode)).length,
+    },
+    byReasonCode: countBy(rows, "reasonCode"),
+    byQueueType: countBy(rows, "queueType"),
+    reviewRows,
+    releaseUseStatus: !rows.length
+      ? "no_submitted_assignment_flags"
+      : reviewRows.length
+        ? "assignment_flag_evidence_review_required"
+        : "submitted_assignment_flag_evidence_complete",
+  };
+}
+
+function normalizeAssignmentFlagEvidenceRow(flag, assignmentById) {
+  if (!flag || typeof flag !== "object") return null;
+  const assignmentId = flag.assignmentId ?? flag.assignment_id ?? null;
+  const assignment = assignmentById.get(assignmentId);
+  const reasonCode = flag.reasonCode ?? flag.reason_code ?? null;
+  const reviewReasons = [
+    flag.id ? null : "id",
+    assignmentId ? null : "assignmentId",
+    assignmentId && !assignment ? "assignment_not_found" : null,
+    flag.raterId ? null : "raterId",
+    reasonCode ? null : "reasonCode",
+    reasonCode && !ASSIGNMENT_FLAG_REASON_CODES.includes(reasonCode) ? "reasonCode:unsupported" : null,
+    flag.positionId && assignment && flag.positionId !== assignment.positionId ? "positionId:assignment_mismatch" : null,
+    flag.critiqueId && assignment && flag.critiqueId !== assignment.critiqueId ? "critiqueId:assignment_mismatch" : null,
+  ].filter(Boolean);
+  return {
+    id: flag.id ?? null,
+    rowSource: "submitted_workflow_assignment_flag",
+    assignmentId,
+    assignmentKnown: Boolean(assignment),
+    positionId: flag.positionId ?? assignment?.positionId ?? null,
+    critiqueId: flag.critiqueId ?? assignment?.critiqueId ?? null,
+    raterId: flag.raterId ?? null,
+    reasonCode,
+    queueType: assignment?.queueType ?? null,
+    assignmentExposure: assignment?.exposure ?? null,
+    notesPresent: typeof flag.notes === "string" && flag.notes.trim().length > 0,
+    blindSafeRoutingOnly: true,
+    excludedFromRatingDenominator: true,
+    reviewReasons,
+    status: reviewReasons.length ? "assignment_flag_evidence_review_required" : "assignment_flag_evidence_complete",
+  };
 }
 
 export function buildActiveLearningAudit(batches = activeLearningBatches, submittedSelectionAudits = [], workflowArtifacts = {}) {
@@ -6973,6 +7238,7 @@ export function buildCorrectnessVerificationReport(
   const evidenceReviewSections = evidenceArtifacts
     .filter((artifact) => artifact.reviewReasons.length)
     .flatMap((artifact) => artifact.reviewReasons.map((reason) => ({ artifactType: "verification_evidence_artifact", artifactId: artifact.id, reason })));
+  const verificationEvidenceProvenanceSummary = buildVerificationEvidenceProvenanceSummary(evidenceArtifacts, evidenceReviewSections);
   return {
     id: `correctness-verification-${releaseId}`,
     releaseId,
@@ -6990,6 +7256,7 @@ export function buildCorrectnessVerificationReport(
     linkedEvidenceArtifactCount: evidenceArtifacts.length,
     submittedEvidenceArtifactCount: evidenceArtifacts.filter((artifact) => artifact.rowSource === "submitted_workflow_verification_evidence_artifact").length,
     evidenceReviewSections,
+    verificationEvidenceProvenanceSummary,
     unresolvedRequiredItems: requiredRows.filter((row) => ["missing", "unresolved"].includes(row.verificationStatus)),
     releaseBlockingItems: releaseBlockingRows,
     byVerificationStatus: countBy(rows, "verificationStatus"),
@@ -14135,6 +14402,14 @@ const REQUIRED_QUEUE_POLICY_COMPONENTS = [
 const ASSIGNMENT_DECLINE_REASON_CODES = ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"];
 const ASSIGNMENT_DECLINE_REASSIGNMENT_STATUSES = ["reassigned_without_label", "paused_for_topic_fit_review", "closed_no_reassignment_needed"];
 const ASSIGNMENT_DECLINE_QA_ROUTING_STATUSES = ["monitor_only", "routed_to_qa_repeated_decline", "routed_to_qa_suspicious_pattern"];
+const ASSIGNMENT_FLAG_REASON_CODES = [
+  "insufficient_topic_expertise",
+  "conflict_or_prior_exposure",
+  "text_unreadable_or_wrong_item",
+  "source_recognition_or_prior_exposure",
+  "time_or_fatigue_risk",
+  "other",
+];
 
 const RATER_ITEM_CONFLICT_TYPES = [
   "authored_position",
@@ -16976,6 +17251,11 @@ export function buildOctoberReleaseReport(
     effectiveVerificationEvidenceArtifacts,
   );
   const adjudicationMemoAudit = buildAdjudicationMemoAuditReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
+  const adjudicationFinalizationEvidence = buildAdjudicationFinalizationEvidenceReport(
+    releaseId,
+    options.adjudicationFinalizations ?? [],
+    effectiveAdjudicationMemos,
+  );
   const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
   const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
     humanCeilingRuns: options.humanCeilingRuns ?? [],
@@ -17060,6 +17340,8 @@ export function buildOctoberReleaseReport(
   ];
   const releaseGoldLibraryItems = buildReleaseGoldLibraryItems(options.goldItems ?? [], positionList);
   const releaseRightsRecords = buildReleaseRightsRecords(options.rightsRecords ?? [], provenanceRightsRecords);
+  const rightsReviewEvidence = buildRightsReviewEvidenceReport(releaseId, positionList, releaseRightsRecords, options.rightsReviews ?? []);
+  const assignmentFlagEvidence = buildAssignmentFlagEvidenceReport(releaseId, options.assignmentFlags ?? [], [...assignments, ...(options.workflowAssignments ?? [])]);
   const certification = buildCertificationAudit(certificationPacks, releaseGoldLibraryItems, OCTOBER_RELEASE_TARGETS, {
     releaseId,
     certificationRecords: options.certificationRecords ?? [],
@@ -17308,6 +17590,8 @@ export function buildOctoberReleaseReport(
     certificationReports,
     protectedSplitIsolation,
     rubricDrift,
+    rightsReviewEvidence,
+    assignmentFlagEvidence,
     provenanceRights: { public: publicRights, hidden_benchmark: hiddenBenchmarkRights },
     activeLearning,
     candidateIntakeQualityAudit,
@@ -17332,6 +17616,7 @@ export function buildOctoberReleaseReport(
     sourceStyleAudit,
     correctnessVerification,
     adjudicationMemoAudit,
+    adjudicationFinalizationEvidence,
     postDiscussionDisagreement,
     humanCeiling,
     samePositionContext,
