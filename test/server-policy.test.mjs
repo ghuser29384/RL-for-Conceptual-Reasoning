@@ -3945,9 +3945,68 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     headers: raterHeaders,
   });
   assert.equal(issuedAssignment.status, 200);
+  assert.equal(issuedAssignment.body.assignment.id, "assignment-workflow-new");
+  assert.equal(issuedAssignment.body.assignment.ratingContextSnapshotId, "rating-context-workflow-new");
+  assert.equal(
+    issuedAssignment.body.screenState.policyVersionProvenance.workflowProfileId,
+    "rating-workflow-profile-workflow-new",
+  );
   assert.equal(issuedAssignment.body.policyActionKind, "assignment_issue");
   assert.match(issuedAssignment.body.policyDecisionId, /^policy-decision-assignment_issue-/);
   assert.match(issuedAssignment.body.policyDecisionConsumptionId, /^policy-decision-consumption-assignment_issue-/);
+
+  const workflowAssignmentScreenState = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/assignments/assignment-workflow-new/screen-state",
+    headers: raterHeaders,
+  });
+  assert.equal(workflowAssignmentScreenState.status, 200);
+  assert.equal(workflowAssignmentScreenState.body.assignmentId, "assignment-workflow-new");
+  assert.equal(workflowAssignmentScreenState.body.sanitized, true);
+
+  const workflowAssignmentSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assignment-workflow-new/source-recognition-events",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...completeParticipantSafeguardWorkflowFixtures().sourceRecognitionEvent,
+        id: "source-recognition-workflow-assignment-new",
+        assignmentId: "assignment-workflow-new",
+      },
+    }),
+  });
+  assert.equal(workflowAssignmentSourceRecognition.status, 201, JSON.stringify(workflowAssignmentSourceRecognition.body));
+  assert.equal(workflowAssignmentSourceRecognition.body.resourceId, "source-recognition-workflow-assignment-new");
+
+  const workflowAssignmentTransition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/state-transitions",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      transition: {
+        id: "workflow-assignment-rater-accepted-transition",
+        entityType: "assignment",
+        entityId: "assignment-workflow-new",
+        assignmentId: "assignment-workflow-new",
+        priorState: "queued",
+        requestedNextState: "accepted_or_declined",
+        acceptedNextState: "accepted_or_declined",
+        guardChecks: ["workflow_assignment_actor_authorized"],
+      },
+    }),
+  });
+  assert.equal(workflowAssignmentTransition.status, 201);
+  assert.equal(workflowAssignmentTransition.body.acceptedNextState, "accepted_or_declined");
+
+  const workflowAssignmentState = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/state/assignment/assignment-workflow-new",
+    headers: raterHeaders,
+  });
+  assert.equal(workflowAssignmentState.status, 200);
+  assert.equal(workflowAssignmentState.body.entityId, "assignment-workflow-new");
+  assert.equal(workflowAssignmentState.body.currentState, "accepted_or_declined");
 
   const incompleteAssignment = await invokeApi(context, {
     method: "POST",
@@ -10614,9 +10673,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.uxSimplification.simplifiedCopyPreviewRows.find((row) => row.screenId === "rating" && row.rowSource === "submitted_workflow_simplified_copy_preview").releaseConfigManifestId,
     "release-config-manifest-workflow-new",
   );
-  assert.equal(releaseReport.body.workflowStateArtifacts.workflowStateTransitionLogs.length, workflowStateTransitionFixtures.length);
+  assert.equal(releaseReport.body.workflowStateArtifacts.workflowStateTransitionLogs.length, workflowStateTransitionFixtures.length + 1);
+  assert.equal(
+    releaseReport.body.workflowStateArtifacts.workflowStateTransitionLogs.some(
+      (transition) => transition.id === "workflow-assignment-rater-accepted-transition" && transition.assignmentId === "assignment-workflow-new",
+    ),
+    true,
+  );
   assert.equal(releaseReport.body.workflowStateMachineEvidence.releaseUseStatus, "submitted_workflow_state_machine_evidence_complete");
-  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.acceptedSubmittedTransitionCount, workflowStateTransitionFixtures.length - 1);
+  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.acceptedSubmittedTransitionCount, workflowStateTransitionFixtures.length);
   assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.rejectedSubmittedTransitionCount, 1);
   assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.passingEntityTypeCount, releaseReport.body.workflowStateMachineEvidence.requiredEntityTypes.length);
   assert.equal(
@@ -10672,7 +10737,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.volunteerIncentivePolicies.length, 1);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.raterQualificationRecords.length, qualificationScopes.length);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.languageArtifactAssessments.length, 1);
-  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.sourceRecognitionEvents.length, 1);
+  assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.sourceRecognitionEvents.length, 2);
+  assert.equal(
+    releaseReport.body.workflowParticipantSafeguardArtifacts.sourceRecognitionEvents.some(
+      (event) => event.id === "source-recognition-workflow-assignment-new" && event.assignmentId === "assignment-workflow-new",
+    ),
+    true,
+  );
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.modelProviderDataHandlingPolicies.length, modelProviderRunClasses.length);
   assert.equal(releaseReport.body.participantSafeguardEvidence.releaseUseStatus, "submitted_participant_safeguard_evidence_complete");
   assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingQualificationScopeCount, qualificationScopes.length);
@@ -10845,13 +10916,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
   assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyActionKinds.length, policyActionKinds.length);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 20);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 22);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 21);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 23);
   assert.equal(
     releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
       (record) => record.actionKind === "protected_render" && String(record.id).startsWith("policy-decision-protected_render-"),
     ).length,
-    2,
+    3,
   );
   assert.equal(
     releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
@@ -11059,7 +11130,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 104);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 108);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

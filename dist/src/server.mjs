@@ -4283,7 +4283,10 @@ async function workflowWriteEndpoint(request, response, context, match) {
   }
   const body = await readJsonBody(request);
   const candidate = body[spec.resourceKey] ?? body.resource ?? body;
-  const validation = validateWorkflowPayload(candidate, session.user, spec, params);
+  const validationContext = spec.requireAssignmentClaimField
+    ? { workflowAssignments: latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "assignment") }
+    : {};
+  const validation = validateWorkflowPayload(candidate, session.user, spec, params, validationContext);
   if (!validation.ok) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
     return;
@@ -4844,7 +4847,7 @@ async function assignmentDraftStoragePolicyEndpoint(request, response, context, 
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
     return;
   }
-  if (["rater", "graduate", "phd"].includes(session.user.role) && !session.user.allowedAssignmentIds?.includes("*") && !session.user.allowedAssignmentIds?.includes(assignmentId)) {
+  if (["rater", "graduate", "phd"].includes(session.user.role) && !(await actorCanAccessAssignmentId(context, assignmentId, session.user))) {
     sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${assignmentId}` });
     return;
   }
@@ -4911,7 +4914,7 @@ async function assignmentScreenStateEndpoint(request, response, context, assignm
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateReadRoles });
     return;
   }
-  if (["rater", "graduate", "phd"].includes(session.user.role) && !session.user.allowedAssignmentIds?.includes("*") && !session.user.allowedAssignmentIds?.includes(assignmentId)) {
+  if (["rater", "graduate", "phd"].includes(session.user.role) && !(await actorCanAccessAssignmentId(context, assignmentId, session.user))) {
     sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${assignmentId}` });
     return;
   }
@@ -5661,7 +5664,9 @@ async function workflowStateTransitionEndpoint(request, response, context) {
   }
   const body = await readJsonBody(request);
   const candidate = body.workflowStateTransitionLog ?? body.stateTransition ?? body.transition ?? body;
-  const validation = validateWorkflowStateTransitionPayload(candidate, session.user);
+  const validation = validateWorkflowStateTransitionPayload(candidate, session.user, {
+    workflowAssignments: latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "assignment"),
+  });
   if (!validation.resource) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_state_transition", detail: validation.detail });
     return;
@@ -5714,7 +5719,7 @@ async function workflowStateEndpoint(request, response, context, entityTypeInput
     sendJson(response, 404, { error: "unknown_workflow_state_entity_type" });
     return;
   }
-  if (["rater", "graduate", "phd"].includes(session.user.role) && entityType === "assignment" && !session.user.allowedAssignmentIds?.includes("*") && !session.user.allowedAssignmentIds?.includes(entityId)) {
+  if (["rater", "graduate", "phd"].includes(session.user.role) && entityType === "assignment" && !(await actorCanAccessAssignmentId(context, entityId, session.user))) {
     sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${entityId}` });
     return;
   }
@@ -6402,19 +6407,38 @@ async function nextAssignmentEndpoint(request, response, context) {
     sendJson(response, 403, { error: "authorized_rater_role_required" });
     return;
   }
-  const assignment = assignments
-    .filter((item) => item.exposure === "blind_initial")
-    .find((item) => session.user.allowedAssignmentIds?.includes("*") || session.user.allowedAssignmentIds?.includes(item.id));
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const workflowAssignments = latestWorkflowResources(workflowEvents, "assignment");
+  const ratingContextSnapshotList = buildEffectiveRatingContextSnapshots(latestWorkflowResources(workflowEvents, "ratingContextSnapshot"));
+  const workflowAssignmentIds = new Set(workflowAssignments.map((item) => item.id));
+  const assignment = [
+    ...workflowAssignments.filter(isIssuableBlindAssignment),
+    ...assignments.filter((item) => !workflowAssignmentIds.has(item.id) && isIssuableBlindAssignment(item)),
+  ].find((item) => actorCanReceiveAssignment(item, session.user));
   if (!assignment) {
     sendJson(response, 404, { error: "no_blind_initial_assignment_available" });
     return;
   }
-  const visibleView = createBlindRatingView(assignment, positions, critiques);
-  const position = positions.find((item) => item.id === assignment.positionId);
-  const critique = critiques.find((item) => item.id === assignment.critiqueId);
-  const contextSnapshot = ratingContextSnapshots.find(
-    (snapshot) => snapshot.positionId === assignment.positionId && snapshot.visibleCritiqueIds.includes(assignment.critiqueId),
-  );
+  const position = positionList.find((item) => item.id === assignment.positionId);
+  const critique = critiqueList.find((item) => item.id === assignment.critiqueId);
+  if (!position || !critique) {
+    sendJson(response, 409, {
+      error: "assignment_reference_missing",
+      detail: `assignment ${assignment.id} references missing position or critique`,
+    });
+    return;
+  }
+  const contextSnapshot = ratingContextSnapshotList.find((snapshot) => snapshot.id === assignment.ratingContextSnapshotId) ??
+    ratingContextSnapshotList.find((snapshot) => snapshot.positionId === assignment.positionId && snapshot.visibleCritiqueIds.includes(assignment.critiqueId));
+  if (assignment.ratingContextSnapshotId && !contextSnapshot) {
+    sendJson(response, 409, {
+      error: "assignment_rating_context_missing",
+      detail: `assignment ${assignment.id} references missing ratingContextSnapshotId ${assignment.ratingContextSnapshotId}`,
+    });
+    return;
+  }
+  const visibleView = createBlindRatingView(assignment, positionList, critiqueList);
   const assignmentIssueRoles = ["rater", "graduate", "phd", "expert", "admin"];
   const policyGate = await appendWorkflowPolicyDecisionGate(
     context,
@@ -6425,7 +6449,7 @@ async function nextAssignmentEndpoint(request, response, context) {
       assignmentId: assignment.id,
       positionId: assignment.positionId,
       critiqueId: assignment.critiqueId,
-      ratingContextSnapshotId: contextSnapshot?.id ?? null,
+      ratingContextSnapshotId: contextSnapshot?.id ?? assignment.ratingContextSnapshotId ?? null,
       outputSchemaVersion: "assignment-issue-output-lmca-v1",
     },
     {
@@ -6448,7 +6472,7 @@ async function nextAssignmentEndpoint(request, response, context) {
       critiqueId: assignment.critiqueId,
       positionTextVersionId: position?.textVersions.at(-1)?.id ?? null,
       critiqueTextVersionId: critique?.textVersions.at(-1)?.id ?? null,
-      ratingContextSnapshotId: contextSnapshot?.id ?? null,
+      ratingContextSnapshotId: contextSnapshot?.id ?? assignment.ratingContextSnapshotId ?? null,
       positionText: visibleView.positionText,
       critiqueText: visibleView.critiqueText,
       hiddenBeforeInitialSubmission: visibleView.hiddenMetadata,
@@ -6464,7 +6488,7 @@ async function nextAssignmentEndpoint(request, response, context) {
       policyVersionProvenance: {
         uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
         visibilityPolicyId: `visibility-policy-${releaseId}`,
-        workflowProfileId: "ordinary-live-rating-profile",
+        workflowProfileId: assignment.workflowProfileId ?? "ordinary-live-rating-profile",
         assistPolicyId: `pre-submit-assist-${releaseId}`,
         uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
         rubricLintConfigId: `rubric-lint-config-${releaseId}`,
@@ -6556,6 +6580,28 @@ async function nextAssignmentEndpoint(request, response, context) {
     policyDecisionId: policyGate.decision.id,
     policyDecisionConsumptionId: policyGate.consumption.id,
   });
+}
+
+function isIssuableBlindAssignment(assignment) {
+  const blindState = assignment.blindState ?? assignment.exposure;
+  if (blindState !== "blind_initial") return false;
+  if (assignment.declineOrReassignmentStatus && assignment.declineOrReassignmentStatus !== "not_declined") return false;
+  if (assignment.independentBlindEligibilityStatus && assignment.independentBlindEligibilityStatus !== "eligible") return false;
+  if (assignment.draftDependencyStaleStatus && assignment.draftDependencyStaleStatus !== "current") return false;
+  if (assignment.submittedAt) return false;
+  return true;
+}
+
+function actorCanReceiveAssignment(assignment, actor) {
+  if (actor.allowedAssignmentIds?.includes("*") || actor.allowedAssignmentIds?.includes(assignment.id)) return true;
+  const assignedRaterId = assignment.raterId ?? assignment.assignedTo ?? assignment.assigned_to ?? null;
+  return Boolean(assignedRaterId && assignedRaterId === actor.id);
+}
+
+async function actorCanAccessAssignmentId(context, assignmentId, actor) {
+  if (actor.allowedAssignmentIds?.includes("*") || actor.allowedAssignmentIds?.includes(assignmentId)) return true;
+  const assignment = await workflowResourceById(context, "assignment", assignmentId);
+  return Boolean(assignment && actorCanReceiveAssignment(assignment, actor));
 }
 
 async function recordRatingEndpoint(request, response, context, eventType, options = {}) {
@@ -7028,7 +7074,9 @@ async function recordSourceStyleAuditEndpoint(request, response, context) {
     sendJson(response, 400, { error: "invalid_source_style_audit", detail: validation.detail });
     return;
   }
-  const actorValidation = validateSourceStyleAuditActor(audit, actor);
+  const actorValidation = validateSourceStyleAuditActor(audit, actor, {
+    workflowAssignments: latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "assignment"),
+  });
   if (!actorValidation.ok) {
     sendJson(response, 403, { error: "source_style_audit_actor_not_authorized", detail: actorValidation.detail });
     return;
@@ -7411,7 +7459,7 @@ export function validateBenchmarkExposurePayload(exposure) {
   return { ok: true };
 }
 
-export function validateWorkflowStateTransitionPayload(transition, actor) {
+export function validateWorkflowStateTransitionPayload(transition, actor, validationContext = {}) {
   if (!transition || typeof transition !== "object" || Array.isArray(transition)) return invalid("workflow state transition object is required");
   const id = transition.id ?? transition.transitionId ?? transition.transition_id;
   const entityType = normalizeWorkflowStateEntityType(transition.entityType ?? transition.entity_type);
@@ -7441,7 +7489,9 @@ export function validateWorkflowStateTransitionPayload(transition, actor) {
   }
   if (["rater", "graduate", "phd"].includes(actor.role)) {
     const assignmentId = transition.assignmentId ?? transition.assignment_id ?? (entityType === "assignment" ? entityId : null);
-    if (assignmentId && !actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(assignmentId)) {
+    const workflowAssignment = (validationContext.workflowAssignments ?? []).find((assignment) => assignment.id === assignmentId);
+    const actorAssignedByWorkflow = Boolean(workflowAssignment && actorCanReceiveAssignment(workflowAssignment, actor));
+    if (assignmentId && !actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(assignmentId) && !actorAssignedByWorkflow) {
       return { ok: false, statusCode: 403, error: "workflow_actor_not_authorized", detail: `actor ${actor.id} is not assigned to ${assignmentId}` };
     }
   }
@@ -7602,7 +7652,7 @@ function validateParticipantRaterId(raterId, actor) {
   return { ok: true };
 }
 
-export function validateWorkflowPayload(resource, actor, spec, params = {}) {
+export function validateWorkflowPayload(resource, actor, spec, params = {}, validationContext = {}) {
   if (!resource || typeof resource !== "object" || Array.isArray(resource)) return invalid(`${spec.resourceKey} object is required`);
   const normalized = structuredClone(resource);
   if (spec.pathParamField) {
@@ -7838,13 +7888,18 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}) {
   if (spec.requireActorField && actor.role !== "admin" && normalized[spec.requireActorField] !== actor.id) {
     return { ok: false, statusCode: 403, error: "workflow_actor_not_authorized", detail: `${spec.resourceKey}.${spec.requireActorField} must match ${actor.id}` };
   }
-  if (spec.requireAssignmentClaimField && !actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(normalized[spec.requireAssignmentClaimField])) {
-    return {
-      ok: false,
-      statusCode: 403,
-      error: "workflow_actor_not_authorized",
-      detail: `actor ${actor.id} is not assigned to ${normalized[spec.requireAssignmentClaimField]}`,
-    };
+  if (spec.requireAssignmentClaimField) {
+    const assignmentId = normalized[spec.requireAssignmentClaimField];
+    const workflowAssignment = (validationContext.workflowAssignments ?? []).find((assignment) => assignment.id === assignmentId);
+    const actorAssignedByWorkflow = Boolean(workflowAssignment && actorCanReceiveAssignment(workflowAssignment, actor));
+    if (!actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(assignmentId) && !actorAssignedByWorkflow) {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: "workflow_actor_not_authorized",
+        detail: `actor ${actor.id} is not assigned to ${assignmentId}`,
+      };
+    }
   }
 
   return { ok: true, resource: normalized };
@@ -7877,11 +7932,13 @@ export function validateRatingActor(rating, actor, validationContext = {}) {
   return { ok: true };
 }
 
-export function validateSourceStyleAuditActor(audit, actor) {
+export function validateSourceStyleAuditActor(audit, actor, validationContext = {}) {
   if (!actor || typeof actor !== "object") return invalid("actor session is required");
   if (!["rater", "graduate", "phd", "expert", "admin"].includes(actor.role)) return invalid("authorized rater role is required");
   if (actor.role !== "admin" && audit.raterId !== actor.id) return invalid(`audit.raterId must match the authenticated actor ${actor.id}`);
-  if (!actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(audit.assignmentId)) {
+  const workflowAssignment = (validationContext.workflowAssignments ?? []).find((assignment) => assignment.id === audit.assignmentId);
+  const actorAssignedByWorkflow = Boolean(workflowAssignment && actorCanReceiveAssignment(workflowAssignment, actor));
+  if (!actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(audit.assignmentId) && !actorAssignedByWorkflow) {
     return invalid(`actor ${actor.id} is not assigned to ${audit.assignmentId}`);
   }
   return { ok: true };
