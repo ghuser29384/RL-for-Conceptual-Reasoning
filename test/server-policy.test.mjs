@@ -2334,6 +2334,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/prompt-templates"',
     'id: "model-improvement-run"',
     'endpoint: () => "/api/v1/model-improvement-runs"',
+    'positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting"',
+    'labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status"',
+    'highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config"',
     'id: "artifact-probe"',
     'endpoint: () => "/api/v1/artifact-probes/run"',
     'id: "sanity-baseline"',
@@ -2362,6 +2365,11 @@ test("rating UI starts score controls unset and requires explicit values before 
   assert.ok(appSource.includes('scoreExplanation: revisionExplanationTriggers.length\n        ? (original.scoreExplanation ?? "Self-check revision keeps a blind-safe explanation for the triggered score policy.")\n        : ""'));
   assert.ok(appSource.includes("General note (optional)"));
   assert.ok(appSource.includes("Short explanation required"));
+  assert.ok(appSource.includes("Short explanation unavailable"));
+  assert.ok(appSource.includes("Use General note for ordinary optional notes. This field opens only when the policy triggers."));
+  assert.ok(appSource.includes('${explanationRequired ? "" : "disabled"}'));
+  assert.ok(appSource.includes("if (!scoreExplanationRequired && state.draftScoreExplanation.trim())"));
+  assert.ok(appSource.includes("scoreExplanation is accepted only when ScoreExplanationPolicy triggers."));
   assert.ok(appSource.includes("Score Explanation Audit"));
   assert.ok(appSource.includes("scoreExplanationAudit.counts.triggerRequiredRows"));
   assert.ok(appSource.includes("scoreExplanationAudit.policy.blindPromptRule"));
@@ -5482,6 +5490,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         targetFields: ["overall", "centrality_x_strength"],
         humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
         tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
+        positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+        labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
+        highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config",
         calibrationTargetDistribution: "public_train_label_snapshot_prior",
         fitSplit: "public_train",
         devSplit: "public_dev",
@@ -5504,6 +5515,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(modelImprovementRunById.status, 200);
   assert.equal(modelImprovementRunById.body.id, "model-improvement-workflow-new");
+
+  const missingPositionBalancedPayload = {
+    ...modelImprovementRunById.body,
+    id: "model-improvement-missing-position-balanced",
+  };
+  delete missingPositionBalancedPayload.positionBalancedWeightingPolicy;
+  const missingPositionBalancedRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-improvement-runs",
+    headers: adminHeaders,
+    body: JSON.stringify({ modelImprovementRun: missingPositionBalancedPayload }),
+  });
+  assert.equal(missingPositionBalancedRun.status, 400);
+  assert.match(missingPositionBalancedRun.body.detail, /positionBalancedWeightingPolicy/);
 
   const incompleteEvaluationRun = await invokeApi(context, {
     method: "POST",

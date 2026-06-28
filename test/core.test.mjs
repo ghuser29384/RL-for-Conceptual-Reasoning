@@ -5696,6 +5696,11 @@ test("submitted model-evaluation artifacts are checked against current release e
           trainingExportId: `training-export-${releaseId}`,
           optimizedSurrogateObjectiveFamily: "pairwise_logistic",
           targetFields: ["overall", "centrality_x_strength"],
+          humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
+          tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
+          positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+          labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
+          highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config",
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
           lmcaEvaluationMetricsSeparate: true,
         },
@@ -5802,6 +5807,41 @@ test("submitted model-evaluation artifacts are checked against current release e
   );
   assert.equal(report.modelEvaluationArtifactEvidence.failureAuditEvidence.status, "submitted_model_failure_audit_is_diagnostic_only");
   assert.deepEqual(report.modelEvaluationArtifactEvidence.reviewSections, []);
+
+  const missingPositionBalanceReport = buildOctoberReleaseReport(
+    releaseId,
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      modelImprovementRuns: [
+        {
+          id: "model-improvement-missing-position-balance",
+          releaseId,
+          trainingExportId: `training-export-${releaseId}`,
+          optimizedSurrogateObjectiveFamily: "pairwise_logistic",
+          targetFields: ["overall", "centrality_x_strength"],
+          humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
+          tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
+          labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
+          highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config",
+          excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          lmcaEvaluationMetricsSeparate: true,
+        },
+      ],
+    },
+  );
+  assert.equal(missingPositionBalanceReport.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.status, "model_improvement_run_review_required");
+  assert.equal(
+    missingPositionBalanceReport.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.reviewChecks.find(
+      (check) => check.field === "positionBalancedWeightingPolicy",
+    ).status,
+    "missing_required_field",
+  );
 
   const staleReport = buildOctoberReleaseReport(
     releaseId,

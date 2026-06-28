@@ -8484,7 +8484,7 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
       failureAuditRule:
         "Submitted ModelFailureAudit artifacts are diagnostic-only and cannot replace aggregate LMCA metric reports.",
       modelImprovementRule:
-        "Submitted ModelImprovementRun artifacts must link to the current TrainingExport and separate optimized surrogate objectives from LMCA evaluation metrics.",
+        "Submitted ModelImprovementRun artifacts must link to the current TrainingExport, separate optimized surrogate objectives from LMCA evaluation metrics, preserve position-balanced weighting, and propagate label uncertainty/downweighting policy.",
     },
     modelImprovementRunEvidence,
     evaluationRunEvidence,
@@ -8508,6 +8508,11 @@ function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitt
     requiredManifestCheck("trainingExportId", trainingExport.id, submitted?.trainingExportId),
     requiredNonEmptyCheck("optimizedSurrogateObjective", submitted?.optimizedSurrogateObjectiveFamily ?? submitted?.optimizedSurrogateObjective),
     requiredNonEmptyCheck("targetFields", submitted?.targetFields),
+    requiredNonEmptyCheck("humanMarginWeightingPolicy", submitted?.humanMarginWeightingPolicy),
+    requiredNonEmptyCheck("tieIndifferenceHandling", submitted?.tieIndifferenceHandling),
+    requiredNonEmptyCheck("positionBalancedWeightingPolicy", submitted?.positionBalancedWeightingPolicy),
+    requiredNonEmptyCheck("labelUncertaintyPropagationPolicy", submitted?.labelUncertaintyPropagationPolicy),
+    requiredNonEmptyCheck("highUncertaintyDownweightingPolicy", submitted?.highUncertaintyDownweightingPolicy),
     requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
     requiredManifestCheck("lmcaEvaluationMetricsSeparate", true, submitted?.lmcaEvaluationMetricsSeparate),
   ];

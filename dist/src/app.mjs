@@ -1309,6 +1309,9 @@ const workflowTemplates = [
         targetFields: ["overall", "centrality_x_strength"],
         humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
         tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
+        positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+        labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
+        highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config",
         calibrationTargetDistribution: "public_train_label_snapshot_prior",
         fitSplit: "public_train",
         devSplit: "public_dev",
@@ -2707,12 +2710,17 @@ function scoreExplanationPolicyPanel(assignment) {
         <textarea id="generalRatingNote" rows="2" placeholder="Optional note for yourself or reviewers.">${escapeHtml(state.draftGeneralRatingNote)}</textarea>
       </label>
       <label>
-        <span>${explanationRequired ? "Short explanation required" : "Short explanation (only required when triggered)"}</span>
-        <textarea id="scoreExplanation" rows="3" placeholder="${escapeHtml(explanationRequired ? "One or two blind-safe sentences; do not mention source, peers, model outputs, or protected status." : "Optional unless the policy triggers.")}">${escapeHtml(state.draftScoreExplanation)}</textarea>
+        <span>${explanationRequired ? "Short explanation required" : "Short explanation unavailable"}</span>
+        <textarea
+          id="scoreExplanation"
+          rows="3"
+          placeholder="${escapeHtml(explanationRequired ? "One or two blind-safe sentences; do not mention source, peers, model outputs, or protected status." : "Use General note for ordinary optional notes. This field opens only when the policy triggers.")}"
+          ${explanationRequired ? "" : "disabled"}
+        >${escapeHtml(explanationRequired ? state.draftScoreExplanation : "")}</textarea>
       </label>
       <div>
         <strong>ScoreExplanationPolicy</strong>
-        <span>${triggers.length ? `Triggered: ${triggers.map(humanize).join(", ")}.` : "No explanation trigger for the current ordinary draft."}</span>
+        <span>${triggers.length ? `Triggered: ${triggers.map(humanize).join(", ")}.` : "No explanation trigger for the current ordinary draft; use General note instead."}</span>
       </div>
       <p>Trigger prompts are label-blind, source-blind, and protected-status-blind.</p>
     </section>
@@ -4880,6 +4888,15 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     const triggeredExplanationValidation = scoreExplanationRequired
       ? validateTriggeredScoreExplanation(state.draftScoreExplanation)
       : { ok: true };
+    if (!scoreExplanationRequired && state.draftScoreExplanation.trim()) {
+      state.lastPersistenceStatus = {
+        tone: "bad",
+        title: "Short explanation not available",
+        detail: "Use General note for ordinary optional notes; scoreExplanation is accepted only when ScoreExplanationPolicy triggers.",
+      };
+      render();
+      return;
+    }
     if (!triggeredExplanationValidation.ok) {
       state.lastPersistenceStatus = {
         tone: "bad",
