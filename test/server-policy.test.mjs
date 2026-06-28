@@ -2383,6 +2383,7 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
 
 test("rating UI starts score controls unset and requires explicit values before submission", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
+  assert.ok(appSource.includes("What actually counts as a good philosophical argument?"));
   assert.match(appSource, /draftScores:\s*Object\.fromEntries\(RUBRIC_DIMENSIONS\.map\(\(dimension\) => \[dimension, null\]\)\)/);
   assert.ok(appSource.includes("const missingScores = missingDraftScoreDimensions();"));
   assert.ok(appSource.includes('title: "Required scores missing"'));
@@ -11917,6 +11918,40 @@ test("server policy requires rating confidence and trigger-based score explanati
   const missingExplanationValidation = validateRatingPayload(extremeWithoutExplanation, "blind_initial_submitted");
   assert.equal(missingExplanationValidation.ok, false);
   assert.match(missingExplanationValidation.detail, /scoreExplanationRequired/);
+
+  const deadWeightExtremeWithoutTrigger = {
+    ...validBlindRating("rating-dead-weight-extreme-missing-trigger"),
+    scores: {
+      centrality: 0.5,
+      strength: 0.5,
+      correctness: 0.5,
+      clarity: 0.8,
+      dead_weight: 0.95,
+      single_issue: 0.8,
+      overall: 0.25,
+    },
+    rawScores: {
+      centrality: 0.5,
+      strength: 0.5,
+      correctness: 0.5,
+      clarity: 0.8,
+      dead_weight: 0.95,
+      single_issue: 0.8,
+      overall: 0.25,
+    },
+    displayedScores: {
+      centrality: 0.5,
+      strength: 0.5,
+      correctness: 0.5,
+      clarity: 0.8,
+      dead_weight: 0.95,
+      single_issue: 0.8,
+      overall: 0.25,
+    },
+  };
+  const missingDeadWeightExtremeTrigger = validateRatingPayload(deadWeightExtremeWithoutTrigger, "blind_initial_submitted");
+  assert.equal(missingDeadWeightExtremeTrigger.ok, false);
+  assert.match(missingDeadWeightExtremeTrigger.detail, /extreme_score/);
 
   const ordinaryWithInventedTrigger = {
     ...validBlindRating("rating-ordinary-invented-trigger"),

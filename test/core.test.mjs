@@ -1963,6 +1963,16 @@ test("score explanation triggers include surprising score flags", () => {
     single_issue: 0.8,
     overall: 0.25,
   };
+  for (const dimension of RUBRIC_DIMENSIONS) {
+    const extremeValue = dimension === "dead_weight" ? 0.95 : 0.05;
+    assert.ok(
+      scoreExplanationTriggersForRating({
+        scores: { ...ordinaryScores, [dimension]: extremeValue },
+        assignment: { queueType: "ordinary" },
+      }).includes("extreme_score"),
+      dimension,
+    );
+  }
   assert.deepEqual(
     scoreExplanationTriggersForRating({
       scores: ordinaryScores,

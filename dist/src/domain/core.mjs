@@ -2542,7 +2542,7 @@ export const SCORE_EXPLANATION_INCONSISTENCY_RULES = ["correctness_lte_0_25_and_
 export const SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS = ["seven_scores", "confidence_low_medium_high"];
 export const SCORE_EXPLANATION_OPTIONAL_FIELDS = ["general_rating_note", "optional_evidence_spans"];
 
-const SCORE_EXPLANATION_EXTREME_DIMENSIONS = ["centrality", "strength", "correctness", "overall"];
+const SCORE_EXPLANATION_EXTREME_DIMENSIONS = RUBRIC_DIMENSIONS;
 const SCORE_EXPLANATION_HIGH_STAKES_QUEUE_TYPES = new Set([
   "validation_subset",
   "benchmark_candidate_review",
@@ -2557,9 +2557,7 @@ export function scoreExplanationTriggersForRating({ scores = {}, flags = {}, ass
   const triggers = [];
   if (
     SCORE_EXPLANATION_EXTREME_DIMENSIONS.some(
-      (dimension) =>
-        Number.isFinite(scores?.[dimension]) &&
-        (scores[dimension] < SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW || scores[dimension] > SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH),
+      (dimension) => scoreExplanationExtremeScoreTriggered(dimension, scores?.[dimension]),
     )
   ) {
     triggers.push("extreme_score");
@@ -2601,6 +2599,13 @@ export function scoreExplanationTriggersForRating({ scores = {}, flags = {}, ass
     triggers.push("exposure_familiarity_conflict_uncertainty");
   }
   return [...new Set(triggers)];
+}
+
+function scoreExplanationExtremeScoreTriggered(dimension, score) {
+  if (!Number.isFinite(score)) return false;
+  if (dimension === "dead_weight") return score > SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH;
+  if (dimension === "clarity" || dimension === "single_issue") return score < SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW;
+  return score < SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW || score > SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH;
 }
 
 export function scoreExplanationRequiredForRating(input) {
