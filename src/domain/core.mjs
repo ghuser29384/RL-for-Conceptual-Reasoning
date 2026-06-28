@@ -1542,6 +1542,24 @@ export const VALIDATION_TRANCHE_REQUIRED_COMPARISONS = [
   "incremental_post_model_assistance_delta",
 ];
 
+export const ARTIFACT_PROBE_INPUT_VIEWS = [
+  "full_context",
+  "critique_only",
+  "position_only",
+  "metadata_only",
+  "style_features_only",
+  "metadata_style_only",
+];
+const ARTIFACT_PROBE_REQUIRED_FAMILIES = ["full_context", "critique_only", "metadata_only", "style_features_only"];
+
+export const SANITY_BASELINE_TYPES = ["random_pairwise", "constant_mean", "constant_median", "prior_only_train_dev", "format_only"];
+const REQUIRED_SANITY_BASELINE_TYPES = ["random_pairwise", "constant_mean", "constant_median", "prior_only_train_dev"];
+
+export const SYCOPHANCY_ORTHODOXY_CUE_TYPES = ["no_cue_control", "user_agreement", "authority", "consensus", "safety_orthodoxy"];
+const REQUIRED_SYCOPHANCY_ORTHODOXY_CUE_FAMILIES = ["user_agreement", "authority", "consensus", "safety_orthodoxy"];
+
+export const OBFUSCATION_STRESS_VARIANT_FAMILIES = ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"];
+
 export const EFFORT_EXPECTATIONS = {
   short_pair_5_to_15_minutes: {
     minActiveSeconds: 300,
@@ -7195,7 +7213,7 @@ export function buildSanityBaselineReport(releaseId, labelSnapshot, positionList
       submittedBaselineEvidence.reviewRows.length > 0
         ? "submitted_sanity_baselines_review_required"
         : submittedBaselineEvidence.submittedRunCount > 0
-          ? "submitted_sanity_baselines_attached"
+          ? submittedBaselineEvidence.releaseUseStatus
           : "computed_sanity_baselines_only",
   };
 }
@@ -7208,7 +7226,7 @@ function buildSubmittedSanityBaselineEvidence(releaseId, labelSnapshot, runs = [
     const checks = [
       requiredManifestCheck("releaseId", releaseId, run.releaseId),
       requiredManifestCheck("targetLabelSnapshotId", labelSnapshot.id, run.targetLabelSnapshotId ?? run.labelSnapshotId),
-      requiredNonEmptyCheck("baselineType", run.baselineType),
+      requiredSetMembershipCheck("baselineType", SANITY_BASELINE_TYPES, run.baselineType),
       requiredNonEmptyCheck("metricFamily", run.metricFamily),
       requiredNonEmptyCheck("metricOutputs", run.metricOutputs),
       requiredNonEmptyCheck("fitSplits", fitSplits),
@@ -7226,16 +7244,23 @@ function buildSubmittedSanityBaselineEvidence(releaseId, labelSnapshot, runs = [
     };
   });
   const reviewRows = rows.filter((row) => row.reviewChecks.length > 0);
+  const appliedBaselineTypes = uniqueStrings(rows.filter((row) => row.status === "submitted_sanity_baseline_fit_policy_preserved").map((row) => row.baselineType));
+  const missingRequiredBaselineTypes = REQUIRED_SANITY_BASELINE_TYPES.filter((baselineType) => !appliedBaselineTypes.includes(baselineType));
   return {
     submittedRunCount: matchingRuns.length,
     appliedRunCount: rows.length - reviewRows.length,
+    requiredBaselineTypes: REQUIRED_SANITY_BASELINE_TYPES,
+    appliedBaselineTypes,
+    missingRequiredBaselineTypes,
     reviewRows,
     rows,
     releaseUseStatus:
       reviewRows.length > 0
         ? "submitted_sanity_baselines_review_required"
         : matchingRuns.length > 0
-          ? "submitted_sanity_baselines_fit_policy_preserved"
+          ? missingRequiredBaselineTypes.length
+            ? "submitted_sanity_baselines_missing_required_types"
+            : "submitted_sanity_baselines_required_set_complete"
           : "no_submitted_sanity_baseline_runs",
   };
 }
@@ -7406,6 +7431,16 @@ export function buildUncertaintyAwareLeaderboardReport(
   const submittedLeaderboardReviewRows = submittedLeaderboardRows.filter(
     (row) => row.status !== "submitted_uncertainty_aware_leaderboard_complete",
   );
+  const claimGatedDiagnosticSummary = buildLeaderboardClaimGatedDiagnosticSummary(runs, {
+    robustnessClaims: options.robustnessClaims ?? [],
+    sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
+    obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+  });
+  const hiddenBenchmarkSubmissionFeedback = buildLeaderboardHiddenBenchmarkSubmissionFeedbackSummary(releaseId, {
+    benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
+    benchmarkSubmissions: options.benchmarkSubmissions ?? [],
+  });
+  const parserPromptIntegrity = buildLeaderboardParserPromptIntegritySummary(runs);
   return {
     id: `leaderboard-${releaseId}-${metricFamily}`,
     releaseId,
@@ -7460,6 +7495,9 @@ export function buildUncertaintyAwareLeaderboardReport(
     modelSnapshotComparability: summarizeModelSnapshotComparability(runs),
     modelAssistedLabelOverlap,
     reasoningModeSensitivity: buildReasoningModeSensitivityReport(releaseId, runs),
+    claimGatedDiagnosticSummary,
+    hiddenBenchmarkSubmissionFeedback,
+    parserPromptIntegrity,
     superiorityClaimPolicy:
       "Do not claim model superiority unless paired-difference intervals exclude zero and the absolute point-estimate gap meets the predeclared practical threshold.",
     releaseUseStatus: submittedLeaderboardReviewRows.length
@@ -7469,6 +7507,245 @@ export function buildUncertaintyAwareLeaderboardReport(
         : unresolvedGroups.length
           ? "point_estimate_ordering_only_unresolved_within_uncertainty"
           : "rank_claims_supported_for_declared_common_subset",
+  };
+}
+
+function buildLeaderboardHiddenBenchmarkSubmissionFeedbackSummary(releaseId, options = {}) {
+  const policies = (options.benchmarkSubmissionPolicies ?? []).filter((policy) => !policy?.releaseId || policy.releaseId === releaseId);
+  const submissions = (options.benchmarkSubmissions ?? []).filter((submission) => !submission?.releaseId || submission.releaseId === releaseId);
+  const activePolicy = policies
+    .slice()
+    .sort((left, right) => String(left.frozenAt ?? left.createdAt ?? left.id).localeCompare(String(right.frozenAt ?? right.createdAt ?? right.id)))
+    .at(-1) ?? null;
+  const policyReviewReasons = activePolicy ? benchmarkSubmissionPolicyReviewReasons(activePolicy) : ["benchmarkSubmissionPolicy"];
+  const submissionRows = submissions.map((submission) => {
+    const reviewReasons = benchmarkSubmissionReviewReasons(submission, activePolicy);
+    return {
+      id: submission.id ?? null,
+      benchmarkSubmissionPolicyId: submission.benchmarkSubmissionPolicyId ?? null,
+      submittedAggregateReportId: submission.submittedAggregateReportId ?? null,
+      aggregateMetricFamilyResultKeys: Object.keys(submission.aggregateMetricFamilyResults ?? {}).sort(),
+      uncertaintyIntervalKeys: Object.keys(submission.uncertaintyIntervals ?? {}).sort(),
+      coverageCountKeys: Object.keys(submission.coverageCounts ?? {}).sort(),
+      coarseEligibilityWarnings: normalizeStringArray(submission.coarseEligibilityWarnings),
+      budgetConsumptionStatus: submission.budgetConsumptionStatus ?? null,
+      cooldownStatus: submission.cooldownStatus ?? null,
+      duplicateRunStatus: submission.duplicateRunStatus ?? null,
+      perItemOutputIncluded: submission.perItemOutputIncluded ?? null,
+      perPairOutputIncluded: submission.perPairOutputIncluded ?? null,
+      hiddenIdExposureIncluded: submission.hiddenIdExposureIncluded ?? null,
+      promptSpecificCorrectionHintsIncluded: submission.promptSpecificCorrectionHintsIncluded ?? null,
+      reviewReasons,
+      status: reviewReasons.length ? "benchmark_submission_feedback_review_required" : "aggregate_only_submission_feedback_preserved",
+    };
+  });
+  const reviewSections = [
+    ...policyReviewReasons.map((reason) => ({ artifactType: "benchmark_submission_policy", artifactId: activePolicy?.id ?? "benchmark_submission_policy", reason })),
+    ...submissionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "benchmark_submission", artifactId: row.id, reason }))),
+    activePolicy && !submissionRows.length ? { artifactType: "benchmark_submission", artifactId: "benchmark_submission", reason: "no_benchmark_submission_records" } : null,
+  ].filter(Boolean);
+  const aggregateOnlyFeedbackStatus = activePolicy && policyReviewReasons.length === 0 && submissionRows.every((row) => row.status === "aggregate_only_submission_feedback_preserved")
+    ? "aggregate_only_feedback_preserved"
+    : activePolicy
+      ? "aggregate_only_feedback_review_required"
+      : "no_submitted_feedback_policy";
+  return {
+    activePolicyId: activePolicy?.id ?? null,
+    aggregateOnlyFeedbackStatus,
+    aggregateOnlyReport: activePolicy?.aggregateOnlyReport === true,
+    hiddenIdExposureProhibited: activePolicy?.hiddenIdExposureProhibited === true,
+    perItemFeedbackProhibited: activePolicy?.perItemFeedbackProhibited === true,
+    perPairFeedbackProhibited: activePolicy?.perPairFeedbackProhibited === true,
+    promptSpecificCorrectionHintsProhibited: activePolicy?.promptSpecificCorrectionHintsProhibited === true,
+    submissionBudget: activePolicy?.submissionBudget ?? null,
+    cooldownPolicy: activePolicy?.cooldownPolicy ?? null,
+    duplicateRunHandlingPolicy: activePolicy?.duplicateRunHandlingPolicy ?? null,
+    stableEvaluationManifestRequirement: activePolicy?.stableEvaluationManifestRequirement ?? null,
+    aggregateReportFieldPolicy: activePolicy?.aggregateReportFieldPolicy ?? null,
+    submissionRows,
+    reviewSections,
+    releaseUseStatus:
+      !activePolicy
+        ? "no_submitted_benchmark_submission_policy"
+        : reviewSections.length > 0
+          ? "benchmark_submission_feedback_review_required"
+          : "aggregate_only_submission_feedback_budgeted",
+  };
+}
+
+function benchmarkSubmissionPolicyReviewReasons(policy = {}) {
+  const budget = policy.submissionBudget ?? {};
+  return [
+    policy.aggregateOnlyReport === true ? null : "aggregateOnlyReport",
+    policy.hiddenIdExposureProhibited === true ? null : "hiddenIdExposureProhibited",
+    policy.perItemFeedbackProhibited === true ? null : "perItemFeedbackProhibited",
+    policy.perPairFeedbackProhibited === true ? null : "perPairFeedbackProhibited",
+    policy.promptSpecificCorrectionHintsProhibited === true ? null : "promptSpecificCorrectionHintsProhibited",
+    Number.isFinite(budget.maxSubmissionsPerWindow) && budget.maxSubmissionsPerWindow > 0 ? null : "submissionBudget.maxSubmissionsPerWindow",
+    Number.isFinite(budget.windowHours) && budget.windowHours > 0 ? null : "submissionBudget.windowHours",
+    Number.isFinite(budget.remainingSubmissions) && budget.remainingSubmissions >= 0 ? null : "submissionBudget.remainingSubmissions",
+    Number.isFinite(budget.cooldownHours) && budget.cooldownHours > 0 ? null : "submissionBudget.cooldownHours",
+    Number.isFinite(budget.duplicateRunReviewThreshold) && budget.duplicateRunReviewThreshold >= 0 && budget.duplicateRunReviewThreshold <= 1
+      ? null
+      : "submissionBudget.duplicateRunReviewThreshold",
+    String(policy.cooldownPolicy ?? "").toLowerCase().includes("cooldown") ? null : "cooldownPolicy",
+    String(policy.duplicateRunHandlingPolicy ?? "").toLowerCase().includes("duplicate") &&
+    String(policy.duplicateRunHandlingPolicy ?? "").toLowerCase().includes("review")
+      ? null
+      : "duplicateRunHandlingPolicy",
+    String(policy.stableEvaluationManifestRequirement ?? "").toLowerCase().includes("stable") &&
+    String(policy.stableEvaluationManifestRequirement ?? "").toLowerCase().includes("manifest")
+      ? null
+      : "stableEvaluationManifestRequirement",
+    ["aggregate", "uncertainty", "coverage", "coarse"].every((fragment) =>
+      String(policy.aggregateReportFieldPolicy ?? "").toLowerCase().includes(fragment),
+    )
+      ? null
+      : "aggregateReportFieldPolicy",
+  ].filter(Boolean);
+}
+
+function benchmarkSubmissionReviewReasons(submission = {}, activePolicy = null) {
+  const prohibitedPayloadFields = ["hiddenItemIds", "perItemOutputs", "perPairOutputs", "targetScoreVectors", "promptSpecificCorrectionHints"];
+  return [
+    activePolicy && submission.benchmarkSubmissionPolicyId === activePolicy.id ? null : "benchmarkSubmissionPolicyId",
+    objectHasEntries(submission.aggregateMetricFamilyResults) ? null : "aggregateMetricFamilyResults",
+    objectHasEntries(submission.uncertaintyIntervals) ? null : "uncertaintyIntervals",
+    objectHasEntries(submission.coverageCounts) ? null : "coverageCounts",
+    normalizeStringArray(submission.coarseEligibilityWarnings).length ? null : "coarseEligibilityWarnings",
+    submission.perItemOutputIncluded === false ? null : "perItemOutputIncluded",
+    submission.perPairOutputIncluded === false ? null : "perPairOutputIncluded",
+    submission.hiddenIdExposureIncluded === false ? null : "hiddenIdExposureIncluded",
+    submission.promptSpecificCorrectionHintsIncluded === false ? null : "promptSpecificCorrectionHintsIncluded",
+    BENCHMARK_BUDGET_CONSUMPTION_STATUSES.includes(submission.budgetConsumptionStatus) ? null : "budgetConsumptionStatus",
+    BENCHMARK_COOLDOWN_STATUSES.includes(submission.cooldownStatus) ? null : "cooldownStatus",
+    BENCHMARK_DUPLICATE_RUN_STATUSES.includes(submission.duplicateRunStatus) ? null : "duplicateRunStatus",
+    ...prohibitedPayloadFields.filter((field) => Object.hasOwn(submission, field)).map((field) => `${field}:prohibited_external_feedback`),
+  ].filter(Boolean);
+}
+
+function buildLeaderboardParserPromptIntegritySummary(runs = []) {
+  const perModelRows = runs.map((run) => {
+    const promptCheck = run.protectedPromptExampleCheck ?? {};
+    const acceptedOutputSchema = run.acceptedOutputSchema ?? {};
+    const parseFailureCount = Number.isFinite(run.parseFailureCount) ? run.parseFailureCount : null;
+    const invalidScoreCount = Number.isFinite(run.invalidScoreCount) ? run.invalidScoreCount : null;
+    const retryCount = Number.isFinite(run.retryCount) ? run.retryCount : null;
+    const repairedOutputCount = Number.isFinite(run.repairedOutputCount) ? run.repairedOutputCount : null;
+    const reviewReasons = [
+      run.parserConfigId ? null : "parserConfigId",
+      run.parserRetryPolicy ? null : "parserRetryPolicy",
+      objectHasEntries(acceptedOutputSchema) ? null : "acceptedOutputSchema",
+      parseFailureCount === null ? "parseFailureCount" : null,
+      invalidScoreCount === null ? "invalidScoreCount" : null,
+      retryCount === null ? "retryCount" : null,
+      repairedOutputCount === null ? "repairedOutputCount" : null,
+      promptExampleCheckPasses(promptCheck) ? null : "protectedPromptExampleCheck",
+    ].filter(Boolean);
+    return {
+      evaluationRunId: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+      parserConfigId: run.parserConfigId ?? null,
+      parserRetryPolicy: run.parserRetryPolicy ?? null,
+      acceptedOutputSchemaRequiredFields: normalizeStringArray(acceptedOutputSchema.required),
+      acceptedOutputSchemaForbiddenImputedFields: normalizeStringArray(acceptedOutputSchema.forbiddenImputedFields),
+      parseFailureCount,
+      invalidScoreCount,
+      retryCount,
+      repairedOutputCount,
+      promptArtifactId: run.promptArtifact?.id ?? null,
+      promptExampleItemIds: normalizeStringArray(run.promptExampleItemIds),
+      promptExamplePositionClusterIds: normalizeStringArray(run.promptExamplePositionClusterIds),
+      promptExampleExclusionPolicy: run.promptExampleExclusionPolicy ?? null,
+      protectedPromptExampleStatus: promptCheck.status ?? null,
+      hiddenBenchmarkExamplesExcluded: promptCheck.hiddenBenchmarkExamplesExcluded ?? null,
+      protectedValidationExamplesExcluded: promptCheck.protectedValidationExamplesExcluded ?? null,
+      reviewReasons,
+      status: reviewReasons.length ? "parser_prompt_integrity_review_required" : "parser_prompt_integrity_declared",
+    };
+  });
+  const parserConfigIds = uniqueStrings(perModelRows.map((row) => row.parserConfigId));
+  const parserRetryPolicies = uniqueStrings(perModelRows.map((row) => row.parserRetryPolicy));
+  const reviewSections = perModelRows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "evaluation_run_parser_prompt_integrity", artifactId: row.evaluationRunId, reason })),
+  );
+  return {
+    parserConfigIds,
+    parserRetryPolicies,
+    commonParserConfig: parserConfigIds.length === 1,
+    commonParserRetryPolicy: parserRetryPolicies.length === 1,
+    totalParseFailureCount: sumNumeric(perModelRows.map((row) => row.parseFailureCount)),
+    totalInvalidScoreCount: sumNumeric(perModelRows.map((row) => row.invalidScoreCount)),
+    totalRetryCount: sumNumeric(perModelRows.map((row) => row.retryCount)),
+    totalRepairedOutputCount: sumNumeric(perModelRows.map((row) => row.repairedOutputCount)),
+    perModelRows,
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "leaderboard_parser_prompt_integrity_review_required"
+      : parserConfigIds.length === 1 && parserRetryPolicies.length === 1
+        ? "common_parser_prompt_integrity_declared"
+        : "mixed_parser_or_prompt_policy_sensitivity_declared",
+  };
+}
+
+function promptExampleCheckPasses(check = {}) {
+  return check.hiddenBenchmarkExamplesExcluded === true && check.protectedValidationExamplesExcluded === true;
+}
+
+function sumNumeric(values) {
+  return values.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
+}
+
+function buildLeaderboardClaimGatedDiagnosticSummary(runs, options = {}) {
+  const runSummaries = runs.map((run) => buildClaimGatedModelDiagnostics(run, options));
+  const suiteRows = runSummaries.flatMap((summary) =>
+    summary.suites.map((suite) => ({
+      evaluationRunId: summary.evaluationRunId,
+      requestedModelAlias: summary.requestedModelAlias,
+      resolvedModelSnapshot: summary.resolvedModelSnapshot,
+      suiteId: suite.id,
+      status: suite.status,
+      completedRunIds: suite.completedRunIds,
+      completedCueFamilies: suite.completedCueFamilies ?? [],
+      missingCueFamilies: suite.missingCueFamilies ?? [],
+      completedVariantFamilies: suite.completedVariantFamilies ?? [],
+      missingVariantFamilies: suite.missingVariantFamilies ?? [],
+      notRunRationale: suite.notRunRationale,
+    })),
+  );
+  const releaseStatuses = uniqueStrings(runSummaries.map((summary) => summary.releaseUseStatus));
+  const releaseUseStatus = releaseStatuses.includes("robustness_claim_blocked_until_claim_gated_probes_run")
+    ? "robustness_claim_blocked_until_claim_gated_probes_run"
+    : releaseStatuses.includes("claim_gated_diagnostics_coverage_review_required")
+      ? "claim_gated_diagnostics_coverage_review_required"
+      : releaseStatuses.includes("claim_gated_diagnostics_attached_no_robustness_claim")
+        ? "claim_gated_diagnostics_attached_no_robustness_claim"
+        : "claim_gated_diagnostics_deferred_no_robustness_claim";
+  return {
+    releaseUseStatus,
+    runCount: runs.length,
+    suiteRows,
+    sycophancyOrthodoxySensitivity: {
+      requiredCueFamilies: REQUIRED_SYCOPHANCY_ORTHODOXY_CUE_FAMILIES,
+      completedCueFamilies: uniqueStrings(suiteRows.flatMap((row) => row.completedCueFamilies)),
+      missingCueFamiliesByRun: suiteRows
+        .filter((row) => row.suiteId === "sycophancy_orthodoxy_sensitivity" && row.missingCueFamilies.length)
+        .map((row) => ({ evaluationRunId: row.evaluationRunId, missingCueFamilies: row.missingCueFamilies })),
+      notRunRationales: suiteRows
+        .filter((row) => row.suiteId === "sycophancy_orthodoxy_sensitivity" && row.notRunRationale)
+        .map((row) => ({ evaluationRunId: row.evaluationRunId, notRunRationale: row.notRunRationale })),
+    },
+    obfuscatedArgumentStress: {
+      requiredVariantFamilies: OBFUSCATION_STRESS_VARIANT_FAMILIES,
+      completedVariantFamilies: uniqueStrings(suiteRows.flatMap((row) => row.completedVariantFamilies)),
+      missingVariantFamiliesByRun: suiteRows
+        .filter((row) => row.suiteId === "obfuscated_argument_stress" && row.missingVariantFamilies.length)
+        .map((row) => ({ evaluationRunId: row.evaluationRunId, missingVariantFamilies: row.missingVariantFamilies })),
+      notRunRationales: suiteRows
+        .filter((row) => row.suiteId === "obfuscated_argument_stress" && row.notRunRationale)
+        .map((row) => ({ evaluationRunId: row.evaluationRunId, notRunRationale: row.notRunRationale })),
+    },
   };
 }
 
@@ -7959,11 +8236,26 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
   const robustnessClaims = options.robustnessClaims ?? [];
   const sycophancyProbeRuns = (options.sycophancyProbeRuns ?? []).filter((probeRun) => probeRunMatchesEvaluation(probeRun, run.id));
   const obfuscationStressRuns = (options.obfuscationStressRuns ?? []).filter((stressRun) => probeRunMatchesEvaluation(stressRun, run.id));
+  const completedCueFamilies = uniqueStrings(
+    sycophancyProbeRuns.flatMap((probeRun) => normalizeSycophancyCueFamilies(probeRun.cueTypesTested ?? probeRun.cueFamiliesTested ?? [])),
+  );
+  const missingCueFamilies = REQUIRED_SYCOPHANCY_ORTHODOXY_CUE_FAMILIES.filter((cueFamily) => !completedCueFamilies.includes(cueFamily));
+  const completedVariantFamilies = uniqueStrings(obfuscationStressRuns.flatMap((stressRun) => stressRun.variantFamilies ?? []));
+  const missingVariantFamilies = OBFUSCATION_STRESS_VARIANT_FAMILIES.filter((variantFamily) => !completedVariantFamilies.includes(variantFamily));
   const robustnessClaimMade = robustnessClaims.length > 0;
   const status = robustnessClaimMade ? "required_not_run_claim_blocking" : "deferred_no_robustness_claim";
-  const sycophancyStatus = sycophancyProbeRuns.length ? "completed_diagnostic_attached" : status;
-  const obfuscationStatus = obfuscationStressRuns.length ? "completed_diagnostic_attached" : status;
-  const missingRequiredDiagnostics = robustnessClaimMade && (!sycophancyProbeRuns.length || !obfuscationStressRuns.length);
+  const sycophancyStatus = sycophancyProbeRuns.length
+    ? missingCueFamilies.length
+      ? "diagnostic_coverage_review_required"
+      : "completed_diagnostic_attached"
+    : status;
+  const obfuscationStatus = obfuscationStressRuns.length
+    ? missingVariantFamilies.length
+      ? "diagnostic_coverage_review_required"
+      : "completed_diagnostic_attached"
+    : status;
+  const coverageReviewRequired = sycophancyStatus === "diagnostic_coverage_review_required" || obfuscationStatus === "diagnostic_coverage_review_required";
+  const missingRequiredDiagnostics = robustnessClaimMade && (sycophancyStatus !== "completed_diagnostic_attached" || obfuscationStatus !== "completed_diagnostic_attached");
   return {
     evaluationRunId: run.id,
     requestedModelAlias: run.requestedModelAlias,
@@ -7974,11 +8266,15 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
         id: "sycophancy_orthodoxy_sensitivity",
         status: sycophancyStatus,
         completedRunIds: sycophancyProbeRuns.map((probeRun) => probeRun.id),
-        cueFamilies: ["user_agreement", "authority", "consensus", "safety_orthodoxy"],
+        cueFamilies: REQUIRED_SYCOPHANCY_ORTHODOXY_CUE_FAMILIES,
+        completedCueFamilies,
+        missingCueFamilies,
         requiredWhenClaiming: ["deference_robustness", "orthodoxy_robustness", "user_agreement_resistance"],
         pairedCommonSetRequired: true,
         notRunRationale: sycophancyProbeRuns.length
-          ? null
+          ? missingCueFamilies.length
+            ? `Submitted sycophancy/orthodoxy runs are missing cue families: ${missingCueFamilies.join(", ")}.`
+            : null
           : robustnessClaimMade
             ? "Robustness claims were requested but no paired sycophancy/orthodoxy probe outputs are attached."
             : "The seed demo makes no deference, authority, consensus, safety, or orthodoxy robustness claim.",
@@ -7987,11 +8283,15 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
         id: "obfuscated_argument_stress",
         status: obfuscationStatus,
         completedRunIds: obfuscationStressRuns.map((stressRun) => stressRun.id),
-        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
+        variantFamilies: OBFUSCATION_STRESS_VARIANT_FAMILIES,
+        completedVariantFamilies,
+        missingVariantFamilies,
         requiredWhenClaiming: ["obfuscation_robustness", "style_artifact_robustness", "masked_fallacy_detection"],
         pairedCommonSetRequired: true,
         notRunRationale: obfuscationStressRuns.length
-          ? null
+          ? missingVariantFamilies.length
+            ? `Submitted obfuscation stress runs are missing variant families: ${missingVariantFamilies.join(", ")}.`
+            : null
           : robustnessClaimMade
             ? "Robustness claims were requested but no paired obfuscated-argument stress outputs are attached."
             : "The seed demo includes obfuscated-style rubric fixtures but does not claim model robustness on stress variants.",
@@ -7999,10 +8299,25 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
     ],
     releaseUseStatus: missingRequiredDiagnostics
       ? "robustness_claim_blocked_until_claim_gated_probes_run"
+      : coverageReviewRequired
+        ? "claim_gated_diagnostics_coverage_review_required"
       : sycophancyProbeRuns.length || obfuscationStressRuns.length
         ? "claim_gated_diagnostics_attached_no_robustness_claim"
         : "claim_gated_diagnostics_deferred_no_robustness_claim",
   };
+}
+
+function normalizeSycophancyCueFamilies(cueTypes = []) {
+  return uniqueStrings(
+    cueTypes.flatMap((cueType) => {
+      if (cueType === "user_endorses_position" || cueType === "user_disagrees_position") return ["user_agreement"];
+      if (cueType === "safety_or_orthodoxy_frame") return ["safety_orthodoxy"];
+      if (cueType === "majority_consensus" || cueType === "majority_cue") return ["consensus"];
+      if (cueType === "expert_authority" || cueType === "institutional_authority") return ["authority"];
+      if (cueType === "no_cue_control") return [];
+      return [cueType];
+    }),
+  );
 }
 
 function probeRunMatchesEvaluation(probeRun, evaluationRunId) {
@@ -16377,6 +16692,10 @@ export function buildOctoberReleaseReport(
     modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
     leaderboards: options.leaderboards ?? [],
     knownEvaluationRuns: options.evaluationRuns ?? [],
+    sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
+    obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+    benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
+    benchmarkSubmissions: options.benchmarkSubmissions ?? [],
   });
   const metricDirectionalityConfig = buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling, {
     metricConfigs: options.metricConfigs ?? [],
@@ -17543,7 +17862,15 @@ function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, 
     protectedPromptExampleCheck: run.protectedPromptExampleCheck ?? null,
     outputFormatPolicy: run.promptArtifact?.outputFormatPolicy ?? "unknown",
     parserConfigId: run.parserConfigId,
+    parserRetryPolicy: run.parserRetryPolicy ?? null,
+    parseFailureCount: run.parseFailureCount ?? null,
+    invalidScoreCount: run.invalidScoreCount ?? null,
+    retryCount: run.retryCount ?? null,
+    repairedOutputCount: run.repairedOutputCount ?? null,
     acceptedOutputSchema: run.acceptedOutputSchema ?? null,
+    promptExampleItemIds: normalizeStringArray(run.promptExampleItemIds),
+    promptExamplePositionClusterIds: normalizeStringArray(run.promptExamplePositionClusterIds),
+    promptExampleExclusionPolicy: run.promptExampleExclusionPolicy ?? null,
     reasoningModeSetting: run.mode === "overall_only" ? "appendix_g_step_by_step_overall_only_baseline" : "project_full_rubric_answer_extraction",
     commonItemCount: commonItemIds.length,
     pointEstimate,
@@ -17831,10 +18158,15 @@ function buildArtifactProbeDiagnostics(events = [], artifactProbeRuns = [], cont
   const submittedRunRows = artifactProbeRuns
     .filter((run) => !run?.releaseId || run.releaseId === context.releaseId)
     .map((run) => {
-      const probeFamilies = run.probeFamilies ?? (run.inputView ? [run.inputView] : []);
+      const submittedProbeFamilies = Array.isArray(run.probeFamilies) && run.probeFamilies.length ? run.probeFamilies : run.inputView ? [run.inputView] : [];
+      const invalidProbeFamilies = submittedProbeFamilies.filter((family) => !ARTIFACT_PROBE_INPUT_VIEWS.includes(family));
+      const probeFamilies = normalizeArtifactProbeFamilies(submittedProbeFamilies);
       const checks = [
         optionalManifestCheck("targetLabelSnapshotId", context.labelSnapshot?.id, run.targetLabelSnapshotId ?? run.labelSnapshotId),
-        requiredNonEmptyCheck("inputView", run.inputView ?? probeFamilies),
+        requiredSetMembershipCheck("inputView", ARTIFACT_PROBE_INPUT_VIEWS, run.inputView),
+        invalidProbeFamilies.length
+          ? { field: "probeFamilies", expectedAnyOf: ARTIFACT_PROBE_INPUT_VIEWS, submitted: invalidProbeFamilies, status: "mismatch" }
+          : { field: "probeFamilies", expectedAnyOf: ARTIFACT_PROBE_INPUT_VIEWS, submitted: submittedProbeFamilies, status: "matches" },
         requiredNonEmptyCheck("metricOutputs", run.metricOutputs),
         requiredNonEmptyCheck("protectedMetadataHandling", run.protectedMetadataHandling),
         requiredManifestCheck(
@@ -17848,6 +18180,7 @@ function buildArtifactProbeDiagnostics(events = [], artifactProbeRuns = [], cont
         id: run.id ?? null,
         inputView: run.inputView ?? null,
         splitEvaluated: run.splitEvaluated ?? null,
+        submittedProbeFamilies,
         probeFamilies,
         metricOutputs: run.metricOutputs ?? null,
         protectedMetadataHandling: run.protectedMetadataHandling ?? null,
@@ -17858,9 +18191,12 @@ function buildArtifactProbeDiagnostics(events = [], artifactProbeRuns = [], cont
     });
   const reviewRows = submittedRunRows.filter((row) => row.reviewChecks.length > 0);
   const completedProbeFamilies = [
-    ...new Set([...probeEvents.flatMap((event) => event.probeFamilies ?? []), ...submittedRunRows.flatMap((row) => row.probeFamilies ?? [])]),
+    ...new Set([
+      ...probeEvents.flatMap((event) => normalizeArtifactProbeFamilies(event.probeFamilies ?? [])),
+      ...submittedRunRows.flatMap((row) => row.probeFamilies ?? []),
+    ]),
   ];
-  const requiredProbeFamilies = ["full_context", "critique_only", "metadata_style_only"];
+  const requiredProbeFamilies = ARTIFACT_PROBE_REQUIRED_FAMILIES;
   const missingProbeFamilies = requiredProbeFamilies.filter((family) => !completedProbeFamilies.includes(family));
   const hasProbeEvidence = probeEvents.length > 0 || submittedRunRows.length > 0;
   const status = reviewRows.length
@@ -17879,6 +18215,15 @@ function buildArtifactProbeDiagnostics(events = [], artifactProbeRuns = [], cont
     reviewRows,
     notRunRationale: hasProbeEvidence ? null : "Seed fixture documents the required probes but blocks ordinary hidden-benchmark headline claims until authorized probes run.",
   };
+}
+
+function normalizeArtifactProbeFamilies(families = []) {
+  return uniqueStrings(
+    families.flatMap((family) => {
+      if (family === "metadata_style_only") return ["metadata_only", "style_features_only"];
+      return [family];
+    }),
+  );
 }
 
 function buildPointwiseTrainingExample(critique, positionList, labelSnapshot, ratings, contextSnapshots) {

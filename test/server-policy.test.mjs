@@ -5893,18 +5893,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteArtifactProbeRun.status, 400);
   assert.match(incompleteArtifactProbeRun.body.detail, /splitEvaluated|targetLabelVersion|inputView/);
 
-  const artifactProbeRun = await invokeApi(context, {
+  const invalidArtifactProbeRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/artifact-probes/run",
     headers: adminHeaders,
     body: JSON.stringify({
       artifactProbeRun: {
-        id: "artifact-probe-workflow-new",
+        id: "artifact-probe-workflow-invalid-view",
         releaseId: "october-2026-demo",
         splitEvaluated: "hidden_benchmark_candidate",
         targetLabelSnapshotId: "snapshot-oct-api",
         targetLabelVersion: "initial_mean",
-        inputView: "critique_only",
+        inputView: "author_guess_only",
         featureSet: ["surface_style", "length_band"],
         requestedModelAlias: "artifact-probe-baseline",
         metricOutputs: { weightedPairwiseLoss: 0.24 },
@@ -5914,15 +5914,68 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       },
     }),
   });
-  assert.equal(artifactProbeRun.status, 201);
+  assert.equal(invalidArtifactProbeRun.status, 400);
+  assert.match(invalidArtifactProbeRun.body.detail, /inputView/);
+
+  const artifactProbePayloads = [
+    {
+      id: "artifact-probe-workflow-full-context",
+      inputView: "full_context",
+      featureSet: ["position_text", "critique_text", "rater_visible_context"],
+      metricOutputs: { weightedPairwiseLoss: 0.18, customWeightedLoss: 0.22 },
+      protectedMetadataHandling: "protected_metadata_redacted",
+    },
+    {
+      id: "artifact-probe-workflow-critique-only",
+      inputView: "critique_only",
+      featureSet: ["critique_text", "surface_style", "length_band"],
+      metricOutputs: { weightedPairwiseLoss: 0.24, customWeightedLoss: 0.29 },
+      protectedMetadataHandling: "authorized_admin_only_probe",
+    },
+    {
+      id: "artifact-probe-workflow-metadata-only",
+      inputView: "metadata_only",
+      featureSet: ["source_route", "authorship_type", "length_band"],
+      metricOutputs: { weightedPairwiseLoss: 0.34, customWeightedLoss: 0.39 },
+      protectedMetadataHandling: "authorized_admin_only_probe",
+    },
+    {
+      id: "artifact-probe-workflow-style-features",
+      inputView: "style_features_only",
+      featureSet: ["style_band", "length_band", "surface_formality"],
+      metricOutputs: { weightedPairwiseLoss: 0.31, customWeightedLoss: 0.36 },
+      protectedMetadataHandling: "authorized_admin_only_probe",
+    },
+  ];
+
+  for (const artifactProbeRun of artifactProbePayloads) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/artifact-probes/run",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        artifactProbeRun: {
+          ...artifactProbeRun,
+          releaseId: "october-2026-demo",
+          splitEvaluated: "hidden_benchmark_candidate",
+          targetLabelSnapshotId: "snapshot-oct-api",
+          targetLabelVersion: "initial_mean",
+          requestedModelAlias: "artifact-probe-baseline",
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T01:45:00.000Z",
+        },
+      }),
+    });
+    assert.equal(response.status, 201, artifactProbeRun.inputView);
+  }
 
   const artifactProbeRunById = await invokeApi(context, {
     method: "GET",
-    url: "/api/v1/artifact-probes/artifact-probe-workflow-new",
+    url: "/api/v1/artifact-probes/artifact-probe-workflow-critique-only",
     headers: adminHeaders,
   });
   assert.equal(artifactProbeRunById.status, 200);
-  assert.equal(artifactProbeRunById.body.id, "artifact-probe-workflow-new");
+  assert.equal(artifactProbeRunById.body.id, "artifact-probe-workflow-critique-only");
 
   const incompleteSycophancyProbeRun = await invokeApi(context, {
     method: "POST",
@@ -5938,6 +5991,29 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteSycophancyProbeRun.status, 400);
   assert.match(incompleteSycophancyProbeRun.body.detail, /releaseId|targetLabelVersion|requestedModelAlias/);
 
+  const partialSycophancyProbeRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sycophancy-probes/run",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sycophancyProbeRun: {
+        id: "sycophancy-probe-partial-cues",
+        releaseId: "october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        requestedModelAlias: "model-under-test",
+        pairedEvaluationRunIds: ["eval-full-rubric-demo"],
+        cueTypesTested: ["no_cue_control", "user_agreement", "safety_orthodoxy"],
+        cueSensitivitySummary: { maxCueShift: 0.04, flaggedCueFamilies: [] },
+        protectedDataHandling: "diagnostic_only_no_hidden_training_exposure",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:49:00.000Z",
+      },
+    }),
+  });
+  assert.equal(partialSycophancyProbeRun.status, 400);
+  assert.match(partialSycophancyProbeRun.body.detail, /authority|consensus/);
+
   const sycophancyProbeRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/sycophancy-probes/run",
@@ -5950,7 +6026,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         targetLabelVersion: "initial_mean",
         requestedModelAlias: "model-under-test",
         pairedEvaluationRunIds: ["eval-full-rubric-demo"],
-        cueTypesTested: ["no_cue_control", "user_endorses_position", "safety_or_orthodoxy_frame"],
+        cueTypesTested: ["no_cue_control", "user_agreement", "authority", "consensus", "safety_orthodoxy"],
         cueSensitivitySummary: { maxCueShift: 0.04, flaggedCueFamilies: [] },
         protectedDataHandling: "diagnostic_only_no_hidden_training_exposure",
         createdBy: "demo-admin",
@@ -5982,6 +6058,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteObfuscationStressRun.status, 400);
   assert.match(incompleteObfuscationStressRun.body.detail, /releaseId|targetLabelVersion|requestedModelAlias/);
 
+  const partialObfuscationStressRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/obfuscation-stress-runs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      obfuscationStressRun: {
+        id: "obfuscation-stress-partial-variants",
+        releaseId: "october-2026-demo",
+        targetLabelSnapshotId: "snapshot-oct-api",
+        targetLabelVersion: "initial_mean",
+        requestedModelAlias: "model-under-test",
+        pairedEvaluationRunIds: ["eval-full-rubric-demo"],
+        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy"],
+        clearBaselineItemIds: ["pos-ai-prior::crit-ai-base-rate"],
+        stressResultSummary: { maxStressDelta: 0.06, flaggedVariantFamilies: ["masked_fallacy"] },
+        protectedDataHandling: "robustness_diagnostic_not_headline_label",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T01:54:00.000Z",
+      },
+    }),
+  });
+  assert.equal(partialObfuscationStressRun.status, 400);
+  assert.match(partialObfuscationStressRun.body.detail, /surface_fluency_obfuscation/);
+
   const obfuscationStressRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/obfuscation-stress-runs",
@@ -5994,7 +6094,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         targetLabelVersion: "initial_mean",
         requestedModelAlias: "model-under-test",
         pairedEvaluationRunIds: ["eval-full-rubric-demo"],
-        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy"],
+        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
         clearBaselineItemIds: ["pos-ai-prior::crit-ai-base-rate"],
         stressResultSummary: { maxStressDelta: 0.06, flaggedVariantFamilies: ["masked_fallacy"] },
         protectedDataHandling: "robustness_diagnostic_not_headline_label",
@@ -6013,15 +6113,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(obfuscationStressRunById.status, 200);
   assert.equal(obfuscationStressRunById.body.id, "obfuscation-stress-workflow-new");
 
-  const sanityBaselineRun = await invokeApi(context, {
+  const invalidSanityBaselineRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/sanity-baselines/run",
     headers: adminHeaders,
     body: JSON.stringify({
       sanityBaselineRun: {
-        id: "sanity-baseline-workflow-new",
+        id: "sanity-baseline-workflow-invalid-type",
         releaseId: "october-2026-demo",
-        baselineType: "constant_mean",
+        baselineType: "artifact_probe_disguised_as_baseline",
         fitSplits: ["public_train"],
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
         targetLabelSnapshotId: "snapshot-oct-api",
@@ -6035,15 +6135,69 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       },
     }),
   });
-  assert.equal(sanityBaselineRun.status, 201);
+  assert.equal(invalidSanityBaselineRun.status, 400);
+  assert.match(invalidSanityBaselineRun.body.detail, /baselineType/);
+
+  const sanityBaselinePayloads = [
+    {
+      id: "sanity-baseline-workflow-random-pairwise",
+      baselineType: "random_pairwise",
+      metricFamily: "weighted_pairwise",
+      metricOutputs: { loss: 0.5, coverage: { nPairsScored: 2, nPositionsScored: 1 } },
+      coverageCounts: { pairsScored: 2, positionsScored: 1 },
+    },
+    {
+      id: "sanity-baseline-workflow-constant-mean",
+      baselineType: "constant_mean",
+      metricFamily: "custom_weighted_loss",
+      metricOutputs: { customWeightedLoss: 0.31, coverage: { nItemsScored: 5 } },
+      coverageCounts: { itemsScored: 5, lowClarityBranchItems: 1 },
+    },
+    {
+      id: "sanity-baseline-workflow-constant-median",
+      baselineType: "constant_median",
+      metricFamily: "custom_weighted_loss",
+      metricOutputs: { customWeightedLoss: 0.34, coverage: { nItemsScored: 5 } },
+      coverageCounts: { itemsScored: 5, lowClarityBranchItems: 1 },
+    },
+    {
+      id: "sanity-baseline-workflow-prior-only",
+      baselineType: "prior_only_train_dev",
+      metricFamily: "custom_weighted_loss",
+      metricOutputs: { customWeightedLoss: 0.29, coverage: { nItemsScored: 5 } },
+      coverageCounts: { itemsScored: 5, lowClarityBranchItems: 1 },
+    },
+  ];
+
+  for (const sanityBaselineRun of sanityBaselinePayloads) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/sanity-baselines/run",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        sanityBaselineRun: {
+          ...sanityBaselineRun,
+          releaseId: "october-2026-demo",
+          fitSplits: ["public_train", "public_dev"],
+          excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          targetLabelSnapshotId: "snapshot-oct-api",
+          targetLabelVersion: "initial_mean",
+          metricVersion: "lmca-october-2026-v1",
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T02:00:00.000Z",
+        },
+      }),
+    });
+    assert.equal(response.status, 201, sanityBaselineRun.baselineType);
+  }
 
   const sanityBaselineRunById = await invokeApi(context, {
     method: "GET",
-    url: "/api/v1/sanity-baselines/sanity-baseline-workflow-new",
+    url: "/api/v1/sanity-baselines/sanity-baseline-workflow-constant-mean",
     headers: adminHeaders,
   });
   assert.equal(sanityBaselineRunById.status, 200);
-  assert.equal(sanityBaselineRunById.body.id, "sanity-baseline-workflow-new");
+  assert.equal(sanityBaselineRunById.body.id, "sanity-baseline-workflow-constant-mean");
 
   const humanCeilingRun = await invokeApi(context, {
     method: "POST",
@@ -9880,17 +10034,52 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.evaluationRuns.length, 1);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelEvaluationPredictions.length, 1);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.calibrationRuns.length, 1);
-  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.artifactProbeRuns.length, 1);
-  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.status, "partial");
-  assert.deepEqual(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.completedProbeFamilies, ["critique_only"]);
-  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.submittedRunRows[0].id, "artifact-probe-workflow-new");
-  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.submittedRunRows[0].status, "submitted_artifact_probe_authorized");
-  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.sanityBaselineRuns.length, 1);
-  assert.equal(releaseReport.body.sanityBaselines.submittedBaselineEvidence.submittedRunCount, 1);
-  assert.equal(releaseReport.body.sanityBaselines.submittedBaselineEvidence.releaseUseStatus, "submitted_sanity_baselines_fit_policy_preserved");
-  assert.equal(releaseReport.body.sanityBaselines.releaseUseStatus, "submitted_sanity_baselines_attached");
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.artifactProbeRuns.length, 4);
+  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.status, "pass");
+  assert.deepEqual(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.requiredProbeFamilies, [
+    "full_context",
+    "critique_only",
+    "metadata_only",
+    "style_features_only",
+  ]);
+  assert.deepEqual(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.completedProbeFamilies, [
+    "full_context",
+    "critique_only",
+    "metadata_only",
+    "style_features_only",
+  ]);
+  assert.deepEqual(releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.missingProbeFamilies, []);
   assert.equal(
-    releaseReport.body.sanityBaselines.baselines.some((baseline) => baseline.id === "sanity-baseline-workflow-new" && baseline.baselineSource === "submitted_workflow_sanity_baseline_run"),
+    releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.submittedRunRows.every(
+      (row) => row.status === "submitted_artifact_probe_authorized",
+    ),
+    true,
+  );
+  assert.equal(
+    releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.submittedRunRows.some(
+      (row) => row.id === "artifact-probe-workflow-metadata-only" && row.inputView === "metadata_only",
+    ),
+    true,
+  );
+  assert.equal(
+    releaseReport.body.hiddenBenchmarkFreeze.artifactProbeDiagnostics.submittedRunRows.some(
+      (row) => row.id === "artifact-probe-workflow-style-features" && row.inputView === "style_features_only",
+    ),
+    true,
+  );
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.sanityBaselineRuns.length, 4);
+  assert.equal(releaseReport.body.sanityBaselines.submittedBaselineEvidence.submittedRunCount, 4);
+  assert.equal(releaseReport.body.sanityBaselines.submittedBaselineEvidence.releaseUseStatus, "submitted_sanity_baselines_required_set_complete");
+  assert.deepEqual(releaseReport.body.sanityBaselines.submittedBaselineEvidence.appliedBaselineTypes, [
+    "random_pairwise",
+    "constant_mean",
+    "constant_median",
+    "prior_only_train_dev",
+  ]);
+  assert.deepEqual(releaseReport.body.sanityBaselines.submittedBaselineEvidence.missingRequiredBaselineTypes, []);
+  assert.equal(releaseReport.body.sanityBaselines.releaseUseStatus, "submitted_sanity_baselines_required_set_complete");
+  assert.equal(
+    releaseReport.body.sanityBaselines.baselines.some((baseline) => baseline.id === "sanity-baseline-workflow-prior-only" && baseline.baselineSource === "submitted_workflow_sanity_baseline_run"),
     true,
   );
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.humanCeilingRuns.length, 1);
@@ -9905,6 +10094,42 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.leaderboardReport.submittedLeaderboardEvidence.activeLeaderboardId, "leaderboard-workflow-new");
   assert.deepEqual(releaseReport.body.leaderboardReport.unresolvedComparisonGroups, []);
   assert.equal(releaseReport.body.leaderboardReport.computedPointEstimateOnlyOrdering, true);
+  assert.equal(
+    releaseReport.body.leaderboardReport.claimGatedDiagnosticSummary.releaseUseStatus,
+    "claim_gated_diagnostics_attached_no_robustness_claim",
+  );
+  assert.deepEqual(
+    releaseReport.body.leaderboardReport.claimGatedDiagnosticSummary.sycophancyOrthodoxySensitivity.completedCueFamilies,
+    ["user_agreement", "authority", "consensus", "safety_orthodoxy"],
+  );
+  assert.deepEqual(
+    releaseReport.body.leaderboardReport.claimGatedDiagnosticSummary.obfuscatedArgumentStress.completedVariantFamilies,
+    ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
+  );
+  assert.equal(
+    releaseReport.body.leaderboardReport.parserPromptIntegrity.releaseUseStatus,
+    "mixed_parser_or_prompt_policy_sensitivity_declared",
+  );
+  assert.deepEqual(releaseReport.body.leaderboardReport.parserPromptIntegrity.parserConfigIds, ["json-seven-dim-v1", "json-overall-v1"]);
+  assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.totalParseFailureCount, 0);
+  assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.totalInvalidScoreCount, 0);
+  assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.totalRetryCount, 1);
+  assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.totalRepairedOutputCount, 1);
+  assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.reviewSections.length, 0);
+  assert.equal(
+    releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.releaseUseStatus,
+    "aggregate_only_submission_feedback_budgeted",
+  );
+  assert.equal(
+    releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.activePolicyId,
+    "benchmark-submission-policy-workflow-new",
+  );
+  assert.equal(releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.aggregateOnlyReport, true);
+  assert.equal(releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.perItemFeedbackProhibited, true);
+  assert.equal(releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.perPairFeedbackProhibited, true);
+  assert.equal(releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.hiddenIdExposureProhibited, true);
+  assert.equal(releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.submissionRows[0].status, "aggregate_only_submission_feedback_preserved");
+  assert.equal(releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.submissionRows[0].budgetConsumptionStatus, "within_budget");
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelFailureAudits.length, 1);
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.releaseUseStatus,
@@ -10381,9 +10606,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     fullRubricAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "sycophancy_orthodoxy_sensitivity").status,
     "completed_diagnostic_attached",
   );
+  assert.deepEqual(
+    fullRubricAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "sycophancy_orthodoxy_sensitivity").completedCueFamilies,
+    ["user_agreement", "authority", "consensus", "safety_orthodoxy"],
+  );
+  assert.deepEqual(
+    fullRubricAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "sycophancy_orthodoxy_sensitivity").missingCueFamilies,
+    [],
+  );
   assert.equal(
     fullRubricAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").status,
     "completed_diagnostic_attached",
+  );
+  assert.deepEqual(
+    fullRubricAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").completedVariantFamilies,
+    ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
+  );
+  assert.deepEqual(
+    fullRubricAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").missingVariantFamilies,
+    [],
   );
 
   const corpusManifest = await invokeApi(context, { method: "POST", url: "/api/v1/corpus-manifests", headers: adminHeaders });
@@ -10402,7 +10643,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 94);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 100);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

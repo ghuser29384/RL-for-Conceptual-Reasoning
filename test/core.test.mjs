@@ -4143,8 +4143,67 @@ test("human score distributions and sanity baselines expose prior-calibration co
   });
   assert.equal(submittedBaselines.baselines.length, 5);
   assert.equal(submittedBaselines.baselines.find((baseline) => baseline.id === "submitted-prior-baseline").baselineSource, "submitted_workflow_sanity_baseline_run");
-  assert.equal(submittedBaselines.submittedBaselineEvidence.releaseUseStatus, "submitted_sanity_baselines_fit_policy_preserved");
-  assert.equal(submittedBaselines.releaseUseStatus, "submitted_sanity_baselines_attached");
+  assert.equal(submittedBaselines.submittedBaselineEvidence.releaseUseStatus, "submitted_sanity_baselines_missing_required_types");
+  assert.deepEqual(submittedBaselines.submittedBaselineEvidence.missingRequiredBaselineTypes, [
+    "random_pairwise",
+    "constant_mean",
+    "constant_median",
+  ]);
+  assert.equal(submittedBaselines.releaseUseStatus, "submitted_sanity_baselines_missing_required_types");
+
+  const completeSubmittedBaselines = buildSanityBaselineReport("release-test", snapshot, positions, critiques, {
+    sanityBaselineRuns: [
+      {
+        id: "submitted-random-pairwise-baseline",
+        releaseId: "release-test",
+        baselineType: "random_pairwise",
+        metricFamily: "weighted_pairwise",
+        fitSplits: ["public_train", "public_dev"],
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelSnapshotId: snapshot.id,
+        metricOutputs: { loss: 0.5, coverage: { nPairsScored: 2 } },
+      },
+      {
+        id: "submitted-constant-mean-baseline",
+        releaseId: "release-test",
+        baselineType: "constant_mean",
+        metricFamily: "custom_weighted_loss",
+        fitSplits: ["public_train", "public_dev"],
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelSnapshotId: snapshot.id,
+        metricOutputs: { customWeightedLoss: 0.33, coverage: { nItemsScored: 5 } },
+      },
+      {
+        id: "submitted-constant-median-baseline",
+        releaseId: "release-test",
+        baselineType: "constant_median",
+        metricFamily: "custom_weighted_loss",
+        fitSplits: ["public_train", "public_dev"],
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelSnapshotId: snapshot.id,
+        metricOutputs: { customWeightedLoss: 0.35, coverage: { nItemsScored: 5 } },
+      },
+      {
+        id: "submitted-prior-baseline-complete",
+        releaseId: "release-test",
+        baselineType: "prior_only_train_dev",
+        metricFamily: "custom_weighted_loss",
+        fitSplits: ["public_train", "public_dev"],
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelSnapshotId: snapshot.id,
+        metricOutputs: { customWeightedLoss: 0.29, coverage: { nItemsScored: 5 } },
+      },
+    ],
+  });
+  assert.equal(completeSubmittedBaselines.submittedBaselineEvidence.releaseUseStatus, "submitted_sanity_baselines_required_set_complete");
+  assert.deepEqual(completeSubmittedBaselines.submittedBaselineEvidence.appliedBaselineTypes, [
+    "random_pairwise",
+    "constant_mean",
+    "constant_median",
+    "prior_only_train_dev",
+  ]);
+  assert.deepEqual(completeSubmittedBaselines.submittedBaselineEvidence.missingRequiredBaselineTypes, []);
+  assert.equal(completeSubmittedBaselines.releaseUseStatus, "submitted_sanity_baselines_required_set_complete");
 
   const staleSubmittedBaselines = buildSanityBaselineReport("release-test", snapshot, positions, critiques, {
     sanityBaselineRuns: [
@@ -4221,6 +4280,17 @@ test("uncertainty-aware leaderboard reports common subsets and unresolved rank t
   assert.equal(report.promptComparability.status, "mixed_prompt_scope_sensitivity");
   assert.deepEqual(report.promptComparability.promptArtifactIds, ["project-full-rubric-v1", "appendix-g-overall-v1"]);
   assert.equal(report.promptComparability.protectedPromptExampleChecks.every((check) => check.hiddenBenchmarkExamplesExcluded), true);
+  assert.equal(report.rows[0].parserRetryPolicy, "schema validation retry follows evaluator prompt, not item-internal instructions");
+  assert.equal(report.rows[1].retryCount, 1);
+  assert.equal(report.rows[1].repairedOutputCount, 1);
+  assert.equal(report.parserPromptIntegrity.releaseUseStatus, "mixed_parser_or_prompt_policy_sensitivity_declared");
+  assert.deepEqual(report.parserPromptIntegrity.parserConfigIds, ["json-seven-dim-v1", "json-overall-v1"]);
+  assert.equal(report.parserPromptIntegrity.totalParseFailureCount, 0);
+  assert.equal(report.parserPromptIntegrity.totalInvalidScoreCount, 0);
+  assert.equal(report.parserPromptIntegrity.totalRetryCount, 1);
+  assert.equal(report.parserPromptIntegrity.totalRepairedOutputCount, 1);
+  assert.equal(report.parserPromptIntegrity.reviewSections.length, 0);
+  assert.equal(report.parserPromptIntegrity.perModelRows[0].hiddenBenchmarkExamplesExcluded, true);
   assert.equal(report.commonMetricConfig.scoreRoundingPolicy, "stored_exact");
   assert.equal(report.commonMetricConfig.scoreQuantizationPolicy, "unit_interval_decimal_scores_no_bucket_quantization");
   assert.equal(report.commonMetricConfig.humanTieTolerance, 0);
@@ -4230,6 +4300,57 @@ test("uncertainty-aware leaderboard reports common subsets and unresolved rank t
   assert.equal(report.modelAssistedLabelOverlap.runRows[0].cleanClaimStatus, "clean_claim_allowed_no_model_assisted_label_exposure");
   assert.equal(report.reasoningModeSensitivity.status, "no_paired_reasoning_mode_run_deferred");
   assert.equal(report.reasoningModeSensitivity.table6SourceBaseline.length, 4);
+  assert.equal(report.hiddenBenchmarkSubmissionFeedback.releaseUseStatus, "no_submitted_benchmark_submission_policy");
+
+  const interactionFixtures = completeInteractionWorkflowFixtures();
+  const budgetedReport = buildUncertaintyAwareLeaderboardReport("october-2026-demo", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
+    benchmarkSubmissionPolicies: interactionFixtures.benchmarkSubmissionPolicies,
+    benchmarkSubmissions: interactionFixtures.benchmarkSubmissions,
+  });
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.releaseUseStatus, "aggregate_only_submission_feedback_budgeted");
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.activePolicyId, "benchmark-submission-policy-submitted");
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.aggregateOnlyReport, true);
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.perItemFeedbackProhibited, true);
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.submissionBudget.maxSubmissionsPerWindow, 2);
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.submissionRows[0].budgetConsumptionStatus, "within_budget");
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.submissionRows[0].cooldownStatus, "cooldown_started");
+  assert.equal(budgetedReport.hiddenBenchmarkSubmissionFeedback.submissionRows[0].duplicateRunStatus, "not_duplicate");
+
+  const unsafeSubmissionReport = buildUncertaintyAwareLeaderboardReport("october-2026-demo", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
+    benchmarkSubmissionPolicies: interactionFixtures.benchmarkSubmissionPolicies,
+    benchmarkSubmissions: [
+      {
+        ...interactionFixtures.benchmarkSubmissions[0],
+        id: "benchmark-submission-unsafe-feedback",
+        perItemOutputIncluded: true,
+        hiddenIdExposureIncluded: true,
+        hiddenItemIds: ["hidden-position-1"],
+        perItemOutputs: [{ itemId: "hidden-position-1::hidden-critique-1", error: 0.4 }],
+      },
+    ],
+  });
+  assert.equal(unsafeSubmissionReport.hiddenBenchmarkSubmissionFeedback.releaseUseStatus, "benchmark_submission_feedback_review_required");
+  assert.ok(
+    unsafeSubmissionReport.hiddenBenchmarkSubmissionFeedback.reviewSections.some(
+      (section) => section.reason === "hiddenItemIds:prohibited_external_feedback",
+    ),
+  );
+  assert.equal(Object.hasOwn(unsafeSubmissionReport.hiddenBenchmarkSubmissionFeedback.submissionRows[0], "hiddenItemIds"), false);
+
+  const contaminatedPromptRun = structuredClone(fullRubricEvaluationRun);
+  contaminatedPromptRun.id = "eval-full-rubric-contaminated-prompt";
+  contaminatedPromptRun.protectedPromptExampleCheck = {
+    status: "protected_examples_present",
+    hiddenBenchmarkExamplesExcluded: false,
+    protectedValidationExamplesExcluded: false,
+  };
+  const contaminatedPromptReport = buildUncertaintyAwareLeaderboardReport("release-test", snapshot, [contaminatedPromptRun, overallOnlyEvaluationRun]);
+  assert.equal(contaminatedPromptReport.parserPromptIntegrity.releaseUseStatus, "leaderboard_parser_prompt_integrity_review_required");
+  assert.ok(
+    contaminatedPromptReport.parserPromptIntegrity.reviewSections.some(
+      (section) => section.artifactId === "eval-full-rubric-contaminated-prompt" && section.reason === "protectedPromptExampleCheck",
+    ),
+  );
 });
 
 test("uncertainty-aware leaderboard accepts submitted paired rank evidence", () => {
@@ -4572,6 +4693,65 @@ test("model failure audits preserve raw outputs and enforce protected-split hand
   assert.equal(audit.claimGatedDiagnostics.releaseUseStatus, "claim_gated_diagnostics_deferred_no_robustness_claim");
   assert.deepEqual(audit.claimGatedDiagnostics.suites[0].cueFamilies, ["user_agreement", "authority", "consensus", "safety_orthodoxy"]);
   assert.equal(audit.claimGatedDiagnostics.suites[1].status, "deferred_no_robustness_claim");
+  const partialDiagnosticAudit = buildModelFailureAudit("release-test", snapshot, fullRubricEvaluationRun, positions, critiques, {
+    sycophancyProbeRuns: [
+      {
+        id: "sycophancy-partial",
+        pairedEvaluationRunIds: [fullRubricEvaluationRun.id],
+        cueTypesTested: ["no_cue_control", "user_agreement"],
+      },
+    ],
+    obfuscationStressRuns: [
+      {
+        id: "obfuscation-partial",
+        pairedEvaluationRunIds: [fullRubricEvaluationRun.id],
+        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy"],
+      },
+    ],
+  });
+  assert.equal(partialDiagnosticAudit.claimGatedDiagnostics.releaseUseStatus, "claim_gated_diagnostics_coverage_review_required");
+  assert.equal(
+    partialDiagnosticAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "sycophancy_orthodoxy_sensitivity").status,
+    "diagnostic_coverage_review_required",
+  );
+  assert.deepEqual(
+    partialDiagnosticAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "sycophancy_orthodoxy_sensitivity").missingCueFamilies,
+    ["authority", "consensus", "safety_orthodoxy"],
+  );
+  assert.equal(
+    partialDiagnosticAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").status,
+    "diagnostic_coverage_review_required",
+  );
+  assert.deepEqual(
+    partialDiagnosticAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").missingVariantFamilies,
+    ["surface_fluency_obfuscation"],
+  );
+
+  const completeDiagnosticAudit = buildModelFailureAudit("release-test", snapshot, fullRubricEvaluationRun, positions, critiques, {
+    sycophancyProbeRuns: [
+      {
+        id: "sycophancy-complete",
+        pairedEvaluationRunIds: [fullRubricEvaluationRun.id],
+        cueTypesTested: ["no_cue_control", "user_agreement", "authority", "consensus", "safety_orthodoxy"],
+      },
+    ],
+    obfuscationStressRuns: [
+      {
+        id: "obfuscation-complete",
+        pairedEvaluationRunIds: [fullRubricEvaluationRun.id],
+        variantFamilies: ["fluent_jargon_heavy", "masked_fallacy", "surface_fluency_obfuscation"],
+      },
+    ],
+  });
+  assert.equal(completeDiagnosticAudit.claimGatedDiagnostics.releaseUseStatus, "claim_gated_diagnostics_attached_no_robustness_claim");
+  assert.deepEqual(
+    completeDiagnosticAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "sycophancy_orthodoxy_sensitivity").completedCueFamilies,
+    ["user_agreement", "authority", "consensus", "safety_orthodoxy"],
+  );
+  assert.deepEqual(
+    completeDiagnosticAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").missingVariantFamilies,
+    [],
+  );
   assert.equal(audit.modelAssistedLabelOverlap.status, "no_model_assisted_target_rows");
   assert.equal(audit.modelAssistedLabelOverlap.cleanClaimStatus, "clean_claim_allowed_no_model_assisted_label_exposure");
   assert.equal(audit.topCustomLossRows[0].itemId, "pos-ai-prior::crit-ai-generic");
@@ -5169,8 +5349,95 @@ test("hidden benchmark freeze report gates access, pointwise-only items, and art
   });
   assert.equal(submittedProbeReport.artifactProbeDiagnostics.status, "partial");
   assert.deepEqual(submittedProbeReport.artifactProbeDiagnostics.completedProbeFamilies, ["critique_only"]);
-  assert.deepEqual(submittedProbeReport.artifactProbeDiagnostics.missingProbeFamilies, ["full_context", "metadata_style_only"]);
+  assert.deepEqual(submittedProbeReport.artifactProbeDiagnostics.missingProbeFamilies, ["full_context", "metadata_only", "style_features_only"]);
   assert.equal(submittedProbeReport.artifactProbeDiagnostics.submittedRunRows[0].status, "submitted_artifact_probe_authorized");
+
+  const completeProbeReport = buildHiddenBenchmarkFreezeReport("release-test", snapshot, positions, critiques, undefined, seedBenchmarkExposureEvents, {
+    artifactProbeRuns: [
+      {
+        id: "artifact-probe-full-context",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "full_context",
+        metricOutputs: { weightedPairwiseLoss: 0.18 },
+        protectedMetadataHandling: "protected_metadata_redacted",
+      },
+      {
+        id: "artifact-probe-critique-only",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "critique_only",
+        metricOutputs: { weightedPairwiseLoss: 0.24 },
+        protectedMetadataHandling: "authorized_admin_only_probe",
+      },
+      {
+        id: "artifact-probe-metadata-only",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "metadata_only",
+        metricOutputs: { weightedPairwiseLoss: 0.34 },
+        protectedMetadataHandling: "authorized_admin_only_probe",
+      },
+      {
+        id: "artifact-probe-style-only",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "style_features_only",
+        metricOutputs: { weightedPairwiseLoss: 0.31 },
+        protectedMetadataHandling: "authorized_admin_only_probe",
+      },
+    ],
+  });
+  assert.equal(completeProbeReport.artifactProbeDiagnostics.status, "pass");
+  assert.deepEqual(completeProbeReport.artifactProbeDiagnostics.requiredProbeFamilies, [
+    "full_context",
+    "critique_only",
+    "metadata_only",
+    "style_features_only",
+  ]);
+  assert.deepEqual(completeProbeReport.artifactProbeDiagnostics.missingProbeFamilies, []);
+  assert.deepEqual(completeProbeReport.artifactProbeDiagnostics.completedProbeFamilies, [
+    "full_context",
+    "critique_only",
+    "metadata_only",
+    "style_features_only",
+  ]);
+
+  const legacyCombinedProbeReport = buildHiddenBenchmarkFreezeReport("release-test", snapshot, positions, critiques, undefined, seedBenchmarkExposureEvents, {
+    artifactProbeRuns: [
+      {
+        id: "artifact-probe-full-context-legacy",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "full_context",
+        metricOutputs: { weightedPairwiseLoss: 0.18 },
+        protectedMetadataHandling: "protected_metadata_redacted",
+      },
+      {
+        id: "artifact-probe-critique-only-legacy",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "critique_only",
+        metricOutputs: { weightedPairwiseLoss: 0.24 },
+        protectedMetadataHandling: "authorized_admin_only_probe",
+      },
+      {
+        id: "artifact-probe-metadata-style-legacy",
+        releaseId: "release-test",
+        targetLabelSnapshotId: snapshot.id,
+        inputView: "metadata_style_only",
+        metricOutputs: { weightedPairwiseLoss: 0.32 },
+        protectedMetadataHandling: "authorized_admin_only_probe",
+      },
+    ],
+  });
+  assert.equal(legacyCombinedProbeReport.artifactProbeDiagnostics.status, "pass");
+  assert.deepEqual(legacyCombinedProbeReport.artifactProbeDiagnostics.completedProbeFamilies, [
+    "full_context",
+    "critique_only",
+    "metadata_only",
+    "style_features_only",
+  ]);
 
   const staleProbeReport = buildHiddenBenchmarkFreezeReport("release-test", snapshot, positions, critiques, undefined, seedBenchmarkExposureEvents, {
     artifactProbeRuns: [
@@ -5635,6 +5902,9 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   assert.equal(report.samePositionContext.releaseUseStatus, "same_position_context_parity_preserved");
   assert.equal(report.leaderboardReport.unresolvedComparisonGroups.length, 1);
   assert.equal(report.leaderboardReport.releaseUseStatus, "point_estimate_ordering_only_unresolved_within_uncertainty");
+  assert.equal(report.leaderboardReport.claimGatedDiagnosticSummary.releaseUseStatus, "claim_gated_diagnostics_deferred_no_robustness_claim");
+  assert.equal(report.leaderboardReport.claimGatedDiagnosticSummary.sycophancyOrthodoxySensitivity.notRunRationales.length, 2);
+  assert.equal(report.leaderboardReport.claimGatedDiagnosticSummary.obfuscatedArgumentStress.notRunRationales.length, 2);
   assert.equal(report.metricDirectionalityConfig.counts.pairwiseConfigRows, 3);
   assert.equal(report.metricDirectionalityConfig.counts.configViolationCount, 0);
   assert.equal(report.metricDirectionalityConfig.directionalityRows[0].callSignature, "customWeightedLoss(targetLabel, modelPrediction)");

@@ -5,9 +5,12 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  ARTIFACT_PROBE_INPUT_VIEWS,
+  OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
   RUBRIC_DIMENSIONS,
+  SANITY_BASELINE_TYPES,
   SCORE_CONFIDENCE_LEVELS,
   SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH,
   SCORE_EXPLANATION_EXTREME_THRESHOLD_LOW,
@@ -16,6 +19,7 @@ import {
   SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
   SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD,
   SCORE_EXPLANATION_TRIGGER_RULES,
+  SYCOPHANCY_ORTHODOXY_CUE_TYPES,
   assignments,
   buildHiddenBenchmarkFreezeReport,
   buildRaterCertificationReport,
@@ -1903,17 +1907,22 @@ const workflowWriteEndpoints = [
     ],
     requiredNonEmptyArrayFields: ["featureSet"],
     requiredObjectFields: ["metricOutputs"],
+    allowedValues: { inputView: ARTIFACT_PROBE_INPUT_VIEWS },
   }),
   workflowWriteSpec(/^\/api\/v1\/sycophancy-probes\/run$/, "sycophancy_probe_run_submitted", "sycophancyProbeRun", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "releaseId", "targetLabelSnapshotId", "targetLabelVersion", "requestedModelAlias", "protectedDataHandling", "createdBy", "timestamp"],
     requiredNonEmptyArrayFields: ["pairedEvaluationRunIds", "cueTypesTested"],
+    requiredArrayIncludes: { cueTypesTested: SYCOPHANCY_ORTHODOXY_CUE_TYPES },
+    allowedArrayValues: { cueTypesTested: SYCOPHANCY_ORTHODOXY_CUE_TYPES },
     requiredObjectFields: ["cueSensitivitySummary"],
   }),
   workflowWriteSpec(/^\/api\/v1\/obfuscation-stress-runs$/, "obfuscation_stress_run_submitted", "obfuscationStressRun", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "releaseId", "targetLabelSnapshotId", "targetLabelVersion", "requestedModelAlias", "protectedDataHandling", "createdBy", "timestamp"],
     requiredNonEmptyArrayFields: ["pairedEvaluationRunIds", "variantFamilies", "clearBaselineItemIds"],
+    requiredArrayIncludes: { variantFamilies: OBFUSCATION_STRESS_VARIANT_FAMILIES },
+    allowedArrayValues: { variantFamilies: OBFUSCATION_STRESS_VARIANT_FAMILIES },
     requiredObjectFields: ["stressResultSummary"],
   }),
   workflowWriteSpec(/^\/api\/v1\/sanity-baselines\/run$/, "sanity_baseline_run_submitted", "sanityBaselineRun", adminRoles, {
@@ -1924,6 +1933,7 @@ const workflowWriteEndpoints = [
     requiredArrayIncludes: {
       excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
     },
+    allowedValues: { baselineType: SANITY_BASELINE_TYPES },
   }),
   workflowWriteSpec(/^\/api\/v1\/human-ceiling-runs$/, "human_ceiling_run_submitted", "humanCeilingRun", adminRoles, {
     allowHiddenMetadata: true,
