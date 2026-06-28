@@ -8178,6 +8178,68 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(scopedUnsafeSourceRecognition.status, 400);
   assert.match(scopedUnsafeSourceRecognition.body.detail, /protectedStatusHiddenFromRater/);
 
+  const hiddenMetadataSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...participantSafeguards.sourceRecognitionEvent,
+        id: "source-recognition-hidden-metadata",
+        sourceType: "hidden_benchmark_candidate",
+      },
+    }),
+  });
+  assert.equal(hiddenMetadataSourceRecognition.status, 400);
+  assert.match(hiddenMetadataSourceRecognition.body.detail, /hidden metadata keys/);
+
+  const scopedRawSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...participantSafeguards.sourceRecognitionEvent,
+        id: "source-recognition-scoped-raw-benchmark",
+        hiddenItemIds: ["hidden-item-1"],
+      },
+    }),
+  });
+  assert.equal(scopedRawSourceRecognition.status, 400);
+  assert.match(scopedRawSourceRecognition.body.detail, /raw benchmark content keys/);
+
+  const independentCountingSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...participantSafeguards.sourceRecognitionEvent,
+        id: "source-recognition-counts-independent",
+        raterAction: "safe_decline",
+        independentBlindEligibilityEffect: "excluded_but_count_as_independent_blind_rating",
+      },
+    }),
+  });
+  assert.equal(independentCountingSourceRecognition.status, 400);
+  assert.match(independentCountingSourceRecognition.body.detail, /independentBlindEligibilityEffect/);
+
+  const scopedIndependentCountingSourceRecognition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/source-recognition-events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceRecognitionEvent: {
+        ...participantSafeguards.sourceRecognitionEvent,
+        id: "source-recognition-scoped-counts-independent",
+        raterAction: "safe_decline",
+        independentBlindEligibilityEffect: "excluded_but_count_as_independent_blind_rating",
+      },
+    }),
+  });
+  assert.equal(scopedIndependentCountingSourceRecognition.status, 400);
+  assert.match(scopedIndependentCountingSourceRecognition.body.detail, /independentBlindEligibilityEffect/);
+
   const unreviewedContinuedSourceRecognition = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/source-recognition-events",
@@ -9190,6 +9252,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(nonBlockingRaterConflict.status, 400);
   assert.match(nonBlockingRaterConflict.body.detail, /independentBlindEligibilityEffect/);
 
+  const contradictoryRaterConflict = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-item-conflicts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterItemConflict: {
+        ...auxiliaryWorkflow.raterItemConflict,
+        id: "rater-item-conflict-contradictory-denominator",
+        independentBlindEligibilityEffect: "excluded_but_count_as_independent_blind_rating",
+      },
+    }),
+  });
+  assert.equal(contradictoryRaterConflict.status, 400);
+  assert.match(contradictoryRaterConflict.body.detail, /independentBlindEligibilityEffect/);
+
   const mutableReleaseErratum = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/release-errata",
@@ -9229,7 +9306,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       raterTrainingExposureSnapshot: {
         ...auxiliaryWorkflow.raterTrainingExposureSnapshot,
         id: "training-exposure-snapshot-unsafe-eligibility",
-        protectedClusterEligibilityEffect: "count_as_independent_blind_after_training_exposure",
+        protectedClusterEligibilityEffect: "eligible_after_checks_but_count_as_independent_blind_after_training_exposure",
       },
     }),
   });
@@ -9400,6 +9477,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(nonBlockingAssignmentConflictScreen.status, 400);
   assert.match(nonBlockingAssignmentConflictScreen.body.detail, /independentBlindEligibilityEffect/);
+
+  const contradictoryAssignmentConflictScreen = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/conflict-screen",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      raterItemConflict: {
+        ...auxiliaryWorkflow.assignmentConflictScreen,
+        id: "assignment-conflict-screen-contradictory-denominator",
+        independentBlindEligibilityEffect: "excluded_but_count_as_independent_blind_rating",
+      },
+    }),
+  });
+  assert.equal(contradictoryAssignmentConflictScreen.status, 400);
+  assert.match(contradictoryAssignmentConflictScreen.body.detail, /independentBlindEligibilityEffect/);
 
   const releaseSupersession = await invokeApi(context, {
     method: "POST",

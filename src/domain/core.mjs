@@ -14503,6 +14503,9 @@ const SOURCE_RECOGNITION_TYPES = [
   "model_generation_route_recognized",
   "other_prior_exposure",
 ];
+const SOURCE_RECOGNITION_BLIND_EFFECT_FRAGMENTS = ["excluded", "blocked", "nonblind", "non_blind", "non_independent", "paused", "reassign", "review"];
+const BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS = ["count_as_independent", "count as independent", "counts_as_independent", "counts as independent", "fresh blind", "fresh_blind"];
+const SOURCE_RECOGNITION_FORBIDDEN_BLIND_EFFECT_FRAGMENTS = BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS;
 
 function defaultVolunteerIncentivePolicy(releaseId) {
   return {
@@ -14797,6 +14800,10 @@ function normalizeSourceRecognitionEvent(event, rowSource) {
     SOURCE_RECOGNITION_TYPES.includes(recognitionType) ? null : "recognitionType",
     ["safe_decline", "continue_nonblind", "request_review"].includes(event.raterAction) ? null : "raterAction",
     requiredPromptFieldReason("independentBlindEligibilityEffect", event.independentBlindEligibilityEffect),
+    policyMentionsAny(event.independentBlindEligibilityEffect, SOURCE_RECOGNITION_BLIND_EFFECT_FRAGMENTS) ? null : "independentBlindEligibilityEffect",
+    policyMentionsAny(event.independentBlindEligibilityEffect, SOURCE_RECOGNITION_FORBIDDEN_BLIND_EFFECT_FRAGMENTS)
+      ? "independentBlindEligibilityEffect:counts_independent"
+      : null,
     event.protectedStatusHiddenFromRater === true ? null : "protectedStatusHiddenFromRater",
     event.raterAction === "continue_nonblind" && !policyMentions(event.independentBlindEligibilityEffect, ["excluded"]) && !policyMentions(event.reviewerResolution, ["review"])
       ? "continuedRatingReview"
@@ -17017,6 +17024,9 @@ function normalizeRaterItemConflict(conflict, rowSource) {
     policyMentions(independentEffect, ["excluded"]) || policyMentions(independentEffect, ["blocked"]) || policyMentions(independentEffect, ["non_independent"])
       ? null
       : "independentBlindEligibilityEffect",
+    policyMentionsAny(independentEffect, BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS)
+      ? "independentBlindEligibilityEffect:counts_independent"
+      : null,
     normalizeStringArray(conflict.allowedNonBlindRoles ?? conflict.allowed_non_blind_roles).length ? null : "allowedNonBlindRoles",
     requiredPromptFieldReason("reviewerResolution", conflict.reviewerResolution ?? conflict.reviewer_resolution),
     requiredPromptFieldReason("timestamp", conflict.timestamp ?? conflict.createdAt ?? conflict.created_at),
@@ -17054,6 +17064,9 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
       : "samePositionPositionClusterExposureChecks",
     requiredPromptFieldReason("protectedSplitConflictStatus", snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status),
     safeProtectedClusterEligibilityEffect ? null : "protectedClusterEligibilityEffect",
+    policyMentionsAny(protectedClusterEligibilityEffect, BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS)
+      ? "protectedClusterEligibilityEffect:counts_independent"
+      : null,
     requiredPromptFieldReason("createdAt", snapshot.createdAt ?? snapshot.created_at),
   ].filter(Boolean);
   return {

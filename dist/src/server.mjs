@@ -821,6 +821,9 @@ const sourceRecognitionTypes = [
   "other_prior_exposure",
 ];
 const sourceRecognitionActions = ["safe_decline", "continue_nonblind", "request_review"];
+const sourceRecognitionBlindEffectFragments = ["excluded", "blocked", "nonblind", "non_blind", "non_independent", "paused", "reassign", "review"];
+const blindDenominatorCountingForbiddenFragments = ["count_as_independent", "count as independent", "counts_as_independent", "counts as independent", "fresh blind", "fresh_blind"];
+const sourceRecognitionForbiddenBlindEffectFragments = blindDenominatorCountingForbiddenFragments;
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const policyActionKinds = [
@@ -1854,7 +1857,6 @@ const workflowWriteEndpoints = [
     rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/source-recognition-events$/, "source_recognition_event_submitted", "sourceRecognitionEvent", ratingWorkflowRoles, {
-    allowHiddenMetadata: true,
     pathParamField: "assignmentId",
     requiredFields: ["id", "assignmentId", "raterId", "recognitionType", "raterAction", "independentBlindEligibilityEffect", "protectedStatusHiddenFromRater"],
     requireAssignmentClaimField: "assignmentId",
@@ -1865,6 +1867,12 @@ const workflowWriteEndpoints = [
     },
     requiredExactFields: {
       protectedStatusHiddenFromRater: true,
+    },
+    requiredStringIncludesAny: {
+      independentBlindEligibilityEffect: sourceRecognitionBlindEffectFragments,
+    },
+    forbiddenStringFragments: {
+      independentBlindEligibilityEffect: sourceRecognitionForbiddenBlindEffectFragments,
     },
     requiredWhen: [
       {
@@ -1877,6 +1885,8 @@ const workflowWriteEndpoints = [
         },
       },
     ],
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -2832,7 +2842,6 @@ const workflowWriteEndpoints = [
     requiredExactFields: { automaticScorePenaltyApplied: false },
   }),
   workflowWriteSpec(/^\/api\/v1\/source-recognition-events$/, "source_recognition_event_submitted", "sourceRecognitionEvent", ratingWorkflowRoles, {
-    allowHiddenMetadata: true,
     requiredFields: ["id", "assignmentId", "raterId", "recognitionType", "raterAction", "independentBlindEligibilityEffect", "protectedStatusHiddenFromRater"],
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
@@ -2842,6 +2851,12 @@ const workflowWriteEndpoints = [
     },
     requiredExactFields: {
       protectedStatusHiddenFromRater: true,
+    },
+    requiredStringIncludesAny: {
+      independentBlindEligibilityEffect: sourceRecognitionBlindEffectFragments,
+    },
+    forbiddenStringFragments: {
+      independentBlindEligibilityEffect: sourceRecognitionForbiddenBlindEffectFragments,
     },
     requiredWhen: [
       {
@@ -2854,6 +2869,8 @@ const workflowWriteEndpoints = [
         },
       },
     ],
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/model-provider-data-handling-policies$/, "model_provider_data_handling_policy_submitted", "modelProviderDataHandlingPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -3279,6 +3296,7 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
     allowedValues: { conflictType: raterItemConflictTypes },
     requiredStringIncludesAny: { independentBlindEligibilityEffect: ["excluded", "blocked", "non_independent"] },
+    forbiddenStringFragments: { independentBlindEligibilityEffect: blindDenominatorCountingForbiddenFragments },
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/conflict-screen$/, "assignment_conflict_screen_submitted", "raterItemConflict", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
@@ -3287,6 +3305,7 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
     allowedValues: { conflictType: raterItemConflictTypes },
     requiredStringIncludesAny: { independentBlindEligibilityEffect: ["excluded", "blocked", "non_independent"] },
+    forbiddenStringFragments: { independentBlindEligibilityEffect: blindDenominatorCountingForbiddenFragments },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
@@ -3297,6 +3316,7 @@ const workflowWriteEndpoints = [
     requiredStringIncludesAny: {
       protectedClusterEligibilityEffect: ["eligible_after_checks", "excluded", "blocked", "non_blind", "reassign"],
     },
+    forbiddenStringFragments: { protectedClusterEligibilityEffect: blindDenominatorCountingForbiddenFragments },
   }),
   workflowWriteSpec(/^\/api\/v1\/release-errata$/, "release_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,

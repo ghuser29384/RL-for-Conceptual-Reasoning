@@ -2238,6 +2238,22 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
   assert.equal(report.counts.submittedSourceRecognitionEventCount, 1);
   assert.equal(report.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const unsafeRecognitionFixtures = completeParticipantSafeguardFixtures();
+  unsafeRecognitionFixtures.sourceRecognitionEvents = [
+    {
+      ...unsafeRecognitionFixtures.sourceRecognitionEvents[0],
+      id: "source-recognition-unsafe-independent-count",
+      independentBlindEligibilityEffect: "excluded_but_count_as_independent_blind_rating",
+    },
+  ];
+  const unsafeRecognitionReport = buildParticipantSafeguardEvidenceReport("october-2026-demo", unsafeRecognitionFixtures);
+  assert.equal(unsafeRecognitionReport.releaseUseStatus, "participant_safeguard_review_required");
+  assert.ok(
+    unsafeRecognitionReport.reviewSections.some(
+      (section) => section.artifactType === "source_recognition_event" && section.reason === "independentBlindEligibilityEffect:counts_independent",
+    ),
+  );
 });
 
 test("rating experience evidence gates score provenance, linting, issue triage, drafts, worksheets, and retention", () => {
@@ -2465,17 +2481,29 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.ok(incompleteSpotCheckReport.reviewSections.some((section) => section.reason === "samplingDimensions:source_family,item_length,score_band"));
   assert.ok(incompleteSpotCheckReport.reviewSections.some((section) => section.reason === "ordinaryRatingStatus"));
 
+  const unsafeConflictReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    raterItemConflicts: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().raterItemConflicts[0],
+        independentBlindEligibilityEffect: "excluded_but_count_as_independent_blind_rating",
+      },
+    ],
+  });
+  assert.equal(unsafeConflictReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(unsafeConflictReport.reviewSections.some((section) => section.reason === "independentBlindEligibilityEffect:counts_independent"));
+
   const unsafeTrainingExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),
     raterTrainingExposureSnapshots: [
       {
         ...completeAuxiliaryWorkflowFixtures().raterTrainingExposureSnapshots[0],
-        protectedClusterEligibilityEffect: "count_as_independent_blind_after_training_exposure",
+        protectedClusterEligibilityEffect: "eligible_after_checks_but_count_as_independent_blind_after_training_exposure",
       },
     ],
   });
   assert.equal(unsafeTrainingExposureReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
-  assert.ok(unsafeTrainingExposureReport.reviewSections.some((section) => section.reason === "protectedClusterEligibilityEffect"));
+  assert.ok(unsafeTrainingExposureReport.reviewSections.some((section) => section.reason === "protectedClusterEligibilityEffect:counts_independent"));
 });
 
 test("interaction workflow evidence gates practice, sessions, discussion, adjudication, governance, benchmark, and simplified UI artifacts", () => {
