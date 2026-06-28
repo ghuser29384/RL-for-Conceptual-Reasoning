@@ -2800,6 +2800,71 @@ test("rater data-governance endpoints expose profile, consent, restrictions, and
   });
   assert.equal(withdrawal.status, 201);
 
+  const deactivation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/withdrawal-requests",
+    headers,
+    body: JSON.stringify({
+      volunteerDataWithdrawalRequest: {
+        id: "withdrawal-deactivation-api",
+        requestType: "account_deactivation",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export", "public_attribution", "session_pacing"],
+        actionTaken: "account_deactivation_recorded",
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+      },
+    }),
+  });
+  assert.equal(deactivation.status, 201);
+
+  const deactivationById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/raters/me/withdrawal-requests/withdrawal-deactivation-api",
+    headers,
+  });
+  assert.equal(deactivationById.status, 200);
+  assert.equal(deactivationById.body.futureAssignmentStop, true);
+  assert.equal(deactivationById.body.publicAttributionRemoved, true);
+  assert.equal(deactivationById.body.futureTrainingExportExcluded, true);
+
+  const unsafeDeactivation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/withdrawal-requests",
+    headers,
+    body: JSON.stringify({
+      volunteerDataWithdrawalRequest: {
+        id: "withdrawal-deactivation-unsafe",
+        requestType: "account_deactivation",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export", "public_attribution", "session_pacing"],
+        actionTaken: "account_deactivation_recorded",
+        identifiableTelemetryRestricted: false,
+        publicAttributionRemoved: false,
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+      },
+    }),
+  });
+  assert.equal(unsafeDeactivation.status, 400);
+  assert.match(unsafeDeactivation.body.detail, /identifiableTelemetryRestricted|publicAttributionRemoved/);
+
+  const frozenLabelRemovalWithoutDenominator = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters/me/withdrawal-requests",
+    headers,
+    body: JSON.stringify({
+      volunteerDataWithdrawalRequest: {
+        id: "withdrawal-frozen-label-api",
+        requestType: "frozen_label_removal_request",
+        affectedDataCategories: ["released_label_rows"],
+        actionTaken: "frozen_label_review_opened",
+        frozenSnapshotImpact: "denominator_change_review_required",
+        requesterNotificationStatus: "notified",
+      },
+    }),
+  });
+  assert.equal(frozenLabelRemovalWithoutDenominator.status, 400);
+  assert.match(frozenLabelRemovalWithoutDenominator.body.detail, /denominatorChangeArtifactId/);
+
   const incompleteWithdrawal = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters/me/withdrawal-requests",
@@ -2827,7 +2892,7 @@ test("rater data-governance endpoints expose profile, consent, restrictions, and
   const updatedProfile = await invokeApi(context, { method: "GET", url: "/api/v1/raters/me/data-profile", headers });
   assert.equal(updatedProfile.body.consent.submittedCount, 1);
   assert.equal(updatedProfile.body.restrictionRequests.length, 1);
-  assert.equal(updatedProfile.body.withdrawalRequests.length, 1);
+  assert.equal(updatedProfile.body.withdrawalRequests.length, 2);
 });
 
 test("v1 rating endpoints persist blind ratings and enforce revision route identity", async () => {
@@ -11023,12 +11088,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.corpusManifest.counts.critiques, 6);
   assert.equal(releaseReport.body.targetGaps.positionsRemaining, 116);
   assert.equal(releaseReport.body.targetGaps.critiquesRemaining, 354);
+  assert.equal(releaseReport.body.lmcaComparison.modelScoreAnchorComparison.lowerIsBetter, true);
+  assert.equal(releaseReport.body.lmcaComparison.modelScoreAnchorComparison.denominators.weightedPairwiseTable5.critiquePairs, 856);
+  assert.equal(releaseReport.body.lmcaComparison.modelScoreAnchorComparison.customMetricTable7[2].denominator.dialogues, 933);
+  assert.equal(
+    releaseReport.body.lmcaComparison.modelScoreAnchorComparison.uncertaintyIntervalPolicy.intervalType,
+    "source_reported_95_percent_confidence_interval",
+  );
   assert.equal(releaseReport.body.certification.loadedGoldLibraryItems, 4);
   assert.equal(releaseReport.body.targetGaps.goldItemsRemaining, 56);
   assert.equal(releaseReport.body.protectedSplitIsolation.goldRows.some((row) => row.itemId === "gold-item-workflow-new"), true);
   assert.equal(releaseReport.body.validationDesign.status, "appendix_c_scale");
   assert.equal(releaseReport.body.validationDesign.submittedValidationEvidence.bestRunId, "human-ceiling-workflow-new");
   assert.equal(releaseReport.body.humanCeiling.releaseUseStatus, "human_ceiling_claims_allowed_with_declared_uncertainty");
+  assert.equal(
+    releaseReport.body.humanCeiling.appendixCNumericBaselineComparison.releaseUseStatus,
+    "appendix_c_numeric_baselines_attached_to_human_ceiling_report",
+  );
+  assert.equal(
+    releaseReport.body.humanCeiling.appendixCNumericBaselineComparison.numericBaselines.gpt5ComparisonPoints.wholeRatingTestWeightedComparisonLoss.mean,
+    0.068,
+  );
   assert.equal(releaseReport.body.targetGaps.validationCritiquesRemaining, 0);
   assert.equal(releaseReport.body.targetGaps.validationPositionsRemaining, 0);
   assert.equal(releaseReport.body.targetGaps.validationCoreAllItemsRatersRemaining, 0);

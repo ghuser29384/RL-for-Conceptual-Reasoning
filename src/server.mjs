@@ -8289,6 +8289,8 @@ export function validateVolunteerDataWithdrawalPayload(request, actor) {
   if (!actorCheck.ok) return actorCheck;
   if (!volunteerWithdrawalRequestTypes.has(requestType)) return invalid(`unsupported withdrawal requestType: ${requestType}`);
   if (!affectedDataCategories.length) return invalid("affectedDataCategories must be non-empty");
+  const effectFailures = volunteerWithdrawalRequiredEffectFailures(requestType, request);
+  if (effectFailures.length) return invalid(`withdrawal request missing required effect confirmations: ${effectFailures.join(", ")}`);
   if (findHiddenKeys(request).length || findRawBenchmarkContentKeys(request).length) return invalid("volunteer withdrawal request cannot include hidden or raw protected item fields");
   return {
     ok: true,
@@ -8298,7 +8300,7 @@ export function validateVolunteerDataWithdrawalPayload(request, actor) {
       requestType,
       affectedDataCategories,
       actionTaken: request.actionTaken ?? "pending_review",
-      futureAssignmentStop: request.futureAssignmentStop === true || requestType === "future_assignment_stop",
+      futureAssignmentStop: request.futureAssignmentStop !== false && ["future_assignment_stop", "account_deactivation"].includes(requestType),
       identifiableTelemetryRestricted: request.identifiableTelemetryRestricted !== false,
       publicAttributionRemoved: request.publicAttributionRemoved !== false,
       privateLearningDashboardDeleted: request.privateLearningDashboardDeleted !== false,
@@ -8309,6 +8311,22 @@ export function validateVolunteerDataWithdrawalPayload(request, actor) {
       timestamp: request.timestamp ?? new Date().toISOString(),
     },
   };
+}
+
+function volunteerWithdrawalRequiredEffectFailures(requestType, request = {}) {
+  const failures = [];
+  const rejectsFalse = (types, field) => {
+    if (types.includes(requestType) && request[field] === false) failures.push(field);
+  };
+  rejectsFalse(["future_assignment_stop", "account_deactivation"], "futureAssignmentStop");
+  rejectsFalse(["identifiable_telemetry_restriction", "account_deactivation"], "identifiableTelemetryRestricted");
+  rejectsFalse(["public_attribution_removal", "account_deactivation"], "publicAttributionRemoved");
+  rejectsFalse(["learning_dashboard_deletion", "account_deactivation"], "privateLearningDashboardDeleted");
+  rejectsFalse(["future_training_export_exclusion", "account_deactivation"], "futureTrainingExportExcluded");
+  if (requestType === "frozen_label_removal_request" && !request.denominatorChangeArtifactId) {
+    failures.push("denominatorChangeArtifactId");
+  }
+  return failures;
 }
 
 function validateParticipantRaterId(raterId, actor) {

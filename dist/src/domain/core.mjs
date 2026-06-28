@@ -8554,6 +8554,19 @@ export function buildHumanCeilingAndSaturationReport(
     },
     finalAverageApproximationPolicy:
       "Final-average labels are an approximation target for validation diagnostics, not literal ground truth or a substitute for blind initial ratings.",
+    appendixCNumericBaselineComparison: {
+      source: "LMCA Appendix C validation and human-ceiling numeric baselines",
+      currentValidationStatus: validationDesign.status,
+      appendixCScaleMet: validationDesign.status === "appendix_c_scale",
+      baselineFamilies: Object.keys(LMCA_BASELINES.appendixCNumericBaselines),
+      numericBaselines: LMCA_BASELINES.appendixCNumericBaselines,
+      releaseUseStatus:
+        validationDesign.status === "appendix_c_scale"
+          ? "appendix_c_numeric_baselines_attached_to_human_ceiling_report"
+          : "appendix_c_numeric_baselines_attached_thin_validation_disclosed",
+      policy:
+        "Human-ceiling and validation claims must interpret current rater/model distances against LMCA Appendix C numeric anchors while preserving thinner-than-Appendix-C labeling when the validation floor is missed.",
+    },
     raterItemCoverage: {
       rows: raterCoverageRows,
       commonOverlapItemIds,
@@ -11391,8 +11404,7 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
   const lmcaRaterTotal = countTotal(LMCA_BASELINES.raterDistributionIgnoringRevisions);
   const releaseLargestRaterShare = largestShare(corpusManifest.raterDistributionIgnoringRevisions);
   const lmcaLargestRaterShare = largestShare(LMCA_BASELINES.raterDistributionIgnoringRevisions);
-  const weightedPairwiseAnchorCount = LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5.length;
-  const customMetricAnchorCount = LMCA_BASELINES.modelScoreAnchors.customMetricTable7.length;
+  const modelScoreAnchorComparison = buildLmcaModelScoreAnchorComparison();
   return {
     id: `lmca-comparison-${releaseId}`,
     releaseId,
@@ -11440,13 +11452,7 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
       comparisonRow("weighted_pairwise_critique_pairs", metricEligibility.pairwiseEligiblePairCount, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs),
       comparisonRow("custom_metric_dialogues", metricEligibility.customLossEligibleItems.length, LMCA_BASELINES.modelEvaluationDenominators.customMetricDialogues),
     ],
-    modelScoreAnchorComparison: {
-      weightedPairwiseTable5: LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5,
-      customMetricTable7: LMCA_BASELINES.modelScoreAnchors.customMetricTable7,
-      anchorCount: weightedPairwiseAnchorCount + customMetricAnchorCount,
-      status: "anchors_declared_seed_run_not_numeric_comparable",
-      note: "Anchor scores are source baselines for release reports; the seed run differs in scale, target labels, prompt tracks, and protected split policy.",
-    },
+    modelScoreAnchorComparison,
     targetLabelComparison: {
       currentTargetLabelVersion: labelSnapshot.targetLabelVersion,
       requiredForTable5StyleTarget: "primary_rater_anchor",
@@ -11475,6 +11481,66 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
     },
     overclaimGuardrail:
       "This comparison is descriptive unless the relevant scale, source composition, rater composition, target-label, validation, denominator, and prompt-track gates pass independently.",
+  };
+}
+
+function buildLmcaModelScoreAnchorComparison() {
+  const weightedPairwiseDenominator = {
+    positionsOrArguments: LMCA_BASELINES.modelEvaluationDenominators.weightedPairwisePositions,
+    critiquePairs: LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs,
+  };
+  const customMetricDenominator = {
+    dialogues: LMCA_BASELINES.modelEvaluationDenominators.customMetricDialogues,
+  };
+  const uncertaintyIntervalPolicy = {
+    intervalType: "source_reported_95_percent_confidence_interval",
+    nominalLevel: 0.95,
+    intervalNotation: "point_estimate_plus_minus_ci95",
+  };
+  const promptSnapshotPolicy = {
+    sourceReferenceAnchorPolicy:
+      "Treat LMCA Table 5/Table 7 scores as source-reference anchors unless target labels, prompt family/scope, protected-split policy, topic/source composition, and resolved model snapshots are comparable.",
+    resolvedSnapshotRequiredForDirectReproduction: true,
+  };
+  const weightedPairwiseTable5 = LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5.map((anchor) => ({
+    ...anchor,
+    table: "LMCA Table 5",
+    metricFamily: "weighted_pairwise",
+    lowerIsBetter: true,
+    denominator: weightedPairwiseDenominator,
+    targetLabelRegime: "Emery Cooper ratings",
+    uncertaintyIntervalPolicy,
+    promptSnapshotPolicy,
+  }));
+  const customMetricTable7 = LMCA_BASELINES.modelScoreAnchors.customMetricTable7.map((anchor) => ({
+    ...anchor,
+    table: "LMCA Table 7",
+    metricFamily: "custom_weighted_loss",
+    lowerIsBetter: true,
+    denominator: customMetricDenominator,
+    targetLabelRegime: "LMCA custom-metric human-rating target",
+    uncertaintyIntervalPolicy,
+    promptSnapshotPolicy,
+  }));
+  const anchorRows = [...weightedPairwiseTable5, ...customMetricTable7];
+  return {
+    lowerIsBetter: true,
+    denominators: {
+      weightedPairwiseTable5: weightedPairwiseDenominator,
+      customMetricTable7: customMetricDenominator,
+    },
+    targetLabelRegimes: {
+      weightedPairwiseTable5: "Emery Cooper ratings",
+      customMetricTable7: "LMCA custom-metric human-rating target",
+    },
+    uncertaintyIntervalPolicy,
+    promptSnapshotPolicy,
+    weightedPairwiseTable5,
+    customMetricTable7,
+    anchorRows,
+    anchorCount: anchorRows.length,
+    status: "anchors_declared_seed_run_not_numeric_comparable",
+    note: "Anchor scores are source baselines for release reports; the seed run differs in scale, target labels, prompt tracks, and protected split policy.",
   };
 }
 
@@ -13313,6 +13379,7 @@ function normalizeVolunteerDataWithdrawalRequest(request, rowSource) {
   if (!id) return null;
   const affectedDataCategories = normalizeStringArray(request.affectedDataCategories);
   const requestType = request.requestType ?? null;
+  const requiredEffectReasons = volunteerWithdrawalRequiredEffectReasons(requestType, request);
   const reviewReasons = [
     requiredPromptFieldReason("raterId", request.raterId),
     VOLUNTEER_WITHDRAWAL_REQUEST_TYPES.includes(requestType) ? null : "requestType",
@@ -13320,7 +13387,7 @@ function normalizeVolunteerDataWithdrawalRequest(request, rowSource) {
     requiredPromptFieldReason("actionTaken", request.actionTaken),
     requiredPromptFieldReason("frozenSnapshotImpact", request.frozenSnapshotImpact),
     requiredPromptFieldReason("requesterNotificationStatus", request.requesterNotificationStatus),
-    request.futureTrainingExportExcluded === true || requestType !== "future_training_export_exclusion" ? null : "futureTrainingExportExcluded",
+    ...requiredEffectReasons,
   ].filter(Boolean);
   return {
     id,
@@ -13341,6 +13408,22 @@ function normalizeVolunteerDataWithdrawalRequest(request, rowSource) {
     reviewReasons,
     status: reviewReasons.length ? "volunteer_data_withdrawal_review_required" : "volunteer_data_withdrawal_request_recorded",
   };
+}
+
+function volunteerWithdrawalRequiredEffectReasons(requestType, request = {}) {
+  const reasons = [];
+  const requires = (types, field) => {
+    if (types.includes(requestType) && request[field] !== true) reasons.push(field);
+  };
+  requires(["future_assignment_stop", "account_deactivation"], "futureAssignmentStop");
+  requires(["identifiable_telemetry_restriction", "account_deactivation"], "identifiableTelemetryRestricted");
+  requires(["public_attribution_removal", "account_deactivation"], "publicAttributionRemoved");
+  requires(["learning_dashboard_deletion", "account_deactivation"], "privateLearningDashboardDeleted");
+  requires(["future_training_export_exclusion", "account_deactivation"], "futureTrainingExportExcluded");
+  if (requestType === "frozen_label_removal_request" && !request.denominatorChangeArtifactId) {
+    reasons.push("denominatorChangeArtifactId");
+  }
+  return reasons;
 }
 
 const POLICY_BUNDLE_FIELD_CLASSES = [

@@ -3037,6 +3037,55 @@ test("rater data-governance evidence requires consent visibility and withdrawal 
   assert.equal(report.volunteerDataConsentProfileRows.at(-1).entityType, "VolunteerDataConsentProfile");
   assert.equal(report.counts.submittedWithdrawalRequestCount, 1);
   assert.deepEqual(report.reviewSections, []);
+
+  const incompleteEffectReport = buildRaterDataGovernanceEvidenceReport("october-2026-demo", {
+    raterDataConsents: [
+      {
+        id: "rater-data-consent-submitted",
+        raterId: "demo-rater",
+        noticeVersion: "rater-data-use-v1",
+        dataCategoriesCovered: raterDataCategories,
+        useScopesAcknowledged: raterDataUseScopes,
+        dataProfileVisible: true,
+        publicArtifactsDeidentifiedByDefault: true,
+        identifiableAccessRestriction: "approved operational or research role access only",
+        privateLearningDataExcludedFromReleaseAndTraining: true,
+        consentedAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    volunteerDataWithdrawalRequests: [
+      {
+        id: "withdrawal-deactivation-incomplete",
+        raterId: "demo-rater",
+        requestType: "account_deactivation",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export", "public_attribution"],
+        actionTaken: "account_deactivation_started",
+        futureAssignmentStop: true,
+        identifiableTelemetryRestricted: false,
+        publicAttributionRemoved: false,
+        privateLearningDashboardDeleted: true,
+        futureTrainingExportExcluded: false,
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:03:00.000Z",
+      },
+      {
+        id: "withdrawal-frozen-label-incomplete",
+        raterId: "demo-rater",
+        requestType: "frozen_label_removal_request",
+        affectedDataCategories: ["released_label_rows"],
+        actionTaken: "frozen_label_review_opened",
+        frozenSnapshotImpact: "denominator_change_review_required",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:04:00.000Z",
+      },
+    ],
+  });
+  assert.equal(incompleteEffectReport.releaseUseStatus, "rater_data_governance_review_required");
+  assert.ok(incompleteEffectReport.reviewSections.some((section) => section.artifactId === "withdrawal-deactivation-incomplete" && section.reason === "identifiableTelemetryRestricted"));
+  assert.ok(incompleteEffectReport.reviewSections.some((section) => section.artifactId === "withdrawal-deactivation-incomplete" && section.reason === "publicAttributionRemoved"));
+  assert.ok(incompleteEffectReport.reviewSections.some((section) => section.artifactId === "withdrawal-deactivation-incomplete" && section.reason === "futureTrainingExportExcluded"));
+  assert.ok(incompleteEffectReport.reviewSections.some((section) => section.artifactId === "withdrawal-frozen-label-incomplete" && section.reason === "denominatorChangeArtifactId"));
 });
 
 test("workflow state-machine evidence requires guarded append-only transitions for each release lifecycle", () => {
@@ -6735,6 +6784,11 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
   });
   assert.equal(humanCeiling.validationScope.appendixCScaleStatus, "appendix_c_scale");
   assert.equal(humanCeiling.validationScope.submittedValidationEvidence.bestRunId, "human-ceiling-submitted-appendix-c");
+  assert.equal(
+    humanCeiling.appendixCNumericBaselineComparison.releaseUseStatus,
+    "appendix_c_numeric_baselines_attached_to_human_ceiling_report",
+  );
+  assert.equal(humanCeiling.appendixCNumericBaselineComparison.numericBaselines.overlappingRaterVsPrimaryCustomLoss[0].mean, 0.139);
   assert.equal(humanCeiling.submittedHumanCeilingUncertainty.status, "submitted_human_ceiling_uncertainty_review_required");
   assert.equal(humanCeiling.submittedHumanCeilingUncertainty.rows[0].status, "human_ceiling_uncertainty_provenance_review_required");
   assert.ok(humanCeiling.submittedHumanCeilingUncertainty.rows[0].reviewReasons.includes("intervalType"));
@@ -8375,6 +8429,12 @@ test("LMCA comparison report separates scale, source, rater, target, and anchor 
   assert.equal(comparison.raterCompositionComparison.status, "seed_rater_composition_not_comparable");
   assert.equal(comparison.modelDenominatorComparison.find((row) => row.metric === "custom_metric_dialogues").lmcaValue, 933);
   assert.equal(comparison.modelScoreAnchorComparison.anchorCount, 7);
+  assert.equal(comparison.modelScoreAnchorComparison.lowerIsBetter, true);
+  assert.equal(comparison.modelScoreAnchorComparison.denominators.weightedPairwiseTable5.critiquePairs, 856);
+  assert.equal(comparison.modelScoreAnchorComparison.targetLabelRegimes.weightedPairwiseTable5, "Emery Cooper ratings");
+  assert.equal(comparison.modelScoreAnchorComparison.uncertaintyIntervalPolicy.nominalLevel, 0.95);
+  assert.equal(comparison.modelScoreAnchorComparison.weightedPairwiseTable5[0].lowerIsBetter, true);
+  assert.equal(comparison.modelScoreAnchorComparison.weightedPairwiseTable5[0].targetLabelRegime, "Emery Cooper ratings");
   assert.equal(comparison.targetLabelComparison.status, "lmca_style_not_target_identical");
   assert.equal(comparison.validationHumanCeilingComparison.status, "numeric_baselines_declared_but_seed_validation_thin");
 });

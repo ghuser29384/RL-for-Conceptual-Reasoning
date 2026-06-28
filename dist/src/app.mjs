@@ -3664,6 +3664,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
   const operationalControls = report.operationalControlEvidence;
   const blindInitialCeiling = humanCeiling.comparisonRows.find((row) => row.ratingKind === "blind_initial");
   const expertCheckCeiling = humanCeiling.comparisonRows.find((row) => row.ratingKind === "expert_check");
+  const appendixCBaselineComparison = humanCeiling.appendixCNumericBaselineComparison;
   const samePositionContext = report.samePositionContext;
   return `
     <div class="governanceLayout">
@@ -3901,12 +3902,14 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
           ${metricCard("Validation scope", `${humanCeiling.validationScope.validationCritiqueCount}/${report.validationDesign.requiredScale.critiqueCount}`, humanize(humanCeiling.validationScope.appendixCScaleStatus))}
           ${metricCard("Common overlap", String(humanCeiling.raterItemCoverage.commonOverlapItemIds.length), `${humanCeiling.raterItemCoverage.fullCoverageRaterIds.length} full-coverage raters`)}
           ${metricCard("Saturation", humanize(humanCeiling.saturationRisk.status), humanize(humanCeiling.releaseUseStatus))}
+          ${metricCard("Appendix-C anchors", String(appendixCBaselineComparison?.baselineFamilies?.length ?? 0), humanize(appendixCBaselineComparison?.releaseUseStatus ?? "missing"))}
           ${metricCard("Refresh queue", String(humanCeiling.refreshQueue.length), "harder, double-rated, checked, adjudicated")}
         </div>
         <div class="metricTable">
           <div><span>Blind initial ceiling</span><strong>${formatNumber(blindInitialCeiling?.meanAbsOverallDiff)} mean abs overall</strong></div>
           <div><span>Expert check ceiling</span><strong>${formatNumber(expertCheckCeiling?.meanAbsOverallDiff)} mean abs overall</strong></div>
           <div><span>Model-assisted rows</span><strong>${humanCeiling.checkSeparation.modelAssistedCheckRows}</strong></div>
+          <div><span>Appendix-C comparison</span><strong>${humanize(appendixCBaselineComparison?.currentValidationStatus ?? "missing")}, ${appendixCBaselineComparison?.appendixCScaleMet ? "scale met" : "thin validation disclosed"}</strong></div>
           <div><span>Final-average policy</span><strong>Approximation target, not ground truth</strong></div>
         </div>
       </section>
@@ -4053,6 +4056,8 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
         <div class="metricTable">
           <div><span>Table 5 target</span><strong>${lmcaComparison.targetLabelComparison.lmcaTable5Target}</strong></div>
           <div><span>Custom metric dialogues</span><strong>${customDialogues.releaseValue}/${customDialogues.lmcaValue}</strong></div>
+          <div><span>Anchor semantics</span><strong>${lmcaComparison.modelScoreAnchorComparison.lowerIsBetter ? "Lower is better" : "Direction missing"}, ${Math.round((lmcaComparison.modelScoreAnchorComparison.uncertaintyIntervalPolicy?.nominalLevel ?? 0) * 100)}% intervals</strong></div>
+          <div><span>Anchor scope</span><strong>${lmcaComparison.modelScoreAnchorComparison.promptSnapshotPolicy?.sourceReferenceAnchorPolicy ?? "source-reference policy missing"}</strong></div>
           <div><span>Validation ceiling status</span><strong>${humanize(lmcaComparison.validationHumanCeilingComparison.status)}</strong></div>
           <div><span>Overclaim guardrail</span><strong>Descriptive only until all gates pass</strong></div>
         </div>
