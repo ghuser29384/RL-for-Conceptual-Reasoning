@@ -5087,6 +5087,37 @@ test("model failure audits preserve raw outputs and enforce protected-split hand
   assert.equal(audit.claimGatedDiagnostics.releaseUseStatus, "claim_gated_diagnostics_deferred_no_robustness_claim");
   assert.deepEqual(audit.claimGatedDiagnostics.suites[0].cueFamilies, ["user_agreement", "authority", "consensus", "safety_orthodoxy"]);
   assert.equal(audit.claimGatedDiagnostics.suites[1].status, "deferred_no_robustness_claim");
+  const blockedRobustnessAudit = buildModelFailureAudit("release-test", snapshot, fullRubricEvaluationRun, positions, critiques, {
+    robustnessClaims: ["obfuscation_robustness"],
+  });
+  assert.equal(blockedRobustnessAudit.claimGatedDiagnostics.releaseUseStatus, "robustness_claim_blocked_until_claim_gated_probes_run");
+  assert.equal(
+    blockedRobustnessAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress").status,
+    "required_not_run_claim_blocking",
+  );
+  const suppressedRobustnessAudit = buildModelFailureAudit("release-test", snapshot, fullRubricEvaluationRun, positions, critiques, {
+    robustnessClaims: ["obfuscation_robustness"],
+    diagnosticDeferralRecords: [
+      {
+        id: "diagnostic-deferral-obfuscation-release-test",
+        releaseId: "release-test",
+        evaluationId: fullRubricEvaluationRun.id,
+        diagnosticName: "obfuscation_stress",
+        claimAffected: "obfuscation_robustness",
+        notRunReason: "Not enough obfuscation variants for this release.",
+        approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+        strongerClaimSuppressed: true,
+        reviewerId: "expert-reviewer",
+        reviewerRole: "expert",
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  });
+  assert.equal(suppressedRobustnessAudit.claimGatedDiagnostics.releaseUseStatus, "claim_gated_diagnostics_deferred_with_claim_suppression");
+  const suppressedObfuscationSuite = suppressedRobustnessAudit.claimGatedDiagnostics.suites.find((suite) => suite.id === "obfuscated_argument_stress");
+  assert.equal(suppressedObfuscationSuite.status, "deferred_claim_suppressed_by_ledger");
+  assert.equal(suppressedObfuscationSuite.approvedDeferral.id, "diagnostic-deferral-obfuscation-release-test");
+  assert.equal(suppressedObfuscationSuite.notRunRationale, "Obfuscation robustness is not claimed for this release.");
   const partialDiagnosticAudit = buildModelFailureAudit("release-test", snapshot, fullRubricEvaluationRun, positions, critiques, {
     sycophancyProbeRuns: [
       {
@@ -6397,6 +6428,10 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   );
   const report = buildOctoberReleaseReport("release-test", snapshot, seedRatings, positions, critiques);
   assert.equal(report.currentStatus, "incomplete_against_october_target");
+  assert.equal(report.releaseClaimWarnings.releaseUseStatus, "release_claims_limited_by_errata_or_schedule");
+  assert.equal(report.releaseClaimWarnings.counts.errataWarningCount, 0);
+  assert.equal(report.releaseClaimWarnings.counts.blockedScheduleCompletionClaimCount, 1);
+  assert.equal(report.releaseClaimWarnings.scheduleCompletionClaimRows[0].completionClaimStatus, "completion_claim_blocked_until_complete_or_rebaselined");
   assert.equal(report.targetGaps.positionsRemaining, 117);
   assert.equal(report.targetGaps.validationCritiquesRemaining, 50);
   assert.equal(report.targetGaps.validationPositionsRemaining, 18);
@@ -6504,6 +6539,87 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   assert.equal(report.leaderboardReport.claimGatedDiagnosticSummary.releaseUseStatus, "claim_gated_diagnostics_deferred_no_robustness_claim");
   assert.equal(report.leaderboardReport.claimGatedDiagnosticSummary.sycophancyOrthodoxySensitivity.notRunRationales.length, 2);
   assert.equal(report.leaderboardReport.claimGatedDiagnosticSummary.obfuscatedArgumentStress.notRunRationales.length, 2);
+  const suppressedClaimReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      comparabilityClaims: [
+        {
+          id: "comparability-claim-report-robustness",
+          releaseId: "release-test",
+          releaseGateProfileId: "gate-release-test",
+          primaryRaterAnchorPolicyId: "primary-rater-anchor-policy-release-test",
+          robustnessClaims: ["obfuscation_robustness"],
+        },
+      ],
+      diagnosticDeferralRecords: [
+        {
+          id: "diagnostic-deferral-report-obfuscation",
+          releaseId: "release-test",
+          diagnosticName: "obfuscation_stress",
+          claimAffected: "obfuscation_robustness",
+          notRunReason: "Diagnostic deferred before release.",
+          approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+          strongerClaimSuppressed: true,
+          reviewerId: "expert-reviewer",
+          reviewerRole: "expert",
+          createdAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    },
+  );
+  assert.equal(
+    suppressedClaimReport.modelFailureAudits[0].claimGatedDiagnostics.releaseUseStatus,
+    "claim_gated_diagnostics_deferred_with_claim_suppression",
+  );
+  assert.equal(
+    suppressedClaimReport.leaderboardReport.claimGatedDiagnosticSummary.releaseUseStatus,
+    "claim_gated_diagnostics_deferred_with_claim_suppression",
+  );
+  assert.equal(
+    suppressedClaimReport.leaderboardReport.claimGatedDiagnosticSummary.obfuscatedArgumentStress.notRunRationales[0].approvedDeferralId,
+    "diagnostic-deferral-report-obfuscation",
+  );
+  const errataWarningReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      releaseErrata: [
+        {
+          id: "release-erratum-report-warning",
+          releaseId: "release-test",
+          erratumType: "denominator_error",
+          affectedArtifactIds: ["release-report-release-test"],
+          defectSummary: "A denominator claim in the frozen report needs a superseding artifact.",
+          impactedMetricsClaims: ["rating_count_denominator", "leaderboard_common_subset"],
+          artifactDeprecationStatus: "superseded",
+          supersedingArtifactIds: ["release-report-release-test-v2"],
+          apiDownloadWarningBlockPolicy: "warn_and_link_superseding_release_report",
+          remediationStatus: "superseding_artifact_published",
+          historicalArtifactsMutated: false,
+          historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
+          status: "issued",
+          approvedBy: "release-admin",
+          createdAt: "2026-10-01T00:11:00.000Z",
+        },
+      ],
+    },
+  );
+  assert.equal(errataWarningReport.releaseClaimWarnings.counts.errataWarningCount, 1);
+  assert.equal(errataWarningReport.releaseClaimWarnings.apiDownloadWarningRows[0].claimWarningStatus, "impacted_metrics_or_claims_require_warning");
+  assert.equal(errataWarningReport.releaseClaimWarnings.apiDownloadWarningRows[0].apiDownloadWarningBlockPolicy, "warn_and_link_superseding_release_report");
   assert.equal(report.metricDirectionalityConfig.counts.pairwiseConfigRows, 3);
   assert.equal(report.metricDirectionalityConfig.counts.configViolationCount, 0);
   assert.equal(report.metricDirectionalityConfig.directionalityRows[0].callSignature, "customWeightedLoss(targetLabel, modelPrediction)");
@@ -7336,13 +7452,29 @@ test("submitted comparability claims annotate release claim tiers without bypass
         {
           id: "comparability-claim-submitted",
           releaseId: "release-test",
+          linkedReleaseIds: ["release-test"],
+          releaseGateProfileId: "gate-release-test",
           claimWording: "LMCA-style method-preserving compressed release; not an LMCA-scale replication.",
           methodPreservingStatus: "passes",
           methodPreservingEvidence: "Seven-dimensional blind rating workflow and scoring families are implemented.",
-          corpusScaleStatus: "fails_until_target_loaded",
-          targetLabelRaterStatus: "partial_primary_rater_anchor_policy_required",
-          validationDesignStatus: "fails_until_appendix_c_scale_validation_complete",
+          corpusScaleStatus: "fails",
+          exactPositionSourceCountStatus: "fails",
+          topicFamilyStatus: "partial",
+          raterContributionStatus: "partial",
+          adaptedSourceLanguageTaskFormatStatus: "partial",
+          metricDenominatorStatus: "fails",
+          targetLabelRaterStatus: "partial",
+          primaryRaterAnchorPolicyId: "primary-rater-anchor-policy-release-test",
+          validationDesignStatus: "fails",
+          validationNumericCeilingStatus: "fails",
+          modelScoreAnchorStatus: "partial",
+          promptFamilySourceScopeStatus: "partial",
+          modelSnapshotStatus: "partial",
+          protectedSplitLeakageStatus: "partial",
+          evidenceLinks: ["release-config-manifest", "label-snapshot", "validation-report"],
           limitationsText: "Target-scale positions, critiques, ratings, and validation evidence are not fully loaded.",
+          approvedBy: "demo-admin",
+          timestamp: "2026-09-30T12:00:00.000Z",
         },
       ],
     },
@@ -7350,16 +7482,22 @@ test("submitted comparability claims annotate release claim tiers without bypass
   const methodClaim = report.comparabilityClaims.find((claim) => claim.tier === "method_preserving");
   const corpusClaim = report.comparabilityClaims.find((claim) => claim.tier === "corpus_scale_comparable");
   const targetClaim = report.comparabilityClaims.find((claim) => claim.tier === "target_label_comparable");
+  const protectedSplitClaim = report.comparabilityClaims.find((claim) => claim.tier === "protected_split_leakage_comparable");
   assert.equal(methodClaim.status, "passes");
   assert.equal(methodClaim.statusSource, "submitted_comparability_claim");
   assert.equal(methodClaim.submittedClaimId, "comparability-claim-submitted");
+  assert.equal(methodClaim.submittedReleaseGateProfileId, "gate-release-test");
+  assert.equal(methodClaim.submittedPrimaryRaterAnchorPolicyId, "primary-rater-anchor-policy-release-test");
+  assert.deepEqual(methodClaim.submittedEvidenceLinks, ["release-config-manifest", "label-snapshot", "validation-report"]);
   assert.equal(methodClaim.evidence, "Seven-dimensional blind rating workflow and scoring families are implemented.");
   assert.equal(corpusClaim.status, "fails");
-  assert.equal(corpusClaim.submittedStatus, "fails_until_target_loaded");
+  assert.equal(corpusClaim.submittedStatus, "fails");
   assert.equal(corpusClaim.statusSource, "submitted_comparability_claim");
   assert.equal(targetClaim.status, "fails");
   assert.equal(targetClaim.normalizedSubmittedStatus, "partial");
   assert.equal(targetClaim.statusSource, "computed_guardrail_with_submitted_claim");
+  assert.equal(protectedSplitClaim.submittedStatus, "partial");
+  assert.equal(protectedSplitClaim.statusSource, "submitted_comparability_claim");
 });
 
 test("rubric QA coverage report freezes Appendix-F edge cases as public-only fixtures", () => {

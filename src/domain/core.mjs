@@ -3662,9 +3662,14 @@ export function buildEffectiveReleaseGateProfile(releaseId, submittedProfiles = 
     ...baseProfile,
     id: submittedProfile.id ?? baseProfile.id,
     releaseId: submittedProfile.releaseId ?? releaseId,
+    releaseVersion: submittedProfile.releaseVersion ?? submittedProfile.release_version ?? null,
     claimTier: submittedProfile.claimTier ?? baseProfile.claimTier,
     frozenAt: submittedProfile.frozenAt ?? submittedProfile.createdAt ?? baseProfile.frozenAt,
     profileName: submittedProfile.profileName ?? submittedProfile.name ?? null,
+    requiredIfClaimedRules: submittedProfile.requiredIfClaimedRules ?? submittedProfile.required_if_claimed_rules ?? [],
+    notRunRationalePolicy: submittedProfile.notRunRationalePolicy ?? submittedProfile.not_run_deferred_rationale_policy ?? null,
+    approvedBy: submittedProfile.approvedBy ?? submittedProfile.approved_by ?? null,
+    timestamp: submittedProfile.timestamp ?? submittedProfile.createdAt ?? submittedProfile.created_at ?? null,
     profileSource: "submitted_workflow_gate_profile",
     submittedProfileId: submittedProfile.id ?? null,
     sourceCriticalCore: sourceCriticalCore.rows,
@@ -5119,7 +5124,8 @@ function normalizeSubmittedCertificationRecord(record, packById, itemById) {
   const pairwiseError = numberOrNull(record.pairwiseError);
   const duplicateInconsistency = numberOrNull(record.duplicateInconsistency ?? record.duplicateConsistencyMeanAbsDiff);
   const targetedRetrainingFlags = optionalStringArray(record.targetedRetrainingFlags) ?? [];
-  const perDimensionCalibrationError = record.perDimensionCalibrationError ?? record.dimensionMeanAbsError ?? {};
+  const perDimensionCalibrationError =
+    record.perDimensionCalibrationError ?? record.perDimensionCalibrationErrorProfile ?? record.dimensionMeanAbsError ?? {};
   const dimensionReviewFlags = Object.entries(perDimensionCalibrationError)
     .filter(([, value]) => typeof value === "number" && value > 0.15)
     .map(([dimension]) => dimension);
@@ -5187,7 +5193,8 @@ export function buildReleaseGoldLibraryItems(submittedGoldItems = [], positionLi
 }
 
 function normalizeSubmittedGoldItem(item, positionClusterById, base = {}) {
-  const hasHumanAdjudicationEvidence = item.humanAdjudicated === true || Boolean(item.adjudicatedScores || item.adjudicationRationale);
+  const hasHumanAdjudicationEvidence =
+    item.humanAdjudicated === true || Boolean(item.adjudicatedRatings || item.adjudicatedScores || item.adjudicationRationale);
   const protectedSplitExcluded =
     item.protectedSplitExcluded ?? item.protectedEvaluationExclusion ?? item.excludedFromProtectedEvaluation ?? base.protectedSplitExcluded ?? false;
   return {
@@ -8704,6 +8711,7 @@ export function buildUncertaintyAwareLeaderboardReport(
     robustnessClaims: options.robustnessClaims ?? [],
     sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
     obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+    diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
   });
   const hiddenBenchmarkSubmissionFeedback = buildLeaderboardHiddenBenchmarkSubmissionFeedbackSummary(releaseId, {
     benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
@@ -9070,6 +9078,8 @@ function buildLeaderboardClaimGatedDiagnosticSummary(runs, options = {}) {
       completedVariantFamilies: suite.completedVariantFamilies ?? [],
       missingVariantFamilies: suite.missingVariantFamilies ?? [],
       notRunRationale: suite.notRunRationale,
+      approvedDeferralId: suite.approvedDeferral?.id ?? null,
+      approvedWeakerClaimWording: suite.approvedDeferral?.approvedWeakerClaimWording ?? null,
     })),
   );
   const releaseStatuses = uniqueStrings(runSummaries.map((summary) => summary.releaseUseStatus));
@@ -9077,6 +9087,8 @@ function buildLeaderboardClaimGatedDiagnosticSummary(runs, options = {}) {
     ? "robustness_claim_blocked_until_claim_gated_probes_run"
     : releaseStatuses.includes("claim_gated_diagnostics_coverage_review_required")
       ? "claim_gated_diagnostics_coverage_review_required"
+      : releaseStatuses.includes("claim_gated_diagnostics_deferred_with_claim_suppression")
+        ? "claim_gated_diagnostics_deferred_with_claim_suppression"
       : releaseStatuses.includes("claim_gated_diagnostics_attached_no_robustness_claim")
         ? "claim_gated_diagnostics_attached_no_robustness_claim"
         : "claim_gated_diagnostics_deferred_no_robustness_claim";
@@ -9092,7 +9104,7 @@ function buildLeaderboardClaimGatedDiagnosticSummary(runs, options = {}) {
         .map((row) => ({ evaluationRunId: row.evaluationRunId, missingCueFamilies: row.missingCueFamilies })),
       notRunRationales: suiteRows
         .filter((row) => row.suiteId === "sycophancy_orthodoxy_sensitivity" && row.notRunRationale)
-        .map((row) => ({ evaluationRunId: row.evaluationRunId, notRunRationale: row.notRunRationale })),
+        .map((row) => ({ evaluationRunId: row.evaluationRunId, notRunRationale: row.notRunRationale, approvedDeferralId: row.approvedDeferralId })),
     },
     obfuscatedArgumentStress: {
       requiredVariantFamilies: OBFUSCATION_STRESS_VARIANT_FAMILIES,
@@ -9102,7 +9114,7 @@ function buildLeaderboardClaimGatedDiagnosticSummary(runs, options = {}) {
         .map((row) => ({ evaluationRunId: row.evaluationRunId, missingVariantFamilies: row.missingVariantFamilies })),
       notRunRationales: suiteRows
         .filter((row) => row.suiteId === "obfuscated_argument_stress" && row.notRunRationale)
-        .map((row) => ({ evaluationRunId: row.evaluationRunId, notRunRationale: row.notRunRationale })),
+        .map((row) => ({ evaluationRunId: row.evaluationRunId, notRunRationale: row.notRunRationale, approvedDeferralId: row.approvedDeferralId })),
     },
   };
 }
@@ -9615,26 +9627,41 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
   const robustnessClaims = options.robustnessClaims ?? [];
   const sycophancyProbeRuns = (options.sycophancyProbeRuns ?? []).filter((probeRun) => probeRunMatchesEvaluation(probeRun, run.id));
   const obfuscationStressRuns = (options.obfuscationStressRuns ?? []).filter((stressRun) => probeRunMatchesEvaluation(stressRun, run.id));
+  const approvedDeferrals = (options.diagnosticDeferralRecords ?? [])
+    .map((record) => normalizeDiagnosticDeferralRecord(record, "submitted_workflow_diagnostic_deferral_record"))
+    .filter((row) => row?.status === "diagnostic_deferral_complete" && (!row.evaluationId || row.evaluationId === run.id));
+  const sycophancyDeferral = approvedDeferrals.find((row) => diagnosticDeferralMatchesSuite(row, "sycophancy_orthodoxy_sensitivity")) ?? null;
+  const obfuscationDeferral = approvedDeferrals.find((row) => diagnosticDeferralMatchesSuite(row, "obfuscated_argument_stress")) ?? null;
   const completedCueFamilies = uniqueStrings(
     sycophancyProbeRuns.flatMap((probeRun) => normalizeSycophancyCueFamilies(probeRun.cueTypesTested ?? probeRun.cueFamiliesTested ?? [])),
   );
   const missingCueFamilies = REQUIRED_SYCOPHANCY_ORTHODOXY_CUE_FAMILIES.filter((cueFamily) => !completedCueFamilies.includes(cueFamily));
   const completedVariantFamilies = uniqueStrings(obfuscationStressRuns.flatMap((stressRun) => stressRun.variantFamilies ?? []));
   const missingVariantFamilies = OBFUSCATION_STRESS_VARIANT_FAMILIES.filter((variantFamily) => !completedVariantFamilies.includes(variantFamily));
-  const robustnessClaimMade = robustnessClaims.length > 0;
-  const status = robustnessClaimMade ? "required_not_run_claim_blocking" : "deferred_no_robustness_claim";
+  const sycophancyClaimMade = robustnessClaims.some((claimValue) => robustnessClaimRequiresSuite(claimValue, "sycophancy_orthodoxy_sensitivity"));
+  const obfuscationClaimMade = robustnessClaims.some((claimValue) => robustnessClaimRequiresSuite(claimValue, "obfuscated_argument_stress"));
+  const missingDiagnosticStatus = (claimMade, approvedDeferral) =>
+    claimMade
+      ? approvedDeferral
+        ? "deferred_claim_suppressed_by_ledger"
+        : "required_not_run_claim_blocking"
+      : "deferred_no_robustness_claim";
   const sycophancyStatus = sycophancyProbeRuns.length
     ? missingCueFamilies.length
       ? "diagnostic_coverage_review_required"
       : "completed_diagnostic_attached"
-    : status;
+    : missingDiagnosticStatus(sycophancyClaimMade, sycophancyDeferral);
   const obfuscationStatus = obfuscationStressRuns.length
     ? missingVariantFamilies.length
       ? "diagnostic_coverage_review_required"
       : "completed_diagnostic_attached"
-    : status;
+    : missingDiagnosticStatus(obfuscationClaimMade, obfuscationDeferral);
   const coverageReviewRequired = sycophancyStatus === "diagnostic_coverage_review_required" || obfuscationStatus === "diagnostic_coverage_review_required";
-  const missingRequiredDiagnostics = robustnessClaimMade && (sycophancyStatus !== "completed_diagnostic_attached" || obfuscationStatus !== "completed_diagnostic_attached");
+  const missingRequiredDiagnostics =
+    (sycophancyClaimMade && sycophancyStatus === "required_not_run_claim_blocking") ||
+    (obfuscationClaimMade && obfuscationStatus === "required_not_run_claim_blocking");
+  const suppressedByLedger =
+    sycophancyStatus === "deferred_claim_suppressed_by_ledger" || obfuscationStatus === "deferred_claim_suppressed_by_ledger";
   return {
     evaluationRunId: run.id,
     requestedModelAlias: run.requestedModelAlias,
@@ -9650,11 +9677,14 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
         missingCueFamilies,
         requiredWhenClaiming: ["deference_robustness", "orthodoxy_robustness", "user_agreement_resistance"],
         pairedCommonSetRequired: true,
+        approvedDeferral: sycophancyDeferral ? diagnosticDeferralEvidenceRef(sycophancyDeferral) : null,
         notRunRationale: sycophancyProbeRuns.length
           ? missingCueFamilies.length
             ? `Submitted sycophancy/orthodoxy runs are missing cue families: ${missingCueFamilies.join(", ")}.`
             : null
-          : robustnessClaimMade
+          : sycophancyStatus === "deferred_claim_suppressed_by_ledger"
+            ? sycophancyDeferral.approvedWeakerClaimWording
+          : sycophancyClaimMade
             ? "Robustness claims were requested but no paired sycophancy/orthodoxy probe outputs are attached."
             : "The seed demo makes no deference, authority, consensus, safety, or orthodoxy robustness claim.",
       },
@@ -9667,11 +9697,14 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
         missingVariantFamilies,
         requiredWhenClaiming: ["obfuscation_robustness", "style_artifact_robustness", "masked_fallacy_detection"],
         pairedCommonSetRequired: true,
+        approvedDeferral: obfuscationDeferral ? diagnosticDeferralEvidenceRef(obfuscationDeferral) : null,
         notRunRationale: obfuscationStressRuns.length
           ? missingVariantFamilies.length
             ? `Submitted obfuscation stress runs are missing variant families: ${missingVariantFamilies.join(", ")}.`
             : null
-          : robustnessClaimMade
+          : obfuscationStatus === "deferred_claim_suppressed_by_ledger"
+            ? obfuscationDeferral.approvedWeakerClaimWording
+          : obfuscationClaimMade
             ? "Robustness claims were requested but no paired obfuscated-argument stress outputs are attached."
             : "The seed demo includes obfuscated-style rubric fixtures but does not claim model robustness on stress variants.",
       },
@@ -9680,9 +9713,50 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
       ? "robustness_claim_blocked_until_claim_gated_probes_run"
       : coverageReviewRequired
         ? "claim_gated_diagnostics_coverage_review_required"
+      : suppressedByLedger
+        ? "claim_gated_diagnostics_deferred_with_claim_suppression"
       : sycophancyProbeRuns.length || obfuscationStressRuns.length
         ? "claim_gated_diagnostics_attached_no_robustness_claim"
         : "claim_gated_diagnostics_deferred_no_robustness_claim",
+  };
+}
+
+function robustnessClaimRequiresSuite(claimValue, suiteId) {
+  const normalized = normalizeDiagnosticText(claimValue);
+  const suiteFragments = diagnosticSuiteFragments(suiteId);
+  const anyKnownFragment = [...diagnosticSuiteFragments("sycophancy_orthodoxy_sensitivity"), ...diagnosticSuiteFragments("obfuscated_argument_stress")]
+    .some((fragment) => normalized.includes(fragment));
+  return suiteFragments.some((fragment) => normalized.includes(fragment)) || !anyKnownFragment;
+}
+
+function diagnosticDeferralMatchesSuite(deferral, suiteId) {
+  const haystack = normalizeDiagnosticText(`${deferral.diagnosticName ?? ""} ${deferral.claimAffected ?? ""}`);
+  return diagnosticSuiteFragments(suiteId).some((fragment) => haystack.includes(fragment));
+}
+
+function diagnosticSuiteFragments(suiteId) {
+  if (suiteId === "sycophancy_orthodoxy_sensitivity") {
+    return ["sycophancy", "orthodoxy", "deference", "authority", "consensus", "user_agreement", "safety_orthodoxy"];
+  }
+  if (suiteId === "obfuscated_argument_stress") {
+    return ["obfuscation", "obfuscated", "style_artifact", "masked_fallacy", "fluent_jargon", "surface_fluency"];
+  }
+  return [];
+}
+
+function normalizeDiagnosticText(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/[-\s]+/g, "_");
+}
+
+function diagnosticDeferralEvidenceRef(deferral) {
+  return {
+    id: deferral.id,
+    diagnosticName: deferral.diagnosticName,
+    claimAffected: deferral.claimAffected,
+    notRunReason: deferral.notRunReason,
+    approvedWeakerClaimWording: deferral.approvedWeakerClaimWording,
+    reviewerId: deferral.reviewerId,
+    reviewerRole: deferral.reviewerRole,
   };
 }
 
@@ -11004,6 +11078,26 @@ export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibilit
       "Source, topic, split, and rater-composition tables are generated; the seed corpus does not yet cover every LMCA topic family.",
     ),
     claim(
+      "exact_position_source_count_comparable",
+      corpusManifest.counts.positions >= LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique ? "passes" : "fails",
+      `${corpusManifest.counts.positions} positions loaded; exact LMCA-style source-count claims require the target corpus scale and linked source manifest evidence.`,
+    ),
+    claim(
+      "topic_family_comparable",
+      coversAllBaselineTopics(corpusManifest.topicFamily) ? "passes" : "partial",
+      "Topic-family coverage is reported separately from the generic source/topic/rater comparability rollup.",
+    ),
+    claim(
+      "rater_contribution_comparable",
+      "partial",
+      "Rater contribution distributions are reported, but LMCA-identical rater composition claims require matching contribution and expertise evidence.",
+    ),
+    claim(
+      "adapted_source_language_task_format_comparable",
+      "partial",
+      "Adapted-source, language, and task-format status must remain explicit when a release includes translated or reformatted artifacts.",
+    ),
+    claim(
       "metric_denominator_comparable",
       metricEligibility.pairwiseEligiblePairCount >= LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs ? "passes" : "fails",
       `${metricEligibility.pairwiseEligiblePairCount} pairwise-eligible critique pairs versus LMCA Table 5's ${LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs}.`,
@@ -11020,9 +11114,18 @@ export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibilit
     ),
     claim("validation_ceiling_comparable", validationDesign.status === "appendix_c_scale" ? "passes" : "fails", "Human-ceiling numeric baselines are stored, but the seed validation run is thinner than Appendix C."),
     claim("model_score_anchor_comparable", "partial", "LMCA Table 5 and Table 7 anchor scores are stored for reports; seed model outputs are not a comparable leaderboard run."),
+    claim("prompt_family_source_scope_comparable", "partial", "Prompt family and source-scope parity are tracked separately from model-score anchor status."),
+    claim("model_snapshot_comparable", "partial", "Model snapshot and parameter provenance are required before model-score comparisons can be treated as target-stable."),
+    claim("protected_split_leakage_comparable", "partial", "Protected-split leakage status is tracked independently from ordinary release-scale and validation-design claims."),
     claim("replication_like", "fails", "The current seed release is method-preserving scaffolding, not an LMCA-scale or target-identical replication."),
   ];
   return applySubmittedComparabilityClaims(computedClaims, submittedClaims);
+}
+
+function robustnessClaimsFromSubmittedComparabilityClaims(submittedClaims = []) {
+  return uniqueStrings(
+    submittedClaims.flatMap((claim) => (Array.isArray(claim?.robustnessClaims) ? claim.robustnessClaims : [])),
+  );
 }
 
 function applySubmittedComparabilityClaims(computedClaims, submittedClaims = []) {
@@ -11035,6 +11138,15 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
     }));
   }
   const submittedByTier = submittedComparabilityStatuses(submittedClaim);
+  const submittedClaimMetadata = {
+    submittedClaimId: submittedClaim.id ?? null,
+    submittedReleaseGateProfileId: submittedClaim.releaseGateProfileId ?? null,
+    submittedPrimaryRaterAnchorPolicyId: submittedClaim.primaryRaterAnchorPolicyId ?? null,
+    submittedLinkedReleaseIds: Array.isArray(submittedClaim.linkedReleaseIds) ? submittedClaim.linkedReleaseIds : [],
+    submittedEvidenceLinks: Array.isArray(submittedClaim.evidenceLinks) ? submittedClaim.evidenceLinks : [],
+    submittedApprovedBy: submittedClaim.approvedBy ?? null,
+    submittedTimestamp: submittedClaim.timestamp ?? null,
+  };
   return computedClaims.map((claimRow) => {
     const submitted = submittedByTier[claimRow.tier] ?? null;
     if (!submitted) {
@@ -11042,7 +11154,7 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
         ...claimRow,
         statusSource: "computed_release_evidence_no_submitted_tier",
         computedStatus: claimRow.status,
-        submittedClaimId: submittedClaim.id ?? null,
+        ...submittedClaimMetadata,
       };
     }
     const normalizedSubmittedStatus = normalizeComparabilityStatus(submitted.status);
@@ -11056,7 +11168,7 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
       submittedStatus: submitted.status,
       normalizedSubmittedStatus,
       submittedEvidence: submitted.evidence ?? null,
-      submittedClaimId: submittedClaim.id ?? null,
+      ...submittedClaimMetadata,
       submittedClaimWording: submittedClaim.claimWording ?? null,
       statusSource:
         effectiveStatus === normalizedSubmittedStatus
@@ -11072,9 +11184,10 @@ function submittedComparabilityStatuses(claim) {
     methodPreservingStatus: "method_preserving",
     corpusScaleStatus: "corpus_scale_comparable",
     sourceTopicRaterStatus: "source_topic_rater_comparable",
-    exactPositionSourceCountStatus: "source_topic_rater_comparable",
-    topicFamilyStatus: "source_topic_rater_comparable",
-    raterContributionStatus: "source_topic_rater_comparable",
+    exactPositionSourceCountStatus: "exact_position_source_count_comparable",
+    topicFamilyStatus: "topic_family_comparable",
+    raterContributionStatus: "rater_contribution_comparable",
+    adaptedSourceLanguageTaskFormatStatus: "adapted_source_language_task_format_comparable",
     metricDenominatorStatus: "metric_denominator_comparable",
     targetLabelRaterStatus: "target_label_comparable",
     targetLabelStatus: "target_label_comparable",
@@ -11082,6 +11195,9 @@ function submittedComparabilityStatuses(claim) {
     validationNumericCeilingStatus: "validation_ceiling_comparable",
     validationCeilingStatus: "validation_ceiling_comparable",
     modelScoreAnchorStatus: "model_score_anchor_comparable",
+    promptFamilySourceScopeStatus: "prompt_family_source_scope_comparable",
+    modelSnapshotStatus: "model_snapshot_comparable",
+    protectedSplitLeakageStatus: "protected_split_leakage_comparable",
     promptModelScoreAnchorStatus: "model_score_anchor_comparable",
     replicationLikeStatus: "replication_like",
   };
@@ -16177,7 +16293,10 @@ function normalizeDiagnosticDeferralRecord(record, rowSource) {
     evaluationId: record.evaluationId ?? record.evaluation_id ?? null,
     diagnosticName: record.diagnosticName ?? record.diagnostic_name ?? null,
     claimAffected: record.claimAffected ?? record.claim_affected ?? null,
+    notRunReason: record.notRunReason ?? record.not_run_reason ?? null,
     approvedWeakerClaimWording: record.approvedWeakerClaimWording ?? record.approved_weaker_claim_wording ?? null,
+    reviewerId: record.reviewerId ?? record.reviewer_id ?? null,
+    reviewerRole: record.reviewerRole ?? record.reviewer_role ?? null,
     reviewReasons,
     status: reviewReasons.length ? "diagnostic_deferral_review_required" : "diagnostic_deferral_complete",
   };
@@ -16386,7 +16505,10 @@ function normalizeReleaseErratum(erratum, rowSource) {
   if (!id) return null;
   const affectedArtifactIds = normalizeStringArray(erratum.affectedArtifactIds ?? erratum.affected_artifact_ids);
   const supersedingArtifactIds = normalizeStringArray(erratum.supersedingArtifactIds ?? erratum.superseding_artifact_ids);
+  const impactedMetricsClaims = normalizeStringArray(erratum.impactedMetricsClaims ?? erratum.impacted_metrics_claims);
   const erratumType = erratum.erratumType ?? erratum.erratum_type ?? null;
+  const apiDownloadWarningBlockPolicy =
+    erratum.apiDownloadWarningBlockPolicy ?? erratum.api_download_warning_block_policy ?? erratum.downloadWarningPolicy ?? null;
   const reviewReasons = [
     requiredPromptFieldReason("releaseId", erratum.releaseId ?? erratum.release_id),
     RELEASE_ERRATUM_TYPES.includes(erratumType) ? null : "erratumType",
@@ -16409,6 +16531,14 @@ function normalizeReleaseErratum(erratum, rowSource) {
     erratumType,
     affectedArtifactIds,
     supersedingArtifactIds,
+    defectSummary: erratum.defectSummary ?? erratum.defect_summary ?? null,
+    impactedMetricsClaims,
+    artifactDeprecationStatus: erratum.artifactDeprecationStatus ?? erratum.artifact_deprecation_status ?? null,
+    apiDownloadWarningBlockPolicy,
+    remediationStatus: erratum.remediationStatus ?? erratum.remediation_status ?? null,
+    erratumStatus: erratum.status ?? null,
+    approvedBy: erratum.approvedBy ?? erratum.approved_by ?? null,
+    createdAt: erratum.createdAt ?? erratum.created_at ?? null,
     historicalArtifactsMutated: erratum.historicalArtifactsMutated === false || erratum.historical_artifacts_mutated === false ? false : true,
     reviewReasons,
     status: reviewReasons.length ? "release_erratum_review_required" : "release_erratum_complete",
@@ -16445,12 +16575,117 @@ function normalizeScheduleStatusSnapshot(snapshot, rowSource) {
     releaseVersionOrProjectScope: snapshot.releaseVersionOrProjectScope ?? snapshot.releaseVersion ?? snapshot.projectScope ?? null,
     milestoneId: snapshot.milestoneId ?? snapshot.milestone_id ?? null,
     milestoneName: snapshot.milestoneName ?? snapshot.milestone_name ?? null,
+    plannedStart: snapshot.plannedStart ?? snapshot.planned_start ?? null,
+    plannedEnd: snapshot.plannedEnd ?? snapshot.planned_end ?? null,
+    actualStart: snapshot.actualStart ?? snapshot.actual_start ?? null,
+    actualEnd: snapshot.actualEnd ?? snapshot.actual_end ?? null,
     status,
     evidenceArtifactIds,
+    criticalPathImpact: snapshot.criticalPathImpact ?? snapshot.critical_path_impact ?? null,
+    rebaselinedDate: snapshot.rebaselinedDate ?? snapshot.re_baselined_date ?? null,
+    rebaselinedScope: snapshot.rebaselinedScope ?? snapshot.re_baselined_scope ?? null,
+    owner: snapshot.owner ?? null,
+    approvedBy: snapshot.approvedBy ?? snapshot.approved_by ?? null,
+    timestamp: snapshot.timestamp ?? snapshot.createdAt ?? snapshot.created_at ?? null,
     supportsCompletionClaim: snapshot.supportsCompletionClaim === true,
     reviewReasons,
     evidenceStatus: reviewReasons.length ? "schedule_status_snapshot_review_required" : "schedule_status_snapshot_complete",
   };
+}
+
+function buildReleaseClaimWarningReport(releaseId, currentStatus, auxiliaryWorkflowEvidence) {
+  const errataRows = auxiliaryWorkflowEvidence.releaseErrataRows ?? [];
+  const scheduleRows = auxiliaryWorkflowEvidence.scheduleStatusRows ?? [];
+  const completeErrataRows = errataRows.filter((row) => row.status === "release_erratum_complete" && row.rowSource === "submitted_workflow_release_erratum");
+  const completeScheduleRows = scheduleRows.filter((row) => row.evidenceStatus === "schedule_status_snapshot_complete");
+  const apiDownloadWarningRows = completeErrataRows.map((row) => ({
+    erratumId: row.id,
+    rowSource: row.rowSource,
+    releaseId: row.releaseId,
+    erratumType: row.erratumType,
+    erratumStatus: row.erratumStatus,
+    affectedArtifactIds: row.affectedArtifactIds,
+    supersedingArtifactIds: row.supersedingArtifactIds,
+    impactedMetricsClaims: row.impactedMetricsClaims,
+    artifactDeprecationStatus: row.artifactDeprecationStatus,
+    remediationStatus: row.remediationStatus,
+    apiDownloadWarningBlockPolicy:
+      row.apiDownloadWarningBlockPolicy ??
+      (row.erratumStatus === "issued" ? "show_warning_and_link_superseding_artifacts" : "warning_available_if_artifact_requested"),
+    claimWarningStatus: row.impactedMetricsClaims.length
+      ? "impacted_metrics_or_claims_require_warning"
+      : "affected_artifacts_require_warning",
+  }));
+  const scheduleCompletionClaimRows = completeScheduleRows.map((row) => {
+    const completionClaimStatus = scheduleCompletionClaimStatus(row);
+    return {
+      scheduleStatusSnapshotId: row.id,
+      rowSource: row.rowSource,
+      releaseVersionOrProjectScope: row.releaseVersionOrProjectScope,
+      milestoneId: row.milestoneId,
+      milestoneName: row.milestoneName,
+      plannedStart: row.plannedStart,
+      plannedEnd: row.plannedEnd,
+      actualStart: row.actualStart,
+      actualEnd: row.actualEnd,
+      status: row.status,
+      evidenceArtifactIds: row.evidenceArtifactIds,
+      criticalPathImpact: row.criticalPathImpact,
+      rebaselinedDate: row.rebaselinedDate,
+      rebaselinedScope: row.rebaselinedScope,
+      supportsCompletionClaim: row.supportsCompletionClaim,
+      completionClaimStatus,
+    };
+  });
+  const reviewRows = [
+    ...errataRows.filter((row) => row.status !== "release_erratum_complete").map((row) => ({
+      artifactType: "release_erratum",
+      artifactId: row.id,
+      reviewReasons: row.reviewReasons,
+    })),
+    ...scheduleRows.filter((row) => row.evidenceStatus !== "schedule_status_snapshot_complete").map((row) => ({
+      artifactType: "schedule_status_snapshot",
+      artifactId: row.id,
+      reviewReasons: row.reviewReasons,
+    })),
+  ];
+  const blockedScheduleRows = scheduleCompletionClaimRows.filter((row) =>
+    ["completion_claim_blocked_until_complete_or_rebaselined", "completion_claim_rebaselined_not_original_schedule"].includes(row.completionClaimStatus),
+  );
+  const releaseUseStatus = reviewRows.length
+    ? "release_claim_warning_review_required"
+    : apiDownloadWarningRows.length || blockedScheduleRows.length || currentStatus !== "target_scale_met"
+      ? "release_claims_limited_by_errata_or_schedule"
+      : "release_claim_warnings_clear";
+  return {
+    id: `release-claim-warnings-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    currentStatus,
+    apiDownloadWarningRows,
+    scheduleCompletionClaimRows,
+    reviewRows,
+    counts: {
+      errataWarningCount: apiDownloadWarningRows.length,
+      scheduleCompletionClaimRowCount: scheduleCompletionClaimRows.length,
+      blockedScheduleCompletionClaimCount: blockedScheduleRows.length,
+      reviewRowCount: reviewRows.length,
+    },
+    releaseUseStatus,
+  };
+}
+
+function scheduleCompletionClaimStatus(row) {
+  if (row.status === "complete" && row.evidenceArtifactIds.length && row.supportsCompletionClaim) {
+    return "completion_claim_supported_by_evidence";
+  }
+  if (row.status === "complete" && row.evidenceArtifactIds.length) {
+    return "complete_but_completion_claim_not_enabled";
+  }
+  if (row.status === "rebaselined") {
+    return "completion_claim_rebaselined_not_original_schedule";
+  }
+  return "completion_claim_blocked_until_complete_or_rebaselined";
 }
 
 function partialTaskOutputTypeEvidenceRow(taskType, rows) {
@@ -18445,14 +18680,20 @@ export function buildOctoberReleaseReport(
     ratingChecks: options.ratingChecks ?? [],
     modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
   });
+  const releaseRobustnessClaims = uniqueStrings([
+    ...(options.robustnessClaims ?? []),
+    ...robustnessClaimsFromSubmittedComparabilityClaims(options.comparabilityClaims ?? []),
+  ]);
   const leaderboardReport = buildUncertaintyAwareLeaderboardReport(releaseId, labelSnapshot, evaluationRuns, {
     ratings,
     pairs: evaluationPairs,
     modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
     leaderboards: options.leaderboards ?? [],
     knownEvaluationRuns: options.evaluationRuns ?? [],
+    robustnessClaims: releaseRobustnessClaims,
     sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
     obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+    diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
     benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
     benchmarkSubmissions: options.benchmarkSubmissions ?? [],
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
@@ -18475,15 +18716,19 @@ export function buildOctoberReleaseReport(
       leaderboardReportId: leaderboardReport.id,
       ratings,
       modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+      robustnessClaims: releaseRobustnessClaims,
       sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
       obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+      diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
     }),
     buildModelFailureAudit(releaseId, labelSnapshot, overallOnlyEvaluationRun, positionList, critiqueList, {
       leaderboardReportId: leaderboardReport.id,
       ratings,
       modelAssistedLabelOverlapReport: modelAssistedLabelOverlap,
+      robustnessClaims: releaseRobustnessClaims,
       sycophancyProbeRuns: options.sycophancyProbeRuns ?? [],
       obfuscationStressRuns: options.obfuscationStressRuns ?? [],
+      diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
     }),
   ];
   const releaseGoldLibraryItems = buildReleaseGoldLibraryItems(options.goldItems ?? [], positionList);
@@ -18690,6 +18935,7 @@ export function buildOctoberReleaseReport(
     releaseErrata: options.releaseErrata ?? [],
     scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
   });
+  const releaseClaimWarnings = buildReleaseClaimWarningReport(releaseId, currentStatus, auxiliaryWorkflowEvidence);
   const interactionWorkflowEvidence = buildInteractionWorkflowEvidenceReport(releaseId, {
     publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
     raterLearningPlans: options.raterLearningPlans ?? [],
@@ -18751,6 +18997,7 @@ export function buildOctoberReleaseReport(
     releaseVersionManifest,
     releaseArtifactEvidence,
     modelEvaluationArtifactEvidence,
+    releaseClaimWarnings,
     uxSimplification,
     workflowStateMachineEvidence,
     raterDataGovernance,

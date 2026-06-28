@@ -1101,11 +1101,79 @@ const workflowWriteEndpoints = [
     policyActionKind: "release_freeze",
     phaseGateLaneKind: "governance_action",
   }),
-  workflowWriteSpec(/^\/api\/v1\/certification-records$/, "certification_record_submitted", "certificationRecord", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/certification-records$/, "certification_record_submitted", "certificationRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "raterId",
+      "packVersion",
+      "rubricVersion",
+      "protectedSplitConflictCheck",
+      "recertificationReason",
+      "tierUnlocked",
+      "timestamp",
+    ],
+    requiredNonEmptyArrayFields: ["goldItemIds", "duplicateItemIds", "hardAmbiguityItemIds"],
+    requiredObjectFields: ["perDimensionCalibrationErrorProfile"],
+    requiredFiniteNumberFields: ["customWeightedLoss", "pairwiseError", "duplicateInconsistency"],
+    requiredNumberRanges: [
+      { field: "customWeightedLoss", min: 0, max: 1 },
+      { field: "pairwiseError", min: 0, max: 1 },
+      { field: "duplicateInconsistency", min: 0, max: 1 },
+    ],
+    requiredExactFields: { trainingExposureAcknowledged: true },
+    requiredStringIncludes: {
+      protectedSplitConflictCheck: ["hidden", "validation"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/exposure-logs$/, "exposure_log_submitted", "exposureLog", adminRoles, { rejectRawBenchmarkContent: true }),
-  workflowWriteSpec(/^\/api\/v1\/revisions$/, "revision_record_submitted", "revisionRecord", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/item-text-versions$/, "item_text_version_submitted", "itemTextVersion", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/rating-context-snapshots$/, "rating_context_snapshot_submitted", "ratingContextSnapshot", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/revisions$/, "revision_record_submitted", "revisionRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "ratingIdPrior", "ratingIdNew", "reasonCode", "revisionComment", "discussionThreadId", "timestamp"],
+    requiredDistinctFieldSets: [["ratingIdPrior", "ratingIdNew"]],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/item-text-versions$/, "item_text_version_submitted", "itemTextVersion", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "itemType",
+      "itemId",
+      "canonicalText",
+      "canonicalTextHash",
+      "raterVisibleRenderedTextHash",
+      "modelVisibleRenderedTextHash",
+      "raterVisibleVersionLabel",
+      "hashDisplayVisibilityPolicy",
+      "normalizationStatus",
+      "diffFromPriorVersionOrSourceArtifact",
+      "sourceProvenanceLink",
+      "createdBy",
+      "createdAt",
+    ],
+    allowedValues: { itemType: ["position", "critique"] },
+    requiredStringPrefixes: {
+      canonicalTextHash: "sha256:",
+      raterVisibleRenderedTextHash: "sha256:",
+      modelVisibleRenderedTextHash: "sha256:",
+    },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rating-context-snapshots$/, "rating_context_snapshot_submitted", "ratingContextSnapshot", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "positionId",
+      "targetCritiqueId",
+      "contextPolicy",
+      "laterSiblingAbsent",
+      "assignmentSource",
+      "modelVisibleContextHash",
+      "createdBy",
+      "createdAt",
+    ],
+    requiredNonEmptyArrayFields: ["siblingCritiqueIdsShown", "siblingItemTextVersionIds", "siblingOrder"],
+    allowedValues: { contextPolicy: ["target_only", "prior_siblings_in_session", "all_current_siblings", "counterbalanced_order", "custom"] },
+    requiredStringPrefixes: { modelVisibleContextHash: "sha256:" },
+  }),
   workflowWriteSpec(/^\/api\/v1\/pairwise-comparison-snapshots$/, "pairwise_comparison_snapshot_submitted", "pairwiseComparisonSnapshot", adminRoles, {
     allowHiddenMetadata: true,
     policyActionKind: "pairwise_snapshot_freeze",
@@ -1273,7 +1341,30 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "raterId", "rubricVersion", "certificationPackVersion", "practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary", "assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown", "protectedLabelExposureCheck", "timestamp"],
     requireActorField: "raterId",
   }),
-  workflowWriteSpec(/^\/api\/v1\/gold-items$/, "gold_item_submitted", "goldItem", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/gold-items$/, "gold_item_submitted", "goldItem", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "itemId",
+      "positionId",
+      "critiqueId",
+      "positionClusterId",
+      "splitName",
+      "rubricVersion",
+      "adjudicatedSummary",
+      "difficultyClass",
+      "ambiguityClass",
+      "trainingExposureStatus",
+      "protectedSplitConflictCheck",
+    ],
+    requiredObjectFields: ["adjudicatedRatings"],
+    requiredExactFields: { rationaleVisibleToRater: false },
+    requiredStringIncludes: {
+      trainingExposureStatus: ["training"],
+      protectedSplitConflictCheck: ["hidden", "validation"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/source-anchor-examples$/, "source_anchor_example_submitted", "sourceAnchorExample", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -1369,7 +1460,33 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["immutableOutputArtifactIds"],
     requiredStringPrefixes: { releaseConfigManifestHash: "sha256:" },
   }),
-  workflowWriteSpec(/^\/api\/v1\/release-gate-profiles$/, "release_gate_profile_submitted", "releaseGateProfile", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/release-gate-profiles$/, "release_gate_profile_submitted", "releaseGateProfile", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "releaseVersion",
+      "profileName",
+      "notRunRationalePolicy",
+      "approvedBy",
+      "frozenAt",
+      "timestamp",
+    ],
+    requiredNonEmptyArrayFields: ["sourceCriticalCoreGates", "benchmarkQualityGates", "claimGatedDiagnostics", "requiredIfClaimedRules"],
+    requiredArrayIncludes: {
+      sourceCriticalCoreGates: ["position-critique-units", "seven-dimensions", "blind-initial", "immutable-revisions", "metric-families"],
+      benchmarkQualityGates: ["split-isolation", "release-manifests", "artifact-balance", "access-audit"],
+      claimGatedDiagnostics: ["derived-utility", "sycophancy", "obfuscation"],
+      requiredIfClaimedRules: [
+        "lmca-comparability-claim-requires-method-core-and-comparability-matrix",
+        "hidden-benchmark-claim-requires-split-isolation-access-audit-and-artifact-balance",
+        "robustness-claim-requires-matching-diagnostic-or-deferral",
+      ],
+    },
+    requiredStringIncludesAny: {
+      notRunRationalePolicy: ["deferred", "not-run", "not run", "suppress", "claim"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/primary-rater-anchor-policies$/, "primary_rater_anchor_policy_submitted", "primaryRaterAnchorPolicy", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "releaseId", "selectionRule", "coverageThreshold", "predeclaredAt"],
@@ -1378,7 +1495,50 @@ const workflowWriteEndpoints = [
       prohibitedPostHocCriteria: ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
     },
   }),
-  workflowWriteSpec(/^\/api\/v1\/comparability-claims$/, "comparability_claim_submitted", "comparabilityClaim", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/comparability-claims$/, "comparability_claim_submitted", "comparabilityClaim", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "releaseGateProfileId",
+      "claimWording",
+      "methodPreservingStatus",
+      "corpusScaleStatus",
+      "exactPositionSourceCountStatus",
+      "topicFamilyStatus",
+      "raterContributionStatus",
+      "adaptedSourceLanguageTaskFormatStatus",
+      "metricDenominatorStatus",
+      "targetLabelRaterStatus",
+      "primaryRaterAnchorPolicyId",
+      "validationDesignStatus",
+      "validationNumericCeilingStatus",
+      "modelScoreAnchorStatus",
+      "promptFamilySourceScopeStatus",
+      "modelSnapshotStatus",
+      "protectedSplitLeakageStatus",
+      "limitationsText",
+      "approvedBy",
+      "timestamp",
+    ],
+    requiredNonEmptyArrayFields: ["linkedReleaseIds", "evidenceLinks"],
+    allowedValues: {
+      methodPreservingStatus: ["passes", "partial", "fails", "not_applicable"],
+      corpusScaleStatus: ["passes", "partial", "fails", "not_applicable"],
+      exactPositionSourceCountStatus: ["passes", "partial", "fails", "not_applicable"],
+      topicFamilyStatus: ["passes", "partial", "fails", "not_applicable"],
+      raterContributionStatus: ["passes", "partial", "fails", "not_applicable"],
+      adaptedSourceLanguageTaskFormatStatus: ["passes", "partial", "fails", "not_applicable"],
+      metricDenominatorStatus: ["passes", "partial", "fails", "not_applicable"],
+      targetLabelRaterStatus: ["passes", "partial", "fails", "not_applicable"],
+      validationDesignStatus: ["passes", "partial", "fails", "not_applicable"],
+      validationNumericCeilingStatus: ["passes", "partial", "fails", "not_applicable"],
+      modelScoreAnchorStatus: ["passes", "partial", "fails", "not_applicable"],
+      promptFamilySourceScopeStatus: ["passes", "partial", "fails", "not_applicable"],
+      modelSnapshotStatus: ["passes", "partial", "fails", "not_applicable"],
+      protectedSplitLeakageStatus: ["passes", "partial", "fails", "not_applicable"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/candidate-batches$/, "candidate_batch_submitted", "candidateBatch", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -7220,6 +7380,59 @@ function resolveWorkflowPolicyActionKind(spec, resource) {
 async function validateWorkflowResourceBindings(context, resource, spec) {
   if (spec.validateSensitiveAuditChainBindings) {
     return validateSensitiveAuditChainEventBindings(context, resource);
+  }
+  if (spec.resourceKey === "comparabilityClaim") {
+    return validateComparabilityClaimBindings(context, resource);
+  }
+  return { ok: true };
+}
+
+async function validateComparabilityClaimBindings(context, claim) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const gateProfiles = latestWorkflowResources(workflowEvents, "releaseGateProfile");
+  const primaryRaterPolicies = latestWorkflowResources(workflowEvents, "primaryRaterAnchorPolicy");
+  const claimReleaseId = claim.releaseId ?? releaseId;
+  const failures = [];
+
+  const defaultGateProfileId = `gate-${claimReleaseId}`;
+  const linkedGateProfile =
+    claim.releaseGateProfileId === defaultGateProfileId
+      ? { id: defaultGateProfileId, releaseId: claimReleaseId, frozenAt: "2026-09-30T12:00:00.000Z", profileSource: "default_project_gate_catalog" }
+      : gateProfiles.find((profile) => profile.id === claim.releaseGateProfileId) ?? null;
+  if (!linkedGateProfile) {
+    failures.push("releaseGateProfileId:not_found");
+  } else {
+    if (linkedGateProfile.releaseId && linkedGateProfile.releaseId !== claimReleaseId) {
+      failures.push("releaseGateProfileId:release_mismatch");
+    }
+    if (claim.timestamp && linkedGateProfile.frozenAt && Date.parse(linkedGateProfile.frozenAt) > Date.parse(claim.timestamp)) {
+      failures.push("releaseGateProfileId:not_frozen_before_claim");
+    }
+  }
+
+  const defaultPrimaryRaterPolicyId = `primary-rater-anchor-policy-${claimReleaseId}`;
+  const linkedPrimaryPolicy =
+    claim.primaryRaterAnchorPolicyId === defaultPrimaryRaterPolicyId
+      ? { id: defaultPrimaryRaterPolicyId, releaseId: claimReleaseId, policySource: "default_project_anchor_policy" }
+      : primaryRaterPolicies.find((policy) => policy.id === claim.primaryRaterAnchorPolicyId) ?? null;
+  if (!linkedPrimaryPolicy) {
+    failures.push("primaryRaterAnchorPolicyId:not_found");
+  } else if (linkedPrimaryPolicy.releaseId && linkedPrimaryPolicy.releaseId !== claimReleaseId) {
+    failures.push("primaryRaterAnchorPolicyId:release_mismatch");
+  }
+
+  if (Array.isArray(claim.linkedReleaseIds) && !claim.linkedReleaseIds.includes(claimReleaseId)) {
+    failures.push("linkedReleaseIds:releaseId_missing");
+  }
+
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "comparability_claim_binding_failed",
+      detail: failures.join(", "),
+      extra: { bindingFailures: failures },
+    };
   }
   return { ok: true };
 }

@@ -2892,7 +2892,12 @@ test("v1 rating endpoint accepts ratings for submitted workflow assignments", as
         contextPolicy: "target_only",
         siblingCritiqueIdsShown: ["crit-ai-base-rate"],
         siblingItemTextVersionIds: ["ctv-ai-base-rate-v1"],
+        siblingOrder: ["crit-ai-base-rate"],
         laterSiblingAbsent: true,
+        assignmentSource: "blind_initial_rating_queue",
+        modelVisibleContextHash: "sha256:live-submitted-context",
+        createdBy: "demo-admin",
+        createdAt: "2026-10-01T00:00:00.000Z",
       },
     }),
   });
@@ -3710,6 +3715,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(positionDenied.status, 403);
 
+  const incompleteCertificationRecord = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/certification-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      certificationRecord: {
+        id: "certification-record-incomplete",
+        raterId: "demo-rater",
+      },
+    }),
+  });
+  assert.equal(incompleteCertificationRecord.status, 400);
+  assert.match(incompleteCertificationRecord.body.detail, /packVersion|goldItemIds|perDimensionCalibrationErrorProfile|timestamp/);
+
   const certificationRecord = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/certification-records",
@@ -3725,10 +3744,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         hardAmbiguityItemIds: ["gold-priced-in-objection"],
         protectedSplitConflictCheck: "training_exposure_only_no_hidden_or_validation_overlap",
         trainingExposureAcknowledged: true,
+        recertificationReason: "initial_certification_for_october_release",
         customWeightedLoss: 0.11,
         pairwiseError: 0.08,
         duplicateInconsistency: 0.04,
+        perDimensionCalibrationErrorProfile: { overall: 0.08, clarity: 0.05, correctness: 0.12 },
+        targetedRetrainingFlags: [],
         tierUnlocked: "graduate_live_rating",
+        timestamp: "2026-10-01T00:00:00.000Z",
       },
     }),
   });
@@ -3768,6 +3791,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(exposureLogById.status, 200);
   assert.equal(exposureLogById.body.id, "exposure-log-workflow-new");
 
+  const incompleteRevisionRecord = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/revisions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      revisionRecord: {
+        id: "revision-record-incomplete",
+        ratingIdPrior: "rating-ai-base-rate-a",
+      },
+    }),
+  });
+  assert.equal(incompleteRevisionRecord.status, 400);
+  assert.match(incompleteRevisionRecord.body.detail, /ratingIdNew|revisionComment|discussionThreadId|timestamp/);
+
   const revisionRecord = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/revisions",
@@ -3780,6 +3817,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         reasonCode: "human_only_self_check",
         revisionComment: "Rater corrected a strength-centrality allocation after rereading the critique.",
         discussionThreadId: "discussion-thread-workflow-new",
+        timestamp: "2026-10-01T00:01:00.000Z",
       },
     }),
   });
@@ -3793,6 +3831,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(revisionRecordById.status, 200);
   assert.equal(revisionRecordById.body.id, "revision-record-workflow-new");
 
+  const incompleteItemTextVersion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-text-versions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemTextVersion: {
+        id: "item-text-version-incomplete",
+        itemType: "critique",
+      },
+    }),
+  });
+  assert.equal(incompleteItemTextVersion.status, 400);
+  assert.match(incompleteItemTextVersion.body.detail, /itemId|canonicalText|raterVisibleVersionLabel|createdAt/);
+
   const itemTextVersion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/item-text-versions",
@@ -3802,10 +3854,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "item-text-version-workflow-new",
         itemType: "critique",
         itemId: "crit-ai-base-rate",
-        canonicalTextHash: "sha256-test-canonical",
-        raterVisibleRenderedTextHash: "sha256-test-rater-visible",
-        modelVisibleRenderedTextHash: "sha256-test-model-visible",
+        canonicalText: "The critique argues that base-rate uncertainty weakens the position's main confidence claim.",
+        canonicalTextHash: "sha256:test-canonical",
+        raterVisibleRenderedTextHash: "sha256:test-rater-visible",
+        modelVisibleRenderedTextHash: "sha256:test-model-visible",
+        raterVisibleVersionLabel: "crit-ai-base-rate-v1",
+        hashDisplayVisibilityPolicy: "hashes_visible_to_admins_hidden_from_initial_raters",
         textVersionStatus: "frozen_for_release_candidate",
+        normalizationStatus: "unchanged_rater_visible_text",
+        diffFromPriorVersionOrSourceArtifact: "initial_canonical_version_no_prior_diff",
+        sourceProvenanceLink: "rights-record-workflow-new",
+        createdBy: "demo-admin",
+        createdAt: "2026-10-01T00:02:00.000Z",
       },
     }),
   });
@@ -3819,6 +3879,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(itemTextVersionById.status, 200);
   assert.equal(itemTextVersionById.body.id, "item-text-version-workflow-new");
 
+  const incompleteRatingContextSnapshot = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-context-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingContextSnapshot: {
+        id: "rating-context-incomplete",
+        positionId: "pos-ai-prior",
+      },
+    }),
+  });
+  assert.equal(incompleteRatingContextSnapshot.status, 400);
+  assert.match(incompleteRatingContextSnapshot.body.detail, /targetCritiqueId|siblingCritiqueIdsShown|assignmentSource|createdAt/);
+
   const ratingContextSnapshot = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rating-context-snapshots",
@@ -3831,7 +3905,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         contextPolicy: "prior_siblings_in_session",
         siblingCritiqueIdsShown: ["crit-ai-base-rate"],
         siblingItemTextVersionIds: ["ctv-crit-ai-base-rate-v1"],
+        siblingOrder: ["crit-ai-base-rate"],
         laterSiblingAbsent: true,
+        assignmentSource: "blind_initial_rating_queue",
+        modelVisibleContextHash: "sha256:test-model-context",
+        createdBy: "demo-admin",
+        createdAt: "2026-10-01T00:03:00.000Z",
       },
     }),
   });
@@ -4178,6 +4257,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteAssignment.body.error, "invalid_workflow_payload");
   assert.match(incompleteAssignment.body.detail, /raterSessionId/);
 
+  const incompleteGoldItem = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/gold-items",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      goldItem: {
+        id: "gold-item-incomplete",
+        releaseId: "october-2026-demo",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+      },
+    }),
+  });
+  assert.equal(incompleteGoldItem.status, 400);
+  assert.match(incompleteGoldItem.body.detail, /positionClusterId|splitName|adjudicatedSummary|protectedSplitConflictCheck/);
+
   const goldItem = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/gold-items",
@@ -4189,9 +4283,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         itemId: "pos-ai-prior::crit-ai-base-rate",
         positionId: "pos-ai-prior",
         critiqueId: "crit-ai-base-rate",
+        positionClusterId: "cluster-ai-prior",
+        splitName: "public_training",
         rubricVersion: "lmca-seven-dim-v1",
         goldRole: "certification_and_drift_monitoring",
-        adjudicatedScores: { overall: 0.72, centrality: 0.78, strength: 0.66, correctness: 0.7, clarity: 0.86, dead_weight: 0.18, single_issue: 0.76 },
+        adjudicatedSummary: "Representative conceptual critique with clear disagreement about base-rate relevance.",
+        adjudicatedRatings: { overall: 0.72, centrality: 0.78, strength: 0.66, correctness: 0.7, clarity: 0.86, dead_weight: 0.18, single_issue: 0.76 },
+        difficultyClass: "medium",
+        ambiguityClass: "moderate",
+        trainingExposureStatus: "training_exposure_gold_item_excluded_from_protected_evaluation",
+        protectedSplitConflictCheck: "no_hidden_or_validation_position_cluster_overlap",
+        rationaleVisibleToRater: false,
         adjudicationRationale: "Representative conceptual critique with clear disagreement about base-rate relevance.",
         protectedEvaluationExclusion: true,
       },
@@ -4525,6 +4627,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(exportManifestArtifact.status, 201);
 
+  const incompleteReleaseGateProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-gate-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseGateProfile: {
+        id: "release-gate-incomplete",
+        releaseId: "october-2026-demo",
+        sourceCriticalCoreGates: ["position-critique-units"],
+      },
+    }),
+  });
+  assert.equal(incompleteReleaseGateProfile.status, 400);
+  assert.match(
+    incompleteReleaseGateProfile.body.detail,
+    /releaseVersion|profileName|benchmarkQualityGates|claimGatedDiagnostics|requiredIfClaimedRules|approvedBy|frozenAt|timestamp/,
+  );
+
   const releaseGateProfile = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/release-gate-profiles",
@@ -4533,7 +4653,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       releaseGateProfile: {
         id: "release-gate-workflow-new",
         releaseId: "october-2026-demo",
-        sourceCriticalCoreGates: ["position_critique_units", "blind_initial"],
+        releaseVersion: "october-2026-demo-v1",
+        profileName: "october_compressed_first_release",
+        sourceCriticalCoreGates: ["position-critique-units", "seven-dimensions", "blind-initial", "immutable-revisions", "metric-families"],
+        benchmarkQualityGates: ["split-isolation", "release-manifests", "artifact-balance", "access-audit"],
+        claimGatedDiagnostics: ["derived-utility", "sycophancy", "obfuscation"],
+        requiredIfClaimedRules: [
+          "lmca-comparability-claim-requires-method-core-and-comparability-matrix",
+          "hidden-benchmark-claim-requires-split-isolation-access-audit-and-artifact-balance",
+          "robustness-claim-requires-matching-diagnostic-or-deferral",
+        ],
+        notRunRationalePolicy: "claim_gated_diagnostics_may_be_deferred_only_with_not-run_rationale_and_suppressed_stronger_claims",
+        approvedBy: "demo-admin",
+        frozenAt: "2026-09-30T12:00:00.000Z",
+        timestamp: "2026-09-30T12:00:00.000Z",
       },
     }),
   });
@@ -4587,20 +4720,79 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(primaryRaterAnchorPolicyById.status, 200);
   assert.equal(primaryRaterAnchorPolicyById.body.id, "primary-rater-policy-workflow-new");
 
-  const comparabilityClaim = await invokeApi(context, {
+  const incompleteComparabilityClaim = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/comparability-claims",
     headers: adminHeaders,
     body: JSON.stringify({
       comparabilityClaim: {
-        id: "comparability-claim-workflow-new",
+        id: "comparability-claim-incomplete",
         releaseId: "october-2026-demo",
+        claimWording: "LMCA-style release.",
         methodPreservingStatus: "passes",
-        corpusScaleStatus: "fails_until_target_loaded",
-        validationDesignStatus: "fails_until_appendix_c_scale_validation_complete",
-        targetLabelRaterStatus: "partial_primary_rater_anchor_policy_required",
-        limitationsText: "Claim remains limited until target-scale corpus and target-identical labels are fully loaded.",
       },
+    }),
+  });
+  assert.equal(incompleteComparabilityClaim.status, 400);
+  assert.match(
+    incompleteComparabilityClaim.body.detail,
+    /releaseGateProfileId|linkedReleaseIds|evidenceLinks|corpusScaleStatus|protectedSplitLeakageStatus|approvedBy|timestamp/,
+  );
+
+  const completeComparabilityClaimPayload = {
+    id: "comparability-claim-workflow-new",
+    releaseId: "october-2026-demo",
+    linkedReleaseIds: ["october-2026-demo"],
+    linkedValidationReportIds: ["human-ceiling-october-2026-demo"],
+    linkedEvaluationRunIds: ["model-eval-october-2026-demo"],
+    linkedLeaderboardIds: [],
+    releaseGateProfileId: "release-gate-workflow-new",
+    methodPreservingStatus: "passes",
+    corpusScaleStatus: "fails",
+    exactPositionSourceCountStatus: "fails",
+    topicFamilyStatus: "partial",
+    raterContributionStatus: "partial",
+    adaptedSourceLanguageTaskFormatStatus: "partial",
+    metricDenominatorStatus: "fails",
+    targetLabelRaterStatus: "partial",
+    primaryRaterAnchorPolicyId: "primary-rater-policy-workflow-new",
+    validationDesignStatus: "fails",
+    validationNumericCeilingStatus: "fails",
+    modelScoreAnchorStatus: "partial",
+    promptFamilySourceScopeStatus: "partial",
+    modelSnapshotStatus: "partial",
+    protectedSplitLeakageStatus: "partial",
+    evidenceLinks: ["release-config-manifest-workflow-new", "label-snapshot-workflow-new", "human-ceiling-report-workflow-new"],
+    claimWording: "LMCA-style method-preserving compressed first release; not LMCA-scale replication.",
+    limitationsText: "Claim remains limited until target-scale corpus and target-identical labels are fully loaded.",
+    approvedBy: "demo-admin",
+    timestamp: "2026-09-30T12:00:00.000Z",
+  };
+
+  const unboundComparabilityClaim = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/comparability-claims",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      comparabilityClaim: {
+        ...completeComparabilityClaimPayload,
+        id: "comparability-claim-unbound",
+        releaseGateProfileId: "release-gate-missing",
+        primaryRaterAnchorPolicyId: "primary-rater-policy-missing",
+      },
+    }),
+  });
+  assert.equal(unboundComparabilityClaim.status, 409);
+  assert.equal(unboundComparabilityClaim.body.error, "comparability_claim_binding_failed");
+  assert.match(unboundComparabilityClaim.body.detail, /releaseGateProfileId:not_found/);
+  assert.match(unboundComparabilityClaim.body.detail, /primaryRaterAnchorPolicyId:not_found/);
+
+  const comparabilityClaim = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/comparability-claims",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      comparabilityClaim: completeComparabilityClaimPayload,
     }),
   });
   assert.equal(comparabilityClaim.status, 201);
@@ -10525,8 +10717,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["matches_current_artifact", "matches_current_artifact", "matches_current_artifact", "matches_current_artifact"],
   );
   assert.equal(releaseReport.body.releaseGateProfile.submittedProfileId, "release-gate-workflow-new");
-  assert.equal(releaseReport.body.releaseGateProfile.profileCoverage.status, "submitted_profile_missing_required_gates");
-  assert.equal(releaseReport.body.releaseGateEvaluation.missingRequiredProfileGateCount, 10);
+  assert.equal(releaseReport.body.releaseGateProfile.releaseVersion, "october-2026-demo-v1");
+  assert.equal(releaseReport.body.releaseGateProfile.profileCoverage.status, "submitted_profile_covers_required_gate_catalog");
+  assert.equal(releaseReport.body.releaseGateEvaluation.missingRequiredProfileGateCount, 0);
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorPolicy.id, "primary-rater-policy-workflow-new");
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorPolicy.policyStatus, "submitted_anchor_policy_predeclared");
   assert.equal(
@@ -10536,8 +10729,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorSnapshot.primaryRaterAnchor.coverageThresholdMet, true);
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedClaimId, "comparability-claim-workflow-new");
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").statusSource, "submitted_comparability_claim");
-  assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "corpus_scale_comparable").submittedStatus, "fails_until_target_loaded");
+  assert.equal(
+    releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedReleaseGateProfileId,
+    "release-gate-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedPrimaryRaterAnchorPolicyId,
+    "primary-rater-policy-workflow-new",
+  );
+  assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "corpus_scale_comparable").submittedStatus, "fails");
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "target_label_comparable").normalizedSubmittedStatus, "partial");
+  assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "protected_split_leakage_comparable").submittedStatus, "partial");
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.hiddenPositionCount, 2);
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.hiddenCritiqueCount, 3);
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.submittedSplitMembership.appliedHiddenPositionCount, 1);
@@ -10685,7 +10887,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(workflowRaterProfileRow.reviewReasons, []);
   const workflowTrainingExample = releaseReport.body.trainingExport.pointwiseExamples.find((example) => example.critiqueId === "crit-ai-base-rate");
   assert.equal(workflowTrainingExample.critiqueTextVersionId, "item-text-version-workflow-new");
-  assert.equal(workflowTrainingExample.critiqueCanonicalHash, "sha256-test-canonical");
+  assert.equal(workflowTrainingExample.critiqueCanonicalHash, "sha256:test-canonical");
   assert.equal(workflowTrainingExample.positionBalancedWeight, 0.5);
   assert.equal(releaseReport.body.trainingExport.positionBalancedWeighting.status, "position_balanced_training_weights_complete");
   assert.equal(releaseReport.body.trainingExport.ratingContextSnapshots.some((snapshot) => snapshot.id === "rating-context-workflow-new"), true);
@@ -11150,6 +11352,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingEffortQuality.protectedUseBlockSummary.validationBlockedCount, 0);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterItemConflictCount, 2);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedReleaseErratumCount, 2);
+  assert.equal(releaseReport.body.releaseClaimWarnings.counts.errataWarningCount, 2);
+  const workflowErratumWarning = releaseReport.body.releaseClaimWarnings.apiDownloadWarningRows.find(
+    (row) => row.erratumId === "release-erratum-workflow-new",
+  );
+  assert.ok(workflowErratumWarning);
+  assert.equal(workflowErratumWarning.apiDownloadWarningBlockPolicy, "show_warning_and_link_superseding_artifacts");
+  assert.equal(workflowErratumWarning.claimWarningStatus, "affected_artifacts_require_warning");
+  const workflowScheduleClaim = releaseReport.body.releaseClaimWarnings.scheduleCompletionClaimRows.find(
+    (row) => row.scheduleStatusSnapshotId === "schedule-status-workflow-new",
+  );
+  assert.ok(workflowScheduleClaim);
+  assert.equal(workflowScheduleClaim.rowSource, "submitted_workflow_schedule_status_snapshot");
+  assert.equal(workflowScheduleClaim.completionClaimStatus, "completion_claim_blocked_until_complete_or_rebaselined");
+  assert.equal(releaseReport.body.releaseClaimWarnings.releaseUseStatus, "release_claims_limited_by_errata_or_schedule");
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.publicExamplePracticeSessions.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.raterLearningPlans.length, 1);
@@ -11474,6 +11690,142 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
   assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 113);
+});
+
+test("comparability claims can bind default governance artifacts before custom records are submitted", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+
+  const response = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/comparability-claims",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      comparabilityClaim: {
+        id: "comparability-claim-default-governance",
+        releaseId: "october-2026-demo",
+        linkedReleaseIds: ["october-2026-demo"],
+        linkedValidationReportIds: ["human-ceiling-october-2026-demo"],
+        linkedEvaluationRunIds: ["model-eval-october-2026-demo"],
+        linkedLeaderboardIds: [],
+        releaseGateProfileId: "gate-october-2026-demo",
+        claimWording: "LMCA-style method-preserving compressed first release; not LMCA-scale replication.",
+        methodPreservingStatus: "passes",
+        corpusScaleStatus: "fails",
+        exactPositionSourceCountStatus: "fails",
+        topicFamilyStatus: "partial",
+        raterContributionStatus: "partial",
+        adaptedSourceLanguageTaskFormatStatus: "partial",
+        metricDenominatorStatus: "fails",
+        targetLabelRaterStatus: "partial",
+        primaryRaterAnchorPolicyId: "primary-rater-anchor-policy-october-2026-demo",
+        validationDesignStatus: "fails",
+        validationNumericCeilingStatus: "fails",
+        modelScoreAnchorStatus: "partial",
+        promptFamilySourceScopeStatus: "partial",
+        modelSnapshotStatus: "partial",
+        protectedSplitLeakageStatus: "partial",
+        evidenceLinks: ["release-config-manifest", "label-snapshot", "validation-report", "model-evaluation-report"],
+        limitationsText: "Claim remains limited until target-scale corpus and Appendix-C-scale validation are present.",
+        approvedBy: "demo-admin",
+        timestamp: "2026-09-30T12:00:00.000Z",
+      },
+    }),
+  });
+  assert.equal(response.status, 201);
+
+  const events = await auditStore.readWorkflowEvents();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].payload.comparabilityClaim.releaseGateProfileId, "gate-october-2026-demo");
+});
+
+test("submitted diagnostic deferrals suppress claim-gated robustness claims in release report", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+
+  const deferral = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/diagnostic-deferrals",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      diagnosticDeferralRecord: {
+        id: "diagnostic-deferral-api-obfuscation",
+        releaseId: "october-2026-demo",
+        diagnosticName: "obfuscation_stress",
+        claimAffected: "obfuscation_robustness",
+        notRunReason: "Not enough obfuscation variants for this release.",
+        approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+        strongerClaimSuppressed: true,
+        reviewerId: "demo-expert",
+        reviewerRole: "expert",
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    }),
+  });
+  assert.equal(deferral.status, 201);
+
+  const claim = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/comparability-claims",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      comparabilityClaim: {
+        id: "comparability-claim-api-robustness",
+        releaseId: "october-2026-demo",
+        linkedReleaseIds: ["october-2026-demo"],
+        linkedValidationReportIds: ["human-ceiling-october-2026-demo"],
+        linkedEvaluationRunIds: ["model-eval-october-2026-demo"],
+        linkedLeaderboardIds: [],
+        releaseGateProfileId: "gate-october-2026-demo",
+        claimWording: "LMCA-style release with no obfuscation robustness claim.",
+        methodPreservingStatus: "passes",
+        corpusScaleStatus: "fails",
+        exactPositionSourceCountStatus: "fails",
+        topicFamilyStatus: "partial",
+        raterContributionStatus: "partial",
+        adaptedSourceLanguageTaskFormatStatus: "partial",
+        metricDenominatorStatus: "fails",
+        targetLabelRaterStatus: "partial",
+        primaryRaterAnchorPolicyId: "primary-rater-anchor-policy-october-2026-demo",
+        validationDesignStatus: "fails",
+        validationNumericCeilingStatus: "fails",
+        modelScoreAnchorStatus: "partial",
+        promptFamilySourceScopeStatus: "partial",
+        modelSnapshotStatus: "partial",
+        protectedSplitLeakageStatus: "partial",
+        robustnessClaims: ["obfuscation_robustness"],
+        evidenceLinks: ["release-config-manifest", "label-snapshot", "validation-report", "model-evaluation-report"],
+        limitationsText: "Obfuscation robustness is explicitly not claimed until the diagnostic is run.",
+        approvedBy: "demo-admin",
+        timestamp: "2026-10-01T00:01:00.000Z",
+      },
+    }),
+  });
+  assert.equal(claim.status, 201);
+
+  const releaseReport = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: adminHeaders,
+  });
+  assert.equal(releaseReport.status, 200);
+  assert.equal(
+    releaseReport.body.modelFailureAudits[0].claimGatedDiagnostics.releaseUseStatus,
+    "claim_gated_diagnostics_deferred_with_claim_suppression",
+  );
+  const obfuscationSuite = releaseReport.body.modelFailureAudits[0].claimGatedDiagnostics.suites.find(
+    (suite) => suite.id === "obfuscated_argument_stress",
+  );
+  assert.equal(obfuscationSuite.status, "deferred_claim_suppressed_by_ledger");
+  assert.equal(obfuscationSuite.approvedDeferral.id, "diagnostic-deferral-api-obfuscation");
+  assert.equal(
+    releaseReport.body.leaderboardReport.claimGatedDiagnosticSummary.releaseUseStatus,
+    "claim_gated_diagnostics_deferred_with_claim_suppression",
+  );
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
