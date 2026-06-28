@@ -103,6 +103,17 @@ const ratingEvidenceReferenceFields = [
   ["sideIssueSpanRefs", "side_issue_span_refs"],
   ["unclearTextSpanRefs", "unclear_text_span_refs"],
 ];
+const rationaleEvidenceSpanLinkCategories = [
+  ...RUBRIC_DIMENSIONS,
+  "attacked_claim",
+  "critique_support",
+  "wrong_claim",
+  "dead_weight_span",
+  "side_issue",
+  "unclear_language",
+  "unclear_text",
+];
+const rationaleEvidenceSpanVisibilityStates = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
 const ratingScoreEntryExplicitnessStatuses = new Set(["all_required_scores_explicit", "low_clarity_branch_explicit", "revision_scores_explicit"]);
 const ratingMissingFieldValidationStatuses = new Set(["passed_no_missing_required_fields", "low_clarity_provisional_fields_allowed"]);
 const lockedInitialSourceTagVisibilityStates = new Set(["hidden", "hidden_from_initial_rater", "source_tag_protected_visibility_preserved"]);
@@ -350,6 +361,8 @@ const correctnessVerificationStatuses = [
   "unresolved",
   "adjudication_resolved",
 ];
+const verificationWorkspaceClaimTypes = ["logical", "mathematical", "empirical", "subjective_or_intuition_pump", "unclear_claim"];
+const verificationWorkspaceClaimStatuses = ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"];
 const verificationEvidenceSourceExposureStatuses = ["source_blind", "post_lock_source_visible", "source_identifiable", "not_applicable"];
 const verificationEvidenceProtectedContentStatuses = ["none", "protected_content_absent", "protected_content_redacted", "protected_content_present_authorized"];
 const verificationEvidenceModelAssistanceStatuses = ["none", "model_assisted_retrieval", "model_generated_summary", "model_suggested_source"];
@@ -364,7 +377,9 @@ const interpretationTargetMapRequiredFields = [
   "positionTextVersionId",
   "critiqueTextVersionId",
   "plausibilityNotes",
+  "interpretationPlausibilityByReading",
   "pricedInBackgroundAssumptionStatus",
+  "dimensionEffectByRubricDimension",
   "productAllocationNote",
   "visibilityState",
   "createdBy",
@@ -374,7 +389,10 @@ const verificationWorkspaceSessionRequiredFields = [
   "id",
   "claimType",
   "verificationStatus",
+  "claimVerificationStatusByClaim",
+  "sourceAssistedReviewNote",
   "correctnessHalfEntireUnclearFlag",
+  "nonBlindAuxiliaryMaterialConsulted",
   "exposureBlindingState",
   "verifierId",
   "verifierRole",
@@ -2008,13 +2026,22 @@ const workflowWriteEndpoints = [
       "centralityTargetClaimSet",
       "strengthTargetClaimSet",
     ],
-    requiredObjectFields: ["critiqueCoverageByInterpretation"],
+    requiredObjectFields: ["interpretationPlausibilityByReading", "critiqueCoverageByInterpretation", "dimensionEffectByRubricDimension"],
+    requiredObjectKeys: { dimensionEffectByRubricDimension: ["centrality", "strength", "overall"] },
+    requiredObjectKeysFromArrayFields: [
+      { objectField: "interpretationPlausibilityByReading", arrayField: "plausiblePositionCritiqueInterpretations" },
+      { objectField: "critiqueCoverageByInterpretation", arrayField: "plausiblePositionCritiqueInterpretations" },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/verification-workspace-sessions$/, "verification_workspace_session_submitted", "verificationWorkspaceSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: verificationWorkspaceSessionRequiredFields,
     requiredNonEmptyArrayFields: ["itemKeys", "claimList", "claimSpanRefs", "evidenceMaterialRefs"],
-    allowedValues: { verificationStatus: correctnessVerificationStatuses },
+    requiredObjectFields: ["claimVerificationStatusByClaim"],
+    requiredObjectKeysFromArrayFields: [{ objectField: "claimVerificationStatusByClaim", arrayField: "claimSpanRefs" }],
+    allowedObjectValues: { claimVerificationStatusByClaim: verificationWorkspaceClaimStatuses },
+    requiredBooleanFields: ["correctnessHalfEntireUnclearFlag", "nonBlindAuxiliaryMaterialConsulted"],
+    allowedValues: { claimType: verificationWorkspaceClaimTypes, verificationStatus: verificationWorkspaceClaimStatuses },
     requiredWhen: [{ field: "verificationStatus", equals: "not_practicable", requiredFields: ["notPracticableJustification"] }],
   }),
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
@@ -2593,9 +2620,24 @@ const workflowWriteEndpoints = [
       requiredConfidenceValues: SCORE_CONFIDENCE_LEVELS,
       triggerRequiredRationaleFields: ["score_explanation"],
       requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
+      optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
       disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
     },
-    requiredExactFields: { safeDeclineAvailable: true, requiredConfidenceJudgment: true },
+    allowedArrayValues: {
+      requiredScoreFields: rubricDimensions,
+      requiredConfidenceValues: SCORE_CONFIDENCE_LEVELS,
+      triggerRequiredRationaleFields: ["score_explanation"],
+      requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
+      optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
+      disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
+    },
+    requiredExactFields: {
+      safeDeclineAvailable: true,
+      requiredConfidenceJudgment: true,
+      evidenceSpanRequirednessPolicy: "optional_ordinary_required_for_disputed_release_critical",
+      verificationWorkspaceRequirednessPolicy: "required_for_correctness_sensitive_unresolved_cases",
+      interpretationTargetMapRequirednessPolicy: "required_for_interpretation_disputes_and_release_critical_escalations",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/score-explanation-policies$/, "score_explanation_policy_submitted", "scoreExplanationPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -2977,6 +3019,15 @@ const workflowWriteEndpoints = [
       "timestamp",
     ],
     requiredAnyFields: [["ratingId", "adjudicationMemoId"]],
+    allowedValues: {
+      spanTarget: ["position", "critique"],
+      linkedDimensionOrFlag: rationaleEvidenceSpanLinkCategories,
+      visibilityState: rationaleEvidenceSpanVisibilityStates,
+    },
+    requiredExactFields: {
+      hiddenUntilInitialRatingLock: true,
+      rawSelectedTextStored: false,
+    },
     rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/same-position-scratchpads$/, "same_position_scratchpad_submitted", "samePositionScratchpad", ratingWorkflowRoles, {
@@ -8304,6 +8355,21 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}, vali
     const missingKeys = requiredKeys.filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key));
     if (missingKeys.length) return invalid(`missing required object keys in ${fieldPath}: ${missingKeys.join(", ")}`);
   }
+  for (const rule of spec.requiredObjectKeysFromArrayFields ?? []) {
+    const value = workflowFieldValue(normalized, rule.objectField);
+    const requiredKeys = workflowFieldValue(normalized, rule.arrayField);
+    if (!Array.isArray(requiredKeys)) return invalid(`${rule.arrayField} must be an array`);
+    const missingKeys = requiredKeys.filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key));
+    if (missingKeys.length) return invalid(`missing required object keys in ${rule.objectField}: ${missingKeys.join(", ")}`);
+  }
+  for (const [fieldPath, allowedValues] of Object.entries(spec.allowedObjectValues ?? {})) {
+    const value = workflowFieldValue(normalized, fieldPath);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return invalid(`${fieldPath} must be an object`);
+    const invalidKeys = Object.entries(value)
+      .filter(([, entryValue]) => !allowedValues.includes(entryValue))
+      .map(([key]) => key);
+    if (invalidKeys.length) return invalid(`${fieldPath} values must be one of: ${allowedValues.join(", ")}`);
+  }
   for (const rule of spec.requiredObjectKeysByFieldValue ?? []) {
     const discriminator = workflowFieldValue(normalized, rule.field);
     const requiredKeys = rule.values?.[discriminator] ?? [];
@@ -8362,6 +8428,8 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}, vali
   }
   const invalidNumbers = (spec.requiredFiniteNumberFields ?? []).filter((fieldPath) => !Number.isFinite(workflowFieldValue(normalized, fieldPath)));
   if (invalidNumbers.length) return invalid(`required numeric fields must be finite numbers: ${invalidNumbers.join(", ")}`);
+  const invalidBooleans = (spec.requiredBooleanFields ?? []).filter((fieldPath) => typeof workflowFieldValue(normalized, fieldPath) !== "boolean");
+  if (invalidBooleans.length) return invalid(`fields must be boolean: ${invalidBooleans.join(", ")}`);
   for (const rule of spec.requiredNumberRanges ?? []) {
     const value = workflowFieldValue(normalized, rule.field);
     const min = rule.min ?? Number.NEGATIVE_INFINITY;

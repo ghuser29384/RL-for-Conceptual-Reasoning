@@ -12999,6 +12999,19 @@ const ACCESSIBILITY_REQUIRED_CHECKS = [
   "readability",
 ];
 
+const RATING_WORKFLOW_OPTIONAL_RATIONALE_FIELDS = ["general_rating_note"];
+const RATING_WORKFLOW_TRIGGER_REQUIRED_RATIONALE_FIELDS = ["score_explanation"];
+const RATING_WORKFLOW_REQUIRED_ISSUE_PANELS = ["safe_decline", "source_recognition", "item_issue_report"];
+const RATING_WORKFLOW_OPTIONAL_ISSUE_PANELS = ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"];
+const RATING_WORKFLOW_DISABLED_CONTROLS = [
+  "peer_score_view_before_initial_lock",
+  "model_judge_score_view_before_initial_lock",
+  "hidden_metadata_view",
+];
+const RATING_WORKFLOW_EVIDENCE_SPAN_REQUIREDNESS_POLICY = "optional_ordinary_required_for_disputed_release_critical";
+const RATING_WORKFLOW_VERIFICATION_WORKSPACE_REQUIREDNESS_POLICY = "required_for_correctness_sensitive_unresolved_cases";
+const RATING_WORKFLOW_INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY = "required_for_interpretation_disputes_and_release_critical_escalations";
+
 function defaultVisibilityPolicy(releaseId) {
   return {
     id: `visibility-policy-${releaseId}`,
@@ -13029,14 +13042,14 @@ function defaultRatingWorkflowProfile(releaseId) {
     requiredConfidenceJudgment: true,
     requiredConfidenceValues: SCORE_CONFIDENCE_LEVELS,
     scoreExplanationPolicyId: `score-explanation-policy-${releaseId}`,
-    optionalRationaleFields: ["general_rating_note"],
-    triggerRequiredRationaleFields: ["score_explanation"],
-    requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
-    optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
-    disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
-    evidenceSpanRequirednessPolicy: "optional_ordinary_required_for_disputed_release_critical",
-    verificationWorkspaceRequirednessPolicy: "required_for_correctness_sensitive_unresolved_cases",
-    interpretationTargetMapRequirednessPolicy: "required_for_interpretation_disputes_and_release_critical_escalations",
+    optionalRationaleFields: RATING_WORKFLOW_OPTIONAL_RATIONALE_FIELDS,
+    triggerRequiredRationaleFields: RATING_WORKFLOW_TRIGGER_REQUIRED_RATIONALE_FIELDS,
+    requiredIssuePanels: RATING_WORKFLOW_REQUIRED_ISSUE_PANELS,
+    optionalIssuePanels: RATING_WORKFLOW_OPTIONAL_ISSUE_PANELS,
+    disabledControls: RATING_WORKFLOW_DISABLED_CONTROLS,
+    evidenceSpanRequirednessPolicy: RATING_WORKFLOW_EVIDENCE_SPAN_REQUIREDNESS_POLICY,
+    verificationWorkspaceRequirednessPolicy: RATING_WORKFLOW_VERIFICATION_WORKSPACE_REQUIREDNESS_POLICY,
+    interpretationTargetMapRequirednessPolicy: RATING_WORKFLOW_INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY,
     preSubmitLintPolicy: `pre-submit-assist-${releaseId}`,
     safeDeclineAvailable: true,
     releaseGateProfileLinkage: `release-gate-${releaseId}`,
@@ -13245,10 +13258,21 @@ function normalizeRatingWorkflowProfile(profile, rowSource) {
   const taskModesCovered = normalizeStringArray(profile.taskModesCovered ?? profile.assignmentTypesCovered);
   const requiredScoreFields = normalizeStringArray(profile.requiredScoreFields);
   const requiredConfidenceValues = normalizeStringArray(profile.requiredConfidenceValues);
+  const optionalRationaleFields = normalizeStringArray(profile.optionalRationaleFields);
   const triggerRequiredRationaleFields = normalizeStringArray(profile.triggerRequiredRationaleFields);
+  const requiredIssuePanels = normalizeStringArray(profile.requiredIssuePanels);
+  const optionalIssuePanels = normalizeStringArray(profile.optionalIssuePanels);
+  const disabledControls = normalizeStringArray(profile.disabledControls);
   const missingTaskModes = RATING_WORKFLOW_TASK_MODES.filter((mode) => !taskModesCovered.includes(mode));
   const missingScoreFields = RUBRIC_DIMENSIONS.filter((field) => !requiredScoreFields.includes(field));
   const missingConfidenceValues = SCORE_CONFIDENCE_LEVELS.filter((value) => !requiredConfidenceValues.includes(value));
+  const missingOptionalRationaleFields = RATING_WORKFLOW_OPTIONAL_RATIONALE_FIELDS.filter((field) => !optionalRationaleFields.includes(field));
+  const ordinaryOptionalTriggerFields = optionalRationaleFields.filter((field) => RATING_WORKFLOW_TRIGGER_REQUIRED_RATIONALE_FIELDS.includes(field));
+  const missingTriggerRequiredRationaleFields = RATING_WORKFLOW_TRIGGER_REQUIRED_RATIONALE_FIELDS.filter((field) => !triggerRequiredRationaleFields.includes(field));
+  const missingRequiredIssuePanels = RATING_WORKFLOW_REQUIRED_ISSUE_PANELS.filter((panel) => !requiredIssuePanels.includes(panel));
+  const advancedPanelsRequiredForOrdinary = RATING_WORKFLOW_OPTIONAL_ISSUE_PANELS.filter((panel) => requiredIssuePanels.includes(panel));
+  const missingOptionalIssuePanels = RATING_WORKFLOW_OPTIONAL_ISSUE_PANELS.filter((panel) => !optionalIssuePanels.includes(panel));
+  const missingDisabledControls = RATING_WORKFLOW_DISABLED_CONTROLS.filter((control) => !disabledControls.includes(control));
   const reviewReasons = [
     requiredPromptFieldReason("profileVersion", profile.profileVersion ?? profile.version),
     missingTaskModes.length ? `taskModesCovered:${missingTaskModes.join(",")}` : null,
@@ -13256,9 +13280,22 @@ function normalizeRatingWorkflowProfile(profile, rowSource) {
     profile.requiredConfidenceJudgment === true ? null : "requiredConfidenceJudgment",
     missingConfidenceValues.length ? `requiredConfidenceValues:${missingConfidenceValues.join(",")}` : null,
     requiredPromptFieldReason("scoreExplanationPolicyId", profile.scoreExplanationPolicyId),
-    triggerRequiredRationaleFields.includes("score_explanation") ? null : "triggerRequiredRationaleFields",
-    normalizeStringArray(profile.requiredIssuePanels).length ? null : "requiredIssuePanels",
-    normalizeStringArray(profile.optionalIssuePanels).length ? null : "optionalIssuePanels",
+    missingOptionalRationaleFields.length ? `optionalRationaleFields:${missingOptionalRationaleFields.join(",")}` : null,
+    ordinaryOptionalTriggerFields.length ? `optionalRationaleFields:unexpected_trigger_required:${ordinaryOptionalTriggerFields.join(",")}` : null,
+    missingTriggerRequiredRationaleFields.length ? `triggerRequiredRationaleFields:${missingTriggerRequiredRationaleFields.join(",")}` : null,
+    missingRequiredIssuePanels.length ? `requiredIssuePanels:${missingRequiredIssuePanels.join(",")}` : null,
+    advancedPanelsRequiredForOrdinary.length ? `requiredIssuePanels:advanced_not_optional:${advancedPanelsRequiredForOrdinary.join(",")}` : null,
+    missingOptionalIssuePanels.length ? `optionalIssuePanels:${missingOptionalIssuePanels.join(",")}` : null,
+    missingDisabledControls.length ? `disabledControls:${missingDisabledControls.join(",")}` : null,
+    profile.evidenceSpanRequirednessPolicy === RATING_WORKFLOW_EVIDENCE_SPAN_REQUIREDNESS_POLICY
+      ? null
+      : `evidenceSpanRequirednessPolicy:${RATING_WORKFLOW_EVIDENCE_SPAN_REQUIREDNESS_POLICY}`,
+    profile.verificationWorkspaceRequirednessPolicy === RATING_WORKFLOW_VERIFICATION_WORKSPACE_REQUIREDNESS_POLICY
+      ? null
+      : `verificationWorkspaceRequirednessPolicy:${RATING_WORKFLOW_VERIFICATION_WORKSPACE_REQUIREDNESS_POLICY}`,
+    profile.interpretationTargetMapRequirednessPolicy === RATING_WORKFLOW_INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY
+      ? null
+      : `interpretationTargetMapRequirednessPolicy:${RATING_WORKFLOW_INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY}`,
     profile.safeDeclineAvailable === true ? null : "safeDeclineAvailable",
     requiredPromptFieldReason("preSubmitLintPolicy", profile.preSubmitLintPolicy),
   ].filter(Boolean);
@@ -13274,10 +13311,19 @@ function normalizeRatingWorkflowProfile(profile, rowSource) {
     requiredConfidenceValues,
     missingConfidenceValues,
     scoreExplanationPolicyId: profile.scoreExplanationPolicyId ?? null,
-    optionalRationaleFields: normalizeStringArray(profile.optionalRationaleFields),
+    optionalRationaleFields,
+    missingOptionalRationaleFields,
     triggerRequiredRationaleFields,
-    requiredIssuePanels: normalizeStringArray(profile.requiredIssuePanels),
-    optionalIssuePanels: normalizeStringArray(profile.optionalIssuePanels),
+    missingTriggerRequiredRationaleFields,
+    requiredIssuePanels,
+    missingRequiredIssuePanels,
+    optionalIssuePanels,
+    missingOptionalIssuePanels,
+    disabledControls,
+    missingDisabledControls,
+    evidenceSpanRequirednessPolicy: profile.evidenceSpanRequirednessPolicy ?? null,
+    verificationWorkspaceRequirednessPolicy: profile.verificationWorkspaceRequirednessPolicy ?? null,
+    interpretationTargetMapRequirednessPolicy: profile.interpretationTargetMapRequirednessPolicy ?? null,
     safeDeclineAvailable: profile.safeDeclineAvailable === true,
     preSubmitLintPolicy: profile.preSubmitLintPolicy ?? null,
     reviewReasons,
@@ -14362,6 +14408,17 @@ const ITEM_ISSUE_ACTION_RESOLUTION_STATUSES = ["triage_opened", "resolved", "qua
 const ITEM_ISSUE_ACTION_QUARANTINE_SCOPES = ["none", "affected_item", "dependent_artifacts", "affected_item_and_dependent_artifacts"];
 const REQUIRED_PROTECTED_ARTIFACT_TYPES = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const REQUIRED_PROTECTED_ARTIFACT_INCIDENT_STALE_CLASSES = ["evaluations", "leaderboards", "label_snapshots", "exports"];
+const RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES = [
+  ...RUBRIC_DIMENSIONS,
+  "attacked_claim",
+  "critique_support",
+  "wrong_claim",
+  "dead_weight_span",
+  "side_issue",
+  "unclear_language",
+  "unclear_text",
+];
+const RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
 const BENCHMARK_SUBMISSION_BUDGET_KEYS = [
   "maxSubmissionsPerWindow",
   "windowHours",
@@ -14372,6 +14429,8 @@ const BENCHMARK_SUBMISSION_BUDGET_KEYS = [
 const BENCHMARK_BUDGET_CONSUMPTION_STATUSES = ["within_budget", "budget_depleted_routed_to_review"];
 const BENCHMARK_COOLDOWN_STATUSES = ["cooldown_started", "cooldown_satisfied", "cooldown_review_required"];
 const BENCHMARK_DUPLICATE_RUN_STATUSES = ["not_duplicate", "near_duplicate_routed_to_review"];
+const VERIFICATION_WORKSPACE_CLAIM_TYPES = ["logical", "mathematical", "empirical", "subjective_or_intuition_pump", "unclear_claim"];
+const VERIFICATION_WORKSPACE_CLAIM_STATUSES = ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"];
 
 function defaultTaskOutputEligibilityPolicy(releaseId) {
   return {
@@ -14844,6 +14903,8 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     requiredRubricLintRules: REQUIRED_RUBRIC_LINT_RULES,
     requiredItemIssueCategories: REQUIRED_ITEM_ISSUE_CATEGORIES,
     requiredProtectedArtifactTypes: REQUIRED_PROTECTED_ARTIFACT_TYPES,
+    allowedRationaleEvidenceSpanLinkCategories: RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES,
+    allowedRationaleEvidenceSpanVisibilityStates: RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES,
     taskOutputEligibilityPolicyRows: [...seedTaskOutputRows, ...submittedTaskOutputRows],
     scoreInputPolicyRows: [...seedScoreInputRows, ...submittedScoreInputRows],
     draftStoragePolicyRows: [...seedDraftStorageRows, ...submittedDraftStorageRows],
@@ -15386,10 +15447,10 @@ function normalizeRationaleEvidenceSpan(span, rowSource) {
     Number.isInteger(startOffset) && startOffset >= 0 ? null : "startOffset",
     Number.isInteger(endOffset) && endOffset > startOffset ? null : "endOffset",
     String(span.normalizedSelectedTextHash ?? "").startsWith("sha256:") ? null : "normalizedSelectedTextHash",
-    requiredPromptFieldReason("linkedDimensionOrFlag", linkedDimensionOrFlag),
+    RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES.includes(linkedDimensionOrFlag) ? null : "linkedDimensionOrFlag",
     requiredPromptFieldReason("noteId", span.noteId),
-    ["draft", "locked_initial_hidden", "post_lock_visible", "adjudication_visible"].includes(visibilityState) ? null : "visibilityState",
-    visibilityState === "locked_initial_hidden" ? (span.hiddenUntilInitialRatingLock === true ? null : "hiddenUntilInitialRatingLock") : null,
+    RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES.includes(visibilityState) ? null : "visibilityState",
+    span.hiddenUntilInitialRatingLock === true ? null : "hiddenUntilInitialRatingLock",
     span.rawSelectedTextStored === false ? null : "rawSelectedTextStored",
     requiredPromptFieldReason("timestamp", span.timestamp ?? span.createdAt),
   ].filter(Boolean);
@@ -16868,11 +16929,17 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         candidateIntendedConclusionSpans: ["position-conclusion-span"],
         attackedClaimSpans: ["critique-attack-span"],
         plausiblePositionCritiqueInterpretations: ["central_forecast_attack", "side_assumption_attack"],
+        interpretationPlausibilityByReading: { central_forecast_attack: 0.7, side_assumption_attack: 0.3 },
         plausibilityNotes: "central forecast attack is more release-relevant",
         critiqueCoverageByInterpretation: { central_forecast_attack: "covered", side_assumption_attack: "partial" },
         pricedInBackgroundAssumptionStatus: "not_priced_in",
         centralityTargetClaimSet: ["central_forecast"],
         strengthTargetClaimSet: ["base_rate_challenge"],
+        dimensionEffectByRubricDimension: {
+          centrality: "central forecast attack sets the target-claim importance",
+          strength: "base-rate challenge determines how much of that target claim is weakened",
+          overall: "overall follows the centrality-strength allocation after priced-in review",
+        },
         productAllocationNote: "centrality and strength allocation reviewed together",
         visibilityState: "post_lock_or_adjudicator_only",
         createdBy: "seed-adjudicator",
@@ -16888,9 +16955,12 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         claimSpanRefs: ["claim-span-1"],
         claimType: "subjective_or_intuition_pump",
         verificationStatus: "not_practicable",
+        claimVerificationStatusByClaim: { "claim-span-1": "not_practicable" },
         evidenceMaterialRefs: ["adjudication-note-seed"],
         notPracticableJustification: "Normative forecast premise lacks direct empirical check.",
         correctnessHalfEntireUnclearFlag: false,
+        nonBlindAuxiliaryMaterialConsulted: true,
+        sourceAssistedReviewNote: "Expert post-lock note was consulted only after initial rating lock.",
         exposureBlindingState: "post_lock_expert_only",
         verifierId: "seed-verifier",
         verifierRole: "expert",
@@ -17170,7 +17240,12 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       artifactType: "interpretation_target_map",
       requiredFields: ["positionTextVersionId", "critiqueTextVersionId", "plausibilityNotes", "pricedInBackgroundAssumptionStatus", "productAllocationNote", "visibilityState", "createdBy", "timestamp"],
       arrayFields: ["itemKeys", "candidateIntendedConclusionSpans", "attackedClaimSpans", "plausiblePositionCritiqueInterpretations", "centralityTargetClaimSet", "strengthTargetClaimSet"],
-      objectFields: ["critiqueCoverageByInterpretation"],
+      objectFields: ["interpretationPlausibilityByReading", "critiqueCoverageByInterpretation", "dimensionEffectByRubricDimension"],
+      objectKeys: { dimensionEffectByRubricDimension: ["centrality", "strength", "overall"] },
+      objectKeysFromArrayFields: [
+        { objectField: "interpretationPlausibilityByReading", arrayField: "plausiblePositionCritiqueInterpretations" },
+        { objectField: "critiqueCoverageByInterpretation", arrayField: "plausiblePositionCritiqueInterpretations" },
+      ],
       seedRows: defaults.interpretationTargetMaps,
     },
     {
@@ -17181,14 +17256,24 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       requiredFields: [
         "claimType",
         "verificationStatus",
+        "sourceAssistedReviewNote",
         "notPracticableJustification",
         "correctnessHalfEntireUnclearFlag",
+        "nonBlindAuxiliaryMaterialConsulted",
         "exposureBlindingState",
         "verifierId",
         "verifierRole",
         "timestamp",
       ],
       arrayFields: ["itemKeys", "claimList", "claimSpanRefs", "evidenceMaterialRefs"],
+      objectFields: ["claimVerificationStatusByClaim"],
+      objectKeysFromArrayFields: [{ objectField: "claimVerificationStatusByClaim", arrayField: "claimSpanRefs" }],
+      allowedObjectValues: { claimVerificationStatusByClaim: VERIFICATION_WORKSPACE_CLAIM_STATUSES },
+      booleanFields: ["correctnessHalfEntireUnclearFlag", "nonBlindAuxiliaryMaterialConsulted"],
+      enumFields: {
+        claimType: VERIFICATION_WORKSPACE_CLAIM_TYPES,
+        verificationStatus: VERIFICATION_WORKSPACE_CLAIM_STATUSES,
+      },
       seedRows: defaults.verificationWorkspaceSessions,
     },
     {
@@ -17448,6 +17533,20 @@ function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
         .filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key))
         .map((key) => `${field}:${key}`);
     }),
+    ...((spec.objectKeysFromArrayFields ?? []).flatMap((rule) => {
+      const value = artifactFieldValue(resource, rule.objectField);
+      const requiredKeys = normalizeStringArray(artifactFieldValue(resource, rule.arrayField));
+      return requiredKeys
+        .filter((key) => !value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, key))
+        .map((key) => `${rule.objectField}:${key}`);
+    })),
+    ...Object.entries(spec.allowedObjectValues ?? {}).flatMap(([field, allowedValues]) => {
+      const value = artifactFieldValue(resource, field);
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [field];
+      return Object.entries(value)
+        .filter(([, entryValue]) => !allowedValues.includes(entryValue))
+        .map(([key]) => `${field}:${key}`);
+    }),
     ...Object.entries(spec.arrayIncludes ?? {}).flatMap(([field, requiredValues]) => {
       const value = normalizeStringArray(artifactFieldValue(resource, field));
       return requiredValues.filter((item) => !value.includes(item)).map((item) => `${field}:${item}`);
@@ -17469,6 +17568,7 @@ function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
     })),
     ...((spec.booleanTrueFields ?? []).map((field) => artifactFieldValue(resource, field) === true ? null : field)),
     ...((spec.booleanFalseFields ?? []).map((field) => artifactFieldValue(resource, field) === false ? null : field)),
+    ...((spec.booleanFields ?? []).map((field) => typeof artifactFieldValue(resource, field) === "boolean" ? null : field)),
     ...Object.entries(spec.exactFields ?? {}).map(([field, expectedValue]) => artifactFieldValue(resource, field) === expectedValue ? null : field),
     ...Object.entries(spec.stringIncludes ?? {}).flatMap(([field, requiredFragments]) => {
       const normalized = String(artifactFieldValue(resource, field) ?? "").toLowerCase();

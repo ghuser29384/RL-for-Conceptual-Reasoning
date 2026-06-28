@@ -1518,11 +1518,17 @@ function completeInteractionWorkflowFixtures() {
       candidateIntendedConclusionSpans: ["position-conclusion"],
       attackedClaimSpans: ["critique-attack"],
       plausiblePositionCritiqueInterpretations: ["central_forecast_attack"],
+      interpretationPlausibilityByReading: { central_forecast_attack: 0.8 },
       plausibilityNotes: "Central forecast attack is release-relevant.",
       critiqueCoverageByInterpretation: { central_forecast_attack: "covered" },
       pricedInBackgroundAssumptionStatus: "not_priced_in",
       centralityTargetClaimSet: ["central_forecast"],
       strengthTargetClaimSet: ["base_rate_challenge"],
+      dimensionEffectByRubricDimension: {
+        centrality: "maps which forecast claim is attacked",
+        strength: "maps how strongly the base-rate challenge lands",
+        overall: "records the product-level effect after priced-in review",
+      },
       productAllocationNote: "Centrality and strength product checked together.",
       visibilityState: "post_lock_or_adjudicator_only",
       createdBy: "demo-expert",
@@ -1536,9 +1542,12 @@ function completeInteractionWorkflowFixtures() {
       claimSpanRefs: ["claim-span-1"],
       claimType: "subjective_or_intuition_pump",
       verificationStatus: "not_practicable",
+      claimVerificationStatusByClaim: { "claim-span-1": "not_practicable" },
       evidenceMaterialRefs: ["adjudication-note"],
       notPracticableJustification: "Normative forecast premise lacks direct empirical check.",
       correctnessHalfEntireUnclearFlag: false,
+      nonBlindAuxiliaryMaterialConsulted: true,
+      sourceAssistedReviewNote: "Expert post-lock note was consulted only after initial rating lock.",
       exposureBlindingState: "post_lock_expert_only",
       verifierId: "demo-expert",
       verifierRole: "expert",
@@ -7642,6 +7651,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteWorkflowProfile.status, 400);
   assert.match(incompleteWorkflowProfile.body.detail, /evidenceSpanRequirednessPolicy|verificationWorkspaceRequirednessPolicy|frozenAt/);
 
+  const ordinaryAdvancedPanelRequiredProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-workflow-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingWorkflowProfile: {
+        ...policyBundle.ratingWorkflowProfile,
+        id: "rating-workflow-profile-advanced-panel-required",
+        requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report", "evidence_spans"],
+      },
+    }),
+  });
+  assert.equal(ordinaryAdvancedPanelRequiredProfile.status, 400);
+  assert.match(ordinaryAdvancedPanelRequiredProfile.body.detail, /requiredIssuePanels/);
+
+  const wrongWorkflowRequirednessProfile = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-workflow-profiles",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingWorkflowProfile: {
+        ...policyBundle.ratingWorkflowProfile,
+        id: "rating-workflow-profile-wrong-requiredness",
+        evidenceSpanRequirednessPolicy: "required_for_all_live_ratings",
+      },
+    }),
+  });
+  assert.equal(wrongWorkflowRequirednessProfile.status, 400);
+  assert.match(wrongWorkflowRequirednessProfile.body.detail, /evidenceSpanRequirednessPolicy/);
+
   const incompleteUiExperimentPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/ui-experiment-policies",
@@ -8229,6 +8268,37 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(peerVisibleScoreConfidence.status, 400);
   assert.match(peerVisibleScoreConfidence.body.detail, /visibleToPeersBeforeLock/);
 
+  const unsupportedRationaleSpanCategory = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rationale-evidence-spans",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      rationaleEvidenceSpan: {
+        ...ratingExperience.rationaleEvidenceSpan,
+        id: "rationale-evidence-span-unsupported-category",
+        linkedDimensionOrFlag: "private_peer_label",
+      },
+    }),
+  });
+  assert.equal(unsupportedRationaleSpanCategory.status, 400);
+  assert.match(unsupportedRationaleSpanCategory.body.detail, /linkedDimensionOrFlag/);
+
+  const draftVisibleRationaleSpan = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rationale-evidence-spans",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      rationaleEvidenceSpan: {
+        ...ratingExperience.rationaleEvidenceSpan,
+        id: "rationale-evidence-span-draft-visible",
+        visibilityState: "draft",
+        hiddenUntilInitialRatingLock: false,
+      },
+    }),
+  });
+  assert.equal(draftVisibleRationaleSpan.status, 400);
+  assert.match(draftVisibleRationaleSpan.body.detail, /visibilityState|hiddenUntilInitialRatingLock/);
+
   const exportingScratchpad = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/same-position-scratchpads",
@@ -8710,6 +8780,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(rationaleSpanById.status, 200);
   assert.equal(rationaleSpanById.body.visibilityState, "locked_initial_hidden");
+  assert.equal(rationaleSpanById.body.linkedDimensionOrFlag, "centrality");
   assert.equal(rationaleSpanById.body.rawSelectedTextStored, false);
 
   const scratchpadById = await invokeApi(context, {
@@ -9359,6 +9430,41 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteInterpretationTargetMap.status, 400);
   assert.match(incompleteInterpretationTargetMap.body.detail, /critiqueCoverageByInterpretation/);
 
+  const missingReadingInterpretationTargetMap = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/interpretation-target-maps",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      interpretationTargetMap: {
+        ...interactionWorkflow.interpretationTargetMap,
+        id: "interpretation-target-map-workflow-missing-reading",
+        plausiblePositionCritiqueInterpretations: ["central_forecast_attack", "side_assumption_attack"],
+        interpretationPlausibilityByReading: { central_forecast_attack: 0.8 },
+        critiqueCoverageByInterpretation: { central_forecast_attack: "covered" },
+      },
+    }),
+  });
+  assert.equal(missingReadingInterpretationTargetMap.status, 400);
+  assert.match(missingReadingInterpretationTargetMap.body.detail, /interpretationPlausibilityByReading|critiqueCoverageByInterpretation/);
+
+  const missingDimensionEffectTargetMap = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/interpretation-target-maps",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      interpretationTargetMap: {
+        ...interactionWorkflow.interpretationTargetMap,
+        id: "interpretation-target-map-workflow-missing-dimension-effect",
+        dimensionEffectByRubricDimension: {
+          centrality: "maps which forecast claim is attacked",
+          strength: "maps how strongly the base-rate challenge lands",
+        },
+      },
+    }),
+  });
+  assert.equal(missingDimensionEffectTargetMap.status, 400);
+  assert.match(missingDimensionEffectTargetMap.body.detail, /dimensionEffectByRubricDimension/);
+
   const incompleteVerificationWorkspaceSession = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/verification-workspace-sessions",
@@ -9389,6 +9495,52 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unsupportedVerificationWorkspaceStatus.status, 400);
   assert.match(unsupportedVerificationWorkspaceStatus.body.detail, /verificationStatus/);
+
+  const missingClaimStatusVerificationWorkspace = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-workspace-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationWorkspaceSession: {
+        ...interactionWorkflow.verificationWorkspaceSession,
+        id: "verification-workspace-workflow-missing-claim-status",
+        claimSpanRefs: ["claim-span-1", "claim-span-2"],
+        claimVerificationStatusByClaim: { "claim-span-1": "not_practicable" },
+      },
+    }),
+  });
+  assert.equal(missingClaimStatusVerificationWorkspace.status, 400);
+  assert.match(missingClaimStatusVerificationWorkspace.body.detail, /claimVerificationStatusByClaim/);
+
+  const invalidClaimStatusVerificationWorkspace = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-workspace-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationWorkspaceSession: {
+        ...interactionWorkflow.verificationWorkspaceSession,
+        id: "verification-workspace-workflow-invalid-claim-status",
+        claimVerificationStatusByClaim: { "claim-span-1": "accepted" },
+      },
+    }),
+  });
+  assert.equal(invalidClaimStatusVerificationWorkspace.status, 400);
+  assert.match(invalidClaimStatusVerificationWorkspace.body.detail, /claimVerificationStatusByClaim/);
+
+  const nonBooleanAuxiliaryMaterialVerificationWorkspace = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-workspace-sessions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationWorkspaceSession: {
+        ...interactionWorkflow.verificationWorkspaceSession,
+        id: "verification-workspace-workflow-nonboolean-auxiliary-material",
+        nonBlindAuxiliaryMaterialConsulted: "yes",
+      },
+    }),
+  });
+  assert.equal(nonBooleanAuxiliaryMaterialVerificationWorkspace.status, 400);
+  assert.match(nonBooleanAuxiliaryMaterialVerificationWorkspace.body.detail, /nonBlindAuxiliaryMaterialConsulted/);
 
   const incompletePostLockDiscussionSession = await invokeApi(context, {
     method: "POST",
@@ -11229,6 +11381,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.policyBundleEvidence.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
   assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 6);
   assert.equal(releaseReport.body.policyBundleEvidence.counts.submittedScoreExplanationPolicyCount, 1);
+  const submittedWorkflowProfile = releaseReport.body.policyBundleEvidence.ratingWorkflowProfileRows.find(
+    (row) => row.id === "rating-workflow-profile-workflow-new" && row.rowSource === "submitted_workflow_rating_profile",
+  );
+  assert.ok(submittedWorkflowProfile);
+  assert.deepEqual(submittedWorkflowProfile.optionalIssuePanels, [
+    "evidence_spans",
+    "interpretation_target_map",
+    "correctness_verification_workspace",
+  ]);
+  assert.equal(submittedWorkflowProfile.requiredIssuePanels.includes("evidence_spans"), false);
+  assert.equal(submittedWorkflowProfile.evidenceSpanRequirednessPolicy, "optional_ordinary_required_for_disputed_release_critical");
   assert.deepEqual(releaseReport.body.policyBundleEvidence.reviewSections, []);
   assert.equal(releaseReport.body.scoreExplanationAudit.releaseUseStatus, "score_explanation_audit_passed");
   assert.equal(releaseReport.body.scoreExplanationAudit.counts.ratingRows, 7);
@@ -11395,14 +11558,31 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     true,
   );
   assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.interpretationTargetMapRows.at(-1).interpretationPlausibilityByReading.central_forecast_attack,
+    0.8,
+  );
+  assert.equal(
     releaseReport.body.interactionWorkflowEvidence.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack,
     "covered",
+  );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.interpretationTargetMapRows.at(-1).dimensionEffectByRubricDimension.overall,
+    "records the product-level effect after priced-in review",
   );
   assert.equal(
     releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).notPracticableJustification,
     "Normative forecast premise lacks direct empirical check.",
   );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).claimVerificationStatusByClaim["claim-span-1"],
+    "not_practicable",
+  );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).nonBlindAuxiliaryMaterialConsulted, true);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).sourceAssistedReviewNote,
+    "Expert post-lock note was consulted only after initial rating lock.",
+  );
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicatorPreReads.length, 1);
   assert.equal(
     releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).completedBeforePeerDistributionExposure,

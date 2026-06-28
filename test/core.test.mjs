@@ -598,6 +598,10 @@ function completePolicyBundleFixtures() {
         triggerRequiredRationaleFields: ["score_explanation"],
         requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report"],
         optionalIssuePanels: ["evidence_spans", "interpretation_target_map", "correctness_verification_workspace"],
+        disabledControls: ["peer_score_view_before_initial_lock", "model_judge_score_view_before_initial_lock", "hidden_metadata_view"],
+        evidenceSpanRequirednessPolicy: "optional_ordinary_required_for_disputed_release_critical",
+        verificationWorkspaceRequirednessPolicy: "required_for_correctness_sensitive_unresolved_cases",
+        interpretationTargetMapRequirednessPolicy: "required_for_interpretation_disputes_and_release_critical_escalations",
         safeDeclineAvailable: true,
         preSubmitLintPolicy: "pre-submit-assist-submitted",
       },
@@ -1658,11 +1662,17 @@ function completeInteractionWorkflowFixtures() {
         candidateIntendedConclusionSpans: ["position-conclusion"],
         attackedClaimSpans: ["critique-attack"],
         plausiblePositionCritiqueInterpretations: ["central_forecast_attack"],
+        interpretationPlausibilityByReading: { central_forecast_attack: 0.8 },
         plausibilityNotes: "Central forecast attack is release-relevant.",
         critiqueCoverageByInterpretation: { central_forecast_attack: "covered" },
         pricedInBackgroundAssumptionStatus: "not_priced_in",
         centralityTargetClaimSet: ["central_forecast"],
         strengthTargetClaimSet: ["base_rate_challenge"],
+        dimensionEffectByRubricDimension: {
+          centrality: "maps which forecast claim is attacked",
+          strength: "maps how strongly the base-rate challenge lands",
+          overall: "records the product-level effect after priced-in review",
+        },
         productAllocationNote: "Centrality and strength product checked together.",
         visibilityState: "post_lock_or_adjudicator_only",
         createdBy: "demo-expert",
@@ -1678,9 +1688,12 @@ function completeInteractionWorkflowFixtures() {
         claimSpanRefs: ["claim-span-1"],
         claimType: "subjective_or_intuition_pump",
         verificationStatus: "not_practicable",
+        claimVerificationStatusByClaim: { "claim-span-1": "not_practicable" },
         evidenceMaterialRefs: ["adjudication-note"],
         notPracticableJustification: "Normative forecast premise lacks direct empirical check.",
         correctnessHalfEntireUnclearFlag: false,
+        nonBlindAuxiliaryMaterialConsulted: true,
+        sourceAssistedReviewNote: "Expert post-lock note was consulted only after initial rating lock.",
         exposureBlindingState: "post_lock_expert_only",
         verifierId: "demo-expert",
         verifierRole: "expert",
@@ -1850,9 +1863,51 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
   assert.equal(report.counts.completePolicyGroupCount, 6);
   assert.equal(report.counts.submittedVisibilityPolicyCount, 1);
   assert.equal(report.counts.submittedScoreExplanationPolicyCount, 1);
+  assert.deepEqual(report.ratingWorkflowProfileRows.at(-1).optionalIssuePanels, [
+    "evidence_spans",
+    "interpretation_target_map",
+    "correctness_verification_workspace",
+  ]);
+  assert.equal(report.ratingWorkflowProfileRows.at(-1).evidenceSpanRequirednessPolicy, "optional_ordinary_required_for_disputed_release_critical");
   assert.deepEqual(report.scoreExplanationPolicyRows.at(-1).triggerList, scoreExplanationTriggerRules);
   assert.equal(report.counts.submittedAccessibilityConformanceReportCount, 1);
   assert.deepEqual(report.reviewSections, []);
+
+  const ordinaryEvidenceSpanRequiredReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    ratingWorkflowProfiles: [
+      {
+        ...completePolicyBundleFixtures().ratingWorkflowProfiles[0],
+        requiredIssuePanels: ["safe_decline", "source_recognition", "item_issue_report", "evidence_spans"],
+      },
+    ],
+  });
+  assert.equal(ordinaryEvidenceSpanRequiredReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(
+    ordinaryEvidenceSpanRequiredReport.reviewSections.some((section) => section.reason === "requiredIssuePanels:advanced_not_optional:evidence_spans"),
+  );
+
+  const missingWorkflowRequirednessPolicyReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    ratingWorkflowProfiles: [
+      {
+        ...completePolicyBundleFixtures().ratingWorkflowProfiles[0],
+        evidenceSpanRequirednessPolicy: "required_for_all_live_ratings",
+        verificationWorkspaceRequirednessPolicy: "",
+      },
+    ],
+  });
+  assert.equal(missingWorkflowRequirednessPolicyReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(
+    missingWorkflowRequirednessPolicyReport.reviewSections.some(
+      (section) => section.reason === "evidenceSpanRequirednessPolicy:optional_ordinary_required_for_disputed_release_critical",
+    ),
+  );
+  assert.ok(
+    missingWorkflowRequirednessPolicyReport.reviewSections.some(
+      (section) => section.reason === "verificationWorkspaceRequirednessPolicy:required_for_correctness_sensitive_unresolved_cases",
+    ),
+  );
 
   const ordinaryExplanationRequiredReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
     ...completePolicyBundleFixtures(),
@@ -2210,12 +2265,33 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation, "Rater preserved the submitted correctness score after reviewing weighted claim evidence.");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
   assert.equal(report.raterScoreConfidenceRows.at(-1).entityType, "RaterScoreConfidence");
+  assert.ok(report.allowedRationaleEvidenceSpanLinkCategories.includes("attacked_claim"));
+  assert.ok(report.allowedRationaleEvidenceSpanLinkCategories.includes("unclear_language"));
   assert.equal(report.rationaleEvidenceSpanRows.at(-1).visibilityState, "locked_initial_hidden");
+  assert.equal(report.rationaleEvidenceSpanRows.at(-1).hiddenUntilInitialRatingLock, true);
   assert.equal(report.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(report.counts.submittedSamePositionBatchReviewCount, 1);
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const unsafeRationaleSpanReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    rationaleEvidenceSpans: [
+      {
+        ...completeRatingExperienceFixtures().rationaleEvidenceSpans[0],
+        linkedDimensionOrFlag: "private_peer_label",
+        visibilityState: "draft",
+        hiddenUntilInitialRatingLock: false,
+      },
+    ],
+  });
+  assert.equal(unsafeRationaleSpanReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(unsafeRationaleSpanReport.reviewSections.some((section) => section.artifactType === "rationale_evidence_span" && section.reason === "linkedDimensionOrFlag"));
+  assert.ok(unsafeRationaleSpanReport.reviewSections.some((section) => section.artifactType === "rationale_evidence_span" && section.reason === "visibilityState"));
+  assert.ok(
+    unsafeRationaleSpanReport.reviewSections.some((section) => section.artifactType === "rationale_evidence_span" && section.reason === "hiddenUntilInitialRatingLock"),
+  );
 
   const unsafeItemIssueReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
@@ -2397,9 +2473,14 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.assignmentDeferralRows.at(-1).resumePolicy, "resume_or_reassign_after_review_without_label_submission");
   assert.equal(report.counts.submittedInterpretationTargetMapCount, 1);
   assert.equal(report.counts.submittedVerificationWorkspaceSessionCount, 1);
+  assert.equal(report.interpretationTargetMapRows.at(-1).interpretationPlausibilityByReading.central_forecast_attack, 0.8);
   assert.equal(report.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack, "covered");
+  assert.equal(report.interpretationTargetMapRows.at(-1).dimensionEffectByRubricDimension.overall, "records the product-level effect after priced-in review");
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).claimVerificationStatusByClaim["claim-span-1"], "not_practicable");
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).notPracticableJustification, "Normative forecast premise lacks direct empirical check.");
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).nonBlindAuxiliaryMaterialConsulted, true);
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).sourceAssistedReviewNote, "Expert post-lock note was consulted only after initial rating lock.");
   assert.equal(report.counts.submittedAdjudicatorPreReadCount, 1);
   assert.equal(report.adjudicatorPreReadRows.at(-1).completedBeforePeerDistributionExposure, true);
   assert.deepEqual(report.adjudicatorPreReadRows.at(-1).preliminaryIssueTags, ["interpretation_dispute"]);
@@ -2427,6 +2508,61 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
+
+  const incompleteTargetMapReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    interpretationTargetMaps: [
+      {
+        ...completeInteractionWorkflowFixtures().interpretationTargetMaps[0],
+        plausiblePositionCritiqueInterpretations: ["central_forecast_attack", "side_assumption_attack"],
+        interpretationPlausibilityByReading: { central_forecast_attack: 0.8 },
+        critiqueCoverageByInterpretation: { central_forecast_attack: "covered" },
+        dimensionEffectByRubricDimension: {
+          centrality: "maps which forecast claim is attacked",
+          strength: "maps how strongly the base-rate challenge lands",
+        },
+      },
+    ],
+  });
+  assert.equal(incompleteTargetMapReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(
+    incompleteTargetMapReport.reviewSections.some(
+      (section) => section.artifactType === "interpretation_target_map" && section.reason === "interpretationPlausibilityByReading:side_assumption_attack",
+    ),
+  );
+  assert.ok(
+    incompleteTargetMapReport.reviewSections.some(
+      (section) => section.artifactType === "interpretation_target_map" && section.reason === "critiqueCoverageByInterpretation:side_assumption_attack",
+    ),
+  );
+  assert.ok(
+    incompleteTargetMapReport.reviewSections.some(
+      (section) => section.artifactType === "interpretation_target_map" && section.reason === "dimensionEffectByRubricDimension:overall",
+    ),
+  );
+
+  const incompleteVerificationWorkspaceReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    verificationWorkspaceSessions: [
+      {
+        ...completeInteractionWorkflowFixtures().verificationWorkspaceSessions[0],
+        claimSpanRefs: ["claim-span-1", "claim-span-2"],
+        claimVerificationStatusByClaim: { "claim-span-1": "not_practicable", "claim-span-2": "accepted" },
+        nonBlindAuxiliaryMaterialConsulted: "yes",
+      },
+    ],
+  });
+  assert.equal(incompleteVerificationWorkspaceReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(
+    incompleteVerificationWorkspaceReport.reviewSections.some(
+      (section) => section.artifactType === "verification_workspace_session" && section.reason === "claimVerificationStatusByClaim:claim-span-2",
+    ),
+  );
+  assert.ok(
+    incompleteVerificationWorkspaceReport.reviewSections.some(
+      (section) => section.artifactType === "verification_workspace_session" && section.reason === "nonBlindAuxiliaryMaterialConsulted",
+    ),
+  );
 
   const unsafeRaterSessionReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
