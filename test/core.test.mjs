@@ -229,22 +229,77 @@ function rubricCopyTraceabilityMaps() {
   ];
 }
 
-const workflowStateTransitionFixtures = [
-  ["assignment", "assignment-state-release", "draft", "locked_initial_rating"],
-  ["rating", "rating-state-release", "draft", "locked_initial"],
-  ["discussion_thread", "discussion-state-release", "eligible_after_initial_locks", "object_level_discussion"],
-  ["post_lock_discussion_session", "post-lock-session-state-release", "object_level_discussion", "revision_window"],
-  ["adjudication_memo", "adjudication-state-release", "revision_window", "adjudication_finalized"],
-  ["verification_record", "verification-state-release", "in_progress", "verified"],
-  ["label_snapshot", "label-snapshot-state-release", "candidate", "frozen"],
-  ["pairwise_comparison_snapshot", "pairwise-state-release", "candidate", "frozen"],
-  ["evaluation_run", "evaluation-state-release", "contamination_checks_passed", "run"],
-  ["training_export", "training-export-state-release", "contamination_checks_passed", "run"],
-  ["release_version", "release-state-release", "gate_checks_passed", "frozen"],
-].map(([entityType, entityId, priorState, requestedNextState], index) => ({
-  id: `workflow-state-transition-${index + 1}`,
+const workflowStateTransitionEdges = {
+  assignment: [
+    ["queued", "accepted_or_declined"],
+    ["accepted_or_declined", "draft"],
+    ["draft", "locked_initial_rating"],
+    ["queued", "safe_declined"],
+    ["queued", "reassigned"],
+  ],
+  rating: [
+    ["draft", "locked_initial"],
+    ["locked_initial", "self_checked"],
+    ["locked_initial", "expert_checked"],
+    ["locked_initial", "model_assisted_checked"],
+    ["self_checked", "revision_proposed"],
+    ["expert_checked", "revision_proposed"],
+    ["model_assisted_checked", "revision_proposed"],
+    ["revision_proposed", "revised_rating_appended"],
+  ],
+  discussion_thread: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  post_lock_discussion_session: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  adjudication_memo: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  verification_record: [
+    ["not_needed", "requested"],
+    ["requested", "in_progress"],
+    ["in_progress", "verified"],
+    ["in_progress", "not_practicable"],
+    ["in_progress", "unresolved"],
+    ["verified", "adjudication_resolved"],
+    ["not_practicable", "adjudication_resolved"],
+    ["unresolved", "adjudication_resolved"],
+  ],
+  label_snapshot: [["candidate", "frozen"]],
+  pairwise_comparison_snapshot: [["candidate", "frozen"]],
+  evaluation_run: [
+    ["configured", "contamination_checks_passed"],
+    ["contamination_checks_passed", "run"],
+    ["run", "frozen"],
+  ],
+  training_export: [
+    ["configured", "contamination_checks_passed"],
+    ["contamination_checks_passed", "run"],
+    ["run", "frozen"],
+  ],
+  release_version: [
+    ["draft", "gate_checks_passed"],
+    ["gate_checks_passed", "frozen"],
+    ["frozen", "published"],
+    ["frozen", "internal_only"],
+  ],
+};
+
+const workflowStateTransitionFixtures = Object.entries(workflowStateTransitionEdges).flatMap(([entityType, transitions]) =>
+  transitions.map(([priorState, requestedNextState], index) => ({
+  id: `workflow-state-transition-${entityType}-${index + 1}`,
   entityType,
-  entityId,
+  entityId: `${entityType}-state-release-${index + 1}`,
   priorState,
   requestedNextState,
   acceptedNextState: requestedNextState,
@@ -255,7 +310,23 @@ const workflowStateTransitionFixtures = [
   lockFreezeArtifactIds: ["release-config-manifest-october-2026-demo"],
   sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
   timestamp: `2026-10-01T00:00:${String(index).padStart(2, "0")}.000Z`,
-}));
+}))).concat([
+  {
+    id: "workflow-state-transition-rejected-rating-backwards",
+    entityType: "rating",
+    entityId: "rating-state-release",
+    priorState: "locked_initial",
+    requestedNextState: "draft",
+    acceptedNextState: "locked_initial",
+    actorId: "release-admin",
+    actorRole: "admin",
+    guardChecks: ["preserve_original_locked_rating"],
+    failedGuardReasons: ["transition_not_allowed:locked_initial->draft"],
+    lockFreezeArtifactIds: ["release-config-manifest-october-2026-demo"],
+    sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
+    timestamp: "2026-10-01T00:00:59.000Z",
+  },
+]);
 
 const raterDataCategories = [
   "identity_profile",
@@ -781,26 +852,38 @@ function completeOperationalControlFixtures() {
 	    redactionPolicy: "redact protected labels, hidden text, raw source text, and private rater data",
 	    occurredAt: "2026-10-01T00:02:00.000Z",
 	  }));
+  const sensitiveAuditChainGovernanceApprovalRecords = auditChainEventKinds.map((eventKind) => ({
+    id: `governance-approval-submitted-${eventKind}`,
+    actionKind: auditChainPolicyActionKindByEventKind[eventKind],
+    affectedArtifactIds: [`artifact-${eventKind}`],
+    proposedBy: "release-admin",
+    approver1: "independent-approver-a",
+    approver2: "independent-approver-b",
+    independenceSeparationOfDutiesStatus: "independent_two_person_approval",
+    reasonCode: `${eventKind}_audit_chain_approval`,
+    visibilitySplitMetricLeaderboardImpactSummary: "redacted high-impact audit-chain approval covers the affected artifact ids",
+    approvalTimestamp: "2026-10-01T00:01:30.000Z",
+  }));
   return {
     policyActionKinds: policyActionKindsSubmitted,
     policyDecisionRecords,
-    policyDecisionConsumptions: [
-      {
-        id: "policy-decision-consumption-submitted",
-        decisionId: policyDecisionRecords[1].id,
-	        actionKind: policyDecisionRecords[1].actionKind,
-	        manifestId: policyDecisionRecords[1].manifestId,
-	        manifestHash: policyDecisionRecords[1].manifestHash,
-	        phaseGateBundleId: policyDecisionRecords[1].phaseGateBundleId,
-	        phaseGateBundleHash: policyDecisionRecords[1].phaseGateBundleHash,
-	        outputSchemaVersion: policyDecisionRecords[1].outputSchemaVersion,
-	        outputSchemaHash: policyDecisionRecords[1].outputSchemaHash,
-	        idempotencyKey: policyDecisionRecords[1].idempotencyKey,
-	        replayRejected: false,
-	        scopeMatched: true,
-        consumedAt: "2026-10-01T00:03:00.000Z",
-      },
-    ],
+    policyDecisionConsumptions: policyDecisionRecords
+      .filter((decision) => decision.actionKind !== "protected_render")
+      .map((decision, index) => ({
+        id: `policy-decision-consumption-submitted-${decision.actionKind}`,
+        decisionId: decision.id,
+        actionKind: decision.actionKind,
+        manifestId: decision.manifestId,
+        manifestHash: decision.manifestHash,
+        phaseGateBundleId: decision.phaseGateBundleId,
+        phaseGateBundleHash: decision.phaseGateBundleHash,
+        outputSchemaVersion: decision.outputSchemaVersion,
+        outputSchemaHash: decision.outputSchemaHash,
+        idempotencyKey: decision.idempotencyKey,
+        replayRejected: false,
+        scopeMatched: true,
+        consumedAt: `2026-10-01T00:03:${String(index).padStart(2, "0")}.000Z`,
+      })),
     implementationPhaseGateBundles: [
       {
         id: "implementation-phase-gate-submitted",
@@ -867,7 +950,8 @@ function completeOperationalControlFixtures() {
 	    checksPassed: clientSurfaceChecks,
 	    failures: [],
 	    checkedAt: "2026-10-01T00:06:00.000Z",
-	  })),
+	    })),
+    governanceApprovalRecords: sensitiveAuditChainGovernanceApprovalRecords,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications: [
       {
@@ -2353,10 +2437,14 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
 
   assert.equal(report.releaseUseStatus, "submitted_operational_control_evidence_complete");
   assert.equal(report.counts.passingPolicyActionKindCount, policyActionKinds.length);
+  assert.equal(report.counts.passingPolicyActionConsumptionCount, policyActionKinds.length);
+  assert.equal(report.policyActionConsumptionRows.every((row) => row.status === "policy_action_consumption_covered"), true);
   assert.equal(report.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
   assert.equal(report.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
   assert.equal(report.counts.passingClientSurfaceCount, clientSurfaces.length);
   assert.equal(report.counts.passingAuditChainKindCount, auditChainEventKinds.length);
+  assert.equal(report.counts.submittedSensitiveAuditChainGovernanceApprovalCount, auditChainEventKinds.length);
+  assert.equal(report.sensitiveAuditChainGovernanceApprovalRows.filter((row) => row.rowSource === "submitted_workflow_audit_chain_governance_approval").length, auditChainEventKinds.length);
   assert.deepEqual(report.reviewSections, []);
 });
 
@@ -2406,6 +2494,7 @@ test("operational control evidence rejects stale or wrong-scope policy decisions
   assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "idempotencyKey"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "replayRejected"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_decision_consumption" && section.reason === "scopeMatched"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "policy_action_consumption_gate" && section.reason === "policy_action_consumption_missing"));
 });
 
 test("operational control evidence rejects incomplete queue stale-by-delay and backpressure proof", () => {
@@ -2508,8 +2597,29 @@ test("operational control evidence rejects incomplete or failed sensitive audit 
         governanceApprovalRecordId: "",
       };
     }
+    if (index === 2) {
+      return {
+        ...event,
+        policyDecisionId: "policy-decision-submitted-training_export",
+      };
+    }
+    if (index === 3) {
+      return {
+        ...event,
+        governanceApprovalRecordId: "governance-approval-submitted-training_export_release",
+      };
+    }
     return event;
   });
+  unsafeFixtures.governanceApprovalRecords = unsafeFixtures.governanceApprovalRecords.map((record, index) =>
+    index === 0
+      ? {
+          ...record,
+          approver2: record.approver1,
+          independenceSeparationOfDutiesStatus: "single_operator_approval",
+        }
+      : record
+  );
   unsafeFixtures.sensitiveAuditChainVerifications = unsafeFixtures.sensitiveAuditChainVerifications.map((verification) => ({
     ...verification,
     chainStatus: "passed",
@@ -2528,7 +2638,13 @@ test("operational control evidence rejects incomplete or failed sensitive audit 
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "redactionPolicy"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "actionKind"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "policyDecisionId"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "policyDecisionId:actionKind"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "governanceApprovalRecordId"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "governanceApprovalRecordId:actionKind"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "governanceApprovalRecordId:affectedArtifactIds"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "governanceApprovalRecordId:reviewReasons"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "audit_chain_governance_approval" && section.reason === "independentApprovers"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "audit_chain_governance_approval" && section.reason === "independenceSeparationOfDutiesStatus"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_verification" && section.reason === "failures"));
 });
 
@@ -2592,9 +2708,14 @@ test("workflow state-machine evidence requires guarded append-only transitions f
 
   assert.equal(report.releaseUseStatus, "submitted_workflow_state_machine_evidence_complete");
   assert.equal(report.counts.submittedTransitionCount, workflowStateTransitionFixtures.length);
+  assert.equal(report.counts.acceptedSubmittedTransitionCount, workflowStateTransitionFixtures.length - 1);
+  assert.equal(report.counts.rejectedSubmittedTransitionCount, 1);
   assert.equal(report.counts.passingEntityTypeCount, report.requiredEntityTypes.length);
+  assert.equal(report.counts.passingTransitionEdgeCount, report.counts.requiredTransitionEdgeCount);
+  assert.equal(report.transitionCoverageRows.every((row) => row.status === "workflow_state_transition_edge_covered"), true);
   assert.deepEqual(report.reviewSections, []);
   assert.equal(report.entityRows.every((row) => row.status === "workflow_state_machine_entity_complete"), true);
+  assert.equal(report.transitionRows.find((row) => row.id === "workflow-state-transition-rejected-rating-backwards")?.status, "rejected_guarded_transition");
   assert.ok(report.stateMachineRules.rating.allowedTransitions.some((transition) => transition.priorState === "draft" && transition.nextState === "locked_initial"));
 });
 

@@ -157,22 +157,77 @@ function uxRubricCopyTraceabilityMaps() {
   ];
 }
 
-const workflowStateTransitionFixtures = [
-  ["assignment", "assignment-state-release", "draft", "locked_initial_rating"],
-  ["rating", "rating-state-release", "draft", "locked_initial"],
-  ["discussion_thread", "discussion-state-release", "eligible_after_initial_locks", "object_level_discussion"],
-  ["post_lock_discussion_session", "post-lock-session-state-release", "object_level_discussion", "revision_window"],
-  ["adjudication_memo", "adjudication-state-release", "revision_window", "adjudication_finalized"],
-  ["verification_record", "verification-state-release", "in_progress", "verified"],
-  ["label_snapshot", "label-snapshot-state-release", "candidate", "frozen"],
-  ["pairwise_comparison_snapshot", "pairwise-state-release", "candidate", "frozen"],
-  ["evaluation_run", "evaluation-state-release", "contamination_checks_passed", "run"],
-  ["training_export", "training-export-state-release", "contamination_checks_passed", "run"],
-  ["release_version", "release-state-release", "gate_checks_passed", "frozen"],
-].map(([entityType, entityId, priorState, requestedNextState], index) => ({
-  id: `workflow-state-transition-${index + 1}`,
+const workflowStateTransitionEdges = {
+  assignment: [
+    ["queued", "accepted_or_declined"],
+    ["accepted_or_declined", "draft"],
+    ["draft", "locked_initial_rating"],
+    ["queued", "safe_declined"],
+    ["queued", "reassigned"],
+  ],
+  rating: [
+    ["draft", "locked_initial"],
+    ["locked_initial", "self_checked"],
+    ["locked_initial", "expert_checked"],
+    ["locked_initial", "model_assisted_checked"],
+    ["self_checked", "revision_proposed"],
+    ["expert_checked", "revision_proposed"],
+    ["model_assisted_checked", "revision_proposed"],
+    ["revision_proposed", "revised_rating_appended"],
+  ],
+  discussion_thread: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  post_lock_discussion_session: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  adjudication_memo: [
+    ["not_open", "eligible_after_initial_locks"],
+    ["eligible_after_initial_locks", "object_level_discussion"],
+    ["object_level_discussion", "revision_window"],
+    ["revision_window", "adjudication_finalized"],
+  ],
+  verification_record: [
+    ["not_needed", "requested"],
+    ["requested", "in_progress"],
+    ["in_progress", "verified"],
+    ["in_progress", "not_practicable"],
+    ["in_progress", "unresolved"],
+    ["verified", "adjudication_resolved"],
+    ["not_practicable", "adjudication_resolved"],
+    ["unresolved", "adjudication_resolved"],
+  ],
+  label_snapshot: [["candidate", "frozen"]],
+  pairwise_comparison_snapshot: [["candidate", "frozen"]],
+  evaluation_run: [
+    ["configured", "contamination_checks_passed"],
+    ["contamination_checks_passed", "run"],
+    ["run", "frozen"],
+  ],
+  training_export: [
+    ["configured", "contamination_checks_passed"],
+    ["contamination_checks_passed", "run"],
+    ["run", "frozen"],
+  ],
+  release_version: [
+    ["draft", "gate_checks_passed"],
+    ["gate_checks_passed", "frozen"],
+    ["frozen", "published"],
+    ["frozen", "internal_only"],
+  ],
+};
+
+const workflowStateTransitionFixtures = Object.entries(workflowStateTransitionEdges).flatMap(([entityType, transitions]) =>
+  transitions.map(([priorState, requestedNextState], index) => ({
+  id: `workflow-state-transition-${entityType}-${index + 1}`,
   entityType,
-  entityId,
+  entityId: `${entityType}-state-release-${index + 1}`,
   priorState,
   requestedNextState,
   acceptedNextState: requestedNextState,
@@ -183,7 +238,23 @@ const workflowStateTransitionFixtures = [
   lockFreezeArtifactIds: ["release-config-manifest-october-2026-demo"],
   sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
   timestamp: `2026-10-01T00:00:${String(index).padStart(2, "0")}.000Z`,
-}));
+}))).concat([
+  {
+    id: "workflow-state-transition-rejected-rating-backwards",
+    entityType: "rating",
+    entityId: "rating-state-release",
+    priorState: "locked_initial",
+    requestedNextState: "draft",
+    acceptedNextState: "locked_initial",
+    actorId: "demo-admin",
+    actorRole: "admin",
+    guardChecks: ["preserve_original_locked_rating"],
+    failedGuardReasons: ["transition_not_allowed:locked_initial->draft"],
+    lockFreezeArtifactIds: ["release-config-manifest-october-2026-demo"],
+    sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
+    timestamp: "2026-10-01T00:00:59.000Z",
+  },
+]);
 
 const raterDataCategories = [
   "identity_profile",
@@ -3684,6 +3755,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(assignmentById.body.independentBlindEligibilityStatus, "eligible");
   assert.equal(assignmentById.body.validationMembershipBlindToRater, true);
 
+  const issuedAssignment = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/assignments/next",
+    headers: raterHeaders,
+  });
+  assert.equal(issuedAssignment.status, 200);
+  assert.equal(issuedAssignment.body.policyActionKind, "assignment_issue");
+  assert.match(issuedAssignment.body.policyDecisionId, /^policy-decision-assignment_issue-/);
+  assert.match(issuedAssignment.body.policyDecisionConsumptionId, /^policy-decision-consumption-assignment_issue-/);
+
   const incompleteAssignment = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/assignments",
@@ -6416,7 +6497,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       headers: adminHeaders,
       body: JSON.stringify({ transition }),
     });
-    assert.equal(transitionResponse.status, 201, transition.entityType);
+    const expectedStatus = transition.failedGuardReasons?.length ? 409 : 201;
+    assert.equal(transitionResponse.status, expectedStatus, transition.entityType);
     assert.equal(transitionResponse.body.acceptedNextState, transition.acceptedNextState);
   }
 
@@ -9037,6 +9119,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(policyDecisionConsumption.status, 201);
 
+  const revisionPolicyDecisionConsumption = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-decisions/policy-decision-workflow-revision_submit/consume",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      policyDecisionConsumption: {
+        ...operationalControls.policyDecisionConsumption,
+        id: "policy-decision-consumption-workflow-revision-submit",
+        decisionId: "policy-decision-workflow-revision_submit",
+        actionKind: "revision_submit",
+        outputSchemaHash: "sha256:output-schema-revision_submit",
+        idempotencyKey: "idempotency-revision_submit",
+      },
+    }),
+  });
+  assert.equal(revisionPolicyDecisionConsumption.status, 201);
+
   const policyDecisionReplay = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/policy-decisions/policy-decision-workflow-rating_lock/consume",
@@ -9703,8 +9802,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.equal(releaseReport.body.workflowStateArtifacts.workflowStateTransitionLogs.length, workflowStateTransitionFixtures.length);
   assert.equal(releaseReport.body.workflowStateMachineEvidence.releaseUseStatus, "submitted_workflow_state_machine_evidence_complete");
-  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.passingEntityTypeCount, workflowStateTransitionFixtures.length);
+  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.acceptedSubmittedTransitionCount, workflowStateTransitionFixtures.length - 1);
+  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.rejectedSubmittedTransitionCount, 1);
+  assert.equal(releaseReport.body.workflowStateMachineEvidence.counts.passingEntityTypeCount, releaseReport.body.workflowStateMachineEvidence.requiredEntityTypes.length);
+  assert.equal(
+    releaseReport.body.workflowStateMachineEvidence.counts.passingTransitionEdgeCount,
+    releaseReport.body.workflowStateMachineEvidence.counts.requiredTransitionEdgeCount,
+  );
+  assert.equal(
+    releaseReport.body.workflowStateMachineEvidence.transitionCoverageRows.every((row) => row.status === "workflow_state_transition_edge_covered"),
+    true,
+  );
   assert.deepEqual(releaseReport.body.workflowStateMachineEvidence.reviewSections, []);
+  assert.equal(
+    releaseReport.body.workflowStateMachineEvidence.transitionRows.find((row) => row.id === "workflow-state-transition-rejected-rating-backwards")?.status,
+    "rejected_guarded_transition",
+  );
   assert.equal(
     releaseReport.body.workflowStateMachineEvidence.entityRows.every((row) => row.status === "workflow_state_machine_entity_complete"),
     true,
@@ -9904,13 +10017,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeManifestId, "release-config-manifest-workflow-new");
   assert.deepEqual(releaseReport.body.releaseConfigManifestEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyActionKinds.length, policyActionKinds.length);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 19);
-  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 20);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.length, policyActionKinds.length + 20);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.policyDecisionConsumptions.length, 22);
   assert.equal(
     releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
       (record) => record.actionKind === "protected_render" && String(record.id).startsWith("policy-decision-protected_render-"),
     ).length,
     2,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "assignment_issue" && String(record.id).startsWith("policy-decision-assignment_issue-"),
+    ).length,
+    1,
+  );
+  assert.equal(
+    releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
+      (record) => record.actionKind === "revision_submit" && record.id === "policy-decision-workflow-revision_submit",
+    ).length,
+    1,
   );
   assert.equal(
     releaseReport.body.workflowOperationalControlArtifacts.policyDecisionRecords.filter(
@@ -9995,10 +10120,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainVerifications.length, 1);
   assert.equal(releaseReport.body.operationalControlEvidence.releaseUseStatus, "submitted_operational_control_evidence_complete");
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPolicyActionKindCount, policyActionKinds.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPolicyActionConsumptionCount, policyActionKinds.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingClientSurfaceCount, clientSurfaces.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingAuditChainKindCount, auditChainEventKinds.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedSensitiveAuditChainGovernanceApprovalCount, 1 + auditChainEventKinds.length);
+  assert.equal(
+    releaseReport.body.operationalControlEvidence.sensitiveAuditChainGovernanceApprovalRows.filter(
+      (row) => row.rowSource === "submitted_workflow_audit_chain_governance_approval",
+    ).length,
+    1 + auditChainEventKinds.length,
+  );
   assert.deepEqual(releaseReport.body.operationalControlEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.labelSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.corpusManifests.length, 1);
@@ -10082,7 +10215,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 54);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 92);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

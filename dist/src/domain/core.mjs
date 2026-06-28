@@ -10325,25 +10325,21 @@ const REQUIRED_WORKFLOW_STATE_ENTITY_TYPES = Object.keys(WORKFLOW_STATE_MACHINE_
 function defaultWorkflowStateTransitionLogs(releaseId) {
   return REQUIRED_WORKFLOW_STATE_ENTITY_TYPES.flatMap((entityType) => {
     const rule = WORKFLOW_STATE_MACHINE_RULES[entityType];
-    const finalState = rule.requiredFinalStates[0];
-    const transition = rule.transitions.find(([, nextState]) => nextState === finalState) ?? rule.transitions.at(-1);
-    return [
-      {
-        id: `state-transition-${releaseId}-${entityType}`,
-        entityType,
-        entityId: `${entityType}-${releaseId}`,
-        priorState: transition[0],
-        requestedNextState: transition[1],
-        acceptedNextState: transition[1],
-        actorId: "seed-release-admin",
-        actorRole: "admin",
-        guardChecks: ["seed_guard_checks_passed"],
-        failedGuardReasons: [],
-        lockFreezeArtifactIds: [`release-config-manifest-${releaseId}`],
-        sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
-        timestamp: "2026-10-01T00:00:00.000Z",
-      },
-    ];
+    return rule.transitions.map(([priorState, nextState], index) => ({
+      id: `state-transition-${releaseId}-${entityType}-${index + 1}`,
+      entityType,
+      entityId: `${entityType}-${releaseId}-${index + 1}`,
+      priorState,
+      requestedNextState: nextState,
+      acceptedNextState: nextState,
+      actorId: "seed-release-admin",
+      actorRole: "admin",
+      guardChecks: ["seed_guard_checks_passed"],
+      failedGuardReasons: [],
+      lockFreezeArtifactIds: [`release-config-manifest-${releaseId}`],
+      sourceTagProtectedVisibilityState: "source_tag_protected_visibility_preserved",
+      timestamp: "2026-10-01T00:00:00.000Z",
+    }));
   });
 }
 
@@ -10356,6 +10352,7 @@ export function buildWorkflowStateMachineEvidenceReport(releaseId, options = {})
   );
   const rowsForGate = submittedRows.length ? submittedRows : seedRows;
   const entityRows = REQUIRED_WORKFLOW_STATE_ENTITY_TYPES.map((entityType) => workflowStateMachineEntityEvidenceRow(entityType, rowsForGate));
+  const transitionCoverageRows = REQUIRED_WORKFLOW_STATE_ENTITY_TYPES.flatMap((entityType) => workflowStateMachineTransitionCoverageRows(entityType, rowsForGate));
   const reviewSections = [
     ...submittedRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "workflow_state_transition_log", artifactId: row.id, reason }))),
     ...entityRows.filter((row) => row.status !== "workflow_state_machine_entity_complete").map((row) => ({
@@ -10363,11 +10360,17 @@ export function buildWorkflowStateMachineEvidenceReport(releaseId, options = {})
       artifactId: row.entityType,
       reason: row.status,
     })),
+    ...transitionCoverageRows.filter((row) => row.status !== "workflow_state_transition_edge_covered").map((row) => ({
+      artifactType: "workflow_state_transition_edge",
+      artifactId: `${row.entityType}:${row.priorState}->${row.nextState}`,
+      reason: row.status,
+    })),
   ];
   const submittedEvidenceComplete =
     submittedRows.length > 0 &&
     reviewSections.length === 0 &&
-    entityRows.every((row) => row.rowSource === "submitted_workflow_state_transition_log");
+    entityRows.every((row) => row.rowSource === "submitted_workflow_state_transition_log") &&
+    transitionCoverageRows.every((row) => row.rowSource === "submitted_workflow_state_transition_log");
   return {
     id: `workflow-state-machine-evidence-${releaseId}`,
     releaseId,
@@ -10385,11 +10388,15 @@ export function buildWorkflowStateMachineEvidenceReport(releaseId, options = {})
     ),
     transitionRows: [...seedRows, ...submittedRows],
     entityRows,
+    transitionCoverageRows,
     counts: {
       submittedTransitionCount: submittedRows.length,
       acceptedSubmittedTransitionCount: submittedRows.filter((row) => row.status === "accepted_guarded_transition").length,
+      rejectedSubmittedTransitionCount: submittedRows.filter((row) => row.status === "rejected_guarded_transition").length,
       requiredEntityTypeCount: REQUIRED_WORKFLOW_STATE_ENTITY_TYPES.length,
       passingEntityTypeCount: entityRows.filter((row) => row.status === "workflow_state_machine_entity_complete").length,
+      requiredTransitionEdgeCount: transitionCoverageRows.length,
+      passingTransitionEdgeCount: transitionCoverageRows.filter((row) => row.status === "workflow_state_transition_edge_covered").length,
       reviewSectionCount: reviewSections.length,
     },
     reviewSections,
@@ -10411,21 +10418,30 @@ function normalizeWorkflowStateTransitionLog(transition, rowSource) {
   const acceptedNextState = transition.acceptedNextState ?? transition.accepted_next_state ?? null;
   const guardChecks = normalizeGuardChecks(transition.guardChecks ?? transition.guard_checks ?? transition.guardChecksEvaluated);
   const failedGuardReasons = normalizeStringArray(transition.failedGuardReasons ?? transition.failed_guard_reasons);
-  const allowedTransition = Boolean(rule?.transitions.some(([prior, next]) => prior === priorState && next === acceptedNextState));
+  const requestedTransitionAllowed = Boolean(rule?.transitions.some(([prior, next]) => prior === priorState && next === requestedNextState));
+  const acceptedTransitionAllowed = Boolean(rule?.transitions.some(([prior, next]) => prior === priorState && next === acceptedNextState));
+  const rejectedWithoutStateAdvance = requestedNextState !== acceptedNextState && acceptedNextState === priorState && failedGuardReasons.length > 0;
+  const transitionWellFormed = rejectedWithoutStateAdvance || acceptedTransitionAllowed;
   const reviewReasons = [
     rule ? null : "entityType",
     requiredPromptFieldReason("entityId", transition.entityId ?? transition.entity_id),
     requiredPromptFieldReason("priorState", priorState),
     requiredPromptFieldReason("requestedNextState", requestedNextState),
     requiredPromptFieldReason("acceptedNextState", acceptedNextState),
-    requestedNextState === acceptedNextState ? null : "requestedNextStateAcceptedMismatch",
-    allowedTransition ? null : "transitionNotAllowed",
+    requestedNextState === acceptedNextState || rejectedWithoutStateAdvance ? null : "requestedNextStateAcceptedMismatch",
+    requestedTransitionAllowed || rejectedWithoutStateAdvance ? null : "requestedTransitionNotAllowed",
+    transitionWellFormed ? null : "acceptedTransitionNotAllowed",
     guardChecks.length ? null : "guardChecks",
-    failedGuardReasons.length ? `failedGuardReasons:${failedGuardReasons.join(",")}` : null,
+    failedGuardReasons.length && !rejectedWithoutStateAdvance ? `failedGuardReasons:${failedGuardReasons.join(",")}` : null,
     requiredPromptFieldReason("actorId", transition.actorId ?? transition.transitionActorId ?? transition.transition_actor_id),
     requiredPromptFieldReason("actorRole", transition.actorRole ?? transition.transitionActorRole ?? transition.transition_actor_role),
     requiredPromptFieldReason("sourceTagProtectedVisibilityState", transition.sourceTagProtectedVisibilityState ?? transition.source_tag_protected_visibility_state),
   ].filter(Boolean);
+  const status = reviewReasons.length
+    ? "workflow_state_transition_review_required"
+    : rejectedWithoutStateAdvance
+      ? "rejected_guarded_transition"
+      : "accepted_guarded_transition";
   return {
     id,
     rowSource,
@@ -10443,13 +10459,13 @@ function normalizeWorkflowStateTransitionLog(transition, rowSource) {
     sourceTagProtectedVisibilityState: transition.sourceTagProtectedVisibilityState ?? transition.source_tag_protected_visibility_state ?? null,
     timestamp: transition.timestamp ?? transition.createdAt ?? transition.created_at ?? null,
     reviewReasons,
-    status: reviewReasons.length ? "workflow_state_transition_review_required" : "accepted_guarded_transition",
+    status,
   };
 }
 
 function workflowStateMachineEntityEvidenceRow(entityType, rows) {
   const rule = WORKFLOW_STATE_MACHINE_RULES[entityType];
-  const entityRows = rows.filter((row) => row.entityType === entityType && row.reviewReasons.length === 0);
+  const entityRows = rows.filter((row) => row.entityType === entityType && row.status === "accepted_guarded_transition");
   const latestRow = entityRows.at(-1) ?? null;
   const reachedRequiredState = Boolean(latestRow && rule.requiredFinalStates.includes(latestRow.acceptedNextState));
   const status = !entityRows.length
@@ -10469,6 +10485,30 @@ function workflowStateMachineEntityEvidenceRow(entityType, rows) {
     reachedRequiredState,
     status,
   };
+}
+
+function workflowStateMachineTransitionCoverageRows(entityType, rows) {
+  const rule = WORKFLOW_STATE_MACHINE_RULES[entityType];
+  return rule.transitions.map(([priorState, nextState]) => {
+    const coveringRow = rows.find(
+      (row) =>
+        row.entityType === entityType &&
+        row.priorState === priorState &&
+        row.requestedNextState === nextState &&
+        row.acceptedNextState === nextState &&
+        row.status === "accepted_guarded_transition",
+    );
+    return {
+      entityType,
+      entityLabel: rule.label,
+      priorState,
+      nextState,
+      transitionId: coveringRow?.id ?? null,
+      rowSource: coveringRow?.rowSource ?? null,
+      covered: Boolean(coveringRow),
+      status: coveringRow ? "workflow_state_transition_edge_covered" : "workflow_state_transition_edge_missing",
+    };
+  });
 }
 
 function normalizeWorkflowEntityType(value) {
@@ -15243,6 +15283,22 @@ function defaultSensitiveAuditChainEvents(releaseId) {
   });
 }
 
+function defaultSensitiveAuditChainGovernanceApprovalRecords(releaseId) {
+  return REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind) => ({
+    id: `governance-approval-${releaseId}-${eventKind}`,
+    releaseId,
+    actionKind: AUDIT_CHAIN_POLICY_ACTION_KIND_BY_EVENT_KIND[eventKind],
+    affectedArtifactIds: [`artifact-${eventKind}-${releaseId}`],
+    proposedBy: "seed-release-admin",
+    approver1: "seed-independent-approver-a",
+    approver2: "seed-independent-approver-b",
+    independenceSeparationOfDutiesStatus: "independent_two_person_approval",
+    reasonCode: `${eventKind}_audit_chain_approval`,
+    visibilitySplitMetricLeaderboardImpactSummary: "redacted high-impact audit-chain approval covers the affected artifact ids",
+    approvalTimestamp: "2026-10-01T00:00:00.000Z",
+  }));
+}
+
 function defaultSensitiveAuditChainVerification(releaseId, events) {
   return {
     id: `sensitive-audit-chain-verification-${releaseId}`,
@@ -15269,6 +15325,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const submittedConsumptionRows = (options.policyDecisionConsumptions ?? [])
     .map((record) => normalizePolicyDecisionConsumption(record, decisionRowsForGate, "submitted_workflow_policy_decision_consumption"))
     .filter(Boolean);
+  const submittedPolicyEvidencePresent = submittedActionRows.length > 0 || submittedDecisionRows.length > 0 || submittedConsumptionRows.length > 0;
   const submittedPhaseRows = (options.implementationPhaseGateBundles ?? [])
     .map((bundle) => normalizeImplementationPhaseGateBundle(bundle, "submitted_workflow_implementation_phase_gate_bundle"))
     .filter(Boolean);
@@ -15295,10 +15352,19 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     normalizeClientSurfaceIntegrityCheck(check, seedClientPolicyRows, "seed_client_surface_integrity_check"),
   );
   const clientCheckRowsForGate = submittedClientCheckRows.length ? submittedClientCheckRows : seedClientCheckRows;
-  const submittedAuditRows = (options.sensitiveAuditChainEvents ?? [])
-    .map((event) => normalizeSensitiveAuditChainEvent(event, "submitted_workflow_sensitive_audit_chain_event"))
+  const submittedAuditGovernanceRows = (options.governanceApprovalRecords ?? [])
+    .map((record) => normalizeAuditChainGovernanceApprovalRecord(record, "submitted_workflow_audit_chain_governance_approval"))
     .filter(Boolean);
-  const seedAuditRows = defaultSensitiveAuditChainEvents(releaseId).map((event) => normalizeSensitiveAuditChainEvent(event, "seed_sensitive_audit_chain_event"));
+  const seedAuditGovernanceRows = defaultSensitiveAuditChainGovernanceApprovalRecords(releaseId).map((record) =>
+    normalizeAuditChainGovernanceApprovalRecord(record, "seed_audit_chain_governance_approval"),
+  );
+  const auditGovernanceRowsForGate = [...seedAuditGovernanceRows, ...submittedAuditGovernanceRows];
+  const submittedAuditRows = (options.sensitiveAuditChainEvents ?? [])
+    .map((event) => normalizeSensitiveAuditChainEvent(event, "submitted_workflow_sensitive_audit_chain_event", decisionRowsForGate, auditGovernanceRowsForGate))
+    .filter(Boolean);
+  const seedAuditRows = defaultSensitiveAuditChainEvents(releaseId).map((event) =>
+    normalizeSensitiveAuditChainEvent(event, "seed_sensitive_audit_chain_event", decisionRowsForGate, auditGovernanceRowsForGate),
+  );
   const auditRowsForGate = submittedAuditRows.length ? submittedAuditRows : seedAuditRows;
   const submittedAuditVerificationRows = (options.sensitiveAuditChainVerifications ?? [])
     .map((verification) => normalizeSensitiveAuditChainVerification(verification, auditRowsForGate, "submitted_workflow_sensitive_audit_chain_verification"))
@@ -15309,6 +15375,9 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const actionKindRows = REQUIRED_POLICY_ACTION_KINDS.map((actionKind) =>
     policyActionKindEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate, submittedConsumptionRows),
   );
+  const policyActionConsumptionRows = REQUIRED_POLICY_ACTION_KINDS.map((actionKind) =>
+    policyActionConsumptionEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate, submittedConsumptionRows),
+  );
   const phaseLaneRows = REQUIRED_PHASE_GATE_LANE_KINDS.map((laneKind) => implementationPhaseLaneEvidenceRow(laneKind, submittedPhaseRows.length ? submittedPhaseRows : seedPhaseRows));
   const queueLaneRows = REQUIRED_QUEUE_FRESHNESS_LANES.map((lane) => queueFreshnessLaneEvidenceRow(lane, queueRowsForGate, submittedScanRows));
   const clientSurfaceRows = REQUIRED_CLIENT_SURFACES.map((surface) => clientSurfaceEvidenceRow(surface, clientPolicyRowsForGate, clientCheckRowsForGate));
@@ -15318,11 +15387,19 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     ...submittedActionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_action_kind", artifactId: row.id, reason }))),
     ...submittedDecisionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_decision", artifactId: row.id, reason }))),
     ...submittedConsumptionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_decision_consumption", artifactId: row.id, reason }))),
+    ...(submittedPolicyEvidencePresent
+      ? policyActionConsumptionRows.filter((row) => row.status !== "policy_action_consumption_covered").map((row) => ({
+          artifactType: "policy_action_consumption_gate",
+          artifactId: row.actionKind,
+          reason: row.status,
+        }))
+      : []),
     ...submittedPhaseRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "implementation_phase_gate_bundle", artifactId: row.id, reason }))),
     ...submittedQueueRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_freshness_policy", artifactId: row.id, reason }))),
     ...submittedScanRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_stale_by_delay_scan", artifactId: row.id, reason }))),
     ...submittedClientPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_policy", artifactId: row.id, reason }))),
     ...submittedClientCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_check", artifactId: row.id, reason }))),
+    ...submittedAuditGovernanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "audit_chain_governance_approval", artifactId: row.id, reason }))),
     ...submittedAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_event", artifactId: row.id, reason }))),
     ...submittedAuditVerificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_verification", artifactId: row.id, reason }))),
     ...actionKindRows.filter((row) => row.status !== "policy_action_kind_gate_complete").map((row) => ({
@@ -15363,8 +15440,10 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     submittedScanRows.length > 0 &&
     submittedClientPolicyRows.length > 0 &&
     submittedClientCheckRows.length > 0 &&
+    submittedAuditGovernanceRows.length > 0 &&
     submittedAuditRows.length > 0 &&
     submittedAuditVerificationRows.length > 0 &&
+    policyActionConsumptionRows.every((row) => row.status === "policy_action_consumption_covered") &&
     reviewSections.length === 0;
   return {
     id: `operational-control-evidence-${releaseId}`,
@@ -15380,11 +15459,13 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     policyActionKindRows: [...seedActionRows, ...submittedActionRows],
     policyDecisionRows: [...seedDecisionRows, ...submittedDecisionRows],
     policyDecisionConsumptionRows: submittedConsumptionRows,
+    policyActionConsumptionRows,
     implementationPhaseGateBundleRows: [...seedPhaseRows, ...submittedPhaseRows],
     queueFreshnessPolicyRows: [...seedQueueRows, ...submittedQueueRows],
     queueStaleByDelayScanRows: submittedScanRows,
     clientSurfaceIntegrityPolicyRows: [...seedClientPolicyRows, ...submittedClientPolicyRows],
     clientSurfaceIntegrityCheckRows: [...seedClientCheckRows, ...submittedClientCheckRows],
+    sensitiveAuditChainGovernanceApprovalRows: [...seedAuditGovernanceRows, ...submittedAuditGovernanceRows],
     sensitiveAuditChainEventRows: [...seedAuditRows, ...submittedAuditRows],
     sensitiveAuditChainVerificationRows: [...seedAuditVerificationRows, ...submittedAuditVerificationRows],
     actionKindRows,
@@ -15401,9 +15482,11 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
       submittedQueueStaleByDelayScanCount: submittedScanRows.length,
       submittedClientSurfaceIntegrityPolicyCount: submittedClientPolicyRows.length,
       submittedClientSurfaceIntegrityCheckCount: submittedClientCheckRows.length,
+      submittedSensitiveAuditChainGovernanceApprovalCount: submittedAuditGovernanceRows.length,
       submittedSensitiveAuditChainEventCount: submittedAuditRows.length,
       submittedSensitiveAuditChainVerificationCount: submittedAuditVerificationRows.length,
       passingPolicyActionKindCount: actionKindRows.filter((row) => row.status === "policy_action_kind_gate_complete").length,
+      passingPolicyActionConsumptionCount: policyActionConsumptionRows.filter((row) => row.status === "policy_action_consumption_covered").length,
       passingPhaseLaneCount: phaseLaneRows.filter((row) => row.status === "implementation_phase_lane_complete").length,
       passingQueueFreshnessLaneCount: queueLaneRows.filter((row) => row.status === "queue_freshness_lane_complete").length,
       passingClientSurfaceCount: clientSurfaceRows.filter((row) => row.status === "client_surface_integrity_complete").length,
@@ -15745,25 +15828,83 @@ function normalizeClientSurfaceIntegrityCheck(check, policyRows, rowSource) {
   };
 }
 
-function normalizeSensitiveAuditChainEvent(event, rowSource) {
+function normalizeAuditChainGovernanceApprovalRecord(record, rowSource) {
+  const id = record?.id ?? record?.governanceApprovalRecordId;
+  if (!id) return null;
+  const affectedArtifactIds = normalizeStringArray(record.affectedArtifactIds);
+  const reviewReasons = [
+    requiredPromptFieldReason("actionKind", record.actionKind),
+    affectedArtifactIds.length ? null : "affectedArtifactIds",
+    requiredPromptFieldReason("proposedBy", record.proposedBy),
+    requiredPromptFieldReason("approver1", record.approver1),
+    requiredPromptFieldReason("approver2", record.approver2),
+    record.proposedBy && record.approver1 && record.approver2 && new Set([record.proposedBy, record.approver1, record.approver2]).size === 3
+      ? null
+      : "independentApprovers",
+    record.independenceSeparationOfDutiesStatus === "independent_two_person_approval" ? null : "independenceSeparationOfDutiesStatus",
+    requiredPromptFieldReason("reasonCode", record.reasonCode),
+    requiredPromptFieldReason("visibilitySplitMetricLeaderboardImpactSummary", record.visibilitySplitMetricLeaderboardImpactSummary),
+    requiredPromptFieldReason("approvalTimestamp", record.approvalTimestamp ?? record.timestamp),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: record.releaseId ?? null,
+    actionKind: record.actionKind ?? null,
+    affectedArtifactIds,
+    proposedBy: record.proposedBy ?? null,
+    approver1: record.approver1 ?? null,
+    approver2: record.approver2 ?? null,
+    independenceSeparationOfDutiesStatus: record.independenceSeparationOfDutiesStatus ?? null,
+    reasonCode: record.reasonCode ?? null,
+    visibilitySplitMetricLeaderboardImpactSummary: record.visibilitySplitMetricLeaderboardImpactSummary ?? null,
+    approvalTimestamp: record.approvalTimestamp ?? record.timestamp ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "audit_chain_governance_approval_review_required" : "audit_chain_governance_approval_complete",
+  };
+}
+
+function latestRowById(rows, id) {
+  if (!id) return null;
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (rows[index]?.id === id) return rows[index];
+  }
+  return null;
+}
+
+function normalizeSensitiveAuditChainEvent(event, rowSource, decisionRows = [], governanceApprovalRows = []) {
   const id = event?.id ?? event?.sensitiveAuditChainEventId;
   if (!id) return null;
   const eventKind = event.eventKind ?? event.actionKind ?? null;
+  const expectedPolicyActionKind = AUDIT_CHAIN_POLICY_ACTION_KIND_BY_EVENT_KIND[eventKind] ?? null;
+  const policyDecisionRow = latestRowById(decisionRows, event.policyDecisionId);
+  const governanceApprovalRow = latestRowById(governanceApprovalRows, event.governanceApprovalRecordId);
   const approverHashes = normalizeStringArray(event.approverHashes);
   const redactedReasonClasses = normalizeStringArray(event.redactedReasonClasses);
+  const affectedArtifactIds = normalizeStringArray(event.affectedArtifactIds);
+  const approvedArtifactIds = new Set(governanceApprovalRow?.affectedArtifactIds ?? []);
+  const uncoveredArtifactIds = affectedArtifactIds.filter((artifactId) => !approvedArtifactIds.has(artifactId));
   const redactionPolicy = String(event.redactionPolicy ?? "").toLowerCase();
   const reviewReasons = [
     REQUIRED_AUDIT_CHAIN_EVENT_KINDS.includes(eventKind) ? null : "eventKind",
     requiredPromptFieldReason("chainId", event.chainId),
     event.actionKind === eventKind ? null : "actionKind",
     requiredPromptFieldReason("policyDecisionId", event.policyDecisionId),
+    event.policyDecisionId && !policyDecisionRow ? "policyDecisionId:not_found" : null,
+    policyDecisionRow && expectedPolicyActionKind && policyDecisionRow.actionKind !== expectedPolicyActionKind ? "policyDecisionId:actionKind" : null,
+    policyDecisionRow && policyDecisionRow.reviewReasons.length ? "policyDecisionId:reviewReasons" : null,
     requiredPromptFieldReason("governanceApprovalRecordId", event.governanceApprovalRecordId),
+    event.governanceApprovalRecordId && !governanceApprovalRow ? "governanceApprovalRecordId:not_found" : null,
+    governanceApprovalRow && expectedPolicyActionKind && governanceApprovalRow.actionKind !== expectedPolicyActionKind ? "governanceApprovalRecordId:actionKind" : null,
+    governanceApprovalRow?.independenceSeparationOfDutiesStatus === "independent_two_person_approval" ? null : governanceApprovalRow ? "governanceApprovalRecordId:independenceSeparationOfDutiesStatus" : null,
+    governanceApprovalRow && uncoveredArtifactIds.length ? "governanceApprovalRecordId:affectedArtifactIds" : null,
+    governanceApprovalRow && governanceApprovalRow.reviewReasons.length ? "governanceApprovalRecordId:reviewReasons" : null,
     Number.isInteger(event.sequence) && event.sequence > 0 ? null : "sequence",
     String(event.eventHash ?? "").startsWith("sha256:") ? null : "eventHash",
     event.sequence === 1 ? (event.previousEventHash ? "previousEventHash" : null) : String(event.previousEventHash ?? "").startsWith("sha256:") ? null : "previousEventHash",
     String(event.actorHash ?? "").startsWith("sha256:") ? null : "actorHash",
     approverHashes.length >= 2 && approverHashes.every((hash) => hash.startsWith("sha256:")) ? null : "approverHashes",
-    normalizeStringArray(event.affectedArtifactIds).length ? null : "affectedArtifactIds",
+    affectedArtifactIds.length ? null : "affectedArtifactIds",
     String(event.beforeHash ?? "").startsWith("sha256:") ? null : "beforeHash",
     String(event.afterHash ?? "").startsWith("sha256:") ? null : "afterHash",
     event.beforeHash && event.afterHash && event.beforeHash !== event.afterHash ? null : "beforeAfterHash",
@@ -15781,11 +15922,15 @@ function normalizeSensitiveAuditChainEvent(event, rowSource) {
     sequence: event.sequence ?? null,
     eventKind,
     actionKind: event.actionKind ?? null,
+    expectedPolicyActionKind,
     policyDecisionId: event.policyDecisionId ?? null,
+    policyDecisionActionKind: policyDecisionRow?.actionKind ?? null,
     governanceApprovalRecordId: event.governanceApprovalRecordId ?? null,
+    governanceApprovalActionKind: governanceApprovalRow?.actionKind ?? null,
     actorHash: event.actorHash ?? null,
     approverHashes,
-    affectedArtifactIds: normalizeStringArray(event.affectedArtifactIds),
+    affectedArtifactIds,
+    uncoveredGovernanceApprovalArtifactIds: uncoveredArtifactIds,
     beforeHash: event.beforeHash ?? null,
     afterHash: event.afterHash ?? null,
     previousEventHash: event.previousEventHash ?? null,
@@ -15843,6 +15988,35 @@ function policyActionKindEvidenceRow(actionKind, actionRows, decisionRows, consu
     policyDecisionId: decisionRow?.id ?? null,
     replayProtection: actionRow?.replayProtection ?? null,
     status: actionRow && decisionRow ? "policy_action_kind_gate_complete" : actionRow ? "policy_decision_missing" : "policy_action_kind_missing",
+  };
+}
+
+function policyActionConsumptionEvidenceRow(actionKind, actionRows, decisionRows, consumptionRows = []) {
+  const actionRow = actionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0) ?? null;
+  const validConsumptionRow =
+    consumptionRows.find((consumption) => {
+      if (consumption.actionKind !== actionKind || consumption.reviewReasons.length) return false;
+      const decisionRow = decisionRows.find((row) => row.id === consumption.decisionId && row.actionKind === actionKind && row.reviewReasons.length === 0);
+      return Boolean(decisionRow);
+    }) ?? null;
+  const currentDecisionRow =
+    decisionRows.find((row) => row.actionKind === actionKind && row.reviewReasons.length === 0 && row.replayStatus === "unused" && row.idempotencyBindingStatus === "matched") ?? null;
+  const idempotencyBoundCurrentDecision = actionRow?.replayProtection === "idempotency_bound" && currentDecisionRow;
+  const status = !actionRow
+    ? "policy_action_kind_missing"
+    : validConsumptionRow || idempotencyBoundCurrentDecision
+      ? "policy_action_consumption_covered"
+      : actionRow.replayProtection === "idempotency_bound"
+        ? "policy_action_idempotency_decision_missing"
+        : "policy_action_consumption_missing";
+  return {
+    actionKind,
+    policyActionKindId: actionRow?.id ?? null,
+    replayProtection: actionRow?.replayProtection ?? null,
+    consumptionId: validConsumptionRow?.id ?? null,
+    decisionId: validConsumptionRow?.decisionId ?? currentDecisionRow?.id ?? null,
+    currentDecisionAllowed: Boolean(idempotencyBoundCurrentDecision),
+    status,
   };
 }
 
@@ -16211,6 +16385,7 @@ export function buildOctoberReleaseReport(
     policyActionKinds: options.policyActionKinds ?? [],
     policyDecisionRecords: options.policyDecisionRecords ?? [],
     policyDecisionConsumptions: options.policyDecisionConsumptions ?? [],
+    governanceApprovalRecords: options.governanceApprovalRecords ?? [],
     implementationPhaseGateBundles: options.implementationPhaseGateBundles ?? [],
     queueFreshnessPolicies: options.queueFreshnessPolicies ?? [],
     queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
