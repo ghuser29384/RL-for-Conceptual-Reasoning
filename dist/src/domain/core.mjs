@@ -292,9 +292,17 @@ export const raterProfiles = [
     conflictDisclosures: [],
     priorExposure: {
       authoredPositionIds: [],
+      authoredCritiqueIds: [],
       selectedCritiqueIds: [],
+      selectedPositionIds: [],
+      selectedItemIds: [],
       adaptedPositionIds: [],
+      adaptationClusterIds: [],
+      sourceFamilyIds: [],
+      nearDuplicateClusterIds: [],
+      publicExampleIds: [],
       previouslyDiscussedPositionIds: [],
+      priorPositionClusterIds: [],
     },
   },
   {
@@ -306,9 +314,17 @@ export const raterProfiles = [
     conflictDisclosures: [],
     priorExposure: {
       authoredPositionIds: [],
+      authoredCritiqueIds: [],
       selectedCritiqueIds: [],
+      selectedPositionIds: [],
+      selectedItemIds: [],
       adaptedPositionIds: [],
+      adaptationClusterIds: [],
+      sourceFamilyIds: [],
+      nearDuplicateClusterIds: [],
+      publicExampleIds: [],
       previouslyDiscussedPositionIds: [],
+      priorPositionClusterIds: [],
     },
   },
   {
@@ -320,9 +336,17 @@ export const raterProfiles = [
     conflictDisclosures: [],
     priorExposure: {
       authoredPositionIds: [],
+      authoredCritiqueIds: [],
       selectedCritiqueIds: [],
+      selectedPositionIds: [],
+      selectedItemIds: [],
       adaptedPositionIds: [],
+      adaptationClusterIds: [],
+      sourceFamilyIds: [],
+      nearDuplicateClusterIds: [],
+      publicExampleIds: [],
       previouslyDiscussedPositionIds: [],
+      priorPositionClusterIds: [],
     },
   },
   {
@@ -334,9 +358,17 @@ export const raterProfiles = [
     conflictDisclosures: [],
     priorExposure: {
       authoredPositionIds: [],
+      authoredCritiqueIds: [],
       selectedCritiqueIds: [],
+      selectedPositionIds: [],
+      selectedItemIds: [],
       adaptedPositionIds: [],
+      adaptationClusterIds: [],
+      sourceFamilyIds: [],
+      nearDuplicateClusterIds: [],
+      publicExampleIds: [],
       previouslyDiscussedPositionIds: [],
+      priorPositionClusterIds: [],
     },
   },
 ];
@@ -6996,9 +7028,11 @@ export function buildRaterCompositionConflictReport(
   ratings = seedRatings,
   positionList = positions,
   profiles = raterProfiles,
+  options = {},
 ) {
   const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
   const positionById = new Map(positionList.map((position) => [position.id, position]));
+  const critiqueById = new Map((options.critiqueList ?? critiques).map((critique) => [critique.id, critique]));
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
   const includedRatings = ratings.filter((rating) => snapshotItemIds.has(makeItemId(rating.positionId, rating.critiqueId)));
   const releaseCriticalRatings = includedRatings.filter((rating) => isReleaseCriticalSplit(positionById.get(rating.positionId)?.split));
@@ -7055,6 +7089,7 @@ export function buildRaterCompositionConflictReport(
     .map(([itemId, label]) => {
       const [positionId, critiqueId] = itemId.split("::");
       const position = positionById.get(positionId);
+      const critique = critiqueById.get(critiqueId);
       const itemRatings = includedRatings.filter((rating) => rating.positionId === positionId && rating.critiqueId === critiqueId);
       const itemRaterIds = uniqueStrings(itemRatings.map((rating) => rating.raterId)).sort();
       const expertRaterIds = uniqueStrings(itemRatings.filter((rating) => ["graduate", "phd", "expert", "admin"].includes(rating.raterTier)).map((rating) => rating.raterId)).sort();
@@ -7073,7 +7108,7 @@ export function buildRaterCompositionConflictReport(
         largestSingleRaterContributionShare: label.largestSingleRaterContributionShare,
         singleRaterDominated: label.largestSingleRaterContributionShare > 0.5,
         independentExpertReviewRequired: releaseCritical && label.largestSingleRaterContributionShare > 0.5,
-        conflictRows: itemRatings.flatMap((rating) => conflictRowsForRating(rating, position, profileById.get(rating.raterId))),
+        conflictRows: itemRatings.flatMap((rating) => conflictRowsForRating(rating, position, profileById.get(rating.raterId), critique)),
       };
     })
     .sort((left, right) => Number(right.releaseCritical) - Number(left.releaseCritical) || right.largestSingleRaterContributionShare - left.largestSingleRaterContributionShare || left.itemId.localeCompare(right.itemId));
@@ -7339,9 +7374,25 @@ function normalizeRaterTopicExpertise(value) {
 function normalizeRaterPriorExposure(value = {}) {
   return {
     authoredPositionIds: normalizeStringArray(value.authoredPositionIds ?? value.authored_position_ids),
+    authoredCritiqueIds: normalizeStringArray(value.authoredCritiqueIds ?? value.authored_critique_ids),
     selectedCritiqueIds: normalizeStringArray(value.selectedCritiqueIds ?? value.selected_critique_ids),
+    selectedPositionIds: normalizeStringArray(value.selectedPositionIds ?? value.selected_position_ids),
+    selectedItemIds: normalizeStringArray(value.selectedItemIds ?? value.selected_item_ids),
     adaptedPositionIds: normalizeStringArray(value.adaptedPositionIds ?? value.adapted_position_ids),
+    submittedSourceIds: normalizeStringArray(value.submittedSourceIds ?? value.submitted_source_ids),
+    generatedCritiqueIds: normalizeStringArray(value.generatedCritiqueIds ?? value.generated_critique_ids),
+    editedItemIds: normalizeStringArray(value.editedItemIds ?? value.edited_item_ids),
+    adaptationClusterIds: normalizeStringArray(value.adaptationClusterIds ?? value.adaptation_cluster_ids ?? value.adaptationFamilyIds ?? value.adaptation_family_ids),
+    sourceFamilyIds: normalizeStringArray(value.sourceFamilyIds ?? value.source_family_ids),
+    nearDuplicateClusterIds: normalizeStringArray(value.nearDuplicateClusterIds ?? value.near_duplicate_cluster_ids),
+    publicExampleIds: normalizeStringArray(
+      value.publicExampleIds ??
+        value.public_example_ids ??
+        value.publicSourceAnchorExampleIds ??
+        value.public_source_anchor_example_ids,
+    ),
     previouslyDiscussedPositionIds: normalizeStringArray(value.previouslyDiscussedPositionIds ?? value.previously_discussed_position_ids),
+    priorPositionClusterIds: normalizeStringArray(value.priorPositionClusterIds ?? value.prior_position_cluster_ids),
   };
 }
 
@@ -7451,6 +7502,10 @@ export function buildCritiqueGenerationEvaluationReport(
   const providerPolicyReviewSections = runRows.flatMap((row) =>
     row.modelProviderPolicyBinding.reviewReasons.map((reason) => ({ artifactType: "critique_generation_provider_policy", artifactId: row.id, reason })),
   );
+  const generatorEvaluatorOverlap = buildGenerationEvaluatorOverlapReport(
+    runRows,
+    options.evaluationRuns ?? [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+  );
   const coverageAndBlindingPass = runRows.every(
     (row) => !row.modelJudgeScreening.scoresVisibleToInitialRaters && row.blindRatingCoverage.noBlindRatingOutputIds.length === 0,
   );
@@ -7467,6 +7522,7 @@ export function buildCritiqueGenerationEvaluationReport(
       modelJudgeScoresAcceptedAsGoldLabels: false,
       modelJudgeScoresVisibleToInitialRaters: generationRuns.some((run) => run.modelJudgeScreening.scoresVisibleToInitialRaters),
     },
+    generatorEvaluatorOverlap,
     aggregateCounts: aggregateGenerationCounts(runRows),
     providerPolicyEvidence: {
       runRows: runRows.map((row) => row.modelProviderPolicyBinding),
@@ -7480,6 +7536,92 @@ export function buildCritiqueGenerationEvaluationReport(
       coverageAndBlindingPass && providerPolicyReviewSections.length === 0
         ? "generation_evaluation_separate_with_blind_rating_coverage"
         : "generation_evaluation_requires_blinding_rating_coverage_or_provider_policy_review",
+  };
+}
+
+function buildGenerationEvaluatorOverlapReport(runRows = [], evaluationRuns = []) {
+  const evaluatorRows = evaluationRuns.map((run) => ({
+    evaluationRunId: run.id,
+    requestedModelAlias: run.requestedModelAlias ?? null,
+    resolvedModelSnapshot: run.resolvedModelSnapshot ?? null,
+    modelFamily: modelIdentityForRun(run).modelFamily,
+    identity: modelIdentityForRun(run),
+  }));
+  const rows = runRows.map((run) => {
+    const generatorIdentity = modelIdentityFromValues({
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+      provider: run.providerRoute,
+      modelFamily: run.modelFamily,
+    });
+    const judgeIdentity = modelIdentityFromValues({
+      requestedModelAlias: run.modelJudgeScreening?.requestedModelAlias,
+      resolvedModelSnapshot: run.modelJudgeScreening?.resolvedModelSnapshot,
+      provider: run.modelJudgeScreening?.providerRoute,
+      modelFamily: run.modelJudgeScreening?.modelFamily,
+    });
+    const generatorJudgeOverlapBasis =
+      judgeIdentity.normalizedAlias || judgeIdentity.normalizedSnapshot || judgeIdentity.modelFamily
+        ? modelOverlapBasis(generatorIdentity, judgeIdentity)
+        : "not_declared";
+    const evaluatorOverlapRows = evaluatorRows
+      .map((evaluator) => ({
+        evaluationRunId: evaluator.evaluationRunId,
+        evaluatorRequestedModelAlias: evaluator.requestedModelAlias,
+        evaluatorResolvedModelSnapshot: evaluator.resolvedModelSnapshot,
+        evaluatorModelFamily: evaluator.modelFamily,
+        overlapBasis: modelOverlapBasis(evaluator.identity, generatorIdentity),
+      }))
+      .filter((row) => row.overlapBasis !== "none");
+    return {
+      generationRunId: run.id,
+      requestedModelAlias: generatorIdentity.requestedModelAlias,
+      resolvedModelSnapshot: generatorIdentity.resolvedModelSnapshot,
+      modelFamily: generatorIdentity.modelFamily,
+      modelJudgeRequestedModelAlias: judgeIdentity.requestedModelAlias,
+      modelJudgeResolvedModelSnapshot: judgeIdentity.resolvedModelSnapshot,
+      modelJudgeModelFamily: judgeIdentity.modelFamily,
+      generatorJudgeOverlapBasis,
+      evaluatorOverlapRows,
+      evaluatorOverlapCount: evaluatorOverlapRows.length,
+      status:
+        evaluatorOverlapRows.length || ["exact_resolved_snapshot", "exact_requested_alias", "close_model_family"].includes(generatorJudgeOverlapBasis)
+          ? "generator_overlap_disclosed"
+          : "no_generator_overlap_detected",
+    };
+  });
+  const evaluatorOverlapRows = rows.flatMap((row) =>
+    row.evaluatorOverlapRows.map((overlap) => ({
+      generationRunId: row.generationRunId,
+      generatorRequestedModelAlias: row.requestedModelAlias,
+      generatorResolvedModelSnapshot: row.resolvedModelSnapshot,
+      generatorModelFamily: row.modelFamily,
+      ...overlap,
+    })),
+  );
+  const generatorJudgeOverlapRows = rows.filter((row) =>
+    ["exact_resolved_snapshot", "exact_requested_alias", "close_model_family"].includes(row.generatorJudgeOverlapBasis),
+  );
+  return {
+    policy: {
+      disclosureRule:
+        "Release reports disclose when a critique generator shares an exact alias, exact resolved snapshot, or close model family with a model judge or evaluated model.",
+      cleanInterpretationRule:
+        "Generator/evaluator overlap is diagnostic provenance for source-style familiarity risk; it does not convert model-judge scores into labels or replace blind human rating coverage.",
+    },
+    counts: {
+      generationRunCount: rows.length,
+      evaluatedModelCount: evaluatorRows.length,
+      evaluatorOverlapCount: evaluatorOverlapRows.length,
+      generatorJudgeOverlapCount: generatorJudgeOverlapRows.length,
+    },
+    rows,
+    evaluatorOverlapRows,
+    generatorJudgeOverlapRows,
+    releaseUseStatus:
+      evaluatorOverlapRows.length || generatorJudgeOverlapRows.length
+        ? "generator_evaluator_or_judge_overlap_disclosed"
+        : "no_generator_evaluator_overlap_detected",
   };
 }
 
@@ -8389,6 +8531,8 @@ export function buildHumanCeilingAndSaturationReport(
   const modelProximityRows = runs.map((run) => modelValidationProximityRow(run, labelSnapshot, validationItemIds));
   const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList, { humanCeilingRuns: options.humanCeilingRuns ?? [] });
   const thinValidation = validationDesign.status !== "appendix_c_scale";
+  const submittedHumanCeilingUncertainty = buildSubmittedHumanCeilingUncertaintyEvidence(options.humanCeilingRuns ?? [], labelSnapshot);
+  const activeSubmittedUncertaintyPolicy = submittedHumanCeilingUncertainty.activeRun?.uncertaintyPolicy ?? null;
   const bestHumanMeanAbsOverallDiff = minValid(comparisonRows.map((row) => row.meanAbsOverallDiff));
   const closestModelMeanAbsOverallDiff = minValid(modelProximityRows.map((row) => row.meanAbsOverallDiff));
   const modelWithinHumanBand =
@@ -8429,14 +8573,17 @@ export function buildHumanCeilingAndSaturationReport(
     },
     modelProximityRows,
     submittedHumanCeilingRuns: options.humanCeilingRuns ?? [],
-    uncertaintyPolicy: {
-      intervalType: "descriptive_seed_no_interval",
-      nominalLevel: null,
-      constructionMethod: "not_computed_until_appendix_c_scale_or_bootstrap_sample_available",
-      resamplingUnit: "item",
-      resampleCountOrDegreesOfFreedom: 0,
-      randomSeedOrArtifact: "not_applicable_seed_demo",
-    },
+    submittedHumanCeilingUncertainty,
+    uncertaintyPolicy:
+      activeSubmittedUncertaintyPolicy ?? {
+        intervalType: "descriptive_seed_no_interval",
+        nominalLevel: null,
+        constructionMethod: "not_computed_until_appendix_c_scale_or_bootstrap_sample_available",
+        resamplingUnit: "item",
+        resampleCountOrDegreesOfFreedom: 0,
+        randomSeedOrArtifact: "not_applicable_seed_demo",
+        intervalComparisonScope: "not_applicable_seed_demo",
+      },
     saturationRisk: {
       bestHumanMeanAbsOverallDiff,
       closestModelMeanAbsOverallDiff,
@@ -8450,7 +8597,101 @@ export function buildHumanCeilingAndSaturationReport(
         "Do not make human-ceiling or saturation claims unless the validation design is Appendix-C-scale or explicitly labeled thinner with reduced claim strength.",
     },
     refreshQueue: buildSaturationRefreshQueue(labelSnapshot, positionList, critiqueList),
-    releaseUseStatus: thinValidation ? "human_ceiling_claims_blocked_thinner_than_appendix_c" : "human_ceiling_claims_allowed_with_declared_uncertainty",
+    releaseUseStatus: thinValidation
+      ? "human_ceiling_claims_blocked_thinner_than_appendix_c"
+      : submittedHumanCeilingUncertainty.activeRun
+        ? "human_ceiling_claims_allowed_with_declared_uncertainty"
+        : "human_ceiling_uncertainty_provenance_required",
+  };
+}
+
+function buildSubmittedHumanCeilingUncertaintyEvidence(humanCeilingRuns = [], labelSnapshot) {
+  const rows = humanCeilingRuns.map((run) => normalizeSubmittedHumanCeilingUncertaintyRow(run, labelSnapshot)).filter(Boolean);
+  const completeRows = rows.filter((row) => row.status === "human_ceiling_uncertainty_provenance_complete");
+  const activeRun = completeRows[0] ?? null;
+  return {
+    rows,
+    activeRun,
+    activeRunId: activeRun?.id ?? null,
+    rowCount: rows.length,
+    completeRunCount: completeRows.length,
+    reviewRequiredCount: rows.length - completeRows.length,
+    status: activeRun
+      ? "submitted_human_ceiling_uncertainty_complete"
+      : rows.length
+        ? "submitted_human_ceiling_uncertainty_review_required"
+        : "no_submitted_human_ceiling_uncertainty",
+  };
+}
+
+function normalizeSubmittedHumanCeilingUncertaintyRow(run, labelSnapshot) {
+  const id = run?.id ?? run?.humanCeilingRunId ?? run?.human_ceiling_run_id;
+  if (!id) return null;
+  const policySource = run.uncertaintyPolicy ?? run.uncertainty ?? {};
+  const intervalLevel = Number(
+    run.intervalLevel ??
+      run.nominalLevel ??
+      run.confidenceLevel ??
+      run.confidenceOrCredibleIntervalLevel ??
+      policySource.intervalLevel ??
+      policySource.nominalLevel ??
+      policySource.confidenceLevel ??
+      policySource.confidenceOrCredibleIntervalLevel,
+  );
+  const resampleCountOrDegreesOfFreedom = Number(
+    run.resampleCountOrDegreesOfFreedom ??
+      run.resampleCount ??
+      run.analyticDegreesOfFreedom ??
+      policySource.resampleCountOrDegreesOfFreedom ??
+      policySource.resampleCount ??
+      policySource.analyticDegreesOfFreedom,
+  );
+  const uncertaintyPolicy = {
+    uncertaintyMethod: run.uncertaintyMethod ?? policySource.uncertaintyMethod ?? policySource.method ?? null,
+    intervalType: run.intervalType ?? run.uncertaintyIntervalType ?? policySource.intervalType ?? policySource.uncertaintyIntervalType ?? null,
+    nominalLevel: Number.isFinite(intervalLevel) ? intervalLevel : null,
+    constructionMethod: run.intervalConstructionMethod ?? run.constructionMethod ?? policySource.intervalConstructionMethod ?? policySource.constructionMethod ?? null,
+    resamplingUnit: run.resamplingUnit ?? policySource.resamplingUnit ?? null,
+    resampleCountOrDegreesOfFreedom: Number.isFinite(resampleCountOrDegreesOfFreedom) ? resampleCountOrDegreesOfFreedom : null,
+    randomSeedOrArtifact:
+      run.randomSeedOrArtifact ??
+      run.randomSeed ??
+      run.randomSeedOrResamplingArtifact ??
+      run.reproducibilityArtifact ??
+      policySource.randomSeedOrArtifact ??
+      policySource.randomSeed ??
+      policySource.randomSeedOrResamplingArtifact ??
+      policySource.reproducibilityArtifact ??
+      null,
+    intervalComparisonScope:
+      run.intervalComparisonScope ??
+      run.pairedVsIndependentIntervalPolicy ??
+      policySource.intervalComparisonScope ??
+      policySource.pairedVsIndependentIntervalPolicy ??
+      null,
+  };
+  const targetLabelSnapshotId = run.targetLabelSnapshotId ?? run.labelSnapshotId ?? null;
+  const reviewReasons = [
+    targetLabelSnapshotId === labelSnapshot.id ? null : "targetLabelSnapshotId",
+    requiredPromptFieldReason("uncertaintyMethod", uncertaintyPolicy.uncertaintyMethod),
+    requiredPromptFieldReason("intervalType", uncertaintyPolicy.intervalType),
+    Number.isFinite(uncertaintyPolicy.nominalLevel) && uncertaintyPolicy.nominalLevel > 0 && uncertaintyPolicy.nominalLevel < 1
+      ? null
+      : "intervalLevel",
+    requiredPromptFieldReason("intervalConstructionMethod", uncertaintyPolicy.constructionMethod),
+    requiredPromptFieldReason("resamplingUnit", uncertaintyPolicy.resamplingUnit),
+    Number.isFinite(uncertaintyPolicy.resampleCountOrDegreesOfFreedom) && uncertaintyPolicy.resampleCountOrDegreesOfFreedom > 0
+      ? null
+      : "resampleCountOrDegreesOfFreedom",
+    requiredPromptFieldReason("randomSeedOrArtifact", uncertaintyPolicy.randomSeedOrArtifact),
+    requiredPromptFieldReason("intervalComparisonScope", uncertaintyPolicy.intervalComparisonScope),
+  ].filter(Boolean);
+  return {
+    id,
+    targetLabelSnapshotId,
+    uncertaintyPolicy,
+    reviewReasons,
+    status: reviewReasons.length ? "human_ceiling_uncertainty_provenance_review_required" : "human_ceiling_uncertainty_provenance_complete",
   };
 }
 
@@ -15867,9 +16108,13 @@ const RATER_ITEM_CONFLICT_TYPES = [
   "generated_critique",
   "submitted_source",
   "selected_or_adapted_source",
+  "item_selection_exposure",
   "edited_item",
   "source_family_exposure",
+  "adaptation_family_exposure",
+  "near_duplicate_exposure",
   "public_example_exposure",
+  "prior_exposure",
   "close_collaboration_or_conflict",
   "declared_custom",
 ];
@@ -19037,7 +19282,9 @@ export function buildOctoberReleaseReport(
   });
   const candidateIntakeQualityAudit = buildCandidateIntakeQualityAudit(releaseId, critiqueList, positionList, effectiveCritiqueGenerationRuns, activeLearning.batches);
   const effectiveRaterProfiles = buildEffectiveRaterProfiles(options.raters ?? []);
-  const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList, effectiveRaterProfiles);
+  const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList, effectiveRaterProfiles, {
+    critiqueList,
+  });
   const raterProfileEvidence = buildRaterProfileEvidenceReport(releaseId, labelSnapshot, ratings, effectiveRaterProfiles, {
     positionList,
     raters: options.raters ?? [],
@@ -19066,7 +19313,10 @@ export function buildOctoberReleaseReport(
     positionList,
     critiqueList,
     effectiveAdjudicationMemos,
-    { modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [] },
+    {
+      modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
+      evaluationRuns: [...evaluationRuns, ...(options.evaluationRuns ?? [])],
+    },
   );
   const trainingExport = buildTrainingExport(
     releaseId,
@@ -20781,27 +21031,114 @@ function fallbackRaterProfile(rating) {
     conflictDisclosures: ["profile_missing_conflicts_unknown"],
     priorExposure: {
       authoredPositionIds: [],
+      authoredCritiqueIds: [],
       selectedCritiqueIds: [],
+      selectedPositionIds: [],
+      selectedItemIds: [],
       adaptedPositionIds: [],
+      submittedSourceIds: [],
+      generatedCritiqueIds: [],
+      editedItemIds: [],
+      adaptationClusterIds: [],
+      sourceFamilyIds: [],
+      nearDuplicateClusterIds: [],
+      publicExampleIds: [],
       previouslyDiscussedPositionIds: [],
+      priorPositionClusterIds: [],
     },
   };
 }
 
-function conflictRowsForRating(rating, position, profile = fallbackRaterProfile(rating)) {
-  const exposure = profile.priorExposure ?? {};
+function conflictTargetIds(...values) {
+  return uniqueStrings(values.flatMap((value) => normalizeStringArray(value))).sort();
+}
+
+function conflictRowsForRating(rating, position, profile = fallbackRaterProfile(rating), critique = null) {
+  const exposure = normalizeRaterPriorExposure(profile.priorExposure ?? {});
+  const itemId = makeItemId(rating.positionId, rating.critiqueId);
+  const positionClusterIds = conflictTargetIds(
+    rating.positionClusterId,
+    rating.position_cluster_id,
+    position?.clusterId,
+    position?.positionClusterId,
+    position?.position_cluster_id,
+  );
+  const sourceFamilyIds = conflictTargetIds(
+    rating.sourceFamilyId,
+    rating.source_family_id,
+    position?.sourceFamilyId,
+    position?.sourceFamilyIds,
+    position?.source_family_id,
+    position?.source_family_ids,
+    critique?.sourceFamilyId,
+    critique?.sourceFamilyIds,
+    critique?.source_family_id,
+    critique?.source_family_ids,
+  );
+  const adaptationClusterIds = conflictTargetIds(
+    rating.adaptationClusterId,
+    rating.adaptation_cluster_id,
+    position?.adaptationClusterId,
+    position?.adaptationFamilyId,
+    position?.adaptation_cluster_id,
+    position?.adaptation_family_id,
+    critique?.adaptationClusterId,
+    critique?.adaptationFamilyId,
+    critique?.adaptation_cluster_id,
+    critique?.adaptation_family_id,
+  );
+  const nearDuplicateClusterIds = conflictTargetIds(
+    rating.nearDuplicateClusterId,
+    rating.near_duplicate_cluster_id,
+    critique?.nearDuplicateClusterId,
+    critique?.near_duplicate_cluster_id,
+  );
+  const publicExampleIds = conflictTargetIds(
+    rating.publicExampleId,
+    rating.public_example_id,
+    rating.sourceAnchorExampleId,
+    rating.source_anchor_example_id,
+    position?.publicExampleId,
+    position?.sourceAnchorExampleId,
+    position?.public_example_id,
+    position?.source_anchor_example_id,
+    critique?.publicExampleId,
+    critique?.sourceAnchorExampleId,
+    critique?.public_example_id,
+    critique?.source_anchor_example_id,
+  );
+  const sourceIds = conflictTargetIds(
+    position?.sourceId,
+    position?.sourceReference,
+    position?.sourceDatasetName,
+    critique?.sourceId,
+    critique?.sourceReference,
+    critique?.sourceDatasetName,
+    rating.sourceId,
+  );
   const checks = [
-    ["authored_position", exposure.authoredPositionIds, rating.positionId],
-    ["selected_critique", exposure.selectedCritiqueIds, rating.critiqueId],
-    ["adapted_position", exposure.adaptedPositionIds, rating.positionId],
-    ["previously_discussed_position", exposure.previouslyDiscussedPositionIds, rating.positionId],
+    ["authored_position", exposure.authoredPositionIds, [rating.positionId]],
+    ["authored_critique", exposure.authoredCritiqueIds, [rating.critiqueId]],
+    ["selected_critique", exposure.selectedCritiqueIds, [rating.critiqueId]],
+    ["selected_position", exposure.selectedPositionIds, [rating.positionId]],
+    ["item_selection_exposure", exposure.selectedItemIds, [itemId]],
+    ["adapted_position", exposure.adaptedPositionIds, [rating.positionId]],
+    ["submitted_source", exposure.submittedSourceIds, sourceIds],
+    ["generated_critique", exposure.generatedCritiqueIds, [rating.critiqueId]],
+    ["edited_item", exposure.editedItemIds, [itemId, rating.positionId, rating.critiqueId]],
+    ["adaptation_family_exposure", exposure.adaptationClusterIds, adaptationClusterIds],
+    ["source_family_exposure", exposure.sourceFamilyIds, sourceFamilyIds],
+    ["near_duplicate_exposure", exposure.nearDuplicateClusterIds, nearDuplicateClusterIds],
+    ["public_example_exposure", exposure.publicExampleIds, publicExampleIds],
+    ["previously_discussed_position", exposure.previouslyDiscussedPositionIds, [rating.positionId]],
+    ["prior_exposure", exposure.priorPositionClusterIds, positionClusterIds],
   ];
   return checks
-    .filter(([, ids, target]) => Array.isArray(ids) && ids.includes(target))
+    .filter(([, ids, targetIds]) => Array.isArray(ids) && targetIds.some((target) => ids.includes(target)))
     .map(([conflictType]) => ({
       ratingId: rating.id,
       raterId: rating.raterId,
-      itemId: makeItemId(rating.positionId, rating.critiqueId),
+      itemId,
       split: position?.split ?? "unknown",
       conflictType,
       adminExceptionRecorded: Boolean(rating.conflictExceptionId),

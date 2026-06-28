@@ -1930,6 +1930,38 @@ test("server policy verifies external JWT roles and assignment claims", async ()
   assert.match(unassigned.detail, /not assigned/);
 });
 
+test("server policy reads default external JWT RBAC claims from Clerk public metadata", async () => {
+  const { privateKey, jwk } = createTestJwksKey("unit-key");
+  const auth = createAuthConfig({
+    authMode: "external_jwt",
+    authIssuer: "https://issuer.example.test",
+    authAudience: "rlhf-conceptual-reasoning",
+    authJwks: { keys: [jwk] },
+    authClockSkewSeconds: 0,
+  });
+  const token = signTestJwt(
+    {
+      iss: "https://issuer.example.test",
+      aud: "rlhf-conceptual-reasoning",
+      sub: "clerk-user-1",
+      name: "Clerk Rater",
+      exp: Math.floor(Date.now() / 1000) + 300,
+      public_metadata: {
+        lmca_role: "rater",
+        lmca_assignments: ["assign-ai-base-rate"],
+      },
+    },
+    privateKey,
+    "unit-key",
+  );
+
+  const session = await authenticateRequest(requestFixture({ headers: { authorization: `Bearer ${token}` } }), auth);
+  assert.equal(session.ok, true);
+  assert.equal(session.user.id, "clerk-user-1");
+  assert.equal(session.user.role, "rater");
+  assert.deepEqual(session.user.allowedAssignmentIds, ["assign-ai-base-rate"]);
+});
+
 test("server policy disables demo session endpoint in external JWT mode", async () => {
   const { jwk } = createTestJwksKey("unit-key");
   const context = createApiContext({
@@ -7049,10 +7081,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         comparisonType: "initial_vs_final",
         modelAssistedCheckInclusionPolicy: "reported_separately_from_human_only_checks",
         metricOutputsByFamily: { customWeightedLoss: 0.08, weightedPairwiseLoss: 0.02 },
+        uncertaintyMethod: "bootstrap",
         uncertaintyIntervalType: "bootstrap_confidence_interval",
+        intervalLevel: 0.95,
         intervalConstructionMethod: "position_level_resampling",
+        resamplingUnit: "position",
         resampleCountOrDegreesOfFreedom: 1000,
         randomSeedOrResamplingArtifact: "seed-20261031",
+        intervalComparisonScope: "paired_difference_on_common_overlap_subset",
         saturationRiskThreshold: "best_model_within_human_band",
         createdBy: "demo-admin",
         timestamp: "2026-10-01T02:05:00.000Z",
@@ -9264,6 +9300,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(assignmentConflictScreen.status, 201);
 
+  const extendedRaterItemConflictTypes = ["item_selection_exposure", "adaptation_family_exposure", "near_duplicate_exposure", "prior_exposure"];
+  for (const conflictType of extendedRaterItemConflictTypes) {
+    const scopedConflict = await invokeApi(context, {
+      method: "POST",
+      url: "/api/v1/rater-item-conflicts",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        raterItemConflict: {
+          ...auxiliaryWorkflow.raterItemConflict,
+          id: `rater-item-conflict-${conflictType}`,
+          conflictType,
+          sourceFamilyId: undefined,
+          adaptationClusterId: "adaptation-family-voting-coursework",
+          nearDuplicateClusterId: "near-duplicate-voting-style",
+          independentBlindEligibilityEffect: "excluded_from_independent_blind_protected_denominators",
+        },
+      }),
+    });
+    assert.equal(scopedConflict.status, 201, conflictType);
+  }
+
   const nonBlockingAssignmentConflictScreen = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/assignments/assign-ai-base-rate/conflict-screen",
@@ -11225,6 +11282,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "critique_generation_provider_policies_approved",
   );
   assert.deepEqual(releaseReport.body.critiqueGenerationEvaluation.providerPolicyEvidence.reviewSections, []);
+  assert.equal(
+    releaseReport.body.critiqueGenerationEvaluation.generatorEvaluatorOverlap.releaseUseStatus,
+    "no_generator_evaluator_overlap_detected",
+  );
   assert.equal(releaseReport.body.critiqueGenerationEvaluation.aggregateCounts.generatedOutputs, 7);
   assert.equal(releaseReport.body.critiqueGenerationEvaluation.aggregateCounts.promotedToRating, 3);
   assert.equal(
@@ -11643,7 +11704,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.assignmentSelectionAudits.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelInferenceConfigs.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunEnvironments.length, 3);
-  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterItemConflicts.length, 2);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterItemConflicts.length, 2 + extendedRaterItemConflictTypes.length);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposureSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.releaseErrata.length, 2);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.scheduleStatusSnapshots.length, 1);
@@ -11659,7 +11720,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingEffortQuality.counts.submittedQaReviewCount, 1);
   assert.equal(releaseReport.body.ratingEffortQuality.counts.qaReviewExcludedCount, 1);
   assert.equal(releaseReport.body.ratingEffortQuality.protectedUseBlockSummary.validationBlockedCount, 0);
-  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterItemConflictCount, 2);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterItemConflictCount, 2 + extendedRaterItemConflictTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedReleaseErratumCount, 2);
   assert.equal(releaseReport.body.releaseClaimWarnings.counts.errataWarningCount, 2);
   const workflowErratumWarning = releaseReport.body.releaseClaimWarnings.apiDownloadWarningRows.find(
@@ -12015,7 +12076,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 114);
+  assert.equal(
+    (await auditStore.readWorkflowEvents()).length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 114 + extendedRaterItemConflictTypes.length,
+  );
 });
 
 test("comparability claims can bind default governance artifacts before custom records are submitted", async () => {

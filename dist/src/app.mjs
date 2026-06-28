@@ -5526,8 +5526,8 @@ async function refreshExternalSession(options = {}) {
     return null;
   }
   const claims = decodeJwtPayload(token);
-  const role = claimAtPath(claims, authConfig.roleClaim ?? "lmca_role");
-  const allowedAssignmentIds = normalizeAssignmentClaim(claimAtPath(claims, authConfig.assignmentsClaim ?? "lmca_assignments"));
+  const role = resolveExternalAuthClaim(claims, authConfig.roleClaim ?? "lmca_role");
+  const allowedAssignmentIds = normalizeAssignmentClaim(resolveExternalAuthClaim(claims, authConfig.assignmentsClaim ?? "lmca_assignments"));
   const displayName = clerk.user?.fullName || clerk.user?.primaryEmailAddress?.emailAddress || clerk.user?.id || "Clerk user";
   const missingClaims = !role || allowedAssignmentIds.length === 0;
   state.session = {
@@ -5629,7 +5629,22 @@ function decodeJwtPayload(token) {
 function claimAtPath(payload, path) {
   return String(path)
     .split(".")
+    .filter(Boolean)
     .reduce((value, key) => (value && typeof value === "object" ? value[key] : undefined), payload);
+}
+
+function resolveExternalAuthClaim(payload, path) {
+  const direct = claimAtPath(payload, path);
+  if (direct !== undefined) return direct;
+
+  const pathParts = String(path).split(".").filter(Boolean);
+  if (pathParts.length !== 1) return undefined;
+  const claimName = pathParts[0];
+  for (const metadataPath of ["public_metadata", "metadata", "user_metadata"]) {
+    const value = claimAtPath(payload, `${metadataPath}.${claimName}`);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 function normalizeAssignmentClaim(value) {

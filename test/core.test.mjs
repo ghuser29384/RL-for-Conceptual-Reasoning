@@ -6213,10 +6213,40 @@ test("critique-generation evaluation reports generation denominators separately 
   assert.deepEqual(report.providerPolicyEvidence.reviewSections, []);
   assert.equal(report.runRows[0].modelProviderPolicyBinding.generator.status, "model_provider_policy_approved");
   assert.equal(report.runRows[0].modelProviderPolicyBinding.modelJudge.status, "model_provider_policy_approved");
+  assert.equal(report.generatorEvaluatorOverlap.releaseUseStatus, "no_generator_evaluator_overlap_detected");
+  assert.equal(report.generatorEvaluatorOverlap.counts.evaluatorOverlapCount, 0);
   assert.equal(report.runRows[0].qualityMetrics.ratedPromotedOverall.mean, 0.14);
   assert.equal(report.runRows[0].qualityMetrics.passAtThresholdRate, 0);
   assert.equal(report.runRows[0].qualityMetrics.bestOfNByPosition[0].budgetNormalized, true);
   assert.equal(report.releaseUseStatus, "generation_evaluation_separate_with_blind_rating_coverage");
+});
+
+test("critique-generation evaluation discloses generator evaluator overlap", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-generation-overlap-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const overlappingRun = {
+    ...critiqueGenerationRuns[0],
+    id: "generation-run-overlap",
+    requestedModelAlias: fullRubricEvaluationRun.requestedModelAlias,
+    resolvedModelSnapshot: fullRubricEvaluationRun.resolvedModelSnapshot,
+  };
+  const report = buildCritiqueGenerationEvaluationReport(
+    "release-test",
+    snapshot,
+    [overlappingRun],
+    seedRatings,
+    positions,
+    critiques,
+    adjudicationMemos,
+    { evaluationRuns: [fullRubricEvaluationRun] },
+  );
+  assert.equal(report.generatorEvaluatorOverlap.releaseUseStatus, "generator_evaluator_or_judge_overlap_disclosed");
+  assert.equal(report.generatorEvaluatorOverlap.counts.evaluatorOverlapCount, 1);
+  assert.equal(report.generatorEvaluatorOverlap.evaluatorOverlapRows[0].overlapBasis, "exact_resolved_snapshot");
 });
 
 test("metric-family eligibility keeps pairwise and pointwise denominators separate", () => {
@@ -6682,6 +6712,18 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
     appendixCComparabilityFlag: "appendix_c_scale_candidate",
     targetLabelSnapshotId: snapshot.id,
   };
+  const submittedRunWithUncertainty = {
+    ...submittedRun,
+    id: "human-ceiling-submitted-appendix-c-with-uncertainty",
+    uncertaintyMethod: "bootstrap",
+    intervalType: "confidence_interval",
+    intervalLevel: 0.95,
+    intervalConstructionMethod: "position_level_resampling",
+    resamplingUnit: "position",
+    resampleCount: 2000,
+    randomSeed: "human-ceiling-seed-20261031",
+    intervalComparisonScope: "paired_difference_on_common_overlap_subset",
+  };
   const validationDesign = buildValidationDesignReport(seedRatings, positions, critiques, { humanCeilingRuns: [submittedRun] });
   assert.equal(validationDesign.status, "appendix_c_scale");
   assert.equal(validationDesign.currentScale.computedFloorMet, false);
@@ -6693,7 +6735,19 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
   });
   assert.equal(humanCeiling.validationScope.appendixCScaleStatus, "appendix_c_scale");
   assert.equal(humanCeiling.validationScope.submittedValidationEvidence.bestRunId, "human-ceiling-submitted-appendix-c");
-  assert.equal(humanCeiling.releaseUseStatus, "human_ceiling_claims_allowed_with_declared_uncertainty");
+  assert.equal(humanCeiling.submittedHumanCeilingUncertainty.status, "submitted_human_ceiling_uncertainty_review_required");
+  assert.equal(humanCeiling.submittedHumanCeilingUncertainty.rows[0].status, "human_ceiling_uncertainty_provenance_review_required");
+  assert.ok(humanCeiling.submittedHumanCeilingUncertainty.rows[0].reviewReasons.includes("intervalType"));
+  assert.equal(humanCeiling.releaseUseStatus, "human_ceiling_uncertainty_provenance_required");
+
+  const completeHumanCeiling = buildHumanCeilingAndSaturationReport("release-test", snapshot, seedRatings, positions, critiques, [fullRubricEvaluationRun], {
+    humanCeilingRuns: [submittedRunWithUncertainty],
+  });
+  assert.equal(completeHumanCeiling.submittedHumanCeilingUncertainty.status, "submitted_human_ceiling_uncertainty_complete");
+  assert.equal(completeHumanCeiling.submittedHumanCeilingUncertainty.activeRunId, "human-ceiling-submitted-appendix-c-with-uncertainty");
+  assert.equal(completeHumanCeiling.uncertaintyPolicy.intervalType, "confidence_interval");
+  assert.equal(completeHumanCeiling.uncertaintyPolicy.resamplingUnit, "position");
+  assert.equal(completeHumanCeiling.releaseUseStatus, "human_ceiling_claims_allowed_with_declared_uncertainty");
 
   const releaseReport = buildOctoberReleaseReport(
     "release-test",
@@ -6704,7 +6758,7 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
     seedCertificationAttempts,
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
-    { humanCeilingRuns: [submittedRun] },
+    { humanCeilingRuns: [submittedRunWithUncertainty] },
   );
   assert.equal(releaseReport.validationDesign.status, "appendix_c_scale");
   assert.equal(releaseReport.targetGaps.validationCritiquesRemaining, 0);
@@ -7957,6 +8011,80 @@ test("rater composition conflict report exposes release-critical dominance and c
   assert.equal(conflicted.conflictRows[0].conflictType, "selected_critique");
   assert.equal(conflicted.conflictRows[0].releaseBlocking, true);
   assert.equal(conflicted.releaseUseStatus, "rater_conflict_review_required");
+
+  const votingStyleRating = seedRatings.find((rating) => rating.id === "rating-voting-style-a");
+  const scopedSnapshot = createLabelSnapshot(
+    "snapshot-rater-composition-full-conflicts",
+    "release-test",
+    [votingStyleRating],
+    [{ positionId: "pos-voting", critiqueId: "crit-voting-style" }],
+  );
+  const scopedPositions = positions.map((position) =>
+    position.id === "pos-voting"
+      ? {
+          ...position,
+          sourceId: "source-voting-coursework",
+          sourceFamilyId: "source-family-voting-coursework",
+          adaptationClusterId: "adaptation-family-voting-coursework",
+        }
+      : position,
+  );
+  const scopedCritiques = critiques.map((critique) =>
+    critique.id === "crit-voting-style"
+      ? {
+          ...critique,
+          nearDuplicateClusterId: "near-duplicate-voting-style",
+          sourceAnchorExampleId: "public-example-voting-style",
+        }
+      : critique,
+  );
+  const fullyConflictedProfiles = raterProfiles.map((profile) =>
+    profile.id === "rater-c"
+      ? {
+          ...profile,
+          priorExposure: {
+            ...profile.priorExposure,
+            authoredCritiqueIds: ["crit-voting-style"],
+            selectedPositionIds: ["pos-voting"],
+            selectedItemIds: ["pos-voting::crit-voting-style"],
+            submittedSourceIds: ["source-voting-coursework"],
+            generatedCritiqueIds: ["crit-voting-style"],
+            editedItemIds: ["pos-voting::crit-voting-style"],
+            adaptationClusterIds: ["adaptation-family-voting-coursework"],
+            sourceFamilyIds: ["source-family-voting-coursework"],
+            nearDuplicateClusterIds: ["near-duplicate-voting-style"],
+            publicExampleIds: ["public-example-voting-style"],
+            priorPositionClusterIds: ["cluster-voting"],
+          },
+        }
+      : profile,
+  );
+  const fullyConflicted = buildRaterCompositionConflictReport(
+    "release-test",
+    scopedSnapshot,
+    [votingStyleRating],
+    scopedPositions,
+    fullyConflictedProfiles,
+    { critiqueList: scopedCritiques },
+  );
+  assert.equal(fullyConflicted.releaseUseStatus, "rater_conflict_review_required");
+  assert.deepEqual(
+    fullyConflicted.conflictRows.map((row) => row.conflictType).sort(),
+    [
+      "adaptation_family_exposure",
+      "authored_critique",
+      "edited_item",
+      "generated_critique",
+      "item_selection_exposure",
+      "near_duplicate_exposure",
+      "prior_exposure",
+      "public_example_exposure",
+      "selected_position",
+      "source_family_exposure",
+      "submitted_source",
+    ],
+  );
+  assert.equal(fullyConflicted.conflictRows.every((row) => row.releaseBlocking), true);
 });
 
 test("release report requires evidence-backed submitted rater profiles for release-used ratings", () => {

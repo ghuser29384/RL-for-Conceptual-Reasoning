@@ -20,8 +20,8 @@ Use these environment variables for production:
 - `LMCA_AUTH_ISSUER`: exact issuer URL from the identity provider.
 - `LMCA_AUTH_AUDIENCE`: expected API audience for annotation-platform access tokens.
 - `LMCA_AUTH_JWKS_URL`: identity-provider JWKS endpoint for RS256 token verification.
-- `LMCA_AUTH_ROLE_CLAIM`: optional, defaults to `lmca_role`.
-- `LMCA_AUTH_ASSIGNMENTS_CLAIM`: optional, defaults to `lmca_assignments`.
+- `LMCA_AUTH_ROLE_CLAIM`: optional, defaults to `lmca_role`. For default simple claim names, the server first reads the top-level JWT claim, then Clerk-style `public_metadata`, `metadata`, or `user_metadata`.
+- `LMCA_AUTH_ASSIGNMENTS_CLAIM`: optional, defaults to `lmca_assignments`. For default simple claim names, the same metadata fallback applies.
 - `LMCA_REQUIRE_REAL_AUTH=true`: fail closed if the deployment is not configured for external JWT auth.
 - `LMCA_AUDIT_STORE=postgres`: routes all persisted rating/audit/certification/benchmark events to Postgres.
 - `POSTGRES_URL` or `DATABASE_URL`: Postgres connection string.
@@ -73,4 +73,4 @@ Use a least-privilege app database role when you move normalized reads/writes be
 
 Protected API routes now authenticate through the configured auth mode. Demo sessions are only available when `LMCA_AUTH_MODE=demo`; `/api/sessions` returns `demo_sessions_disabled` when external JWT auth is enabled.
 
-External tokens must pass issuer, audience, expiry, and RS256 JWKS signature checks. The role claim drives server-side route authorization, and the assignment claim drives rater write authorization. Admin-only hidden benchmark routes remain admin-only; append-only audit reads accept `admin` or `auditor`.
+External tokens must pass issuer, audience, expiry, and RS256 JWKS signature checks. The role claim drives server-side route authorization, and the assignment claim drives rater write authorization. With Clerk, the `lmca` JWT template can emit top-level `lmca_role` and `lmca_assignments` claims or include those default names in `public_metadata`. Admin-only hidden benchmark routes remain admin-only; append-only audit reads accept `admin` or `auditor`.

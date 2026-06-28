@@ -79,10 +79,10 @@ export function mapClaimsToUser(payload, config) {
   const subject = payload?.sub;
   if (!subject || typeof subject !== "string") return { ok: false, error: "missing_external_jwt_subject" };
 
-  const role = String(claimAtPath(payload, config.roleClaim) ?? "");
+  const role = String(resolveExternalAuthClaim(payload, config.roleClaim) ?? "");
   if (!allowedRoles.has(role)) return { ok: false, error: "missing_or_invalid_external_jwt_role" };
 
-  const allowedAssignmentIds = normalizeAssignmentClaim(claimAtPath(payload, config.assignmentsClaim), role);
+  const allowedAssignmentIds = normalizeAssignmentClaim(resolveExternalAuthClaim(payload, config.assignmentsClaim), role);
   const displayName = displayNameFromClaims(payload);
   return {
     ok: true,
@@ -153,6 +153,20 @@ function claimAtPath(payload, path) {
     .split(".")
     .filter(Boolean)
     .reduce((value, key) => (value && typeof value === "object" ? value[key] : undefined), payload);
+}
+
+function resolveExternalAuthClaim(payload, path) {
+  const direct = claimAtPath(payload, path);
+  if (direct !== undefined) return direct;
+
+  const pathParts = String(path).split(".").filter(Boolean);
+  if (pathParts.length !== 1) return undefined;
+  const claimName = pathParts[0];
+  for (const metadataPath of ["public_metadata", "metadata", "user_metadata"]) {
+    const value = claimAtPath(payload, `${metadataPath}.${claimName}`);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 function constantTimeStringEqual(a, b) {
