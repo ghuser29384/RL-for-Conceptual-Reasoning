@@ -844,12 +844,21 @@ function buildEffectiveVerificationRecords(submittedRecords = [], baseRecords = 
 const VERIFICATION_EVIDENCE_SOURCE_EXPOSURE_STATUSES = ["source_blind", "post_lock_source_visible", "source_identifiable", "not_applicable"];
 const VERIFICATION_EVIDENCE_PROTECTED_CONTENT_STATUSES = ["none", "protected_content_absent", "protected_content_redacted", "protected_content_present_authorized"];
 const VERIFICATION_EVIDENCE_MODEL_ASSISTANCE_STATUSES = ["none", "model_assisted_retrieval", "model_generated_summary", "model_suggested_source"];
+const VERIFICATION_EVIDENCE_TYPES = [
+  "external_citation",
+  "immutable_snapshot",
+  "internal_expert_note",
+  "supplied_item_text",
+  "model_assisted_material",
+  "no_external_material_required",
+];
 const VERIFICATION_EVIDENCE_BLINDING_IMPACT_STATUSES = [
   "source_blind_release_safe",
   "post_lock_nonblind_evidence",
   "source_assisted_review_required",
   "protected_content_quarantined",
 ];
+const VERIFICATION_EVIDENCE_AUDIENCE_FIELDS = ["shownToOriginalRater", "shownToChecker", "shownToAdjudicator"];
 
 function normalizeSubmittedVerificationRecord(record) {
   const { positionId, critiqueId } = itemRefFromWorkflowArtifact(record);
@@ -891,6 +900,7 @@ function defaultVerificationEvidenceArtifactsForRecord(record) {
       verificationRecordId: record.id,
       itemId: makeItemId(record.positionId, record.critiqueId),
       claimRef: record.claimChecked ?? record.claim ?? record.id,
+      evidenceType: record.verificationStatus === "not_needed" ? "no_external_material_required" : "internal_expert_note",
       citation: material,
       snapshotContentHash: `sha256:verification-evidence-${record.id}-${index + 1}`,
       retrievedAt: record.createdAt ?? record.timestamp ?? "2026-10-01T00:00:00.000Z",
@@ -901,6 +911,9 @@ function defaultVerificationEvidenceArtifactsForRecord(record) {
       sourceAssistedFlag: false,
       sourceIdentifiabilityFlag: false,
       protectedContentFlag: false,
+      shownToOriginalRater: false,
+      shownToChecker: true,
+      shownToAdjudicator: String(record.exposureStatus ?? "").includes("adjudication"),
       blindingImpactStatus: String(record.exposureStatus ?? "").includes("post_initial_lock") ? "post_lock_nonblind_evidence" : "source_blind_release_safe",
       evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
       createdBy: record.verifierId ?? "seed-verifier",
@@ -916,14 +929,19 @@ function normalizeSubmittedVerificationEvidenceArtifact(artifact, rowSource = "s
   const protectedContentExposureStatus = artifact.protectedContentExposureStatus ?? artifact.protectedContentStatus ?? null;
   const modelAssistanceStatus = artifact.modelAssistanceStatus ?? artifact.modelAssistedStatus ?? null;
   const blindingImpactStatus = artifact.blindingImpactStatus ?? artifact.blindingStatus ?? null;
+  const evidenceType = artifact.evidenceType ?? artifact.type ?? null;
   const citation = firstDefined([artifact.citation, artifact.sourceCitation, artifact.evidenceCitation, artifact.url]);
   const snapshotContentHash = firstDefined([artifact.snapshotContentHash, artifact.snapshotHash, artifact.sourceSnapshotHash]);
   const nonblindEvidenceFlag = artifact.nonblindEvidenceFlag === true;
   const sourceAssistedFlag = artifact.sourceAssistedFlag === true;
   const sourceIdentifiabilityFlag = artifact.sourceIdentifiabilityFlag === true;
   const protectedContentFlag = artifact.protectedContentFlag === true;
+  const audienceReviewReasons = VERIFICATION_EVIDENCE_AUDIENCE_FIELDS
+    .map((field) => (typeof artifact[field] === "boolean" ? null : field))
+    .filter(Boolean);
   const reviewReasons = [
     requiredPromptFieldReason("claimRef", artifact.claimRef ?? artifact.claimChecked ?? artifact.claimId),
+    VERIFICATION_EVIDENCE_TYPES.includes(evidenceType) ? null : "evidenceType",
     requiredPromptFieldReason("citation", citation),
     requiredPromptFieldReason("snapshotContentHash", snapshotContentHash),
     String(snapshotContentHash ?? "").startsWith("sha256:") ? null : "snapshotContentHash",
@@ -935,6 +953,7 @@ function normalizeSubmittedVerificationEvidenceArtifact(artifact, rowSource = "s
     typeof artifact.sourceAssistedFlag === "boolean" ? null : "sourceAssistedFlag",
     typeof artifact.sourceIdentifiabilityFlag === "boolean" ? null : "sourceIdentifiabilityFlag",
     typeof artifact.protectedContentFlag === "boolean" ? null : "protectedContentFlag",
+    ...audienceReviewReasons,
     sourceExposureStatus && !["source_blind", "not_applicable"].includes(sourceExposureStatus) && !nonblindEvidenceFlag ? "nonblindEvidenceFlag" : null,
     sourceExposureStatus === "source_identifiable" && !sourceIdentifiabilityFlag ? "sourceIdentifiabilityFlag" : null,
     modelAssistanceStatus && modelAssistanceStatus !== "none" && !sourceAssistedFlag ? "sourceAssistedFlag" : null,
@@ -954,6 +973,7 @@ function normalizeSubmittedVerificationEvidenceArtifact(artifact, rowSource = "s
     verificationRecordId: artifact.verificationRecordId ?? artifact.recordId ?? null,
     verificationWorkspaceId: artifact.verificationWorkspaceId ?? artifact.workspaceId ?? null,
     claimRef: artifact.claimRef ?? artifact.claimChecked ?? artifact.claimId ?? null,
+    evidenceType,
     citation,
     snapshotArtifactId: artifact.snapshotArtifactId ?? null,
     snapshotContentHash,
@@ -965,6 +985,9 @@ function normalizeSubmittedVerificationEvidenceArtifact(artifact, rowSource = "s
     sourceAssistedFlag,
     sourceIdentifiabilityFlag,
     protectedContentFlag,
+    shownToOriginalRater: artifact.shownToOriginalRater === true,
+    shownToChecker: artifact.shownToChecker === true,
+    shownToAdjudicator: artifact.shownToAdjudicator === true,
     blindingImpactStatus,
     evidenceUsePolicy: artifact.evidenceUsePolicy ?? null,
     createdBy: artifact.createdBy ?? artifact.verifierId ?? null,
@@ -998,6 +1021,9 @@ function buildVerificationEvidenceProvenanceSummary(evidenceArtifacts = [], evid
     (artifact) => artifact.protectedContentFlag === true || artifact.protectedContentExposureStatus === "protected_content_present_authorized",
   );
   const modelAssistedArtifactIds = artifactIds((artifact) => artifact.modelAssistanceStatus && artifact.modelAssistanceStatus !== "none");
+  const shownToOriginalRaterArtifactIds = artifactIds((artifact) => artifact.shownToOriginalRater === true);
+  const shownToCheckerArtifactIds = artifactIds((artifact) => artifact.shownToChecker === true);
+  const shownToAdjudicatorArtifactIds = artifactIds((artifact) => artifact.shownToAdjudicator === true);
   const totalArtifactCount = evidenceArtifacts.length;
   const releaseUseStatus =
     !totalArtifactCount
@@ -1017,6 +1043,10 @@ function buildVerificationEvidenceProvenanceSummary(evidenceArtifacts = [], evid
     sourceAssistedEvidenceCount: sourceAssistedArtifactIds.length,
     protectedContentEvidenceCount: protectedContentArtifactIds.length,
     modelAssistedEvidenceCount: modelAssistedArtifactIds.length,
+    shownToOriginalRaterEvidenceCount: shownToOriginalRaterArtifactIds.length,
+    shownToCheckerEvidenceCount: shownToCheckerArtifactIds.length,
+    shownToAdjudicatorEvidenceCount: shownToAdjudicatorArtifactIds.length,
+    byEvidenceType: countBy(evidenceArtifacts, "evidenceType"),
     bySourceExposureStatus: countBy(evidenceArtifacts, "sourceExposureStatus"),
     byProtectedContentExposureStatus: countBy(evidenceArtifacts, "protectedContentExposureStatus"),
     byModelAssistanceStatus: countBy(evidenceArtifacts, "modelAssistanceStatus"),
@@ -1028,6 +1058,9 @@ function buildVerificationEvidenceProvenanceSummary(evidenceArtifacts = [], evid
     sourceAssistedArtifactIds,
     protectedContentArtifactIds,
     modelAssistedArtifactIds,
+    shownToOriginalRaterArtifactIds,
+    shownToCheckerArtifactIds,
+    shownToAdjudicatorArtifactIds,
     reviewSections: evidenceReviewSections,
     releaseUseStatus,
   };
@@ -2227,8 +2260,14 @@ export function customWeightedLossForDataset(humanRatings, modelRatings) {
 }
 
 export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabelVersion, positionToHumanOveralls, tieTolerance = 0) {
+  const options = typeof tieTolerance === "object" && tieTolerance !== null ? tieTolerance : { tieTolerance };
+  const resolvedTieTolerance = numberOrDefault(options.tieTolerance, 0);
+  const positionTextVersionIdsByPosition = options.positionTextVersionIdsByPosition ?? {};
+  const critiqueTextVersionIdsByPosition = options.critiqueTextVersionIdsByPosition ?? {};
+  const itemTextVersionIdsByItem = options.itemTextVersionIdsByItem ?? {};
   const nonTiedEdges = [];
   let excludedHumanTieEdges = 0;
+  const excludedHumanTieEdgeRows = [];
   const excludedNoPairPositions = [];
   Object.entries(positionToHumanOveralls).forEach(([positionId, critiqueScores]) => {
     const ids = Object.keys(critiqueScores);
@@ -2236,8 +2275,17 @@ export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabel
     ids.forEach((a, index) => {
       ids.slice(index + 1).forEach((b) => {
         const margin = Math.abs(critiqueScores[a] - critiqueScores[b]);
-        if (isTie(margin, tieTolerance)) {
+        const textVersionRefs = pairwiseEdgeTextVersionRefs(
+          positionId,
+          a,
+          b,
+          positionTextVersionIdsByPosition,
+          critiqueTextVersionIdsByPosition,
+          itemTextVersionIdsByItem,
+        );
+        if (isTie(margin, resolvedTieTolerance)) {
           excludedHumanTieEdges += 1;
+          excludedHumanTieEdgeRows.push({ positionId, critiqueA: a, critiqueB: b, humanMargin: margin, ...textVersionRefs });
           return;
         }
         positionEdgeCount += 1;
@@ -2247,6 +2295,7 @@ export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabel
           critiqueB: b,
           humanMargin: margin,
           marginBin: margin < 0.15 ? "low" : margin < 0.35 ? "medium" : "high",
+          ...textVersionRefs,
         });
       });
     });
@@ -2256,20 +2305,63 @@ export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabel
     id,
     labelSnapshotId,
     targetLabelVersion,
-    tieTolerance,
-    humanTieTolerance: tieTolerance,
-    modelTieTolerance: tieTolerance,
+    targetScoreField: options.targetScoreField ?? "overall",
+    humanTargetScoreSource: options.humanTargetScoreSource ?? `${labelSnapshotId}:${targetLabelVersion}:weighted_mean_overall`,
+    tieTolerance: resolvedTieTolerance,
+    humanTieTolerance: resolvedTieTolerance,
+    modelTieTolerance: resolvedTieTolerance,
     humanTiePolicy: "exclude_human_tied_pairs_from_pairwise_loss",
     modelTiePolicy: "score_model_tied_predictions_as_half_error",
-    scoreRoundingPolicy: tieTolerance === 0 ? "stored_exact" : "declared_tolerance",
+    scoreRoundingPolicy: resolvedTieTolerance === 0 ? "stored_exact" : "declared_tolerance",
     scoreQuantizationPolicy: "unit_interval_decimal_scores_no_bucket_quantization",
     positionIds: Object.keys(positionToHumanOveralls),
     critiqueIdsByPosition: Object.fromEntries(Object.entries(positionToHumanOveralls).map(([positionId, scores]) => [positionId, Object.keys(scores)])),
+    positionTextVersionIdsByPosition,
+    critiqueTextVersionIdsByPosition,
+    itemTextVersionIds: pairwiseSnapshotItemTextVersionIds(itemTextVersionIdsByItem, positionTextVersionIdsByPosition, critiqueTextVersionIdsByPosition),
+    itemTextVersionIdsByItem,
     nonTiedEdges,
     excludedHumanTieEdges,
+    excludedHumanTieEdgeRows,
     excludedNoPairPositions,
+    exclusions: {
+      humanTieEdgeCount: excludedHumanTieEdges,
+      humanTieEdges: excludedHumanTieEdgeRows,
+      noPairPositionIds: excludedNoPairPositions,
+      missingTextVersionItemIds: pairwiseMissingTextVersionItemIds(positionToHumanOveralls, itemTextVersionIdsByItem),
+    },
     frozenAt: new Date().toISOString(),
   };
+}
+
+function pairwiseEdgeTextVersionRefs(positionId, critiqueA, critiqueB, positionTextVersionIdsByPosition, critiqueTextVersionIdsByPosition, itemTextVersionIdsByItem) {
+  const itemA = makeItemId(positionId, critiqueA);
+  const itemB = makeItemId(positionId, critiqueB);
+  return {
+    positionTextVersionIds: positionTextVersionIdsByPosition[positionId] ?? [],
+    critiqueATextVersionIds: normalizeStringArray(critiqueTextVersionIdsByPosition[positionId]?.[critiqueA]) ?? [],
+    critiqueBTextVersionIds: normalizeStringArray(critiqueTextVersionIdsByPosition[positionId]?.[critiqueB]) ?? [],
+    itemATextVersionIds: normalizeStringArray(itemTextVersionIdsByItem[itemA]) ?? [],
+    itemBTextVersionIds: normalizeStringArray(itemTextVersionIdsByItem[itemB]) ?? [],
+  };
+}
+
+function pairwiseSnapshotItemTextVersionIds(itemTextVersionIdsByItem, positionTextVersionIdsByPosition, critiqueTextVersionIdsByPosition) {
+  return uniqueStrings([
+    ...Object.values(itemTextVersionIdsByItem).flatMap((ids) => normalizeStringArray(ids) ?? []),
+    ...Object.values(positionTextVersionIdsByPosition).flatMap((ids) => normalizeStringArray(ids) ?? []),
+    ...Object.values(critiqueTextVersionIdsByPosition).flatMap((byCritique) =>
+      Object.values(byCritique ?? {}).flatMap((ids) => normalizeStringArray(ids) ?? []),
+    ),
+  ]);
+}
+
+function pairwiseMissingTextVersionItemIds(positionToHumanOveralls, itemTextVersionIdsByItem) {
+  return Object.entries(positionToHumanOveralls).flatMap(([positionId, critiqueScores]) =>
+    Object.keys(critiqueScores)
+      .map((critiqueId) => makeItemId(positionId, critiqueId))
+      .filter((itemId) => !(normalizeStringArray(itemTextVersionIdsByItem[itemId]) ?? []).length),
+  );
 }
 
 export function pairwiseMarginDistribution(snapshot) {
@@ -3162,6 +3254,8 @@ export function aggregateRatings(positionId, critiqueId, ratings, status = "init
     .filter((item) => typeof item === "number");
   const raterSet = new Set(includedRatings.map((rating) => rating.raterId));
   const expertSet = new Set(includedRatings.filter((rating) => ["graduate", "phd", "expert", "admin"].includes(rating.raterTier)).map((rating) => rating.raterId));
+  const positionTextVersionIds = uniqueStrings(includedRatings.map((rating) => rating.positionTextVersionId).filter(Boolean));
+  const critiqueTextVersionIds = uniqueStrings(includedRatings.map((rating) => rating.critiqueTextVersionId).filter(Boolean));
   return {
     positionId,
     critiqueId,
@@ -3176,6 +3270,9 @@ export function aggregateRatings(positionId, critiqueId, ratings, status = "init
     uncertaintyFlag: detectEscalations(includedRatings).length > 0,
     finalLabelStatus: status,
     largestSingleRaterContributionShare: includedRatings.length ? round(1 / raterSet.size) : 0,
+    positionTextVersionIds,
+    critiqueTextVersionIds,
+    itemTextVersionIds: uniqueStrings([...positionTextVersionIds, ...critiqueTextVersionIds]),
   };
 }
 
@@ -3952,6 +4049,7 @@ export function buildTrainingExport(
     const overallA = itemA.weightedMeanScores.overall;
     const overallB = itemB.weightedMeanScores.overall;
     const preferred = overallA > overallB ? edge.critiqueA : edge.critiqueB;
+    const pairwiseMargin = round(Math.abs(overallA - overallB));
     return {
       id: `pref-${edge.positionId}-${edge.critiqueA}-${edge.critiqueB}`,
       positionId: edge.positionId,
@@ -3959,14 +4057,19 @@ export function buildTrainingExport(
       critiqueB: edge.critiqueB,
       pairwiseComparisonSnapshotId: pairwiseComparisonSnapshot.id,
       preferredCritiqueId: preferred,
-      preferenceWeight: round(Math.abs(overallA - overallB)),
+      preferenceWeight: pairwiseMargin,
       targetLabelVersion: labelSnapshot.targetLabelVersion,
+      labelMetadataByCritique: {
+        [edge.critiqueA]: trainingPreferenceLabelMetadata(itemA),
+        [edge.critiqueB]: trainingPreferenceLabelMetadata(itemB),
+      },
+      pairwiseMargin,
       marginBin: edge.marginBin,
-      lowMarginFlag: Math.abs(overallA - overallB) < (options.lowMarginThreshold ?? 0.2),
+      lowMarginFlag: pairwiseMargin < (options.lowMarginThreshold ?? 0.2),
       labelUncertaintyClass:
         itemA.uncertaintyFlag || itemB.uncertaintyFlag
           ? "review_before_training"
-          : Math.abs(overallA - overallB) < (options.lowMarginThreshold ?? 0.2)
+          : pairwiseMargin < (options.lowMarginThreshold ?? 0.2)
             ? "low_margin_downweight"
             : "standard_weighted_preference",
     };
@@ -4039,6 +4142,21 @@ export function buildTrainingExport(
       "LMCA evaluation metrics remain frozen report metrics, not optimized training losses.",
       "Label uncertainty, rater coverage, spread, and context-snapshot provenance are preserved for downstream exclusion or downweighting.",
     ],
+  };
+}
+
+function trainingPreferenceLabelMetadata(label) {
+  const lowClarityBranch = Number.isFinite(label?.weightedMeanScores?.clarity) && label.weightedMeanScores.clarity < 0.5;
+  return {
+    labelStatus: label?.finalLabelStatus ?? null,
+    raterCount: label?.raterCount ?? null,
+    expertCount: label?.expertCount ?? null,
+    spreadPreDiscussion: Number.isFinite(label?.spreadPreDiscussion) ? round(label.spreadPreDiscussion) : null,
+    spreadPostDiscussion: Number.isFinite(label?.spreadPostDiscussion) ? round(label.spreadPostDiscussion) : null,
+    unresolvedDisagreementClass: label?.uncertaintyFlag ? "review_before_training" : "none_recorded",
+    lowClarityBranch,
+    lowClarityPolicy: lowClarityBranch ? "non_clarity_subscores_provisional_or_downweighted" : "full_rubric_fields_available",
+    largestSingleRaterContributionShare: label?.largestSingleRaterContributionShare ?? null,
   };
 }
 
@@ -4136,11 +4254,45 @@ function buildEffectiveTrainingPairwiseComparisonSnapshot(
       labelSnapshot.id,
       labelSnapshot.targetLabelVersion,
       positionToOveralls,
+      pairwiseSnapshotOptionsFromLabelSnapshot(labelSnapshot, positionToOveralls),
     ),
     source: "computed_training_pairwise_snapshot",
     status: normalizedSubmitted.length ? "submitted_pairwise_snapshot_not_applicable_computed_used" : "computed_pairwise_snapshot_used",
     submittedPairwiseComparisonSnapshotId: null,
     ignoredPairwiseComparisonSnapshotIds: normalizedSubmitted.map((snapshot) => snapshot.id),
+  };
+}
+
+function pairwiseSnapshotOptionsFromLabelSnapshot(labelSnapshot, positionToOveralls) {
+  const positionTextVersionIdsByPosition = {};
+  const critiqueTextVersionIdsByPosition = {};
+  const itemTextVersionIdsByItem = {};
+  Object.entries(positionToOveralls).forEach(([positionId, critiqueScores]) => {
+    Object.keys(critiqueScores).forEach((critiqueId) => {
+      const itemId = makeItemId(positionId, critiqueId);
+      const label = labelSnapshot.itemLabels?.[itemId] ?? {};
+      const positionTextVersionIds = normalizeStringArray(label.positionTextVersionIds) ?? [];
+      const critiqueTextVersionIds = normalizeStringArray(label.critiqueTextVersionIds) ?? [];
+      if (positionTextVersionIds.length) {
+        positionTextVersionIdsByPosition[positionId] = uniqueStrings([
+          ...(positionTextVersionIdsByPosition[positionId] ?? []),
+          ...positionTextVersionIds,
+        ]);
+      }
+      critiqueTextVersionIdsByPosition[positionId] ??= {};
+      if (critiqueTextVersionIds.length) {
+        critiqueTextVersionIdsByPosition[positionId][critiqueId] = critiqueTextVersionIds;
+      }
+      itemTextVersionIdsByItem[itemId] = uniqueStrings([...positionTextVersionIds, ...critiqueTextVersionIds]);
+    });
+  });
+  return {
+    tieTolerance: 0,
+    targetScoreField: "overall",
+    humanTargetScoreSource: `${labelSnapshot.id}:${labelSnapshot.targetLabelVersion}:weightedMeanScores.overall`,
+    positionTextVersionIdsByPosition,
+    critiqueTextVersionIdsByPosition,
+    itemTextVersionIdsByItem,
   };
 }
 
@@ -4156,6 +4308,8 @@ function normalizeSubmittedPairwiseComparisonSnapshot(snapshot, labelSnapshot, p
     id,
     labelSnapshotId: snapshot.labelSnapshotId ?? labelSnapshot.id,
     targetLabelVersion: snapshot.targetLabelVersion ?? labelSnapshot.targetLabelVersion,
+    targetScoreField: snapshot.targetScoreField ?? "overall",
+    humanTargetScoreSource: snapshot.humanTargetScoreSource ?? `${snapshot.labelSnapshotId ?? labelSnapshot.id}:${snapshot.targetLabelVersion ?? labelSnapshot.targetLabelVersion}:weightedMeanScores.overall`,
     tieTolerance: numberOrDefault(snapshot.tieTolerance ?? snapshot.humanTieTolerance, 0),
     humanTieTolerance: numberOrDefault(snapshot.humanTieTolerance ?? snapshot.tieTolerance, 0),
     modelTieTolerance: numberOrDefault(snapshot.modelTieTolerance ?? snapshot.tieTolerance, 0),
@@ -4165,10 +4319,20 @@ function normalizeSubmittedPairwiseComparisonSnapshot(snapshot, labelSnapshot, p
     scoreQuantizationPolicy: snapshot.scoreQuantizationPolicy ?? "unit_interval_decimal_scores_no_bucket_quantization",
     positionIds,
     critiqueIdsByPosition,
+    positionTextVersionIdsByPosition: snapshot.positionTextVersionIdsByPosition ?? {},
+    critiqueTextVersionIdsByPosition: snapshot.critiqueTextVersionIdsByPosition ?? {},
     itemTextVersionIds: snapshot.itemTextVersionIds ?? [],
+    itemTextVersionIdsByItem: snapshot.itemTextVersionIdsByItem ?? {},
     nonTiedEdges: edges,
     excludedHumanTieEdges: snapshot.excludedHumanTieEdges ?? snapshot.excludedHumanTieEdgeCount ?? 0,
+    excludedHumanTieEdgeRows: snapshot.excludedHumanTieEdgeRows ?? snapshot.exclusions?.humanTieEdges ?? [],
     excludedNoPairPositions: snapshot.excludedNoPairPositions ?? [],
+    exclusions: snapshot.exclusions ?? {
+      humanTieEdgeCount: snapshot.excludedHumanTieEdges ?? snapshot.excludedHumanTieEdgeCount ?? 0,
+      humanTieEdges: snapshot.excludedHumanTieEdgeRows ?? [],
+      noPairPositionIds: snapshot.excludedNoPairPositions ?? [],
+      missingTextVersionItemIds: [],
+    },
     frozenAt: snapshot.frozenAt ?? snapshot.timestamp ?? now,
     snapshotSource: "submitted_workflow_pairwise_comparison_snapshot",
   };
@@ -8148,11 +8312,15 @@ export function buildCorrectnessVerificationReport(
       linkedEvidenceArtifactCount: linkedEvidenceArtifacts.length,
       completeEvidenceArtifactCount: completeEvidenceArtifacts.length,
       verificationEvidenceArtifactIds: linkedEvidenceArtifacts.map((artifact) => artifact.id),
+      verificationEvidenceTypes: uniqueStrings(linkedEvidenceArtifacts.map((artifact) => artifact.evidenceType).filter(Boolean)),
       verificationEvidenceProvenanceStatus: evidenceProvenanceStatus,
       nonblindEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.nonblindEvidenceFlag),
       sourceAssistedEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.sourceAssistedFlag),
       protectedContentEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.protectedContentFlag),
       modelAssistedEvidenceFlag: linkedEvidenceArtifacts.some((artifact) => artifact.modelAssistanceStatus && artifact.modelAssistanceStatus !== "none"),
+      evidenceShownToOriginalRaterFlag: linkedEvidenceArtifacts.some((artifact) => artifact.shownToOriginalRater),
+      evidenceShownToCheckerFlag: linkedEvidenceArtifacts.some((artifact) => artifact.shownToChecker),
+      evidenceShownToAdjudicatorFlag: linkedEvidenceArtifacts.some((artifact) => artifact.shownToAdjudicator),
       confidence: latestRecord?.confidence ?? null,
       verifierRole: latestRecord?.verifierRole ?? null,
       exposureStatus: latestRecord?.exposureStatus ?? "not_applicable",
@@ -8177,7 +8345,7 @@ export function buildCorrectnessVerificationReport(
       releaseRule: "Correctness-sensitive benchmark, validation, or public-release items must be verified or explicitly marked not_practicable by an expert/admin adjudicator.",
       ratingPreservation: "Verification materials are linked records and do not overwrite blind initial ratings.",
       evidenceArtifactRule:
-        "VerificationEvidenceArtifact rows preserve citation/snapshot, retrieval time, source/protected/model-assistance exposure status, and nonblind/source-assisted flags.",
+        "VerificationEvidenceArtifact rows preserve evidence type, citation/snapshot, retrieval time, source/protected/model-assistance exposure status, audience exposure, and nonblind/source-assisted flags.",
     },
     requiredItemCount: requiredRows.length,
     linkedRecordCount: records.length,
@@ -14391,7 +14559,14 @@ const REQUIRED_TASK_OUTPUT_USES = ["label_snapshot", "routing", "calibration", "
 const REQUIRED_SCORE_INPUT_SPLITS = ["release_critical", "validation", "hidden_benchmark"];
 const REQUIRED_SERVER_SIDE_DRAFT_LANES = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const PROHIBITED_DRAFT_CLIENT_PERSISTENCE = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
-const REQUIRED_RUBRIC_LINT_RULES = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const REQUIRED_RUBRIC_LINT_RULES = [
+  "missing_required_score",
+  "clarity_branch_consistency",
+  "correctness_strength_consistency",
+  "centrality_strength_product_gap",
+  "dead_weight_rationale",
+  "verification_status_missing",
+];
 const REQUIRED_ITEM_ISSUE_CATEGORIES = [
   "source_leakage",
   "missing_context",

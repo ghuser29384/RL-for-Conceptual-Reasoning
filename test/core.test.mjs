@@ -554,7 +554,14 @@ const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudicat
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
 const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
-const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const rubricLintRules = [
+  "missing_required_score",
+  "clarity_branch_consistency",
+  "correctness_strength_consistency",
+  "centrality_strength_product_gap",
+  "dead_weight_rationale",
+  "verification_status_missing",
+];
 const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
@@ -2275,6 +2282,23 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
 
+  const missingCorrectnessStrengthLintReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    rubricLintConfigs: [
+      {
+        ...completeRatingExperienceFixtures().rubricLintConfigs[0],
+        id: "rubric-lint-config-missing-correctness-strength",
+        lintRuleIds: rubricLintRules.filter((rule) => rule !== "correctness_strength_consistency"),
+      },
+    ],
+  });
+  assert.equal(missingCorrectnessStrengthLintReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    missingCorrectnessStrengthLintReport.reviewSections.some(
+      (section) => section.artifactType === "rubric_lint_config" && section.reason === "lintRuleIds:correctness_strength_consistency",
+    ),
+  );
+
   const unsafeRationaleSpanReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
     rationaleEvidenceSpans: [
@@ -3756,13 +3780,32 @@ test("custom-loss dataset coverage distinguishes low-clarity and full-rubric ite
   assert.deepEqual(result.coverage, { nItemsScored: 2, nLowClarityBranchItems: 1, nFullRubricItems: 1 });
 });
 
-test("pairwise snapshots freeze comparison denominators and margin bins", () => {
+test("pairwise snapshots freeze comparison denominators, text versions, and margin bins", () => {
   const snapshot = buildPairwiseComparisonSnapshot("snap", "labels", "adjudicated", {
     p1: { a: 0.9, b: 0.8, c: 0.5 },
     p2: { d: 0.5 },
+  }, {
+    humanTargetScoreSource: "labels:adjudicated:weightedMeanScores.overall",
+    positionTextVersionIdsByPosition: { p1: ["ptv-p1-v1"], p2: ["ptv-p2-v1"] },
+    critiqueTextVersionIdsByPosition: { p1: { a: ["ctv-a-v1"], b: ["ctv-b-v1"], c: ["ctv-c-v1"] }, p2: { d: ["ctv-d-v1"] } },
+    itemTextVersionIdsByItem: {
+      "p1::a": ["ptv-p1-v1", "ctv-a-v1"],
+      "p1::b": ["ptv-p1-v1", "ctv-b-v1"],
+      "p1::c": ["ptv-p1-v1", "ctv-c-v1"],
+      "p2::d": ["ptv-p2-v1", "ctv-d-v1"],
+    },
   });
   assert.equal(snapshot.nonTiedEdges.length, 3);
   assert.deepEqual(snapshot.excludedNoPairPositions, ["p2"]);
+  assert.equal(snapshot.humanTargetScoreSource, "labels:adjudicated:weightedMeanScores.overall");
+  assert.equal(snapshot.targetScoreField, "overall");
+  assert.deepEqual(snapshot.positionTextVersionIdsByPosition.p1, ["ptv-p1-v1"]);
+  assert.deepEqual(snapshot.nonTiedEdges[0].positionTextVersionIds, ["ptv-p1-v1"]);
+  assert.deepEqual(snapshot.nonTiedEdges[0].itemATextVersionIds, ["ptv-p1-v1", "ctv-a-v1"]);
+  assert.deepEqual(snapshot.itemTextVersionIds.sort(), ["ctv-a-v1", "ctv-b-v1", "ctv-c-v1", "ctv-d-v1", "ptv-p1-v1", "ptv-p2-v1"]);
+  assert.equal(snapshot.exclusions.humanTieEdgeCount, 0);
+  assert.deepEqual(snapshot.exclusions.noPairPositionIds, ["p2"]);
+  assert.deepEqual(snapshot.exclusions.missingTextVersionItemIds, []);
   assert.deepEqual(pairwiseMarginDistribution(snapshot).bins, { low: 1, medium: 1, high: 1 });
 });
 
@@ -4061,6 +4104,11 @@ test("correctness verification report links VerificationRecords and blocks unres
   assert.equal(report.verificationEvidenceProvenanceSummary.reviewRequiredArtifactCount, 0);
   assert.equal(report.verificationEvidenceProvenanceSummary.sourceBlindEvidenceCount, 1);
   assert.equal(report.verificationEvidenceProvenanceSummary.postLockNonblindEvidenceCount, 3);
+  assert.equal(report.verificationEvidenceProvenanceSummary.shownToOriginalRaterEvidenceCount, 0);
+  assert.equal(report.verificationEvidenceProvenanceSummary.shownToCheckerEvidenceCount, 4);
+  assert.equal(report.verificationEvidenceProvenanceSummary.shownToAdjudicatorEvidenceCount, 3);
+  assert.equal(report.verificationEvidenceProvenanceSummary.byEvidenceType.internal_expert_note, 3);
+  assert.equal(report.verificationEvidenceProvenanceSummary.byEvidenceType.no_external_material_required, 1);
   assert.equal(report.verificationEvidenceProvenanceSummary.bySourceExposureStatus.post_lock_source_visible, 3);
   assert.equal(report.verificationEvidenceProvenanceSummary.releaseUseStatus, "post_lock_nonblind_verification_evidence_disclosed");
 
@@ -4118,6 +4166,7 @@ test("release report applies submitted adjudication and verification workflow ar
           verificationRecordId: "verification-submitted-voting-bullet",
           itemId: "pos-voting::crit-voting-bullet",
           claimRef: "Approval voting strategic incentives were verified by expert review.",
+          evidenceType: "internal_expert_note",
           citation: "Expert voting-theory review note, post-lock source-blind snapshot.",
           snapshotContentHash: "sha256:verification-evidence-submitted-voting-bullet",
           retrievedAt: "2026-06-12T11:59:00.000Z",
@@ -4128,6 +4177,9 @@ test("release report applies submitted adjudication and verification workflow ar
           sourceAssistedFlag: false,
           sourceIdentifiabilityFlag: false,
           protectedContentFlag: false,
+          shownToOriginalRater: false,
+          shownToChecker: true,
+          shownToAdjudicator: true,
           blindingImpactStatus: "source_blind_release_safe",
           evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
           createdBy: "expert-workflow",
@@ -4181,18 +4233,98 @@ test("release report applies submitted adjudication and verification workflow ar
   assert.equal(verificationRow.confidence, 0.86);
   assert.deepEqual(verificationRow.verificationEvidenceArtifactIds, ["verification-evidence-submitted-voting-bullet"]);
   assert.equal(verificationRow.verificationEvidenceProvenanceStatus, "verification_evidence_artifact_complete");
+  assert.equal(verificationRow.evidenceShownToOriginalRaterFlag, false);
+  assert.equal(verificationRow.evidenceShownToCheckerFlag, true);
+  assert.equal(verificationRow.evidenceShownToAdjudicatorFlag, true);
+  assert.deepEqual(verificationRow.verificationEvidenceTypes, ["internal_expert_note"]);
   assert.equal(verificationRow.timestamp, "2026-06-12T12:00:00.000Z");
   assert.equal(report.correctnessVerification.submittedEvidenceArtifactCount, 1);
   assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).sourceExposureStatus, "source_blind");
+  assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).evidenceType, "internal_expert_note");
+  assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).shownToOriginalRater, false);
+  assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).shownToChecker, true);
+  assert.equal(report.correctnessVerification.verificationEvidenceArtifactRows.at(-1).shownToAdjudicator, true);
   assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.totalArtifactCount, 6);
   assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.sourceBlindEvidenceCount, 2);
   assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.postLockNonblindEvidenceCount, 4);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.shownToOriginalRaterEvidenceCount, 0);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.shownToCheckerEvidenceCount, 6);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.shownToAdjudicatorEvidenceCount, 5);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.byEvidenceType.internal_expert_note, 5);
+  assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.byEvidenceType.no_external_material_required, 1);
   assert.equal(
     report.correctnessVerification.verificationEvidenceProvenanceSummary.completeArtifactIds.includes("verification-evidence-submitted-voting-bullet"),
     true,
   );
   assert.equal(report.correctnessVerification.verificationEvidenceProvenanceSummary.releaseUseStatus, "post_lock_nonblind_verification_evidence_disclosed");
   assert.equal(report.correctnessVerification.releaseUseStatus, "pass");
+
+  const audienceReviewReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      verificationRecords: [
+        {
+          id: "verification-submitted-audience-review",
+          itemId: "pos-voting::crit-voting-bullet",
+          evidenceArtifactIds: ["verification-evidence-submitted-audience-review"],
+          claimChecked: "Approval voting strategic incentives were verified by expert review.",
+          verificationType: "logical",
+          verificationMaterials: ["Expert reviewed standard approval-voting incentive structure after initial rating lock."],
+          verifierId: "expert-workflow",
+          verifierRole: "expert",
+          verificationStatus: "verified",
+          verificationResult: "Expert review resolved the required conceptual incentive check.",
+          confidence: 0.86,
+          exposureStatus: "post_initial_lock_adjudication",
+          timestamp: "2026-06-12T12:20:00.000Z",
+          createdAt: "2026-06-12T12:20:00.000Z",
+        },
+      ],
+      verificationEvidenceArtifacts: [
+        {
+          id: "verification-evidence-submitted-audience-review",
+          verificationRecordId: "verification-submitted-audience-review",
+          itemId: "pos-voting::crit-voting-bullet",
+          claimRef: "Approval voting strategic incentives were verified by expert review.",
+          evidenceType: "internal_expert_note",
+          citation: "Expert voting-theory review note, post-lock source-blind snapshot.",
+          snapshotContentHash: "sha256:verification-evidence-submitted-audience-review",
+          retrievedAt: "2026-06-12T12:19:00.000Z",
+          sourceExposureStatus: "source_blind",
+          protectedContentExposureStatus: "protected_content_absent",
+          modelAssistanceStatus: "none",
+          nonblindEvidenceFlag: false,
+          sourceAssistedFlag: false,
+          sourceIdentifiabilityFlag: false,
+          protectedContentFlag: false,
+          shownToOriginalRater: "no",
+          shownToChecker: true,
+          blindingImpactStatus: "source_blind_release_safe",
+          evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
+          createdBy: "expert-workflow",
+          createdAt: "2026-06-12T12:19:00.000Z",
+        },
+      ],
+    },
+  );
+  const audienceReviewArtifact = audienceReviewReport.correctnessVerification.verificationEvidenceArtifactRows.find(
+    (row) => row.id === "verification-evidence-submitted-audience-review",
+  );
+  assert.equal(audienceReviewArtifact.reviewReasons.includes("shownToOriginalRater"), true);
+  assert.equal(audienceReviewArtifact.reviewReasons.includes("shownToAdjudicator"), true);
+  assert.equal(
+    audienceReviewReport.correctnessVerification.verificationEvidenceProvenanceSummary.reviewRequiredArtifactIds.includes(
+      "verification-evidence-submitted-audience-review",
+    ),
+    true,
+  );
 
   const memoRow = report.adjudicationMemoAudit.memoRows.find((row) => row.memoId === "adjudication-memo-submitted-voting-bullet");
   assert.equal(report.adjudicationMemoAudit.counts.memoCount, adjudicationMemos.length + 1);
@@ -4426,8 +4558,25 @@ test("training export preserves uncertainty and excludes protected splits", () =
   assert.equal(trainingExport.ratingContextSnapshots[0].humanModelParityStatus, "matchable_target_only");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferredCritiqueId, "crit-ai-base-rate");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferenceWeight, 0.46);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].pairwiseMargin, 0.46);
   assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPairWeight, 1);
   assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPreferenceWeight, 0.46);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].labelStatus, "initial_only");
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].raterCount, 2);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].expertCount, 2);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].lowClarityBranch, false);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].spreadPostDiscussion, 0.04);
+  assert.equal(trainingExport.pairwiseComparisonSnapshot.humanTargetScoreSource, "snapshot-training-test:initial_mean:weightedMeanScores.overall");
+  assert.deepEqual(trainingExport.pairwiseComparisonSnapshot.positionTextVersionIdsByPosition["pos-ai-prior"], ["ptv-ai-prior-v1"]);
+  assert.deepEqual(
+    trainingExport.pairwiseComparisonSnapshot.critiqueTextVersionIdsByPosition["pos-ai-prior"]["crit-ai-base-rate"],
+    ["ctv-ai-base-rate-v1"],
+  );
+  assert.deepEqual(
+    trainingExport.pairwiseComparisonSnapshot.nonTiedEdges[0].itemATextVersionIds,
+    ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
+  );
+  assert.deepEqual(trainingExport.pairwiseComparisonSnapshot.exclusions.missingTextVersionItemIds, []);
   assert.equal(trainingExport.optimizedSurrogateObjective.lmcaEvaluationMetricsSeparate, true);
   assert.equal(trainingExport.scalarRewardTargets[0].positionBalancedWeight, 0.5);
   assert.match(trainingExport.scalarRewardTargets[0].rewardPolicy, /not_personal_agreement/);

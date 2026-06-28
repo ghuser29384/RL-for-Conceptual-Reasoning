@@ -483,7 +483,14 @@ const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchm
 const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const rubricDimensions = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
-const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const rubricLintRules = [
+  "missing_required_score",
+  "clarity_branch_consistency",
+  "correctness_strength_consistency",
+  "centrality_strength_product_gap",
+  "dead_weight_rationale",
+  "verification_status_missing",
+];
 const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
@@ -5612,6 +5619,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         verificationRecordId: "verification-workflow-new",
         itemId: "pos-ai-prior::crit-ai-base-rate",
         claimRef: "Whether the base-rate selectivity objection is externally verifiable or conceptual.",
+        evidenceType: "internal_expert_note",
         citation: "Adjudicator reviewed the supplied position and critique after initial lock.",
         snapshotContentHash: "sha256:verification-evidence-workflow-new",
         retrievedAt: "2026-06-12T11:58:00.000Z",
@@ -5622,6 +5630,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         sourceAssistedFlag: false,
         sourceIdentifiabilityFlag: false,
         protectedContentFlag: false,
+        shownToOriginalRater: false,
+        shownToChecker: true,
+        shownToAdjudicator: true,
         blindingImpactStatus: "post_lock_nonblind_evidence",
         evidenceUsePolicy: "post-lock correctness evidence only; not visible before blind initial rating and not a direct score override",
         createdBy: "demo-expert",
@@ -5685,6 +5696,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         verificationRecordId: "verification-workflow-new",
         itemId: "pos-ai-prior::crit-ai-base-rate",
         claimRef: "Whether the evidence artifact has a canonical hash.",
+        evidenceType: "internal_expert_note",
         citation: "Expert-reviewed verification note.",
         snapshotContentHash: "verification-evidence-invalid-hash",
         retrievedAt: "2026-06-12T11:58:00.000Z",
@@ -5695,6 +5707,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         sourceAssistedFlag: false,
         sourceIdentifiabilityFlag: false,
         protectedContentFlag: false,
+        shownToOriginalRater: false,
+        shownToChecker: true,
+        shownToAdjudicator: false,
         blindingImpactStatus: "source_blind_release_safe",
         evidenceUsePolicy: "Source-blind evidence must preserve a snapshot hash before release review.",
         createdBy: "demo-expert",
@@ -5704,6 +5719,73 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(invalidVerificationEvidenceHash.status, 400);
   assert.match(invalidVerificationEvidenceHash.body.detail, /snapshotContentHash/);
+
+  const invalidVerificationEvidenceType = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-evidence-artifacts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationEvidenceArtifact: {
+        id: "verification-evidence-invalid-type",
+        verificationRecordId: "verification-workflow-new",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimRef: "Whether evidence type must be allowlisted.",
+        evidenceType: "mutable_freeform_reference",
+        citation: "Expert-reviewed verification note.",
+        snapshotContentHash: "sha256:verification-evidence-invalid-type",
+        retrievedAt: "2026-06-12T11:58:40.000Z",
+        sourceExposureStatus: "source_blind",
+        protectedContentExposureStatus: "protected_content_absent",
+        modelAssistanceStatus: "none",
+        nonblindEvidenceFlag: false,
+        sourceAssistedFlag: false,
+        sourceIdentifiabilityFlag: false,
+        protectedContentFlag: false,
+        shownToOriginalRater: false,
+        shownToChecker: true,
+        shownToAdjudicator: false,
+        blindingImpactStatus: "source_blind_release_safe",
+        evidenceUsePolicy: "Source-blind evidence must preserve an allowlisted evidence type.",
+        createdBy: "demo-expert",
+        createdAt: "2026-06-12T11:58:40.000Z",
+      },
+    }),
+  });
+  assert.equal(invalidVerificationEvidenceType.status, 400);
+  assert.match(invalidVerificationEvidenceType.body.detail, /evidenceType/);
+
+  const invalidVerificationEvidenceAudience = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/verification-evidence-artifacts",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      verificationEvidenceArtifact: {
+        id: "verification-evidence-invalid-audience",
+        verificationRecordId: "verification-workflow-new",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        claimRef: "Whether audience exposure must be explicitly captured.",
+        evidenceType: "internal_expert_note",
+        citation: "Expert-reviewed verification note.",
+        snapshotContentHash: "sha256:verification-evidence-invalid-audience",
+        retrievedAt: "2026-06-12T11:58:45.000Z",
+        sourceExposureStatus: "source_blind",
+        protectedContentExposureStatus: "protected_content_absent",
+        modelAssistanceStatus: "none",
+        nonblindEvidenceFlag: false,
+        sourceAssistedFlag: false,
+        sourceIdentifiabilityFlag: false,
+        protectedContentFlag: false,
+        shownToOriginalRater: "no",
+        shownToChecker: true,
+        blindingImpactStatus: "source_blind_release_safe",
+        evidenceUsePolicy: "Source-blind evidence must still record who saw it.",
+        createdBy: "demo-expert",
+        createdAt: "2026-06-12T11:58:45.000Z",
+      },
+    }),
+  });
+  assert.equal(invalidVerificationEvidenceAudience.status, 400);
+  assert.match(invalidVerificationEvidenceAudience.body.detail, /shownToOriginalRater|shownToAdjudicator/);
 
   const invalidVerificationEvidenceFlag = await invokeApi(context, {
     method: "POST",
@@ -5715,6 +5797,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         verificationRecordId: "verification-workflow-new",
         itemId: "pos-ai-prior::crit-ai-base-rate",
         claimRef: "Whether source-identifiable evidence must be marked nonblind.",
+        evidenceType: "internal_expert_note",
         citation: "Source-identifiable adjudicator note.",
         snapshotContentHash: "sha256:verification-evidence-invalid-flag",
         retrievedAt: "2026-06-12T11:59:00.000Z",
@@ -5725,6 +5808,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         sourceAssistedFlag: false,
         sourceIdentifiabilityFlag: false,
         protectedContentFlag: false,
+        shownToOriginalRater: false,
+        shownToChecker: true,
+        shownToAdjudicator: true,
         blindingImpactStatus: "post_lock_nonblind_evidence",
         evidenceUsePolicy: "Source-identifiable evidence must be quarantined from blind rating.",
         createdBy: "demo-expert",
@@ -5750,7 +5836,11 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(verificationEvidenceById.status, 200);
   assert.equal(verificationEvidenceById.body.id, "verification-evidence-workflow-new");
+  assert.equal(verificationEvidenceById.body.evidenceType, "internal_expert_note");
   assert.equal(verificationEvidenceById.body.snapshotContentHash, "sha256:verification-evidence-workflow-new");
+  assert.equal(verificationEvidenceById.body.shownToOriginalRater, false);
+  assert.equal(verificationEvidenceById.body.shownToChecker, true);
+  assert.equal(verificationEvidenceById.body.shownToAdjudicator, true);
 
   const incompletePromptTemplateWorkflow = await invokeApi(context, {
     method: "POST",
@@ -8222,6 +8312,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompleteRubricLintConfig.status, 400);
   assert.match(incompleteRubricLintConfig.body.detail, /lintRuleIds|protectedSplitEligible/);
+
+  const missingCorrectnessStrengthLintConfig = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rubric-lint-configs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rubricLintConfig: {
+        ...ratingExperience.rubricLintConfig,
+        id: "rubric-lint-config-missing-correctness-strength",
+        lintRuleIds: rubricLintRules.filter((rule) => rule !== "correctness_strength_consistency"),
+      },
+    }),
+  });
+  assert.equal(missingCorrectnessStrengthLintConfig.status, 400);
+  assert.match(missingCorrectnessStrengthLintConfig.body.detail, /correctness_strength_consistency/);
+
+  const correctnessStrengthLintEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rubric-lint-events",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      rubricLintEvent: {
+        ...ratingExperience.rubricLintEvent,
+        id: "rubric-lint-event-correctness-strength",
+        lintRuleId: "correctness_strength_consistency",
+        acknowledgementNote: "Rater acknowledged the zero-correctness with nonzero-strength consistency diagnostic without score auto-change.",
+      },
+    }),
+  });
+  assert.equal(correctnessStrengthLintEvent.status, 201);
 
   const unacknowledgedLintEvent = await invokeApi(context, {
     method: "POST",
@@ -10952,8 +11072,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(workflowVerificationRow.verificationEvidenceArtifactIds, ["verification-evidence-workflow-new"]);
   assert.equal(workflowVerificationRow.verificationEvidenceProvenanceStatus, "verification_evidence_artifact_complete");
   assert.equal(workflowVerificationRow.nonblindEvidenceFlag, true);
+  assert.equal(workflowVerificationRow.evidenceShownToOriginalRaterFlag, false);
+  assert.equal(workflowVerificationRow.evidenceShownToCheckerFlag, true);
+  assert.equal(workflowVerificationRow.evidenceShownToAdjudicatorFlag, true);
+  assert.deepEqual(workflowVerificationRow.verificationEvidenceTypes, ["internal_expert_note"]);
   assert.equal(releaseReport.body.correctnessVerification.submittedEvidenceArtifactCount, 1);
   assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.reviewRequiredArtifactCount, 0);
+  assert.equal(
+    releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.shownToOriginalRaterEvidenceCount,
+    0,
+  );
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.shownToCheckerEvidenceCount, 6);
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.shownToAdjudicatorEvidenceCount, 5);
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.byEvidenceType.internal_expert_note, 5);
+  assert.equal(
+    releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.byEvidenceType.no_external_material_required,
+    1,
+  );
   assert.equal(
     releaseReport.body.correctnessVerification.verificationEvidenceProvenanceSummary.postLockNonblindArtifactIds.includes("verification-evidence-workflow-new"),
     true,
@@ -10966,6 +11101,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).retrievedAt,
     "2026-06-12T11:58:00.000Z",
   );
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).evidenceType, "internal_expert_note");
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).shownToOriginalRater, false);
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).shownToChecker, true);
+  assert.equal(releaseReport.body.correctnessVerification.verificationEvidenceArtifactRows.at(-1).shownToAdjudicator, true);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateBatchModelJudgeScoreSubmissions.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateReviews.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidatePromotions.length, 1);
@@ -11429,7 +11568,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.draftStoragePolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.raterInstructionRenderVersions.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintConfigs.length, 1);
-  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 2);
+  assert.equal(
+    releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.some(
+      (event) => event.id === "rubric-lint-event-correctness-strength" && event.lintRuleId === "correctness_strength_consistency",
+    ),
+    true,
+  );
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueReports.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueActions.length, 2);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
@@ -11467,7 +11612,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreInputPolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedDraftStoragePolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionRenderVersionCount, 1);
-  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 2);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueReportCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueActionCount, 2);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueQuarantineActionCount, 1);
@@ -11870,7 +12015,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 113);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 114);
 });
 
 test("comparability claims can bind default governance artifacts before custom records are submitted", async () => {

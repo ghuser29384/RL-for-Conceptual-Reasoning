@@ -366,12 +366,21 @@ const verificationWorkspaceClaimStatuses = ["verified", "unresolved", "not_pract
 const verificationEvidenceSourceExposureStatuses = ["source_blind", "post_lock_source_visible", "source_identifiable", "not_applicable"];
 const verificationEvidenceProtectedContentStatuses = ["none", "protected_content_absent", "protected_content_redacted", "protected_content_present_authorized"];
 const verificationEvidenceModelAssistanceStatuses = ["none", "model_assisted_retrieval", "model_generated_summary", "model_suggested_source"];
+const verificationEvidenceTypes = [
+  "external_citation",
+  "immutable_snapshot",
+  "internal_expert_note",
+  "supplied_item_text",
+  "model_assisted_material",
+  "no_external_material_required",
+];
 const verificationEvidenceBlindingImpactStatuses = [
   "source_blind_release_safe",
   "post_lock_nonblind_evidence",
   "source_assisted_review_required",
   "protected_content_quarantined",
 ];
+const verificationEvidenceAudienceFields = ["shownToOriginalRater", "shownToChecker", "shownToAdjudicator"];
 const interpretationTargetMapRequiredFields = [
   "id",
   "positionTextVersionId",
@@ -613,7 +622,14 @@ const ratingProtectedSplitExclusions = ["hidden_benchmark", "protected_validatio
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
 const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
-const rubricLintRules = ["missing_required_score", "clarity_branch_consistency", "centrality_strength_product_gap", "dead_weight_rationale", "verification_status_missing"];
+const rubricLintRules = [
+  "missing_required_score",
+  "clarity_branch_consistency",
+  "correctness_strength_consistency",
+  "centrality_strength_product_gap",
+  "dead_weight_rationale",
+  "verification_status_missing",
+];
 const partialTaskOutputTypes = [
   "pairwise_preference_only",
   "clarity_triage",
@@ -1958,6 +1974,7 @@ const workflowWriteEndpoints = [
     requiredFields: [
       "id",
       "claimRef",
+      "evidenceType",
       "citation",
       "snapshotContentHash",
       "retrievedAt",
@@ -1968,6 +1985,7 @@ const workflowWriteEndpoints = [
       "sourceAssistedFlag",
       "sourceIdentifiabilityFlag",
       "protectedContentFlag",
+      ...verificationEvidenceAudienceFields,
       "blindingImpactStatus",
       "evidenceUsePolicy",
       "createdBy",
@@ -1976,7 +1994,15 @@ const workflowWriteEndpoints = [
     requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"]]],
     requiredAnyFields: [["verificationRecordId", "verificationWorkspaceId"]],
     requiredStringPrefixes: { snapshotContentHash: "sha256:" },
+    requiredBooleanFields: [
+      "nonblindEvidenceFlag",
+      "sourceAssistedFlag",
+      "sourceIdentifiabilityFlag",
+      "protectedContentFlag",
+      ...verificationEvidenceAudienceFields,
+    ],
     allowedValues: {
+      evidenceType: verificationEvidenceTypes,
       sourceExposureStatus: verificationEvidenceSourceExposureStatuses,
       protectedContentExposureStatus: verificationEvidenceProtectedContentStatuses,
       modelAssistanceStatus: verificationEvidenceModelAssistanceStatuses,
