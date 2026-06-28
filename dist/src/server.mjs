@@ -39,8 +39,10 @@ import {
   postLockSourceStyleAudits,
   promptArtifacts,
   ratingContextSnapshots,
+  ratingObfuscationNoteForRating,
   scoreCertificationAttempt,
   scoreExplanationTriggersForRating,
+  validateRatingObfuscationNote,
   validateTriggeredScoreExplanation,
   seedBenchmarkExposureEvents,
   seedCertificationAttempts,
@@ -813,6 +815,73 @@ const phaseGateLaneKinds = [
 ];
 const phaseGateStates = ["enabled", "staff_only", "shadow", "disabled_stub", "blocked"];
 const phaseGateSideEffectEnabledStates = new Set(["enabled", "staff_only"]);
+const phaseGateStaffRoles = ["admin", "auditor"];
+const phaseGateGovernanceResourceKeys = new Set([
+  "governanceApprovalRecord",
+  "governedBundleCanonicalizationProfile",
+  "governedBundleRecord",
+  "governedBundleVerification",
+  "releaseConfigManifest",
+  "releaseConfigManifestVerification",
+  "policyActionKind",
+  "policyDecisionRecord",
+  "policyDecisionConsumption",
+  "implementationPhaseGateBundle",
+  "sensitiveAuditChainEvent",
+  "sensitiveAuditChainVerification",
+]);
+const phaseGateQueueResourceKeys = new Set([
+  "assignment",
+  "assignmentSelectionAudit",
+  "queuePolicySnapshot",
+  "queueFreshnessPolicy",
+  "queueStaleByDelayScan",
+  "workflowStateTransitionLog",
+]);
+const phaseGateUiPanelResourceKeys = new Set([
+  "screenStatePayload",
+  "uxSimplificationPolicy",
+  "uxSimplificationReview",
+  "clientSurfaceIntegrityPolicy",
+  "clientSurfaceIntegrityCheck",
+  "screenFeatureParityCheck",
+  "simplifiedCopyPreview",
+  "rubricCopyTraceabilityMap",
+  "raterInstructionRenderVersion",
+  "rubricLintConfig",
+  "rubricLintEvent",
+]);
+const phaseGateExportResourceKeys = new Set(["exportManifest", "trainingExport", "modelImprovementRun"]);
+const phaseGateEvaluationResourceKeys = new Set([
+  "evaluationRun",
+  "modelEvaluationPrediction",
+  "calibrationRun",
+  "artifactProbeRun",
+  "sycophancyProbeRun",
+  "obfuscationStressRun",
+  "sanityBaselineRun",
+  "humanCeilingRun",
+  "validationTrancheEvidence",
+  "leaderboard",
+  "modelFailureAudit",
+  "modelProviderDataHandlingPolicy",
+  "modelInferenceConfig",
+  "modelRunEnvironment",
+]);
+const phaseGateWorkerResourceKeys = new Set([
+  "candidateBatch",
+  "candidateCritique",
+  "modelJudgeScore",
+  "modelJudgeScores",
+  "activeLearningSelectionAudit",
+  "candidateReview",
+  "candidatePromotion",
+  "critiqueGenerationRun",
+  "generatedCritiqueSubmission",
+  "generatedCritiquePromotion",
+  "generationEvaluationReport",
+]);
+const phaseGateHiddenBenchmarkSubmissionResourceKeys = new Set(["benchmarkSubmissionPolicy", "benchmarkSubmission"]);
 const queueFreshnessLanes = [
   "assignment",
   "draft",
@@ -4211,6 +4280,11 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
     return true;
   }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, spec);
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return true;
+  }
   const body = await readJsonBody(request);
   const candidate = body[spec.resourceKey] ?? body.resource;
   if (!candidate) return false;
@@ -4305,6 +4379,11 @@ async function workflowWriteEndpoint(request, response, context, match) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
     return;
   }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, spec);
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
   const body = await readJsonBody(request);
   const candidate = body[spec.resourceKey] ?? body.resource ?? body;
   const validationContext = spec.requireAssignmentClaimField
@@ -4364,6 +4443,39 @@ async function workflowWriteEndpoint(request, response, context, match) {
   });
 }
 
+async function enforceWorkflowSpecPhaseGate(context, actor, spec) {
+  const laneKind = workflowSpecPhaseGateLaneKind(spec);
+  const phaseGate = await resolveImplementationPhaseGate(context, laneKind, actor);
+  if (phaseGate.ok) return { ok: true, laneKind, phaseGate };
+  return {
+    ok: false,
+    statusCode: 409,
+    error: "implementation_phase_lane_unavailable",
+    detail: phaseGate.detail,
+    extra: {
+      laneKind,
+      phaseState: phaseGate.phaseState ?? null,
+      activeBundleId: phaseGate.bundle?.id ?? null,
+    },
+  };
+}
+
+function sendWorkflowPhaseGateFailure(response, phaseGate) {
+  sendJson(response, phaseGate.statusCode ?? 409, { error: phaseGate.error, detail: phaseGate.detail, ...(phaseGate.extra ?? {}) });
+}
+
+function workflowSpecPhaseGateLaneKind(spec) {
+  if (spec.phaseGateLaneKind) return spec.phaseGateLaneKind;
+  if (phaseGateGovernanceResourceKeys.has(spec.resourceKey)) return "governance_action";
+  if (phaseGateQueueResourceKeys.has(spec.resourceKey)) return "queue";
+  if (phaseGateUiPanelResourceKeys.has(spec.resourceKey)) return "ui_panel";
+  if (phaseGateExportResourceKeys.has(spec.resourceKey)) return "export_path";
+  if (phaseGateEvaluationResourceKeys.has(spec.resourceKey)) return "evaluation_lane";
+  if (phaseGateWorkerResourceKeys.has(spec.resourceKey)) return "worker";
+  if (phaseGateHiddenBenchmarkSubmissionResourceKeys.has(spec.resourceKey)) return "hidden_benchmark_submission_lane";
+  return "route";
+}
+
 async function workflowReadEndpoint(request, response, context, match) {
   const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
@@ -4412,6 +4524,11 @@ async function contributionSubmissionEndpoint(request, response, context) {
   }
   if (!contributionSubmissionRoles.includes(session.user.role)) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionSubmissionRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "contributionSubmission", roles: contributionSubmissionRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
   const body = await readJsonBody(request);
@@ -4558,6 +4675,11 @@ async function contributionGateDecisionEndpoint(request, response, context) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
     return;
   }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "gateDecision", roles: contributionAdminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
   const body = await readJsonBody(request);
   const candidate = body.gateDecision ?? body.resource ?? body;
   const validation = createGateDecisionResource(candidate, session.user);
@@ -4589,6 +4711,11 @@ async function contributionPreparedDraftEndpoint(request, response, context, sub
   }
   if (!contributionAdminRoles.includes(session.user.role)) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "preparedDraft", roles: contributionAdminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
   const model = await contributionReadModel(context);
@@ -4633,6 +4760,11 @@ async function contributionPreparedDraftPromotionEndpoint(request, response, con
   }
   if (!contributionAdminRoles.includes(session.user.role)) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "promotionRecord", roles: contributionAdminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
   const model = await contributionReadModel(context);
@@ -5157,6 +5289,11 @@ async function remediationCompleteEndpoint(request, response, context, moduleId)
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: participantDataWriteRoles });
     return;
   }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "raterLearningPlan", roles: participantDataWriteRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
   const body = await readJsonBody(request);
   const candidate = body.raterLearningPlan ?? body.resource ?? {};
   const raterId = session.user.role === "admin" ? candidate.raterId ?? body.raterId ?? session.user.id : session.user.id;
@@ -5208,6 +5345,11 @@ async function itemIssueActionEndpoint(request, response, context, itemIssueId, 
   }
   if (!expertWorkflowRoles.includes(session.user.role)) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: expertWorkflowRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "itemIssueAction", roles: expertWorkflowRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
   const body = await readJsonBody(request);
@@ -5479,6 +5621,11 @@ async function policyDecisionConsumeEndpoint(request, response, context, request
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminRoles });
     return;
   }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "policyDecisionConsumption", roles: adminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
   const decision = await workflowResourceById(context, "policyDecisionRecord", requestedDecisionId);
 	  if (!decision) {
 	    sendJson(response, 404, { error: "policy_decision_not_found" });
@@ -5622,6 +5769,11 @@ async function sensitiveAuditChainVerifyEndpoint(request, response, context) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminRoles });
     return;
   }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "sensitiveAuditChainVerification", roles: adminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
   const body = await readJsonBody(request);
   const events = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "sensitiveAuditChainEvent").sort(
     (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0) || String(left.id).localeCompare(String(right.id)),
@@ -5684,6 +5836,11 @@ async function workflowStateTransitionEndpoint(request, response, context) {
   }
   if (!workflowStateTransitionRoles.includes(session.user.role)) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: workflowStateTransitionRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "workflowStateTransitionLog", roles: workflowStateTransitionRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
   const body = await readJsonBody(request);
@@ -5813,6 +5970,11 @@ async function participantDataWorkflowWriteEndpoint(request, response, context, 
   }
   if (!participantDataWriteRoles.includes(session.user.role)) {
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: participantDataWriteRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey, roles: participantDataWriteRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
   const body = await readJsonBody(request);
@@ -6672,6 +6834,7 @@ async function recordRatingEndpoint(request, response, context, eventType, optio
     sendJson(response, policyGate.statusCode ?? 409, {
       error: policyGate.error ?? "policy_decision_gate_failed",
       detail: policyGate.detail,
+      ...(policyGate.extra ?? {}),
     });
     return;
   }
@@ -6709,7 +6872,8 @@ async function buildRatingValidationContext(context) {
 }
 
 async function appendWorkflowPolicyDecisionGate(context, request, actor, resource, spec, params = {}) {
-  const phaseGate = await resolveImplementationPhaseGate(context, spec.phaseGateLaneKind);
+  const laneKind = workflowSpecPhaseGateLaneKind(spec);
+  const phaseGate = await resolveImplementationPhaseGate(context, laneKind, actor);
   if (!phaseGate.ok) {
     return {
       ok: false,
@@ -6717,7 +6881,7 @@ async function appendWorkflowPolicyDecisionGate(context, request, actor, resourc
       error: "implementation_phase_lane_unavailable",
       detail: phaseGate.detail,
       extra: {
-        laneKind: spec.phaseGateLaneKind,
+        laneKind,
         phaseState: phaseGate.phaseState ?? null,
         activeBundleId: phaseGate.bundle?.id ?? null,
       },
@@ -6862,7 +7026,7 @@ async function appendWorkflowPolicyDecisionGate(context, request, actor, resourc
   };
 }
 
-async function resolveImplementationPhaseGate(context, laneKind) {
+async function resolveImplementationPhaseGate(context, laneKind, actor = null) {
   if (!laneKind) return { ok: true, bundle: null, lane: null, phaseState: "enabled" };
   const bundles = await workflowResourcesByField(context, "implementationPhaseGateBundle", "releaseId", releaseId);
   const bundle = bundles.at(-1) ?? null;
@@ -6885,6 +7049,15 @@ async function resolveImplementationPhaseGate(context, laneKind) {
       lane,
       phaseState: lane.phaseState ?? null,
       detail: disabledSafe ? `${laneKind} lane is ${lane.phaseState}` : `${laneKind} lane disabled state is not safe`,
+    };
+  }
+  if (lane.phaseState === "staff_only" && !phaseGateStaffRoles.includes(actor?.role)) {
+    return {
+      ok: false,
+      bundle,
+      lane,
+      phaseState: lane.phaseState,
+      detail: `${laneKind} lane is staff_only`,
     };
   }
   return { ok: true, bundle, lane, phaseState: lane.phaseState };
@@ -6962,10 +7135,25 @@ async function validateSensitiveAuditChainEventBindings(context, event) {
 
 async function appendRatingPolicyDecisionGate(context, request, actor, rating, eventType) {
   const actionKind = eventType === "revision_submitted" ? "revision_submit" : "rating_lock";
+  const phaseGate = await resolveImplementationPhaseGate(context, "route", actor);
+  if (!phaseGate.ok) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "implementation_phase_lane_unavailable",
+      detail: phaseGate.detail,
+      extra: {
+        laneKind: "route",
+        phaseState: phaseGate.phaseState ?? null,
+        activeBundleId: phaseGate.bundle?.id ?? null,
+      },
+    };
+  }
   const decidedAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   const idempotencyKey = `${actionKind}:${rating.id}:${rating.assignmentId}:${rating.kind}`;
   const outputSchemaVersion = actionKind === "revision_submit" ? "lmca-rating-revision-submit-v1" : "lmca-rating-lock-v1";
+  const phaseGateBundleId = phaseGate.bundle?.id ?? `implementation-phase-gate-bundle-${releaseId}`;
   const decision = {
     id: `policy-decision-${actionKind}-${randomUUID()}`,
     actionKindId: `policy-action-kind-${releaseId}-${actionKind}`,
@@ -6973,10 +7161,11 @@ async function appendRatingPolicyDecisionGate(context, request, actor, rating, e
     decisionStatus: "allow",
     actorId: actor.id,
     actorRole: actor.role,
-    manifestId: `release-config-manifest-${releaseId}`,
-    manifestHash: `sha256:manifest-${releaseId}`,
-    phaseGateBundleId: `implementation-phase-gate-bundle-${releaseId}`,
-    phaseGateBundleHash: `sha256:phase-gate-${releaseId}`,
+    manifestId: phaseGate.bundle?.manifestId ?? `release-config-manifest-${releaseId}`,
+    manifestHash: phaseGate.bundle?.manifestHash ?? phaseGate.bundle?.canonicalManifestHash ?? `sha256:manifest-${releaseId}`,
+    phaseGateBundleId,
+    phaseGateBundleHash:
+      phaseGate.bundle?.phaseGateBundleHash ?? phaseGate.bundle?.canonicalBundleHash ?? phaseGate.bundle?.bundleHash ?? `sha256:${sha256(phaseGateBundleId)}`,
     releaseId,
     outputSchemaVersion,
     outputSchemaHash: `sha256:${sha256(outputSchemaVersion)}`,
@@ -7319,6 +7508,14 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
       .filter(([, value]) => typeof value !== "boolean")
       .map(([flag]) => flag);
     if (nonBooleanFlags.length) return invalid(`rating flags must be boolean: ${nonBooleanFlags.join(", ")}`);
+  }
+  const obfuscationNote = ratingObfuscationNoteForRating(rating);
+  if (obfuscationNote !== "" && typeof obfuscationNote !== "string") return invalid("obfuscationNote must be a short string when provided");
+  if (rating.flags?.obfuscatedArgumentRisk === true) {
+    const obfuscationNoteValidation = validateRatingObfuscationNote(obfuscationNote);
+    if (!obfuscationNoteValidation.ok) return invalid(obfuscationNoteValidation.detail);
+  } else if (typeof obfuscationNote === "string" && obfuscationNote.trim()) {
+    return invalid("obfuscationNote is only allowed when obfuscatedArgumentRisk is flagged");
   }
   const expectedExplanationTriggers = scoreExplanationTriggersForRating({
     scores: rating.scores,

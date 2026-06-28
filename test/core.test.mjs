@@ -3697,6 +3697,9 @@ test("rubric issue flag report separates allocation ambiguity from product disag
   assert.equal(report.counts.correctnessWeightingIssueCount, 1);
   assert.equal(report.counts.clarityAfterEffortIssueCount, 1);
   assert.equal(report.counts.midRangeStrengthUncertaintyCount, 1);
+  assert.equal(report.counts.obfuscatedArgumentRiskCount, 1);
+  assert.equal(report.counts.obfuscationNoteRows, 1);
+  assert.equal(report.counts.obfuscationNoteMissingRows, 0);
   assert.equal(report.counts.observedIssueFlagFamilyCount, 10);
   assert.equal(report.counts.coveredIssueFlagCount, 10);
   assert.equal(report.counts.missingCoverageCount, 0);
@@ -3706,6 +3709,7 @@ test("rubric issue flag report separates allocation ambiguity from product disag
   assert.equal(report.policy.requiredRaterFlags.includes("midRangeStrengthUncertainty"), true);
   assert.equal(report.policy.requiredRaterFlags.includes("vagueGoodObjectionGesture"), true);
   assert.equal(report.counts.byFlag.contentFreePseudoSubstance, 1);
+  assert.equal(report.obfuscationRows[0].noteStatus, "obfuscation_note_recorded");
   assert.equal(report.counts.byFlag.midRangeStrengthUncertainty, 1);
   assert.equal(report.counts.byFlag.backgroundKnowledgeDependence, 1);
   assert.equal(report.flagCoverageRows.find((row) => row.flag === "inBetweenSingleIssueSideIssue").coverageStatus, "not_observed_in_seed");
@@ -3729,6 +3733,15 @@ test("rubric issue flag report separates allocation ambiguity from product disag
   assert.equal(spreadReport.counts.productLevelDisagreementItemCount, 1);
   assert.equal(spreadReport.counts.strengthCentralityAllocationAmbiguityCount, 1);
   assert.equal(spreadReport.releaseUseStatus, "rubric_issue_flags_separated_with_product_disagreement");
+
+  const missingObfuscationNoteRating = {
+    ...seedRatings.find((rating) => rating.flags?.obfuscatedArgumentRisk),
+    id: "rating-obfuscation-note-missing",
+    obfuscationNote: "",
+  };
+  const missingNoteReport = buildRubricIssueFlagReport("release-test", [missingObfuscationNoteRating], adjudicationMemos, positions);
+  assert.equal(missingNoteReport.counts.obfuscationNoteMissingRows, 1);
+  assert.equal(missingNoteReport.releaseUseStatus, "rubric_issue_obfuscation_notes_incomplete");
 });
 
 test("rating effort quality report routes rushed and interrupted rows before sensitive use", () => {

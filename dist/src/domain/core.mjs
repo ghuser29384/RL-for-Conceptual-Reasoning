@@ -579,6 +579,7 @@ export const seedRatings = [
       contentFreePseudoSubstance: true,
       clarityAfterEffortIssue: true,
     },
+    obfuscationNote: "The fluent abstraction hides the inferential route, so the risk is tracked separately from the seven LMCA scores.",
     scoreExplanationRequired: true,
     scoreExplanationTriggers: ["unclear_target"],
     scoreExplanation: "The target objection remains unclear after effort, so the low scores need a blind-safe explanation.",
@@ -2601,6 +2602,8 @@ export function scoreExplanationRequiredForRating(input) {
 const SCORE_EXPLANATION_MIN_CHARS = 12;
 const SCORE_EXPLANATION_MAX_CHARS = 360;
 const SCORE_EXPLANATION_MAX_SENTENCES = 2;
+const RATING_OBFUSCATION_NOTE_MIN_CHARS = 12;
+const RATING_OBFUSCATION_NOTE_MAX_CHARS = 500;
 
 function scoreExplanationSentenceCount(text) {
   const normalized = String(text)
@@ -2620,6 +2623,22 @@ export function validateTriggeredScoreExplanation(text) {
   }
   if (scoreExplanationSentenceCount(value) > SCORE_EXPLANATION_MAX_SENTENCES) {
     return { ok: false, detail: "scoreExplanation must be one or two sentences when ScoreExplanationPolicy triggers" };
+  }
+  return { ok: true };
+}
+
+export function ratingObfuscationNoteForRating(rating = {}) {
+  const value = rating.obfuscationNote ?? rating.obfuscation_note ?? "";
+  return typeof value === "string" ? value.trim() : value;
+}
+
+export function validateRatingObfuscationNote(text) {
+  const value = typeof text === "string" ? text.trim() : "";
+  if (value.length < RATING_OBFUSCATION_NOTE_MIN_CHARS) {
+    return { ok: false, detail: "obfuscationNote is required when obfuscatedArgumentRisk is flagged" };
+  }
+  if (value.length > RATING_OBFUSCATION_NOTE_MAX_CHARS) {
+    return { ok: false, detail: "obfuscationNote must be a short blind-safe note" };
   }
   return { ok: true };
 }
@@ -2977,6 +2996,7 @@ export function buildRubricIssueFlagReport(
   const flagRows = ratings.flatMap((rating) =>
     RATER_ISSUE_FLAG_DEFINITIONS.filter((definition) => rating.flags?.[definition.key]).map((definition) => {
       const position = positionById.get(rating.positionId);
+      const obfuscationNote = definition.key === "obfuscatedArgumentRisk" ? ratingObfuscationNoteForRating(rating) : "";
       return {
         ratingId: rating.id,
         itemId: makeItemId(rating.positionId, rating.critiqueId),
@@ -2987,6 +3007,13 @@ export function buildRubricIssueFlagReport(
         flag: definition.key,
         label: definition.label,
         issueType: definition.issueType,
+        obfuscationNote,
+        noteStatus:
+          definition.key === "obfuscatedArgumentRisk"
+            ? validateRatingObfuscationNote(obfuscationNote).ok
+              ? "obfuscation_note_recorded"
+              : "obfuscation_note_missing"
+            : "not_applicable",
       };
     }),
   );
@@ -3048,6 +3075,8 @@ export function buildRubricIssueFlagReport(
   });
   const observedFlagCoverageRows = flagCoverageRows.filter((row) => row.ratingFlagCount > 0);
   const missingCoverageRows = observedFlagCoverageRows.filter((row) => !row.adjudicationTaxonomyCovered);
+  const obfuscationRows = flagRows.filter((row) => row.flag === "obfuscatedArgumentRisk");
+  const obfuscationRowsMissingNotes = obfuscationRows.filter((row) => row.noteStatus !== "obfuscation_note_recorded");
   const productDisagreementRows = itemRows.filter((row) => row.productDisagreementStatus === "product_level_disagreement_observed");
   const flagCounts = Object.fromEntries(
     RATER_ISSUE_FLAG_DEFINITIONS.map((definition) => [definition.key, flagRows.filter((row) => row.flag === definition.key).length]),
@@ -3070,6 +3099,9 @@ export function buildRubricIssueFlagReport(
       correctnessWeightingIssueCount: flagRows.filter((row) => row.flag === "correctnessWeightingIssue").length,
       clarityAfterEffortIssueCount: flagRows.filter((row) => row.flag === "clarityAfterEffortIssue").length,
       midRangeStrengthUncertaintyCount: flagRows.filter((row) => row.flag === "midRangeStrengthUncertainty").length,
+      obfuscatedArgumentRiskCount: obfuscationRows.length,
+      obfuscationNoteRows: obfuscationRows.filter((row) => row.noteStatus === "obfuscation_note_recorded").length,
+      obfuscationNoteMissingRows: obfuscationRowsMissingNotes.length,
       observedIssueFlagFamilyCount: observedFlagCoverageRows.length,
       productLevelDisagreementItemCount: productDisagreementRows.length,
       coveredIssueFlagCount: observedFlagCoverageRows.filter((row) => row.adjudicationTaxonomyCovered).length,
@@ -3078,11 +3110,14 @@ export function buildRubricIssueFlagReport(
     },
     flagCoverageRows,
     flagRows,
+    obfuscationRows,
     itemRows,
     memoTaxonomyRows,
     productDisagreementRows,
     releaseUseStatus:
-      missingCoverageRows.length > 0
+      obfuscationRowsMissingNotes.length > 0
+        ? "rubric_issue_obfuscation_notes_incomplete"
+        : missingCoverageRows.length > 0
         ? "rubric_issue_flag_coverage_incomplete"
         : productDisagreementRows.length > 0
           ? "rubric_issue_flags_separated_with_product_disagreement"

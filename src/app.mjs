@@ -59,6 +59,7 @@ const state = {
   draftConfidenceJudgment: "",
   draftGeneralRatingNote: "",
   draftScoreExplanation: "",
+  draftObfuscationNote: "",
   selectedPracticeAnchorId: lmcaSourceExampleAnchors[0]?.id ?? null,
   practiceScores: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, null])),
   practiceAttemptLocked: false,
@@ -4813,6 +4814,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   document.querySelectorAll("[data-flag]").forEach((input) => {
     input.addEventListener("change", () => {
       state.draftFlags[input.getAttribute("data-flag")] = input.checked;
+      if (input.getAttribute("data-flag") === "obfuscatedArgumentRisk" && !input.checked) state.draftObfuscationNote = "";
       render();
     });
   });
@@ -4826,6 +4828,9 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   });
   document.getElementById("scoreExplanation")?.addEventListener("input", (event) => {
     state.draftScoreExplanation = event.target.value;
+  });
+  document.getElementById("obfuscationNote")?.addEventListener("input", (event) => {
+    state.draftObfuscationNote = event.target.value;
   });
   document.getElementById("verificationStatus")?.addEventListener("change", (event) => {
     state.draftVerification.status = event.target.value;
@@ -4906,6 +4911,16 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       render();
       return;
     }
+    const obfuscationNote = state.draftFlags.obfuscatedArgumentRisk ? state.draftObfuscationNote.trim() : "";
+    if (state.draftFlags.obfuscatedArgumentRisk && obfuscationNote.length < 12) {
+      state.lastPersistenceStatus = {
+        tone: "bad",
+        title: "Obfuscation note required",
+        detail: "Add a short blind-safe note explaining how surface fluency hides the inferential route.",
+      };
+      render();
+      return;
+    }
     const newRating = {
       id: `rating-demo-${Date.now()}`,
       assignmentId: selectedAssignment.id,
@@ -4938,6 +4953,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       correctnessVerificationNote: state.draftVerification.note,
       rationale: "Demo submission from the local blind-rating workspace.",
       flags: { ...state.draftFlags },
+      obfuscationNote,
       activeSeconds: 620,
       idleGapSeconds: 20,
       interruptionCount: 0,
@@ -5218,7 +5234,19 @@ function missingPracticeScoreDimensions() {
 }
 
 function issueFlagControls() {
-  return `<div class="flagGrid">${raterIssueFlags.map(checkRow).join("")}</div>`;
+  const obfuscationFlagged = state.draftFlags.obfuscatedArgumentRisk === true;
+  return `
+    <div class="flagGrid">${raterIssueFlags.map(checkRow).join("")}</div>
+    <label class="noteControl ${obfuscationFlagged ? "" : "disabledControl"}">
+      <span>Obfuscation note ${obfuscationFlagged ? "required" : "unavailable"}</span>
+      <textarea
+        id="obfuscationNote"
+        rows="2"
+        placeholder="${escapeHtml(obfuscationFlagged ? "Blind-safe note on how surface fluency hides the inferential route." : "Available only when Obfuscated argument or masked fallacy is checked.")}"
+        ${obfuscationFlagged ? "" : "disabled"}
+      >${escapeHtml(obfuscationFlagged ? state.draftObfuscationNote : "")}</textarea>
+    </label>
+  `;
 }
 
 function checkRow(flag) {

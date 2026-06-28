@@ -3047,6 +3047,16 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(labelSnapshot.status, 409);
   assert.equal(labelSnapshot.body.error, "implementation_phase_lane_unavailable");
 
+  const ratingContextSnapshot = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-context-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({ ratingContextSnapshot: { id: "rating-context-route-blocked" } }),
+  });
+  assert.equal(ratingContextSnapshot.status, 409);
+  assert.equal(ratingContextSnapshot.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(ratingContextSnapshot.body.laneKind, "route");
+
   const releaseFreeze = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/releases/freeze",
@@ -3110,6 +3120,16 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(assignmentIssue.body.error, "implementation_phase_lane_unavailable");
   assert.equal(assignmentIssue.body.laneKind, "queue");
 
+  const stateTransition = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/state-transitions",
+    headers: raterHeaders,
+    body: JSON.stringify({ transition: { id: "state-transition-lane-blocked" } }),
+  });
+  assert.equal(stateTransition.status, 409);
+  assert.equal(stateTransition.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(stateTransition.body.laneKind, "queue");
+
   const assignmentScreenState = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/assignments/assign-ai-base-rate/screen-state",
@@ -3118,6 +3138,27 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(assignmentScreenState.status, 409);
   assert.equal(assignmentScreenState.body.error, "implementation_phase_lane_unavailable");
   assert.equal(assignmentScreenState.body.laneKind, "ui_panel");
+
+  const ratingLock = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ratings",
+    headers: raterHeaders,
+    body: JSON.stringify({ rating: validBlindRating("rating-route-blocked") }),
+  });
+  assert.equal(ratingLock.status, 409);
+  assert.equal(ratingLock.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(ratingLock.body.laneKind, "route");
+  assert.equal(ratingLock.body.phaseState, "blocked");
+
+  const policyDecisionConsumption = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/policy-decisions/policy-decision-lane-blocked/consume",
+    headers: adminHeaders,
+    body: JSON.stringify({ policyDecisionConsumption: { id: "policy-consumption-lane-blocked" } }),
+  });
+  assert.equal(policyDecisionConsumption.status, 409);
+  assert.equal(policyDecisionConsumption.body.error, "implementation_phase_lane_unavailable");
+  assert.equal(policyDecisionConsumption.body.laneKind, "governance_action");
 
   const governanceApproval = await invokeApi(context, {
     method: "POST",
@@ -3142,10 +3183,14 @@ test("workflow and snapshot side effects require current policy decisions and re
   assert.equal(workflowEvents.some((event) => event.type === "adjudication_finalized"), false);
   assert.equal(workflowEvents.some((event) => event.type === "pairwise_comparison_snapshot_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "label_snapshot_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "rating_context_snapshot_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "release_freeze_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "training_export_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "benchmark_submission_submitted"), false);
   assert.equal(workflowEvents.some((event) => event.type === "governance_approval_record_submitted"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "workflow_state_transition_rejected"), false);
+  assert.equal(workflowEvents.some((event) => event.type === "policy_decision_consumed"), false);
+  assert.equal((await auditStore.readRatingEvents()).length, 0);
 });
 
 test("governance approval policy gates use exact unblinding and deprotection action kinds", async () => {
@@ -11595,10 +11640,31 @@ test("server policy validates structured rater issue flags", () => {
       correctnessNotAssessableDueToClarity: false,
       vagueGoodObjectionGesture: true,
       midRangeStrengthUncertainty: true,
+      obfuscatedArgumentRisk: true,
       backgroundKnowledgeDependence: false,
     },
+    obfuscationNote: "Surface fluency may hide the unsupported inferential route in this critique.",
   };
   assert.equal(validateRatingPayload(rating, "blind_initial_submitted").ok, true);
+
+  const missingObfuscationNote = validateRatingPayload(
+    { ...rating, id: "rating-issue-flags-missing-obfuscation-note", obfuscationNote: "" },
+    "blind_initial_submitted",
+  );
+  assert.equal(missingObfuscationNote.ok, false);
+  assert.match(missingObfuscationNote.detail, /obfuscationNote/);
+
+  const strayObfuscationNote = validateRatingPayload(
+    {
+      ...rating,
+      id: "rating-issue-flags-stray-obfuscation-note",
+      flags: { ...rating.flags, obfuscatedArgumentRisk: false },
+      obfuscationNote: "This note should not be submitted without the matching flag.",
+    },
+    "blind_initial_submitted",
+  );
+  assert.equal(strayObfuscationNote.ok, false);
+  assert.match(strayObfuscationNote.detail, /only allowed when obfuscatedArgumentRisk/);
 
   const unknownFlag = validateRatingPayload(
     { ...rating, id: "rating-issue-flags-unknown", flags: { ...rating.flags, sourceVisibleConcern: true } },
