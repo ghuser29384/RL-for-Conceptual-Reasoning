@@ -2840,6 +2840,119 @@ test("v1 rating endpoints persist blind ratings and enforce revision route ident
   assert.equal(releaseReport.body.operationalControlEvidence.policyDecisionConsumptionRows.length, 2);
 });
 
+test("v1 rating endpoint accepts ratings for submitted workflow assignments", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+
+  const contextSnapshot = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-context-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingContextSnapshot: {
+        id: "rating-context-live-submitted-assignment",
+        positionId: "pos-ai-prior",
+        targetCritiqueId: "crit-ai-base-rate",
+        contextPolicy: "target_only",
+        siblingCritiqueIdsShown: ["crit-ai-base-rate"],
+        siblingItemTextVersionIds: ["ctv-ai-base-rate-v1"],
+        laterSiblingAbsent: true,
+      },
+    }),
+  });
+  assert.equal(contextSnapshot.status, 201);
+
+  const assignment = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      assignment: {
+        id: "assignment-live-submitted-rating",
+        raterId: "demo-rater",
+        raterSessionId: "rater-session-live-submitted-rating",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        assignmentType: "live",
+        workflowProfileId: "rating-workflow-profile-workflow-new",
+        workflowProfileVersion: "workflow-profile-rlhf90-v1",
+        scoreInputPolicyId: "score-input-policy-workflow-new",
+        requiredUiPanelSet: ["score_fields", "safe_decline", "source_recognition"],
+        optionalUiPanelSet: ["evidence_spans"],
+        preRatingSelfScreenStatus: "passed",
+        raterItemConflictCheckStatus: "no_conflict",
+        independentBlindEligibilityStatus: "eligible",
+        declineOrReassignmentStatus: "not_declined",
+        blindState: "blind_initial",
+        sourceTagVisibilityState: "hidden_before_initial_lock",
+        topicRoutingBasisAdminOnly: "topic competence used without exposing source tags",
+        validationMembershipBlindToRater: true,
+        ratingContextSnapshotId: "rating-context-live-submitted-assignment",
+        samePositionSessionId: "same-position-session-live-submitted-rating",
+        samePositionOrderPolicy: "counterbalanced",
+        orderCounterbalanceBucket: "bucket-a",
+        positionOrderIndex: 0,
+        siblingCritiquesSeenPriorCount: 0,
+        siblingCritiquesSeenPriorIds: [],
+        laterSiblingCritiquesAbsentAtSubmission: true,
+        positionLengthBand: "short",
+        critiqueLengthBand: "medium",
+        expectedEffortBand: "ordinary_live",
+        startedAt: "2026-10-01T00:24:00.000Z",
+        activeTimeSeconds: 180,
+        idleGapSummary: "none",
+        interruptionCount: 0,
+        draftAutosaveStatus: "saved_server_side",
+        lastAutosavedAt: "2026-10-01T00:27:00.000Z",
+        draftDependencyStaleStatus: "current",
+        resumeCount: 0,
+        sessionPacingState: "within_target",
+        fatigueWarningState: "none",
+        uiMode: "task_first_simplified",
+        rubricAnchorPanelVersion: "appendix-f-anchor-v1",
+        preSubmitLintPolicyVersion: "rubric-lint-rlhf90-v1",
+      },
+    }),
+  });
+  assert.equal(assignment.status, 201);
+
+  const rating = {
+    ...validBlindRating("rating-live-submitted-assignment"),
+    assignmentId: "assignment-live-submitted-rating",
+    ratingContextSnapshotId: "rating-context-live-submitted-assignment",
+    submittedAt: "2026-10-01T00:30:00.000Z",
+    lockedAt: "2026-10-01T00:30:00.000Z",
+  };
+  const ratingResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ratings",
+    headers: raterHeaders,
+    body: JSON.stringify({ rating }),
+  });
+  assert.equal(ratingResponse.status, 201);
+  assert.equal(ratingResponse.body.ratingId, "rating-live-submitted-assignment");
+
+  const releaseReport = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseReport.status, 200);
+  assert.equal(releaseReport.body.workflowOperationalArtifacts.assignments.length, 1);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.ratingRows, 8);
+  const samePositionContextRow = releaseReport.body.samePositionContext.contextRows.find(
+    (row) => row.ratingId === "rating-live-submitted-assignment",
+  );
+  assert.equal(samePositionContextRow.queueType, "live");
+  assert.equal(samePositionContextRow.ratingContextSnapshotId, "rating-context-live-submitted-assignment");
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.rows[0].assignmentId, "assignment-live-submitted-rating");
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.rows[0].reviewReasons.includes("raterSessionId:not_found"), true);
+});
+
 test("workflow and snapshot side effects require current policy decisions and respect disabled phase lanes", async () => {
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
@@ -10214,6 +10327,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.trainingExport.submittedPairwiseComparisonSnapshotId, "pairwise-snapshot-workflow-new");
   assert.equal(releaseReport.body.workflowOperationalArtifacts.raters.length, 1);
   assert.equal(releaseReport.body.workflowOperationalArtifacts.assignments.length, 1);
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.releaseUseStatus, "submitted_assignment_workflow_evidence_complete");
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.counts.submittedAssignmentCount, 1);
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.counts.completeAssignmentCount, 1);
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.counts.linkedRaterSessionCount, 1);
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.counts.linkedRatingContextSnapshotCount, 1);
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.counts.counterbalancedOrRandomizedOrderCount, 1);
+  assert.deepEqual(releaseReport.body.assignmentWorkflowEvidence.rows[0].reviewReasons, []);
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.rows[0].assignmentId, "assignment-workflow-new");
+  assert.equal(releaseReport.body.assignmentWorkflowEvidence.rows[0].blindingEligibilityStatus, "blind_initial_eligibility_complete");
   assert.equal(releaseReport.body.workflowOperationalArtifacts.candidateBatches.length, 1);
   assert.equal(releaseReport.body.workflowOperationalArtifacts.candidateCritiques.length, 1);
   assert.equal(releaseReport.body.workflowOperationalArtifacts.modelJudgeScores.length, 1);
@@ -10536,6 +10658,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.scoreExplanationAudit.counts.triggerRequiredRows, 5);
   assert.equal(releaseReport.body.scoreExplanationAudit.counts.triggerExplanationCompleteRows, 5);
   assert.equal(releaseReport.body.scoreExplanationAudit.counts.triggerMismatchRows, 0);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.submittedScoreExplanationPolicyCount, 1);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.policyBoundRows, 7);
+  assert.equal(releaseReport.body.scoreExplanationAudit.counts.policyBindingReviewRows, 0);
+  assert.equal(
+    releaseReport.body.scoreExplanationAudit.scoreExplanationPolicyRows.some(
+      (row) => row.id === "score-explanation-policy-workflow-new" && row.rowSource === "submitted_workflow_score_explanation_policy",
+    ),
+    true,
+  );
   assert.equal(releaseReport.body.scoreExplanationAudit.byExpectedTrigger.high_stakes_workflow, 3);
   assert.equal(releaseReport.body.scoreExplanationAudit.byExpectedTrigger.unclear_target, 2);
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.volunteerIncentivePolicies.length, 1);

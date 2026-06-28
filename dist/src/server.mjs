@@ -22,6 +22,7 @@ import {
   SYCOPHANCY_ORTHODOXY_CUE_TYPES,
   assignments,
   buildHiddenBenchmarkFreezeReport,
+  buildEffectiveRatingContextSnapshots,
   buildRaterCertificationReport,
   buildReleaseRightsRecords,
   buildTrainingExport,
@@ -1089,6 +1090,27 @@ const workflowWriteEndpoints = [
       "rubricAnchorPanelVersion",
       "preSubmitLintPolicyVersion",
     ],
+    requiredNonEmptyArrayFields: ["requiredUiPanelSet"],
+    requiredNumberRanges: [
+      { field: "activeTimeSeconds", min: 0 },
+      { field: "interruptionCount", min: 0 },
+      { field: "resumeCount", min: 0 },
+      { field: "positionOrderIndex", min: 0 },
+      { field: "siblingCritiquesSeenPriorCount", min: 0 },
+    ],
+    requiredStringIncludesAny: {
+      samePositionOrderPolicy: ["counterbalanced", "randomized", "random"],
+    },
+    requiredExactFields: {
+      preRatingSelfScreenStatus: "passed",
+      raterItemConflictCheckStatus: "no_conflict",
+      independentBlindEligibilityStatus: "eligible",
+      blindState: "blind_initial",
+      sourceTagVisibilityState: "hidden_before_initial_lock",
+      validationMembershipBlindToRater: true,
+      laterSiblingCritiquesAbsentAtSubmission: true,
+      draftDependencyStaleStatus: "current",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions$/, "rater_session_submitted", "raterSession", ratingWorkflowRoles, {
     requiredFields: raterSessionRequiredFields,
@@ -6554,12 +6576,13 @@ async function recordRatingEndpoint(request, response, context, eventType, optio
     sendJson(response, 400, { error: "revision_path_mismatch", detail: "rating.parentRatingId must match the v1 revision route id" });
     return;
   }
-  const validation = validateRatingPayload(rating, eventType);
+  const ratingValidationContext = await buildRatingValidationContext(context);
+  const validation = validateRatingPayload(rating, eventType, ratingValidationContext);
   if (!validation.ok) {
     sendJson(response, 400, { error: "invalid_rating_payload", detail: validation.detail });
     return;
   }
-  const actorValidation = validateRatingActor(rating, actor);
+  const actorValidation = validateRatingActor(rating, actor, ratingValidationContext);
   if (!actorValidation.ok) {
     sendJson(response, 403, { error: "rating_actor_not_authorized", detail: actorValidation.detail });
     return;
@@ -6591,6 +6614,19 @@ async function recordRatingEndpoint(request, response, context, eventType, optio
     payloadHash: event.payloadHash,
     accessAudit: event.accessAudit,
   });
+}
+
+async function buildRatingValidationContext(context) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const workflowAssignments = latestWorkflowResources(workflowEvents, "assignment");
+  const ratingContextSnapshotArtifacts = latestWorkflowResources(workflowEvents, "ratingContextSnapshot");
+  return {
+    assignments: [...assignments, ...workflowAssignments],
+    positions: positionList,
+    critiques: critiqueList,
+    ratingContextSnapshots: buildEffectiveRatingContextSnapshots(ratingContextSnapshotArtifacts),
+  };
 }
 
 async function appendWorkflowPolicyDecisionGate(context, request, actor, resource, spec, params = {}) {
@@ -7110,7 +7146,7 @@ async function trainingExportEndpoint(request, response, context) {
   sendJson(response, 200, await buildAdminTrainingExport(context));
 }
 
-export function validateRatingPayload(rating, eventType) {
+export function validateRatingPayload(rating, eventType, validationContext = {}) {
   if (!rating || typeof rating !== "object" || Array.isArray(rating)) return invalid("rating object is required");
   const hiddenKeys = findHiddenKeys(rating);
   if (hiddenKeys.length) return invalid(`rater submissions cannot contain hidden metadata keys: ${hiddenKeys.join(", ")}`);
@@ -7148,16 +7184,22 @@ export function validateRatingPayload(rating, eventType) {
   if (eventType === "revision_submitted" && (rating.kind !== "revision" || !rating.parentRatingId)) {
     return invalid("revision endpoint requires kind=revision and parentRatingId");
   }
-  const assignment = assignments.find((item) => item.id === rating.assignmentId);
+  const assignmentList = validationContext.assignments ?? assignments;
+  const positionList = validationContext.positions ?? positions;
+  const critiqueList = validationContext.critiques ?? critiques;
+  const contextSnapshotList = validationContext.ratingContextSnapshots ?? ratingContextSnapshots;
+  const assignment = assignmentList.find((item) => item.id === rating.assignmentId);
   if (!assignment) return invalid(`unknown assignmentId: ${rating.assignmentId}`);
-  if (!positions.some((position) => position.id === rating.positionId)) return invalid(`unknown positionId: ${rating.positionId}`);
-  if (!critiques.some((critique) => critique.id === rating.critiqueId && critique.positionId === rating.positionId)) {
+  if (!positionList.some((position) => position.id === rating.positionId)) return invalid(`unknown positionId: ${rating.positionId}`);
+  if (!critiqueList.some((critique) => critique.id === rating.critiqueId && critique.positionId === rating.positionId)) {
     return invalid(`critiqueId ${rating.critiqueId} does not belong to positionId ${rating.positionId}`);
   }
-  const contextSnapshot = ratingContextSnapshots.find((snapshot) => snapshot.id === rating.ratingContextSnapshotId);
+  const contextSnapshot = contextSnapshotList.find((snapshot) => snapshot.id === rating.ratingContextSnapshotId);
   if (!contextSnapshot) return invalid(`unknown ratingContextSnapshotId: ${rating.ratingContextSnapshotId}`);
   if (contextSnapshot.positionId !== rating.positionId) return invalid("ratingContextSnapshotId must belong to the rated position");
   if (!contextSnapshot.visibleCritiqueIds.includes(rating.critiqueId)) return invalid("ratingContextSnapshotId must include the rated critique");
+  if ((assignment.positionId ?? rating.positionId) !== rating.positionId) return invalid("assignmentId must belong to the rated position");
+  if ((assignment.critiqueId ?? rating.critiqueId) !== rating.critiqueId) return invalid("assignmentId must belong to the rated critique");
   const scoreValidation = validateRatingScoreObject(rating.scores, "scores");
   if (!scoreValidation.ok) return scoreValidation;
   const rawScoreValidation = validateRatingScoreObject(rating.rawScores, "rawScores");
@@ -7823,10 +7865,13 @@ function normalizeFieldFragment(value) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-export function validateRatingActor(rating, actor) {
+export function validateRatingActor(rating, actor, validationContext = {}) {
   if (!actor || typeof actor !== "object") return invalid("actor session is required");
   if (actor.role !== "admin" && rating.raterId !== actor.id) return invalid(`rating.raterId must match the authenticated actor ${actor.id}`);
-  if (!actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(rating.assignmentId)) {
+  const assignment = (validationContext.assignments ?? assignments).find((item) => item.id === rating.assignmentId);
+  const assignedRaterId = assignment?.raterId ?? assignment?.assignedTo ?? assignment?.assigned_to ?? null;
+  const actorAssignedByWorkflow = Boolean(assignedRaterId && assignedRaterId === actor.id);
+  if (!actor.allowedAssignmentIds?.includes("*") && !actor.allowedAssignmentIds?.includes(rating.assignmentId) && !actorAssignedByWorkflow) {
     return invalid(`actor ${actor.id} is not assigned to ${rating.assignmentId}`);
   }
   return { ok: true };

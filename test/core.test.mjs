@@ -1987,6 +1987,10 @@ test("score explanation audit recomputes trigger requiredness from rating contex
   assert.equal(report.counts.triggerRequiredRows, 5);
   assert.equal(report.counts.triggerExplanationCompleteRows, 5);
   assert.equal(report.counts.triggerMismatchRows, 0);
+  assert.equal(report.counts.policyBoundRows, seedRatings.length);
+  assert.equal(report.counts.policyBindingReviewRows, 0);
+  assert.equal(report.scoreExplanationPolicyRows.some((row) => row.id === "score-explanation-policy-october-2026-demo"), true);
+  assert.equal(report.rows.every((row) => row.policyBindingStatus === "score_explanation_policy_bound"), true);
   assert.equal(report.byExpectedTrigger.high_stakes_workflow, 3);
   assert.equal(report.byExpectedTrigger.unclear_target, 2);
 
@@ -2014,6 +2018,36 @@ test("score explanation audit recomputes trigger requiredness from rating contex
   assert.ok(
     incompleteReport.reviewSections.some(
       (section) => section.artifactId === "rating-voting-bullet-a" && section.reason === "scoreExplanationRequired",
+    ),
+  );
+
+  const submittedPolicy = completePolicyBundleFixtures().scoreExplanationPolicies[0];
+  const submittedPolicyRating = {
+    ...seedRatings[0],
+    id: "rating-submitted-score-explanation-policy",
+    scoreExplanationPolicyId: submittedPolicy.id,
+  };
+  const submittedPolicyReport = buildScoreExplanationAuditReport("release-test", [submittedPolicyRating], {
+    scoreExplanationPolicies: [submittedPolicy],
+  });
+  assert.equal(submittedPolicyReport.releaseUseStatus, "score_explanation_audit_passed");
+  assert.equal(submittedPolicyReport.rows[0].scoreExplanationPolicySource, "submitted_workflow_score_explanation_policy");
+  assert.equal(submittedPolicyReport.rows[0].policyBindingStatus, "score_explanation_policy_bound");
+
+  const unknownPolicyReport = buildScoreExplanationAuditReport("release-test", [
+    {
+      ...seedRatings[0],
+      id: "rating-unknown-score-explanation-policy",
+      scoreExplanationPolicyId: "score-explanation-policy-missing",
+    },
+  ]);
+  assert.equal(unknownPolicyReport.releaseUseStatus, "score_explanation_audit_review_required");
+  assert.equal(unknownPolicyReport.counts.policyBindingReviewRows, 1);
+  assert.ok(
+    unknownPolicyReport.reviewSections.some(
+      (section) =>
+        section.artifactId === "rating-unknown-score-explanation-policy" &&
+        section.reason === "scoreExplanationPolicyId:not_found",
     ),
   );
 });
@@ -4006,6 +4040,46 @@ test("same-position context report accepts matching model prediction context sna
   assert.ok(votingStyle.modelContextPredictionIds.includes("pred-overall-voting-style"));
 });
 
+test("release report same-position context consumes submitted workflow assignments", () => {
+  const workflowRating = {
+    ...seedRatings[0],
+    id: "rating-workflow-same-position-context",
+    assignmentId: "assignment-workflow-same-position-context",
+    ratingContextSnapshotId: "rc-target-only-1",
+  };
+  const snapshot = createLabelSnapshot(
+    "snapshot-workflow-same-position-context",
+    "release-test",
+    [...seedRatings, workflowRating],
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    [...seedRatings, workflowRating],
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      workflowAssignments: [
+        {
+          id: "assignment-workflow-same-position-context",
+          assignmentType: "validation_subset",
+          positionId: "pos-ai-prior",
+          critiqueId: "crit-ai-base-rate",
+        },
+      ],
+    },
+  );
+  const workflowContextRow = report.samePositionContext.contextRows.find((row) => row.ratingId === "rating-workflow-same-position-context");
+
+  assert.equal(workflowContextRow.queueType, "validation_subset");
+  assert.equal(workflowContextRow.releaseCritical, true);
+  assert.equal(workflowContextRow.orderPolicyStatus, "fixed_or_target_only_order_disclosed");
+});
+
 test("aggregation excludes low-clarity provisional non-clarity fields", () => {
   const label = aggregateRatings("pos-voting", "crit-voting-style", seedRatings);
   assert.equal(label.weightedMeanScores.clarity, 0.32);
@@ -5422,6 +5496,109 @@ test("release report derives assignment-flag evidence from blind-safe workflow a
   const unsupportedRow = report.assignmentFlagEvidence.rows.find((row) => row.id === "flag-unsupported-core");
   assert.equal(unsupportedRow.reviewReasons.includes("assignment_not_found"), true);
   assert.equal(unsupportedRow.reviewReasons.includes("reasonCode:unsupported"), true);
+});
+
+test("release report derives assignment workflow evidence for blinding eligibility order and pacing", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-assignment-workflow-evidence",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const completeAssignment = {
+    id: "assignment-workflow-core",
+    raterId: "rater-a",
+    raterSessionId: "rater-session-core",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+    assignmentType: "live",
+    workflowProfileId: "workflow-profile-core",
+    workflowProfileVersion: "workflow-profile-rlhf90-v1",
+    scoreInputPolicyId: "score-input-policy-core",
+    requiredUiPanelSet: ["score_fields", "safe_decline", "source_recognition"],
+    optionalUiPanelSet: ["evidence_spans"],
+    preRatingSelfScreenStatus: "passed",
+    raterItemConflictCheckStatus: "no_conflict",
+    independentBlindEligibilityStatus: "eligible",
+    declineOrReassignmentStatus: "not_declined",
+    blindState: "blind_initial",
+    sourceTagVisibilityState: "hidden_before_initial_lock",
+    topicRoutingBasisAdminOnly: "topic competence only; no source tags exposed",
+    validationMembershipBlindToRater: true,
+    ratingContextSnapshotId: "rc-target-only-1",
+    samePositionSessionId: "same-position-session-core",
+    samePositionOrderPolicy: "counterbalanced",
+    orderCounterbalanceBucket: "bucket-a",
+    positionOrderIndex: 0,
+    siblingCritiquesSeenPriorCount: 0,
+    siblingCritiquesSeenPriorIds: [],
+    laterSiblingCritiquesAbsentAtSubmission: true,
+    positionLengthBand: "short",
+    critiqueLengthBand: "medium",
+    expectedEffortBand: "ordinary_live",
+    startedAt: "2026-10-01T00:00:00.000Z",
+    activeTimeSeconds: 120,
+    idleGapSummary: "none",
+    interruptionCount: 0,
+    draftAutosaveStatus: "saved_server_side",
+    lastAutosavedAt: "2026-10-01T00:02:00.000Z",
+    draftDependencyStaleStatus: "current",
+    resumeCount: 0,
+    sessionPacingState: "within_target",
+    fatigueWarningState: "none",
+    uiMode: "task_first_simplified",
+    rubricAnchorPanelVersion: "appendix-f-anchor-v1",
+    preSubmitLintPolicyVersion: "pre-submit-lint-v1",
+  };
+  const reviewAssignment = {
+    ...completeAssignment,
+    id: "assignment-workflow-core-review",
+    raterSessionId: "missing-rater-session",
+    requiredUiPanelSet: ["score_fields"],
+    raterItemConflictCheckStatus: "unchecked",
+    validationMembershipBlindToRater: false,
+    samePositionOrderPolicy: "source_order",
+    laterSiblingCritiquesAbsentAtSubmission: false,
+    draftDependencyStaleStatus: "stale_text_version",
+  };
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      workflowAssignments: [completeAssignment, reviewAssignment],
+      raterSessions: [{ id: "rater-session-core", raterId: "rater-a" }],
+      ratingContextSnapshots,
+      ratingWorkflowProfiles: [{ id: "workflow-profile-core" }],
+      scoreInputPolicies: [{ id: "score-input-policy-core" }],
+    },
+  );
+
+  assert.equal(report.assignmentWorkflowEvidence.counts.submittedAssignmentCount, 2);
+  assert.equal(report.assignmentWorkflowEvidence.counts.completeAssignmentCount, 1);
+  assert.equal(report.assignmentWorkflowEvidence.counts.reviewRequiredAssignmentCount, 1);
+  assert.equal(report.assignmentWorkflowEvidence.counts.linkedRaterSessionCount, 1);
+  assert.equal(report.assignmentWorkflowEvidence.counts.linkedRatingContextSnapshotCount, 2);
+  assert.equal(report.assignmentWorkflowEvidence.counts.counterbalancedOrRandomizedOrderCount, 1);
+  assert.equal(report.assignmentWorkflowEvidence.releaseUseStatus, "assignment_workflow_evidence_review_required");
+  const completeRow = report.assignmentWorkflowEvidence.rows.find((row) => row.assignmentId === "assignment-workflow-core");
+  assert.equal(completeRow.status, "assignment_workflow_evidence_complete");
+  assert.equal(completeRow.blindingEligibilityStatus, "blind_initial_eligibility_complete");
+  const reviewRow = report.assignmentWorkflowEvidence.rows.find((row) => row.assignmentId === "assignment-workflow-core-review");
+  assert.equal(reviewRow.status, "assignment_workflow_evidence_review_required");
+  assert.equal(reviewRow.reviewReasons.includes("raterSessionId:not_found"), true);
+  assert.equal(reviewRow.reviewReasons.includes("requiredUiPanelSet:safe_decline"), true);
+  assert.equal(reviewRow.reviewReasons.includes("requiredUiPanelSet:source_recognition"), true);
+  assert.equal(reviewRow.reviewReasons.includes("raterItemConflictCheckStatus"), true);
+  assert.equal(reviewRow.reviewReasons.includes("validationMembershipBlindToRater"), true);
+  assert.equal(reviewRow.reviewReasons.includes("samePositionOrderPolicy"), true);
+  assert.equal(reviewRow.reviewReasons.includes("laterSiblingCritiquesAbsentAtSubmission"), true);
+  assert.equal(reviewRow.reviewReasons.includes("draftDependencyStaleStatus"), true);
 });
 
 test("active-learning audit reports denominator flow and preserves blinding", () => {

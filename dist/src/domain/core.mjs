@@ -2627,13 +2627,27 @@ export function validateTriggeredScoreExplanation(text) {
 export function buildScoreExplanationAuditReport(releaseId, ratings = seedRatings, options = {}) {
   const assignmentRows = [...assignments, ...(options.assignments ?? []), ...(options.workflowAssignments ?? [])].filter((assignment) => assignment?.id);
   const assignmentById = new Map(assignmentRows.map((assignment) => [assignment.id, assignment]));
-  const rows = ratings.map((rating) => normalizeScoreExplanationAuditRow(rating, assignmentById.get(rating.assignmentId) ?? null));
+  const seedPolicyRows = uniqueRowsById([
+    normalizeScoreExplanationPolicy(defaultScoreExplanationPolicy("october-2026-demo"), "seed_score_explanation_policy"),
+    normalizeScoreExplanationPolicy(defaultScoreExplanationPolicy(releaseId), "seed_score_explanation_policy"),
+  ]);
+  const submittedPolicyRows = (options.scoreExplanationPolicies ?? [])
+    .map((policy) => normalizeScoreExplanationPolicy(policy, "submitted_workflow_score_explanation_policy"))
+    .filter(Boolean);
+  const scoreExplanationPolicyRows = uniqueRowsById([...seedPolicyRows, ...submittedPolicyRows]);
+  const scoreExplanationPolicyById = new Map(scoreExplanationPolicyRows.map((policy) => [policy.id, policy]));
+  const rows = ratings.map((rating) =>
+    normalizeScoreExplanationAuditRow(rating, assignmentById.get(rating.assignmentId) ?? null, scoreExplanationPolicyById),
+  );
   const reviewSections = rows.flatMap((row) =>
     row.reviewReasons.map((reason) => ({
       artifactType: "rating_score_explanation",
       artifactId: row.ratingId,
       reason,
     })),
+  );
+  const policyReviewSections = submittedPolicyRows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "score_explanation_policy", artifactId: row.id, reason })),
   );
   const byExpectedTrigger = Object.fromEntries(
     SCORE_EXPLANATION_TRIGGER_RULES.map((trigger) => [trigger, rows.filter((row) => row.expectedTriggers.includes(trigger)).length]),
@@ -2653,6 +2667,7 @@ export function buildScoreExplanationAuditReport(releaseId, ratings = seedRating
         "Ordinary ratings require seven scores plus low/medium/high confidence; scoreExplanation is required only when the server-derived trigger set is non-empty.",
       blindPromptRule: "Triggered explanations must be short, blind-safe, and hidden from source, peer, model, gold, and protected-status context.",
     },
+    scoreExplanationPolicyRows,
     rows,
     byExpectedTrigger,
     bySubmittedTrigger,
@@ -2668,14 +2683,18 @@ export function buildScoreExplanationAuditReport(releaseId, ratings = seedRating
       ordinaryRowsWithDisallowedScoreExplanation: rows.filter((row) => row.reviewReasons.includes("scoreExplanation:ordinary_not_allowed")).length,
       triggerMismatchRows: rows.filter((row) => row.missingExpectedTriggers.length || row.unexpectedSubmittedTriggers.length).length,
       promptVisibilityViolationRows: rows.filter((row) => row.reviewReasons.includes("scoreExplanationPromptVisibility")).length,
-      reviewSectionCount: reviewSections.length,
+      submittedScoreExplanationPolicyCount: submittedPolicyRows.length,
+      policyBoundRows: rows.filter((row) => row.policyBindingStatus === "score_explanation_policy_bound").length,
+      policyBindingReviewRows: rows.filter((row) => row.policyBindingStatus !== "score_explanation_policy_bound").length,
+      policyReviewSectionCount: policyReviewSections.length,
+      reviewSectionCount: reviewSections.length + policyReviewSections.length,
     },
-    reviewSections,
-    releaseUseStatus: reviewSections.length ? "score_explanation_audit_review_required" : "score_explanation_audit_passed",
+    reviewSections: [...policyReviewSections, ...reviewSections],
+    releaseUseStatus: reviewSections.length || policyReviewSections.length ? "score_explanation_audit_review_required" : "score_explanation_audit_passed",
   };
 }
 
-function normalizeScoreExplanationAuditRow(rating, assignment) {
+function normalizeScoreExplanationAuditRow(rating, assignment, scoreExplanationPolicyById = new Map()) {
   const submittedTriggers = normalizeStringArray(rating.scoreExplanationTriggers);
   const expectedTriggers = scoreExplanationTriggersForRating({
     scores: rating.scores ?? {},
@@ -2691,7 +2710,19 @@ function normalizeScoreExplanationAuditRow(rating, assignment) {
   const explanationText = typeof rating.scoreExplanation === "string" ? rating.scoreExplanation.trim() : "";
   const triggeredExplanationValidation = explanationRequired ? validateTriggeredScoreExplanation(explanationText) : { ok: true };
   const confidenceJudgmentPresent = SCORE_CONFIDENCE_LEVELS.includes(rating.scoreConfidenceJudgment);
+  const scoreExplanationPolicyId = rating.scoreExplanationPolicyId ?? null;
+  const scoreExplanationPolicy = scoreExplanationPolicyId ? scoreExplanationPolicyById.get(scoreExplanationPolicyId) : null;
+  const policyBindingStatus = !scoreExplanationPolicyId
+    ? "score_explanation_policy_missing"
+    : !scoreExplanationPolicy
+      ? "score_explanation_policy_not_found"
+      : scoreExplanationPolicy.reviewReasons.length
+        ? "score_explanation_policy_review_required"
+        : "score_explanation_policy_bound";
   const reviewReasons = [
+    scoreExplanationPolicyId ? null : "scoreExplanationPolicyId",
+    scoreExplanationPolicyId && !scoreExplanationPolicy ? "scoreExplanationPolicyId:not_found" : null,
+    scoreExplanationPolicy?.reviewReasons.length ? "scoreExplanationPolicyId:review_required" : null,
     confidenceJudgmentPresent ? null : "scoreConfidenceJudgment",
     missingExpectedTriggers.length ? `scoreExplanationTriggers:missing:${missingExpectedTriggers.join(",")}` : null,
     unexpectedSubmittedTriggers.length ? `scoreExplanationTriggers:unexpected:${unexpectedSubmittedTriggers.join(",")}` : null,
@@ -2716,7 +2747,9 @@ function normalizeScoreExplanationAuditRow(rating, assignment) {
     raterId: rating.raterId ?? null,
     queueType: assignment?.queueType ?? null,
     workflowProfileId: rating.workflowProfileId ?? null,
-    scoreExplanationPolicyId: rating.scoreExplanationPolicyId ?? null,
+    scoreExplanationPolicyId,
+    scoreExplanationPolicySource: scoreExplanationPolicy?.rowSource ?? null,
+    policyBindingStatus,
     scoreConfidenceJudgment: rating.scoreConfidenceJudgment ?? null,
     confidenceJudgmentPresent,
     expectedTriggers,
@@ -5755,6 +5788,192 @@ function normalizeAssignmentFlagEvidenceRow(flag, assignmentById) {
   };
 }
 
+function buildAssignmentWorkflowEvidenceReport(releaseId, options = {}) {
+  const linkedEvidence = {
+    raterSessionById: new Map((options.raterSessions ?? []).map((session) => [session.id, session])),
+    ratingContextSnapshotById: new Map((options.ratingContextSnapshots ?? []).map((snapshot) => [snapshot.id, snapshot])),
+    workflowProfileById: new Map((options.ratingWorkflowProfiles ?? []).map((profile) => [profile.id, profile])),
+    scoreInputPolicyById: new Map((options.scoreInputPolicies ?? []).map((policy) => [policy.id, policy])),
+    assignmentDeclineByAssignmentId: new Map((options.assignmentDeclines ?? []).map((decline) => [decline.assignmentId, decline])),
+  };
+  const rows = (options.workflowAssignments ?? [])
+    .map((assignment) => normalizeAssignmentWorkflowEvidenceRow(assignment, linkedEvidence))
+    .filter(Boolean);
+  const reviewRows = rows.filter((row) => row.reviewReasons.length);
+  const reviewSections = rows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "assignment_workflow", artifactId: row.assignmentId, reason })),
+  );
+  return {
+    id: `assignment-workflow-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    evidenceRules: {
+      eligibilityRule:
+        "Submitted release-critical assignments must pass pre-rating self-screen, conflict, exposure-aware independent-blind eligibility, and safe-decline routing before serving.",
+      blindingRule:
+        "Source tags, validation membership, protected split state, model/peer/gold labels, and later same-position siblings must remain hidden before initial lock.",
+      orderRule: "Same-position queues must record counterbalanced or randomized order, counterbalance bucket, order index, and prior/later sibling exposure state.",
+      pacingRule: "Assignments must carry session workload metadata, current draft dependency state, and rater-session pacing evidence before supporting release claims.",
+    },
+    rows,
+    reviewRows,
+    reviewSections,
+    byAssignmentType: countBy(rows, "assignmentType"),
+    bySamePositionOrderPolicy: countBy(rows, "samePositionOrderPolicy"),
+    bySessionPacingState: countBy(rows, "sessionPacingState"),
+    counts: {
+      submittedAssignmentCount: rows.length,
+      completeAssignmentCount: rows.length - reviewRows.length,
+      reviewRequiredAssignmentCount: reviewRows.length,
+      linkedRaterSessionCount: rows.filter((row) => row.linkedRaterSessionStatus === "linked_rater_session_complete").length,
+      linkedRatingContextSnapshotCount: rows.filter((row) => row.linkedRatingContextSnapshotStatus === "linked_rating_context_snapshot_complete").length,
+      counterbalancedOrRandomizedOrderCount: rows.filter((row) => row.samePositionOrderStatus === "same_position_order_declared").length,
+      blindInitialEligibleCount: rows.filter((row) => row.blindingEligibilityStatus === "blind_initial_eligibility_complete").length,
+      currentDraftDependencyCount: rows.filter((row) => row.draftDependencyStaleStatus === "current").length,
+    },
+    releaseUseStatus: !rows.length
+      ? "assignment_workflow_not_submitted"
+      : reviewRows.length
+        ? "assignment_workflow_evidence_review_required"
+        : "submitted_assignment_workflow_evidence_complete",
+  };
+}
+
+function normalizeAssignmentWorkflowEvidenceRow(assignment, linkedEvidence) {
+  if (!assignment || typeof assignment !== "object") return null;
+  const assignmentId = assignment.id ?? assignment.assignmentId ?? assignment.assignment_id;
+  if (!assignmentId) return null;
+  const raterSessionId = assignment.raterSessionId ?? assignment.rater_session_id ?? null;
+  const ratingContextSnapshotId = assignment.ratingContextSnapshotId ?? assignment.rating_context_snapshot_id ?? null;
+  const workflowProfileId = assignment.workflowProfileId ?? assignment.workflow_profile_id ?? null;
+  const scoreInputPolicyId = assignment.scoreInputPolicyId ?? assignment.score_input_policy_id ?? null;
+  const requiredUiPanelSet = normalizeStringArray(assignment.requiredUiPanelSet ?? assignment.required_ui_panel_set);
+  const optionalUiPanelSet = normalizeStringArray(assignment.optionalUiPanelSet ?? assignment.optional_ui_panel_set);
+  const siblingCritiquesSeenPriorIds = normalizeStringArray(assignment.siblingCritiquesSeenPriorIds ?? assignment.sibling_critiques_seen_prior_ids);
+  const samePositionOrderPolicy = assignment.samePositionOrderPolicy ?? assignment.same_position_order_policy ?? null;
+  const draftDependencyStaleStatus = assignment.draftDependencyStaleStatus ?? assignment.draft_dependency_stale_status ?? null;
+  const sessionPacingState = assignment.sessionPacingState ?? assignment.session_pacing_state ?? null;
+  const fatigueWarningState = assignment.fatigueWarningState ?? assignment.fatigue_warning_state ?? null;
+  const linkedRaterSession = raterSessionId ? linkedEvidence.raterSessionById.get(raterSessionId) : null;
+  const linkedRatingContextSnapshot = ratingContextSnapshotId ? linkedEvidence.ratingContextSnapshotById.get(ratingContextSnapshotId) : null;
+  const linkedWorkflowProfile = workflowProfileId ? linkedEvidence.workflowProfileById.get(workflowProfileId) : null;
+  const linkedScoreInputPolicy = scoreInputPolicyId ? linkedEvidence.scoreInputPolicyById.get(scoreInputPolicyId) : null;
+  const linkedDecline = linkedEvidence.assignmentDeclineByAssignmentId.get(assignmentId) ?? null;
+  const activeTimeSeconds = Number(assignment.activeTimeSeconds ?? assignment.active_time_seconds);
+  const interruptionCount = Number(assignment.interruptionCount ?? assignment.interruption_count);
+  const resumeCount = Number(assignment.resumeCount ?? assignment.resume_count);
+  const positionOrderIndex = Number(assignment.positionOrderIndex ?? assignment.position_order_index);
+  const siblingCritiquesSeenPriorCount = Number(assignment.siblingCritiquesSeenPriorCount ?? assignment.sibling_critiques_seen_prior_count);
+  const reviewReasons = [
+    requiredPromptFieldReason("raterId", assignment.raterId ?? assignment.rater_id),
+    requiredPromptFieldReason("raterSessionId", raterSessionId),
+    raterSessionId && !linkedRaterSession ? "raterSessionId:not_found" : null,
+    requiredPromptFieldReason("positionId", assignment.positionId ?? assignment.position_id),
+    requiredPromptFieldReason("critiqueId", assignment.critiqueId ?? assignment.critique_id),
+    requiredPromptFieldReason("assignmentType", assignment.assignmentType ?? assignment.assignment_type),
+    requiredPromptFieldReason("workflowProfileId", workflowProfileId),
+    workflowProfileId && !linkedWorkflowProfile ? "workflowProfileId:not_found" : null,
+    requiredPromptFieldReason("workflowProfileVersion", assignment.workflowProfileVersion ?? assignment.workflow_profile_version),
+    requiredPromptFieldReason("scoreInputPolicyId", scoreInputPolicyId),
+    scoreInputPolicyId && !linkedScoreInputPolicy ? "scoreInputPolicyId:not_found" : null,
+    requiredUiPanelSet.length ? null : "requiredUiPanelSet",
+    requiredUiPanelSet.includes("score_fields") ? null : "requiredUiPanelSet:score_fields",
+    requiredUiPanelSet.includes("safe_decline") ? null : "requiredUiPanelSet:safe_decline",
+    requiredUiPanelSet.includes("source_recognition") ? null : "requiredUiPanelSet:source_recognition",
+    Array.isArray(assignment.optionalUiPanelSet ?? assignment.optional_ui_panel_set) ? null : "optionalUiPanelSet",
+    assignment.preRatingSelfScreenStatus === "passed" ? null : "preRatingSelfScreenStatus",
+    assignment.raterItemConflictCheckStatus === "no_conflict" ? null : "raterItemConflictCheckStatus",
+    assignment.independentBlindEligibilityStatus === "eligible" ? null : "independentBlindEligibilityStatus",
+    requiredPromptFieldReason("declineOrReassignmentStatus", assignment.declineOrReassignmentStatus ?? assignment.decline_or_reassignment_status),
+    assignment.blindState === "blind_initial" ? null : "blindState",
+    assignment.sourceTagVisibilityState === "hidden_before_initial_lock" ? null : "sourceTagVisibilityState",
+    requiredPromptFieldReason("topicRoutingBasisAdminOnly", assignment.topicRoutingBasisAdminOnly ?? assignment.topic_routing_basis_admin_only),
+    assignment.validationMembershipBlindToRater === true ? null : "validationMembershipBlindToRater",
+    requiredPromptFieldReason("ratingContextSnapshotId", ratingContextSnapshotId),
+    ratingContextSnapshotId && !linkedRatingContextSnapshot ? "ratingContextSnapshotId:not_found" : null,
+    requiredPromptFieldReason("samePositionSessionId", assignment.samePositionSessionId ?? assignment.same_position_session_id),
+    policyMentionsAny(samePositionOrderPolicy, ["counterbalanced", "randomized", "random"]) ? null : "samePositionOrderPolicy",
+    requiredPromptFieldReason("orderCounterbalanceBucket", assignment.orderCounterbalanceBucket ?? assignment.order_counterbalance_bucket),
+    Number.isFinite(positionOrderIndex) && positionOrderIndex >= 0 ? null : "positionOrderIndex",
+    Number.isFinite(siblingCritiquesSeenPriorCount) && siblingCritiquesSeenPriorCount >= 0 ? null : "siblingCritiquesSeenPriorCount",
+    Array.isArray(assignment.siblingCritiquesSeenPriorIds ?? assignment.sibling_critiques_seen_prior_ids) ? null : "siblingCritiquesSeenPriorIds",
+    assignment.laterSiblingCritiquesAbsentAtSubmission === true ? null : "laterSiblingCritiquesAbsentAtSubmission",
+    requiredPromptFieldReason("positionLengthBand", assignment.positionLengthBand ?? assignment.position_length_band),
+    requiredPromptFieldReason("critiqueLengthBand", assignment.critiqueLengthBand ?? assignment.critique_length_band),
+    requiredPromptFieldReason("expectedEffortBand", assignment.expectedEffortBand ?? assignment.expected_effort_band),
+    requiredPromptFieldReason("startedAt", assignment.startedAt ?? assignment.started_at),
+    Number.isFinite(activeTimeSeconds) && activeTimeSeconds >= 0 ? null : "activeTimeSeconds",
+    requiredPromptFieldReason("idleGapSummary", assignment.idleGapSummary ?? assignment.idle_gap_summary),
+    Number.isFinite(interruptionCount) && interruptionCount >= 0 ? null : "interruptionCount",
+    requiredPromptFieldReason("draftAutosaveStatus", assignment.draftAutosaveStatus ?? assignment.draft_autosave_status),
+    requiredPromptFieldReason("lastAutosavedAt", assignment.lastAutosavedAt ?? assignment.last_autosaved_at),
+    draftDependencyStaleStatus === "current" ? null : "draftDependencyStaleStatus",
+    Number.isFinite(resumeCount) && resumeCount >= 0 ? null : "resumeCount",
+    requiredPromptFieldReason("sessionPacingState", sessionPacingState),
+    requiredPromptFieldReason("fatigueWarningState", fatigueWarningState),
+    linkedRaterSession && linkedRaterSession.raterId !== (assignment.raterId ?? assignment.rater_id) ? "raterSessionId:rater_mismatch" : null,
+    requiredPromptFieldReason("uiMode", assignment.uiMode ?? assignment.ui_mode),
+    requiredPromptFieldReason("rubricAnchorPanelVersion", assignment.rubricAnchorPanelVersion ?? assignment.rubric_anchor_panel_version),
+    requiredPromptFieldReason("preSubmitLintPolicyVersion", assignment.preSubmitLintPolicyVersion ?? assignment.pre_submit_lint_policy_version),
+  ].filter(Boolean);
+  return {
+    assignmentId,
+    rowSource: "submitted_workflow_assignment",
+    raterId: assignment.raterId ?? assignment.rater_id ?? null,
+    raterSessionId,
+    linkedRaterSessionStatus: linkedRaterSession ? "linked_rater_session_complete" : "linked_rater_session_missing",
+    positionId: assignment.positionId ?? assignment.position_id ?? null,
+    critiqueId: assignment.critiqueId ?? assignment.critique_id ?? null,
+    assignmentType: assignment.assignmentType ?? assignment.assignment_type ?? null,
+    workflowProfileId,
+    linkedWorkflowProfileStatus: linkedWorkflowProfile ? "linked_workflow_profile_complete" : "linked_workflow_profile_missing",
+    scoreInputPolicyId,
+    linkedScoreInputPolicyStatus: linkedScoreInputPolicy ? "linked_score_input_policy_complete" : "linked_score_input_policy_missing",
+    requiredUiPanelSet,
+    optionalUiPanelSet,
+    preRatingSelfScreenStatus: assignment.preRatingSelfScreenStatus ?? assignment.pre_rating_self_screen_status ?? null,
+    raterItemConflictCheckStatus: assignment.raterItemConflictCheckStatus ?? assignment.rater_item_conflict_check_status ?? null,
+    independentBlindEligibilityStatus: assignment.independentBlindEligibilityStatus ?? assignment.independent_blind_eligibility_status ?? null,
+    declineOrReassignmentStatus: assignment.declineOrReassignmentStatus ?? assignment.decline_or_reassignment_status ?? null,
+    linkedAssignmentDeclineId: linkedDecline?.id ?? null,
+    blindState: assignment.blindState ?? assignment.blind_state ?? null,
+    sourceTagVisibilityState: assignment.sourceTagVisibilityState ?? assignment.source_tag_visibility_state ?? null,
+    validationMembershipBlindToRater: assignment.validationMembershipBlindToRater === true,
+    blindingEligibilityStatus:
+      assignment.blindState === "blind_initial" &&
+      assignment.sourceTagVisibilityState === "hidden_before_initial_lock" &&
+      assignment.validationMembershipBlindToRater === true &&
+      assignment.independentBlindEligibilityStatus === "eligible"
+        ? "blind_initial_eligibility_complete"
+        : "blind_initial_eligibility_review_required",
+    ratingContextSnapshotId,
+    linkedRatingContextSnapshotStatus: linkedRatingContextSnapshot ? "linked_rating_context_snapshot_complete" : "linked_rating_context_snapshot_missing",
+    samePositionSessionId: assignment.samePositionSessionId ?? assignment.same_position_session_id ?? null,
+    samePositionOrderPolicy,
+    samePositionOrderStatus: policyMentionsAny(samePositionOrderPolicy, ["counterbalanced", "randomized", "random"])
+      ? "same_position_order_declared"
+      : "same_position_order_review_required",
+    orderCounterbalanceBucket: assignment.orderCounterbalanceBucket ?? assignment.order_counterbalance_bucket ?? null,
+    positionOrderIndex: Number.isFinite(positionOrderIndex) ? positionOrderIndex : null,
+    siblingCritiquesSeenPriorCount: Number.isFinite(siblingCritiquesSeenPriorCount) ? siblingCritiquesSeenPriorCount : null,
+    siblingCritiquesSeenPriorIds,
+    laterSiblingCritiquesAbsentAtSubmission: assignment.laterSiblingCritiquesAbsentAtSubmission === true,
+    positionLengthBand: assignment.positionLengthBand ?? assignment.position_length_band ?? null,
+    critiqueLengthBand: assignment.critiqueLengthBand ?? assignment.critique_length_band ?? null,
+    expectedEffortBand: assignment.expectedEffortBand ?? assignment.expected_effort_band ?? null,
+    activeTimeSeconds: Number.isFinite(activeTimeSeconds) ? activeTimeSeconds : null,
+    interruptionCount: Number.isFinite(interruptionCount) ? interruptionCount : null,
+    resumeCount: Number.isFinite(resumeCount) ? resumeCount : null,
+    draftAutosaveStatus: assignment.draftAutosaveStatus ?? assignment.draft_autosave_status ?? null,
+    draftDependencyStaleStatus,
+    sessionPacingState,
+    fatigueWarningState,
+    uiMode: assignment.uiMode ?? assignment.ui_mode ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "assignment_workflow_evidence_review_required" : "assignment_workflow_evidence_complete",
+  };
+}
+
 export function buildActiveLearningAudit(batches = activeLearningBatches, submittedSelectionAudits = [], workflowArtifacts = {}) {
   const candidateWorkflowEvidence = buildCandidateWorkflowEvidence(workflowArtifacts);
   const submittedBatches = submittedSelectionAudits.map((audit) => normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence)).filter(Boolean);
@@ -8039,6 +8258,7 @@ export function buildSamePositionContextReport(
     const itemId = makeItemId(rating.positionId, rating.critiqueId);
     const position = positionById.get(rating.positionId);
     const assignment = assignmentById.get(rating.assignmentId);
+    const assignmentQueueType = assignment?.queueType ?? assignment?.assignmentType ?? "unknown";
     const snapshot = snapshotById.get(rating.ratingContextSnapshotId);
     const allCritiqueIds = critiqueIdsByPosition[rating.positionId] ?? [];
     const siblingCritiqueIds = allCritiqueIds.filter((id) => id !== rating.critiqueId);
@@ -8059,7 +8279,7 @@ export function buildSamePositionContextReport(
     ]);
     const releaseCritical =
       ["internal_validation", "hidden_benchmark"].includes(position?.split) ||
-      ["validation_subset", "benchmark_candidate_review"].includes(assignment?.queueType);
+      ["validation_subset", "benchmark_candidate_review", "hidden_benchmark"].includes(assignmentQueueType);
     const currentCritiqueVisible = visibleSet.has(rating.critiqueId);
     const humanModelParityStatus = snapshot?.humanModelParityStatus ?? "missing_context_snapshot";
     const contextSensitive = visibleSiblingCritiqueIds.length > 0 || humanModelParityStatus.includes("context_sensitive");
@@ -8087,7 +8307,7 @@ export function buildSamePositionContextReport(
       critiqueId: rating.critiqueId,
       itemHash: `sha256:${itemId}:same-position-context`,
       split: position?.split ?? "unknown",
-      queueType: assignment?.queueType ?? "unknown",
+      queueType: assignmentQueueType,
       ratingContextSnapshotId: rating.ratingContextSnapshotId,
       contextSnapshotFrozen: Boolean(snapshot?.frozenAt),
       currentCritiqueVisible,
@@ -11960,6 +12180,10 @@ function normalizeStringArray(value) {
   if (Array.isArray(value)) return value.filter((item) => typeof item === "string" && item).map((item) => item.trim());
   if (typeof value === "string" && value) return value.split(",").map((item) => item.trim()).filter(Boolean);
   return [];
+}
+
+function uniqueRowsById(rows) {
+  return [...new Map(rows.filter((row) => row?.id).map((row) => [row.id, row])).values()];
 }
 
 function policyMentions(value, fragments) {
@@ -17940,13 +18164,21 @@ export function buildOctoberReleaseReport(
   const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
     humanCeilingRuns: options.humanCeilingRuns ?? [],
   });
-  const samePositionContext = buildSamePositionContextReport(releaseId, ratings, positionList, critiqueList, effectiveRatingContextSnapshots, assignments, {
-    modelEvaluationPredictions: [
-      ...fullRubricEvaluationRun.predictions,
-      ...overallOnlyEvaluationRun.predictions,
-      ...(options.modelEvaluationPredictions ?? []),
-    ],
-  });
+  const samePositionContext = buildSamePositionContextReport(
+    releaseId,
+    ratings,
+    positionList,
+    critiqueList,
+    effectiveRatingContextSnapshots,
+    [...assignments, ...(options.workflowAssignments ?? [])],
+    {
+      modelEvaluationPredictions: [
+        ...fullRubricEvaluationRun.predictions,
+        ...overallOnlyEvaluationRun.predictions,
+        ...(options.modelEvaluationPredictions ?? []),
+      ],
+    },
+  );
   const sanityBaselines = buildSanityBaselineReport(releaseId, labelSnapshot, positionList, critiqueList, {
     sanityBaselineRuns: options.sanityBaselineRuns ?? [],
   });
@@ -18195,6 +18427,15 @@ export function buildOctoberReleaseReport(
   });
   const scoreExplanationAudit = buildScoreExplanationAuditReport(releaseId, ratings, {
     workflowAssignments: options.workflowAssignments ?? [],
+    scoreExplanationPolicies: options.scoreExplanationPolicies ?? [],
+  });
+  const assignmentWorkflowEvidence = buildAssignmentWorkflowEvidenceReport(releaseId, {
+    workflowAssignments: options.workflowAssignments ?? [],
+    raterSessions: options.raterSessions ?? [],
+    ratingContextSnapshots: effectiveRatingContextSnapshots,
+    ratingWorkflowProfiles: options.ratingWorkflowProfiles ?? [],
+    scoreInputPolicies: options.scoreInputPolicies ?? [],
+    assignmentDeclines: options.assignmentDeclines ?? [],
   });
   const auxiliaryWorkflowEvidence = buildAuxiliaryWorkflowEvidenceReport(releaseId, {
     blindingPreviewAudits: options.blindingPreviewAudits ?? [],
@@ -18278,6 +18519,7 @@ export function buildOctoberReleaseReport(
     participantSafeguardEvidence,
     ratingExperienceEvidence,
     scoreExplanationAudit,
+    assignmentWorkflowEvidence,
     auxiliaryWorkflowEvidence,
     interactionWorkflowEvidence,
     discussionAdjudicationWorkflowEvidence,
