@@ -1551,10 +1551,10 @@ function completeInteractionWorkflowFixtures() {
       moderatorAdjudicatorVisibilityExceptions: "adjudicator can inspect pre-read notes only after initial locks",
       visibleMaterialPolicy: "peer_rationales_visible_post_lock_only",
       peerScoreRationaleVisibilityTimestamp: "2026-10-01T00:50:00.000Z",
-      objectLevelCommentRecords: ["comment-workflow-new"],
+      objectLevelCommentRecords: ["discussion-comment-workflow-new"],
       spanReferenceLinks: ["rationale-span-workflow-new"],
       overlookedPointFlags: ["no_unanswered_central_objection"],
-      revisionProposalIds: ["revision-proposal-workflow-new"],
+      revisionProposalIds: ["discussion-revision-proposal-workflow-new"],
       majorityPressureWarningState: "displayed",
       transcriptArtifact: "discussion-transcript-workflow-new",
       writtenFollowUpStatus: "not_required",
@@ -4651,6 +4651,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unsafeDiscussionRevisionProposal.status, 400);
   assert.match(unsafeDiscussionRevisionProposal.body.detail, /revisionReasonCode|originalRatingPreservation/);
+
+  const incompleteAdjudication = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudications",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudication: {
+        id: "adjudication-workflow-incomplete",
+        discussionThreadId: "discussion-thread-workflow-new",
+        itemId: "pos-workflow-new::crit-workflow-new",
+        decisionStatus: "memo_pending_finalization",
+      },
+    }),
+  });
+  assert.equal(incompleteAdjudication.status, 400);
+  assert.match(incompleteAdjudication.body.detail, /adjudicatorIds/);
 
   const adjudication = await invokeApi(context, {
     method: "POST",
@@ -10018,8 +10034,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.assignmentFlagEvidence.rows[0].excludedFromRatingDenominator, true);
   assert.equal(releaseReport.body.assignmentFlagEvidence.releaseUseStatus, "submitted_assignment_flag_evidence_complete");
   assert.equal(releaseReport.body.workflowActionArtifacts.discussions.length, 1);
+  assert.equal(releaseReport.body.workflowAuditTrailArtifacts.discussionComments.length, 1);
+  assert.equal(releaseReport.body.workflowAuditTrailArtifacts.discussionRevisionProposals.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.adjudications.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.adjudicationFinalizations.length, 1);
+  assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.releaseUseStatus, "submitted_discussion_adjudication_workflow_complete");
+  assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionThreadCount, 1);
+  assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionCommentCount, 1);
+  assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionRevisionProposalCount, 1);
+  assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.completeDiscussionThreadCount, 1);
+  assert.deepEqual(releaseReport.body.discussionAdjudicationWorkflowEvidence.coverageRows[0].reviewReasons, []);
+  assert.deepEqual(releaseReport.body.discussionAdjudicationWorkflowEvidence.coverageRows[0].objectLevelCommentIds, [
+    "discussion-comment-workflow-new",
+  ]);
+  assert.deepEqual(releaseReport.body.discussionAdjudicationWorkflowEvidence.coverageRows[0].revisionProposalIds, [
+    "discussion-revision-proposal-workflow-new",
+  ]);
+  assert.deepEqual(releaseReport.body.discussionAdjudicationWorkflowEvidence.coverageRows[0].adjudicationFinalizationIds, [
+    "adjudication-finalization-workflow-new",
+  ]);
   assert.equal(releaseReport.body.adjudicationFinalizationEvidence.counts.submittedFinalizationCount, 1);
   assert.equal(releaseReport.body.adjudicationFinalizationEvidence.counts.completeFinalizationCount, 1);
   assert.equal(releaseReport.body.adjudicationFinalizationEvidence.rows[0].memoFound, true);

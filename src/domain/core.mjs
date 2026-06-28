@@ -341,6 +341,8 @@ export const raterProfiles = [
   },
 ];
 
+const RATER_PROFILE_TIERS = ["undergraduate", "graduate", "phd", "expert", "admin"];
+
 export const ratingContextSnapshots = [
   {
     id: "rc-target-only-1",
@@ -4377,6 +4379,367 @@ function normalizeAdjudicationFinalizationEvidenceRow(finalization, memoById) {
     reviewReasons,
     status: reviewReasons.length ? "adjudication_finalization_evidence_review_required" : "adjudication_finalization_evidence_complete",
   };
+}
+
+function buildDiscussionAdjudicationWorkflowEvidenceReport(releaseId, options = {}) {
+  const threadRows = (options.discussionThreads ?? []).map(normalizeDiscussionThreadWorkflowRow).filter(Boolean);
+  const discussionRows = (options.discussions ?? []).map((discussion) => normalizeDiscussionOpenWorkflowRow(discussion, threadRows)).filter(Boolean);
+  const commentRows = (options.discussionComments ?? []).map(normalizeDiscussionCommentWorkflowRow).filter(Boolean);
+  const revisionProposalRows = (options.discussionRevisionProposals ?? []).map(normalizeDiscussionRevisionProposalWorkflowRow).filter(Boolean);
+  const postLockSessionRows = (options.postLockDiscussionSessions ?? []).map(normalizePostLockDiscussionSessionLinkRow).filter(Boolean);
+  const adjudicationRows = (options.adjudications ?? []).map(normalizeAdjudicationWorkflowRow).filter(Boolean);
+  const adjudicationReviewSessionRows = (options.adjudicationReviewSessions ?? []).map(normalizeAdjudicationReviewSessionLinkRow).filter(Boolean);
+  const memoRows = (options.adjudicationMemos ?? []).map(normalizeAdjudicationMemoLinkRow).filter(Boolean);
+  const finalizationRows = (options.adjudicationFinalizations ?? []).map(normalizeAdjudicationFinalizationLinkRow).filter(Boolean);
+  const coverageRows = threadRows.map((thread) =>
+    discussionAdjudicationThreadCoverageRow(thread, {
+      discussionRows,
+      commentRows,
+      revisionProposalRows,
+      postLockSessionRows,
+      adjudicationRows,
+      adjudicationReviewSessionRows,
+      memoRows,
+      finalizationRows,
+    }),
+  );
+  const reviewSections = [
+    ...discussionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion", artifactId: row.id, reason }))),
+    ...threadRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_thread", artifactId: row.id, reason }))),
+    ...commentRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_comment", artifactId: row.id, reason }))),
+    ...revisionProposalRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_revision_proposal", artifactId: row.id, reason }))),
+    ...adjudicationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication", artifactId: row.id, reason }))),
+    ...coverageRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "discussion_adjudication_thread_coverage", artifactId: row.discussionThreadId, reason })),
+    ),
+  ];
+  const submittedThreadCount = threadRows.length;
+  const completeThreadCount = coverageRows.filter((row) => row.status === "discussion_adjudication_workflow_complete").length;
+  const releaseUseStatus = reviewSections.length
+    ? "discussion_adjudication_workflow_review_required"
+    : submittedThreadCount
+      ? "submitted_discussion_adjudication_workflow_complete"
+      : "discussion_adjudication_workflow_not_submitted";
+  return {
+    id: `discussion-adjudication-workflow-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    evidenceRules: {
+      postLockDiscussionRule:
+        "Submitted discussion threads must link to post-lock sessions with locked initial ratings, object-level comments, revision proposals, and transcript artifacts.",
+      adjudicationRule:
+        "Submitted discussion threads must link to adjudication records, adjudication review sessions, memos, and finalized release-candidate finalizations before supporting release claims.",
+      preservationRule: "Revision proposals must preserve original ratings append-only rather than replacing initial blind ratings.",
+    },
+    discussionRows,
+    discussionThreadRows: threadRows,
+    discussionCommentRows: commentRows,
+    discussionRevisionProposalRows: revisionProposalRows,
+    postLockDiscussionSessionRows: postLockSessionRows,
+    adjudicationRows,
+    adjudicationReviewSessionRows,
+    adjudicationMemoRows: memoRows,
+    adjudicationFinalizationRows: finalizationRows,
+    coverageRows,
+    counts: {
+      submittedDiscussionCount: discussionRows.length,
+      submittedDiscussionThreadCount: threadRows.length,
+      submittedDiscussionCommentCount: commentRows.length,
+      submittedDiscussionRevisionProposalCount: revisionProposalRows.length,
+      submittedPostLockDiscussionSessionCount: postLockSessionRows.length,
+      submittedAdjudicationCount: adjudicationRows.length,
+      submittedAdjudicationReviewSessionCount: adjudicationReviewSessionRows.length,
+      submittedAdjudicationMemoCount: memoRows.filter((row) => row.rowSource === "submitted_workflow_adjudication_memo").length,
+      submittedAdjudicationFinalizationCount: finalizationRows.length,
+      completeDiscussionThreadCount: completeThreadCount,
+      reviewSectionCount: reviewSections.length,
+    },
+    reviewSections,
+    releaseUseStatus,
+  };
+}
+
+function normalizeDiscussionOpenWorkflowRow(discussion, threadRows = []) {
+  const id = discussion?.id;
+  if (!id) return null;
+  const itemKeys = workflowItemKeys(discussion);
+  const linkedThread = linkedDiscussionThreadForResource(discussion, threadRows);
+  const disagreementTaxonomy = normalizeStringArray(discussion.disagreementTaxonomy ?? discussion.disagreementTaxonomyCodes);
+  const reviewReasons = [
+    itemKeys.length ? null : "itemKeys",
+    disagreementTaxonomy.length ? null : "disagreementTaxonomy",
+    linkedThread ? null : "linkedDiscussionThread",
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_discussion",
+    itemKeys,
+    linkedDiscussionThreadId: linkedThread?.id ?? null,
+    disagreementTaxonomy,
+    policyActionKind: discussion.policyActionKind ?? null,
+    policyDecisionId: discussion.policyDecisionId ?? null,
+    policyDecisionConsumptionId: discussion.policyDecisionConsumptionId ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "discussion_open_review_required" : "discussion_open_complete",
+  };
+}
+
+function normalizeDiscussionThreadWorkflowRow(thread) {
+  const id = thread?.id;
+  if (!id) return null;
+  const itemKeys = workflowItemKeys(thread);
+  const disagreementTaxonomyCodes = normalizeStringArray(thread.disagreementTaxonomyCodes ?? thread.disagreementTaxonomy);
+  const reviewReasons = [
+    itemKeys.length ? null : "itemKeys",
+    requiredPromptFieldReason("issueType", thread.issueType),
+    disagreementTaxonomyCodes.length ? null : "disagreementTaxonomyCodes",
+    requiredPromptFieldReason("status", thread.status),
+    requiredPromptFieldReason("createdAt", thread.createdAt),
+    requiredPromptFieldReason("updatedAt", thread.updatedAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_discussion_thread",
+    itemKeys,
+    issueType: thread.issueType ?? null,
+    disagreementTaxonomyCodes,
+    statusValue: thread.status ?? null,
+    createdAt: thread.createdAt ?? null,
+    updatedAt: thread.updatedAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "discussion_thread_review_required" : "discussion_thread_complete",
+  };
+}
+
+function normalizeDiscussionCommentWorkflowRow(comment) {
+  const id = comment?.id;
+  if (!id) return null;
+  const threadId = workflowDiscussionThreadId(comment);
+  const reviewReasons = [
+    requiredPromptFieldReason("discussionThreadId", threadId),
+    requiredPromptFieldReason("authorId", comment.authorId),
+    requiredPromptFieldReason("commentText", comment.commentText),
+    requiredPromptFieldReason("objectLevelStatus", comment.objectLevelStatus),
+    requiredPromptFieldReason("timestamp", comment.timestamp ?? comment.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_discussion_comment",
+    discussionThreadId: threadId,
+    authorId: comment.authorId ?? null,
+    objectLevelStatus: comment.objectLevelStatus ?? null,
+    timestamp: comment.timestamp ?? comment.createdAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "discussion_comment_review_required" : "discussion_comment_complete",
+  };
+}
+
+function normalizeDiscussionRevisionProposalWorkflowRow(proposal) {
+  const id = proposal?.id;
+  if (!id) return null;
+  const threadId = workflowDiscussionThreadId(proposal);
+  const reviewReasons = [
+    requiredPromptFieldReason("discussionThreadId", threadId),
+    requiredPromptFieldReason("proposedBy", proposal.proposedBy),
+    requiredPromptFieldReason("ratingIdPrior", proposal.ratingIdPrior),
+    requiredPromptFieldReason("revisionReasonCode", proposal.revisionReasonCode),
+    requiredPromptFieldReason("revisionRationale", proposal.revisionRationale),
+    proposal.originalRatingPreservation === "original_rating_preserved_append_only" ? null : "originalRatingPreservation",
+    requiredPromptFieldReason("timestamp", proposal.timestamp ?? proposal.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_discussion_revision_proposal",
+    discussionThreadId: threadId,
+    ratingIdPrior: proposal.ratingIdPrior ?? null,
+    revisionReasonCode: proposal.revisionReasonCode ?? null,
+    originalRatingPreservation: proposal.originalRatingPreservation ?? null,
+    timestamp: proposal.timestamp ?? proposal.createdAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "discussion_revision_proposal_review_required" : "discussion_revision_proposal_complete",
+  };
+}
+
+function normalizePostLockDiscussionSessionLinkRow(session) {
+  const id = session?.id;
+  if (!id) return null;
+  const threadId = workflowDiscussionThreadId(session);
+  const reviewReasons = [
+    requiredPromptFieldReason("discussionThreadId", threadId),
+    session.initialRatingLockCheck === "all_initial_ratings_locked" ? null : "initialRatingLockCheck",
+    normalizeStringArray(session.objectLevelCommentRecords).length ? null : "objectLevelCommentRecords",
+    normalizeStringArray(session.revisionProposalIds).length ? null : "revisionProposalIds",
+    requiredPromptFieldReason("transcriptArtifact", session.transcriptArtifact),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_post_lock_discussion_session",
+    discussionThreadId: threadId,
+    objectLevelCommentRecords: normalizeStringArray(session.objectLevelCommentRecords),
+    revisionProposalIds: normalizeStringArray(session.revisionProposalIds),
+    identityStagingPolicy: session.identityStagingPolicy ?? null,
+    identityMaskPhaseStatus: session.identityMaskPhaseStatus ?? null,
+    roleRevealPolicy: session.roleRevealPolicy ?? null,
+    transcriptArtifact: session.transcriptArtifact ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "post_lock_discussion_session_link_review_required" : "post_lock_discussion_session_link_complete",
+  };
+}
+
+function normalizeAdjudicationWorkflowRow(adjudication) {
+  const id = adjudication?.id;
+  if (!id) return null;
+  const itemKeys = workflowItemKeys(adjudication);
+  const adjudicatorIds = normalizeStringArray(adjudication.adjudicatorIds);
+  const reviewReasons = [
+    requiredPromptFieldReason("discussionThreadId", workflowDiscussionThreadId(adjudication)),
+    itemKeys.length ? null : "itemKeys",
+    adjudicatorIds.length ? null : "adjudicatorIds",
+    requiredPromptFieldReason("decisionStatus", adjudication.decisionStatus),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_adjudication",
+    discussionThreadId: workflowDiscussionThreadId(adjudication),
+    itemKeys,
+    adjudicatorIds,
+    decisionStatus: adjudication.decisionStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "adjudication_review_required" : "adjudication_complete",
+  };
+}
+
+function normalizeAdjudicationReviewSessionLinkRow(session) {
+  const id = session?.id;
+  if (!id) return null;
+  const threadId = workflowDiscussionThreadId(session);
+  const reviewReasons = [
+    requiredPromptFieldReason("discussionThreadId", threadId),
+    normalizeStringArray(session.rationaleSpanOverlayRefs).length ? null : "rationaleSpanOverlayRefs",
+    normalizeStringArray(session.revisionTimelineRefs).length ? null : "revisionTimelineRefs",
+    normalizeStringArray(session.targetMapIds).length ? null : "targetMapIds",
+    normalizeStringArray(session.minorityRationaleFields).length ? null : "minorityRationaleFields",
+    normalizeStringArray(session.adjudicatorIds).length ? null : "adjudicatorIds",
+    requiredPromptFieldReason("finalizationStatus", session.finalizationStatus),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_adjudication_review_session",
+    discussionThreadId: threadId,
+    finalizationStatus: session.finalizationStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "adjudication_review_session_link_review_required" : "adjudication_review_session_link_complete",
+  };
+}
+
+function normalizeAdjudicationMemoLinkRow(memo) {
+  const id = memo?.id;
+  if (!id) return null;
+  const normalizedMemo = normalizeSubmittedAdjudicationMemo(memo) ?? memo;
+  const reviewReasons = [
+    requiredPromptFieldReason("discussionThreadId", workflowDiscussionThreadId(memo)),
+    normalizeStringArray(memo.plausibleInterpretationsConsidered ?? normalizedMemo.plausibleInterpretations).length ? null : "plausibleInterpretationsConsidered",
+    normalizeStringArray(memo.disagreementTaxonomyCodes ?? normalizedMemo.disagreementTaxonomy).length ? null : "disagreementTaxonomyCodes",
+    normalizeStringArray(memo.adjudicatorIds).length ? null : "adjudicatorIds",
+    requiredPromptFieldReason("timestamp", memo.timestamp ?? memo.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: normalizedMemo.memoSource ?? "submitted_workflow_adjudication_memo",
+    discussionThreadId: workflowDiscussionThreadId(memo),
+    itemId: normalizedMemo.itemId ?? null,
+    adjudicatorIds: normalizeStringArray(memo.adjudicatorIds),
+    reviewReasons,
+    status: reviewReasons.length ? "adjudication_memo_link_review_required" : "adjudication_memo_link_complete",
+  };
+}
+
+function normalizeAdjudicationFinalizationLinkRow(finalization) {
+  const id = finalization?.id;
+  if (!id) return null;
+  const reviewReasons = [
+    requiredPromptFieldReason("adjudicationId", finalization.adjudicationId),
+    requiredPromptFieldReason("memoId", finalization.memoId),
+    finalization.finalizationStatus === "finalized_for_release_candidate" ? null : "finalizationStatus",
+    requiredPromptFieldReason("finalizedBy", finalization.finalizedBy),
+    requiredPromptFieldReason("timestamp", finalization.timestamp ?? finalization.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource: "submitted_workflow_adjudication_finalization",
+    adjudicationId: finalization.adjudicationId ?? null,
+    memoId: finalization.memoId ?? null,
+    finalizationStatus: finalization.finalizationStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "adjudication_finalization_link_review_required" : "adjudication_finalization_link_complete",
+  };
+}
+
+function discussionAdjudicationThreadCoverageRow(thread, groups) {
+  const completeDiscussions = groups.discussionRows.filter((row) => row.linkedDiscussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeSessions = groups.postLockSessionRows.filter((row) => row.discussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeComments = groups.commentRows.filter((row) => row.discussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeRevisionProposals = groups.revisionProposalRows.filter((row) => row.discussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeAdjudications = groups.adjudicationRows.filter((row) => row.discussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeReviewSessions = groups.adjudicationReviewSessionRows.filter((row) => row.discussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeMemos = groups.memoRows.filter((row) => row.discussionThreadId === thread.id && !row.reviewReasons.length);
+  const completeFinalizations = groups.finalizationRows.filter(
+    (row) =>
+      !row.reviewReasons.length &&
+      (completeAdjudications.some((adjudication) => adjudication.id === row.adjudicationId) ||
+        completeMemos.some((memo) => memo.id === row.memoId)),
+  );
+  const sessionCommentRefs = new Set(completeSessions.flatMap((session) => session.objectLevelCommentRecords));
+  const sessionRevisionRefs = new Set(completeSessions.flatMap((session) => session.revisionProposalIds));
+  const commentsLinkedFromSession = completeComments.some((comment) => sessionCommentRefs.has(comment.id));
+  const revisionsLinkedFromSession = completeRevisionProposals.some((proposal) => sessionRevisionRefs.has(proposal.id));
+  const reviewReasons = [
+    thread.reviewReasons.length ? "discussionThread" : null,
+    completeDiscussions.length ? null : "discussionOpen",
+    completeSessions.length ? null : "postLockDiscussionSession",
+    completeComments.length && commentsLinkedFromSession ? null : "objectLevelCommentThread",
+    completeRevisionProposals.length && revisionsLinkedFromSession ? null : "revisionProposalPreservingOriginalRating",
+    completeAdjudications.length ? null : "adjudicationRecord",
+    completeReviewSessions.length ? null : "adjudicationReviewSession",
+    completeMemos.length ? null : "adjudicationMemo",
+    completeFinalizations.length ? null : "adjudicationFinalization",
+  ].filter(Boolean);
+  return {
+    discussionThreadId: thread.id,
+    itemKeys: thread.itemKeys,
+    linkedDiscussionIds: completeDiscussions.map((row) => row.id),
+    postLockDiscussionSessionIds: completeSessions.map((row) => row.id),
+    objectLevelCommentIds: completeComments.map((row) => row.id),
+    revisionProposalIds: completeRevisionProposals.map((row) => row.id),
+    adjudicationIds: completeAdjudications.map((row) => row.id),
+    adjudicationReviewSessionIds: completeReviewSessions.map((row) => row.id),
+    adjudicationMemoIds: completeMemos.map((row) => row.id),
+    adjudicationFinalizationIds: completeFinalizations.map((row) => row.id),
+    reviewReasons,
+    status: reviewReasons.length ? "discussion_adjudication_workflow_review_required" : "discussion_adjudication_workflow_complete",
+  };
+}
+
+function workflowItemKeys(resource) {
+  const explicit = normalizeStringArray(resource?.itemKeys ?? resource?.item_keys);
+  if (explicit.length) return explicit;
+  const { positionId, critiqueId } = itemRefFromWorkflowArtifact(resource);
+  if (positionId && critiqueId) return [makeItemId(positionId, critiqueId)];
+  const itemId = resource?.itemId ?? resource?.item_id;
+  return typeof itemId === "string" && itemId.trim() ? [itemId.trim()] : [];
+}
+
+function workflowDiscussionThreadId(resource) {
+  return resource?.discussionThreadId ?? resource?.discussion_thread_id ?? resource?.threadId ?? resource?.thread_id ?? null;
+}
+
+function linkedDiscussionThreadForResource(resource, threadRows) {
+  const explicitThreadId = workflowDiscussionThreadId(resource);
+  if (explicitThreadId) return threadRows.find((thread) => thread.id === explicitThreadId) ?? null;
+  const itemKeys = new Set(workflowItemKeys(resource));
+  if (!itemKeys.size) return null;
+  const matches = threadRows.filter((thread) => thread.itemKeys.some((itemKey) => itemKeys.has(itemKey)));
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export function buildPostDiscussionDisagreementReport(
@@ -17538,6 +17901,17 @@ export function buildOctoberReleaseReport(
     screenFeatureParityChecks: options.screenFeatureParityChecks ?? [],
     simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
   });
+  const discussionAdjudicationWorkflowEvidence = buildDiscussionAdjudicationWorkflowEvidenceReport(releaseId, {
+    discussions: options.discussions ?? [],
+    discussionThreads: options.discussionThreads ?? [],
+    discussionComments: options.discussionComments ?? [],
+    discussionRevisionProposals: options.discussionRevisionProposals ?? [],
+    postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
+    adjudications: options.adjudications ?? [],
+    adjudicationReviewSessions: options.adjudicationReviewSessions ?? [],
+    adjudicationMemos: options.adjudicationMemos ?? [],
+    adjudicationFinalizations: options.adjudicationFinalizations ?? [],
+  });
 	  const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
 	    governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
 	    governedBundleRecords: options.governedBundleRecords ?? [],
@@ -17577,6 +17951,7 @@ export function buildOctoberReleaseReport(
     scoreExplanationAudit,
     auxiliaryWorkflowEvidence,
     interactionWorkflowEvidence,
+    discussionAdjudicationWorkflowEvidence,
     releaseConfigManifestEvidence,
     operationalControlEvidence,
     corpusManifest,
@@ -17650,6 +18025,8 @@ export function buildOctoberReleaseReport(
       exposureLogs: options.exposureLogs ?? [],
       revisionRecords: options.revisionRecords ?? [],
       discussionThreads: options.discussionThreads ?? [],
+      discussionComments: options.discussionComments ?? [],
+      discussionRevisionProposals: options.discussionRevisionProposals ?? [],
       adjudicationMemos: options.adjudicationMemos ?? [],
       ratingChecks: options.ratingChecks ?? [],
     },

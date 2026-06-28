@@ -1436,6 +1436,9 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/discussions$/, "discussion_submitted", "discussion", expertWorkflowRoles, {
     allowHiddenMetadata: true,
+    requiredFields: ["id"],
+    requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
+    requiredNonEmptyArrayFields: ["disagreementTaxonomy"],
     policyActionKind: "discussion_open",
     phaseGateLaneKind: "route",
   }),
@@ -1485,7 +1488,12 @@ const workflowWriteEndpoints = [
     requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
     requiredNonEmptyArrayFields: ["disagreementTaxonomyCodes"],
   }),
-  workflowWriteSpec(/^\/api\/v1\/adjudications$/, "adjudication_submitted", "adjudication", expertWorkflowRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/adjudications$/, "adjudication_submitted", "adjudication", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "discussionThreadId", "decisionStatus"],
+    requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
+    requiredNonEmptyArrayFields: ["adjudicatorIds"],
+  }),
   workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "adjudicationId",
@@ -5807,6 +5815,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const assignmentFlags = latestWorkflowResources(workflowEvents, "assignmentFlag");
   const discussions = latestWorkflowResources(workflowEvents, "discussion");
   const discussionThreads = latestWorkflowResources(workflowEvents, "discussionThread");
+  const discussionComments = latestWorkflowResources(workflowEvents, "discussionComment");
+  const discussionRevisionProposals = latestWorkflowResources(workflowEvents, "discussionRevisionProposal");
   const adjudications = latestWorkflowResources(workflowEvents, "adjudication");
   const adjudicationFinalizations = latestWorkflowResources(workflowEvents, "adjudicationFinalization");
   const adjudicationMemos = latestWorkflowResources(workflowEvents, "adjudicationMemo");
@@ -5961,6 +5971,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     assignmentFlags,
     discussions,
     discussionThreads,
+    discussionComments,
+    discussionRevisionProposals,
     adjudications,
     adjudicationFinalizations,
     adjudicationMemos,
@@ -6112,6 +6124,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     assignmentFlags,
     discussions,
     discussionThreads,
+    discussionComments,
+    discussionRevisionProposals,
     adjudications,
     adjudicationFinalizations,
     adjudicationMemos,

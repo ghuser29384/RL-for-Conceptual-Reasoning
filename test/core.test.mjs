@@ -7178,6 +7178,158 @@ test("rater composition conflict report exposes release-critical dominance and c
   assert.equal(conflicted.releaseUseStatus, "rater_conflict_review_required");
 });
 
+test("release report links submitted discussion threads through adjudication finalization evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-discussion-adjudication-workflow",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const completeOptions = {
+    discussions: [
+      {
+        id: "discussion-complete",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        disagreementTaxonomy: ["strength_centrality_allocation"],
+      },
+    ],
+    discussionThreads: [
+      {
+        id: "discussion-thread-complete",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        issueType: "strength_centrality_allocation",
+        disagreementTaxonomyCodes: ["strength_centrality_allocation"],
+        status: "open_for_expert_adjudication",
+        createdAt: "2026-10-01T00:30:00.000Z",
+        updatedAt: "2026-10-01T00:31:00.000Z",
+      },
+    ],
+    discussionComments: [
+      {
+        id: "discussion-comment-complete",
+        discussionThreadId: "discussion-thread-complete",
+        authorId: "expert-1",
+        commentText: "Object-level target-mapping point preserved.",
+        objectLevelStatus: "object_level_point_preserved",
+        timestamp: "2026-10-01T00:31:30.000Z",
+      },
+    ],
+    discussionRevisionProposals: [
+      {
+        id: "discussion-revision-proposal-complete",
+        discussionThreadId: "discussion-thread-complete",
+        proposedBy: "expert-1",
+        ratingIdPrior: "rating-ai-base-a",
+        revisionReasonCode: "overlooked_object_level_point",
+        revisionRationale: "The locked initial rating missed the target-mapping point.",
+        originalRatingPreservation: "original_rating_preserved_append_only",
+        timestamp: "2026-10-01T00:31:50.000Z",
+      },
+    ],
+    postLockDiscussionSessions: [
+      {
+        id: "post-lock-discussion-complete",
+        discussionThreadId: "discussion-thread-complete",
+        initialRatingLockCheck: "all_initial_ratings_locked",
+        objectLevelCommentRecords: ["discussion-comment-complete"],
+        revisionProposalIds: ["discussion-revision-proposal-complete"],
+        transcriptArtifact: "discussion-transcript-complete",
+      },
+    ],
+    adjudications: [
+      {
+        id: "adjudication-complete",
+        discussionThreadId: "discussion-thread-complete",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        adjudicatorIds: ["expert-1"],
+        decisionStatus: "memo_pending_finalization",
+      },
+    ],
+    adjudicationReviewSessions: [
+      {
+        id: "adjudication-review-complete",
+        discussionThreadId: "discussion-thread-complete",
+        rationaleSpanOverlayRefs: ["rationale-span-complete"],
+        revisionTimelineRefs: ["revision-timeline-complete"],
+        targetMapIds: ["interpretation-target-complete"],
+        minorityRationaleFields: ["minority-strength-reading"],
+        adjudicatorIds: ["expert-1"],
+        finalizationStatus: "ready_for_memo",
+      },
+    ],
+    adjudicationMemos: [
+      {
+        id: "adjudication-memo-complete",
+        discussionThreadId: "discussion-thread-complete",
+        positionId: "pos-ai-prior",
+        critiqueId: "crit-ai-base-rate",
+        plausibleInterpretationsConsidered: ["central_base_rate_attack"],
+        disagreementTaxonomyCodes: ["strength_centrality_allocation"],
+        adjudicatorIds: ["expert-1"],
+        timestamp: "2026-10-01T00:33:00.000Z",
+      },
+    ],
+    adjudicationFinalizations: [
+      {
+        id: "adjudication-finalization-complete",
+        adjudicationId: "adjudication-complete",
+        memoId: "adjudication-memo-complete",
+        finalizationStatus: "finalized_for_release_candidate",
+        finalizedBy: "expert-1",
+        timestamp: "2026-10-01T00:34:00.000Z",
+      },
+    ],
+  };
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    completeOptions,
+  );
+  assert.equal(report.discussionAdjudicationWorkflowEvidence.releaseUseStatus, "submitted_discussion_adjudication_workflow_complete");
+  assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionThreadCount, 1);
+  assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.completeDiscussionThreadCount, 1);
+  assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionCommentCount, 1);
+  assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionRevisionProposalCount, 1);
+  assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].reviewReasons, []);
+  assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].objectLevelCommentIds, ["discussion-comment-complete"]);
+  assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].revisionProposalIds, ["discussion-revision-proposal-complete"]);
+  assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].adjudicationFinalizationIds, ["adjudication-finalization-complete"]);
+
+  const incompleteReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      discussions: completeOptions.discussions,
+      discussionThreads: completeOptions.discussionThreads,
+    },
+  );
+  assert.equal(incompleteReport.discussionAdjudicationWorkflowEvidence.releaseUseStatus, "discussion_adjudication_workflow_review_required");
+  assert.ok(
+    incompleteReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactId === "discussion-thread-complete" && section.reason === "postLockDiscussionSession",
+    ),
+  );
+  assert.ok(
+    incompleteReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactId === "discussion-thread-complete" && section.reason === "adjudicationFinalization",
+    ),
+  );
+});
+
 test("LMCA comparison report separates scale, source, rater, target, and anchor baselines", () => {
   const snapshot = createLabelSnapshot(
     "snapshot-comparison",
