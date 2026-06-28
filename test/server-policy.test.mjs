@@ -2785,6 +2785,21 @@ test("v1 rating endpoints persist blind ratings and enforce revision route ident
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
   const token = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const unknownPolicyResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ratings",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      rating: {
+        ...validBlindRating("rating-v1-unknown-score-explanation-policy"),
+        scoreExplanationPolicyId: "score-explanation-policy-missing",
+      },
+    }),
+  });
+  assert.equal(unknownPolicyResponse.status, 400);
+  assert.match(unknownPolicyResponse.body.detail, /unknown scoreExplanationPolicyId/);
+  assert.equal((await auditStore.readRatingEvents()).length, 0);
+
   const rating = validBlindRating("rating-v1-blind");
   const blindResponse = await invokeApi(context, {
     method: "POST",
@@ -3861,6 +3876,50 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(pairwiseComparisonSnapshotById.body.id, "pairwise-snapshot-workflow-new");
   assert.equal(pairwiseComparisonSnapshotById.body.policyDecisionId, pairwiseComparisonSnapshot.body.policyDecisionId);
 
+  const incompleteRaterReliabilityWeightModel = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-reliability-weight-models",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterReliabilityWeightModel: {
+        id: "reliability-weight-model-incomplete",
+        reliabilityWeightModelId: "uniform-v1-with-sensitivity",
+        modelName: "incomplete_weight_model",
+      },
+    }),
+  });
+  assert.equal(incompleteRaterReliabilityWeightModel.status, 400);
+  assert.match(incompleteRaterReliabilityWeightModel.body.detail, /version|fitDataSource|protectedSplitExclusions/);
+
+  const unsafeFitRaterReliabilityWeightModel = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-reliability-weight-models",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterReliabilityWeightModel: {
+        id: "reliability-weight-model-hidden-fit",
+        reliabilityWeightModelId: "uniform-v1-with-sensitivity",
+        modelName: "hidden_benchmark_fit_model",
+        version: "v1",
+        fitDataSource: "hidden_benchmark_model_performance",
+        protectedSplitExclusions: ["hidden_benchmark", "internal_validation"],
+        fittedAt: "2026-10-01T00:00:00.000Z",
+        fittedBy: "demo-admin",
+        raterWeightsByDimension: { "demo-rater": { overall: 0.45 }, "demo-expert": { overall: 0.55 } },
+        weightCaps: { maxSingleRaterShare: 0.6 },
+        effectiveSampleSizeByDimension: { overall: 18, clarity: 18, correctness: 16 },
+        maximumSingleRaterWeightShare: 0.55,
+        unweightedSensitivitySnapshotId: "snapshot-oct-api-unweighted",
+        medianSensitivitySnapshotId: "snapshot-oct-api-median",
+        freezeVersion: "october-2026-demo.1",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    }),
+  });
+  assert.equal(unsafeFitRaterReliabilityWeightModel.status, 400);
+  assert.match(unsafeFitRaterReliabilityWeightModel.body.detail, /fitDataSource/);
+
   const raterReliabilityWeightModel = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rater-reliability-weight-models",
@@ -3882,6 +3941,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         unweightedSensitivitySnapshotId: "snapshot-oct-api-unweighted",
         medianSensitivitySnapshotId: "snapshot-oct-api-median",
         freezeVersion: "october-2026-demo.1",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T00:00:00.000Z",
       },
     }),
   });
@@ -4146,6 +4207,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(goldItemById.status, 200);
   assert.equal(goldItemById.body.id, "gold-item-workflow-new");
 
+  const incompleteSourceAnchorExample = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-anchor-examples",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceAnchorExample: {
+        id: "source-anchor-incomplete",
+        suiteVersion: "lmca-public-source-anchors-2026-10-workflow",
+        sourceExampleFamily: "table4_model_failure",
+        publicSourceReference: "Thin anchor should not pass without protected-exclusion and prompt-regression metadata.",
+      },
+    }),
+  });
+  assert.equal(incompleteSourceAnchorExample.status, 400);
+  assert.match(incompleteSourceAnchorExample.body.detail, /itemId|allowedUse|excludedFromProtectedEvaluation/);
+
   const sourceAnchorExample = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/source-anchor-examples",
@@ -4181,6 +4258,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(sourceAnchorExampleById.status, 200);
   assert.equal(sourceAnchorExampleById.body.id, "source-anchor-workflow-new");
 
+  const incompleteBenchmarkSplitMember = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark-split-members",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      benchmarkSplitMember: {
+        id: "split-member-incomplete",
+        releaseId: "october-2026-demo",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        split: "hidden_benchmark_candidate",
+      },
+    }),
+  });
+  assert.equal(incompleteBenchmarkSplitMember.status, 400);
+  assert.match(incompleteBenchmarkSplitMember.body.detail, /positionClusterId|splitUnit|freezeVersion/);
+
   const benchmarkSplitMember = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/benchmark-split-members",
@@ -4190,8 +4283,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "split-member-workflow-new",
         releaseId: "october-2026-demo",
         itemId: "pos-ai-prior::crit-ai-base-rate",
+        positionClusterId: "cluster-ai-prior",
         split: "hidden_benchmark_candidate",
+        splitUnit: "position_cluster",
+        customWeightedLossEligible: true,
+        pairwiseRankingEligible: true,
+        pointwiseOnly: false,
+        freezeVersion: "october-2026-demo.1",
+        artifactBalanceBucket: "ai_safety_short_medium",
+        crossSplitExceptionReason: "none",
+        exposureRestricted: true,
         leakPreventionStatus: "excluded_from_training_prompt_tuning_and_public_export",
+        frozenAt: "2026-10-01T00:00:00.000Z",
       },
     }),
   });
@@ -4205,6 +4308,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(benchmarkSplitMemberById.status, 200);
   assert.equal(benchmarkSplitMemberById.body.id, "split-member-workflow-new");
 
+  const incompleteRightsRecord = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rights-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rightsRecord: {
+        id: "rights-record-incomplete",
+        releaseId: "october-2026-demo",
+        artifactId: "pos-ai-prior::crit-ai-base-rate",
+        rightsStatus: "hidden_benchmark_export_allowed",
+      },
+    }),
+  });
+  assert.equal(incompleteRightsRecord.status, 400);
+  assert.match(incompleteRightsRecord.body.detail, /artifactKind|sourceOrigin|licenseType|releaseScope|reviewerId/);
+
   const rightsRecord = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rights-records",
@@ -4215,11 +4334,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         releaseId: "october-2026-demo",
         artifactId: "pos-ai-prior::crit-ai-base-rate",
         artifactKind: "position_critique_item",
+        sourceOrigin: "project_authored_hidden_benchmark_candidate",
+        licenseType: "project_owned_or_public_domain",
         rightsStatus: "hidden_benchmark_export_allowed",
+        releaseScope: "internal_and_hidden_benchmark_export_allowed",
+        reviewerId: "demo-admin",
         sourceLanguage: "en",
         translationRoute: "none_original_english",
         taskFormat: "short essay claim",
         sourceDomainSuitability: "suitable_conceptual",
+        removalPolicy: "tombstone_and_rebuild_export_manifest",
+        reviewedAt: "2026-10-01T00:00:00.000Z",
       },
     }),
   });
@@ -4232,6 +4357,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(rightsRecordById.status, 200);
   assert.equal(rightsRecordById.body.id, "rights-record-workflow-new");
+
+  const incompleteReleaseVersion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-versions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseVersion: {
+        id: "release-version-incomplete",
+        releaseId: "october-2026-demo",
+        version: "october-2026-demo.1",
+        corpusManifestId: "corpus-composition-october-2026-demo",
+      },
+    }),
+  });
+  assert.equal(incompleteReleaseVersion.status, 400);
+  assert.match(incompleteReleaseVersion.body.detail, /releaseConfigManifestId|releaseConfigManifestHash|immutableOutputArtifactIds/);
 
   const releaseVersion = await invokeApi(context, {
     method: "POST",
@@ -4246,6 +4387,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         labelSnapshotId: "snapshot-oct-api",
         metricConfigId: "metric-config-workflow-new",
         gateProfileId: "release-gate-workflow-new",
+        releaseConfigManifestId: "release-config-manifest-workflow-new",
+        releaseConfigManifestHash: "sha256:release-config-manifest-workflow-new",
+        immutableOutputArtifactIds: ["export-manifest-public-workflow-new", "export-manifest-internal-workflow-new"],
         status: "method_preserving_demo_not_target_scale",
         releaseNotes: "Workflow release version is recorded but remains below October target scale.",
         frozenAt: "2026-10-01T00:00:00.000Z",
@@ -4402,6 +4546,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(releaseGateProfileById.status, 200);
   assert.equal(releaseGateProfileById.body.id, "release-gate-workflow-new");
+
+  const incompletePrimaryRaterAnchorPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/primary-rater-anchor-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      primaryRaterAnchorPolicy: {
+        id: "primary-rater-policy-incomplete",
+        releaseId: "october-2026-demo",
+        selectionRule: "max_blind_initial_coverage_tie_break_rater_id",
+      },
+    }),
+  });
+  assert.equal(incompletePrimaryRaterAnchorPolicy.status, 400);
+  assert.match(incompletePrimaryRaterAnchorPolicy.body.detail, /coverageThreshold|prohibitedPostHocCriteria|predeclaredAt/);
 
   const primaryRaterAnchorPolicy = await invokeApi(context, {
     method: "POST",
@@ -6069,6 +6228,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         parserConfigId: "parser-workflow-new",
         answerExtractionPolicy: "extract_overall_score_from_json",
         reasoningMode: "not_requested",
+        reasoningBudget: "0_tokens_not_requested",
+        cueCondition: "none_no_sycophancy_or_orthodoxy_cue",
+        obfuscationStressVariant: "none_not_obfuscation_stress_probe",
         parseStatus: "parsed",
         delimitedItemTextIntegrityStatus: "delimited_inert_data_preserved",
         itemInternalInstructionFlag: "instruction_like_text_flagged_inert",
@@ -6106,6 +6268,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         parserConfigId: "parser-workflow-new",
         answerExtractionPolicy: "extract_overall_score_from_json",
         reasoningMode: "not_requested",
+        reasoningBudget: "0_tokens_not_requested",
+        cueCondition: "orthodoxy_cue_present",
+        obfuscationStressVariant: "none_not_obfuscation_stress_probe",
         parseStatus: "parsed",
         delimitedItemTextIntegrityStatus: "item_text_treated_as_instruction",
         itemInternalInstructionFlag: "instruction_obeyed",
@@ -10723,7 +10888,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.modelEvaluationArtifactEvidence.evaluationRunEvidence.status, "submitted_evaluation_run_matches_current_target");
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.predictionEvidence.status,
-    "submitted_model_evaluation_predictions_preserve_text_context_and_parser_provenance",
+    "submitted_model_evaluation_predictions_preserve_text_context_parser_and_condition_provenance",
   );
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.calibrationRunEvidence.status,
@@ -11853,7 +12018,7 @@ function validBlindRating(id) {
     rubricVersion: "lmca-app-f-2026-10",
     scoreInputPolicyId: "score-input-policy-workflow-new",
     workflowProfileId: "rating-workflow-profile-workflow-new",
-    scoreExplanationPolicyId: "score-explanation-policy-workflow-new",
+    scoreExplanationPolicyId: "score-explanation-policy-october-2026-demo",
     positionTextVersionId: "ptv-ai-prior-v1",
     critiqueTextVersionId: "ctv-ai-base-rate-v1",
     ratingContextSnapshotId: "rc-target-only-1",

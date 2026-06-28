@@ -6926,6 +6926,14 @@ test("submitted model-evaluation artifacts are checked against current release e
           critiqueTextVersionId: prediction.critiqueTextVersionId,
           renderedItemHash: "sha256:submitted-rendered-item",
           ratingContextSnapshotId: "rating-context-submitted",
+          requestedModelAlias: "submitted-model",
+          resolvedModelSnapshot: "submitted-model-2026-10-01",
+          modelParameterSettings: { temperature: 0, topP: 1, maxOutputTokens: 512 },
+          answerExtractionPolicy: "extract_all_seven_dimensions_from_json",
+          reasoningMode: "not_requested",
+          reasoningBudget: "0_tokens_not_requested",
+          cueCondition: "none_no_sycophancy_or_orthodoxy_cue",
+          obfuscationStressVariant: "none_not_obfuscation_stress_probe",
           parserConfigId: "json-seven-dim-v1",
           parseStatus: "parsed",
           delimitedItemTextIntegrityStatus: "delimited_inert_data_preserved",
@@ -6983,12 +6991,14 @@ test("submitted model-evaluation artifacts are checked against current release e
   assert.equal(report.modelEvaluationArtifactEvidence.evaluationRunEvidence.status, "submitted_evaluation_run_matches_current_target");
   assert.equal(
     report.modelEvaluationArtifactEvidence.predictionEvidence.status,
-    "submitted_model_evaluation_predictions_preserve_text_context_and_parser_provenance",
+    "submitted_model_evaluation_predictions_preserve_text_context_parser_and_condition_provenance",
   );
   assert.equal(
     report.modelEvaluationArtifactEvidence.predictionEvidence.counts.unsafeDelimitedItemTextCount,
     0,
   );
+  assert.equal(report.modelEvaluationArtifactEvidence.predictionEvidence.counts.missingCueConditionCount, 0);
+  assert.equal(report.modelEvaluationArtifactEvidence.predictionEvidence.counts.missingObfuscationStressVariantCount, 0);
   assert.equal(report.modelEvaluationArtifactEvidence.calibrationRunEvidence.status, "submitted_calibration_run_preserves_protected_fit_policy");
   assert.equal(
     report.modelEvaluationArtifactEvidence.leaderboardEvidence.status,
@@ -7117,6 +7127,10 @@ test("submitted model-evaluation artifacts are checked against current release e
   );
   assert.equal(
     staleReport.modelEvaluationArtifactEvidence.predictionEvidence.reviewChecks.find((check) => check.field === "missingTextVersionCount").status,
+    "mismatch",
+  );
+  assert.equal(
+    staleReport.modelEvaluationArtifactEvidence.predictionEvidence.reviewChecks.find((check) => check.field === "missingCueConditionCount").status,
     "mismatch",
   );
   assert.equal(

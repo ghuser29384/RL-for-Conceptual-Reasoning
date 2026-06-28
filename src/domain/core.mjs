@@ -1179,6 +1179,9 @@ function prediction(id, positionId, critiqueId, scores) {
     humanModelItemViewParityStatus: "model_visible_hashes_match_rater_visible_versions",
     requestedModelAlias: overallOnly ? "appendix-g-demo" : "gpt-demo-full-rubric",
     resolvedModelSnapshot: overallOnly ? "appendix-g-demo-2026-06-01" : "gpt-demo-full-rubric-2026-06-01",
+    modelParameterSettings: overallOnly
+      ? { temperature: 0, topP: 1, maxOutputTokens: 128 }
+      : { temperature: 0, topP: 1, maxOutputTokens: 512 },
     rawModelResponse: JSON.stringify(scores),
     parseStatus: "parsed",
     parseAttemptCount: 1,
@@ -1190,6 +1193,11 @@ function prediction(id, positionId, critiqueId, scores) {
     rawOutputPreserved: true,
     scores,
     promptTemplateId: overallOnly ? "appendix-g-overall-v1" : "project-full-rubric-v1",
+    answerExtractionPolicy: overallOnly ? "extract_overall_json_only_no_full_rubric_imputation" : "extract_all_seven_dimensions_from_json",
+    reasoningMode: overallOnly ? "step_by_step_prompt_text" : "not_requested",
+    reasoningBudget: overallOnly ? "not_available_prompt_requested_step_by_step_reasoning" : "0_tokens_not_requested",
+    cueCondition: "none_no_sycophancy_or_orthodoxy_cue",
+    obfuscationStressVariant: "none_not_obfuscation_stress_probe",
     renderedPromptChecksum: overallOnly
       ? promptArtifacts["appendix-g-overall-v1"].renderedPromptChecksum
       : promptArtifacts["project-full-rubric-v1"].renderedPromptChecksum,
@@ -10440,6 +10448,19 @@ function submittedModelEvaluationPredictionEvidence(labelSnapshot, evaluationRun
   const missingTextVersionCount = predictions.filter((prediction) => !prediction.positionTextVersionId || !prediction.critiqueTextVersionId).length;
   const missingRenderedItemHashCount = predictions.filter((prediction) => !prediction.renderedItemHash).length;
   const missingRatingContextSnapshotCount = predictions.filter((prediction) => !prediction.ratingContextSnapshotId).length;
+  const missingRequestedModelAliasCount = predictions.filter((prediction) => !prediction.requestedModelAlias).length;
+  const missingResolvedModelSnapshotCount = predictions.filter((prediction) => !prediction.resolvedModelSnapshot).length;
+  const missingModelParameterSettingsCount = predictions.filter((prediction) =>
+    !objectHasEntries(prediction.modelParameterSettings ?? prediction.model_parameter_settings ?? prediction.modelParameters ?? prediction.model_parameters),
+  ).length;
+  const missingAnswerExtractionPolicyCount = predictions.filter((prediction) => !prediction.answerExtractionPolicy && !prediction.answer_extraction_policy).length;
+  const missingReasoningModeCount = predictions.filter((prediction) => !prediction.reasoningMode && !prediction.reasoning_mode).length;
+  const missingReasoningBudgetCount = predictions.filter((prediction) => {
+    const budget = prediction.reasoningBudget ?? prediction.reasoning_budget ?? prediction.reasoningBudgetTokens ?? prediction.reasoning_budget_tokens;
+    return budget === undefined || budget === null || budget === "";
+  }).length;
+  const missingCueConditionCount = predictions.filter((prediction) => !prediction.cueCondition && !prediction.cue_condition).length;
+  const missingObfuscationStressVariantCount = predictions.filter((prediction) => !prediction.obfuscationStressVariant && !prediction.obfuscation_stress_variant).length;
   const missingParserConfigCount = predictions.filter((prediction) => !prediction.parserConfigId).length;
   const unparsedPredictionCount = predictions.filter((prediction) => prediction.parseStatus && prediction.parseStatus !== "parsed").length;
   const unsafeDelimitedItemTextCount = predictions.filter((prediction) => prediction.delimitedItemTextIntegrityStatus !== "delimited_inert_data_preserved").length;
@@ -10459,6 +10480,14 @@ function submittedModelEvaluationPredictionEvidence(labelSnapshot, evaluationRun
     requiredManifestCheck("missingTextVersionCount", 0, missingTextVersionCount),
     requiredManifestCheck("missingRenderedItemHashCount", 0, missingRenderedItemHashCount),
     requiredManifestCheck("missingRatingContextSnapshotCount", 0, missingRatingContextSnapshotCount),
+    requiredManifestCheck("missingRequestedModelAliasCount", 0, missingRequestedModelAliasCount),
+    requiredManifestCheck("missingResolvedModelSnapshotCount", 0, missingResolvedModelSnapshotCount),
+    requiredManifestCheck("missingModelParameterSettingsCount", 0, missingModelParameterSettingsCount),
+    requiredManifestCheck("missingAnswerExtractionPolicyCount", 0, missingAnswerExtractionPolicyCount),
+    requiredManifestCheck("missingReasoningModeCount", 0, missingReasoningModeCount),
+    requiredManifestCheck("missingReasoningBudgetCount", 0, missingReasoningBudgetCount),
+    requiredManifestCheck("missingCueConditionCount", 0, missingCueConditionCount),
+    requiredManifestCheck("missingObfuscationStressVariantCount", 0, missingObfuscationStressVariantCount),
     requiredManifestCheck("missingParserConfigCount", 0, missingParserConfigCount),
     requiredManifestCheck("unparsedPredictionCount", 0, unparsedPredictionCount),
     requiredManifestCheck("unsafeDelimitedItemTextCount", 0, unsafeDelimitedItemTextCount),
@@ -10474,7 +10503,7 @@ function submittedModelEvaluationPredictionEvidence(labelSnapshot, evaluationRun
       "model_evaluation_predictions",
       submitted,
       checks,
-      "submitted_model_evaluation_predictions_preserve_text_context_and_parser_provenance",
+      "submitted_model_evaluation_predictions_preserve_text_context_parser_and_condition_provenance",
     ),
     predictionIds: predictions.map((prediction) => prediction.id).filter(Boolean),
     counts: {
@@ -10483,6 +10512,14 @@ function submittedModelEvaluationPredictionEvidence(labelSnapshot, evaluationRun
       missingTextVersionCount,
       missingRenderedItemHashCount,
       missingRatingContextSnapshotCount,
+      missingRequestedModelAliasCount,
+      missingResolvedModelSnapshotCount,
+      missingModelParameterSettingsCount,
+      missingAnswerExtractionPolicyCount,
+      missingReasoningModeCount,
+      missingReasoningBudgetCount,
+      missingCueConditionCount,
+      missingObfuscationStressVariantCount,
       unparsedPredictionCount,
       unsafeDelimitedItemTextCount,
       unsafeParserRetryInstructionCount,

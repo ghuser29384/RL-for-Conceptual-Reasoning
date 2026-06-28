@@ -1111,7 +1111,34 @@ const workflowWriteEndpoints = [
     policyActionKind: "pairwise_snapshot_freeze",
     phaseGateLaneKind: "route",
   }),
-  workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "reliabilityWeightModelId",
+      "modelName",
+      "version",
+      "fitDataSource",
+      "fittedAt",
+      "fittedBy",
+      "maximumSingleRaterWeightShare",
+      "unweightedSensitivitySnapshotId",
+      "medianSensitivitySnapshotId",
+      "freezeVersion",
+      "createdBy",
+      "timestamp",
+    ],
+    requiredNonEmptyArrayFields: ["protectedSplitExclusions"],
+    requiredObjectFields: ["raterWeightsByDimension", "weightCaps", "effectiveSampleSizeByDimension"],
+    requiredObjectKeys: { weightCaps: ["maxSingleRaterShare"] },
+    requiredArrayIncludes: { protectedSplitExclusions: ["hidden_benchmark", "internal_validation"] },
+    requiredNumberRanges: [
+      { field: "maximumSingleRaterWeightShare", min: 0, max: 1 },
+      { field: "weightCaps.maxSingleRaterShare", min: 0, max: 1 },
+    ],
+    requiredStringIncludesAny: { fitDataSource: ["gold", "certification", "adjudicated", "training", "validation"] },
+    forbiddenStringFragments: { fitDataSource: ["hidden_benchmark", "model_performance"] },
+  }),
   workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "tier", "certificationStatus", "activeReliabilityWeightModelId"],
@@ -1247,12 +1274,110 @@ const workflowWriteEndpoints = [
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/gold-items$/, "gold_item_submitted", "goldItem", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/source-anchor-examples$/, "source_anchor_example_submitted", "sourceAnchorExample", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/benchmark-split-members$/, "benchmark_split_member_submitted", "benchmarkSplitMember", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/rights-records$/, "rights_record_submitted", "rightsRecord", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/release-versions$/, "release_version_submitted", "releaseVersion", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/source-anchor-examples$/, "source_anchor_example_submitted", "sourceAnchorExample", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "suiteVersion",
+      "sourceExampleFamily",
+      "publicSourceReference",
+      "itemId",
+      "positionClusterId",
+      "split",
+      "exposurePolicy",
+      "intendedLesson",
+      "expectedLabelSummary",
+    ],
+    requiredNonEmptyArrayFields: ["allowedUse", "targetDimensions"],
+    requiredArrayIncludes: { allowedUse: ["training", "certification", "prompt_regression"] },
+    requiredStringIncludes: {
+      split: ["public"],
+      exposurePolicy: ["public", "training"],
+    },
+    requiredExactFields: {
+      excludedFromProtectedEvaluation: true,
+      promptRegressionEligible: true,
+      certificationExposureEligible: true,
+    },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/benchmark-split-members$/, "benchmark_split_member_submitted", "benchmarkSplitMember", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "itemId",
+      "positionClusterId",
+      "split",
+      "splitUnit",
+      "freezeVersion",
+      "artifactBalanceBucket",
+      "crossSplitExceptionReason",
+      "leakPreventionStatus",
+      "frozenAt",
+    ],
+    allowedValues: { split: ["hidden_benchmark_candidate", "hidden_benchmark"], splitUnit: ["position_cluster"] },
+    requiredStringIncludes: {
+      leakPreventionStatus: ["excluded", "training", "public"],
+    },
+    requiredExactFields: {
+      customWeightedLossEligible: true,
+      pairwiseRankingEligible: true,
+      pointwiseOnly: false,
+      exposureRestricted: true,
+    },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rights-records$/, "rights_record_submitted", "rightsRecord", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "artifactId",
+      "artifactKind",
+      "sourceOrigin",
+      "licenseType",
+      "rightsStatus",
+      "releaseScope",
+      "reviewerId",
+      "reviewedAt",
+      "sourceLanguage",
+      "translationRoute",
+      "taskFormat",
+      "sourceDomainSuitability",
+      "removalPolicy",
+    ],
+    requiredStringIncludesAny: {
+      rightsStatus: ["allowed", "cleared"],
+      releaseScope: ["public", "training", "internal", "hidden", "benchmark"],
+    },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/release-versions$/, "release_version_submitted", "releaseVersion", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "version",
+      "corpusManifestId",
+      "labelSnapshotId",
+      "metricConfigId",
+      "gateProfileId",
+      "releaseConfigManifestId",
+      "releaseConfigManifestHash",
+      "status",
+      "releaseNotes",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["immutableOutputArtifactIds"],
+    requiredStringPrefixes: { releaseConfigManifestHash: "sha256:" },
+  }),
   workflowWriteSpec(/^\/api\/v1\/release-gate-profiles$/, "release_gate_profile_submitted", "releaseGateProfile", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/primary-rater-anchor-policies$/, "primary_rater_anchor_policy_submitted", "primaryRaterAnchorPolicy", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/primary-rater-anchor-policies$/, "primary_rater_anchor_policy_submitted", "primaryRaterAnchorPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "releaseId", "selectionRule", "coverageThreshold", "predeclaredAt"],
+    requiredNonEmptyArrayFields: ["prohibitedPostHocCriteria"],
+    requiredArrayIncludes: {
+      prohibitedPostHocCriteria: ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/comparability-claims$/, "comparability_claim_submitted", "comparabilityClaim", adminRoles, { allowHiddenMetadata: true }),
   workflowWriteSpec(/^\/api\/v1\/candidate-batches$/, "candidate_batch_submitted", "candidateBatch", adminRoles, {
     allowHiddenMetadata: true,
@@ -1991,6 +2116,9 @@ const workflowWriteEndpoints = [
       "parseStatus",
       "answerExtractionPolicy",
       "reasoningMode",
+      "reasoningBudget",
+      "cueCondition",
+      "obfuscationStressVariant",
       "delimitedItemTextIntegrityStatus",
       "itemInternalInstructionFlag",
       "parserRetryInstructionAdherence",
@@ -6863,11 +6991,16 @@ async function buildRatingValidationContext(context) {
   const { positionList, critiqueList } = await buildCurrentCorpus(context);
   const workflowAssignments = latestWorkflowResources(workflowEvents, "assignment");
   const ratingContextSnapshotArtifacts = latestWorkflowResources(workflowEvents, "ratingContextSnapshot");
+  const scoreExplanationPolicyArtifacts = latestWorkflowResources(workflowEvents, "scoreExplanationPolicy");
   return {
     assignments: [...assignments, ...workflowAssignments],
     positions: positionList,
     critiques: critiqueList,
     ratingContextSnapshots: buildEffectiveRatingContextSnapshots(ratingContextSnapshotArtifacts),
+    allowedScoreExplanationPolicyIds: new Set([
+      `score-explanation-policy-${releaseId}`,
+      ...scoreExplanationPolicyArtifacts.map((policy) => policy.id).filter(Boolean),
+    ]),
   };
 }
 
@@ -7484,6 +7617,12 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
     return invalid("scoreConfidenceJudgment must be one of: low, medium, high");
   }
   if (!String(rating.scoreExplanationPolicyId ?? "").trim()) return invalid("scoreExplanationPolicyId is required");
+  if (
+    validationContext.allowedScoreExplanationPolicyIds instanceof Set &&
+    !validationContext.allowedScoreExplanationPolicyIds.has(rating.scoreExplanationPolicyId)
+  ) {
+    return invalid(`unknown scoreExplanationPolicyId: ${rating.scoreExplanationPolicyId}`);
+  }
   if (!Array.isArray(rating.scoreExplanationTriggers)) return invalid("scoreExplanationTriggers must be an array");
   const unsupportedExplanationTriggers = rating.scoreExplanationTriggers.filter((trigger) => !allowedScoreExplanationTriggers.has(trigger));
   if (unsupportedExplanationTriggers.length) return invalid(`unsupported scoreExplanationTriggers: ${unsupportedExplanationTriggers.join(", ")}`);
@@ -8041,6 +8180,12 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}, vali
     if (!allowedFragments.some((fragment) => normalizedObserved.includes(String(fragment).toLowerCase()))) {
       return invalid(`${spec.resourceKey}.${fieldPath} must include one of: ${allowedFragments.join(", ")}`);
     }
+  }
+  for (const [fieldPath, forbiddenFragments] of Object.entries(spec.forbiddenStringFragments ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    const normalizedObserved = typeof observedValue === "string" ? observedValue.toLowerCase() : "";
+    const observedForbidden = forbiddenFragments.filter((fragment) => normalizedObserved.includes(String(fragment).toLowerCase()));
+    if (observedForbidden.length) return invalid(`${spec.resourceKey}.${fieldPath} must not include: ${observedForbidden.join(", ")}`);
   }
   for (const rule of spec.requiredFieldMatches ?? []) {
     const observedValue = workflowFieldValue(normalized, rule.field);
