@@ -3607,6 +3607,59 @@ test("rating effort quality report routes rushed and interrupted rows before sen
   assert.equal(report.releaseUseStatus, "qa_routing_required_before_sensitive_use");
 });
 
+test("rating effort quality report accepts submitted QA reviews for routed rows", () => {
+  const report = buildRatingEffortQualityReport("release-test", seedRatings, positions, critiques, assignments, {
+    ratingEffortQaReviews: [
+      {
+        id: "rating-effort-qa-voting-style",
+        ratingId: "rating-voting-style-a",
+        itemKeys: ["pos-voting::crit-voting-style"],
+        routeReasonsReviewed: ["length_adjusted_active_time_below_expected"],
+        reviewerId: "expert-qa",
+        reviewerRole: "expert",
+        reviewDecision: "exclude_from_sensitive_denominators",
+        sensitiveUseDecision: "excluded_from_validation_denominator",
+        labelMutationProhibited: true,
+        independentRaterDenominatorUnchanged: true,
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  });
+  const reviewed = report.qaRoutedRatings.find((row) => row.ratingId === "rating-voting-style-a");
+  assert.equal(report.releaseUseStatus, "rating_effort_qa_review_complete");
+  assert.equal(report.counts.qaRoutedRatingCount, 1);
+  assert.equal(report.counts.qaReviewExcludedCount, 1);
+  assert.equal(report.counts.qaReviewMissingCount, 0);
+  assert.equal(report.protectedUseBlockSummary.validationBlockedCount, 0);
+  assert.equal(reviewed.ratingEffortQaReviewId, "rating-effort-qa-voting-style");
+  assert.equal(reviewed.qaStatus, "qa_review_excluded_from_sensitive_denominators");
+  assert.equal(reviewed.sensitiveUseDisposition, "excluded_from_sensitive_denominators");
+});
+
+test("rating effort quality report keeps unsafe QA reviews blocked", () => {
+  const report = buildRatingEffortQualityReport("release-test", seedRatings, positions, critiques, assignments, {
+    ratingEffortQaReviews: [
+      {
+        id: "rating-effort-qa-unsafe",
+        ratingId: "rating-voting-style-a",
+        itemKeys: ["pos-voting::crit-voting-style"],
+        routeReasonsReviewed: ["wrong_reason"],
+        reviewerId: "expert-qa",
+        reviewerRole: "expert",
+        reviewDecision: "cleared_for_sensitive_use",
+        sensitiveUseDecision: "cleared",
+        labelMutationProhibited: false,
+        independentRaterDenominatorUnchanged: true,
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  });
+  assert.equal(report.releaseUseStatus, "qa_routing_required_before_sensitive_use");
+  assert.equal(report.counts.invalidQaReviewCount, 1);
+  assert.ok(report.reviewSections[0].reviewReasons.includes("labelMutationProhibited"));
+  assert.ok(report.reviewSections[0].reviewReasons.includes("routeReasonsReviewed:length_adjusted_active_time_below_expected"));
+});
+
 test("post-lock source/style audit reports identifiability without feeding scores", () => {
   const snapshot = createLabelSnapshot(
     "snapshot-source-style-test",
@@ -4177,6 +4230,62 @@ test("uncertainty-aware leaderboard reports common subsets and unresolved rank t
   assert.equal(report.modelAssistedLabelOverlap.runRows[0].cleanClaimStatus, "clean_claim_allowed_no_model_assisted_label_exposure");
   assert.equal(report.reasoningModeSensitivity.status, "no_paired_reasoning_mode_run_deferred");
   assert.equal(report.reasoningModeSensitivity.table6SourceBaseline.length, 4);
+});
+
+test("uncertainty-aware leaderboard accepts submitted paired rank evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-leaderboard-submitted-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildUncertaintyAwareLeaderboardReport("release-test", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
+    leaderboards: [
+      {
+        id: "leaderboard-submitted-rank-evidence",
+        releaseId: "release-test",
+        metricFamily: "weighted_pairwise",
+        targetLabelSnapshotId: snapshot.id,
+        targetLabelVersion: snapshot.targetLabelVersion,
+        evaluationRunIds: ["eval-full-rubric-demo", "eval-overall-demo"],
+        commonSubsetPolicy: "common_item_set_required",
+        commonMetricFamilyEligibilityPolicy: "shared_metric_config_and_pairwise_snapshot",
+        commonPromptPolicyRequirement: "same_prompt_source_scope_or_sensitivity_label",
+        commonReasoningModeRequirement: "same_reasoning_mode_or_sensitivity_label",
+        uncertaintyPolicy: {
+          intervalType: "paired_difference_interval",
+          nominalLevel: 0.95,
+          constructionMethod: "position_level_bootstrap",
+          resamplingUnit: "position",
+          resampleCountOrDegreesOfFreedom: 2000,
+          randomSeedOrArtifact: "leaderboard-seed-20261031",
+        },
+        uncertaintySupportedRankTiers: [["eval-full-rubric-demo"], ["eval-overall-demo"]],
+        pairedDifferenceRows: [
+          {
+            comparison: "eval-full-rubric-demo_vs_eval-overall-demo",
+            evaluationRunIds: ["eval-full-rubric-demo", "eval-overall-demo"],
+            leftMinusRightPointEstimate: -0.08,
+            pairedDifferenceInterval: { lower: -0.12, upper: -0.03 },
+            intervalExcludesZero: true,
+            practicalDifferenceThreshold: 0.02,
+            practicalGapMet: true,
+            interpretation: "rank_claim_supported",
+          },
+        ],
+        pointEstimateOnlyOrderingFlag: false,
+        superiorityClaimPolicy: "rank_claims_require_paired_intervals_and_practical_threshold",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T02:10:00.000Z",
+      },
+    ],
+  });
+  assert.equal(report.releaseUseStatus, "submitted_uncertainty_aware_leaderboard_complete");
+  assert.equal(report.pointEstimateOnlyOrdering, false);
+  assert.deepEqual(report.computedUnresolvedComparisonGroups, ["eval-full-rubric-demo_vs_eval-overall-demo"]);
+  assert.deepEqual(report.unresolvedComparisonGroups, []);
+  assert.equal(report.submittedLeaderboardEvidence.activeLeaderboardId, "leaderboard-submitted-rank-evidence");
+  assert.equal(report.submittedLeaderboardEvidence.completeLeaderboardCount, 1);
 });
 
 test("metric directionality and pairwise config report declares target roles and tie handling", () => {
@@ -5230,6 +5339,116 @@ test("validation tranche report separates random sentinel from hard-case stress 
   assert.equal(report.randomSentinel.incrementalPostModelAssistanceDelta.status, "no_model_assisted_checks_in_tranche");
   assert.equal(report.hardCaseStress.initialVsFinal.meanAbsOverallDiff, 0);
   assert.equal(report.hardCaseStress.unresolvedPostDiscussionRows[0].unresolvedDisagreementClass, "stable low-quality diagnosis");
+});
+
+test("validation tranche report accepts submitted Appendix-C-scale tranche evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-validation-tranche-submitted-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const comparisons = ["initial_vs_final", "human_only_self_checked_vs_final", "model_assisted_checked_vs_final", "incremental_post_model_assistance_delta"];
+  const evidence = {
+    id: "validation-tranche-evidence-test",
+    releaseId: "release-test",
+    targetLabelSnapshotId: snapshot.id,
+    targetLabelVersion: snapshot.targetLabelVersion,
+    validationDesignStatus: "appendix_c_scale",
+    appendixCComparabilityStatus: "appendix_c_scale",
+    validationCritiqueCount: 52,
+    validationPositionCount: 19,
+    coreAllItemsRaterCount: 4,
+    partialRaterCoverageSummary: "four core all-items raters plus documented partial prefixes",
+    discussionSessionHourAccounting: "7.5 discussion hours with written follow-up accounted separately",
+    trancheRows: [
+      {
+        tranche: "random_sentinel",
+        itemIds: ["pos-voting::crit-voting-bullet"],
+        positionCount: 19,
+        critiqueCount: 52,
+        membershipBlindingStatus: "membership_hidden_until_initial_lock_where_feasible",
+        humanCeilingEstimateStatus: "reported_with_uncertainty",
+        perDimensionCalibrationStatus: "reported",
+        individualRaterDominanceStatus: "largest_share_below_policy_threshold",
+        expertVsModelAgreementStatus: "reported",
+        saturationRiskStatus: "not_saturated",
+      },
+      {
+        tranche: "hard_case_stress",
+        itemIds: ["pos-voting::crit-voting-style"],
+        positionCount: 6,
+        critiqueCount: 18,
+        membershipBlindingStatus: "hard_case_status_admin_only_until_initial_lock",
+        humanCeilingEstimateStatus: "reported_with_uncertainty",
+        perDimensionCalibrationStatus: "reported",
+        individualRaterDominanceStatus: "largest_share_below_policy_threshold",
+        expertVsModelAgreementStatus: "reported",
+        saturationRiskStatus: "reported_separately_not_headline_random_sentinel",
+      },
+    ],
+    comparisonRows: ["random_sentinel", "hard_case_stress"].flatMap((tranche) =>
+      comparisons.map((comparison) => ({
+        tranche,
+        comparison,
+        rowCount: tranche === "random_sentinel" ? 52 : 18,
+        comparisonStatus: "reported_with_uncertainty",
+        uncertaintyMethod: "bootstrap",
+        intervalType: "confidence_interval",
+        intervalLevel: 0.95,
+        intervalConstructionMethod: "position_level_resampling",
+        resamplingUnit: "position",
+        resampleCount: 2000,
+        randomSeed: "validation-tranche-seed-20261031",
+      })),
+    ),
+    reviewerId: "expert-validation",
+    reviewerRole: "expert",
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+  const report = buildValidationTrancheReport("release-test", snapshot, seedRatings, positions, critiques, adjudicationMemos, {
+    validationTrancheEvidenceRecords: [evidence],
+  });
+  assert.equal(report.releaseUseStatus, "submitted_validation_tranche_evidence_complete");
+  assert.equal(report.submittedValidationTrancheEvidence.activeEvidenceId, "validation-tranche-evidence-test");
+  assert.equal(report.submittedValidationTrancheEvidence.completeEvidenceCount, 1);
+  assert.deepEqual(report.reviewSections, []);
+});
+
+test("validation tranche report requires current complete tranche evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-validation-tranche-review-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildValidationTrancheReport("release-test", snapshot, seedRatings, positions, critiques, adjudicationMemos, {
+    validationTrancheEvidenceRecords: [
+      {
+        id: "validation-tranche-evidence-review",
+        releaseId: "older-release",
+        targetLabelSnapshotId: "stale-snapshot",
+        targetLabelVersion: snapshot.targetLabelVersion,
+        validationDesignStatus: "thinner_than_appendix_c",
+        appendixCComparabilityStatus: "thin_seed",
+        validationCritiqueCount: 2,
+        validationPositionCount: 1,
+        coreAllItemsRaterCount: 1,
+        partialRaterCoverageSummary: "",
+        discussionSessionHourAccounting: "",
+        trancheRows: [{ tranche: "random_sentinel", itemIds: ["pos-voting::crit-voting-bullet"], positionCount: 1, critiqueCount: 1 }],
+        comparisonRows: [],
+        reviewerId: "expert-validation",
+        reviewerRole: "expert",
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  });
+  assert.equal(report.releaseUseStatus, "validation_tranche_evidence_review_required");
+  assert.equal(report.submittedValidationTrancheEvidence.reviewRequiredCount, 1);
+  assert.ok(report.reviewSections.some((section) => section.reason === "releaseId"));
+  assert.ok(report.reviewSections.some((section) => section.reason === "trancheRows:hard_case_stress"));
+  assert.ok(report.reviewSections.some((section) => section.reason === "comparisonRows:random_sentinel:initial_vs_final"));
 });
 
 test("human-ceiling report separates check types and blocks saturation claims for thin validation", () => {

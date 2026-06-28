@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   RATER_ISSUE_FLAG_DEFINITIONS,
+  RATING_EFFORT_QA_REVIEW_DECISIONS,
   RUBRIC_DIMENSIONS,
   SCORE_CONFIDENCE_LEVELS,
   SCORE_EXPLANATION_EXTREME_THRESHOLD_HIGH,
@@ -39,6 +40,8 @@ import {
   seedBenchmarkExposureEvents,
   seedCertificationAttempts,
   seedRatings,
+  VALIDATION_TRANCHE_REQUIRED_COMPARISONS,
+  VALIDATION_TRANCHE_TYPES,
 } from "./domain/core.mjs";
 import {
   CONTRIBUTION_ARCHITECTURE,
@@ -1944,6 +1947,33 @@ const workflowWriteEndpoints = [
     requiredFiniteNumberFields: ["validationCritiqueCount", "validationPositionCount", "coreAllItemsRaterCount", "discussionHours"],
     requiredObjectFields: ["metricOutputsByFamily"],
   }),
+  workflowWriteSpec(/^\/api\/v1\/validation-tranche-evidence$/, "validation_tranche_evidence_submitted", "validationTrancheEvidence", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "targetLabelSnapshotId",
+      "targetLabelVersion",
+      "validationDesignStatus",
+      "appendixCComparabilityStatus",
+      "partialRaterCoverageSummary",
+      "discussionSessionHourAccounting",
+      "reviewerId",
+      "reviewerRole",
+      "createdAt",
+    ],
+    requiredFiniteNumberFields: ["validationCritiqueCount", "validationPositionCount", "coreAllItemsRaterCount"],
+    requiredNonEmptyArrayFields: ["trancheRows", "comparisonRows"],
+    requiredObjectArrayFieldValues: [
+      { arrayField: "trancheRows", valueField: "tranche", requiredValues: VALIDATION_TRANCHE_TYPES },
+      { arrayField: "comparisonRows", valueField: "comparison", requiredValues: VALIDATION_TRANCHE_REQUIRED_COMPARISONS },
+    ],
+    allowedObjectArrayFieldValues: [
+      { arrayField: "trancheRows", valueField: "tranche", allowedValues: VALIDATION_TRANCHE_TYPES },
+      { arrayField: "comparisonRows", valueField: "tranche", allowedValues: VALIDATION_TRANCHE_TYPES },
+      { arrayField: "comparisonRows", valueField: "comparison", allowedValues: VALIDATION_TRANCHE_REQUIRED_COMPARISONS },
+    ],
+  }),
   workflowWriteSpec(/^\/api\/v1\/leaderboards$/, "leaderboard_submitted", "leaderboard", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -1960,8 +1990,18 @@ const workflowWriteEndpoints = [
       "createdBy",
       "timestamp",
     ],
-    requiredNonEmptyArrayFields: ["evaluationRunIds", "uncertaintySupportedRankTiers"],
+    requiredNonEmptyArrayFields: ["evaluationRunIds", "uncertaintySupportedRankTiers", "pairedDifferenceRows"],
     requiredObjectFields: ["uncertaintyPolicy"],
+    requiredObjectKeys: {
+      uncertaintyPolicy: [
+        "intervalType",
+        "nominalLevel",
+        "constructionMethod",
+        "resamplingUnit",
+        "resampleCountOrDegreesOfFreedom",
+        "randomSeedOrArtifact",
+      ],
+    },
     requiredExactFields: {
       pointEstimateOnlyOrderingFlag: false,
     },
@@ -2645,6 +2685,16 @@ const workflowWriteEndpoints = [
     requiredStringPrefixes: { samplingSeedArtifact: "sha256:" },
     requiredExactFields: { excludedFromIndependentRaterCount: true, ordinaryRatingStatus: "apparently_ordinary_non_escalated" },
   }),
+  workflowWriteSpec(/^\/api\/v1\/rating-effort-qa-reviews$/, "rating_effort_qa_review_submitted", "ratingEffortQaReview", expertWorkflowRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "ratingId", "reviewerId", "reviewerRole", "reviewDecision", "sensitiveUseDecision", "timestamp"],
+    requiredNonEmptyArrayFields: ["itemKeys", "routeReasonsReviewed"],
+    allowedValues: { reviewDecision: RATING_EFFORT_QA_REVIEW_DECISIONS },
+    requiredExactFields: {
+      labelMutationProhibited: true,
+      independentRaterDenominatorUnchanged: true,
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-triage-items$/, "adjudication_triage_queue_item_submitted", "adjudicationTriageQueueItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: ["id", "triggerType", "releaseBlockingStatus", "priority", "queueLane", "assignedReviewerId", "status", "routingRationale", "timestamp"],
@@ -3234,6 +3284,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/sycophancy-probes\/(?<id>[^/]+)$/, "sycophancyProbeRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/obfuscation-stress-runs\/(?<id>[^/]+)$/, "obfuscationStressRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/sanity-baselines\/(?<id>[^/]+)$/, "sanityBaselineRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/validation-tranche-evidence\/(?<id>[^/]+)$/, "validationTrancheEvidence", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ux-simplification-policies\/(?<id>[^/]+)$/, "uxSimplificationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ux-simplification-reviews\/(?<id>[^/]+)$/, "uxSimplificationReview", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/screen-state-payloads\/(?<id>[^/]+)$/, "screenStatePayload", adminAuditRoles),
@@ -3267,6 +3318,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/blinding-preview-audits\/(?<id>[^/]+)$/, "blindingPreviewAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/partial-task-outputs\/(?<id>[^/]+)$/, "partialTaskOutput", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/spot-checks\/(?<id>[^/]+)$/, "spotCheckQaItem", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rating-effort-qa-reviews\/(?<id>[^/]+)$/, "ratingEffortQaReview", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-triage-items\/(?<id>[^/]+)$/, "adjudicationTriageQueueItem", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/diagnostic-deferrals\/(?<id>[^/]+)$/, "diagnosticDeferralRecord", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/queue-policy-snapshots\/(?<id>[^/]+)$/, "queuePolicySnapshot", adminAuditRoles),
@@ -5763,6 +5815,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const artifactProbeRuns = latestWorkflowResources(workflowEvents, "artifactProbeRun");
   const sanityBaselineRuns = latestWorkflowResources(workflowEvents, "sanityBaselineRun");
   const humanCeilingRuns = latestWorkflowResources(workflowEvents, "humanCeilingRun");
+  const validationTrancheEvidenceRecords = latestWorkflowResources(workflowEvents, "validationTrancheEvidence");
   const leaderboards = latestWorkflowResources(workflowEvents, "leaderboard");
   const modelFailureAudits = latestWorkflowResources(workflowEvents, "modelFailureAudit");
   const goldItems = latestWorkflowResources(workflowEvents, "goldItem");
@@ -5817,6 +5870,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const partialTaskOutputs = latestWorkflowResources(workflowEvents, "partialTaskOutput");
   const raterPositionClusterExposures = latestWorkflowResources(workflowEvents, "raterPositionClusterExposure");
   const spotCheckQaItems = latestWorkflowResources(workflowEvents, "spotCheckQaItem");
+  const ratingEffortQaReviews = latestWorkflowResources(workflowEvents, "ratingEffortQaReview");
   const adjudicationTriageQueueItems = latestWorkflowResources(workflowEvents, "adjudicationTriageQueueItem");
   const diagnosticDeferralRecords = latestWorkflowResources(workflowEvents, "diagnosticDeferralRecord");
   const queuePolicySnapshots = latestWorkflowResources(workflowEvents, "queuePolicySnapshot");
@@ -5915,6 +5969,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     artifactProbeRuns,
     sanityBaselineRuns,
     humanCeilingRuns,
+    validationTrancheEvidenceRecords,
     leaderboards,
     modelFailureAudits,
     goldItems,
@@ -5969,6 +6024,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     partialTaskOutputs,
     raterPositionClusterExposures,
     spotCheckQaItems,
+    ratingEffortQaReviews,
     adjudicationTriageQueueItems,
     diagnosticDeferralRecords,
     queuePolicySnapshots,
@@ -6064,6 +6120,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     artifactProbeRuns,
     sanityBaselineRuns,
     humanCeilingRuns,
+    validationTrancheEvidenceRecords,
     leaderboards,
     modelFailureAudits,
     goldItems,
@@ -6118,6 +6175,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     partialTaskOutputs,
     raterPositionClusterExposures,
     spotCheckQaItems,
+    ratingEffortQaReviews,
     adjudicationTriageQueueItems,
     diagnosticDeferralRecords,
     queuePolicySnapshots,

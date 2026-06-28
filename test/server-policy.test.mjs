@@ -1271,6 +1271,19 @@ function completeAuxiliaryWorkflowFixtures() {
       excludedFromIndependentRaterCount: true,
       timestamp: "2026-10-01T00:33:00.000Z",
     },
+    ratingEffortQaReview: {
+      id: "rating-effort-qa-workflow-new",
+      ratingId: "rating-voting-style-a",
+      itemKeys: ["pos-voting::crit-voting-style"],
+      routeReasonsReviewed: ["length_adjusted_active_time_below_expected"],
+      reviewerId: "demo-expert",
+      reviewerRole: "expert",
+      reviewDecision: "exclude_from_sensitive_denominators",
+      sensitiveUseDecision: "excluded_from_validation_denominator",
+      labelMutationProhibited: true,
+      independentRaterDenominatorUnchanged: true,
+      timestamp: "2026-10-01T00:33:30.000Z",
+    },
     adjudicationTriageQueueItem: {
       id: "adjudication-triage-workflow-new",
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
@@ -6071,6 +6084,96 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(humanCeilingRunById.status, 200);
   assert.equal(humanCeilingRunById.body.id, "human-ceiling-workflow-new");
 
+  const validationTrancheEvidence = {
+    id: "validation-tranche-evidence-workflow-new",
+    releaseId: "october-2026-demo",
+    targetLabelSnapshotId: "snapshot-oct-api",
+    targetLabelVersion: "initial_mean",
+    validationDesignStatus: "appendix_c_scale",
+    appendixCComparabilityStatus: "appendix_c_scale",
+    validationCritiqueCount: 52,
+    validationPositionCount: 19,
+    coreAllItemsRaterCount: 4,
+    partialRaterCoverageSummary: "four core all-items raters plus documented partial prefixes",
+    discussionSessionHourAccounting: "7.5 discussion hours plus written follow-up accounting",
+    trancheRows: [
+      {
+        tranche: "random_sentinel",
+        itemIds: ["pos-voting::crit-voting-bullet"],
+        positionCount: 19,
+        critiqueCount: 52,
+        membershipBlindingStatus: "membership_hidden_until_initial_lock_where_feasible",
+        humanCeilingEstimateStatus: "reported_with_uncertainty",
+        perDimensionCalibrationStatus: "reported",
+        individualRaterDominanceStatus: "largest_share_below_policy_threshold",
+        expertVsModelAgreementStatus: "reported",
+        saturationRiskStatus: "not_saturated",
+      },
+      {
+        tranche: "hard_case_stress",
+        itemIds: ["pos-voting::crit-voting-style"],
+        positionCount: 6,
+        critiqueCount: 18,
+        membershipBlindingStatus: "hard_case_status_admin_only_until_initial_lock",
+        humanCeilingEstimateStatus: "reported_with_uncertainty",
+        perDimensionCalibrationStatus: "reported",
+        individualRaterDominanceStatus: "largest_share_below_policy_threshold",
+        expertVsModelAgreementStatus: "reported",
+        saturationRiskStatus: "reported_separately_not_headline_random_sentinel",
+      },
+    ],
+    comparisonRows: ["random_sentinel", "hard_case_stress"].flatMap((tranche) =>
+      ["initial_vs_final", "human_only_self_checked_vs_final", "model_assisted_checked_vs_final", "incremental_post_model_assistance_delta"].map((comparison) => ({
+        tranche,
+        comparison,
+        rowCount: tranche === "random_sentinel" ? 52 : 18,
+        comparisonStatus: "reported_with_uncertainty",
+        uncertaintyMethod: "bootstrap",
+        intervalType: "confidence_interval",
+        intervalLevel: 0.95,
+        intervalConstructionMethod: "position_level_resampling",
+        resamplingUnit: "position",
+        resampleCount: 2000,
+        randomSeed: "validation-tranche-seed-20261031",
+      })),
+    ),
+    reviewerId: "demo-admin",
+    reviewerRole: "admin",
+    createdAt: "2026-10-01T02:07:00.000Z",
+  };
+
+  const incompleteValidationTrancheEvidence = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/validation-tranche-evidence",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      validationTrancheEvidence: {
+        ...validationTrancheEvidence,
+        id: "validation-tranche-evidence-incomplete",
+        trancheRows: validationTrancheEvidence.trancheRows.slice(0, 1),
+        comparisonRows: [],
+      },
+    }),
+  });
+  assert.equal(incompleteValidationTrancheEvidence.status, 400);
+  assert.match(incompleteValidationTrancheEvidence.body.detail, /comparisonRows/);
+
+  const validationTrancheEvidenceResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/validation-tranche-evidence",
+    headers: adminHeaders,
+    body: JSON.stringify({ validationTrancheEvidence }),
+  });
+  assert.equal(validationTrancheEvidenceResponse.status, 201);
+
+  const validationTrancheEvidenceById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/validation-tranche-evidence/validation-tranche-evidence-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(validationTrancheEvidenceById.status, 200);
+  assert.equal(validationTrancheEvidenceById.body.validationDesignStatus, "appendix_c_scale");
+
   const leaderboardWorkflow = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/leaderboards",
@@ -6082,14 +6185,33 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         metricFamily: "weighted_pairwise",
         targetLabelSnapshotId: "snapshot-oct-api",
         targetLabelVersion: "initial_mean",
-        evaluationRunIds: ["eval-workflow-new"],
+        evaluationRunIds: ["eval-workflow-new", "eval-full-rubric-demo"],
         commonSubsetPolicy: "common_item_set_required",
         commonMetricFamilyEligibilityPolicy: "shared_metric_config_and_pairwise_snapshot",
         commonPromptPolicyRequirement: "same_prompt_source_scope_or_sensitivity_label",
         commonReasoningModeRequirement: "same_reasoning_mode_or_sensitivity_label",
-        uncertaintyPolicy: { intervalType: "paired_difference_interval", nominalLevel: 0.95 },
+        uncertaintyPolicy: {
+          intervalType: "paired_difference_interval",
+          nominalLevel: 0.95,
+          constructionMethod: "position_level_bootstrap",
+          resamplingUnit: "position",
+          resampleCountOrDegreesOfFreedom: 2000,
+          randomSeedOrArtifact: "leaderboard-seed-20261031",
+        },
         superiorityClaimPolicy: "rank_claims_require_paired_intervals_and_practical_threshold",
-        uncertaintySupportedRankTiers: [["eval-workflow-new"]],
+        uncertaintySupportedRankTiers: [["eval-workflow-new"], ["eval-full-rubric-demo"]],
+        pairedDifferenceRows: [
+          {
+            comparison: "eval-workflow-new_vs_eval-full-rubric-demo",
+            evaluationRunIds: ["eval-workflow-new", "eval-full-rubric-demo"],
+            leftMinusRightPointEstimate: -0.07,
+            pairedDifferenceInterval: { lower: -0.11, upper: -0.03 },
+            intervalExcludesZero: true,
+            practicalDifferenceThreshold: 0.02,
+            practicalGapMet: true,
+            interpretation: "rank_claim_supported",
+          },
+        ],
         pointEstimateOnlyOrderingFlag: false,
         createdBy: "demo-admin",
         timestamp: "2026-10-01T02:10:00.000Z",
@@ -7937,10 +8059,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteSpotCheck.status, 400);
   assert.match(incompleteSpotCheck.body.detail, /samplingDimensions|ordinaryRatingStatus/);
 
+  const unsafeRatingEffortQaReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rating-effort-qa-reviews",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      ratingEffortQaReview: {
+        ...auxiliaryWorkflow.ratingEffortQaReview,
+        id: "rating-effort-qa-unsafe-mutation",
+        routeReasonsReviewed: [],
+        labelMutationProhibited: false,
+      },
+    }),
+  });
+  assert.equal(unsafeRatingEffortQaReview.status, 400);
+  assert.match(unsafeRatingEffortQaReview.body.detail, /routeReasonsReviewed|labelMutationProhibited/);
+
   for (const [resourceKey, url] of [
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
     ["spotCheckQaItem", "/api/v1/spot-checks"],
+    ["ratingEffortQaReview", "/api/v1/rating-effort-qa-reviews"],
     ["adjudicationTriageQueueItem", "/api/v1/adjudication-triage-items"],
     ["diagnosticDeferralRecord", "/api/v1/diagnostic-deferrals"],
     ["queuePolicySnapshot", "/api/v1/queue-policy-snapshots"],
@@ -8022,6 +8161,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(partialTaskById.status, 200);
   assert.equal(partialTaskById.body.countedAsFullRubricRating, false);
+
+  const ratingEffortQaReviewById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rating-effort-qa-reviews/rating-effort-qa-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(ratingEffortQaReviewById.status, 200);
+  assert.equal(ratingEffortQaReviewById.body.reviewDecision, "exclude_from_sensitive_denominators");
 
   const exposureEligibility = await invokeApi(context, {
     method: "GET",
@@ -9747,7 +9894,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     true,
   );
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.humanCeilingRuns.length, 1);
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.validationTrancheEvidenceRecords.length, 1);
+  assert.equal(releaseReport.body.validationTrancheReport.releaseUseStatus, "submitted_validation_tranche_evidence_complete");
+  assert.equal(
+    releaseReport.body.validationTrancheReport.submittedValidationTrancheEvidence.activeEvidenceId,
+    "validation-tranche-evidence-workflow-new",
+  );
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.leaderboards.length, 1);
+  assert.equal(releaseReport.body.leaderboardReport.releaseUseStatus, "submitted_uncertainty_aware_leaderboard_complete");
+  assert.equal(releaseReport.body.leaderboardReport.submittedLeaderboardEvidence.activeLeaderboardId, "leaderboard-workflow-new");
+  assert.deepEqual(releaseReport.body.leaderboardReport.unresolvedComparisonGroups, []);
+  assert.equal(releaseReport.body.leaderboardReport.computedPointEstimateOnlyOrdering, true);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelFailureAudits.length, 1);
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.releaseUseStatus,
@@ -9935,6 +10092,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.partialTaskOutputs.length, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterPositionClusterExposures.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.spotCheckQaItems.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.ratingEffortQaReviews.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.adjudicationTriageQueueItems.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.diagnosticDeferralRecords.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.queuePolicySnapshots.length, 1);
@@ -9953,6 +10111,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckQAItemCount, 1);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
+  assert.equal(releaseReport.body.ratingEffortQuality.releaseUseStatus, "rating_effort_qa_review_complete");
+  assert.equal(releaseReport.body.ratingEffortQuality.counts.submittedQaReviewCount, 1);
+  assert.equal(releaseReport.body.ratingEffortQuality.counts.qaReviewExcludedCount, 1);
+  assert.equal(releaseReport.body.ratingEffortQuality.protectedUseBlockSummary.validationBlockedCount, 0);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterItemConflictCount, 2);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedReleaseErratumCount, 2);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
@@ -10240,7 +10402,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 92);
+	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 94);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {
