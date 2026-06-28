@@ -5996,10 +5996,17 @@ export function buildCritiqueGenerationEvaluationReport(
   positionList = positions,
   critiqueList = critiques,
   memos = adjudicationMemos,
+  options = {},
 ) {
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const critiqueById = new Map(critiqueList.map((critique) => [critique.id, critique]));
   const adjudicatedCritiqueIds = new Set(memos.map((memo) => memo.critiqueId));
+  const modelProviderPolicyRows = (options.modelProviderDataHandlingPolicies?.length
+    ? options.modelProviderDataHandlingPolicies
+    : defaultModelProviderDataHandlingPolicies(releaseId)
+  )
+    .map((policy) => normalizeModelProviderDataHandlingPolicy(policy, "critique_generation_provider_policy"))
+    .filter(Boolean);
   const runRows = generationRuns.map((run) => {
     const outputRows = run.outputs.map((output) => {
       const position = positionById.get(output.positionId);
@@ -6052,6 +6059,7 @@ export function buildCritiqueGenerationEvaluationReport(
       generationSettings: run.generationSettings,
       filteringPolicy: run.filteringPolicy,
       modelJudgeScreening: run.modelJudgeScreening,
+      modelProviderPolicyBinding: critiqueGenerationProviderPolicyBinding(run, modelProviderPolicyRows),
       metricDefinitions: run.metricDefinitions,
       submittedWorkflowOutputCount: run.submittedWorkflowOutputCount ?? 0,
       outputStatusCounts: countBy(outputRows, "status"),
@@ -6083,6 +6091,12 @@ export function buildCritiqueGenerationEvaluationReport(
       outputRows,
     };
   });
+  const providerPolicyReviewSections = runRows.flatMap((row) =>
+    row.modelProviderPolicyBinding.reviewReasons.map((reason) => ({ artifactType: "critique_generation_provider_policy", artifactId: row.id, reason })),
+  );
+  const coverageAndBlindingPass = runRows.every(
+    (row) => !row.modelJudgeScreening.scoresVisibleToInitialRaters && row.blindRatingCoverage.noBlindRatingOutputIds.length === 0,
+  );
   return {
     id: `critique-generation-evaluation-${releaseId}`,
     releaseId,
@@ -6097,10 +6111,18 @@ export function buildCritiqueGenerationEvaluationReport(
       modelJudgeScoresVisibleToInitialRaters: generationRuns.some((run) => run.modelJudgeScreening.scoresVisibleToInitialRaters),
     },
     aggregateCounts: aggregateGenerationCounts(runRows),
+    providerPolicyEvidence: {
+      runRows: runRows.map((row) => row.modelProviderPolicyBinding),
+      reviewSections: providerPolicyReviewSections,
+      releaseUseStatus: providerPolicyReviewSections.length
+        ? "critique_generation_provider_policy_review_required"
+        : "critique_generation_provider_policies_approved",
+    },
     runRows,
-    releaseUseStatus: runRows.every((row) => !row.modelJudgeScreening.scoresVisibleToInitialRaters && row.blindRatingCoverage.noBlindRatingOutputIds.length === 0)
-      ? "generation_evaluation_separate_with_blind_rating_coverage"
-      : "generation_evaluation_requires_blinding_or_rating_coverage_review",
+    releaseUseStatus:
+      coverageAndBlindingPass && providerPolicyReviewSections.length === 0
+        ? "generation_evaluation_separate_with_blind_rating_coverage"
+        : "generation_evaluation_requires_blinding_rating_coverage_or_provider_policy_review",
   };
 }
 
@@ -6122,6 +6144,60 @@ function buildEffectiveCritiqueGenerationRuns({
     normalizeSubmittedCritiqueGenerationRun(run, generatedCritiqueSubmissions, generatedCritiquePromotions, generationEvaluationReports),
   );
   return [...critiqueGenerationRuns, ...normalizedSubmittedRuns];
+}
+
+function critiqueGenerationProviderPolicyBinding(run, policyRows = []) {
+  const generatorPolicyId = run.modelProviderDataHandlingPolicyId ?? run.generationModelProviderDataHandlingPolicyId ?? null;
+  const judgePolicyId = run.modelJudgeScreening?.modelProviderDataHandlingPolicyId ?? run.judgeModelProviderDataHandlingPolicyId ?? null;
+  const generator = modelProviderPolicyBindingForRunClass(run, "critique_generation", generatorPolicyId, policyRows);
+  const modelJudge = modelProviderPolicyBindingForRunClass(run, "model_judge", judgePolicyId, policyRows);
+  return {
+    generationRunId: run.id,
+    runSource: run.runSource ?? "seed_critique_generation_run",
+    generator,
+    modelJudge,
+    reviewReasons: [...generator.reviewReasons.map((reason) => `generator.${reason}`), ...modelJudge.reviewReasons.map((reason) => `modelJudge.${reason}`)],
+    status:
+      generator.reviewReasons.length || modelJudge.reviewReasons.length
+        ? "critique_generation_provider_policy_review_required"
+        : "critique_generation_provider_policy_approved",
+  };
+}
+
+function modelProviderPolicyBindingForRunClass(run, runClass, explicitPolicyId, policyRows = [], options = {}) {
+  const submittedWorkflowRun = options.requireExplicitPolicyId ?? run.runSource === "submitted_workflow_critique_generation_run";
+  const policy = explicitPolicyId
+    ? policyRows.find((row) => row.id === explicitPolicyId) ?? null
+    : submittedWorkflowRun
+      ? null
+      : policyRows.find((row) => row.coveredRunClass === runClass && row.reviewReasons.length === 0) ?? null;
+  const reviewReasons = [
+    submittedWorkflowRun && !explicitPolicyId ? "modelProviderDataHandlingPolicyId" : null,
+    policy ? null : "policyNotFound",
+    policy && policy.coveredRunClass !== runClass ? "coveredRunClass" : null,
+    policy && !policy.approvedSplitContentClasses.includes("protected_validation") ? "approvedSplitContentClasses.protected_validation" : null,
+    policy && !policy.approvedSplitContentClasses.includes("hidden_benchmark") ? "approvedSplitContentClasses.hidden_benchmark" : null,
+    policy && policy.noTrainingOnInputsOutputs !== true ? "noTrainingOnInputsOutputs" : null,
+    policy && policy.noPromptOrOutputReuse !== true ? "noPromptOrOutputReuse" : null,
+    policy && policy.unnecessaryHumanReviewProhibited !== true ? "unnecessaryHumanReviewProhibited" : null,
+    policy && policy.protectedContentEligible !== true ? "protectedContentEligible" : null,
+    policy && policy.approvalStatus !== "approved" ? "approvalStatus" : null,
+    ...(policy?.reviewReasons ?? []),
+  ].filter(Boolean);
+  return {
+    runClass,
+    modelProviderDataHandlingPolicyId: policy?.id ?? explicitPolicyId ?? null,
+    providerEndpointClass: policy?.providerEndpointClass ?? null,
+    approvedSplitContentClasses: policy?.approvedSplitContentClasses ?? [],
+    protectedContentEligible: policy?.protectedContentEligible === true,
+    noTrainingOnInputsOutputs: policy?.noTrainingOnInputsOutputs === true,
+    noPromptOrOutputReuse: policy?.noPromptOrOutputReuse === true,
+    unnecessaryHumanReviewProhibited: policy?.unnecessaryHumanReviewProhibited === true,
+    logRetentionWindowDays: policy?.logRetentionWindowDays ?? null,
+    approvalStatus: policy?.approvalStatus ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_provider_policy_review_required" : "model_provider_policy_approved",
+  };
 }
 
 function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, reports) {
@@ -6162,6 +6238,7 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
     requestedModelAlias: run.requestedModelAlias ?? run.generatorRequestedModelAlias ?? run.generatorModelAlias ?? "submitted-generator",
     resolvedModelSnapshot: run.resolvedModelSnapshot ?? run.generatorResolvedModelSnapshot ?? run.generatorModelSnapshot ?? "submitted-generator-snapshot",
     providerRoute: run.providerRoute ?? run.provider ?? "submitted_workflow",
+    modelProviderDataHandlingPolicyId: run.modelProviderDataHandlingPolicyId ?? run.generationModelProviderDataHandlingPolicyId ?? null,
     inferenceDate: run.inferenceDate ?? run.createdAt ?? null,
     promptTemplateId,
     promptFamily: promptArtifact.promptFamily,
@@ -6242,6 +6319,7 @@ function normalizeSubmittedGenerationJudge(run, promptArtifact) {
     repairedOutputCount: judge.repairedOutputCount ?? 0,
     scoresVisibleToInitialRaters: judge.scoresVisibleToInitialRaters ?? run.modelJudgeScoresVisibleToInitialRaters ?? false,
     diagnosticOnly: judge.diagnosticOnly ?? run.modelJudgeDiagnosticOnly ?? true,
+    modelProviderDataHandlingPolicyId: judge.modelProviderDataHandlingPolicyId ?? run.judgeModelProviderDataHandlingPolicyId ?? null,
   };
 }
 
@@ -7410,7 +7488,14 @@ export function buildUncertaintyAwareLeaderboardReport(
   const modelAssistedLabelOverlap =
     options.modelAssistedLabelOverlapReport ??
     buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, options.ratings ?? seedRatings, runs, options.pairs);
-  const rows = runs.map((run) => leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily));
+  const modelRunProvenance = buildLeaderboardModelRunProvenanceSummary(runs, {
+    modelInferenceConfigs: options.modelInferenceConfigs ?? [],
+    modelRunEnvironments: options.modelRunEnvironments ?? [],
+  });
+  const modelRunProvenanceByRun = new Map(modelRunProvenance.perModelRows.map((row) => [row.evaluationRunId, row]));
+  const rows = runs.map((run) =>
+    leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily, modelRunProvenanceByRun.get(run.id)),
+  );
   const pairwiseComparisons = buildLeaderboardPairwiseComparisons(rows, practicalDifferenceThreshold);
   const unresolvedGroups = pairwiseComparisons
     .filter((comparison) => comparison.interpretation === "unresolved_within_uncertainty")
@@ -7498,6 +7583,7 @@ export function buildUncertaintyAwareLeaderboardReport(
     claimGatedDiagnosticSummary,
     hiddenBenchmarkSubmissionFeedback,
     parserPromptIntegrity,
+    modelRunProvenance,
     superiorityClaimPolicy:
       "Do not claim model superiority unless paired-difference intervals exclude zero and the absolute point-estimate gap meets the predeclared practical threshold.",
     releaseUseStatus: submittedLeaderboardReviewRows.length
@@ -7687,6 +7773,94 @@ function buildLeaderboardParserPromptIntegritySummary(runs = []) {
         ? "common_parser_prompt_integrity_declared"
         : "mixed_parser_or_prompt_policy_sensitivity_declared",
   };
+}
+
+function buildLeaderboardModelRunProvenanceSummary(runs = [], options = {}) {
+  const configRows = (options.modelInferenceConfigs ?? [])
+    .map((config) => normalizeModelInferenceConfig(config, "submitted_leaderboard_model_inference_config"))
+    .filter(Boolean);
+  const environmentRows = (options.modelRunEnvironments ?? [])
+    .map((environment) => normalizeModelRunEnvironment(environment, "submitted_leaderboard_model_run_environment"))
+    .filter(Boolean);
+  const perModelRows = runs.map((run) => {
+    const matchingConfigs = configRows.filter((row) => row.evaluationRunId === run.id);
+    const matchingEnvironments = environmentRows.filter((row) => row.evaluationRunId === run.id);
+    const config = matchingConfigs.find((row) => row.reviewReasons.length === 0) ?? matchingConfigs[0] ?? null;
+    const environment = matchingEnvironments.find((row) => row.reviewReasons.length === 0) ?? matchingEnvironments[0] ?? null;
+    const reviewReasons = [
+      config ? null : "modelInferenceConfig",
+      environment ? null : "modelRunEnvironment",
+      ...(config?.reviewReasons ?? []).map((reason) => `modelInferenceConfig.${reason}`),
+      ...(environment?.reviewReasons ?? []).map((reason) => `modelRunEnvironment.${reason}`),
+      config?.modelSnapshot && run.resolvedModelSnapshot && config.modelSnapshot !== run.resolvedModelSnapshot ? "modelSnapshotMismatch" : null,
+    ].filter(Boolean);
+    return {
+      evaluationRunId: run.id,
+      requestedModelAlias: run.requestedModelAlias,
+      resolvedModelSnapshot: run.resolvedModelSnapshot,
+      modelInferenceConfigId: config?.id ?? null,
+      modelRunEnvironmentId: environment?.id ?? null,
+      providerEndpoint: config?.providerEndpoint ?? null,
+      modelSnapshot: config?.modelSnapshot ?? null,
+      decodingParameters: config?.decodingParameters ?? null,
+      reasoningBudget: config?.reasoningBudget ?? null,
+      toolAvailability: config?.toolAvailability ?? [],
+      messageStackTemplate: config?.messageStackTemplate ?? null,
+      retryPolicy: config?.retryPolicy ?? null,
+      seedDeterminismArtifact: config?.seedDeterminismArtifact ?? null,
+      runtimeOrchestratorVersion: environment?.runtimeOrchestratorVersion ?? null,
+      apiRouteDeploymentId: environment?.apiRouteDeploymentId ?? null,
+      libraryVersions: environment?.libraryVersions ?? null,
+      rateLimitRetryMetadata: environment?.rateLimitRetryMetadata ?? null,
+      parserExtractorVersionLinks: environment?.parserExtractorVersionLinks ?? [],
+      reviewReasons,
+      status: reviewReasons.length ? "model_run_provenance_review_required" : "model_run_provenance_declared",
+    };
+  });
+  const reviewSections = perModelRows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "leaderboard_model_run_provenance", artifactId: row.evaluationRunId, reason })),
+  );
+  const commonReasoningBudgets = uniqueStrings(perModelRows.map((row) => row.reasoningBudget));
+  const commonToolAvailability = uniqueStrings(perModelRows.map((row) => stableJsonKey(row.toolAvailability)));
+  const commonMessageStackTemplates = uniqueStrings(perModelRows.map((row) => row.messageStackTemplate));
+  const commonRetryPolicies = uniqueStrings(perModelRows.map((row) => row.retryPolicy));
+  const commonRuntimeOrchestratorVersions = uniqueStrings(perModelRows.map((row) => row.runtimeOrchestratorVersion));
+  const commonParserExtractorVersionLinks = uniqueStrings(perModelRows.map((row) => stableJsonKey(row.parserExtractorVersionLinks)));
+  return {
+    submittedModelInferenceConfigCount: perModelRows.filter((row) => row.modelInferenceConfigId).length,
+    submittedModelRunEnvironmentCount: perModelRows.filter((row) => row.modelRunEnvironmentId).length,
+    availableModelInferenceConfigCount: configRows.length,
+    availableModelRunEnvironmentCount: environmentRows.length,
+    providerEndpoints: uniqueStrings(perModelRows.map((row) => row.providerEndpoint)),
+    apiRouteDeploymentIds: uniqueStrings(perModelRows.map((row) => row.apiRouteDeploymentId)),
+    modelSnapshots: uniqueStrings(perModelRows.map((row) => row.modelSnapshot)),
+    commonReasoningBudget: commonReasoningBudgets.length === 1,
+    commonToolAvailability: commonToolAvailability.length === 1,
+    commonMessageStackTemplate: commonMessageStackTemplates.length === 1,
+    commonRetryPolicy: commonRetryPolicies.length === 1,
+    commonRuntimeOrchestratorVersion: commonRuntimeOrchestratorVersions.length === 1,
+    commonParserExtractorVersionLinks: commonParserExtractorVersionLinks.length === 1,
+    commonSettingStatus:
+      commonReasoningBudgets.length === 1 &&
+      commonToolAvailability.length === 1 &&
+      commonMessageStackTemplates.length === 1 &&
+      commonRetryPolicies.length === 1
+        ? "common_inference_settings_declared"
+        : "mixed_inference_settings_sensitivity_declared",
+    perModelRows,
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "leaderboard_model_run_provenance_review_required"
+      : commonReasoningBudgets.length === 1 && commonToolAvailability.length === 1 && commonMessageStackTemplates.length === 1 && commonRetryPolicies.length === 1
+        ? "common_model_run_provenance_declared"
+        : "mixed_model_run_provenance_sensitivity_declared",
+  };
+}
+
+function stableJsonKey(value) {
+  if (Array.isArray(value)) return JSON.stringify(value);
+  if (value && typeof value === "object") return JSON.stringify(Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right))));
+  return typeof value === "string" && value ? value : null;
 }
 
 function promptExampleCheckPasses(check = {}) {
@@ -8090,6 +8264,12 @@ export function buildModelAssistedLabelOverlapReport(
 ) {
   const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
   const ratingById = new Map(ratings.map((rating) => [rating.id, rating]));
+  const modelProviderPolicyRows = (options.modelProviderDataHandlingPolicies?.length
+    ? options.modelProviderDataHandlingPolicies
+    : defaultModelProviderDataHandlingPolicies(releaseId)
+  )
+    .map((policy) => normalizeModelProviderDataHandlingPolicy(policy, "model_assisted_check_provider_policy"))
+    .filter(Boolean);
   const targetModelAssistedRows = [
     ...ratings
     .filter(hasModelAssistedExposure)
@@ -8098,7 +8278,16 @@ export function buildModelAssistedLabelOverlapReport(
     ...(options.ratingChecks ?? [])
       .map((ratingCheck) => modelAssistedRatingCheckRow(ratingCheck, ratingById))
       .filter((row) => row && snapshotItemIds.has(row.itemId)),
-  ];
+  ].map((row) => ({
+    ...row,
+    modelProviderPolicyBinding: modelProviderPolicyBindingForRunClass(
+      { runSource: row.assistanceSource },
+      "model_assisted_check",
+      row.modelProviderDataHandlingPolicyId,
+      modelProviderPolicyRows,
+      { requireExplicitPolicyId: row.assistanceSource === "submitted_workflow_rating_check" },
+    ),
+  }));
   const humanOnlyRatings = ratings.filter((rating) => !hasModelAssistedExposure(rating));
   const humanOnlySnapshot =
     options.humanOnlyPreAssistanceSnapshot ??
@@ -8140,7 +8329,10 @@ export function buildModelAssistedLabelOverlapReport(
   });
   const overlapRunRows = runRows.filter((row) => row.status === "model_assisted_label_overlap_sensitive");
   const reviewSections = targetModelAssistedRows.flatMap((row) =>
-    (row.reviewReasons ?? []).map((reason) => ({
+    [
+      ...(row.reviewReasons ?? []),
+      ...(row.modelProviderPolicyBinding?.reviewReasons ?? []).map((reason) => `modelProviderPolicy.${reason}`),
+    ].map((reason) => ({
       artifactType: row.assistanceSource,
       artifactId: row.ratingCheckId ?? row.ratingId,
       reason,
@@ -8168,6 +8360,9 @@ export function buildModelAssistedLabelOverlapReport(
       submittedModelAssistedRatingCheckRows: targetModelAssistedRows.filter((row) => row.assistanceSource === "submitted_workflow_rating_check").length,
       submittedModelAssistedRatingCheckReviewRows: targetModelAssistedRows.filter(
         (row) => row.assistanceSource === "submitted_workflow_rating_check" && (row.reviewReasons ?? []).length,
+      ).length,
+      submittedModelAssistedProviderPolicyReviewRows: targetModelAssistedRows.filter(
+        (row) => row.assistanceSource === "submitted_workflow_rating_check" && (row.modelProviderPolicyBinding?.reviewReasons ?? []).length,
       ).length,
       evaluatedRunCount: runRows.length,
       overlapSensitiveRunCount: overlapRunRows.length,
@@ -8936,6 +9131,9 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
     calibrationRuns = [],
     leaderboards = [],
     modelFailureAuditArtifacts = [],
+    modelInferenceConfigs = [],
+    modelRunEnvironments = [],
+    modelProviderDataHandlingPolicies = [],
   } = {},
 ) {
   const submittedModelImprovementRun = latestSubmittedReleaseArtifact(modelImprovementRuns, releaseId);
@@ -8956,6 +9154,8 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
   const calibrationRunEvidence = submittedCalibrationRunEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedCalibrationRun, recalibratedEvaluation);
   const leaderboardEvidence = submittedLeaderboardEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedLeaderboard, leaderboardReport);
   const failureAuditEvidence = submittedModelFailureAuditEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedFailureAudit, modelFailureAudits);
+  const modelRunProvenanceEvidence = submittedModelRunProvenanceEvidence(submittedEvaluationRun, modelInferenceConfigs, modelRunEnvironments);
+  const modelProviderPolicyEvidence = submittedModelProviderPolicyEvidence(submittedEvaluationRun, modelProviderDataHandlingPolicies);
   const sections = [
     modelImprovementRunEvidence,
     evaluationRunEvidence,
@@ -8963,6 +9163,8 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
     calibrationRunEvidence,
     leaderboardEvidence,
     failureAuditEvidence,
+    modelRunProvenanceEvidence,
+    modelProviderPolicyEvidence,
   ];
   const submittedSections = sections.filter((section) => section.submittedArtifactId);
   const allReviewSections = sections.filter(
@@ -8985,6 +9187,10 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
         "Submitted ModelFailureAudit artifacts are diagnostic-only and cannot replace aggregate LMCA metric reports.",
       modelImprovementRule:
         "Submitted ModelImprovementRun artifacts must link to the current TrainingExport, separate optimized surrogate objectives from LMCA evaluation metrics, preserve position-balanced weighting, and propagate label uncertainty/downweighting policy.",
+      modelRunProvenanceRule:
+        "Submitted EvaluationRun artifacts must have matching ModelInferenceConfig and ModelRunEnvironment records that preserve endpoint, snapshot, decoding, tool, seed, deployment, and parser/extractor provenance.",
+      modelProviderPolicyRule:
+        "Submitted protected model-evaluation runs must reference an approved ModelProviderDataHandlingPolicy with no training, no reuse, no unnecessary human review, bounded retention, and protected-content eligibility.",
     },
     modelImprovementRunEvidence,
     evaluationRunEvidence,
@@ -8992,6 +9198,8 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
     calibrationRunEvidence,
     leaderboardEvidence,
     failureAuditEvidence,
+    modelRunProvenanceEvidence,
+    modelProviderPolicyEvidence,
     reviewSections: allReviewSections.map((section) => section.artifactKind),
     releaseUseStatus: allReviewSections.length
       ? "submitted_model_evaluation_artifacts_review_required"
@@ -9158,6 +9366,113 @@ function submittedModelFailureAuditEvidence(releaseId, labelSnapshot, evaluation
   return {
     ...releaseArtifactEvidenceRow("model_failure_audit", submitted, checks, "submitted_model_failure_audit_is_diagnostic_only"),
     computedFailureAuditIds: computedFailureAudits.map((audit) => audit.id),
+  };
+}
+
+function submittedModelRunProvenanceEvidence(evaluationRun, modelInferenceConfigs = [], modelRunEnvironments = []) {
+  const rawConfig = evaluationRun
+    ? latestSubmittedWorkflowArtifactByField(modelInferenceConfigs, "evaluationRunId", evaluationRun.id, evaluationRun.releaseId)
+    : null;
+  const rawEnvironment = evaluationRun
+    ? latestSubmittedWorkflowArtifactByField(modelRunEnvironments, "evaluationRunId", evaluationRun.id, evaluationRun.releaseId)
+    : null;
+  const config = rawConfig ? normalizeModelInferenceConfig(rawConfig, "submitted_model_evaluation_model_inference_config") : null;
+  const environment = rawEnvironment ? normalizeModelRunEnvironment(rawEnvironment, "submitted_model_evaluation_model_run_environment") : null;
+  const submitted =
+    config || environment
+      ? {
+          id: `${config?.id ?? "missing-model-inference-config"}:${environment?.id ?? "missing-model-run-environment"}`,
+          createdAt: [config?.createdAt, environment?.timestamp].filter(Boolean).sort().at(-1) ?? null,
+        }
+      : null;
+  const checks = [
+    requiredNonEmptyCheck("modelInferenceConfigId", config?.id),
+    requiredNonEmptyCheck("modelRunEnvironmentId", environment?.id),
+    requiredManifestCheck("modelInferenceConfig.evaluationRunId", evaluationRun?.id, config?.evaluationRunId),
+    requiredManifestCheck("modelRunEnvironment.evaluationRunId", evaluationRun?.id, environment?.evaluationRunId),
+    requiredManifestCheck("modelSnapshot", evaluationRun?.resolvedModelSnapshot, config?.modelSnapshot),
+    requiredNonEmptyCheck("providerEndpoint", config?.providerEndpoint),
+    requiredMinimumCheck("decodingParameterCount", 1, Object.keys(config?.decodingParameters ?? {}).length),
+    requiredNonEmptyCheck("reasoningBudget", config?.reasoningBudget),
+    requiredMinimumCheck("toolAvailabilityCount", 1, config?.toolAvailability?.length),
+    requiredNonEmptyCheck("messageStackTemplate", config?.messageStackTemplate),
+    requiredNonEmptyCheck("retryPolicy", config?.retryPolicy),
+    requiredNonEmptyCheck("seedDeterminismArtifact", config?.seedDeterminismArtifact),
+    requiredNonEmptyCheck("runtimeOrchestratorVersion", environment?.runtimeOrchestratorVersion),
+    requiredNonEmptyCheck("apiRouteDeploymentId", environment?.apiRouteDeploymentId),
+    requiredMinimumCheck("libraryVersionCount", 1, Object.keys(environment?.libraryVersions ?? {}).length),
+    requiredNonEmptyCheck("rateLimitRetryMetadata", environment?.rateLimitRetryMetadata),
+    requiredMinimumCheck("parserExtractorVersionLinkCount", 1, environment?.parserExtractorVersionLinks?.length),
+    requiredManifestCheck("modelInferenceConfigReviewReasonCount", 0, config?.reviewReasons?.length),
+    requiredManifestCheck("modelRunEnvironmentReviewReasonCount", 0, environment?.reviewReasons?.length),
+  ];
+  return {
+    ...releaseArtifactEvidenceRow(
+      "model_run_provenance",
+      submitted,
+      checks,
+      "submitted_model_run_provenance_preserves_inference_and_environment",
+    ),
+    evaluationRunId: evaluationRun?.id ?? null,
+    modelInferenceConfigId: config?.id ?? null,
+    modelRunEnvironmentId: environment?.id ?? null,
+    providerEndpoint: config?.providerEndpoint ?? null,
+    modelSnapshot: config?.modelSnapshot ?? null,
+    decodingParameters: config?.decodingParameters ?? null,
+    reasoningBudget: config?.reasoningBudget ?? null,
+    toolAvailability: config?.toolAvailability ?? [],
+    messageStackTemplate: config?.messageStackTemplate ?? null,
+    retryPolicy: config?.retryPolicy ?? null,
+    seedDeterminismArtifact: config?.seedDeterminismArtifact ?? null,
+    runtimeOrchestratorVersion: environment?.runtimeOrchestratorVersion ?? null,
+    apiRouteDeploymentId: environment?.apiRouteDeploymentId ?? null,
+    libraryVersions: environment?.libraryVersions ?? null,
+    rateLimitRetryMetadata: environment?.rateLimitRetryMetadata ?? null,
+    parserExtractorVersionLinks: environment?.parserExtractorVersionLinks ?? [],
+  };
+}
+
+function submittedModelProviderPolicyEvidence(evaluationRun, modelProviderDataHandlingPolicies = []) {
+  const policyId = evaluationRun?.modelProviderDataHandlingPolicyId ?? evaluationRun?.model_provider_data_handling_policy_id ?? null;
+  const rawPolicy = policyId ? modelProviderDataHandlingPolicies.find((policy) => (policy?.id ?? policy?.modelProviderDataHandlingPolicyId) === policyId) ?? null : null;
+  const policy = rawPolicy ? normalizeModelProviderDataHandlingPolicy(rawPolicy, "submitted_model_evaluation_provider_policy") : null;
+  const submitted =
+    evaluationRun && (policyId || policy)
+      ? {
+          id: policy?.id ?? policyId ?? `missing-model-provider-policy-${evaluationRun.id}`,
+          createdAt: rawPolicy?.approvedAt ?? rawPolicy?.createdAt ?? rawPolicy?.timestamp ?? null,
+        }
+      : null;
+  const checks = [
+    requiredNonEmptyCheck("modelProviderDataHandlingPolicyId", policyId),
+    requiredManifestCheck("policyId", policyId, policy?.id),
+    requiredManifestCheck("coveredRunClass", "model_evaluation", policy?.coveredRunClass),
+    requiredArrayIncludesCheck("approvedSplitContentClasses", ["protected_validation", "hidden_benchmark"], policy?.approvedSplitContentClasses),
+    requiredManifestCheck("noTrainingOnInputsOutputs", true, policy?.noTrainingOnInputsOutputs),
+    requiredManifestCheck("noPromptOrOutputReuse", true, policy?.noPromptOrOutputReuse),
+    requiredManifestCheck("unnecessaryHumanReviewProhibited", true, policy?.unnecessaryHumanReviewProhibited),
+    requiredManifestCheck("protectedContentEligible", true, policy?.protectedContentEligible),
+    requiredManifestCheck("approvalStatus", "approved", policy?.approvalStatus),
+    requiredManifestCheck("policyReviewReasonCount", 0, policy?.reviewReasons?.length),
+  ];
+  return {
+    ...releaseArtifactEvidenceRow(
+      "model_provider_data_handling_policy",
+      submitted,
+      checks,
+      "submitted_model_provider_policy_approved_for_protected_evaluation",
+    ),
+    evaluationRunId: evaluationRun?.id ?? null,
+    modelProviderDataHandlingPolicyId: policy?.id ?? policyId ?? null,
+    providerEndpointClass: policy?.providerEndpointClass ?? null,
+    coveredRunClass: policy?.coveredRunClass ?? null,
+    approvedSplitContentClasses: policy?.approvedSplitContentClasses ?? [],
+    protectedContentEligible: policy?.protectedContentEligible === true,
+    noTrainingOnInputsOutputs: policy?.noTrainingOnInputsOutputs === true,
+    noPromptOrOutputReuse: policy?.noPromptOrOutputReuse === true,
+    unnecessaryHumanReviewProhibited: policy?.unnecessaryHumanReviewProhibited === true,
+    logRetentionWindowDays: policy?.logRetentionWindowDays ?? null,
+    approvalStatus: policy?.approvalStatus ?? null,
   };
 }
 
@@ -12630,8 +12945,12 @@ function normalizeModelProviderDataHandlingPolicy(policy, rowSource) {
     noPromptOrOutputReuse: policy.noPromptOrOutputReuse === true,
     unnecessaryHumanReviewProhibited: policy.unnecessaryHumanReviewProhibited === true,
     logRetentionWindowDays: policy.logRetentionWindowDays ?? null,
+    subprocessorsSummary: policy.subprocessorsSummary ?? null,
+    deletionOrRetentionProofRequired: policy.deletionOrRetentionProofRequired === true,
     protectedContentEligible: policy.protectedContentEligible === true,
     approvalStatus: policy.approvalStatus ?? null,
+    reviewer: policy.reviewer ?? null,
+    expiresAt: policy.expiresAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "model_provider_data_handling_review_required" : "model_provider_data_handling_complete",
   };
@@ -14582,6 +14901,13 @@ function normalizeModelInferenceConfig(config, rowSource) {
     evaluationRunId: config.evaluationRunId ?? config.evaluation_run_id ?? null,
     providerEndpoint: config.providerEndpoint ?? config.provider_endpoint ?? null,
     modelSnapshot: config.modelSnapshot ?? config.model_snapshot ?? null,
+    decodingParameters: config.decodingParameters ?? config.decoding_parameters ?? null,
+    reasoningBudget: config.reasoningBudget ?? config.reasoning_budget ?? null,
+    toolAvailability: normalizeStringArray(config.toolAvailability ?? config.tool_availability),
+    messageStackTemplate: config.messageStackTemplate ?? config.message_stack_template ?? null,
+    retryPolicy: config.retryPolicy ?? config.retry_policy ?? null,
+    seedDeterminismArtifact: config.seedDeterminismArtifact ?? config.seed_determinism_artifact ?? null,
+    createdAt: config.createdAt ?? config.created_at ?? null,
     reviewReasons,
     status: reviewReasons.length ? "model_inference_config_review_required" : "model_inference_config_complete",
   };
@@ -14605,6 +14931,10 @@ function normalizeModelRunEnvironment(environment, rowSource) {
     evaluationRunId: environment.evaluationRunId ?? environment.evaluation_run_id ?? null,
     runtimeOrchestratorVersion: environment.runtimeOrchestratorVersion ?? environment.runtime_orchestrator_version ?? null,
     apiRouteDeploymentId: environment.apiRouteDeploymentId ?? environment.api_route_deployment_id ?? null,
+    libraryVersions: environment.libraryVersions ?? environment.library_versions ?? null,
+    timestamp: environment.timestamp ?? environment.createdAt ?? environment.created_at ?? null,
+    rateLimitRetryMetadata: environment.rateLimitRetryMetadata ?? environment.rate_limit_retry_metadata ?? null,
+    parserExtractorVersionLinks: normalizeStringArray(environment.parserExtractorVersionLinks ?? environment.parser_extractor_version_links),
     reviewReasons,
     status: reviewReasons.length ? "model_run_environment_review_required" : "model_run_environment_complete",
   };
@@ -16685,6 +17015,7 @@ export function buildOctoberReleaseReport(
   const evaluationPairs = critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id }));
   const modelAssistedLabelOverlap = buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, ratings, evaluationRuns, evaluationPairs, {
     ratingChecks: options.ratingChecks ?? [],
+    modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
   });
   const leaderboardReport = buildUncertaintyAwareLeaderboardReport(releaseId, labelSnapshot, evaluationRuns, {
     ratings,
@@ -16696,6 +17027,8 @@ export function buildOctoberReleaseReport(
     obfuscationStressRuns: options.obfuscationStressRuns ?? [],
     benchmarkSubmissionPolicies: options.benchmarkSubmissionPolicies ?? [],
     benchmarkSubmissions: options.benchmarkSubmissions ?? [],
+    modelInferenceConfigs: options.modelInferenceConfigs ?? [],
+    modelRunEnvironments: options.modelRunEnvironments ?? [],
   });
   const metricDirectionalityConfig = buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling, {
     metricConfigs: options.metricConfigs ?? [],
@@ -16766,6 +17099,7 @@ export function buildOctoberReleaseReport(
     positionList,
     critiqueList,
     effectiveAdjudicationMemos,
+    { modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [] },
   );
   const trainingExport = buildTrainingExport(
     releaseId,
@@ -16830,6 +17164,9 @@ export function buildOctoberReleaseReport(
       calibrationRuns: options.calibrationRuns ?? [],
       leaderboards: options.leaderboards ?? [],
       modelFailureAuditArtifacts: options.modelFailureAudits ?? [],
+      modelInferenceConfigs: options.modelInferenceConfigs ?? [],
+      modelRunEnvironments: options.modelRunEnvironments ?? [],
+      modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
     },
   );
   const uxSimplification = buildUXSimplificationEvidenceReport(releaseId, {
@@ -17699,6 +18036,7 @@ function modelAssistedRatingRow(rating) {
     ),
     assistanceDeltaSummary: exposure.deltaSummary ?? rating.modelAssistanceDeltaSummary ?? null,
     promptTemplateId: exposure.promptTemplateId ?? rating.assistingPromptTemplateId ?? null,
+    modelProviderDataHandlingPolicyId: exposure.modelProviderDataHandlingPolicyId ?? rating.modelProviderDataHandlingPolicyId ?? null,
     assistingModel,
   };
 }
@@ -17772,6 +18110,7 @@ function modelAssistedRatingCheckRow(check, ratingById) {
     missingAuxiliaryMaterials,
     reviewReasons,
     promptTemplateId: firstDefined([check.assistingPromptTemplateId, check.promptTemplateId]),
+    modelProviderDataHandlingPolicyId: check.modelProviderDataHandlingPolicyId ?? check.assistingModelProviderDataHandlingPolicyId ?? null,
     rubricVersionUsedForCheck: check.rubricVersionUsedForCheck ?? check.rubricVersion ?? null,
     labelContaminationGroupId: check.labelContaminationGroupId ?? null,
     resultingRevisionId: check.resultingRevisionId ?? null,
@@ -17829,7 +18168,7 @@ function normalizeModelKey(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily) {
+function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, metricFamily, modelRunProvenance = null) {
   const commonItemSet = new Set(commonItemIds);
   const predictions = run.predictions.filter((prediction) => commonItemSet.has(makeItemId(prediction.positionId, prediction.critiqueId)));
   const humanOveralls = commonHumanOverallsByPosition(labelSnapshot, commonItemIds);
@@ -17871,6 +18210,22 @@ function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, 
     promptExampleItemIds: normalizeStringArray(run.promptExampleItemIds),
     promptExamplePositionClusterIds: normalizeStringArray(run.promptExamplePositionClusterIds),
     promptExampleExclusionPolicy: run.promptExampleExclusionPolicy ?? null,
+    modelInferenceConfigId: modelRunProvenance?.modelInferenceConfigId ?? null,
+    modelRunEnvironmentId: modelRunProvenance?.modelRunEnvironmentId ?? null,
+    providerEndpoint: modelRunProvenance?.providerEndpoint ?? null,
+    modelSnapshotFromInferenceConfig: modelRunProvenance?.modelSnapshot ?? null,
+    decodingParameters: modelRunProvenance?.decodingParameters ?? null,
+    reasoningBudget: modelRunProvenance?.reasoningBudget ?? null,
+    toolAvailability: modelRunProvenance?.toolAvailability ?? [],
+    messageStackTemplate: modelRunProvenance?.messageStackTemplate ?? null,
+    inferenceRetryPolicy: modelRunProvenance?.retryPolicy ?? null,
+    seedDeterminismArtifact: modelRunProvenance?.seedDeterminismArtifact ?? null,
+    runtimeOrchestratorVersion: modelRunProvenance?.runtimeOrchestratorVersion ?? null,
+    apiRouteDeploymentId: modelRunProvenance?.apiRouteDeploymentId ?? null,
+    libraryVersions: modelRunProvenance?.libraryVersions ?? null,
+    rateLimitRetryMetadata: modelRunProvenance?.rateLimitRetryMetadata ?? null,
+    parserExtractorVersionLinks: modelRunProvenance?.parserExtractorVersionLinks ?? [],
+    modelRunProvenanceStatus: modelRunProvenance?.status ?? "model_run_provenance_not_submitted",
     reasoningModeSetting: run.mode === "overall_only" ? "appendix_g_step_by_step_overall_only_baseline" : "project_full_rubric_answer_extraction",
     commonItemCount: commonItemIds.length,
     pointEstimate,

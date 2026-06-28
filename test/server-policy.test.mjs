@@ -1328,7 +1328,7 @@ function completeAuxiliaryWorkflowFixtures() {
       id: "model-inference-config-workflow-new",
       evaluationRunId: "eval-full-rubric-demo",
       providerEndpoint: "approved-model-evaluation-endpoint",
-      modelSnapshot: "gpt-demo-2026-10-01",
+      modelSnapshot: "gpt-demo-full-rubric-2026-06-01",
       decodingParameters: { temperature: 0, topP: 1 },
       reasoningBudget: "bounded_hidden_chain_budget_v1",
       toolAvailability: ["none"],
@@ -4752,6 +4752,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         assistingModelProvider: "approved-model-evaluation-endpoint",
         assistingModelFamily: "gpt_demo_family",
         assistingPromptTemplateId: "label-check-v1",
+        modelProviderDataHandlingPolicyId: "model-provider-data-handling-workflow-model_assisted_check",
         humanOnlyCheckLockedBeforeModelExposure: true,
         preModelRatingCheckId: "rating-check-action-workflow-new",
         modelAssistanceDeltaSummary: "Assisting model suggested no score change after human-only lock.",
@@ -5328,6 +5329,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         generatorRequestedModelAlias: "generator-model-a",
         generatorProvider: "internal_eval_gateway",
         generatorResolvedModelSnapshot: "generator-model-a-2026-10-01",
+        modelProviderDataHandlingPolicyId: "model-provider-data-handling-workflow-critique_generation",
+        judgeModelProviderDataHandlingPolicyId: "model-provider-data-handling-workflow-model_judge",
         promptTemplateId: "prompt-template-workflow-new",
         renderedPromptChecksum: "sha256-generation-workflow-new",
         sourceSplit: "public_train",
@@ -5571,6 +5574,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         targetLabelVersion: "initial_mean",
         requestedModelAlias: "model-under-test",
         resolvedModelSnapshot: "model-under-test-2026-10-01",
+        modelProviderDataHandlingPolicyId: "model-provider-data-handling-workflow-model_evaluation",
         promptTemplateId: "prompt-template-workflow-new",
         renderedPromptChecksum: "sha256-rendered-workflow-prompt",
         promptPolicyComparabilityStatus: "project_extension_full_rubric_prompt_track",
@@ -8254,6 +8258,60 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     assert.equal(response.status, 201, resourceKey);
   }
 
+  for (const [resourceKey, url, resource] of [
+    [
+      "modelInferenceConfig",
+      "/api/v1/model-inference-configs",
+      {
+        ...auxiliaryWorkflow.modelInferenceConfig,
+        id: "model-inference-config-overall-workflow-new",
+        evaluationRunId: "eval-overall-demo",
+        modelSnapshot: "appendix-g-demo-2026-06-01",
+        messageStackTemplate: "lmca-overall-eval-template-v1",
+        seedDeterminismArtifact: "sha256:model-eval-overall-seed",
+      },
+    ],
+    [
+      "modelRunEnvironment",
+      "/api/v1/model-run-environments",
+      {
+        ...auxiliaryWorkflow.modelRunEnvironment,
+        id: "model-run-environment-overall-workflow-new",
+        evaluationRunId: "eval-overall-demo",
+      },
+    ],
+    [
+      "modelInferenceConfig",
+      "/api/v1/model-inference-configs",
+      {
+        ...auxiliaryWorkflow.modelInferenceConfig,
+        id: "model-inference-config-evaluation-workflow-new",
+        evaluationRunId: "eval-workflow-new",
+        modelSnapshot: "model-under-test-2026-10-01",
+        messageStackTemplate: "lmca-submitted-evaluation-template-v1",
+        seedDeterminismArtifact: "sha256:model-eval-workflow-seed",
+      },
+    ],
+    [
+      "modelRunEnvironment",
+      "/api/v1/model-run-environments",
+      {
+        ...auxiliaryWorkflow.modelRunEnvironment,
+        id: "model-run-environment-evaluation-workflow-new",
+        evaluationRunId: "eval-workflow-new",
+        apiRouteDeploymentId: "deployment-eval-workflow-new",
+      },
+    ],
+  ]) {
+    const response = await invokeApi(context, {
+      method: "POST",
+      url,
+      headers: adminHeaders,
+      body: JSON.stringify({ [resourceKey]: resource }),
+    });
+    assert.equal(response.status, 201, resourceKey);
+  }
+
   for (const partialTaskOutput of auxiliaryWorkflow.partialTaskOutputs) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -8346,7 +8404,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     headers: adminHeaders,
   });
   assert.equal(modelInferenceById.status, 200);
-  assert.equal(modelInferenceById.body.modelSnapshot, "gpt-demo-2026-10-01");
+  assert.equal(modelInferenceById.body.modelSnapshot, "gpt-demo-full-rubric-2026-06-01");
 
   const trainingExposureForAssignment = await invokeApi(context, {
     method: "GET",
@@ -9962,6 +10020,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowRatingCheckOverlapRow.preModelRatingCheckId, "rating-check-action-workflow-new");
   assert.equal(workflowRatingCheckOverlapRow.labelContaminationGroupId, "label-contamination-group-rating-check-workflow-new");
   assert.equal(
+    workflowRatingCheckOverlapRow.modelProviderPolicyBinding.modelProviderDataHandlingPolicyId,
+    "model-provider-data-handling-workflow-model_assisted_check",
+  );
+  assert.equal(workflowRatingCheckOverlapRow.modelProviderPolicyBinding.status, "model_provider_policy_approved");
+  assert.equal(releaseReport.body.modelAssistedLabelOverlap.counts.submittedModelAssistedProviderPolicyReviewRows, 0);
+  assert.equal(
     releaseReport.body.modelAssistedLabelOverlap.runRows.find((row) => row.evaluationRunId === "eval-full-rubric-demo").status,
     "model_assisted_label_overlap_sensitive",
   );
@@ -10005,11 +10069,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(submittedGenerationRun.outputRows.find((row) => row.promotedCritiqueId === "crit-workflow-new").adjudicated, true);
   assert.equal(submittedGenerationRun.counts.adjudicatedPromoted, 1);
   assert.equal(submittedGenerationRun.counts.blindHumanRatedPromoted, 0);
+  assert.equal(
+    submittedGenerationRun.modelProviderPolicyBinding.generator.modelProviderDataHandlingPolicyId,
+    "model-provider-data-handling-workflow-critique_generation",
+  );
+  assert.equal(
+    submittedGenerationRun.modelProviderPolicyBinding.modelJudge.modelProviderDataHandlingPolicyId,
+    "model-provider-data-handling-workflow-model_judge",
+  );
+  assert.equal(
+    releaseReport.body.critiqueGenerationEvaluation.providerPolicyEvidence.releaseUseStatus,
+    "critique_generation_provider_policies_approved",
+  );
+  assert.deepEqual(releaseReport.body.critiqueGenerationEvaluation.providerPolicyEvidence.reviewSections, []);
   assert.equal(releaseReport.body.critiqueGenerationEvaluation.aggregateCounts.generatedOutputs, 7);
   assert.equal(releaseReport.body.critiqueGenerationEvaluation.aggregateCounts.promotedToRating, 3);
   assert.equal(
     releaseReport.body.critiqueGenerationEvaluation.releaseUseStatus,
-    "generation_evaluation_requires_blinding_or_rating_coverage_review",
+    "generation_evaluation_requires_blinding_rating_coverage_or_provider_policy_review",
   );
   assert.equal(releaseReport.body.promptTrackSeparation.rows.some((row) => row.runId === "critique-generation-run-workflow-new"), true);
   assert.equal(releaseReport.body.candidateIntakeQualityAudit.generatedOutputStatusCounts.promoted_to_rating, 3);
@@ -10117,6 +10194,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.totalRepairedOutputCount, 1);
   assert.equal(releaseReport.body.leaderboardReport.parserPromptIntegrity.reviewSections.length, 0);
   assert.equal(
+    releaseReport.body.leaderboardReport.modelRunProvenance.releaseUseStatus,
+    "mixed_model_run_provenance_sensitivity_declared",
+  );
+  assert.deepEqual(releaseReport.body.leaderboardReport.modelRunProvenance.reviewSections, []);
+  assert.equal(releaseReport.body.leaderboardReport.modelRunProvenance.submittedModelInferenceConfigCount, 2);
+  assert.equal(releaseReport.body.leaderboardReport.modelRunProvenance.submittedModelRunEnvironmentCount, 2);
+  assert.deepEqual(releaseReport.body.leaderboardReport.modelRunProvenance.modelSnapshots, [
+    "gpt-demo-full-rubric-2026-06-01",
+    "appendix-g-demo-2026-06-01",
+  ]);
+  assert.equal(
+    releaseReport.body.leaderboardReport.rows.find((row) => row.evaluationRunId === "eval-full-rubric-demo").modelInferenceConfigId,
+    "model-inference-config-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.leaderboardReport.rows.find((row) => row.evaluationRunId === "eval-overall-demo").modelRunEnvironmentId,
+    "model-run-environment-overall-workflow-new",
+  );
+  assert.equal(
     releaseReport.body.leaderboardReport.hiddenBenchmarkSubmissionFeedback.releaseUseStatus,
     "aggregate_only_submission_feedback_budgeted",
   );
@@ -10157,6 +10253,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.modelEvaluationArtifactEvidence.failureAuditEvidence.status,
     "submitted_model_failure_audit_is_diagnostic_only",
   );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.status,
+    "submitted_model_run_provenance_preserves_inference_and_environment",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelInferenceConfigId,
+    "model-inference-config-evaluation-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelRunEnvironmentId,
+    "model-run-environment-evaluation-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelSnapshot,
+    "model-under-test-2026-10-01",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.apiRouteDeploymentId,
+    "deployment-eval-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.status,
+    "submitted_model_provider_policy_approved_for_protected_evaluation",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.modelProviderDataHandlingPolicyId,
+    "model-provider-data-handling-workflow-model_evaluation",
+  );
+  assert.equal(releaseReport.body.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.coveredRunClass, "model_evaluation");
+  assert.equal(releaseReport.body.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.protectedContentEligible, true);
   assert.deepEqual(releaseReport.body.modelEvaluationArtifactEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowUxArtifacts.uxSimplificationPolicies.length, 1);
   assert.equal(releaseReport.body.workflowUxArtifacts.uxSimplificationReviews.length, 1);
@@ -10322,8 +10448,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.diagnosticDeferralRecords.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.queuePolicySnapshots.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.assignmentSelectionAudits.length, 1);
-  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelInferenceConfigs.length, 1);
-  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunEnvironments.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelInferenceConfigs.length, 3);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunEnvironments.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterItemConflicts.length, 2);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposureSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.releaseErrata.length, 2);
@@ -10332,7 +10458,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
-  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingModelRunProvenanceCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingModelRunProvenanceCount, 3);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckQAItemCount, 1);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
@@ -10643,7 +10769,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-	  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 100);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 104);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

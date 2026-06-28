@@ -1435,7 +1435,7 @@ function completeAuxiliaryWorkflowFixtures() {
         id: "model-inference-config-submitted",
         evaluationRunId: "eval-full-rubric-demo",
         providerEndpoint: "approved-model-evaluation-endpoint",
-        modelSnapshot: "gpt-demo-2026-10-01",
+        modelSnapshot: "gpt-demo-full-rubric-2026-06-01",
         decodingParameters: { temperature: 0, topP: 1 },
         reasoningBudget: "bounded_hidden_chain_budget_v1",
         toolAvailability: ["none"],
@@ -4301,6 +4301,88 @@ test("uncertainty-aware leaderboard reports common subsets and unresolved rank t
   assert.equal(report.reasoningModeSensitivity.status, "no_paired_reasoning_mode_run_deferred");
   assert.equal(report.reasoningModeSensitivity.table6SourceBaseline.length, 4);
   assert.equal(report.hiddenBenchmarkSubmissionFeedback.releaseUseStatus, "no_submitted_benchmark_submission_policy");
+  assert.equal(report.modelRunProvenance.releaseUseStatus, "leaderboard_model_run_provenance_review_required");
+  assert.deepEqual(
+    report.modelRunProvenance.reviewSections.map((section) => `${section.artifactId}:${section.reason}`),
+    [
+      "eval-full-rubric-demo:modelInferenceConfig",
+      "eval-full-rubric-demo:modelRunEnvironment",
+      "eval-overall-demo:modelInferenceConfig",
+      "eval-overall-demo:modelRunEnvironment",
+    ],
+  );
+  assert.equal(report.rows[0].modelRunProvenanceStatus, "model_run_provenance_review_required");
+  assert.equal(report.rows[0].modelInferenceConfigId, null);
+
+  const leaderboardInferenceConfigs = [
+    {
+      id: "leaderboard-inference-full",
+      evaluationRunId: fullRubricEvaluationRun.id,
+      providerEndpoint: "approved-model-evaluation-endpoint",
+      modelSnapshot: fullRubricEvaluationRun.resolvedModelSnapshot,
+      decodingParameters: { temperature: 0, topP: 1 },
+      reasoningBudget: "bounded_hidden_chain_budget_v1",
+      toolAvailability: ["none"],
+      messageStackTemplate: "lmca-leaderboard-eval-template-v1",
+      retryPolicy: "single_retry_parse_failures_only",
+      seedDeterminismArtifact: "sha256:leaderboard-full-seed",
+      createdAt: "2026-10-01T00:00:00.000Z",
+    },
+    {
+      id: "leaderboard-inference-overall",
+      evaluationRunId: overallOnlyEvaluationRun.id,
+      providerEndpoint: "approved-model-evaluation-endpoint",
+      modelSnapshot: overallOnlyEvaluationRun.resolvedModelSnapshot,
+      decodingParameters: { temperature: 0, topP: 1 },
+      reasoningBudget: "bounded_hidden_chain_budget_v1",
+      toolAvailability: ["none"],
+      messageStackTemplate: "lmca-leaderboard-eval-template-v1",
+      retryPolicy: "single_retry_parse_failures_only",
+      seedDeterminismArtifact: "sha256:leaderboard-overall-seed",
+      createdAt: "2026-10-01T00:00:00.000Z",
+    },
+  ];
+  const leaderboardRunEnvironments = [
+    {
+      id: "leaderboard-env-full",
+      evaluationRunId: fullRubricEvaluationRun.id,
+      runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
+      apiRouteDeploymentId: "deployment-october-2026-demo",
+      libraryVersions: { node: "20.x", parser: "lmca-parser-v1" },
+      timestamp: "2026-10-01T00:01:00.000Z",
+      rateLimitRetryMetadata: "bounded retries with no prompt mutation",
+      parserExtractorVersionLinks: ["json-seven-dim-v1", "json-overall-v1"],
+    },
+    {
+      id: "leaderboard-env-overall",
+      evaluationRunId: overallOnlyEvaluationRun.id,
+      runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
+      apiRouteDeploymentId: "deployment-october-2026-demo",
+      libraryVersions: { node: "20.x", parser: "lmca-parser-v1" },
+      timestamp: "2026-10-01T00:01:00.000Z",
+      rateLimitRetryMetadata: "bounded retries with no prompt mutation",
+      parserExtractorVersionLinks: ["json-seven-dim-v1", "json-overall-v1"],
+    },
+  ];
+  const provenanceReport = buildUncertaintyAwareLeaderboardReport("october-2026-demo", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
+    modelInferenceConfigs: leaderboardInferenceConfigs,
+    modelRunEnvironments: leaderboardRunEnvironments,
+  });
+  assert.equal(provenanceReport.modelRunProvenance.releaseUseStatus, "common_model_run_provenance_declared");
+  assert.deepEqual(provenanceReport.modelRunProvenance.reviewSections, []);
+  assert.deepEqual(provenanceReport.modelRunProvenance.modelSnapshots, [
+    "gpt-demo-full-rubric-2026-06-01",
+    "appendix-g-demo-2026-06-01",
+  ]);
+  assert.equal(provenanceReport.modelRunProvenance.commonReasoningBudget, true);
+  assert.equal(provenanceReport.modelRunProvenance.commonRetryPolicy, true);
+  assert.equal(provenanceReport.rows[0].modelInferenceConfigId, "leaderboard-inference-full");
+  assert.equal(provenanceReport.rows[0].modelRunEnvironmentId, "leaderboard-env-full");
+  assert.equal(provenanceReport.rows[0].providerEndpoint, "approved-model-evaluation-endpoint");
+  assert.equal(provenanceReport.rows[0].decodingParameters.temperature, 0);
+  assert.equal(provenanceReport.rows[0].seedDeterminismArtifact, "sha256:leaderboard-full-seed");
+  assert.equal(provenanceReport.rows[1].apiRouteDeploymentId, "deployment-october-2026-demo");
+  assert.equal(provenanceReport.rows[1].modelRunProvenanceStatus, "model_run_provenance_declared");
 
   const interactionFixtures = completeInteractionWorkflowFixtures();
   const budgetedReport = buildUncertaintyAwareLeaderboardReport("october-2026-demo", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
@@ -4613,6 +4695,7 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         assistingModelProvider: "approved-model-evaluation-endpoint",
         assistingModelFamily: "gpt_demo_family",
         assistingPromptTemplateId: "label-check-v1",
+        modelProviderDataHandlingPolicyId: "model-provider-data-handling-submitted-model_assisted_check",
         auxiliaryMaterialSeen: ["own_initial_rationale", "assisting_model_commentary"],
         modelExposureTiming: "post_human_only_self_check_lock",
         humanOnlyCheckLockedBeforeModelExposure: true,
@@ -4624,6 +4707,7 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         timestamp: "2026-10-01T00:31:00.000Z",
       },
     ],
+    modelProviderDataHandlingPolicies: completeParticipantSafeguardFixtures().modelProviderDataHandlingPolicies,
   });
   const fullRubricRow = report.runRows.find((row) => row.evaluationRunId === fullRubricEvaluationRun.id);
   const overallOnlyRow = report.runRows.find((row) => row.evaluationRunId === overallOnlyEvaluationRun.id);
@@ -4635,8 +4719,11 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
   assert.equal(report.assistanceRows[0].ratingCheckId, "rating-check-submitted-model-assisted");
   assert.equal(report.assistanceRows[0].preModelRatingCheckId, "rating-check-submitted-human-only");
   assert.equal(report.assistanceRows[0].labelContaminationGroupId, "label-contamination-group-rating-check-submitted");
+  assert.equal(report.assistanceRows[0].modelProviderPolicyBinding.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-model_assisted_check");
+  assert.equal(report.assistanceRows[0].modelProviderPolicyBinding.status, "model_provider_policy_approved");
   assert.deepEqual(report.assistanceRows[0].reviewReasons, []);
   assert.deepEqual(report.reviewSections, []);
+  assert.equal(report.counts.submittedModelAssistedProviderPolicyReviewRows, 0);
   assert.equal(fullRubricRow.status, "model_assisted_label_overlap_sensitive");
   assert.deepEqual(fullRubricRow.overlapItemIds, ["pos-voting::crit-voting-bullet"]);
   assert.equal(overallOnlyRow.status, "model_assisted_rows_present_no_evaluated_model_overlap");
@@ -4654,6 +4741,7 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         assistingModelProvider: "approved-model-evaluation-endpoint",
         assistingModelFamily: "gpt_demo_family",
         assistingPromptTemplateId: "label-check-v1",
+        modelProviderDataHandlingPolicyId: "model-provider-data-handling-submitted-model_assisted_check",
         modelExposureTiming: "before_human_only_lock",
         humanOnlyCheckLockedBeforeModelExposure: false,
         auxiliaryMaterialSeen: ["assisting_model_commentary"],
@@ -4664,6 +4752,7 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         timestamp: "2026-10-01T00:31:30.000Z",
       },
     ],
+    modelProviderDataHandlingPolicies: completeParticipantSafeguardFixtures().modelProviderDataHandlingPolicies,
   });
   assert.equal(unstagedReport.releaseUseStatus, "model_assisted_rating_check_review_required");
   assert.equal(unstagedReport.counts.submittedModelAssistedRatingCheckReviewRows, 1);
@@ -5288,6 +5377,10 @@ test("critique-generation evaluation reports generation denominators separately 
   assert.equal(report.runRows[0].protectedPromptExampleCheck.hiddenBenchmarkExamplesExcluded, true);
   assert.equal(report.runRows[0].modelJudgeScreening.promptArtifact.id, "candidate-judge-v2");
   assert.equal(report.runRows[0].modelJudgeScreening.acceptedOutputSchema.required[0], "screening_score");
+  assert.equal(report.providerPolicyEvidence.releaseUseStatus, "critique_generation_provider_policies_approved");
+  assert.deepEqual(report.providerPolicyEvidence.reviewSections, []);
+  assert.equal(report.runRows[0].modelProviderPolicyBinding.generator.status, "model_provider_policy_approved");
+  assert.equal(report.runRows[0].modelProviderPolicyBinding.modelJudge.status, "model_provider_policy_approved");
   assert.equal(report.runRows[0].qualityMetrics.ratedPromotedOverall.mean, 0.14);
   assert.equal(report.runRows[0].qualityMetrics.passAtThresholdRate, 0);
   assert.equal(report.runRows[0].qualityMetrics.bestOfNByPosition[0].budgetNormalized, true);
@@ -5952,12 +6045,19 @@ test("submitted critique-generation artifacts drive generation denominators and 
           id: "generation-run-submitted",
           requestedModelAlias: "generator-under-test",
           resolvedModelSnapshot: "generator-under-test-2026-10-01",
+          modelProviderDataHandlingPolicyId: "model-provider-data-handling-submitted-critique_generation",
           promptTemplateId: "candidate-gen-v3",
           sourceSplit: "public_train",
           generationBudgetPerPosition: 1,
-          modelJudgeScreening: { promptTemplateId: "candidate-judge-v2", scoresVisibleToInitialRaters: false, diagnosticOnly: true },
+          modelJudgeScreening: {
+            promptTemplateId: "candidate-judge-v2",
+            scoresVisibleToInitialRaters: false,
+            diagnosticOnly: true,
+            modelProviderDataHandlingPolicyId: "model-provider-data-handling-submitted-model_judge",
+          },
         },
       ],
+      modelProviderDataHandlingPolicies: completeParticipantSafeguardFixtures().modelProviderDataHandlingPolicies,
       generatedCritiqueSubmissions: [
         {
           id: "generated-critique-submitted",
@@ -5994,6 +6094,9 @@ test("submitted critique-generation artifacts drive generation denominators and 
   assert.equal(submittedRun.outputStatusCounts.promoted_to_rating, 1);
   assert.equal(submittedRun.counts.generatedOutputs, 1);
   assert.equal(submittedRun.counts.blindHumanRatedPromoted, 1);
+  assert.equal(submittedRun.modelProviderPolicyBinding.generator.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-critique_generation");
+  assert.equal(submittedRun.modelProviderPolicyBinding.modelJudge.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-model_judge");
+  assert.equal(report.critiqueGenerationEvaluation.providerPolicyEvidence.releaseUseStatus, "critique_generation_provider_policies_approved");
   assert.equal(report.critiqueGenerationEvaluation.aggregateCounts.generatedOutputs, 7);
   assert.equal(report.critiqueGenerationEvaluation.aggregateCounts.promotedToRating, 3);
   assert.equal(report.promptTrackSeparation.counts.generationPromptTrackRows, 4);
@@ -6229,6 +6332,9 @@ test("submitted model-evaluation artifacts are checked against current release e
           releaseId,
           targetLabelSnapshotId: snapshot.id,
           targetLabelVersion: snapshot.targetLabelVersion,
+          requestedModelAlias: "submitted-model",
+          resolvedModelSnapshot: "submitted-model-2026-10-01",
+          modelProviderDataHandlingPolicyId: "model-provider-policy-submitted-eval",
           promptTemplateId: "project-full-rubric-v1",
           parserConfigId: "json-seven-dim-v1",
           metricFamilies: ["weighted_pairwise", "custom_weighted_loss"],
@@ -6242,6 +6348,53 @@ test("submitted model-evaluation artifacts are checked against current release e
           promptExampleSplitMembership: [],
           promptExampleExclusionPolicy: "exclude hidden and protected examples from evaluated splits",
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        },
+      ],
+      modelProviderDataHandlingPolicies: [
+        {
+          id: "model-provider-policy-submitted-eval",
+          providerEndpointClass: "approved-model-evaluation-endpoint",
+          coveredRunClass: "model_evaluation",
+          approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
+          noTrainingOnInputsOutputs: true,
+          noPromptOrOutputReuse: true,
+          unnecessaryHumanReviewProhibited: true,
+          logRetentionWindowDays: 30,
+          subprocessorsSummary: "approved bounded processing route",
+          deletionOrRetentionProofRequired: true,
+          protectedContentEligible: true,
+          approvalStatus: "approved",
+          reviewer: "release-admin",
+          expiresAt: "2026-12-31T00:00:00.000Z",
+        },
+      ],
+      modelInferenceConfigs: [
+        {
+          id: "model-inference-config-submitted-eval",
+          releaseId,
+          evaluationRunId: "evaluation-run-submitted",
+          providerEndpoint: "approved-model-evaluation-endpoint",
+          modelSnapshot: "submitted-model-2026-10-01",
+          decodingParameters: { temperature: 0, topP: 1 },
+          reasoningBudget: "bounded_hidden_chain_budget_v1",
+          toolAvailability: ["none"],
+          messageStackTemplate: "lmca-full-rubric-eval-template-v1",
+          retryPolicy: "single_retry_parse_failures_only",
+          seedDeterminismArtifact: "sha256:submitted-eval-seed",
+          createdAt: "2026-10-01T00:07:00.000Z",
+        },
+      ],
+      modelRunEnvironments: [
+        {
+          id: "model-run-environment-submitted-eval",
+          releaseId,
+          evaluationRunId: "evaluation-run-submitted",
+          runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
+          apiRouteDeploymentId: "deployment-model-evaluation-artifact-test",
+          libraryVersions: { node: "20.x", parser: "lmca-parser-v1" },
+          timestamp: "2026-10-01T00:08:00.000Z",
+          rateLimitRetryMetadata: "bounded retries with no prompt mutation",
+          parserExtractorVersionLinks: ["json-seven-dim-v1"],
         },
       ],
       modelEvaluationPredictions: [
@@ -6324,6 +6477,23 @@ test("submitted model-evaluation artifacts are checked against current release e
     "submitted_leaderboard_declares_common_subset_uncertainty_policy",
   );
   assert.equal(report.modelEvaluationArtifactEvidence.failureAuditEvidence.status, "submitted_model_failure_audit_is_diagnostic_only");
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.status,
+    "submitted_model_run_provenance_preserves_inference_and_environment",
+  );
+  assert.equal(report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelInferenceConfigId, "model-inference-config-submitted-eval");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelRunEnvironmentId, "model-run-environment-submitted-eval");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelSnapshot, "submitted-model-2026-10-01");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.decodingParameters.temperature, 0);
+  assert.equal(report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.seedDeterminismArtifact, "sha256:submitted-eval-seed");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.apiRouteDeploymentId, "deployment-model-evaluation-artifact-test");
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.status,
+    "submitted_model_provider_policy_approved_for_protected_evaluation",
+  );
+  assert.equal(report.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.modelProviderDataHandlingPolicyId, "model-provider-policy-submitted-eval");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.coveredRunClass, "model_evaluation");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelProviderPolicyEvidence.protectedContentEligible, true);
   assert.deepEqual(report.modelEvaluationArtifactEvidence.reviewSections, []);
 
   const missingPositionBalanceReport = buildOctoberReleaseReport(
@@ -6420,6 +6590,8 @@ test("submitted model-evaluation artifacts are checked against current release e
     "calibration_run",
     "leaderboard",
     "model_failure_audit",
+    "model_run_provenance",
+    "model_provider_data_handling_policy",
   ]);
   assert.equal(
     staleReport.modelEvaluationArtifactEvidence.evaluationRunEvidence.reviewChecks.find((check) => check.field === "targetLabelSnapshotId").status,
