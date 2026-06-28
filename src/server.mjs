@@ -165,6 +165,13 @@ const assignmentDeclineRequiredFields = [
 const assignmentDeclineReasonCodes = ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"];
 const assignmentDeclineReassignmentStatuses = ["reassigned_without_label", "paused_for_topic_fit_review", "closed_no_reassignment_needed"];
 const assignmentDeclineQaRoutingStatuses = ["monitor_only", "routed_to_qa_repeated_decline", "routed_to_qa_suspicious_pattern"];
+const assignmentSelfScreenStatuses = ["continue", "pause", "request_reassignment"];
+const assignmentDeferralReasons = assignmentDeclineReasonCodes;
+const assignmentDeferralResumePolicies = [
+  "resume_without_label_submission",
+  "reassign_without_label_submission",
+  "resume_or_reassign_after_review_without_label_submission",
+];
 const assignmentFlagReasonCodes = [
   "insufficient_topic_expertise",
   "conflict_or_prior_exposure",
@@ -1409,8 +1416,16 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/self-screen$/, "assignment_self_screen_submitted", "assignmentSelfScreen", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
     requiredFields: ["id", "assignmentId", "raterId", "selfScreenStatus", "sourcePeerModelGoldProtectedLabelVisibilityState"],
+    allowedValues: {
+      selfScreenStatus: assignmentSelfScreenStatuses,
+    },
+    requiredExactFields: {
+      sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+    },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/decline$/, "assignment_decline_submitted", "assignmentDecline", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
@@ -1434,8 +1449,17 @@ const workflowWriteEndpoints = [
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/defer$/, "assignment_deferral_submitted", "assignmentDeferral", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
     requiredFields: ["id", "assignmentId", "raterId", "deferReason", "resumePolicy", "sourcePeerModelGoldProtectedLabelVisibilityState"],
+    allowedValues: {
+      deferReason: assignmentDeferralReasons,
+      resumePolicy: assignmentDeferralResumePolicies,
+    },
+    requiredExactFields: {
+      sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+    },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
+    rejectHiddenMetadata: true,
+    rejectRawBenchmarkContent: true,
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/source-recognition-events$/, "source_recognition_event_submitted", "sourceRecognitionEvent", ratingWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -5936,6 +5960,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const rubricLintConfigs = latestWorkflowResources(workflowEvents, "rubricLintConfig");
   const rubricLintEvents = latestWorkflowResources(workflowEvents, "rubricLintEvent");
   const itemIssueReports = latestWorkflowResources(workflowEvents, "itemIssueReport");
+  const itemIssueActions = latestWorkflowResources(workflowEvents, "itemIssueAction");
   const ratingDraftSessions = latestWorkflowResources(workflowEvents, "ratingDraftSession");
   const correctnessClaimWeightWorksheets = latestWorkflowResources(workflowEvents, "correctnessClaimWeightWorksheet");
   const protectedArtifactRetentionRecords = latestWorkflowResources(workflowEvents, "protectedArtifactRetentionRecord");
@@ -5963,7 +5988,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
   const raterLearningPlans = latestWorkflowResources(workflowEvents, "raterLearningPlan");
   const raterSessions = latestWorkflowResources(workflowEvents, "raterSession");
+  const assignmentSelfScreens = latestWorkflowResources(workflowEvents, "assignmentSelfScreen");
   const assignmentDeclines = latestWorkflowResources(workflowEvents, "assignmentDecline");
+  const assignmentDeferrals = latestWorkflowResources(workflowEvents, "assignmentDeferral");
   const interpretationTargetMaps = latestWorkflowResources(workflowEvents, "interpretationTargetMap");
   const verificationWorkspaceSessions = latestWorkflowResources(workflowEvents, "verificationWorkspaceSession");
   const adjudicatorPreReads = latestWorkflowResources(workflowEvents, "adjudicatorPreRead");
@@ -6092,6 +6119,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     rubricLintConfigs,
     rubricLintEvents,
     itemIssueReports,
+    itemIssueActions,
     ratingDraftSessions,
     correctnessClaimWeightWorksheets,
     protectedArtifactRetentionRecords,
@@ -6119,7 +6147,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     publicExamplePracticeSessions,
     raterLearningPlans,
     raterSessions,
+    assignmentSelfScreens,
     assignmentDeclines,
+    assignmentDeferrals,
     interpretationTargetMaps,
     verificationWorkspaceSessions,
     adjudicatorPreReads,
@@ -6245,6 +6275,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     rubricLintConfigs,
     rubricLintEvents,
     itemIssueReports,
+    itemIssueActions,
     ratingDraftSessions,
     correctnessClaimWeightWorksheets,
     protectedArtifactRetentionRecords,
@@ -6272,7 +6303,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     publicExamplePracticeSessions,
     raterLearningPlans,
     raterSessions,
+    assignmentSelfScreens,
     assignmentDeclines,
+    assignmentDeferrals,
     interpretationTargetMaps,
     verificationWorkspaceSessions,
     adjudicatorPreReads,

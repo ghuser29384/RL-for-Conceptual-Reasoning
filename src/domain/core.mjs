@@ -14164,6 +14164,9 @@ const REQUIRED_ITEM_ISSUE_CATEGORIES = [
   "rubric_or_ui_render_defect",
   "external_assistance_or_exfiltration",
 ];
+const ITEM_ISSUE_ACTION_KINDS = ["triage", "resolve", "quarantine"];
+const ITEM_ISSUE_ACTION_RESOLUTION_STATUSES = ["triage_opened", "resolved", "quarantined"];
+const ITEM_ISSUE_ACTION_QUARANTINE_SCOPES = ["none", "affected_item", "dependent_artifacts", "affected_item_and_dependent_artifacts"];
 const REQUIRED_PROTECTED_ARTIFACT_TYPES = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const REQUIRED_PROTECTED_ARTIFACT_INCIDENT_STALE_CLASSES = ["evaluations", "leaderboards", "label_snapshots", "exports"];
 const BENCHMARK_SUBMISSION_BUDGET_KEYS = [
@@ -14307,6 +14310,36 @@ function defaultItemIssueReport(releaseId) {
     excludedFromLabelDenominator: true,
     createdAt: "2026-10-01T00:00:00.000Z",
   };
+}
+
+function defaultItemIssueActions(releaseId) {
+  const itemIssueId = `item-issue-report-${releaseId}`;
+  return [
+    {
+      id: `item-issue-action-${releaseId}-triage`,
+      itemIssueId,
+      action: "triage",
+      actorId: "seed-expert",
+      resolutionStatus: "triage_opened",
+      quarantineScope: "none",
+      labelVisibilityStateForTriage: "labels_hidden_from_triage",
+      modelResultVisibilityStateForTriage: "model_results_hidden_from_triage",
+      notes: "Opened label-blind and model-result-blind triage.",
+      timestamp: "2026-10-01T00:00:00.000Z",
+    },
+    {
+      id: `item-issue-action-${releaseId}-quarantine`,
+      itemIssueId,
+      action: "quarantine",
+      actorId: "seed-expert",
+      resolutionStatus: "quarantined",
+      quarantineScope: "affected_item_and_dependent_artifacts",
+      labelVisibilityStateForTriage: "labels_hidden_from_triage",
+      modelResultVisibilityStateForTriage: "model_results_hidden_from_triage",
+      notes: "Quarantined the affected item and marked dependent artifacts stale pending review.",
+      timestamp: "2026-10-01T00:00:00.000Z",
+    },
+  ];
 }
 
 function defaultRatingDraftSession(releaseId, renderVersionId, scoreInputPolicyId, draftStoragePolicyId, lintConfigId) {
@@ -14489,6 +14522,12 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     .map((report) => normalizeItemIssueReport(report, "submitted_workflow_item_issue_report"))
     .filter(Boolean);
   const seedItemIssueRows = [normalizeItemIssueReport(defaultItemIssueReport(releaseId), "seed_item_issue_report")];
+  const submittedItemIssueActionRows = (options.itemIssueActions ?? [])
+    .map((action) => normalizeItemIssueAction(action, "submitted_workflow_item_issue_action"))
+    .filter(Boolean);
+  const seedItemIssueActionRows = defaultItemIssueActions(releaseId)
+    .map((action) => normalizeItemIssueAction(action, "seed_item_issue_action"))
+    .filter(Boolean);
   const submittedDraftRows = (options.ratingDraftSessions ?? [])
     .map((draft) =>
       normalizeRatingDraftSession(draft, activeRender.id, activeScoreInput.id, activeDraftStorage.id, activeLintConfig.id, "submitted_workflow_rating_draft_session"),
@@ -14536,6 +14575,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const seedAssistanceRows = [normalizeExternalAssistanceDeclaration(defaultExternalAssistanceDeclaration(releaseId), "seed_external_assistance_declaration")];
   const retentionRowsForGate = submittedRetentionRows.length ? submittedRetentionRows : seedRetentionRows;
   const protectedArtifactTypeRows = REQUIRED_PROTECTED_ARTIFACT_TYPES.map((artifactType) => protectedArtifactTypeEvidenceRow(artifactType, retentionRowsForGate));
+  const itemIssueRowsForGate = submittedItemIssueRows.length ? submittedItemIssueRows : seedItemIssueRows;
+  const itemIssueActionRowsForGate = submittedItemIssueActionRows.length ? submittedItemIssueActionRows : seedItemIssueActionRows;
+  const itemIssueActionCoverageRows = buildItemIssueActionCoverageRows(itemIssueRowsForGate, itemIssueActionRowsForGate);
   const gateGroups = [
     ["task_output_eligibility_policy", submittedTaskOutputRows.length ? submittedTaskOutputRows : seedTaskOutputRows],
     ["score_input_policy", submittedScoreInputRows.length ? submittedScoreInputRows : seedScoreInputRows],
@@ -14543,7 +14585,8 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ["rater_instruction_render_version", submittedRenderRows.length ? submittedRenderRows : seedRenderRows],
     ["rubric_lint_config", submittedLintConfigRows.length ? submittedLintConfigRows : seedLintConfigRows],
     ["rubric_lint_event", submittedLintEventRows.length ? submittedLintEventRows : seedLintEventRows],
-    ["item_issue_report", submittedItemIssueRows.length ? submittedItemIssueRows : seedItemIssueRows],
+    ["item_issue_report", itemIssueRowsForGate],
+    ["item_issue_action", itemIssueActionRowsForGate],
     ["rating_draft_session", submittedDraftRows.length ? submittedDraftRows : seedDraftRows],
     ["correctness_claim_weight_worksheet", submittedWorksheetRows.length ? submittedWorksheetRows : seedWorksheetRows],
     ["score_confidence_annotation", submittedConfidenceRows.length ? submittedConfidenceRows : seedConfidenceRows],
@@ -14560,6 +14603,8 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ...submittedLintConfigRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_config", artifactId: row.id, reason }))),
     ...submittedLintEventRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_event", artifactId: row.id, reason }))),
     ...submittedItemIssueRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_report", artifactId: row.id, reason }))),
+    ...submittedItemIssueActionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_action", artifactId: row.id, reason }))),
+    ...itemIssueActionCoverageRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_action_coverage", artifactId: row.itemIssueId, reason }))),
     ...submittedDraftRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rating_draft_session", artifactId: row.id, reason }))),
     ...submittedWorksheetRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "correctness_claim_weight_worksheet", artifactId: row.id, reason }))),
     ...submittedRetentionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "protected_artifact_retention_record", artifactId: row.id, reason }))),
@@ -14585,6 +14630,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedLintConfigRows.length > 0 &&
     submittedLintEventRows.length > 0 &&
     submittedItemIssueRows.length > 0 &&
+    submittedItemIssueActionRows.length > 0 &&
     submittedDraftRows.length > 0 &&
     submittedWorksheetRows.length > 0 &&
     submittedRetentionRows.length > 0 &&
@@ -14612,6 +14658,8 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     rubricLintConfigRows: [...seedLintConfigRows, ...submittedLintConfigRows],
     rubricLintEventRows: [...seedLintEventRows, ...submittedLintEventRows],
     itemIssueReportRows: [...seedItemIssueRows, ...submittedItemIssueRows],
+    itemIssueActionRows: [...seedItemIssueActionRows, ...submittedItemIssueActionRows],
+    itemIssueActionCoverageRows,
     ratingDraftSessionRows: [...seedDraftRows, ...submittedDraftRows],
     correctnessClaimWeightWorksheetRows: [...seedWorksheetRows, ...submittedWorksheetRows],
     protectedArtifactRetentionRows: [...seedRetentionRows, ...submittedRetentionRows],
@@ -14630,6 +14678,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedRubricLintConfigCount: submittedLintConfigRows.length,
       submittedRubricLintEventCount: submittedLintEventRows.length,
       submittedItemIssueReportCount: submittedItemIssueRows.length,
+      submittedItemIssueActionCount: submittedItemIssueActionRows.length,
+      submittedItemIssueQuarantineActionCount: submittedItemIssueActionRows.filter((row) => row.action === "quarantine").length,
+      passingItemIssueActionCoverageCount: itemIssueActionCoverageRows.filter((row) => row.status === "item_issue_action_coverage_complete").length,
       submittedRatingDraftSessionCount: submittedDraftRows.length,
       submittedCorrectnessClaimWeightWorksheetCount: submittedWorksheetRows.length,
       submittedProtectedArtifactRetentionRecordCount: submittedRetentionRows.length,
@@ -14899,6 +14950,65 @@ function normalizeItemIssueReport(report, rowSource) {
     reviewReasons,
     status: reviewReasons.length ? "item_issue_report_review_required" : "item_issue_report_complete",
   };
+}
+
+function normalizeItemIssueAction(action, rowSource) {
+  const id = action?.id ?? action?.itemIssueActionId;
+  if (!id) return null;
+  const actionKind = action.action ?? action.actionKind;
+  const quarantineScope = action.quarantineScope ?? "none";
+  const reviewReasons = [
+    requiredPromptFieldReason("itemIssueId", action.itemIssueId),
+    ITEM_ISSUE_ACTION_KINDS.includes(actionKind) ? null : "action",
+    requiredPromptFieldReason("actorId", action.actorId),
+    ITEM_ISSUE_ACTION_RESOLUTION_STATUSES.includes(action.resolutionStatus) ? null : "resolutionStatus",
+    ITEM_ISSUE_ACTION_QUARANTINE_SCOPES.includes(quarantineScope) ? null : "quarantineScope",
+    action.labelVisibilityStateForTriage === "labels_hidden_from_triage" ? null : "labelVisibilityStateForTriage",
+    action.modelResultVisibilityStateForTriage === "model_results_hidden_from_triage" ? null : "modelResultVisibilityStateForTriage",
+    actionKind === "quarantine" && !policyMentionsAny(quarantineScope, ["affected", "dependent"]) ? "quarantineScope" : null,
+    requiredPromptFieldReason("timestamp", action.timestamp ?? action.createdAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    itemIssueId: action.itemIssueId ?? null,
+    action: actionKind ?? null,
+    actorId: action.actorId ?? null,
+    resolutionStatus: action.resolutionStatus ?? null,
+    quarantineScope,
+    labelVisibilityStateForTriage: action.labelVisibilityStateForTriage ?? null,
+    modelResultVisibilityStateForTriage: action.modelResultVisibilityStateForTriage ?? null,
+    notes: action.notes ?? null,
+    timestamp: action.timestamp ?? action.createdAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "item_issue_action_review_required" : "item_issue_action_complete",
+  };
+}
+
+function buildItemIssueActionCoverageRows(itemIssueRows, actionRows) {
+  const completeActions = actionRows.filter((row) => row.reviewReasons.length === 0);
+  return itemIssueRows
+    .filter((row) => row.reviewReasons.length === 0)
+    .map((issue) => {
+      const issueActions = completeActions.filter((action) => action.itemIssueId === issue.id);
+      const latestAction = issueActions.at(-1) ?? null;
+      const quarantineAction = issueActions.find((action) => action.action === "quarantine" && policyMentionsAny(action.quarantineScope, ["affected", "dependent"])) ?? null;
+      const quarantinePropagationRequired = policyMentionsAny(issue.quarantineStalePropagationState, ["quarantine", "stale", "propagation"]);
+      const reviewReasons = [
+        issueActions.length ? null : "item_issue_action_missing",
+        quarantinePropagationRequired && !quarantineAction ? "quarantine_action_missing" : null,
+      ].filter(Boolean);
+      return {
+        itemIssueId: issue.id,
+        latestActionId: latestAction?.id ?? null,
+        latestAction: latestAction?.action ?? null,
+        quarantinePropagationRequired,
+        quarantineActionId: quarantineAction?.id ?? null,
+        actionCount: issueActions.length,
+        reviewReasons,
+        status: reviewReasons.length ? "item_issue_action_coverage_review_required" : "item_issue_action_coverage_complete",
+      };
+    });
 }
 
 function normalizeRatingDraftSession(draft, activeRenderVersionId, activeScoreInputPolicyId, activeDraftStoragePolicyId, activeLintConfigId, rowSource) {
@@ -15306,6 +15416,13 @@ const REQUIRED_QUEUE_POLICY_COMPONENTS = [
 const ASSIGNMENT_DECLINE_REASON_CODES = ["lack_topic_expertise", "conflict_or_prior_exposure", "text_unreadable_or_wrong_item", "insufficient_time", "other"];
 const ASSIGNMENT_DECLINE_REASSIGNMENT_STATUSES = ["reassigned_without_label", "paused_for_topic_fit_review", "closed_no_reassignment_needed"];
 const ASSIGNMENT_DECLINE_QA_ROUTING_STATUSES = ["monitor_only", "routed_to_qa_repeated_decline", "routed_to_qa_suspicious_pattern"];
+const ASSIGNMENT_SELF_SCREEN_STATUSES = ["continue", "pause", "request_reassignment"];
+const ASSIGNMENT_DEFERRAL_REASONS = ASSIGNMENT_DECLINE_REASON_CODES;
+const ASSIGNMENT_DEFERRAL_RESUME_POLICIES = [
+  "resume_without_label_submission",
+  "reassign_without_label_submission",
+  "resume_or_reassign_after_review_without_label_submission",
+];
 const ASSIGNMENT_FLAG_REASON_CODES = [
   "insufficient_topic_expertise",
   "conflict_or_prior_exposure",
@@ -16390,6 +16507,16 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
+    assignmentSelfScreens: [
+      {
+        id: `assignment-self-screen-${releaseId}`,
+        assignmentId: "assign-ai-base-rate",
+        raterId: "seed-rater",
+        selfScreenStatus: "continue",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
     assignmentDeclines: [
       {
         id: `assignment-decline-${releaseId}`,
@@ -16405,6 +16532,17 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         repeatedOrStrategicDeclineQaPolicy: "repeated or suspicious safe-decline patterns route to QA review",
         sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
         excludedFromRatingDenominator: true,
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    assignmentDeferrals: [
+      {
+        id: `assignment-deferral-${releaseId}`,
+        assignmentId: "assign-ai-base-rate",
+        raterId: "seed-rater",
+        deferReason: "insufficient_time",
+        resumePolicy: "resume_or_reassign_after_review_without_label_submission",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
@@ -16660,6 +16798,18 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       seedRows: defaults.raterSessions,
     },
     {
+      label: "AssignmentSelfScreen",
+      optionKey: "assignmentSelfScreens",
+      rowKey: "assignmentSelfScreenRows",
+      artifactType: "assignment_self_screen",
+      requiredFields: ["assignmentId", "raterId", "selfScreenStatus", "sourcePeerModelGoldProtectedLabelVisibilityState", "timestamp"],
+      enumFields: {
+        selfScreenStatus: ASSIGNMENT_SELF_SCREEN_STATUSES,
+      },
+      exactFields: { sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden" },
+      seedRows: defaults.assignmentSelfScreens,
+    },
+    {
       label: "AssignmentDecline",
       optionKey: "assignmentDeclines",
       rowKey: "assignmentDeclineRows",
@@ -16686,6 +16836,20 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       exactFields: { sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden" },
       stringIncludes: { repeatedOrStrategicDeclineQaPolicy: ["repeated", "suspicious", "qa"] },
       seedRows: defaults.assignmentDeclines,
+    },
+    {
+      label: "AssignmentDeferral",
+      optionKey: "assignmentDeferrals",
+      rowKey: "assignmentDeferralRows",
+      artifactType: "assignment_deferral",
+      requiredFields: ["assignmentId", "raterId", "deferReason", "resumePolicy", "sourcePeerModelGoldProtectedLabelVisibilityState", "timestamp"],
+      enumFields: {
+        deferReason: ASSIGNMENT_DEFERRAL_REASONS,
+        resumePolicy: ASSIGNMENT_DEFERRAL_RESUME_POLICIES,
+      },
+      exactFields: { sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden" },
+      stringIncludes: { resumePolicy: ["without_label_submission"] },
+      seedRows: defaults.assignmentDeferrals,
     },
     {
       label: "InterpretationTargetMap",
@@ -18415,6 +18579,7 @@ export function buildOctoberReleaseReport(
     rubricLintConfigs: options.rubricLintConfigs ?? [],
     rubricLintEvents: options.rubricLintEvents ?? [],
     itemIssueReports: options.itemIssueReports ?? [],
+    itemIssueActions: options.itemIssueActions ?? [],
     ratingDraftSessions: options.ratingDraftSessions ?? [],
     correctnessClaimWeightWorksheets: options.correctnessClaimWeightWorksheets ?? [],
     protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
@@ -18457,7 +18622,9 @@ export function buildOctoberReleaseReport(
     publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
     raterLearningPlans: options.raterLearningPlans ?? [],
     raterSessions: options.raterSessions ?? [],
+    assignmentSelfScreens: options.assignmentSelfScreens ?? [],
     assignmentDeclines: options.assignmentDeclines ?? [],
+    assignmentDeferrals: options.assignmentDeferrals ?? [],
     interpretationTargetMaps: options.interpretationTargetMaps ?? [],
     verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
     adjudicatorPreReads: options.adjudicatorPreReads ?? [],
@@ -18686,6 +18853,7 @@ export function buildOctoberReleaseReport(
       rubricLintConfigs: options.rubricLintConfigs ?? [],
       rubricLintEvents: options.rubricLintEvents ?? [],
       itemIssueReports: options.itemIssueReports ?? [],
+      itemIssueActions: options.itemIssueActions ?? [],
       ratingDraftSessions: options.ratingDraftSessions ?? [],
       correctnessClaimWeightWorksheets: options.correctnessClaimWeightWorksheets ?? [],
       protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
@@ -18717,7 +18885,9 @@ export function buildOctoberReleaseReport(
       publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
       raterLearningPlans: options.raterLearningPlans ?? [],
       raterSessions: options.raterSessions ?? [],
+      assignmentSelfScreens: options.assignmentSelfScreens ?? [],
       assignmentDeclines: options.assignmentDeclines ?? [],
+      assignmentDeferrals: options.assignmentDeferrals ?? [],
       interpretationTargetMaps: options.interpretationTargetMaps ?? [],
       verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
       adjudicatorPreReads: options.adjudicatorPreReads ?? [],

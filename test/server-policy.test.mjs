@@ -1476,6 +1476,14 @@ function completeInteractionWorkflowFixtures() {
       qaRoutingStatus: "no_fatigue_qa_route",
       timestamp: "2026-10-01T00:45:00.000Z",
     },
+    assignmentSelfScreen: {
+      id: "assignment-self-screen-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      raterId: "demo-rater",
+      selfScreenStatus: "continue",
+      sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+      timestamp: "2026-10-01T00:45:30.000Z",
+    },
     assignmentDecline: {
       id: "assignment-decline-workflow-new",
       assignmentId: "assign-ai-base-rate",
@@ -1491,6 +1499,15 @@ function completeInteractionWorkflowFixtures() {
       sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
       excludedFromRatingDenominator: true,
       timestamp: "2026-10-01T00:46:00.000Z",
+    },
+    assignmentDeferral: {
+      id: "assignment-deferral-workflow-new",
+      assignmentId: "assign-ai-base-rate",
+      raterId: "demo-rater",
+      deferReason: "insufficient_time",
+      resumePolicy: "resume_or_reassign_after_review_without_label_submission",
+      sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+      timestamp: "2026-10-01T00:46:30.000Z",
     },
     interpretationTargetMap: {
       id: "interpretation-target-map-workflow-new",
@@ -3963,6 +3980,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowAssignmentScreenState.status, 200);
   assert.equal(workflowAssignmentScreenState.body.assignmentId, "assignment-workflow-new");
   assert.equal(workflowAssignmentScreenState.body.sanitized, true);
+
+  const workflowAssignmentSelfScreen = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assignment-workflow-new/self-screen",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentSelfScreen: {
+        ...completeInteractionWorkflowFixtures().assignmentSelfScreen,
+        id: "assignment-self-screen-workflow-assignment-new",
+        assignmentId: "assignment-workflow-new",
+      },
+    }),
+  });
+  assert.equal(workflowAssignmentSelfScreen.status, 201, JSON.stringify(workflowAssignmentSelfScreen.body));
+  assert.equal(workflowAssignmentSelfScreen.body.resourceId, "assignment-self-screen-workflow-assignment-new");
+
+  const workflowAssignmentDeferral = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assignment-workflow-new/defer",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentDeferral: {
+        ...completeInteractionWorkflowFixtures().assignmentDeferral,
+        id: "assignment-deferral-workflow-assignment-new",
+        assignmentId: "assignment-workflow-new",
+      },
+    }),
+  });
+  assert.equal(workflowAssignmentDeferral.status, 201, JSON.stringify(workflowAssignmentDeferral.body));
+  assert.equal(workflowAssignmentDeferral.body.resourceId, "assignment-deferral-workflow-assignment-new");
 
   const workflowAssignmentSourceRecognition = await invokeApi(context, {
     method: "POST",
@@ -8230,6 +8277,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(weakQuarantineAction.status, 400);
   assert.match(weakQuarantineAction.body.detail, /quarantineScope/);
 
+  const itemIssueQuarantineAction = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issues/item-issue-workflow-new/quarantine",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueAction: {
+        id: "item-issue-action-workflow-quarantine",
+        quarantineScope: "affected_item_and_dependent_artifacts",
+        notes: "Quarantine affected item and stale dependent artifacts before release evidence can clear.",
+      },
+    }),
+  });
+  assert.equal(itemIssueQuarantineAction.status, 201);
+  assert.equal(itemIssueQuarantineAction.body.resourceId, "item-issue-action-workflow-quarantine");
+
   const scoreConfidenceById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/score-confidence-annotations/score-confidence-annotation-workflow-new",
@@ -8826,7 +8888,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   for (const [resourceKey, url] of [
     ["publicExamplePracticeSession", "/api/v1/practice-sessions"],
     ["raterSession", "/api/v1/rater-sessions"],
+    ["assignmentSelfScreen", "/api/v1/assignments/assign-ai-base-rate/self-screen"],
     ["assignmentDecline", "/api/v1/assignments/assign-ai-base-rate/decline"],
+    ["assignmentDeferral", "/api/v1/assignments/assign-ai-base-rate/defer"],
     ["interpretationTargetMap", "/api/v1/interpretation-target-maps"],
     ["verificationWorkspaceSession", "/api/v1/verification-workspace-sessions"],
     ["adjudicatorPreRead", "/api/v1/adjudicator-pre-reads"],
@@ -8841,7 +8905,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     const response = await invokeApi(context, {
       method: "POST",
       url,
-      headers: resourceKey === "assignmentDecline" ? raterHeaders : adminHeaders,
+      headers: ["assignmentSelfScreen", "assignmentDecline", "assignmentDeferral"].includes(resourceKey) ? raterHeaders : adminHeaders,
       body: JSON.stringify({ [resourceKey]: interactionWorkflow[resourceKey] }),
     });
     assert.equal(response.status, 201, resourceKey);
@@ -9199,6 +9263,23 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteRaterSession.status, 400);
   assert.match(incompleteRaterSession.body.detail, /endedAt/);
 
+  const leakingAssignmentSelfScreen = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/self-screen",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentSelfScreen: {
+        ...interactionWorkflow.assignmentSelfScreen,
+        id: "assignment-self-screen-workflow-leaking",
+        selfScreenStatus: "benchmark_status_reviewed",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "benchmark_status_visible",
+        sourceCategory: "coursework_derived",
+      },
+    }),
+  });
+  assert.equal(leakingAssignmentSelfScreen.status, 400);
+  assert.match(leakingAssignmentSelfScreen.body.detail, /selfScreenStatus|sourcePeerModelGoldProtectedLabelVisibilityState|hidden metadata keys/);
+
   const incompleteAssignmentDecline = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/assignments/assign-ai-base-rate/decline",
@@ -9259,6 +9340,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(leakingAssignmentDecline.status, 400);
   assert.match(leakingAssignmentDecline.body.detail, /hidden metadata keys/);
+
+  const unsafeAssignmentDeferral = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/assignments/assign-ai-base-rate/defer",
+    headers: raterHeaders,
+    body: JSON.stringify({
+      assignmentDeferral: {
+        ...interactionWorkflow.assignmentDeferral,
+        id: "assignment-deferral-workflow-unsafe",
+        deferReason: "wait_for_gold_label",
+        resumePolicy: "resume_after_peer_distribution",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "gold_visible",
+        hiddenBenchmarkMemberIds: ["hidden-item-1"],
+      },
+    }),
+  });
+  assert.equal(unsafeAssignmentDeferral.status, 400);
+  assert.match(unsafeAssignmentDeferral.body.detail, /deferReason|resumePolicy|sourcePeerModelGoldProtectedLabelVisibilityState|hidden metadata keys/);
 
   const practiceSessionById = await invokeApi(context, {
     method: "GET",
@@ -10756,9 +10855,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintConfigs.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueReports.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueActions.length, 2);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.itemIssueActionRows.find((row) => row.id === "item-issue-action-workflow-quarantine")?.quarantineScope,
+    "affected_item_and_dependent_artifacts",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.itemIssueActionCoverageRows.find((row) => row.itemIssueId === "item-issue-workflow-new")?.quarantineActionId,
+    "item-issue-action-workflow-quarantine",
+  );
   assert.equal(releaseReport.body.ratingExperienceEvidence.draftStoragePolicyRows.at(-1).serverSidePersistenceDefault, true);
   assert.equal(releaseReport.body.ratingExperienceEvidence.draftStoragePolicyRows.at(-1).clientStatePolicy, "ephemeral_in_memory_only");
   assert.equal(releaseReport.body.ratingExperienceEvidence.ratingDraftSessionRows.at(-1).resumeCount, 1);
@@ -10785,6 +10893,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionRenderVersionCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueReportCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueActionCount, 2);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueQuarantineActionCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.passingItemIssueActionCoverageCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRatingDraftSessionCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
@@ -10833,9 +10944,29 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowInteractionArtifacts.publicExamplePracticeSessions.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.raterLearningPlans.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.raterSessions.length, 1);
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.assignmentSelfScreens.length, 2);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.assignmentDeclines.length, 1);
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.assignmentDeferrals.length, 2);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.interpretationTargetMaps.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.verificationWorkspaceSessions.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.assignmentSelfScreenRows.some(
+      (row) =>
+        row.id === "assignment-self-screen-workflow-assignment-new" &&
+        row.assignmentId === "assignment-workflow-new" &&
+        row.sourcePeerModelGoldProtectedLabelVisibilityState === "all_hidden",
+    ),
+    true,
+  );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.assignmentDeferralRows.some(
+      (row) =>
+        row.id === "assignment-deferral-workflow-assignment-new" &&
+        row.assignmentId === "assignment-workflow-new" &&
+        row.resumePolicy === "resume_or_reassign_after_review_without_label_submission",
+    ),
+    true,
+  );
   assert.equal(
     releaseReport.body.interactionWorkflowEvidence.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack,
     "covered",
@@ -10899,8 +11030,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.interactionWorkflowEvidence.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")),
   );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 16);
-  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 16);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 18);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 18);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedAssignmentSelfScreenCount, 2);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedAssignmentDeferralCount, 2);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedBenchmarkSubmissionCount, 1);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedScreenFeatureParityCheckCount, uxSimplificationSurfaces.length);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedSimplifiedCopyPreviewCount, uxSimplificationSurfaces.length);
@@ -11130,7 +11263,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 108);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 113);
 });
 
 test("server policy rejects hidden metadata in rater submissions", () => {

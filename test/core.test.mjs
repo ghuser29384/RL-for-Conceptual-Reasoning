@@ -1166,6 +1166,32 @@ function completeRatingExperienceFixtures() {
         createdAt: "2026-10-01T00:02:00.000Z",
       },
     ],
+    itemIssueActions: [
+      {
+        id: "item-issue-action-submitted-triage",
+        itemIssueId: "item-issue-submitted",
+        action: "triage",
+        actorId: "demo-expert",
+        resolutionStatus: "triage_opened",
+        quarantineScope: "none",
+        labelVisibilityStateForTriage: "labels_hidden_from_triage",
+        modelResultVisibilityStateForTriage: "model_results_hidden_from_triage",
+        notes: "Opened blind triage without label or model-result visibility.",
+        timestamp: "2026-10-01T00:02:30.000Z",
+      },
+      {
+        id: "item-issue-action-submitted-quarantine",
+        itemIssueId: "item-issue-submitted",
+        action: "quarantine",
+        actorId: "demo-expert",
+        resolutionStatus: "quarantined",
+        quarantineScope: "affected_item_and_dependent_artifacts",
+        labelVisibilityStateForTriage: "labels_hidden_from_triage",
+        modelResultVisibilityStateForTriage: "model_results_hidden_from_triage",
+        notes: "Quarantined affected item and stale-dependent artifacts pending review.",
+        timestamp: "2026-10-01T00:02:45.000Z",
+      },
+    ],
     ratingDraftSessions: [
       {
         id: "rating-draft-session-submitted",
@@ -1584,6 +1610,16 @@ function completeInteractionWorkflowFixtures() {
         timestamp: "2026-10-01T00:02:00.000Z",
       },
     ],
+    assignmentSelfScreens: [
+      {
+        id: "assignment-self-screen-submitted",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        selfScreenStatus: "continue",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+        timestamp: "2026-10-01T00:02:30.000Z",
+      },
+    ],
     assignmentDeclines: [
       {
         id: "assignment-decline-submitted",
@@ -1600,6 +1636,17 @@ function completeInteractionWorkflowFixtures() {
         sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
         excludedFromRatingDenominator: true,
         timestamp: "2026-10-01T00:03:00.000Z",
+      },
+    ],
+    assignmentDeferrals: [
+      {
+        id: "assignment-deferral-submitted",
+        assignmentId: "assign-ai-base-rate",
+        raterId: "demo-rater",
+        deferReason: "insufficient_time",
+        resumePolicy: "resume_or_reassign_after_review_without_label_submission",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "all_hidden",
+        timestamp: "2026-10-01T00:03:30.000Z",
       },
     ],
     interpretationTargetMaps: [
@@ -2132,6 +2179,9 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRubricLintConfigCount, 1);
   assert.equal(report.counts.submittedRubricLintEventCount, 1);
   assert.equal(report.counts.submittedItemIssueReportCount, 1);
+  assert.equal(report.counts.submittedItemIssueActionCount, 2);
+  assert.equal(report.counts.submittedItemIssueQuarantineActionCount, 1);
+  assert.equal(report.counts.passingItemIssueActionCoverageCount, 1);
   assert.equal(report.counts.submittedRatingDraftSessionCount, 1);
   assert.equal(report.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
   assert.equal(report.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
@@ -2140,6 +2190,8 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
   assert.equal(report.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
+  assert.equal(report.itemIssueActionRows.at(-1).action, "quarantine");
+  assert.equal(report.itemIssueActionCoverageRows.at(-1).quarantineActionId, "item-issue-action-submitted-quarantine");
   assert.equal(report.draftStoragePolicyRows.at(-1).serverSidePersistenceDefault, true);
   assert.equal(report.draftStoragePolicyRows.at(-1).clientStatePolicy, "ephemeral_in_memory_only");
   assert.equal(report.ratingDraftSessionRows.at(-1).resumeCount, 1);
@@ -2174,6 +2226,33 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "modelResultVisibilityStateForTriage"));
   assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "quarantineStalePropagationState"));
   assert.ok(unsafeItemIssueReport.reviewSections.some((section) => section.artifactType === "item_issue_report" && section.reason === "excludedFromLabelDenominator"));
+
+  const unsafeItemIssueActionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    itemIssueActions: [
+      {
+        ...completeRatingExperienceFixtures().itemIssueActions[0],
+        action: "quarantine",
+        quarantineScope: "none",
+        labelVisibilityStateForTriage: "labels_visible_to_triage",
+        modelResultVisibilityStateForTriage: "model_results_visible_to_triage",
+      },
+    ],
+  });
+  assert.equal(unsafeItemIssueActionReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(unsafeItemIssueActionReport.reviewSections.some((section) => section.artifactType === "item_issue_action" && section.reason === "quarantineScope"));
+  assert.ok(unsafeItemIssueActionReport.reviewSections.some((section) => section.artifactType === "item_issue_action" && section.reason === "labelVisibilityStateForTriage"));
+
+  const missingQuarantineActionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    itemIssueActions: [completeRatingExperienceFixtures().itemIssueActions[0]],
+  });
+  assert.equal(missingQuarantineActionReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    missingQuarantineActionReport.reviewSections.some(
+      (section) => section.artifactType === "item_issue_action_coverage" && section.reason === "quarantine_action_missing",
+    ),
+  );
 
   const incompleteRetentionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
@@ -2293,14 +2372,19 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   const report = buildInteractionWorkflowEvidenceReport("october-2026-demo", completeInteractionWorkflowFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(report.counts.submittedArtifactGroupCount, 16);
-  assert.equal(report.counts.completeArtifactGroupCount, 16);
+  assert.equal(report.counts.submittedArtifactGroupCount, 18);
+  assert.equal(report.counts.completeArtifactGroupCount, 18);
   assert.equal(report.counts.submittedPublicExamplePracticeSessionCount, 1);
   assert.equal(report.counts.submittedRaterLearningPlanCount, 1);
   assert.equal(report.counts.submittedRaterSessionCount, 1);
   assert.equal(report.raterSessionRows.at(-1).expectedEffortCompleted, "within_band");
   assert.equal(report.raterSessionRows.at(-1).qaRoutingStatus, "no_fatigue_qa_route");
+  assert.equal(report.counts.submittedAssignmentSelfScreenCount, 1);
+  assert.equal(report.assignmentSelfScreenRows.at(-1).selfScreenStatus, "continue");
+  assert.equal(report.assignmentSelfScreenRows.at(-1).sourcePeerModelGoldProtectedLabelVisibilityState, "all_hidden");
   assert.equal(report.counts.submittedAssignmentDeclineCount, 1);
+  assert.equal(report.counts.submittedAssignmentDeferralCount, 1);
+  assert.equal(report.assignmentDeferralRows.at(-1).resumePolicy, "resume_or_reassign_after_review_without_label_submission");
   assert.equal(report.counts.submittedInterpretationTargetMapCount, 1);
   assert.equal(report.counts.submittedVerificationWorkspaceSessionCount, 1);
   assert.equal(report.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack, "covered");
@@ -2354,6 +2438,24 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "fatigueWarningState"));
   assert.ok(unsafeRaterSessionReport.reviewSections.some((section) => section.artifactType === "rater_session" && section.reason === "qaRoutingStatus"));
 
+  const unsafeSelfScreenReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    assignmentSelfScreens: [
+      {
+        ...completeInteractionWorkflowFixtures().assignmentSelfScreens[0],
+        selfScreenStatus: "benchmark_status_reviewed",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "benchmark_status_visible",
+      },
+    ],
+  });
+  assert.equal(unsafeSelfScreenReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeSelfScreenReport.reviewSections.some((section) => section.artifactType === "assignment_self_screen" && section.reason === "selfScreenStatus"));
+  assert.ok(
+    unsafeSelfScreenReport.reviewSections.some(
+      (section) => section.artifactType === "assignment_self_screen" && section.reason === "sourcePeerModelGoldProtectedLabelVisibilityState",
+    ),
+  );
+
   const unsafeDeclineReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
     assignmentDeclines: [
@@ -2375,6 +2477,26 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
     ),
   );
   assert.ok(unsafeDeclineReport.reviewSections.some((section) => section.artifactType === "assignment_decline" && section.reason === "repeatedOrStrategicDeclineQaPolicy:repeated"));
+
+  const unsafeDeferralReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    assignmentDeferrals: [
+      {
+        ...completeInteractionWorkflowFixtures().assignmentDeferrals[0],
+        deferReason: "wait_for_gold_label",
+        resumePolicy: "resume_after_peer_distribution",
+        sourcePeerModelGoldProtectedLabelVisibilityState: "source_visible",
+      },
+    ],
+  });
+  assert.equal(unsafeDeferralReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(unsafeDeferralReport.reviewSections.some((section) => section.artifactType === "assignment_deferral" && section.reason === "deferReason"));
+  assert.ok(unsafeDeferralReport.reviewSections.some((section) => section.artifactType === "assignment_deferral" && section.reason === "resumePolicy"));
+  assert.ok(
+    unsafeDeferralReport.reviewSections.some(
+      (section) => section.artifactType === "assignment_deferral" && section.reason === "sourcePeerModelGoldProtectedLabelVisibilityState",
+    ),
+  );
 
   const unsafeDiscussionIdentityReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
