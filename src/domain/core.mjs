@@ -1111,6 +1111,7 @@ function prediction(id, positionId, critiqueId, scores) {
   const overallOnly = Object.keys(scores).length === 1 && Object.hasOwn(scores, "overall");
   const positionVersion = latestText(mustFind(positions, positionId));
   const critiqueVersion = latestText(mustFind(critiques, critiqueId));
+  const contextSnapshot = ratingContextSnapshots.find((snapshot) => snapshot.positionId === positionId && snapshot.visibleCritiqueIds.includes(critiqueId));
   return {
     id,
     evaluationRunId: overallOnly ? "eval-overall-demo" : "eval-full-rubric-demo",
@@ -1118,6 +1119,8 @@ function prediction(id, positionId, critiqueId, scores) {
     critiqueId,
     positionTextVersionId: positionVersion.id,
     critiqueTextVersionId: critiqueVersion.id,
+    ratingContextSnapshotId: contextSnapshot?.id ?? null,
+    modelVisibleRatingContextHash: contextSnapshot ? `sha256:${contextSnapshot.id}:model-visible-context` : null,
     modelVisiblePositionRenderedHash: positionVersion.renderedHash,
     modelVisibleCritiqueRenderedHash: critiqueVersion.renderedHash,
     humanModelItemViewParityStatus: "model_visible_hashes_match_rater_visible_versions",
@@ -6907,16 +6910,24 @@ export function buildSamePositionContextReport(
   critiqueList = critiques,
   contextSnapshots = ratingContextSnapshots,
   assignmentList = assignments,
+  options = {},
 ) {
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const assignmentById = new Map(assignmentList.map((assignment) => [assignment.id, assignment]));
   const snapshotById = new Map(contextSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+  const predictionRowsByItem = (options.modelEvaluationPredictions ?? []).reduce((acc, prediction) => {
+    const itemId = makeItemId(prediction.positionId, prediction.critiqueId);
+    acc[itemId] ??= [];
+    acc[itemId].push(prediction);
+    return acc;
+  }, {});
   const critiqueIdsByPosition = critiqueList.reduce((acc, critique) => {
     acc[critique.positionId] ??= [];
     acc[critique.positionId].push(critique.id);
     return acc;
   }, {});
   const rows = ratings.map((rating) => {
+    const itemId = makeItemId(rating.positionId, rating.critiqueId);
     const position = positionById.get(rating.positionId);
     const assignment = assignmentById.get(rating.assignmentId);
     const snapshot = snapshotById.get(rating.ratingContextSnapshotId);
@@ -6950,10 +6961,22 @@ export function buildSamePositionContextReport(
         : snapshot.orderPolicy.includes("counterbalanced")
           ? "counterbalanced"
           : "fixed_or_target_only_order_disclosed";
+    const modelContextPredictionIds = (predictionRowsByItem[itemId] ?? [])
+      .filter((prediction) => prediction.ratingContextSnapshotId === rating.ratingContextSnapshotId)
+      .map((prediction) => prediction.id)
+      .filter(Boolean);
+    const modelContextParityEvidenceStatus = !contextSensitive
+      ? "not_required"
+      : modelContextPredictionIds.length
+        ? "model_prompt_context_matches_frozen_rating_context"
+        : "model_prompt_context_parity_evidence_missing";
     return {
       ratingHash: `sha256:${rating.id}:same-position-context`,
       ratingId: rating.id,
-      itemHash: `sha256:${makeItemId(rating.positionId, rating.critiqueId)}:same-position-context`,
+      itemId,
+      positionId: rating.positionId,
+      critiqueId: rating.critiqueId,
+      itemHash: `sha256:${itemId}:same-position-context`,
       split: position?.split ?? "unknown",
       queueType: assignment?.queueType ?? "unknown",
       ratingContextSnapshotId: rating.ratingContextSnapshotId,
@@ -6970,6 +6993,8 @@ export function buildSamePositionContextReport(
       releaseCritical,
       humanModelParityStatus,
       contextSensitive,
+      modelContextPredictionIds,
+      modelContextParityEvidenceStatus,
       cleanModelPromptRequirement: contextSensitive
         ? "model_prompt_must_match_frozen_sibling_context_or_restrict_target_snapshot"
         : "target_only_context_is_matchable",
@@ -6978,6 +7003,7 @@ export function buildSamePositionContextReport(
   const missingContextRows = rows.filter((row) => row.policy === "missing_context_snapshot");
   const currentCritiqueVisibilityViolations = rows.filter((row) => !row.currentCritiqueVisible);
   const contextSensitiveRows = rows.filter((row) => row.contextSensitive);
+  const missingModelContextParityRows = contextSensitiveRows.filter((row) => row.modelContextParityEvidenceStatus !== "model_prompt_context_matches_frozen_rating_context");
   return {
     id: `same-position-context-${releaseId}`,
     releaseId,
@@ -6994,6 +7020,8 @@ export function buildSamePositionContextReport(
       missingContextSnapshotCount: missingContextRows.length,
       currentCritiqueVisibilityViolationCount: currentCritiqueVisibilityViolations.length,
       contextSensitiveRatingCount: contextSensitiveRows.length,
+      contextSensitiveModelContextMatchedCount: contextSensitiveRows.length - missingModelContextParityRows.length,
+      contextSensitiveModelContextMissingCount: missingModelContextParityRows.length,
       releaseCriticalRatingCount: rows.filter((row) => row.releaseCritical).length,
       counterbalancedReleaseCriticalRatingCount: rows.filter((row) => row.releaseCritical && row.orderPolicyStatus === "counterbalanced").length,
       absentSiblingDisclosureCount: rows.filter((row) => row.absentSiblingCritiqueIds.length > 0).length,
@@ -7002,15 +7030,19 @@ export function buildSamePositionContextReport(
     byOrderPolicy: countBy(rows, "orderPolicy"),
     byOrderPolicyStatus: countBy(rows, "orderPolicyStatus"),
     byHumanModelParityStatus: countBy(rows, "humanModelParityStatus"),
+    byModelContextParityEvidenceStatus: countBy(rows, "modelContextParityEvidenceStatus"),
     contextSensitiveRows,
+    missingModelContextParityRows,
     currentCritiqueVisibilityViolations,
     contextRows: rows,
     releaseUseStatus:
       missingContextRows.length || currentCritiqueVisibilityViolations.length
         ? "rating_context_snapshot_repair_required"
-        : contextSensitiveRows.length
+        : missingModelContextParityRows.length
           ? "rating_context_sensitive_model_prompt_matching_required"
-          : "pass",
+          : contextSensitiveRows.length
+            ? "same_position_context_parity_preserved"
+            : "pass",
   };
 }
 
@@ -15219,6 +15251,26 @@ function defaultQueueFreshnessPolicies(releaseId) {
   }));
 }
 
+function defaultQueueStaleByDelayScans(releaseId, policies = defaultQueueFreshnessPolicies(releaseId)) {
+  return policies.map((policy, index) => ({
+    id: `queue-stale-by-delay-scan-${releaseId}-${policy.lane}`,
+    policyId: policy.id,
+    lane: policy.lane,
+    scanStatus: "passed",
+    staleCount: 1,
+    maxObservedAgeMinutes: policy.freshnessWindowMinutes + 5 + index,
+    backpressureThreshold: policy.backpressureThreshold,
+    dependencyRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
+    staleTransitionBehavior: policy.staleBehavior,
+    staleTransitionOutcomes: REQUIRED_QUEUE_STALE_TRANSITION_OUTCOMES,
+    queueHealthChecks: REQUIRED_QUEUE_HEALTH_CHECKS,
+    workerConsumeRevalidationConfirmed: true,
+    sideEffectSuppressionConfirmed: true,
+    sideChannelSafeNotificationConfirmed: true,
+    scannedAt: "2026-10-01T00:05:00.000Z",
+  }));
+}
+
 function defaultClientSurfaceIntegrityPolicies(releaseId) {
   return REQUIRED_CLIENT_SURFACES.map((surface) => ({
     id: `client-surface-integrity-${releaseId}-${surface}`,
@@ -15343,6 +15395,10 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const submittedScanRows = (options.queueStaleByDelayScans ?? [])
     .map((scan) => normalizeQueueStaleByDelayScan(scan, queueRowsForGate, "submitted_workflow_queue_stale_by_delay_scan"))
     .filter(Boolean);
+  const seedScanRows = defaultQueueStaleByDelayScans(releaseId, defaultQueueFreshnessPolicies(releaseId)).map((scan) =>
+    normalizeQueueStaleByDelayScan(scan, seedQueueRows, "seed_queue_stale_by_delay_scan"),
+  );
+  const scanRowsForGate = submittedScanRows.length ? submittedScanRows : submittedQueueRows.length ? [] : seedScanRows;
   const submittedClientPolicyRows = (options.clientSurfaceIntegrityPolicies ?? [])
     .map((policy) => normalizeClientSurfaceIntegrityPolicy(policy, "submitted_workflow_client_surface_integrity_policy"))
     .filter(Boolean);
@@ -15384,7 +15440,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     policyActionConsumptionEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate, submittedConsumptionRows),
   );
   const phaseLaneRows = REQUIRED_PHASE_GATE_LANE_KINDS.map((laneKind) => implementationPhaseLaneEvidenceRow(laneKind, submittedPhaseRows.length ? submittedPhaseRows : seedPhaseRows));
-  const queueLaneRows = REQUIRED_QUEUE_FRESHNESS_LANES.map((lane) => queueFreshnessLaneEvidenceRow(lane, queueRowsForGate, submittedScanRows));
+  const queueLaneRows = REQUIRED_QUEUE_FRESHNESS_LANES.map((lane) => queueFreshnessLaneEvidenceRow(lane, queueRowsForGate, scanRowsForGate));
   const clientSurfaceRows = REQUIRED_CLIENT_SURFACES.map((surface) => clientSurfaceEvidenceRow(surface, clientPolicyRowsForGate, clientCheckRowsForGate));
   const auditKindRows = REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind) => auditChainKindEvidenceRow(eventKind, auditRowsForGate));
   const auditVerificationRowsForGate = submittedAuditVerificationRows.length ? submittedAuditVerificationRows : seedAuditVerificationRows;
@@ -15467,7 +15523,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     policyActionConsumptionRows,
     implementationPhaseGateBundleRows: [...seedPhaseRows, ...submittedPhaseRows],
     queueFreshnessPolicyRows: [...seedQueueRows, ...submittedQueueRows],
-    queueStaleByDelayScanRows: submittedScanRows,
+    queueStaleByDelayScanRows: [...seedScanRows, ...submittedScanRows],
     clientSurfaceIntegrityPolicyRows: [...seedClientPolicyRows, ...submittedClientPolicyRows],
     clientSurfaceIntegrityCheckRows: [...seedClientCheckRows, ...submittedClientCheckRows],
     sensitiveAuditChainGovernanceApprovalRows: [...seedAuditGovernanceRows, ...submittedAuditGovernanceRows],
@@ -16122,7 +16178,13 @@ export function buildOctoberReleaseReport(
   const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
     humanCeilingRuns: options.humanCeilingRuns ?? [],
   });
-  const samePositionContext = buildSamePositionContextReport(releaseId, ratings, positionList, critiqueList, effectiveRatingContextSnapshots);
+  const samePositionContext = buildSamePositionContextReport(releaseId, ratings, positionList, critiqueList, effectiveRatingContextSnapshots, assignments, {
+    modelEvaluationPredictions: [
+      ...fullRubricEvaluationRun.predictions,
+      ...overallOnlyEvaluationRun.predictions,
+      ...(options.modelEvaluationPredictions ?? []),
+    ],
+  });
   const sanityBaselines = buildSanityBaselineReport(releaseId, labelSnapshot, positionList, critiqueList, {
     sanityBaselineRuns: options.sanityBaselineRuns ?? [],
   });

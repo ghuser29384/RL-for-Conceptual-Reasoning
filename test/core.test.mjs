@@ -2448,6 +2448,18 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
   assert.deepEqual(report.reviewSections, []);
 });
 
+test("seed operational control evidence includes queue stale-by-delay scans for all freshness lanes", () => {
+  const report = buildOperationalControlEvidenceReport("october-2026-demo");
+  const seedScanRows = report.queueStaleByDelayScanRows.filter((row) => row.rowSource === "seed_queue_stale_by_delay_scan");
+
+  assert.equal(report.releaseUseStatus, "seed_operational_control_evidence_complete");
+  assert.equal(seedScanRows.length, queueFreshnessLanes.length);
+  assert.equal(report.counts.submittedQueueStaleByDelayScanCount, 0);
+  assert.equal(report.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
+  assert.equal(report.queueLaneRows.every((row) => row.status === "queue_freshness_lane_complete"), true);
+  assert.deepEqual(report.reviewSections, []);
+});
+
 test("operational control evidence rejects stale or wrong-scope policy decisions", () => {
   const unsafeFixtures = completeOperationalControlFixtures();
   unsafeFixtures.policyActionKinds = unsafeFixtures.policyActionKinds.map((actionKind, index) =>
@@ -3827,6 +3839,7 @@ test("same-position context report freezes sibling exposure and model-context pa
   assert.equal(report.counts.missingContextSnapshotCount, 0);
   assert.equal(report.counts.currentCritiqueVisibilityViolationCount, 0);
   assert.equal(report.counts.contextSensitiveRatingCount, 3);
+  assert.equal(report.counts.contextSensitiveModelContextMissingCount, 3);
   assert.equal(report.counts.counterbalancedReleaseCriticalRatingCount, 3);
   assert.equal(report.counts.absentSiblingDisclosureCount, 3);
   assert.equal(report.byPolicy.target_only, 4);
@@ -3835,7 +3848,23 @@ test("same-position context report freezes sibling exposure and model-context pa
   const votingStyle = report.contextRows.find((row) => row.ratingId === "rating-voting-style-a");
   assert.deepEqual(votingStyle.priorSiblingCritiqueIds, ["crit-voting-bullet"]);
   assert.deepEqual(votingStyle.absentSiblingCritiqueIds, []);
+  assert.deepEqual(votingStyle.modelContextPredictionIds, []);
+  assert.equal(votingStyle.modelContextParityEvidenceStatus, "model_prompt_context_parity_evidence_missing");
   assert.equal(votingStyle.cleanModelPromptRequirement, "model_prompt_must_match_frozen_sibling_context_or_restrict_target_snapshot");
+});
+
+test("same-position context report accepts matching model prediction context snapshots", () => {
+  const report = buildSamePositionContextReport("release-test", seedRatings, positions, critiques, ratingContextSnapshots, assignments, {
+    modelEvaluationPredictions: [...fullRubricEvaluationRun.predictions, ...overallOnlyEvaluationRun.predictions],
+  });
+  const votingStyle = report.contextRows.find((row) => row.ratingId === "rating-voting-style-a");
+
+  assert.equal(report.releaseUseStatus, "same_position_context_parity_preserved");
+  assert.equal(report.counts.contextSensitiveModelContextMatchedCount, 3);
+  assert.equal(report.counts.contextSensitiveModelContextMissingCount, 0);
+  assert.equal(report.byModelContextParityEvidenceStatus.model_prompt_context_matches_frozen_rating_context, 3);
+  assert.ok(votingStyle.modelContextPredictionIds.includes("pred-voting-style"));
+  assert.ok(votingStyle.modelContextPredictionIds.includes("pred-overall-voting-style"));
 });
 
 test("aggregation excludes low-clarity provisional non-clarity fields", () => {
@@ -5384,7 +5413,7 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   assert.equal(report.promptTrackSeparation.counts.appendixGExactRows, 1);
   assert.equal(report.promptTrackSeparation.counts.protectedExampleViolationCount, 0);
   assert.equal(report.promptTrackSeparation.releaseUseStatus, "appendix_g_baseline_separated_from_project_prompt_tracks");
-  assert.equal(report.samePositionContext.releaseUseStatus, "rating_context_sensitive_model_prompt_matching_required");
+  assert.equal(report.samePositionContext.releaseUseStatus, "same_position_context_parity_preserved");
   assert.equal(report.leaderboardReport.unresolvedComparisonGroups.length, 1);
   assert.equal(report.leaderboardReport.releaseUseStatus, "point_estimate_ordering_only_unresolved_within_uncertainty");
   assert.equal(report.metricDirectionalityConfig.counts.pairwiseConfigRows, 3);
