@@ -3837,9 +3837,9 @@ export function buildTrainingExport(
   const includedCritiques = critiqueList.filter((critique) => includedPositionIds.has(critique.positionId));
   const includedCritiqueIds = new Set(includedCritiques.map((critique) => critique.id));
   const includedRatings = ratings.filter((rating) => includedPositionIds.has(rating.positionId) && includedCritiqueIds.has(rating.critiqueId));
-  const pointwiseExamples = includedCritiques
+  const pointwiseExamples = applyPositionBalancedPointwiseWeights(includedCritiques
     .map((critique) => buildPointwiseTrainingExample(critique, positionList, labelSnapshot, includedRatings, contextSnapshots))
-    .filter(Boolean);
+    .filter(Boolean));
   const positionToOveralls = Object.fromEntries(
     includedPositions.map((position) => [
       position.id,
@@ -3860,7 +3860,7 @@ export function buildTrainingExport(
   );
   const pairwiseComparisonSnapshot = pairwiseSnapshotEvidence.snapshot;
   const labelByItemId = labelSnapshot.itemLabels;
-  const pairwisePreferenceExamples = pairwiseComparisonSnapshot.nonTiedEdges.map((edge) => {
+  const pairwisePreferenceExamples = applyPositionBalancedPairwiseWeights(pairwiseComparisonSnapshot.nonTiedEdges.map((edge) => {
     const itemA = labelByItemId[makeItemId(edge.positionId, edge.critiqueA)];
     const itemB = labelByItemId[makeItemId(edge.positionId, edge.critiqueB)];
     const overallA = itemA.weightedMeanScores.overall;
@@ -3884,7 +3884,7 @@ export function buildTrainingExport(
             ? "low_margin_downweight"
             : "standard_weighted_preference",
     };
-  });
+  }));
   const scalarRewardTargets = pointwiseExamples.map((example) => ({
     itemId: example.itemId,
     positionId: example.positionId,
@@ -3893,8 +3893,11 @@ export function buildTrainingExport(
     centXStrTarget: example.centXStrWeightedMean,
     deadWeightBadnessTarget: example.scores.dead_weight,
     singleIssueDiagnosticTarget: example.scores.single_issue,
+    positionBalancedWeight: example.positionBalancedWeight,
+    normalizedPositionBalancedWeight: example.normalizedPositionBalancedWeight,
     rewardPolicy: "overall_and_cent_x_strength_separate_dead_weight_badness_not_personal_agreement",
   }));
+  const positionBalancedWeighting = buildTrainingExportPositionBalancedWeighting(pointwiseExamples, pairwisePreferenceExamples);
   const includedClusterIds = new Set(includedPositions.map((position) => position.clusterId));
   const protectedClusterIds = new Set(excludedPositions.map((position) => position.clusterId));
   const clusterOverlaps = [...includedClusterIds].filter((clusterId) => protectedClusterIds.has(clusterId));
@@ -3933,6 +3936,7 @@ export function buildTrainingExport(
       includedPositions: includedPositions.length,
       excludedProtectedPositions: excludedPositions.length,
     },
+    positionBalancedWeighting,
     ratingContextSnapshots: contextSnapshots.filter((snapshot) => includedPositionIds.has(snapshot.positionId)),
     pairwiseComparisonSnapshot,
     pairwiseComparisonSnapshotSource: pairwiseSnapshotEvidence.source,
@@ -3950,6 +3954,72 @@ export function buildTrainingExport(
       "Label uncertainty, rater coverage, spread, and context-snapshot provenance are preserved for downstream exclusion or downweighting.",
     ],
   };
+}
+
+function applyPositionBalancedPointwiseWeights(examples) {
+  const rowsByPosition = countBy(examples, "positionId");
+  const scoredPositionCount = Object.keys(rowsByPosition).length;
+  return examples.map((example) => {
+    const positionExampleCount = rowsByPosition[example.positionId] ?? 1;
+    const positionBalancedWeight = 1 / positionExampleCount;
+    return {
+      ...example,
+      positionExampleCount,
+      positionBalancedWeight: round(positionBalancedWeight),
+      normalizedPositionBalancedWeight: scoredPositionCount ? round(positionBalancedWeight / scoredPositionCount) : 0,
+      positionBalancedWeightingPolicy: "average_within_position_before_cross_position_training_weighting",
+    };
+  });
+}
+
+function applyPositionBalancedPairwiseWeights(examples) {
+  const rowsByPosition = countBy(examples, "positionId");
+  const scoredPairwisePositionCount = Object.keys(rowsByPosition).length;
+  return examples.map((example) => {
+    const positionPairCount = rowsByPosition[example.positionId] ?? 1;
+    const positionBalancedPairWeight = 1 / positionPairCount;
+    return {
+      ...example,
+      positionPairCount,
+      positionBalancedPairWeight: round(positionBalancedPairWeight),
+      positionBalancedPreferenceWeight: round(example.preferenceWeight * positionBalancedPairWeight),
+      normalizedPositionBalancedPreferenceWeight: scoredPairwisePositionCount
+        ? round((example.preferenceWeight * positionBalancedPairWeight) / scoredPairwisePositionCount)
+        : 0,
+      positionBalancedWeightingPolicy: "average_pairwise_edges_within_position_before_cross_position_training_weighting",
+    };
+  });
+}
+
+function buildTrainingExportPositionBalancedWeighting(pointwiseExamples, pairwisePreferenceExamples) {
+  const pointwiseRowsByPosition = countBy(pointwiseExamples, "positionId");
+  const pairwiseRowsByPosition = countBy(pairwisePreferenceExamples, "positionId");
+  const pointwiseWeightSumByPosition = weightSumByPosition(pointwiseExamples, "positionBalancedWeight");
+  const pairwiseWeightSumByPosition = weightSumByPosition(pairwisePreferenceExamples, "positionBalancedPairWeight");
+  const pointwiseSumsBalanced = Object.values(pointwiseWeightSumByPosition).every((value) => Math.abs(value - 1) <= 0.001);
+  const pairwiseSumsBalanced = Object.values(pairwiseWeightSumByPosition).every((value) => Math.abs(value - 1) <= 0.001);
+  return {
+    policy: "average_or_sample_within_position_before_cross_position_training_weighting",
+    pointwiseRowsByPosition,
+    pairwiseRowsByPosition,
+    pointwiseWeightSumByPosition,
+    pairwiseWeightSumByPosition,
+    normalizedPointwiseWeightSum: round(pointwiseExamples.reduce((sum, example) => sum + example.normalizedPositionBalancedWeight, 0)),
+    normalizedPairwisePreferenceWeightSum: round(
+      pairwisePreferenceExamples.reduce((sum, example) => sum + example.normalizedPositionBalancedPreferenceWeight, 0),
+    ),
+    status:
+      pointwiseSumsBalanced && (pairwisePreferenceExamples.length === 0 || pairwiseSumsBalanced)
+        ? "position_balanced_training_weights_complete"
+        : "position_balanced_training_weights_review_required",
+  };
+}
+
+function weightSumByPosition(rows, weightField) {
+  return rows.reduce((acc, row) => {
+    acc[row.positionId] = round((acc[row.positionId] ?? 0) + (Number.isFinite(row[weightField]) ? row[weightField] : 0));
+    return acc;
+  }, {});
 }
 
 function buildEffectiveTrainingPairwiseComparisonSnapshot(
@@ -6613,6 +6683,227 @@ export function buildRaterCompositionConflictReport(
         : singleRaterDominatedReleaseCriticalRows.length > 0 || topicExpertiseMissingRows.length > 0
           ? "rater_composition_limitations_disclosed"
           : "rater_composition_conflict_pass",
+  };
+}
+
+function buildEffectiveRaterProfiles(submittedRaters = [], baseProfiles = raterProfiles) {
+  const normalizedSubmittedProfiles = submittedRaters.map(normalizeSubmittedRaterProfile).filter(Boolean);
+  return mergeByArtifactId(baseProfiles, normalizedSubmittedProfiles);
+}
+
+function normalizeSubmittedRaterProfile(profile) {
+  const id = profile?.id ?? profile?.raterId;
+  if (!id) return null;
+  const activeReliabilityWeightModelId =
+    profile.activeReliabilityWeightModelId ?? profile.reliabilityWeightModelId ?? profile.reliabilityProfile ?? null;
+  return {
+    ...profile,
+    id,
+    profileSource: "submitted_workflow_rater",
+    tier: profile.tier ?? profile.raterTier ?? null,
+    topicExpertise: normalizeRaterTopicExpertise(profile.topicExpertise ?? profile.topicExpertiseByFamily),
+    certificationStatus: profile.certificationStatus ?? profile.certification_status ?? null,
+    reliabilityProfile: activeReliabilityWeightModelId ?? profile.reliabilityProfile ?? null,
+    activeReliabilityWeightModelId,
+    conflictDisclosures: normalizeStringArray(profile.conflictDisclosures ?? profile.conflict_disclosures),
+    priorExposure: normalizeRaterPriorExposure(profile.priorExposure ?? profile.prior_exposure),
+  };
+}
+
+function buildRaterProfileEvidenceReport(
+  releaseId,
+  labelSnapshot,
+  ratings = seedRatings,
+  profiles = raterProfiles,
+  options = {},
+) {
+  const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
+  const positionById = new Map((options.positionList ?? positions).map((position) => [position.id, position]));
+  const includedRatings = ratings.filter((rating) => snapshotItemIds.has(makeItemId(rating.positionId, rating.critiqueId)));
+  const submittedProfiles = (options.raters ?? []).map(normalizeSubmittedRaterProfile).filter(Boolean);
+  const submittedProfileById = new Map(submittedProfiles.map((profile) => [profile.id, profile]));
+  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const qualificationRows = (options.raterQualificationRecords ?? [])
+    .map((record) => normalizeRaterQualificationRecord(record, "submitted_workflow_rater_qualification_record"))
+    .filter(Boolean);
+  const packById = new Map(certificationPacks.map((pack) => [pack.id, pack]));
+  const itemById = new Map(buildReleaseGoldLibraryItems(options.goldItems ?? [], options.positionList ?? positions).map((item) => [item.id, item]));
+  const certificationRows = (options.certificationRecords ?? [])
+    .map((record) => normalizeSubmittedCertificationRecord(record, packById, itemById))
+    .filter(Boolean);
+  const consentRows = [...(options.raterDataConsents ?? []), ...(options.volunteerDataConsentProfiles ?? [])]
+    .map((consent) => normalizeRaterDataConsent(consent, "submitted_workflow_rater_data_consent"))
+    .filter(Boolean);
+  const withdrawalRows = (options.volunteerDataWithdrawalRequests ?? [])
+    .map((request) => normalizeVolunteerDataWithdrawalRequest(request, "submitted_workflow_volunteer_data_withdrawal_request"))
+    .filter(Boolean);
+  const reliabilityModelRefs = new Set(
+    (options.raterReliabilityWeightModels ?? []).flatMap((model) =>
+      [model.id, model.reliabilityWeightModelId, model.modelId, model.weightModelId].filter((value) => typeof value === "string" && value),
+    ),
+  );
+  const auditedRaterIds = uniqueStrings([
+    ...includedRatings.map((rating) => rating.raterId),
+    ...submittedProfiles.map((profile) => profile.id),
+  ]).sort();
+  const rows = auditedRaterIds.map((raterId) =>
+    raterProfileEvidenceRow(raterId, {
+      profile: profileById.get(raterId),
+      submittedProfile: submittedProfileById.get(raterId),
+      ratingsForRater: includedRatings.filter((rating) => rating.raterId === raterId),
+      positionById,
+      qualificationRows: qualificationRows.filter((row) => row.raterId === raterId),
+      certificationRows: certificationRows.filter((row) => row.raterId === raterId),
+      consentRows: consentRows.filter((row) => row.raterId === raterId),
+      withdrawalRows: withdrawalRows.filter((row) => row.raterId === raterId),
+      reliabilityModelRefs,
+    }),
+  );
+  const reviewRows = rows.filter((row) => row.reviewReasons.length);
+  const releaseUsedSubmittedRows = rows.filter((row) => row.releaseUsed && row.profileSource === "submitted_workflow_rater");
+  return {
+    id: `rater-profile-evidence-${releaseId}-${labelSnapshot.id}`,
+    releaseId,
+    labelSnapshotId: labelSnapshot.id,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      profileEvidenceRule:
+        "Submitted raters that contribute release-used ratings must have a profile, role evidence from qualification or certification records, and a current data-consent artifact.",
+      expertRoleRule:
+        "Expert-denominator, adjudicator, topic-specialist, hidden-benchmark, and primary-anchor claims require evidence-backed qualification, certification, prior-rating evidence, or an approved exception rather than self-attestation alone.",
+      reliabilityModelRule:
+        "Submitted active reliability-weight model references must resolve to a submitted frozen rater-reliability weight model before release reports can treat them as provenance-backed.",
+    },
+    counts: {
+      includedRatingRows: includedRatings.length,
+      auditedRaterCount: rows.length,
+      submittedRaterProfileCount: submittedProfiles.length,
+      releaseUsedSubmittedRaterProfileCount: releaseUsedSubmittedRows.length,
+      completeReleaseUsedSubmittedRaterProfileCount: releaseUsedSubmittedRows.filter((row) => !row.reviewReasons.length).length,
+      submittedQualificationRecordCount: qualificationRows.length,
+      submittedCertificationRecordCount: certificationRows.length,
+      submittedConsentRecordCount: consentRows.length,
+      submittedWithdrawalRecordCount: withdrawalRows.length,
+      reviewRowCount: reviewRows.length,
+    },
+    rows,
+    reviewRows,
+    releaseUseStatus: reviewRows.length
+      ? "rater_profile_evidence_review_required"
+      : submittedProfiles.length
+        ? "submitted_rater_profile_evidence_complete"
+        : "seed_or_fallback_rater_profile_evidence_complete",
+  };
+}
+
+function raterProfileEvidenceRow(raterId, context) {
+  const {
+    profile,
+    submittedProfile,
+    ratingsForRater,
+    positionById,
+    qualificationRows,
+    certificationRows,
+    consentRows,
+    withdrawalRows,
+    reliabilityModelRefs,
+  } = context;
+  const effectiveProfile = profile ?? submittedProfile ?? null;
+  const profileMissing = !effectiveProfile || effectiveProfile.certificationStatus === "unknown_unprofiled_persisted_rater";
+  const releaseUsed = ratingsForRater.length > 0;
+  const releaseCriticalRatings = ratingsForRater.filter((rating) => isReleaseCriticalSplit(positionById.get(rating.positionId)?.split));
+  const topicFamiliesRated = uniqueStrings(ratingsForRater.map((rating) => positionById.get(rating.positionId)?.topicFamily)).sort();
+  const releaseCriticalTopicFamilies = uniqueStrings(releaseCriticalRatings.map((rating) => positionById.get(rating.positionId)?.topicFamily)).sort();
+  const topicExpertise = normalizeRaterTopicExpertise(effectiveProfile?.topicExpertise);
+  const topicExpertiseMissingFamilies = releaseCriticalTopicFamilies.filter((family) => !topicExpertise.includes(family));
+  const completeQualificationRows = qualificationRows.filter((row) => row.status === "rater_qualification_complete");
+  const completeCertificationRows = certificationRows.filter((row) => row.recordStatus === "certified_or_tier_unlocked");
+  const completeConsentRows = consentRows.filter((row) => row.status === "rater_data_consent_notice_complete");
+  const submitted = Boolean(submittedProfile);
+  const requiresSubmittedReleaseEvidence = releaseUsed && (submitted || profileMissing);
+  const activeReliabilityWeightModelId = effectiveProfile?.activeReliabilityWeightModelId ?? effectiveProfile?.reliabilityWeightModelId ?? null;
+  const reviewReasons = [
+    profileMissing ? "raterProfile" : null,
+    submitted && !effectiveProfile?.tier ? "tier" : null,
+    submitted && !RATER_PROFILE_TIERS.includes(effectiveProfile?.tier) ? "tierAllowedValue" : null,
+    submitted && !topicExpertise.length ? "topicExpertise" : null,
+    submitted && !effectiveProfile?.certificationStatus ? "certificationStatus" : null,
+    submitted && !activeReliabilityWeightModelId ? "activeReliabilityWeightModelId" : null,
+    submitted && !normalizeStringArray(effectiveProfile?.conflictDisclosures).length ? "conflictDisclosures" : null,
+    requiresSubmittedReleaseEvidence && !completeQualificationRows.length && !completeCertificationRows.length ? "qualificationOrCertificationEvidence" : null,
+    requiresSubmittedReleaseEvidence && !completeConsentRows.length ? "raterDataConsent" : null,
+    requiresSubmittedReleaseEvidence && releaseCriticalTopicFamilies.length && topicExpertiseMissingFamilies.length
+      ? `releaseCriticalTopicExpertise:${topicExpertiseMissingFamilies.join(",")}`
+      : null,
+    submitted && activeReliabilityWeightModelId && !reliabilityModelRefs.has(activeReliabilityWeightModelId) ? "activeReliabilityWeightModelId:submittedModelMissing" : null,
+  ].filter(Boolean);
+  return {
+    raterId,
+    profileSource: submitted ? "submitted_workflow_rater" : effectiveProfile ? "seed_rater_profile_registry" : "missing_rater_profile",
+    releaseUsed,
+    includedRatingCount: ratingsForRater.length,
+    releaseCriticalRatingCount: releaseCriticalRatings.length,
+    tier: effectiveProfile?.tier ?? null,
+    certificationStatus: effectiveProfile?.certificationStatus ?? null,
+    reliabilityProfile: effectiveProfile?.reliabilityProfile ?? null,
+    activeReliabilityWeightModelId,
+    topicExpertise,
+    topicFamiliesRated,
+    releaseCriticalTopicFamilies,
+    topicExpertiseMissingFamilies,
+    conflictDisclosures: normalizeStringArray(effectiveProfile?.conflictDisclosures),
+    qualificationRecordIds: qualificationRows.map((row) => row.id),
+    completeQualificationRecordIds: completeQualificationRows.map((row) => row.id),
+    certificationRecordIds: certificationRows.map((row) => row.recordId),
+    completeCertificationRecordIds: completeCertificationRows.map((row) => row.recordId),
+    consentRecordIds: consentRows.map((row) => row.id),
+    completeConsentRecordIds: completeConsentRows.map((row) => row.id),
+    withdrawalRequestIds: withdrawalRows.map((row) => row.id),
+    roleEvidenceStatus:
+      completeQualificationRows.length || completeCertificationRows.length
+        ? "role_evidence_backed"
+        : requiresSubmittedReleaseEvidence
+          ? "role_evidence_missing"
+          : "seed_or_not_required",
+    dataConsentStatus:
+      completeConsentRows.length
+        ? "rater_data_consent_complete"
+        : requiresSubmittedReleaseEvidence
+          ? "rater_data_consent_missing"
+          : "seed_or_not_required",
+    reliabilityModelStatus:
+      activeReliabilityWeightModelId && reliabilityModelRefs.has(activeReliabilityWeightModelId)
+        ? "submitted_reliability_model_reference_resolved"
+        : activeReliabilityWeightModelId
+          ? "submitted_reliability_model_reference_missing"
+          : "not_declared",
+    reviewReasons,
+    status: reviewReasons.length
+      ? "rater_profile_evidence_review_required"
+      : releaseUsed
+        ? "rater_profile_release_evidence_complete"
+        : "rater_profile_registry_evidence_complete",
+  };
+}
+
+function normalizeRaterTopicExpertise(value) {
+  if (Array.isArray(value) || typeof value === "string") return normalizeStringArray(value).sort();
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .filter(([, level]) => level !== false && level !== null && level !== undefined && level !== "none" && level !== "not_applicable")
+      .map(([topic]) => topic)
+      .filter((topic) => typeof topic === "string" && topic)
+      .sort();
+  }
+  return [];
+}
+
+function normalizeRaterPriorExposure(value = {}) {
+  return {
+    authoredPositionIds: normalizeStringArray(value.authoredPositionIds ?? value.authored_position_ids),
+    selectedCritiqueIds: normalizeStringArray(value.selectedCritiqueIds ?? value.selected_critique_ids),
+    adaptedPositionIds: normalizeStringArray(value.adaptedPositionIds ?? value.adapted_position_ids),
+    previouslyDiscussedPositionIds: normalizeStringArray(value.previouslyDiscussedPositionIds ?? value.previously_discussed_position_ids),
   };
 }
 
@@ -10143,6 +10434,8 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
   const sourceLabelSnapshotId = submitted?.sourceLabelSnapshotId ?? submitted?.labelSnapshotId;
   const sourceSplits = submitted?.sourceSplits ?? [];
   const excludedProtectedSplits = submitted?.excludedProtectedSplits ?? [];
+  const submittedWeighting = submitted?.positionBalancedWeighting ?? submitted?.positionBalancedWeightingSummary ?? {};
+  const submittedWeightingPolicy = submitted?.positionBalancedWeightingPolicy ?? submittedWeighting.policy;
   const checks = [
     requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
     requiredSetMembershipCheck("sourceLabelSnapshotId", allowedLabelSnapshotIds, sourceLabelSnapshotId),
@@ -10151,6 +10444,23 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
     requiredManifestCheck("targetLabelVersion", trainingExport.targetLabelVersion, submitted?.targetLabelVersion),
     requiredNonEmptyCheck("targetFields", submitted?.targetFields),
     requiredNonEmptyCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy ?? submitted?.promptTrackExposure),
+    requiredManifestCheck("positionBalancedWeightingPolicy", trainingExport.positionBalancedWeighting.policy, submittedWeightingPolicy),
+    requiredManifestCheck("positionBalancedWeighting.status", trainingExport.positionBalancedWeighting.status, submittedWeighting.status),
+    requiredStructuredManifestCheck(
+      "positionBalancedWeighting.pointwiseRowsByPosition",
+      trainingExport.positionBalancedWeighting.pointwiseRowsByPosition,
+      submittedWeighting.pointwiseRowsByPosition,
+    ),
+    requiredStructuredManifestCheck(
+      "positionBalancedWeighting.pairwiseRowsByPosition",
+      trainingExport.positionBalancedWeighting.pairwiseRowsByPosition,
+      submittedWeighting.pairwiseRowsByPosition,
+    ),
+    requiredStructuredManifestCheck(
+      "positionBalancedWeighting.pointwiseWeightSumByPosition",
+      trainingExport.positionBalancedWeighting.pointwiseWeightSumByPosition,
+      submittedWeighting.pointwiseWeightSumByPosition,
+    ),
   ];
   return releaseArtifactEvidenceRow("training_export", submitted, checks, "submitted_training_export_preserves_current_release_policy");
 }
@@ -10188,6 +10498,13 @@ function requiredManifestCheck(field, expected, submitted) {
     return { field, expected, submitted: submitted ?? null, status: "missing_required_field" };
   }
   return { field, expected, submitted, status: manifestValuesMatch(expected, submitted) ? "matches" : "mismatch" };
+}
+
+function requiredStructuredManifestCheck(field, expected, submitted) {
+  if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) {
+    return { field, expected, submitted: submitted ?? null, status: "missing_required_field" };
+  }
+  return { field, expected, submitted, status: stableJsonKey(expected) === stableJsonKey(submitted) ? "matches" : "mismatch" };
 }
 
 function optionalManifestCheck(field, expected, submitted) {
@@ -17726,7 +18043,19 @@ export function buildOctoberReleaseReport(
     candidatePromotions: options.candidatePromotions ?? [],
   });
   const candidateIntakeQualityAudit = buildCandidateIntakeQualityAudit(releaseId, critiqueList, positionList, effectiveCritiqueGenerationRuns, activeLearning.batches);
-  const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList);
+  const effectiveRaterProfiles = buildEffectiveRaterProfiles(options.raters ?? []);
+  const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList, effectiveRaterProfiles);
+  const raterProfileEvidence = buildRaterProfileEvidenceReport(releaseId, labelSnapshot, ratings, effectiveRaterProfiles, {
+    positionList,
+    raters: options.raters ?? [],
+    raterQualificationRecords: options.raterQualificationRecords ?? [],
+    certificationRecords: options.certificationRecords ?? [],
+    goldItems: options.goldItems ?? [],
+    raterDataConsents: options.raterDataConsents ?? [],
+    volunteerDataConsentProfiles: options.volunteerDataConsentProfiles ?? [],
+    volunteerDataWithdrawalRequests: options.volunteerDataWithdrawalRequests ?? [],
+    raterReliabilityWeightModels: options.raterReliabilityWeightModels ?? [],
+  });
   const hiddenBenchmarkFreeze = buildHiddenBenchmarkFreezeReport(
     releaseId,
     labelSnapshot,
@@ -17971,6 +18300,7 @@ export function buildOctoberReleaseReport(
     activeLearning,
     candidateIntakeQualityAudit,
     raterCompositionConflicts,
+    raterProfileEvidence,
     hiddenBenchmarkFreeze,
     critiqueGenerationEvaluation,
     trainingExport,

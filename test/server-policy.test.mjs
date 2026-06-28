@@ -2931,7 +2931,26 @@ test("workflow and snapshot side effects require current policy decisions and re
     method: "POST",
     url: "/api/v1/training-exports",
     headers: adminHeaders,
-    body: JSON.stringify({ trainingExport: { id: "training-export-lane-blocked" } }),
+    body: JSON.stringify({
+      trainingExport: {
+        id: "training-export-lane-blocked",
+        releaseId: "october-2026-demo",
+        sourceLabelSnapshotId: "snapshot-oct-api",
+        sourceSplits: ["public_train"],
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        targetLabelVersion: "initial_mean",
+        targetFields: ["overall", "centrality_x_strength"],
+        positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+        positionBalancedWeighting: {
+          policy: "average_or_sample_within_position_before_cross_position_training_weighting",
+          status: "position_balanced_training_weights_complete",
+          pointwiseRowsByPosition: { "pos-ai-prior": 2 },
+          pairwiseRowsByPosition: { "pos-ai-prior": 1 },
+          pointwiseWeightSumByPosition: { "pos-ai-prior": 1 },
+        },
+        createdBy: "demo-admin",
+      },
+    }),
   });
   assert.equal(trainingExport.status, 409);
   assert.equal(trainingExport.body.error, "implementation_phase_lane_unavailable");
@@ -3701,13 +3720,28 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(raterReliabilityWeightModelById.status, 200);
   assert.equal(raterReliabilityWeightModelById.body.id, "reliability-weight-model-workflow-new");
 
+  const incompleteRater = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/raters",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rater: {
+        id: "rater-workflow-incomplete",
+        tier: "graduate",
+        certificationStatus: "self_attested_interest_only",
+      },
+    }),
+  });
+  assert.equal(incompleteRater.status, 400);
+  assert.match(incompleteRater.body.detail, /activeReliabilityWeightModelId|topicExpertise|conflictDisclosures/);
+
   const rater = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/raters",
     headers: adminHeaders,
     body: JSON.stringify({
       rater: {
-        id: "rater-workflow-new",
+        id: "demo-rater",
         tier: "graduate",
         topicExpertise: { ai_safety: "strong", decision_theory: "working" },
         certificationStatus: "certified_for_live_blind_rating",
@@ -3720,11 +3754,11 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   const raterById = await invokeApi(context, {
     method: "GET",
-    url: "/api/v1/raters/rater-workflow-new",
+    url: "/api/v1/raters/demo-rater",
     headers: adminHeaders,
   });
   assert.equal(raterById.status, 200);
-  assert.equal(raterById.body.id, "rater-workflow-new");
+  assert.equal(raterById.body.id, "demo-rater");
 
   const assignment = await invokeApi(context, {
     method: "POST",
@@ -4036,6 +4070,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         targetLabelVersion: "initial_mean",
         targetFields: ["overall", "centrality_x_strength"],
         promptTrackExposurePolicy: "project_full_rubric_training",
+        positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+        positionBalancedWeighting: {
+          policy: "average_or_sample_within_position_before_cross_position_training_weighting",
+          status: "position_balanced_training_weights_complete",
+          pointwiseRowsByPosition: { "pos-ai-prior": 2 },
+          pairwiseRowsByPosition: { "pos-ai-prior": 1 },
+          pointwiseWeightSumByPosition: { "pos-ai-prior": 1 },
+        },
         createdBy: "demo-admin",
       },
     }),
@@ -10152,9 +10194,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.labelSnapshotReliability.raterReliabilityWeightModelEvidence.activeSubmittedModelId,
     "reliability-weight-model-workflow-new",
   );
+  assert.equal(releaseReport.body.raterProfileEvidence.counts.submittedRaterProfileCount, 1);
+  assert.equal(releaseReport.body.raterProfileEvidence.releaseUseStatus, "submitted_rater_profile_evidence_complete");
+  const workflowRaterProfileRow = releaseReport.body.raterProfileEvidence.rows.find((row) => row.raterId === "demo-rater");
+  assert.equal(workflowRaterProfileRow.profileSource, "submitted_workflow_rater");
+  assert.equal(workflowRaterProfileRow.roleEvidenceStatus, "role_evidence_backed");
+  assert.equal(workflowRaterProfileRow.dataConsentStatus, "rater_data_consent_complete");
+  assert.equal(workflowRaterProfileRow.reliabilityModelStatus, "submitted_reliability_model_reference_resolved");
+  assert.deepEqual(workflowRaterProfileRow.reviewReasons, []);
   const workflowTrainingExample = releaseReport.body.trainingExport.pointwiseExamples.find((example) => example.critiqueId === "crit-ai-base-rate");
   assert.equal(workflowTrainingExample.critiqueTextVersionId, "item-text-version-workflow-new");
   assert.equal(workflowTrainingExample.critiqueCanonicalHash, "sha256-test-canonical");
+  assert.equal(workflowTrainingExample.positionBalancedWeight, 0.5);
+  assert.equal(releaseReport.body.trainingExport.positionBalancedWeighting.status, "position_balanced_training_weights_complete");
   assert.equal(releaseReport.body.trainingExport.ratingContextSnapshots.some((snapshot) => snapshot.id === "rating-context-workflow-new"), true);
   assert.equal(releaseReport.body.trainingExport.pairwiseComparisonSnapshot.id, "pairwise-snapshot-workflow-new");
   assert.equal(releaseReport.body.trainingExport.pairwiseComparisonSnapshotSource, "submitted_workflow_pairwise_comparison_snapshot");

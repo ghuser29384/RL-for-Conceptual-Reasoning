@@ -4058,13 +4058,23 @@ test("training export preserves uncertainty and excludes protected splits", () =
   assert.equal(trainingExport.protectedSplitPolicy.positionClusterIsolationStatus, "pass");
   assert.equal(trainingExport.counts.pointwiseExamples, 2);
   assert.equal(trainingExport.counts.pairwisePreferenceExamples, 1);
+  assert.equal(trainingExport.positionBalancedWeighting.status, "position_balanced_training_weights_complete");
+  assert.deepEqual(trainingExport.positionBalancedWeighting.pointwiseRowsByPosition, { "pos-ai-prior": 2 });
+  assert.deepEqual(trainingExport.positionBalancedWeighting.pairwiseRowsByPosition, { "pos-ai-prior": 1 });
+  assert.deepEqual(trainingExport.positionBalancedWeighting.pointwiseWeightSumByPosition, { "pos-ai-prior": 1 });
   assert.equal(trainingExport.pointwiseExamples.every((example) => example.split === "public_train"), true);
   assert.equal(trainingExport.pointwiseExamples[0].labelStatus, "initial_only");
   assert.equal(trainingExport.pointwiseExamples[0].ratingContextSnapshotId, "rc-target-only-1");
+  assert.equal(trainingExport.pointwiseExamples[0].positionExampleCount, 2);
+  assert.equal(trainingExport.pointwiseExamples[0].positionBalancedWeight, 0.5);
+  assert.equal(trainingExport.pointwiseExamples[0].normalizedPositionBalancedWeight, 0.5);
   assert.equal(trainingExport.ratingContextSnapshots[0].humanModelParityStatus, "matchable_target_only");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferredCritiqueId, "crit-ai-base-rate");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferenceWeight, 0.46);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPairWeight, 1);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPreferenceWeight, 0.46);
   assert.equal(trainingExport.optimizedSurrogateObjective.lmcaEvaluationMetricsSeparate, true);
+  assert.equal(trainingExport.scalarRewardTargets[0].positionBalancedWeight, 0.5);
   assert.match(trainingExport.scalarRewardTargets[0].rewardPolicy, /not_personal_agreement/);
 });
 
@@ -6418,6 +6428,14 @@ test("submitted label, corpus, training, and export manifests are checked agains
           targetLabelVersion: "initial_mean",
           targetFields: ["overall", "centrality_x_strength"],
           promptTrackExposurePolicy: "project_full_rubric_training",
+          positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+          positionBalancedWeighting: {
+            policy: "average_or_sample_within_position_before_cross_position_training_weighting",
+            status: "position_balanced_training_weights_complete",
+            pointwiseRowsByPosition: { "pos-ai-prior": 2 },
+            pairwiseRowsByPosition: { "pos-ai-prior": 1 },
+            pointwiseWeightSumByPosition: { "pos-ai-prior": 1 },
+          },
         },
       ],
       exportManifests: [
@@ -6439,6 +6457,10 @@ test("submitted label, corpus, training, and export manifests are checked agains
   assert.equal(report.releaseArtifactEvidence.labelSnapshotEvidence.status, "submitted_label_snapshot_matches_current_release_target");
   assert.equal(report.releaseArtifactEvidence.corpusManifestEvidence.status, "submitted_corpus_manifest_matches_current_release_counts");
   assert.equal(report.releaseArtifactEvidence.trainingExportEvidence.status, "submitted_training_export_preserves_current_release_policy");
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "positionBalancedWeighting.status").status,
+    "matches",
+  );
   assert.equal(report.releaseArtifactEvidence.exportManifestEvidence.status, "submitted_public_export_manifest_preserves_current_release_policy");
   assert.deepEqual(report.releaseArtifactEvidence.reviewSections, []);
 
@@ -7176,6 +7198,124 @@ test("rater composition conflict report exposes release-critical dominance and c
   assert.equal(conflicted.conflictRows[0].conflictType, "selected_critique");
   assert.equal(conflicted.conflictRows[0].releaseBlocking, true);
   assert.equal(conflicted.releaseUseStatus, "rater_conflict_review_required");
+});
+
+test("release report requires evidence-backed submitted rater profiles for release-used ratings", () => {
+  const releaseUsedRating = {
+    ...seedRatings.find((rating) => rating.id === "rating-voting-bullet-a"),
+    id: "rating-profiled-rater-release-critical",
+    raterId: "profiled-rater",
+    raterTier: "graduate",
+  };
+  const ratings = [releaseUsedRating];
+  const snapshot = createLabelSnapshot(
+    "snapshot-rater-profile-evidence",
+    "release-test",
+    ratings,
+    [{ positionId: "pos-voting", critiqueId: "crit-voting-bullet" }],
+    "initial_only",
+    positions,
+  );
+  const completeReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    ratings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      raters: [
+        {
+          id: "profiled-rater",
+          tier: "graduate",
+          topicExpertise: { politics: "strong" },
+          certificationStatus: "certified_for_live_blind_rating",
+          activeReliabilityWeightModelId: "uniform-v1-with-sensitivity",
+          conflictDisclosures: ["no_known_conflict"],
+        },
+      ],
+      certificationRecords: [
+        {
+          id: "certification-record-profiled-rater",
+          raterId: "profiled-rater",
+          packVersion: "cert-tier-zero-2026-10",
+          rubricVersion: "lmca-app-f-2026-10",
+          goldItemIds: ["gold-ai-selectivity"],
+          duplicateItemIds: ["gold-low-clarity-obfuscation"],
+          hardAmbiguityItemIds: ["gold-priced-in-objection"],
+          protectedSplitConflictCheck: "training_exposure_only_no_hidden_or_validation_overlap",
+          trainingExposureAcknowledged: true,
+          customWeightedLoss: 0.11,
+          pairwiseError: 0.08,
+          duplicateInconsistency: 0.04,
+          tierUnlocked: "graduate_live_rating",
+        },
+      ],
+      raterDataConsents: [
+        {
+          id: "rater-data-consent-profiled-rater",
+          raterId: "profiled-rater",
+          noticeVersion: "rater-data-use-v1",
+          dataCategoriesCovered: raterDataCategories,
+          useScopesAcknowledged: raterDataUseScopes,
+          dataProfileVisible: true,
+          publicArtifactsDeidentifiedByDefault: true,
+          identifiableAccessRestriction: "approved operational or research role access only",
+          privateLearningDataExcludedFromReleaseAndTraining: true,
+          consentedAt: "2026-10-01T00:04:00.000Z",
+        },
+      ],
+      raterReliabilityWeightModels: [
+        {
+          id: "reliability-weight-model-profiled-rater",
+          reliabilityWeightModelId: "uniform-v1-with-sensitivity",
+        },
+      ],
+    },
+  );
+  assert.equal(completeReport.raterProfileEvidence.releaseUseStatus, "submitted_rater_profile_evidence_complete");
+  assert.equal(completeReport.raterProfileEvidence.counts.submittedRaterProfileCount, 1);
+  assert.equal(completeReport.raterProfileEvidence.counts.completeReleaseUsedSubmittedRaterProfileCount, 1);
+  const completeRow = completeReport.raterProfileEvidence.rows.find((row) => row.raterId === "profiled-rater");
+  assert.equal(completeRow.profileSource, "submitted_workflow_rater");
+  assert.equal(completeRow.roleEvidenceStatus, "role_evidence_backed");
+  assert.equal(completeRow.dataConsentStatus, "rater_data_consent_complete");
+  assert.equal(completeRow.reliabilityModelStatus, "submitted_reliability_model_reference_resolved");
+  assert.deepEqual(completeRow.topicExpertiseMissingFamilies, []);
+  const compositionRow = completeReport.raterCompositionConflicts.raterRows.find((row) => row.raterId === "profiled-rater");
+  assert.equal(compositionRow.certificationStatus, "certified_for_live_blind_rating");
+  assert.deepEqual(compositionRow.topicExpertise, ["politics"]);
+
+  const incompleteReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    ratings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      raters: [
+        {
+          id: "profiled-rater",
+          tier: "graduate",
+          topicExpertise: { ai_safety: "working" },
+          certificationStatus: "self_attested_interest_only",
+          activeReliabilityWeightModelId: "missing-weight-model",
+          conflictDisclosures: ["no_known_conflict"],
+        },
+      ],
+    },
+  );
+  assert.equal(incompleteReport.raterProfileEvidence.releaseUseStatus, "rater_profile_evidence_review_required");
+  const incompleteRow = incompleteReport.raterProfileEvidence.rows.find((row) => row.raterId === "profiled-rater");
+  assert.ok(incompleteRow.reviewReasons.includes("qualificationOrCertificationEvidence"));
+  assert.ok(incompleteRow.reviewReasons.includes("raterDataConsent"));
+  assert.ok(incompleteRow.reviewReasons.includes("releaseCriticalTopicExpertise:politics"));
+  assert.ok(incompleteRow.reviewReasons.includes("activeReliabilityWeightModelId:submittedModelMissing"));
 });
 
 test("release report links submitted discussion threads through adjudication finalization evidence", () => {

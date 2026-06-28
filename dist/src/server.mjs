@@ -1035,7 +1035,13 @@ const workflowWriteEndpoints = [
     phaseGateLaneKind: "route",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-reliability-weight-models$/, "rater_reliability_weight_model_submitted", "raterReliabilityWeightModel", adminRoles, { allowHiddenMetadata: true }),
-  workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, { allowHiddenMetadata: true }),
+  workflowWriteSpec(/^\/api\/v1\/raters$/, "rater_submitted", "rater", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "tier", "certificationStatus", "activeReliabilityWeightModelId"],
+    requiredAnyFields: [["topicExpertise", "topicExpertiseByFamily"]],
+    requiredNonEmptyArrayFields: ["conflictDisclosures"],
+    allowedValues: { tier: ["undergraduate", "graduate", "phd", "expert", "admin"] },
+  }),
   workflowWriteSpec(/^\/api\/v1\/assignments$/, "assignment_submitted", "assignment", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -4130,6 +4136,15 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
       route: "/api/v1/training-exports",
       policyActionKind: "training_export",
       phaseGateLaneKind: "export_path",
+      requiredFields: ["id", "releaseId", "sourceLabelSnapshotId", "targetLabelVersion", "positionBalancedWeightingPolicy", "createdBy"],
+      requiredNonEmptyArrayFields: ["sourceSplits", "excludedProtectedSplits", "targetFields"],
+      requiredObjectFields: ["positionBalancedWeighting"],
+      requiredObjectKeys: {
+        positionBalancedWeighting: ["policy", "status", "pointwiseRowsByPosition", "pairwiseRowsByPosition", "pointwiseWeightSumByPosition"],
+      },
+      requiredArrayIncludes: {
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+      },
     });
     if (persisted) return;
   }
