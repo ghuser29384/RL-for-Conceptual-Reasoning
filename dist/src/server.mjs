@@ -5,9 +5,11 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
   ARTIFACT_PROBE_INPUT_VIEWS,
   ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
+  INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
@@ -22,12 +24,18 @@ import {
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
+  REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
   REQUIRED_DISAGREEMENT_ESCALATION_RULES,
   REQUIRED_DISAGREEMENT_THRESHOLDS,
   REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
   REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
   REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
   REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+  REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
+  REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
+  REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   RUBRIC_DIMENSIONS,
@@ -71,6 +79,10 @@ import {
   seedRatings,
   VALIDATION_TRANCHE_REQUIRED_COMPARISONS,
   VALIDATION_TRANCHE_TYPES,
+  VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
+  REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+  REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
+  REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
 } from "./domain/core.mjs";
 import {
   CONTRIBUTION_ARCHITECTURE,
@@ -495,6 +507,9 @@ const verificationEvidenceBlindingImpactStatuses = [
 const verificationEvidenceAudienceFields = ["shownToOriginalRater", "shownToChecker", "shownToAdjudicator"];
 const interpretationTargetMapRequiredFields = [
   "id",
+  "interpretationTargetMapRequirednessPolicyId",
+  "requirednessTriggerClass",
+  "requirednessDecisionStatus",
   "positionTextVersionId",
   "critiqueTextVersionId",
   "plausibilityNotes",
@@ -506,8 +521,48 @@ const interpretationTargetMapRequiredFields = [
   "createdBy",
   "timestamp",
 ];
+const interpretationTargetMapRequirednessPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "ordinaryItemPolicy",
+  "coverageManifestRule",
+  "lmcaSourceBoundary",
+  "frozenAt",
+];
+const interpretationTargetMapRequiredFieldsManifest = [
+  "candidateIntendedConclusionSpans",
+  "attackedClaimSpans",
+  "plausiblePositionCritiqueInterpretations",
+  "interpretationPlausibilityByReading",
+  "critiqueCoverageByInterpretation",
+  "pricedInBackgroundAssumptionStatus",
+  "centralityTargetClaimSet",
+  "strengthTargetClaimSet",
+  "dimensionEffectByRubricDimension",
+];
+const interpretationTargetMapRequirednessDecisionStatuses = [
+  "optional_for_ordinary_low_risk",
+  "required_before_release_or_adjudication",
+  "complete_required_map",
+  "review_required",
+];
+const verificationClaimGranularityPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "worksheetLinkageRule",
+  "sourceBoundary",
+  "frozenAt",
+];
+const verificationClaimGranularityReviewStatuses = [
+  "policy_applied_claim_level",
+  "compound_claim_justified",
+  "review_required",
+];
 const verificationWorkspaceSessionRequiredFields = [
   "id",
+  "verificationClaimGranularityPolicyId",
+  "claimGranularityClass",
+  "claimGranularityReviewStatus",
   "claimType",
   "verificationStatus",
   "claimVerificationStatusByClaim",
@@ -600,6 +655,10 @@ const adjudicatorPreReadRequiredFields = [
 ];
 const adjudicationReviewSessionRequiredFields = [
   "id",
+  "adjudicationCockpitSignoffPolicyId",
+  "cockpitSignoffStatus",
+  "originalRatingPreservationCheck",
+  "memoSignoffGateStatus",
   "discussionThreadId",
   "scoreSpreadHeatmapVersion",
   "centXStrProductAllocationView",
@@ -608,6 +667,18 @@ const adjudicationReviewSessionRequiredFields = [
   "preSubmitLintSummary",
   "finalizationStatus",
   "timestamp",
+];
+const adjudicationCockpitSignoffPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "finalMemoGateRule",
+  "sourceBoundary",
+  "frozenAt",
+];
+const adjudicationCockpitSignoffStatuses = [
+  "ready_for_memo",
+  "review_required",
+  "blocked_missing_mandatory_views",
 ];
 const uxSimplificationPolicyRequiredFields = [
   "id",
@@ -2558,10 +2629,53 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["itemKeys", "preliminaryIssueTags"],
     requiredExactFields: { completedBeforePeerDistributionExposure: true },
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/adjudication-cockpit-signoff-policies$/,
+    "adjudication_cockpit_signoff_policy_submitted",
+    "adjudicationCockpitSignoffPolicy",
+    adminAuditRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: adjudicationCockpitSignoffPolicyRequiredFields,
+      requiredNonEmptyArrayFields: ["mandatoryViewIds", "allowedSignoffStatuses"],
+      requiredObjectFields: ["thresholds", "signoffRules"],
+      requiredArrayIncludes: {
+        mandatoryViewIds: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
+        allowedSignoffStatuses: adjudicationCockpitSignoffStatuses,
+      },
+      requiredObjectKeys: {
+        thresholds: Object.keys(REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS),
+        signoffRules: Object.keys(REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES),
+      },
+      requiredStructuredFields: {
+        thresholds: REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+        signoffRules: REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
+      },
+      requiredExactFields: { policyVersion: ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION },
+      requiredStringIncludes: {
+        finalMemoGateRule: ["mandatory cockpit views", "final memo"],
+        sourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/adjudication-review-sessions$/, "adjudication_review_session_submitted", "adjudicationReviewSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: adjudicationReviewSessionRequiredFields,
-    requiredNonEmptyArrayFields: ["itemKeys", "rationaleSpanOverlayRefs", "revisionTimelineRefs", "targetMapIds", "minorityRationaleFields", "adjudicatorIds"],
+    requiredNonEmptyArrayFields: [
+      "itemKeys",
+      "mandatoryViewIdsReviewed",
+      "rationaleSpanOverlayRefs",
+      "revisionTimelineRefs",
+      "targetMapIds",
+      "minorityRationaleFields",
+      "adjudicatorIds",
+    ],
+    requiredArrayIncludes: { mandatoryViewIdsReviewed: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS },
+    allowedValues: { cockpitSignoffStatus: adjudicationCockpitSignoffStatuses },
+    requiredStringIncludes: {
+      originalRatingPreservationCheck: ["original", "preserved"],
+      memoSignoffGateStatus: ["mandatory", "reviewed", "memo"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -2644,6 +2758,37 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/interpretation-target-map-requiredness-policies$/,
+    "interpretation_target_map_requiredness_policy_submitted",
+    "interpretationTargetMapRequirednessPolicy",
+    adminAuditRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: interpretationTargetMapRequirednessPolicyRequiredFields,
+      requiredNonEmptyArrayFields: ["triggerClasses", "requiredMapFields", "allowedRequirednessDecisionStatuses", "allowedVisibilityStates"],
+      requiredObjectFields: ["thresholds", "coverageRules"],
+      requiredArrayIncludes: {
+        triggerClasses: REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+        requiredMapFields: interpretationTargetMapRequiredFieldsManifest,
+        allowedRequirednessDecisionStatuses: interpretationTargetMapRequirednessDecisionStatuses,
+      },
+      requiredObjectKeys: {
+        thresholds: Object.keys(REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS),
+        coverageRules: Object.keys(REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES),
+      },
+      requiredStructuredFields: {
+        thresholds: REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
+        coverageRules: REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
+      },
+      requiredExactFields: { policyVersion: INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION },
+      requiredStringIncludes: {
+        ordinaryItemPolicy: ["optional", "ordinary", "release-critical"],
+        coverageManifestRule: ["policy id", "trigger class", "dimension-effect"],
+        lmcaSourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretation_target_map_submitted", "interpretationTargetMap", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: interpretationTargetMapRequiredFields,
@@ -2661,7 +2806,42 @@ const workflowWriteEndpoints = [
       { objectField: "interpretationPlausibilityByReading", arrayField: "plausiblePositionCritiqueInterpretations" },
       { objectField: "critiqueCoverageByInterpretation", arrayField: "plausiblePositionCritiqueInterpretations" },
     ],
+    allowedValues: {
+      requirednessTriggerClass: REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+      requirednessDecisionStatus: interpretationTargetMapRequirednessDecisionStatuses,
+    },
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/verification-claim-granularity-policies$/,
+    "verification_claim_granularity_policy_submitted",
+    "verificationClaimGranularityPolicy",
+    adminAuditRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: verificationClaimGranularityPolicyRequiredFields,
+      requiredNonEmptyArrayFields: ["claimGranularityClasses", "allowedClaimTypes", "allowedClaimStatuses", "allowedReviewStatuses"],
+      requiredObjectFields: ["thresholds", "granularityRules"],
+      requiredArrayIncludes: {
+        claimGranularityClasses: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+        allowedClaimTypes: verificationWorkspaceClaimTypes,
+        allowedClaimStatuses: verificationWorkspaceClaimStatuses,
+        allowedReviewStatuses: verificationClaimGranularityReviewStatuses,
+      },
+      requiredObjectKeys: {
+        thresholds: Object.keys(REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS),
+        granularityRules: Object.keys(REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES),
+      },
+      requiredStructuredFields: {
+        thresholds: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+        granularityRules: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
+      },
+      requiredExactFields: { policyVersion: VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION },
+      requiredStringIncludes: {
+        worksheetLinkageRule: ["Release-critical", "claim-weight worksheet", "not practicable"],
+        sourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/verification-workspace-sessions$/, "verification_workspace_session_submitted", "verificationWorkspaceSession", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: verificationWorkspaceSessionRequiredFields,
@@ -2670,7 +2850,12 @@ const workflowWriteEndpoints = [
     requiredObjectKeysFromArrayFields: [{ objectField: "claimVerificationStatusByClaim", arrayField: "claimSpanRefs" }],
     allowedObjectValues: { claimVerificationStatusByClaim: verificationWorkspaceClaimStatuses },
     requiredBooleanFields: ["correctnessHalfEntireUnclearFlag", "nonBlindAuxiliaryMaterialConsulted"],
-    allowedValues: { claimType: verificationWorkspaceClaimTypes, verificationStatus: verificationWorkspaceClaimStatuses },
+    allowedValues: {
+      claimType: verificationWorkspaceClaimTypes,
+      verificationStatus: verificationWorkspaceClaimStatuses,
+      claimGranularityClass: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+      claimGranularityReviewStatus: verificationClaimGranularityReviewStatuses,
+    },
     requiredWhen: [{ field: "verificationStatus", equals: "not_practicable", requiredFields: ["notPracticableJustification"] }],
   }),
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
@@ -4730,8 +4915,11 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/verification-records\/(?<id>[^/]+)$/, "verificationRecord", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-evidence-artifacts\/(?<id>[^/]+)$/, "verificationEvidenceArtifact", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudicator-pre-reads\/(?<id>[^/]+)$/, "adjudicatorPreRead", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudication-cockpit-signoff-policies\/(?<id>[^/]+)$/, "adjudicationCockpitSignoffPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-review-sessions\/(?<id>[^/]+)$/, "adjudicationReviewSession", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/interpretation-target-map-requiredness-policies\/(?<id>[^/]+)$/, "interpretationTargetMapRequirednessPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/interpretation-target-maps\/(?<id>[^/]+)$/, "interpretationTargetMap", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/verification-claim-granularity-policies\/(?<id>[^/]+)$/, "verificationClaimGranularityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/verification-workspace-sessions\/(?<id>[^/]+)$/, "verificationWorkspaceSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-checks\/(?<id>[^/]+)$/, "ratingCheck", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/calibration-feedback-events\/(?<id>[^/]+)$/, "calibrationFeedbackEvent", expertAuditWorkflowRoles),
@@ -7530,10 +7718,13 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const assignmentSelfScreens = latestWorkflowResources(workflowEvents, "assignmentSelfScreen");
   const assignmentDeclines = latestWorkflowResources(workflowEvents, "assignmentDecline");
   const assignmentDeferrals = latestWorkflowResources(workflowEvents, "assignmentDeferral");
+  const interpretationTargetMapRequirednessPolicies = latestWorkflowResources(workflowEvents, "interpretationTargetMapRequirednessPolicy");
   const interpretationTargetMaps = latestWorkflowResources(workflowEvents, "interpretationTargetMap");
+  const verificationClaimGranularityPolicies = latestWorkflowResources(workflowEvents, "verificationClaimGranularityPolicy");
   const verificationWorkspaceSessions = latestWorkflowResources(workflowEvents, "verificationWorkspaceSession");
   const adjudicatorPreReads = latestWorkflowResources(workflowEvents, "adjudicatorPreRead");
   const postLockDiscussionSessions = latestWorkflowResources(workflowEvents, "postLockDiscussionSession");
+  const adjudicationCockpitSignoffPolicies = latestWorkflowResources(workflowEvents, "adjudicationCockpitSignoffPolicy");
   const adjudicationReviewSessions = latestWorkflowResources(workflowEvents, "adjudicationReviewSession");
   const calibrationFeedbackEvents = latestWorkflowResources(workflowEvents, "calibrationFeedbackEvent");
   const governanceApprovalRecords = latestWorkflowResources(workflowEvents, "governanceApprovalRecord");
@@ -7704,10 +7895,13 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     assignmentSelfScreens,
     assignmentDeclines,
     assignmentDeferrals,
+    interpretationTargetMapRequirednessPolicies,
     interpretationTargetMaps,
+    verificationClaimGranularityPolicies,
     verificationWorkspaceSessions,
     adjudicatorPreReads,
     postLockDiscussionSessions,
+    adjudicationCockpitSignoffPolicies,
     adjudicationReviewSessions,
     calibrationFeedbackEvents,
     governanceApprovalRecords,
@@ -7873,10 +8067,13 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     assignmentSelfScreens,
     assignmentDeclines,
     assignmentDeferrals,
+    interpretationTargetMapRequirednessPolicies,
     interpretationTargetMaps,
+    verificationClaimGranularityPolicies,
     verificationWorkspaceSessions,
     adjudicatorPreReads,
     postLockDiscussionSessions,
+    adjudicationCockpitSignoffPolicies,
     adjudicationReviewSessions,
     calibrationFeedbackEvents,
     governanceApprovalRecords,

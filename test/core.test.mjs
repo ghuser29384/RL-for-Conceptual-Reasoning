@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
   aggregateRatings,
   adjudicationMemos,
   appendRatingRevision,
@@ -67,13 +68,24 @@ import {
   buildValidationTrancheReport,
   buildWorkflowStateMachineEvidenceReport,
   buildValidationDesignReport,
+  INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
+  REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
+  REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+  REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
+  REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+  REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+  REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
+  REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+  VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
   createBlindRatingView,
   createExportManifest,
   createLabelSnapshot,
@@ -305,6 +317,94 @@ function rationaleEvidenceSpanRequirednessPolicy(id = "rationale-evidence-span-r
       "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
     lmcaSourceBoundary:
       "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const interpretationTargetMapTriggerClasses = REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES;
+const interpretationTargetMapRequirednessThresholds = REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS;
+const interpretationTargetMapCoverageRules = REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES;
+const interpretationTargetMapRequiredFields = [
+  "candidateIntendedConclusionSpans",
+  "attackedClaimSpans",
+  "plausiblePositionCritiqueInterpretations",
+  "interpretationPlausibilityByReading",
+  "critiqueCoverageByInterpretation",
+  "pricedInBackgroundAssumptionStatus",
+  "centralityTargetClaimSet",
+  "strengthTargetClaimSet",
+  "dimensionEffectByRubricDimension",
+];
+const interpretationTargetMapDecisionStatuses = [
+  "optional_for_ordinary_low_risk",
+  "required_before_release_or_adjudication",
+  "complete_required_map",
+  "review_required",
+];
+
+function interpretationTargetMapRequirednessPolicy(id = "interpretation-target-map-requiredness-policy-submitted") {
+  return {
+    id,
+    policyVersion: INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: interpretationTargetMapTriggerClasses,
+    thresholds: interpretationTargetMapRequirednessThresholds,
+    coverageRules: interpretationTargetMapCoverageRules,
+    requiredMapFields: interpretationTargetMapRequiredFields,
+    allowedRequirednessDecisionStatuses: interpretationTargetMapDecisionStatuses,
+    allowedVisibilityStates: ["post_lock_or_adjudicator_only", "adjudication_visible", "release_review_visible"],
+    ordinaryItemPolicy:
+      "Interpretation-target maps remain optional for ordinary low-risk live ratings below the frozen ambiguity threshold, but required for release-critical ambiguity disputes.",
+    coverageManifestRule:
+      "Every required target map must link its active policy id, trigger class, and completed conclusion, attacked-claim, plausibility, coverage, priced-in, and dimension-effect fields.",
+    lmcaSourceBoundary:
+      "Project default target-map requiredness thresholds are frozen here; LMCA motivates structured interpretation mapping but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const verificationClaimGranularityClasses = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES;
+const verificationClaimGranularityThresholds = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS;
+const verificationClaimGranularityRules = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES;
+const verificationClaimGranularityReviewStatuses = [
+  "policy_applied_claim_level",
+  "compound_claim_justified",
+  "review_required",
+];
+
+function verificationClaimGranularityPolicy(id = "verification-claim-granularity-policy-submitted") {
+  return {
+    id,
+    policyVersion: VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
+    claimGranularityClasses: verificationClaimGranularityClasses,
+    thresholds: verificationClaimGranularityThresholds,
+    granularityRules: verificationClaimGranularityRules,
+    allowedClaimTypes: ["logical", "mathematical", "empirical", "subjective_or_intuition_pump", "unclear_claim"],
+    allowedClaimStatuses: ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"],
+    allowedReviewStatuses: verificationClaimGranularityReviewStatuses,
+    worksheetLinkageRule:
+      "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
+    sourceBoundary:
+      "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const adjudicationCockpitMandatoryViewIds = REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS;
+const adjudicationCockpitSignoffThresholds = REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS;
+const adjudicationCockpitSignoffRules = REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES;
+
+function adjudicationCockpitSignoffPolicy(id = "adjudication-cockpit-signoff-policy-submitted") {
+  return {
+    id,
+    policyVersion: ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
+    mandatoryViewIds: adjudicationCockpitMandatoryViewIds,
+    thresholds: adjudicationCockpitSignoffThresholds,
+    signoffRules: adjudicationCockpitSignoffRules,
+    allowedSignoffStatuses: ["ready_for_memo", "review_required", "blocked_missing_mandatory_views"],
+    finalMemoGateRule:
+      "Adjudication review sessions must prove all mandatory cockpit views were reviewed before a final memo is marked ready for signoff.",
+    sourceBoundary:
+      "Project default cockpit signoff views are frozen here; LMCA motivates object-level adjudication review but does not state this exact mandatory view list.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -2207,10 +2307,14 @@ function completeInteractionWorkflowFixtures() {
         timestamp: "2026-10-01T00:03:30.000Z",
       },
     ],
+    interpretationTargetMapRequirednessPolicies: [interpretationTargetMapRequirednessPolicy()],
     interpretationTargetMaps: [
       {
         id: "interpretation-target-map-submitted",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        interpretationTargetMapRequirednessPolicyId: "interpretation-target-map-requiredness-policy-submitted",
+        requirednessTriggerClass: "release_critical_ambiguity_dispute",
+        requirednessDecisionStatus: "required_before_release_or_adjudication",
         positionTextVersionId: "ptv-ai-prior-v1",
         critiqueTextVersionId: "ctv-ai-base-rate-v1",
         candidateIntendedConclusionSpans: ["position-conclusion"],
@@ -2233,11 +2337,15 @@ function completeInteractionWorkflowFixtures() {
         timestamp: "2026-10-01T00:04:00.000Z",
       },
     ],
+    verificationClaimGranularityPolicies: [verificationClaimGranularityPolicy()],
     verificationWorkspaceSessions: [
       {
         id: "verification-workspace-submitted",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         relatedRatingIds: ["rating-seed-ai-base-rate-r1"],
+        verificationClaimGranularityPolicyId: "verification-claim-granularity-policy-submitted",
+        claimGranularityClass: "subjective_or_intuition_pump_claim",
+        claimGranularityReviewStatus: "policy_applied_claim_level",
         claimList: ["The critique says expert forecasts ignore base rates."],
         claimSpanRefs: ["claim-span-1"],
         claimType: "subjective_or_intuition_pump",
@@ -2292,12 +2400,18 @@ function completeInteractionWorkflowFixtures() {
         timestamp: "2026-10-01T00:07:00.000Z",
       },
     ],
+    adjudicationCockpitSignoffPolicies: [adjudicationCockpitSignoffPolicy()],
     adjudicationReviewSessions: [
       {
         id: "adjudication-review-session-submitted",
         adjudicationId: "adjudication-workflow-new",
         discussionThreadId: "discussion-thread-workflow-new",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        adjudicationCockpitSignoffPolicyId: "adjudication-cockpit-signoff-policy-submitted",
+        mandatoryViewIdsReviewed: adjudicationCockpitMandatoryViewIds,
+        cockpitSignoffStatus: "ready_for_memo",
+        originalRatingPreservationCheck: "original_blind_ratings_and_revision_history_preserved",
+        memoSignoffGateStatus: "all_mandatory_cockpit_views_reviewed_before_final_memo",
         scoreSpreadHeatmapVersion: "spread-heatmap-v1",
         centXStrProductAllocationView: "product-allocation-v1",
         rationaleSpanOverlayRefs: ["rationale-span-submitted"],
@@ -3436,8 +3550,8 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   const report = buildInteractionWorkflowEvidenceReport("october-2026-demo", completeInteractionWorkflowFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(report.counts.submittedArtifactGroupCount, 20);
-  assert.equal(report.counts.completeArtifactGroupCount, 20);
+  assert.equal(report.counts.submittedArtifactGroupCount, 23);
+  assert.equal(report.counts.completeArtifactGroupCount, 23);
   assert.equal(report.counts.submittedPublicExamplePracticeSessionCount, 1);
   assert.equal(report.counts.submittedPracticeSandboxPolicyCount, 1);
   assert.deepEqual(report.practiceSandboxPolicyRows.at(-1).requiredPublicSourceAnchorIds, practiceSandboxSourceAnchorIds);
@@ -3456,8 +3570,22 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.counts.submittedAssignmentDeclineCount, 1);
   assert.equal(report.counts.submittedAssignmentDeferralCount, 1);
   assert.equal(report.assignmentDeferralRows.at(-1).resumePolicy, "resume_or_reassign_after_review_without_label_submission");
+  assert.equal(report.counts.submittedInterpretationTargetMapRequirednessPolicyCount, 1);
+  assert.equal(report.interpretationTargetMapRequirednessPolicyId, "interpretation-target-map-requiredness-policy-submitted");
+  assert.equal(report.interpretationTargetMapRequirednessPolicyReleaseUseStatus, "submitted_interpretation_target_map_requiredness_policy_active");
+  assert.deepEqual(report.requiredInterpretationTargetMapTriggerClasses, interpretationTargetMapTriggerClasses);
+  assert.deepEqual(report.requiredInterpretationTargetMapThresholds, interpretationTargetMapRequirednessThresholds);
   assert.equal(report.counts.submittedInterpretationTargetMapCount, 1);
+  assert.equal(report.interpretationTargetMapRows.at(-1).interpretationTargetMapRequirednessPolicyId, "interpretation-target-map-requiredness-policy-submitted");
+  assert.equal(report.interpretationTargetMapRows.at(-1).requirednessTriggerClass, "release_critical_ambiguity_dispute");
+  assert.equal(report.counts.submittedVerificationClaimGranularityPolicyCount, 1);
+  assert.equal(report.verificationClaimGranularityPolicyId, "verification-claim-granularity-policy-submitted");
+  assert.equal(report.verificationClaimGranularityPolicyReleaseUseStatus, "submitted_verification_claim_granularity_policy_active");
+  assert.deepEqual(report.requiredVerificationClaimGranularityClasses, verificationClaimGranularityClasses);
+  assert.deepEqual(report.requiredVerificationClaimGranularityThresholds, verificationClaimGranularityThresholds);
   assert.equal(report.counts.submittedVerificationWorkspaceSessionCount, 1);
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).verificationClaimGranularityPolicyId, "verification-claim-granularity-policy-submitted");
+  assert.equal(report.verificationWorkspaceSessionRows.at(-1).claimGranularityClass, "subjective_or_intuition_pump_claim");
   assert.equal(report.interpretationTargetMapRows.at(-1).interpretationPlausibilityByReading.central_forecast_attack, 0.8);
   assert.equal(report.interpretationTargetMapRows.at(-1).critiqueCoverageByInterpretation.central_forecast_attack, "covered");
   assert.equal(report.interpretationTargetMapRows.at(-1).dimensionEffectByRubricDimension.overall, "records the product-level effect after priced-in review");
@@ -3475,7 +3603,15 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.postLockDiscussionSessionRows.at(-1).roleRevealPolicy, "moderator_exception_logged");
   assert.equal(report.postLockDiscussionSessionRows.at(-1).writtenFollowUpStatus, "not_required");
   assert.deepEqual(report.discussionIdentityStagingPolicies, ["role_neutral_handles_first", "moderator_exception_immediate"]);
+  assert.equal(report.counts.submittedAdjudicationCockpitSignoffPolicyCount, 1);
+  assert.equal(report.adjudicationCockpitSignoffPolicyId, "adjudication-cockpit-signoff-policy-submitted");
+  assert.equal(report.adjudicationCockpitSignoffPolicyReleaseUseStatus, "submitted_adjudication_cockpit_signoff_policy_active");
+  assert.deepEqual(report.requiredAdjudicationCockpitMandatoryViewIds, adjudicationCockpitMandatoryViewIds);
+  assert.deepEqual(report.requiredAdjudicationCockpitSignoffThresholds, adjudicationCockpitSignoffThresholds);
   assert.equal(report.counts.submittedAdjudicationReviewSessionCount, 1);
+  assert.equal(report.adjudicationReviewSessionRows.at(-1).adjudicationCockpitSignoffPolicyId, "adjudication-cockpit-signoff-policy-submitted");
+  assert.deepEqual(report.adjudicationReviewSessionRows.at(-1).mandatoryViewIdsReviewed, adjudicationCockpitMandatoryViewIds);
+  assert.equal(report.adjudicationReviewSessionRows.at(-1).cockpitSignoffStatus, "ready_for_memo");
   assert.equal(report.adjudicationReviewSessionRows.at(-1).preSubmitLintSummary, "centrality-strength warning acknowledged");
   assert.deepEqual(report.adjudicationReviewSessionRows.at(-1).targetMapIds, ["interpretation-target-map-submitted"]);
   assert.equal(report.counts.submittedCalibrationFeedbackEventCount, 1);
@@ -3493,6 +3629,66 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
+
+  const driftedTargetMapPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    interpretationTargetMapRequirednessPolicies: [
+      {
+        ...interpretationTargetMapRequirednessPolicy("interpretation-target-map-requiredness-policy-drifted"),
+        thresholds: { ...interpretationTargetMapRequirednessThresholds, ambiguitySpreadMin: 0.2 },
+      },
+    ],
+  });
+  assert.equal(driftedTargetMapPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.equal(
+    driftedTargetMapPolicyReport.interpretationTargetMapRequirednessPolicyReleaseUseStatus,
+    "submitted_interpretation_target_map_requiredness_policy_review_required",
+  );
+  assert.ok(
+    driftedTargetMapPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "interpretation_target_map_requiredness_policy" && section.reason === "thresholds:mismatch",
+    ),
+  );
+
+  const driftedVerificationGranularityPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    verificationClaimGranularityPolicies: [
+      {
+        ...verificationClaimGranularityPolicy("verification-claim-granularity-policy-drifted"),
+        thresholds: { ...verificationClaimGranularityThresholds, maxAtomicClaimSpanRefs: 4 },
+      },
+    ],
+  });
+  assert.equal(driftedVerificationGranularityPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.equal(
+    driftedVerificationGranularityPolicyReport.verificationClaimGranularityPolicyReleaseUseStatus,
+    "submitted_verification_claim_granularity_policy_review_required",
+  );
+  assert.ok(
+    driftedVerificationGranularityPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "verification_claim_granularity_policy" && section.reason === "thresholds:mismatch",
+    ),
+  );
+
+  const driftedAdjudicationCockpitPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    adjudicationCockpitSignoffPolicies: [
+      {
+        ...adjudicationCockpitSignoffPolicy("adjudication-cockpit-signoff-policy-drifted"),
+        thresholds: { ...adjudicationCockpitSignoffThresholds, productSpreadReviewMin: 0.3 },
+      },
+    ],
+  });
+  assert.equal(driftedAdjudicationCockpitPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.equal(
+    driftedAdjudicationCockpitPolicyReport.adjudicationCockpitSignoffPolicyReleaseUseStatus,
+    "submitted_adjudication_cockpit_signoff_policy_review_required",
+  );
+  assert.ok(
+    driftedAdjudicationCockpitPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "adjudication_cockpit_signoff_policy" && section.reason === "thresholds:mismatch",
+    ),
+  );
 
   const incompleteTargetMapReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),

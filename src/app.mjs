@@ -136,6 +136,103 @@ const rationaleEvidenceSpanLinkCategories = [
   "unclear_text",
 ];
 const rationaleEvidenceSpanVisibilityStates = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
+const interpretationTargetMapTriggerClasses = [
+  "ordinary_low_risk_optional",
+  "interpretation_uncertainty_flagged",
+  "centrality_strength_target_uncertainty",
+  "priced_in_background_assumption_uncertainty",
+  "release_critical_ambiguity_dispute",
+  "hidden_benchmark_ambiguity_adjudication",
+  "post_discussion_unresolved_interpretation_spread",
+  "adjudication_memo_target_mapping",
+];
+const interpretationTargetMapRequirednessThresholds = {
+  ordinaryOptionalRiskMax: 0.39,
+  interpretationConfidenceMax: 0.6,
+  ambiguitySpreadMin: 0.25,
+  plausibilitySplitMin: 0.25,
+  lowClarityMax: 0.5,
+  postDiscussionOverallSpreadMin: 0.3,
+  releaseCriticalRiskMin: 0.6,
+};
+const interpretationTargetMapCoverageRules = {
+  ordinaryLowRiskOptional: "ordinary_live_items_remain_optional_when_ambiguity_risk_below_0_40_and_no_release_critical_trigger",
+  interpretationUncertaintyFlagged: "rater_or_adjudicator_interpretation_uncertainty_requires_target_map_before_release_critical_use",
+  centralityStrengthTargetUncertainty: "centrality_or_strength_target_uncertainty_requires_attacked_claim_and_dimension_effect_mapping",
+  pricedInBackgroundAssumptionUncertainty: "priced_in_or_background_assumption_dispute_requires_priced_in_status_and_assumption_effect_notes",
+  releaseCriticalAmbiguityDispute: "release_critical_ambiguity_disputes_require_completed_map_before_adjudication_or_snapshot_freeze",
+  hiddenBenchmarkAdjudication: "hidden_benchmark_ambiguity_adjudication_requires_completed_map_without_disclosing_benchmark_membership_to_raters",
+  postDiscussionSpread: "post_discussion_overall_spread_at_or_above_0_30_with_interpretation_dispute_requires_map_before_final_memo",
+  mapFieldCoverage: "required_maps_must_include_conclusion_spans_attacked_claim_spans_plausible_readings_plausibility_coverage_priced_in_status_and_dimension_effects",
+};
+const interpretationTargetMapRequiredFields = [
+  "candidateIntendedConclusionSpans",
+  "attackedClaimSpans",
+  "plausiblePositionCritiqueInterpretations",
+  "interpretationPlausibilityByReading",
+  "critiqueCoverageByInterpretation",
+  "pricedInBackgroundAssumptionStatus",
+  "centralityTargetClaimSet",
+  "strengthTargetClaimSet",
+  "dimensionEffectByRubricDimension",
+];
+const interpretationTargetMapRequirednessDecisionStatuses = [
+  "optional_for_ordinary_low_risk",
+  "required_before_release_or_adjudication",
+  "complete_required_map",
+  "review_required",
+];
+const verificationClaimGranularityClasses = [
+  "atomic_logical_step",
+  "mathematical_derivation_step",
+  "easy_empirical_claim",
+  "hard_empirical_or_background_assumption",
+  "subjective_or_intuition_pump_claim",
+  "unclear_text_fragment",
+  "compound_claim_split_or_justified",
+];
+const verificationClaimGranularityThresholds = {
+  maxAtomicClaimSpanRefs: 3,
+  maxConjunctionsBeforeSplit: 1,
+  minClaimSignificanceForWorksheetInclusion: 0.05,
+  releaseCriticalCoverageMin: 1,
+  maxUnclearFragmentCharacters: 240,
+};
+const verificationClaimGranularityRules = {
+  atomicity: "split_logical_mathematical_and_easy_empirical_claims_until_each_row_has_one_checkable_assertion_or_a_recorded_compound_justification",
+  spanBinding: "every_claim_row_requires_at_least_one_claim_span_ref_and_status_key_matching_that_span_ref",
+  compoundClaimHandling: "compound_claims_with_more_than_one_conjunction_must_split_or_use_compound_claim_split_or_justified_with_notes",
+  subjectiveClaims: "subjective_or_intuition_pump_claims_record_credence_or_not_practicable_status_without_forcing_binary_verification",
+  unclearText: "unclear_text_fragments_may_be_excluded_or_marked_correctness_half_only_with_explicit_unclear_text_basis",
+  releaseCriticalCoverage: "release_critical_validation_adjudication_or_high_disagreement_workspaces_must_include_at_least_one_policy_classified_claim_row",
+};
+const adjudicationCockpitMandatoryViewIds = [
+  "score_spread_heatmap",
+  "cent_x_str_product_allocation",
+  "low_clarity_branch_alerts",
+  "rationale_span_overlays",
+  "verification_conflict_summary",
+  "sibling_context_difference_summary",
+  "pre_submit_lint_summary",
+  "revision_timeline",
+  "interpretation_target_maps",
+  "minority_rationale_fields",
+  "original_rating_preservation",
+];
+const adjudicationCockpitSignoffThresholds = {
+  overallSpreadReviewMin: 0.3,
+  productSpreadReviewMin: 0.2,
+  lowClarityAlertMax: 0.5,
+  mandatoryViewCoverageMin: adjudicationCockpitMandatoryViewIds.length,
+  minimumAdjudicatorCount: 1,
+};
+const adjudicationCockpitSignoffRules = {
+  mandatoryViews: "all_mandatory_cockpit_views_must_be_reviewed_before_ready_for_memo",
+  initialLockBoundary: "cockpit_material_is_hidden_from_ordinary_raters_until_relevant_initial_ratings_are_locked",
+  originalRatingPreservation: "review_session_and_final_memo_must_preserve_original_blind_ratings_and_revision_history_without_overwrite",
+  minorityRationale: "unresolved_minority_rationales_must_be_recorded_or_explicitly_marked_none_before_signoff",
+  verificationConflict: "verification_conflicts_and_not_practicable_claims_must_be_summarized_before_memo_signoff",
+};
 const comparabilityTierThresholds = {
   method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
   corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
@@ -956,6 +1053,81 @@ const workflowTemplates = [
           "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
         lmcaSourceBoundary:
           "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "interpretation-target-map-requiredness-policy",
+    label: "Interpretation Target Map Policy",
+    endpoint: () => "/api/v1/interpretation-target-map-requiredness-policies",
+    resourceKey: "interpretationTargetMapRequirednessPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exactly when structured interpretation-target maps are optional or required for non-benchmark and release-critical ambiguity cases.",
+    payload: () => ({
+      interpretationTargetMapRequirednessPolicy: {
+        id: `interpretation-target-map-requiredness-policy-${releaseId}`,
+        policyVersion: "interpretation-target-map-requiredness-rlhf90-v1",
+        triggerClasses: interpretationTargetMapTriggerClasses,
+        thresholds: interpretationTargetMapRequirednessThresholds,
+        coverageRules: interpretationTargetMapCoverageRules,
+        requiredMapFields: interpretationTargetMapRequiredFields,
+        allowedRequirednessDecisionStatuses: interpretationTargetMapRequirednessDecisionStatuses,
+        allowedVisibilityStates: ["post_lock_or_adjudicator_only", "adjudication_visible", "release_review_visible"],
+        ordinaryItemPolicy:
+          "Interpretation-target maps remain optional for ordinary low-risk live ratings below the frozen ambiguity threshold, but required for release-critical ambiguity disputes.",
+        coverageManifestRule:
+          "Every required target map must link its active policy id, trigger class, and completed conclusion, attacked-claim, plausibility, coverage, priced-in, and dimension-effect fields.",
+        lmcaSourceBoundary:
+          "Project default target-map requiredness thresholds are frozen here; LMCA motivates structured interpretation mapping but does not state these exact platform thresholds.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "verification-claim-granularity-policy",
+    label: "Verification Claim Granularity Policy",
+    endpoint: () => "/api/v1/verification-claim-granularity-policies",
+    resourceKey: "verificationClaimGranularityPolicy",
+    requiredRole: "admin",
+    summary: "Freeze claim-splitting and worksheet-linkage standards for correctness verification workspaces.",
+    payload: () => ({
+      verificationClaimGranularityPolicy: {
+        id: `verification-claim-granularity-policy-${releaseId}`,
+        policyVersion: "verification-claim-granularity-rlhf90-v1",
+        claimGranularityClasses: verificationClaimGranularityClasses,
+        thresholds: verificationClaimGranularityThresholds,
+        granularityRules: verificationClaimGranularityRules,
+        allowedClaimTypes: ["logical", "mathematical", "empirical", "subjective_or_intuition_pump", "unclear_claim"],
+        allowedClaimStatuses: ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"],
+        allowedReviewStatuses: ["policy_applied_claim_level", "compound_claim_justified", "review_required"],
+        worksheetLinkageRule:
+          "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
+        sourceBoundary:
+          "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "adjudication-cockpit-signoff-policy",
+    label: "Adjudication Cockpit Signoff Policy",
+    endpoint: () => "/api/v1/adjudication-cockpit-signoff-policies",
+    resourceKey: "adjudicationCockpitSignoffPolicy",
+    requiredRole: "admin",
+    summary: "Freeze the mandatory cockpit views adjudicators must review before a final memo is ready for signoff.",
+    payload: () => ({
+      adjudicationCockpitSignoffPolicy: {
+        id: `adjudication-cockpit-signoff-policy-${releaseId}`,
+        policyVersion: "adjudication-cockpit-signoff-rlhf90-v1",
+        mandatoryViewIds: adjudicationCockpitMandatoryViewIds,
+        thresholds: adjudicationCockpitSignoffThresholds,
+        signoffRules: adjudicationCockpitSignoffRules,
+        allowedSignoffStatuses: ["ready_for_memo", "review_required", "blocked_missing_mandatory_views"],
+        finalMemoGateRule:
+          "Adjudication review sessions must prove all mandatory cockpit views were reviewed before a final memo is marked ready for signoff.",
+        sourceBoundary:
+          "Project default cockpit signoff views are frozen here; LMCA motivates object-level adjudication review but does not state this exact mandatory view list.",
         frozenAt: new Date().toISOString(),
       },
     }),

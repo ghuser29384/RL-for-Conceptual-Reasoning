@@ -17157,6 +17157,53 @@ export const REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES = {
   postDiscussionRevision: "post_discussion_revision_requires_post_lock_or_adjudication_visible_span_linked_to_changed_claim",
   protectedVisibility: "spans_for_initial_ratings_must_hide_raw_text_and remain hidden_until_initial_rating_lock",
 };
+export const INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION = "interpretation-target-map-requiredness-rlhf90-v1";
+export const REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES = [
+  "ordinary_low_risk_optional",
+  "interpretation_uncertainty_flagged",
+  "centrality_strength_target_uncertainty",
+  "priced_in_background_assumption_uncertainty",
+  "release_critical_ambiguity_dispute",
+  "hidden_benchmark_ambiguity_adjudication",
+  "post_discussion_unresolved_interpretation_spread",
+  "adjudication_memo_target_mapping",
+];
+export const REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS = {
+  ordinaryOptionalRiskMax: 0.39,
+  interpretationConfidenceMax: 0.6,
+  ambiguitySpreadMin: 0.25,
+  plausibilitySplitMin: 0.25,
+  lowClarityMax: 0.5,
+  postDiscussionOverallSpreadMin: 0.3,
+  releaseCriticalRiskMin: 0.6,
+};
+export const REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES = {
+  ordinaryLowRiskOptional: "ordinary_live_items_remain_optional_when_ambiguity_risk_below_0_40_and_no_release_critical_trigger",
+  interpretationUncertaintyFlagged: "rater_or_adjudicator_interpretation_uncertainty_requires_target_map_before_release_critical_use",
+  centralityStrengthTargetUncertainty: "centrality_or_strength_target_uncertainty_requires_attacked_claim_and_dimension_effect_mapping",
+  pricedInBackgroundAssumptionUncertainty: "priced_in_or_background_assumption_dispute_requires_priced_in_status_and_assumption_effect_notes",
+  releaseCriticalAmbiguityDispute: "release_critical_ambiguity_disputes_require_completed_map_before_adjudication_or_snapshot_freeze",
+  hiddenBenchmarkAdjudication: "hidden_benchmark_ambiguity_adjudication_requires_completed_map_without_disclosing_benchmark_membership_to_raters",
+  postDiscussionSpread: "post_discussion_overall_spread_at_or_above_0_30_with_interpretation_dispute_requires_map_before_final_memo",
+  mapFieldCoverage: "required_maps_must_include_conclusion_spans_attacked_claim_spans_plausible_readings_plausibility_coverage_priced_in_status_and_dimension_effects",
+};
+const INTERPRETATION_TARGET_MAP_REQUIRED_FIELDS = [
+  "candidateIntendedConclusionSpans",
+  "attackedClaimSpans",
+  "plausiblePositionCritiqueInterpretations",
+  "interpretationPlausibilityByReading",
+  "critiqueCoverageByInterpretation",
+  "pricedInBackgroundAssumptionStatus",
+  "centralityTargetClaimSet",
+  "strengthTargetClaimSet",
+  "dimensionEffectByRubricDimension",
+];
+const INTERPRETATION_TARGET_MAP_REQUIREDNESS_DECISION_STATUSES = [
+  "optional_for_ordinary_low_risk",
+  "required_before_release_or_adjudication",
+  "complete_required_map",
+  "review_required",
+];
 const BENCHMARK_SUBMISSION_BUDGET_KEYS = [
   "maxSubmissionsPerWindow",
   "windowHours",
@@ -17169,6 +17216,69 @@ const BENCHMARK_COOLDOWN_STATUSES = ["cooldown_started", "cooldown_satisfied", "
 const BENCHMARK_DUPLICATE_RUN_STATUSES = ["not_duplicate", "near_duplicate_routed_to_review"];
 const VERIFICATION_WORKSPACE_CLAIM_TYPES = ["logical", "mathematical", "empirical", "subjective_or_intuition_pump", "unclear_claim"];
 const VERIFICATION_WORKSPACE_CLAIM_STATUSES = ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"];
+export const VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION = "verification-claim-granularity-rlhf90-v1";
+export const REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES = [
+  "atomic_logical_step",
+  "mathematical_derivation_step",
+  "easy_empirical_claim",
+  "hard_empirical_or_background_assumption",
+  "subjective_or_intuition_pump_claim",
+  "unclear_text_fragment",
+  "compound_claim_split_or_justified",
+];
+export const REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS = {
+  maxAtomicClaimSpanRefs: 3,
+  maxConjunctionsBeforeSplit: 1,
+  minClaimSignificanceForWorksheetInclusion: 0.05,
+  releaseCriticalCoverageMin: 1,
+  maxUnclearFragmentCharacters: 240,
+};
+export const REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES = {
+  atomicity: "split_logical_mathematical_and_easy_empirical_claims_until_each_row_has_one_checkable_assertion_or_a_recorded_compound_justification",
+  spanBinding: "every_claim_row_requires_at_least_one_claim_span_ref_and_status_key_matching_that_span_ref",
+  compoundClaimHandling: "compound_claims_with_more_than_one_conjunction_must_split_or_use_compound_claim_split_or_justified_with_notes",
+  subjectiveClaims: "subjective_or_intuition_pump_claims_record_credence_or_not_practicable_status_without_forcing_binary_verification",
+  unclearText: "unclear_text_fragments_may_be_excluded_or_marked_correctness_half_only_with_explicit_unclear_text_basis",
+  releaseCriticalCoverage: "release_critical_validation_adjudication_or_high_disagreement_workspaces_must_include_at_least_one_policy_classified_claim_row",
+};
+const VERIFICATION_CLAIM_GRANULARITY_REVIEW_STATUSES = [
+  "policy_applied_claim_level",
+  "compound_claim_justified",
+  "review_required",
+];
+export const ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION = "adjudication-cockpit-signoff-rlhf90-v1";
+export const REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS = [
+  "score_spread_heatmap",
+  "cent_x_str_product_allocation",
+  "low_clarity_branch_alerts",
+  "rationale_span_overlays",
+  "verification_conflict_summary",
+  "sibling_context_difference_summary",
+  "pre_submit_lint_summary",
+  "revision_timeline",
+  "interpretation_target_maps",
+  "minority_rationale_fields",
+  "original_rating_preservation",
+];
+export const REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS = {
+  overallSpreadReviewMin: 0.3,
+  productSpreadReviewMin: 0.2,
+  lowClarityAlertMax: 0.5,
+  mandatoryViewCoverageMin: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS.length,
+  minimumAdjudicatorCount: 1,
+};
+export const REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES = {
+  mandatoryViews: "all_mandatory_cockpit_views_must_be_reviewed_before_ready_for_memo",
+  initialLockBoundary: "cockpit_material_is_hidden_from_ordinary_raters_until_relevant_initial_ratings_are_locked",
+  originalRatingPreservation: "review_session_and_final_memo_must_preserve_original_blind_ratings_and_revision_history_without_overwrite",
+  minorityRationale: "unresolved_minority_rationales_must_be_recorded_or_explicitly_marked_none_before_signoff",
+  verificationConflict: "verification_conflicts_and_not_practicable_claims_must_be_summarized_before_memo_signoff",
+};
+const ADJUDICATION_COCKPIT_SIGNOFF_STATUSES = [
+  "ready_for_memo",
+  "review_required",
+  "blocked_missing_mandatory_views",
+];
 
 function defaultTaskOutputEligibilityPolicy(releaseId) {
   return {
@@ -20222,6 +20332,60 @@ function defaultSimplifiedCopyPreviews(releaseId) {
   }));
 }
 
+function defaultInterpretationTargetMapRequirednessPolicy(releaseId) {
+  return {
+    id: `interpretation-target-map-requiredness-policy-${releaseId}`,
+    policyVersion: INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+    thresholds: REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
+    coverageRules: REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
+    requiredMapFields: INTERPRETATION_TARGET_MAP_REQUIRED_FIELDS,
+    allowedRequirednessDecisionStatuses: INTERPRETATION_TARGET_MAP_REQUIREDNESS_DECISION_STATUSES,
+    allowedVisibilityStates: ["post_lock_or_adjudicator_only", "adjudication_visible", "release_review_visible"],
+    ordinaryItemPolicy:
+      "Interpretation-target maps remain optional for ordinary low-risk live ratings below the frozen ambiguity threshold, but required for release-critical ambiguity disputes.",
+    coverageManifestRule:
+      "Every required target map must link its active policy id, trigger class, and completed conclusion, attacked-claim, plausibility, coverage, priced-in, and dimension-effect fields.",
+    lmcaSourceBoundary:
+      "Project default target-map requiredness thresholds are frozen here; LMCA motivates structured interpretation mapping but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultVerificationClaimGranularityPolicy(releaseId) {
+  return {
+    id: `verification-claim-granularity-policy-${releaseId}`,
+    policyVersion: VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
+    claimGranularityClasses: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+    thresholds: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+    granularityRules: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
+    allowedClaimTypes: VERIFICATION_WORKSPACE_CLAIM_TYPES,
+    allowedClaimStatuses: VERIFICATION_WORKSPACE_CLAIM_STATUSES,
+    allowedReviewStatuses: VERIFICATION_CLAIM_GRANULARITY_REVIEW_STATUSES,
+    worksheetLinkageRule:
+      "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
+    sourceBoundary:
+      "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultAdjudicationCockpitSignoffPolicy(releaseId) {
+  return {
+    id: `adjudication-cockpit-signoff-policy-${releaseId}`,
+    policyVersion: ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
+    mandatoryViewIds: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
+    thresholds: REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+    signoffRules: REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
+    allowedSignoffStatuses: ADJUDICATION_COCKPIT_SIGNOFF_STATUSES,
+    finalMemoGateRule:
+      "Adjudication review sessions must prove all mandatory cockpit views were reviewed before a final memo is marked ready for signoff.",
+    sourceBoundary:
+      "Project default cockpit signoff views are frozen here; LMCA motivates object-level adjudication review but does not state this exact mandatory view list.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultInteractionWorkflowArtifacts(releaseId) {
   return {
     publicExamplePracticeSessions: [
@@ -20347,11 +20511,15 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
+    interpretationTargetMapRequirednessPolicies: [defaultInterpretationTargetMapRequirednessPolicy(releaseId)],
     interpretationTargetMaps: [
       {
         id: `interpretation-target-map-${releaseId}`,
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         assignmentId: "assign-ai-base-rate",
+        interpretationTargetMapRequirednessPolicyId: `interpretation-target-map-requiredness-policy-${releaseId}`,
+        requirednessTriggerClass: "release_critical_ambiguity_dispute",
+        requirednessDecisionStatus: "required_before_release_or_adjudication",
         positionTextVersionId: "ptv-ai-prior-v1",
         critiqueTextVersionId: "ctv-ai-base-rate-v1",
         candidateIntendedConclusionSpans: ["position-conclusion-span"],
@@ -20374,11 +20542,15 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
+    verificationClaimGranularityPolicies: [defaultVerificationClaimGranularityPolicy(releaseId)],
     verificationWorkspaceSessions: [
       {
         id: `verification-workspace-${releaseId}`,
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         relatedRatingIds: ["rating-seed-ai-base-rate-r1"],
+        verificationClaimGranularityPolicyId: `verification-claim-granularity-policy-${releaseId}`,
+        claimGranularityClass: "subjective_or_intuition_pump_claim",
+        claimGranularityReviewStatus: "policy_applied_claim_level",
         claimList: ["The critique says expert forecasts ignore base rates."],
         claimSpanRefs: ["claim-span-1"],
         claimType: "subjective_or_intuition_pump",
@@ -20433,11 +20605,17 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
+    adjudicationCockpitSignoffPolicies: [defaultAdjudicationCockpitSignoffPolicy(releaseId)],
     adjudicationReviewSessions: [
       {
         id: `adjudication-review-session-${releaseId}`,
         discussionThreadId: `discussion-thread-${releaseId}`,
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        adjudicationCockpitSignoffPolicyId: `adjudication-cockpit-signoff-policy-${releaseId}`,
+        mandatoryViewIdsReviewed: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
+        cockpitSignoffStatus: "ready_for_memo",
+        originalRatingPreservationCheck: "original_blind_ratings_and_revision_history_preserved",
+        memoSignoffGateStatus: "all_mandatory_cockpit_views_reviewed_before_final_memo",
         scoreSpreadHeatmapVersion: "spread-heatmap-v1",
         centXStrProductAllocationView: "product-allocation-v1",
         rationaleSpanOverlayRefs: ["rationale-span-seed"],
@@ -20728,11 +20906,52 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       seedRows: defaults.assignmentDeferrals,
     },
     {
+      label: "InterpretationTargetMapRequirednessPolicy",
+      optionKey: "interpretationTargetMapRequirednessPolicies",
+      rowKey: "interpretationTargetMapRequirednessPolicyRows",
+      artifactType: "interpretation_target_map_requiredness_policy",
+      requiredFields: ["policyVersion", "ordinaryItemPolicy", "coverageManifestRule", "lmcaSourceBoundary", "frozenAt"],
+      arrayFields: ["triggerClasses", "requiredMapFields", "allowedRequirednessDecisionStatuses", "allowedVisibilityStates"],
+      arrayIncludes: {
+        triggerClasses: REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+        requiredMapFields: INTERPRETATION_TARGET_MAP_REQUIRED_FIELDS,
+        allowedRequirednessDecisionStatuses: INTERPRETATION_TARGET_MAP_REQUIREDNESS_DECISION_STATUSES,
+      },
+      objectFields: ["thresholds", "coverageRules"],
+      objectKeys: {
+        thresholds: Object.keys(REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS),
+        coverageRules: Object.keys(REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES),
+      },
+      structuredFields: {
+        thresholds: REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
+        coverageRules: REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
+      },
+      exactFields: { policyVersion: INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION },
+      stringIncludes: {
+        ordinaryItemPolicy: ["optional", "ordinary", "release-critical"],
+        coverageManifestRule: ["policy id", "trigger class", "dimension-effect"],
+        lmcaSourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+      seedRows: defaults.interpretationTargetMapRequirednessPolicies,
+    },
+    {
       label: "InterpretationTargetMap",
       optionKey: "interpretationTargetMaps",
       rowKey: "interpretationTargetMapRows",
       artifactType: "interpretation_target_map",
-      requiredFields: ["positionTextVersionId", "critiqueTextVersionId", "plausibilityNotes", "pricedInBackgroundAssumptionStatus", "productAllocationNote", "visibilityState", "createdBy", "timestamp"],
+      requiredFields: [
+        "interpretationTargetMapRequirednessPolicyId",
+        "requirednessTriggerClass",
+        "requirednessDecisionStatus",
+        "positionTextVersionId",
+        "critiqueTextVersionId",
+        "plausibilityNotes",
+        "pricedInBackgroundAssumptionStatus",
+        "productAllocationNote",
+        "visibilityState",
+        "createdBy",
+        "timestamp",
+      ],
       arrayFields: ["itemKeys", "candidateIntendedConclusionSpans", "attackedClaimSpans", "plausiblePositionCritiqueInterpretations", "centralityTargetClaimSet", "strengthTargetClaimSet"],
       objectFields: ["interpretationPlausibilityByReading", "critiqueCoverageByInterpretation", "dimensionEffectByRubricDimension"],
       objectKeys: { dimensionEffectByRubricDimension: ["centrality", "strength", "overall"] },
@@ -20740,7 +20959,40 @@ function interactionWorkflowArtifactSpecs(releaseId) {
         { objectField: "interpretationPlausibilityByReading", arrayField: "plausiblePositionCritiqueInterpretations" },
         { objectField: "critiqueCoverageByInterpretation", arrayField: "plausiblePositionCritiqueInterpretations" },
       ],
+      enumFields: {
+        requirednessTriggerClass: REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+        requirednessDecisionStatus: INTERPRETATION_TARGET_MAP_REQUIREDNESS_DECISION_STATUSES,
+      },
       seedRows: defaults.interpretationTargetMaps,
+    },
+    {
+      label: "VerificationClaimGranularityPolicy",
+      optionKey: "verificationClaimGranularityPolicies",
+      rowKey: "verificationClaimGranularityPolicyRows",
+      artifactType: "verification_claim_granularity_policy",
+      requiredFields: ["policyVersion", "worksheetLinkageRule", "sourceBoundary", "frozenAt"],
+      arrayFields: ["claimGranularityClasses", "allowedClaimTypes", "allowedClaimStatuses", "allowedReviewStatuses"],
+      arrayIncludes: {
+        claimGranularityClasses: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+        allowedClaimTypes: VERIFICATION_WORKSPACE_CLAIM_TYPES,
+        allowedClaimStatuses: VERIFICATION_WORKSPACE_CLAIM_STATUSES,
+        allowedReviewStatuses: VERIFICATION_CLAIM_GRANULARITY_REVIEW_STATUSES,
+      },
+      objectFields: ["thresholds", "granularityRules"],
+      objectKeys: {
+        thresholds: Object.keys(REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS),
+        granularityRules: Object.keys(REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES),
+      },
+      structuredFields: {
+        thresholds: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+        granularityRules: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
+      },
+      exactFields: { policyVersion: VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION },
+      stringIncludes: {
+        worksheetLinkageRule: ["Release-critical", "claim-weight worksheet", "not practicable"],
+        sourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+      seedRows: defaults.verificationClaimGranularityPolicies,
     },
     {
       label: "VerificationWorkspaceSession",
@@ -20748,6 +21000,9 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       rowKey: "verificationWorkspaceSessionRows",
       artifactType: "verification_workspace_session",
       requiredFields: [
+        "verificationClaimGranularityPolicyId",
+        "claimGranularityClass",
+        "claimGranularityReviewStatus",
         "claimType",
         "verificationStatus",
         "sourceAssistedReviewNote",
@@ -20767,6 +21022,8 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       enumFields: {
         claimType: VERIFICATION_WORKSPACE_CLAIM_TYPES,
         verificationStatus: VERIFICATION_WORKSPACE_CLAIM_STATUSES,
+        claimGranularityClass: REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
+        claimGranularityReviewStatus: VERIFICATION_CLAIM_GRANULARITY_REVIEW_STATUSES,
       },
       seedRows: defaults.verificationWorkspaceSessions,
     },
@@ -20817,12 +21074,58 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       seedRows: defaults.postLockDiscussionSessions,
     },
     {
+      label: "AdjudicationCockpitSignoffPolicy",
+      optionKey: "adjudicationCockpitSignoffPolicies",
+      rowKey: "adjudicationCockpitSignoffPolicyRows",
+      artifactType: "adjudication_cockpit_signoff_policy",
+      requiredFields: ["policyVersion", "finalMemoGateRule", "sourceBoundary", "frozenAt"],
+      arrayFields: ["mandatoryViewIds", "allowedSignoffStatuses"],
+      arrayIncludes: {
+        mandatoryViewIds: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
+        allowedSignoffStatuses: ADJUDICATION_COCKPIT_SIGNOFF_STATUSES,
+      },
+      objectFields: ["thresholds", "signoffRules"],
+      objectKeys: {
+        thresholds: Object.keys(REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS),
+        signoffRules: Object.keys(REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES),
+      },
+      structuredFields: {
+        thresholds: REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+        signoffRules: REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
+      },
+      exactFields: { policyVersion: ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION },
+      stringIncludes: {
+        finalMemoGateRule: ["mandatory cockpit views", "final memo"],
+        sourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+      seedRows: defaults.adjudicationCockpitSignoffPolicies,
+    },
+    {
       label: "AdjudicationReviewSession",
       optionKey: "adjudicationReviewSessions",
       rowKey: "adjudicationReviewSessionRows",
       artifactType: "adjudication_review_session",
-      requiredFields: ["discussionThreadId", "scoreSpreadHeatmapVersion", "centXStrProductAllocationView", "verificationConflictSummary", "siblingContextDifferenceSummary", "preSubmitLintSummary", "finalizationStatus", "timestamp"],
-      arrayFields: ["itemKeys", "rationaleSpanOverlayRefs", "revisionTimelineRefs", "targetMapIds", "minorityRationaleFields", "adjudicatorIds"],
+      requiredFields: [
+        "adjudicationCockpitSignoffPolicyId",
+        "cockpitSignoffStatus",
+        "originalRatingPreservationCheck",
+        "memoSignoffGateStatus",
+        "discussionThreadId",
+        "scoreSpreadHeatmapVersion",
+        "centXStrProductAllocationView",
+        "verificationConflictSummary",
+        "siblingContextDifferenceSummary",
+        "preSubmitLintSummary",
+        "finalizationStatus",
+        "timestamp",
+      ],
+      arrayFields: ["itemKeys", "mandatoryViewIdsReviewed", "rationaleSpanOverlayRefs", "revisionTimelineRefs", "targetMapIds", "minorityRationaleFields", "adjudicatorIds"],
+      arrayIncludes: { mandatoryViewIdsReviewed: REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS },
+      enumFields: { cockpitSignoffStatus: ADJUDICATION_COCKPIT_SIGNOFF_STATUSES },
+      stringIncludes: {
+        originalRatingPreservationCheck: ["original", "preserved"],
+        memoSignoffGateStatus: ["mandatory", "reviewed", "memo"],
+      },
       seedRows: defaults.adjudicationReviewSessions,
     },
     {
@@ -20977,12 +21280,54 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
       complete,
     };
   });
+  const interpretationPolicyGroup = groups.find((group) => group.spec.artifactType === "interpretation_target_map_requiredness_policy");
+  const activeInterpretationTargetMapRequirednessPolicy =
+    interpretationPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? interpretationPolicyGroup?.rowsForGate[0] ?? null;
+  const verificationGranularityPolicyGroup = groups.find((group) => group.spec.artifactType === "verification_claim_granularity_policy");
+  const activeVerificationClaimGranularityPolicy =
+    verificationGranularityPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? verificationGranularityPolicyGroup?.rowsForGate[0] ?? null;
+  const adjudicationCockpitSignoffPolicyGroup = groups.find((group) => group.spec.artifactType === "adjudication_cockpit_signoff_policy");
+  const activeAdjudicationCockpitSignoffPolicy =
+    adjudicationCockpitSignoffPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? adjudicationCockpitSignoffPolicyGroup?.rowsForGate[0] ?? null;
+  const interpretationTargetMapPolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "interpretation_target_map")?.rowsForGate ?? [])
+    .filter((row) =>
+      row.reviewReasons.length === 0 &&
+      activeInterpretationTargetMapRequirednessPolicy?.id &&
+      row.interpretationTargetMapRequirednessPolicyId !== activeInterpretationTargetMapRequirednessPolicy.id
+    )
+    .map((row) => ({
+      artifactType: "interpretation_target_map",
+      artifactId: row.id,
+      reason: "interpretationTargetMapRequirednessPolicyId",
+    }));
+  const verificationWorkspacePolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "verification_workspace_session")?.rowsForGate ?? [])
+    .filter((row) =>
+      row.reviewReasons.length === 0 &&
+      activeVerificationClaimGranularityPolicy?.id &&
+      row.verificationClaimGranularityPolicyId !== activeVerificationClaimGranularityPolicy.id
+    )
+    .map((row) => ({
+      artifactType: "verification_workspace_session",
+      artifactId: row.id,
+      reason: "verificationClaimGranularityPolicyId",
+    }));
+  const adjudicationReviewSessionPolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "adjudication_review_session")?.rowsForGate ?? [])
+    .filter((row) =>
+      row.reviewReasons.length === 0 &&
+      activeAdjudicationCockpitSignoffPolicy?.id &&
+      row.adjudicationCockpitSignoffPolicyId !== activeAdjudicationCockpitSignoffPolicy.id
+    )
+    .map((row) => ({
+      artifactType: "adjudication_review_session",
+      artifactId: row.id,
+      reason: "adjudicationCockpitSignoffPolicyId",
+    }));
   const reviewSections = groups.flatMap((group) => [
     ...group.submittedRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: group.spec.artifactType, artifactId: row.id, reason }))),
     group.complete
       ? null
       : { artifactType: group.spec.artifactType, artifactId: group.spec.artifactType, reason: "missing_complete_interaction_workflow_artifact" },
-  ]).filter(Boolean);
+  ]).filter(Boolean).concat(interpretationTargetMapPolicyLinkReviews, verificationWorkspacePolicyLinkReviews, adjudicationReviewSessionPolicyLinkReviews);
   const counts = Object.fromEntries(
     groups.flatMap((group) => [
       [`submitted${group.spec.label}Count`, group.submittedRows.length],
@@ -20998,6 +21343,33 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
     discussionIdentityStagingPolicies: DISCUSSION_IDENTITY_STAGING_POLICIES,
     discussionIdentityMaskPhaseStatuses: DISCUSSION_IDENTITY_MASK_PHASE_STATUSES,
     discussionRoleRevealPolicies: DISCUSSION_ROLE_REVEAL_POLICIES,
+    interpretationTargetMapRequirednessPolicyId: activeInterpretationTargetMapRequirednessPolicy?.id ?? null,
+    interpretationTargetMapRequirednessPolicyReleaseUseStatus: activeInterpretationTargetMapRequirednessPolicy?.rowSource?.startsWith("seed_")
+      ? "seed_interpretation_target_map_requiredness_policy_active"
+      : activeInterpretationTargetMapRequirednessPolicy?.reviewReasons?.length
+        ? "submitted_interpretation_target_map_requiredness_policy_review_required"
+        : "submitted_interpretation_target_map_requiredness_policy_active",
+    requiredInterpretationTargetMapTriggerClasses: activeInterpretationTargetMapRequirednessPolicy?.triggerClasses ?? [],
+    requiredInterpretationTargetMapThresholds: activeInterpretationTargetMapRequirednessPolicy?.thresholds ?? {},
+    requiredInterpretationTargetMapCoverageRules: activeInterpretationTargetMapRequirednessPolicy?.coverageRules ?? {},
+    verificationClaimGranularityPolicyId: activeVerificationClaimGranularityPolicy?.id ?? null,
+    verificationClaimGranularityPolicyReleaseUseStatus: activeVerificationClaimGranularityPolicy?.rowSource?.startsWith("seed_")
+      ? "seed_verification_claim_granularity_policy_active"
+      : activeVerificationClaimGranularityPolicy?.reviewReasons?.length
+        ? "submitted_verification_claim_granularity_policy_review_required"
+        : "submitted_verification_claim_granularity_policy_active",
+    requiredVerificationClaimGranularityClasses: activeVerificationClaimGranularityPolicy?.claimGranularityClasses ?? [],
+    requiredVerificationClaimGranularityThresholds: activeVerificationClaimGranularityPolicy?.thresholds ?? {},
+    requiredVerificationClaimGranularityRules: activeVerificationClaimGranularityPolicy?.granularityRules ?? {},
+    adjudicationCockpitSignoffPolicyId: activeAdjudicationCockpitSignoffPolicy?.id ?? null,
+    adjudicationCockpitSignoffPolicyReleaseUseStatus: activeAdjudicationCockpitSignoffPolicy?.rowSource?.startsWith("seed_")
+      ? "seed_adjudication_cockpit_signoff_policy_active"
+      : activeAdjudicationCockpitSignoffPolicy?.reviewReasons?.length
+        ? "submitted_adjudication_cockpit_signoff_policy_review_required"
+        : "submitted_adjudication_cockpit_signoff_policy_active",
+    requiredAdjudicationCockpitMandatoryViewIds: activeAdjudicationCockpitSignoffPolicy?.mandatoryViewIds ?? [],
+    requiredAdjudicationCockpitSignoffThresholds: activeAdjudicationCockpitSignoffPolicy?.thresholds ?? {},
+    requiredAdjudicationCockpitSignoffRules: activeAdjudicationCockpitSignoffPolicy?.signoffRules ?? {},
     ...Object.fromEntries(groups.map((group) => [group.spec.rowKey, [...group.seedRows, ...group.submittedRows]])),
     counts: {
       ...counts,
@@ -22584,10 +22956,13 @@ export function buildOctoberReleaseReport(
     assignmentSelfScreens: options.assignmentSelfScreens ?? [],
     assignmentDeclines: options.assignmentDeclines ?? [],
     assignmentDeferrals: options.assignmentDeferrals ?? [],
+    interpretationTargetMapRequirednessPolicies: options.interpretationTargetMapRequirednessPolicies ?? [],
     interpretationTargetMaps: options.interpretationTargetMaps ?? [],
+    verificationClaimGranularityPolicies: options.verificationClaimGranularityPolicies ?? [],
     verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
     adjudicatorPreReads: options.adjudicatorPreReads ?? [],
     postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
+    adjudicationCockpitSignoffPolicies: options.adjudicationCockpitSignoffPolicies ?? [],
     adjudicationReviewSessions: options.adjudicationReviewSessions ?? [],
     calibrationFeedbackEvents: options.calibrationFeedbackEvents ?? [],
     governanceApprovalRecords: options.governanceApprovalRecords ?? [],
@@ -22862,10 +23237,13 @@ export function buildOctoberReleaseReport(
       assignmentSelfScreens: options.assignmentSelfScreens ?? [],
       assignmentDeclines: options.assignmentDeclines ?? [],
       assignmentDeferrals: options.assignmentDeferrals ?? [],
+      interpretationTargetMapRequirednessPolicies: options.interpretationTargetMapRequirednessPolicies ?? [],
       interpretationTargetMaps: options.interpretationTargetMaps ?? [],
+      verificationClaimGranularityPolicies: options.verificationClaimGranularityPolicies ?? [],
       verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
       adjudicatorPreReads: options.adjudicatorPreReads ?? [],
       postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
+      adjudicationCockpitSignoffPolicies: options.adjudicationCockpitSignoffPolicies ?? [],
       adjudicationReviewSessions: options.adjudicationReviewSessions ?? [],
       calibrationFeedbackEvents: options.calibrationFeedbackEvents ?? [],
       governanceApprovalRecords: options.governanceApprovalRecords ?? [],
