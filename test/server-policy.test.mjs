@@ -367,6 +367,21 @@ const releaseConfigBindings = [
   "score_input",
   "export_policy",
 ];
+const rightsLegalBases = ["project_owned", "public_domain", "open_license", "explicit_permission", "fair_use_memo", "internal_only_restricted"];
+const rightsEvidenceByLegalBasis = {
+  project_owned: ["authorship_attestation", "contributor_license_or_assignment", "third_party_content_check"],
+  public_domain: ["public_domain_basis", "jurisdiction_or_publication_date", "source_url_or_archive"],
+  open_license: ["license_identifier", "license_text_or_url", "attribution_requirements", "commercial_derivative_benchmark_use_allowed"],
+  explicit_permission: ["permission_grant", "permitted_release_scopes", "revocation_or_expiry_terms"],
+  fair_use_memo: ["factor_analysis", "excerpt_minimization", "public_release_risk_review", "fallback_removal_plan"],
+  internal_only_restricted: ["internal_use_basis", "raw_public_release_block", "access_control_plan"],
+};
+const rightsScopeStandards = {
+  public: "explicit_public_export_public_summary_and_attribution_allowed",
+  training: "training_or_model_improvement_export_allowed_without_provider_training_conflict",
+  hidden_benchmark: "internal_hidden_benchmark_use_allowed_raw_public_release_blocked",
+  internal: "internal_research_review_and_adjudication_use_allowed",
+};
 const governedBundleFamilies = [
   "rubric",
   "scoring",
@@ -478,6 +493,22 @@ const prohibitedIncentiveSignals = [
   "accepted_revision_count",
   "leaderboard_rank",
 ];
+const compensationRateUsdByEligibleUnit = {
+  ordinaryRating: 12,
+  releaseCriticalRating: 18,
+  practiceOrCalibrationSession: 8,
+  trainingModuleCompletion: 10,
+  validSafeDeclineOrConflictDisclosure: 3,
+  postLockDiscussionParticipation: 15,
+  correctnessVerificationWorkspace: 20,
+  adjudicationMemo: 35,
+};
+const compensationEligibilityPolicy =
+  "pay only QA-accepted eligible work units, approved training completion, and valid safe-decline or conflict disclosures; never pay for score direction, agreement, rank, or hidden-benchmark performance";
+const payrollLegalImplementationPolicy =
+  "US pilot uses counsel-reviewed contractor or stipend classification, tax onboarding before paid work, and jurisdiction-specific payroll approval before non-US payments";
+const paymentDataSeparationPolicy =
+  "payment identity, tax, and payout account data stay in the payroll system outside annotation events; annotation records store only payment eligibility ids";
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 const ratingTaskOutputUses = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
@@ -573,6 +604,26 @@ const releaseErratumApiWarningTypes = [
   "configuration_manifest_error",
 ];
 const releaseErratumExportBlockTypes = ["source_leakage_defect", "rights_provenance_issue"];
+const scheduleRebaselineDelayThresholdDays = {
+  minorSlipMaxDays: 6,
+  significantSlipMinDays: 7,
+  majorSlipMinDays: 21,
+};
+const scheduleRebaselineRules = {
+  slipUnderSevenDays: "keep_original_milestone_with_delay_note_no_completion_claim_until_complete",
+  slipSevenToTwentyDays: "blocked_or_in_progress_requires_recovery_plan_owner_review_and_updated_risk_disclosure",
+  slipTwentyOneDaysOrMore: "rebaselined_status_requires_new_date_scope_and_two_person_release_review",
+  scopeOrTargetChange: "rebaselined_status_required_with_scope_delta_and_compressed_scope_label_update",
+  rebaselinedCompletionClaim: "original_dated_milestone_completion_claim_forbidden_superseding_schedule_only",
+};
+const requiredRebaselinedSnapshotFields = [
+  "rebaselinedDate",
+  "rebaselinedScope",
+  "rebaselineReason",
+  "previousPlannedEnd",
+  "newPlannedEnd",
+  "rebaselineApprovalRecordIds",
+];
 const rubricLintRules = [
   "missing_required_score",
   "clarity_branch_consistency",
@@ -1055,9 +1106,15 @@ function completeParticipantSafeguardWorkflowFixtures() {
   return {
     volunteerIncentivePolicy: {
       id: "volunteer-incentive-workflow-new",
-      policyVersion: "volunteer-incentive-rlhf84-v1",
+      policyVersion: "volunteer-incentive-rlhf90-v2",
       allowedCompensationCreditInputs: ["eligible_completed_work", "role", "time_commitment", "training_completion"],
       prohibitedIncentiveSignals,
+      compensationCurrency: "USD",
+      compensationRateUsdByEligibleUnit,
+      monthlyCompensationCapUsd: 600,
+      compensationEligibilityPolicy,
+      payrollLegalImplementationPolicy,
+      paymentDataSeparationPolicy,
       speedEffortGuardrails: "private QA-safe effort bands only",
       publicRecognitionPolicy: "participation acknowledgement without scores, speed, agreement, or benchmark ranking",
       privateProgressDashboardPolicy: "private non-gamified progress only",
@@ -1621,8 +1678,21 @@ function completeAuxiliaryWorkflowFixtures() {
       approvedBy: "demo-admin",
       createdAt: "2026-10-01T00:41:00.000Z",
     },
+    scheduleRebaselinePolicy: {
+      id: "schedule-rebaseline-policy-workflow-new",
+      policyVersion: "schedule-rebaseline-rlhf90-v1",
+      delayThresholdDays: scheduleRebaselineDelayThresholdDays,
+      rebaselineRuleByTrigger: scheduleRebaselineRules,
+      requiredRebaselinedSnapshotFields,
+      datedMilestoneSlipPolicy:
+        "after planned end, slipped dated milestones must be blocked or rebaselined before release claims can cite the schedule",
+      approvalPolicy: "major slips or scope changes require two-person release review approval before rebaselining",
+      claimPolicy: "original dated milestone completion claims are suppressed after rebaseline; only the superseding schedule may support future claims",
+      frozenAt: "2026-10-01T00:41:30.000Z",
+    },
     scheduleStatusSnapshot: {
       id: "schedule-status-workflow-new",
+      scheduleRebaselinePolicyId: "schedule-rebaseline-policy-workflow-new",
       releaseVersionOrProjectScope: "october-2026-demo",
       milestoneId: "october-internal-release",
       milestoneName: "October internal LMCA release",
@@ -1635,6 +1705,11 @@ function completeAuxiliaryWorkflowFixtures() {
       criticalPathImpact: "release remains incomplete until target scale and evidence gates pass",
       rebaselinedDate: null,
       rebaselinedScope: null,
+      rebaselineReason: null,
+      previousPlannedEnd: null,
+      newPlannedEnd: null,
+      rebaselineApprovalRecordIds: [],
+      originalScheduleCompletionClaimSuppressed: false,
       owner: "demo-admin",
       approvedBy: "demo-expert",
       supportsCompletionClaim: false,
@@ -2338,6 +2413,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/source-anchor-examples/source-anchor-smoke"],
     ["POST", "/api/v1/benchmark-split-members"],
     ["GET", "/api/v1/benchmark-split-members/split-member-smoke"],
+    ["POST", "/api/v1/rights-clearance-policies"],
+    ["GET", "/api/v1/rights-clearance-policies/rights-clearance-policy-smoke"],
     ["POST", "/api/v1/rights-records"],
     ["GET", "/api/v1/rights-records/rights-record-smoke"],
     ["POST", "/api/v1/release-versions"],
@@ -2567,6 +2644,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/release-errata"],
     ["GET", "/api/v1/release-errata/release-erratum-smoke"],
     ["POST", "/api/v1/releases/october-2026-demo/supersede"],
+    ["POST", "/api/v1/schedule-rebaseline-policies"],
+    ["GET", "/api/v1/schedule-rebaseline-policies/schedule-rebaseline-policy-smoke"],
     ["POST", "/api/v1/schedule-status-snapshots"],
     ["GET", "/api/v1/schedule-status-snapshots/schedule-status-smoke"],
     ["GET", "/api/v1/releases/october-2026-demo/schedule-status"],
@@ -4009,6 +4088,29 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(critique.status, 201);
   assert.equal(critique.body.resourceId, "crit-workflow-new");
 
+  const rightsClearancePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rights-clearance-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rightsClearancePolicy: {
+        id: "rights-clearance-policy-workflow-new",
+        policyVersion: "rights-clearance-rlhf90-v1",
+        allowedLegalBases: rightsLegalBases,
+        requiredEvidenceByLegalBasis: rightsEvidenceByLegalBasis,
+        releaseScopeStandards: rightsScopeStandards,
+        takedownOrRemovalSlaDays: 14,
+        publicReleaseRule:
+          "public or training export requires project-owned, public-domain, open-license, explicit-permission, or approved fair-use memo evidence with attribution and removal plan",
+        hiddenBenchmarkRule:
+          "hidden-benchmark use may rely on internal-only restricted clearance only when raw public release is blocked and access control is documented",
+        reviewerIndependenceRule: "rights reviewer must be independent from item author when legal basis is fair-use memo or explicit permission",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    }),
+  });
+  assert.equal(rightsClearancePolicy.status, 201);
+
   const rightsReview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rights/review",
@@ -4016,6 +4118,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({
       rightsReview: {
         id: "rights-review-workflow-new",
+        rightsClearancePolicyId: "rights-clearance-policy-workflow-new",
         itemId: "pos-workflow-new::crit-workflow-new",
         reviewerId: "demo-admin",
         rightsStatus: "cleared_internal",
@@ -4038,7 +4141,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(incompleteRightsReview.status, 400);
-  assert.match(incompleteRightsReview.body.detail, /reviewerId|releaseScope/);
+  assert.match(incompleteRightsReview.body.detail, /rightsClearancePolicyId|reviewerId|releaseScope/);
 
   const releaseFreeze = await invokeApi(context, {
     method: "POST",
@@ -4789,7 +4892,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(incompleteRightsRecord.status, 400);
-  assert.match(incompleteRightsRecord.body.detail, /artifactKind|sourceOrigin|licenseType|releaseScope|reviewerId/);
+  assert.match(incompleteRightsRecord.body.detail, /rightsClearancePolicyId|artifactKind|sourceOrigin|legalBasis|licenseType|releaseScope|reviewerId/);
 
   const rightsRecord = await invokeApi(context, {
     method: "POST",
@@ -4799,12 +4902,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       rightsRecord: {
         id: "rights-record-workflow-new",
         releaseId: "october-2026-demo",
+        rightsClearancePolicyId: "rights-clearance-policy-workflow-new",
         artifactId: "pos-ai-prior::crit-ai-base-rate",
         artifactKind: "position_critique_item",
         sourceOrigin: "project_authored_hidden_benchmark_candidate",
+        legalBasis: "project_owned",
+        clearanceStandard: "project-owned clearance supports internal and hidden benchmark release scopes",
+        evidenceArtifactIds: rightsEvidenceByLegalBasis.project_owned,
         licenseType: "project_owned_or_public_domain",
         rightsStatus: "hidden_benchmark_export_allowed",
         releaseScope: "internal_and_hidden_benchmark_export_allowed",
+        legalReviewJurisdiction: "US",
+        thirdPartyContentCheck: "third-party content checked and none detected",
+        takedownOrRemovalSlaDays: 14,
         reviewerId: "demo-admin",
         sourceLanguage: "en",
         translationRoute: "none_original_english",
@@ -4824,6 +4934,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(rightsRecordById.status, 200);
   assert.equal(rightsRecordById.body.id, "rights-record-workflow-new");
+  assert.equal(rightsRecordById.body.rightsClearancePolicyId, "rights-clearance-policy-workflow-new");
+
+  const rightsClearancePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rights-clearance-policies/rights-clearance-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(rightsClearancePolicyById.status, 200);
+  assert.deepEqual(rightsClearancePolicyById.body.releaseScopeStandards, rightsScopeStandards);
 
   const incompleteReleaseVersion = await invokeApi(context, {
     method: "POST",
@@ -8471,7 +8590,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     body: JSON.stringify({
       volunteerIncentivePolicy: {
         id: "volunteer-incentive-incomplete",
-        policyVersion: "volunteer-incentive-rlhf84-v1",
+        policyVersion: "volunteer-incentive-rlhf90-v2",
         allowedCompensationCreditInputs: ["eligible_completed_work"],
         prohibitedIncentiveSignals: ["rating_direction"],
         frozenAt: "2026-10-01T00:19:00.000Z",
@@ -8495,6 +8614,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(weakVolunteerIncentivePolicy.status, 400);
   assert.match(weakVolunteerIncentivePolicy.body.detail, /privateProgressDashboardPolicy/);
+
+  const driftedVolunteerCompensationPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/volunteer-incentive-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      volunteerIncentivePolicy: {
+        ...participantSafeguards.volunteerIncentivePolicy,
+        id: "volunteer-incentive-drifted-compensation",
+        compensationRateUsdByEligibleUnit: {
+          ...compensationRateUsdByEligibleUnit,
+          ordinaryRating: 30,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedVolunteerCompensationPolicy.status, 400);
+  assert.match(driftedVolunteerCompensationPolicy.body.detail, /compensationRateUsdByEligibleUnit/);
 
   const incompleteRaterQualificationRecord = await invokeApi(context, {
     method: "POST",
@@ -8726,6 +8863,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(volunteerIncentivePolicyById.status, 200);
   assert.equal(volunteerIncentivePolicyById.body.privateProgressDashboardPolicy, "private non-gamified progress only");
+  assert.deepEqual(volunteerIncentivePolicyById.body.compensationRateUsdByEligibleUnit, compensationRateUsdByEligibleUnit);
+  assert.equal(volunteerIncentivePolicyById.body.monthlyCompensationCapUsd, 600);
+  assert.equal(volunteerIncentivePolicyById.body.payrollLegalImplementationPolicy, payrollLegalImplementationPolicy);
 
   for (const raterQualificationRecord of participantSafeguards.raterQualificationRecords) {
     const response = await invokeApi(context, {
@@ -9781,6 +9921,46 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(undisclosedReleaseErratum.status, 400);
   assert.match(undisclosedReleaseErratum.body.detail, /artifactDeprecationStatus|apiDownloadWarningBlockPolicy|remediationStatus|impactedMetricsClaims/);
 
+  const driftedScheduleRebaselinePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/schedule-rebaseline-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scheduleRebaselinePolicy: {
+        ...auxiliaryWorkflow.scheduleRebaselinePolicy,
+        id: "schedule-rebaseline-policy-drifted",
+        delayThresholdDays: {
+          ...scheduleRebaselineDelayThresholdDays,
+          majorSlipMinDays: 45,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedScheduleRebaselinePolicy.status, 400);
+  assert.match(driftedScheduleRebaselinePolicy.body.detail, /delayThresholdDays/);
+
+  const weakRebaselineSchedule = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/schedule-status-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scheduleStatusSnapshot: {
+        ...auxiliaryWorkflow.scheduleStatusSnapshot,
+        id: "schedule-status-weak-rebaseline",
+        status: "rebaselined",
+        rebaselinedDate: "2026-10-10",
+        rebaselinedScope: "move public release review to November without target change",
+        rebaselineReason: "October milestone slipped beyond the frozen major-slip threshold.",
+        previousPlannedEnd: "2026-10-31",
+        newPlannedEnd: "2026-11-21",
+        rebaselineApprovalRecordIds: [],
+        originalScheduleCompletionClaimSuppressed: false,
+      },
+    }),
+  });
+  assert.equal(weakRebaselineSchedule.status, 400);
+  assert.match(weakRebaselineSchedule.body.detail, /rebaselineApprovalRecordIds|originalScheduleCompletionClaimSuppressed/);
+
   const unsupportedCompleteSchedule = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/schedule-status-snapshots",
@@ -9926,6 +10106,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["raterTrainingExposureSnapshot", "/api/v1/rater-training-exposure-snapshots"],
     ["releaseErratumDisclosurePolicy", "/api/v1/release-erratum-disclosure-policies"],
     ["releaseErratum", "/api/v1/release-errata"],
+    ["scheduleRebaselinePolicy", "/api/v1/schedule-rebaseline-policies"],
     ["scheduleStatusSnapshot", "/api/v1/schedule-status-snapshots"],
   ]) {
     const response = await invokeApi(context, {
@@ -10153,6 +10334,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(releaseErratumDisclosurePolicyById.status, 200);
   assert.equal(releaseErratumDisclosurePolicyById.body.disclosureThresholdByErratumType.denominator_error, "public_erratum_and_metric_claim_warning_required");
+
+  const scheduleRebaselinePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/schedule-rebaseline-policies/schedule-rebaseline-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(scheduleRebaselinePolicyById.status, 200);
+  assert.equal(scheduleRebaselinePolicyById.body.delayThresholdDays.majorSlipMinDays, 21);
 
   const releaseScheduleStatus = await invokeApi(context, {
     method: "GET",
@@ -11906,6 +12095,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.rightsStatus.submittedRightsRecordContractFailures.length, 0);
   assert.equal(releaseReport.body.positionIntakeReadiness.rows.some((row) => row.positionId === "pos-workflow-new"), true);
   assert.equal(releaseReport.body.workflowActionArtifacts.rightsReviews.length, 1);
+  assert.equal(releaseReport.body.rightsReviewEvidence.counts.submittedRightsClearancePolicyCount, 1);
+  assert.deepEqual(releaseReport.body.rightsReviewEvidence.requiredReleaseScopeStandards, rightsScopeStandards);
   assert.equal(releaseReport.body.rightsReviewEvidence.counts.submittedReviewCount, 1);
   assert.equal(releaseReport.body.rightsReviewEvidence.counts.unmatchedRightsRecordCount, 1);
   assert.equal(releaseReport.body.rightsReviewEvidence.releaseUseStatus, "rights_review_evidence_review_required");
@@ -12474,6 +12665,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.equal(releaseReport.body.workflowParticipantSafeguardArtifacts.modelProviderDataHandlingPolicies.length, modelProviderRunClasses.length);
   assert.equal(releaseReport.body.participantSafeguardEvidence.releaseUseStatus, "submitted_participant_safeguard_evidence_complete");
+  assert.deepEqual(releaseReport.body.participantSafeguardEvidence.requiredCompensationRateUsdByEligibleUnit, compensationRateUsdByEligibleUnit);
+  assert.equal(releaseReport.body.participantSafeguardEvidence.requiredMonthlyCompensationCapUsd, 600);
+  assert.equal(releaseReport.body.participantSafeguardEvidence.volunteerIncentivePolicyRows.at(-1).compensationCurrency, "USD");
+  assert.equal(releaseReport.body.participantSafeguardEvidence.volunteerIncentivePolicyRows.at(-1).compensationRateUsdByEligibleUnit.adjudicationMemo, 35);
   assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingQualificationScopeCount, qualificationScopes.length);
   assert.equal(releaseReport.body.participantSafeguardEvidence.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
   assert.deepEqual(releaseReport.body.participantSafeguardEvidence.reviewSections, []);
@@ -12573,6 +12768,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposureSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.releaseErratumDisclosurePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.releaseErrata.length, 2);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.scheduleRebaselinePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.scheduleStatusSnapshots.length, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.releaseUseStatus, "submitted_auxiliary_workflow_evidence_complete");
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
@@ -12593,6 +12789,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.auxiliaryWorkflowEvidence.releaseErratumDisclosurePolicyRows.at(-1).disclosureThresholdByErratumType.denominator_error,
     "public_erratum_and_metric_claim_warning_required",
   );
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedScheduleRebaselinePolicyCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.scheduleRebaselinePolicyRows.at(-1).delayThresholdDays.majorSlipMinDays, 21);
   assert.equal(releaseReport.body.ratingEffortQuality.releaseUseStatus, "rating_effort_qa_review_complete");
   assert.equal(releaseReport.body.ratingEffortQuality.counts.submittedQaReviewCount, 1);
   assert.equal(releaseReport.body.ratingEffortQuality.counts.qaReviewExcludedCount, 1);
@@ -12917,6 +13115,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.equal(releaseReport.body.sourceExampleAnchors.releaseUseStatus, "source_anchor_suite_public_training_only");
   assert.equal(releaseReport.body.workflowReleaseArtifacts.benchmarkSplitMembers.length, 1);
+  assert.equal(releaseReport.body.workflowReleaseArtifacts.rightsClearancePolicies.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.rightsRecords.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.releaseVersions.length, 1);
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.releaseGateProfiles.length, 1);
@@ -13004,7 +13203,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 120 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 122 + extendedRaterItemConflictTypes.length,
   );
 });
 

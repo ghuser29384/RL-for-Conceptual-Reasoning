@@ -5975,12 +5975,19 @@ export function buildRubricVersionDriftReport(
 const REQUIRED_SUBMITTED_RIGHTS_RECORD_FIELDS = [
   "id",
   "releaseId",
+  "rightsClearancePolicyId",
   "artifactId",
   "artifactKind",
   "sourceOrigin",
+  "legalBasis",
+  "clearanceStandard",
+  "evidenceArtifactIds",
   "licenseType",
   "rightsStatus",
   "releaseScope",
+  "legalReviewJurisdiction",
+  "thirdPartyContentCheck",
+  "takedownOrRemovalSlaDays",
   "reviewerId",
   "reviewedAt",
   "sourceLanguage",
@@ -5991,6 +5998,47 @@ const REQUIRED_SUBMITTED_RIGHTS_RECORD_FIELDS = [
 ];
 const SUBMITTED_RIGHTS_STATUS_FRAGMENTS = ["allowed", "cleared"];
 const SUBMITTED_RIGHTS_RELEASE_SCOPE_FRAGMENTS = ["public", "training", "internal", "hidden", "benchmark"];
+const RIGHTS_CLEARANCE_POLICY_VERSION = "rights-clearance-rlhf90-v1";
+const REQUIRED_RIGHTS_LEGAL_BASES = [
+  "project_owned",
+  "public_domain",
+  "open_license",
+  "explicit_permission",
+  "fair_use_memo",
+  "internal_only_restricted",
+];
+const REQUIRED_RIGHTS_EVIDENCE_BY_LEGAL_BASIS = {
+  project_owned: ["authorship_attestation", "contributor_license_or_assignment", "third_party_content_check"],
+  public_domain: ["public_domain_basis", "jurisdiction_or_publication_date", "source_url_or_archive"],
+  open_license: ["license_identifier", "license_text_or_url", "attribution_requirements", "commercial_derivative_benchmark_use_allowed"],
+  explicit_permission: ["permission_grant", "permitted_release_scopes", "revocation_or_expiry_terms"],
+  fair_use_memo: ["factor_analysis", "excerpt_minimization", "public_release_risk_review", "fallback_removal_plan"],
+  internal_only_restricted: ["internal_use_basis", "raw_public_release_block", "access_control_plan"],
+};
+const REQUIRED_RIGHTS_SCOPE_STANDARDS = {
+  public: "explicit_public_export_public_summary_and_attribution_allowed",
+  training: "training_or_model_improvement_export_allowed_without_provider_training_conflict",
+  hidden_benchmark: "internal_hidden_benchmark_use_allowed_raw_public_release_blocked",
+  internal: "internal_research_review_and_adjudication_use_allowed",
+};
+const REQUIRED_RIGHTS_TAKEDOWN_SLA_DAYS = 14;
+
+function defaultRightsClearancePolicy(releaseId) {
+  return {
+    id: `rights-clearance-policy-${releaseId}`,
+    policyVersion: RIGHTS_CLEARANCE_POLICY_VERSION,
+    allowedLegalBases: REQUIRED_RIGHTS_LEGAL_BASES,
+    requiredEvidenceByLegalBasis: REQUIRED_RIGHTS_EVIDENCE_BY_LEGAL_BASIS,
+    releaseScopeStandards: REQUIRED_RIGHTS_SCOPE_STANDARDS,
+    takedownOrRemovalSlaDays: REQUIRED_RIGHTS_TAKEDOWN_SLA_DAYS,
+    publicReleaseRule:
+      "public or training export requires project-owned, public-domain, open-license, explicit-permission, or approved fair-use memo evidence with attribution and removal plan",
+    hiddenBenchmarkRule:
+      "hidden-benchmark use may rely on internal-only restricted clearance only when raw public release is blocked and access control is documented",
+    reviewerIndependenceRule: "rights reviewer must be independent from item author when legal basis is fair-use memo or explicit permission",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
 
 export function auditProvenanceRights(exportKind = "public", positionList = positions, records = provenanceRightsRecords) {
   const includedSplits = allowedSplitsForExport(exportKind);
@@ -6070,8 +6118,14 @@ function submittedRightsRecordContractViolations(record) {
   const missingFields = REQUIRED_SUBMITTED_RIGHTS_RECORD_FIELDS.filter((field) => !hasRequiredValue(record[field]));
   const rightsStatus = String(record.rightsStatus ?? "").toLowerCase();
   const releaseScope = String(record.releaseScope ?? "").toLowerCase();
+  const legalBasis = record.legalBasis ?? null;
+  const evidenceArtifactIds = normalizeStringArray(record.evidenceArtifactIds);
+  const missingBasisEvidence = (REQUIRED_RIGHTS_EVIDENCE_BY_LEGAL_BASIS[legalBasis] ?? []).filter((evidenceKey) => !evidenceArtifactIds.includes(evidenceKey));
   return [
     ...missingFields,
+    REQUIRED_RIGHTS_LEGAL_BASES.includes(legalBasis) ? null : "legalBasis",
+    missingBasisEvidence.length ? `evidenceArtifactIds:${missingBasisEvidence.join(",")}` : null,
+    record.takedownOrRemovalSlaDays === REQUIRED_RIGHTS_TAKEDOWN_SLA_DAYS ? null : "takedownOrRemovalSlaDays",
     SUBMITTED_RIGHTS_STATUS_FRAGMENTS.some((fragment) => rightsStatus.includes(fragment))
       ? null
       : "rightsStatus:allowed_or_cleared",
@@ -6079,6 +6133,53 @@ function submittedRightsRecordContractViolations(record) {
       ? null
       : "releaseScope:release_scope_class",
   ].filter(Boolean);
+}
+
+function normalizeRightsClearancePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.rightsClearancePolicyId;
+  if (!id) return null;
+  const allowedLegalBases = normalizeStringArray(policy.allowedLegalBases);
+  const requiredEvidenceByLegalBasis =
+    policy.requiredEvidenceByLegalBasis && typeof policy.requiredEvidenceByLegalBasis === "object" && !Array.isArray(policy.requiredEvidenceByLegalBasis)
+      ? policy.requiredEvidenceByLegalBasis
+      : {};
+  const releaseScopeStandards =
+    policy.releaseScopeStandards && typeof policy.releaseScopeStandards === "object" && !Array.isArray(policy.releaseScopeStandards)
+      ? policy.releaseScopeStandards
+      : {};
+  const missingLegalBases = REQUIRED_RIGHTS_LEGAL_BASES.filter((basis) => !allowedLegalBases.includes(basis));
+  const missingEvidenceKeys = Object.entries(REQUIRED_RIGHTS_EVIDENCE_BY_LEGAL_BASIS).flatMap(([basis, requiredEvidence]) => {
+    const observed = normalizeStringArray(requiredEvidenceByLegalBasis[basis]);
+    const missing = requiredEvidence.filter((evidenceKey) => !observed.includes(evidenceKey));
+    return missing.length ? [`${basis}:${missing.join(",")}`] : [];
+  });
+  const missingScopeStandards = Object.keys(REQUIRED_RIGHTS_SCOPE_STANDARDS).filter((scope) => !Object.hasOwn(releaseScopeStandards, scope));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === RIGHTS_CLEARANCE_POLICY_VERSION ? null : `policyVersion:${RIGHTS_CLEARANCE_POLICY_VERSION}`,
+    missingLegalBases.length ? `allowedLegalBases:${missingLegalBases.join(",")}` : null,
+    missingEvidenceKeys.length ? `requiredEvidenceByLegalBasis:${missingEvidenceKeys.join(";")}` : null,
+    stableJsonKey(releaseScopeStandards) === stableJsonKey(REQUIRED_RIGHTS_SCOPE_STANDARDS) ? null : "releaseScopeStandards",
+    missingScopeStandards.length ? `releaseScopeStandards:${missingScopeStandards.join(",")}` : null,
+    policy.takedownOrRemovalSlaDays === REQUIRED_RIGHTS_TAKEDOWN_SLA_DAYS ? null : "takedownOrRemovalSlaDays",
+    policyMentions(policy.publicReleaseRule, ["public", "training", "evidence", "removal"]) ? null : "publicReleaseRule",
+    policyMentions(policy.hiddenBenchmarkRule, ["hidden", "raw public release", "access control"]) ? null : "hiddenBenchmarkRule",
+    policyMentions(policy.reviewerIndependenceRule, ["independent"]) ? null : "reviewerIndependenceRule",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    allowedLegalBases,
+    requiredEvidenceByLegalBasis,
+    releaseScopeStandards,
+    takedownOrRemovalSlaDays: policy.takedownOrRemovalSlaDays ?? null,
+    publicReleaseRule: policy.publicReleaseRule ?? null,
+    hiddenBenchmarkRule: policy.hiddenBenchmarkRule ?? null,
+    reviewerIndependenceRule: policy.reviewerIndependenceRule ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rights_clearance_policy_review_required" : "rights_clearance_policy_complete",
+  };
 }
 
 function hasRequiredValue(value) {
@@ -6127,10 +6228,22 @@ function normalizeRightsStatus(status, releaseScopes, baseStatus) {
   return status;
 }
 
-function buildRightsReviewEvidenceReport(releaseId, positionList = positions, rightsRecords = provenanceRightsRecords, rightsReviews = []) {
+function buildRightsReviewEvidenceReport(
+  releaseId,
+  positionList = positions,
+  rightsRecords = provenanceRightsRecords,
+  rightsReviews = [],
+  rightsClearancePolicies = [],
+) {
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const rightsRecordByPosition = new Map(rightsRecords.map((record) => [record.positionId, record]));
-  const rows = rightsReviews.map((review) => normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPosition)).filter(Boolean);
+  const submittedPolicyRows = rightsClearancePolicies
+    .map((policy) => normalizeRightsClearancePolicy(policy, "submitted_workflow_rights_clearance_policy"))
+    .filter(Boolean);
+  const seedPolicyRows = [normalizeRightsClearancePolicy(defaultRightsClearancePolicy(releaseId), "seed_rights_clearance_policy")];
+  const activePolicy = submittedPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedPolicyRows[0];
+  const rows = rightsReviews.map((review) => normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPosition, activePolicy)).filter(Boolean);
+  const policyReviewRows = submittedPolicyRows.filter((row) => row.reviewReasons.length);
   const reviewRows = rows.filter((row) => row.reviewReasons.length);
   return {
     id: `rights-review-evidence-${releaseId}`,
@@ -6142,11 +6255,17 @@ function buildRightsReviewEvidenceReport(releaseId, positionList = positions, ri
         "Submitted rights reviews must name the reviewed position or item, reviewer, status, and release scope, and must be matched by a current RightsRecord before they count as release evidence.",
       nonOverrideRule: "RightsReview actions do not broaden release scopes unless a matching RightsRecord is also present.",
     },
+    rightsClearancePolicyRows: [...seedPolicyRows, ...submittedPolicyRows],
+    requiredLegalBases: REQUIRED_RIGHTS_LEGAL_BASES,
+    requiredEvidenceByLegalBasis: REQUIRED_RIGHTS_EVIDENCE_BY_LEGAL_BASIS,
+    requiredReleaseScopeStandards: REQUIRED_RIGHTS_SCOPE_STANDARDS,
+    requiredTakedownOrRemovalSlaDays: REQUIRED_RIGHTS_TAKEDOWN_SLA_DAYS,
     rows,
     counts: {
+      submittedRightsClearancePolicyCount: submittedPolicyRows.length,
       submittedReviewCount: rows.length,
       completeReviewCount: rows.length - reviewRows.length,
-      reviewRequiredCount: reviewRows.length,
+      reviewRequiredCount: reviewRows.length + policyReviewRows.length,
       matchedRightsRecordCount: rows.filter((row) => row.matchedCurrentRightsRecord).length,
       unmatchedRightsRecordCount: rows.filter((row) => !row.matchedCurrentRightsRecord).length,
       releaseScopeCoveredCount: rows.filter((row) => row.releaseScopeCovered).length,
@@ -6154,17 +6273,21 @@ function buildRightsReviewEvidenceReport(releaseId, positionList = positions, ri
     },
     byReviewStatus: countBy(rows, "status"),
     byNormalizedRightsStatus: countBy(rows, "normalizedRightsStatus"),
-    reviewRows,
+    reviewRows: [
+      ...policyReviewRows.map((row) => ({ artifactType: "rights_clearance_policy", artifactId: row.id, reviewReasons: row.reviewReasons })),
+      ...reviewRows,
+    ],
     releaseUseStatus: !rows.length
       ? "no_submitted_rights_reviews"
-      : reviewRows.length
+      : reviewRows.length || policyReviewRows.length
         ? "rights_review_evidence_review_required"
         : "submitted_rights_review_evidence_complete",
   };
 }
 
-function normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPosition) {
+function normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPosition, activeRightsPolicy) {
   if (!review || typeof review !== "object") return null;
+  const activePolicyId = activeRightsPolicy?.id ?? null;
   const artifactId = review.artifactId ?? review.itemId ?? null;
   const positionId =
     review.positionId ??
@@ -6177,18 +6300,21 @@ function normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPo
   const releaseScopeCovered = Boolean(rightsRecord && releaseScopes.length && releaseScopes.every((scope) => rightsRecord.releaseScopes?.includes(scope)));
   const rightsStatusCompatible = Boolean(rightsRecord && releaseScopes.length && releaseScopes.every((scope) => isRightsStatusAllowed(scope, rightsRecord.rightsStatus)));
   const reviewReasons = [
+    review.rightsClearancePolicyId === activePolicyId ? null : "rightsClearancePolicyId",
     positionId ? null : "positionId_or_itemId",
     positionId && !positionById.has(positionId) ? "position_not_in_current_corpus" : null,
     reviewerId ? null : "reviewerId",
     review.rightsStatus ? null : "rightsStatus",
     releaseScopes.length ? null : "releaseScope",
     rightsRecord ? null : "matching_rights_record",
+    rightsRecord && rightsRecord.rightsClearancePolicyId !== activePolicyId ? "rightsRecordClearancePolicyId" : null,
     rightsRecord && !releaseScopeCovered ? "release_scope_not_covered_by_rights_record" : null,
     rightsRecord && !rightsStatusCompatible ? "rights_status_not_compatible_with_requested_scope" : null,
   ].filter(Boolean);
   return {
     id: review.id,
     rowSource: "submitted_workflow_rights_review",
+    rightsClearancePolicyId: review.rightsClearancePolicyId ?? null,
     artifactId,
     positionId,
     itemId: review.itemId ?? null,
@@ -6197,6 +6323,7 @@ function normalizeRightsReviewEvidenceRow(review, positionById, rightsRecordByPo
     normalizedRightsStatus,
     releaseScopes,
     rightsRecordId: rightsRecord?.id ?? null,
+    rightsRecordClearancePolicyId: rightsRecord?.rightsClearancePolicyId ?? null,
     matchedCurrentRightsRecord: Boolean(rightsRecord),
     releaseScopeCovered,
     rightsStatusCompatible,
@@ -15712,6 +15839,26 @@ const PROHIBITED_INCENTIVE_SIGNALS = [
   "leaderboard_rank",
 ];
 
+const VOLUNTEER_INCENTIVE_POLICY_VERSION = "volunteer-incentive-rlhf90-v2";
+const REQUIRED_COMPENSATION_RATE_USD_BY_ELIGIBLE_UNIT = {
+  ordinaryRating: 12,
+  releaseCriticalRating: 18,
+  practiceOrCalibrationSession: 8,
+  trainingModuleCompletion: 10,
+  validSafeDeclineOrConflictDisclosure: 3,
+  postLockDiscussionParticipation: 15,
+  correctnessVerificationWorkspace: 20,
+  adjudicationMemo: 35,
+};
+const REQUIRED_COMPENSATION_CURRENCY = "USD";
+const REQUIRED_MONTHLY_COMPENSATION_CAP_USD = 600;
+const REQUIRED_COMPENSATION_ELIGIBILITY_POLICY =
+  "pay only QA-accepted eligible work units, approved training completion, and valid safe-decline or conflict disclosures; never pay for score direction, agreement, rank, or hidden-benchmark performance";
+const REQUIRED_PAYROLL_LEGAL_IMPLEMENTATION_POLICY =
+  "US pilot uses counsel-reviewed contractor or stipend classification, tax onboarding before paid work, and jurisdiction-specific payroll approval before non-US payments";
+const REQUIRED_PAYMENT_DATA_SEPARATION_POLICY =
+  "payment identity, tax, and payout account data stay in the payroll system outside annotation events; annotation records store only payment eligibility ids";
+
 const LANGUAGE_ARTIFACT_TYPES = [
   "non_native_wording",
   "dialect_or_register",
@@ -15737,9 +15884,15 @@ const SOURCE_RECOGNITION_FORBIDDEN_BLIND_EFFECT_FRAGMENTS = BLIND_DENOMINATOR_CO
 function defaultVolunteerIncentivePolicy(releaseId) {
   return {
     id: `volunteer-incentive-policy-${releaseId}`,
-    policyVersion: "volunteer-incentive-rlhf84-v1",
+    policyVersion: VOLUNTEER_INCENTIVE_POLICY_VERSION,
     allowedCompensationCreditInputs: ["eligible_completed_work", "role", "time_commitment", "training_completion"],
     prohibitedIncentiveSignals: PROHIBITED_INCENTIVE_SIGNALS,
+    compensationCurrency: REQUIRED_COMPENSATION_CURRENCY,
+    compensationRateUsdByEligibleUnit: REQUIRED_COMPENSATION_RATE_USD_BY_ELIGIBLE_UNIT,
+    monthlyCompensationCapUsd: REQUIRED_MONTHLY_COMPENSATION_CAP_USD,
+    compensationEligibilityPolicy: REQUIRED_COMPENSATION_ELIGIBILITY_POLICY,
+    payrollLegalImplementationPolicy: REQUIRED_PAYROLL_LEGAL_IMPLEMENTATION_POLICY,
+    paymentDataSeparationPolicy: REQUIRED_PAYMENT_DATA_SEPARATION_POLICY,
     speedEffortGuardrails: "private QA-safe effort bands only; no public speed rewards",
     publicRecognitionPolicy: "acknowledge participation without score, agreement, speed, or benchmark ranking",
     privateProgressDashboardPolicy: "private non-gamified progress only",
@@ -15889,6 +16042,9 @@ export function buildParticipantSafeguardEvidenceReport(releaseId, options = {})
     generatedAt: new Date().toISOString(),
     requiredQualificationScopes: REQUIRED_QUALIFICATION_SCOPES,
     prohibitedIncentiveSignals: PROHIBITED_INCENTIVE_SIGNALS,
+    requiredCompensationCurrency: REQUIRED_COMPENSATION_CURRENCY,
+    requiredCompensationRateUsdByEligibleUnit: REQUIRED_COMPENSATION_RATE_USD_BY_ELIGIBLE_UNIT,
+    requiredMonthlyCompensationCapUsd: REQUIRED_MONTHLY_COMPENSATION_CAP_USD,
     languageArtifactTypes: LANGUAGE_ARTIFACT_TYPES,
     sourceRecognitionTypes: SOURCE_RECOGNITION_TYPES,
     modelProviderProtectedRunClasses: MODEL_PROVIDER_PROTECTED_RUN_CLASSES,
@@ -15923,10 +16079,26 @@ function normalizeVolunteerIncentivePolicy(policy, rowSource) {
   if (!id) return null;
   const prohibitedSignals = normalizeStringArray(policy.prohibitedIncentiveSignals);
   const missingSignals = PROHIBITED_INCENTIVE_SIGNALS.filter((signal) => !prohibitedSignals.includes(signal));
+  const compensationRateUsdByEligibleUnit =
+    policy.compensationRateUsdByEligibleUnit &&
+    typeof policy.compensationRateUsdByEligibleUnit === "object" &&
+    !Array.isArray(policy.compensationRateUsdByEligibleUnit)
+      ? policy.compensationRateUsdByEligibleUnit
+      : {};
+  const missingRateKeys = Object.keys(REQUIRED_COMPENSATION_RATE_USD_BY_ELIGIBLE_UNIT).filter((key) => !Object.hasOwn(compensationRateUsdByEligibleUnit, key));
   const reviewReasons = [
-    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    (policy.policyVersion ?? policy.version) === VOLUNTEER_INCENTIVE_POLICY_VERSION ? null : `policyVersion:${VOLUNTEER_INCENTIVE_POLICY_VERSION}`,
     normalizeStringArray(policy.allowedCompensationCreditInputs).length ? null : "allowedCompensationCreditInputs",
     missingSignals.length ? `prohibitedIncentiveSignals:${missingSignals.join(",")}` : null,
+    policy.compensationCurrency === REQUIRED_COMPENSATION_CURRENCY ? null : "compensationCurrency",
+    missingRateKeys.length ? `compensationRateUsdByEligibleUnit:${missingRateKeys.join(",")}` : null,
+    stableJsonKey(compensationRateUsdByEligibleUnit) === stableJsonKey(REQUIRED_COMPENSATION_RATE_USD_BY_ELIGIBLE_UNIT)
+      ? null
+      : "compensationRateUsdByEligibleUnit",
+    policy.monthlyCompensationCapUsd === REQUIRED_MONTHLY_COMPENSATION_CAP_USD ? null : "monthlyCompensationCapUsd",
+    policy.compensationEligibilityPolicy === REQUIRED_COMPENSATION_ELIGIBILITY_POLICY ? null : "compensationEligibilityPolicy",
+    policy.payrollLegalImplementationPolicy === REQUIRED_PAYROLL_LEGAL_IMPLEMENTATION_POLICY ? null : "payrollLegalImplementationPolicy",
+    policy.paymentDataSeparationPolicy === REQUIRED_PAYMENT_DATA_SEPARATION_POLICY ? null : "paymentDataSeparationPolicy",
     policyMentions(policy.speedEffortGuardrails, ["qa"]) ? null : "speedEffortGuardrails",
     policyMentions(policy.publicRecognitionPolicy, ["without"]) || policyMentions(policy.publicRecognitionPolicy, ["no"]) ? null : "publicRecognitionPolicy",
     policyMentions(policy.privateProgressDashboardPolicy, ["private"]) && policyMentions(policy.privateProgressDashboardPolicy, ["non-gamified"])
@@ -15944,6 +16116,12 @@ function normalizeVolunteerIncentivePolicy(policy, rowSource) {
     policyVersion: policy.policyVersion ?? policy.version ?? null,
     allowedCompensationCreditInputs: normalizeStringArray(policy.allowedCompensationCreditInputs),
     prohibitedIncentiveSignals: prohibitedSignals,
+    compensationCurrency: policy.compensationCurrency ?? null,
+    compensationRateUsdByEligibleUnit,
+    monthlyCompensationCapUsd: policy.monthlyCompensationCapUsd ?? null,
+    compensationEligibilityPolicy: policy.compensationEligibilityPolicy ?? null,
+    payrollLegalImplementationPolicy: policy.payrollLegalImplementationPolicy ?? null,
+    paymentDataSeparationPolicy: policy.paymentDataSeparationPolicy ?? null,
     missingSignals,
     reviewReasons,
     status: reviewReasons.length ? "volunteer_incentive_policy_review_required" : "volunteer_incentive_policy_complete",
@@ -17686,6 +17864,27 @@ const REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES = [
 const REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES = ["source_leakage_defect", "rights_provenance_issue"];
 
 const SCHEDULE_SNAPSHOT_STATUSES = ["not_started", "in_progress", "complete", "blocked", "rebaselined", "dropped"];
+const SCHEDULE_REBASELINE_POLICY_VERSION = "schedule-rebaseline-rlhf90-v1";
+const REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS = {
+  minorSlipMaxDays: 6,
+  significantSlipMinDays: 7,
+  majorSlipMinDays: 21,
+};
+const REQUIRED_SCHEDULE_REBASELINE_RULES = {
+  slipUnderSevenDays: "keep_original_milestone_with_delay_note_no_completion_claim_until_complete",
+  slipSevenToTwentyDays: "blocked_or_in_progress_requires_recovery_plan_owner_review_and_updated_risk_disclosure",
+  slipTwentyOneDaysOrMore: "rebaselined_status_requires_new_date_scope_and_two_person_release_review",
+  scopeOrTargetChange: "rebaselined_status_required_with_scope_delta_and_compressed_scope_label_update",
+  rebaselinedCompletionClaim: "original_dated_milestone_completion_claim_forbidden_superseding_schedule_only",
+};
+const REQUIRED_REBASELINED_SNAPSHOT_FIELDS = [
+  "rebaselinedDate",
+  "rebaselinedScope",
+  "rebaselineReason",
+  "previousPlannedEnd",
+  "newPlannedEnd",
+  "rebaselineApprovalRecordIds",
+];
 
 function defaultBlindingPreviewAudit(releaseId) {
   return {
@@ -17945,9 +18144,25 @@ function defaultReleaseErratumDisclosurePolicy(releaseId) {
   };
 }
 
+function defaultScheduleRebaselinePolicy(releaseId) {
+  return {
+    id: `schedule-rebaseline-policy-${releaseId}`,
+    policyVersion: SCHEDULE_REBASELINE_POLICY_VERSION,
+    delayThresholdDays: REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS,
+    rebaselineRuleByTrigger: REQUIRED_SCHEDULE_REBASELINE_RULES,
+    requiredRebaselinedSnapshotFields: REQUIRED_REBASELINED_SNAPSHOT_FIELDS,
+    datedMilestoneSlipPolicy:
+      "after planned end, slipped dated milestones must be blocked or rebaselined before release claims can cite the schedule",
+    approvalPolicy: "major slips or scope changes require two-person release review approval before rebaselining",
+    claimPolicy: "original dated milestone completion claims are suppressed after rebaseline; only the superseding schedule may support future claims",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultScheduleStatusSnapshot(releaseId) {
   return {
     id: `schedule-status-${releaseId}`,
+    scheduleRebaselinePolicyId: `schedule-rebaseline-policy-${releaseId}`,
     releaseVersionOrProjectScope: releaseId,
     milestoneId: "october-internal-release",
     milestoneName: "October internal LMCA release",
@@ -17960,6 +18175,11 @@ function defaultScheduleStatusSnapshot(releaseId) {
     criticalPathImpact: "release remains incomplete until target scale and evidence gates pass",
     rebaselinedDate: null,
     rebaselinedScope: null,
+    rebaselineReason: null,
+    previousPlannedEnd: null,
+    newPlannedEnd: null,
+    rebaselineApprovalRecordIds: [],
+    originalScheduleCompletionClaimSuppressed: false,
     owner: "seed-release-admin",
     approvedBy: "seed-release-reviewer",
     supportsCompletionClaim: false,
@@ -18037,10 +18257,20 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     .map((erratum) => normalizeReleaseErratum(erratum, activeReleaseErratumPolicy, "submitted_workflow_release_erratum"))
     .filter(Boolean);
   const seedErrataRows = [normalizeReleaseErratum(defaultReleaseErratum(releaseId), seedReleaseErratumPolicyRows[0], "seed_release_erratum")];
-  const submittedScheduleRows = (options.scheduleStatusSnapshots ?? [])
-    .map((snapshot) => normalizeScheduleStatusSnapshot(snapshot, "submitted_workflow_schedule_status_snapshot"))
+  const submittedScheduleRebaselinePolicyRows = (options.scheduleRebaselinePolicies ?? [])
+    .map((policy) => normalizeScheduleRebaselinePolicy(policy, "submitted_workflow_schedule_rebaseline_policy"))
     .filter(Boolean);
-  const seedScheduleRows = [normalizeScheduleStatusSnapshot(defaultScheduleStatusSnapshot(releaseId), "seed_schedule_status_snapshot")];
+  const seedScheduleRebaselinePolicyRows = [
+    normalizeScheduleRebaselinePolicy(defaultScheduleRebaselinePolicy(releaseId), "seed_schedule_rebaseline_policy"),
+  ];
+  const activeScheduleRebaselinePolicy =
+    submittedScheduleRebaselinePolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedScheduleRebaselinePolicyRows[0];
+  const submittedScheduleRows = (options.scheduleStatusSnapshots ?? [])
+    .map((snapshot) => normalizeScheduleStatusSnapshot(snapshot, activeScheduleRebaselinePolicy, "submitted_workflow_schedule_status_snapshot"))
+    .filter(Boolean);
+  const seedScheduleRows = [
+    normalizeScheduleStatusSnapshot(defaultScheduleStatusSnapshot(releaseId), seedScheduleRebaselinePolicyRows[0], "seed_schedule_status_snapshot"),
+  ];
 
   const partialTaskTypeRows = REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.map((taskType) =>
     partialTaskOutputTypeEvidenceRow(taskType, submittedPartialRows.length ? submittedPartialRows : seedPartialRows),
@@ -18067,6 +18297,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ["rater_training_exposure_snapshot", submittedTrainingExposureRows.length ? submittedTrainingExposureRows : seedTrainingExposureRows],
     ["release_erratum_disclosure_policy", submittedReleaseErratumPolicyRows.length ? submittedReleaseErratumPolicyRows : seedReleaseErratumPolicyRows],
     ["release_erratum", submittedErrataRows.length ? submittedErrataRows : seedErrataRows],
+    ["schedule_rebaseline_policy", submittedScheduleRebaselinePolicyRows.length ? submittedScheduleRebaselinePolicyRows : seedScheduleRebaselinePolicyRows],
     ["schedule_status_snapshot", submittedScheduleRows.length ? submittedScheduleRows : seedScheduleRows],
   ];
   const reviewSections = [
@@ -18089,6 +18320,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       row.reviewReasons.map((reason) => ({ artifactType: "release_erratum_disclosure_policy", artifactId: row.id, reason })),
     ),
     ...submittedErrataRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "release_erratum", artifactId: row.id, reason }))),
+    ...submittedScheduleRebaselinePolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "schedule_rebaseline_policy", artifactId: row.id, reason })),
+    ),
     ...submittedScheduleRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "schedule_status_snapshot", artifactId: row.id, reason }))),
     ...partialTaskTypeRows.filter((row) => row.status !== "partial_task_output_type_complete").map((row) => ({
       artifactType: "partial_task_output_type",
@@ -18125,6 +18359,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     submittedTrainingExposureRows.length > 0 &&
     submittedReleaseErratumPolicyRows.length > 0 &&
     submittedErrataRows.length > 0 &&
+    submittedScheduleRebaselinePolicyRows.length > 0 &&
     submittedScheduleRows.length > 0 &&
     reviewSections.length === 0;
   return {
@@ -18145,6 +18380,8 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     requiredReleaseErratumDisclosureThresholds: REQUIRED_RELEASE_ERRATUM_DISCLOSURE_THRESHOLDS,
     requiredReleaseErratumApiWarningTypes: REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES,
     requiredReleaseErratumExportBlockTypes: REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES,
+    requiredScheduleRebaselineDelayThresholdDays: REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS,
+    requiredScheduleRebaselineRules: REQUIRED_SCHEDULE_REBASELINE_RULES,
     scheduleSnapshotStatuses: SCHEDULE_SNAPSHOT_STATUSES,
     blindingPreviewAuditRows: [...seedBlindingRows, ...submittedBlindingRows],
     partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
@@ -18162,6 +18399,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     raterTrainingExposureRows: [...seedTrainingExposureRows, ...submittedTrainingExposureRows],
     releaseErratumDisclosurePolicyRows: [...seedReleaseErratumPolicyRows, ...submittedReleaseErratumPolicyRows],
     releaseErrataRows: [...seedErrataRows, ...submittedErrataRows],
+    scheduleRebaselinePolicyRows: [...seedScheduleRebaselinePolicyRows, ...submittedScheduleRebaselinePolicyRows],
     scheduleStatusRows: [...seedScheduleRows, ...submittedScheduleRows],
     partialTaskTypeRows,
     queuePolicyComponentRows,
@@ -18183,6 +18421,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       submittedRaterTrainingExposureSnapshotCount: submittedTrainingExposureRows.length,
       submittedReleaseErratumDisclosurePolicyCount: submittedReleaseErratumPolicyRows.length,
       submittedReleaseErratumCount: submittedErrataRows.length,
+      submittedScheduleRebaselinePolicyCount: submittedScheduleRebaselinePolicyRows.length,
       submittedScheduleStatusSnapshotCount: submittedScheduleRows.length,
       passingPartialTaskTypeCount: partialTaskTypeRows.filter((row) => row.status === "partial_task_output_type_complete").length,
       passingQueuePolicyComponentCount: queuePolicyComponentRows.filter((row) => row.status === "queue_policy_component_complete").length,
@@ -18771,16 +19010,70 @@ function normalizeReleaseErratum(erratum, activeReleaseErratumPolicy, rowSource)
   };
 }
 
-function normalizeScheduleStatusSnapshot(snapshot, rowSource) {
+function normalizeScheduleRebaselinePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.scheduleRebaselinePolicyId;
+  if (!id) return null;
+  const delayThresholdDays =
+    policy.delayThresholdDays && typeof policy.delayThresholdDays === "object" && !Array.isArray(policy.delayThresholdDays)
+      ? policy.delayThresholdDays
+      : {};
+  const rebaselineRuleByTrigger =
+    policy.rebaselineRuleByTrigger && typeof policy.rebaselineRuleByTrigger === "object" && !Array.isArray(policy.rebaselineRuleByTrigger)
+      ? policy.rebaselineRuleByTrigger
+      : {};
+  const requiredRebaselinedSnapshotFields = normalizeStringArray(policy.requiredRebaselinedSnapshotFields);
+  const missingDelayKeys = Object.keys(REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS).filter((key) => !Object.hasOwn(delayThresholdDays, key));
+  const missingRuleKeys = Object.keys(REQUIRED_SCHEDULE_REBASELINE_RULES).filter((key) => !Object.hasOwn(rebaselineRuleByTrigger, key));
+  const missingSnapshotFields = REQUIRED_REBASELINED_SNAPSHOT_FIELDS.filter((field) => !requiredRebaselinedSnapshotFields.includes(field));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === SCHEDULE_REBASELINE_POLICY_VERSION ? null : `policyVersion:${SCHEDULE_REBASELINE_POLICY_VERSION}`,
+    missingDelayKeys.length ? `delayThresholdDays:${missingDelayKeys.join(",")}` : null,
+    stableJsonKey(delayThresholdDays) === stableJsonKey(REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS) ? null : "delayThresholdDays",
+    missingRuleKeys.length ? `rebaselineRuleByTrigger:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(rebaselineRuleByTrigger) === stableJsonKey(REQUIRED_SCHEDULE_REBASELINE_RULES) ? null : "rebaselineRuleByTrigger",
+    missingSnapshotFields.length ? `requiredRebaselinedSnapshotFields:${missingSnapshotFields.join(",")}` : null,
+    policyMentions(policy.datedMilestoneSlipPolicy, ["planned", "blocked", "rebaseline"]) ? null : "datedMilestoneSlipPolicy",
+    policyMentions(policy.approvalPolicy, ["two-person", "approval"]) || policyMentions(policy.approvalPolicy, ["two person", "approval"])
+      ? null
+      : "approvalPolicy",
+    policyMentions(policy.claimPolicy, ["completion", "superseding"]) ? null : "claimPolicy",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    delayThresholdDays,
+    rebaselineRuleByTrigger,
+    requiredRebaselinedSnapshotFields,
+    datedMilestoneSlipPolicy: policy.datedMilestoneSlipPolicy ?? null,
+    approvalPolicy: policy.approvalPolicy ?? null,
+    claimPolicy: policy.claimPolicy ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "schedule_rebaseline_policy_review_required" : "schedule_rebaseline_policy_complete",
+  };
+}
+
+function normalizeScheduleStatusSnapshot(snapshot, activeScheduleRebaselinePolicy, rowSource) {
   const id = snapshot?.id ?? snapshot?.scheduleStatusSnapshotId ?? snapshot?.schedule_status_snapshot_id;
   if (!id) return null;
+  const activePolicyId = activeScheduleRebaselinePolicy?.id ?? null;
   const status = snapshot.status ?? null;
   const evidenceArtifactIds = normalizeStringArray(snapshot.evidenceArtifactIds ?? snapshot.evidence_artifact_ids);
+  const rebaselineApprovalRecordIds = normalizeStringArray(snapshot.rebaselineApprovalRecordIds ?? snapshot.rebaseline_approval_record_ids);
+  const timestamp = snapshot.timestamp ?? snapshot.createdAt ?? snapshot.created_at;
+  const slipDays = scheduleSlipDays(snapshot.plannedEnd ?? snapshot.planned_end, snapshot.actualEnd ?? snapshot.actual_end ?? timestamp);
   const approvedRebaseline =
     status === "rebaselined" &&
     Boolean(snapshot.rebaselinedDate ?? snapshot.re_baselined_date) &&
-    Boolean(snapshot.rebaselinedScope ?? snapshot.re_baselined_scope);
+    Boolean(snapshot.rebaselinedScope ?? snapshot.re_baselined_scope) &&
+    Boolean(snapshot.rebaselineReason ?? snapshot.rebaseline_reason) &&
+    Boolean(snapshot.previousPlannedEnd ?? snapshot.previous_planned_end) &&
+    Boolean(snapshot.newPlannedEnd ?? snapshot.new_planned_end) &&
+    rebaselineApprovalRecordIds.length > 0 &&
+    snapshot.originalScheduleCompletionClaimSuppressed === true;
   const reviewReasons = [
+    snapshot.scheduleRebaselinePolicyId === activePolicyId ? null : "scheduleRebaselinePolicyId",
     snapshot.releaseVersionOrProjectScope || snapshot.releaseVersion || snapshot.projectScope ? null : "releaseVersionOrProjectScope",
     requiredPromptFieldReason("milestoneId", snapshot.milestoneId ?? snapshot.milestone_id),
     requiredPromptFieldReason("milestoneName", snapshot.milestoneName ?? snapshot.milestone_name),
@@ -18790,14 +19083,26 @@ function normalizeScheduleStatusSnapshot(snapshot, rowSource) {
     status === "complete" && !evidenceArtifactIds.length ? "evidenceArtifactIds" : null,
     status !== "complete" && status !== "rebaselined" && snapshot.supportsCompletionClaim === true ? "supportsCompletionClaim" : null,
     status === "rebaselined" && !approvedRebaseline ? "approvedRebaseline" : null,
+    status === "rebaselined" &&
+    snapshot.previousPlannedEnd &&
+    snapshot.newPlannedEnd &&
+    snapshot.previousPlannedEnd === snapshot.newPlannedEnd
+      ? "newPlannedEnd"
+      : null,
+    slipDays >= REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS.majorSlipMinDays &&
+    !["complete", "rebaselined", "dropped"].includes(status)
+      ? "majorSlipRequiresRebaseline"
+      : null,
+    slipDays > 0 && status === "in_progress" ? "slippedMilestoneRequiresBlockedOrRebaselinedStatus" : null,
     requiredPromptFieldReason("criticalPathImpact", snapshot.criticalPathImpact ?? snapshot.critical_path_impact),
     requiredPromptFieldReason("owner", snapshot.owner),
     requiredPromptFieldReason("approvedBy", snapshot.approvedBy ?? snapshot.approved_by),
-    requiredPromptFieldReason("timestamp", snapshot.timestamp ?? snapshot.createdAt ?? snapshot.created_at),
+    requiredPromptFieldReason("timestamp", timestamp),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    scheduleRebaselinePolicyId: snapshot.scheduleRebaselinePolicyId ?? null,
     releaseVersionOrProjectScope: snapshot.releaseVersionOrProjectScope ?? snapshot.releaseVersion ?? snapshot.projectScope ?? null,
     milestoneId: snapshot.milestoneId ?? snapshot.milestone_id ?? null,
     milestoneName: snapshot.milestoneName ?? snapshot.milestone_name ?? null,
@@ -18810,13 +19115,32 @@ function normalizeScheduleStatusSnapshot(snapshot, rowSource) {
     criticalPathImpact: snapshot.criticalPathImpact ?? snapshot.critical_path_impact ?? null,
     rebaselinedDate: snapshot.rebaselinedDate ?? snapshot.re_baselined_date ?? null,
     rebaselinedScope: snapshot.rebaselinedScope ?? snapshot.re_baselined_scope ?? null,
+    rebaselineReason: snapshot.rebaselineReason ?? snapshot.rebaseline_reason ?? null,
+    previousPlannedEnd: snapshot.previousPlannedEnd ?? snapshot.previous_planned_end ?? null,
+    newPlannedEnd: snapshot.newPlannedEnd ?? snapshot.new_planned_end ?? null,
+    rebaselineApprovalRecordIds,
+    originalScheduleCompletionClaimSuppressed: snapshot.originalScheduleCompletionClaimSuppressed === true,
+    slipDays,
     owner: snapshot.owner ?? null,
     approvedBy: snapshot.approvedBy ?? snapshot.approved_by ?? null,
-    timestamp: snapshot.timestamp ?? snapshot.createdAt ?? snapshot.created_at ?? null,
+    timestamp: timestamp ?? null,
     supportsCompletionClaim: snapshot.supportsCompletionClaim === true,
     reviewReasons,
     evidenceStatus: reviewReasons.length ? "schedule_status_snapshot_review_required" : "schedule_status_snapshot_complete",
   };
+}
+
+function scheduleSlipDays(plannedEnd, observedDate) {
+  const plannedEndTime = dateOnlyTime(plannedEnd);
+  const observedTime = dateOnlyTime(observedDate);
+  if (plannedEndTime === null || observedTime === null || observedTime <= plannedEndTime) return 0;
+  return Math.floor((observedTime - plannedEndTime) / 86_400_000);
+}
+
+function dateOnlyTime(value) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 function buildReleaseClaimWarningReport(releaseId, currentStatus, auxiliaryWorkflowEvidence) {
@@ -21099,7 +21423,13 @@ export function buildOctoberReleaseReport(
   ];
   const releaseGoldLibraryItems = buildReleaseGoldLibraryItems(options.goldItems ?? [], positionList);
   const releaseRightsRecords = buildReleaseRightsRecords(options.rightsRecords ?? [], provenanceRightsRecords);
-  const rightsReviewEvidence = buildRightsReviewEvidenceReport(releaseId, positionList, releaseRightsRecords, options.rightsReviews ?? []);
+  const rightsReviewEvidence = buildRightsReviewEvidenceReport(
+    releaseId,
+    positionList,
+    releaseRightsRecords,
+    options.rightsReviews ?? [],
+    options.rightsClearancePolicies ?? [],
+  );
   const assignmentFlagEvidence = buildAssignmentFlagEvidenceReport(releaseId, options.assignmentFlags ?? [], [...assignments, ...(options.workflowAssignments ?? [])]);
   const certification = buildCertificationAudit(certificationPacks, releaseGoldLibraryItems, OCTOBER_RELEASE_TARGETS, {
     releaseId,
@@ -21308,6 +21638,7 @@ export function buildOctoberReleaseReport(
     raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
     releaseErratumDisclosurePolicies: options.releaseErratumDisclosurePolicies ?? [],
     releaseErrata: options.releaseErrata ?? [],
+    scheduleRebaselinePolicies: options.scheduleRebaselinePolicies ?? [],
     scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
   });
   const releaseClaimWarnings = buildReleaseClaimWarningReport(releaseId, currentStatus, auxiliaryWorkflowEvidence);
@@ -21505,6 +21836,7 @@ export function buildOctoberReleaseReport(
       sourceAnchorExamples: options.sourceAnchorExamples ?? [],
       benchmarkSplitMembers: options.benchmarkSplitMembers ?? [],
       rightsRecords: options.rightsRecords ?? [],
+      rightsClearancePolicies: options.rightsClearancePolicies ?? [],
       releaseVersions: options.releaseVersions ?? [],
     },
     workflowMetricArtifacts: {
@@ -21579,6 +21911,7 @@ export function buildOctoberReleaseReport(
       raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
       releaseErratumDisclosurePolicies: options.releaseErratumDisclosurePolicies ?? [],
       releaseErrata: options.releaseErrata ?? [],
+      scheduleRebaselinePolicies: options.scheduleRebaselinePolicies ?? [],
       scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
     },
     workflowInteractionArtifacts: {

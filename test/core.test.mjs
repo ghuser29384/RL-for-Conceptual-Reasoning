@@ -439,6 +439,21 @@ const releaseConfigBindings = [
   "score_input",
   "export_policy",
 ];
+const rightsLegalBases = ["project_owned", "public_domain", "open_license", "explicit_permission", "fair_use_memo", "internal_only_restricted"];
+const rightsEvidenceByLegalBasis = {
+  project_owned: ["authorship_attestation", "contributor_license_or_assignment", "third_party_content_check"],
+  public_domain: ["public_domain_basis", "jurisdiction_or_publication_date", "source_url_or_archive"],
+  open_license: ["license_identifier", "license_text_or_url", "attribution_requirements", "commercial_derivative_benchmark_use_allowed"],
+  explicit_permission: ["permission_grant", "permitted_release_scopes", "revocation_or_expiry_terms"],
+  fair_use_memo: ["factor_analysis", "excerpt_minimization", "public_release_risk_review", "fallback_removal_plan"],
+  internal_only_restricted: ["internal_use_basis", "raw_public_release_block", "access_control_plan"],
+};
+const rightsScopeStandards = {
+  public: "explicit_public_export_public_summary_and_attribution_allowed",
+  training: "training_or_model_improvement_export_allowed_without_provider_training_conflict",
+  hidden_benchmark: "internal_hidden_benchmark_use_allowed_raw_public_release_blocked",
+  internal: "internal_research_review_and_adjudication_use_allowed",
+};
 const governedBundleFamilies = [
   "rubric",
   "scoring",
@@ -550,6 +565,22 @@ const prohibitedIncentiveSignals = [
   "accepted_revision_count",
   "leaderboard_rank",
 ];
+const compensationRateUsdByEligibleUnit = {
+  ordinaryRating: 12,
+  releaseCriticalRating: 18,
+  practiceOrCalibrationSession: 8,
+  trainingModuleCompletion: 10,
+  validSafeDeclineOrConflictDisclosure: 3,
+  postLockDiscussionParticipation: 15,
+  correctnessVerificationWorkspace: 20,
+  adjudicationMemo: 35,
+};
+const compensationEligibilityPolicy =
+  "pay only QA-accepted eligible work units, approved training completion, and valid safe-decline or conflict disclosures; never pay for score direction, agreement, rank, or hidden-benchmark performance";
+const payrollLegalImplementationPolicy =
+  "US pilot uses counsel-reviewed contractor or stipend classification, tax onboarding before paid work, and jurisdiction-specific payroll approval before non-US payments";
+const paymentDataSeparationPolicy =
+  "payment identity, tax, and payout account data stay in the payroll system outside annotation events; annotation records store only payment eligibility ids";
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudication_label"];
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
@@ -644,6 +675,26 @@ const releaseErratumApiWarningTypes = [
   "configuration_manifest_error",
 ];
 const releaseErratumExportBlockTypes = ["source_leakage_defect", "rights_provenance_issue"];
+const scheduleRebaselineDelayThresholdDays = {
+  minorSlipMaxDays: 6,
+  significantSlipMinDays: 7,
+  majorSlipMinDays: 21,
+};
+const scheduleRebaselineRules = {
+  slipUnderSevenDays: "keep_original_milestone_with_delay_note_no_completion_claim_until_complete",
+  slipSevenToTwentyDays: "blocked_or_in_progress_requires_recovery_plan_owner_review_and_updated_risk_disclosure",
+  slipTwentyOneDaysOrMore: "rebaselined_status_requires_new_date_scope_and_two_person_release_review",
+  scopeOrTargetChange: "rebaselined_status_required_with_scope_delta_and_compressed_scope_label_update",
+  rebaselinedCompletionClaim: "original_dated_milestone_completion_claim_forbidden_superseding_schedule_only",
+};
+const requiredRebaselinedSnapshotFields = [
+  "rebaselinedDate",
+  "rebaselinedScope",
+  "rebaselineReason",
+  "previousPlannedEnd",
+  "newPlannedEnd",
+  "rebaselineApprovalRecordIds",
+];
 const rubricLintRules = [
   "missing_required_score",
   "clarity_branch_consistency",
@@ -1144,9 +1195,15 @@ function completeParticipantSafeguardFixtures() {
     volunteerIncentivePolicies: [
       {
         id: "volunteer-incentive-submitted",
-        policyVersion: "volunteer-incentive-rlhf84-v1",
+        policyVersion: "volunteer-incentive-rlhf90-v2",
         allowedCompensationCreditInputs: ["eligible_completed_work", "role", "time_commitment", "training_completion"],
         prohibitedIncentiveSignals,
+        compensationCurrency: "USD",
+        compensationRateUsdByEligibleUnit,
+        monthlyCompensationCapUsd: 600,
+        compensationEligibilityPolicy,
+        payrollLegalImplementationPolicy,
+        paymentDataSeparationPolicy,
         speedEffortGuardrails: "private QA-safe effort bands only",
         publicRecognitionPolicy: "participation acknowledgement without scores, speed, agreement, or benchmark ranking",
         privateProgressDashboardPolicy: "private non-gamified progress only",
@@ -1762,9 +1819,24 @@ function completeAuxiliaryWorkflowFixtures() {
         createdAt: "2026-10-01T00:11:00.000Z",
       },
     ],
+    scheduleRebaselinePolicies: [
+      {
+        id: "schedule-rebaseline-policy-submitted",
+        policyVersion: "schedule-rebaseline-rlhf90-v1",
+        delayThresholdDays: scheduleRebaselineDelayThresholdDays,
+        rebaselineRuleByTrigger: scheduleRebaselineRules,
+        requiredRebaselinedSnapshotFields,
+        datedMilestoneSlipPolicy:
+          "after planned end, slipped dated milestones must be blocked or rebaselined before release claims can cite the schedule",
+        approvalPolicy: "major slips or scope changes require two-person release review approval before rebaselining",
+        claimPolicy: "original dated milestone completion claims are suppressed after rebaseline; only the superseding schedule may support future claims",
+        frozenAt: "2026-10-01T00:11:30.000Z",
+      },
+    ],
     scheduleStatusSnapshots: [
       {
         id: "schedule-status-submitted",
+        scheduleRebaselinePolicyId: "schedule-rebaseline-policy-submitted",
         releaseVersionOrProjectScope: "october-2026-demo",
         milestoneId: "october-internal-release",
         milestoneName: "October internal LMCA release",
@@ -1777,6 +1849,11 @@ function completeAuxiliaryWorkflowFixtures() {
         criticalPathImpact: "release remains incomplete until target scale and evidence gates pass",
         rebaselinedDate: null,
         rebaselinedScope: null,
+        rebaselineReason: null,
+        previousPlannedEnd: null,
+        newPlannedEnd: null,
+        rebaselineApprovalRecordIds: [],
+        originalScheduleCompletionClaimSuppressed: false,
         owner: "release-admin",
         approvedBy: "release-reviewer",
         supportsCompletionClaim: false,
@@ -2529,6 +2606,12 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
 
   assert.equal(report.releaseUseStatus, "submitted_participant_safeguard_evidence_complete");
   assert.equal(report.counts.submittedVolunteerIncentivePolicyCount, 1);
+  assert.equal(report.requiredCompensationCurrency, "USD");
+  assert.deepEqual(report.requiredCompensationRateUsdByEligibleUnit, compensationRateUsdByEligibleUnit);
+  assert.equal(report.requiredMonthlyCompensationCapUsd, 600);
+  assert.deepEqual(report.volunteerIncentivePolicyRows.at(-1).compensationRateUsdByEligibleUnit, compensationRateUsdByEligibleUnit);
+  assert.equal(report.volunteerIncentivePolicyRows.at(-1).monthlyCompensationCapUsd, 600);
+  assert.equal(report.volunteerIncentivePolicyRows.at(-1).payrollLegalImplementationPolicy, payrollLegalImplementationPolicy);
   assert.equal(report.counts.passingQualificationScopeCount, qualificationScopes.length);
   assert.equal(report.counts.submittedLanguageArtifactAssessmentCount, 1);
   assert.equal(report.counts.submittedSourceRecognitionEventCount, 1);
@@ -2548,6 +2631,22 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
   assert.ok(
     unsafeRecognitionReport.reviewSections.some(
       (section) => section.artifactType === "source_recognition_event" && section.reason === "independentBlindEligibilityEffect:counts_independent",
+    ),
+  );
+
+  const driftedCompensationFixtures = completeParticipantSafeguardFixtures();
+  driftedCompensationFixtures.volunteerIncentivePolicies = [
+    {
+      ...driftedCompensationFixtures.volunteerIncentivePolicies[0],
+      id: "volunteer-incentive-drifted-compensation",
+      monthlyCompensationCapUsd: 1000,
+    },
+  ];
+  const driftedCompensationReport = buildParticipantSafeguardEvidenceReport("october-2026-demo", driftedCompensationFixtures);
+  assert.equal(driftedCompensationReport.releaseUseStatus, "participant_safeguard_review_required");
+  assert.ok(
+    driftedCompensationReport.reviewSections.some(
+      (section) => section.artifactType === "volunteer_incentive_policy" && section.reason === "monthlyCompensationCapUsd",
     ),
   );
 
@@ -2851,7 +2950,12 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.releaseErrataRows.at(-1).releaseErratumDisclosurePolicyId, "release-erratum-disclosure-policy-submitted");
   assert.equal(report.releaseErrataRows.at(-1).apiDownloadWarningBlockPolicy, "show_warning_and_link_superseding_artifacts");
   assert.equal(report.releaseErrataRows.at(-1).historicalArtifactsMutated, false);
+  assert.equal(report.counts.submittedScheduleRebaselinePolicyCount, 1);
+  assert.deepEqual(report.scheduleRebaselinePolicyRows.at(-1).delayThresholdDays, scheduleRebaselineDelayThresholdDays);
+  assert.deepEqual(report.scheduleRebaselinePolicyRows.at(-1).rebaselineRuleByTrigger, scheduleRebaselineRules);
   assert.equal(report.counts.submittedScheduleStatusSnapshotCount, 1);
+  assert.equal(report.scheduleStatusRows.at(-1).scheduleRebaselinePolicyId, "schedule-rebaseline-policy-submitted");
+  assert.equal(report.scheduleStatusRows.at(-1).slipDays, 0);
   assert.equal(report.scheduleStatusRows.at(-1).supportsCompletionClaim, false);
   assert.deepEqual(report.reviewSections, []);
 
@@ -2986,6 +3090,86 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "artifactDeprecationStatus"));
   assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "apiDownloadWarningBlockPolicy"));
   assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "remediationStatus"));
+
+  const driftedScheduleRebaselinePolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    scheduleRebaselinePolicies: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().scheduleRebaselinePolicies[0],
+        id: "schedule-rebaseline-policy-drifted",
+        delayThresholdDays: {
+          ...scheduleRebaselineDelayThresholdDays,
+          majorSlipMinDays: 45,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedScheduleRebaselinePolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    driftedScheduleRebaselinePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "schedule_rebaseline_policy" && section.reason === "delayThresholdDays",
+    ),
+  );
+
+  const staleScheduleRebaselinePolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    scheduleStatusSnapshots: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().scheduleStatusSnapshots[0],
+        id: "schedule-status-stale-policy",
+        scheduleRebaselinePolicyId: "schedule-rebaseline-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleScheduleRebaselinePolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    staleScheduleRebaselinePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "schedule_status_snapshot" && section.reason === "scheduleRebaselinePolicyId",
+    ),
+  );
+
+  const weakRebaselineSnapshotReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    scheduleStatusSnapshots: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().scheduleStatusSnapshots[0],
+        id: "schedule-status-weak-rebaseline",
+        status: "rebaselined",
+        rebaselinedDate: "2026-10-10",
+        rebaselinedScope: "move public release review to November without target change",
+        rebaselineReason: "October milestone slipped beyond the frozen major-slip threshold.",
+        previousPlannedEnd: "2026-10-31",
+        newPlannedEnd: "2026-11-21",
+        rebaselineApprovalRecordIds: [],
+        originalScheduleCompletionClaimSuppressed: false,
+      },
+    ],
+  });
+  assert.equal(weakRebaselineSnapshotReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    weakRebaselineSnapshotReport.reviewSections.some(
+      (section) => section.artifactType === "schedule_status_snapshot" && section.reason === "approvedRebaseline",
+    ),
+  );
+
+  const slippedMilestoneReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    scheduleStatusSnapshots: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().scheduleStatusSnapshots[0],
+        id: "schedule-status-slipped-in-progress",
+        plannedEnd: "2026-10-01",
+        status: "in_progress",
+        timestamp: "2026-10-30T00:00:00.000Z",
+      },
+    ],
+  });
+  assert.equal(slippedMilestoneReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    slippedMilestoneReport.reviewSections.some(
+      (section) => section.artifactType === "schedule_status_snapshot" && section.reason === "majorSlipRequiresRebaseline",
+    ),
+  );
 
   const unsafeTrainingExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),
@@ -6678,12 +6862,19 @@ test("submitted rights records update release rights audits without broadening s
     {
       id: "rights-hidden",
       releaseId: "release-test",
+      rightsClearancePolicyId: "rights-clearance-policy-release-test",
       artifactId: "pos-ai-prior::crit-ai-base-rate",
       artifactKind: "position_critique_item",
       sourceOrigin: "project_authored_hidden_benchmark_candidate",
+      legalBasis: "project_owned",
+      clearanceStandard: "project-owned clearance supports internal and hidden benchmark release scopes",
+      evidenceArtifactIds: rightsEvidenceByLegalBasis.project_owned,
       licenseType: "project_owned_or_public_domain",
       rightsStatus: "hidden_benchmark_export_allowed",
       releaseScope: "internal_and_hidden_benchmark_export_allowed",
+      legalReviewJurisdiction: "US",
+      thirdPartyContentCheck: "third-party content checked and none detected",
+      takedownOrRemovalSlaDays: 14,
       reviewerId: "release-admin",
       reviewedAt: "2026-10-01T00:00:00.000Z",
       sourceLanguage: "en",
@@ -6704,6 +6895,7 @@ test("submitted rights records update release rights audits without broadening s
       id: "rights-hidden-underdeclared",
       artifactId: "pos-ai-prior::crit-ai-base-rate",
       rightsStatus: "hidden_benchmark_export_allowed",
+      legalBasis: "project_owned",
       sourceLanguage: "en",
       translationRoute: "none_original_english",
       taskFormat: "short essay claim",
@@ -6738,9 +6930,52 @@ test("release report derives rights-review evidence from submitted workflow acti
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      rightsClearancePolicies: [
+        {
+          id: "rights-clearance-policy-release-test-submitted",
+          policyVersion: "rights-clearance-rlhf90-v1",
+          allowedLegalBases: rightsLegalBases,
+          requiredEvidenceByLegalBasis: rightsEvidenceByLegalBasis,
+          releaseScopeStandards: rightsScopeStandards,
+          takedownOrRemovalSlaDays: 14,
+          publicReleaseRule:
+            "public or training export requires project-owned, public-domain, open-license, explicit-permission, or approved fair-use memo evidence with attribution and removal plan",
+          hiddenBenchmarkRule:
+            "hidden-benchmark use may rely on internal-only restricted clearance only when raw public release is blocked and access control is documented",
+          reviewerIndependenceRule: "rights reviewer must be independent from item author when legal basis is fair-use memo or explicit permission",
+          frozenAt: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+      rightsRecords: [
+        {
+          id: "rights-record-public-ai-prior",
+          releaseId: "release-test",
+          rightsClearancePolicyId: "rights-clearance-policy-release-test-submitted",
+          artifactId: "pos-ai-prior::crit-ai-base-rate",
+          artifactKind: "position_critique_item",
+          sourceOrigin: "project_authored_public_item",
+          legalBasis: "project_owned",
+          clearanceStandard: "project-owned clearance supports public export release scope",
+          evidenceArtifactIds: rightsEvidenceByLegalBasis.project_owned,
+          licenseType: "project_owned_or_public_domain",
+          rightsStatus: "public_export_allowed",
+          releaseScope: "public_export",
+          legalReviewJurisdiction: "US",
+          thirdPartyContentCheck: "third-party content checked and none detected",
+          takedownOrRemovalSlaDays: 14,
+          reviewerId: "rights-admin",
+          reviewedAt: "2026-06-12T09:55:00.000Z",
+          sourceLanguage: "en",
+          translationRoute: "none_original_english",
+          taskFormat: "short essay claim",
+          sourceDomainSuitability: "suitable_conceptual",
+          removalPolicy: "tombstone_and_rebuild_export_manifest",
+        },
+      ],
       rightsReviews: [
         {
           id: "rights-review-public-ai-prior",
+          rightsClearancePolicyId: "rights-clearance-policy-release-test-submitted",
           itemId: "pos-ai-prior::crit-ai-base-rate",
           reviewerId: "rights-admin",
           rightsStatus: "public_export_allowed",
@@ -6749,6 +6984,7 @@ test("release report derives rights-review evidence from submitted workflow acti
         },
         {
           id: "rights-review-public-voting-mismatch",
+          rightsClearancePolicyId: "rights-clearance-policy-release-test-submitted",
           itemId: "pos-voting::crit-voting-bullet",
           reviewerId: "rights-admin",
           rightsStatus: "public_export_allowed",
@@ -6760,12 +6996,15 @@ test("release report derives rights-review evidence from submitted workflow acti
   );
 
   assert.equal(report.rightsReviewEvidence.counts.submittedReviewCount, 2);
+  assert.equal(report.rightsReviewEvidence.counts.submittedRightsClearancePolicyCount, 1);
+  assert.deepEqual(report.rightsReviewEvidence.requiredEvidenceByLegalBasis.project_owned, rightsEvidenceByLegalBasis.project_owned);
   assert.equal(report.rightsReviewEvidence.counts.completeReviewCount, 1);
   assert.equal(report.rightsReviewEvidence.counts.reviewRequiredCount, 1);
   assert.equal(report.rightsReviewEvidence.releaseUseStatus, "rights_review_evidence_review_required");
   const completeRow = report.rightsReviewEvidence.rows.find((row) => row.id === "rights-review-public-ai-prior");
   assert.equal(completeRow.status, "rights_review_evidence_complete");
-  assert.equal(completeRow.rightsRecordId, "rights-pos-ai-prior");
+  assert.equal(completeRow.rightsRecordId, "rights-record-public-ai-prior");
+  assert.equal(completeRow.rightsClearancePolicyId, "rights-clearance-policy-release-test-submitted");
   const mismatchRow = report.rightsReviewEvidence.rows.find((row) => row.id === "rights-review-public-voting-mismatch");
   assert.equal(mismatchRow.releaseScopeCovered, false);
   assert.equal(mismatchRow.reviewReasons.includes("release_scope_not_covered_by_rights_record"), true);

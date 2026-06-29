@@ -825,6 +825,27 @@ const releaseErratumApiWarningTypes = [
 ];
 const releaseErratumExportBlockTypes = ["source_leakage_defect", "rights_provenance_issue"];
 const scheduleSnapshotStatuses = ["not_started", "in_progress", "complete", "blocked", "rebaselined", "dropped"];
+const scheduleRebaselinePolicyVersion = "schedule-rebaseline-rlhf90-v1";
+const scheduleRebaselineDelayThresholdDays = {
+  minorSlipMaxDays: 6,
+  significantSlipMinDays: 7,
+  majorSlipMinDays: 21,
+};
+const scheduleRebaselineRules = {
+  slipUnderSevenDays: "keep_original_milestone_with_delay_note_no_completion_claim_until_complete",
+  slipSevenToTwentyDays: "blocked_or_in_progress_requires_recovery_plan_owner_review_and_updated_risk_disclosure",
+  slipTwentyOneDaysOrMore: "rebaselined_status_requires_new_date_scope_and_two_person_release_review",
+  scopeOrTargetChange: "rebaselined_status_required_with_scope_delta_and_compressed_scope_label_update",
+  rebaselinedCompletionClaim: "original_dated_milestone_completion_claim_forbidden_superseding_schedule_only",
+};
+const requiredRebaselinedSnapshotFields = [
+  "rebaselinedDate",
+  "rebaselinedScope",
+  "rebaselineReason",
+  "previousPlannedEnd",
+  "newPlannedEnd",
+  "rebaselineApprovalRecordIds",
+];
 const uxPolicyRequiredObjectFields = [
   "taskFirstLayoutRules",
   "plainLanguageCopyRules",
@@ -932,6 +953,25 @@ const prohibitedIncentiveSignals = [
   "accepted_revision_count",
   "leaderboard_rank",
 ];
+const volunteerIncentivePolicyVersion = "volunteer-incentive-rlhf90-v2";
+const compensationRateUsdByEligibleUnit = {
+  ordinaryRating: 12,
+  releaseCriticalRating: 18,
+  practiceOrCalibrationSession: 8,
+  trainingModuleCompletion: 10,
+  validSafeDeclineOrConflictDisclosure: 3,
+  postLockDiscussionParticipation: 15,
+  correctnessVerificationWorkspace: 20,
+  adjudicationMemo: 35,
+};
+const compensationCurrency = "USD";
+const monthlyCompensationCapUsd = 600;
+const compensationEligibilityPolicy =
+  "pay only QA-accepted eligible work units, approved training completion, and valid safe-decline or conflict disclosures; never pay for score direction, agreement, rank, or hidden-benchmark performance";
+const payrollLegalImplementationPolicy =
+  "US pilot uses counsel-reviewed contractor or stipend classification, tax onboarding before paid work, and jurisdiction-specific payroll approval before non-US payments";
+const paymentDataSeparationPolicy =
+  "payment identity, tax, and payout account data stay in the payroll system outside annotation events; annotation records store only payment eligibility ids";
 const languageArtifactTypes = [
   "non_native_wording",
   "dialect_or_register",
@@ -1145,6 +1185,23 @@ const releaseConfigBindings = [
   "score_input",
   "export_policy",
 ];
+const rightsClearancePolicyVersion = "rights-clearance-rlhf90-v1";
+const rightsLegalBases = ["project_owned", "public_domain", "open_license", "explicit_permission", "fair_use_memo", "internal_only_restricted"];
+const rightsEvidenceByLegalBasis = {
+  project_owned: ["authorship_attestation", "contributor_license_or_assignment", "third_party_content_check"],
+  public_domain: ["public_domain_basis", "jurisdiction_or_publication_date", "source_url_or_archive"],
+  open_license: ["license_identifier", "license_text_or_url", "attribution_requirements", "commercial_derivative_benchmark_use_allowed"],
+  explicit_permission: ["permission_grant", "permitted_release_scopes", "revocation_or_expiry_terms"],
+  fair_use_memo: ["factor_analysis", "excerpt_minimization", "public_release_risk_review", "fallback_removal_plan"],
+  internal_only_restricted: ["internal_use_basis", "raw_public_release_block", "access_control_plan"],
+};
+const rightsScopeStandards = {
+  public: "explicit_public_export_public_summary_and_attribution_allowed",
+  training: "training_or_model_improvement_export_allowed_without_provider_training_conflict",
+  hidden_benchmark: "internal_hidden_benchmark_use_allowed_raw_public_release_blocked",
+  internal: "internal_research_review_and_adjudication_use_allowed",
+};
+const rightsTakedownOrRemovalSlaDays = 14;
 const governedBundleFamilies = [
   "rubric",
   "scoring",
@@ -1261,8 +1318,42 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/rights\/review$/, "rights_review_submitted", "rightsReview", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "reviewerId", "rightsStatus", "releaseScope"],
+    requiredFields: ["id", "rightsClearancePolicyId", "reviewerId", "rightsStatus", "releaseScope"],
     requiredAnyFields: [["positionId", "itemId", "artifactId"]],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/rights-clearance-policies$/, "rights_clearance_policy_submitted", "rightsClearancePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "allowedLegalBases",
+      "requiredEvidenceByLegalBasis",
+      "releaseScopeStandards",
+      "takedownOrRemovalSlaDays",
+      "publicReleaseRule",
+      "hiddenBenchmarkRule",
+      "reviewerIndependenceRule",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["requiredEvidenceByLegalBasis", "releaseScopeStandards"],
+    requiredObjectKeys: {
+      requiredEvidenceByLegalBasis: rightsLegalBases,
+      releaseScopeStandards: Object.keys(rightsScopeStandards),
+    },
+    requiredStructuredFields: {
+      requiredEvidenceByLegalBasis: rightsEvidenceByLegalBasis,
+      releaseScopeStandards: rightsScopeStandards,
+    },
+    requiredArrayIncludes: { allowedLegalBases: rightsLegalBases },
+    requiredStringIncludes: {
+      publicReleaseRule: ["public", "training", "evidence", "removal"],
+      hiddenBenchmarkRule: ["hidden", "raw public release", "access control"],
+      reviewerIndependenceRule: ["independent"],
+    },
+    requiredExactFields: {
+      policyVersion: rightsClearancePolicyVersion,
+      takedownOrRemovalSlaDays: rightsTakedownOrRemovalSlaDays,
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/releases\/freeze$/, "release_freeze_submitted", "releaseFreeze", adminRoles, {
     allowHiddenMetadata: true,
@@ -1661,12 +1752,18 @@ const workflowWriteEndpoints = [
     requiredFields: [
       "id",
       "releaseId",
+      "rightsClearancePolicyId",
       "artifactId",
       "artifactKind",
       "sourceOrigin",
+      "legalBasis",
+      "clearanceStandard",
+      "legalReviewJurisdiction",
       "licenseType",
       "rightsStatus",
       "releaseScope",
+      "thirdPartyContentCheck",
+      "takedownOrRemovalSlaDays",
       "reviewerId",
       "reviewedAt",
       "sourceLanguage",
@@ -1675,9 +1772,23 @@ const workflowWriteEndpoints = [
       "sourceDomainSuitability",
       "removalPolicy",
     ],
+    requiredNonEmptyArrayFields: ["evidenceArtifactIds"],
+    allowedValues: { legalBasis: rightsLegalBases },
+    requiredWhen: rightsLegalBases.map((legalBasis) => ({
+      field: "legalBasis",
+      equals: legalBasis,
+      requiredArrayIncludes: { evidenceArtifactIds: rightsEvidenceByLegalBasis[legalBasis] },
+    })),
     requiredStringIncludesAny: {
       rightsStatus: ["allowed", "cleared"],
       releaseScope: ["public", "training", "internal", "hidden", "benchmark"],
+    },
+    requiredStringIncludes: {
+      clearanceStandard: ["clearance", "release"],
+      thirdPartyContentCheck: ["third-party", "checked"],
+    },
+    requiredExactFields: {
+      takedownOrRemovalSlaDays: rightsTakedownOrRemovalSlaDays,
     },
   }),
   workflowWriteSpec(/^\/api\/v1\/release-versions$/, "release_version_submitted", "releaseVersion", adminRoles, {
@@ -3011,6 +3122,12 @@ const workflowWriteEndpoints = [
     requiredFields: [
       "id",
       "policyVersion",
+      "compensationCurrency",
+      "compensationRateUsdByEligibleUnit",
+      "monthlyCompensationCapUsd",
+      "compensationEligibilityPolicy",
+      "payrollLegalImplementationPolicy",
+      "paymentDataSeparationPolicy",
       "speedEffortGuardrails",
       "publicRecognitionPolicy",
       "privateProgressDashboardPolicy",
@@ -3019,6 +3136,9 @@ const workflowWriteEndpoints = [
       "leaderboardBadgeRestrictions",
       "frozenAt",
     ],
+    requiredObjectFields: ["compensationRateUsdByEligibleUnit"],
+    requiredObjectKeys: { compensationRateUsdByEligibleUnit: Object.keys(compensationRateUsdByEligibleUnit) },
+    requiredStructuredFields: { compensationRateUsdByEligibleUnit },
     requiredNonEmptyArrayFields: ["allowedCompensationCreditInputs", "prohibitedIncentiveSignals"],
     requiredArrayIncludes: { prohibitedIncentiveSignals },
     requiredStringIncludes: {
@@ -3029,6 +3149,14 @@ const workflowWriteEndpoints = [
     requiredStringIncludesAny: {
       publicRecognitionPolicy: ["without", "no"],
       leaderboardBadgeRestrictions: ["no", "prohibit"],
+    },
+    requiredExactFields: {
+      policyVersion: volunteerIncentivePolicyVersion,
+      compensationCurrency,
+      monthlyCompensationCapUsd,
+      compensationEligibilityPolicy,
+      payrollLegalImplementationPolicy,
+      paymentDataSeparationPolicy,
     },
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-qualification-records$/, "rater_qualification_record_submitted", "raterQualificationRecord", adminRoles, {
@@ -3707,7 +3835,20 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/schedule-status-snapshots$/, "schedule_status_snapshot_submitted", "scheduleStatusSnapshot", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "releaseVersionOrProjectScope", "milestoneId", "milestoneName", "plannedStart", "plannedEnd", "status", "criticalPathImpact", "owner", "approvedBy", "timestamp"],
+    requiredFields: [
+      "id",
+      "scheduleRebaselinePolicyId",
+      "releaseVersionOrProjectScope",
+      "milestoneId",
+      "milestoneName",
+      "plannedStart",
+      "plannedEnd",
+      "status",
+      "criticalPathImpact",
+      "owner",
+      "approvedBy",
+      "timestamp",
+    ],
     allowedValues: { status: scheduleSnapshotStatuses },
     requiredWhen: [
       {
@@ -3718,9 +3859,44 @@ const workflowWriteEndpoints = [
       {
         field: "status",
         equals: "rebaselined",
-        requiredFields: ["rebaselinedDate", "rebaselinedScope"],
+        requiredFields: ["rebaselinedDate", "rebaselinedScope", "rebaselineReason", "previousPlannedEnd", "newPlannedEnd"],
+        requiredNonEmptyArrayFields: ["rebaselineApprovalRecordIds"],
+        requiredExactFields: { originalScheduleCompletionClaimSuppressed: true },
       },
     ],
+  }),
+  workflowWriteSpec(/^\/api\/v1\/schedule-rebaseline-policies$/, "schedule_rebaseline_policy_submitted", "scheduleRebaselinePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "delayThresholdDays",
+      "rebaselineRuleByTrigger",
+      "requiredRebaselinedSnapshotFields",
+      "datedMilestoneSlipPolicy",
+      "approvalPolicy",
+      "claimPolicy",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["delayThresholdDays", "rebaselineRuleByTrigger"],
+    requiredObjectKeys: {
+      delayThresholdDays: Object.keys(scheduleRebaselineDelayThresholdDays),
+      rebaselineRuleByTrigger: Object.keys(scheduleRebaselineRules),
+    },
+    requiredStructuredFields: {
+      delayThresholdDays: scheduleRebaselineDelayThresholdDays,
+      rebaselineRuleByTrigger: scheduleRebaselineRules,
+    },
+    requiredArrayIncludes: { requiredRebaselinedSnapshotFields },
+    requiredStringIncludes: {
+      datedMilestoneSlipPolicy: ["planned", "blocked", "rebaseline"],
+      approvalPolicy: ["approval"],
+      claimPolicy: ["completion", "superseding"],
+    },
+    requiredStringIncludesAny: {
+      approvalPolicy: ["two-person", "two person"],
+    },
+    requiredExactFields: { policyVersion: scheduleRebaselinePolicyVersion },
   }),
   workflowWriteSpec(/^\/api\/v1\/governance-approvals$/, "governance_approval_record_submitted", "governanceApprovalRecord", adminRoles, {
     allowHiddenMetadata: true,
@@ -4175,6 +4351,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/gold-items\/(?<id>[^/]+)$/, "goldItem", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/source-anchor-examples\/(?<id>[^/]+)$/, "sourceAnchorExample", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/benchmark-split-members\/(?<id>[^/]+)$/, "benchmarkSplitMember", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rights-clearance-policies\/(?<id>[^/]+)$/, "rightsClearancePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rights-records\/(?<id>[^/]+)$/, "rightsRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-versions\/(?<id>[^/]+)$/, "releaseVersion", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-gate-profiles\/(?<id>[^/]+)$/, "releaseGateProfile", adminAuditRoles),
@@ -4255,6 +4432,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rater-training-exposure-snapshots\/(?<id>[^/]+)$/, "raterTrainingExposureSnapshot", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies\/(?<id>[^/]+)$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-errata\/(?<id>[^/]+)$/, "releaseErratum", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/schedule-rebaseline-policies\/(?<id>[^/]+)$/, "scheduleRebaselinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/schedule-status-snapshots\/(?<id>[^/]+)$/, "scheduleStatusSnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governance-approvals\/(?<id>[^/]+)$/, "governanceApprovalRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/protected-artifact-revalidations\/(?<id>[^/]+)$/, "protectedArtifactRevalidation", adminAuditRoles),
@@ -6844,6 +7022,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const persistedBenchmarkExposureEvents = await readPersistedBenchmarkExposureEvents(context.auditStore);
   const persistedSourceStyleAudits = await readPersistedSourceStyleAudits(context.auditStore);
   const rightsReviews = latestWorkflowResources(workflowEvents, "rightsReview");
+  const rightsClearancePolicies = latestWorkflowResources(workflowEvents, "rightsClearancePolicy");
   const releaseFreezes = latestWorkflowResources(workflowEvents, "releaseFreeze");
   const certificationRecords = latestWorkflowResources(workflowEvents, "certificationRecord");
   const exposureLogs = latestWorkflowResources(workflowEvents, "exposureLog");
@@ -6958,6 +7137,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const raterTrainingExposureSnapshots = latestWorkflowResources(workflowEvents, "raterTrainingExposureSnapshot");
   const releaseErratumDisclosurePolicies = latestWorkflowResources(workflowEvents, "releaseErratumDisclosurePolicy");
   const releaseErrata = latestWorkflowResources(workflowEvents, "releaseErratum");
+  const scheduleRebaselinePolicies = latestWorkflowResources(workflowEvents, "scheduleRebaselinePolicy");
   const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
   const practiceSandboxPolicies = latestWorkflowResources(workflowEvents, "practiceSandboxPolicy");
@@ -7009,6 +7189,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   );
   const report = buildOctoberReleaseReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, certificationAttempts, benchmarkExposureEvents, sourceStyleAudits, {
     rightsReviews,
+    rightsClearancePolicies,
     releaseFreezes,
     certificationRecords,
     exposureLogs,
@@ -7059,6 +7240,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     goldItems,
     sourceAnchorExamples,
     benchmarkSplitMembers,
+    rightsClearancePolicies,
     rightsRecords,
     releaseVersions,
     metricConfigs,
@@ -7123,6 +7305,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterTrainingExposureSnapshots,
     releaseErratumDisclosurePolicies,
     releaseErrata,
+    scheduleRebaselinePolicies,
     scheduleStatusSnapshots,
     publicExamplePracticeSessions,
     practiceSandboxPolicies,
@@ -7285,6 +7468,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterTrainingExposureSnapshots,
     releaseErratumDisclosurePolicies,
     releaseErrata,
+    scheduleRebaselinePolicies,
     scheduleStatusSnapshots,
       publicExamplePracticeSessions,
       practiceSandboxPolicies,
