@@ -484,6 +484,95 @@ const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchm
 const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
 const rubricDimensions = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
+const itemIssueCategories = [
+  "source_leakage",
+  "missing_context",
+  "malformed_text",
+  "duplicate_or_near_duplicate",
+  "nonconceptual_or_scope",
+  "translation_or_adaptation_error",
+  "rights_or_provenance",
+  "rubric_or_ui_render_defect",
+  "external_assistance_or_exfiltration",
+];
+const itemIssueSeverityCategories = [
+  {
+    severity: "critical",
+    definition: "confirmed_or_likely_source_leakage_rights_failure_or_release_blocking_context_defect",
+    releaseEffect: "block_release_and_quarantine_dependents",
+  },
+  {
+    severity: "high",
+    definition: "plausible_leakage_context_duplicate_translation_or_ui_defect_that_can_change_labels",
+    releaseEffect: "quarantine_item_and_dependents_until_triage",
+  },
+  {
+    severity: "medium",
+    definition: "localized_defect_or_ambiguity_that_can_affect_one_item_or_assignment",
+    releaseEffect: "quarantine_affected_item_until_resolution",
+  },
+  {
+    severity: "low",
+    definition: "copy_formatting_or_minor_clarity_defect_unlikely_to_change_locked_labels",
+    releaseEffect: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+  },
+];
+const itemIssueQuarantineSlaHoursBySeverity = {
+  critical: 4,
+  high: 24,
+  medium: 72,
+  low: 168,
+};
+const itemIssueQuarantineActionRequirementBySeverity = {
+  critical: "quarantine_affected_item_and_dependent_artifacts_until_resolved_or_superseded",
+  high: "quarantine_affected_item_and_dependent_artifacts_until_triaged",
+  medium: "quarantine_affected_item_until_triaged_or_resolved",
+  low: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+};
+const raterTrainingExposureWindowDays = {
+  publicSourceAnchorRecordOnly: 0,
+  practiceFeedbackSamePublicAnchor: 0,
+  goldFeedbackSameCluster: 180,
+  duplicateFeedbackSameCluster: 180,
+  calibrationFeedbackSameCluster: 90,
+  remediationModuleSameCluster: 90,
+  samePositionClusterExposure: 365,
+  peerRationaleOrPostLockDiscussion: 365,
+  modelAssistedCheckSameCluster: 365,
+  adjudicationMemoOrProtectedLabelAccess: 3650,
+  sourceMetadataOrHiddenBenchmarkAccess: 3650,
+};
+const raterTrainingExposureBlockingEffects = {
+  publicSourceAnchorRecordOnly: "record_training_exposure_without_protected_block_by_itself",
+  practiceFeedbackSamePublicAnchor: "record_training_exposure_without_protected_block_by_itself",
+  goldFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  duplicateFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  calibrationFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  remediationModuleSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  samePositionClusterExposure: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  peerRationaleOrPostLockDiscussion: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  modelAssistedCheckSameCluster: "exclude_from_human_only_blind_denominators_and_reassign_same_cluster",
+  adjudicationMemoOrProtectedLabelAccess: "non_blind_for_related_protected_cluster_until_admin_exception",
+  sourceMetadataOrHiddenBenchmarkAccess: "blocked_from_related_protected_assignment_until_deprotection_or_admin_exception",
+};
+const releaseErratumDisclosureThresholds = {
+  scoring_bug: "public_erratum_and_superseding_artifact_required",
+  source_leakage_defect: "public_erratum_api_warning_and_protected_incident_review_required",
+  rights_provenance_issue: "public_erratum_export_block_until_rights_review_required",
+  corrupted_text: "public_erratum_required_when_published_or_release_critical",
+  denominator_error: "public_erratum_and_metric_claim_warning_required",
+  configuration_manifest_error: "public_erratum_and_manifest_supersession_required",
+  other: "internal_audit_allowed_only_when_no_published_export_denominator_rights_source_metric_leaderboard_or_claim_change",
+};
+const releaseErratumApiWarningTypes = [
+  "scoring_bug",
+  "source_leakage_defect",
+  "rights_provenance_issue",
+  "corrupted_text",
+  "denominator_error",
+  "configuration_manifest_error",
+];
+const releaseErratumExportBlockTypes = ["source_leakage_defect", "rights_provenance_issue"];
 const rubricLintRules = [
   "missing_required_score",
   "clarity_branch_consistency",
@@ -1136,8 +1225,23 @@ function completeRatingExperienceWorkflowFixtures() {
       resolvedStatus: "acknowledged",
       timestamp: "2026-10-01T00:24:00.000Z",
     },
+    itemIssueQuarantinePolicy: {
+      id: "item-issue-quarantine-policy-workflow-new",
+      policyVersion: "item-issue-quarantine-rlhf90-v1",
+      issueCategories: itemIssueCategories,
+      severityCategories: itemIssueSeverityCategories,
+      quarantineSlaHoursBySeverity: itemIssueQuarantineSlaHoursBySeverity,
+      quarantineActionRequirementBySeverity: itemIssueQuarantineActionRequirementBySeverity,
+      triageVisibilityPolicy: "label_and_model_result_blind_by_default_with_reason_coded_unblinding",
+      stalePropagationPolicy: "quarantine marks dependent labels, exports, reports, leaderboards, and release claims stale until resolved or superseded",
+      denominatorPolicy: "release-critical item issues are excluded from label denominators until blind triage resolves them",
+      disclosurePolicy: "public errata required for published denominator changes, rights defects, source leakage, or release-claim changes; otherwise internal audit disclosure",
+      slaClockStart: "createdAt",
+      frozenAt: "2026-10-01T00:24:30.000Z",
+    },
     itemIssueReport: {
       id: "item-issue-workflow-new",
+      itemIssueQuarantinePolicyId: "item-issue-quarantine-policy-workflow-new",
       reporterId: "demo-rater",
       reporterRole: "graduate",
       positionId: "pos-ai-prior",
@@ -1454,8 +1558,22 @@ function completeAuxiliaryWorkflowFixtures() {
       reviewerResolution: "route_to_non_blind_or_reassign",
       timestamp: "2026-10-01T00:39:30.000Z",
     },
+    raterTrainingExposurePolicy: {
+      id: "rater-training-exposure-policy-workflow-new",
+      policyVersion: "rater-training-exposure-rlhf90-v1",
+      exposureWindowDays: raterTrainingExposureWindowDays,
+      protectedAssignmentBlockingEffects: raterTrainingExposureBlockingEffects,
+      snapshotRequiredBeforeAssignment: true,
+      protectedAssignmentScope: "validation_hidden_benchmark_human_ceiling_release_critical",
+      publicAnchorExposurePolicy: "public source-anchor examples are record-only by themselves but must be snapshotted before protected assignment",
+      clusterMatchPolicy: "same_position_or_near_duplicate_source_family_or_adaptation_cluster blocks protected independent blind eligibility within window",
+      staleEligibilityPolicy: "later sibling critiques, post-lock discussion, model-assisted checks, protected labels, or source metadata exposures trigger recheck before protected assignment",
+      adminExceptionPolicy: "admin exception must deprotect or route to non-blind role and cannot count as independent blind protected label",
+      frozenAt: "2026-10-01T00:39:45.000Z",
+    },
     raterTrainingExposureSnapshot: {
       id: "training-exposure-snapshot-workflow-new",
+      raterTrainingExposurePolicyId: "rater-training-exposure-policy-workflow-new",
       raterId: "demo-rater",
       assignmentId: "assign-ai-base-rate",
       certificationRecordId: "certification-workflow-new",
@@ -1472,8 +1590,22 @@ function completeAuxiliaryWorkflowFixtures() {
       protectedClusterEligibilityEffect: "eligible_after_checks",
       createdAt: "2026-10-01T00:40:00.000Z",
     },
+    releaseErratumDisclosurePolicy: {
+      id: "release-erratum-disclosure-policy-workflow-new",
+      policyVersion: "release-erratum-disclosure-rlhf90-v1",
+      disclosureThresholdByErratumType: releaseErratumDisclosureThresholds,
+      publicDisclosureRequiredFor: releaseErratumApiWarningTypes,
+      apiWarningRequiredFor: releaseErratumApiWarningTypes,
+      exportBlockRequiredFor: releaseErratumExportBlockTypes,
+      internalOnlyAllowedPolicy:
+        "internal-only errata are allowed only for other defects with no published artifact, export, denominator, rights, source, metric, leaderboard, or release-claim change",
+      supersessionPolicy: "affected published artifacts must be deprecated or superseded without mutating historical releases or leaderboards",
+      approvalPolicy: "release admin approval required before erratum publication or internal-only classification",
+      frozenAt: "2026-10-01T00:40:30.000Z",
+    },
     releaseErratum: {
       id: "release-erratum-workflow-new",
+      releaseErratumDisclosurePolicyId: "release-erratum-disclosure-policy-workflow-new",
       releaseId: "october-2026-demo",
       erratumType: "denominator_error",
       affectedArtifactIds: ["release-report-october-2026-demo"],
@@ -1481,6 +1613,10 @@ function completeAuxiliaryWorkflowFixtures() {
       supersedingArtifactIds: ["release-report-october-2026-demo-superseding-template"],
       historicalArtifactsMutated: false,
       historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
+      impactedMetricsClaims: ["lmca_comparability"],
+      artifactDeprecationStatus: "affected_artifacts_deprecated_with_superseding_links",
+      apiDownloadWarningBlockPolicy: "show_warning_and_link_superseding_artifacts",
+      remediationStatus: "superseding_artifact_published",
       status: "issued",
       approvedBy: "demo-admin",
       createdAt: "2026-10-01T00:41:00.000Z",
@@ -2370,6 +2506,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/rubric-lint-configs/rubric-lint-config-smoke"],
     ["POST", "/api/v1/rubric-lint-events"],
     ["GET", "/api/v1/rubric-lint-events/rubric-lint-event-smoke"],
+    ["POST", "/api/v1/item-issue-quarantine-policies"],
+    ["GET", "/api/v1/item-issue-quarantine-policies/item-issue-quarantine-policy-smoke"],
     ["POST", "/api/v1/item-issues"],
     ["GET", "/api/v1/item-issues/item-issue-smoke"],
     ["POST", "/api/v1/item-issues/item-issue-smoke/triage"],
@@ -2417,11 +2555,15 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/rater-item-conflicts"],
     ["GET", "/api/v1/rater-item-conflicts/rater-conflict-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/conflict-screen"],
+    ["POST", "/api/v1/rater-training-exposure-policies"],
+    ["GET", "/api/v1/rater-training-exposure-policies/training-exposure-policy-smoke"],
     ["POST", "/api/v1/rater-training-exposure-snapshots"],
     ["GET", "/api/v1/rater-training-exposure-snapshots/training-exposure-smoke"],
     ["GET", "/api/v1/assignments/assign-ai-base-rate/training-exposure-snapshot"],
     ["GET", "/api/v1/assignments/assign-ai-base-rate/draft-storage-policy"],
     ["GET", "/api/v1/raters/me/training-exposure"],
+    ["POST", "/api/v1/release-erratum-disclosure-policies"],
+    ["GET", "/api/v1/release-erratum-disclosure-policies/release-erratum-disclosure-policy-smoke"],
     ["POST", "/api/v1/release-errata"],
     ["GET", "/api/v1/release-errata/release-erratum-smoke"],
     ["POST", "/api/v1/releases/october-2026-demo/supersede"],
@@ -2582,6 +2724,7 @@ test("rating UI exposes RLHF88 task-first simplification, safe actions, and glos
   assert.ok(appSource.includes("createAssignmentSelfScreenPayload(assignment)"));
   assert.ok(appSource.includes("createAssignmentDeclinePayload(assignment)"));
   assert.ok(appSource.includes("createItemIssueReportPayload(assignment)"));
+  assert.ok(appSource.includes("itemIssueQuarantinePolicyId"));
   assert.ok(appSource.includes("createSourceRecognitionPayload(assignment)"));
   assert.ok(appSource.includes("/api/v1/assignments/${encodeURIComponent(assignment?.id ?? state.selectedAssignmentId)}/decline"));
   assert.ok(appSource.includes('endpoint: "/api/v1/item-issues"'));
@@ -8962,6 +9105,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["raterInstructionRenderVersion", "/api/v1/rater-instruction-render-versions"],
     ["rubricLintConfig", "/api/v1/rubric-lint-configs"],
     ["rubricLintEvent", "/api/v1/rubric-lint-events"],
+    ["itemIssueQuarantinePolicy", "/api/v1/item-issue-quarantine-policies"],
     ["itemIssueReport", "/api/v1/item-issues"],
     ["ratingDraftSession", "/api/v1/rating-draft-sessions"],
     ["scoreConfidenceAnnotation", "/api/v1/score-confidence-annotations"],
@@ -8979,6 +9123,39 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     });
     assert.equal(response.status, 201, resourceKey);
   }
+
+  const driftedItemIssuePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issue-quarantine-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueQuarantinePolicy: {
+        ...ratingExperience.itemIssueQuarantinePolicy,
+        id: "item-issue-quarantine-policy-drifted",
+        quarantineSlaHoursBySeverity: {
+          ...itemIssueQuarantineSlaHoursBySeverity,
+          high: 48,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedItemIssuePolicy.status, 400);
+  assert.match(driftedItemIssuePolicy.body.detail, /quarantineSlaHoursBySeverity/);
+
+  const visibleItemIssuePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-issue-quarantine-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemIssueQuarantinePolicy: {
+        ...ratingExperience.itemIssueQuarantinePolicy,
+        id: "item-issue-quarantine-policy-visible",
+        triageVisibilityPolicy: "triage may inspect labels and model results",
+      },
+    }),
+  });
+  assert.equal(visibleItemIssuePolicy.status, 400);
+  assert.match(visibleItemIssuePolicy.body.detail, /triageVisibilityPolicy/);
 
   const incompleteItemIssueReport = await invokeApi(context, {
     method: "POST",
@@ -9264,6 +9441,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(raterInstructionRenderById.status, 200);
   assert.equal(raterInstructionRenderById.body.scoreInputPolicyId, "score-input-policy-workflow-new");
+
+  const itemIssueQuarantinePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/item-issue-quarantine-policies/item-issue-quarantine-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(itemIssueQuarantinePolicyById.status, 200);
+  assert.equal(itemIssueQuarantinePolicyById.body.quarantineSlaHoursBySeverity.high, 24);
+  assert.equal(itemIssueQuarantinePolicyById.body.triageVisibilityPolicy, "label_and_model_result_blind_by_default_with_reason_coded_unblinding");
 
   const itemIssueById = await invokeApi(context, {
     method: "GET",
@@ -9577,6 +9763,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(mutableReleaseErratum.status, 400);
   assert.match(mutableReleaseErratum.body.detail, /historicalArtifactsMutated/);
 
+  const undisclosedReleaseErratum = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-errata",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseErratum: {
+        ...auxiliaryWorkflow.releaseErratum,
+        id: "release-erratum-undisclosed-denominator",
+        impactedMetricsClaims: [],
+        artifactDeprecationStatus: "",
+        apiDownloadWarningBlockPolicy: "",
+        remediationStatus: "",
+      },
+    }),
+  });
+  assert.equal(undisclosedReleaseErratum.status, 400);
+  assert.match(undisclosedReleaseErratum.body.detail, /artifactDeprecationStatus|apiDownloadWarningBlockPolicy|remediationStatus|impactedMetricsClaims/);
+
   const unsupportedCompleteSchedule = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/schedule-status-snapshots",
@@ -9607,6 +9811,72 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unsafeTrainingExposureSnapshot.status, 400);
   assert.match(unsafeTrainingExposureSnapshot.body.detail, /protectedClusterEligibilityEffect/);
+
+  const driftedTrainingExposurePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-training-exposure-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterTrainingExposurePolicy: {
+        ...auxiliaryWorkflow.raterTrainingExposurePolicy,
+        id: "rater-training-exposure-policy-drifted",
+        exposureWindowDays: {
+          ...raterTrainingExposureWindowDays,
+          goldFeedbackSameCluster: 30,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedTrainingExposurePolicy.status, 400);
+  assert.match(driftedTrainingExposurePolicy.body.detail, /exposureWindowDays/);
+
+  const weakTrainingExposurePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-training-exposure-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterTrainingExposurePolicy: {
+        ...auxiliaryWorkflow.raterTrainingExposurePolicy,
+        id: "rater-training-exposure-policy-weak-exception",
+        adminExceptionPolicy: "admin may count exceptions as normal labels",
+      },
+    }),
+  });
+  assert.equal(weakTrainingExposurePolicy.status, 400);
+  assert.match(weakTrainingExposurePolicy.body.detail, /adminExceptionPolicy/);
+
+  const driftedErratumDisclosurePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-erratum-disclosure-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseErratumDisclosurePolicy: {
+        ...auxiliaryWorkflow.releaseErratumDisclosurePolicy,
+        id: "release-erratum-disclosure-policy-drifted",
+        disclosureThresholdByErratumType: {
+          ...releaseErratumDisclosureThresholds,
+          denominator_error: "internal_only",
+        },
+      },
+    }),
+  });
+  assert.equal(driftedErratumDisclosurePolicy.status, 400);
+  assert.match(driftedErratumDisclosurePolicy.body.detail, /disclosureThresholdByErratumType/);
+
+  const weakErratumDisclosurePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-erratum-disclosure-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      releaseErratumDisclosurePolicy: {
+        ...auxiliaryWorkflow.releaseErratumDisclosurePolicy,
+        id: "release-erratum-disclosure-policy-weak-internal-only",
+        internalOnlyAllowedPolicy: "internal only whenever admin chooses",
+      },
+    }),
+  });
+  assert.equal(weakErratumDisclosurePolicy.status, 400);
+  assert.match(weakErratumDisclosurePolicy.body.detail, /internalOnlyAllowedPolicy/);
 
   const incompleteSpotCheck = await invokeApi(context, {
     method: "POST",
@@ -9652,7 +9922,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["modelInferenceConfig", "/api/v1/model-inference-configs"],
     ["modelRunEnvironment", "/api/v1/model-run-environments"],
     ["raterItemConflict", "/api/v1/rater-item-conflicts"],
+    ["raterTrainingExposurePolicy", "/api/v1/rater-training-exposure-policies"],
     ["raterTrainingExposureSnapshot", "/api/v1/rater-training-exposure-snapshots"],
+    ["releaseErratumDisclosurePolicy", "/api/v1/release-erratum-disclosure-policies"],
     ["releaseErratum", "/api/v1/release-errata"],
     ["scheduleStatusSnapshot", "/api/v1/schedule-status-snapshots"],
   ]) {
@@ -9855,7 +10127,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     headers: raterHeaders,
   });
   assert.equal(trainingExposureForAssignment.status, 200);
+  assert.equal(trainingExposureForAssignment.body.raterTrainingExposurePolicyId, "rater-training-exposure-policy-workflow-new");
   assert.equal(trainingExposureForAssignment.body.protectedSplitConflictStatus, "no_conflict_for_current_assignment");
+
+  const trainingExposurePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rater-training-exposure-policies/rater-training-exposure-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(trainingExposurePolicyById.status, 200);
+  assert.equal(trainingExposurePolicyById.body.exposureWindowDays.goldFeedbackSameCluster, 180);
 
   const raterTrainingExposure = await invokeApi(context, {
     method: "GET",
@@ -9864,6 +10145,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(raterTrainingExposure.status, 200);
   assert.equal(raterTrainingExposure.body.trainingExposureSnapshots.length, 1);
+
+  const releaseErratumDisclosurePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-erratum-disclosure-policies/release-erratum-disclosure-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(releaseErratumDisclosurePolicyById.status, 200);
+  assert.equal(releaseErratumDisclosurePolicyById.body.disclosureThresholdByErratumType.denominator_error, "public_erratum_and_metric_claim_warning_required");
 
   const releaseScheduleStatus = await invokeApi(context, {
     method: "GET",
@@ -12200,9 +12489,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ),
     true,
   );
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueQuarantinePolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueReports.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.itemIssueActions.length, 2);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.ratingDraftSessions.length, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueQuarantinePolicyRows.at(-1).quarantineSlaHoursBySeverity.high, 24);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.itemIssueQuarantinePolicyRows.at(-1).quarantineActionRequirementBySeverity.critical,
+    "quarantine_affected_item_and_dependent_artifacts_until_resolved_or_superseded",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).itemIssueQuarantinePolicyId,
+    "item-issue-quarantine-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(releaseReport.body.ratingExperienceEvidence.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
   assert.equal(
@@ -12238,6 +12537,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedDraftStoragePolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionRenderVersionCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 2);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueQuarantinePolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueReportCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueActionCount, 2);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueQuarantineActionCount, 1);
@@ -12269,7 +12569,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelInferenceConfigs.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunEnvironments.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterItemConflicts.length, 2 + extendedRaterItemConflictTypes.length);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposurePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposureSnapshots.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.releaseErratumDisclosurePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.releaseErrata.length, 2);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.scheduleStatusSnapshots.length, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.releaseUseStatus, "submitted_auxiliary_workflow_evidence_complete");
@@ -12280,6 +12582,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckQAItemCount, 1);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterTrainingExposurePolicyCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.raterTrainingExposurePolicyRows.at(-1).exposureWindowDays.goldFeedbackSameCluster, 180);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.raterTrainingExposureRows.at(-1).raterTrainingExposurePolicyId,
+    "rater-training-exposure-policy-workflow-new",
+  );
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedReleaseErratumDisclosurePolicyCount, 1);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.releaseErratumDisclosurePolicyRows.at(-1).disclosureThresholdByErratumType.denominator_error,
+    "public_erratum_and_metric_claim_warning_required",
+  );
   assert.equal(releaseReport.body.ratingEffortQuality.releaseUseStatus, "rating_effort_qa_review_complete");
   assert.equal(releaseReport.body.ratingEffortQuality.counts.submittedQaReviewCount, 1);
   assert.equal(releaseReport.body.ratingEffortQuality.counts.qaReviewExcludedCount, 1);
@@ -12292,7 +12605,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.ok(workflowErratumWarning);
   assert.equal(workflowErratumWarning.apiDownloadWarningBlockPolicy, "show_warning_and_link_superseding_artifacts");
-  assert.equal(workflowErratumWarning.claimWarningStatus, "affected_artifacts_require_warning");
+  assert.equal(workflowErratumWarning.claimWarningStatus, "impacted_metrics_or_claims_require_warning");
   const workflowScheduleClaim = releaseReport.body.releaseClaimWarnings.scheduleCompletionClaimRows.find(
     (row) => row.scheduleStatusSnapshotId === "schedule-status-workflow-new",
   );
@@ -12691,7 +13004,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 117 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 120 + extendedRaterItemConflictTypes.length,
   );
 });
 

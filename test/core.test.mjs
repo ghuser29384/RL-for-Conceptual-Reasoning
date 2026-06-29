@@ -555,6 +555,95 @@ const ratingTaskOutputUses = ["blind_initial_rating", "expert_check", "adjudicat
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
 const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
+const itemIssueCategories = [
+  "source_leakage",
+  "missing_context",
+  "malformed_text",
+  "duplicate_or_near_duplicate",
+  "nonconceptual_or_scope",
+  "translation_or_adaptation_error",
+  "rights_or_provenance",
+  "rubric_or_ui_render_defect",
+  "external_assistance_or_exfiltration",
+];
+const itemIssueSeverityCategories = [
+  {
+    severity: "critical",
+    definition: "confirmed_or_likely_source_leakage_rights_failure_or_release_blocking_context_defect",
+    releaseEffect: "block_release_and_quarantine_dependents",
+  },
+  {
+    severity: "high",
+    definition: "plausible_leakage_context_duplicate_translation_or_ui_defect_that_can_change_labels",
+    releaseEffect: "quarantine_item_and_dependents_until_triage",
+  },
+  {
+    severity: "medium",
+    definition: "localized_defect_or_ambiguity_that_can_affect_one_item_or_assignment",
+    releaseEffect: "quarantine_affected_item_until_resolution",
+  },
+  {
+    severity: "low",
+    definition: "copy_formatting_or_minor_clarity_defect_unlikely_to_change_locked_labels",
+    releaseEffect: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+  },
+];
+const itemIssueQuarantineSlaHoursBySeverity = {
+  critical: 4,
+  high: 24,
+  medium: 72,
+  low: 168,
+};
+const itemIssueQuarantineActionRequirementBySeverity = {
+  critical: "quarantine_affected_item_and_dependent_artifacts_until_resolved_or_superseded",
+  high: "quarantine_affected_item_and_dependent_artifacts_until_triaged",
+  medium: "quarantine_affected_item_until_triaged_or_resolved",
+  low: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+};
+const raterTrainingExposureWindowDays = {
+  publicSourceAnchorRecordOnly: 0,
+  practiceFeedbackSamePublicAnchor: 0,
+  goldFeedbackSameCluster: 180,
+  duplicateFeedbackSameCluster: 180,
+  calibrationFeedbackSameCluster: 90,
+  remediationModuleSameCluster: 90,
+  samePositionClusterExposure: 365,
+  peerRationaleOrPostLockDiscussion: 365,
+  modelAssistedCheckSameCluster: 365,
+  adjudicationMemoOrProtectedLabelAccess: 3650,
+  sourceMetadataOrHiddenBenchmarkAccess: 3650,
+};
+const raterTrainingExposureBlockingEffects = {
+  publicSourceAnchorRecordOnly: "record_training_exposure_without_protected_block_by_itself",
+  practiceFeedbackSamePublicAnchor: "record_training_exposure_without_protected_block_by_itself",
+  goldFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  duplicateFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  calibrationFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  remediationModuleSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  samePositionClusterExposure: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  peerRationaleOrPostLockDiscussion: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  modelAssistedCheckSameCluster: "exclude_from_human_only_blind_denominators_and_reassign_same_cluster",
+  adjudicationMemoOrProtectedLabelAccess: "non_blind_for_related_protected_cluster_until_admin_exception",
+  sourceMetadataOrHiddenBenchmarkAccess: "blocked_from_related_protected_assignment_until_deprotection_or_admin_exception",
+};
+const releaseErratumDisclosureThresholds = {
+  scoring_bug: "public_erratum_and_superseding_artifact_required",
+  source_leakage_defect: "public_erratum_api_warning_and_protected_incident_review_required",
+  rights_provenance_issue: "public_erratum_export_block_until_rights_review_required",
+  corrupted_text: "public_erratum_required_when_published_or_release_critical",
+  denominator_error: "public_erratum_and_metric_claim_warning_required",
+  configuration_manifest_error: "public_erratum_and_manifest_supersession_required",
+  other: "internal_audit_allowed_only_when_no_published_export_denominator_rights_source_metric_leaderboard_or_claim_change",
+};
+const releaseErratumApiWarningTypes = [
+  "scoring_bug",
+  "source_leakage_defect",
+  "rights_provenance_issue",
+  "corrupted_text",
+  "denominator_error",
+  "configuration_manifest_error",
+];
+const releaseErratumExportBlockTypes = ["source_leakage_defect", "rights_provenance_issue"];
 const rubricLintRules = [
   "missing_required_score",
   "clarity_branch_consistency",
@@ -1233,9 +1322,26 @@ function completeRatingExperienceFixtures() {
         timestamp: "2026-10-01T00:01:00.000Z",
       },
     ],
+    itemIssueQuarantinePolicies: [
+      {
+        id: "item-issue-quarantine-policy-submitted",
+        policyVersion: "item-issue-quarantine-rlhf90-v1",
+        issueCategories: itemIssueCategories,
+        severityCategories: itemIssueSeverityCategories,
+        quarantineSlaHoursBySeverity: itemIssueQuarantineSlaHoursBySeverity,
+        quarantineActionRequirementBySeverity: itemIssueQuarantineActionRequirementBySeverity,
+        triageVisibilityPolicy: "label_and_model_result_blind_by_default_with_reason_coded_unblinding",
+        stalePropagationPolicy: "quarantine marks dependent labels, exports, reports, leaderboards, and release claims stale until resolved or superseded",
+        denominatorPolicy: "release-critical item issues are excluded from label denominators until blind triage resolves them",
+        disclosurePolicy: "public errata required for published denominator changes, rights defects, source leakage, or release-claim changes; otherwise internal audit disclosure",
+        slaClockStart: "createdAt",
+        frozenAt: "2026-10-01T00:01:30.000Z",
+      },
+    ],
     itemIssueReports: [
       {
         id: "item-issue-submitted",
+        itemIssueQuarantinePolicyId: "item-issue-quarantine-policy-submitted",
         reporterId: "demo-rater",
         reporterRole: "graduate",
         positionId: "pos-ai-prior",
@@ -1585,9 +1691,25 @@ function completeAuxiliaryWorkflowFixtures() {
         timestamp: "2026-10-01T00:09:00.000Z",
       },
     ],
+    raterTrainingExposurePolicies: [
+      {
+        id: "rater-training-exposure-policy-submitted",
+        policyVersion: "rater-training-exposure-rlhf90-v1",
+        exposureWindowDays: raterTrainingExposureWindowDays,
+        protectedAssignmentBlockingEffects: raterTrainingExposureBlockingEffects,
+        snapshotRequiredBeforeAssignment: true,
+        protectedAssignmentScope: "validation_hidden_benchmark_human_ceiling_release_critical",
+        publicAnchorExposurePolicy: "public source-anchor examples are record-only by themselves but must be snapshotted before protected assignment",
+        clusterMatchPolicy: "same_position_or_near_duplicate_source_family_or_adaptation_cluster blocks protected independent blind eligibility within window",
+        staleEligibilityPolicy: "later sibling critiques, post-lock discussion, model-assisted checks, protected labels, or source metadata exposures trigger recheck before protected assignment",
+        adminExceptionPolicy: "admin exception must deprotect or route to non-blind role and cannot count as independent blind protected label",
+        frozenAt: "2026-10-01T00:09:30.000Z",
+      },
+    ],
     raterTrainingExposureSnapshots: [
       {
         id: "training-exposure-snapshot-submitted",
+        raterTrainingExposurePolicyId: "rater-training-exposure-policy-submitted",
         raterId: "demo-rater",
         assignmentId: "assign-ai-base-rate",
         certificationRecordId: "certification-workflow-new",
@@ -1605,9 +1727,25 @@ function completeAuxiliaryWorkflowFixtures() {
         createdAt: "2026-10-01T00:10:00.000Z",
       },
     ],
+    releaseErratumDisclosurePolicies: [
+      {
+        id: "release-erratum-disclosure-policy-submitted",
+        policyVersion: "release-erratum-disclosure-rlhf90-v1",
+        disclosureThresholdByErratumType: releaseErratumDisclosureThresholds,
+        publicDisclosureRequiredFor: releaseErratumApiWarningTypes,
+        apiWarningRequiredFor: releaseErratumApiWarningTypes,
+        exportBlockRequiredFor: releaseErratumExportBlockTypes,
+        internalOnlyAllowedPolicy:
+          "internal-only errata are allowed only for other defects with no published artifact, export, denominator, rights, source, metric, leaderboard, or release-claim change",
+        supersessionPolicy: "affected published artifacts must be deprecated or superseded without mutating historical releases or leaderboards",
+        approvalPolicy: "release admin approval required before erratum publication or internal-only classification",
+        frozenAt: "2026-10-01T00:10:30.000Z",
+      },
+    ],
     releaseErrata: [
       {
         id: "release-erratum-submitted",
+        releaseErratumDisclosurePolicyId: "release-erratum-disclosure-policy-submitted",
         releaseId: "october-2026-demo",
         erratumType: "denominator_error",
         affectedArtifactIds: ["release-report-october-2026-demo"],
@@ -1615,6 +1753,10 @@ function completeAuxiliaryWorkflowFixtures() {
         supersedingArtifactIds: ["release-report-october-2026-demo-superseding-template"],
         historicalArtifactsMutated: false,
         historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
+        impactedMetricsClaims: ["lmca_comparability"],
+        artifactDeprecationStatus: "affected_artifacts_deprecated_with_superseding_links",
+        apiDownloadWarningBlockPolicy: "show_warning_and_link_superseding_artifacts",
+        remediationStatus: "superseding_artifact_published",
         status: "issued",
         approvedBy: "release-admin",
         createdAt: "2026-10-01T00:11:00.000Z",
@@ -2434,6 +2576,9 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRubricLintEventCount, 1);
   assert.deepEqual(report.rubricLintConfigRows.at(-1).triggerThresholds, rubricLintTriggerThresholds);
   assert.deepEqual(report.rubricLintConfigRows.at(-1).acknowledgementModes, rubricLintAcknowledgementModes);
+  assert.equal(report.counts.submittedItemIssueQuarantinePolicyCount, 1);
+  assert.deepEqual(report.itemIssueQuarantinePolicyRows.at(-1).severityCategories, itemIssueSeverityCategories);
+  assert.deepEqual(report.itemIssueQuarantinePolicyRows.at(-1).quarantineSlaHoursBySeverity, itemIssueQuarantineSlaHoursBySeverity);
   assert.equal(report.counts.submittedItemIssueReportCount, 1);
   assert.equal(report.counts.submittedItemIssueActionCount, 2);
   assert.equal(report.counts.submittedItemIssueQuarantineActionCount, 1);
@@ -2444,6 +2589,7 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedScoreConfidenceAnnotationCount, 1);
   assert.equal(report.counts.submittedRaterScoreConfidenceCount, 1);
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(report.itemIssueReportRows.at(-1).itemIssueQuarantinePolicyId, "item-issue-quarantine-policy-submitted");
   assert.equal(report.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
   assert.equal(report.itemIssueActionRows.at(-1).action, "quarantine");
@@ -2523,6 +2669,43 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   );
   assert.ok(
     mismatchedLintThresholdReport.reviewSections.some((section) => section.artifactType === "rubric_lint_config" && section.reason === "acknowledgementModes:explain,route_to_qa"),
+  );
+
+  const mismatchedItemIssuePolicyReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    itemIssueQuarantinePolicies: [
+      {
+        ...completeRatingExperienceFixtures().itemIssueQuarantinePolicies[0],
+        id: "item-issue-quarantine-policy-drifted",
+        quarantineSlaHoursBySeverity: {
+          ...itemIssueQuarantineSlaHoursBySeverity,
+          high: 48,
+        },
+      },
+    ],
+  });
+  assert.equal(mismatchedItemIssuePolicyReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    mismatchedItemIssuePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "item_issue_quarantine_policy" && section.reason === "quarantineSlaHoursBySeverity",
+    ),
+  );
+
+  const stalePolicyItemIssueReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    itemIssueReports: [
+      {
+        ...completeRatingExperienceFixtures().itemIssueReports[0],
+        id: "item-issue-stale-policy",
+        itemIssueQuarantinePolicyId: "item-issue-quarantine-policy-old",
+      },
+    ],
+  });
+  assert.equal(stalePolicyItemIssueReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    stalePolicyItemIssueReport.reviewSections.some(
+      (section) => section.artifactType === "item_issue_report" && section.reason === "itemIssueQuarantinePolicyId",
+    ),
   );
 
   const unsafeRationaleSpanReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
@@ -2657,8 +2840,16 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.counts.passingModelRunProvenanceCount, 1);
   assert.equal(report.counts.submittedRaterItemConflictCount, 1);
   assert.equal(report.raterItemConflictRows.at(-1).independentBlindEligibilityEffect, "excluded_from_independent_blind_protected_denominators");
+  assert.equal(report.counts.submittedRaterTrainingExposurePolicyCount, 1);
+  assert.deepEqual(report.raterTrainingExposurePolicyRows.at(-1).exposureWindowDays, raterTrainingExposureWindowDays);
+  assert.deepEqual(report.raterTrainingExposurePolicyRows.at(-1).protectedAssignmentBlockingEffects, raterTrainingExposureBlockingEffects);
   assert.equal(report.counts.submittedRaterTrainingExposureSnapshotCount, 1);
+  assert.equal(report.raterTrainingExposureRows.at(-1).raterTrainingExposurePolicyId, "rater-training-exposure-policy-submitted");
+  assert.equal(report.counts.submittedReleaseErratumDisclosurePolicyCount, 1);
+  assert.deepEqual(report.releaseErratumDisclosurePolicyRows.at(-1).disclosureThresholdByErratumType, releaseErratumDisclosureThresholds);
   assert.equal(report.counts.submittedReleaseErratumCount, 1);
+  assert.equal(report.releaseErrataRows.at(-1).releaseErratumDisclosurePolicyId, "release-erratum-disclosure-policy-submitted");
+  assert.equal(report.releaseErrataRows.at(-1).apiDownloadWarningBlockPolicy, "show_warning_and_link_superseding_artifacts");
   assert.equal(report.releaseErrataRows.at(-1).historicalArtifactsMutated, false);
   assert.equal(report.counts.submittedScheduleStatusSnapshotCount, 1);
   assert.equal(report.scheduleStatusRows.at(-1).supportsCompletionClaim, false);
@@ -2702,6 +2893,99 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   });
   assert.equal(unsafeConflictReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
   assert.ok(unsafeConflictReport.reviewSections.some((section) => section.reason === "independentBlindEligibilityEffect:counts_independent"));
+
+  const driftedTrainingExposurePolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    raterTrainingExposurePolicies: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().raterTrainingExposurePolicies[0],
+        id: "rater-training-exposure-policy-drifted",
+        exposureWindowDays: {
+          ...raterTrainingExposureWindowDays,
+          goldFeedbackSameCluster: 30,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedTrainingExposurePolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    driftedTrainingExposurePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "rater_training_exposure_policy" && section.reason === "exposureWindowDays",
+    ),
+  );
+
+  const staleTrainingExposurePolicySnapshotReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    raterTrainingExposureSnapshots: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().raterTrainingExposureSnapshots[0],
+        id: "training-exposure-snapshot-stale-policy",
+        raterTrainingExposurePolicyId: "rater-training-exposure-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleTrainingExposurePolicySnapshotReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    staleTrainingExposurePolicySnapshotReport.reviewSections.some(
+      (section) => section.artifactType === "rater_training_exposure_snapshot" && section.reason === "raterTrainingExposurePolicyId",
+    ),
+  );
+
+  const driftedErratumDisclosurePolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    releaseErratumDisclosurePolicies: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().releaseErratumDisclosurePolicies[0],
+        id: "release-erratum-disclosure-policy-drifted",
+        disclosureThresholdByErratumType: {
+          ...releaseErratumDisclosureThresholds,
+          denominator_error: "internal_only",
+        },
+      },
+    ],
+  });
+  assert.equal(driftedErratumDisclosurePolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    driftedErratumDisclosurePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "release_erratum_disclosure_policy" && section.reason === "disclosureThresholdByErratumType",
+    ),
+  );
+
+  const staleErratumDisclosurePolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    releaseErrata: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().releaseErrata[0],
+        id: "release-erratum-stale-policy",
+        releaseErratumDisclosurePolicyId: "release-erratum-disclosure-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleErratumDisclosurePolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    staleErratumDisclosurePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "release_erratum" && section.reason === "releaseErratumDisclosurePolicyId",
+    ),
+  );
+
+  const undisclosedErratumReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    releaseErrata: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().releaseErrata[0],
+        id: "release-erratum-undisclosed-denominator",
+        impactedMetricsClaims: [],
+        artifactDeprecationStatus: "",
+        apiDownloadWarningBlockPolicy: "",
+        remediationStatus: "",
+      },
+    ],
+  });
+  assert.equal(undisclosedErratumReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "impactedMetricsClaims"));
+  assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "artifactDeprecationStatus"));
+  assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "apiDownloadWarningBlockPolicy"));
+  assert.ok(undisclosedErratumReport.reviewSections.some((section) => section.artifactType === "release_erratum" && section.reason === "remediationStatus"));
 
   const unsafeTrainingExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),
@@ -7697,9 +7981,25 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      releaseErratumDisclosurePolicies: [
+        {
+          id: "release-erratum-disclosure-policy-report-warning",
+          policyVersion: "release-erratum-disclosure-rlhf90-v1",
+          disclosureThresholdByErratumType: releaseErratumDisclosureThresholds,
+          publicDisclosureRequiredFor: releaseErratumApiWarningTypes,
+          apiWarningRequiredFor: releaseErratumApiWarningTypes,
+          exportBlockRequiredFor: releaseErratumExportBlockTypes,
+          internalOnlyAllowedPolicy:
+            "internal-only errata are allowed only for other defects with no published artifact, export, denominator, rights, source, metric, leaderboard, or release-claim change",
+          supersessionPolicy: "affected published artifacts must be deprecated or superseded without mutating historical releases or leaderboards",
+          approvalPolicy: "release admin approval required before erratum publication or internal-only classification",
+          frozenAt: "2026-10-01T00:10:30.000Z",
+        },
+      ],
       releaseErrata: [
         {
           id: "release-erratum-report-warning",
+          releaseErratumDisclosurePolicyId: "release-erratum-disclosure-policy-report-warning",
           releaseId: "release-test",
           erratumType: "denominator_error",
           affectedArtifactIds: ["release-report-release-test"],
@@ -7707,7 +8007,7 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
           impactedMetricsClaims: ["rating_count_denominator", "leaderboard_common_subset"],
           artifactDeprecationStatus: "superseded",
           supersedingArtifactIds: ["release-report-release-test-v2"],
-          apiDownloadWarningBlockPolicy: "warn_and_link_superseding_release_report",
+          apiDownloadWarningBlockPolicy: "warning_and_link_superseding_release_report",
           remediationStatus: "superseding_artifact_published",
           historicalArtifactsMutated: false,
           historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
@@ -7720,7 +8020,7 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   );
   assert.equal(errataWarningReport.releaseClaimWarnings.counts.errataWarningCount, 1);
   assert.equal(errataWarningReport.releaseClaimWarnings.apiDownloadWarningRows[0].claimWarningStatus, "impacted_metrics_or_claims_require_warning");
-  assert.equal(errataWarningReport.releaseClaimWarnings.apiDownloadWarningRows[0].apiDownloadWarningBlockPolicy, "warn_and_link_superseding_release_report");
+  assert.equal(errataWarningReport.releaseClaimWarnings.apiDownloadWarningRows[0].apiDownloadWarningBlockPolicy, "warning_and_link_superseding_release_report");
   assert.equal(report.metricDirectionalityConfig.counts.pairwiseConfigRows, 3);
   assert.equal(report.metricDirectionalityConfig.counts.configViolationCount, 0);
   assert.equal(report.metricDirectionalityConfig.directionalityRows[0].callSignature, "customWeightedLoss(targetLabel, modelPrediction)");

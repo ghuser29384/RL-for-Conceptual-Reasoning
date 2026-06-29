@@ -5252,6 +5252,8 @@ function createAssignmentDeclinePayload(assignment) {
 function createItemIssueReportPayload(assignment) {
   return {
     id: `item-issue-ui-${assignment?.id ?? state.selectedAssignmentId}-${Date.now()}`,
+    itemIssueQuarantinePolicyId:
+      state.releaseReport?.ratingExperienceEvidence?.itemIssueQuarantinePolicyRows?.at(-1)?.id ?? "item-issue-quarantine-policy-october-2026-demo",
     reporterId: state.session?.user?.id ?? "demo-rater",
     reporterRole: state.session?.user?.role ?? "graduate",
     positionId: assignment?.positionId ?? null,

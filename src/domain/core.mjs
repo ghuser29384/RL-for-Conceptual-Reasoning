@@ -16151,6 +16151,42 @@ const REQUIRED_ITEM_ISSUE_CATEGORIES = [
   "rubric_or_ui_render_defect",
   "external_assistance_or_exfiltration",
 ];
+const ITEM_ISSUE_QUARANTINE_POLICY_VERSION = "item-issue-quarantine-rlhf90-v1";
+const REQUIRED_ITEM_ISSUE_SEVERITIES = ["low", "medium", "high", "critical"];
+const REQUIRED_ITEM_ISSUE_SEVERITY_CATEGORIES = [
+  {
+    severity: "critical",
+    definition: "confirmed_or_likely_source_leakage_rights_failure_or_release_blocking_context_defect",
+    releaseEffect: "block_release_and_quarantine_dependents",
+  },
+  {
+    severity: "high",
+    definition: "plausible_leakage_context_duplicate_translation_or_ui_defect_that_can_change_labels",
+    releaseEffect: "quarantine_item_and_dependents_until_triage",
+  },
+  {
+    severity: "medium",
+    definition: "localized_defect_or_ambiguity_that_can_affect_one_item_or_assignment",
+    releaseEffect: "quarantine_affected_item_until_resolution",
+  },
+  {
+    severity: "low",
+    definition: "copy_formatting_or_minor_clarity_defect_unlikely_to_change_locked_labels",
+    releaseEffect: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+  },
+];
+const REQUIRED_ITEM_ISSUE_QUARANTINE_SLA_HOURS = {
+  critical: 4,
+  high: 24,
+  medium: 72,
+  low: 168,
+};
+const REQUIRED_ITEM_ISSUE_QUARANTINE_ACTION_REQUIREMENTS = {
+  critical: "quarantine_affected_item_and_dependent_artifacts_until_resolved_or_superseded",
+  high: "quarantine_affected_item_and_dependent_artifacts_until_triaged",
+  medium: "quarantine_affected_item_until_triaged_or_resolved",
+  low: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+};
 const ITEM_ISSUE_ACTION_KINDS = ["triage", "resolve", "quarantine"];
 const ITEM_ISSUE_ACTION_RESOLUTION_STATUSES = ["triage_opened", "resolved", "quarantined"];
 const ITEM_ISSUE_ACTION_QUARANTINE_SCOPES = ["none", "affected_item", "dependent_artifacts", "affected_item_and_dependent_artifacts"];
@@ -16294,9 +16330,27 @@ function defaultRubricLintEvent(releaseId, lintConfigId) {
   };
 }
 
+function defaultItemIssueQuarantinePolicy(releaseId) {
+  return {
+    id: `item-issue-quarantine-policy-${releaseId}`,
+    policyVersion: ITEM_ISSUE_QUARANTINE_POLICY_VERSION,
+    issueCategories: REQUIRED_ITEM_ISSUE_CATEGORIES,
+    severityCategories: REQUIRED_ITEM_ISSUE_SEVERITY_CATEGORIES,
+    quarantineSlaHoursBySeverity: REQUIRED_ITEM_ISSUE_QUARANTINE_SLA_HOURS,
+    quarantineActionRequirementBySeverity: REQUIRED_ITEM_ISSUE_QUARANTINE_ACTION_REQUIREMENTS,
+    triageVisibilityPolicy: "label_and_model_result_blind_by_default_with_reason_coded_unblinding",
+    stalePropagationPolicy: "quarantine marks dependent labels, exports, reports, leaderboards, and release claims stale until resolved or superseded",
+    denominatorPolicy: "release-critical item issues are excluded from label denominators until blind triage resolves them",
+    disclosurePolicy: "public errata required for published denominator changes, rights defects, source leakage, or release-claim changes; otherwise internal audit disclosure",
+    slaClockStart: "createdAt",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultItemIssueReport(releaseId) {
   return {
     id: `item-issue-report-${releaseId}`,
+    itemIssueQuarantinePolicyId: `item-issue-quarantine-policy-${releaseId}`,
     reporterId: "demo-rater",
     reporterRole: "graduate",
     positionId: "pos-ai-prior",
@@ -16521,10 +16575,15 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     .map((event) => normalizeRubricLintEvent(event, activeLintConfig.id, "submitted_workflow_rubric_lint_event"))
     .filter(Boolean);
   const seedLintEventRows = [normalizeRubricLintEvent(defaultRubricLintEvent(releaseId, seedLintConfigRows[0].id), seedLintConfigRows[0].id, "seed_rubric_lint_event")];
-  const submittedItemIssueRows = (options.itemIssueReports ?? [])
-    .map((report) => normalizeItemIssueReport(report, "submitted_workflow_item_issue_report"))
+  const submittedItemIssueQuarantinePolicyRows = (options.itemIssueQuarantinePolicies ?? [])
+    .map((policy) => normalizeItemIssueQuarantinePolicy(policy, "submitted_workflow_item_issue_quarantine_policy"))
     .filter(Boolean);
-  const seedItemIssueRows = [normalizeItemIssueReport(defaultItemIssueReport(releaseId), "seed_item_issue_report")];
+  const seedItemIssueQuarantinePolicyRows = [normalizeItemIssueQuarantinePolicy(defaultItemIssueQuarantinePolicy(releaseId), "seed_item_issue_quarantine_policy")];
+  const activeItemIssueQuarantinePolicy = submittedItemIssueQuarantinePolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedItemIssueQuarantinePolicyRows[0];
+  const submittedItemIssueRows = (options.itemIssueReports ?? [])
+    .map((report) => normalizeItemIssueReport(report, activeItemIssueQuarantinePolicy, "submitted_workflow_item_issue_report"))
+    .filter(Boolean);
+  const seedItemIssueRows = [normalizeItemIssueReport(defaultItemIssueReport(releaseId), seedItemIssueQuarantinePolicyRows[0], "seed_item_issue_report")];
   const submittedItemIssueActionRows = (options.itemIssueActions ?? [])
     .map((action) => normalizeItemIssueAction(action, "submitted_workflow_item_issue_action"))
     .filter(Boolean);
@@ -16588,6 +16647,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ["rater_instruction_render_version", submittedRenderRows.length ? submittedRenderRows : seedRenderRows],
     ["rubric_lint_config", submittedLintConfigRows.length ? submittedLintConfigRows : seedLintConfigRows],
     ["rubric_lint_event", submittedLintEventRows.length ? submittedLintEventRows : seedLintEventRows],
+    ["item_issue_quarantine_policy", submittedItemIssueQuarantinePolicyRows.length ? submittedItemIssueQuarantinePolicyRows : seedItemIssueQuarantinePolicyRows],
     ["item_issue_report", itemIssueRowsForGate],
     ["item_issue_action", itemIssueActionRowsForGate],
     ["rating_draft_session", submittedDraftRows.length ? submittedDraftRows : seedDraftRows],
@@ -16605,6 +16665,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ...submittedRenderRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_instruction_render_version", artifactId: row.id, reason }))),
     ...submittedLintConfigRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_config", artifactId: row.id, reason }))),
     ...submittedLintEventRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_event", artifactId: row.id, reason }))),
+    ...submittedItemIssueQuarantinePolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "item_issue_quarantine_policy", artifactId: row.id, reason })),
+    ),
     ...submittedItemIssueRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_report", artifactId: row.id, reason }))),
     ...submittedItemIssueActionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_action", artifactId: row.id, reason }))),
     ...itemIssueActionCoverageRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "item_issue_action_coverage", artifactId: row.itemIssueId, reason }))),
@@ -16632,6 +16695,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedRenderRows.length > 0 &&
     submittedLintConfigRows.length > 0 &&
     submittedLintEventRows.length > 0 &&
+    submittedItemIssueQuarantinePolicyRows.length > 0 &&
     submittedItemIssueRows.length > 0 &&
     submittedItemIssueActionRows.length > 0 &&
     submittedDraftRows.length > 0 &&
@@ -16653,6 +16717,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     prohibitedDraftClientPersistence: PROHIBITED_DRAFT_CLIENT_PERSISTENCE,
     requiredRubricLintRules: REQUIRED_RUBRIC_LINT_RULES,
     requiredItemIssueCategories: REQUIRED_ITEM_ISSUE_CATEGORIES,
+    requiredItemIssueSeverities: REQUIRED_ITEM_ISSUE_SEVERITIES,
+    requiredItemIssueSeverityCategories: REQUIRED_ITEM_ISSUE_SEVERITY_CATEGORIES,
+    requiredItemIssueQuarantineSlaHoursBySeverity: REQUIRED_ITEM_ISSUE_QUARANTINE_SLA_HOURS,
+    requiredItemIssueQuarantineActionRequirementBySeverity: REQUIRED_ITEM_ISSUE_QUARANTINE_ACTION_REQUIREMENTS,
     requiredProtectedArtifactTypes: REQUIRED_PROTECTED_ARTIFACT_TYPES,
     allowedRationaleEvidenceSpanLinkCategories: RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES,
     allowedRationaleEvidenceSpanVisibilityStates: RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES,
@@ -16662,6 +16730,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     raterInstructionRenderVersionRows: [...seedRenderRows, ...submittedRenderRows],
     rubricLintConfigRows: [...seedLintConfigRows, ...submittedLintConfigRows],
     rubricLintEventRows: [...seedLintEventRows, ...submittedLintEventRows],
+    itemIssueQuarantinePolicyRows: [...seedItemIssueQuarantinePolicyRows, ...submittedItemIssueQuarantinePolicyRows],
     itemIssueReportRows: [...seedItemIssueRows, ...submittedItemIssueRows],
     itemIssueActionRows: [...seedItemIssueActionRows, ...submittedItemIssueActionRows],
     itemIssueActionCoverageRows,
@@ -16682,6 +16751,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedRaterInstructionRenderVersionCount: submittedRenderRows.length,
       submittedRubricLintConfigCount: submittedLintConfigRows.length,
       submittedRubricLintEventCount: submittedLintEventRows.length,
+      submittedItemIssueQuarantinePolicyCount: submittedItemIssueQuarantinePolicyRows.length,
       submittedItemIssueReportCount: submittedItemIssueRows.length,
       submittedItemIssueActionCount: submittedItemIssueActionRows.length,
       submittedItemIssueQuarantineActionCount: submittedItemIssueActionRows.filter((row) => row.action === "quarantine").length,
@@ -16935,15 +17005,73 @@ function normalizeRubricLintEvent(event, activeLintConfigId, rowSource) {
   };
 }
 
-function normalizeItemIssueReport(report, rowSource) {
+function normalizeItemIssueQuarantinePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.itemIssueQuarantinePolicyId;
+  if (!id) return null;
+  const issueCategories = normalizeStringArray(policy.issueCategories);
+  const missingCategories = REQUIRED_ITEM_ISSUE_CATEGORIES.filter((category) => !issueCategories.includes(category));
+  const severityCategories = Array.isArray(policy.severityCategories) ? policy.severityCategories : [];
+  const quarantineSlaHoursBySeverity =
+    policy.quarantineSlaHoursBySeverity && typeof policy.quarantineSlaHoursBySeverity === "object" && !Array.isArray(policy.quarantineSlaHoursBySeverity)
+      ? policy.quarantineSlaHoursBySeverity
+      : {};
+  const quarantineActionRequirementBySeverity =
+    policy.quarantineActionRequirementBySeverity &&
+    typeof policy.quarantineActionRequirementBySeverity === "object" &&
+    !Array.isArray(policy.quarantineActionRequirementBySeverity)
+      ? policy.quarantineActionRequirementBySeverity
+      : {};
+  const missingSlaSeverities = REQUIRED_ITEM_ISSUE_SEVERITIES.filter((severity) => !Object.hasOwn(quarantineSlaHoursBySeverity, severity));
+  const missingActionRequirementSeverities = REQUIRED_ITEM_ISSUE_SEVERITIES.filter((severity) => !Object.hasOwn(quarantineActionRequirementBySeverity, severity));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === ITEM_ISSUE_QUARANTINE_POLICY_VERSION ? null : `policyVersion:${ITEM_ISSUE_QUARANTINE_POLICY_VERSION}`,
+    missingCategories.length ? `issueCategories:${missingCategories.join(",")}` : null,
+    stableJsonKey(severityCategories) === stableJsonKey(REQUIRED_ITEM_ISSUE_SEVERITY_CATEGORIES) ? null : "severityCategories",
+    missingSlaSeverities.length ? `quarantineSlaHoursBySeverity:${missingSlaSeverities.join(",")}` : null,
+    stableJsonKey(quarantineSlaHoursBySeverity) === stableJsonKey(REQUIRED_ITEM_ISSUE_QUARANTINE_SLA_HOURS)
+      ? null
+      : "quarantineSlaHoursBySeverity",
+    missingActionRequirementSeverities.length ? `quarantineActionRequirementBySeverity:${missingActionRequirementSeverities.join(",")}` : null,
+    stableJsonKey(quarantineActionRequirementBySeverity) === stableJsonKey(REQUIRED_ITEM_ISSUE_QUARANTINE_ACTION_REQUIREMENTS)
+      ? null
+      : "quarantineActionRequirementBySeverity",
+    policyMentions(policy.triageVisibilityPolicy, ["label", "model", "blind"]) ? null : "triageVisibilityPolicy",
+    policyMentions(policy.stalePropagationPolicy, ["dependent", "stale"]) ? null : "stalePropagationPolicy",
+    policyMentions(policy.denominatorPolicy, ["excluded", "denominator"]) ? null : "denominatorPolicy",
+    policyMentions(policy.disclosurePolicy, ["errata"]) ? null : "disclosurePolicy",
+    policy.slaClockStart === "createdAt" ? null : "slaClockStart",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    issueCategories,
+    missingCategories,
+    severityCategories,
+    quarantineSlaHoursBySeverity,
+    quarantineActionRequirementBySeverity,
+    triageVisibilityPolicy: policy.triageVisibilityPolicy ?? null,
+    stalePropagationPolicy: policy.stalePropagationPolicy ?? null,
+    denominatorPolicy: policy.denominatorPolicy ?? null,
+    disclosurePolicy: policy.disclosurePolicy ?? null,
+    slaClockStart: policy.slaClockStart ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "item_issue_quarantine_policy_review_required" : "item_issue_quarantine_policy_complete",
+  };
+}
+
+function normalizeItemIssueReport(report, activeItemIssueQuarantinePolicy, rowSource) {
   const id = report?.id ?? report?.itemIssueReportId;
   if (!id) return null;
+  const activePolicyId = activeItemIssueQuarantinePolicy?.id ?? null;
   const reviewReasons = [
+    report.itemIssueQuarantinePolicyId === activePolicyId ? null : "itemIssueQuarantinePolicyId",
     requiredPromptFieldReason("reporterId", report.reporterId),
     requiredPromptFieldReason("reporterRole", report.reporterRole),
     report.positionId || report.critiqueId || report.assignmentId || report.ratingId ? null : "affectedItemReference",
     REQUIRED_ITEM_ISSUE_CATEGORIES.includes(report.issueCategory) ? null : "issueCategory",
-    ["low", "medium", "high", "critical"].includes(report.severity) ? null : "severity",
+    REQUIRED_ITEM_ISSUE_SEVERITIES.includes(report.severity) ? null : "severity",
     requiredPromptFieldReason("blindSafeReporterNote", report.blindSafeReporterNote),
     requiredPromptFieldReason("reporterExposureState", report.reporterExposureState),
     report.labelVisibilityStateForTriage === "hidden" ? null : "labelVisibilityStateForTriage",
@@ -16955,6 +17083,7 @@ function normalizeItemIssueReport(report, rowSource) {
   return {
     id,
     rowSource,
+    itemIssueQuarantinePolicyId: report.itemIssueQuarantinePolicyId ?? null,
     reporterId: report.reporterId ?? null,
     reporterRole: report.reporterRole ?? null,
     positionId: report.positionId ?? null,
@@ -17454,6 +17583,33 @@ const REQUIRED_PRACTICE_COMPLETION_STANDARDS = {
   excludedFromReleaseDenominators: true,
   trainingExposureRecorded: true,
 };
+const RATER_TRAINING_EXPOSURE_POLICY_VERSION = "rater-training-exposure-rlhf90-v1";
+const REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS = {
+  publicSourceAnchorRecordOnly: 0,
+  practiceFeedbackSamePublicAnchor: 0,
+  goldFeedbackSameCluster: 180,
+  duplicateFeedbackSameCluster: 180,
+  calibrationFeedbackSameCluster: 90,
+  remediationModuleSameCluster: 90,
+  samePositionClusterExposure: 365,
+  peerRationaleOrPostLockDiscussion: 365,
+  modelAssistedCheckSameCluster: 365,
+  adjudicationMemoOrProtectedLabelAccess: 3650,
+  sourceMetadataOrHiddenBenchmarkAccess: 3650,
+};
+const REQUIRED_TRAINING_EXPOSURE_BLOCKING_EFFECTS = {
+  publicSourceAnchorRecordOnly: "record_training_exposure_without_protected_block_by_itself",
+  practiceFeedbackSamePublicAnchor: "record_training_exposure_without_protected_block_by_itself",
+  goldFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  duplicateFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  calibrationFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  remediationModuleSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  samePositionClusterExposure: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  peerRationaleOrPostLockDiscussion: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  modelAssistedCheckSameCluster: "exclude_from_human_only_blind_denominators_and_reassign_same_cluster",
+  adjudicationMemoOrProtectedLabelAccess: "non_blind_for_related_protected_cluster_until_admin_exception",
+  sourceMetadataOrHiddenBenchmarkAccess: "blocked_from_related_protected_assignment_until_deprotection_or_admin_exception",
+};
 
 const REQUIRED_QUEUE_POLICY_COMPONENTS = [
   "live_gold_duplicate_validation_mix",
@@ -17509,6 +17665,25 @@ const RELEASE_ERRATUM_TYPES = [
   "configuration_manifest_error",
   "other",
 ];
+const RELEASE_ERRATUM_DISCLOSURE_POLICY_VERSION = "release-erratum-disclosure-rlhf90-v1";
+const REQUIRED_RELEASE_ERRATUM_DISCLOSURE_THRESHOLDS = {
+  scoring_bug: "public_erratum_and_superseding_artifact_required",
+  source_leakage_defect: "public_erratum_api_warning_and_protected_incident_review_required",
+  rights_provenance_issue: "public_erratum_export_block_until_rights_review_required",
+  corrupted_text: "public_erratum_required_when_published_or_release_critical",
+  denominator_error: "public_erratum_and_metric_claim_warning_required",
+  configuration_manifest_error: "public_erratum_and_manifest_supersession_required",
+  other: "internal_audit_allowed_only_when_no_published_export_denominator_rights_source_metric_leaderboard_or_claim_change",
+};
+const REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES = [
+  "scoring_bug",
+  "source_leakage_defect",
+  "rights_provenance_issue",
+  "corrupted_text",
+  "denominator_error",
+  "configuration_manifest_error",
+];
+const REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES = ["source_leakage_defect", "rights_provenance_issue"];
 
 const SCHEDULE_SNAPSHOT_STATUSES = ["not_started", "in_progress", "complete", "blocked", "rebaselined", "dropped"];
 
@@ -17698,6 +17873,7 @@ function defaultRaterItemConflict(releaseId) {
 function defaultRaterTrainingExposureSnapshot(releaseId) {
   return {
     id: `training-exposure-snapshot-${releaseId}`,
+    raterTrainingExposurePolicyId: `rater-training-exposure-policy-${releaseId}`,
     raterId: "seed-rater",
     assignmentId: "assign-ai-base-rate",
     certificationRecordId: "certification-seed",
@@ -17716,9 +17892,26 @@ function defaultRaterTrainingExposureSnapshot(releaseId) {
   };
 }
 
+function defaultRaterTrainingExposurePolicy(releaseId) {
+  return {
+    id: `rater-training-exposure-policy-${releaseId}`,
+    policyVersion: RATER_TRAINING_EXPOSURE_POLICY_VERSION,
+    exposureWindowDays: REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS,
+    protectedAssignmentBlockingEffects: REQUIRED_TRAINING_EXPOSURE_BLOCKING_EFFECTS,
+    snapshotRequiredBeforeAssignment: true,
+    protectedAssignmentScope: "validation_hidden_benchmark_human_ceiling_release_critical",
+    publicAnchorExposurePolicy: "public source-anchor examples are record-only by themselves but must be snapshotted before protected assignment",
+    clusterMatchPolicy: "same_position_or_near_duplicate_source_family_or_adaptation_cluster_blocks protected independent blind eligibility within window",
+    staleEligibilityPolicy: "later sibling critiques, post-lock discussion, model-assisted checks, protected labels, or source metadata exposures trigger recheck before protected assignment",
+    adminExceptionPolicy: "admin exception must deprotect or route to non-blind role and cannot count as independent blind protected label",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultReleaseErratum(releaseId) {
   return {
     id: `release-erratum-${releaseId}`,
+    releaseErratumDisclosurePolicyId: `release-erratum-disclosure-policy-${releaseId}`,
     releaseId,
     erratumType: "denominator_error",
     affectedArtifactIds: [`release-report-${releaseId}`],
@@ -17726,9 +17919,29 @@ function defaultReleaseErratum(releaseId) {
     supersedingArtifactIds: [`release-report-${releaseId}-superseding-template`],
     historicalArtifactsMutated: false,
     historicalLeaderboardMutationPolicy: "do not mutate historical leaderboard; publish superseding artifact",
+    impactedMetricsClaims: ["lmca_comparability"],
+    artifactDeprecationStatus: "affected_artifacts_deprecated_with_superseding_links",
+    apiDownloadWarningBlockPolicy: "show_warning_and_link_superseding_artifacts",
+    remediationStatus: "superseding_artifact_published",
     status: "issued",
     approvedBy: "seed-release-admin",
     createdAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultReleaseErratumDisclosurePolicy(releaseId) {
+  return {
+    id: `release-erratum-disclosure-policy-${releaseId}`,
+    policyVersion: RELEASE_ERRATUM_DISCLOSURE_POLICY_VERSION,
+    disclosureThresholdByErratumType: REQUIRED_RELEASE_ERRATUM_DISCLOSURE_THRESHOLDS,
+    publicDisclosureRequiredFor: REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES,
+    apiWarningRequiredFor: REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES,
+    exportBlockRequiredFor: REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES,
+    internalOnlyAllowedPolicy:
+      "internal-only errata are allowed only for other defects with no published artifact, export, denominator, rights, source, metric, leaderboard, or release-claim change",
+    supersessionPolicy: "affected published artifacts must be deprecated or superseded without mutating historical releases or leaderboards",
+    approvalPolicy: "release admin approval required before erratum publication or internal-only classification",
+    frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -17802,14 +18015,28 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     .map((conflict) => normalizeRaterItemConflict(conflict, "submitted_workflow_rater_item_conflict"))
     .filter(Boolean);
   const seedConflictRows = [normalizeRaterItemConflict(defaultRaterItemConflict(releaseId), "seed_rater_item_conflict")];
+  const submittedTrainingExposurePolicyRows = (options.raterTrainingExposurePolicies ?? [])
+    .map((policy) => normalizeRaterTrainingExposurePolicy(policy, "submitted_workflow_rater_training_exposure_policy"))
+    .filter(Boolean);
+  const seedTrainingExposurePolicyRows = [normalizeRaterTrainingExposurePolicy(defaultRaterTrainingExposurePolicy(releaseId), "seed_rater_training_exposure_policy")];
+  const activeTrainingExposurePolicy = submittedTrainingExposurePolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedTrainingExposurePolicyRows[0];
   const submittedTrainingExposureRows = (options.raterTrainingExposureSnapshots ?? [])
-    .map((snapshot) => normalizeRaterTrainingExposureSnapshot(snapshot, "submitted_workflow_rater_training_exposure_snapshot"))
+    .map((snapshot) => normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposurePolicy, "submitted_workflow_rater_training_exposure_snapshot"))
     .filter(Boolean);
-  const seedTrainingExposureRows = [normalizeRaterTrainingExposureSnapshot(defaultRaterTrainingExposureSnapshot(releaseId), "seed_rater_training_exposure_snapshot")];
+  const seedTrainingExposureRows = [
+    normalizeRaterTrainingExposureSnapshot(defaultRaterTrainingExposureSnapshot(releaseId), seedTrainingExposurePolicyRows[0], "seed_rater_training_exposure_snapshot"),
+  ];
+  const submittedReleaseErratumPolicyRows = (options.releaseErratumDisclosurePolicies ?? [])
+    .map((policy) => normalizeReleaseErratumDisclosurePolicy(policy, "submitted_workflow_release_erratum_disclosure_policy"))
+    .filter(Boolean);
+  const seedReleaseErratumPolicyRows = [
+    normalizeReleaseErratumDisclosurePolicy(defaultReleaseErratumDisclosurePolicy(releaseId), "seed_release_erratum_disclosure_policy"),
+  ];
+  const activeReleaseErratumPolicy = submittedReleaseErratumPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedReleaseErratumPolicyRows[0];
   const submittedErrataRows = (options.releaseErrata ?? [])
-    .map((erratum) => normalizeReleaseErratum(erratum, "submitted_workflow_release_erratum"))
+    .map((erratum) => normalizeReleaseErratum(erratum, activeReleaseErratumPolicy, "submitted_workflow_release_erratum"))
     .filter(Boolean);
-  const seedErrataRows = [normalizeReleaseErratum(defaultReleaseErratum(releaseId), "seed_release_erratum")];
+  const seedErrataRows = [normalizeReleaseErratum(defaultReleaseErratum(releaseId), seedReleaseErratumPolicyRows[0], "seed_release_erratum")];
   const submittedScheduleRows = (options.scheduleStatusSnapshots ?? [])
     .map((snapshot) => normalizeScheduleStatusSnapshot(snapshot, "submitted_workflow_schedule_status_snapshot"))
     .filter(Boolean);
@@ -17836,7 +18063,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ["model_inference_config", submittedInferenceRows.length ? submittedInferenceRows : seedInferenceRows],
     ["model_run_environment", submittedEnvironmentRows.length ? submittedEnvironmentRows : seedEnvironmentRows],
     ["rater_item_conflict", submittedConflictRows.length ? submittedConflictRows : seedConflictRows],
+    ["rater_training_exposure_policy", submittedTrainingExposurePolicyRows.length ? submittedTrainingExposurePolicyRows : seedTrainingExposurePolicyRows],
     ["rater_training_exposure_snapshot", submittedTrainingExposureRows.length ? submittedTrainingExposureRows : seedTrainingExposureRows],
+    ["release_erratum_disclosure_policy", submittedReleaseErratumPolicyRows.length ? submittedReleaseErratumPolicyRows : seedReleaseErratumPolicyRows],
     ["release_erratum", submittedErrataRows.length ? submittedErrataRows : seedErrataRows],
     ["schedule_status_snapshot", submittedScheduleRows.length ? submittedScheduleRows : seedScheduleRows],
   ];
@@ -17852,7 +18081,13 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ...submittedInferenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_inference_config", artifactId: row.id, reason }))),
     ...submittedEnvironmentRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_run_environment", artifactId: row.id, reason }))),
     ...submittedConflictRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_item_conflict", artifactId: row.id, reason }))),
+    ...submittedTrainingExposurePolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "rater_training_exposure_policy", artifactId: row.id, reason })),
+    ),
     ...submittedTrainingExposureRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_training_exposure_snapshot", artifactId: row.id, reason }))),
+    ...submittedReleaseErratumPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "release_erratum_disclosure_policy", artifactId: row.id, reason })),
+    ),
     ...submittedErrataRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "release_erratum", artifactId: row.id, reason }))),
     ...submittedScheduleRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "schedule_status_snapshot", artifactId: row.id, reason }))),
     ...partialTaskTypeRows.filter((row) => row.status !== "partial_task_output_type_complete").map((row) => ({
@@ -17886,7 +18121,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     submittedInferenceRows.length > 0 &&
     submittedEnvironmentRows.length > 0 &&
     submittedConflictRows.length > 0 &&
+    submittedTrainingExposurePolicyRows.length > 0 &&
     submittedTrainingExposureRows.length > 0 &&
+    submittedReleaseErratumPolicyRows.length > 0 &&
     submittedErrataRows.length > 0 &&
     submittedScheduleRows.length > 0 &&
     reviewSections.length === 0;
@@ -17902,7 +18139,12 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     spotCheckRequiredSamplingDimensions: SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS,
     spotCheckSelectionMethods: SPOT_CHECK_SELECTION_METHODS,
     raterItemConflictTypes: RATER_ITEM_CONFLICT_TYPES,
+    requiredTrainingExposureWindowDays: REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS,
+    requiredTrainingExposureBlockingEffects: REQUIRED_TRAINING_EXPOSURE_BLOCKING_EFFECTS,
     releaseErratumTypes: RELEASE_ERRATUM_TYPES,
+    requiredReleaseErratumDisclosureThresholds: REQUIRED_RELEASE_ERRATUM_DISCLOSURE_THRESHOLDS,
+    requiredReleaseErratumApiWarningTypes: REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES,
+    requiredReleaseErratumExportBlockTypes: REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES,
     scheduleSnapshotStatuses: SCHEDULE_SNAPSHOT_STATUSES,
     blindingPreviewAuditRows: [...seedBlindingRows, ...submittedBlindingRows],
     partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
@@ -17916,7 +18158,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     modelInferenceConfigRows: [...seedInferenceRows, ...submittedInferenceRows],
     modelRunEnvironmentRows: [...seedEnvironmentRows, ...submittedEnvironmentRows],
     raterItemConflictRows: [...seedConflictRows, ...submittedConflictRows],
+    raterTrainingExposurePolicyRows: [...seedTrainingExposurePolicyRows, ...submittedTrainingExposurePolicyRows],
     raterTrainingExposureRows: [...seedTrainingExposureRows, ...submittedTrainingExposureRows],
+    releaseErratumDisclosurePolicyRows: [...seedReleaseErratumPolicyRows, ...submittedReleaseErratumPolicyRows],
     releaseErrataRows: [...seedErrataRows, ...submittedErrataRows],
     scheduleStatusRows: [...seedScheduleRows, ...submittedScheduleRows],
     partialTaskTypeRows,
@@ -17935,7 +18179,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       submittedModelInferenceConfigCount: submittedInferenceRows.length,
       submittedModelRunEnvironmentCount: submittedEnvironmentRows.length,
       submittedRaterItemConflictCount: submittedConflictRows.length,
+      submittedRaterTrainingExposurePolicyCount: submittedTrainingExposurePolicyRows.length,
       submittedRaterTrainingExposureSnapshotCount: submittedTrainingExposureRows.length,
+      submittedReleaseErratumDisclosurePolicyCount: submittedReleaseErratumPolicyRows.length,
       submittedReleaseErratumCount: submittedErrataRows.length,
       submittedScheduleStatusSnapshotCount: submittedScheduleRows.length,
       passingPartialTaskTypeCount: partialTaskTypeRows.filter((row) => row.status === "partial_task_output_type_complete").length,
@@ -18335,9 +18581,55 @@ function normalizeRaterItemConflict(conflict, rowSource) {
   };
 }
 
-function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
+function normalizeRaterTrainingExposurePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.raterTrainingExposurePolicyId;
+  if (!id) return null;
+  const exposureWindowDays =
+    policy.exposureWindowDays && typeof policy.exposureWindowDays === "object" && !Array.isArray(policy.exposureWindowDays)
+      ? policy.exposureWindowDays
+      : {};
+  const protectedAssignmentBlockingEffects =
+    policy.protectedAssignmentBlockingEffects &&
+    typeof policy.protectedAssignmentBlockingEffects === "object" &&
+    !Array.isArray(policy.protectedAssignmentBlockingEffects)
+      ? policy.protectedAssignmentBlockingEffects
+      : {};
+  const requiredWindowKeys = Object.keys(REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS);
+  const missingWindowKeys = requiredWindowKeys.filter((key) => !Object.hasOwn(exposureWindowDays, key));
+  const missingBlockingEffectKeys = requiredWindowKeys.filter((key) => !Object.hasOwn(protectedAssignmentBlockingEffects, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === RATER_TRAINING_EXPOSURE_POLICY_VERSION ? null : `policyVersion:${RATER_TRAINING_EXPOSURE_POLICY_VERSION}`,
+    missingWindowKeys.length ? `exposureWindowDays:${missingWindowKeys.join(",")}` : null,
+    stableJsonKey(exposureWindowDays) === stableJsonKey(REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS) ? null : "exposureWindowDays",
+    missingBlockingEffectKeys.length ? `protectedAssignmentBlockingEffects:${missingBlockingEffectKeys.join(",")}` : null,
+    stableJsonKey(protectedAssignmentBlockingEffects) === stableJsonKey(REQUIRED_TRAINING_EXPOSURE_BLOCKING_EFFECTS)
+      ? null
+      : "protectedAssignmentBlockingEffects",
+    policy.snapshotRequiredBeforeAssignment === true ? null : "snapshotRequiredBeforeAssignment",
+    policyMentions(policy.protectedAssignmentScope, ["validation", "hidden", "release"]) ? null : "protectedAssignmentScope",
+    policyMentions(policy.publicAnchorExposurePolicy, ["record"]) ? null : "publicAnchorExposurePolicy",
+    policyMentions(policy.clusterMatchPolicy, ["cluster", "block"]) ? null : "clusterMatchPolicy",
+    policyMentions(policy.staleEligibilityPolicy, ["recheck"]) ? null : "staleEligibilityPolicy",
+    policyMentions(policy.adminExceptionPolicy, ["cannot count", "independent blind"]) ? null : "adminExceptionPolicy",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    exposureWindowDays,
+    protectedAssignmentBlockingEffects,
+    snapshotRequiredBeforeAssignment: policy.snapshotRequiredBeforeAssignment === true,
+    protectedAssignmentScope: policy.protectedAssignmentScope ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rater_training_exposure_policy_review_required" : "rater_training_exposure_policy_complete",
+  };
+}
+
+function normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposurePolicy, rowSource) {
   const id = snapshot?.id ?? snapshot?.trainingExposureSnapshotId ?? snapshot?.training_exposure_snapshot_id;
   if (!id) return null;
+  const activePolicyId = activeTrainingExposurePolicy?.id ?? null;
   const protectedClusterEligibilityEffect = snapshot.protectedClusterEligibilityEffect ?? snapshot.protected_cluster_eligibility_effect ?? null;
   const safeProtectedClusterEligibilityEffect =
     protectedClusterEligibilityEffect === "eligible_after_checks" ||
@@ -18346,6 +18638,7 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
     policyMentions(protectedClusterEligibilityEffect, ["non_blind"]) ||
     policyMentions(protectedClusterEligibilityEffect, ["reassign"]);
   const reviewReasons = [
+    snapshot.raterTrainingExposurePolicyId === activePolicyId ? null : "raterTrainingExposurePolicyId",
     requiredPromptFieldReason("raterId", snapshot.raterId ?? snapshot.rater_id),
     requiredPromptFieldReason("assignmentId", snapshot.assignmentId ?? snapshot.assignment_id),
     requiredPromptFieldReason("rubricVersion", snapshot.rubricVersion ?? snapshot.rubric_version),
@@ -18363,6 +18656,7 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
   return {
     id,
     rowSource,
+    raterTrainingExposurePolicyId: snapshot.raterTrainingExposurePolicyId ?? null,
     raterId: snapshot.raterId ?? snapshot.rater_id ?? null,
     assignmentId: snapshot.assignmentId ?? snapshot.assignment_id ?? null,
     ratingId: snapshot.ratingId ?? snapshot.rating_id ?? null,
@@ -18373,16 +18667,65 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, rowSource) {
   };
 }
 
-function normalizeReleaseErratum(erratum, rowSource) {
+function normalizeReleaseErratumDisclosurePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.releaseErratumDisclosurePolicyId;
+  if (!id) return null;
+  const disclosureThresholdByErratumType =
+    policy.disclosureThresholdByErratumType &&
+    typeof policy.disclosureThresholdByErratumType === "object" &&
+    !Array.isArray(policy.disclosureThresholdByErratumType)
+      ? policy.disclosureThresholdByErratumType
+      : {};
+  const publicDisclosureRequiredFor = normalizeStringArray(policy.publicDisclosureRequiredFor);
+  const apiWarningRequiredFor = normalizeStringArray(policy.apiWarningRequiredFor);
+  const exportBlockRequiredFor = normalizeStringArray(policy.exportBlockRequiredFor);
+  const missingThresholdTypes = RELEASE_ERRATUM_TYPES.filter((type) => !Object.hasOwn(disclosureThresholdByErratumType, type));
+  const missingPublicTypes = REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES.filter((type) => !publicDisclosureRequiredFor.includes(type));
+  const missingWarningTypes = REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES.filter((type) => !apiWarningRequiredFor.includes(type));
+  const missingExportBlockTypes = REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES.filter((type) => !exportBlockRequiredFor.includes(type));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === RELEASE_ERRATUM_DISCLOSURE_POLICY_VERSION ? null : `policyVersion:${RELEASE_ERRATUM_DISCLOSURE_POLICY_VERSION}`,
+    missingThresholdTypes.length ? `disclosureThresholdByErratumType:${missingThresholdTypes.join(",")}` : null,
+    stableJsonKey(disclosureThresholdByErratumType) === stableJsonKey(REQUIRED_RELEASE_ERRATUM_DISCLOSURE_THRESHOLDS)
+      ? null
+      : "disclosureThresholdByErratumType",
+    missingPublicTypes.length ? `publicDisclosureRequiredFor:${missingPublicTypes.join(",")}` : null,
+    missingWarningTypes.length ? `apiWarningRequiredFor:${missingWarningTypes.join(",")}` : null,
+    missingExportBlockTypes.length ? `exportBlockRequiredFor:${missingExportBlockTypes.join(",")}` : null,
+    policyMentions(policy.internalOnlyAllowedPolicy, ["no published", "export", "claim"]) ? null : "internalOnlyAllowedPolicy",
+    policyMentions(policy.supersessionPolicy, ["superseded", "historical"]) || policyMentions(policy.supersessionPolicy, ["superseded", "leaderboards"])
+      ? null
+      : "supersessionPolicy",
+    policyMentions(policy.approvalPolicy, ["approval"]) ? null : "approvalPolicy",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    disclosureThresholdByErratumType,
+    publicDisclosureRequiredFor,
+    apiWarningRequiredFor,
+    exportBlockRequiredFor,
+    reviewReasons,
+    status: reviewReasons.length ? "release_erratum_disclosure_policy_review_required" : "release_erratum_disclosure_policy_complete",
+  };
+}
+
+function normalizeReleaseErratum(erratum, activeReleaseErratumPolicy, rowSource) {
   const id = erratum?.id ?? erratum?.releaseErratumId ?? erratum?.release_erratum_id;
   if (!id) return null;
+  const activePolicyId = activeReleaseErratumPolicy?.id ?? null;
   const affectedArtifactIds = normalizeStringArray(erratum.affectedArtifactIds ?? erratum.affected_artifact_ids);
   const supersedingArtifactIds = normalizeStringArray(erratum.supersedingArtifactIds ?? erratum.superseding_artifact_ids);
   const impactedMetricsClaims = normalizeStringArray(erratum.impactedMetricsClaims ?? erratum.impacted_metrics_claims);
   const erratumType = erratum.erratumType ?? erratum.erratum_type ?? null;
+  const publicDisclosureRequired = REQUIRED_RELEASE_ERRATUM_API_WARNING_TYPES.includes(erratumType);
+  const exportBlockRequired = REQUIRED_RELEASE_ERRATUM_EXPORT_BLOCK_TYPES.includes(erratumType);
   const apiDownloadWarningBlockPolicy =
     erratum.apiDownloadWarningBlockPolicy ?? erratum.api_download_warning_block_policy ?? erratum.downloadWarningPolicy ?? null;
   const reviewReasons = [
+    erratum.releaseErratumDisclosurePolicyId === activePolicyId ? null : "releaseErratumDisclosurePolicyId",
     requiredPromptFieldReason("releaseId", erratum.releaseId ?? erratum.release_id),
     RELEASE_ERRATUM_TYPES.includes(erratumType) ? null : "erratumType",
     affectedArtifactIds.length ? null : "affectedArtifactIds",
@@ -18393,6 +18736,15 @@ function normalizeReleaseErratum(erratum, rowSource) {
     policyMentions(erratum.historicalLeaderboardMutationPolicy ?? erratum.historical_leaderboard_mutation_policy, ["superseding"])
       ? null
       : "historicalLeaderboardMutationPolicy",
+    publicDisclosureRequired && !impactedMetricsClaims.length ? "impactedMetricsClaims" : null,
+    publicDisclosureRequired && !policyMentionsAny(erratum.artifactDeprecationStatus ?? erratum.artifact_deprecation_status, ["deprecated", "superseded"])
+      ? "artifactDeprecationStatus"
+      : null,
+    publicDisclosureRequired && !policyMentionsAny(apiDownloadWarningBlockPolicy, ["warning", "block"]) ? "apiDownloadWarningBlockPolicy" : null,
+    exportBlockRequired && !policyMentionsAny(apiDownloadWarningBlockPolicy, ["block", "warning"]) ? "apiDownloadWarningBlockPolicy:export_block" : null,
+    publicDisclosureRequired && !policyMentionsAny(erratum.remediationStatus ?? erratum.remediation_status, ["superseding", "remediated", "blocked"])
+      ? "remediationStatus"
+      : null,
     requiredPromptFieldReason("status", erratum.status),
     requiredPromptFieldReason("approvedBy", erratum.approvedBy ?? erratum.approved_by),
     requiredPromptFieldReason("createdAt", erratum.createdAt ?? erratum.created_at),
@@ -18400,6 +18752,7 @@ function normalizeReleaseErratum(erratum, rowSource) {
   return {
     id,
     rowSource,
+    releaseErratumDisclosurePolicyId: erratum.releaseErratumDisclosurePolicyId ?? null,
     releaseId: erratum.releaseId ?? erratum.release_id ?? null,
     erratumType,
     affectedArtifactIds,
@@ -20914,6 +21267,7 @@ export function buildOctoberReleaseReport(
     raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
     rubricLintConfigs: options.rubricLintConfigs ?? [],
     rubricLintEvents: options.rubricLintEvents ?? [],
+    itemIssueQuarantinePolicies: options.itemIssueQuarantinePolicies ?? [],
     itemIssueReports: options.itemIssueReports ?? [],
     itemIssueActions: options.itemIssueActions ?? [],
     ratingDraftSessions: options.ratingDraftSessions ?? [],
@@ -20950,7 +21304,9 @@ export function buildOctoberReleaseReport(
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
     modelRunEnvironments: options.modelRunEnvironments ?? [],
     raterItemConflicts: options.raterItemConflicts ?? [],
+    raterTrainingExposurePolicies: options.raterTrainingExposurePolicies ?? [],
     raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
+    releaseErratumDisclosurePolicies: options.releaseErratumDisclosurePolicies ?? [],
     releaseErrata: options.releaseErrata ?? [],
     scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
   });
@@ -21193,6 +21549,7 @@ export function buildOctoberReleaseReport(
       raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
       rubricLintConfigs: options.rubricLintConfigs ?? [],
       rubricLintEvents: options.rubricLintEvents ?? [],
+      itemIssueQuarantinePolicies: options.itemIssueQuarantinePolicies ?? [],
       itemIssueReports: options.itemIssueReports ?? [],
       itemIssueActions: options.itemIssueActions ?? [],
       ratingDraftSessions: options.ratingDraftSessions ?? [],
@@ -21218,7 +21575,9 @@ export function buildOctoberReleaseReport(
       modelInferenceConfigs: options.modelInferenceConfigs ?? [],
       modelRunEnvironments: options.modelRunEnvironments ?? [],
       raterItemConflicts: options.raterItemConflicts ?? [],
+      raterTrainingExposurePolicies: options.raterTrainingExposurePolicies ?? [],
       raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
+      releaseErratumDisclosurePolicies: options.releaseErratumDisclosurePolicies ?? [],
       releaseErrata: options.releaseErrata ?? [],
       scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
     },

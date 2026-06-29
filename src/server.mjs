@@ -193,6 +193,33 @@ const practiceSandboxCompletionStandards = {
   excludedFromReleaseDenominators: true,
   trainingExposureRecorded: true,
 };
+const raterTrainingExposurePolicyVersion = "rater-training-exposure-rlhf90-v1";
+const raterTrainingExposureWindowDays = {
+  publicSourceAnchorRecordOnly: 0,
+  practiceFeedbackSamePublicAnchor: 0,
+  goldFeedbackSameCluster: 180,
+  duplicateFeedbackSameCluster: 180,
+  calibrationFeedbackSameCluster: 90,
+  remediationModuleSameCluster: 90,
+  samePositionClusterExposure: 365,
+  peerRationaleOrPostLockDiscussion: 365,
+  modelAssistedCheckSameCluster: 365,
+  adjudicationMemoOrProtectedLabelAccess: 3650,
+  sourceMetadataOrHiddenBenchmarkAccess: 3650,
+};
+const raterTrainingExposureBlockingEffects = {
+  publicSourceAnchorRecordOnly: "record_training_exposure_without_protected_block_by_itself",
+  practiceFeedbackSamePublicAnchor: "record_training_exposure_without_protected_block_by_itself",
+  goldFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  duplicateFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  calibrationFeedbackSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  remediationModuleSameCluster: "block_or_reassign_protected_assignment_with_same_cluster_until_window_expires",
+  samePositionClusterExposure: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  peerRationaleOrPostLockDiscussion: "exclude_from_independent_blind_denominators_and_reassign_same_cluster",
+  modelAssistedCheckSameCluster: "exclude_from_human_only_blind_denominators_and_reassign_same_cluster",
+  adjudicationMemoOrProtectedLabelAccess: "non_blind_for_related_protected_cluster_until_admin_exception",
+  sourceMetadataOrHiddenBenchmarkAccess: "blocked_from_related_protected_assignment_until_deprotection_or_admin_exception",
+};
 const assignmentDeclineRequiredFields = [
   "id",
   "assignmentId",
@@ -229,6 +256,7 @@ const assignmentFlagReasonCodes = [
 ];
 const itemIssueReportRequiredFields = [
   "id",
+  "itemIssueQuarantinePolicyId",
   "reporterId",
   "reporterRole",
   "issueCategory",
@@ -253,7 +281,42 @@ const itemIssueCategories = [
   "rubric_or_ui_render_defect",
   "external_assistance_or_exfiltration",
 ];
+const itemIssueQuarantinePolicyVersion = "item-issue-quarantine-rlhf90-v1";
 const itemIssueSeverities = ["low", "medium", "high", "critical"];
+const itemIssueSeverityCategories = [
+  {
+    severity: "critical",
+    definition: "confirmed_or_likely_source_leakage_rights_failure_or_release_blocking_context_defect",
+    releaseEffect: "block_release_and_quarantine_dependents",
+  },
+  {
+    severity: "high",
+    definition: "plausible_leakage_context_duplicate_translation_or_ui_defect_that_can_change_labels",
+    releaseEffect: "quarantine_item_and_dependents_until_triage",
+  },
+  {
+    severity: "medium",
+    definition: "localized_defect_or_ambiguity_that_can_affect_one_item_or_assignment",
+    releaseEffect: "quarantine_affected_item_until_resolution",
+  },
+  {
+    severity: "low",
+    definition: "copy_formatting_or_minor_clarity_defect_unlikely_to_change_locked_labels",
+    releaseEffect: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+  },
+];
+const itemIssueQuarantineSlaHoursBySeverity = {
+  critical: 4,
+  high: 24,
+  medium: 72,
+  low: 168,
+};
+const itemIssueQuarantineActionRequirementBySeverity = {
+  critical: "quarantine_affected_item_and_dependent_artifacts_until_resolved_or_superseded",
+  high: "quarantine_affected_item_and_dependent_artifacts_until_triaged",
+  medium: "quarantine_affected_item_until_triaged_or_resolved",
+  low: "triage_within_sla_and_quarantine_if_release_critical_or_unresolved",
+};
 const itemIssueActionKinds = ["triage", "resolve", "quarantine"];
 const itemIssueResolutionStatuses = ["triage_opened", "resolved", "quarantined"];
 const itemIssueQuarantineScopes = ["none", "affected_item", "dependent_artifacts", "affected_item_and_dependent_artifacts"];
@@ -742,6 +805,25 @@ const releaseErratumTypes = [
   "configuration_manifest_error",
   "other",
 ];
+const releaseErratumDisclosurePolicyVersion = "release-erratum-disclosure-rlhf90-v1";
+const releaseErratumDisclosureThresholds = {
+  scoring_bug: "public_erratum_and_superseding_artifact_required",
+  source_leakage_defect: "public_erratum_api_warning_and_protected_incident_review_required",
+  rights_provenance_issue: "public_erratum_export_block_until_rights_review_required",
+  corrupted_text: "public_erratum_required_when_published_or_release_critical",
+  denominator_error: "public_erratum_and_metric_claim_warning_required",
+  configuration_manifest_error: "public_erratum_and_manifest_supersession_required",
+  other: "internal_audit_allowed_only_when_no_published_export_denominator_rights_source_metric_leaderboard_or_claim_change",
+};
+const releaseErratumApiWarningTypes = [
+  "scoring_bug",
+  "source_leakage_defect",
+  "rights_provenance_issue",
+  "corrupted_text",
+  "denominator_error",
+  "configuration_manifest_error",
+];
+const releaseErratumExportBlockTypes = ["source_leakage_defect", "rights_provenance_issue"];
 const scheduleSnapshotStatuses = ["not_started", "in_progress", "complete", "blocked", "rebaselined", "dropped"];
 const uxPolicyRequiredObjectFields = [
   "taskFirstLayoutRules",
@@ -3165,6 +3247,38 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
+  workflowWriteSpec(/^\/api\/v1\/item-issue-quarantine-policies$/, "item_issue_quarantine_policy_submitted", "itemIssueQuarantinePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "triageVisibilityPolicy",
+      "stalePropagationPolicy",
+      "denominatorPolicy",
+      "disclosurePolicy",
+      "slaClockStart",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["issueCategories", "severityCategories"],
+    requiredArrayIncludes: { issueCategories: itemIssueCategories },
+    requiredObjectKeys: {
+      quarantineSlaHoursBySeverity: itemIssueSeverities,
+      quarantineActionRequirementBySeverity: itemIssueSeverities,
+    },
+    requiredStructuredFields: {
+      severityCategories: itemIssueSeverityCategories,
+      quarantineSlaHoursBySeverity: itemIssueQuarantineSlaHoursBySeverity,
+      quarantineActionRequirementBySeverity: itemIssueQuarantineActionRequirementBySeverity,
+    },
+    requiredStringIncludes: {
+      triageVisibilityPolicy: ["label", "model", "blind"],
+      stalePropagationPolicy: ["dependent", "stale"],
+      denominatorPolicy: ["excluded", "denominator"],
+      disclosurePolicy: ["errata"],
+      slaClockStart: ["createdAt"],
+    },
+    requiredExactFields: { policyVersion: itemIssueQuarantinePolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/item-issues$/, "item_issue_report_submitted", "itemIssueReport", ratingWorkflowRoles, {
     requiredFields: itemIssueReportRequiredFields,
     requiredAnyFields: [["positionId", "critiqueId", "assignmentId", "ratingId", "snapshotId", "evaluationId", "releaseId"]],
@@ -3465,29 +3579,131 @@ const workflowWriteEndpoints = [
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(/^\/api\/v1\/rater-training-exposure-policies$/, "rater_training_exposure_policy_submitted", "raterTrainingExposurePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "protectedAssignmentScope",
+      "publicAnchorExposurePolicy",
+      "clusterMatchPolicy",
+      "staleEligibilityPolicy",
+      "adminExceptionPolicy",
+      "frozenAt",
+    ],
+    requiredObjectKeys: {
+      exposureWindowDays: Object.keys(raterTrainingExposureWindowDays),
+      protectedAssignmentBlockingEffects: Object.keys(raterTrainingExposureBlockingEffects),
+    },
+    requiredStructuredFields: {
+      exposureWindowDays: raterTrainingExposureWindowDays,
+      protectedAssignmentBlockingEffects: raterTrainingExposureBlockingEffects,
+    },
+    requiredStringIncludes: {
+      protectedAssignmentScope: ["validation", "hidden", "release"],
+      publicAnchorExposurePolicy: ["record"],
+      clusterMatchPolicy: ["cluster", "block"],
+      staleEligibilityPolicy: ["recheck"],
+      adminExceptionPolicy: ["cannot count", "independent blind"],
+    },
+    requiredExactFields: {
+      policyVersion: raterTrainingExposurePolicyVersion,
+      snapshotRequiredBeforeAssignment: true,
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/rater-training-exposure-snapshots$/, "rater_training_exposure_snapshot_submitted", "raterTrainingExposureSnapshot", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "raterId", "assignmentId", "rubricVersion", "protectedSplitConflictStatus", "protectedClusterEligibilityEffect", "createdAt"],
+    requiredFields: [
+      "id",
+      "raterTrainingExposurePolicyId",
+      "raterId",
+      "assignmentId",
+      "rubricVersion",
+      "protectedSplitConflictStatus",
+      "protectedClusterEligibilityEffect",
+      "createdAt",
+    ],
     requiredNonEmptyArrayFields: ["publicSourceAnchorExampleIdsPreviouslySeen", "samePositionPositionClusterExposureChecks"],
     requiredStringIncludesAny: {
       protectedClusterEligibilityEffect: ["eligible_after_checks", "excluded", "blocked", "non_blind", "reassign"],
     },
     forbiddenStringFragments: { protectedClusterEligibilityEffect: blindDenominatorCountingForbiddenFragments },
   }),
+  workflowWriteSpec(/^\/api\/v1\/release-erratum-disclosure-policies$/, "release_erratum_disclosure_policy_submitted", "releaseErratumDisclosurePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "internalOnlyAllowedPolicy",
+      "supersessionPolicy",
+      "approvalPolicy",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["publicDisclosureRequiredFor", "apiWarningRequiredFor", "exportBlockRequiredFor"],
+    requiredObjectKeys: { disclosureThresholdByErratumType: releaseErratumTypes },
+    requiredStructuredFields: { disclosureThresholdByErratumType: releaseErratumDisclosureThresholds },
+    requiredArrayIncludes: {
+      publicDisclosureRequiredFor: releaseErratumApiWarningTypes,
+      apiWarningRequiredFor: releaseErratumApiWarningTypes,
+      exportBlockRequiredFor: releaseErratumExportBlockTypes,
+    },
+    requiredStringIncludes: {
+      internalOnlyAllowedPolicy: ["no published", "export", "claim"],
+      supersessionPolicy: ["superseded", "historical"],
+      approvalPolicy: ["approval"],
+    },
+    requiredExactFields: { policyVersion: releaseErratumDisclosurePolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/release-errata$/, "release_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "releaseId", "erratumType", "defectSummary", "historicalLeaderboardMutationPolicy", "status", "approvedBy", "createdAt"],
+    requiredFields: [
+      "id",
+      "releaseErratumDisclosurePolicyId",
+      "releaseId",
+      "erratumType",
+      "defectSummary",
+      "historicalLeaderboardMutationPolicy",
+      "status",
+      "approvedBy",
+      "createdAt",
+    ],
     requiredNonEmptyArrayFields: ["affectedArtifactIds", "supersedingArtifactIds"],
     allowedValues: { erratumType: releaseErratumTypes },
     requiredExactFields: { historicalArtifactsMutated: false },
+    requiredWhen: [
+      {
+        field: "erratumType",
+        values: releaseErratumApiWarningTypes,
+        requiredFields: ["artifactDeprecationStatus", "apiDownloadWarningBlockPolicy", "remediationStatus"],
+        requiredNonEmptyArrayFields: ["impactedMetricsClaims"],
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/supersede$/, "release_supersession_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "releaseId",
-    requiredFields: ["id", "releaseId", "erratumType", "defectSummary", "historicalLeaderboardMutationPolicy", "status", "approvedBy", "createdAt"],
+    requiredFields: [
+      "id",
+      "releaseErratumDisclosurePolicyId",
+      "releaseId",
+      "erratumType",
+      "defectSummary",
+      "historicalLeaderboardMutationPolicy",
+      "status",
+      "approvedBy",
+      "createdAt",
+    ],
     requiredNonEmptyArrayFields: ["affectedArtifactIds", "supersedingArtifactIds"],
     allowedValues: { erratumType: releaseErratumTypes },
     requiredExactFields: { historicalArtifactsMutated: false },
+    requiredWhen: [
+      {
+        field: "erratumType",
+        values: releaseErratumApiWarningTypes,
+        requiredFields: ["artifactDeprecationStatus", "apiDownloadWarningBlockPolicy", "remediationStatus"],
+        requiredNonEmptyArrayFields: ["impactedMetricsClaims"],
+      },
+    ],
   }),
   workflowWriteSpec(/^\/api\/v1\/schedule-status-snapshots$/, "schedule_status_snapshot_submitted", "scheduleStatusSnapshot", adminRoles, {
     allowHiddenMetadata: true,
@@ -4013,6 +4229,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rater-instruction-render-versions\/(?<id>[^/]+)$/, "raterInstructionRenderVersion", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-configs\/(?<id>[^/]+)$/, "rubricLintConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-events\/(?<id>[^/]+)$/, "rubricLintEvent", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/item-issue-quarantine-policies\/(?<id>[^/]+)$/, "itemIssueQuarantinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/item-issues\/(?<id>[^/]+)$/, "itemIssueReport", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-draft-sessions\/(?<id>[^/]+)$/, "ratingDraftSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/score-confidence-annotations\/(?<id>[^/]+)$/, "scoreConfidenceAnnotation", expertAuditWorkflowRoles),
@@ -4034,7 +4251,9 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/model-inference-configs\/(?<id>[^/]+)$/, "modelInferenceConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/model-run-environments\/(?<id>[^/]+)$/, "modelRunEnvironment", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-item-conflicts\/(?<id>[^/]+)$/, "raterItemConflict", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-training-exposure-policies\/(?<id>[^/]+)$/, "raterTrainingExposurePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-training-exposure-snapshots\/(?<id>[^/]+)$/, "raterTrainingExposureSnapshot", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies\/(?<id>[^/]+)$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-errata\/(?<id>[^/]+)$/, "releaseErratum", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/schedule-status-snapshots\/(?<id>[^/]+)$/, "scheduleStatusSnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governance-approvals\/(?<id>[^/]+)$/, "governanceApprovalRecord", adminAuditRoles),
@@ -6711,6 +6930,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const raterInstructionRenderVersions = latestWorkflowResources(workflowEvents, "raterInstructionRenderVersion");
   const rubricLintConfigs = latestWorkflowResources(workflowEvents, "rubricLintConfig");
   const rubricLintEvents = latestWorkflowResources(workflowEvents, "rubricLintEvent");
+  const itemIssueQuarantinePolicies = latestWorkflowResources(workflowEvents, "itemIssueQuarantinePolicy");
   const itemIssueReports = latestWorkflowResources(workflowEvents, "itemIssueReport");
   const itemIssueActions = latestWorkflowResources(workflowEvents, "itemIssueAction");
   const ratingDraftSessions = latestWorkflowResources(workflowEvents, "ratingDraftSession");
@@ -6734,7 +6954,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const modelInferenceConfigs = latestWorkflowResources(workflowEvents, "modelInferenceConfig");
   const modelRunEnvironments = latestWorkflowResources(workflowEvents, "modelRunEnvironment");
   const raterItemConflicts = latestWorkflowResources(workflowEvents, "raterItemConflict");
+  const raterTrainingExposurePolicies = latestWorkflowResources(workflowEvents, "raterTrainingExposurePolicy");
   const raterTrainingExposureSnapshots = latestWorkflowResources(workflowEvents, "raterTrainingExposureSnapshot");
+  const releaseErratumDisclosurePolicies = latestWorkflowResources(workflowEvents, "releaseErratumDisclosurePolicy");
   const releaseErrata = latestWorkflowResources(workflowEvents, "releaseErratum");
   const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
@@ -6873,6 +7095,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterInstructionRenderVersions,
     rubricLintConfigs,
     rubricLintEvents,
+    itemIssueQuarantinePolicies,
     itemIssueReports,
     itemIssueActions,
     ratingDraftSessions,
@@ -6896,7 +7119,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelInferenceConfigs,
     modelRunEnvironments,
     raterItemConflicts,
+    raterTrainingExposurePolicies,
     raterTrainingExposureSnapshots,
+    releaseErratumDisclosurePolicies,
     releaseErrata,
     scheduleStatusSnapshots,
     publicExamplePracticeSessions,
@@ -7032,6 +7257,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterInstructionRenderVersions,
     rubricLintConfigs,
     rubricLintEvents,
+    itemIssueQuarantinePolicies,
     itemIssueReports,
     itemIssueActions,
     ratingDraftSessions,
@@ -7055,7 +7281,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelInferenceConfigs,
     modelRunEnvironments,
     raterItemConflicts,
+    raterTrainingExposurePolicies,
     raterTrainingExposureSnapshots,
+    releaseErratumDisclosurePolicies,
     releaseErrata,
     scheduleStatusSnapshots,
       publicExamplePracticeSessions,
