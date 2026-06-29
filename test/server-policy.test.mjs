@@ -11505,6 +11505,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "critique_generation_provider_policies_approved",
   );
   assert.deepEqual(releaseReport.body.critiqueGenerationEvaluation.providerPolicyEvidence.reviewSections, []);
+  assert.equal(submittedGenerationRun.generationRunContractStatus, "critique_generation_run_contract_complete");
+  assert.equal(submittedGenerationRun.generationWorkflowContractViolationCount, 0);
+  assert.equal(submittedGenerationRun.generatedSubmissionContractViolationCount, 0);
+  assert.equal(submittedGenerationRun.generatedPromotionContractViolationCount, 0);
+  assert.equal(submittedGenerationRun.generationEvaluationReportContractViolationCount, 0);
+  assert.equal(
+    releaseReport.body.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.releaseUseStatus,
+    "critique_generation_workflow_contract_complete",
+  );
+  assert.deepEqual(releaseReport.body.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.reviewSections, []);
   assert.equal(
     releaseReport.body.critiqueGenerationEvaluation.generatorEvaluatorOverlap.releaseUseStatus,
     "no_generator_evaluator_overlap_detected",
@@ -11513,7 +11523,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.critiqueGenerationEvaluation.aggregateCounts.promotedToRating, 3);
   assert.equal(
     releaseReport.body.critiqueGenerationEvaluation.releaseUseStatus,
-    "generation_evaluation_requires_blinding_rating_coverage_or_provider_policy_review",
+    "generation_evaluation_requires_blinding_rating_coverage_provider_policy_or_contract_review",
   );
   assert.equal(releaseReport.body.promptTrackSeparation.rows.some((row) => row.runId === "critique-generation-run-workflow-new"), true);
   assert.equal(releaseReport.body.candidateIntakeQualityAudit.generatedOutputStatusCounts.promoted_to_rating, 3);
@@ -11661,6 +11671,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.status,
     "submitted_model_improvement_run_preserves_surrogate_separation",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "targetLabelSnapshotId").status,
+    "matches",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "calibrationTargetDistribution").status,
+    "matches",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "linkedPostTrainingEvaluationRunIds").status,
+    "matches",
   );
   assert.equal(releaseReport.body.modelEvaluationArtifactEvidence.evaluationRunEvidence.submittedArtifactId, "eval-workflow-new");
   assert.equal(releaseReport.body.modelEvaluationArtifactEvidence.evaluationRunEvidence.status, "submitted_evaluation_run_matches_current_target");

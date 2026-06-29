@@ -7917,6 +7917,16 @@ export function buildCritiqueGenerationEvaluationReport(
       filteringPolicy: run.filteringPolicy,
       modelJudgeScreening: run.modelJudgeScreening,
       modelProviderPolicyBinding: critiqueGenerationProviderPolicyBinding(run, modelProviderPolicyRows),
+      generationRunContractStatus: run.generationRunContractStatus ?? "seed_critique_generation_run_contract_not_required",
+      generationRunContractChecks: run.generationRunContractChecks ?? [],
+      generationRunContractViolations: run.generationRunContractViolations ?? [],
+      generatedSubmissionContractViolationCount: run.generatedSubmissionContractViolationCount ?? 0,
+      generatedSubmissionContractViolationRows: run.generatedSubmissionContractViolationRows ?? [],
+      generatedPromotionContractViolationCount: run.generatedPromotionContractViolationCount ?? 0,
+      generatedPromotionContractViolationRows: run.generatedPromotionContractViolationRows ?? [],
+      generationEvaluationReportContractViolationCount: run.generationEvaluationReportContractViolationCount ?? 0,
+      generationEvaluationReportContractViolationRows: run.generationEvaluationReportContractViolationRows ?? [],
+      generationWorkflowContractViolationCount: run.generationWorkflowContractViolationCount ?? 0,
       metricDefinitions: run.metricDefinitions,
       submittedWorkflowOutputCount: run.submittedWorkflowOutputCount ?? 0,
       outputStatusCounts: countBy(outputRows, "status"),
@@ -7951,6 +7961,34 @@ export function buildCritiqueGenerationEvaluationReport(
   const providerPolicyReviewSections = runRows.flatMap((row) =>
     row.modelProviderPolicyBinding.reviewReasons.map((reason) => ({ artifactType: "critique_generation_provider_policy", artifactId: row.id, reason })),
   );
+  const contractReviewSections = runRows.flatMap((row) => [
+    ...row.generationRunContractViolations.map((check) => ({
+      artifactType: "critique_generation_run",
+      artifactId: row.id,
+      reason: `generationRun.${check.field}:${check.status}`,
+    })),
+    ...row.generatedSubmissionContractViolationRows.flatMap((violationRow) =>
+      violationRow.contractViolations.map((check) => ({
+        artifactType: "generated_critique_submission",
+        artifactId: violationRow.outputId,
+        reason: `${check.field}:${check.status}`,
+      })),
+    ),
+    ...row.generatedPromotionContractViolationRows.flatMap((violationRow) =>
+      violationRow.contractViolations.map((check) => ({
+        artifactType: "generated_critique_promotion",
+        artifactId: violationRow.outputId,
+        reason: `${check.field}:${check.status}`,
+      })),
+    ),
+    ...row.generationEvaluationReportContractViolationRows.flatMap((violationRow) =>
+      violationRow.contractViolations.map((check) => ({
+        artifactType: "generation_evaluation_report",
+        artifactId: violationRow.id,
+        reason: `${check.field}:${check.status}`,
+      })),
+    ),
+  ]);
   const generatorEvaluatorOverlap = buildGenerationEvaluatorOverlapReport(
     runRows,
     options.evaluationRuns ?? [fullRubricEvaluationRun, overallOnlyEvaluationRun],
@@ -7980,11 +8018,28 @@ export function buildCritiqueGenerationEvaluationReport(
         ? "critique_generation_provider_policy_review_required"
         : "critique_generation_provider_policies_approved",
     },
+    submittedWorkflowContractEvidence: {
+      runRows: runRows
+        .filter((row) => row.runSource === "submitted_workflow_critique_generation_run")
+        .map((row) => ({
+          generationRunId: row.id,
+          generationRunContractStatus: row.generationRunContractStatus,
+          generationRunContractViolationCount: row.generationRunContractViolations.length,
+          generatedSubmissionContractViolationCount: row.generatedSubmissionContractViolationCount,
+          generatedPromotionContractViolationCount: row.generatedPromotionContractViolationCount,
+          generationEvaluationReportContractViolationCount: row.generationEvaluationReportContractViolationCount,
+          generationWorkflowContractViolationCount: row.generationWorkflowContractViolationCount,
+        })),
+      reviewSections: contractReviewSections,
+      releaseUseStatus: contractReviewSections.length
+        ? "critique_generation_workflow_contract_review_required"
+        : "critique_generation_workflow_contract_complete",
+    },
     runRows,
     releaseUseStatus:
-      coverageAndBlindingPass && providerPolicyReviewSections.length === 0
+      coverageAndBlindingPass && providerPolicyReviewSections.length === 0 && contractReviewSections.length === 0
         ? "generation_evaluation_separate_with_blind_rating_coverage"
-        : "generation_evaluation_requires_blinding_rating_coverage_or_provider_policy_review",
+        : "generation_evaluation_requires_blinding_rating_coverage_provider_policy_or_contract_review",
   };
 }
 
@@ -8074,6 +8129,74 @@ function buildGenerationEvaluatorOverlapReport(runRows = [], evaluationRuns = []
   };
 }
 
+const REQUIRED_CRITIQUE_GENERATION_RUN_FIELDS = [
+  "id",
+  "generatorRequestedModelAlias",
+  "generatorProvider",
+  "generatorResolvedModelSnapshot",
+  "promptTemplateId",
+  "renderedPromptChecksum",
+  "sourceSplit",
+  "positionIds",
+  "generationParameters",
+  "generationBudgetPerPosition",
+  "outputsRequested",
+  "outputsGenerated",
+  "emptyRefusalCount",
+  "duplicateNearDuplicateCount",
+  "outputFilteringPolicy",
+  "judgeScreeningPolicy",
+  "aliasStabilityStatus",
+  "createdBy",
+  "timestamp",
+];
+const REQUIRED_CRITIQUE_GENERATION_RUN_NUMBER_FIELDS = [
+  "generationBudgetPerPosition",
+  "outputsRequested",
+  "outputsGenerated",
+  "emptyRefusalCount",
+  "duplicateNearDuplicateCount",
+];
+const REQUIRED_GENERATED_CRITIQUE_SUBMISSION_FIELDS = [
+  "id",
+  "generationRunId",
+  "positionId",
+  "rawGeneratedText",
+  "normalizedRaterVisibleText",
+  "generationIndex",
+  "generationOutputStatus",
+  "rightsStatus",
+  "timestamp",
+];
+const GENERATED_CRITIQUE_SUBMISSION_ALLOWED_STATUSES = ["generated", "empty", "refusal", "duplicate", "filtered", "promoted", "rated"];
+const REQUIRED_GENERATED_CRITIQUE_PROMOTION_FIELDS = [
+  "id",
+  "generatedCritiqueId",
+  "promotedCritiqueId",
+  "promotionStatus",
+  "humanReviewStatus",
+  "promotedBy",
+  "promotedAt",
+];
+const REQUIRED_GENERATION_EVALUATION_REPORT_FIELDS = [
+  "id",
+  "generationRunIds",
+  "labelSnapshotId",
+  "commonPositionSetPolicy",
+  "commonGenerationBudgetPolicy",
+  "filteringSelectionPolicy",
+  "uncuratedRandomSampleMetrics",
+  "bestOfNMetrics",
+  "counts",
+  "createdBy",
+  "timestamp",
+];
+const REQUIRED_GENERATION_EVALUATION_REPORT_METRIC_FIELDS = {
+  uncuratedRandomSampleMetrics: ["ratedCount", "meanOverall"],
+  bestOfNMetrics: ["n", "passAtThreshold", "threshold"],
+  counts: ["generated", "refusal", "duplicate", "filtered", "promoted", "rated"],
+};
+
 function buildEffectiveCritiqueGenerationRuns({
   critiqueGenerationRuns: submittedRuns = [],
   generatedCritiqueSubmissions = [],
@@ -8152,13 +8275,35 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
   const runId = run.id;
   const runSubmissions = submissions.filter((submission) => (submission.generationRunId ?? submission.critiqueGenerationRunId) === runId);
   const promotionByGeneratedId = new Map(promotions.map((promotion) => [promotion.generatedCritiqueId ?? promotion.outputId, promotion]));
+  const generationRunContractChecks = submittedCritiqueGenerationRunContractChecks(run);
+  const generationRunContractViolations = generationRunContractChecks.filter((check) => check.status !== "pass");
   const outputRows = runSubmissions.length
-    ? runSubmissions.map((submission) => normalizeSubmittedGenerationOutput(submission, promotionByGeneratedId.get(submission.id)))
-    : (run.outputs ?? []).map((output) => normalizeSubmittedGenerationOutput(output, promotionByGeneratedId.get(output.id)));
+    ? runSubmissions.map((submission) => normalizeSubmittedGenerationOutput(submission, promotionByGeneratedId.get(submission.id), true))
+    : (run.outputs ?? []).map((output) => normalizeSubmittedGenerationOutput(output, promotionByGeneratedId.get(output.id), false));
   const reportRows = reports.filter((report) => {
     const reportRunIds = report.generationRunIds ?? report.critiqueGenerationRunIds ?? [];
     return report.generationRunId === runId || report.critiqueGenerationRunId === runId || reportRunIds.includes(runId);
   });
+  const generationEvaluationReportContractViolationRows = reportRows
+    .map((report) => ({
+      id: report.id,
+      contractViolations: submittedGenerationEvaluationReportContractChecks(report, runId).filter((check) => check.status !== "pass"),
+    }))
+    .filter((row) => row.contractViolations.length);
+  const generatedSubmissionContractViolationRows = outputRows
+    .filter((output) => output.generatedSubmissionContractViolations?.length)
+    .map((output) => ({
+      outputId: output.id,
+      positionId: output.positionId,
+      contractViolations: output.generatedSubmissionContractViolations,
+    }));
+  const generatedPromotionContractViolationRows = outputRows
+    .filter((output) => output.generatedPromotionContractViolations?.length)
+    .map((output) => ({
+      outputId: output.id,
+      promotedCritiqueId: output.promotedCritiqueId,
+      contractViolations: output.generatedPromotionContractViolations,
+    }));
   const promptTemplateId = run.promptTemplateId ?? run.promptTemplateVersion ?? "candidate-gen-v3";
   const promptArtifact = promptArtifactForSubmittedWorkflow(
     promptTemplateId,
@@ -8177,7 +8322,7 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
     run.modelJudgeScreening?.renderedPromptChecksum ?? run.modelJudgeRenderedPromptChecksum ?? `sha256:${judgePromptTemplateId}:submitted`,
     "json_generation_screening_score",
   );
-  const sourcePositionIds = uniqueStrings(run.sourcePositionIds ?? outputRows.map((output) => output.positionId).filter(Boolean));
+  const sourcePositionIds = uniqueStrings(run.sourcePositionIds ?? run.positionIds ?? outputRows.map((output) => output.positionId).filter(Boolean));
   const firstReport = reportRows[0] ?? {};
   return {
     id: runId,
@@ -8185,7 +8330,7 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
     submittedGenerationEvaluationReportIds: reportRows.map((report) => report.id).filter(Boolean),
     requestedModelAlias: run.requestedModelAlias ?? run.generatorRequestedModelAlias ?? run.generatorModelAlias ?? "submitted-generator",
     resolvedModelSnapshot: run.resolvedModelSnapshot ?? run.generatorResolvedModelSnapshot ?? run.generatorModelSnapshot ?? "submitted-generator-snapshot",
-    providerRoute: run.providerRoute ?? run.provider ?? "submitted_workflow",
+    providerRoute: run.providerRoute ?? run.provider ?? run.generatorProvider ?? "submitted_workflow",
     modelProviderDataHandlingPolicyId: run.modelProviderDataHandlingPolicyId ?? run.generationModelProviderDataHandlingPolicyId ?? null,
     inferenceDate: run.inferenceDate ?? run.createdAt ?? null,
     promptTemplateId,
@@ -8199,7 +8344,7 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
     sourcePositionIds,
     generationBudgetPerPosition: run.generationBudgetPerPosition ?? firstReport.generationBudgetPerPosition ?? 1,
     sampledOutputCount: run.sampledOutputCount ?? outputRows.length,
-    generationSettings: run.generationSettings ?? {
+    generationSettings: run.generationSettings ?? run.generationParameters ?? {
       temperature: run.temperature ?? null,
       topP: run.topP ?? null,
       maxOutputTokens: run.maxOutputTokens ?? null,
@@ -8209,6 +8354,22 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
     modelJudgeScreening: normalizeSubmittedGenerationJudge(run, judgePromptArtifact),
     outputs: outputRows,
     submittedWorkflowOutputCount: outputRows.length,
+    generationRunContractChecks,
+    generationRunContractViolations,
+    generationRunContractStatus: generationRunContractViolations.length
+      ? "critique_generation_run_contract_review_required"
+      : "critique_generation_run_contract_complete",
+    generatedSubmissionContractViolationCount: generatedSubmissionContractViolationRows.length,
+    generatedSubmissionContractViolationRows,
+    generatedPromotionContractViolationCount: generatedPromotionContractViolationRows.length,
+    generatedPromotionContractViolationRows,
+    generationEvaluationReportContractViolationCount: generationEvaluationReportContractViolationRows.length,
+    generationEvaluationReportContractViolationRows,
+    generationWorkflowContractViolationCount:
+      Number(generationRunContractViolations.length > 0) +
+      generatedSubmissionContractViolationRows.length +
+      generatedPromotionContractViolationRows.length +
+      generationEvaluationReportContractViolationRows.length,
     metricDefinitions: {
       headlineMetric: run.metricDefinitions?.headlineMetric ?? firstReport.headlineMetric ?? "submitted_generation_evaluation_report",
       uncuratedRandomSampleMetric:
@@ -8220,7 +8381,11 @@ function normalizeSubmittedCritiqueGenerationRun(run, submissions, promotions, r
   };
 }
 
-function normalizeSubmittedGenerationOutput(output, promotion) {
+function normalizeSubmittedGenerationOutput(output, promotion, submittedWorkflowOutput = false) {
+  const generatedSubmissionContractChecks = submittedWorkflowOutput ? submittedGeneratedCritiqueSubmissionContractChecks(output) : [];
+  const generatedSubmissionContractViolations = generatedSubmissionContractChecks.filter((check) => check.status !== "pass");
+  const generatedPromotionContractChecks = promotion ? submittedGeneratedCritiquePromotionContractChecks(promotion) : [];
+  const generatedPromotionContractViolations = generatedPromotionContractChecks.filter((check) => check.status !== "pass");
   return {
     id: output.id,
     positionId: output.positionId,
@@ -8229,7 +8394,141 @@ function normalizeSubmittedGenerationOutput(output, promotion) {
     duplicateOfOutputId: output.duplicateOfOutputId ?? null,
     selectionReasons: output.selectionReasons ?? output.selectionReasonCodes ?? (output.selectionReason ? [output.selectionReason] : []),
     modelJudgeScore: output.modelJudgeScore ?? output.screeningScore ?? null,
+    generatedSubmissionContractChecks,
+    generatedSubmissionContractViolations,
+    generatedSubmissionContractStatus: generatedSubmissionContractViolations.length
+      ? "generated_critique_submission_contract_review_required"
+      : submittedWorkflowOutput
+        ? "generated_critique_submission_contract_complete"
+        : "not_submitted_generated_critique_submission",
+    generatedPromotionContractChecks,
+    generatedPromotionContractViolations,
+    generatedPromotionContractStatus: generatedPromotionContractViolations.length
+      ? "generated_critique_promotion_contract_review_required"
+      : promotion
+        ? "generated_critique_promotion_contract_complete"
+        : "not_promoted_generated_critique",
   };
+}
+
+function submittedCritiqueGenerationRunContractChecks(run) {
+  const fieldChecks = REQUIRED_CRITIQUE_GENERATION_RUN_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: run?.[field] ?? null,
+    status: hasRequiredValue(run?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const positionIdsCheck = {
+    field: "positionIds",
+    expected: "non_empty_array",
+    observed: run?.positionIds ?? null,
+    status: Array.isArray(run?.positionIds) && run.positionIds.length ? "pass" : "missing_required_array_values",
+  };
+  const generationParametersCheck = {
+    field: "generationParameters",
+    expected: "object",
+    observed: run?.generationParameters ?? null,
+    status: run?.generationParameters && typeof run.generationParameters === "object" && !Array.isArray(run.generationParameters) ? "pass" : "invalid_object",
+  };
+  const finiteNumberChecks = REQUIRED_CRITIQUE_GENERATION_RUN_NUMBER_FIELDS.map((field) => ({
+    field,
+    expected: "finite_number",
+    observed: run?.[field] ?? null,
+    status: Number.isFinite(Number(run?.[field])) ? "pass" : "invalid_number",
+  }));
+  const blindRatingCheck = {
+    field: "blindRatingBeforeScreening",
+    expected: true,
+    observed: run?.blindRatingBeforeScreening ?? null,
+    status: run?.blindRatingBeforeScreening === true ? "pass" : "must_equal_true",
+  };
+  return [...fieldChecks, positionIdsCheck, generationParametersCheck, ...finiteNumberChecks, blindRatingCheck];
+}
+
+function submittedGeneratedCritiqueSubmissionContractChecks(submission) {
+  const fieldChecks = REQUIRED_GENERATED_CRITIQUE_SUBMISSION_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: submission?.[field] ?? null,
+    status: hasRequiredValue(submission?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const generationIndexCheck = {
+    field: "generationIndex",
+    expected: "finite_number",
+    observed: submission?.generationIndex ?? null,
+    status: Number.isFinite(Number(submission?.generationIndex)) ? "pass" : "invalid_number",
+  };
+  const statusCheck = {
+    field: "generationOutputStatus",
+    expected: GENERATED_CRITIQUE_SUBMISSION_ALLOWED_STATUSES,
+    observed: submission?.generationOutputStatus ?? null,
+    status: GENERATED_CRITIQUE_SUBMISSION_ALLOWED_STATUSES.includes(submission?.generationOutputStatus) ? "pass" : "unsupported_status",
+  };
+  const hiddenCheck = {
+    field: "generatorMetadataHiddenFromRaters",
+    expected: true,
+    observed: submission?.generatorMetadataHiddenFromRaters ?? null,
+    status: submission?.generatorMetadataHiddenFromRaters === true ? "pass" : "must_equal_true",
+  };
+  return [...fieldChecks, generationIndexCheck, statusCheck, hiddenCheck];
+}
+
+function submittedGeneratedCritiquePromotionContractChecks(promotion) {
+  const fieldChecks = REQUIRED_GENERATED_CRITIQUE_PROMOTION_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: promotion?.[field] ?? null,
+    status: hasRequiredValue(promotion?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const promotionStatusCheck = {
+    field: "promotionStatus",
+    expected: "promoted_after_human_review",
+    observed: promotion?.promotionStatus ?? null,
+    status: promotion?.promotionStatus === "promoted_after_human_review" ? "pass" : "unsupported_status",
+  };
+  const humanReviewStatusCheck = {
+    field: "humanReviewStatus",
+    expected: "passed_trained_human_review",
+    observed: promotion?.humanReviewStatus ?? null,
+    status: promotion?.humanReviewStatus === "passed_trained_human_review" ? "pass" : "unsupported_status",
+  };
+  const hiddenCheck = {
+    field: "generatorMetadataHiddenFromRaters",
+    expected: true,
+    observed: promotion?.generatorMetadataHiddenFromRaters ?? null,
+    status: promotion?.generatorMetadataHiddenFromRaters === true ? "pass" : "must_equal_true",
+  };
+  return [...fieldChecks, promotionStatusCheck, humanReviewStatusCheck, hiddenCheck];
+}
+
+function submittedGenerationEvaluationReportContractChecks(report, generationRunId) {
+  const fieldChecks = REQUIRED_GENERATION_EVALUATION_REPORT_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: report?.[field] ?? null,
+    status: hasRequiredValue(report?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const linkedRunCheck = {
+    field: "generationRunIds",
+    expected: generationRunId,
+    observed: report?.generationRunIds ?? report?.critiqueGenerationRunIds ?? [],
+    status: normalizeStringArray(report?.generationRunIds ?? report?.critiqueGenerationRunIds).includes(generationRunId) ? "pass" : "missing_linked_generation_run",
+  };
+  const objectChecks = Object.keys(REQUIRED_GENERATION_EVALUATION_REPORT_METRIC_FIELDS).map((field) => ({
+    field,
+    expected: "object",
+    observed: report?.[field] ?? null,
+    status: report?.[field] && typeof report[field] === "object" && !Array.isArray(report[field]) ? "pass" : "invalid_object",
+  }));
+  const metricFieldChecks = Object.entries(REQUIRED_GENERATION_EVALUATION_REPORT_METRIC_FIELDS).flatMap(([objectField, nestedFields]) =>
+    nestedFields.map((nestedField) => ({
+      field: `${objectField}.${nestedField}`,
+      expected: "finite_number",
+      observed: report?.[objectField]?.[nestedField] ?? null,
+      status: Number.isFinite(Number(report?.[objectField]?.[nestedField])) ? "pass" : "invalid_number",
+    })),
+  );
+  return [...fieldChecks, linkedRunCheck, ...objectChecks, ...metricFieldChecks];
 }
 
 function normalizeGenerationOutputStatus(status) {
@@ -11460,6 +11759,9 @@ function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitt
   const checks = [
     requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
     requiredManifestCheck("trainingExportId", trainingExport.id, submitted?.trainingExportId),
+    requiredManifestCheck("targetLabelSnapshotId", trainingExport.labelSnapshotId, submitted?.targetLabelSnapshotId ?? submitted?.labelSnapshotId),
+    requiredManifestCheck("targetLabelVersion", trainingExport.targetLabelVersion, submitted?.targetLabelVersion),
+    requiredNonEmptyCheck("modelFamilyOrCheckpoint", submitted?.modelFamilyOrCheckpoint ?? submitted?.modelFamily ?? submitted?.checkpointId),
     requiredNonEmptyCheck("optimizedSurrogateObjective", submitted?.optimizedSurrogateObjectiveFamily ?? submitted?.optimizedSurrogateObjective),
     requiredNonEmptyCheck("targetFields", submitted?.targetFields),
     requiredNonEmptyCheck("humanMarginWeightingPolicy", submitted?.humanMarginWeightingPolicy),
@@ -11467,8 +11769,16 @@ function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitt
     requiredNonEmptyCheck("positionBalancedWeightingPolicy", submitted?.positionBalancedWeightingPolicy),
     requiredNonEmptyCheck("labelUncertaintyPropagationPolicy", submitted?.labelUncertaintyPropagationPolicy),
     requiredNonEmptyCheck("highUncertaintyDownweightingPolicy", submitted?.highUncertaintyDownweightingPolicy),
+    requiredNonEmptyCheck("calibrationTargetDistribution", submitted?.calibrationTargetDistribution),
+    requiredNonEmptyCheck("fitSplit", submitted?.fitSplit),
+    requiredNonEmptyCheck("devSplit", submitted?.devSplit),
     requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    requiredPolicyIncludesCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy, ["prompt", "track"]),
+    requiredNonEmptyCheck("trainingPromptTemplateId", submitted?.trainingPromptTemplateId ?? submitted?.trainingPromptId),
+    requiredNonEmptyCheck("linkedPostTrainingEvaluationRunIds", submitted?.linkedPostTrainingEvaluationRunIds ?? submitted?.postTrainingEvaluationRunIds),
     requiredManifestCheck("lmcaEvaluationMetricsSeparate", true, submitted?.lmcaEvaluationMetricsSeparate),
+    requiredNonEmptyCheck("createdBy", submitted?.createdBy ?? submitted?.created_by),
+    requiredNonEmptyCheck("timestamp", submitted?.timestamp),
   ];
   return releaseArtifactEvidenceRow(
     "model_improvement_run",

@@ -7526,12 +7526,28 @@ test("submitted critique-generation artifacts drive generation denominators and 
       critiqueGenerationRuns: [
         {
           id: "generation-run-submitted",
+          generatorRequestedModelAlias: "generator-under-test",
+          generatorProvider: "internal_eval_gateway",
+          generatorResolvedModelSnapshot: "generator-under-test-2026-10-01",
           requestedModelAlias: "generator-under-test",
           resolvedModelSnapshot: "generator-under-test-2026-10-01",
           modelProviderDataHandlingPolicyId: "model-provider-data-handling-submitted-critique_generation",
           promptTemplateId: "candidate-gen-v3",
+          renderedPromptChecksum: "sha256-generation-run-submitted",
           sourceSplit: "public_train",
+          positionIds: ["pos-ai-prior"],
+          generationParameters: { temperature: 0.7, maxOutputsPerPosition: 1 },
           generationBudgetPerPosition: 1,
+          outputsRequested: 1,
+          outputsGenerated: 1,
+          emptyRefusalCount: 0,
+          duplicateNearDuplicateCount: 0,
+          outputFilteringPolicy: "deduplicate_then_human_review",
+          judgeScreeningPolicy: "model_judge_scores_hidden_from_raters",
+          blindRatingBeforeScreening: true,
+          aliasStabilityStatus: "resolved_snapshot_recorded",
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T00:00:00.000Z",
           modelJudgeScreening: {
             promptTemplateId: "candidate-judge-v2",
             scoresVisibleToInitialRaters: false,
@@ -7546,9 +7562,15 @@ test("submitted critique-generation artifacts drive generation denominators and 
           id: "generated-critique-submitted",
           generationRunId: "generation-run-submitted",
           positionId: "pos-ai-prior",
+          rawGeneratedText: "The position should account for base-rate failures in adjacent forecasting domains.",
+          normalizedRaterVisibleText: "The position should account for base-rate failures in adjacent forecasting domains.",
+          generationIndex: 0,
           generationOutputStatus: "generated",
+          generatorMetadataHiddenFromRaters: true,
+          rightsStatus: "cleared_internal",
           selectionReasons: ["judge_disagreement"],
           modelJudgeScore: 0.71,
+          timestamp: "2026-10-01T00:01:00.000Z",
         },
       ],
       generatedCritiquePromotions: [
@@ -7557,15 +7579,27 @@ test("submitted critique-generation artifacts drive generation denominators and 
           generatedCritiqueId: "generated-critique-submitted",
           promotedCritiqueId: "crit-ai-base-rate",
           promotionStatus: "promoted_after_human_review",
+          humanReviewStatus: "passed_trained_human_review",
+          generatorMetadataHiddenFromRaters: true,
+          promotedBy: "demo-admin",
+          promotedAt: "2026-10-01T00:02:00.000Z",
         },
       ],
       generationEvaluationReports: [
         {
           id: "generation-evaluation-report-submitted",
           generationRunIds: ["generation-run-submitted"],
+          labelSnapshotId: snapshot.id,
+          commonPositionSetPolicy: "common_positions_required_for_generator_comparison",
           headlineMetric: "blind_human_rated_promoted_outputs",
           commonGenerationBudgetPolicy: "budget_matched",
+          filteringSelectionPolicy: "uncurated_random_sample_plus_best_of_n_diagnostic",
+          uncuratedRandomSampleMetrics: { ratedCount: 1, meanOverall: 0.61 },
+          bestOfNMetrics: { n: 1, passAtThreshold: 1, threshold: 0.6 },
+          counts: { generated: 1, refusal: 0, duplicate: 0, filtered: 0, promoted: 1, rated: 1 },
           passThresholdOverall: 0.6,
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T00:03:00.000Z",
         },
       ],
     },
@@ -7577,14 +7611,80 @@ test("submitted critique-generation artifacts drive generation denominators and 
   assert.equal(submittedRun.outputStatusCounts.promoted_to_rating, 1);
   assert.equal(submittedRun.counts.generatedOutputs, 1);
   assert.equal(submittedRun.counts.blindHumanRatedPromoted, 1);
+  assert.equal(submittedRun.generationRunContractStatus, "critique_generation_run_contract_complete");
+  assert.equal(submittedRun.generationWorkflowContractViolationCount, 0);
+  assert.equal(submittedRun.generatedSubmissionContractViolationCount, 0);
+  assert.equal(submittedRun.generatedPromotionContractViolationCount, 0);
+  assert.equal(submittedRun.generationEvaluationReportContractViolationCount, 0);
   assert.equal(submittedRun.modelProviderPolicyBinding.generator.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-critique_generation");
   assert.equal(submittedRun.modelProviderPolicyBinding.modelJudge.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-model_judge");
   assert.equal(report.critiqueGenerationEvaluation.providerPolicyEvidence.releaseUseStatus, "critique_generation_provider_policies_approved");
+  assert.equal(report.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.releaseUseStatus, "critique_generation_workflow_contract_complete");
   assert.equal(report.critiqueGenerationEvaluation.aggregateCounts.generatedOutputs, 7);
   assert.equal(report.critiqueGenerationEvaluation.aggregateCounts.promotedToRating, 3);
   assert.equal(report.promptTrackSeparation.counts.generationPromptTrackRows, 4);
   assert.equal(report.promptTrackSeparation.rows.some((row) => row.runId === "generation-run-submitted"), true);
   assert.equal(report.candidateIntakeQualityAudit.generatedOutputStatusCounts.promoted_to_rating, 3);
+
+  const underdeclaredReport = buildOctoberReleaseReport(
+    releaseId,
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      critiqueGenerationRuns: [
+        {
+          id: "generation-run-underdeclared",
+          promptTemplateId: "candidate-gen-v3",
+        },
+      ],
+      generatedCritiqueSubmissions: [
+        {
+          id: "generated-critique-underdeclared",
+          generationRunId: "generation-run-underdeclared",
+          positionId: "pos-ai-prior",
+          generationOutputStatus: "generated",
+        },
+      ],
+      generationEvaluationReports: [
+        {
+          id: "generation-evaluation-report-underdeclared",
+          generationRunIds: ["generation-run-underdeclared"],
+        },
+      ],
+    },
+  );
+  const underdeclaredRun = underdeclaredReport.critiqueGenerationEvaluation.runRows.find((row) => row.id === "generation-run-underdeclared");
+  assert.equal(underdeclaredRun.generationRunContractStatus, "critique_generation_run_contract_review_required");
+  assert.equal(underdeclaredRun.generatedSubmissionContractViolationCount, 1);
+  assert.equal(underdeclaredRun.generationEvaluationReportContractViolationCount, 1);
+  assert.equal(
+    underdeclaredReport.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.releaseUseStatus,
+    "critique_generation_workflow_contract_review_required",
+  );
+  assert.ok(
+    underdeclaredReport.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.reviewSections.some(
+      (section) => section.artifactType === "critique_generation_run" && section.reason.includes("generatorProvider"),
+    ),
+  );
+  assert.ok(
+    underdeclaredReport.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.reviewSections.some(
+      (section) => section.artifactType === "generated_critique_submission" && section.reason.includes("rawGeneratedText"),
+    ),
+  );
+  assert.ok(
+    underdeclaredReport.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.reviewSections.some(
+      (section) => section.artifactType === "generation_evaluation_report" && section.reason.includes("commonPositionSetPolicy"),
+    ),
+  );
+  assert.equal(
+    underdeclaredReport.critiqueGenerationEvaluation.releaseUseStatus,
+    "generation_evaluation_requires_blinding_rating_coverage_provider_policy_or_contract_review",
+  );
 });
 
 test("submitted rater-reliability weight models become label-snapshot provenance evidence", () => {
@@ -7810,6 +7910,9 @@ test("submitted model-evaluation artifacts are checked against current release e
           id: "model-improvement-submitted",
           releaseId,
           trainingExportId: `training-export-${releaseId}`,
+          targetLabelSnapshotId: `snapshot-${releaseId}`,
+          targetLabelVersion: snapshot.targetLabelVersion,
+          modelFamilyOrCheckpoint: "reward-model-candidate-a",
           optimizedSurrogateObjectiveFamily: "pairwise_logistic",
           targetFields: ["overall", "centrality_x_strength"],
           humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
@@ -7817,8 +7920,16 @@ test("submitted model-evaluation artifacts are checked against current release e
           positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
           labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
           highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config",
+          calibrationTargetDistribution: "public_train_label_snapshot_prior",
+          fitSplit: "public_train",
+          devSplit: "public_dev",
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
+          trainingPromptTemplateId: "project-full-rubric-v1",
+          linkedPostTrainingEvaluationRunIds: ["evaluation-run-submitted"],
           lmcaEvaluationMetricsSeparate: true,
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T00:20:00.000Z",
         },
       ],
       evaluationRuns: [
@@ -7965,6 +8076,18 @@ test("submitted model-evaluation artifacts are checked against current release e
     report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.status,
     "submitted_model_improvement_run_preserves_surrogate_separation",
   );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "targetLabelSnapshotId").status,
+    "matches",
+  );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "calibrationTargetDistribution").status,
+    "matches",
+  );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "linkedPostTrainingEvaluationRunIds").status,
+    "matches",
+  );
   assert.equal(report.modelEvaluationArtifactEvidence.evaluationRunEvidence.status, "submitted_evaluation_run_matches_current_target");
   assert.equal(
     report.modelEvaluationArtifactEvidence.predictionEvidence.status,
@@ -8016,14 +8139,25 @@ test("submitted model-evaluation artifacts are checked against current release e
           id: "model-improvement-missing-position-balance",
           releaseId,
           trainingExportId: `training-export-${releaseId}`,
+          targetLabelSnapshotId: snapshot.id,
+          targetLabelVersion: snapshot.targetLabelVersion,
+          modelFamilyOrCheckpoint: "reward-model-candidate-a",
           optimizedSurrogateObjectiveFamily: "pairwise_logistic",
           targetFields: ["overall", "centrality_x_strength"],
           humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
           tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
           labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
           highUncertaintyDownweightingPolicy: "downweight_or_exclude_unresolved_high_spread_labels_by_training_config",
+          calibrationTargetDistribution: "public_train_label_snapshot_prior",
+          fitSplit: "public_train",
+          devSplit: "public_dev",
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
+          trainingPromptTemplateId: "project-full-rubric-v1",
+          linkedPostTrainingEvaluationRunIds: ["evaluation-run-submitted"],
           lmcaEvaluationMetricsSeparate: true,
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T00:20:00.000Z",
         },
       ],
     },
