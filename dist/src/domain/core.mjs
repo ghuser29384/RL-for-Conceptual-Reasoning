@@ -11632,7 +11632,7 @@ function buildClaimGatedModelDiagnostics(run, options = {}) {
   const sycophancyProbeRuns = (options.sycophancyProbeRuns ?? []).filter((probeRun) => probeRunMatchesEvaluation(probeRun, run.id));
   const obfuscationStressRuns = (options.obfuscationStressRuns ?? []).filter((stressRun) => probeRunMatchesEvaluation(stressRun, run.id));
   const approvedDeferrals = (options.diagnosticDeferralRecords ?? [])
-    .map((record) => normalizeDiagnosticDeferralRecord(record, "submitted_workflow_diagnostic_deferral_record"))
+    .map((record) => normalizeDiagnosticDeferralRecord(record, null, "submitted_workflow_diagnostic_deferral_record"))
     .filter((row) => row?.status === "diagnostic_deferral_complete" && (!row.evaluationId || row.evaluationId === run.id));
   const sycophancyDeferral = approvedDeferrals.find((row) => diagnosticDeferralMatchesSuite(row, "sycophancy_orthodoxy_sensitivity")) ?? null;
   const obfuscationDeferral = approvedDeferrals.find((row) => diagnosticDeferralMatchesSuite(row, "obfuscated_argument_stress")) ?? null;
@@ -17279,6 +17279,38 @@ const VERIFICATION_CLAIM_GRANULARITY_REVIEW_STATUSES = [
   "compound_claim_justified",
   "review_required",
 ];
+export const ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION = "adjudicator-pre-read-requiredness-rlhf90-v1";
+export const REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES = [
+  "release_critical_escalation",
+  "high_spread_disagreement",
+  "hidden_benchmark_ambiguity",
+  "validation_adjudication",
+  "correctness_sensitive_adjudication",
+];
+export const REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS = {
+  maxPeerDistributionExposureBeforePreRead: 0,
+  minPreReadIssueTags: 1,
+  minPreReadNoteCharacters: 20,
+  highSpreadTriggerMin: 0.3,
+  releaseCriticalRequiredPriorityMin: 0.6,
+};
+export const REQUIRED_ADJUDICATOR_PRE_READ_RULES = {
+  exposureOrder:
+    "Adjudicator pre-read must be submitted before peer-score distributions, majority direction, model outputs, or post-lock discussion summaries are shown.",
+  visibleMaterial:
+    "Pre-read may use the position text, critique text, rubric anchors, issue flags, and protected-safe item context, but not peer labels or model predictions.",
+  memoLinkage: "Required pre-reads must link to the adjudication memo or record a deferral reason before final signoff.",
+  anchoringControl: "Pre-read notes and issue tags are preserved as anchoring-control evidence and cannot overwrite original ratings.",
+};
+export const REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES = [
+  "required_before_peer_distribution",
+  "optional_not_required",
+  "deferred_with_reason",
+];
+export const REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES = [
+  "position_critique_rubric_only",
+  "protected_safe_item_context_only",
+];
 export const ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION = "adjudication-cockpit-signoff-rlhf90-v1";
 export const REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS = [
   "score_spread_heatmap",
@@ -19219,6 +19251,44 @@ const ADJUDICATION_TRIAGE_LANES = [
   "spot_check_qa",
   "training_feedback",
 ];
+export const DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION = "diagnostic-deferral-visibility-rlhf90-v1";
+export const REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES = [
+  "sycophancy_orthodoxy_sensitivity",
+  "obfuscated_argument_stress",
+  "derived_utility_pairwise_diagnostic",
+  "lmca_numeric_anchor_comparison",
+  "source_anchor_prompt_regression",
+  "exact_adapted_source_comparability",
+];
+export const REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS = [
+  "public_weaker_claim_summary",
+  "public_not_run_rationale",
+  "private_internal_only_with_no_public_claim",
+];
+export const REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS = [
+  "suppress_stronger_claim",
+  "downgrade_to_point_estimate_only",
+  "mark_not_run",
+  "remove_from_release_copy",
+];
+export const REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES = {
+  robustnessClaims:
+    "A deferred robustness diagnostic requires public weaker-claim wording or removal of the stronger robustness claim from release copy.",
+  comparabilityClaims:
+    "A deferred comparability diagnostic requires public not-run rationale when the release still discusses the affected comparison.",
+  privateOnly:
+    "Private internal-only deferrals are allowed only when no public release, leaderboard, benchmark, export, or model-improvement claim relies on the missing diagnostic.",
+  protectedContent:
+    "Deferral summaries must not reveal hidden benchmark item ids, protected labels, private rater data, or raw model outputs.",
+  approval:
+    "Each public/private visibility decision requires expert or release-review approval before release packaging.",
+};
+export const REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES = [
+  "visibility_review_complete",
+  "public_summary_required",
+  "private_only_claim_removed",
+  "blocked_missing_claim_suppression",
+];
 
 const DISCUSSION_IDENTITY_STAGING_POLICIES = ["role_neutral_handles_first", "moderator_exception_immediate"];
 const DISCUSSION_IDENTITY_MASK_PHASE_STATUSES = ["pending_role_neutral_comment_phase", "completed_before_role_reveal", "not_feasible_moderator_exception_logged"];
@@ -19260,6 +19330,53 @@ const REQUIRED_PRACTICE_COMPLETION_STANDARDS = {
   excludedFromReleaseDenominators: true,
   trainingExposureRecorded: true,
 };
+export const RATER_DASHBOARD_POLICY_VERSION = "rater-dashboard-remediation-rlhf90-v1";
+export const REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS = [
+  "certification_status",
+  "rubric_version",
+  "practice_progress",
+  "public_anchor_exposure",
+  "gold_duplicate_feedback_summary",
+  "per_dimension_drift_summary",
+  "assigned_remediation_modules",
+  "completed_remediation_modules",
+  "assignment_eligibility",
+];
+export const REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS = [
+  "protected_validation_labels",
+  "hidden_benchmark_membership",
+  "live_peer_scores",
+  "model_judge_scores",
+  "source_metadata",
+  "active_learning_selection_metadata",
+  "other_rater_performance",
+];
+export const REQUIRED_RATER_DASHBOARD_THRESHOLDS = {
+  minLockedPracticeAttemptsForOrdinaryUnlock: 1,
+  maxOpenRemediationModulesForOrdinaryUnlock: 2,
+  maxOpenRemediationModulesForProtectedUnlock: 0,
+  minDuplicateConsistencyForProtectedUnlock: 0.8,
+  maxPerDimensionDriftForProtectedUnlock: 0.15,
+  remediationCooldownHoursBeforeProtectedAssignment: 24,
+};
+export const REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES = {
+  feedbackVisibility: "training feedback appears only after lock and only for training-approved practice, gold, or duplicate items",
+  protectedLabelBoundary: "hidden-benchmark and protected-validation labels, membership, source metadata, peer scores, and model-judge scores remain hidden",
+  remediationRouting: "open remediation routes raters to targeted practice before protected or harder live assignment unlocks",
+  assignmentEligibility: "dashboard eligibility summaries are advisory and must be checked again by assignment-time training-exposure snapshots",
+  privateDataSeparation: "private learning data is separated from public release metadata, model-training exports, and protected label evidence",
+};
+export const REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES = [
+  "ordinary_live_allowed",
+  "targeted_practice_required",
+  "protected_assignment_locked",
+  "expert_review_required",
+];
+export const REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES = [
+  "private_training_only",
+  "admin_audit_only",
+  "deidentified_release_summary_only",
+];
 const RATER_TRAINING_EXPOSURE_POLICY_VERSION = "rater-training-exposure-rlhf90-v1";
 const REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS = {
   publicSourceAnchorRecordOnly: 0,
@@ -19498,14 +19615,41 @@ function defaultAdjudicationTriageQueueItem(releaseId) {
   };
 }
 
+function defaultDiagnosticDeferralVisibilityPolicy(releaseId) {
+  return {
+    id: `diagnostic-deferral-visibility-policy-${releaseId}`,
+    policyVersion: DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+    diagnosticClasses: REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
+    publicVisibilityLevels: REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
+    claimSuppressionActions: REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
+    visibilityRules: REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+    allowedReviewStatuses: REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
+    publicSummaryRule: REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES.robustnessClaims,
+    privateOnlyRule: REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES.privateOnly,
+    protectedContentRule: REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES.protectedContent,
+    approvalRule: REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES.approval,
+    sourceBoundary:
+      "Project default diagnostic-deferral public visibility is frozen here; LMCA motivates diagnostic limitation disclosure but does not state these exact platform visibility levels.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultDiagnosticDeferralRecord(releaseId) {
   return {
     id: `diagnostic-deferral-${releaseId}`,
     releaseId,
+    diagnosticDeferralVisibilityPolicyId: `diagnostic-deferral-visibility-policy-${releaseId}`,
+    diagnosticClass: "obfuscated_argument_stress",
     diagnosticName: "obfuscation_stress",
     claimAffected: "robustness_to_obfuscated_arguments",
     notRunReason: "Not enough obfuscation variants for the current internal milestone.",
     approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+    publicVisibilityLevel: "public_weaker_claim_summary",
+    claimSuppressionAction: "suppress_stronger_claim",
+    publicSummaryText: "Obfuscation robustness is not claimed for this release because the diagnostic was deferred.",
+    privateReviewerNotes: "Internal milestone lacks enough obfuscation variants.",
+    protectedContentDisclosureCheck: "no_hidden_or_protected_content_disclosed",
+    diagnosticDeferralReviewStatus: "visibility_review_complete",
     strongerClaimSuppressed: true,
     reviewerId: "seed-release-reviewer",
     reviewerRole: "expert",
@@ -19737,10 +19881,27 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     .map((item) => normalizeAdjudicationTriageQueueItem(item, "submitted_workflow_adjudication_triage_queue_item"))
     .filter(Boolean);
   const seedTriageRows = [normalizeAdjudicationTriageQueueItem(defaultAdjudicationTriageQueueItem(releaseId), "seed_adjudication_triage_queue_item")];
-  const submittedDeferralRows = (options.diagnosticDeferralRecords ?? [])
-    .map((record) => normalizeDiagnosticDeferralRecord(record, "submitted_workflow_diagnostic_deferral_record"))
+  const submittedDeferralVisibilityPolicyRows = (options.diagnosticDeferralVisibilityPolicies ?? [])
+    .map((policy) => normalizeDiagnosticDeferralVisibilityPolicy(policy, "submitted_workflow_diagnostic_deferral_visibility_policy"))
     .filter(Boolean);
-  const seedDeferralRows = [normalizeDiagnosticDeferralRecord(defaultDiagnosticDeferralRecord(releaseId), "seed_diagnostic_deferral_record")];
+  const seedDeferralVisibilityPolicyRows = [
+    normalizeDiagnosticDeferralVisibilityPolicy(
+      defaultDiagnosticDeferralVisibilityPolicy(releaseId),
+      "seed_diagnostic_deferral_visibility_policy",
+    ),
+  ];
+  const submittedActiveDeferralVisibilityPolicy = submittedDeferralVisibilityPolicyRows.find((row) => row.reviewReasons.length === 0);
+  const activeDeferralVisibilityPolicy = submittedActiveDeferralVisibilityPolicy ?? seedDeferralVisibilityPolicyRows[0];
+  const submittedDeferralRows = (options.diagnosticDeferralRecords ?? [])
+    .map((record) => normalizeDiagnosticDeferralRecord(record, activeDeferralVisibilityPolicy, "submitted_workflow_diagnostic_deferral_record"))
+    .filter(Boolean);
+  const seedDeferralRows = [
+    normalizeDiagnosticDeferralRecord(
+      defaultDiagnosticDeferralRecord(releaseId),
+      seedDeferralVisibilityPolicyRows[0],
+      "seed_diagnostic_deferral_record",
+    ),
+  ];
   const submittedQueuePolicyRows = (options.queuePolicySnapshots ?? [])
     .map((snapshot) => normalizeQueuePolicySnapshot(snapshot, "submitted_workflow_queue_policy_snapshot"))
     .filter(Boolean);
@@ -19817,6 +19978,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ["spot_check_sampling_policy", submittedSpotCheckPolicyRows.length ? submittedSpotCheckPolicyRows : seedSpotCheckPolicyRows],
     ["spot_check_qa_item", submittedSpotCheckRows.length ? submittedSpotCheckRows : seedSpotCheckRows],
     ["adjudication_triage_queue_item", submittedTriageRows.length ? submittedTriageRows : seedTriageRows],
+    ["diagnostic_deferral_visibility_policy", submittedDeferralVisibilityPolicyRows.length ? submittedDeferralVisibilityPolicyRows : seedDeferralVisibilityPolicyRows],
     ["diagnostic_deferral_record", submittedDeferralRows.length ? submittedDeferralRows : seedDeferralRows],
     ["queue_policy_snapshot", submittedQueuePolicyRows.length ? submittedQueuePolicyRows : seedQueuePolicyRows],
     ["assignment_selection_audit", submittedAssignmentAuditRows.length ? submittedAssignmentAuditRows : seedAssignmentAuditRows],
@@ -19837,6 +19999,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ...submittedSpotCheckPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "spot_check_sampling_policy", artifactId: row.id, reason }))),
     ...submittedSpotCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "spot_check_qa_item", artifactId: row.id, reason }))),
     ...submittedTriageRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication_triage_queue_item", artifactId: row.id, reason }))),
+    ...submittedDeferralVisibilityPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "diagnostic_deferral_visibility_policy", artifactId: row.id, reason })),
+    ),
     ...submittedDeferralRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "diagnostic_deferral_record", artifactId: row.id, reason }))),
     ...submittedQueuePolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_policy_snapshot", artifactId: row.id, reason }))),
     ...submittedAssignmentAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "assignment_selection_audit", artifactId: row.id, reason }))),
@@ -19881,6 +20046,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     submittedSpotCheckPolicyRows.length > 0 &&
     submittedSpotCheckRows.length > 0 &&
     submittedTriageRows.length > 0 &&
+    submittedDeferralVisibilityPolicyRows.length > 0 &&
     submittedDeferralRows.length > 0 &&
     submittedQueuePolicyRows.length > 0 &&
     submittedAssignmentAuditRows.length > 0 &&
@@ -19915,6 +20081,16 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     spotCheckRequiredSamplingDimensions: SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS,
     spotCheckSelectionMethods: SPOT_CHECK_SELECTION_METHODS,
     raterItemConflictTypes: RATER_ITEM_CONFLICT_TYPES,
+    diagnosticDeferralVisibilityPolicyId: activeDeferralVisibilityPolicy.id,
+    diagnosticDeferralVisibilityPolicyReleaseUseStatus: submittedActiveDeferralVisibilityPolicy
+      ? "submitted_diagnostic_deferral_visibility_policy_active"
+      : submittedDeferralVisibilityPolicyRows.length
+        ? "submitted_diagnostic_deferral_visibility_policy_review_required"
+        : "seed_diagnostic_deferral_visibility_policy_active",
+    requiredDiagnosticDeferralDiagnosticClasses: activeDeferralVisibilityPolicy.diagnosticClasses ?? [],
+    requiredDiagnosticDeferralPublicVisibilityLevels: activeDeferralVisibilityPolicy.publicVisibilityLevels ?? [],
+    requiredDiagnosticDeferralClaimSuppressionActions: activeDeferralVisibilityPolicy.claimSuppressionActions ?? [],
+    requiredDiagnosticDeferralVisibilityRules: activeDeferralVisibilityPolicy.visibilityRules ?? {},
     requiredTrainingExposureWindowDays: REQUIRED_TRAINING_EXPOSURE_WINDOW_DAYS,
     requiredTrainingExposureBlockingEffects: REQUIRED_TRAINING_EXPOSURE_BLOCKING_EFFECTS,
     releaseErratumTypes: RELEASE_ERRATUM_TYPES,
@@ -19931,6 +20107,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     spotCheckQaRows: [...seedSpotCheckRows, ...submittedSpotCheckRows],
     spotCheckQAItemRows: [...seedSpotCheckRows, ...submittedSpotCheckRows],
     adjudicationTriageQueueRows: [...seedTriageRows, ...submittedTriageRows],
+    diagnosticDeferralVisibilityPolicyRows: [...seedDeferralVisibilityPolicyRows, ...submittedDeferralVisibilityPolicyRows],
     diagnosticDeferralRows: [...seedDeferralRows, ...submittedDeferralRows],
     queuePolicySnapshotRows: [...seedQueuePolicyRows, ...submittedQueuePolicyRows],
     assignmentSelectionAuditRows: [...seedAssignmentAuditRows, ...submittedAssignmentAuditRows],
@@ -19954,6 +20131,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       submittedSpotCheckQaItemCount: submittedSpotCheckRows.length,
       submittedSpotCheckQAItemCount: submittedSpotCheckRows.length,
       submittedAdjudicationTriageQueueItemCount: submittedTriageRows.length,
+      submittedDiagnosticDeferralVisibilityPolicyCount: submittedDeferralVisibilityPolicyRows.length,
       submittedDiagnosticDeferralRecordCount: submittedDeferralRows.length,
       submittedQueuePolicySnapshotCount: submittedQueuePolicyRows.length,
       submittedAssignmentSelectionAuditCount: submittedAssignmentAuditRows.length,
@@ -20223,15 +20401,98 @@ function normalizeAdjudicationTriageQueueItem(item, rowSource) {
   };
 }
 
-function normalizeDiagnosticDeferralRecord(record, rowSource) {
+function normalizeDiagnosticDeferralVisibilityPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.diagnosticDeferralVisibilityPolicyId ?? policy?.diagnostic_deferral_visibility_policy_id;
+  if (!id) return null;
+  const diagnosticClasses = normalizeStringArray(policy.diagnosticClasses ?? policy.diagnostic_classes);
+  const publicVisibilityLevels = normalizeStringArray(policy.publicVisibilityLevels ?? policy.public_visibility_levels);
+  const claimSuppressionActions = normalizeStringArray(policy.claimSuppressionActions ?? policy.claim_suppression_actions);
+  const allowedReviewStatuses = normalizeStringArray(policy.allowedReviewStatuses ?? policy.allowed_review_statuses);
+  const visibilityRules = policy.visibilityRules ?? policy.visibility_rules ?? {};
+  const missingDiagnosticClasses = REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES.filter((item) => !diagnosticClasses.includes(item));
+  const missingVisibilityLevels = REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS.filter((item) => !publicVisibilityLevels.includes(item));
+  const missingSuppressionActions = REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS.filter((item) => !claimSuppressionActions.includes(item));
+  const missingReviewStatuses = REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES.filter((item) => !allowedReviewStatuses.includes(item));
+  const missingRuleKeys = Object.keys(REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES).filter((key) => !Object.hasOwn(visibilityRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION
+      ? null
+      : `policyVersion:${DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION}`,
+    missingDiagnosticClasses.length ? `diagnosticClasses:${missingDiagnosticClasses.join(",")}` : null,
+    missingVisibilityLevels.length ? `publicVisibilityLevels:${missingVisibilityLevels.join(",")}` : null,
+    missingSuppressionActions.length ? `claimSuppressionActions:${missingSuppressionActions.join(",")}` : null,
+    missingReviewStatuses.length ? `allowedReviewStatuses:${missingReviewStatuses.join(",")}` : null,
+    missingRuleKeys.length ? `visibilityRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(visibilityRules) === stableJsonKey(REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES) ? null : "visibilityRules",
+    policyMentions(policy.publicSummaryRule, ["public", "weaker", "claim"]) ? null : "publicSummaryRule",
+    policyMentions(policy.privateOnlyRule, ["private", "no public", "claim"]) ? null : "privateOnlyRule",
+    policyMentions(policy.protectedContentRule, ["hidden", "protected", "private"]) ? null : "protectedContentRule",
+    policyMentions(policy.approvalRule, ["approval", "release"]) ? null : "approvalRule",
+    policyMentions(policy.sourceBoundary, ["project default", "lmca", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    diagnosticClasses,
+    publicVisibilityLevels,
+    claimSuppressionActions,
+    visibilityRules,
+    allowedReviewStatuses,
+    publicSummaryRule: policy.publicSummaryRule ?? policy.public_summary_rule ?? null,
+    privateOnlyRule: policy.privateOnlyRule ?? policy.private_only_rule ?? null,
+    protectedContentRule: policy.protectedContentRule ?? policy.protected_content_rule ?? null,
+    approvalRule: policy.approvalRule ?? policy.approval_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "diagnostic_deferral_visibility_policy_review_required" : "diagnostic_deferral_visibility_policy_complete",
+  };
+}
+
+function normalizeDiagnosticDeferralRecord(record, activeVisibilityPolicy, rowSource) {
   const id = record?.id ?? record?.diagnosticDeferralId ?? record?.diagnostic_deferral_id;
   if (!id) return null;
+  const diagnosticDeferralVisibilityPolicyId =
+    record.diagnosticDeferralVisibilityPolicyId ?? record.diagnostic_deferral_visibility_policy_id ?? null;
+  const diagnosticClass = record.diagnosticClass ?? record.diagnostic_class ?? null;
+  const publicVisibilityLevel = record.publicVisibilityLevel ?? record.public_visibility_level ?? null;
+  const claimSuppressionAction = record.claimSuppressionAction ?? record.claim_suppression_action ?? null;
+  const diagnosticDeferralReviewStatus = record.diagnosticDeferralReviewStatus ?? record.diagnostic_deferral_review_status ?? null;
+  const activePolicyId = activeVisibilityPolicy?.id ?? null;
+  const activeDiagnosticClasses = activeVisibilityPolicy?.diagnosticClasses?.length
+    ? activeVisibilityPolicy.diagnosticClasses
+    : REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES;
+  const activeVisibilityLevels = activeVisibilityPolicy?.publicVisibilityLevels?.length
+    ? activeVisibilityPolicy.publicVisibilityLevels
+    : REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS;
+  const activeSuppressionActions = activeVisibilityPolicy?.claimSuppressionActions?.length
+    ? activeVisibilityPolicy.claimSuppressionActions
+    : REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS;
+  const activeReviewStatuses = activeVisibilityPolicy?.allowedReviewStatuses?.length
+    ? activeVisibilityPolicy.allowedReviewStatuses
+    : REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES;
+  const publicSummaryRequired = String(publicVisibilityLevel).startsWith("public_");
   const reviewReasons = [
     record.releaseId || record.evaluationId ? null : "releaseIdOrEvaluationId",
+    activePolicyId
+      ? diagnosticDeferralVisibilityPolicyId === activePolicyId
+        ? null
+        : "diagnosticDeferralVisibilityPolicyId"
+      : requiredPromptFieldReason("diagnosticDeferralVisibilityPolicyId", diagnosticDeferralVisibilityPolicyId),
+    activeDiagnosticClasses.includes(diagnosticClass) ? null : "diagnosticClass",
     requiredPromptFieldReason("diagnosticName", record.diagnosticName ?? record.diagnostic_name),
     requiredPromptFieldReason("claimAffected", record.claimAffected ?? record.claim_affected),
     requiredPromptFieldReason("notRunReason", record.notRunReason ?? record.not_run_reason),
     requiredPromptFieldReason("approvedWeakerClaimWording", record.approvedWeakerClaimWording ?? record.approved_weaker_claim_wording),
+    activeVisibilityLevels.includes(publicVisibilityLevel) ? null : "publicVisibilityLevel",
+    activeSuppressionActions.includes(claimSuppressionAction) ? null : "claimSuppressionAction",
+    publicSummaryRequired ? requiredPromptFieldReason("publicSummaryText", record.publicSummaryText ?? record.public_summary_text) : null,
+    policyMentions(record.protectedContentDisclosureCheck ?? record.protected_content_disclosure_check, ["no_hidden", "protected"])
+      ? null
+      : "protectedContentDisclosureCheck",
+    activeReviewStatuses.includes(diagnosticDeferralReviewStatus) ? null : "diagnosticDeferralReviewStatus",
     record.strongerClaimSuppressed === false ? "strongerClaimSuppressed" : null,
     requiredPromptFieldReason("reviewerId", record.reviewerId ?? record.reviewer_id),
     requiredPromptFieldReason("reviewerRole", record.reviewerRole ?? record.reviewer_role),
@@ -20242,10 +20503,19 @@ function normalizeDiagnosticDeferralRecord(record, rowSource) {
     rowSource,
     releaseId: record.releaseId ?? record.release_id ?? null,
     evaluationId: record.evaluationId ?? record.evaluation_id ?? null,
+    diagnosticDeferralVisibilityPolicyId,
+    diagnosticClass,
     diagnosticName: record.diagnosticName ?? record.diagnostic_name ?? null,
     claimAffected: record.claimAffected ?? record.claim_affected ?? null,
     notRunReason: record.notRunReason ?? record.not_run_reason ?? null,
     approvedWeakerClaimWording: record.approvedWeakerClaimWording ?? record.approved_weaker_claim_wording ?? null,
+    publicVisibilityLevel,
+    claimSuppressionAction,
+    publicSummaryText: record.publicSummaryText ?? record.public_summary_text ?? null,
+    privateReviewerNotes: record.privateReviewerNotes ?? record.private_reviewer_notes ?? null,
+    protectedContentDisclosureCheck: record.protectedContentDisclosureCheck ?? record.protected_content_disclosure_check ?? null,
+    diagnosticDeferralReviewStatus,
+    strongerClaimSuppressed: record.strongerClaimSuppressed === true || record.stronger_claim_suppressed === true,
     reviewerId: record.reviewerId ?? record.reviewer_id ?? null,
     reviewerRole: record.reviewerRole ?? record.reviewer_role ?? null,
     reviewReasons,
@@ -20947,6 +21217,26 @@ function defaultVerificationClaimGranularityPolicy(releaseId) {
   };
 }
 
+function defaultAdjudicatorPreReadRequirednessPolicy(releaseId) {
+  return {
+    id: `adjudicator-pre-read-requiredness-policy-${releaseId}`,
+    policyVersion: ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+    thresholds: REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
+    requirednessRules: REQUIRED_ADJUDICATOR_PRE_READ_RULES,
+    allowedRequirednessDecisionStatuses: REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+    allowedVisibleMaterialPolicies: REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+    exposureOrderRule: REQUIRED_ADJUDICATOR_PRE_READ_RULES.exposureOrder,
+    memoLinkageRule: REQUIRED_ADJUDICATOR_PRE_READ_RULES.memoLinkage,
+    anchoringControlRule: REQUIRED_ADJUDICATOR_PRE_READ_RULES.anchoringControl,
+    peerDistributionExposureBeforePreReadMax: 0,
+    completedBeforePeerDistributionExposureRequired: true,
+    lmcaSourceBoundary:
+      "Project default adjudicator pre-read requiredness is frozen here; LMCA motivates blind initial judgment and object-level adjudication but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultAdjudicationCockpitSignoffPolicy(releaseId) {
   return {
     id: `adjudication-cockpit-signoff-policy-${releaseId}`,
@@ -20997,9 +21287,29 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         frozenAt: "2026-10-01T00:00:00.000Z",
       },
     ],
+    raterDashboardPolicies: [
+      {
+        id: `rater-dashboard-policy-${releaseId}`,
+        policyVersion: RATER_DASHBOARD_POLICY_VERSION,
+        visibleSections: REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS,
+        prohibitedFields: REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
+        thresholds: REQUIRED_RATER_DASHBOARD_THRESHOLDS,
+        remediationRules: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES,
+        allowedRemediationStatuses: REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+        allowedVisibilityStatuses: REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
+        feedbackVisibilityPolicy: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES.feedbackVisibility,
+        protectedLabelBoundary: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES.protectedLabelBoundary,
+        remediationRoutingRule: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES.remediationRouting,
+        assignmentEligibilityRule: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES.assignmentEligibility,
+        sourceBoundary:
+          "Project default private-dashboard visibility and remediation thresholds are frozen here; LMCA motivates calibration feedback but does not state these exact volunteer-dashboard thresholds.",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
     raterLearningPlans: [
       {
         id: `rater-learning-plan-${releaseId}`,
+        raterDashboardPolicyId: `rater-dashboard-policy-${releaseId}`,
         raterId: "seed-rater",
         rubricVersion: "appendix-f-operational-v1",
         certificationPackVersion: "pack-v1",
@@ -21008,8 +21318,13 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         assignedRemediationModules: ["centrality-strength-product"],
         completedModules: [],
         currentAssignmentRestrictionsUnlocks: ["ordinary_live_allowed"],
+        dashboardVisibilityStatus: "private_training_only",
+        remediationRoutingStatus: "ordinary_live_allowed",
         feedbackArtifactsShown: ["calibration-feedback-seed"],
         protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+        hiddenProtectedLabelsSuppressed: true,
+        livePeerModelSourceLabelsHidden: true,
+        trainingApprovedFeedbackOnly: true,
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
@@ -21144,15 +21459,22 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
+    adjudicatorPreReadRequirednessPolicies: [defaultAdjudicatorPreReadRequirednessPolicy(releaseId)],
     adjudicatorPreReads: [
       {
         id: `adjudicator-pre-read-${releaseId}`,
+        adjudicatorPreReadRequirednessPolicyId: `adjudicator-pre-read-requiredness-policy-${releaseId}`,
+        requirednessTriggerClass: "release_critical_escalation",
+        requirednessDecisionStatus: "required_before_peer_distribution",
         adjudicatorId: "seed-adjudicator",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
-        visibleMaterialPolicy: "rationales_without_peer_distribution",
+        visibleMaterialPolicy: "position_critique_rubric_only",
         preReadNotes: "Potential target-interpretation ambiguity identified.",
         preliminaryIssueTags: ["interpretation_dispute"],
         completedBeforePeerDistributionExposure: true,
+        peerDistributionExposureBeforePreRead: 0,
+        majorityDirectionHiddenBeforePreRead: true,
+        modelOutputHiddenBeforePreRead: true,
         linkedAdjudicationMemoId: `adjudication-memo-${releaseId}`,
         timestamp: "2026-10-01T00:00:00.000Z",
       },
@@ -21350,13 +21672,70 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       seedRows: defaults.practiceSandboxPolicies,
     },
     {
+      label: "RaterDashboardPolicy",
+      optionKey: "raterDashboardPolicies",
+      rowKey: "raterDashboardPolicyRows",
+      artifactType: "rater_dashboard_policy",
+      requiredFields: [
+        "policyVersion",
+        "feedbackVisibilityPolicy",
+        "protectedLabelBoundary",
+        "remediationRoutingRule",
+        "assignmentEligibilityRule",
+        "sourceBoundary",
+        "frozenAt",
+      ],
+      arrayFields: ["visibleSections", "prohibitedFields", "allowedRemediationStatuses", "allowedVisibilityStatuses"],
+      arrayIncludes: {
+        visibleSections: REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS,
+        prohibitedFields: REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
+        allowedRemediationStatuses: REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+        allowedVisibilityStatuses: REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
+      },
+      objectFields: ["thresholds", "remediationRules"],
+      objectKeys: {
+        thresholds: Object.keys(REQUIRED_RATER_DASHBOARD_THRESHOLDS),
+        remediationRules: Object.keys(REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES),
+      },
+      structuredFields: {
+        thresholds: REQUIRED_RATER_DASHBOARD_THRESHOLDS,
+        remediationRules: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES,
+      },
+      exactFields: { policyVersion: RATER_DASHBOARD_POLICY_VERSION },
+      stringIncludes: {
+        feedbackVisibilityPolicy: ["only after lock", "training-approved"],
+        protectedLabelBoundary: ["hidden-benchmark", "protected-validation", "peer scores", "model-judge"],
+        remediationRoutingRule: ["targeted practice", "protected", "unlocks"],
+        assignmentEligibilityRule: ["assignment-time", "training-exposure snapshots"],
+        sourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+      seedRows: defaults.raterDashboardPolicies,
+    },
+    {
       label: "RaterLearningPlan",
       optionKey: "raterLearningPlans",
       rowKey: "raterLearningPlanRows",
       artifactType: "rater_learning_plan",
-      requiredFields: ["raterId", "rubricVersion", "certificationPackVersion", "protectedLabelExposureCheck", "timestamp"],
+      requiredFields: [
+        "raterDashboardPolicyId",
+        "raterId",
+        "rubricVersion",
+        "certificationPackVersion",
+        "dashboardVisibilityStatus",
+        "remediationRoutingStatus",
+        "protectedLabelExposureCheck",
+        "timestamp",
+      ],
       arrayFields: ["assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown"],
       objectFields: ["practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary"],
+      booleanTrueFields: ["hiddenProtectedLabelsSuppressed", "livePeerModelSourceLabelsHidden", "trainingApprovedFeedbackOnly"],
+      enumFields: {
+        dashboardVisibilityStatus: REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
+        remediationRoutingStatus: REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+      },
+      stringIncludes: {
+        protectedLabelExposureCheck: ["no_protected", "live_labels"],
+      },
       seedRows: defaults.raterLearningPlans,
     },
     {
@@ -21605,13 +21984,63 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       seedRows: defaults.verificationWorkspaceSessions,
     },
     {
+      label: "AdjudicatorPreReadRequirednessPolicy",
+      optionKey: "adjudicatorPreReadRequirednessPolicies",
+      rowKey: "adjudicatorPreReadRequirednessPolicyRows",
+      artifactType: "adjudicator_pre_read_requiredness_policy",
+      requiredFields: ["policyVersion", "exposureOrderRule", "memoLinkageRule", "anchoringControlRule", "lmcaSourceBoundary", "frozenAt"],
+      arrayFields: ["triggerClasses", "allowedRequirednessDecisionStatuses", "allowedVisibleMaterialPolicies"],
+      arrayIncludes: {
+        triggerClasses: REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+        allowedRequirednessDecisionStatuses: REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+        allowedVisibleMaterialPolicies: REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+      },
+      objectFields: ["thresholds", "requirednessRules"],
+      objectKeys: {
+        thresholds: Object.keys(REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS),
+        requirednessRules: Object.keys(REQUIRED_ADJUDICATOR_PRE_READ_RULES),
+      },
+      structuredFields: {
+        thresholds: REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
+        requirednessRules: REQUIRED_ADJUDICATOR_PRE_READ_RULES,
+      },
+      exactFields: {
+        policyVersion: ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+        completedBeforePeerDistributionExposureRequired: true,
+        peerDistributionExposureBeforePreReadMax: 0,
+      },
+      stringIncludes: {
+        exposureOrderRule: ["before", "peer-score"],
+        memoLinkageRule: ["memo", "deferral"],
+        anchoringControlRule: ["anchoring-control", "original ratings"],
+        lmcaSourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+      seedRows: defaults.adjudicatorPreReadRequirednessPolicies,
+    },
+    {
       label: "AdjudicatorPreRead",
       optionKey: "adjudicatorPreReads",
       rowKey: "adjudicatorPreReadRows",
       artifactType: "adjudicator_pre_read",
-      requiredFields: ["adjudicatorId", "visibleMaterialPolicy", "preReadNotes", "linkedAdjudicationMemoId", "timestamp"],
+      requiredFields: [
+        "adjudicatorPreReadRequirednessPolicyId",
+        "requirednessTriggerClass",
+        "requirednessDecisionStatus",
+        "adjudicatorId",
+        "visibleMaterialPolicy",
+        "preReadNotes",
+        "peerDistributionExposureBeforePreRead",
+        "linkedAdjudicationMemoId",
+        "timestamp",
+      ],
       arrayFields: ["itemKeys", "preliminaryIssueTags"],
-      booleanTrueFields: ["completedBeforePeerDistributionExposure"],
+      numericRanges: [{ field: "peerDistributionExposureBeforePreRead", min: 0, max: 0 }],
+      booleanTrueFields: ["completedBeforePeerDistributionExposure", "majorityDirectionHiddenBeforePreRead", "modelOutputHiddenBeforePreRead"],
+      enumFields: {
+        requirednessTriggerClass: REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+        requirednessDecisionStatus: REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+        visibleMaterialPolicy: REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+      },
       seedRows: defaults.adjudicatorPreReads,
     },
     {
@@ -21857,15 +22286,34 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
       complete,
     };
   });
+  const raterDashboardPolicyGroup = groups.find((group) => group.spec.artifactType === "rater_dashboard_policy");
+  const activeRaterDashboardPolicy =
+    raterDashboardPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? raterDashboardPolicyGroup?.rowsForGate[0] ?? null;
   const interpretationPolicyGroup = groups.find((group) => group.spec.artifactType === "interpretation_target_map_requiredness_policy");
   const activeInterpretationTargetMapRequirednessPolicy =
     interpretationPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? interpretationPolicyGroup?.rowsForGate[0] ?? null;
   const verificationGranularityPolicyGroup = groups.find((group) => group.spec.artifactType === "verification_claim_granularity_policy");
   const activeVerificationClaimGranularityPolicy =
     verificationGranularityPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? verificationGranularityPolicyGroup?.rowsForGate[0] ?? null;
+  const adjudicatorPreReadRequirednessPolicyGroup = groups.find((group) => group.spec.artifactType === "adjudicator_pre_read_requiredness_policy");
+  const activeAdjudicatorPreReadRequirednessPolicy =
+    adjudicatorPreReadRequirednessPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ??
+    adjudicatorPreReadRequirednessPolicyGroup?.rowsForGate[0] ??
+    null;
   const adjudicationCockpitSignoffPolicyGroup = groups.find((group) => group.spec.artifactType === "adjudication_cockpit_signoff_policy");
   const activeAdjudicationCockpitSignoffPolicy =
     adjudicationCockpitSignoffPolicyGroup?.rowsForGate.find((row) => row.reviewReasons.length === 0) ?? adjudicationCockpitSignoffPolicyGroup?.rowsForGate[0] ?? null;
+  const raterLearningPlanPolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "rater_learning_plan")?.rowsForGate ?? [])
+    .filter((row) =>
+      row.reviewReasons.length === 0 &&
+      activeRaterDashboardPolicy?.id &&
+      row.raterDashboardPolicyId !== activeRaterDashboardPolicy.id
+    )
+    .map((row) => ({
+      artifactType: "rater_learning_plan",
+      artifactId: row.id,
+      reason: "raterDashboardPolicyId",
+    }));
   const interpretationTargetMapPolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "interpretation_target_map")?.rowsForGate ?? [])
     .filter((row) =>
       row.reviewReasons.length === 0 &&
@@ -21888,6 +22336,17 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
       artifactId: row.id,
       reason: "verificationClaimGranularityPolicyId",
     }));
+  const adjudicatorPreReadPolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "adjudicator_pre_read")?.rowsForGate ?? [])
+    .filter((row) =>
+      row.reviewReasons.length === 0 &&
+      activeAdjudicatorPreReadRequirednessPolicy?.id &&
+      row.adjudicatorPreReadRequirednessPolicyId !== activeAdjudicatorPreReadRequirednessPolicy.id
+    )
+    .map((row) => ({
+      artifactType: "adjudicator_pre_read",
+      artifactId: row.id,
+      reason: "adjudicatorPreReadRequirednessPolicyId",
+    }));
   const adjudicationReviewSessionPolicyLinkReviews = (groups.find((group) => group.spec.artifactType === "adjudication_review_session")?.rowsForGate ?? [])
     .filter((row) =>
       row.reviewReasons.length === 0 &&
@@ -21904,7 +22363,15 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
     group.complete
       ? null
       : { artifactType: group.spec.artifactType, artifactId: group.spec.artifactType, reason: "missing_complete_interaction_workflow_artifact" },
-  ]).filter(Boolean).concat(interpretationTargetMapPolicyLinkReviews, verificationWorkspacePolicyLinkReviews, adjudicationReviewSessionPolicyLinkReviews);
+  ])
+    .filter(Boolean)
+    .concat(
+      raterLearningPlanPolicyLinkReviews,
+      interpretationTargetMapPolicyLinkReviews,
+      verificationWorkspacePolicyLinkReviews,
+      adjudicatorPreReadPolicyLinkReviews,
+      adjudicationReviewSessionPolicyLinkReviews,
+    );
   const counts = Object.fromEntries(
     groups.flatMap((group) => [
       [`submitted${group.spec.label}Count`, group.submittedRows.length],
@@ -21920,6 +22387,16 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
     discussionIdentityStagingPolicies: DISCUSSION_IDENTITY_STAGING_POLICIES,
     discussionIdentityMaskPhaseStatuses: DISCUSSION_IDENTITY_MASK_PHASE_STATUSES,
     discussionRoleRevealPolicies: DISCUSSION_ROLE_REVEAL_POLICIES,
+    raterDashboardPolicyId: activeRaterDashboardPolicy?.id ?? null,
+    raterDashboardPolicyReleaseUseStatus: activeRaterDashboardPolicy?.rowSource?.startsWith("seed_")
+      ? "seed_rater_dashboard_policy_active"
+      : activeRaterDashboardPolicy?.reviewReasons?.length
+        ? "submitted_rater_dashboard_policy_review_required"
+        : "submitted_rater_dashboard_policy_active",
+    requiredRaterDashboardVisibleSections: activeRaterDashboardPolicy?.visibleSections ?? [],
+    prohibitedRaterDashboardFields: activeRaterDashboardPolicy?.prohibitedFields ?? [],
+    requiredRaterDashboardThresholds: activeRaterDashboardPolicy?.thresholds ?? {},
+    requiredRaterDashboardRemediationRules: activeRaterDashboardPolicy?.remediationRules ?? {},
     interpretationTargetMapRequirednessPolicyId: activeInterpretationTargetMapRequirednessPolicy?.id ?? null,
     interpretationTargetMapRequirednessPolicyReleaseUseStatus: activeInterpretationTargetMapRequirednessPolicy?.rowSource?.startsWith("seed_")
       ? "seed_interpretation_target_map_requiredness_policy_active"
@@ -21938,6 +22415,15 @@ export function buildInteractionWorkflowEvidenceReport(releaseId, options = {}) 
     requiredVerificationClaimGranularityClasses: activeVerificationClaimGranularityPolicy?.claimGranularityClasses ?? [],
     requiredVerificationClaimGranularityThresholds: activeVerificationClaimGranularityPolicy?.thresholds ?? {},
     requiredVerificationClaimGranularityRules: activeVerificationClaimGranularityPolicy?.granularityRules ?? {},
+    adjudicatorPreReadRequirednessPolicyId: activeAdjudicatorPreReadRequirednessPolicy?.id ?? null,
+    adjudicatorPreReadRequirednessPolicyReleaseUseStatus: activeAdjudicatorPreReadRequirednessPolicy?.rowSource?.startsWith("seed_")
+      ? "seed_adjudicator_pre_read_requiredness_policy_active"
+      : activeAdjudicatorPreReadRequirednessPolicy?.reviewReasons?.length
+        ? "submitted_adjudicator_pre_read_requiredness_policy_review_required"
+        : "submitted_adjudicator_pre_read_requiredness_policy_active",
+    requiredAdjudicatorPreReadTriggerClasses: activeAdjudicatorPreReadRequirednessPolicy?.triggerClasses ?? [],
+    requiredAdjudicatorPreReadThresholds: activeAdjudicatorPreReadRequirednessPolicy?.thresholds ?? {},
+    requiredAdjudicatorPreReadRules: activeAdjudicatorPreReadRequirednessPolicy?.requirednessRules ?? {},
     adjudicationCockpitSignoffPolicyId: activeAdjudicationCockpitSignoffPolicy?.id ?? null,
     adjudicationCockpitSignoffPolicyReleaseUseStatus: activeAdjudicationCockpitSignoffPolicy?.rowSource?.startsWith("seed_")
       ? "seed_adjudication_cockpit_signoff_policy_active"
@@ -23514,6 +24000,7 @@ export function buildOctoberReleaseReport(
     spotCheckSamplingPolicies: options.spotCheckSamplingPolicies ?? [],
     spotCheckQaItems: options.spotCheckQaItems ?? [],
     adjudicationTriageQueueItems: options.adjudicationTriageQueueItems ?? [],
+    diagnosticDeferralVisibilityPolicies: options.diagnosticDeferralVisibilityPolicies ?? [],
     diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
     queuePolicySnapshots: options.queuePolicySnapshots ?? [],
     assignmentSelectionAudits: options.assignmentSelectionAudits ?? [],
@@ -23531,6 +24018,7 @@ export function buildOctoberReleaseReport(
   const interactionWorkflowEvidence = buildInteractionWorkflowEvidenceReport(releaseId, {
     publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
     practiceSandboxPolicies: options.practiceSandboxPolicies ?? [],
+    raterDashboardPolicies: options.raterDashboardPolicies ?? [],
     raterLearningPlans: options.raterLearningPlans ?? [],
     sessionPacingPolicies: options.sessionPacingPolicies ?? [],
     raterSessions: options.raterSessions ?? [],
@@ -23541,6 +24029,7 @@ export function buildOctoberReleaseReport(
     interpretationTargetMaps: options.interpretationTargetMaps ?? [],
     verificationClaimGranularityPolicies: options.verificationClaimGranularityPolicies ?? [],
     verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
+    adjudicatorPreReadRequirednessPolicies: options.adjudicatorPreReadRequirednessPolicies ?? [],
     adjudicatorPreReads: options.adjudicatorPreReads ?? [],
     postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
     adjudicationCockpitSignoffPolicies: options.adjudicationCockpitSignoffPolicies ?? [],
@@ -23800,6 +24289,7 @@ export function buildOctoberReleaseReport(
       spotCheckQaItems: options.spotCheckQaItems ?? [],
       ratingEffortQaReviews: options.ratingEffortQaReviews ?? [],
       adjudicationTriageQueueItems: options.adjudicationTriageQueueItems ?? [],
+      diagnosticDeferralVisibilityPolicies: options.diagnosticDeferralVisibilityPolicies ?? [],
       diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
       queuePolicySnapshots: options.queuePolicySnapshots ?? [],
       assignmentSelectionAudits: options.assignmentSelectionAudits ?? [],
@@ -23816,6 +24306,7 @@ export function buildOctoberReleaseReport(
     workflowInteractionArtifacts: {
       publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
       practiceSandboxPolicies: options.practiceSandboxPolicies ?? [],
+      raterDashboardPolicies: options.raterDashboardPolicies ?? [],
       raterLearningPlans: options.raterLearningPlans ?? [],
       sessionPacingPolicies: options.sessionPacingPolicies ?? [],
       raterSessions: options.raterSessions ?? [],
@@ -23826,6 +24317,7 @@ export function buildOctoberReleaseReport(
       interpretationTargetMaps: options.interpretationTargetMaps ?? [],
       verificationClaimGranularityPolicies: options.verificationClaimGranularityPolicies ?? [],
       verificationWorkspaceSessions: options.verificationWorkspaceSessions ?? [],
+      adjudicatorPreReadRequirednessPolicies: options.adjudicatorPreReadRequirednessPolicies ?? [],
       adjudicatorPreReads: options.adjudicatorPreReads ?? [],
       postLockDiscussionSessions: options.postLockDiscussionSessions ?? [],
       adjudicationCockpitSignoffPolicies: options.adjudicationCockpitSignoffPolicies ?? [],

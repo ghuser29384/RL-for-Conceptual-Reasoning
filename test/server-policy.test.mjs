@@ -9,6 +9,8 @@ import { pathToFileURL } from "node:url";
 import vercelHealthHandler from "../api/health.mjs";
 import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
+  ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+  DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
@@ -17,6 +19,16 @@ import {
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+  REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+  REQUIRED_ADJUDICATOR_PRE_READ_RULES,
+  REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
+  REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+  REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
@@ -25,6 +37,13 @@ import {
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
   REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
+  RATER_DASHBOARD_POLICY_VERSION,
+  REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
+  REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES,
+  REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+  REQUIRED_RATER_DASHBOARD_THRESHOLDS,
+  REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS,
+  REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
@@ -321,6 +340,33 @@ function scoreConfidenceScalePolicy(id = "score-confidence-scale-policy-workflow
   };
 }
 
+const raterDashboardVisibleSections = REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS;
+const raterDashboardProhibitedFields = REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS;
+const raterDashboardThresholds = REQUIRED_RATER_DASHBOARD_THRESHOLDS;
+const raterDashboardRemediationRules = REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES;
+const raterDashboardRemediationStatuses = REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES;
+const raterDashboardVisibilityStatuses = REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES;
+
+function raterDashboardPolicy(id = "rater-dashboard-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: RATER_DASHBOARD_POLICY_VERSION,
+    visibleSections: raterDashboardVisibleSections,
+    prohibitedFields: raterDashboardProhibitedFields,
+    thresholds: raterDashboardThresholds,
+    remediationRules: raterDashboardRemediationRules,
+    allowedRemediationStatuses: raterDashboardRemediationStatuses,
+    allowedVisibilityStatuses: raterDashboardVisibilityStatuses,
+    feedbackVisibilityPolicy: raterDashboardRemediationRules.feedbackVisibility,
+    protectedLabelBoundary: raterDashboardRemediationRules.protectedLabelBoundary,
+    remediationRoutingRule: raterDashboardRemediationRules.remediationRouting,
+    assignmentEligibilityRule: raterDashboardRemediationRules.assignmentEligibility,
+    sourceBoundary:
+      "Project default private-dashboard visibility and remediation thresholds are frozen here; LMCA motivates calibration feedback but does not state these exact volunteer-dashboard thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 const samePositionBatchReviewTriggerClasses = REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES;
 const samePositionBatchReviewThresholds = REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS;
 const samePositionBatchReviewRules = REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES;
@@ -452,6 +498,32 @@ function verificationClaimGranularityPolicy(id = "verification-claim-granularity
       "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
     sourceBoundary:
       "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const adjudicatorPreReadTriggerClasses = REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES;
+const adjudicatorPreReadThresholds = REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS;
+const adjudicatorPreReadRules = REQUIRED_ADJUDICATOR_PRE_READ_RULES;
+const adjudicatorPreReadDecisionStatuses = REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES;
+const adjudicatorPreReadVisibleMaterialPolicies = REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES;
+
+function adjudicatorPreReadRequirednessPolicy(id = "adjudicator-pre-read-requiredness-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: adjudicatorPreReadTriggerClasses,
+    thresholds: adjudicatorPreReadThresholds,
+    requirednessRules: adjudicatorPreReadRules,
+    allowedRequirednessDecisionStatuses: adjudicatorPreReadDecisionStatuses,
+    allowedVisibleMaterialPolicies: adjudicatorPreReadVisibleMaterialPolicies,
+    exposureOrderRule: adjudicatorPreReadRules.exposureOrder,
+    memoLinkageRule: adjudicatorPreReadRules.memoLinkage,
+    anchoringControlRule: adjudicatorPreReadRules.anchoringControl,
+    peerDistributionExposureBeforePreReadMax: 0,
+    completedBeforePeerDistributionExposureRequired: true,
+    lmcaSourceBoundary:
+      "Project default adjudicator pre-read requiredness is frozen here; LMCA motivates blind initial judgment and object-level adjudication but does not state these exact platform thresholds.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1116,6 +1188,11 @@ const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "r
 const spotCheckSamplingStrata = REQUIRED_SPOT_CHECK_SAMPLING_STRATA;
 const spotCheckMinimumRateByStratum = REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM;
 const spotCheckMinimumCountByStratum = REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM;
+const diagnosticDeferralDiagnosticClasses = REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES;
+const diagnosticDeferralPublicVisibilityLevels = REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS;
+const diagnosticDeferralClaimSuppressionActions = REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS;
+const diagnosticDeferralVisibilityRules = REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES;
+const diagnosticDeferralReviewStatuses = REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES;
 
 function spotCheckSamplingPolicy(id = "spot-check-sampling-policy-workflow-new") {
   return {
@@ -1134,6 +1211,25 @@ function spotCheckSamplingPolicy(id = "spot-check-sampling-policy-workflow-new")
       "Spot-check review does not directly mutate locked labels; revisions or adjudication require explicit linked workflow artifacts.",
     lmcaSourceBoundary:
       "Project default spot-check sampling rates are frozen here; LMCA motivates blind-rater denominator integrity but does not state these exact QA sampling rates.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function diagnosticDeferralVisibilityPolicy(id = "diagnostic-deferral-visibility-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+    diagnosticClasses: diagnosticDeferralDiagnosticClasses,
+    publicVisibilityLevels: diagnosticDeferralPublicVisibilityLevels,
+    claimSuppressionActions: diagnosticDeferralClaimSuppressionActions,
+    visibilityRules: diagnosticDeferralVisibilityRules,
+    allowedReviewStatuses: diagnosticDeferralReviewStatuses,
+    publicSummaryRule: diagnosticDeferralVisibilityRules.robustnessClaims,
+    privateOnlyRule: diagnosticDeferralVisibilityRules.privateOnly,
+    protectedContentRule: diagnosticDeferralVisibilityRules.protectedContent,
+    approvalRule: diagnosticDeferralVisibilityRules.approval,
+    sourceBoundary:
+      "Project default diagnostic-deferral public visibility is frozen here; LMCA motivates diagnostic limitation disclosure but does not state these exact platform visibility levels.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -2004,13 +2100,22 @@ function completeAuxiliaryWorkflowFixtures() {
       priorityDoesNotMutateLabels: true,
       timestamp: "2026-10-01T00:34:00.000Z",
     },
+    diagnosticDeferralVisibilityPolicy: diagnosticDeferralVisibilityPolicy("diagnostic-deferral-visibility-policy-workflow-new"),
     diagnosticDeferralRecord: {
       id: "diagnostic-deferral-workflow-new",
       releaseId: "october-2026-demo",
+      diagnosticDeferralVisibilityPolicyId: "diagnostic-deferral-visibility-policy-workflow-new",
+      diagnosticClass: "obfuscated_argument_stress",
       diagnosticName: "obfuscation_stress",
       claimAffected: "robustness_to_obfuscated_arguments",
       notRunReason: "Not enough obfuscation variants for the current internal milestone.",
       approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+      publicVisibilityLevel: "public_weaker_claim_summary",
+      claimSuppressionAction: "suppress_stronger_claim",
+      publicSummaryText: "Obfuscation robustness is not claimed for this release because the diagnostic was deferred.",
+      privateReviewerNotes: "Internal milestone lacks enough obfuscation variants.",
+      protectedContentDisclosureCheck: "no_hidden_or_protected_content_disclosed",
+      diagnosticDeferralReviewStatus: "visibility_review_complete",
       strongerClaimSuppressed: true,
       reviewerId: "demo-expert",
       reviewerRole: "expert",
@@ -2214,8 +2319,10 @@ function completeInteractionWorkflowFixtures() {
       createdBy: "workflow-admin",
       frozenAt: "2026-10-01T00:43:30.000Z",
     },
+    raterDashboardPolicy: raterDashboardPolicy(),
     raterLearningPlan: {
       id: "rater-learning-plan-workflow-new",
+      raterDashboardPolicyId: "rater-dashboard-policy-workflow-new",
       raterId: "demo-rater",
       rubricVersion: "appendix-f-operational-v1",
       certificationPackVersion: "pack-v1",
@@ -2224,8 +2331,13 @@ function completeInteractionWorkflowFixtures() {
       assignedRemediationModules: ["centrality-strength-product"],
       completedModules: ["centrality-strength-product"],
       currentAssignmentRestrictionsUnlocks: ["ordinary_live_allowed"],
+      dashboardVisibilityStatus: "private_training_only",
+      remediationRoutingStatus: "ordinary_live_allowed",
       feedbackArtifactsShown: ["calibration-feedback-workflow-new"],
       protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+      hiddenProtectedLabelsSuppressed: true,
+      livePeerModelSourceLabelsHidden: true,
+      trainingApprovedFeedbackOnly: true,
       timestamp: "2026-10-01T00:44:00.000Z",
     },
     sessionPacingPolicy: {
@@ -2345,14 +2457,21 @@ function completeInteractionWorkflowFixtures() {
       verifierRole: "expert",
       timestamp: "2026-10-01T00:48:00.000Z",
     },
+    adjudicatorPreReadRequirednessPolicy: adjudicatorPreReadRequirednessPolicy(),
     adjudicatorPreRead: {
       id: "adjudicator-pre-read-workflow-new",
+      adjudicatorPreReadRequirednessPolicyId: "adjudicator-pre-read-requiredness-policy-workflow-new",
+      requirednessTriggerClass: "release_critical_escalation",
+      requirednessDecisionStatus: "required_before_peer_distribution",
       adjudicatorId: "demo-expert",
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
-      visibleMaterialPolicy: "rationales_without_peer_distribution",
+      visibleMaterialPolicy: "position_critique_rubric_only",
       preReadNotes: "Potential target ambiguity identified.",
       preliminaryIssueTags: ["interpretation_dispute"],
       completedBeforePeerDistributionExposure: true,
+      peerDistributionExposureBeforePreRead: 0,
+      majorityDirectionHiddenBeforePreRead: true,
+      modelOutputHiddenBeforePreRead: true,
       linkedAdjudicationMemoId: "adjudication-memo-workflow-new",
       timestamp: "2026-10-01T00:49:00.000Z",
     },
@@ -2883,6 +3002,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/practice-sessions/practice-session-smoke"],
     ["POST", "/api/v1/practice-sandbox-policies"],
     ["GET", "/api/v1/practice-sandbox-policies/practice-sandbox-policy-smoke"],
+    ["POST", "/api/v1/rater-dashboard-policies"],
+    ["GET", "/api/v1/rater-dashboard-policies/rater-dashboard-policy-smoke"],
     ["POST", "/api/v1/rater-learning-plans"],
     ["GET", "/api/v1/rater-learning-plans/rater-learning-plan-smoke"],
     ["POST", "/api/v1/gold-items"],
@@ -2952,6 +3073,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/adjudications/adjudication-smoke/finalize"],
     ["POST", "/api/v1/adjudication-memos"],
     ["GET", "/api/v1/adjudication-memos/adjudication-memo-smoke"],
+    ["POST", "/api/v1/adjudicator-pre-read-requiredness-policies"],
+    ["GET", "/api/v1/adjudicator-pre-read-requiredness-policies/adjudicator-pre-read-requiredness-smoke"],
     ["POST", "/api/v1/adjudicator-pre-reads"],
     ["GET", "/api/v1/adjudicator-pre-reads/adjudicator-pre-read-smoke"],
     ["POST", "/api/v1/adjudication-cockpit-signoff-policies"],
@@ -3118,6 +3241,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/spot-checks/spot-check-smoke"],
     ["POST", "/api/v1/adjudication-triage-items"],
     ["GET", "/api/v1/adjudication-triage-items/triage-smoke"],
+    ["POST", "/api/v1/diagnostic-deferral-visibility-policies"],
+    ["GET", "/api/v1/diagnostic-deferral-visibility-policies/diagnostic-deferral-visibility-smoke"],
     ["POST", "/api/v1/diagnostic-deferrals"],
     ["GET", "/api/v1/diagnostic-deferrals/diagnostic-deferral-smoke"],
     ["POST", "/api/v1/queue-policy-snapshots"],
@@ -10924,6 +11049,40 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeRatingEffortQaReview.status, 400);
   assert.match(unsafeRatingEffortQaReview.body.detail, /routeReasonsReviewed|labelMutationProhibited/);
 
+  const driftedDeferralVisibilityPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/diagnostic-deferral-visibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      diagnosticDeferralVisibilityPolicy: {
+        ...auxiliaryWorkflow.diagnosticDeferralVisibilityPolicy,
+        id: "diagnostic-deferral-visibility-policy-drifted",
+        visibilityRules: {
+          ...diagnosticDeferralVisibilityRules,
+          robustnessClaims: "Deferred robustness diagnostics may remain private while preserving stronger public claims.",
+        },
+      },
+    }),
+  });
+  assert.equal(driftedDeferralVisibilityPolicy.status, 400);
+  assert.match(driftedDeferralVisibilityPolicy.body.detail, /visibilityRules/);
+
+  const unsafeDiagnosticDeferral = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/diagnostic-deferrals",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      diagnosticDeferralRecord: {
+        ...auxiliaryWorkflow.diagnosticDeferralRecord,
+        id: "diagnostic-deferral-unsafe-visibility",
+        protectedContentDisclosureCheck: "hidden benchmark ids disclosed",
+        diagnosticDeferralReviewStatus: "unreviewed",
+      },
+    }),
+  });
+  assert.equal(unsafeDiagnosticDeferral.status, 400);
+  assert.match(unsafeDiagnosticDeferral.body.detail, /protectedContentDisclosureCheck|diagnosticDeferralReviewStatus/);
+
   for (const [resourceKey, url] of [
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
@@ -10931,6 +11090,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["spotCheckQaItem", "/api/v1/spot-checks"],
     ["ratingEffortQaReview", "/api/v1/rating-effort-qa-reviews"],
     ["adjudicationTriageQueueItem", "/api/v1/adjudication-triage-items"],
+    ["diagnosticDeferralVisibilityPolicy", "/api/v1/diagnostic-deferral-visibility-policies"],
     ["diagnosticDeferralRecord", "/api/v1/diagnostic-deferrals"],
     ["queuePolicySnapshot", "/api/v1/queue-policy-snapshots"],
     ["assignmentSelectionAudit", "/api/v1/assignment-selection-audits"],
@@ -11112,6 +11272,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(ratingEffortQaReviewById.status, 200);
   assert.equal(ratingEffortQaReviewById.body.reviewDecision, "exclude_from_sensitive_denominators");
+
+  const diagnosticDeferralVisibilityPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/diagnostic-deferral-visibility-policies/diagnostic-deferral-visibility-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(diagnosticDeferralVisibilityPolicyById.status, 200);
+  assert.deepEqual(diagnosticDeferralVisibilityPolicyById.body.diagnosticClasses, diagnosticDeferralDiagnosticClasses);
+  assert.deepEqual(diagnosticDeferralVisibilityPolicyById.body.visibilityRules, diagnosticDeferralVisibilityRules);
 
   const exposureEligibility = await invokeApi(context, {
     method: "GET",
@@ -11318,6 +11487,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(driftedPracticeSandboxPolicy.status, 400);
   assert.match(driftedPracticeSandboxPolicy.body.detail, /policyVersion|requiredPublicSourceAnchorIds|completionStandards/);
 
+  const driftedRaterDashboardPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-dashboard-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterDashboardPolicy: {
+        ...interactionWorkflow.raterDashboardPolicy,
+        id: "rater-dashboard-policy-drifted",
+        thresholds: { ...raterDashboardThresholds, maxOpenRemediationModulesForProtectedUnlock: 1 },
+      },
+    }),
+  });
+  assert.equal(driftedRaterDashboardPolicy.status, 400);
+  assert.match(driftedRaterDashboardPolicy.body.detail, /thresholds/);
+
   const driftedSessionPacingPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/session-pacing-policies",
@@ -11366,6 +11550,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(driftedVerificationClaimGranularityPolicy.status, 400);
   assert.match(driftedVerificationClaimGranularityPolicy.body.detail, /thresholds/);
 
+  const driftedAdjudicatorPreReadRequirednessPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/adjudicator-pre-read-requiredness-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      adjudicatorPreReadRequirednessPolicy: {
+        ...interactionWorkflow.adjudicatorPreReadRequirednessPolicy,
+        id: "adjudicator-pre-read-requiredness-policy-drifted",
+        thresholds: { ...adjudicatorPreReadThresholds, highSpreadTriggerMin: 0.25 },
+      },
+    }),
+  });
+  assert.equal(driftedAdjudicatorPreReadRequirednessPolicy.status, 400);
+  assert.match(driftedAdjudicatorPreReadRequirednessPolicy.body.detail, /thresholds/);
+
   const driftedAdjudicationCockpitSignoffPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/adjudication-cockpit-signoff-policies",
@@ -11384,6 +11583,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   for (const [resourceKey, url] of [
     ["publicExamplePracticeSession", "/api/v1/practice-sessions"],
     ["practiceSandboxPolicy", "/api/v1/practice-sandbox-policies"],
+    ["raterDashboardPolicy", "/api/v1/rater-dashboard-policies"],
     ["raterSession", "/api/v1/rater-sessions"],
     ["sessionPacingPolicy", "/api/v1/session-pacing-policies"],
     ["assignmentSelfScreen", "/api/v1/assignments/assign-ai-base-rate/self-screen"],
@@ -11393,6 +11593,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["interpretationTargetMap", "/api/v1/interpretation-target-maps"],
     ["verificationClaimGranularityPolicy", "/api/v1/verification-claim-granularity-policies"],
     ["verificationWorkspaceSession", "/api/v1/verification-workspace-sessions"],
+    ["adjudicatorPreReadRequirednessPolicy", "/api/v1/adjudicator-pre-read-requiredness-policies"],
     ["adjudicatorPreRead", "/api/v1/adjudicator-pre-reads"],
     ["postLockDiscussionSession", "/api/v1/discussions/discussion-thread-workflow-new/post-lock-sessions"],
     ["adjudicationCockpitSignoffPolicy", "/api/v1/adjudication-cockpit-signoff-policies"],
@@ -11619,11 +11820,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "adjudicator-pre-read-workflow-incomplete",
         preliminaryIssueTags: [],
         completedBeforePeerDistributionExposure: false,
+        peerDistributionExposureBeforePreRead: 1,
+        majorityDirectionHiddenBeforePreRead: false,
+        modelOutputHiddenBeforePreRead: false,
       },
     }),
   });
   assert.equal(incompleteAdjudicatorPreRead.status, 400);
-  assert.match(incompleteAdjudicatorPreRead.body.detail, /preliminaryIssueTags/);
+  assert.match(
+    incompleteAdjudicatorPreRead.body.detail,
+    /preliminaryIssueTags|completedBeforePeerDistributionExposure|peerDistributionExposureBeforePreRead|majorityDirectionHiddenBeforePreRead|modelOutputHiddenBeforePreRead/,
+  );
 
   const incompleteAdjudicationReviewSession = await invokeApi(context, {
     method: "POST",
@@ -11841,6 +12048,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(practiceSandboxPolicyById.status, 200);
   assert.deepEqual(practiceSandboxPolicyById.body.requiredPublicSourceAnchorIds, practiceSandboxSourceAnchorIds);
 
+  const raterDashboardPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rater-dashboard-policies/rater-dashboard-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(raterDashboardPolicyById.status, 200);
+  assert.deepEqual(raterDashboardPolicyById.body.visibleSections, raterDashboardVisibleSections);
+  assert.deepEqual(raterDashboardPolicyById.body.thresholds, raterDashboardThresholds);
+
   const interpretationTargetMapRequirednessPolicyById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/interpretation-target-map-requiredness-policies/interpretation-target-map-requiredness-policy-workflow-new",
@@ -11858,6 +12074,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(verificationClaimGranularityPolicyById.status, 200);
   assert.deepEqual(verificationClaimGranularityPolicyById.body.claimGranularityClasses, verificationClaimGranularityClasses);
   assert.deepEqual(verificationClaimGranularityPolicyById.body.thresholds, verificationClaimGranularityThresholds);
+
+  const adjudicatorPreReadRequirednessPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/adjudicator-pre-read-requiredness-policies/adjudicator-pre-read-requiredness-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(adjudicatorPreReadRequirednessPolicyById.status, 200);
+  assert.deepEqual(adjudicatorPreReadRequirednessPolicyById.body.triggerClasses, adjudicatorPreReadTriggerClasses);
+  assert.deepEqual(adjudicatorPreReadRequirednessPolicyById.body.thresholds, adjudicatorPreReadThresholds);
 
   const adjudicationCockpitSignoffPolicyById = await invokeApi(context, {
     method: "GET",
@@ -13768,6 +13993,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.spotCheckQaItems.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.ratingEffortQaReviews.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.adjudicationTriageQueueItems.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.diagnosticDeferralVisibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.diagnosticDeferralRecords.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.queuePolicySnapshots.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.assignmentSelectionAudits.length, 1);
@@ -13794,6 +14020,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).spotCheckSamplingPolicyId, "spot-check-sampling-policy-workflow-new");
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedDiagnosticDeferralVisibilityPolicyCount, 1);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.diagnosticDeferralVisibilityPolicyReleaseUseStatus,
+    "submitted_diagnostic_deferral_visibility_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.diagnosticDeferralVisibilityPolicyId,
+    "diagnostic-deferral-visibility-policy-workflow-new",
+  );
+  assert.deepEqual(
+    releaseReport.body.auxiliaryWorkflowEvidence.requiredDiagnosticDeferralDiagnosticClasses,
+    diagnosticDeferralDiagnosticClasses,
+  );
+  assert.deepEqual(
+    releaseReport.body.auxiliaryWorkflowEvidence.requiredDiagnosticDeferralVisibilityRules,
+    diagnosticDeferralVisibilityRules,
+  );
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.diagnosticDeferralRows.at(-1).diagnosticDeferralVisibilityPolicyId,
+    "diagnostic-deferral-visibility-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterTrainingExposurePolicyCount, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.raterTrainingExposurePolicyRows.at(-1).exposureWindowDays.goldFeedbackSameCluster, 180);
   assert.equal(
@@ -13838,7 +14085,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.interactionWorkflowEvidence.practiceSandboxPolicyRows.at(-1).completionStandards,
     practiceSandboxCompletionStandards,
   );
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.raterDashboardPolicies.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.raterDashboardPolicyReleaseUseStatus,
+    "submitted_rater_dashboard_policy_active",
+  );
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.raterDashboardPolicyId, "rater-dashboard-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.requiredRaterDashboardVisibleSections, raterDashboardVisibleSections);
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.prohibitedRaterDashboardFields, raterDashboardProhibitedFields);
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.requiredRaterDashboardThresholds, raterDashboardThresholds);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.raterLearningPlans.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.raterLearningPlanRows.at(-1).raterDashboardPolicyId,
+    "rater-dashboard-policy-workflow-new",
+  );
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.raterLearningPlanRows.at(-1).dashboardVisibilityStatus, "private_training_only");
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.raterLearningPlanRows.at(-1).hiddenProtectedLabelsSuppressed, true);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.sessionPacingPolicies.length, 1);
   assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.sessionPacingPolicyRows.at(-1).thresholdSeconds, sessionPacingThresholdSeconds);
   assert.deepEqual(
@@ -13931,11 +14193,34 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.interactionWorkflowEvidence.verificationWorkspaceSessionRows.at(-1).sourceAssistedReviewNote,
     "Expert post-lock note was consulted only after initial rating lock.",
   );
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicatorPreReadRequirednessPolicies.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRequirednessPolicyReleaseUseStatus,
+    "submitted_adjudicator_pre_read_requiredness_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRequirednessPolicyId,
+    "adjudicator-pre-read-requiredness-policy-workflow-new",
+  );
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.requiredAdjudicatorPreReadTriggerClasses, adjudicatorPreReadTriggerClasses);
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.requiredAdjudicatorPreReadThresholds, adjudicatorPreReadThresholds);
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.requiredAdjudicatorPreReadRules, adjudicatorPreReadRules);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.adjudicatorPreReads.length, 1);
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).adjudicatorPreReadRequirednessPolicyId,
+    "adjudicator-pre-read-requiredness-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).requirednessTriggerClass,
+    "release_critical_escalation",
+  );
   assert.equal(
     releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).completedBeforePeerDistributionExposure,
     true,
   );
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).peerDistributionExposureBeforePreRead, 0);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).majorityDirectionHiddenBeforePreRead, true);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).modelOutputHiddenBeforePreRead, true);
   assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.adjudicatorPreReadRows.at(-1).preliminaryIssueTags, [
     "interpretation_dispute",
   ]);
@@ -14005,8 +14290,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.interactionWorkflowEvidence.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")),
   );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 23);
-  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 23);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 25);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 25);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedAssignmentSelfScreenCount, 2);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedAssignmentDeferralCount, 2);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedBenchmarkSubmissionCount, 1);
@@ -14311,7 +14596,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 135 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 138 + extendedRaterItemConflictTypes.length,
   );
 });
 
@@ -14371,6 +14656,16 @@ test("submitted diagnostic deferrals suppress claim-gated robustness claims in r
   const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
   const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
 
+  const visibilityPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/diagnostic-deferral-visibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      diagnosticDeferralVisibilityPolicy: diagnosticDeferralVisibilityPolicy("diagnostic-deferral-visibility-policy-api-obfuscation"),
+    }),
+  });
+  assert.equal(visibilityPolicy.status, 201);
+
   const deferral = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/diagnostic-deferrals",
@@ -14379,10 +14674,17 @@ test("submitted diagnostic deferrals suppress claim-gated robustness claims in r
       diagnosticDeferralRecord: {
         id: "diagnostic-deferral-api-obfuscation",
         releaseId: "october-2026-demo",
+        diagnosticDeferralVisibilityPolicyId: "diagnostic-deferral-visibility-policy-api-obfuscation",
+        diagnosticClass: "obfuscated_argument_stress",
         diagnosticName: "obfuscation_stress",
         claimAffected: "obfuscation_robustness",
         notRunReason: "Not enough obfuscation variants for this release.",
         approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+        publicVisibilityLevel: "public_weaker_claim_summary",
+        claimSuppressionAction: "suppress_stronger_claim",
+        publicSummaryText: "Obfuscation robustness is not claimed for this release because the diagnostic was deferred.",
+        protectedContentDisclosureCheck: "no_hidden_or_protected_content_disclosed",
+        diagnosticDeferralReviewStatus: "visibility_review_complete",
         strongerClaimSuppressed: true,
         reviewerId: "demo-expert",
         reviewerRole: "expert",

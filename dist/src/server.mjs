@@ -6,13 +6,16 @@ import { fileURLToPath } from "node:url";
 
 import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
+  ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   ARTIFACT_PROBE_INPUT_VIEWS,
   ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
+  DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
+  RATER_DASHBOARD_POLICY_VERSION,
   RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD,
   RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT,
   RATING_ESCALATION_LOW_CLARITY_THRESHOLD,
@@ -32,6 +35,12 @@ import {
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
   REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
+  REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
+  REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES,
+  REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+  REQUIRED_RATER_DASHBOARD_THRESHOLDS,
+  REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS,
+  REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
   REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
   REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
   REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
@@ -56,6 +65,16 @@ import {
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+  REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+  REQUIRED_ADJUDICATOR_PRE_READ_RULES,
+  REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
+  REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+  REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   RUBRIC_DIMENSIONS,
@@ -666,12 +685,25 @@ const adjudicationMemoRequiredFields = [
 ];
 const adjudicatorPreReadRequiredFields = [
   "id",
+  "adjudicatorPreReadRequirednessPolicyId",
+  "requirednessTriggerClass",
+  "requirednessDecisionStatus",
   "adjudicatorId",
   "visibleMaterialPolicy",
   "preReadNotes",
   "completedBeforePeerDistributionExposure",
+  "peerDistributionExposureBeforePreRead",
   "linkedAdjudicationMemoId",
   "timestamp",
+];
+const adjudicatorPreReadRequirednessPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "exposureOrderRule",
+  "memoLinkageRule",
+  "anchoringControlRule",
+  "lmcaSourceBoundary",
+  "frozenAt",
 ];
 const adjudicationReviewSessionRequiredFields = [
   "id",
@@ -1445,6 +1477,42 @@ const releaseConfigBindings = [
   "score_input",
   "export_policy",
 ];
+const raterDashboardPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "feedbackVisibilityPolicy",
+  "protectedLabelBoundary",
+  "remediationRoutingRule",
+  "assignmentEligibilityRule",
+  "sourceBoundary",
+  "frozenAt",
+];
+const raterLearningPlanRequiredFields = [
+  "id",
+  "raterDashboardPolicyId",
+  "raterId",
+  "rubricVersion",
+  "certificationPackVersion",
+  "practiceGoldDuplicatePerformanceSummaries",
+  "perDimensionDriftSummary",
+  "assignedRemediationModules",
+  "currentAssignmentRestrictionsUnlocks",
+  "dashboardVisibilityStatus",
+  "remediationRoutingStatus",
+  "feedbackArtifactsShown",
+  "protectedLabelExposureCheck",
+  "timestamp",
+];
+const diagnosticDeferralVisibilityPolicyRequiredFields = [
+  "id",
+  "policyVersion",
+  "publicSummaryRule",
+  "privateOnlyRule",
+  "protectedContentRule",
+  "approvalRule",
+  "sourceBoundary",
+  "frozenAt",
+];
 const rightsClearancePolicyVersion = "rights-clearance-rlhf90-v1";
 const rightsLegalBases = ["project_owned", "public_domain", "open_license", "explicit_permission", "fair_use_memo", "internal_only_restricted"];
 const rightsEvidenceByLegalBasis = {
@@ -1958,8 +2026,46 @@ const workflowWriteEndpoints = [
     ],
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(/^\/api\/v1\/rater-dashboard-policies$/, "rater_dashboard_policy_submitted", "raterDashboardPolicy", adminAuditRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: raterDashboardPolicyRequiredFields,
+    requiredNonEmptyArrayFields: ["visibleSections", "prohibitedFields", "allowedRemediationStatuses", "allowedVisibilityStatuses"],
+    requiredObjectFields: ["thresholds", "remediationRules"],
+    requiredArrayIncludes: {
+      visibleSections: REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS,
+      prohibitedFields: REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
+      allowedRemediationStatuses: REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+      allowedVisibilityStatuses: REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
+    },
+    requiredObjectKeys: {
+      thresholds: Object.keys(REQUIRED_RATER_DASHBOARD_THRESHOLDS),
+      remediationRules: Object.keys(REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES),
+    },
+    requiredStructuredFields: {
+      thresholds: REQUIRED_RATER_DASHBOARD_THRESHOLDS,
+      remediationRules: REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES,
+    },
+    requiredExactFields: { policyVersion: RATER_DASHBOARD_POLICY_VERSION },
+    requiredStringIncludes: {
+      feedbackVisibilityPolicy: ["only after lock", "training-approved"],
+      protectedLabelBoundary: ["hidden-benchmark", "protected-validation", "peer scores", "model-judge"],
+      remediationRoutingRule: ["targeted practice", "protected", "unlocks"],
+      assignmentEligibilityRule: ["assignment-time", "training-exposure snapshots"],
+      sourceBoundary: ["Project default", "LMCA", "does not state"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/rater-learning-plans$/, "rater_learning_plan_submitted", "raterLearningPlan", ratingWorkflowRoles, {
-    requiredFields: ["id", "raterId", "rubricVersion", "certificationPackVersion", "practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary", "assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown", "protectedLabelExposureCheck", "timestamp"],
+    requiredFields: raterLearningPlanRequiredFields,
+    allowedValues: {
+      dashboardVisibilityStatus: REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
+      remediationRoutingStatus: REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+    },
+    requiredExactFields: {
+      hiddenProtectedLabelsSuppressed: true,
+      livePeerModelSourceLabelsHidden: true,
+      trainingApprovedFeedbackOnly: true,
+    },
+    requiredStringIncludes: { protectedLabelExposureCheck: ["no_protected", "live_labels"] },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/gold-items$/, "gold_item_submitted", "goldItem", adminRoles, {
@@ -2664,11 +2770,57 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["plausibleInterpretationsConsidered", "disagreementTaxonomyCodes", "adjudicatorIds"],
     requiredFiniteNumberFields: ["maxFinalRaterSpread"],
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/adjudicator-pre-read-requiredness-policies$/,
+    "adjudicator_pre_read_requiredness_policy_submitted",
+    "adjudicatorPreReadRequirednessPolicy",
+    adminAuditRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: adjudicatorPreReadRequirednessPolicyRequiredFields,
+      requiredNonEmptyArrayFields: ["triggerClasses", "allowedRequirednessDecisionStatuses", "allowedVisibleMaterialPolicies"],
+      requiredObjectFields: ["thresholds", "requirednessRules"],
+      requiredArrayIncludes: {
+        triggerClasses: REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+        allowedRequirednessDecisionStatuses: REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+        allowedVisibleMaterialPolicies: REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+      },
+      requiredObjectKeys: {
+        thresholds: Object.keys(REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS),
+        requirednessRules: Object.keys(REQUIRED_ADJUDICATOR_PRE_READ_RULES),
+      },
+      requiredStructuredFields: {
+        thresholds: REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
+        requirednessRules: REQUIRED_ADJUDICATOR_PRE_READ_RULES,
+      },
+      requiredExactFields: {
+        policyVersion: ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+        completedBeforePeerDistributionExposureRequired: true,
+        peerDistributionExposureBeforePreReadMax: 0,
+      },
+      requiredStringIncludes: {
+        exposureOrderRule: ["before", "peer-score"],
+        memoLinkageRule: ["memo", "deferral"],
+        anchoringControlRule: ["anchoring-control", "original ratings"],
+        lmcaSourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/adjudicator-pre-reads$/, "adjudicator_pre_read_submitted", "adjudicatorPreRead", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     requiredFields: adjudicatorPreReadRequiredFields,
     requiredNonEmptyArrayFields: ["itemKeys", "preliminaryIssueTags"],
-    requiredExactFields: { completedBeforePeerDistributionExposure: true },
+    allowedValues: {
+      requirednessTriggerClass: REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+      requirednessDecisionStatus: REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+      visibleMaterialPolicy: REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+    },
+    requiredExactFields: {
+      completedBeforePeerDistributionExposure: true,
+      peerDistributionExposureBeforePreRead: 0,
+      majorityDirectionHiddenBeforePreRead: true,
+      modelOutputHiddenBeforePreRead: true,
+    },
   }),
   workflowWriteSpec(
     /^\/api\/v1\/adjudication-cockpit-signoff-policies$/,
@@ -4455,10 +4607,61 @@ const workflowWriteEndpoints = [
     allowedValues: { queueLane: adjudicationTriageLanes },
     requiredExactFields: { priorityDoesNotMutateLabels: true },
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/diagnostic-deferral-visibility-policies$/,
+    "diagnostic_deferral_visibility_policy_submitted",
+    "diagnosticDeferralVisibilityPolicy",
+    adminRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: diagnosticDeferralVisibilityPolicyRequiredFields,
+      requiredNonEmptyArrayFields: ["diagnosticClasses", "publicVisibilityLevels", "claimSuppressionActions", "allowedReviewStatuses"],
+      requiredObjectFields: ["visibilityRules"],
+      requiredArrayIncludes: {
+        diagnosticClasses: REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
+        publicVisibilityLevels: REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
+        claimSuppressionActions: REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
+        allowedReviewStatuses: REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
+      },
+      requiredObjectKeys: { visibilityRules: Object.keys(REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES) },
+      requiredStructuredFields: { visibilityRules: REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES },
+      requiredExactFields: { policyVersion: DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION },
+      requiredStringIncludes: {
+        publicSummaryRule: ["public", "weaker", "claim"],
+        privateOnlyRule: ["private", "no public", "claim"],
+        protectedContentRule: ["hidden", "protected", "private"],
+        approvalRule: ["approval", "release"],
+        sourceBoundary: ["Project default", "LMCA", "does not state"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/diagnostic-deferrals$/, "diagnostic_deferral_record_submitted", "diagnosticDeferralRecord", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "diagnosticName", "claimAffected", "notRunReason", "approvedWeakerClaimWording", "reviewerId", "reviewerRole", "createdAt"],
+    requiredFields: [
+      "id",
+      "diagnosticDeferralVisibilityPolicyId",
+      "diagnosticClass",
+      "diagnosticName",
+      "claimAffected",
+      "notRunReason",
+      "approvedWeakerClaimWording",
+      "publicVisibilityLevel",
+      "claimSuppressionAction",
+      "publicSummaryText",
+      "protectedContentDisclosureCheck",
+      "diagnosticDeferralReviewStatus",
+      "reviewerId",
+      "reviewerRole",
+      "createdAt",
+    ],
     requiredAnyFields: [["releaseId", "evaluationId"]],
+    allowedValues: {
+      diagnosticClass: REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
+      publicVisibilityLevel: REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
+      claimSuppressionAction: REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
+      diagnosticDeferralReviewStatus: REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
+    },
+    requiredStringIncludes: { protectedContentDisclosureCheck: ["no_hidden", "protected"] },
     requiredExactFields: { strongerClaimSuppressed: true },
   }),
   workflowWriteSpec(/^\/api\/v1\/queue-policy-snapshots$/, "queue_policy_snapshot_submitted", "queuePolicySnapshot", adminRoles, {
@@ -5157,6 +5360,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)$/, "raterSession", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/practice-sessions\/(?<id>[^/]+)$/, "publicExamplePracticeSession", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/practice-sandbox-policies\/(?<id>[^/]+)$/, "practiceSandboxPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-dashboard-policies\/(?<id>[^/]+)$/, "raterDashboardPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-learning-plans\/(?<id>[^/]+)$/, "raterLearningPlan", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/gold-items\/(?<id>[^/]+)$/, "goldItem", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/source-anchor-examples\/(?<id>[^/]+)$/, "sourceAnchorExample", adminAuditRoles),
@@ -5183,6 +5387,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/adjudication-memos\/(?<id>[^/]+)$/, "adjudicationMemo", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-records\/(?<id>[^/]+)$/, "verificationRecord", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-evidence-artifacts\/(?<id>[^/]+)$/, "verificationEvidenceArtifact", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudicator-pre-read-requiredness-policies\/(?<id>[^/]+)$/, "adjudicatorPreReadRequirednessPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/adjudicator-pre-reads\/(?<id>[^/]+)$/, "adjudicatorPreRead", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-cockpit-signoff-policies\/(?<id>[^/]+)$/, "adjudicationCockpitSignoffPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-review-sessions\/(?<id>[^/]+)$/, "adjudicationReviewSession", expertAuditWorkflowRoles),
@@ -5248,6 +5453,11 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/spot-checks\/(?<id>[^/]+)$/, "spotCheckQaItem", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-effort-qa-reviews\/(?<id>[^/]+)$/, "ratingEffortQaReview", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-triage-items\/(?<id>[^/]+)$/, "adjudicationTriageQueueItem", expertAuditWorkflowRoles),
+  workflowReadSpec(
+    /^\/api\/v1\/diagnostic-deferral-visibility-policies\/(?<id>[^/]+)$/,
+    "diagnosticDeferralVisibilityPolicy",
+    adminAuditRoles,
+  ),
   workflowReadSpec(/^\/api\/v1\/diagnostic-deferrals\/(?<id>[^/]+)$/, "diagnosticDeferralRecord", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/queue-policy-snapshots\/(?<id>[^/]+)$/, "queuePolicySnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/assignment-selection-audits\/(?<id>[^/]+)$/, "assignmentSelectionAudit", adminAuditRoles),
@@ -7127,6 +7337,7 @@ async function remediationCompleteEndpoint(request, response, context, moduleId)
   const raterId = session.user.role === "admin" ? candidate.raterId ?? body.raterId ?? session.user.id : session.user.id;
   const resource = {
     id: candidate.id ?? `rater-learning-plan-${raterId}-${moduleId}`,
+    raterDashboardPolicyId: candidate.raterDashboardPolicyId ?? `rater-dashboard-policy-october-2026-demo`,
     raterId,
     rubricVersion: candidate.rubricVersion ?? "appendix-f-operational-v1",
     certificationPackVersion: candidate.certificationPackVersion ?? "pack-v1",
@@ -7135,13 +7346,28 @@ async function remediationCompleteEndpoint(request, response, context, moduleId)
     assignedRemediationModules: normalizeWorkflowStringList(candidate.assignedRemediationModules ?? [moduleId]),
     completedModules: normalizeWorkflowStringList(candidate.completedModules ?? [moduleId]),
     currentAssignmentRestrictionsUnlocks: normalizeWorkflowStringList(candidate.currentAssignmentRestrictionsUnlocks ?? ["ordinary_live_allowed"]),
+    dashboardVisibilityStatus: candidate.dashboardVisibilityStatus ?? "private_training_only",
+    remediationRoutingStatus: candidate.remediationRoutingStatus ?? "ordinary_live_allowed",
     feedbackArtifactsShown: normalizeWorkflowStringList(candidate.feedbackArtifactsShown ?? []),
     protectedLabelExposureCheck: candidate.protectedLabelExposureCheck ?? "no_protected_or_live_labels_shown",
+    hiddenProtectedLabelsSuppressed: candidate.hiddenProtectedLabelsSuppressed ?? true,
+    livePeerModelSourceLabelsHidden: candidate.livePeerModelSourceLabelsHidden ?? true,
+    trainingApprovedFeedbackOnly: candidate.trainingApprovedFeedbackOnly ?? true,
     timestamp: candidate.timestamp ?? new Date().toISOString(),
   };
   const validation = validateWorkflowPayload(resource, session.user, {
     resourceKey: "raterLearningPlan",
-    requiredFields: ["id", "raterId", "rubricVersion", "certificationPackVersion", "practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary", "assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown", "protectedLabelExposureCheck", "timestamp"],
+    requiredFields: raterLearningPlanRequiredFields,
+    allowedValues: {
+      dashboardVisibilityStatus: REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
+      remediationRoutingStatus: REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+    },
+    requiredExactFields: {
+      hiddenProtectedLabelsSuppressed: true,
+      livePeerModelSourceLabelsHidden: true,
+      trainingApprovedFeedbackOnly: true,
+    },
+    requiredStringIncludes: { protectedLabelExposureCheck: ["no_protected", "live_labels"] },
     requireActorField: "raterId",
   });
   if (!validation.ok) {
@@ -7979,6 +8205,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const spotCheckQaItems = latestWorkflowResources(workflowEvents, "spotCheckQaItem");
   const ratingEffortQaReviews = latestWorkflowResources(workflowEvents, "ratingEffortQaReview");
   const adjudicationTriageQueueItems = latestWorkflowResources(workflowEvents, "adjudicationTriageQueueItem");
+  const diagnosticDeferralVisibilityPolicies = latestWorkflowResources(workflowEvents, "diagnosticDeferralVisibilityPolicy");
   const diagnosticDeferralRecords = latestWorkflowResources(workflowEvents, "diagnosticDeferralRecord");
   const queuePolicySnapshots = latestWorkflowResources(workflowEvents, "queuePolicySnapshot");
   const assignmentSelectionAudits = latestWorkflowResources(workflowEvents, "assignmentSelectionAudit");
@@ -7993,6 +8220,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
   const practiceSandboxPolicies = latestWorkflowResources(workflowEvents, "practiceSandboxPolicy");
+  const raterDashboardPolicies = latestWorkflowResources(workflowEvents, "raterDashboardPolicy");
   const raterLearningPlans = latestWorkflowResources(workflowEvents, "raterLearningPlan");
   const sessionPacingPolicies = latestWorkflowResources(workflowEvents, "sessionPacingPolicy");
   const raterSessions = latestWorkflowResources(workflowEvents, "raterSession");
@@ -8003,6 +8231,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const interpretationTargetMaps = latestWorkflowResources(workflowEvents, "interpretationTargetMap");
   const verificationClaimGranularityPolicies = latestWorkflowResources(workflowEvents, "verificationClaimGranularityPolicy");
   const verificationWorkspaceSessions = latestWorkflowResources(workflowEvents, "verificationWorkspaceSession");
+  const adjudicatorPreReadRequirednessPolicies = latestWorkflowResources(workflowEvents, "adjudicatorPreReadRequirednessPolicy");
   const adjudicatorPreReads = latestWorkflowResources(workflowEvents, "adjudicatorPreRead");
   const postLockDiscussionSessions = latestWorkflowResources(workflowEvents, "postLockDiscussionSession");
   const adjudicationCockpitSignoffPolicies = latestWorkflowResources(workflowEvents, "adjudicationCockpitSignoffPolicy");
@@ -8160,6 +8389,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     spotCheckQaItems,
     ratingEffortQaReviews,
     adjudicationTriageQueueItems,
+    diagnosticDeferralVisibilityPolicies,
     diagnosticDeferralRecords,
     queuePolicySnapshots,
     assignmentSelectionAudits,
@@ -8174,6 +8404,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     scheduleStatusSnapshots,
     publicExamplePracticeSessions,
     practiceSandboxPolicies,
+    raterDashboardPolicies,
     raterLearningPlans,
     sessionPacingPolicies,
     raterSessions,
@@ -8184,6 +8415,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     interpretationTargetMaps,
     verificationClaimGranularityPolicies,
     verificationWorkspaceSessions,
+    adjudicatorPreReadRequirednessPolicies,
     adjudicatorPreReads,
     postLockDiscussionSessions,
     adjudicationCockpitSignoffPolicies,
@@ -8336,6 +8568,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     spotCheckQaItems,
     ratingEffortQaReviews,
     adjudicationTriageQueueItems,
+    diagnosticDeferralVisibilityPolicies,
     diagnosticDeferralRecords,
     queuePolicySnapshots,
     assignmentSelectionAudits,
@@ -8350,6 +8583,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     scheduleStatusSnapshots,
       publicExamplePracticeSessions,
       practiceSandboxPolicies,
+      raterDashboardPolicies,
       raterLearningPlans,
       sessionPacingPolicies,
       raterSessions,
@@ -8360,6 +8594,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     interpretationTargetMaps,
     verificationClaimGranularityPolicies,
     verificationWorkspaceSessions,
+    adjudicatorPreReadRequirednessPolicies,
     adjudicatorPreReads,
     postLockDiscussionSessions,
     adjudicationCockpitSignoffPolicies,

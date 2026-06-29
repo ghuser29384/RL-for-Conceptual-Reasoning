@@ -72,6 +72,18 @@ import {
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+  ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
+  REQUIRED_ADJUDICATOR_PRE_READ_RULES,
+  REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
+  REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
+  REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+  DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
+  REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
@@ -86,6 +98,13 @@ import {
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
   REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
+  RATER_DASHBOARD_POLICY_VERSION,
+  REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
+  REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES,
+  REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES,
+  REQUIRED_RATER_DASHBOARD_THRESHOLDS,
+  REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS,
+  REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
@@ -353,6 +372,33 @@ function scoreConfidenceScalePolicy(id = "score-confidence-scale-policy-submitte
   };
 }
 
+const raterDashboardVisibleSections = REQUIRED_RATER_DASHBOARD_VISIBLE_SECTIONS;
+const raterDashboardProhibitedFields = REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS;
+const raterDashboardThresholds = REQUIRED_RATER_DASHBOARD_THRESHOLDS;
+const raterDashboardRemediationRules = REQUIRED_RATER_DASHBOARD_REMEDIATION_RULES;
+const raterDashboardRemediationStatuses = REQUIRED_RATER_DASHBOARD_REMEDIATION_STATUSES;
+const raterDashboardVisibilityStatuses = REQUIRED_RATER_DASHBOARD_VISIBILITY_STATUSES;
+
+function raterDashboardPolicy(id = "rater-dashboard-policy-submitted") {
+  return {
+    id,
+    policyVersion: RATER_DASHBOARD_POLICY_VERSION,
+    visibleSections: raterDashboardVisibleSections,
+    prohibitedFields: raterDashboardProhibitedFields,
+    thresholds: raterDashboardThresholds,
+    remediationRules: raterDashboardRemediationRules,
+    allowedRemediationStatuses: raterDashboardRemediationStatuses,
+    allowedVisibilityStatuses: raterDashboardVisibilityStatuses,
+    feedbackVisibilityPolicy: raterDashboardRemediationRules.feedbackVisibility,
+    protectedLabelBoundary: raterDashboardRemediationRules.protectedLabelBoundary,
+    remediationRoutingRule: raterDashboardRemediationRules.remediationRouting,
+    assignmentEligibilityRule: raterDashboardRemediationRules.assignmentEligibility,
+    sourceBoundary:
+      "Project default private-dashboard visibility and remediation thresholds are frozen here; LMCA motivates calibration feedback but does not state these exact volunteer-dashboard thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 const samePositionBatchReviewTriggerClasses = REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES;
 const samePositionBatchReviewThresholds = REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS;
 const samePositionBatchReviewRules = REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES;
@@ -478,6 +524,32 @@ function verificationClaimGranularityPolicy(id = "verification-claim-granularity
       "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
     sourceBoundary:
       "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const adjudicatorPreReadTriggerClasses = REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES;
+const adjudicatorPreReadThresholds = REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS;
+const adjudicatorPreReadRules = REQUIRED_ADJUDICATOR_PRE_READ_RULES;
+const adjudicatorPreReadDecisionStatuses = REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES;
+const adjudicatorPreReadVisibleMaterialPolicies = REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES;
+
+function adjudicatorPreReadRequirednessPolicy(id = "adjudicator-pre-read-requiredness-policy-submitted") {
+  return {
+    id,
+    policyVersion: ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: adjudicatorPreReadTriggerClasses,
+    thresholds: adjudicatorPreReadThresholds,
+    requirednessRules: adjudicatorPreReadRules,
+    allowedRequirednessDecisionStatuses: adjudicatorPreReadDecisionStatuses,
+    allowedVisibleMaterialPolicies: adjudicatorPreReadVisibleMaterialPolicies,
+    exposureOrderRule: adjudicatorPreReadRules.exposureOrder,
+    memoLinkageRule: adjudicatorPreReadRules.memoLinkage,
+    anchoringControlRule: adjudicatorPreReadRules.anchoringControl,
+    peerDistributionExposureBeforePreReadMax: 0,
+    completedBeforePeerDistributionExposureRequired: true,
+    lmcaSourceBoundary:
+      "Project default adjudicator pre-read requiredness is frozen here; LMCA motivates blind initial judgment and object-level adjudication but does not state these exact platform thresholds.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1179,6 +1251,11 @@ const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "r
 const spotCheckSamplingStrata = REQUIRED_SPOT_CHECK_SAMPLING_STRATA;
 const spotCheckMinimumRateByStratum = REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM;
 const spotCheckMinimumCountByStratum = REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM;
+const diagnosticDeferralDiagnosticClasses = REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES;
+const diagnosticDeferralPublicVisibilityLevels = REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS;
+const diagnosticDeferralClaimSuppressionActions = REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS;
+const diagnosticDeferralVisibilityRules = REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES;
+const diagnosticDeferralReviewStatuses = REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES;
 
 function spotCheckSamplingPolicy(id = "spot-check-sampling-policy-submitted") {
   return {
@@ -1197,6 +1274,25 @@ function spotCheckSamplingPolicy(id = "spot-check-sampling-policy-submitted") {
       "Spot-check review does not directly mutate locked labels; revisions or adjudication require explicit linked workflow artifacts.",
     lmcaSourceBoundary:
       "Project default spot-check sampling rates are frozen here; LMCA motivates blind-rater denominator integrity but does not state these exact QA sampling rates.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function diagnosticDeferralVisibilityPolicy(id = "diagnostic-deferral-visibility-policy-submitted") {
+  return {
+    id,
+    policyVersion: DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+    diagnosticClasses: diagnosticDeferralDiagnosticClasses,
+    publicVisibilityLevels: diagnosticDeferralPublicVisibilityLevels,
+    claimSuppressionActions: diagnosticDeferralClaimSuppressionActions,
+    visibilityRules: diagnosticDeferralVisibilityRules,
+    allowedReviewStatuses: diagnosticDeferralReviewStatuses,
+    publicSummaryRule: diagnosticDeferralVisibilityRules.robustnessClaims,
+    privateOnlyRule: diagnosticDeferralVisibilityRules.privateOnly,
+    protectedContentRule: diagnosticDeferralVisibilityRules.protectedContent,
+    approvalRule: diagnosticDeferralVisibilityRules.approval,
+    sourceBoundary:
+      "Project default diagnostic-deferral public visibility is frozen here; LMCA motivates diagnostic limitation disclosure but does not state these exact platform visibility levels.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -2134,14 +2230,23 @@ function completeAuxiliaryWorkflowFixtures() {
         timestamp: "2026-10-01T00:04:00.000Z",
       },
     ],
+    diagnosticDeferralVisibilityPolicies: [diagnosticDeferralVisibilityPolicy("diagnostic-deferral-visibility-policy-submitted")],
     diagnosticDeferralRecords: [
       {
         id: "diagnostic-deferral-submitted",
         releaseId: "october-2026-demo",
+        diagnosticDeferralVisibilityPolicyId: "diagnostic-deferral-visibility-policy-submitted",
+        diagnosticClass: "obfuscated_argument_stress",
         diagnosticName: "obfuscation_stress",
         claimAffected: "robustness_to_obfuscated_arguments",
         notRunReason: "Not enough obfuscation variants for the current internal milestone.",
         approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+        publicVisibilityLevel: "public_weaker_claim_summary",
+        claimSuppressionAction: "suppress_stronger_claim",
+        publicSummaryText: "Obfuscation robustness is not claimed for this release because the diagnostic was deferred.",
+        privateReviewerNotes: "Internal milestone lacks enough obfuscation variants.",
+        protectedContentDisclosureCheck: "no_hidden_or_protected_content_disclosed",
+        diagnosticDeferralReviewStatus: "visibility_review_complete",
         strongerClaimSuppressed: true,
         reviewerId: "release-reviewer",
         reviewerRole: "expert",
@@ -2354,9 +2459,11 @@ function completeInteractionWorkflowFixtures() {
         frozenAt: "2026-10-01T00:00:30.000Z",
       },
     ],
+    raterDashboardPolicies: [raterDashboardPolicy()],
     raterLearningPlans: [
       {
         id: "rater-learning-plan-submitted",
+        raterDashboardPolicyId: "rater-dashboard-policy-submitted",
         raterId: "demo-rater",
         rubricVersion: "appendix-f-operational-v1",
         certificationPackVersion: "pack-v1",
@@ -2365,8 +2472,13 @@ function completeInteractionWorkflowFixtures() {
         assignedRemediationModules: ["centrality-strength-product"],
         completedModules: ["centrality-strength-product"],
         currentAssignmentRestrictionsUnlocks: ["ordinary_live_allowed"],
+        dashboardVisibilityStatus: "private_training_only",
+        remediationRoutingStatus: "ordinary_live_allowed",
         feedbackArtifactsShown: ["calibration-feedback-submitted"],
         protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+        hiddenProtectedLabelsSuppressed: true,
+        livePeerModelSourceLabelsHidden: true,
+        trainingApprovedFeedbackOnly: true,
         timestamp: "2026-10-01T00:01:00.000Z",
       },
     ],
@@ -2500,15 +2612,22 @@ function completeInteractionWorkflowFixtures() {
         timestamp: "2026-10-01T00:05:00.000Z",
       },
     ],
+    adjudicatorPreReadRequirednessPolicies: [adjudicatorPreReadRequirednessPolicy()],
     adjudicatorPreReads: [
       {
         id: "adjudicator-pre-read-submitted",
+        adjudicatorPreReadRequirednessPolicyId: "adjudicator-pre-read-requiredness-policy-submitted",
+        requirednessTriggerClass: "release_critical_escalation",
+        requirednessDecisionStatus: "required_before_peer_distribution",
         adjudicatorId: "demo-expert",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
-        visibleMaterialPolicy: "rationales_without_peer_distribution",
+        visibleMaterialPolicy: "position_critique_rubric_only",
         preReadNotes: "Potential target ambiguity identified.",
         preliminaryIssueTags: ["interpretation_dispute"],
         completedBeforePeerDistributionExposure: true,
+        peerDistributionExposureBeforePreRead: 0,
+        majorityDirectionHiddenBeforePreRead: true,
+        modelOutputHiddenBeforePreRead: true,
         linkedAdjudicationMemoId: "adjudication-memo-workflow-new",
         timestamp: "2026-10-01T00:06:00.000Z",
       },
@@ -3581,7 +3700,19 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
   assert.deepEqual(report.spotCheckRequiredSamplingDimensions, spotCheckSamplingDimensions);
   assert.equal(report.counts.submittedAdjudicationTriageQueueItemCount, 1);
+  assert.equal(report.counts.submittedDiagnosticDeferralVisibilityPolicyCount, 1);
+  assert.equal(report.diagnosticDeferralVisibilityPolicyReleaseUseStatus, "submitted_diagnostic_deferral_visibility_policy_active");
+  assert.equal(report.diagnosticDeferralVisibilityPolicyId, "diagnostic-deferral-visibility-policy-submitted");
+  assert.deepEqual(report.requiredDiagnosticDeferralDiagnosticClasses, diagnosticDeferralDiagnosticClasses);
+  assert.deepEqual(report.requiredDiagnosticDeferralPublicVisibilityLevels, diagnosticDeferralPublicVisibilityLevels);
+  assert.deepEqual(report.requiredDiagnosticDeferralClaimSuppressionActions, diagnosticDeferralClaimSuppressionActions);
+  assert.deepEqual(report.requiredDiagnosticDeferralVisibilityRules, diagnosticDeferralVisibilityRules);
+  assert.equal(report.diagnosticDeferralVisibilityPolicyRows.at(-1).policyVersion, DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION);
   assert.equal(report.counts.submittedDiagnosticDeferralRecordCount, 1);
+  assert.equal(report.diagnosticDeferralRows.at(-1).diagnosticDeferralVisibilityPolicyId, "diagnostic-deferral-visibility-policy-submitted");
+  assert.equal(report.diagnosticDeferralRows.at(-1).diagnosticClass, "obfuscated_argument_stress");
+  assert.equal(report.diagnosticDeferralRows.at(-1).publicVisibilityLevel, "public_weaker_claim_summary");
+  assert.equal(report.diagnosticDeferralRows.at(-1).claimSuppressionAction, "suppress_stronger_claim");
   assert.equal(report.counts.submittedQueuePolicySnapshotCount, 1);
   assert.equal(report.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
   assert.equal(report.counts.submittedAssignmentSelectionAuditCount, 1);
@@ -3670,6 +3801,45 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.ok(
     staleSpotCheckPolicyItemReport.reviewSections.some(
       (section) => section.artifactType === "spot_check_qa_item" && section.reason === "spotCheckSamplingPolicyId",
+    ),
+  );
+
+  const driftedDeferralVisibilityPolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    diagnosticDeferralVisibilityPolicies: [
+      {
+        ...diagnosticDeferralVisibilityPolicy("diagnostic-deferral-visibility-policy-drifted"),
+        visibilityRules: {
+          ...diagnosticDeferralVisibilityRules,
+          robustnessClaims: "Internal review may keep deferred robustness diagnostics private while preserving the stronger release claim.",
+        },
+      },
+    ],
+  });
+  assert.equal(driftedDeferralVisibilityPolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.equal(
+    driftedDeferralVisibilityPolicyReport.diagnosticDeferralVisibilityPolicyReleaseUseStatus,
+    "submitted_diagnostic_deferral_visibility_policy_review_required",
+  );
+  assert.ok(
+    driftedDeferralVisibilityPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "diagnostic_deferral_visibility_policy" && section.reason === "visibilityRules",
+    ),
+  );
+
+  const staleDeferralVisibilityPolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    diagnosticDeferralRecords: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().diagnosticDeferralRecords[0],
+        diagnosticDeferralVisibilityPolicyId: "diagnostic-deferral-visibility-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleDeferralVisibilityPolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    staleDeferralVisibilityPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "diagnostic_deferral_record" && section.reason === "diagnosticDeferralVisibilityPolicyId",
     ),
   );
 
@@ -3875,13 +4045,24 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   const report = buildInteractionWorkflowEvidenceReport("october-2026-demo", completeInteractionWorkflowFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(report.counts.submittedArtifactGroupCount, 23);
-  assert.equal(report.counts.completeArtifactGroupCount, 23);
+  assert.equal(report.counts.submittedArtifactGroupCount, 25);
+  assert.equal(report.counts.completeArtifactGroupCount, 25);
   assert.equal(report.counts.submittedPublicExamplePracticeSessionCount, 1);
   assert.equal(report.counts.submittedPracticeSandboxPolicyCount, 1);
   assert.deepEqual(report.practiceSandboxPolicyRows.at(-1).requiredPublicSourceAnchorIds, practiceSandboxSourceAnchorIds);
   assert.deepEqual(report.practiceSandboxPolicyRows.at(-1).completionStandards, practiceSandboxCompletionStandards);
+  assert.equal(report.counts.submittedRaterDashboardPolicyCount, 1);
+  assert.equal(report.raterDashboardPolicyId, "rater-dashboard-policy-submitted");
+  assert.equal(report.raterDashboardPolicyReleaseUseStatus, "submitted_rater_dashboard_policy_active");
+  assert.deepEqual(report.requiredRaterDashboardVisibleSections, raterDashboardVisibleSections);
+  assert.deepEqual(report.prohibitedRaterDashboardFields, raterDashboardProhibitedFields);
+  assert.deepEqual(report.requiredRaterDashboardThresholds, raterDashboardThresholds);
+  assert.deepEqual(report.requiredRaterDashboardRemediationRules, raterDashboardRemediationRules);
   assert.equal(report.counts.submittedRaterLearningPlanCount, 1);
+  assert.equal(report.raterLearningPlanRows.at(-1).raterDashboardPolicyId, "rater-dashboard-policy-submitted");
+  assert.equal(report.raterLearningPlanRows.at(-1).dashboardVisibilityStatus, "private_training_only");
+  assert.equal(report.raterLearningPlanRows.at(-1).remediationRoutingStatus, "ordinary_live_allowed");
+  assert.equal(report.raterLearningPlanRows.at(-1).hiddenProtectedLabelsSuppressed, true);
   assert.equal(report.counts.submittedSessionPacingPolicyCount, 1);
   assert.deepEqual(report.sessionPacingPolicyRows.at(-1).coveredSessionTargets, sessionPacingTargets);
   assert.deepEqual(report.sessionPacingPolicyRows.at(-1).thresholdSeconds, sessionPacingThresholdSeconds);
@@ -3919,8 +4100,20 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).correctnessHalfEntireUnclearFlag, false);
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).nonBlindAuxiliaryMaterialConsulted, true);
   assert.equal(report.verificationWorkspaceSessionRows.at(-1).sourceAssistedReviewNote, "Expert post-lock note was consulted only after initial rating lock.");
+  assert.equal(report.counts.submittedAdjudicatorPreReadRequirednessPolicyCount, 1);
+  assert.equal(report.adjudicatorPreReadRequirednessPolicyId, "adjudicator-pre-read-requiredness-policy-submitted");
+  assert.equal(report.adjudicatorPreReadRequirednessPolicyReleaseUseStatus, "submitted_adjudicator_pre_read_requiredness_policy_active");
+  assert.deepEqual(report.requiredAdjudicatorPreReadTriggerClasses, adjudicatorPreReadTriggerClasses);
+  assert.deepEqual(report.requiredAdjudicatorPreReadThresholds, adjudicatorPreReadThresholds);
+  assert.deepEqual(report.requiredAdjudicatorPreReadRules, adjudicatorPreReadRules);
   assert.equal(report.counts.submittedAdjudicatorPreReadCount, 1);
+  assert.equal(report.adjudicatorPreReadRows.at(-1).adjudicatorPreReadRequirednessPolicyId, "adjudicator-pre-read-requiredness-policy-submitted");
+  assert.equal(report.adjudicatorPreReadRows.at(-1).requirednessTriggerClass, "release_critical_escalation");
+  assert.equal(report.adjudicatorPreReadRows.at(-1).requirednessDecisionStatus, "required_before_peer_distribution");
   assert.equal(report.adjudicatorPreReadRows.at(-1).completedBeforePeerDistributionExposure, true);
+  assert.equal(report.adjudicatorPreReadRows.at(-1).peerDistributionExposureBeforePreRead, 0);
+  assert.equal(report.adjudicatorPreReadRows.at(-1).majorityDirectionHiddenBeforePreRead, true);
+  assert.equal(report.adjudicatorPreReadRows.at(-1).modelOutputHiddenBeforePreRead, true);
   assert.deepEqual(report.adjudicatorPreReadRows.at(-1).preliminaryIssueTags, ["interpretation_dispute"]);
   assert.equal(report.counts.submittedPostLockDiscussionSessionCount, 1);
   assert.deepEqual(report.postLockDiscussionSessionRows.at(-1).participantRoles, ["graduate_rater", "expert_adjudicator"]);
@@ -3954,6 +4147,42 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   );
   assert.equal(report.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")), true);
   assert.deepEqual(report.reviewSections, []);
+
+  const driftedRaterDashboardPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    raterDashboardPolicies: [
+      {
+        ...raterDashboardPolicy("rater-dashboard-policy-drifted"),
+        thresholds: { ...raterDashboardThresholds, maxOpenRemediationModulesForProtectedUnlock: 1 },
+      },
+    ],
+  });
+  assert.equal(driftedRaterDashboardPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.equal(
+    driftedRaterDashboardPolicyReport.raterDashboardPolicyReleaseUseStatus,
+    "submitted_rater_dashboard_policy_review_required",
+  );
+  assert.ok(
+    driftedRaterDashboardPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "rater_dashboard_policy" && section.reason === "thresholds:mismatch",
+    ),
+  );
+
+  const staleRaterDashboardPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    raterLearningPlans: [
+      {
+        ...completeInteractionWorkflowFixtures().raterLearningPlans[0],
+        raterDashboardPolicyId: "rater-dashboard-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleRaterDashboardPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(
+    staleRaterDashboardPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "rater_learning_plan" && section.reason === "raterDashboardPolicyId",
+    ),
+  );
 
   const driftedTargetMapPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
     ...completeInteractionWorkflowFixtures(),
@@ -3992,6 +4221,42 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.ok(
     driftedVerificationGranularityPolicyReport.reviewSections.some(
       (section) => section.artifactType === "verification_claim_granularity_policy" && section.reason === "thresholds:mismatch",
+    ),
+  );
+
+  const driftedAdjudicatorPreReadPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    adjudicatorPreReadRequirednessPolicies: [
+      {
+        ...adjudicatorPreReadRequirednessPolicy("adjudicator-pre-read-requiredness-policy-drifted"),
+        thresholds: { ...adjudicatorPreReadThresholds, highSpreadTriggerMin: 0.25 },
+      },
+    ],
+  });
+  assert.equal(driftedAdjudicatorPreReadPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.equal(
+    driftedAdjudicatorPreReadPolicyReport.adjudicatorPreReadRequirednessPolicyReleaseUseStatus,
+    "submitted_adjudicator_pre_read_requiredness_policy_review_required",
+  );
+  assert.ok(
+    driftedAdjudicatorPreReadPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "adjudicator_pre_read_requiredness_policy" && section.reason === "thresholds:mismatch",
+    ),
+  );
+
+  const stalePreReadPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    adjudicatorPreReads: [
+      {
+        ...completeInteractionWorkflowFixtures().adjudicatorPreReads[0],
+        adjudicatorPreReadRequirednessPolicyId: "adjudicator-pre-read-requiredness-policy-old",
+      },
+    ],
+  });
+  assert.equal(stalePreReadPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(
+    stalePreReadPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "adjudicator_pre_read" && section.reason === "adjudicatorPreReadRequirednessPolicyId",
     ),
   );
 
@@ -7155,10 +7420,17 @@ test("model failure audits preserve raw outputs and enforce protected-split hand
         id: "diagnostic-deferral-obfuscation-release-test",
         releaseId: "release-test",
         evaluationId: fullRubricEvaluationRun.id,
+        diagnosticDeferralVisibilityPolicyId: "diagnostic-deferral-visibility-policy-release-test",
+        diagnosticClass: "obfuscated_argument_stress",
         diagnosticName: "obfuscation_stress",
         claimAffected: "obfuscation_robustness",
         notRunReason: "Not enough obfuscation variants for this release.",
         approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+        publicVisibilityLevel: "public_weaker_claim_summary",
+        claimSuppressionAction: "suppress_stronger_claim",
+        publicSummaryText: "Obfuscation robustness is not claimed for this release because the diagnostic was deferred.",
+        protectedContentDisclosureCheck: "no_hidden_or_protected_content_disclosed",
+        diagnosticDeferralReviewStatus: "visibility_review_complete",
         strongerClaimSuppressed: true,
         reviewerId: "expert-reviewer",
         reviewerRole: "expert",
@@ -9086,14 +9358,22 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
           robustnessClaims: ["obfuscation_robustness"],
         },
       ],
+      diagnosticDeferralVisibilityPolicies: [diagnosticDeferralVisibilityPolicy("diagnostic-deferral-visibility-policy-release-test")],
       diagnosticDeferralRecords: [
         {
           id: "diagnostic-deferral-report-obfuscation",
           releaseId: "release-test",
+          diagnosticDeferralVisibilityPolicyId: "diagnostic-deferral-visibility-policy-release-test",
+          diagnosticClass: "obfuscated_argument_stress",
           diagnosticName: "obfuscation_stress",
           claimAffected: "obfuscation_robustness",
           notRunReason: "Diagnostic deferred before release.",
           approvedWeakerClaimWording: "Obfuscation robustness is not claimed for this release.",
+          publicVisibilityLevel: "public_weaker_claim_summary",
+          claimSuppressionAction: "suppress_stronger_claim",
+          publicSummaryText: "Obfuscation robustness is not claimed for this release because the diagnostic was deferred.",
+          protectedContentDisclosureCheck: "no_hidden_or_protected_content_disclosed",
+          diagnosticDeferralReviewStatus: "visibility_review_complete",
           strongerClaimSuppressed: true,
           reviewerId: "expert-reviewer",
           reviewerRole: "expert",

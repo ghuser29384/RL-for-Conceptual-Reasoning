@@ -145,6 +145,52 @@ const scoreConfidenceReasonCodes = [
   "rubric_boundary_case",
   "high_confidence_clear_application",
 ];
+const raterDashboardVisibleSections = [
+  "certification_status",
+  "rubric_version",
+  "practice_progress",
+  "public_anchor_exposure",
+  "gold_duplicate_feedback_summary",
+  "per_dimension_drift_summary",
+  "assigned_remediation_modules",
+  "completed_remediation_modules",
+  "assignment_eligibility",
+];
+const raterDashboardProhibitedFields = [
+  "protected_validation_labels",
+  "hidden_benchmark_membership",
+  "live_peer_scores",
+  "model_judge_scores",
+  "source_metadata",
+  "active_learning_selection_metadata",
+  "other_rater_performance",
+];
+const raterDashboardThresholds = {
+  minLockedPracticeAttemptsForOrdinaryUnlock: 1,
+  maxOpenRemediationModulesForOrdinaryUnlock: 2,
+  maxOpenRemediationModulesForProtectedUnlock: 0,
+  minDuplicateConsistencyForProtectedUnlock: 0.8,
+  maxPerDimensionDriftForProtectedUnlock: 0.15,
+  remediationCooldownHoursBeforeProtectedAssignment: 24,
+};
+const raterDashboardRemediationRules = {
+  feedbackVisibility: "training feedback appears only after lock and only for training-approved practice, gold, or duplicate items",
+  protectedLabelBoundary: "hidden-benchmark and protected-validation labels, membership, source metadata, peer scores, and model-judge scores remain hidden",
+  remediationRouting: "open remediation routes raters to targeted practice before protected or harder live assignment unlocks",
+  assignmentEligibility: "dashboard eligibility summaries are advisory and must be checked again by assignment-time training-exposure snapshots",
+  privateDataSeparation: "private learning data is separated from public release metadata, model-training exports, and protected label evidence",
+};
+const raterDashboardRemediationStatuses = [
+  "ordinary_live_allowed",
+  "targeted_practice_required",
+  "protected_assignment_locked",
+  "expert_review_required",
+];
+const raterDashboardVisibilityStatuses = [
+  "private_training_only",
+  "admin_audit_only",
+  "deidentified_release_summary_only",
+];
 const samePositionBatchReviewTriggerClasses = [
   "same_position_session_completed",
   "large_product_overall_delta",
@@ -197,6 +243,42 @@ const spotCheckMinimumCountByStratum = {
   hidden_benchmark_candidate: 1,
   ordinary_live_rating: 1,
 };
+const diagnosticDeferralDiagnosticClasses = [
+  "sycophancy_orthodoxy_sensitivity",
+  "obfuscated_argument_stress",
+  "derived_utility_pairwise_diagnostic",
+  "lmca_numeric_anchor_comparison",
+  "source_anchor_prompt_regression",
+  "exact_adapted_source_comparability",
+];
+const diagnosticDeferralPublicVisibilityLevels = [
+  "public_weaker_claim_summary",
+  "public_not_run_rationale",
+  "private_internal_only_with_no_public_claim",
+];
+const diagnosticDeferralClaimSuppressionActions = [
+  "suppress_stronger_claim",
+  "downgrade_to_point_estimate_only",
+  "mark_not_run",
+  "remove_from_release_copy",
+];
+const diagnosticDeferralVisibilityRules = {
+  robustnessClaims:
+    "A deferred robustness diagnostic requires public weaker-claim wording or removal of the stronger robustness claim from release copy.",
+  comparabilityClaims:
+    "A deferred comparability diagnostic requires public not-run rationale when the release still discusses the affected comparison.",
+  privateOnly:
+    "Private internal-only deferrals are allowed only when no public release, leaderboard, benchmark, export, or model-improvement claim relies on the missing diagnostic.",
+  protectedContent:
+    "Deferral summaries must not reveal hidden benchmark item ids, protected labels, private rater data, or raw model outputs.",
+  approval: "Each public/private visibility decision requires expert or release-review approval before release packaging.",
+};
+const diagnosticDeferralReviewStatuses = [
+  "visibility_review_complete",
+  "public_summary_required",
+  "private_only_claim_removed",
+  "blocked_missing_claim_suppression",
+];
 const rationaleEvidenceSpanMandatoryTriggerClasses = [
   "score_explanation_triggered",
   "low_clarity_or_unclear_target",
@@ -304,6 +386,37 @@ const verificationClaimGranularityRules = {
   unclearText: "unclear_text_fragments_may_be_excluded_or_marked_correctness_half_only_with_explicit_unclear_text_basis",
   releaseCriticalCoverage: "release_critical_validation_adjudication_or_high_disagreement_workspaces_must_include_at_least_one_policy_classified_claim_row",
 };
+const adjudicatorPreReadTriggerClasses = [
+  "release_critical_escalation",
+  "high_spread_disagreement",
+  "hidden_benchmark_ambiguity",
+  "validation_adjudication",
+  "correctness_sensitive_adjudication",
+];
+const adjudicatorPreReadThresholds = {
+  maxPeerDistributionExposureBeforePreRead: 0,
+  minPreReadIssueTags: 1,
+  minPreReadNoteCharacters: 20,
+  highSpreadTriggerMin: 0.3,
+  releaseCriticalRequiredPriorityMin: 0.6,
+};
+const adjudicatorPreReadRules = {
+  exposureOrder:
+    "Adjudicator pre-read must be submitted before peer-score distributions, majority direction, model outputs, or post-lock discussion summaries are shown.",
+  visibleMaterial:
+    "Pre-read may use the position text, critique text, rubric anchors, issue flags, and protected-safe item context, but not peer labels or model predictions.",
+  memoLinkage: "Required pre-reads must link to the adjudication memo or record a deferral reason before final signoff.",
+  anchoringControl: "Pre-read notes and issue tags are preserved as anchoring-control evidence and cannot overwrite original ratings.",
+};
+const adjudicatorPreReadDecisionStatuses = [
+  "required_before_peer_distribution",
+  "optional_not_required",
+  "deferred_with_reason",
+];
+const adjudicatorPreReadVisibleMaterialPolicies = [
+  "position_critique_rubric_only",
+  "protected_safe_item_context_only",
+];
 const adjudicationCockpitMandatoryViewIds = [
   "score_spread_heatmap",
   "cent_x_str_product_allocation",
@@ -556,6 +669,33 @@ const workflowTemplates = [
         recertificationRule:
           "Rubric-version mismatch requires recertification or grandfathering review before certification evidence can support release use.",
         frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    }),
+  },
+  {
+    id: "rater-dashboard-policy",
+    label: "Rater Dashboard Policy",
+    endpoint: () => "/api/v1/rater-dashboard-policies",
+    resourceKey: "raterDashboardPolicy",
+    requiredRole: "admin",
+    summary: "Freeze private calibration-dashboard visibility, remediation thresholds, and assignment-unlock rules.",
+    payload: () => ({
+      raterDashboardPolicy: {
+        id: `rater-dashboard-policy-${releaseId}`,
+        policyVersion: "rater-dashboard-remediation-rlhf90-v1",
+        visibleSections: raterDashboardVisibleSections,
+        prohibitedFields: raterDashboardProhibitedFields,
+        thresholds: raterDashboardThresholds,
+        remediationRules: raterDashboardRemediationRules,
+        allowedRemediationStatuses: raterDashboardRemediationStatuses,
+        allowedVisibilityStatuses: raterDashboardVisibilityStatuses,
+        feedbackVisibilityPolicy: raterDashboardRemediationRules.feedbackVisibility,
+        protectedLabelBoundary: raterDashboardRemediationRules.protectedLabelBoundary,
+        remediationRoutingRule: raterDashboardRemediationRules.remediationRouting,
+        assignmentEligibilityRule: raterDashboardRemediationRules.assignmentEligibility,
+        sourceBoundary:
+          "Project default private-dashboard visibility and remediation thresholds are frozen here; LMCA motivates calibration feedback but does not state these exact volunteer-dashboard thresholds.",
+        frozenAt: new Date().toISOString(),
       },
     }),
   },
@@ -1234,6 +1374,32 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "diagnostic-deferral-visibility-policy",
+    label: "Diagnostic Deferral Visibility Policy",
+    endpoint: () => "/api/v1/diagnostic-deferral-visibility-policies",
+    resourceKey: "diagnosticDeferralVisibilityPolicy",
+    requiredRole: "admin",
+    summary: "Freeze public/private visibility and claim-suppression rules for deferred diagnostics.",
+    payload: () => ({
+      diagnosticDeferralVisibilityPolicy: {
+        id: `diagnostic-deferral-visibility-policy-${releaseId}`,
+        policyVersion: "diagnostic-deferral-visibility-rlhf90-v1",
+        diagnosticClasses: diagnosticDeferralDiagnosticClasses,
+        publicVisibilityLevels: diagnosticDeferralPublicVisibilityLevels,
+        claimSuppressionActions: diagnosticDeferralClaimSuppressionActions,
+        visibilityRules: diagnosticDeferralVisibilityRules,
+        allowedReviewStatuses: diagnosticDeferralReviewStatuses,
+        publicSummaryRule: diagnosticDeferralVisibilityRules.robustnessClaims,
+        privateOnlyRule: diagnosticDeferralVisibilityRules.privateOnly,
+        protectedContentRule: diagnosticDeferralVisibilityRules.protectedContent,
+        approvalRule: diagnosticDeferralVisibilityRules.approval,
+        sourceBoundary:
+          "Project default diagnostic-deferral public visibility is frozen here; LMCA motivates diagnostic limitation disclosure but does not state these exact platform visibility levels.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "same-position-batch-review-requiredness-policy",
     label: "Batch Review Requiredness Policy",
     endpoint: () => "/api/v1/same-position-batch-review-requiredness-policies",
@@ -1309,6 +1475,33 @@ const workflowTemplates = [
           "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
         sourceBoundary:
           "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "adjudicator-pre-read-requiredness-policy",
+    label: "Adjudicator Pre-Read Policy",
+    endpoint: () => "/api/v1/adjudicator-pre-read-requiredness-policies",
+    resourceKey: "adjudicatorPreReadRequirednessPolicy",
+    requiredRole: "admin",
+    summary: "Freeze when adjudicators must submit blind pre-reads before peer distributions, majority direction, or model outputs are visible.",
+    payload: () => ({
+      adjudicatorPreReadRequirednessPolicy: {
+        id: `adjudicator-pre-read-requiredness-policy-${releaseId}`,
+        policyVersion: "adjudicator-pre-read-requiredness-rlhf90-v1",
+        triggerClasses: adjudicatorPreReadTriggerClasses,
+        thresholds: adjudicatorPreReadThresholds,
+        requirednessRules: adjudicatorPreReadRules,
+        allowedRequirednessDecisionStatuses: adjudicatorPreReadDecisionStatuses,
+        allowedVisibleMaterialPolicies: adjudicatorPreReadVisibleMaterialPolicies,
+        exposureOrderRule: adjudicatorPreReadRules.exposureOrder,
+        memoLinkageRule: adjudicatorPreReadRules.memoLinkage,
+        anchoringControlRule: adjudicatorPreReadRules.anchoringControl,
+        peerDistributionExposureBeforePreReadMax: 0,
+        completedBeforePeerDistributionExposureRequired: true,
+        lmcaSourceBoundary:
+          "Project default adjudicator pre-read requiredness is frozen here; LMCA motivates blind initial judgment and object-level adjudication but does not state these exact platform thresholds.",
         frozenAt: new Date().toISOString(),
       },
     }),
@@ -6531,6 +6724,7 @@ function createRemediationCompletionPayload(moduleId) {
   const completedModules = Array.from(new Set([...(existingPlan?.completedModules ?? []), moduleId]));
   return {
     id: `rater-learning-plan-ui-${moduleId}-${Date.now()}`,
+    raterDashboardPolicyId: existingPlan?.raterDashboardPolicyId ?? `rater-dashboard-policy-${releaseId}`,
     raterId: state.session?.user?.id ?? "demo-rater",
     rubricVersion: existingPlan?.rubricVersion ?? "appendix-f-operational-v1",
     certificationPackVersion: existingPlan?.certificationPackVersion ?? "pack-v1",
@@ -6539,8 +6733,13 @@ function createRemediationCompletionPayload(moduleId) {
     assignedRemediationModules: assignedModules,
     completedModules,
     currentAssignmentRestrictionsUnlocks: existingPlan?.currentAssignmentRestrictionsUnlocks ?? ["ordinary_live_allowed"],
+    dashboardVisibilityStatus: existingPlan?.dashboardVisibilityStatus ?? "private_training_only",
+    remediationRoutingStatus: existingPlan?.remediationRoutingStatus ?? "ordinary_live_allowed",
     feedbackArtifactsShown: existingPlan?.feedbackArtifactsShown ?? [],
     protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
+    hiddenProtectedLabelsSuppressed: true,
+    livePeerModelSourceLabelsHidden: true,
+    trainingApprovedFeedbackOnly: true,
     timestamp: new Date().toISOString(),
   };
 }
