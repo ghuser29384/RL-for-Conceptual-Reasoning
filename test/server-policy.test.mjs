@@ -130,6 +130,91 @@ function certificationThresholdPolicy(id = "certification-threshold-policy-workf
   };
 }
 
+const disagreementThresholds = {
+  lowClarityThreshold: 0.5,
+  lowClarityAdjudicationCount: 2,
+  initialOverallSpreadThreshold: 0.35,
+  centralityStrengthProductSpreadThreshold: 0.3,
+  correctnessSpreadThreshold: 0.35,
+  postDiscussionMaxSpreadTarget: 0.3,
+  highSpreadResidualClassificationThreshold: 0.3,
+  thinOverlapFinalRaterCountMin: 2,
+};
+
+const disagreementEscalationRules = {
+  lowClarity: "clarity_below_0_50_routes_to_low_clarity_review_and_two_or_more_routes_to_adjudication",
+  initialOverallSpread: "initial_overall_spread_above_0_35_routes_to_object_level_discussion_or_adjudication",
+  centralityStrengthProductSpread: "centrality_strength_product_spread_above_0_30_routes_to_target_map_or_adjudication",
+  correctnessSpread: "correctness_spread_above_0_35_routes_to_correctness_verification_review",
+  postDiscussionResidualSpread: "post_discussion_final_max_spread_above_0_30_requires_residual_disagreement_classification_and_memo",
+  thinOverlap: "fewer_than_two_final_raters_is_thin_overlap_and_cannot_support_consensus_claims",
+};
+
+function disagreementThresholdPolicy(id = "disagreement-threshold-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: "disagreement-threshold-rlhf90-v1",
+    thresholds: disagreementThresholds,
+    escalationRules: disagreementEscalationRules,
+    postDiscussionResidualRule:
+      "Post-discussion final max spread above 0.30 requires residual disagreement classification, an adjudication memo, and minority-rationale preservation before release use.",
+    thinOverlapRule:
+      "Fewer than two final raters is thin overlap and must be disclosed rather than counted as low-disagreement consensus evidence.",
+    lmcaSourceBoundary:
+      "Project default numeric disagreement thresholds are frozen here; LMCA motivates disagreement reporting but does not state every platform escalation threshold.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const activeLearningSelectionThresholds = {
+  judgeDisagreementDeltaMin: 0.25,
+  highRatedOverallScoreMin: 0.7,
+  suspectedJudgeFalsePositiveOverallMax: 0.35,
+  modelJudgeCoverageShareMin: 0.2,
+  promotedToRatingShareMax: 0.25,
+  nearDuplicateRejectionShareReviewMin: 0.3,
+  rightsUnclearRejectionShareReviewMin: 0.05,
+  lowMarginalInformativenessRejectionShareReviewMin: 0.25,
+};
+
+const activeLearningHandSelectionQuotas = {
+  diversitySelectedMin: 1,
+  suitabilitySelectedMin: 1,
+  interestingnessSelectedMin: 1,
+  promotedPerBatchMin: 1,
+};
+
+const activeLearningSelectionReasonCodes = [
+  "judge_disagreement",
+  "high_rated",
+  "suspected_judge_false_positive",
+  "human_diversity_selection",
+  "human_suitability_selection",
+  "human_interestingness_selection",
+];
+
+const activeLearningRejectionReasonCodes = ["near_duplicate", "rights_unclear", "low_marginal_informativeness"];
+
+function activeLearningSelectionPolicy(id = "active-learning-selection-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: "active-learning-selection-rlhf90-v1",
+    thresholds: activeLearningSelectionThresholds,
+    handSelectionQuotas: activeLearningHandSelectionQuotas,
+    selectionReasonCodes: activeLearningSelectionReasonCodes,
+    rejectionReasonCodes: activeLearningRejectionReasonCodes,
+    thresholdRule:
+      "Judge-disagreement, high-rated, and suspected-false-positive selections use the frozen numeric thresholds before human hand-selection.",
+    handSelectionQuotaRule:
+      "Each active-learning batch needs at least one diversity, suitability, and interestingness hand-selection path before promoted-to-rating claims.",
+    raterVisibilityRule:
+      "Selection policy ids, judge thresholds, reason codes, and model-judge scores remain admin-only before initial rating lock.",
+    lmcaSourceBoundary:
+      "Project default active-learning thresholds and hand-selection quotas are frozen here; LMCA motivates active-learning denominator audits but does not state these exact platform values.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 const comparabilityTierThresholds = {
   method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
   corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
@@ -2503,6 +2588,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/candidate-critiques/candidate-critique-smoke"],
     ["POST", "/api/v1/model-judge-scores"],
     ["GET", "/api/v1/model-judge-scores/model-judge-score-smoke"],
+    ["POST", "/api/v1/active-learning-selection-policies"],
+    ["GET", "/api/v1/active-learning-selection-policies/active-learning-selection-policy-smoke"],
     ["POST", "/api/v1/active-learning-selection-audits"],
     ["GET", "/api/v1/active-learning-selection-audits/selection-audit-smoke"],
     ["POST", "/api/v1/candidate-batches/candidate-batch-smoke/model-judge-scores"],
@@ -2647,6 +2734,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/score-explanation-policies/score-explanation-policy-smoke"],
     ["POST", "/api/v1/rating-escalation-policies"],
     ["GET", "/api/v1/rating-escalation-policies/rating-escalation-policy-smoke"],
+    ["POST", "/api/v1/disagreement-threshold-policies"],
+    ["GET", "/api/v1/disagreement-threshold-policies/disagreement-threshold-policy-smoke"],
     ["POST", "/api/v1/draft-storage-policies"],
     ["GET", "/api/v1/draft-storage-policies/draft-storage-policy-smoke"],
     ["POST", "/api/v1/rater-instruction-render-versions"],
@@ -4279,6 +4368,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(thresholdPolicy.status, 201);
 
+  const driftedDisagreementThresholdPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/disagreement-threshold-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      disagreementThresholdPolicy: {
+        ...disagreementThresholdPolicy("disagreement-threshold-policy-drifted"),
+        thresholds: { ...disagreementThresholds, highSpreadResidualClassificationThreshold: 0.45 },
+      },
+    }),
+  });
+  assert.equal(driftedDisagreementThresholdPolicy.status, 400);
+  assert.match(driftedDisagreementThresholdPolicy.body.detail, /thresholds/);
+
+  const disagreementPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/disagreement-threshold-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      disagreementThresholdPolicy: disagreementThresholdPolicy(),
+    }),
+  });
+  assert.equal(disagreementPolicy.status, 201);
+
   const incompleteCertificationRecord = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/certification-records",
@@ -4337,6 +4450,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(certificationThresholdPolicyById.status, 200);
   assert.deepEqual(certificationThresholdPolicyById.body.thresholds, certificationThresholds);
+
+  const disagreementThresholdPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/disagreement-threshold-policies/disagreement-threshold-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(disagreementThresholdPolicyById.status, 200);
+  assert.deepEqual(disagreementThresholdPolicyById.body.thresholds, disagreementThresholds);
+  assert.deepEqual(disagreementThresholdPolicyById.body.escalationRules, disagreementEscalationRules);
 
   const exposureLog = await invokeApi(context, {
     method: "POST",
@@ -5741,6 +5863,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(candidatePromotion.status, 201);
   assert.equal(candidatePromotion.body.resourceId, "candidate-promotion-workflow-new");
 
+  const driftedActiveLearningSelectionPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/active-learning-selection-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      activeLearningSelectionPolicy: {
+        ...activeLearningSelectionPolicy("active-learning-selection-policy-drifted"),
+        thresholds: { ...activeLearningSelectionThresholds, highRatedOverallScoreMin: 0.8 },
+      },
+    }),
+  });
+  assert.equal(driftedActiveLearningSelectionPolicy.status, 400);
+  assert.match(driftedActiveLearningSelectionPolicy.body.detail, /thresholds/);
+
+  const activeLearningSelectionPolicySubmission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/active-learning-selection-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      activeLearningSelectionPolicy: activeLearningSelectionPolicy(),
+    }),
+  });
+  assert.equal(activeLearningSelectionPolicySubmission.status, 201);
+
   const incompleteActiveLearningSelectionAudit = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/active-learning-selection-audits",
@@ -5755,7 +5901,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     }),
   });
   assert.equal(incompleteActiveLearningSelectionAudit.status, 400);
-  assert.match(incompleteActiveLearningSelectionAudit.body.detail, /promotedToRatingCount|judgedCount/);
+  assert.match(incompleteActiveLearningSelectionAudit.body.detail, /activeLearningSelectionPolicyId|promotedToRatingCount|judgedCount/);
 
   const activeLearningSelectionAudit = await invokeApi(context, {
     method: "POST",
@@ -5766,13 +5912,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "selection-audit-workflow-new",
         candidateBatchId: "candidate-batch-workflow-new",
         positionId: "pos-ai-prior",
+        activeLearningSelectionPolicyId: "active-learning-selection-policy-workflow-new",
+        selectionThresholds: activeLearningSelectionThresholds,
         generatedOrIngestedCount: 20,
         judgedCount: 18,
         disagreementSelectedCount: 3,
         highRatedSelectedCount: 2,
         suspectedJudgeFalsePositiveCount: 1,
         humanSelectedForDiversityCount: 3,
-        rejectedCountByReason: { near_duplicate: 5, low_marginal_informativeness: 3 },
+        humanSelectedForSuitabilityCount: 2,
+        humanSelectedForInterestingnessCount: 1,
+        rejectedCountByReason: { near_duplicate: 5, rights_unclear: 0, low_marginal_informativeness: 3 },
         promotedToRatingCount: 4,
       },
     }),
@@ -5786,6 +5936,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(activeLearningSelectionAuditById.status, 200);
   assert.equal(activeLearningSelectionAuditById.body.id, "selection-audit-workflow-new");
+
+  const activeLearningSelectionPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/active-learning-selection-policies/active-learning-selection-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(activeLearningSelectionPolicyById.status, 200);
+  assert.deepEqual(activeLearningSelectionPolicyById.body.thresholds, activeLearningSelectionThresholds);
+  assert.deepEqual(activeLearningSelectionPolicyById.body.handSelectionQuotas, activeLearningHandSelectionQuotas);
 
   const assignmentFlag = await invokeApi(context, {
     method: "POST",
@@ -12361,6 +12520,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.certification.certificationRecordEvidence.releaseUseStatus,
     "submitted_certification_records_gatekeeping_evidence_complete",
   );
+  assert.equal(releaseReport.body.disagreementThresholdPolicyEvidence.releaseUseStatus, "submitted_disagreement_threshold_policy_active");
+  assert.equal(releaseReport.body.disagreementThresholdPolicyEvidence.activePolicyId, "disagreement-threshold-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.disagreementThresholdPolicyEvidence.activePolicy.thresholds, disagreementThresholds);
+  assert.equal(releaseReport.body.postDiscussionDisagreement.disagreementThresholdPolicyId, "disagreement-threshold-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.postDiscussionDisagreement.disagreementThresholdPolicyReleaseUseStatus,
+    "submitted_disagreement_threshold_policy_active",
+  );
+  assert.deepEqual(releaseReport.body.postDiscussionDisagreement.thresholdsApplied, disagreementThresholds);
   assert.equal(releaseReport.body.workflowAuditTrailArtifacts.exposureLogs.length, 1);
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.accessAudit.workflowExposureLogCount, 1);
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.accessAudit.actions.membership_view, 1);
@@ -12785,6 +12953,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowPolicyArtifacts.ratingWorkflowProfiles.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.scoreExplanationPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.ratingEscalationPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowPolicyArtifacts.disagreementThresholdPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.uiExperimentPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.preSubmitAssistPolicies.length, 1);
   assert.equal(releaseReport.body.workflowPolicyArtifacts.accessibilityConformanceReports.length, 1);
@@ -13288,12 +13457,33 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.releaseGateProfiles.length, 1);
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.primaryRaterAnchorPolicies.length, 1);
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.comparabilityClaims.length, 1);
+  assert.equal(releaseReport.body.workflowGovernanceArtifacts.activeLearningSelectionPolicies.length, 1);
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.activeLearningSelectionAudits.length, 1);
+  assert.equal(releaseReport.body.activeLearning.selectionPolicyEvidence.releaseUseStatus, "submitted_active_learning_selection_policy_active");
+  assert.equal(releaseReport.body.activeLearning.selectionPolicyEvidence.activePolicyId, "active-learning-selection-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.activeLearning.selectionPolicyEvidence.activePolicy.thresholds, activeLearningSelectionThresholds);
+  assert.deepEqual(releaseReport.body.activeLearning.requiredHandSelectionQuotas, activeLearningHandSelectionQuotas);
   assert.equal(releaseReport.body.activeLearning.submittedSelectionAuditIds.includes("selection-audit-workflow-new"), true);
   assert.equal(releaseReport.body.activeLearning.submittedSelectionAuditContractViolationCount, 0);
   assert.equal(
     releaseReport.body.activeLearning.batches.find((batch) => batch.selectionAuditId === "selection-audit-workflow-new").selectionAuditContractStatus,
     "selection_audit_contract_complete",
+  );
+  assert.equal(
+    releaseReport.body.activeLearning.batches.find((batch) => batch.selectionAuditId === "selection-audit-workflow-new").activeLearningSelectionPolicyId,
+    "active-learning-selection-policy-workflow-new",
+  );
+  assert.deepEqual(
+    releaseReport.body.activeLearning.batches.find((batch) => batch.selectionAuditId === "selection-audit-workflow-new").selectionThresholdsApplied,
+    activeLearningSelectionThresholds,
+  );
+  assert.equal(
+    releaseReport.body.activeLearning.batches.find((batch) => batch.selectionAuditId === "selection-audit-workflow-new").humanSelectedForSuitability,
+    2,
+  );
+  assert.equal(
+    releaseReport.body.activeLearning.batches.find((batch) => batch.selectionAuditId === "selection-audit-workflow-new").humanSelectedForInterestingness,
+    1,
   );
   assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.candidateBatchCount, 1);
   assert.equal(releaseReport.body.activeLearning.candidateWorkflowContractViolationCount, 0);
@@ -13312,7 +13502,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.activeLearning.totals.generated, 62);
   assert.equal(releaseReport.body.activeLearning.totals.judged, 30);
   assert.equal(releaseReport.body.activeLearning.totals.promoted, 9);
+  assert.equal(releaseReport.body.activeLearning.totals.handSelected, 11);
   assert.equal(releaseReport.body.activeLearning.selectionReasonCounts.judge_disagreement, 3);
+  assert.equal(releaseReport.body.activeLearning.selectionReasonCounts.human_suitability_selection, 2);
+  assert.equal(releaseReport.body.activeLearning.selectionReasonCounts.human_interestingness_selection, 1);
   assert.equal(releaseReport.body.activeLearning.rejectionReasonCounts.near_duplicate, 5);
   assert.equal(releaseReport.body.workflowMetricArtifacts.metricConfigs.length, 1);
   assert.equal(releaseReport.body.workflowMetricArtifacts.derivedUtilityFormulas.length, 1);
@@ -13370,7 +13563,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
 	assert.equal(
 	  (await auditStore.readWorkflowEvents()).length,
-	  243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 124 + extendedRaterItemConflictTypes.length,
+	  243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 126 + extendedRaterItemConflictTypes.length,
 	);
 });
 

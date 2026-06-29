@@ -2643,6 +2643,25 @@ export const RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD = 0.35;
 export const RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD = 0.3;
 export const RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD = 0.35;
 export const RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET = 0.3;
+export const DISAGREEMENT_THRESHOLD_POLICY_VERSION = "disagreement-threshold-rlhf90-v1";
+export const REQUIRED_DISAGREEMENT_THRESHOLDS = {
+  lowClarityThreshold: RATING_ESCALATION_LOW_CLARITY_THRESHOLD,
+  lowClarityAdjudicationCount: RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT,
+  initialOverallSpreadThreshold: RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD,
+  centralityStrengthProductSpreadThreshold: RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
+  correctnessSpreadThreshold: RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD,
+  postDiscussionMaxSpreadTarget: RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
+  highSpreadResidualClassificationThreshold: RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
+  thinOverlapFinalRaterCountMin: 2,
+};
+export const REQUIRED_DISAGREEMENT_ESCALATION_RULES = {
+  lowClarity: "clarity_below_0_50_routes_to_low_clarity_review_and_two_or_more_routes_to_adjudication",
+  initialOverallSpread: "initial_overall_spread_above_0_35_routes_to_object_level_discussion_or_adjudication",
+  centralityStrengthProductSpread: "centrality_strength_product_spread_above_0_30_routes_to_target_map_or_adjudication",
+  correctnessSpread: "correctness_spread_above_0_35_routes_to_correctness_verification_review",
+  postDiscussionResidualSpread: "post_discussion_final_max_spread_above_0_30_requires_residual_disagreement_classification_and_memo",
+  thinOverlap: "fewer_than_two_final_raters_is_thin_overlap_and_cannot_support_consensus_claims",
+};
 
 export function defaultRatingEscalationPolicy(releaseId = "october-2026-demo") {
   return {
@@ -2677,6 +2696,27 @@ export function defaultRatingEscalationPolicy(releaseId = "october-2026-demo") {
     frozenAt: "2026-10-01T00:00:00.000Z",
     timestamp: "2026-10-01T00:00:00.000Z",
   };
+}
+
+function defaultDisagreementThresholdPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `disagreement-threshold-policy-${releaseId}`,
+    policyVersion: DISAGREEMENT_THRESHOLD_POLICY_VERSION,
+    thresholds: REQUIRED_DISAGREEMENT_THRESHOLDS,
+    escalationRules: REQUIRED_DISAGREEMENT_ESCALATION_RULES,
+    postDiscussionResidualRule:
+      "Post-discussion final max spread above 0.30 requires residual disagreement classification, an adjudication memo, and minority-rationale preservation before release use.",
+    thinOverlapRule:
+      "Fewer than two final raters is thin overlap and must be disclosed rather than counted as low-disagreement consensus evidence.",
+    lmcaSourceBoundary:
+      "Project default numeric disagreement thresholds are frozen here; LMCA motivates disagreement reporting but does not state every platform escalation threshold.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function disagreementThresholdValues(policy) {
+  const thresholds = policy?.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  return { ...REQUIRED_DISAGREEMENT_THRESHOLDS, ...thresholds };
 }
 
 export function detectEscalations(ratings, escalationPolicy = defaultRatingEscalationPolicy("runtime")) {
@@ -5277,6 +5317,103 @@ function linkedDiscussionThreadForResource(resource, threadRows) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function normalizeDisagreementThresholdPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.disagreementThresholdPolicyId;
+  if (!id) return null;
+  const thresholds = policy.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  const escalationRules =
+    policy.escalationRules && typeof policy.escalationRules === "object" && !Array.isArray(policy.escalationRules)
+      ? policy.escalationRules
+      : {};
+  const missingThresholdKeys = Object.keys(REQUIRED_DISAGREEMENT_THRESHOLDS).filter((key) => !Object.hasOwn(thresholds, key));
+  const missingRuleKeys = Object.keys(REQUIRED_DISAGREEMENT_ESCALATION_RULES).filter((key) => !Object.hasOwn(escalationRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === DISAGREEMENT_THRESHOLD_POLICY_VERSION
+      ? null
+      : `policyVersion:${DISAGREEMENT_THRESHOLD_POLICY_VERSION}`,
+    missingThresholdKeys.length ? `thresholds:${missingThresholdKeys.join(",")}` : null,
+    stableJsonKey(thresholds) === stableJsonKey(REQUIRED_DISAGREEMENT_THRESHOLDS) ? null : "thresholds",
+    missingRuleKeys.length ? `escalationRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(escalationRules) === stableJsonKey(REQUIRED_DISAGREEMENT_ESCALATION_RULES) ? null : "escalationRules",
+    policyMentions(policy.postDiscussionResidualRule, ["0.30", "classification", "memo"]) ? null : "postDiscussionResidualRule",
+    policyMentions(policy.thinOverlapRule, ["two", "final raters"]) ? null : "thinOverlapRule",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "lmca"]) ? null : "lmcaSourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    thresholds,
+    escalationRules,
+    postDiscussionResidualRule: policy.postDiscussionResidualRule ?? null,
+    thinOverlapRule: policy.thinOverlapRule ?? null,
+    lmcaSourceBoundary: policy.lmcaSourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "disagreement_threshold_policy_review_required" : "disagreement_threshold_policy_complete",
+  };
+}
+
+export function buildDisagreementThresholdPolicyEvidenceReport(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeDisagreementThresholdPolicy(policy, "submitted_workflow_disagreement_threshold_policy"))
+    .filter(Boolean);
+  const seedRows = [normalizeDisagreementThresholdPolicy(defaultDisagreementThresholdPolicy(releaseId), "seed_disagreement_threshold_policy")];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `disagreement-threshold-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredThresholds: REQUIRED_DISAGREEMENT_THRESHOLDS,
+    requiredEscalationRules: REQUIRED_DISAGREEMENT_ESCALATION_RULES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_disagreement_threshold_policy_active"
+      : reviewRows.length
+        ? "submitted_disagreement_threshold_policy_review_required"
+        : "submitted_disagreement_threshold_policy_active",
+  };
+}
+
+function resolveDisagreementThresholdPolicy(releaseId, thresholdOrPolicy, options = {}) {
+  if (typeof thresholdOrPolicy === "number") {
+    return {
+      activePolicy: null,
+      activePolicyId: null,
+      releaseUseStatus: "legacy_numeric_threshold_argument",
+      thresholds: {
+        ...REQUIRED_DISAGREEMENT_THRESHOLDS,
+        postDiscussionMaxSpreadTarget: thresholdOrPolicy,
+        highSpreadResidualClassificationThreshold: thresholdOrPolicy,
+      },
+      escalationRules: REQUIRED_DISAGREEMENT_ESCALATION_RULES,
+    };
+  }
+  const evidence = options.disagreementThresholdPolicyEvidence ?? null;
+  const activePolicy =
+    evidence?.activePolicy ??
+    normalizeDisagreementThresholdPolicy(thresholdOrPolicy, "runtime_disagreement_threshold_policy") ??
+    normalizeDisagreementThresholdPolicy(defaultDisagreementThresholdPolicy(releaseId), "seed_disagreement_threshold_policy");
+  return {
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    releaseUseStatus: evidence?.releaseUseStatus ?? activePolicy?.rowSource ?? "runtime_disagreement_threshold_policy",
+    thresholds: disagreementThresholdValues(activePolicy),
+    escalationRules:
+      activePolicy?.escalationRules && Object.keys(activePolicy.escalationRules).length
+        ? activePolicy.escalationRules
+        : REQUIRED_DISAGREEMENT_ESCALATION_RULES,
+  };
+}
+
 export function buildPostDiscussionDisagreementReport(
   releaseId,
   labelSnapshot,
@@ -5284,8 +5421,12 @@ export function buildPostDiscussionDisagreementReport(
   positionList = positions,
   critiqueList = critiques,
   memos = adjudicationMemos,
-  threshold = 0.3,
+  thresholdOrPolicy = null,
+  options = {},
 ) {
+  const thresholdPolicy = resolveDisagreementThresholdPolicy(releaseId, thresholdOrPolicy, options);
+  const threshold = thresholdPolicy.thresholds.highSpreadResidualClassificationThreshold ?? thresholdPolicy.thresholds.postDiscussionMaxSpreadTarget;
+  const thinOverlapFinalRaterCountMin = thresholdPolicy.thresholds.thinOverlapFinalRaterCountMin;
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const memosByItemId = memos.reduce((acc, memo) => {
     const itemId = makeItemId(memo.positionId, memo.critiqueId);
@@ -5307,7 +5448,7 @@ export function buildPostDiscussionDisagreementReport(
       const itemMemos = memosByItemId[itemId] ?? [];
       const label = labelSnapshot.itemLabels[itemId];
       const highSpread = typeof maxEntry[1] === "number" && maxEntry[1] > threshold;
-      const insufficientFinalOverlap = finalRaterIds.length < 2;
+      const insufficientFinalOverlap = finalRaterIds.length < thinOverlapFinalRaterCountMin;
       const classification = highSpread
         ? itemMemos.length
           ? "high_post_discussion_spread_classified_with_memo"
@@ -5327,6 +5468,9 @@ export function buildPostDiscussionDisagreementReport(
         finalRaterIds,
         ratingKinds: countBy(itemRatings, "kind"),
         threshold,
+        disagreementThresholdPolicyId: thresholdPolicy.activePolicyId,
+        disagreementThresholdPolicyReleaseUseStatus: thresholdPolicy.releaseUseStatus,
+        thresholdsApplied: thresholdPolicy.thresholds,
         spreadPreDiscussionOverall: label?.spreadPreDiscussion ?? null,
         spreadPostDiscussionOverall: label?.spreadPostDiscussion ?? null,
         byDimensionFinalSpread,
@@ -5360,8 +5504,15 @@ export function buildPostDiscussionDisagreementReport(
     labelSnapshotId: labelSnapshot.id,
     targetLabelVersion: labelSnapshot.targetLabelVersion,
     generatedAt: new Date().toISOString(),
+    disagreementThresholdPolicyId: thresholdPolicy.activePolicyId,
+    disagreementThresholdPolicyReleaseUseStatus: thresholdPolicy.releaseUseStatus,
+    thresholdsApplied: thresholdPolicy.thresholds,
     policy: {
+      disagreementThresholdPolicyId: thresholdPolicy.activePolicyId,
+      policyVersion: thresholdPolicy.activePolicy?.policyVersion ?? DISAGREEMENT_THRESHOLD_POLICY_VERSION,
       maxSpreadThreshold: threshold,
+      thresholds: thresholdPolicy.thresholds,
+      escalationRules: thresholdPolicy.escalationRules,
       finalSpreadDefinition:
         "Final spread is the maximum per-dimension spread across rating rows included in the release label after blind initial ratings, checks, revisions, or adjudication rows are recorded.",
       releaseRule:
@@ -6707,12 +6858,16 @@ const REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_FIELDS = [
   "id",
   "candidateBatchId",
   "positionId",
+  "activeLearningSelectionPolicyId",
   "generatedOrIngestedCount",
   "judgedCount",
   "disagreementSelectedCount",
   "highRatedSelectedCount",
   "suspectedJudgeFalsePositiveCount",
   "humanSelectedForDiversityCount",
+  "humanSelectedForSuitabilityCount",
+  "humanSelectedForInterestingnessCount",
+  "selectionThresholds",
   "rejectedCountByReason",
   "promotedToRatingCount",
 ];
@@ -6723,12 +6878,148 @@ const REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_NUMBER_FIELDS = [
   "highRatedSelectedCount",
   "suspectedJudgeFalsePositiveCount",
   "humanSelectedForDiversityCount",
+  "humanSelectedForSuitabilityCount",
+  "humanSelectedForInterestingnessCount",
   "promotedToRatingCount",
 ];
+export const ACTIVE_LEARNING_SELECTION_POLICY_VERSION = "active-learning-selection-rlhf90-v1";
+export const REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS = {
+  judgeDisagreementDeltaMin: 0.25,
+  highRatedOverallScoreMin: 0.7,
+  suspectedJudgeFalsePositiveOverallMax: 0.35,
+  modelJudgeCoverageShareMin: 0.2,
+  promotedToRatingShareMax: 0.25,
+  nearDuplicateRejectionShareReviewMin: 0.3,
+  rightsUnclearRejectionShareReviewMin: 0.05,
+  lowMarginalInformativenessRejectionShareReviewMin: 0.25,
+};
+export const REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS = {
+  diversitySelectedMin: 1,
+  suitabilitySelectedMin: 1,
+  interestingnessSelectedMin: 1,
+  promotedPerBatchMin: 1,
+};
+export const REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES = [
+  "judge_disagreement",
+  "high_rated",
+  "suspected_judge_false_positive",
+  "human_diversity_selection",
+  "human_suitability_selection",
+  "human_interestingness_selection",
+];
+export const REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES = ["near_duplicate", "rights_unclear", "low_marginal_informativeness"];
+
+function defaultActiveLearningSelectionPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `active-learning-selection-policy-${releaseId}`,
+    policyVersion: ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
+    thresholds: REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+    handSelectionQuotas: REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
+    selectionReasonCodes: REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
+    rejectionReasonCodes: REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
+    thresholdRule:
+      "Judge-disagreement, high-rated, and suspected-false-positive selections use the frozen numeric thresholds before human hand-selection.",
+    handSelectionQuotaRule:
+      "Each active-learning batch needs at least one diversity, suitability, and interestingness hand-selection path before promoted-to-rating claims.",
+    raterVisibilityRule:
+      "Selection policy ids, judge thresholds, reason codes, and model-judge scores remain admin-only before initial rating lock.",
+    lmcaSourceBoundary:
+      "Project default active-learning thresholds and hand-selection quotas are frozen here; LMCA motivates active-learning denominator audits but does not state these exact platform values.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function activeLearningSelectionThresholdValues(policy) {
+  const thresholds = policy?.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  return { ...REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS, ...thresholds };
+}
+
+function normalizeActiveLearningSelectionPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.activeLearningSelectionPolicyId;
+  if (!id) return null;
+  const thresholds = policy.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  const handSelectionQuotas =
+    policy.handSelectionQuotas && typeof policy.handSelectionQuotas === "object" && !Array.isArray(policy.handSelectionQuotas)
+      ? policy.handSelectionQuotas
+      : {};
+  const selectionReasonCodes = normalizeStringArray(policy.selectionReasonCodes);
+  const rejectionReasonCodes = normalizeStringArray(policy.rejectionReasonCodes);
+  const missingThresholdKeys = Object.keys(REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS).filter((key) => !Object.hasOwn(thresholds, key));
+  const missingQuotaKeys = Object.keys(REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS).filter((key) => !Object.hasOwn(handSelectionQuotas, key));
+  const missingSelectionReasonCodes = REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES.filter((code) => !selectionReasonCodes.includes(code));
+  const missingRejectionReasonCodes = REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES.filter((code) => !rejectionReasonCodes.includes(code));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === ACTIVE_LEARNING_SELECTION_POLICY_VERSION
+      ? null
+      : `policyVersion:${ACTIVE_LEARNING_SELECTION_POLICY_VERSION}`,
+    missingThresholdKeys.length ? `thresholds:${missingThresholdKeys.join(",")}` : null,
+    stableJsonKey(thresholds) === stableJsonKey(REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS) ? null : "thresholds",
+    missingQuotaKeys.length ? `handSelectionQuotas:${missingQuotaKeys.join(",")}` : null,
+    stableJsonKey(handSelectionQuotas) === stableJsonKey(REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS) ? null : "handSelectionQuotas",
+    missingSelectionReasonCodes.length ? `selectionReasonCodes:${missingSelectionReasonCodes.join(",")}` : null,
+    missingRejectionReasonCodes.length ? `rejectionReasonCodes:${missingRejectionReasonCodes.join(",")}` : null,
+    policyMentions(policy.thresholdRule, ["judge", "threshold"]) ? null : "thresholdRule",
+    policyMentions(policy.handSelectionQuotaRule, ["diversity", "suitability", "interestingness"]) ? null : "handSelectionQuotaRule",
+    policyMentions(policy.raterVisibilityRule, ["admin-only", "initial rating lock"]) ? null : "raterVisibilityRule",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "lmca"]) ? null : "lmcaSourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    thresholds,
+    handSelectionQuotas,
+    selectionReasonCodes,
+    rejectionReasonCodes,
+    thresholdRule: policy.thresholdRule ?? null,
+    handSelectionQuotaRule: policy.handSelectionQuotaRule ?? null,
+    raterVisibilityRule: policy.raterVisibilityRule ?? null,
+    lmcaSourceBoundary: policy.lmcaSourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "active_learning_selection_policy_review_required" : "active_learning_selection_policy_complete",
+  };
+}
+
+function buildActiveLearningSelectionPolicyEvidenceReport(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeActiveLearningSelectionPolicy(policy, "submitted_workflow_active_learning_selection_policy"))
+    .filter(Boolean);
+  const seedRows = [normalizeActiveLearningSelectionPolicy(defaultActiveLearningSelectionPolicy(releaseId), "seed_active_learning_selection_policy")];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `active-learning-selection-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredThresholds: REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+    requiredHandSelectionQuotas: REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
+    requiredSelectionReasonCodes: REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
+    requiredRejectionReasonCodes: REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_active_learning_selection_policy_active"
+      : reviewRows.length
+        ? "submitted_active_learning_selection_policy_review_required"
+        : "submitted_active_learning_selection_policy_active",
+  };
+}
 
 export function buildActiveLearningAudit(batches = activeLearningBatches, submittedSelectionAudits = [], workflowArtifacts = {}) {
-  const candidateWorkflowEvidence = buildCandidateWorkflowEvidence(workflowArtifacts);
-  const submittedBatches = submittedSelectionAudits.map((audit) => normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence)).filter(Boolean);
+  const releaseId = workflowArtifacts.releaseId ?? "october-2026-demo";
+  const selectionPolicyEvidence = buildActiveLearningSelectionPolicyEvidenceReport(releaseId, workflowArtifacts.activeLearningSelectionPolicies ?? []);
+  const activeSelectionPolicy = selectionPolicyEvidence.activePolicy;
+  const candidateWorkflowEvidence = buildCandidateWorkflowEvidence(workflowArtifacts, activeSelectionPolicy, selectionPolicyEvidence);
+  const submittedBatches = submittedSelectionAudits
+    .map((audit) => normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence, activeSelectionPolicy, selectionPolicyEvidence))
+    .filter(Boolean);
   const submittedSelectionAuditContractViolationRows = submittedBatches.filter((batch) => batch.selectionAuditContractViolations.length);
   const auditedBatchIds = new Set(submittedBatches.map((batch) => batch.id).filter(Boolean));
   const candidateWorkflowBatches = buildCandidateWorkflowActiveLearningBatches(candidateWorkflowEvidence, auditedBatchIds);
@@ -6749,6 +7040,13 @@ export function buildActiveLearningAudit(batches = activeLearningBatches, submit
     submittedSelectionAuditIds: submittedBatches.map((batch) => batch.selectionAuditId),
     submittedSelectionAuditContractViolationCount: submittedSelectionAuditContractViolationRows.length,
     submittedSelectionAuditContractViolationRows,
+    selectionPolicyEvidence,
+    activeLearningSelectionPolicyId: selectionPolicyEvidence.activePolicyId,
+    activeLearningSelectionPolicyReleaseUseStatus: selectionPolicyEvidence.releaseUseStatus,
+    requiredSelectionThresholds: REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+    requiredHandSelectionQuotas: REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
+    requiredSelectionReasonCodes: REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
+    requiredRejectionReasonCodes: REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
     candidateWorkflowEvidence,
     candidateWorkflowContractViolationCount: candidateWorkflowEvidence.candidateWorkflowContractViolationCount ?? 0,
     derivedCandidateWorkflowBatchCount: candidateWorkflowBatches.length,
@@ -6769,8 +7067,17 @@ export function buildActiveLearningAudit(batches = activeLearningBatches, submit
       highRated: batch.highRated,
       suspectedJudgeFalsePositive: batch.suspectedJudgeFalsePositive,
       handSelected: batch.handSelected,
+      humanSelectedForDiversity: batch.humanSelectedForDiversity ?? null,
+      humanSelectedForSuitability: batch.humanSelectedForSuitability ?? null,
+      humanSelectedForInterestingness: batch.humanSelectedForInterestingness ?? null,
       rejected: batch.rejected,
       promoted: batch.promoted,
+      activeLearningSelectionPolicyId: batch.activeLearningSelectionPolicyId ?? null,
+      submittedActiveLearningSelectionPolicyId: batch.submittedActiveLearningSelectionPolicyId ?? null,
+      selectionPolicyReleaseUseStatus: batch.selectionPolicyReleaseUseStatus ?? null,
+      selectionThresholdsApplied: batch.selectionThresholdsApplied ?? REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+      submittedSelectionThresholds: batch.submittedSelectionThresholds ?? null,
+      handSelectionQuotasApplied: batch.handSelectionQuotasApplied ?? REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
       selectionReasonCounts: batch.selectionReasonCounts ?? {},
       rejectedCountByReason: batch.rejectedCountByReason ?? {},
       selectionRates: {
@@ -6795,7 +7102,12 @@ export function buildActiveLearningAudit(batches = activeLearningBatches, submit
   };
 }
 
-function normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence = {}) {
+function normalizeSubmittedActiveLearningSelectionAudit(
+  audit,
+  candidateWorkflowEvidence = {},
+  activeSelectionPolicy = normalizeActiveLearningSelectionPolicy(defaultActiveLearningSelectionPolicy("october-2026-demo"), "seed_active_learning_selection_policy"),
+  selectionPolicyEvidence = null,
+) {
   if (!audit || typeof audit !== "object") return null;
   const rejectedCountByReason = audit.rejectedCountByReason ?? audit.rejectionReasonCounts ?? {};
   const selectionReasonCounts = {
@@ -6809,22 +7121,48 @@ function normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflow
   if (audit.humanSelectedForDiversityCount !== undefined) {
     selectionReasonCounts.human_diversity_selection = numberOrDefault(audit.humanSelectedForDiversityCount, 0);
   }
+  if (audit.humanSelectedForSuitabilityCount !== undefined) {
+    selectionReasonCounts.human_suitability_selection = numberOrDefault(audit.humanSelectedForSuitabilityCount, 0);
+  }
+  if (audit.humanSelectedForInterestingnessCount !== undefined) {
+    selectionReasonCounts.human_interestingness_selection = numberOrDefault(audit.humanSelectedForInterestingnessCount, 0);
+  }
   const batchId = audit.candidateBatchId ?? audit.batchId ?? audit.id;
   const workflowRow = (candidateWorkflowEvidence.rows ?? []).find((row) => row.candidateBatchId === batchId);
-  const selectionAuditContractChecks = submittedActiveLearningSelectionAuditContractChecks(audit);
+  const selectionThresholds =
+    audit.selectionThresholds && typeof audit.selectionThresholds === "object" && !Array.isArray(audit.selectionThresholds)
+      ? audit.selectionThresholds
+      : {};
+  const activeThresholds = activeLearningSelectionThresholdValues(activeSelectionPolicy);
+  const selectionAuditContractChecks = submittedActiveLearningSelectionAuditContractChecks(audit, activeSelectionPolicy);
   const selectionAuditContractViolations = selectionAuditContractChecks.filter((check) => check.status !== "pass");
+  const humanSelectedForDiversity = numberOrDefault(audit.humanSelectedForDiversityCount, 0);
+  const humanSelectedForSuitability = numberOrDefault(audit.humanSelectedForSuitabilityCount, 0);
+  const humanSelectedForInterestingness = numberOrDefault(audit.humanSelectedForInterestingnessCount, 0);
   return {
     id: batchId,
     selectionAuditId: audit.id ?? null,
     positionId: audit.positionId ?? workflowRow?.positionId ?? null,
     batchSource: "submitted_workflow_selection_audit",
+    activeLearningSelectionPolicyId: activeSelectionPolicy?.id ?? null,
+    submittedActiveLearningSelectionPolicyId: audit.activeLearningSelectionPolicyId ?? audit.selectionPolicyId ?? null,
+    selectionPolicyReleaseUseStatus: selectionPolicyEvidence?.releaseUseStatus ?? null,
+    selectionThresholdsApplied: activeThresholds,
+    submittedSelectionThresholds: selectionThresholds,
+    handSelectionQuotasApplied: activeSelectionPolicy?.handSelectionQuotas ?? REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
     generated: numberOrDefault(audit.generatedOrIngestedCount ?? audit.generatedOrIngestedCandidateCount ?? audit.generatedCount, 0),
     ingested: numberOrDefault(audit.ingestedCount, 0),
     judged: numberOrDefault(audit.judgedCount ?? audit.judgedCandidateCount, 0),
     disagreementSelected: numberOrDefault(audit.disagreementSelectedCount, 0),
     highRated: numberOrDefault(audit.highRatedSelectedCount ?? audit.highRatedCount, 0),
     suspectedJudgeFalsePositive: numberOrDefault(audit.suspectedJudgeFalsePositiveCount, 0),
-    handSelected: numberOrDefault(audit.humanSelectedForDiversityCount ?? audit.handSelectedCount ?? audit.humanHandSelectedCount, 0),
+    humanSelectedForDiversity,
+    humanSelectedForSuitability,
+    humanSelectedForInterestingness,
+    handSelected: numberOrDefault(
+      audit.handSelectedCount ?? audit.humanHandSelectedCount,
+      humanSelectedForDiversity + humanSelectedForSuitability + humanSelectedForInterestingness,
+    ),
     rejected: numberOrDefault(audit.rejectedCount, sumCountMap(rejectedCountByReason)),
     promoted: numberOrDefault(audit.promotedToRatingCount ?? audit.promotedCount, 0),
     acceptedCritiqueIds: uniqueStrings([...(audit.acceptedCritiqueIds ?? audit.promotedCritiqueIds ?? []), ...(workflowRow?.acceptedCritiqueIds ?? [])]),
@@ -6837,7 +7175,7 @@ function normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflow
   };
 }
 
-function submittedActiveLearningSelectionAuditContractChecks(audit) {
+function submittedActiveLearningSelectionAuditContractChecks(audit, activeSelectionPolicy = null) {
   const requiredFieldChecks = REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_FIELDS.map((field) => ({
     field,
     expected: "present",
@@ -6858,7 +7196,33 @@ function submittedActiveLearningSelectionAuditContractChecks(audit) {
       ? "pass"
       : "invalid_object",
   };
-  return [...requiredFieldChecks, ...finiteNumberChecks, rejectedCountByReasonCheck];
+  const selectionThresholds = audit?.selectionThresholds;
+  const activeThresholds = activeLearningSelectionThresholdValues(activeSelectionPolicy);
+  const thresholdPolicyCheck = {
+    field: "activeLearningSelectionPolicyId",
+    expected: activeSelectionPolicy?.id ?? null,
+    observed: audit?.activeLearningSelectionPolicyId ?? audit?.selectionPolicyId ?? null,
+    status:
+      audit?.activeLearningSelectionPolicyId && activeSelectionPolicy?.id && audit.activeLearningSelectionPolicyId === activeSelectionPolicy.id
+        ? "pass"
+        : "selection_policy_mismatch",
+  };
+  const selectionThresholdCheck = {
+    field: "selectionThresholds",
+    expected: activeThresholds,
+    observed: selectionThresholds ?? null,
+    status:
+      selectionThresholds && typeof selectionThresholds === "object" && !Array.isArray(selectionThresholds) && stableJsonKey(selectionThresholds) === stableJsonKey(activeThresholds)
+        ? "pass"
+        : "selection_thresholds_mismatch",
+  };
+  const rejectedReasonChecks = REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES.map((reason) => ({
+    field: `rejectedCountByReason.${reason}`,
+    expected: "present",
+    observed: audit?.rejectedCountByReason?.[reason] ?? null,
+    status: Number.isFinite(Number(audit?.rejectedCountByReason?.[reason])) ? "pass" : "missing_required_reason_count",
+  }));
+  return [...requiredFieldChecks, ...finiteNumberChecks, rejectedCountByReasonCheck, thresholdPolicyCheck, selectionThresholdCheck, ...rejectedReasonChecks];
 }
 
 const REQUIRED_CANDIDATE_BATCH_FIELDS = [
@@ -6912,7 +7276,8 @@ function buildCandidateWorkflowEvidence({
   candidateBatchModelJudgeScoreSubmissions = [],
   candidateReviews = [],
   candidatePromotions = [],
-} = {}) {
+} = {}, activeSelectionPolicy = null, selectionPolicyEvidence = null) {
+  const activeThresholds = activeLearningSelectionThresholdValues(activeSelectionPolicy);
   const critiqueById = new Map(candidateCritiques.map((critique) => [critique.id, critique]));
   const batchRows = candidateBatches.map((batch) => {
     const batchId = batch.id;
@@ -6967,6 +7332,10 @@ function buildCandidateWorkflowEvidence({
       positionId: batch.positionId ?? null,
       candidateBatchStatus: batch.batchStatus ?? null,
       batchSource: "submitted_workflow_candidate_batch",
+      activeLearningSelectionPolicyId: activeSelectionPolicy?.id ?? null,
+      selectionPolicyReleaseUseStatus: selectionPolicyEvidence?.releaseUseStatus ?? null,
+      selectionThresholdsApplied: activeThresholds,
+      handSelectionQuotasApplied: activeSelectionPolicy?.handSelectionQuotas ?? REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
       generated: numberOrDefault(batch.generatedOrIngestedCandidateCount ?? batch.generatedOrIngestedCount ?? batch.generatedCount, batchCritiques.length),
       ingested: numberOrDefault(batch.ingestedCount, 0),
       judged: numberOrDefault(
@@ -6974,7 +7343,7 @@ function buildCandidateWorkflowEvidence({
         0,
       ),
       disagreementSelected: selectionReasonCounts.judge_disagreement ?? 0,
-      highRated: batchScores.filter((score) => numberOrDefault(score.overallScore ?? score.score, 0) >= 0.7).length,
+      highRated: batchScores.filter((score) => numberOrDefault(score.overallScore ?? score.score, 0) >= activeThresholds.highRatedOverallScoreMin).length,
       suspectedJudgeFalsePositive: selectionReasonCounts.suspected_judge_false_positive ?? 0,
       handSelected: reviews.filter((review) => /approved|selected|include/.test(String(review.reviewStatus ?? review.inclusionReason ?? ""))).length,
       rejected: reviews.filter((review) => /reject|exclude/.test(String(review.reviewStatus ?? ""))).length,
@@ -7157,6 +7526,10 @@ function buildCandidateWorkflowActiveLearningBatches(candidateWorkflowEvidence, 
     .map((row) => ({
       id: row.candidateBatchId,
       batchSource: "submitted_workflow_candidate_batch",
+      activeLearningSelectionPolicyId: row.activeLearningSelectionPolicyId ?? null,
+      selectionPolicyReleaseUseStatus: row.selectionPolicyReleaseUseStatus ?? null,
+      selectionThresholdsApplied: row.selectionThresholdsApplied ?? REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+      handSelectionQuotasApplied: row.handSelectionQuotasApplied ?? REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
       generated: row.generated,
       ingested: row.ingested,
       judged: row.judged,
@@ -21655,7 +22028,17 @@ export function buildOctoberReleaseReport(
     options.adjudicationFinalizations ?? [],
     effectiveAdjudicationMemos,
   );
-  const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos);
+  const disagreementThresholdPolicyEvidence = buildDisagreementThresholdPolicyEvidenceReport(releaseId, options.disagreementThresholdPolicies ?? []);
+  const postDiscussionDisagreement = buildPostDiscussionDisagreementReport(
+    releaseId,
+    labelSnapshot,
+    ratings,
+    positionList,
+    critiqueList,
+    effectiveAdjudicationMemos,
+    disagreementThresholdPolicyEvidence.activePolicy,
+    { disagreementThresholdPolicyEvidence },
+  );
   const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
     humanCeilingRuns: options.humanCeilingRuns ?? [],
   });
@@ -21785,6 +22168,8 @@ export function buildOctoberReleaseReport(
     candidateBatchModelJudgeScoreSubmissions: options.candidateBatchModelJudgeScoreSubmissions ?? [],
     candidateReviews: options.candidateReviews ?? [],
     candidatePromotions: options.candidatePromotions ?? [],
+    activeLearningSelectionPolicies: options.activeLearningSelectionPolicies ?? [],
+    releaseId,
   });
   const candidateIntakeQualityAudit = buildCandidateIntakeQualityAudit(releaseId, critiqueList, positionList, effectiveCritiqueGenerationRuns, activeLearning.batches);
   const effectiveRaterProfiles = buildEffectiveRaterProfiles(options.raters ?? []);
@@ -22062,6 +22447,7 @@ export function buildOctoberReleaseReport(
     releaseGateProfile,
     releaseGateEvaluation,
     comparabilityTierPolicyEvidence,
+    disagreementThresholdPolicyEvidence,
     adminTagBlinding,
     positionIntakeReadiness,
     rubricQaCoverage,
@@ -22200,6 +22586,7 @@ export function buildOctoberReleaseReport(
       volunteerDataWithdrawalRequests: options.volunteerDataWithdrawalRequests ?? [],
     },
     workflowPolicyArtifacts: {
+      disagreementThresholdPolicies: options.disagreementThresholdPolicies ?? [],
       visibilityPolicies: options.visibilityPolicies ?? [],
       ratingWorkflowProfiles: options.ratingWorkflowProfiles ?? [],
       scoreExplanationPolicies: options.scoreExplanationPolicies ?? [],
@@ -22301,6 +22688,7 @@ export function buildOctoberReleaseReport(
       primaryRaterAnchorPolicies: options.primaryRaterAnchorPolicies ?? [],
       comparabilityTierPolicies: options.comparabilityTierPolicies ?? [],
       comparabilityClaims: options.comparabilityClaims ?? [],
+      activeLearningSelectionPolicies: options.activeLearningSelectionPolicies ?? [],
       activeLearningSelectionAudits: options.activeLearningSelectionAudits ?? [],
     },
     claimGatedDiagnosticRuns: {

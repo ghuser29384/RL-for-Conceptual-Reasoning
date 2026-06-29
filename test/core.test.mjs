@@ -164,6 +164,91 @@ function certificationThresholdPolicy(id = "certification-threshold-policy-relea
   };
 }
 
+const disagreementThresholds = {
+  lowClarityThreshold: 0.5,
+  lowClarityAdjudicationCount: 2,
+  initialOverallSpreadThreshold: 0.35,
+  centralityStrengthProductSpreadThreshold: 0.3,
+  correctnessSpreadThreshold: 0.35,
+  postDiscussionMaxSpreadTarget: 0.3,
+  highSpreadResidualClassificationThreshold: 0.3,
+  thinOverlapFinalRaterCountMin: 2,
+};
+
+const disagreementEscalationRules = {
+  lowClarity: "clarity_below_0_50_routes_to_low_clarity_review_and_two_or_more_routes_to_adjudication",
+  initialOverallSpread: "initial_overall_spread_above_0_35_routes_to_object_level_discussion_or_adjudication",
+  centralityStrengthProductSpread: "centrality_strength_product_spread_above_0_30_routes_to_target_map_or_adjudication",
+  correctnessSpread: "correctness_spread_above_0_35_routes_to_correctness_verification_review",
+  postDiscussionResidualSpread: "post_discussion_final_max_spread_above_0_30_requires_residual_disagreement_classification_and_memo",
+  thinOverlap: "fewer_than_two_final_raters_is_thin_overlap_and_cannot_support_consensus_claims",
+};
+
+function disagreementThresholdPolicy(id = "disagreement-threshold-policy-release-test") {
+  return {
+    id,
+    policyVersion: "disagreement-threshold-rlhf90-v1",
+    thresholds: disagreementThresholds,
+    escalationRules: disagreementEscalationRules,
+    postDiscussionResidualRule:
+      "Post-discussion final max spread above 0.30 requires residual disagreement classification, an adjudication memo, and minority-rationale preservation before release use.",
+    thinOverlapRule:
+      "Fewer than two final raters is thin overlap and must be disclosed rather than counted as low-disagreement consensus evidence.",
+    lmcaSourceBoundary:
+      "Project default numeric disagreement thresholds are frozen here; LMCA motivates disagreement reporting but does not state every platform escalation threshold.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const activeLearningSelectionThresholds = {
+  judgeDisagreementDeltaMin: 0.25,
+  highRatedOverallScoreMin: 0.7,
+  suspectedJudgeFalsePositiveOverallMax: 0.35,
+  modelJudgeCoverageShareMin: 0.2,
+  promotedToRatingShareMax: 0.25,
+  nearDuplicateRejectionShareReviewMin: 0.3,
+  rightsUnclearRejectionShareReviewMin: 0.05,
+  lowMarginalInformativenessRejectionShareReviewMin: 0.25,
+};
+
+const activeLearningHandSelectionQuotas = {
+  diversitySelectedMin: 1,
+  suitabilitySelectedMin: 1,
+  interestingnessSelectedMin: 1,
+  promotedPerBatchMin: 1,
+};
+
+const activeLearningSelectionReasonCodes = [
+  "judge_disagreement",
+  "high_rated",
+  "suspected_judge_false_positive",
+  "human_diversity_selection",
+  "human_suitability_selection",
+  "human_interestingness_selection",
+];
+
+const activeLearningRejectionReasonCodes = ["near_duplicate", "rights_unclear", "low_marginal_informativeness"];
+
+function activeLearningSelectionPolicy(id = "active-learning-selection-policy-release-test") {
+  return {
+    id,
+    policyVersion: "active-learning-selection-rlhf90-v1",
+    thresholds: activeLearningSelectionThresholds,
+    handSelectionQuotas: activeLearningHandSelectionQuotas,
+    selectionReasonCodes: activeLearningSelectionReasonCodes,
+    rejectionReasonCodes: activeLearningRejectionReasonCodes,
+    thresholdRule:
+      "Judge-disagreement, high-rated, and suspected-false-positive selections use the frozen numeric thresholds before human hand-selection.",
+    handSelectionQuotaRule:
+      "Each active-learning batch needs at least one diversity, suitability, and interestingness hand-selection path before promoted-to-rating claims.",
+    raterVisibilityRule:
+      "Selection policy ids, judge thresholds, reason codes, and model-judge scores remain admin-only before initial rating lock.",
+    lmcaSourceBoundary:
+      "Project default active-learning thresholds and hand-selection quotas are frozen here; LMCA motivates active-learning denominator audits but does not state these exact platform values.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 const comparabilityTierThresholds = {
   method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
   corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
@@ -7308,32 +7393,62 @@ test("submitted active-learning selection audits update denominator and reason-c
         id: "selection-audit-submitted",
         candidateBatchId: "candidate-batch-submitted",
         positionId: "pos-ai-prior",
+        activeLearningSelectionPolicyId: "active-learning-selection-policy-release-test-submitted",
+        selectionThresholds: activeLearningSelectionThresholds,
         generatedOrIngestedCount: 20,
         judgedCount: 18,
         disagreementSelectedCount: 3,
       highRatedSelectedCount: 2,
       suspectedJudgeFalsePositiveCount: 1,
       humanSelectedForDiversityCount: 3,
-      rejectedCountByReason: { near_duplicate: 5, low_marginal_informativeness: 3 },
+      humanSelectedForSuitabilityCount: 2,
+      humanSelectedForInterestingnessCount: 1,
+      rejectedCountByReason: { near_duplicate: 5, rights_unclear: 0, low_marginal_informativeness: 3 },
       promotedToRatingCount: 4,
       acceptedCritiqueIds: ["crit-submitted-active-learning"],
     },
-  ]);
+  ], {
+    releaseId: "release-test",
+    activeLearningSelectionPolicies: [activeLearningSelectionPolicy("active-learning-selection-policy-release-test-submitted")],
+  });
   assert.equal(audit.totals.generated, 62);
   assert.equal(audit.totals.judged, 30);
   assert.equal(audit.totals.disagreementSelected, 7);
   assert.equal(audit.totals.highRated, 5);
   assert.equal(audit.totals.suspectedJudgeFalsePositive, 2);
-  assert.equal(audit.totals.handSelected, 8);
+  assert.equal(audit.totals.handSelected, 11);
   assert.equal(audit.totals.rejected, 15);
   assert.equal(audit.totals.promoted, 9);
+  assert.equal(audit.selectionPolicyEvidence.releaseUseStatus, "submitted_active_learning_selection_policy_active");
+  assert.equal(audit.activeLearningSelectionPolicyId, "active-learning-selection-policy-release-test-submitted");
+  assert.deepEqual(audit.requiredSelectionThresholds, activeLearningSelectionThresholds);
   assert.equal(audit.submittedSelectionAuditCount, 1);
   assert.deepEqual(audit.submittedSelectionAuditIds, ["selection-audit-submitted"]);
   assert.equal(audit.submittedSelectionAuditContractViolationCount, 0);
-  assert.equal(audit.batches.find((batch) => batch.selectionAuditId === "selection-audit-submitted").selectionAuditContractStatus, "selection_audit_contract_complete");
+  const submittedBatch = audit.batches.find((batch) => batch.selectionAuditId === "selection-audit-submitted");
+  assert.equal(submittedBatch.selectionAuditContractStatus, "selection_audit_contract_complete");
+  assert.equal(submittedBatch.activeLearningSelectionPolicyId, "active-learning-selection-policy-release-test-submitted");
+  assert.deepEqual(submittedBatch.selectionThresholdsApplied, activeLearningSelectionThresholds);
+  assert.equal(submittedBatch.humanSelectedForSuitability, 2);
+  assert.equal(submittedBatch.humanSelectedForInterestingness, 1);
   assert.equal(audit.selectionReasonCounts.judge_disagreement, 3);
+  assert.equal(audit.selectionReasonCounts.human_suitability_selection, 2);
+  assert.equal(audit.selectionReasonCounts.human_interestingness_selection, 1);
   assert.equal(audit.rejectionReasonCounts.near_duplicate, 5);
   assert.equal(audit.batches.find((batch) => batch.selectionAuditId === "selection-audit-submitted").batchSource, "submitted_workflow_selection_audit");
+
+  const driftedPolicyAudit = buildActiveLearningAudit(undefined, [], {
+    releaseId: "release-test",
+    activeLearningSelectionPolicies: [
+      {
+        ...activeLearningSelectionPolicy("active-learning-selection-policy-drifted"),
+        thresholds: { ...activeLearningSelectionThresholds, highRatedOverallScoreMin: 0.8 },
+      },
+    ],
+  });
+  assert.equal(driftedPolicyAudit.selectionPolicyEvidence.releaseUseStatus, "submitted_active_learning_selection_policy_review_required");
+  assert.equal(driftedPolicyAudit.activeLearningSelectionPolicyId, "active-learning-selection-policy-release-test");
+  assert.equal(driftedPolicyAudit.selectionPolicyEvidence.reviewRows[0].reviewReasons.includes("thresholds"), true);
 
   const malformedAudit = buildActiveLearningAudit(undefined, [
     {
@@ -7345,9 +7460,11 @@ test("submitted active-learning selection audits update denominator and reason-c
       highRatedSelectedCount: 2,
       suspectedJudgeFalsePositiveCount: 1,
       humanSelectedForDiversityCount: 3,
+      humanSelectedForSuitabilityCount: 1,
+      humanSelectedForInterestingnessCount: 1,
       promotedToRatingCount: 4,
     },
-  ]);
+  ], { releaseId: "release-test" });
   assert.equal(malformedAudit.releaseUseStatus, "active_learning_selection_audit_review_required");
   assert.equal(malformedAudit.submittedSelectionAuditContractViolationCount, 1);
   assert.equal(
@@ -7359,6 +7476,9 @@ test("submitted active-learning selection audits update denominator and reason-c
   );
   assert.ok(
     malformedAudit.submittedSelectionAuditContractViolationRows[0].selectionAuditContractViolations.some((check) => check.field === "rejectedCountByReason"),
+  );
+  assert.ok(
+    malformedAudit.submittedSelectionAuditContractViolationRows[0].selectionAuditContractViolations.some((check) => check.field === "selectionThresholds"),
   );
 });
 
@@ -9630,6 +9750,10 @@ test("post-discussion disagreement report classifies residual high spread instea
   assert.equal(seedReport.counts.releaseCriticalItemCount, 3);
   assert.equal(seedReport.counts.highSpreadItemCount, 0);
   assert.equal(seedReport.counts.insufficientFinalOverlapItemCount, 2);
+  assert.equal(seedReport.disagreementThresholdPolicyId, "disagreement-threshold-policy-release-test");
+  assert.equal(seedReport.disagreementThresholdPolicyReleaseUseStatus, "seed_disagreement_threshold_policy");
+  assert.deepEqual(seedReport.thresholdsApplied, disagreementThresholds);
+  assert.equal(seedReport.policy.maxSpreadThreshold, 0.3);
   assert.equal(seedReport.releaseUseStatus, "post_discussion_spread_check_thin_no_high_spread_observed");
 
   const divergentExpertCheck = {
@@ -9662,8 +9786,62 @@ test("post-discussion disagreement report classifies residual high spread instea
   assert.equal(row.classification, "high_post_discussion_spread_classified_with_memo");
   assert.equal(row.maxFinalSpreadDimension, "centrality");
   assert.equal(row.maxFinalSpread > 0.3, true);
+  assert.equal(row.disagreementThresholdPolicyId, "disagreement-threshold-policy-release-test");
+  assert.deepEqual(row.thresholdsApplied, disagreementThresholds);
   assert.deepEqual(row.adjudicationMemoIds, ["memo-mind-zombie"]);
   assert.ok(row.disagreementTaxonomy.includes("contentious_bottom_line_premise"));
+});
+
+test("release report uses submitted disagreement threshold policies for post-discussion evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-disagreement-threshold-policy-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      disagreementThresholdPolicies: [disagreementThresholdPolicy("disagreement-threshold-policy-release-test-submitted")],
+    },
+  );
+  assert.equal(report.disagreementThresholdPolicyEvidence.releaseUseStatus, "submitted_disagreement_threshold_policy_active");
+  assert.equal(report.disagreementThresholdPolicyEvidence.activePolicyId, "disagreement-threshold-policy-release-test-submitted");
+  assert.deepEqual(report.disagreementThresholdPolicyEvidence.activePolicy.thresholds, disagreementThresholds);
+  assert.equal(report.postDiscussionDisagreement.disagreementThresholdPolicyId, "disagreement-threshold-policy-release-test-submitted");
+  assert.equal(report.postDiscussionDisagreement.disagreementThresholdPolicyReleaseUseStatus, "submitted_disagreement_threshold_policy_active");
+  assert.deepEqual(report.postDiscussionDisagreement.thresholdsApplied, disagreementThresholds);
+  assert.equal(report.workflowPolicyArtifacts.disagreementThresholdPolicies.length, 1);
+
+  const driftedReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      disagreementThresholdPolicies: [
+        {
+          ...disagreementThresholdPolicy("disagreement-threshold-policy-drifted"),
+          thresholds: { ...disagreementThresholds, postDiscussionMaxSpreadTarget: 0.45 },
+        },
+      ],
+    },
+  );
+  assert.equal(driftedReport.disagreementThresholdPolicyEvidence.releaseUseStatus, "submitted_disagreement_threshold_policy_review_required");
+  assert.equal(driftedReport.disagreementThresholdPolicyEvidence.activePolicyId, "disagreement-threshold-policy-release-test");
+  assert.equal(driftedReport.disagreementThresholdPolicyEvidence.reviewRows[0].reviewReasons.includes("thresholds"), true);
+  assert.equal(driftedReport.postDiscussionDisagreement.disagreementThresholdPolicyId, "disagreement-threshold-policy-release-test");
 });
 
 test("rater composition conflict report exposes release-critical dominance and conflicts", () => {

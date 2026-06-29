@@ -45,6 +45,40 @@ import {
 } from "./domain/contributions.mjs";
 
 const releaseId = "october-2026-demo";
+const disagreementThresholds = {
+  lowClarityThreshold: 0.5,
+  lowClarityAdjudicationCount: 2,
+  initialOverallSpreadThreshold: 0.35,
+  centralityStrengthProductSpreadThreshold: 0.3,
+  correctnessSpreadThreshold: 0.35,
+  postDiscussionMaxSpreadTarget: 0.3,
+  highSpreadResidualClassificationThreshold: 0.3,
+  thinOverlapFinalRaterCountMin: 2,
+};
+const disagreementEscalationRules = {
+  lowClarity: "clarity_below_0_50_routes_to_low_clarity_review_and_two_or_more_routes_to_adjudication",
+  initialOverallSpread: "initial_overall_spread_above_0_35_routes_to_object_level_discussion_or_adjudication",
+  centralityStrengthProductSpread: "centrality_strength_product_spread_above_0_30_routes_to_target_map_or_adjudication",
+  correctnessSpread: "correctness_spread_above_0_35_routes_to_correctness_verification_review",
+  postDiscussionResidualSpread: "post_discussion_final_max_spread_above_0_30_requires_residual_disagreement_classification_and_memo",
+  thinOverlap: "fewer_than_two_final_raters_is_thin_overlap_and_cannot_support_consensus_claims",
+};
+const activeLearningSelectionThresholds = {
+  judgeDisagreementDeltaMin: 0.25,
+  highRatedOverallScoreMin: 0.7,
+  suspectedJudgeFalsePositiveOverallMax: 0.35,
+  modelJudgeCoverageShareMin: 0.2,
+  promotedToRatingShareMax: 0.25,
+  nearDuplicateRejectionShareReviewMin: 0.3,
+  rightsUnclearRejectionShareReviewMin: 0.05,
+  lowMarginalInformativenessRejectionShareReviewMin: 0.25,
+};
+const activeLearningHandSelectionQuotas = {
+  diversitySelectedMin: 1,
+  suitabilitySelectedMin: 1,
+  interestingnessSelectedMin: 1,
+  promotedPerBatchMin: 1,
+};
 const comparabilityTierThresholds = {
   method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
   corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
@@ -270,6 +304,29 @@ const workflowTemplates = [
         recertificationRule:
           "Rubric-version mismatch requires recertification or grandfathering review before certification evidence can support release use.",
         frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    }),
+  },
+  {
+    id: "disagreement-threshold-policy",
+    label: "Disagreement Threshold Policy",
+    endpoint: () => "/api/v1/disagreement-threshold-policies",
+    resourceKey: "disagreementThresholdPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exact numeric disagreement thresholds for escalation routing and post-discussion release evidence.",
+    payload: () => ({
+      disagreementThresholdPolicy: {
+        id: `disagreement-threshold-policy-${releaseId}`,
+        policyVersion: "disagreement-threshold-rlhf90-v1",
+        thresholds: disagreementThresholds,
+        escalationRules: disagreementEscalationRules,
+        postDiscussionResidualRule:
+          "Post-discussion final max spread above 0.30 requires residual disagreement classification, an adjudication memo, and minority-rationale preservation before release use.",
+        thinOverlapRule:
+          "Fewer than two final raters is thin overlap and must be disclosed rather than counted as low-disagreement consensus evidence.",
+        lmcaSourceBoundary:
+          "Project default numeric disagreement thresholds are frozen here; LMCA motivates disagreement reporting but does not state every platform escalation threshold.",
+        frozenAt: new Date().toISOString(),
       },
     }),
   },
@@ -1112,6 +1169,40 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "active-learning-selection-policy",
+    label: "Active-Learning Selection Policy",
+    endpoint: () => "/api/v1/active-learning-selection-policies",
+    resourceKey: "activeLearningSelectionPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exact candidate-selection thresholds, reason codes, and hand-selection quotas before active-learning intake claims.",
+    payload: () => ({
+      activeLearningSelectionPolicy: {
+        id: `active-learning-selection-policy-${releaseId}`,
+        policyVersion: "active-learning-selection-rlhf90-v1",
+        thresholds: activeLearningSelectionThresholds,
+        handSelectionQuotas: activeLearningHandSelectionQuotas,
+        selectionReasonCodes: [
+          "judge_disagreement",
+          "high_rated",
+          "suspected_judge_false_positive",
+          "human_diversity_selection",
+          "human_suitability_selection",
+          "human_interestingness_selection",
+        ],
+        rejectionReasonCodes: ["near_duplicate", "rights_unclear", "low_marginal_informativeness"],
+        thresholdRule:
+          "Judge-disagreement, high-rated, and suspected-false-positive selections use the frozen numeric thresholds before human hand-selection.",
+        handSelectionQuotaRule:
+          "Each active-learning batch needs at least one diversity, suitability, and interestingness hand-selection path before promoted-to-rating claims.",
+        raterVisibilityRule:
+          "Selection policy ids, judge thresholds, reason codes, and model-judge scores remain admin-only before initial rating lock.",
+        lmcaSourceBoundary:
+          "Project default active-learning thresholds and hand-selection quotas are frozen here; LMCA motivates active-learning denominator audits but does not state these exact platform values.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "active-learning-selection-audit",
     label: "Selection Audit",
     endpoint: () => "/api/v1/active-learning-selection-audits",
@@ -1123,12 +1214,16 @@ const workflowTemplates = [
         id: `selection-audit-${Date.now()}`,
         candidateBatchId: "candidate-batch-demo",
         positionId: "pos-ai-prior",
+        activeLearningSelectionPolicyId: `active-learning-selection-policy-${releaseId}`,
+        selectionThresholds: activeLearningSelectionThresholds,
         generatedOrIngestedCount: 48,
         judgedCount: 48,
         disagreementSelectedCount: 9,
         highRatedSelectedCount: 6,
         suspectedJudgeFalsePositiveCount: 4,
         humanSelectedForDiversityCount: 3,
+        humanSelectedForSuitabilityCount: 2,
+        humanSelectedForInterestingnessCount: 2,
         rejectedCountByReason: { near_duplicate: 11, rights_unclear: 2, low_marginal_informativeness: 13 },
         promotedToRatingCount: 7,
       },

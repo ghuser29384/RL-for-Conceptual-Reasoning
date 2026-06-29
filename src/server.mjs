@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   ARTIFACT_PROBE_INPUT_VIEWS,
+  ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
+  DISAGREEMENT_THRESHOLD_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
@@ -16,6 +18,12 @@ import {
   RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
   RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
   RATING_ESCALATION_TRIGGER_RULES,
+  REQUIRED_DISAGREEMENT_ESCALATION_RULES,
+  REQUIRED_DISAGREEMENT_THRESHOLDS,
+  REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
+  REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
+  REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
+  REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
   RUBRIC_DIMENSIONS,
   SANITY_BASELINE_TYPES,
   SCORE_CONFIDENCE_LEVELS,
@@ -753,6 +761,14 @@ const certificationRemediationRules = {
   hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
   rubricVersionMismatch: "recertification_or_grandfathering_review_required",
 };
+const disagreementThresholdPolicyVersion = DISAGREEMENT_THRESHOLD_POLICY_VERSION;
+const disagreementThresholds = REQUIRED_DISAGREEMENT_THRESHOLDS;
+const disagreementEscalationRules = REQUIRED_DISAGREEMENT_ESCALATION_RULES;
+const activeLearningSelectionPolicyVersion = ACTIVE_LEARNING_SELECTION_POLICY_VERSION;
+const activeLearningSelectionThresholds = REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS;
+const activeLearningHandSelectionQuotas = REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS;
+const activeLearningSelectionReasonCodes = REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES;
+const activeLearningRejectionReasonCodes = REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES;
 const comparabilityClaimTiers = [
   "method_preserving",
   "corpus_scale_comparable",
@@ -2129,22 +2145,67 @@ const workflowWriteEndpoints = [
       hiddenFromRatersBeforeInitialLock: true,
     },
   }),
+  workflowWriteSpec(/^\/api\/v1\/active-learning-selection-policies$/, "active_learning_selection_policy_submitted", "activeLearningSelectionPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "thresholds",
+      "handSelectionQuotas",
+      "selectionReasonCodes",
+      "rejectionReasonCodes",
+      "thresholdRule",
+      "handSelectionQuotaRule",
+      "raterVisibilityRule",
+      "lmcaSourceBoundary",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["thresholds", "handSelectionQuotas"],
+    requiredNonEmptyArrayFields: ["selectionReasonCodes", "rejectionReasonCodes"],
+    requiredObjectKeys: {
+      thresholds: Object.keys(activeLearningSelectionThresholds),
+      handSelectionQuotas: Object.keys(activeLearningHandSelectionQuotas),
+    },
+    requiredStructuredFields: {
+      thresholds: activeLearningSelectionThresholds,
+      handSelectionQuotas: activeLearningHandSelectionQuotas,
+    },
+    requiredArrayIncludes: {
+      selectionReasonCodes: activeLearningSelectionReasonCodes,
+      rejectionReasonCodes: activeLearningRejectionReasonCodes,
+    },
+    allowedArrayValues: {
+      selectionReasonCodes: activeLearningSelectionReasonCodes,
+      rejectionReasonCodes: activeLearningRejectionReasonCodes,
+    },
+    requiredStringIncludes: {
+      thresholdRule: ["judge", "threshold"],
+      handSelectionQuotaRule: ["diversity", "suitability", "interestingness"],
+      raterVisibilityRule: ["admin-only", "initial rating lock"],
+      lmcaSourceBoundary: ["Project", "LMCA"],
+    },
+    requiredExactFields: { policyVersion: activeLearningSelectionPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/active-learning-selection-audits$/, "active_learning_selection_audit_submitted", "activeLearningSelectionAudit", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
       "id",
       "candidateBatchId",
       "positionId",
+      "activeLearningSelectionPolicyId",
       "generatedOrIngestedCount",
       "judgedCount",
       "disagreementSelectedCount",
       "highRatedSelectedCount",
       "suspectedJudgeFalsePositiveCount",
       "humanSelectedForDiversityCount",
+      "humanSelectedForSuitabilityCount",
+      "humanSelectedForInterestingnessCount",
+      "selectionThresholds",
       "rejectedCountByReason",
       "promotedToRatingCount",
     ],
-    requiredObjectFields: ["rejectedCountByReason"],
+    requiredObjectFields: ["selectionThresholds", "rejectedCountByReason"],
     requiredFiniteNumberFields: [
       "generatedOrIngestedCount",
       "judgedCount",
@@ -2152,6 +2213,8 @@ const workflowWriteEndpoints = [
       "highRatedSelectedCount",
       "suspectedJudgeFalsePositiveCount",
       "humanSelectedForDiversityCount",
+      "humanSelectedForSuitabilityCount",
+      "humanSelectedForInterestingnessCount",
       "promotedToRatingCount",
     ],
   }),
@@ -3242,6 +3305,34 @@ const workflowWriteEndpoints = [
       protectedStatusBlindRoutingCopy: ["workflow", "policy"],
       lmcaSourceBoundary: ["project", "default"],
     },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/disagreement-threshold-policies$/, "disagreement_threshold_policy_submitted", "disagreementThresholdPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "thresholds",
+      "escalationRules",
+      "postDiscussionResidualRule",
+      "thinOverlapRule",
+      "lmcaSourceBoundary",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["thresholds", "escalationRules"],
+    requiredObjectKeys: {
+      thresholds: Object.keys(disagreementThresholds),
+      escalationRules: Object.keys(disagreementEscalationRules),
+    },
+    requiredStructuredFields: {
+      thresholds: disagreementThresholds,
+      escalationRules: disagreementEscalationRules,
+    },
+    requiredStringIncludes: {
+      postDiscussionResidualRule: ["0.30", "classification", "memo"],
+      thinOverlapRule: ["two", "final raters"],
+      lmcaSourceBoundary: ["Project", "LMCA"],
+    },
+    requiredExactFields: { policyVersion: disagreementThresholdPolicyVersion },
   }),
   workflowWriteSpec(/^\/api\/v1\/ui-experiment-policies$/, "ui_experiment_policy_submitted", "uiExperimentPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -4537,6 +4628,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/candidate-batches\/(?<id>[^/]+)$/, "candidateBatch", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/candidate-critiques\/(?<id>[^/]+)$/, "candidateCritique", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/model-judge-scores\/(?<id>[^/]+)$/, "modelJudgeScore", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/active-learning-selection-policies\/(?<id>[^/]+)$/, "activeLearningSelectionPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/active-learning-selection-audits\/(?<id>[^/]+)$/, "activeLearningSelectionAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/critique-generation-runs\/(?<id>[^/]+)$/, "critiqueGenerationRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/generated-critiques\/(?<id>[^/]+)$/, "generatedCritiqueSubmission", adminAuditRoles),
@@ -4569,6 +4661,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rating-workflow-profiles\/(?<id>[^/]+)$/, "ratingWorkflowProfile", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/score-explanation-policies\/(?<id>[^/]+)$/, "scoreExplanationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rating-escalation-policies\/(?<id>[^/]+)$/, "ratingEscalationPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/disagreement-threshold-policies\/(?<id>[^/]+)$/, "disagreementThresholdPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ui-experiment-policies\/(?<id>[^/]+)$/, "uiExperimentPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/pre-submit-assist-policies\/(?<id>[^/]+)$/, "preSubmitAssistPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/accessibility-conformance-reports\/(?<id>[^/]+)$/, "accessibilityConformanceReport", adminAuditRoles),
@@ -7259,6 +7352,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const primaryRaterAnchorPolicies = latestWorkflowResources(workflowEvents, "primaryRaterAnchorPolicy");
   const comparabilityTierPolicies = latestWorkflowResources(workflowEvents, "comparabilityTierPolicy");
   const comparabilityClaims = latestWorkflowResources(workflowEvents, "comparabilityClaim");
+  const activeLearningSelectionPolicies = latestWorkflowResources(workflowEvents, "activeLearningSelectionPolicy");
   const activeLearningSelectionAudits = latestWorkflowResources(workflowEvents, "activeLearningSelectionAudit");
   const sycophancyProbeRuns = latestWorkflowResources(workflowEvents, "sycophancyProbeRun");
   const obfuscationStressRuns = latestWorkflowResources(workflowEvents, "obfuscationStressRun");
@@ -7274,6 +7368,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const ratingWorkflowProfiles = latestWorkflowResources(workflowEvents, "ratingWorkflowProfile");
   const scoreExplanationPolicies = latestWorkflowResources(workflowEvents, "scoreExplanationPolicy");
   const ratingEscalationPolicies = latestWorkflowResources(workflowEvents, "ratingEscalationPolicy");
+  const disagreementThresholdPolicies = latestWorkflowResources(workflowEvents, "disagreementThresholdPolicy");
   const uiExperimentPolicies = latestWorkflowResources(workflowEvents, "uiExperimentPolicy");
   const preSubmitAssistPolicies = latestWorkflowResources(workflowEvents, "preSubmitAssistPolicy");
   const accessibilityConformanceReports = latestWorkflowResources(workflowEvents, "accessibilityConformanceReport");
@@ -7429,6 +7524,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     primaryRaterAnchorPolicies,
     comparabilityTierPolicies,
     comparabilityClaims,
+    activeLearningSelectionPolicies,
     activeLearningSelectionAudits,
     sycophancyProbeRuns,
     obfuscationStressRuns,
@@ -7444,6 +7540,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     ratingWorkflowProfiles,
     scoreExplanationPolicies,
     ratingEscalationPolicies,
+    disagreementThresholdPolicies,
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
@@ -7594,6 +7691,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     primaryRaterAnchorPolicies,
     comparabilityTierPolicies,
     comparabilityClaims,
+    activeLearningSelectionPolicies,
     activeLearningSelectionAudits,
     sycophancyProbeRuns,
     obfuscationStressRuns,
@@ -7609,6 +7707,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     ratingWorkflowProfiles,
     scoreExplanationPolicies,
     ratingEscalationPolicies,
+    disagreementThresholdPolicies,
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
