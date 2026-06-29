@@ -573,6 +573,25 @@ const scoreExplanationTriggerRules = [
   "post_discussion_revision",
   "exposure_familiarity_conflict_uncertainty",
 ];
+const ratingEscalationTriggerRules = [
+  "low_clarity_single",
+  "low_clarity_two_or_more",
+  "overall_spread",
+  "centrality_strength_product_spread",
+  "correctness_spread",
+  "insufficient_topic_expertise",
+  "needs_verification",
+  "zero_correctness_nonzero_strength",
+  "nonclarity_provisional_with_clarity_gte_threshold",
+  "correctness_not_assessable_with_clarity_gte_threshold",
+  "materially_different_plausible_interpretations",
+  "vague_good_objection_gesture",
+  "clearly_unsatisfactory_imprecision",
+  "background_knowledge_dispute",
+];
+const ratingEscalationServiceLevels = Object.fromEntries(
+  ratingEscalationTriggerRules.map((trigger) => [trigger, `service_level_for_${trigger}`]),
+);
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
 
@@ -636,6 +655,25 @@ function completePolicyBundleFixtures() {
         protectedSplitCompatibilityClass: "protected_split_compatible_trigger_required_v1",
         protectedSplitCompatible: true,
         createdBy: "policy-admin",
+        timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    ratingEscalationPolicies: [
+      {
+        id: "rating-escalation-policy-submitted",
+        policyVersion: "rating-escalation-policy-rlhf90-v1",
+        triggerList: ratingEscalationTriggerRules,
+        lowClarityThreshold: 0.5,
+        lowClarityAdjudicationCount: 2,
+        initialOverallSpreadThreshold: 0.35,
+        centralityStrengthProductSpreadThreshold: 0.3,
+        correctnessSpreadThreshold: 0.35,
+        postDiscussionMaxSpreadTarget: 0.3,
+        serviceLevelByTrigger: ratingEscalationServiceLevels,
+        protectedStatusBlindRoutingCopy: "Generic workflow policy requires additional review for this item.",
+        lmcaSourceBoundary: "Project default thresholds are used because LMCA does not state exact numeric escalation rules.",
+        createdBy: "policy-admin",
+        frozenAt: "2026-10-01T00:00:00.000Z",
         timestamp: "2026-10-01T00:00:00.000Z",
       },
     ],
@@ -1864,13 +1902,14 @@ function completeInteractionWorkflowFixtures() {
   };
 }
 
-test("policy bundle evidence gates visibility, workflow profile, UI experiments, assist, and accessibility", () => {
+test("policy bundle evidence gates visibility, workflow profile, escalation, UI experiments, assist, and accessibility", () => {
   const report = buildPolicyBundleEvidenceReport("october-2026-demo", completePolicyBundleFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
-  assert.equal(report.counts.completePolicyGroupCount, 6);
+  assert.equal(report.counts.completePolicyGroupCount, 7);
   assert.equal(report.counts.submittedVisibilityPolicyCount, 1);
   assert.equal(report.counts.submittedScoreExplanationPolicyCount, 1);
+  assert.equal(report.counts.submittedRatingEscalationPolicyCount, 1);
   assert.deepEqual(report.ratingWorkflowProfileRows.at(-1).optionalIssuePanels, [
     "evidence_spans",
     "interpretation_target_map",
@@ -1878,6 +1917,8 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
   ]);
   assert.equal(report.ratingWorkflowProfileRows.at(-1).evidenceSpanRequirednessPolicy, "optional_ordinary_required_for_disputed_release_critical");
   assert.deepEqual(report.scoreExplanationPolicyRows.at(-1).triggerList, scoreExplanationTriggerRules);
+  assert.deepEqual(report.ratingEscalationPolicyRows.at(-1).triggerList, ratingEscalationTriggerRules);
+  assert.equal(report.ratingEscalationPolicyRows.at(-1).initialOverallSpreadThreshold, 0.35);
   assert.equal(report.counts.submittedAccessibilityConformanceReportCount, 1);
   assert.deepEqual(report.reviewSections, []);
 
@@ -2014,6 +2055,39 @@ test("policy bundle evidence gates visibility, workflow profile, UI experiments,
   assert.equal(unsupportedScoreExplanationVocabularyReport.releaseUseStatus, "policy_bundle_review_required");
   assert.ok(unsupportedScoreExplanationVocabularyReport.reviewSections.some((section) => section.reason === "triggerList:unexpected:peer_disagreement"));
   assert.ok(unsupportedScoreExplanationVocabularyReport.reviewSections.some((section) => section.reason === "inconsistencyRules:unexpected:private_model_disagreement"));
+
+  const missingEscalationTriggerReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    ratingEscalationPolicies: [
+      {
+        ...completePolicyBundleFixtures().ratingEscalationPolicies[0],
+        triggerList: ratingEscalationTriggerRules.filter((trigger) => trigger !== "needs_verification"),
+      },
+    ],
+  });
+  assert.equal(missingEscalationTriggerReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(missingEscalationTriggerReport.reviewSections.some((section) => section.reason === "triggerList:needs_verification"));
+
+  const mismatchedEscalationThresholdReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    ratingEscalationPolicies: [
+      {
+        ...completePolicyBundleFixtures().ratingEscalationPolicies[0],
+        lowClarityThreshold: 0.4,
+        initialOverallSpreadThreshold: 0.4,
+        serviceLevelByTrigger: {
+          ...ratingEscalationServiceLevels,
+          hidden_status_routing: "unsupported",
+        },
+      },
+    ],
+  });
+  assert.equal(mismatchedEscalationThresholdReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(mismatchedEscalationThresholdReport.reviewSections.some((section) => section.reason === "lowClarityThreshold:0.5"));
+  assert.ok(mismatchedEscalationThresholdReport.reviewSections.some((section) => section.reason === "initialOverallSpreadThreshold:0.35"));
+  assert.ok(
+    mismatchedEscalationThresholdReport.reviewSections.some((section) => section.reason === "serviceLevelByTrigger:unexpected:hidden_status_routing"),
+  );
 });
 
 test("score explanation triggers include surprising score flags", () => {
@@ -7816,7 +7890,89 @@ test("submitted label, corpus, training, and export manifests are checked agains
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
           targetLabelVersion: "initial_mean",
           targetFields: ["overall", "centrality_x_strength"],
+          exportKind: "model_improvement_training_export",
           promptTrackExposurePolicy: "project_full_rubric_training",
+          pairwiseComparisonSnapshotId: `training-pairwise-${releaseId}`,
+          pairwiseComparisonSnapshotStatus: "computed_pairwise_snapshot_used",
+          labelUncertaintyDownweightingPolicy: "preserve_label_uncertainty_and_downweight_high_uncertainty_labels",
+          pairwiseMarginThresholdPolicy: "pairwise_margin_threshold_0_20_with_continuous_weights",
+          lowMarginHandlingPolicy: "low_margin_pairs_retained_with_downweighting_and_flags",
+          humanTargetTiePolicy: "human_ties_excluded_from_pairwise_preferences",
+          modelPredictionIndifferencePolicy: "model_indifference_costs_half_margin",
+          lowClarityPolicy: "low_clarity_rows_keep_clarity_and_overall_with_provisional_subscores",
+          rationaleInclusionPolicy: "rationales_included_only_when_rights_and_release_policy_allow",
+          promptExampleContaminationCheck: "protected_and_hidden_prompt_examples_excluded_from_training_export",
+          releaseRightsEligibilitySummary: "rights_cleared_public_train_only",
+          itemTextVersionHashManifest: {
+            itemTextVersionIds: ["ctv-ai-base-rate-v1", "ctv-ai-generic-v1", "ptv-ai-prior-v1"],
+            rows: [
+              {
+                itemId: "pos-ai-prior::crit-ai-base-rate",
+                positionId: "pos-ai-prior",
+                critiqueId: "crit-ai-base-rate",
+                positionTextVersionId: "ptv-ai-prior-v1",
+                critiqueTextVersionId: "ctv-ai-base-rate-v1",
+                positionCanonicalHash: "sha256:ptv-ai-prior-v1:canonical",
+                critiqueCanonicalHash: "sha256:ctv-ai-base-rate-v1:canonical",
+              },
+              {
+                itemId: "pos-ai-prior::crit-ai-generic",
+                positionId: "pos-ai-prior",
+                critiqueId: "crit-ai-generic",
+                positionTextVersionId: "ptv-ai-prior-v1",
+                critiqueTextVersionId: "ctv-ai-generic-v1",
+                positionCanonicalHash: "sha256:ptv-ai-prior-v1:canonical",
+                critiqueCanonicalHash: "sha256:ctv-ai-generic-v1:canonical",
+              },
+            ],
+          },
+          ratingContextSnapshotManifest: {
+            snapshotIds: ["rc-target-only-1", "rc-target-only-ai-generic"],
+            rows: [
+              {
+                id: "rc-target-only-1",
+                positionId: "pos-ai-prior",
+                policy: "target_only",
+                visibleCritiqueIds: ["crit-ai-base-rate"],
+                priorSiblingCritiqueIds: [],
+                orderPolicy: "single_target_no_sibling_context",
+                siblingExposurePattern: "none",
+                humanModelParityStatus: "matchable_target_only",
+              },
+              {
+                id: "rc-target-only-ai-generic",
+                positionId: "pos-ai-prior",
+                policy: "target_only",
+                visibleCritiqueIds: ["crit-ai-generic"],
+                priorSiblingCritiqueIds: [],
+                orderPolicy: "single_target_no_sibling_context",
+                siblingExposurePattern: "none",
+                humanModelParityStatus: "matchable_target_only",
+              },
+            ],
+          },
+          labelMetadataManifest: {
+            rows: [
+              {
+                itemId: "pos-ai-prior::crit-ai-base-rate",
+                labelStatus: "initial_only",
+                raterCount: 2,
+                expertCount: 2,
+                spreadPreDiscussion: 0.04,
+                spreadPostDiscussion: 0.04,
+                unresolvedDisagreementClass: "none_recorded",
+              },
+              {
+                itemId: "pos-ai-prior::crit-ai-generic",
+                labelStatus: "initial_only",
+                raterCount: 1,
+                expertCount: 1,
+                spreadPreDiscussion: 0,
+                spreadPostDiscussion: 0,
+                unresolvedDisagreementClass: "review_before_training",
+              },
+            ],
+          },
           positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
           positionBalancedWeighting: {
             policy: "average_or_sample_within_position_before_cross_position_training_weighting",
@@ -7825,6 +7981,8 @@ test("submitted label, corpus, training, and export manifests are checked agains
             pairwiseRowsByPosition: { "pos-ai-prior": 1 },
             pointwiseWeightSumByPosition: { "pos-ai-prior": 1 },
           },
+          createdBy: "release-artifact-admin",
+          timestamp: "2026-10-01T00:00:00.000Z",
         },
       ],
       exportManifests: [
@@ -7848,6 +8006,18 @@ test("submitted label, corpus, training, and export manifests are checked agains
   assert.equal(report.releaseArtifactEvidence.trainingExportEvidence.status, "submitted_training_export_preserves_current_release_policy");
   assert.equal(
     report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "positionBalancedWeighting.status").status,
+    "matches",
+  );
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "itemTextVersionHashManifest").status,
+    "matches",
+  );
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "ratingContextSnapshotManifest").status,
+    "matches",
+  );
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "labelMetadataManifest").status,
     "matches",
   );
   assert.equal(report.releaseArtifactEvidence.exportManifestEvidence.status, "submitted_public_export_manifest_preserves_current_release_policy");

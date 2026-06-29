@@ -9,6 +9,13 @@ import {
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
+  RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD,
+  RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT,
+  RATING_ESCALATION_LOW_CLARITY_THRESHOLD,
+  RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD,
+  RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
+  RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
+  RATING_ESCALATION_TRIGGER_RULES,
   RUBRIC_DIMENSIONS,
   SANITY_BASELINE_TYPES,
   SCORE_CONFIDENCE_LEVELS,
@@ -2725,6 +2732,41 @@ const workflowWriteEndpoints = [
       qaRoutingPolicy: ["qa"],
     },
   }),
+  workflowWriteSpec(/^\/api\/v1\/rating-escalation-policies$/, "rating_escalation_policy_submitted", "ratingEscalationPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "protectedStatusBlindRoutingCopy",
+      "lmcaSourceBoundary",
+      "createdBy",
+      "frozenAt",
+      "timestamp",
+    ],
+    requiredNonEmptyArrayFields: ["triggerList"],
+    requiredObjectFields: ["serviceLevelByTrigger"],
+    requiredArrayIncludes: {
+      triggerList: RATING_ESCALATION_TRIGGER_RULES,
+    },
+    allowedArrayValues: {
+      triggerList: RATING_ESCALATION_TRIGGER_RULES,
+    },
+    requiredObjectKeys: {
+      serviceLevelByTrigger: RATING_ESCALATION_TRIGGER_RULES,
+    },
+    requiredExactFields: {
+      lowClarityThreshold: RATING_ESCALATION_LOW_CLARITY_THRESHOLD,
+      lowClarityAdjudicationCount: RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT,
+      initialOverallSpreadThreshold: RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD,
+      centralityStrengthProductSpreadThreshold: RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
+      correctnessSpreadThreshold: RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD,
+      postDiscussionMaxSpreadTarget: RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
+    },
+    requiredStringIncludesAny: {
+      protectedStatusBlindRoutingCopy: ["workflow", "policy"],
+      lmcaSourceBoundary: ["project", "default"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/ui-experiment-policies$/, "ui_experiment_policy_submitted", "uiExperimentPolicy", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -3842,6 +3884,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/visibility-policies\/(?<id>[^/]+)$/, "visibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rating-workflow-profiles\/(?<id>[^/]+)$/, "ratingWorkflowProfile", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/score-explanation-policies\/(?<id>[^/]+)$/, "scoreExplanationPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rating-escalation-policies\/(?<id>[^/]+)$/, "ratingEscalationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ui-experiment-policies\/(?<id>[^/]+)$/, "uiExperimentPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/pre-submit-assist-policies\/(?<id>[^/]+)$/, "preSubmitAssistPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/accessibility-conformance-reports\/(?<id>[^/]+)$/, "accessibilityConformanceReport", adminAuditRoles),
@@ -4646,14 +4689,51 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
       route: "/api/v1/training-exports",
       policyActionKind: "training_export",
       phaseGateLaneKind: "export_path",
-      requiredFields: ["id", "releaseId", "sourceLabelSnapshotId", "targetLabelVersion", "positionBalancedWeightingPolicy", "createdBy"],
+      requiredFields: [
+        "id",
+        "releaseId",
+        "exportKind",
+        "sourceLabelSnapshotId",
+        "targetLabelVersion",
+        "promptTrackExposurePolicy",
+        "pairwiseComparisonSnapshotId",
+        "pairwiseComparisonSnapshotStatus",
+        "positionBalancedWeightingPolicy",
+        "labelUncertaintyDownweightingPolicy",
+        "pairwiseMarginThresholdPolicy",
+        "lowMarginHandlingPolicy",
+        "humanTargetTiePolicy",
+        "modelPredictionIndifferencePolicy",
+        "lowClarityPolicy",
+        "rationaleInclusionPolicy",
+        "promptExampleContaminationCheck",
+        "releaseRightsEligibilitySummary",
+        "createdBy",
+        "timestamp",
+      ],
       requiredNonEmptyArrayFields: ["sourceSplits", "excludedProtectedSplits", "targetFields"],
-      requiredObjectFields: ["positionBalancedWeighting"],
+      requiredObjectFields: ["positionBalancedWeighting", "itemTextVersionHashManifest", "ratingContextSnapshotManifest", "labelMetadataManifest"],
       requiredObjectKeys: {
         positionBalancedWeighting: ["policy", "status", "pointwiseRowsByPosition", "pairwiseRowsByPosition", "pointwiseWeightSumByPosition"],
+        itemTextVersionHashManifest: ["itemTextVersionIds", "rows"],
+        ratingContextSnapshotManifest: ["snapshotIds", "rows"],
+        labelMetadataManifest: ["rows"],
       },
       requiredArrayIncludes: {
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+      },
+      requiredStringIncludes: {
+        labelUncertaintyDownweightingPolicy: ["uncertainty"],
+        pairwiseMarginThresholdPolicy: ["margin"],
+        lowMarginHandlingPolicy: ["low", "margin"],
+        humanTargetTiePolicy: ["tie"],
+        lowClarityPolicy: ["clarity"],
+        rationaleInclusionPolicy: ["rationale"],
+        releaseRightsEligibilitySummary: ["rights"],
+      },
+      requiredStringIncludesAny: {
+        modelPredictionIndifferencePolicy: ["indifference", "tie"],
+        promptExampleContaminationCheck: ["protected", "hidden"],
       },
     });
     if (persisted) return;
@@ -6502,6 +6582,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const visibilityPolicies = latestWorkflowResources(workflowEvents, "visibilityPolicy");
   const ratingWorkflowProfiles = latestWorkflowResources(workflowEvents, "ratingWorkflowProfile");
   const scoreExplanationPolicies = latestWorkflowResources(workflowEvents, "scoreExplanationPolicy");
+  const ratingEscalationPolicies = latestWorkflowResources(workflowEvents, "ratingEscalationPolicy");
   const uiExperimentPolicies = latestWorkflowResources(workflowEvents, "uiExperimentPolicy");
   const preSubmitAssistPolicies = latestWorkflowResources(workflowEvents, "preSubmitAssistPolicy");
   const accessibilityConformanceReports = latestWorkflowResources(workflowEvents, "accessibilityConformanceReport");
@@ -6661,6 +6742,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     visibilityPolicies,
     ratingWorkflowProfiles,
     scoreExplanationPolicies,
+    ratingEscalationPolicies,
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,
@@ -6817,6 +6899,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     visibilityPolicies,
     ratingWorkflowProfiles,
     scoreExplanationPolicies,
+    ratingEscalationPolicies,
     uiExperimentPolicies,
     preSubmitAssistPolicies,
     accessibilityConformanceReports,

@@ -2620,29 +2620,133 @@ function normalizeSubmittedRevisionRecord(record, ratingById) {
   };
 }
 
-export function detectEscalations(ratings) {
+export const RATING_ESCALATION_TRIGGER_RULES = [
+  "low_clarity_single",
+  "low_clarity_two_or_more",
+  "overall_spread",
+  "centrality_strength_product_spread",
+  "correctness_spread",
+  "insufficient_topic_expertise",
+  "needs_verification",
+  "zero_correctness_nonzero_strength",
+  "nonclarity_provisional_with_clarity_gte_threshold",
+  "correctness_not_assessable_with_clarity_gte_threshold",
+  "materially_different_plausible_interpretations",
+  "vague_good_objection_gesture",
+  "clearly_unsatisfactory_imprecision",
+  "background_knowledge_dispute",
+];
+
+export const RATING_ESCALATION_LOW_CLARITY_THRESHOLD = 0.5;
+export const RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT = 2;
+export const RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD = 0.35;
+export const RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD = 0.3;
+export const RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD = 0.35;
+export const RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET = 0.3;
+
+export function defaultRatingEscalationPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `rating-escalation-policy-${releaseId}`,
+    policyVersion: "rating-escalation-policy-rlhf90-v1",
+    triggerList: RATING_ESCALATION_TRIGGER_RULES,
+    lowClarityThreshold: RATING_ESCALATION_LOW_CLARITY_THRESHOLD,
+    lowClarityAdjudicationCount: RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT,
+    initialOverallSpreadThreshold: RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD,
+    centralityStrengthProductSpreadThreshold: RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
+    correctnessSpreadThreshold: RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD,
+    postDiscussionMaxSpreadTarget: RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
+    serviceLevelByTrigger: {
+      low_clarity_single: "enter_low_clarity_workflow_expert_review_before_hidden_benchmark_eligibility",
+      low_clarity_two_or_more: "auto_escalate_to_adjudication",
+      overall_spread: "auto_escalate_to_adjudication_before_release",
+      centrality_strength_product_spread: "auto_escalate_to_adjudication_before_release",
+      correctness_spread: "route_to_correctness_review_escalate_if_unresolved",
+      insufficient_topic_expertise: "route_to_topic_fit_review_or_expert_reassignment",
+      needs_verification: "create_or_link_verification_record_block_release_until_resolved_or_not_practicable",
+      zero_correctness_nonzero_strength: "route_to_rubric_consistency_review_no_auto_correction",
+      nonclarity_provisional_with_clarity_gte_threshold: "route_to_completion_consistency_review",
+      correctness_not_assessable_with_clarity_gte_threshold: "route_to_rubric_consistency_review_or_adjudicated_exception",
+      materially_different_plausible_interpretations: "auto_escalate_to_interpretation_adjudication",
+      vague_good_objection_gesture: "route_to_expert_review_do_not_steelman_missing_reasoning",
+      clearly_unsatisfactory_imprecision: "preserve_low_quality_diagnosis_escalate_release_critical_only",
+      background_knowledge_dispute: "route_to_topic_expert_review_when_background_assumption_disputed",
+    },
+    protectedStatusBlindRoutingCopy: "Generic workflow policy requires additional review for this item.",
+    lmcaSourceBoundary: "numeric_thresholds_are_project_defaults_not_lmca_source_stated_rules",
+    createdBy: "seed-policy-admin",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+    timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+export function detectEscalations(ratings, escalationPolicy = defaultRatingEscalationPolicy("runtime")) {
+  const policy = normalizeRuntimeRatingEscalationPolicy(escalationPolicy);
   const triggers = [];
-  if (ratings.some((rating) => value(rating, "clarity") !== null && value(rating, "clarity") < 0.5)) triggers.push("low clarity workflow required");
-  if (ratings.filter((rating) => (value(rating, "clarity") ?? 1) < 0.5).length >= 2) triggers.push("two or more raters gave clarity below 0.5");
+  if (ratings.some((rating) => value(rating, "clarity") !== null && value(rating, "clarity") < policy.lowClarityThreshold)) triggers.push("low clarity workflow required");
+  if (ratings.filter((rating) => (value(rating, "clarity") ?? 1) < policy.lowClarityThreshold).length >= policy.lowClarityAdjudicationCount) {
+    triggers.push(`two or more raters gave clarity below ${policy.lowClarityThreshold}`);
+  }
   const overallSpread = spread(ratings, "overall");
-  if (overallSpread !== null && overallSpread > 0.35) triggers.push("initial overall score spread above 0.35");
+  if (overallSpread !== null && overallSpread > policy.initialOverallSpreadThreshold) {
+    triggers.push(`initial overall score spread above ${formatThreshold(policy.initialOverallSpreadThreshold)}`);
+  }
   const productSpread = centralityStrengthSpread(ratings);
-  if (productSpread !== null && productSpread > 0.3) triggers.push("centrality * strength spread above 0.30");
+  if (productSpread !== null && productSpread > policy.centralityStrengthProductSpreadThreshold) {
+    triggers.push(`centrality * strength spread above ${formatThreshold(policy.centralityStrengthProductSpreadThreshold)}`);
+  }
   const correctnessSpread = spread(ratings, "correctness");
-  if (correctnessSpread !== null && correctnessSpread > 0.35) triggers.push("correctness spread above 0.35");
-  if (ratings.some((rating) => rating.flags.insufficientTopicExpertise)) triggers.push("topic-fit review required");
-  if (ratings.some((rating) => rating.flags.needsVerification)) triggers.push("correctness verification record required");
+  if (correctnessSpread !== null && correctnessSpread > policy.correctnessSpreadThreshold) {
+    triggers.push(`correctness spread above ${formatThreshold(policy.correctnessSpreadThreshold)}`);
+  }
+  if (ratings.some((rating) => rating.flags?.insufficientTopicExpertise)) triggers.push("topic-fit review required");
+  if (ratings.some((rating) => rating.flags?.needsVerification)) triggers.push("correctness verification record required");
   if (ratings.some((rating) => value(rating, "correctness") === 0 && (value(rating, "strength") ?? 0) > 0)) triggers.push("zero correctness with nonzero strength consistency review");
   if (
     ratings.some(
       (rating) =>
-        (value(rating, "clarity") ?? 0) >= 0.5 &&
-        rating.provisionalDimensions.some((dimension) => dimension !== "clarity" && dimension !== "overall"),
+        (value(rating, "clarity") ?? 0) >= policy.lowClarityThreshold &&
+        (rating.provisionalDimensions ?? []).some((dimension) => dimension !== "clarity" && dimension !== "overall"),
     )
   ) {
     triggers.push("non-clarity provisional fields with clarity >= 0.5");
   }
+  if (
+    ratings.some(
+      (rating) => rating.flags?.correctnessNotAssessableDueToClarity === true && (value(rating, "clarity") ?? 0) >= policy.lowClarityThreshold,
+    )
+  ) {
+    triggers.push("correctness not assessable due to clarity with clarity >= 0.5");
+  }
+  if (ratings.some((rating) => rating.flags?.materiallyDifferentPlausibleInterpretations === true || rating.flags?.interpretationDispute === true)) {
+    triggers.push("materially different plausible interpretations require adjudication");
+  }
+  if (ratings.some((rating) => rating.flags?.vagueGoodObjectionGesture === true)) {
+    triggers.push("vague good-objection gesture requires expert review");
+  }
+  if (ratings.some((rating) => rating.flags?.clearlyUnsatisfactoryDueToImprecision === true)) {
+    triggers.push("clearly unsatisfactory imprecision retained as review diagnosis");
+  }
+  if (ratings.some((rating) => rating.flags?.backgroundKnowledgeNote === true || rating.flags?.backgroundKnowledgeDispute === true)) {
+    triggers.push("background-knowledge assumption requires topic review");
+  }
   return triggers;
+}
+
+function normalizeRuntimeRatingEscalationPolicy(policy = {}) {
+  return {
+    lowClarityThreshold: numberOrDefault(policy.lowClarityThreshold, RATING_ESCALATION_LOW_CLARITY_THRESHOLD),
+    lowClarityAdjudicationCount: numberOrDefault(policy.lowClarityAdjudicationCount, RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT),
+    initialOverallSpreadThreshold: numberOrDefault(policy.initialOverallSpreadThreshold, RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD),
+    centralityStrengthProductSpreadThreshold: numberOrDefault(
+      policy.centralityStrengthProductSpreadThreshold,
+      RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
+    ),
+    correctnessSpreadThreshold: numberOrDefault(policy.correctnessSpreadThreshold, RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD),
+  };
+}
+
+function formatThreshold(value) {
+  return Number(value).toFixed(2);
 }
 
 export const SCORE_CONFIDENCE_LEVELS = ["low", "medium", "high"];
@@ -10290,9 +10394,20 @@ function buildLeaderboardModelRunProvenanceSummary(runs = [], options = {}) {
 }
 
 function stableJsonKey(value) {
-  if (Array.isArray(value)) return JSON.stringify(value);
-  if (value && typeof value === "object") return JSON.stringify(Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right))));
-  return typeof value === "string" && value ? value : null;
+  if (value === undefined || value === null || value === "") return null;
+  return JSON.stringify(stableJsonValue(value));
+}
+
+function stableJsonValue(value) {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, stableJsonValue(entry)]),
+    );
+  }
+  return value;
 }
 
 function promptExampleCheckPasses(check = {}) {
@@ -12100,14 +12215,43 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
   const excludedProtectedSplits = submitted?.excludedProtectedSplits ?? [];
   const submittedWeighting = submitted?.positionBalancedWeighting ?? submitted?.positionBalancedWeightingSummary ?? {};
   const submittedWeightingPolicy = submitted?.positionBalancedWeightingPolicy ?? submittedWeighting.policy;
+  const submittedPairwiseSnapshotId = submitted?.pairwiseComparisonSnapshotId ?? submitted?.pairwiseComparisonSnapshot?.id;
+  const submittedTimestamp = submitted?.timestamp ?? submitted?.createdAt;
   const checks = [
     requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("exportKind", trainingExport.exportKind, submitted?.exportKind ?? submitted?.kind),
     requiredSetMembershipCheck("sourceLabelSnapshotId", allowedLabelSnapshotIds, sourceLabelSnapshotId),
     requiredArrayIncludesCheck("sourceSplits", trainingExport.protectedSplitPolicy.includedSplits, sourceSplits),
     requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
     requiredManifestCheck("targetLabelVersion", trainingExport.targetLabelVersion, submitted?.targetLabelVersion),
     requiredNonEmptyCheck("targetFields", submitted?.targetFields),
     requiredNonEmptyCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy ?? submitted?.promptTrackExposure),
+    requiredManifestCheck("pairwiseComparisonSnapshotId", trainingExport.pairwiseComparisonSnapshot.id, submittedPairwiseSnapshotId),
+    requiredManifestCheck("pairwiseComparisonSnapshotStatus", trainingExport.pairwiseComparisonSnapshotStatus, submitted?.pairwiseComparisonSnapshotStatus),
+    requiredPolicyIncludesCheck("labelUncertaintyDownweightingPolicy", submitted?.labelUncertaintyDownweightingPolicy, ["uncertainty"]),
+    requiredPolicyIncludesCheck("pairwiseMarginThresholdPolicy", submitted?.pairwiseMarginThresholdPolicy, ["margin"]),
+    requiredPolicyIncludesCheck("lowMarginHandlingPolicy", submitted?.lowMarginHandlingPolicy, ["low", "margin"]),
+    requiredPolicyIncludesCheck("humanTargetTiePolicy", submitted?.humanTargetTiePolicy, ["tie"]),
+    requiredPolicyIncludesAnyCheck("modelPredictionIndifferencePolicy", submitted?.modelPredictionIndifferencePolicy, ["indifference", "tie"]),
+    requiredPolicyIncludesCheck("lowClarityPolicy", submitted?.lowClarityPolicy, ["clarity"]),
+    requiredPolicyIncludesCheck("rationaleInclusionPolicy", submitted?.rationaleInclusionPolicy, ["rationale"]),
+    requiredPolicyIncludesAnyCheck("promptExampleContaminationCheck", submitted?.promptExampleContaminationCheck, ["protected", "hidden"]),
+    requiredPolicyIncludesCheck("releaseRightsEligibilitySummary", submitted?.releaseRightsEligibilitySummary, ["rights"]),
+    requiredStructuredManifestCheck(
+      "itemTextVersionHashManifest",
+      trainingExportItemTextVersionHashManifest(trainingExport),
+      submitted?.itemTextVersionHashManifest,
+    ),
+    requiredStructuredManifestCheck(
+      "ratingContextSnapshotManifest",
+      trainingExportRatingContextSnapshotManifest(trainingExport),
+      submitted?.ratingContextSnapshotManifest,
+    ),
+    requiredStructuredManifestCheck(
+      "labelMetadataManifest",
+      trainingExportLabelMetadataManifest(trainingExport),
+      submitted?.labelMetadataManifest,
+    ),
     requiredManifestCheck("positionBalancedWeightingPolicy", trainingExport.positionBalancedWeighting.policy, submittedWeightingPolicy),
     requiredManifestCheck("positionBalancedWeighting.status", trainingExport.positionBalancedWeighting.status, submittedWeighting.status),
     requiredStructuredManifestCheck(
@@ -12125,8 +12269,64 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
       trainingExport.positionBalancedWeighting.pointwiseWeightSumByPosition,
       submittedWeighting.pointwiseWeightSumByPosition,
     ),
+    requiredNonEmptyCheck("createdBy", submitted?.createdBy),
+    requiredNonEmptyCheck("timestamp", submittedTimestamp),
   ];
   return releaseArtifactEvidenceRow("training_export", submitted, checks, "submitted_training_export_preserves_current_release_policy");
+}
+
+function trainingExportItemTextVersionHashManifest(trainingExport) {
+  const rows = [...(trainingExport.pointwiseExamples ?? [])]
+    .sort((left, right) => String(left.itemId).localeCompare(String(right.itemId)))
+    .map((example) => ({
+      itemId: example.itemId,
+      positionId: example.positionId,
+      critiqueId: example.critiqueId,
+      positionTextVersionId: example.positionTextVersionId,
+      critiqueTextVersionId: example.critiqueTextVersionId,
+      positionCanonicalHash: example.positionCanonicalHash,
+      critiqueCanonicalHash: example.critiqueCanonicalHash,
+    }));
+  return {
+    itemTextVersionIds: uniqueStrings(rows.flatMap((row) => [row.positionTextVersionId, row.critiqueTextVersionId])).sort((left, right) =>
+      left.localeCompare(right),
+    ),
+    rows,
+  };
+}
+
+function trainingExportRatingContextSnapshotManifest(trainingExport) {
+  const rows = [...(trainingExport.ratingContextSnapshots ?? [])]
+    .sort((left, right) => String(left.id).localeCompare(String(right.id)))
+    .map((snapshot) => ({
+      id: snapshot.id,
+      positionId: snapshot.positionId,
+      policy: snapshot.policy,
+      visibleCritiqueIds: normalizeStringArray(snapshot.visibleCritiqueIds) ?? [],
+      priorSiblingCritiqueIds: normalizeStringArray(snapshot.priorSiblingCritiqueIds) ?? [],
+      orderPolicy: snapshot.orderPolicy,
+      siblingExposurePattern: snapshot.siblingExposurePattern,
+      humanModelParityStatus: snapshot.humanModelParityStatus,
+    }));
+  return {
+    snapshotIds: rows.map((row) => row.id),
+    rows,
+  };
+}
+
+function trainingExportLabelMetadataManifest(trainingExport) {
+  const rows = [...(trainingExport.pointwiseExamples ?? [])]
+    .sort((left, right) => String(left.itemId).localeCompare(String(right.itemId)))
+    .map((example) => ({
+      itemId: example.itemId,
+      labelStatus: example.labelStatus,
+      raterCount: example.raterCount,
+      expertCount: example.expertCount,
+      spreadPreDiscussion: Number.isFinite(example.uncertainty?.spreadPreDiscussion) ? round(example.uncertainty.spreadPreDiscussion) : null,
+      spreadPostDiscussion: Number.isFinite(example.uncertainty?.spreadPostDiscussion) ? round(example.uncertainty.spreadPostDiscussion) : null,
+      unresolvedDisagreementClass: example.uncertainty?.uncertaintyFlag ? "review_before_training" : "none_recorded",
+    }));
+  return { rows };
 }
 
 function submittedExportManifestEvidence(releaseId, publicExportManifest, labelSnapshotEvidence, submitted) {
@@ -14585,6 +14785,9 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
   const submittedScoreExplanationRows = (options.scoreExplanationPolicies ?? [])
     .map((policy) => normalizeScoreExplanationPolicy(policy, "submitted_workflow_score_explanation_policy"))
     .filter(Boolean);
+  const submittedEscalationRows = (options.ratingEscalationPolicies ?? [])
+    .map((policy) => normalizeRatingEscalationPolicy(policy, "submitted_workflow_rating_escalation_policy"))
+    .filter(Boolean);
   const submittedUiPolicyRows = (options.uiExperimentPolicies ?? []).map((policy) => normalizeUIExperimentPolicy(policy, "submitted_workflow_ui_experiment_policy")).filter(Boolean);
   const submittedAssistRows = (options.preSubmitAssistPolicies ?? []).map((policy) => normalizePreSubmitAssistPolicy(policy, "submitted_workflow_pre_submit_assist_policy")).filter(Boolean);
   const submittedAccessibilityRows = (options.accessibilityConformanceReports ?? [])
@@ -14593,6 +14796,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
   const seedVisibilityRows = [normalizeVisibilityPolicy(defaultVisibilityPolicy(releaseId), "seed_visibility_policy")];
   const seedProfileRows = [normalizeRatingWorkflowProfile(defaultRatingWorkflowProfile(releaseId), "seed_rating_workflow_profile")];
   const seedScoreExplanationRows = [normalizeScoreExplanationPolicy(defaultScoreExplanationPolicy(releaseId), "seed_score_explanation_policy")];
+  const seedEscalationRows = [normalizeRatingEscalationPolicy(defaultRatingEscalationPolicy(releaseId), "seed_rating_escalation_policy")];
   const seedUiPolicyRows = [normalizeUIExperimentPolicy(defaultUIExperimentPolicy(releaseId), "seed_ui_experiment_policy")];
   const seedAssistRows = [normalizePreSubmitAssistPolicy(defaultPreSubmitAssistPolicy(releaseId), "seed_pre_submit_assist_policy")];
   const seedAccessibilityRows = [normalizeAccessibilityConformanceReport(defaultAccessibilityConformanceReport(releaseId), "seed_accessibility_conformance_report")];
@@ -14600,6 +14804,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     ["visibility_policy", submittedVisibilityRows.length ? submittedVisibilityRows : seedVisibilityRows],
     ["rating_workflow_profile", submittedProfileRows.length ? submittedProfileRows : seedProfileRows],
     ["score_explanation_policy", submittedScoreExplanationRows.length ? submittedScoreExplanationRows : seedScoreExplanationRows],
+    ["rating_escalation_policy", submittedEscalationRows.length ? submittedEscalationRows : seedEscalationRows],
     ["ui_experiment_policy", submittedUiPolicyRows.length ? submittedUiPolicyRows : seedUiPolicyRows],
     ["pre_submit_assist_policy", submittedAssistRows.length ? submittedAssistRows : seedAssistRows],
     ["accessibility_conformance_report", submittedAccessibilityRows.length ? submittedAccessibilityRows : seedAccessibilityRows],
@@ -14608,6 +14813,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     ...submittedVisibilityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "visibility_policy", artifactId: row.id, reason }))),
     ...submittedProfileRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rating_workflow_profile", artifactId: row.id, reason }))),
     ...submittedScoreExplanationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_explanation_policy", artifactId: row.id, reason }))),
+    ...submittedEscalationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rating_escalation_policy", artifactId: row.id, reason }))),
     ...submittedUiPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "ui_experiment_policy", artifactId: row.id, reason }))),
     ...submittedAssistRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "pre_submit_assist_policy", artifactId: row.id, reason }))),
     ...submittedAccessibilityRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "accessibility_conformance_report", artifactId: row.id, reason }))),
@@ -14619,6 +14825,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     submittedVisibilityRows.length > 0 &&
     submittedProfileRows.length > 0 &&
     submittedScoreExplanationRows.length > 0 &&
+    submittedEscalationRows.length > 0 &&
     submittedUiPolicyRows.length > 0 &&
     submittedAssistRows.length > 0 &&
     submittedAccessibilityRows.length > 0 &&
@@ -14637,6 +14844,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     visibilityPolicyRows: [...seedVisibilityRows, ...submittedVisibilityRows],
     ratingWorkflowProfileRows: [...seedProfileRows, ...submittedProfileRows],
     scoreExplanationPolicyRows: [...seedScoreExplanationRows, ...submittedScoreExplanationRows],
+    ratingEscalationPolicyRows: [...seedEscalationRows, ...submittedEscalationRows],
     uiExperimentPolicyRows: [...seedUiPolicyRows, ...submittedUiPolicyRows],
     preSubmitAssistPolicyRows: [...seedAssistRows, ...submittedAssistRows],
     accessibilityConformanceRows: [...seedAccessibilityRows, ...submittedAccessibilityRows],
@@ -14644,6 +14852,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
       submittedVisibilityPolicyCount: submittedVisibilityRows.length,
       submittedRatingWorkflowProfileCount: submittedProfileRows.length,
       submittedScoreExplanationPolicyCount: submittedScoreExplanationRows.length,
+      submittedRatingEscalationPolicyCount: submittedEscalationRows.length,
       submittedUiExperimentPolicyCount: submittedUiPolicyRows.length,
       submittedPreSubmitAssistPolicyCount: submittedAssistRows.length,
       submittedAccessibilityConformanceReportCount: submittedAccessibilityRows.length,
@@ -14847,6 +15056,74 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
     timestamp: policy.timestamp ?? null,
     reviewReasons,
     status: reviewReasons.length ? "score_explanation_policy_review_required" : "score_explanation_policy_complete",
+  };
+}
+
+function normalizeRatingEscalationPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.ratingEscalationPolicyId;
+  if (!id) return null;
+  const triggerList = normalizeStringArray(policy.triggerList ?? policy.triggers);
+  const missingTriggers = RATING_ESCALATION_TRIGGER_RULES.filter((trigger) => !triggerList.includes(trigger));
+  const unexpectedTriggers = triggerList.filter((trigger) => !RATING_ESCALATION_TRIGGER_RULES.includes(trigger));
+  const serviceLevelByTrigger =
+    policy.serviceLevelByTrigger && typeof policy.serviceLevelByTrigger === "object" && !Array.isArray(policy.serviceLevelByTrigger)
+      ? policy.serviceLevelByTrigger
+      : {};
+  const missingServiceLevelTriggers = RATING_ESCALATION_TRIGGER_RULES.filter(
+    (trigger) => typeof serviceLevelByTrigger[trigger] !== "string" || !serviceLevelByTrigger[trigger].trim(),
+  );
+  const unexpectedServiceLevelTriggers = Object.keys(serviceLevelByTrigger).filter((trigger) => !RATING_ESCALATION_TRIGGER_RULES.includes(trigger));
+  const reviewReasons = [
+    requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    missingTriggers.length ? `triggerList:${missingTriggers.join(",")}` : null,
+    unexpectedTriggers.length ? `triggerList:unexpected:${unexpectedTriggers.join(",")}` : null,
+    policy.lowClarityThreshold === RATING_ESCALATION_LOW_CLARITY_THRESHOLD
+      ? null
+      : `lowClarityThreshold:${RATING_ESCALATION_LOW_CLARITY_THRESHOLD}`,
+    policy.lowClarityAdjudicationCount === RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT
+      ? null
+      : `lowClarityAdjudicationCount:${RATING_ESCALATION_LOW_CLARITY_ADJUDICATION_COUNT}`,
+    policy.initialOverallSpreadThreshold === RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD
+      ? null
+      : `initialOverallSpreadThreshold:${RATING_ESCALATION_OVERALL_SPREAD_THRESHOLD}`,
+    policy.centralityStrengthProductSpreadThreshold === RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD
+      ? null
+      : `centralityStrengthProductSpreadThreshold:${RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD}`,
+    policy.correctnessSpreadThreshold === RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD
+      ? null
+      : `correctnessSpreadThreshold:${RATING_ESCALATION_CORRECTNESS_SPREAD_THRESHOLD}`,
+    policy.postDiscussionMaxSpreadTarget === RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET
+      ? null
+      : `postDiscussionMaxSpreadTarget:${RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET}`,
+    missingServiceLevelTriggers.length ? `serviceLevelByTrigger:${missingServiceLevelTriggers.join(",")}` : null,
+    unexpectedServiceLevelTriggers.length ? `serviceLevelByTrigger:unexpected:${unexpectedServiceLevelTriggers.join(",")}` : null,
+    policyMentions(policy.protectedStatusBlindRoutingCopy, ["workflow", "policy"]) ? null : "protectedStatusBlindRoutingCopy",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "default"]) ? null : "lmcaSourceBoundary",
+    requiredPromptFieldReason("createdBy", policy.createdBy ?? policy.created_by),
+    requiredPromptFieldReason("timestamp", policy.timestamp),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    triggerList,
+    missingTriggers,
+    unexpectedTriggers,
+    lowClarityThreshold: policy.lowClarityThreshold ?? null,
+    lowClarityAdjudicationCount: policy.lowClarityAdjudicationCount ?? null,
+    initialOverallSpreadThreshold: policy.initialOverallSpreadThreshold ?? null,
+    centralityStrengthProductSpreadThreshold: policy.centralityStrengthProductSpreadThreshold ?? null,
+    correctnessSpreadThreshold: policy.correctnessSpreadThreshold ?? null,
+    postDiscussionMaxSpreadTarget: policy.postDiscussionMaxSpreadTarget ?? null,
+    serviceLevelByTrigger,
+    missingServiceLevelTriggers,
+    unexpectedServiceLevelTriggers,
+    protectedStatusBlindRoutingCopy: policy.protectedStatusBlindRoutingCopy ?? null,
+    lmcaSourceBoundary: policy.lmcaSourceBoundary ?? null,
+    createdBy: policy.createdBy ?? policy.created_by ?? null,
+    timestamp: policy.timestamp ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rating_escalation_policy_review_required" : "rating_escalation_policy_complete",
   };
 }
 
@@ -20460,6 +20737,7 @@ export function buildOctoberReleaseReport(
     visibilityPolicies: options.visibilityPolicies ?? [],
     ratingWorkflowProfiles: options.ratingWorkflowProfiles ?? [],
     scoreExplanationPolicies: options.scoreExplanationPolicies ?? [],
+    ratingEscalationPolicies: options.ratingEscalationPolicies ?? [],
     uiExperimentPolicies: options.uiExperimentPolicies ?? [],
     preSubmitAssistPolicies: options.preSubmitAssistPolicies ?? [],
     accessibilityConformanceReports: options.accessibilityConformanceReports ?? [],
@@ -20736,6 +21014,7 @@ export function buildOctoberReleaseReport(
       visibilityPolicies: options.visibilityPolicies ?? [],
       ratingWorkflowProfiles: options.ratingWorkflowProfiles ?? [],
       scoreExplanationPolicies: options.scoreExplanationPolicies ?? [],
+      ratingEscalationPolicies: options.ratingEscalationPolicies ?? [],
       uiExperimentPolicies: options.uiExperimentPolicies ?? [],
       preSubmitAssistPolicies: options.preSubmitAssistPolicies ?? [],
       accessibilityConformanceReports: options.accessibilityConformanceReports ?? [],
