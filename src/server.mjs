@@ -21,9 +21,23 @@ import {
   RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
   RATING_ESCALATION_TRIGGER_RULES,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+  RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
+  SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+  SPOT_CHECK_SAMPLING_POLICY_VERSION,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
+  REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
+  REQUIRED_SCORE_CONFIDENCE_BANDS,
+  REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
+  REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
+  REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION,
+  REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM,
+  REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
+  REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
   REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
   REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
@@ -805,6 +819,16 @@ const ratingProtectedSplitExclusions = ["hidden_benchmark", "protected_validatio
 const ratingScoreInputSplits = ["release_critical", "validation", "hidden_benchmark"];
 const draftStorageLanes = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const prohibitedDraftClientPersistence = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
+const raterInstructionCompatibilityPolicyVersion = RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION;
+const raterInstructionCompatibilityClasses = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES;
+const raterInstructionCompatibilityThresholds = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS;
+const raterInstructionCompatibilityRules = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES;
+const raterInstructionSharedPolicyFields = REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS;
+const scoreConfidenceScalePolicyVersion = SCORE_CONFIDENCE_SCALE_POLICY_VERSION;
+const scoreConfidenceScaleVersion = REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION;
+const scoreConfidenceBands = REQUIRED_SCORE_CONFIDENCE_BANDS;
+const scoreConfidenceNumericThresholds = REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS;
+const scoreConfidenceReasonCodes = REQUIRED_SCORE_CONFIDENCE_REASON_CODES;
 const rubricLintRules = [
   "missing_required_score",
   "clarity_branch_consistency",
@@ -974,6 +998,10 @@ const partialTaskExcludedDenominators = [
 const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
 const spotCheckSelectionMethods = ["random", "stratified_random"];
 const spotCheckResultStatuses = ["passed_without_label_change", "routed_to_revision", "routed_to_adjudication", "escalated_quality_issue"];
+const spotCheckSamplingPolicyVersion = SPOT_CHECK_SAMPLING_POLICY_VERSION;
+const spotCheckSamplingStrata = REQUIRED_SPOT_CHECK_SAMPLING_STRATA;
+const spotCheckMinimumRateByStratum = REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM;
+const spotCheckMinimumCountByStratum = REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM;
 const positionClusterExposureSources = [
   "own_rating",
   "peer_score",
@@ -1274,6 +1302,7 @@ const phaseGateUiPanelResourceKeys = new Set([
   "screenFeatureParityCheck",
   "simplifiedCopyPreview",
   "rubricCopyTraceabilityMap",
+  "raterInstructionCompatibilityPolicy",
   "raterInstructionRenderVersion",
   "rubricLintConfig",
   "rubricLintEvent",
@@ -3808,6 +3837,44 @@ const workflowWriteEndpoints = [
       staleDraftDependencyBlocker: true,
     },
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/rater-instruction-compatibility-policies$/,
+    "rater_instruction_compatibility_policy_submitted",
+    "raterInstructionCompatibilityPolicy",
+    adminRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: [
+        "id",
+        "policyVersion",
+        "protectedSplitMergePolicy",
+        "sensitivitySnapshotPolicy",
+        "lmcaSourceBoundary",
+        "frozenAt",
+      ],
+      requiredNonEmptyArrayFields: ["coveredWorkflowSplitClasses", "compatibleRenderClasses", "requiredSharedPolicyFields"],
+      requiredObjectFields: ["thresholds", "compatibilityRules"],
+      requiredArrayIncludes: {
+        coveredWorkflowSplitClasses: ratingScoreInputSplits,
+        compatibleRenderClasses: raterInstructionCompatibilityClasses,
+        requiredSharedPolicyFields: raterInstructionSharedPolicyFields,
+      },
+      requiredObjectKeys: {
+        thresholds: Object.keys(raterInstructionCompatibilityThresholds),
+        compatibilityRules: Object.keys(raterInstructionCompatibilityRules),
+      },
+      requiredStructuredFields: {
+        thresholds: raterInstructionCompatibilityThresholds,
+        compatibilityRules: raterInstructionCompatibilityRules,
+      },
+      requiredExactFields: { policyVersion: raterInstructionCompatibilityPolicyVersion },
+      requiredStringIncludes: {
+        protectedSplitMergePolicy: ["policy", "family"],
+        sensitivitySnapshotPolicy: ["sensitivity", "snapshot"],
+        lmcaSourceBoundary: ["Project", "LMCA"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/rater-instruction-render-versions$/, "rater_instruction_render_version_submitted", "raterInstructionRenderVersion", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -3824,11 +3891,23 @@ const workflowWriteEndpoints = [
       "rubricLintConfigId",
       "accessibilityVisualVariant",
       "uiExperimentPolicyId",
+      "raterInstructionCompatibilityPolicyId",
+      "renderCompatibilityClass",
+      "compatibilityEvidenceStatus",
       "protectedSplitEligibilityPolicy",
+      "sensitivitySnapshotPolicy",
       "frozenAt",
     ],
     requiredStringPrefixes: { renderedRubricAnchorChecksum: "sha256:" },
-    requiredExactFields: { scoreDefaultPolicy: "unset_required" },
+    allowedValues: { renderCompatibilityClass: raterInstructionCompatibilityClasses },
+    requiredStringIncludes: {
+      protectedSplitEligibilityPolicy: ["compatible"],
+      sensitivitySnapshotPolicy: ["sensitivity", "snapshot"],
+    },
+    requiredExactFields: {
+      scoreDefaultPolicy: "unset_required",
+      compatibilityEvidenceStatus: "compatible_review_passed",
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/rubric-lint-configs$/, "rubric_lint_config_submitted", "rubricLintConfig", adminRoles, {
     allowHiddenMetadata: true,
@@ -3923,11 +4002,63 @@ const workflowWriteEndpoints = [
     },
     requireAssignmentClaimField: "assignmentId",
   }),
-  workflowWriteSpec(/^\/api\/v1\/score-confidence-annotations$/, "score_confidence_annotation_submitted", "scoreConfidenceAnnotation", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy", "timestamp"],
-    requiredObjectFields: ["dimensionConfidences"],
-    requiredObjectKeys: { dimensionConfidences: RUBRIC_DIMENSIONS },
+  workflowWriteSpec(/^\/api\/v1\/score-confidence-scale-policies$/, "score_confidence_scale_policy_submitted", "scoreConfidenceScalePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "scaleVersion",
+      "annotationUsePolicy",
+      "lmcaSourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["dimensionCoverage", "confidenceBands", "allowedReasonCodes"],
+    requiredObjectFields: ["numericThresholds"],
+    requiredArrayIncludes: {
+      dimensionCoverage: RUBRIC_DIMENSIONS,
+      confidenceBands: scoreConfidenceBands,
+      allowedReasonCodes: scoreConfidenceReasonCodes,
+    },
+    requiredObjectKeys: {
+      numericThresholds: Object.keys(scoreConfidenceNumericThresholds),
+    },
+    requiredStructuredFields: {
+      numericThresholds: scoreConfidenceNumericThresholds,
+    },
+    requiredStringIncludes: {
+      annotationUsePolicy: ["not", "score"],
+      lmcaSourceBoundary: ["Project", "LMCA"],
+    },
     requiredExactFields: {
+      policyVersion: scoreConfidenceScalePolicyVersion,
+      scaleVersion: scoreConfidenceScaleVersion,
+      excludedFromScoreComputationRequired: true,
+      visibleToPeersBeforeLockRequired: false,
+    },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/score-confidence-annotations$/, "score_confidence_annotation_submitted", "scoreConfidenceAnnotation", ratingWorkflowRoles, {
+    requiredFields: [
+      "id",
+      "scoreConfidenceScalePolicyId",
+      "assignmentId",
+      "ratingId",
+      "raterId",
+      "dimensionConfidences",
+      "confidenceBandByDimension",
+      "reasonCodeByDimension",
+      "scaleVersion",
+      "annotationUsePolicy",
+      "timestamp",
+    ],
+    requiredObjectFields: ["dimensionConfidences", "confidenceBandByDimension", "reasonCodeByDimension"],
+    requiredObjectKeys: {
+      dimensionConfidences: RUBRIC_DIMENSIONS,
+      confidenceBandByDimension: RUBRIC_DIMENSIONS,
+      reasonCodeByDimension: RUBRIC_DIMENSIONS,
+    },
+    requiredStringIncludes: { annotationUsePolicy: ["not", "score"] },
+    requiredExactFields: {
+      scaleVersion: scoreConfidenceScaleVersion,
       excludedFromScoreComputation: true,
       visibleToPeersBeforeLock: false,
     },
@@ -3935,10 +4066,28 @@ const workflowWriteEndpoints = [
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-score-confidences$/, "rater_score_confidence_submitted", "raterScoreConfidence", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "ratingId", "raterId", "dimensionConfidences", "scaleVersion", "annotationUsePolicy", "timestamp"],
-    requiredObjectFields: ["dimensionConfidences"],
-    requiredObjectKeys: { dimensionConfidences: RUBRIC_DIMENSIONS },
+    requiredFields: [
+      "id",
+      "scoreConfidenceScalePolicyId",
+      "assignmentId",
+      "ratingId",
+      "raterId",
+      "dimensionConfidences",
+      "confidenceBandByDimension",
+      "reasonCodeByDimension",
+      "scaleVersion",
+      "annotationUsePolicy",
+      "timestamp",
+    ],
+    requiredObjectFields: ["dimensionConfidences", "confidenceBandByDimension", "reasonCodeByDimension"],
+    requiredObjectKeys: {
+      dimensionConfidences: RUBRIC_DIMENSIONS,
+      confidenceBandByDimension: RUBRIC_DIMENSIONS,
+      reasonCodeByDimension: RUBRIC_DIMENSIONS,
+    },
+    requiredStringIncludes: { annotationUsePolicy: ["not", "score"] },
     requiredExactFields: {
+      scaleVersion: scoreConfidenceScaleVersion,
       excludedFromScoreComputation: true,
       visibleToPeersBeforeLock: false,
     },
@@ -4159,9 +4308,49 @@ const workflowWriteEndpoints = [
     allowedValues: { exposureSource: positionClusterExposureSources },
     requiredStringIncludesAny: { blindEligibilityEffect: ["excluded", "blocked", "non_blind"] },
   }),
+  workflowWriteSpec(/^\/api\/v1\/spot-check-sampling-policies$/, "spot_check_sampling_policy_submitted", "spotCheckSamplingPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: ["id", "policyVersion", "ordinaryRatingStatusRequired", "sampleExclusionRule", "labelMutationRule", "lmcaSourceBoundary", "frozenAt"],
+    requiredNonEmptyArrayFields: ["sampledWorkflowStrata", "samplingDimensions", "selectionMethods"],
+    requiredObjectFields: ["minimumSamplingRateByStratum", "minimumSampleCountByStratum"],
+    requiredArrayIncludes: {
+      sampledWorkflowStrata: spotCheckSamplingStrata,
+      samplingDimensions: spotCheckSamplingDimensions,
+      selectionMethods: spotCheckSelectionMethods,
+    },
+    requiredObjectKeys: {
+      minimumSamplingRateByStratum: Object.keys(spotCheckMinimumRateByStratum),
+      minimumSampleCountByStratum: Object.keys(spotCheckMinimumCountByStratum),
+    },
+    requiredStructuredFields: {
+      minimumSamplingRateByStratum: spotCheckMinimumRateByStratum,
+      minimumSampleCountByStratum: spotCheckMinimumCountByStratum,
+    },
+    requiredExactFields: {
+      policyVersion: spotCheckSamplingPolicyVersion,
+      ordinaryRatingStatusRequired: "apparently_ordinary_non_escalated",
+      excludedFromIndependentRaterCountRequired: true,
+    },
+    requiredStringIncludes: {
+      sampleExclusionRule: ["excluded", "independent"],
+      labelMutationRule: ["not", "mutate"],
+      lmcaSourceBoundary: ["Project", "LMCA"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/spot-checks$/, "spot_check_qa_item_submitted", "spotCheckQaItem", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "samplingStratum", "samplingSeedArtifact", "selectionMethod", "ordinaryRatingStatus", "reviewerId", "reviewerRole", "checkResult", "timestamp"],
+    requiredFields: [
+      "id",
+      "spotCheckSamplingPolicyId",
+      "samplingStratum",
+      "samplingSeedArtifact",
+      "selectionMethod",
+      "ordinaryRatingStatus",
+      "reviewerId",
+      "reviewerRole",
+      "checkResult",
+      "timestamp",
+    ],
     requiredNonEmptyArrayFields: ["itemKeys", "samplingDimensions"],
     requiredArrayIncludes: { samplingDimensions: spotCheckSamplingDimensions },
     allowedArrayValues: { samplingDimensions: spotCheckSamplingDimensions },
@@ -4951,12 +5140,14 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/task-output-eligibility-policies\/(?<id>[^/]+)$/, "taskOutputEligibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/score-input-policies\/(?<id>[^/]+)$/, "scoreInputPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/draft-storage-policies\/(?<id>[^/]+)$/, "draftStoragePolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-instruction-compatibility-policies\/(?<id>[^/]+)$/, "raterInstructionCompatibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-instruction-render-versions\/(?<id>[^/]+)$/, "raterInstructionRenderVersion", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-configs\/(?<id>[^/]+)$/, "rubricLintConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-events\/(?<id>[^/]+)$/, "rubricLintEvent", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/item-issue-quarantine-policies\/(?<id>[^/]+)$/, "itemIssueQuarantinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/item-issues\/(?<id>[^/]+)$/, "itemIssueReport", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-draft-sessions\/(?<id>[^/]+)$/, "ratingDraftSession", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/score-confidence-scale-policies\/(?<id>[^/]+)$/, "scoreConfidenceScalePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/score-confidence-annotations\/(?<id>[^/]+)$/, "scoreConfidenceAnnotation", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rater-score-confidences\/(?<id>[^/]+)$/, "raterScoreConfidence", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rationale-evidence-span-requiredness-policies\/(?<id>[^/]+)$/, "rationaleEvidenceSpanRequirednessPolicy", adminAuditRoles),
@@ -4968,6 +5159,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/protected-artifact-retention-records\/(?<id>[^/]+)$/, "protectedArtifactRetentionRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/blinding-preview-audits\/(?<id>[^/]+)$/, "blindingPreviewAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/partial-task-outputs\/(?<id>[^/]+)$/, "partialTaskOutput", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/spot-check-sampling-policies\/(?<id>[^/]+)$/, "spotCheckSamplingPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/spot-checks\/(?<id>[^/]+)$/, "spotCheckQaItem", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-effort-qa-reviews\/(?<id>[^/]+)$/, "ratingEffortQaReview", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-triage-items\/(?<id>[^/]+)$/, "adjudicationTriageQueueItem", expertAuditWorkflowRoles),
@@ -7676,6 +7868,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const taskOutputEligibilityPolicies = latestWorkflowResources(workflowEvents, "taskOutputEligibilityPolicy");
   const scoreInputPolicies = latestWorkflowResources(workflowEvents, "scoreInputPolicy");
   const draftStoragePolicies = latestWorkflowResources(workflowEvents, "draftStoragePolicy");
+  const raterInstructionCompatibilityPolicies = latestWorkflowResources(workflowEvents, "raterInstructionCompatibilityPolicy");
   const raterInstructionRenderVersions = latestWorkflowResources(workflowEvents, "raterInstructionRenderVersion");
   const rubricLintConfigs = latestWorkflowResources(workflowEvents, "rubricLintConfig");
   const rubricLintEvents = latestWorkflowResources(workflowEvents, "rubricLintEvent");
@@ -7685,6 +7878,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const ratingDraftSessions = latestWorkflowResources(workflowEvents, "ratingDraftSession");
   const correctnessClaimWeightWorksheets = latestWorkflowResources(workflowEvents, "correctnessClaimWeightWorksheet");
   const protectedArtifactRetentionRecords = latestWorkflowResources(workflowEvents, "protectedArtifactRetentionRecord");
+  const scoreConfidenceScalePolicies = latestWorkflowResources(workflowEvents, "scoreConfidenceScalePolicy");
   const scoreConfidenceAnnotations = latestWorkflowResources(workflowEvents, "scoreConfidenceAnnotation");
   const raterScoreConfidences = latestWorkflowResources(workflowEvents, "raterScoreConfidence");
   const rationaleEvidenceSpanRequirednessPolicies = latestWorkflowResources(workflowEvents, "rationaleEvidenceSpanRequirednessPolicy");
@@ -7695,6 +7889,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const blindingPreviewAudits = latestWorkflowResources(workflowEvents, "blindingPreviewAudit");
   const partialTaskOutputs = latestWorkflowResources(workflowEvents, "partialTaskOutput");
   const raterPositionClusterExposures = latestWorkflowResources(workflowEvents, "raterPositionClusterExposure");
+  const spotCheckSamplingPolicies = latestWorkflowResources(workflowEvents, "spotCheckSamplingPolicy");
   const spotCheckQaItems = latestWorkflowResources(workflowEvents, "spotCheckQaItem");
   const ratingEffortQaReviews = latestWorkflowResources(workflowEvents, "ratingEffortQaReview");
   const adjudicationTriageQueueItems = latestWorkflowResources(workflowEvents, "adjudicationTriageQueueItem");
@@ -7853,6 +8048,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     taskOutputEligibilityPolicies,
     scoreInputPolicies,
     draftStoragePolicies,
+    raterInstructionCompatibilityPolicies,
     raterInstructionRenderVersions,
     rubricLintConfigs,
     rubricLintEvents,
@@ -7862,6 +8058,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     ratingDraftSessions,
     correctnessClaimWeightWorksheets,
     protectedArtifactRetentionRecords,
+    scoreConfidenceScalePolicies,
     scoreConfidenceAnnotations,
     raterScoreConfidences,
     rationaleEvidenceSpanRequirednessPolicies,
@@ -7872,6 +8069,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     blindingPreviewAudits,
     partialTaskOutputs,
     raterPositionClusterExposures,
+    spotCheckSamplingPolicies,
     spotCheckQaItems,
     ratingEffortQaReviews,
     adjudicationTriageQueueItems,
@@ -8025,6 +8223,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     taskOutputEligibilityPolicies,
     scoreInputPolicies,
     draftStoragePolicies,
+    raterInstructionCompatibilityPolicies,
     raterInstructionRenderVersions,
     rubricLintConfigs,
     rubricLintEvents,
@@ -8034,6 +8233,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     ratingDraftSessions,
     correctnessClaimWeightWorksheets,
     protectedArtifactRetentionRecords,
+    scoreConfidenceScalePolicies,
     scoreConfidenceAnnotations,
     raterScoreConfidences,
     rationaleEvidenceSpanRequirednessPolicies,
@@ -8044,6 +8244,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     blindingPreviewAudits,
     partialTaskOutputs,
     raterPositionClusterExposures,
+    spotCheckSamplingPolicies,
     spotCheckQaItems,
     ratingEffortQaReviews,
     adjudicationTriageQueueItems,

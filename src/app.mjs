@@ -99,6 +99,72 @@ const trainingExportDownweightRules = {
   lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
   protectedSplit: "exclude_from_training_exports_with_weight_0",
 };
+const raterInstructionCompatibilityClasses = [
+  "protected_release_critical_same_policy_family",
+  "quarantined_sensitivity_snapshot_required",
+];
+const raterInstructionCompatibilityThresholds = {
+  maxChangedMappedCopyStringsWithoutReview: 0,
+  maxRequiredControlSemanticDrift: 0,
+  maxRubricClauseMappingDrift: 0,
+  minNoFeatureLossReviewCoverage: 1,
+  maxMixedRenderVersionsPerProtectedSnapshot: 1,
+};
+const raterInstructionCompatibilityRules = {
+  protectedMerge:
+    "Protected or release-critical labels may merge only when render versions share policy id, compatibility family, score-input policy, UI-experiment policy, workflow profile, UX simplification policy, and lint config.",
+  sensitivitySnapshot:
+    "Mixed or incompatible render versions require a quarantined sensitivity snapshot before release, benchmark, validation, leaderboard, or training-export claims.",
+  rubricSemantics:
+    "Appendix-F rubric-clause meaning changes are incompatible without a new render family and review.",
+  featureReachability:
+    "Safe-decline, source-recognition, item-issue, lint, score, confidence, evidence-span, and required panel controls must remain reachable.",
+  stalePayloads:
+    "Mapped copy or render changes stale screen-state payloads, draft dependencies, traceability maps, and protected-split compatibility records until reviewed.",
+};
+const raterInstructionSharedPolicyFields = [
+  "scoreInputPolicyId",
+  "uiExperimentPolicyId",
+  "rubricLintConfigId",
+  "workflowProfileId",
+  "uxSimplificationPolicyId",
+];
+const scoreConfidenceBands = ["low", "medium", "high"];
+const scoreConfidenceNumericThresholds = {
+  minValue: 0,
+  lowMaxExclusive: 0.34,
+  mediumMinInclusive: 0.34,
+  mediumMaxExclusive: 0.67,
+  highMinInclusive: 0.67,
+  maxValue: 1,
+};
+const scoreConfidenceReasonCodes = [
+  "unclear_target",
+  "insufficient_context",
+  "verification_uncertainty",
+  "rubric_boundary_case",
+  "high_confidence_clear_application",
+];
+const spotCheckSamplingStrata = [
+  "non_escalated_release_critical",
+  "validation_candidate",
+  "hidden_benchmark_candidate",
+  "ordinary_live_rating",
+];
+const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
+const spotCheckSelectionMethods = ["random", "stratified_random"];
+const spotCheckMinimumRateByStratum = {
+  non_escalated_release_critical: 0.1,
+  validation_candidate: 0.15,
+  hidden_benchmark_candidate: 0.2,
+  ordinary_live_rating: 0.05,
+};
+const spotCheckMinimumCountByStratum = {
+  non_escalated_release_critical: 1,
+  validation_candidate: 1,
+  hidden_benchmark_candidate: 1,
+  ordinary_live_rating: 1,
+};
 const rationaleEvidenceSpanMandatoryTriggerClasses = [
   "score_explanation_triggered",
   "low_clarity_or_unclear_target",
@@ -1053,6 +1119,84 @@ const workflowTemplates = [
           "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
         lmcaSourceBoundary:
           "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "rater-instruction-compatibility-policy",
+    label: "Render Compatibility Policy",
+    endpoint: () => "/api/v1/rater-instruction-compatibility-policies",
+    resourceKey: "raterInstructionCompatibilityPolicy",
+    requiredRole: "admin",
+    summary: "Freeze when rater-instruction and UI-render versions can merge for protected release evidence.",
+    payload: () => ({
+      raterInstructionCompatibilityPolicy: {
+        id: `rater-instruction-compatibility-policy-${releaseId}`,
+        policyVersion: "rater-instruction-compatibility-rlhf90-v1",
+        coveredWorkflowSplitClasses: ["release_critical", "validation", "hidden_benchmark"],
+        compatibleRenderClasses: raterInstructionCompatibilityClasses,
+        thresholds: raterInstructionCompatibilityThresholds,
+        compatibilityRules: raterInstructionCompatibilityRules,
+        requiredSharedPolicyFields: raterInstructionSharedPolicyFields,
+        protectedSplitMergePolicy: raterInstructionCompatibilityRules.protectedMerge,
+        sensitivitySnapshotPolicy: raterInstructionCompatibilityRules.sensitivitySnapshot,
+        lmcaSourceBoundary:
+          "Project default UI-render compatibility thresholds are frozen here; LMCA motivates stable score semantics and protected-split comparability but does not state these exact platform thresholds.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "score-confidence-scale-policy",
+    label: "Confidence Scale Policy",
+    endpoint: () => "/api/v1/score-confidence-scale-policies",
+    resourceKey: "scoreConfidenceScalePolicy",
+    requiredRole: "admin",
+    summary: "Freeze confidence annotation bands, numeric thresholds, and reason codes before release use.",
+    payload: () => ({
+      scoreConfidenceScalePolicy: {
+        id: `score-confidence-scale-policy-${releaseId}`,
+        policyVersion: "score-confidence-scale-rlhf90-v1",
+        scaleVersion: "confidence-0-1-v1",
+        dimensionCoverage: RUBRIC_DIMENSIONS,
+        confidenceBands: scoreConfidenceBands,
+        numericThresholds: scoreConfidenceNumericThresholds,
+        allowedReasonCodes: scoreConfidenceReasonCodes,
+        annotationUsePolicy:
+          "Score-confidence annotations are uncertainty metadata for adjudication routing, QA review, and training downweighting only, not an LMCA score dimension.",
+        excludedFromScoreComputationRequired: true,
+        visibleToPeersBeforeLockRequired: false,
+        lmcaSourceBoundary:
+          "Project default confidence annotation scale is frozen here; LMCA motivates preserving uncertainty metadata but does not state this exact per-dimension scale.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "spot-check-sampling-policy",
+    label: "Spot Check Sampling Policy",
+    endpoint: () => "/api/v1/spot-check-sampling-policies",
+    resourceKey: "spotCheckSamplingPolicy",
+    requiredRole: "admin",
+    summary: "Freeze non-escalated QA spot-check sampling rates before release denominator claims.",
+    payload: () => ({
+      spotCheckSamplingPolicy: {
+        id: `spot-check-sampling-policy-${releaseId}`,
+        policyVersion: "spot-check-sampling-rlhf90-v1",
+        sampledWorkflowStrata: spotCheckSamplingStrata,
+        samplingDimensions: spotCheckSamplingDimensions,
+        selectionMethods: spotCheckSelectionMethods,
+        minimumSamplingRateByStratum: spotCheckMinimumRateByStratum,
+        minimumSampleCountByStratum: spotCheckMinimumCountByStratum,
+        ordinaryRatingStatusRequired: "apparently_ordinary_non_escalated",
+        excludedFromIndependentRaterCountRequired: true,
+        sampleExclusionRule:
+          "Spot-check QA rows are quality-audit observations and are excluded from independent blind-rater counts, label denominators, and consensus claims unless separately promoted through adjudication.",
+        labelMutationRule:
+          "Spot-check review does not directly mutate locked labels; revisions or adjudication require explicit linked workflow artifacts.",
+        lmcaSourceBoundary:
+          "Project default spot-check sampling rates are frozen here; LMCA motivates blind-rater denominator integrity but does not state these exact QA sampling rates.",
         frozenAt: new Date().toISOString(),
       },
     }),

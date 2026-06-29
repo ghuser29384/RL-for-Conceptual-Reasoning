@@ -80,10 +80,24 @@ import {
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+  RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
+  REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_SCORE_CONFIDENCE_BANDS,
+  REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
+  REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
+  REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION,
+  REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM,
+  REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
+  REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
+  SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+  SPOT_CHECK_SAMPLING_POLICY_VERSION,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
   VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
   createBlindRatingView,
@@ -283,6 +297,52 @@ function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-polic
       "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
     lmcaSourceBoundary:
       "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const raterInstructionCompatibilityClasses = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES;
+const raterInstructionCompatibilityThresholds = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS;
+const raterInstructionCompatibilityRules = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES;
+const raterInstructionSharedPolicyFields = REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS;
+
+function raterInstructionCompatibilityPolicy(id = "rater-instruction-compatibility-policy-submitted") {
+  return {
+    id,
+    policyVersion: RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
+    coveredWorkflowSplitClasses: ratingScoreInputSplits,
+    compatibleRenderClasses: raterInstructionCompatibilityClasses,
+    thresholds: raterInstructionCompatibilityThresholds,
+    compatibilityRules: raterInstructionCompatibilityRules,
+    requiredSharedPolicyFields: raterInstructionSharedPolicyFields,
+    protectedSplitMergePolicy: raterInstructionCompatibilityRules.protectedMerge,
+    sensitivitySnapshotPolicy: raterInstructionCompatibilityRules.sensitivitySnapshot,
+    lmcaSourceBoundary:
+      "Project default UI-render compatibility thresholds are frozen here; LMCA motivates stable score semantics and protected-split comparability but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const scoreConfidenceScaleVersion = REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION;
+const scoreConfidenceBands = REQUIRED_SCORE_CONFIDENCE_BANDS;
+const scoreConfidenceNumericThresholds = REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS;
+const scoreConfidenceReasonCodes = REQUIRED_SCORE_CONFIDENCE_REASON_CODES;
+
+function scoreConfidenceScalePolicy(id = "score-confidence-scale-policy-submitted") {
+  return {
+    id,
+    policyVersion: SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+    scaleVersion: scoreConfidenceScaleVersion,
+    dimensionCoverage: RUBRIC_DIMENSIONS,
+    confidenceBands: scoreConfidenceBands,
+    numericThresholds: scoreConfidenceNumericThresholds,
+    allowedReasonCodes: scoreConfidenceReasonCodes,
+    annotationUsePolicy:
+      "Score-confidence annotations are uncertainty metadata for adjudication routing, QA review, and training downweighting only, not an LMCA score dimension.",
+    excludedFromScoreComputationRequired: true,
+    visibleToPeersBeforeLockRequired: false,
+    lmcaSourceBoundary:
+      "Project default confidence annotation scale is frozen here; LMCA motivates preserving uncertainty metadata but does not state this exact per-dimension scale.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1083,6 +1143,30 @@ const ratingEscalationServiceLevels = Object.fromEntries(
 );
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
+const spotCheckSamplingStrata = REQUIRED_SPOT_CHECK_SAMPLING_STRATA;
+const spotCheckMinimumRateByStratum = REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM;
+const spotCheckMinimumCountByStratum = REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM;
+
+function spotCheckSamplingPolicy(id = "spot-check-sampling-policy-submitted") {
+  return {
+    id,
+    policyVersion: SPOT_CHECK_SAMPLING_POLICY_VERSION,
+    sampledWorkflowStrata: spotCheckSamplingStrata,
+    samplingDimensions: spotCheckSamplingDimensions,
+    selectionMethods: ["random", "stratified_random"],
+    minimumSamplingRateByStratum: spotCheckMinimumRateByStratum,
+    minimumSampleCountByStratum: spotCheckMinimumCountByStratum,
+    ordinaryRatingStatusRequired: "apparently_ordinary_non_escalated",
+    excludedFromIndependentRaterCountRequired: true,
+    sampleExclusionRule:
+      "Spot-check QA rows are quality-audit observations and are excluded from independent blind-rater counts, label denominators, and consensus claims unless separately promoted through adjudication.",
+    labelMutationRule:
+      "Spot-check review does not directly mutate locked labels; revisions or adjudication require explicit linked workflow artifacts.",
+    lmcaSourceBoundary:
+      "Project default spot-check sampling rates are frozen here; LMCA motivates blind-rater denominator integrity but does not state these exact QA sampling rates.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
 
 function completePolicyBundleFixtures() {
   return {
@@ -1641,6 +1725,7 @@ function completeRatingExperienceFixtures() {
     protectedSplitEligible: true,
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
+  const compatibilityPolicy = raterInstructionCompatibilityPolicy("rater-instruction-compatibility-policy-submitted");
   const renderVersion = {
     id: "rater-instruction-render-submitted",
     rubricVersion: "appendix-f-operational-v1",
@@ -1657,9 +1742,14 @@ function completeRatingExperienceFixtures() {
     rubricLintConfigId: rubricLintConfig.id,
     accessibilityVisualVariant: "wcag-aa-task-first",
     uiExperimentPolicyId: "ui-experiment-policy-submitted",
-    protectedSplitEligibilityPolicy: "compatible_with_protected_splits",
+    raterInstructionCompatibilityPolicyId: compatibilityPolicy.id,
+    renderCompatibilityClass: "protected_release_critical_same_policy_family",
+    compatibilityEvidenceStatus: "compatible_review_passed",
+    protectedSplitEligibilityPolicy: "compatible_with_protected_splits_when_policy_family_matches_or_quarantined_sensitivity_snapshot_required",
+    sensitivitySnapshotPolicy: "incompatible_or_mixed_render_versions_require_quarantined_sensitivity_snapshot",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
+  const confidenceScalePolicy = scoreConfidenceScalePolicy("score-confidence-scale-policy-submitted");
   return {
     taskOutputEligibilityPolicies: [
       {
@@ -1678,6 +1768,7 @@ function completeRatingExperienceFixtures() {
     ],
     scoreInputPolicies: [scoreInputPolicy],
     draftStoragePolicies: [draftStoragePolicy],
+    raterInstructionCompatibilityPolicies: [compatibilityPolicy],
     raterInstructionRenderVersions: [renderVersion],
     rubricLintConfigs: [rubricLintConfig],
     rubricLintEvents: [
@@ -1784,14 +1875,18 @@ function completeRatingExperienceFixtures() {
         timestamp: "2026-10-01T00:03:00.000Z",
       },
     ],
+    scoreConfidenceScalePolicies: [confidenceScalePolicy],
     scoreConfidenceAnnotations: [
       {
         id: "score-confidence-annotation-submitted",
         assignmentId: "assign-ai-base-rate",
         ratingId: "rating-seed-ai-base-rate-r1",
         raterId: "demo-rater",
+        scoreConfidenceScalePolicyId: confidenceScalePolicy.id,
         dimensionConfidences: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, 0.7])),
-        scaleVersion: "confidence-0-1-v1",
+        confidenceBandByDimension: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, "high"])),
+        reasonCodeByDimension: Object.fromEntries(RUBRIC_DIMENSIONS.map((dimension) => [dimension, "rubric_boundary_case"])),
+        scaleVersion: scoreConfidenceScaleVersion,
         annotationUsePolicy: "adjudication uncertainty only, not an extra score dimension",
         excludedFromScoreComputation: true,
         visibleToPeersBeforeLock: false,
@@ -1962,9 +2057,11 @@ function completeAuxiliaryWorkflowFixtures() {
         timestamp: "2026-10-01T00:02:00.000Z",
       },
     ],
+    spotCheckSamplingPolicies: [spotCheckSamplingPolicy("spot-check-sampling-policy-submitted")],
     spotCheckQaItems: [
       {
         id: "spot-check-qa-submitted",
+        spotCheckSamplingPolicyId: "spot-check-sampling-policy-submitted",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         ratingId: "rating-seed-ai-base-rate-r1",
         samplingStratum: "non_escalated_release_critical",
@@ -3004,7 +3101,15 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedTaskOutputEligibilityPolicyCount, 1);
   assert.equal(report.counts.submittedScoreInputPolicyCount, 1);
   assert.equal(report.counts.submittedDraftStoragePolicyCount, 1);
+  assert.equal(report.counts.submittedRaterInstructionCompatibilityPolicyCount, 1);
   assert.equal(report.counts.submittedRaterInstructionRenderVersionCount, 1);
+  assert.equal(report.raterInstructionCompatibilityPolicyReleaseUseStatus, "submitted_rater_instruction_compatibility_policy_active");
+  assert.equal(report.raterInstructionCompatibilityPolicyId, "rater-instruction-compatibility-policy-submitted");
+  assert.deepEqual(report.requiredRaterInstructionCompatibilityClasses, raterInstructionCompatibilityClasses);
+  assert.deepEqual(report.requiredRaterInstructionCompatibilityThresholds, raterInstructionCompatibilityThresholds);
+  assert.deepEqual(report.requiredRaterInstructionCompatibilityRules, raterInstructionCompatibilityRules);
+  assert.equal(report.raterInstructionRenderVersionRows.at(-1).raterInstructionCompatibilityPolicyId, "rater-instruction-compatibility-policy-submitted");
+  assert.equal(report.raterInstructionRenderVersionRows.at(-1).renderCompatibilityClass, "protected_release_critical_same_policy_family");
   assert.equal(report.counts.submittedRubricLintConfigCount, 1);
   assert.equal(report.counts.submittedRubricLintEventCount, 1);
   assert.deepEqual(report.rubricLintConfigRows.at(-1).triggerThresholds, rubricLintTriggerThresholds);
@@ -3019,8 +3124,14 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRatingDraftSessionCount, 1);
   assert.equal(report.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
   assert.equal(report.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
+  assert.equal(report.counts.submittedScoreConfidenceScalePolicyCount, 1);
   assert.equal(report.counts.submittedScoreConfidenceAnnotationCount, 1);
   assert.equal(report.counts.submittedRaterScoreConfidenceCount, 1);
+  assert.equal(report.scoreConfidenceScalePolicyReleaseUseStatus, "submitted_score_confidence_scale_policy_active");
+  assert.equal(report.scoreConfidenceScalePolicyId, "score-confidence-scale-policy-submitted");
+  assert.deepEqual(report.requiredScoreConfidenceBands, scoreConfidenceBands);
+  assert.deepEqual(report.requiredScoreConfidenceNumericThresholds, scoreConfidenceNumericThresholds);
+  assert.deepEqual(report.requiredScoreConfidenceReasonCodes, scoreConfidenceReasonCodes);
   assert.equal(report.counts.submittedRationaleEvidenceSpanRequirednessPolicyCount, 1);
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
   assert.equal(report.rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus, "submitted_rationale_evidence_span_requiredness_policy_active");
@@ -3040,6 +3151,8 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.ratingDraftSessionRows.at(-1).dependencyVersionSnapshot.draftStoragePolicyId, "draft-storage-policy-submitted");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation, "Rater preserved the submitted correctness score after reviewing weighted claim evidence.");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
+  assert.equal(report.scoreConfidenceScalePolicyRows.at(-1).scaleVersion, scoreConfidenceScaleVersion);
+  assert.equal(report.scoreConfidenceAnnotationRows.at(-1).scoreConfidenceScalePolicyId, "score-confidence-scale-policy-submitted");
   assert.equal(report.raterScoreConfidenceRows.at(-1).entityType, "RaterScoreConfidence");
   assert.ok(report.allowedRationaleEvidenceSpanLinkCategories.includes("attacked_claim"));
   assert.ok(report.allowedRationaleEvidenceSpanLinkCategories.includes("unclear_language"));
@@ -3110,6 +3223,83 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   );
   assert.ok(
     mismatchedLintThresholdReport.reviewSections.some((section) => section.artifactType === "rubric_lint_config" && section.reason === "acknowledgementModes:explain,route_to_qa"),
+  );
+
+  const driftedCompatibilityPolicyReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    raterInstructionCompatibilityPolicies: [
+      {
+        ...raterInstructionCompatibilityPolicy("rater-instruction-compatibility-policy-drifted"),
+        thresholds: {
+          ...raterInstructionCompatibilityThresholds,
+          maxChangedMappedCopyStringsWithoutReview: 1,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedCompatibilityPolicyReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.equal(
+    driftedCompatibilityPolicyReport.raterInstructionCompatibilityPolicyReleaseUseStatus,
+    "submitted_rater_instruction_compatibility_policy_review_required",
+  );
+  assert.ok(
+    driftedCompatibilityPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "rater_instruction_compatibility_policy" && section.reason === "thresholds",
+    ),
+  );
+
+  const mismatchedRenderCompatibilityReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    raterInstructionRenderVersions: [
+      {
+        ...completeRatingExperienceFixtures().raterInstructionRenderVersions[0],
+        id: "rater-instruction-render-wrong-compatibility",
+        raterInstructionCompatibilityPolicyId: "rater-instruction-compatibility-policy-old",
+      },
+    ],
+  });
+  assert.equal(mismatchedRenderCompatibilityReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    mismatchedRenderCompatibilityReport.reviewSections.some(
+      (section) => section.artifactType === "rater_instruction_render_version" && section.reason === "raterInstructionCompatibilityPolicyId",
+    ),
+  );
+
+  const driftedScoreConfidenceScaleReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    scoreConfidenceScalePolicies: [
+      {
+        ...scoreConfidenceScalePolicy("score-confidence-scale-policy-drifted"),
+        numericThresholds: {
+          ...scoreConfidenceNumericThresholds,
+          highMinInclusive: 0.75,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedScoreConfidenceScaleReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.equal(driftedScoreConfidenceScaleReport.scoreConfidenceScalePolicyReleaseUseStatus, "submitted_score_confidence_scale_policy_review_required");
+  assert.ok(
+    driftedScoreConfidenceScaleReport.reviewSections.some(
+      (section) => section.artifactType === "score_confidence_scale_policy" && section.reason === "numericThresholds",
+    ),
+  );
+
+  const mismatchedScoreConfidenceScaleReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    scoreConfidenceAnnotations: [
+      {
+        ...completeRatingExperienceFixtures().scoreConfidenceAnnotations[0],
+        id: "score-confidence-annotation-stale-scale",
+        scoreConfidenceScalePolicyId: "score-confidence-scale-policy-old",
+      },
+    ],
+  });
+  assert.equal(mismatchedScoreConfidenceScaleReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    mismatchedScoreConfidenceScaleReport.reviewSections.some(
+      (section) => section.artifactType === "score_confidence_annotation" && section.reason === "scoreConfidenceScalePolicyId",
+    ),
   );
 
   const mismatchedItemIssuePolicyReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
@@ -3284,9 +3474,16 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
   assert.equal(report.counts.submittedRaterPositionClusterExposureCount, 1);
   assert.equal(report.raterPositionClusterExposureRows.at(-1).blindEligibilityEffect, "excluded_from_fresh_blind_initial_on_cluster");
+  assert.equal(report.counts.submittedSpotCheckSamplingPolicyCount, 1);
+  assert.equal(report.spotCheckSamplingPolicyReleaseUseStatus, "submitted_spot_check_sampling_policy_active");
+  assert.equal(report.spotCheckSamplingPolicyId, "spot-check-sampling-policy-submitted");
+  assert.deepEqual(report.requiredSpotCheckSamplingStrata, spotCheckSamplingStrata);
+  assert.deepEqual(report.requiredSpotCheckMinimumRateByStratum, spotCheckMinimumRateByStratum);
+  assert.deepEqual(report.requiredSpotCheckMinimumCountByStratum, spotCheckMinimumCountByStratum);
   assert.equal(report.counts.submittedSpotCheckQaItemCount, 1);
   assert.equal(report.counts.submittedSpotCheckQAItemCount, 1);
   assert.equal(report.spotCheckQAItemRows.at(-1).status, "spot_check_qa_item_complete");
+  assert.equal(report.spotCheckQaRows.at(-1).spotCheckSamplingPolicyId, "spot-check-sampling-policy-submitted");
   assert.equal(report.spotCheckQaRows.at(-1).excludedFromIndependentRaterCount, true);
   assert.deepEqual(report.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
   assert.equal(report.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
@@ -3347,6 +3544,42 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(incompleteSpotCheckReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
   assert.ok(incompleteSpotCheckReport.reviewSections.some((section) => section.reason === "samplingDimensions:source_family,item_length,score_band"));
   assert.ok(incompleteSpotCheckReport.reviewSections.some((section) => section.reason === "ordinaryRatingStatus"));
+
+  const driftedSpotCheckSamplingPolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    spotCheckSamplingPolicies: [
+      {
+        ...spotCheckSamplingPolicy("spot-check-sampling-policy-drifted"),
+        minimumSamplingRateByStratum: {
+          ...spotCheckMinimumRateByStratum,
+          non_escalated_release_critical: 0.02,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedSpotCheckSamplingPolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.equal(driftedSpotCheckSamplingPolicyReport.spotCheckSamplingPolicyReleaseUseStatus, "submitted_spot_check_sampling_policy_review_required");
+  assert.ok(
+    driftedSpotCheckSamplingPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "spot_check_sampling_policy" && section.reason === "minimumSamplingRateByStratum",
+    ),
+  );
+
+  const staleSpotCheckPolicyItemReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    spotCheckQaItems: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().spotCheckQaItems[0],
+        spotCheckSamplingPolicyId: "spot-check-sampling-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleSpotCheckPolicyItemReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    staleSpotCheckPolicyItemReport.reviewSections.some(
+      (section) => section.artifactType === "spot_check_qa_item" && section.reason === "spotCheckSamplingPolicyId",
+    ),
+  );
 
   const unsafeConflictReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),

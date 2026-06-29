@@ -20,9 +20,23 @@ import {
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+  RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
+  REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
+  REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_SCORE_CONFIDENCE_BANDS,
+  REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
+  REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
+  REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION,
+  REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM,
+  REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
+  REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
+  SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+  SPOT_CHECK_SAMPLING_POLICY_VERSION,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
@@ -251,6 +265,52 @@ function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-polic
       "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
     lmcaSourceBoundary:
       "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const raterInstructionCompatibilityClasses = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES;
+const raterInstructionCompatibilityThresholds = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS;
+const raterInstructionCompatibilityRules = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES;
+const raterInstructionSharedPolicyFields = REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS;
+
+function raterInstructionCompatibilityPolicy(id = "rater-instruction-compatibility-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
+    coveredWorkflowSplitClasses: ratingScoreInputSplits,
+    compatibleRenderClasses: raterInstructionCompatibilityClasses,
+    thresholds: raterInstructionCompatibilityThresholds,
+    compatibilityRules: raterInstructionCompatibilityRules,
+    requiredSharedPolicyFields: raterInstructionSharedPolicyFields,
+    protectedSplitMergePolicy: raterInstructionCompatibilityRules.protectedMerge,
+    sensitivitySnapshotPolicy: raterInstructionCompatibilityRules.sensitivitySnapshot,
+    lmcaSourceBoundary:
+      "Project default UI-render compatibility thresholds are frozen here; LMCA motivates stable score semantics and protected-split comparability but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const scoreConfidenceScaleVersion = REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION;
+const scoreConfidenceBands = REQUIRED_SCORE_CONFIDENCE_BANDS;
+const scoreConfidenceNumericThresholds = REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS;
+const scoreConfidenceReasonCodes = REQUIRED_SCORE_CONFIDENCE_REASON_CODES;
+
+function scoreConfidenceScalePolicy(id = "score-confidence-scale-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+    scaleVersion: scoreConfidenceScaleVersion,
+    dimensionCoverage: rubricDimensions,
+    confidenceBands: scoreConfidenceBands,
+    numericThresholds: scoreConfidenceNumericThresholds,
+    allowedReasonCodes: scoreConfidenceReasonCodes,
+    annotationUsePolicy:
+      "Score-confidence annotations are uncertainty metadata for adjudication routing, QA review, and training downweighting only, not an LMCA score dimension.",
+    excludedFromScoreComputationRequired: true,
+    visibleToPeersBeforeLockRequired: false,
+    lmcaSourceBoundary:
+      "Project default confidence annotation scale is frozen here; LMCA motivates preserving uncertainty metadata but does not state this exact per-dimension scale.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1020,6 +1080,30 @@ const ratingEscalationServiceLevels = Object.fromEntries(
 );
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const spotCheckSamplingDimensions = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
+const spotCheckSamplingStrata = REQUIRED_SPOT_CHECK_SAMPLING_STRATA;
+const spotCheckMinimumRateByStratum = REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM;
+const spotCheckMinimumCountByStratum = REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM;
+
+function spotCheckSamplingPolicy(id = "spot-check-sampling-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: SPOT_CHECK_SAMPLING_POLICY_VERSION,
+    sampledWorkflowStrata: spotCheckSamplingStrata,
+    samplingDimensions: spotCheckSamplingDimensions,
+    selectionMethods: ["random", "stratified_random"],
+    minimumSamplingRateByStratum: spotCheckMinimumRateByStratum,
+    minimumSampleCountByStratum: spotCheckMinimumCountByStratum,
+    ordinaryRatingStatusRequired: "apparently_ordinary_non_escalated",
+    excludedFromIndependentRaterCountRequired: true,
+    sampleExclusionRule:
+      "Spot-check QA rows are quality-audit observations and are excluded from independent blind-rater counts, label denominators, and consensus claims unless separately promoted through adjudication.",
+    labelMutationRule:
+      "Spot-check review does not directly mutate locked labels; revisions or adjudication require explicit linked workflow artifacts.",
+    lmcaSourceBoundary:
+      "Project default spot-check sampling rates are frozen here; LMCA motivates blind-rater denominator integrity but does not state these exact QA sampling rates.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
 
 function completePolicyBundleFixtures() {
   return {
@@ -1556,6 +1640,7 @@ function completeRatingExperienceWorkflowFixtures() {
     protectedSplitEligible: true,
     frozenAt: "2026-10-01T00:22:00.000Z",
   };
+  const compatibilityPolicy = raterInstructionCompatibilityPolicy("rater-instruction-compatibility-policy-workflow-new");
   const raterInstructionRenderVersion = {
     id: "rater-instruction-render-workflow-new",
     rubricVersion: "appendix-f-operational-v1",
@@ -1572,9 +1657,14 @@ function completeRatingExperienceWorkflowFixtures() {
     rubricLintConfigId: rubricLintConfig.id,
     accessibilityVisualVariant: "wcag-aa-task-first",
     uiExperimentPolicyId: "ui-experiment-policy-workflow-new",
-    protectedSplitEligibilityPolicy: "compatible_with_protected_splits",
+    raterInstructionCompatibilityPolicyId: compatibilityPolicy.id,
+    renderCompatibilityClass: "protected_release_critical_same_policy_family",
+    compatibilityEvidenceStatus: "compatible_review_passed",
+    protectedSplitEligibilityPolicy: "compatible_with_protected_splits_when_policy_family_matches_or_quarantined_sensitivity_snapshot_required",
+    sensitivitySnapshotPolicy: "incompatible_or_mixed_render_versions_require_quarantined_sensitivity_snapshot",
     frozenAt: "2026-10-01T00:23:00.000Z",
   };
+  const confidenceScalePolicy = scoreConfidenceScalePolicy("score-confidence-scale-policy-workflow-new");
   return {
     taskOutputEligibilityPolicy: {
       id: "task-output-eligibility-policy-workflow-new",
@@ -1591,6 +1681,7 @@ function completeRatingExperienceWorkflowFixtures() {
     },
     scoreInputPolicy,
     draftStoragePolicy,
+    raterInstructionCompatibilityPolicy: compatibilityPolicy,
     raterInstructionRenderVersion,
     rubricLintConfig,
     rubricLintEvent: {
@@ -1663,13 +1754,17 @@ function completeRatingExperienceWorkflowFixtures() {
       draftNotExportedAsLabel: true,
       timestamp: "2026-10-01T00:26:00.000Z",
     },
+    scoreConfidenceScalePolicy: confidenceScalePolicy,
     scoreConfidenceAnnotation: {
       id: "score-confidence-annotation-workflow-new",
       assignmentId: "assign-ai-base-rate",
       ratingId: "rating-seed-ai-base-rate-r1",
       raterId: "demo-rater",
+      scoreConfidenceScalePolicyId: confidenceScalePolicy.id,
       dimensionConfidences: Object.fromEntries(rubricDimensions.map((dimension) => [dimension, 0.7])),
-      scaleVersion: "confidence-0-1-v1",
+      confidenceBandByDimension: Object.fromEntries(rubricDimensions.map((dimension) => [dimension, "high"])),
+      reasonCodeByDimension: Object.fromEntries(rubricDimensions.map((dimension) => [dimension, "rubric_boundary_case"])),
+      scaleVersion: scoreConfidenceScaleVersion,
       annotationUsePolicy: "adjudication uncertainty only, not an extra score dimension",
       excludedFromScoreComputation: true,
       visibleToPeersBeforeLock: false,
@@ -1823,8 +1918,10 @@ function completeAuxiliaryWorkflowFixtures() {
       createdBy: "demo-admin",
       timestamp: "2026-10-01T00:32:00.000Z",
     },
+    spotCheckSamplingPolicy: spotCheckSamplingPolicy("spot-check-sampling-policy-workflow-new"),
     spotCheckQaItem: {
       id: "spot-check-qa-workflow-new",
+      spotCheckSamplingPolicyId: "spot-check-sampling-policy-workflow-new",
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
       ratingId: "rating-seed-ai-base-rate-r1",
       samplingStratum: "non_escalated_release_critical",
@@ -2931,6 +3028,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/disagreement-threshold-policies/disagreement-threshold-policy-smoke"],
     ["POST", "/api/v1/draft-storage-policies"],
     ["GET", "/api/v1/draft-storage-policies/draft-storage-policy-smoke"],
+    ["POST", "/api/v1/rater-instruction-compatibility-policies"],
+    ["GET", "/api/v1/rater-instruction-compatibility-policies/rater-instruction-compatibility-smoke"],
     ["POST", "/api/v1/rater-instruction-render-versions"],
     ["GET", "/api/v1/rater-instruction-render-versions/rater-instruction-render-smoke"],
     ["POST", "/api/v1/rubric-lint-configs"],
@@ -2970,6 +3069,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/partial-task-outputs/partial-task-smoke"],
     ["GET", "/api/v1/raters/me/exposure-eligibility"],
     ["POST", "/api/v1/raters/demo-rater/position-cluster-exposures"],
+    ["POST", "/api/v1/spot-check-sampling-policies"],
+    ["GET", "/api/v1/spot-check-sampling-policies/spot-check-sampling-policy-smoke"],
     ["POST", "/api/v1/spot-checks"],
     ["GET", "/api/v1/spot-checks/spot-check-smoke"],
     ["POST", "/api/v1/adjudication-triage-items"],
@@ -9541,6 +9642,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeDraftStoragePolicy.status, 400);
   assert.match(unsafeDraftStoragePolicy.body.detail, /prohibitedClientPersistenceMechanisms|localStorageProhibited/);
 
+  const driftedCompatibilityPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-instruction-compatibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterInstructionCompatibilityPolicy: {
+        ...ratingExperience.raterInstructionCompatibilityPolicy,
+        id: "rater-instruction-compatibility-policy-drifted",
+        thresholds: {
+          ...raterInstructionCompatibilityThresholds,
+          maxChangedMappedCopyStringsWithoutReview: 1,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedCompatibilityPolicy.status, 400);
+  assert.match(driftedCompatibilityPolicy.body.detail, /thresholds/);
+
   const incompleteRenderVersion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rater-instruction-render-versions",
@@ -9556,6 +9675,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompleteRenderVersion.status, 400);
   assert.match(incompleteRenderVersion.body.detail, /uxSimplificationPolicyId|renderedRubricAnchorChecksum/);
+
+  const mismatchedRenderCompatibility = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-instruction-render-versions",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterInstructionRenderVersion: {
+        ...ratingExperience.raterInstructionRenderVersion,
+        id: "rater-instruction-render-incompatible",
+        renderCompatibilityClass: "unknown_render_family",
+      },
+    }),
+  });
+  assert.equal(mismatchedRenderCompatibility.status, 400);
+  assert.match(mismatchedRenderCompatibility.body.detail, /renderCompatibilityClass/);
 
   const incompleteRubricLintConfig = await invokeApi(context, {
     method: "POST",
@@ -9637,6 +9771,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(unacknowledgedLintEvent.status, 400);
   assert.match(unacknowledgedLintEvent.body.detail, /acknowledgementNote/);
+
+  const driftedScoreConfidenceScalePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/score-confidence-scale-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      scoreConfidenceScalePolicy: {
+        ...ratingExperience.scoreConfidenceScalePolicy,
+        id: "score-confidence-scale-policy-drifted",
+        numericThresholds: {
+          ...scoreConfidenceNumericThresholds,
+          highMinInclusive: 0.75,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedScoreConfidenceScalePolicy.status, 400);
+  assert.match(driftedScoreConfidenceScalePolicy.body.detail, /numericThresholds/);
 
   const incompleteScoreConfidence = await invokeApi(context, {
     method: "POST",
@@ -9806,12 +9958,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["taskOutputEligibilityPolicy", "/api/v1/task-output-eligibility-policies"],
     ["scoreInputPolicy", "/api/v1/score-input-policies"],
     ["draftStoragePolicy", "/api/v1/draft-storage-policies"],
+    ["raterInstructionCompatibilityPolicy", "/api/v1/rater-instruction-compatibility-policies"],
     ["raterInstructionRenderVersion", "/api/v1/rater-instruction-render-versions"],
     ["rubricLintConfig", "/api/v1/rubric-lint-configs"],
     ["rubricLintEvent", "/api/v1/rubric-lint-events"],
     ["itemIssueQuarantinePolicy", "/api/v1/item-issue-quarantine-policies"],
     ["itemIssueReport", "/api/v1/item-issues"],
     ["ratingDraftSession", "/api/v1/rating-draft-sessions"],
+    ["scoreConfidenceScalePolicy", "/api/v1/score-confidence-scale-policies"],
     ["scoreConfidenceAnnotation", "/api/v1/score-confidence-annotations"],
     ["rationaleEvidenceSpan", "/api/v1/rationale-evidence-spans"],
     ["samePositionScratchpad", "/api/v1/same-position-scratchpads"],
@@ -10138,6 +10292,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(assignmentDraftStoragePolicy.body.serverSidePersistenceDefault, true);
   assert.equal(assignmentDraftStoragePolicy.body.localStorageProhibited, true);
 
+  const raterInstructionCompatibilityPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rater-instruction-compatibility-policies/rater-instruction-compatibility-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(raterInstructionCompatibilityPolicyById.status, 200);
+  assert.deepEqual(raterInstructionCompatibilityPolicyById.body.thresholds, raterInstructionCompatibilityThresholds);
+
   const raterInstructionRenderById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/rater-instruction-render-versions/rater-instruction-render-workflow-new",
@@ -10145,6 +10307,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(raterInstructionRenderById.status, 200);
   assert.equal(raterInstructionRenderById.body.scoreInputPolicyId, "score-input-policy-workflow-new");
+
+  const scoreConfidenceScalePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/score-confidence-scale-policies/score-confidence-scale-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(scoreConfidenceScalePolicyById.status, 200);
+  assert.deepEqual(scoreConfidenceScalePolicyById.body.numericThresholds, scoreConfidenceNumericThresholds);
 
   const itemIssueQuarantinePolicyById = await invokeApi(context, {
     method: "GET",
@@ -10631,6 +10801,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(weakErratumDisclosurePolicy.status, 400);
   assert.match(weakErratumDisclosurePolicy.body.detail, /internalOnlyAllowedPolicy/);
 
+  const driftedSpotCheckSamplingPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/spot-check-sampling-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      spotCheckSamplingPolicy: {
+        ...auxiliaryWorkflow.spotCheckSamplingPolicy,
+        id: "spot-check-sampling-policy-drifted",
+        minimumSamplingRateByStratum: {
+          ...spotCheckMinimumRateByStratum,
+          non_escalated_release_critical: 0.02,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedSpotCheckSamplingPolicy.status, 400);
+  assert.match(driftedSpotCheckSamplingPolicy.body.detail, /minimumSamplingRateByStratum/);
+
   const incompleteSpotCheck = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/spot-checks",
@@ -10666,6 +10854,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   for (const [resourceKey, url] of [
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
+    ["spotCheckSamplingPolicy", "/api/v1/spot-check-sampling-policies"],
     ["spotCheckQaItem", "/api/v1/spot-checks"],
     ["ratingEffortQaReview", "/api/v1/rating-effort-qa-reviews"],
     ["adjudicationTriageQueueItem", "/api/v1/adjudication-triage-items"],
@@ -13354,7 +13543,26 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.taskOutputEligibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreInputPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.draftStoragePolicies.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.raterInstructionCompatibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.raterInstructionRenderVersions.length, 1);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.raterInstructionCompatibilityPolicyReleaseUseStatus,
+    "submitted_rater_instruction_compatibility_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.raterInstructionCompatibilityPolicyId,
+    "rater-instruction-compatibility-policy-workflow-new",
+  );
+  assert.deepEqual(releaseReport.body.ratingExperienceEvidence.requiredRaterInstructionCompatibilityThresholds, raterInstructionCompatibilityThresholds);
+  assert.deepEqual(releaseReport.body.ratingExperienceEvidence.requiredRaterInstructionCompatibilityRules, raterInstructionCompatibilityRules);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.raterInstructionRenderVersionRows.at(-1).raterInstructionCompatibilityPolicyId,
+    "rater-instruction-compatibility-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.raterInstructionRenderVersionRows.at(-1).renderCompatibilityClass,
+    "protected_release_critical_same_policy_family",
+  );
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintConfigs.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rubricLintEvents.length, 2);
   assert.equal(
@@ -13401,7 +13609,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.equal(releaseReport.body.ratingExperienceEvidence.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.protectedArtifactRetentionRecords.length, protectedArtifactTypes.length);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreConfidenceScalePolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreConfidenceAnnotations.length, 1);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.scoreConfidenceScalePolicyReleaseUseStatus,
+    "submitted_score_confidence_scale_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.scoreConfidenceScalePolicyId,
+    "score-confidence-scale-policy-workflow-new",
+  );
+  assert.deepEqual(releaseReport.body.ratingExperienceEvidence.requiredScoreConfidenceNumericThresholds, scoreConfidenceNumericThresholds);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.scoreConfidenceAnnotationRows.at(-1).scoreConfidenceScalePolicyId,
+    "score-confidence-scale-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpanRequirednessPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpans.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionScratchpads.length, 1);
@@ -13410,6 +13632,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.releaseUseStatus, "submitted_rating_experience_evidence_complete");
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreInputPolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedDraftStoragePolicyCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionCompatibilityPolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterInstructionRenderVersionCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRubricLintEventCount, 2);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedItemIssueQuarantinePolicyCount, 1);
@@ -13420,6 +13643,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRatingDraftSessionCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedCorrectnessClaimWeightWorksheetCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreConfidenceScalePolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreConfidenceAnnotationCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterScoreConfidenceCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanRequirednessPolicyCount, 1);
@@ -13452,6 +13676,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.blindingPreviewAudits.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.partialTaskOutputs.length, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterPositionClusterExposures.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.spotCheckSamplingPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.spotCheckQaItems.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.ratingEffortQaReviews.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.adjudicationTriageQueueItems.length, 1);
@@ -13472,7 +13697,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingModelRunProvenanceCount, 3);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckSamplingPolicyCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckSamplingPolicyReleaseUseStatus, "submitted_spot_check_sampling_policy_active");
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckSamplingPolicyId, "spot-check-sampling-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredSpotCheckMinimumRateByStratum, spotCheckMinimumRateByStratum);
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredSpotCheckMinimumCountByStratum, spotCheckMinimumCountByStratum);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckQAItemCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).spotCheckSamplingPolicyId, "spot-check-sampling-policy-workflow-new");
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).samplingDimensions, spotCheckSamplingDimensions);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckQaRows.at(-1).ordinaryRatingStatus, "apparently_ordinary_non_escalated");
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterTrainingExposurePolicyCount, 1);
@@ -13992,7 +14223,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 131 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 134 + extendedRaterItemConflictTypes.length,
   );
 });
 
