@@ -17432,6 +17432,28 @@ const RATER_SESSION_QA_ROUTING_STATUSES = [
   "routed_to_qa_suspicious_low_effort",
   "routed_to_qa_repeated_interruption",
 ];
+const SESSION_PACING_POLICY_VERSION = "session-pacing-rlhf90-v1";
+const REQUIRED_SESSION_PACING_TARGETS = ["ordinary_live_rating", "practice", "calibration", "discussion", "adjudication", "release_review"];
+const REQUIRED_SESSION_PACING_THRESHOLD_SECONDS = {
+  breakPromptAfter: 2700,
+  fatigueWarningAfter: 3600,
+  qaReviewAfter: 7200,
+};
+const REQUIRED_SAFE_DECLINE_ABUSE_THRESHOLDS = {
+  monitorAfterDeclinesPer24h: 3,
+  qaAfterSameReasonDeclinesPer7d: 5,
+  suspiciousPatternWindowHours: 24,
+};
+const PRACTICE_SANDBOX_POLICY_VERSION = "practice-sandbox-rlhf90-v1";
+const REQUIRED_PRACTICE_SOURCE_ANCHOR_IDS = lmcaSourceExampleAnchors.map((anchor) => anchor.id);
+const REQUIRED_PRACTICE_COMPLETION_STANDARDS = {
+  minimumLockedAttemptsBeforeLiveRating: 4,
+  requiredAnchorAttemptCoverage: 4,
+  allSevenScoresRequired: true,
+  feedbackAfterLockOnly: true,
+  excludedFromReleaseDenominators: true,
+  trainingExposureRecorded: true,
+};
 
 const REQUIRED_QUEUE_POLICY_COMPONENTS = [
   "live_gold_duplicate_validation_mix",
@@ -18625,9 +18647,24 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         lockedAt: "2026-10-01T00:00:00.000Z",
         feedbackArtifactId: "calibration-feedback-seed",
         rubricAnchorUsageSummary: "public anchors reviewed before feedback",
+        practiceSandboxPolicyId: `practice-sandbox-policy-${releaseId}`,
         trainingExposureStatus: "training_exposure_recorded",
         excludedFromRatingDenominator: true,
         createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    practiceSandboxPolicies: [
+      {
+        id: `practice-sandbox-policy-${releaseId}`,
+        policyVersion: PRACTICE_SANDBOX_POLICY_VERSION,
+        requiredPublicSourceAnchorIds: REQUIRED_PRACTICE_SOURCE_ANCHOR_IDS,
+        completionStandards: REQUIRED_PRACTICE_COMPLETION_STANDARDS,
+        liveRatingUnlockPolicy: "live rating unlock requires locked attempts covering every required public source anchor",
+        feedbackVisibilityPolicy: "feedback is shown only after each practice attempt is locked",
+        denominatorExclusionPolicy: "practice attempts and public anchors are excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators",
+        trainingExposurePolicy: "practice sandbox attempts record training exposure only",
+        createdBy: "seed-release-admin",
+        frozenAt: "2026-10-01T00:00:00.000Z",
       },
     ],
     raterLearningPlans: [
@@ -18644,6 +18681,23 @@ function defaultInteractionWorkflowArtifacts(releaseId) {
         feedbackArtifactsShown: ["calibration-feedback-seed"],
         protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
         timestamp: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    sessionPacingPolicies: [
+      {
+        id: `session-pacing-policy-${releaseId}`,
+        policyVersion: SESSION_PACING_POLICY_VERSION,
+        coveredSessionTargets: REQUIRED_SESSION_PACING_TARGETS,
+        thresholdSeconds: REQUIRED_SESSION_PACING_THRESHOLD_SECONDS,
+        safeDeclineAbuseThresholds: REQUIRED_SAFE_DECLINE_ABUSE_THRESHOLDS,
+        breakPromptPolicy: "break prompt after 45 minutes of active rating time",
+        fatigueWarningPolicy: "fatigue warning after 60 minutes of active rating time",
+        qaRoutingPolicy: "route fatigue, repeated interruption, repeated safe-decline, and suspicious decline patterns to monitor or QA review",
+        ordinaryPausePenaltyPolicy: "ordinary pauses and breaks are not a label-quality penalty",
+        stopAfterCurrentPolicy: "stop-after-current is available without label penalty",
+        safeDeclineDenominatorPolicy: "safe declines and reassignments are excluded from rating denominators",
+        createdBy: "seed-release-admin",
+        frozenAt: "2026-10-01T00:00:00.000Z",
       },
     ],
     raterSessions: [
@@ -18918,10 +18972,38 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       optionKey: "publicExamplePracticeSessions",
       rowKey: "publicExamplePracticeSessionRows",
       artifactType: "public_example_practice_session",
-      requiredFields: ["raterId", "workflowProfileId", "lockedAt", "feedbackArtifactId", "rubricAnchorUsageSummary", "trainingExposureStatus", "createdAt"],
+      requiredFields: ["raterId", "workflowProfileId", "practiceSandboxPolicyId", "lockedAt", "feedbackArtifactId", "rubricAnchorUsageSummary", "trainingExposureStatus", "createdAt"],
       arrayFields: ["sourceAnchorExampleIds", "itemTextVersionIds", "attemptRatings"],
       booleanTrueFields: ["excludedFromRatingDenominator"],
       seedRows: defaults.publicExamplePracticeSessions,
+    },
+    {
+      label: "PracticeSandboxPolicy",
+      optionKey: "practiceSandboxPolicies",
+      rowKey: "practiceSandboxPolicyRows",
+      artifactType: "practice_sandbox_policy",
+      requiredFields: [
+        "policyVersion",
+        "liveRatingUnlockPolicy",
+        "feedbackVisibilityPolicy",
+        "denominatorExclusionPolicy",
+        "trainingExposurePolicy",
+        "createdBy",
+        "frozenAt",
+      ],
+      arrayFields: ["requiredPublicSourceAnchorIds"],
+      arrayIncludes: { requiredPublicSourceAnchorIds: REQUIRED_PRACTICE_SOURCE_ANCHOR_IDS },
+      objectFields: ["completionStandards"],
+      objectKeys: { completionStandards: Object.keys(REQUIRED_PRACTICE_COMPLETION_STANDARDS) },
+      structuredFields: { completionStandards: REQUIRED_PRACTICE_COMPLETION_STANDARDS },
+      exactFields: { policyVersion: PRACTICE_SANDBOX_POLICY_VERSION },
+      stringIncludes: {
+        liveRatingUnlockPolicy: ["locked", "every required public source anchor"],
+        feedbackVisibilityPolicy: ["only after", "locked"],
+        denominatorExclusionPolicy: ["excluded", "blind-label", "validation", "hidden-benchmark", "human-ceiling", "training-export"],
+        trainingExposurePolicy: ["training exposure only"],
+      },
+      seedRows: defaults.practiceSandboxPolicies,
     },
     {
       label: "RaterLearningPlan",
@@ -18932,6 +19014,44 @@ function interactionWorkflowArtifactSpecs(releaseId) {
       arrayFields: ["assignedRemediationModules", "currentAssignmentRestrictionsUnlocks", "feedbackArtifactsShown"],
       objectFields: ["practiceGoldDuplicatePerformanceSummaries", "perDimensionDriftSummary"],
       seedRows: defaults.raterLearningPlans,
+    },
+    {
+      label: "SessionPacingPolicy",
+      optionKey: "sessionPacingPolicies",
+      rowKey: "sessionPacingPolicyRows",
+      artifactType: "session_pacing_policy",
+      requiredFields: [
+        "policyVersion",
+        "breakPromptPolicy",
+        "fatigueWarningPolicy",
+        "qaRoutingPolicy",
+        "ordinaryPausePenaltyPolicy",
+        "stopAfterCurrentPolicy",
+        "safeDeclineDenominatorPolicy",
+        "createdBy",
+        "frozenAt",
+      ],
+      arrayFields: ["coveredSessionTargets"],
+      arrayIncludes: { coveredSessionTargets: REQUIRED_SESSION_PACING_TARGETS },
+      objectFields: ["thresholdSeconds", "safeDeclineAbuseThresholds"],
+      objectKeys: {
+        thresholdSeconds: Object.keys(REQUIRED_SESSION_PACING_THRESHOLD_SECONDS),
+        safeDeclineAbuseThresholds: Object.keys(REQUIRED_SAFE_DECLINE_ABUSE_THRESHOLDS),
+      },
+      structuredFields: {
+        thresholdSeconds: REQUIRED_SESSION_PACING_THRESHOLD_SECONDS,
+        safeDeclineAbuseThresholds: REQUIRED_SAFE_DECLINE_ABUSE_THRESHOLDS,
+      },
+      exactFields: { policyVersion: SESSION_PACING_POLICY_VERSION },
+      stringIncludes: {
+        breakPromptPolicy: ["45"],
+        fatigueWarningPolicy: ["60"],
+        qaRoutingPolicy: ["fatigue", "repeated", "suspicious", "qa"],
+        ordinaryPausePenaltyPolicy: ["ordinary", "not", "label-quality penalty"],
+        stopAfterCurrentPolicy: ["stop-after-current", "without label penalty"],
+        safeDeclineDenominatorPolicy: ["safe declines", "excluded", "denominators"],
+      },
+      seedRows: defaults.sessionPacingPolicies,
     },
     {
       label: "RaterSession",
@@ -19332,6 +19452,9 @@ function normalizeInteractionWorkflowArtifact(resource, spec, rowSource) {
         .filter(([, entryValue]) => !allowedValues.includes(entryValue))
         .map(([key]) => `${field}:${key}`);
     }),
+    ...Object.entries(spec.structuredFields ?? {}).map(([field, expectedValue]) =>
+      stableJsonKey(artifactFieldValue(resource, field)) === stableJsonKey(expectedValue) ? null : `${field}:mismatch`,
+    ),
     ...Object.entries(spec.arrayIncludes ?? {}).flatMap(([field, requiredValues]) => {
       const value = normalizeStringArray(artifactFieldValue(resource, field));
       return requiredValues.filter((item) => !value.includes(item)).map((item) => `${field}:${item}`);
@@ -20834,7 +20957,9 @@ export function buildOctoberReleaseReport(
   const releaseClaimWarnings = buildReleaseClaimWarningReport(releaseId, currentStatus, auxiliaryWorkflowEvidence);
   const interactionWorkflowEvidence = buildInteractionWorkflowEvidenceReport(releaseId, {
     publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
+    practiceSandboxPolicies: options.practiceSandboxPolicies ?? [],
     raterLearningPlans: options.raterLearningPlans ?? [],
+    sessionPacingPolicies: options.sessionPacingPolicies ?? [],
     raterSessions: options.raterSessions ?? [],
     assignmentSelfScreens: options.assignmentSelfScreens ?? [],
     assignmentDeclines: options.assignmentDeclines ?? [],
@@ -21099,7 +21224,9 @@ export function buildOctoberReleaseReport(
     },
     workflowInteractionArtifacts: {
       publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
+      practiceSandboxPolicies: options.practiceSandboxPolicies ?? [],
       raterLearningPlans: options.raterLearningPlans ?? [],
+      sessionPacingPolicies: options.sessionPacingPolicies ?? [],
       raterSessions: options.raterSessions ?? [],
       assignmentSelfScreens: options.assignmentSelfScreens ?? [],
       assignmentDeclines: options.assignmentDeclines ?? [],

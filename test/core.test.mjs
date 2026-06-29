@@ -572,6 +572,31 @@ const rubricLintTriggerThresholds = {
   verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
 };
 const rubricLintAcknowledgementModes = ["acknowledge", "explain", "route_to_qa"];
+const sessionPacingTargets = ["ordinary_live_rating", "practice", "calibration", "discussion", "adjudication", "release_review"];
+const sessionPacingThresholdSeconds = {
+  breakPromptAfter: 2700,
+  fatigueWarningAfter: 3600,
+  qaReviewAfter: 7200,
+};
+const safeDeclineAbuseThresholds = {
+  monitorAfterDeclinesPer24h: 3,
+  qaAfterSameReasonDeclinesPer7d: 5,
+  suspiciousPatternWindowHours: 24,
+};
+const practiceSandboxSourceAnchorIds = [
+  "anchor-is-ought-near-zero",
+  "anchor-is-ought-near-perfect",
+  "anchor-approval-voting-midrange",
+  "anchor-table4-model-failure-overcredit",
+];
+const practiceSandboxCompletionStandards = {
+  minimumLockedAttemptsBeforeLiveRating: 4,
+  requiredAnchorAttemptCoverage: 4,
+  allSevenScoresRequired: true,
+  feedbackAfterLockOnly: true,
+  excludedFromReleaseDenominators: true,
+  trainingExposureRecorded: true,
+};
 const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
@@ -1632,9 +1657,24 @@ function completeInteractionWorkflowFixtures() {
         lockedAt: "2026-10-01T00:00:00.000Z",
         feedbackArtifactId: "calibration-feedback-submitted",
         rubricAnchorUsageSummary: "Public anchors reviewed before feedback.",
+        practiceSandboxPolicyId: "practice-sandbox-policy-submitted",
         trainingExposureStatus: "training_exposure_recorded",
         excludedFromRatingDenominator: true,
         createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    practiceSandboxPolicies: [
+      {
+        id: "practice-sandbox-policy-submitted",
+        policyVersion: "practice-sandbox-rlhf90-v1",
+        requiredPublicSourceAnchorIds: practiceSandboxSourceAnchorIds,
+        completionStandards: practiceSandboxCompletionStandards,
+        liveRatingUnlockPolicy: "live rating unlock requires locked attempts covering every required public source anchor",
+        feedbackVisibilityPolicy: "feedback is shown only after each practice attempt is locked",
+        denominatorExclusionPolicy: "practice attempts and public anchors are excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators",
+        trainingExposurePolicy: "practice sandbox attempts record training exposure only",
+        createdBy: "workflow-admin",
+        frozenAt: "2026-10-01T00:00:30.000Z",
       },
     ],
     raterLearningPlans: [
@@ -1651,6 +1691,23 @@ function completeInteractionWorkflowFixtures() {
         feedbackArtifactsShown: ["calibration-feedback-submitted"],
         protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
         timestamp: "2026-10-01T00:01:00.000Z",
+      },
+    ],
+    sessionPacingPolicies: [
+      {
+        id: "session-pacing-policy-submitted",
+        policyVersion: "session-pacing-rlhf90-v1",
+        coveredSessionTargets: sessionPacingTargets,
+        thresholdSeconds: sessionPacingThresholdSeconds,
+        safeDeclineAbuseThresholds,
+        breakPromptPolicy: "break prompt after 45 minutes of active rating time",
+        fatigueWarningPolicy: "fatigue warning after 60 minutes of active rating time",
+        qaRoutingPolicy: "route fatigue, repeated interruption, repeated safe-decline, and suspicious decline patterns to monitor or QA review",
+        ordinaryPausePenaltyPolicy: "ordinary pauses and breaks are not a label-quality penalty",
+        stopAfterCurrentPolicy: "stop-after-current is available without label penalty",
+        safeDeclineDenominatorPolicy: "safe declines and reassignments are excluded from rating denominators",
+        createdBy: "workflow-admin",
+        frozenAt: "2026-10-01T00:01:30.000Z",
       },
     ],
     raterSessions: [
@@ -2663,10 +2720,17 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   const report = buildInteractionWorkflowEvidenceReport("october-2026-demo", completeInteractionWorkflowFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(report.counts.submittedArtifactGroupCount, 18);
-  assert.equal(report.counts.completeArtifactGroupCount, 18);
+  assert.equal(report.counts.submittedArtifactGroupCount, 20);
+  assert.equal(report.counts.completeArtifactGroupCount, 20);
   assert.equal(report.counts.submittedPublicExamplePracticeSessionCount, 1);
+  assert.equal(report.counts.submittedPracticeSandboxPolicyCount, 1);
+  assert.deepEqual(report.practiceSandboxPolicyRows.at(-1).requiredPublicSourceAnchorIds, practiceSandboxSourceAnchorIds);
+  assert.deepEqual(report.practiceSandboxPolicyRows.at(-1).completionStandards, practiceSandboxCompletionStandards);
   assert.equal(report.counts.submittedRaterLearningPlanCount, 1);
+  assert.equal(report.counts.submittedSessionPacingPolicyCount, 1);
+  assert.deepEqual(report.sessionPacingPolicyRows.at(-1).coveredSessionTargets, sessionPacingTargets);
+  assert.deepEqual(report.sessionPacingPolicyRows.at(-1).thresholdSeconds, sessionPacingThresholdSeconds);
+  assert.deepEqual(report.sessionPacingPolicyRows.at(-1).safeDeclineAbuseThresholds, safeDeclineAbuseThresholds);
   assert.equal(report.counts.submittedRaterSessionCount, 1);
   assert.equal(report.raterSessionRows.at(-1).expectedEffortCompleted, "within_band");
   assert.equal(report.raterSessionRows.at(-1).qaRoutingStatus, "no_fatigue_qa_route");
@@ -2766,6 +2830,68 @@ test("interaction workflow evidence gates practice, sessions, discussion, adjudi
   assert.ok(
     incompleteVerificationWorkspaceReport.reviewSections.some(
       (section) => section.artifactType === "verification_workspace_session" && section.reason === "nonBlindAuxiliaryMaterialConsulted",
+    ),
+  );
+
+  const driftedPracticeSandboxPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    practiceSandboxPolicies: [
+      {
+        ...completeInteractionWorkflowFixtures().practiceSandboxPolicies[0],
+        policyVersion: "practice-sandbox-draft",
+        requiredPublicSourceAnchorIds: practiceSandboxSourceAnchorIds.filter((anchorId) => anchorId !== "anchor-table4-model-failure-overcredit"),
+        completionStandards: { ...practiceSandboxCompletionStandards, minimumLockedAttemptsBeforeLiveRating: 1 },
+      },
+    ],
+  });
+  assert.equal(driftedPracticeSandboxPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(
+    driftedPracticeSandboxPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "practice_sandbox_policy" && section.reason === "policyVersion",
+    ),
+  );
+  assert.ok(
+    driftedPracticeSandboxPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "practice_sandbox_policy" && section.reason === "requiredPublicSourceAnchorIds:anchor-table4-model-failure-overcredit",
+    ),
+  );
+  assert.ok(
+    driftedPracticeSandboxPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "practice_sandbox_policy" && section.reason === "completionStandards:mismatch",
+    ),
+  );
+
+  const driftedSessionPacingPolicyReport = buildInteractionWorkflowEvidenceReport("october-2026-demo", {
+    ...completeInteractionWorkflowFixtures(),
+    sessionPacingPolicies: [
+      {
+        ...completeInteractionWorkflowFixtures().sessionPacingPolicies[0],
+        policyVersion: "session-pacing-draft",
+        coveredSessionTargets: ["ordinary_live_rating"],
+        thresholdSeconds: { ...sessionPacingThresholdSeconds, fatigueWarningAfter: 5400 },
+        safeDeclineAbuseThresholds: { ...safeDeclineAbuseThresholds, qaAfterSameReasonDeclinesPer7d: 99 },
+      },
+    ],
+  });
+  assert.equal(driftedSessionPacingPolicyReport.releaseUseStatus, "interaction_workflow_evidence_review_required");
+  assert.ok(
+    driftedSessionPacingPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "session_pacing_policy" && section.reason === "policyVersion",
+    ),
+  );
+  assert.ok(
+    driftedSessionPacingPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "session_pacing_policy" && section.reason === "coveredSessionTargets:practice",
+    ),
+  );
+  assert.ok(
+    driftedSessionPacingPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "session_pacing_policy" && section.reason === "thresholdSeconds:mismatch",
+    ),
+  );
+  assert.ok(
+    driftedSessionPacingPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "session_pacing_policy" && section.reason === "safeDeclineAbuseThresholds:mismatch",
     ),
   );
 

@@ -501,6 +501,31 @@ const rubricLintTriggerThresholds = {
   verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
 };
 const rubricLintAcknowledgementModes = ["acknowledge", "explain", "route_to_qa"];
+const sessionPacingTargets = ["ordinary_live_rating", "practice", "calibration", "discussion", "adjudication", "release_review"];
+const sessionPacingThresholdSeconds = {
+  breakPromptAfter: 2700,
+  fatigueWarningAfter: 3600,
+  qaReviewAfter: 7200,
+};
+const safeDeclineAbuseThresholds = {
+  monitorAfterDeclinesPer24h: 3,
+  qaAfterSameReasonDeclinesPer7d: 5,
+  suspiciousPatternWindowHours: 24,
+};
+const practiceSandboxSourceAnchorIds = [
+  "anchor-is-ought-near-zero",
+  "anchor-is-ought-near-perfect",
+  "anchor-approval-voting-midrange",
+  "anchor-table4-model-failure-overcredit",
+];
+const practiceSandboxCompletionStandards = {
+  minimumLockedAttemptsBeforeLiveRating: 4,
+  requiredAnchorAttemptCoverage: 4,
+  allSevenScoresRequired: true,
+  feedbackAfterLockOnly: true,
+  excludedFromReleaseDenominators: true,
+  trainingExposureRecorded: true,
+};
 const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
@@ -1497,9 +1522,22 @@ function completeInteractionWorkflowFixtures() {
       lockedAt: "2026-10-01T00:43:00.000Z",
       feedbackArtifactId: "calibration-feedback-workflow-new",
       rubricAnchorUsageSummary: "Public anchors reviewed before feedback.",
+      practiceSandboxPolicyId: "practice-sandbox-policy-workflow-new",
       trainingExposureStatus: "training_exposure_recorded",
       excludedFromRatingDenominator: true,
       createdAt: "2026-10-01T00:43:00.000Z",
+    },
+    practiceSandboxPolicy: {
+      id: "practice-sandbox-policy-workflow-new",
+      policyVersion: "practice-sandbox-rlhf90-v1",
+      requiredPublicSourceAnchorIds: practiceSandboxSourceAnchorIds,
+      completionStandards: practiceSandboxCompletionStandards,
+      liveRatingUnlockPolicy: "live rating unlock requires locked attempts covering every required public source anchor",
+      feedbackVisibilityPolicy: "feedback is shown only after each practice attempt is locked",
+      denominatorExclusionPolicy: "practice attempts and public anchors are excluded from blind-label, validation, hidden-benchmark, human-ceiling, and training-export denominators",
+      trainingExposurePolicy: "practice sandbox attempts record training exposure only",
+      createdBy: "workflow-admin",
+      frozenAt: "2026-10-01T00:43:30.000Z",
     },
     raterLearningPlan: {
       id: "rater-learning-plan-workflow-new",
@@ -1514,6 +1552,21 @@ function completeInteractionWorkflowFixtures() {
       feedbackArtifactsShown: ["calibration-feedback-workflow-new"],
       protectedLabelExposureCheck: "no_protected_or_live_labels_shown",
       timestamp: "2026-10-01T00:44:00.000Z",
+    },
+    sessionPacingPolicy: {
+      id: "session-pacing-policy-workflow-new",
+      policyVersion: "session-pacing-rlhf90-v1",
+      coveredSessionTargets: sessionPacingTargets,
+      thresholdSeconds: sessionPacingThresholdSeconds,
+      safeDeclineAbuseThresholds,
+      breakPromptPolicy: "break prompt after 45 minutes of active rating time",
+      fatigueWarningPolicy: "fatigue warning after 60 minutes of active rating time",
+      qaRoutingPolicy: "route fatigue, repeated interruption, repeated safe-decline, and suspicious decline patterns to monitor or QA review",
+      ordinaryPausePenaltyPolicy: "ordinary pauses and breaks are not a label-quality penalty",
+      stopAfterCurrentPolicy: "stop-after-current is available without label penalty",
+      safeDeclineDenominatorPolicy: "safe declines and reassignments are excluded from rating denominators",
+      createdBy: "workflow-admin",
+      frozenAt: "2026-10-01T00:44:30.000Z",
     },
     raterSession: {
       id: "rater-session-workflow-new",
@@ -2130,6 +2183,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/raters/rater-smoke"],
     ["POST", "/api/v1/assignments"],
     ["GET", "/api/v1/assignments/assignment-smoke"],
+    ["POST", "/api/v1/session-pacing-policies"],
+    ["GET", "/api/v1/session-pacing-policies/session-pacing-policy-smoke"],
     ["POST", "/api/v1/rater-sessions"],
     ["GET", "/api/v1/rater-sessions/rater-session-smoke"],
     ["PATCH", "/api/v1/rater-sessions/rater-session-smoke"],
@@ -2137,6 +2192,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/rater-sessions/rater-session-smoke/stop-after-current"],
     ["POST", "/api/v1/practice-sessions"],
     ["GET", "/api/v1/practice-sessions/practice-session-smoke"],
+    ["POST", "/api/v1/practice-sandbox-policies"],
+    ["GET", "/api/v1/practice-sandbox-policies/practice-sandbox-policy-smoke"],
     ["POST", "/api/v1/rater-learning-plans"],
     ["GET", "/api/v1/rater-learning-plans/rater-learning-plan-smoke"],
     ["POST", "/api/v1/gold-items"],
@@ -9931,9 +9988,46 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unsafeProtectedArtifactRevalidation.status, 400);
   assert.match(unsafeProtectedArtifactRevalidation.body.detail, /revalidationStatus|staleSupersededBehavior/);
 
+  const driftedPracticeSandboxPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/practice-sandbox-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      practiceSandboxPolicy: {
+        ...interactionWorkflow.practiceSandboxPolicy,
+        id: "practice-sandbox-policy-drifted",
+        policyVersion: "practice-sandbox-draft",
+        requiredPublicSourceAnchorIds: practiceSandboxSourceAnchorIds.filter((anchorId) => anchorId !== "anchor-table4-model-failure-overcredit"),
+        completionStandards: { ...practiceSandboxCompletionStandards, minimumLockedAttemptsBeforeLiveRating: 1 },
+      },
+    }),
+  });
+  assert.equal(driftedPracticeSandboxPolicy.status, 400);
+  assert.match(driftedPracticeSandboxPolicy.body.detail, /policyVersion|requiredPublicSourceAnchorIds|completionStandards/);
+
+  const driftedSessionPacingPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/session-pacing-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sessionPacingPolicy: {
+        ...interactionWorkflow.sessionPacingPolicy,
+        id: "session-pacing-policy-drifted",
+        policyVersion: "session-pacing-draft",
+        coveredSessionTargets: ["ordinary_live_rating"],
+        thresholdSeconds: { ...sessionPacingThresholdSeconds, fatigueWarningAfter: 5400 },
+        safeDeclineAbuseThresholds: { ...safeDeclineAbuseThresholds, qaAfterSameReasonDeclinesPer7d: 99 },
+      },
+    }),
+  });
+  assert.equal(driftedSessionPacingPolicy.status, 400);
+  assert.match(driftedSessionPacingPolicy.body.detail, /policyVersion|coveredSessionTargets|thresholdSeconds|safeDeclineAbuseThresholds/);
+
   for (const [resourceKey, url] of [
     ["publicExamplePracticeSession", "/api/v1/practice-sessions"],
+    ["practiceSandboxPolicy", "/api/v1/practice-sandbox-policies"],
     ["raterSession", "/api/v1/rater-sessions"],
+    ["sessionPacingPolicy", "/api/v1/session-pacing-policies"],
     ["assignmentSelfScreen", "/api/v1/assignments/assign-ai-base-rate/self-screen"],
     ["assignmentDecline", "/api/v1/assignments/assign-ai-base-rate/decline"],
     ["assignmentDeferral", "/api/v1/assignments/assign-ai-base-rate/defer"],
@@ -10369,6 +10463,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(raterSessionById.status, 200);
   assert.equal(raterSessionById.body.expectedEffortCompleted, "within_band");
+
+  const sessionPacingPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/session-pacing-policies/session-pacing-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(sessionPacingPolicyById.status, 200);
+  assert.deepEqual(sessionPacingPolicyById.body.thresholdSeconds, sessionPacingThresholdSeconds);
+
+  const practiceSandboxPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/practice-sandbox-policies/practice-sandbox-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(practiceSandboxPolicyById.status, 200);
+  assert.deepEqual(practiceSandboxPolicyById.body.requiredPublicSourceAnchorIds, practiceSandboxSourceAnchorIds);
 
   const incompleteRaterSession = await invokeApi(context, {
     method: "POST",
@@ -12192,7 +12302,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseClaimWarnings.releaseUseStatus, "release_claims_limited_by_errata_or_schedule");
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.publicExamplePracticeSessions.length, 1);
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.practiceSandboxPolicies.length, 1);
+  assert.deepEqual(
+    releaseReport.body.interactionWorkflowEvidence.practiceSandboxPolicyRows.at(-1).requiredPublicSourceAnchorIds,
+    practiceSandboxSourceAnchorIds,
+  );
+  assert.deepEqual(
+    releaseReport.body.interactionWorkflowEvidence.practiceSandboxPolicyRows.at(-1).completionStandards,
+    practiceSandboxCompletionStandards,
+  );
   assert.equal(releaseReport.body.workflowInteractionArtifacts.raterLearningPlans.length, 1);
+  assert.equal(releaseReport.body.workflowInteractionArtifacts.sessionPacingPolicies.length, 1);
+  assert.deepEqual(releaseReport.body.interactionWorkflowEvidence.sessionPacingPolicyRows.at(-1).thresholdSeconds, sessionPacingThresholdSeconds);
+  assert.deepEqual(
+    releaseReport.body.interactionWorkflowEvidence.sessionPacingPolicyRows.at(-1).safeDeclineAbuseThresholds,
+    safeDeclineAbuseThresholds,
+  );
   assert.equal(releaseReport.body.workflowInteractionArtifacts.raterSessions.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.assignmentSelfScreens.length, 2);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.assignmentDeclines.length, 1);
@@ -12297,8 +12422,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.interactionWorkflowEvidence.simplifiedCopyPreviewRows.every((row) => row.glossaryTooltipIds.includes("strength")),
   );
   assert.equal(releaseReport.body.interactionWorkflowEvidence.releaseUseStatus, "submitted_interaction_workflow_evidence_complete");
-  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 18);
-  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 18);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedArtifactGroupCount, 20);
+  assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.completeArtifactGroupCount, 20);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedAssignmentSelfScreenCount, 2);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedAssignmentDeferralCount, 2);
   assert.equal(releaseReport.body.interactionWorkflowEvidence.counts.submittedBenchmarkSubmissionCount, 1);
@@ -12566,7 +12691,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 115 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 117 + extendedRaterItemConflictTypes.length,
   );
 });
 

@@ -166,6 +166,33 @@ const raterSessionQaRoutingStatuses = [
   "routed_to_qa_repeated_interruption",
 ];
 const raterSessionNonNegativeNumberFields = ["activeTimeSeconds", "completedAssignmentCount", "breakPromptCount", "breakTakenCount"];
+const sessionPacingPolicyVersion = "session-pacing-rlhf90-v1";
+const sessionPacingTargets = ["ordinary_live_rating", "practice", "calibration", "discussion", "adjudication", "release_review"];
+const sessionPacingThresholdSeconds = {
+  breakPromptAfter: 2700,
+  fatigueWarningAfter: 3600,
+  qaReviewAfter: 7200,
+};
+const safeDeclineAbuseThresholds = {
+  monitorAfterDeclinesPer24h: 3,
+  qaAfterSameReasonDeclinesPer7d: 5,
+  suspiciousPatternWindowHours: 24,
+};
+const practiceSandboxPolicyVersion = "practice-sandbox-rlhf90-v1";
+const practiceSandboxRequiredSourceAnchorIds = [
+  "anchor-is-ought-near-zero",
+  "anchor-is-ought-near-perfect",
+  "anchor-approval-voting-midrange",
+  "anchor-table4-model-failure-overcredit",
+];
+const practiceSandboxCompletionStandards = {
+  minimumLockedAttemptsBeforeLiveRating: 4,
+  requiredAnchorAttemptCoverage: 4,
+  allSevenScoresRequired: true,
+  feedbackAfterLockOnly: true,
+  excludedFromReleaseDenominators: true,
+  trainingExposureRecorded: true,
+};
 const assignmentDeclineRequiredFields = [
   "id",
   "assignmentId",
@@ -1342,6 +1369,41 @@ const workflowWriteEndpoints = [
       draftDependencyStaleStatus: "current",
     },
   }),
+  workflowWriteSpec(/^\/api\/v1\/session-pacing-policies$/, "session_pacing_policy_submitted", "sessionPacingPolicy", adminRoles, {
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "breakPromptPolicy",
+      "fatigueWarningPolicy",
+      "qaRoutingPolicy",
+      "ordinaryPausePenaltyPolicy",
+      "stopAfterCurrentPolicy",
+      "safeDeclineDenominatorPolicy",
+      "createdBy",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["coveredSessionTargets"],
+    requiredArrayIncludes: { coveredSessionTargets: sessionPacingTargets },
+    allowedArrayValues: { coveredSessionTargets: sessionPacingTargets },
+    requiredObjectFields: ["thresholdSeconds", "safeDeclineAbuseThresholds"],
+    requiredObjectKeys: {
+      thresholdSeconds: Object.keys(sessionPacingThresholdSeconds),
+      safeDeclineAbuseThresholds: Object.keys(safeDeclineAbuseThresholds),
+    },
+    requiredStructuredFields: {
+      thresholdSeconds: sessionPacingThresholdSeconds,
+      safeDeclineAbuseThresholds,
+    },
+    requiredExactFields: { policyVersion: sessionPacingPolicyVersion },
+    requiredStringIncludes: {
+      breakPromptPolicy: ["45"],
+      fatigueWarningPolicy: ["60"],
+      qaRoutingPolicy: ["fatigue", "repeated", "suspicious", "qa"],
+      ordinaryPausePenaltyPolicy: ["ordinary", "not", "label-quality penalty"],
+      stopAfterCurrentPolicy: ["stop-after-current", "without label penalty"],
+      safeDeclineDenominatorPolicy: ["safe declines", "excluded", "denominators"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/rater-sessions$/, "rater_session_submitted", "raterSession", ratingWorkflowRoles, {
     requiredFields: raterSessionRequiredFields,
     requiredNumberRanges: raterSessionNonNegativeNumberFields.map((field) => ({ field, min: 0 })),
@@ -1392,8 +1454,44 @@ const workflowWriteEndpoints = [
     requiredExactFields: { stopAfterCurrentItemState: "requested" },
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(/^\/api\/v1\/practice-sandbox-policies$/, "practice_sandbox_policy_submitted", "practiceSandboxPolicy", adminRoles, {
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "liveRatingUnlockPolicy",
+      "feedbackVisibilityPolicy",
+      "denominatorExclusionPolicy",
+      "trainingExposurePolicy",
+      "createdBy",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["requiredPublicSourceAnchorIds"],
+    requiredArrayIncludes: { requiredPublicSourceAnchorIds: practiceSandboxRequiredSourceAnchorIds },
+    allowedArrayValues: { requiredPublicSourceAnchorIds: practiceSandboxRequiredSourceAnchorIds },
+    requiredObjectFields: ["completionStandards"],
+    requiredObjectKeys: { completionStandards: Object.keys(practiceSandboxCompletionStandards) },
+    requiredStructuredFields: { completionStandards: practiceSandboxCompletionStandards },
+    requiredExactFields: { policyVersion: practiceSandboxPolicyVersion },
+    requiredStringIncludes: {
+      liveRatingUnlockPolicy: ["locked", "every required public source anchor"],
+      feedbackVisibilityPolicy: ["only after", "locked"],
+      denominatorExclusionPolicy: ["excluded", "blind-label", "validation", "hidden-benchmark", "human-ceiling", "training-export"],
+      trainingExposurePolicy: ["training exposure only"],
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/practice-sessions$/, "public_example_practice_session_submitted", "publicExamplePracticeSession", ratingWorkflowRoles, {
-    requiredFields: ["id", "raterId", "sourceAnchorExampleIds", "workflowProfileId", "attemptRatings", "lockedAt", "feedbackArtifactId", "trainingExposureStatus", "excludedFromRatingDenominator"],
+    requiredFields: [
+      "id",
+      "raterId",
+      "sourceAnchorExampleIds",
+      "workflowProfileId",
+      "practiceSandboxPolicyId",
+      "attemptRatings",
+      "lockedAt",
+      "feedbackArtifactId",
+      "trainingExposureStatus",
+      "excludedFromRatingDenominator",
+    ],
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/rater-learning-plans$/, "rater_learning_plan_submitted", "raterLearningPlan", ratingWorkflowRoles, {
@@ -3853,8 +3951,10 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rater-reliability-weight-models\/(?<id>[^/]+)$/, "raterReliabilityWeightModel", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/raters\/(?<id>[^/]+)$/, "rater", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)$/, "assignment", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/session-pacing-policies\/(?<id>[^/]+)$/, "sessionPacingPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-sessions\/(?<id>[^/]+)$/, "raterSession", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/practice-sessions\/(?<id>[^/]+)$/, "publicExamplePracticeSession", workflowStateReadRoles),
+  workflowReadSpec(/^\/api\/v1\/practice-sandbox-policies\/(?<id>[^/]+)$/, "practiceSandboxPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-learning-plans\/(?<id>[^/]+)$/, "raterLearningPlan", workflowStateReadRoles),
   workflowReadSpec(/^\/api\/v1\/gold-items\/(?<id>[^/]+)$/, "goldItem", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/source-anchor-examples\/(?<id>[^/]+)$/, "sourceAnchorExample", adminAuditRoles),
@@ -6638,7 +6738,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const releaseErrata = latestWorkflowResources(workflowEvents, "releaseErratum");
   const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
+  const practiceSandboxPolicies = latestWorkflowResources(workflowEvents, "practiceSandboxPolicy");
   const raterLearningPlans = latestWorkflowResources(workflowEvents, "raterLearningPlan");
+  const sessionPacingPolicies = latestWorkflowResources(workflowEvents, "sessionPacingPolicy");
   const raterSessions = latestWorkflowResources(workflowEvents, "raterSession");
   const assignmentSelfScreens = latestWorkflowResources(workflowEvents, "assignmentSelfScreen");
   const assignmentDeclines = latestWorkflowResources(workflowEvents, "assignmentDecline");
@@ -6798,7 +6900,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     releaseErrata,
     scheduleStatusSnapshots,
     publicExamplePracticeSessions,
+    practiceSandboxPolicies,
     raterLearningPlans,
+    sessionPacingPolicies,
     raterSessions,
     assignmentSelfScreens,
     assignmentDeclines,
@@ -6954,9 +7058,11 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterTrainingExposureSnapshots,
     releaseErrata,
     scheduleStatusSnapshots,
-    publicExamplePracticeSessions,
-    raterLearningPlans,
-    raterSessions,
+      publicExamplePracticeSessions,
+      practiceSandboxPolicies,
+      raterLearningPlans,
+      sessionPacingPolicies,
+      raterSessions,
     assignmentSelfScreens,
     assignmentDeclines,
     assignmentDeferrals,
