@@ -2081,6 +2081,16 @@ test("score explanation triggers include surprising score flags", () => {
     }),
     ["high_stakes_workflow"],
   );
+  for (const queueType of ["validation", "internal_validation", "protected_validation"]) {
+    assert.deepEqual(
+      scoreExplanationTriggersForRating({
+        scores: ordinaryScores,
+        assignment: { queueType },
+      }),
+      ["high_stakes_workflow"],
+      queueType,
+    );
+  }
   assert.deepEqual(validateTriggeredScoreExplanation("One blind-safe sentence. Another short sentence.").ok, true);
   assert.deepEqual(validateTriggeredScoreExplanation("One sentence. Two sentence. Third sentence.").ok, false);
 
@@ -4040,6 +4050,56 @@ test("rating effort quality report routes rushed and interrupted rows before sen
   assert.equal(report.protectedUseBlockSummary.hiddenBenchmarkBlockedCount, 1);
   assert.equal(report.protectedUseBlockSummary.validationBlockedCount, 2);
   assert.equal(report.releaseUseStatus, "qa_routing_required_before_sensitive_use");
+});
+
+test("rating effort quality report blocks validation queue aliases before sensitive use", () => {
+  const validationAssignmentTypeRating = {
+    ...seedRatings.find((rating) => rating.id === "rating-ai-base-rate-a"),
+    id: "rating-validation-assignment-type-interrupted",
+    assignmentId: "assignment-validation-assignment-type",
+    activeSeconds: 760,
+    idleGapSeconds: 20,
+    interruptionCount: 1,
+  };
+  const protectedValidationQueueRating = {
+    ...seedRatings.find((rating) => rating.id === "rating-ai-base-rate-b"),
+    id: "rating-protected-validation-queue-interrupted",
+    assignmentId: "assignment-protected-validation-queue",
+    activeSeconds: 760,
+    idleGapSeconds: 20,
+    interruptionCount: 1,
+  };
+  const assignmentList = [
+    ...assignments,
+    {
+      id: "assignment-validation-assignment-type",
+      assignmentType: "validation",
+      positionId: "pos-ai-prior",
+      critiqueId: "crit-ai-base-rate",
+    },
+    {
+      id: "assignment-protected-validation-queue",
+      queueType: "protected_validation",
+      positionId: "pos-ai-prior",
+      critiqueId: "crit-ai-base-rate",
+    },
+  ];
+  const report = buildRatingEffortQualityReport(
+    "release-test",
+    [validationAssignmentTypeRating, protectedValidationQueueRating],
+    positions,
+    critiques,
+    assignmentList,
+  );
+
+  const validationAssignmentTypeRow = report.qaRoutedRatings.find((row) => row.ratingId === "rating-validation-assignment-type-interrupted");
+  const protectedValidationQueueRow = report.qaRoutedRatings.find((row) => row.ratingId === "rating-protected-validation-queue-interrupted");
+  assert.equal(validationAssignmentTypeRow.queueType, "validation");
+  assert.equal(protectedValidationQueueRow.queueType, "protected_validation");
+  assert.ok(validationAssignmentTypeRow.protectedUseBlocks.includes("validation"));
+  assert.ok(protectedValidationQueueRow.protectedUseBlocks.includes("validation"));
+  assert.equal(report.protectedUseBlockSummary.validationBlockedCount, 2);
+  assert.equal(report.protectedUseBlockSummary.hiddenBenchmarkBlockedCount, 0);
 });
 
 test("rating effort quality report accepts submitted QA reviews for routed rows", () => {

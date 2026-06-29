@@ -12698,6 +12698,34 @@ test("server policy requires rating confidence and trigger-based score explanati
     generalRatingNote: "",
   };
   assert.equal(validateRatingPayload(validationSubset, "blind_initial_submitted").ok, true);
+
+  const validationAssignment = {
+    id: "assignment-validation-high-stakes",
+    queueType: "validation",
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+  };
+  const validationWorkflowWithoutTrigger = {
+    ...validBlindRating("rating-validation-workflow-missing-trigger"),
+    assignmentId: "assignment-validation-high-stakes",
+  };
+  const missingValidationWorkflowTrigger = validateRatingPayload(validationWorkflowWithoutTrigger, "blind_initial_submitted", {
+    assignments: [validationAssignment],
+  });
+  assert.equal(missingValidationWorkflowTrigger.ok, false);
+  assert.match(missingValidationWorkflowTrigger.detail, /high_stakes_workflow/);
+
+  const validationWorkflowWithExplanation = {
+    ...validationWorkflowWithoutTrigger,
+    id: "rating-validation-workflow-explanation",
+    scoreExplanationTriggers: ["high_stakes_workflow"],
+    scoreExplanationRequired: true,
+    scoreExplanation: "The validation workflow is release-sensitive, so this blind-safe explanation is required.",
+  };
+  assert.equal(
+    validateRatingPayload(validationWorkflowWithExplanation, "blind_initial_submitted", { assignments: [validationAssignment] }).ok,
+    true,
+  );
 });
 
 test("server policy requires rating context snapshots to include the rated critique", () => {

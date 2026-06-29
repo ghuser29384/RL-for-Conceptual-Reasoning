@@ -2668,7 +2668,10 @@ export const SCORE_EXPLANATION_OPTIONAL_FIELDS = ["general_rating_note", "option
 
 const SCORE_EXPLANATION_EXTREME_DIMENSIONS = RUBRIC_DIMENSIONS;
 const SCORE_EXPLANATION_HIGH_STAKES_QUEUE_TYPES = new Set([
+  "validation",
   "validation_subset",
+  "internal_validation",
+  "protected_validation",
   "benchmark_candidate_review",
   "hidden_benchmark",
   "hidden_benchmark_review",
@@ -8147,13 +8150,14 @@ export function buildRatingEffortQualityReport(
     };
     const routeReasons = effortRouteReasons(telemetry, expectation);
     const split = position?.split ?? "unknown";
-    const protectedUseBlocks = protectedEffortUseBlocks(routeReasons, split, assignment?.queueType);
+    const assignmentQueueType = assignment?.queueType ?? assignment?.assignmentType ?? "unknown";
+    const protectedUseBlocks = protectedEffortUseBlocks(routeReasons, split, assignmentQueueType);
     return {
       ratingId: rating.id,
       ratingHash: `sha256:${rating.id}:effort`,
       itemHash: `sha256:${makeItemId(rating.positionId, rating.critiqueId)}:effort`,
       split,
-      queueType: assignment?.queueType ?? "unknown",
+      queueType: assignmentQueueType,
       kind: rating.kind,
       raterTier: rating.raterTier,
       positionLengthBand,
@@ -20064,11 +20068,14 @@ function effortRouteReasons(telemetry, expectation) {
   return reasons;
 }
 
+const EFFORT_VALIDATION_QUEUE_TYPES = new Set(["validation", "validation_subset", "internal_validation", "protected_validation"]);
+const EFFORT_HIDDEN_BENCHMARK_QUEUE_TYPES = new Set(["benchmark_candidate_review", "hidden_benchmark", "hidden_benchmark_review"]);
+
 function protectedEffortUseBlocks(routeReasons, split, queueType) {
   if (!routeReasons.length) return [];
   const blocks = new Set(["certification"]);
-  if (split === "internal_validation" || queueType === "validation_subset") blocks.add("validation");
-  if (split === "hidden_benchmark" || queueType === "benchmark_candidate_review") blocks.add("hidden_benchmark");
+  if (split === "internal_validation" || split === "protected_validation" || EFFORT_VALIDATION_QUEUE_TYPES.has(queueType)) blocks.add("validation");
+  if (split === "hidden_benchmark" || EFFORT_HIDDEN_BENCHMARK_QUEUE_TYPES.has(queueType)) blocks.add("hidden_benchmark");
   return [...blocks];
 }
 
