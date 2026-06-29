@@ -95,6 +95,76 @@ const uxScreenControlRequirements = {
   admin_governance: ["release_governance_action", "data_governance_withdrawal", "audit_provenance_capture"],
 };
 
+const certificationThresholds = {
+  customWeightedLossMax: 0.14,
+  pairwiseErrorMax: 0.14,
+  duplicateInconsistencyMax: 0.12,
+  meanAbsErrorMax: 0.14,
+  perDimensionCalibrationErrorMax: 0.15,
+  restrictionDimensionErrorMax: 0.2,
+};
+
+const certificationRemediationRules = {
+  dimensionErrorAbovePerDimensionMax: "targeted_retraining_required_before_live_or_release_critical_rating",
+  restrictionDimensionErrorAboveMax: "hold_matching_sensitive_assignments_until_recertified",
+  duplicateInconsistencyAboveMax: "duplicate_consistency_review_required_before_tier_unlock",
+  hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
+  rubricVersionMismatch: "recertification_or_grandfathering_review_required",
+};
+
+function certificationThresholdPolicy(id = "certification-threshold-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: "certification-threshold-rlhf90-v1",
+    thresholds: certificationThresholds,
+    remediationRules: certificationRemediationRules,
+    certificationStatusRule:
+      "A rater is certified only when completion is met, the rubric is current, mean absolute error and every dimension stay within the frozen numeric thresholds, and no restriction flags remain.",
+    retrainingRule:
+      "Any dimension above the per-dimension calibration threshold creates a targeted retraining flag before live or release-critical rating.",
+    restrictionRule:
+      "Restriction thresholds hold correctness-sensitive, low-clarity, dead-weight, duplicate-consistency, or hard-ambiguity assignments until recertification or approved review.",
+    recertificationRule:
+      "Rubric-version mismatch requires recertification or grandfathering review before certification evidence can support release use.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const comparabilityTierThresholds = {
+  method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
+  corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
+  source_topic_rater_comparable: { pass: { topicFamiliesCoveredMin: 6, positionSourceCategoriesCoveredMin: 6, raterContributionRowsMin: 6 }, partial: { topicFamiliesCoveredMin: 3, positionSourceCategoriesCoveredMin: 3, raterContributionRowsMin: 3 }, fail: { topicFamiliesCoveredMax: 2 } },
+  exact_position_source_count_comparable: { pass: { exactLmcaSourceCategoryCountMatchesMin: 6, totalPositionsMin: 442 }, partial: { sourceCategoriesCoveredMin: 4, knownOtherDatasetSubsourceRowsMin: 2 }, fail: { sourceCategoriesCoveredMax: 3 } },
+  topic_family_comparable: { pass: { lmcaTopicFamiliesCoveredMin: 6 }, partial: { lmcaTopicFamiliesCoveredMin: 3 }, fail: { lmcaTopicFamiliesCoveredMax: 2 } },
+  rater_contribution_comparable: { pass: { knownLmcaRaterRowsComparedMin: 6, largestSingleRaterShareMax: 0.649 }, partial: { submittedRaterProfilesMin: 4, individualRaterDominanceReported: 1 }, fail: { submittedRaterProfilesMax: 3 } },
+  adapted_source_language_task_format_comparable: { pass: { adaptedSourceDisclosureFieldsMin: 5, knownSubsourceRowsMin: 2, machineTranslationStatusRowsMin: 1 }, partial: { adaptedSourceDisclosureFieldsMin: 3, knownSubsourceRowsMin: 1 }, fail: { adaptedSourceDisclosureFieldsMax: 2 } },
+  metric_denominator_comparable: { pass: { weightedPairwisePositionsMin: 255, weightedPairwiseCritiquePairsMin: 856, customMetricDialoguesMin: 933 }, partial: { weightedPairwisePositionsMin: 52, weightedPairwiseCritiquePairsMin: 100, customMetricDialoguesMin: 120 }, fail: { weightedPairwiseCritiquePairsMax: 99 } },
+  target_label_comparable: { pass: { primaryRaterAnchorSnapshotsMin: 1, targetLabelVersionPrimaryRaterAnchorRequired: 1 }, partial: { pairedPrimaryAndConsensusSnapshotsMin: 1 }, fail: { primaryRaterAnchorSnapshotsMax: 0 } },
+  validation_design_comparable: { pass: { validationCritiquesMin: 52, validationPositionsMin: 19, coreAllItemsRatersMin: 4 }, partial: { validationCritiquesMin: 26, validationPositionsMin: 10, coreAllItemsRatersMin: 2 }, fail: { validationCritiquesMax: 25 } },
+  validation_ceiling_comparable: { pass: { appendixCNumericBaselineSectionsMin: 5, humanCeilingRunsMin: 1, intervalMetadataComplete: 1 }, partial: { appendixCNumericBaselineSectionsMin: 3, humanCeilingRunsMin: 1 }, fail: { humanCeilingRunsMax: 0 } },
+  model_score_anchor_comparable: { pass: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3, cleanLeaderboardRunsMin: 1 }, partial: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3 }, fail: { table5WeightedPairwiseAnchorsMax: 3 } },
+  prompt_family_source_scope_comparable: { pass: { commonPromptPolicyRowsMin: 1, appendixGExactBaselineRowsMin: 1, promptScopeSensitivityRowsMin: 1 }, partial: { promptPolicyRowsMin: 1 }, fail: { promptPolicyRowsMax: 0 } },
+  model_snapshot_comparable: { pass: { resolvedModelSnapshotShareMin: 1, aliasStabilityRowsMin: 1 }, partial: { resolvedModelSnapshotShareMin: 0.5 }, fail: { resolvedModelSnapshotShareMax: 0.49 } },
+  protected_split_leakage_comparable: { pass: { protectedLeakageIncidentMax: 0, accessAuditRowsMin: 1, protectedSplitIsolationFailuresMax: 0 }, partial: { accessAuditRowsMin: 1 }, fail: { protectedLeakageIncidentMin: 1 } },
+  replication_like: { pass: { passingComparabilityTierCountMin: 15, failingComparabilityTierCountMax: 0 }, partial: { passingComparabilityTierCountMin: 12, failingComparabilityTierCountMax: 2 }, fail: { failingComparabilityTierCountMin: 3 } },
+};
+
+function comparabilityTierPolicy(id = "comparability-tier-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: "comparability-tier-rlhf90-v1",
+    statusOrder: ["fails", "partial", "passes"],
+    tierThresholds: comparabilityTierThresholds,
+    guardrailRule:
+      "Computed release evidence remains authoritative; submitted comparability statuses can only narrow or annotate tiers and the stricter status wins.",
+    notApplicableRule:
+      "not_applicable is allowed only for tiers outside a release claim scope and ranks no higher than partial for overclaim prevention.",
+    publicWordingRule:
+      "Public claim wording must name the tier, status, threshold policy, limitations, and whether the claim is LMCA-style rather than target-identical replication.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function reachableUxControlResults(surface) {
   return Object.fromEntries((uxScreenControlRequirements[surface] ?? []).map((control) => [control, "reachable"]));
 }
@@ -2423,6 +2493,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/release-gate-profiles/release-gate-smoke"],
     ["POST", "/api/v1/primary-rater-anchor-policies"],
     ["GET", "/api/v1/primary-rater-anchor-policies/primary-rater-policy-smoke"],
+    ["POST", "/api/v1/comparability-tier-policies"],
+    ["GET", "/api/v1/comparability-tier-policies/comparability-tier-policy-smoke"],
     ["POST", "/api/v1/comparability-claims"],
     ["GET", "/api/v1/comparability-claims/comparability-claim-smoke"],
     ["POST", "/api/v1/candidate-batches"],
@@ -4183,6 +4255,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(positionDenied.status, 403);
 
+  const driftedCertificationThresholdPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/certification-threshold-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      certificationThresholdPolicy: {
+        ...certificationThresholdPolicy("certification-threshold-policy-drifted"),
+        thresholds: { ...certificationThresholds, meanAbsErrorMax: 0.2 },
+      },
+    }),
+  });
+  assert.equal(driftedCertificationThresholdPolicy.status, 400);
+  assert.match(driftedCertificationThresholdPolicy.body.detail, /thresholds/);
+
+  const thresholdPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/certification-threshold-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      certificationThresholdPolicy: certificationThresholdPolicy(),
+    }),
+  });
+  assert.equal(thresholdPolicy.status, 201);
+
   const incompleteCertificationRecord = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/certification-records",
@@ -4206,6 +4302,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "certification-record-workflow-new",
         raterId: "demo-rater",
         packVersion: "cert-tier-zero-2026-10",
+        certificationThresholdPolicyId: "certification-threshold-policy-workflow-new",
         rubricVersion: "lmca-app-f-2026-10",
         goldItemIds: ["gold-ai-selectivity"],
         duplicateItemIds: ["gold-low-clarity-obfuscation"],
@@ -4232,6 +4329,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(certificationRecordById.status, 200);
   assert.equal(certificationRecordById.body.id, "certification-record-workflow-new");
+
+  const certificationThresholdPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/certification-threshold-policies/certification-threshold-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(certificationThresholdPolicyById.status, 200);
+  assert.deepEqual(certificationThresholdPolicyById.body.thresholds, certificationThresholds);
 
   const exposureLog = await invokeApi(context, {
     method: "POST",
@@ -5297,6 +5402,36 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(primaryRaterAnchorPolicyById.status, 200);
   assert.equal(primaryRaterAnchorPolicyById.body.id, "primary-rater-policy-workflow-new");
 
+  const driftedComparabilityTierPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/comparability-tier-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      comparabilityTierPolicy: {
+        ...comparabilityTierPolicy("comparability-tier-policy-drifted"),
+        tierThresholds: {
+          ...comparabilityTierThresholds,
+          metric_denominator_comparable: {
+            ...comparabilityTierThresholds.metric_denominator_comparable,
+            pass: { ...comparabilityTierThresholds.metric_denominator_comparable.pass, weightedPairwiseCritiquePairsMin: 500 },
+          },
+        },
+      },
+    }),
+  });
+  assert.equal(driftedComparabilityTierPolicy.status, 400);
+  assert.match(driftedComparabilityTierPolicy.body.detail, /tierThresholds/);
+
+  const comparabilityTierPolicySubmission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/comparability-tier-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      comparabilityTierPolicy: comparabilityTierPolicy(),
+    }),
+  });
+  assert.equal(comparabilityTierPolicySubmission.status, 201);
+
   const incompleteComparabilityClaim = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/comparability-claims",
@@ -5313,7 +5448,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteComparabilityClaim.status, 400);
   assert.match(
     incompleteComparabilityClaim.body.detail,
-    /releaseGateProfileId|linkedReleaseIds|evidenceLinks|corpusScaleStatus|protectedSplitLeakageStatus|approvedBy|timestamp/,
+    /releaseGateProfileId|comparabilityTierPolicyId|linkedReleaseIds|evidenceLinks|corpusScaleStatus|protectedSplitLeakageStatus|approvedBy|timestamp/,
   );
 
   const completeComparabilityClaimPayload = {
@@ -5324,6 +5459,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     linkedEvaluationRunIds: ["model-eval-october-2026-demo"],
     linkedLeaderboardIds: [],
     releaseGateProfileId: "release-gate-workflow-new",
+    comparabilityTierPolicyId: "comparability-tier-policy-workflow-new",
     methodPreservingStatus: "passes",
     corpusScaleStatus: "fails",
     exactPositionSourceCountStatus: "fails",
@@ -5356,6 +5492,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "comparability-claim-unbound",
         releaseGateProfileId: "release-gate-missing",
         primaryRaterAnchorPolicyId: "primary-rater-policy-missing",
+        comparabilityTierPolicyId: "comparability-tier-policy-missing",
       },
     }),
   });
@@ -5363,6 +5500,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(unboundComparabilityClaim.body.error, "comparability_claim_binding_failed");
   assert.match(unboundComparabilityClaim.body.detail, /releaseGateProfileId:not_found/);
   assert.match(unboundComparabilityClaim.body.detail, /primaryRaterAnchorPolicyId:not_found/);
+  assert.match(unboundComparabilityClaim.body.detail, /comparabilityTierPolicyId:not_found/);
 
   const comparabilityClaim = await invokeApi(context, {
     method: "POST",
@@ -5381,6 +5519,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(comparabilityClaimById.status, 200);
   assert.equal(comparabilityClaimById.body.id, "comparability-claim-workflow-new");
+
+  const comparabilityTierPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/comparability-tier-policies/comparability-tier-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(comparabilityTierPolicyById.status, 200);
+  assert.deepEqual(comparabilityTierPolicyById.body.tierThresholds, comparabilityTierThresholds);
 
   const incompleteCandidateBatch = await invokeApi(context, {
     method: "POST",
@@ -12062,8 +12208,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "primary-rater-policy-workflow-new",
   );
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorSnapshot.primaryRaterAnchor.coverageThresholdMet, true);
+  assert.equal(releaseReport.body.comparabilityTierPolicyEvidence.releaseUseStatus, "submitted_comparability_tier_policy_active");
+  assert.equal(releaseReport.body.comparabilityTierPolicyEvidence.activePolicyId, "comparability-tier-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.comparabilityTierPolicyEvidence.activePolicy.tierThresholds, comparabilityTierThresholds);
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedClaimId, "comparability-claim-workflow-new");
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").statusSource, "submitted_comparability_claim");
+  assert.equal(
+    releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedComparabilityTierPolicyId,
+    "comparability-tier-policy-workflow-new",
+  );
+  assert.deepEqual(
+    releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").tierThresholds,
+    comparabilityTierThresholds.method_preserving,
+  );
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedClaimContractViolationCount, 0);
   assert.ok(
     releaseReport.body.comparabilityClaims
@@ -12078,6 +12235,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedPrimaryRaterAnchorPolicyId,
     "primary-rater-policy-workflow-new",
   );
+  assert.equal(releaseReport.body.workflowGovernanceArtifacts.comparabilityTierPolicies.length, 1);
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "corpus_scale_comparable").submittedStatus, "fails");
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "target_label_comparable").normalizedSubmittedStatus, "partial");
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "protected_split_leakage_comparable").submittedStatus, "partial");
@@ -12186,10 +12344,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowActionArtifacts.candidateReviews.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.candidatePromotions.length, 1);
   assert.equal(releaseReport.body.workflowActionArtifacts.generatedCritiquePromotions.length, 1);
+  assert.equal(releaseReport.body.workflowAuditTrailArtifacts.certificationThresholdPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuditTrailArtifacts.certificationRecords.length, 1);
+  assert.equal(releaseReport.body.certification.thresholdPolicyReleaseUseStatus, "submitted_certification_threshold_policy_active");
+  assert.equal(releaseReport.body.certification.activeCertificationThresholdPolicyId, "certification-threshold-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.certification.certificationThresholdPolicyRows.at(-1).thresholds, certificationThresholds);
   assert.equal(releaseReport.body.certification.certificationRecordEvidence.submittedRecordCount, 1);
   assert.equal(releaseReport.body.certification.certificationRecordEvidence.certifiedRecordCount, 1);
   assert.equal(releaseReport.body.certification.certificationRecordEvidence.rows[0].recordId, "certification-record-workflow-new");
+  assert.equal(
+    releaseReport.body.certification.certificationRecordEvidence.rows[0].thresholdPolicyStatus,
+    "certification_threshold_policy_matched",
+  );
+  assert.deepEqual(releaseReport.body.certification.certificationRecordEvidence.rows[0].thresholdsApplied, certificationThresholds);
   assert.equal(
     releaseReport.body.certification.certificationRecordEvidence.releaseUseStatus,
     "submitted_certification_records_gatekeeping_evidence_complete",
@@ -13201,10 +13368,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(submittedFreeze.body.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(submittedFreeze.body.rightsStatus.status, "pass");
 
-  assert.equal(
-    (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 122 + extendedRaterItemConflictTypes.length,
-  );
+	assert.equal(
+	  (await auditStore.readWorkflowEvents()).length,
+	  243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 124 + extendedRaterItemConflictTypes.length,
+	);
 });
 
 test("comparability claims can bind default governance artifacts before custom records are submitted", async () => {
@@ -13226,6 +13393,7 @@ test("comparability claims can bind default governance artifacts before custom r
         linkedEvaluationRunIds: ["model-eval-october-2026-demo"],
         linkedLeaderboardIds: [],
         releaseGateProfileId: "gate-october-2026-demo",
+        comparabilityTierPolicyId: "comparability-tier-policy-october-2026-demo",
         claimWording: "LMCA-style method-preserving compressed first release; not LMCA-scale replication.",
         methodPreservingStatus: "passes",
         corpusScaleStatus: "fails",
@@ -13296,6 +13464,7 @@ test("submitted diagnostic deferrals suppress claim-gated robustness claims in r
         linkedEvaluationRunIds: ["model-eval-october-2026-demo"],
         linkedLeaderboardIds: [],
         releaseGateProfileId: "gate-october-2026-demo",
+        comparabilityTierPolicyId: "comparability-tier-policy-october-2026-demo",
         claimWording: "LMCA-style release with no obfuscation robustness claim.",
         methodPreservingStatus: "passes",
         corpusScaleStatus: "fails",

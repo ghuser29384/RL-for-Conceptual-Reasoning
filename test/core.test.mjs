@@ -129,6 +129,76 @@ const uxNoFeatureLossKeys = [
   "autosave_resume",
 ];
 
+const certificationThresholds = {
+  customWeightedLossMax: 0.14,
+  pairwiseErrorMax: 0.14,
+  duplicateInconsistencyMax: 0.12,
+  meanAbsErrorMax: 0.14,
+  perDimensionCalibrationErrorMax: 0.15,
+  restrictionDimensionErrorMax: 0.2,
+};
+
+const certificationRemediationRules = {
+  dimensionErrorAbovePerDimensionMax: "targeted_retraining_required_before_live_or_release_critical_rating",
+  restrictionDimensionErrorAboveMax: "hold_matching_sensitive_assignments_until_recertified",
+  duplicateInconsistencyAboveMax: "duplicate_consistency_review_required_before_tier_unlock",
+  hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
+  rubricVersionMismatch: "recertification_or_grandfathering_review_required",
+};
+
+function certificationThresholdPolicy(id = "certification-threshold-policy-release-test") {
+  return {
+    id,
+    policyVersion: "certification-threshold-rlhf90-v1",
+    thresholds: certificationThresholds,
+    remediationRules: certificationRemediationRules,
+    certificationStatusRule:
+      "A rater is certified only when completion is met, the rubric is current, mean absolute error and every dimension stay within the frozen numeric thresholds, and no restriction flags remain.",
+    retrainingRule:
+      "Any dimension above the per-dimension calibration threshold creates a targeted retraining flag before live or release-critical rating.",
+    restrictionRule:
+      "Restriction thresholds hold correctness-sensitive, low-clarity, dead-weight, duplicate-consistency, or hard-ambiguity assignments until recertification or approved review.",
+    recertificationRule:
+      "Rubric-version mismatch requires recertification or grandfathering review before certification evidence can support release use.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const comparabilityTierThresholds = {
+  method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
+  corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
+  source_topic_rater_comparable: { pass: { topicFamiliesCoveredMin: 6, positionSourceCategoriesCoveredMin: 6, raterContributionRowsMin: 6 }, partial: { topicFamiliesCoveredMin: 3, positionSourceCategoriesCoveredMin: 3, raterContributionRowsMin: 3 }, fail: { topicFamiliesCoveredMax: 2 } },
+  exact_position_source_count_comparable: { pass: { exactLmcaSourceCategoryCountMatchesMin: 6, totalPositionsMin: 442 }, partial: { sourceCategoriesCoveredMin: 4, knownOtherDatasetSubsourceRowsMin: 2 }, fail: { sourceCategoriesCoveredMax: 3 } },
+  topic_family_comparable: { pass: { lmcaTopicFamiliesCoveredMin: 6 }, partial: { lmcaTopicFamiliesCoveredMin: 3 }, fail: { lmcaTopicFamiliesCoveredMax: 2 } },
+  rater_contribution_comparable: { pass: { knownLmcaRaterRowsComparedMin: 6, largestSingleRaterShareMax: 0.649 }, partial: { submittedRaterProfilesMin: 4, individualRaterDominanceReported: 1 }, fail: { submittedRaterProfilesMax: 3 } },
+  adapted_source_language_task_format_comparable: { pass: { adaptedSourceDisclosureFieldsMin: 5, knownSubsourceRowsMin: 2, machineTranslationStatusRowsMin: 1 }, partial: { adaptedSourceDisclosureFieldsMin: 3, knownSubsourceRowsMin: 1 }, fail: { adaptedSourceDisclosureFieldsMax: 2 } },
+  metric_denominator_comparable: { pass: { weightedPairwisePositionsMin: 255, weightedPairwiseCritiquePairsMin: 856, customMetricDialoguesMin: 933 }, partial: { weightedPairwisePositionsMin: 52, weightedPairwiseCritiquePairsMin: 100, customMetricDialoguesMin: 120 }, fail: { weightedPairwiseCritiquePairsMax: 99 } },
+  target_label_comparable: { pass: { primaryRaterAnchorSnapshotsMin: 1, targetLabelVersionPrimaryRaterAnchorRequired: 1 }, partial: { pairedPrimaryAndConsensusSnapshotsMin: 1 }, fail: { primaryRaterAnchorSnapshotsMax: 0 } },
+  validation_design_comparable: { pass: { validationCritiquesMin: 52, validationPositionsMin: 19, coreAllItemsRatersMin: 4 }, partial: { validationCritiquesMin: 26, validationPositionsMin: 10, coreAllItemsRatersMin: 2 }, fail: { validationCritiquesMax: 25 } },
+  validation_ceiling_comparable: { pass: { appendixCNumericBaselineSectionsMin: 5, humanCeilingRunsMin: 1, intervalMetadataComplete: 1 }, partial: { appendixCNumericBaselineSectionsMin: 3, humanCeilingRunsMin: 1 }, fail: { humanCeilingRunsMax: 0 } },
+  model_score_anchor_comparable: { pass: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3, cleanLeaderboardRunsMin: 1 }, partial: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3 }, fail: { table5WeightedPairwiseAnchorsMax: 3 } },
+  prompt_family_source_scope_comparable: { pass: { commonPromptPolicyRowsMin: 1, appendixGExactBaselineRowsMin: 1, promptScopeSensitivityRowsMin: 1 }, partial: { promptPolicyRowsMin: 1 }, fail: { promptPolicyRowsMax: 0 } },
+  model_snapshot_comparable: { pass: { resolvedModelSnapshotShareMin: 1, aliasStabilityRowsMin: 1 }, partial: { resolvedModelSnapshotShareMin: 0.5 }, fail: { resolvedModelSnapshotShareMax: 0.49 } },
+  protected_split_leakage_comparable: { pass: { protectedLeakageIncidentMax: 0, accessAuditRowsMin: 1, protectedSplitIsolationFailuresMax: 0 }, partial: { accessAuditRowsMin: 1 }, fail: { protectedLeakageIncidentMin: 1 } },
+  replication_like: { pass: { passingComparabilityTierCountMin: 15, failingComparabilityTierCountMax: 0 }, partial: { passingComparabilityTierCountMin: 12, failingComparabilityTierCountMax: 2 }, fail: { failingComparabilityTierCountMin: 3 } },
+};
+
+function comparabilityTierPolicy(id = "comparability-tier-policy-release-test") {
+  return {
+    id,
+    policyVersion: "comparability-tier-rlhf90-v1",
+    statusOrder: ["fails", "partial", "passes"],
+    tierThresholds: comparabilityTierThresholds,
+    guardrailRule:
+      "Computed release evidence remains authoritative; submitted comparability statuses can only narrow or annotate tiers and the stricter status wins.",
+    notApplicableRule:
+      "not_applicable is allowed only for tiers outside a release claim scope and ranks no higher than partial for overclaim prevention.",
+    publicWordingRule:
+      "Public claim wording must name the tier, status, threshold policy, limitations, and whether the claim is LMCA-style rather than target-identical replication.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 const uxHiddenFieldClasses = [
   "source_metadata",
   "admin_tags",
@@ -6614,6 +6684,9 @@ test("certification audit enforces gold-pack isolation without treating model ju
   assert.ok(audit.trainingExposureOnly);
   assert.equal(audit.packs[0].totalRequiredItems, 30);
   assert.ok(audit.packs.every((pack) => pack.clusterIsolationStatus === "pass"));
+  assert.equal(audit.activeCertificationThresholdPolicyId, "certification-threshold-policy-october-2026-demo");
+  assert.deepEqual(audit.requiredCertificationThresholds, certificationThresholds);
+  assert.equal(audit.thresholdPolicyReleaseUseStatus, "seed_certification_threshold_policy_active");
   assert.equal(audit.certificationRecordEvidence.releaseUseStatus, "no_submitted_certification_records");
 });
 
@@ -6634,11 +6707,13 @@ test("submitted CertificationRecord artifacts become certification gatekeeping e
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      certificationThresholdPolicies: [certificationThresholdPolicy("certification-threshold-policy-release-test-submitted")],
       certificationRecords: [
         {
           id: "certification-record-submitted",
           raterId: "demo-rater",
           packVersion: "cert-tier-zero-2026-10",
+          certificationThresholdPolicyId: "certification-threshold-policy-release-test-submitted",
           rubricVersion: "lmca-app-f-2026-10",
           goldItemIds: ["gold-ai-selectivity"],
           duplicateItemIds: ["gold-low-clarity-obfuscation"],
@@ -6655,15 +6730,72 @@ test("submitted CertificationRecord artifacts become certification gatekeeping e
     },
   );
   const evidence = report.certification.certificationRecordEvidence;
+  assert.equal(report.certification.thresholdPolicyReleaseUseStatus, "submitted_certification_threshold_policy_active");
+  assert.equal(report.certification.activeCertificationThresholdPolicyId, "certification-threshold-policy-release-test-submitted");
+  assert.deepEqual(report.certification.certificationThresholdPolicyRows.at(-1).thresholds, certificationThresholds);
   assert.equal(evidence.submittedRecordCount, 1);
   assert.equal(evidence.certifiedRecordCount, 1);
   assert.equal(evidence.reviewRows.length, 0);
   assert.equal(evidence.rows[0].recordSource, "submitted_workflow_certification_record");
+  assert.equal(evidence.rows[0].certificationThresholdPolicyId, "certification-threshold-policy-release-test-submitted");
+  assert.equal(evidence.rows[0].thresholdPolicyStatus, "certification_threshold_policy_matched");
+  assert.deepEqual(evidence.rows[0].thresholdsApplied, certificationThresholds);
   assert.equal(evidence.rows[0].rubricStatus, "certification_record_matches_pack_rubric");
   assert.equal(evidence.rows[0].protectedSplitConflictStatus, "protected_split_excluded_training_exposure_acknowledged");
   assert.equal(evidence.rows[0].scoreStatus, "certification_scores_within_policy");
   assert.equal(evidence.rows[0].tierUnlockStatus, "tier_unlocked_recorded");
   assert.equal(evidence.releaseUseStatus, "submitted_certification_records_gatekeeping_evidence_complete");
+});
+
+test("certification threshold policy drift keeps certification records under review", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-certification-policy-drift-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const driftedPolicy = {
+    ...certificationThresholdPolicy("certification-threshold-policy-drifted"),
+    thresholds: { ...certificationThresholds, meanAbsErrorMax: 0.2 },
+  };
+  const report = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      certificationThresholdPolicies: [driftedPolicy],
+      certificationRecords: [
+        {
+          id: "certification-record-drifted-policy",
+          raterId: "demo-rater",
+          packVersion: "cert-tier-zero-2026-10",
+          certificationThresholdPolicyId: "certification-threshold-policy-drifted",
+          rubricVersion: "lmca-app-f-2026-10",
+          goldItemIds: ["gold-ai-selectivity"],
+          duplicateItemIds: ["gold-low-clarity-obfuscation"],
+          hardAmbiguityItemIds: ["gold-priced-in-objection"],
+          protectedSplitConflictCheck: "training_exposure_only_no_hidden_or_validation_overlap",
+          trainingExposureAcknowledged: true,
+          recertificationReason: "initial_certification_for_october_release",
+          customWeightedLoss: 0.11,
+          pairwiseError: 0.08,
+          duplicateInconsistency: 0.04,
+          perDimensionCalibrationError: { centrality: 0.07, strength: 0.09, correctness: 0.1 },
+          tierUnlocked: "graduate_live_rating",
+        },
+      ],
+    },
+  );
+  assert.equal(report.certification.thresholdPolicyReleaseUseStatus, "submitted_certification_threshold_policy_review_required");
+  assert.equal(report.certification.activeCertificationThresholdPolicyId, "certification-threshold-policy-release-test");
+  assert.equal(report.certification.thresholdPolicyReviewRows[0].reviewReasons.includes("thresholds"), true);
+  assert.equal(report.certification.certificationRecordEvidence.rows[0].thresholdPolicyStatus, "certification_threshold_policy_review_required");
+  assert.equal(report.certification.certificationRecordEvidence.releaseUseStatus, "submitted_certification_records_require_review");
 });
 
 test("submitted gold items count toward release gold-library readiness", () => {
@@ -9318,12 +9450,14 @@ test("submitted comparability claims annotate release claim tiers without bypass
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      comparabilityTierPolicies: [comparabilityTierPolicy("comparability-tier-policy-release-test-submitted")],
       comparabilityClaims: [
         {
           id: "comparability-claim-submitted",
           releaseId: "release-test",
           linkedReleaseIds: ["release-test"],
           releaseGateProfileId: "gate-release-test",
+          comparabilityTierPolicyId: "comparability-tier-policy-release-test-submitted",
           claimWording: "LMCA-style method-preserving compressed release; not an LMCA-scale replication.",
           methodPreservingStatus: "passes",
           methodPreservingEvidence: "Seven-dimensional blind rating workflow and scoring families are implemented.",
@@ -9353,11 +9487,17 @@ test("submitted comparability claims annotate release claim tiers without bypass
   const corpusClaim = report.comparabilityClaims.find((claim) => claim.tier === "corpus_scale_comparable");
   const targetClaim = report.comparabilityClaims.find((claim) => claim.tier === "target_label_comparable");
   const protectedSplitClaim = report.comparabilityClaims.find((claim) => claim.tier === "protected_split_leakage_comparable");
+  assert.equal(report.comparabilityTierPolicyEvidence.releaseUseStatus, "submitted_comparability_tier_policy_active");
+  assert.equal(report.comparabilityTierPolicyEvidence.activePolicyId, "comparability-tier-policy-release-test-submitted");
+  assert.deepEqual(report.comparabilityTierPolicyEvidence.activePolicy.tierThresholds, comparabilityTierThresholds);
   assert.equal(methodClaim.status, "passes");
   assert.equal(methodClaim.statusSource, "submitted_comparability_claim");
   assert.equal(methodClaim.submittedClaimId, "comparability-claim-submitted");
   assert.equal(methodClaim.submittedReleaseGateProfileId, "gate-release-test");
   assert.equal(methodClaim.submittedPrimaryRaterAnchorPolicyId, "primary-rater-anchor-policy-release-test");
+  assert.equal(methodClaim.submittedComparabilityTierPolicyId, "comparability-tier-policy-release-test-submitted");
+  assert.equal(methodClaim.comparabilityTierPolicyId, "comparability-tier-policy-release-test-submitted");
+  assert.deepEqual(methodClaim.tierThresholds, comparabilityTierThresholds.method_preserving);
   assert.deepEqual(methodClaim.submittedEvidenceLinks, ["release-config-manifest", "label-snapshot", "validation-report"]);
   assert.equal(methodClaim.submittedClaimContractViolationCount, 0);
   assert.ok(methodClaim.submittedClaimContractChecks.every((check) => check.status === "pass"));
@@ -9370,6 +9510,7 @@ test("submitted comparability claims annotate release claim tiers without bypass
   assert.equal(targetClaim.statusSource, "computed_guardrail_with_submitted_claim");
   assert.equal(protectedSplitClaim.submittedStatus, "partial");
   assert.equal(protectedSplitClaim.statusSource, "submitted_comparability_claim");
+  assert.deepEqual(protectedSplitClaim.tierThresholds, comparabilityTierThresholds.protected_split_leakage_comparable);
 
   const malformedReport = buildOctoberReleaseReport(
     "release-test",
@@ -9674,11 +9815,13 @@ test("release report requires evidence-backed submitted rater profiles for relea
           conflictDisclosures: ["no_known_conflict"],
         },
       ],
+      certificationThresholdPolicies: [certificationThresholdPolicy("certification-threshold-policy-release-test")],
       certificationRecords: [
         {
           id: "certification-record-profiled-rater",
           raterId: "profiled-rater",
           packVersion: "cert-tier-zero-2026-10",
+          certificationThresholdPolicyId: "certification-threshold-policy-release-test",
           rubricVersion: "lmca-app-f-2026-10",
           goldItemIds: ["gold-ai-selectivity"],
           duplicateItemIds: ["gold-low-clarity-obfuscation"],

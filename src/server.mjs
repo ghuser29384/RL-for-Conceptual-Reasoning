@@ -737,6 +737,124 @@ const rubricLintTriggerThresholds = {
   dead_weight_rationale: { deadWeightMin: 0.7 },
   verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
 };
+const certificationThresholdPolicyVersion = "certification-threshold-rlhf90-v1";
+const certificationThresholds = {
+  customWeightedLossMax: 0.14,
+  pairwiseErrorMax: 0.14,
+  duplicateInconsistencyMax: 0.12,
+  meanAbsErrorMax: 0.14,
+  perDimensionCalibrationErrorMax: 0.15,
+  restrictionDimensionErrorMax: 0.2,
+};
+const certificationRemediationRules = {
+  dimensionErrorAbovePerDimensionMax: "targeted_retraining_required_before_live_or_release_critical_rating",
+  restrictionDimensionErrorAboveMax: "hold_matching_sensitive_assignments_until_recertified",
+  duplicateInconsistencyAboveMax: "duplicate_consistency_review_required_before_tier_unlock",
+  hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
+  rubricVersionMismatch: "recertification_or_grandfathering_review_required",
+};
+const comparabilityClaimTiers = [
+  "method_preserving",
+  "corpus_scale_comparable",
+  "source_topic_rater_comparable",
+  "exact_position_source_count_comparable",
+  "topic_family_comparable",
+  "rater_contribution_comparable",
+  "adapted_source_language_task_format_comparable",
+  "metric_denominator_comparable",
+  "target_label_comparable",
+  "validation_design_comparable",
+  "validation_ceiling_comparable",
+  "model_score_anchor_comparable",
+  "prompt_family_source_scope_comparable",
+  "model_snapshot_comparable",
+  "protected_split_leakage_comparable",
+  "replication_like",
+];
+const comparabilityTierPolicyVersion = "comparability-tier-rlhf90-v1";
+const comparabilityTierStatusOrder = ["fails", "partial", "passes"];
+const comparabilityTierThresholds = {
+  method_preserving: {
+    pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 },
+    partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 },
+    fail: { sourceCriticalCoreGatePassCountMax: 3 },
+  },
+  corpus_scale_comparable: {
+    pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 },
+    partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 },
+    fail: { positionsWithAtLeastOneCritiqueMax: 119 },
+  },
+  source_topic_rater_comparable: {
+    pass: { topicFamiliesCoveredMin: 6, positionSourceCategoriesCoveredMin: 6, raterContributionRowsMin: 6 },
+    partial: { topicFamiliesCoveredMin: 3, positionSourceCategoriesCoveredMin: 3, raterContributionRowsMin: 3 },
+    fail: { topicFamiliesCoveredMax: 2 },
+  },
+  exact_position_source_count_comparable: {
+    pass: { exactLmcaSourceCategoryCountMatchesMin: 6, totalPositionsMin: 442 },
+    partial: { sourceCategoriesCoveredMin: 4, knownOtherDatasetSubsourceRowsMin: 2 },
+    fail: { sourceCategoriesCoveredMax: 3 },
+  },
+  topic_family_comparable: {
+    pass: { lmcaTopicFamiliesCoveredMin: 6 },
+    partial: { lmcaTopicFamiliesCoveredMin: 3 },
+    fail: { lmcaTopicFamiliesCoveredMax: 2 },
+  },
+  rater_contribution_comparable: {
+    pass: { knownLmcaRaterRowsComparedMin: 6, largestSingleRaterShareMax: 0.649 },
+    partial: { submittedRaterProfilesMin: 4, individualRaterDominanceReported: 1 },
+    fail: { submittedRaterProfilesMax: 3 },
+  },
+  adapted_source_language_task_format_comparable: {
+    pass: { adaptedSourceDisclosureFieldsMin: 5, knownSubsourceRowsMin: 2, machineTranslationStatusRowsMin: 1 },
+    partial: { adaptedSourceDisclosureFieldsMin: 3, knownSubsourceRowsMin: 1 },
+    fail: { adaptedSourceDisclosureFieldsMax: 2 },
+  },
+  metric_denominator_comparable: {
+    pass: { weightedPairwisePositionsMin: 255, weightedPairwiseCritiquePairsMin: 856, customMetricDialoguesMin: 933 },
+    partial: { weightedPairwisePositionsMin: 52, weightedPairwiseCritiquePairsMin: 100, customMetricDialoguesMin: 120 },
+    fail: { weightedPairwiseCritiquePairsMax: 99 },
+  },
+  target_label_comparable: {
+    pass: { primaryRaterAnchorSnapshotsMin: 1, targetLabelVersionPrimaryRaterAnchorRequired: 1 },
+    partial: { pairedPrimaryAndConsensusSnapshotsMin: 1 },
+    fail: { primaryRaterAnchorSnapshotsMax: 0 },
+  },
+  validation_design_comparable: {
+    pass: { validationCritiquesMin: 52, validationPositionsMin: 19, coreAllItemsRatersMin: 4 },
+    partial: { validationCritiquesMin: 26, validationPositionsMin: 10, coreAllItemsRatersMin: 2 },
+    fail: { validationCritiquesMax: 25 },
+  },
+  validation_ceiling_comparable: {
+    pass: { appendixCNumericBaselineSectionsMin: 5, humanCeilingRunsMin: 1, intervalMetadataComplete: 1 },
+    partial: { appendixCNumericBaselineSectionsMin: 3, humanCeilingRunsMin: 1 },
+    fail: { humanCeilingRunsMax: 0 },
+  },
+  model_score_anchor_comparable: {
+    pass: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3, cleanLeaderboardRunsMin: 1 },
+    partial: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3 },
+    fail: { table5WeightedPairwiseAnchorsMax: 3 },
+  },
+  prompt_family_source_scope_comparable: {
+    pass: { commonPromptPolicyRowsMin: 1, appendixGExactBaselineRowsMin: 1, promptScopeSensitivityRowsMin: 1 },
+    partial: { promptPolicyRowsMin: 1 },
+    fail: { promptPolicyRowsMax: 0 },
+  },
+  model_snapshot_comparable: {
+    pass: { resolvedModelSnapshotShareMin: 1, aliasStabilityRowsMin: 1 },
+    partial: { resolvedModelSnapshotShareMin: 0.5 },
+    fail: { resolvedModelSnapshotShareMax: 0.49 },
+  },
+  protected_split_leakage_comparable: {
+    pass: { protectedLeakageIncidentMax: 0, accessAuditRowsMin: 1, protectedSplitIsolationFailuresMax: 0 },
+    partial: { accessAuditRowsMin: 1 },
+    fail: { protectedLeakageIncidentMin: 1 },
+  },
+  replication_like: {
+    pass: { passingComparabilityTierCountMin: 15, failingComparabilityTierCountMax: 0 },
+    partial: { passingComparabilityTierCountMin: 12, failingComparabilityTierCountMax: 2 },
+    fail: { failingComparabilityTierCountMin: 3 },
+  },
+};
 const partialTaskOutputTypes = [
   "pairwise_preference_only",
   "clarity_triage",
@@ -1360,12 +1478,43 @@ const workflowWriteEndpoints = [
     policyActionKind: "release_freeze",
     phaseGateLaneKind: "governance_action",
   }),
+  workflowWriteSpec(/^\/api\/v1\/certification-threshold-policies$/, "certification_threshold_policy_submitted", "certificationThresholdPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "thresholds",
+      "remediationRules",
+      "certificationStatusRule",
+      "retrainingRule",
+      "restrictionRule",
+      "recertificationRule",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["thresholds", "remediationRules"],
+    requiredObjectKeys: {
+      thresholds: Object.keys(certificationThresholds),
+      remediationRules: Object.keys(certificationRemediationRules),
+    },
+    requiredStructuredFields: {
+      thresholds: certificationThresholds,
+      remediationRules: certificationRemediationRules,
+    },
+    requiredStringIncludes: {
+      certificationStatusRule: ["mean absolute error", "certified"],
+      retrainingRule: ["dimension", "retraining"],
+      restrictionRule: ["restriction"],
+      recertificationRule: ["rubric", "recertification"],
+    },
+    requiredExactFields: { policyVersion: certificationThresholdPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/certification-records$/, "certification_record_submitted", "certificationRecord", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
       "id",
       "raterId",
       "packVersion",
+      "certificationThresholdPolicyId",
       "rubricVersion",
       "protectedSplitConflictCheck",
       "recertificationReason",
@@ -1845,12 +1994,38 @@ const workflowWriteEndpoints = [
       prohibitedPostHocCriteria: ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
     },
   }),
+  workflowWriteSpec(/^\/api\/v1\/comparability-tier-policies$/, "comparability_tier_policy_submitted", "comparabilityTierPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "statusOrder",
+      "tierThresholds",
+      "guardrailRule",
+      "notApplicableRule",
+      "publicWordingRule",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["tierThresholds"],
+    requiredObjectKeys: { tierThresholds: comparabilityClaimTiers },
+    requiredStructuredFields: {
+      statusOrder: comparabilityTierStatusOrder,
+      tierThresholds: comparabilityTierThresholds,
+    },
+    requiredStringIncludes: {
+      guardrailRule: ["computed", "stricter"],
+      notApplicableRule: ["not_applicable", "partial"],
+      publicWordingRule: ["tier", "limitations"],
+    },
+    requiredExactFields: { policyVersion: comparabilityTierPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/comparability-claims$/, "comparability_claim_submitted", "comparabilityClaim", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
       "id",
       "releaseId",
       "releaseGateProfileId",
+      "comparabilityTierPolicyId",
       "claimWording",
       "methodPreservingStatus",
       "corpusScaleStatus",
@@ -4334,6 +4509,7 @@ const workflowWriteEndpoints = [
 ];
 
 const workflowReadEndpoints = [
+  workflowReadSpec(/^\/api\/v1\/certification-threshold-policies\/(?<id>[^/]+)$/, "certificationThresholdPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/certification-records\/(?<id>[^/]+)$/, "certificationRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/exposure-logs\/(?<id>[^/]+)$/, "exposureLog", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/revisions\/(?<id>[^/]+)$/, "revisionRecord", adminAuditRoles),
@@ -4356,6 +4532,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/release-versions\/(?<id>[^/]+)$/, "releaseVersion", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-gate-profiles\/(?<id>[^/]+)$/, "releaseGateProfile", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/primary-rater-anchor-policies\/(?<id>[^/]+)$/, "primaryRaterAnchorPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/comparability-tier-policies\/(?<id>[^/]+)$/, "comparabilityTierPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/comparability-claims\/(?<id>[^/]+)$/, "comparabilityClaim", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/candidate-batches\/(?<id>[^/]+)$/, "candidateBatch", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/candidate-critiques\/(?<id>[^/]+)$/, "candidateCritique", adminAuditRoles),
@@ -7024,6 +7201,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const rightsReviews = latestWorkflowResources(workflowEvents, "rightsReview");
   const rightsClearancePolicies = latestWorkflowResources(workflowEvents, "rightsClearancePolicy");
   const releaseFreezes = latestWorkflowResources(workflowEvents, "releaseFreeze");
+  const certificationThresholdPolicies = latestWorkflowResources(workflowEvents, "certificationThresholdPolicy");
   const certificationRecords = latestWorkflowResources(workflowEvents, "certificationRecord");
   const exposureLogs = latestWorkflowResources(workflowEvents, "exposureLog");
   const revisionRecords = latestWorkflowResources(workflowEvents, "revisionRecord");
@@ -7079,6 +7257,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const derivedUtilityFormulas = latestWorkflowResources(workflowEvents, "derivedUtilityFormula");
   const releaseGateProfiles = latestWorkflowResources(workflowEvents, "releaseGateProfile");
   const primaryRaterAnchorPolicies = latestWorkflowResources(workflowEvents, "primaryRaterAnchorPolicy");
+  const comparabilityTierPolicies = latestWorkflowResources(workflowEvents, "comparabilityTierPolicy");
   const comparabilityClaims = latestWorkflowResources(workflowEvents, "comparabilityClaim");
   const activeLearningSelectionAudits = latestWorkflowResources(workflowEvents, "activeLearningSelectionAudit");
   const sycophancyProbeRuns = latestWorkflowResources(workflowEvents, "sycophancyProbeRun");
@@ -7191,6 +7370,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     rightsReviews,
     rightsClearancePolicies,
     releaseFreezes,
+    certificationThresholdPolicies,
     certificationRecords,
     exposureLogs,
     revisionRecords,
@@ -7247,6 +7427,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     derivedUtilityFormulas,
     releaseGateProfiles,
     primaryRaterAnchorPolicies,
+    comparabilityTierPolicies,
     comparabilityClaims,
     activeLearningSelectionAudits,
     sycophancyProbeRuns,
@@ -7355,6 +7536,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     critiqueList,
     rightsReviews,
     releaseFreezes,
+    certificationThresholdPolicies,
     certificationRecords,
     exposureLogs,
     revisionRecords,
@@ -7410,6 +7592,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     derivedUtilityFormulas,
     releaseGateProfiles,
     primaryRaterAnchorPolicies,
+    comparabilityTierPolicies,
     comparabilityClaims,
     activeLearningSelectionAudits,
     sycophancyProbeRuns,
@@ -8113,6 +8296,7 @@ async function validateComparabilityClaimBindings(context, claim) {
   const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
   const gateProfiles = latestWorkflowResources(workflowEvents, "releaseGateProfile");
   const primaryRaterPolicies = latestWorkflowResources(workflowEvents, "primaryRaterAnchorPolicy");
+  const comparabilityTierPolicies = latestWorkflowResources(workflowEvents, "comparabilityTierPolicy");
   const claimReleaseId = claim.releaseId ?? releaseId;
   const failures = [];
 
@@ -8145,6 +8329,17 @@ async function validateComparabilityClaimBindings(context, claim) {
 
   if (Array.isArray(claim.linkedReleaseIds) && !claim.linkedReleaseIds.includes(claimReleaseId)) {
     failures.push("linkedReleaseIds:releaseId_missing");
+  }
+
+  const defaultComparabilityTierPolicyId = `comparability-tier-policy-${claimReleaseId}`;
+  const linkedComparabilityTierPolicy =
+    claim.comparabilityTierPolicyId === defaultComparabilityTierPolicyId
+      ? { id: defaultComparabilityTierPolicyId, releaseId: claimReleaseId, policySource: "default_project_comparability_tier_policy" }
+      : comparabilityTierPolicies.find((policy) => policy.id === claim.comparabilityTierPolicyId) ?? null;
+  if (!linkedComparabilityTierPolicy) {
+    failures.push("comparabilityTierPolicyId:not_found");
+  } else if (linkedComparabilityTierPolicy.releaseId && linkedComparabilityTierPolicy.releaseId !== claimReleaseId) {
+    failures.push("comparabilityTierPolicyId:release_mismatch");
   }
 
   if (failures.length) {

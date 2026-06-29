@@ -45,6 +45,24 @@ import {
 } from "./domain/contributions.mjs";
 
 const releaseId = "october-2026-demo";
+const comparabilityTierThresholds = {
+  method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
+  corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
+  source_topic_rater_comparable: { pass: { topicFamiliesCoveredMin: 6, positionSourceCategoriesCoveredMin: 6, raterContributionRowsMin: 6 }, partial: { topicFamiliesCoveredMin: 3, positionSourceCategoriesCoveredMin: 3, raterContributionRowsMin: 3 }, fail: { topicFamiliesCoveredMax: 2 } },
+  exact_position_source_count_comparable: { pass: { exactLmcaSourceCategoryCountMatchesMin: 6, totalPositionsMin: 442 }, partial: { sourceCategoriesCoveredMin: 4, knownOtherDatasetSubsourceRowsMin: 2 }, fail: { sourceCategoriesCoveredMax: 3 } },
+  topic_family_comparable: { pass: { lmcaTopicFamiliesCoveredMin: 6 }, partial: { lmcaTopicFamiliesCoveredMin: 3 }, fail: { lmcaTopicFamiliesCoveredMax: 2 } },
+  rater_contribution_comparable: { pass: { knownLmcaRaterRowsComparedMin: 6, largestSingleRaterShareMax: 0.649 }, partial: { submittedRaterProfilesMin: 4, individualRaterDominanceReported: 1 }, fail: { submittedRaterProfilesMax: 3 } },
+  adapted_source_language_task_format_comparable: { pass: { adaptedSourceDisclosureFieldsMin: 5, knownSubsourceRowsMin: 2, machineTranslationStatusRowsMin: 1 }, partial: { adaptedSourceDisclosureFieldsMin: 3, knownSubsourceRowsMin: 1 }, fail: { adaptedSourceDisclosureFieldsMax: 2 } },
+  metric_denominator_comparable: { pass: { weightedPairwisePositionsMin: 255, weightedPairwiseCritiquePairsMin: 856, customMetricDialoguesMin: 933 }, partial: { weightedPairwisePositionsMin: 52, weightedPairwiseCritiquePairsMin: 100, customMetricDialoguesMin: 120 }, fail: { weightedPairwiseCritiquePairsMax: 99 } },
+  target_label_comparable: { pass: { primaryRaterAnchorSnapshotsMin: 1, targetLabelVersionPrimaryRaterAnchorRequired: 1 }, partial: { pairedPrimaryAndConsensusSnapshotsMin: 1 }, fail: { primaryRaterAnchorSnapshotsMax: 0 } },
+  validation_design_comparable: { pass: { validationCritiquesMin: 52, validationPositionsMin: 19, coreAllItemsRatersMin: 4 }, partial: { validationCritiquesMin: 26, validationPositionsMin: 10, coreAllItemsRatersMin: 2 }, fail: { validationCritiquesMax: 25 } },
+  validation_ceiling_comparable: { pass: { appendixCNumericBaselineSectionsMin: 5, humanCeilingRunsMin: 1, intervalMetadataComplete: 1 }, partial: { appendixCNumericBaselineSectionsMin: 3, humanCeilingRunsMin: 1 }, fail: { humanCeilingRunsMax: 0 } },
+  model_score_anchor_comparable: { pass: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3, cleanLeaderboardRunsMin: 1 }, partial: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3 }, fail: { table5WeightedPairwiseAnchorsMax: 3 } },
+  prompt_family_source_scope_comparable: { pass: { commonPromptPolicyRowsMin: 1, appendixGExactBaselineRowsMin: 1, promptScopeSensitivityRowsMin: 1 }, partial: { promptPolicyRowsMin: 1 }, fail: { promptPolicyRowsMax: 0 } },
+  model_snapshot_comparable: { pass: { resolvedModelSnapshotShareMin: 1, aliasStabilityRowsMin: 1 }, partial: { resolvedModelSnapshotShareMin: 0.5 }, fail: { resolvedModelSnapshotShareMax: 0.49 } },
+  protected_split_leakage_comparable: { pass: { protectedLeakageIncidentMax: 0, accessAuditRowsMin: 1, protectedSplitIsolationFailuresMax: 0 }, partial: { accessAuditRowsMin: 1 }, fail: { protectedLeakageIncidentMin: 1 } },
+  replication_like: { pass: { passingComparabilityTierCountMin: 15, failingComparabilityTierCountMax: 0 }, partial: { passingComparabilityTierCountMin: 12, failingComparabilityTierCountMax: 2 }, fail: { failingComparabilityTierCountMin: 3 } },
+};
 const root = document.getElementById("root");
 const initialSection = window.location.pathname.startsWith("/contribute")
   ? "contribute"
@@ -218,6 +236,44 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "certification-threshold-policy",
+    label: "Certification Threshold Policy",
+    endpoint: () => "/api/v1/certification-threshold-policies",
+    resourceKey: "certificationThresholdPolicy",
+    requiredRole: "admin",
+    summary: "Freeze the exact numeric certification, retraining, restriction, and recertification thresholds for release evidence.",
+    payload: () => ({
+      certificationThresholdPolicy: {
+        id: "certification-threshold-policy-october-2026-demo",
+        policyVersion: "certification-threshold-rlhf90-v1",
+        thresholds: {
+          customWeightedLossMax: 0.14,
+          pairwiseErrorMax: 0.14,
+          duplicateInconsistencyMax: 0.12,
+          meanAbsErrorMax: 0.14,
+          perDimensionCalibrationErrorMax: 0.15,
+          restrictionDimensionErrorMax: 0.2,
+        },
+        remediationRules: {
+          dimensionErrorAbovePerDimensionMax: "targeted_retraining_required_before_live_or_release_critical_rating",
+          restrictionDimensionErrorAboveMax: "hold_matching_sensitive_assignments_until_recertified",
+          duplicateInconsistencyAboveMax: "duplicate_consistency_review_required_before_tier_unlock",
+          hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
+          rubricVersionMismatch: "recertification_or_grandfathering_review_required",
+        },
+        certificationStatusRule:
+          "A rater is certified only when completion is met, the rubric is current, mean absolute error and every dimension stay within the frozen numeric thresholds, and no restriction flags remain.",
+        retrainingRule:
+          "Any dimension above the per-dimension calibration threshold creates a targeted retraining flag before live or release-critical rating.",
+        restrictionRule:
+          "Restriction thresholds hold correctness-sensitive, low-clarity, dead-weight, duplicate-consistency, or hard-ambiguity assignments until recertification or approved review.",
+        recertificationRule:
+          "Rubric-version mismatch requires recertification or grandfathering review before certification evidence can support release use.",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    }),
+  },
+  {
     id: "certification-record",
     label: "Certification Record",
     endpoint: () => "/api/v1/certification-records",
@@ -229,10 +285,11 @@ const workflowTemplates = [
         id: `certification-record-${Date.now()}`,
         raterId: "demo-rater",
         packVersion: "cert-tier-zero-2026-10",
-        rubricVersion: "lmca-seven-dim-v1",
-        goldItemIds: ["gold-item-demo"],
-        duplicateItemIds: ["duplicate-demo"],
-        hardAmbiguityItemIds: ["hard-ambiguity-demo"],
+        certificationThresholdPolicyId: "certification-threshold-policy-october-2026-demo",
+        rubricVersion: "lmca-app-f-2026-10",
+        goldItemIds: ["gold-ai-selectivity"],
+        duplicateItemIds: ["gold-low-clarity-obfuscation"],
+        hardAmbiguityItemIds: ["gold-priced-in-objection"],
         protectedSplitConflictCheck: "training_exposure_only_no_hidden_or_validation_overlap",
         trainingExposureAcknowledged: true,
         recertificationReason: "initial_certification_for_october_release",
@@ -492,6 +549,29 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "comparability-tier-policy",
+    label: "Comparability Tier Policy",
+    endpoint: () => "/api/v1/comparability-tier-policies",
+    resourceKey: "comparabilityTierPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exact pass, partial, and fail thresholds for each LMCA comparability claim tier.",
+    payload: () => ({
+      comparabilityTierPolicy: {
+        id: `comparability-tier-policy-${releaseId}`,
+        policyVersion: "comparability-tier-rlhf90-v1",
+        statusOrder: ["fails", "partial", "passes"],
+        tierThresholds: comparabilityTierThresholds,
+        guardrailRule:
+          "Computed release evidence remains authoritative; submitted comparability statuses can only narrow or annotate tiers and the stricter status wins.",
+        notApplicableRule:
+          "not_applicable is allowed only for tiers outside a release claim scope and ranks no higher than partial for overclaim prevention.",
+        publicWordingRule:
+          "Public claim wording must name the tier, status, threshold policy, limitations, and whether the claim is LMCA-style rather than target-identical replication.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "comparability-claim",
     label: "Comparability Claim",
     endpoint: () => "/api/v1/comparability-claims",
@@ -507,6 +587,7 @@ const workflowTemplates = [
         linkedEvaluationRunIds: ["eval-october-full-rubric"],
         linkedLeaderboardIds: [],
         releaseGateProfileId: `gate-${releaseId}`,
+        comparabilityTierPolicyId: `comparability-tier-policy-${releaseId}`,
         claimWording: "LMCA-style method-preserving compressed first release; not LMCA-scale replication.",
         methodPreservingStatus: "passes",
         corpusScaleStatus: "fails",

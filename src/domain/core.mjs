@@ -5417,13 +5417,99 @@ export function buildCommonMaps(labelSnapshot, run = fullRubricEvaluationRun) {
   return { humanOveralls, modelOveralls, humanFullRatings, modelFullRatings, humanFullByPosition, modelFullByPosition };
 }
 
+const CERTIFICATION_THRESHOLD_POLICY_VERSION = "certification-threshold-rlhf90-v1";
+const REQUIRED_CERTIFICATION_THRESHOLDS = {
+  customWeightedLossMax: 0.14,
+  pairwiseErrorMax: 0.14,
+  duplicateInconsistencyMax: 0.12,
+  meanAbsErrorMax: 0.14,
+  perDimensionCalibrationErrorMax: 0.15,
+  restrictionDimensionErrorMax: 0.2,
+};
+const REQUIRED_CERTIFICATION_REMEDIATION_RULES = {
+  dimensionErrorAbovePerDimensionMax: "targeted_retraining_required_before_live_or_release_critical_rating",
+  restrictionDimensionErrorAboveMax: "hold_matching_sensitive_assignments_until_recertified",
+  duplicateInconsistencyAboveMax: "duplicate_consistency_review_required_before_tier_unlock",
+  hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
+  rubricVersionMismatch: "recertification_or_grandfathering_review_required",
+};
+
+function defaultCertificationThresholdPolicy(releaseId) {
+  return {
+    id: `certification-threshold-policy-${releaseId}`,
+    policyVersion: CERTIFICATION_THRESHOLD_POLICY_VERSION,
+    thresholds: REQUIRED_CERTIFICATION_THRESHOLDS,
+    remediationRules: REQUIRED_CERTIFICATION_REMEDIATION_RULES,
+    certificationStatusRule:
+      "A rater is certified only when completion is met, the rubric is current, mean absolute error and every dimension stay within the frozen numeric thresholds, and no restriction flags remain.",
+    retrainingRule:
+      "Any dimension above the per-dimension calibration threshold creates a targeted retraining flag before live or release-critical rating.",
+    restrictionRule:
+      "Restriction thresholds hold correctness-sensitive, low-clarity, dead-weight, duplicate-consistency, or hard-ambiguity assignments until recertification or approved review.",
+    recertificationRule:
+      "Rubric-version mismatch requires recertification or grandfathering review before certification evidence can support release use.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function certificationThresholdValues(policy) {
+  const thresholds = policy?.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  return { ...REQUIRED_CERTIFICATION_THRESHOLDS, ...thresholds };
+}
+
+function normalizeCertificationThresholdPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.certificationThresholdPolicyId;
+  if (!id) return null;
+  const thresholds = policy.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  const remediationRules =
+    policy.remediationRules && typeof policy.remediationRules === "object" && !Array.isArray(policy.remediationRules)
+      ? policy.remediationRules
+      : {};
+  const missingThresholdKeys = Object.keys(REQUIRED_CERTIFICATION_THRESHOLDS).filter((key) => !Object.hasOwn(thresholds, key));
+  const missingRuleKeys = Object.keys(REQUIRED_CERTIFICATION_REMEDIATION_RULES).filter((key) => !Object.hasOwn(remediationRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === CERTIFICATION_THRESHOLD_POLICY_VERSION
+      ? null
+      : `policyVersion:${CERTIFICATION_THRESHOLD_POLICY_VERSION}`,
+    missingThresholdKeys.length ? `thresholds:${missingThresholdKeys.join(",")}` : null,
+    stableJsonKey(thresholds) === stableJsonKey(REQUIRED_CERTIFICATION_THRESHOLDS) ? null : "thresholds",
+    missingRuleKeys.length ? `remediationRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(remediationRules) === stableJsonKey(REQUIRED_CERTIFICATION_REMEDIATION_RULES) ? null : "remediationRules",
+    policyMentions(policy.certificationStatusRule, ["mean absolute error", "certified"]) ? null : "certificationStatusRule",
+    policyMentions(policy.retrainingRule, ["dimension", "retraining"]) ? null : "retrainingRule",
+    policyMentions(policy.restrictionRule, ["restriction"]) ? null : "restrictionRule",
+    policyMentions(policy.recertificationRule, ["rubric", "recertification"]) ? null : "recertificationRule",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    thresholds,
+    remediationRules,
+    certificationStatusRule: policy.certificationStatusRule ?? null,
+    retrainingRule: policy.retrainingRule ?? null,
+    restrictionRule: policy.restrictionRule ?? null,
+    recertificationRule: policy.recertificationRule ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "certification_threshold_policy_review_required" : "certification_threshold_policy_complete",
+  };
+}
+
 export function buildCertificationAudit(packs = certificationPacks, items = goldLibraryItems, targets = OCTOBER_RELEASE_TARGETS, options = {}) {
   const modelJudgeViolations = items.filter((item) => item.modelJudgeAcceptedAsGold || !item.humanAdjudicated);
+  const submittedThresholdPolicyRows = (options.certificationThresholdPolicies ?? [])
+    .map((policy) => normalizeCertificationThresholdPolicy(policy, "submitted_workflow_certification_threshold_policy"))
+    .filter(Boolean);
+  const seedThresholdPolicyRows = [normalizeCertificationThresholdPolicy(defaultCertificationThresholdPolicy(options.releaseId ?? "october-2026-demo"), "seed_certification_threshold_policy")];
+  const activeThresholdPolicy = submittedThresholdPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedThresholdPolicyRows[0];
+  const thresholdPolicyReviewRows = submittedThresholdPolicyRows.filter((row) => row.reviewReasons.length);
   const certificationRecordEvidence = buildSubmittedCertificationRecordEvidence(
     options.releaseId ?? "october-2026-demo",
     options.certificationRecords ?? [],
     packs,
     items,
+    activeThresholdPolicy,
   );
   return {
     id: "certification-audit-october-2026",
@@ -5443,6 +5529,17 @@ export function buildCertificationAudit(packs = certificationPacks, items = gold
       recertificationPolicy: pack.recertificationPolicy,
       status: pack.status,
     })),
+    certificationThresholdPolicyRows: [...seedThresholdPolicyRows, ...submittedThresholdPolicyRows],
+    activeCertificationThresholdPolicy: activeThresholdPolicy,
+    activeCertificationThresholdPolicyId: activeThresholdPolicy?.id ?? null,
+    requiredCertificationThresholds: REQUIRED_CERTIFICATION_THRESHOLDS,
+    requiredCertificationRemediationRules: REQUIRED_CERTIFICATION_REMEDIATION_RULES,
+    thresholdPolicyReviewRows,
+    thresholdPolicyReleaseUseStatus: !submittedThresholdPolicyRows.length
+      ? "seed_certification_threshold_policy_active"
+      : thresholdPolicyReviewRows.length
+        ? "submitted_certification_threshold_policy_review_required"
+        : "submitted_certification_threshold_policy_active",
     certificationRecordEvidence,
   };
 }
@@ -5452,16 +5549,18 @@ export function buildSubmittedCertificationRecordEvidence(
   submittedRecords = [],
   packs = certificationPacks,
   items = goldLibraryItems,
+  activeThresholdPolicy = normalizeCertificationThresholdPolicy(defaultCertificationThresholdPolicy(releaseId), "seed_certification_threshold_policy"),
 ) {
   const packById = new Map(packs.map((pack) => [pack.id, pack]));
   const itemById = new Map(items.map((item) => [item.id, item]));
-  const rows = submittedRecords.map((record) => normalizeSubmittedCertificationRecord(record, packById, itemById)).filter(Boolean);
+  const rows = submittedRecords.map((record) => normalizeSubmittedCertificationRecord(record, packById, itemById, activeThresholdPolicy)).filter(Boolean);
   const reviewRows = rows.filter(
     (row) =>
       row.packStatus !== "known_live_certification_pack" ||
       row.rubricStatus !== "certification_record_matches_pack_rubric" ||
       row.protectedSplitConflictStatus !== "protected_split_excluded_training_exposure_acknowledged" ||
       row.goldCoverageStatus !== "submitted_gold_ids_present" ||
+      row.thresholdPolicyStatus !== "certification_threshold_policy_matched" ||
       row.scoreStatus !== "certification_scores_within_policy" ||
       row.retrainingStatus !== "no_targeted_retraining_flags" ||
       row.tierUnlockStatus !== "tier_unlocked_recorded",
@@ -5481,6 +5580,8 @@ export function buildSubmittedCertificationRecordEvidence(
       scoreRule:
         "Submitted custom weighted loss, pairwise error, duplicate inconsistency, and per-dimension calibration fields are release evidence only when they stay inside the certification policy thresholds or explicitly route to retraining/restriction review.",
       modelJudgeRule: "Certification records can document human gatekeeping only; they do not turn model-judge outputs into gold labels.",
+      activeCertificationThresholdPolicyId: activeThresholdPolicy?.id ?? null,
+      thresholds: certificationThresholdValues(activeThresholdPolicy),
     },
     releaseUseStatus: !rows.length
       ? "no_submitted_certification_records"
@@ -5490,10 +5591,13 @@ export function buildSubmittedCertificationRecordEvidence(
   };
 }
 
-function normalizeSubmittedCertificationRecord(record, packById, itemById) {
+function normalizeSubmittedCertificationRecord(record, packById, itemById, activeThresholdPolicy) {
   if (!record?.id || !record.raterId) return null;
   const packId = record.packId ?? record.packVersion;
   const pack = packById.get(packId);
+  const thresholds = certificationThresholdValues(activeThresholdPolicy);
+  const activeThresholdPolicyId = activeThresholdPolicy?.id ?? null;
+  const certificationThresholdPolicyId = record.certificationThresholdPolicyId ?? record.thresholdPolicyId ?? null;
   const goldItemIds = optionalStringArray(record.goldItemIds) ?? [];
   const duplicateItemIds = optionalStringArray(record.duplicateItemIds) ?? [];
   const hardAmbiguityItemIds = optionalStringArray(record.hardAmbiguityItemIds) ?? [];
@@ -5511,21 +5615,27 @@ function normalizeSubmittedCertificationRecord(record, packById, itemById) {
   const perDimensionCalibrationError =
     record.perDimensionCalibrationError ?? record.perDimensionCalibrationErrorProfile ?? record.dimensionMeanAbsError ?? {};
   const dimensionReviewFlags = Object.entries(perDimensionCalibrationError)
-    .filter(([, value]) => typeof value === "number" && value > 0.15)
+    .filter(([, value]) => typeof value === "number" && value > thresholds.perDimensionCalibrationErrorMax)
     .map(([dimension]) => dimension);
   const scoreStatus =
-    (customWeightedLoss === null || customWeightedLoss <= 0.14) &&
-    (pairwiseError === null || pairwiseError <= 0.14) &&
-    (duplicateInconsistency === null || duplicateInconsistency <= 0.12) &&
+    (customWeightedLoss === null || customWeightedLoss <= thresholds.customWeightedLossMax) &&
+    (pairwiseError === null || pairwiseError <= thresholds.pairwiseErrorMax) &&
+    (duplicateInconsistency === null || duplicateInconsistency <= thresholds.duplicateInconsistencyMax) &&
     dimensionReviewFlags.length === 0
       ? "certification_scores_within_policy"
       : "certification_score_review_required";
+  const thresholdPolicyStatus =
+    certificationThresholdPolicyId === activeThresholdPolicyId ? "certification_threshold_policy_matched" : "certification_threshold_policy_review_required";
   const tierUnlocked = record.tierUnlocked ?? record.tier_unlocked ?? null;
   return {
     recordId: record.id,
     recordSource: "submitted_workflow_certification_record",
     raterId: record.raterId,
     packId,
+    certificationThresholdPolicyId,
+    activeCertificationThresholdPolicyId: activeThresholdPolicyId,
+    thresholdPolicyStatus,
+    thresholdsApplied: thresholds,
     packStatus: pack?.status === "live" ? "known_live_certification_pack" : "unknown_or_inactive_certification_pack",
     rubricVersion: record.rubricVersion ?? null,
     packRubricVersion: pack?.rubricVersion ?? null,
@@ -5558,6 +5668,7 @@ function normalizeSubmittedCertificationRecord(record, packById, itemById) {
       record.rubricVersion === pack.rubricVersion &&
       protectedSplitConflictStatus === "protected_split_excluded_training_exposure_acknowledged" &&
       missingItemIds.length === 0 &&
+      thresholdPolicyStatus === "certification_threshold_policy_matched" &&
       scoreStatus === "certification_scores_within_policy" &&
       !targetedRetrainingFlags.length
         ? "certified_or_tier_unlocked"
@@ -5776,9 +5887,10 @@ export function buildProtectedSplitIsolationReport(
   };
 }
 
-export function scoreCertificationAttempt(attempt, packs = certificationPacks) {
+export function scoreCertificationAttempt(attempt, packs = certificationPacks, thresholdPolicy = null) {
   const pack = packs.find((item) => item.id === attempt.packId);
   if (!pack) throw new Error(`Unknown certification pack: ${attempt.packId}`);
+  const thresholds = certificationThresholdValues(thresholdPolicy);
   const completion = {
     gold: attempt.goldItemsCompleted ?? 0,
     duplicates: attempt.duplicateItemsCompleted ?? 0,
@@ -5799,13 +5911,13 @@ export function scoreCertificationAttempt(attempt, packs = certificationPacks) {
   const validDimensionValues = Object.values(dimensionMeanAbsError).filter((value) => typeof value === "number");
   const meanAbsError = validDimensionValues.length ? round(mean(validDimensionValues)) : null;
   const targetedRetrainingFlags = Object.entries(dimensionMeanAbsError)
-    .filter(([, value]) => typeof value === "number" && value > 0.15)
+    .filter(([, value]) => typeof value === "number" && value > thresholds.perDimensionCalibrationErrorMax)
     .map(([dimension]) => dimension);
   const restrictionFlags = [];
-  if ((dimensionMeanAbsError.correctness ?? 0) > 0.2) restrictionFlags.push("hold_correctness_sensitive_assignments");
-  if ((dimensionMeanAbsError.clarity ?? 0) > 0.2) restrictionFlags.push("hold_low_clarity_workflows");
-  if ((dimensionMeanAbsError.dead_weight ?? 0) > 0.2) restrictionFlags.push("hold_obfuscation_dead_weight_items");
-  if ((attempt.duplicateConsistencyMeanAbsDiff ?? 1) > 0.12) restrictionFlags.push("duplicate_consistency_review_required");
+  if ((dimensionMeanAbsError.correctness ?? 0) > thresholds.restrictionDimensionErrorMax) restrictionFlags.push("hold_correctness_sensitive_assignments");
+  if ((dimensionMeanAbsError.clarity ?? 0) > thresholds.restrictionDimensionErrorMax) restrictionFlags.push("hold_low_clarity_workflows");
+  if ((dimensionMeanAbsError.dead_weight ?? 0) > thresholds.restrictionDimensionErrorMax) restrictionFlags.push("hold_obfuscation_dead_weight_items");
+  if ((attempt.duplicateConsistencyMeanAbsDiff ?? 1) > thresholds.duplicateInconsistencyMax) restrictionFlags.push("duplicate_consistency_review_required");
   if (!attempt.hardAmbiguityReviewPass) restrictionFlags.push("hard_ambiguity_review_required");
 
   const rubricCurrent = attempt.rubricVersion === pack.rubricVersion;
@@ -5813,7 +5925,7 @@ export function scoreCertificationAttempt(attempt, packs = certificationPacks) {
     completionPass &&
     rubricCurrent &&
     meanAbsError !== null &&
-    meanAbsError <= 0.14 &&
+    meanAbsError <= thresholds.meanAbsErrorMax &&
     targetedRetrainingFlags.length === 0 &&
     restrictionFlags.length === 0;
   return {
@@ -5828,6 +5940,8 @@ export function scoreCertificationAttempt(attempt, packs = certificationPacks) {
     rubricCurrent,
     duplicateConsistencyMeanAbsDiff: attempt.duplicateConsistencyMeanAbsDiff,
     hardAmbiguityReviewPass: Boolean(attempt.hardAmbiguityReviewPass),
+    certificationThresholdPolicyId: thresholdPolicy?.id ?? null,
+    thresholdsApplied: thresholds,
     meanAbsError,
     dimensionMeanAbsError,
     targetedRetrainingFlags,
@@ -5836,8 +5950,8 @@ export function scoreCertificationAttempt(attempt, packs = certificationPacks) {
   };
 }
 
-export function buildRaterCertificationReport(raterId, attempts = seedCertificationAttempts, packs = certificationPacks) {
-  const scoredAttempts = attempts.filter((attempt) => attempt.raterId === raterId).map((attempt) => scoreCertificationAttempt(attempt, packs));
+export function buildRaterCertificationReport(raterId, attempts = seedCertificationAttempts, packs = certificationPacks, thresholdPolicy = null) {
+  const scoredAttempts = attempts.filter((attempt) => attempt.raterId === raterId).map((attempt) => scoreCertificationAttempt(attempt, packs, thresholdPolicy));
   const latestAttempt = scoredAttempts.at(-1) ?? null;
   return {
     id: `certification-report-${raterId}`,
@@ -5848,6 +5962,8 @@ export function buildRaterCertificationReport(raterId, attempts = seedCertificat
     latestAttempt,
     attemptCount: scoredAttempts.length,
     attemptHistory: scoredAttempts,
+    certificationThresholdPolicyId: thresholdPolicy?.id ?? null,
+    thresholdsApplied: certificationThresholdValues(thresholdPolicy),
     availablePacks: packs.map((pack) => ({
       id: pack.id,
       raterTier: pack.raterTier,
@@ -7881,8 +7997,13 @@ function buildRaterProfileEvidenceReport(
     .filter(Boolean);
   const packById = new Map(certificationPacks.map((pack) => [pack.id, pack]));
   const itemById = new Map(buildReleaseGoldLibraryItems(options.goldItems ?? [], options.positionList ?? positions).map((item) => [item.id, item]));
+  const submittedThresholdPolicyRows = (options.certificationThresholdPolicies ?? [])
+    .map((policy) => normalizeCertificationThresholdPolicy(policy, "submitted_workflow_certification_threshold_policy"))
+    .filter(Boolean);
+  const seedThresholdPolicy = normalizeCertificationThresholdPolicy(defaultCertificationThresholdPolicy(releaseId), "seed_certification_threshold_policy");
+  const activeThresholdPolicy = submittedThresholdPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedThresholdPolicy;
   const certificationRows = (options.certificationRecords ?? [])
-    .map((record) => normalizeSubmittedCertificationRecord(record, packById, itemById))
+    .map((record) => normalizeSubmittedCertificationRecord(record, packById, itemById, activeThresholdPolicy))
     .filter(Boolean);
   const consentRows = [...(options.raterDataConsents ?? []), ...(options.volunteerDataConsentProfiles ?? [])]
     .map((consent) => normalizeRaterDataConsent(consent, "submitted_workflow_rater_data_consent"))
@@ -12742,7 +12863,199 @@ function buildLmcaModelScoreAnchorComparison() {
   };
 }
 
-export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibility, validationDesign, labelSnapshot, submittedClaims = [] }) {
+const COMPARABILITY_CLAIM_TIERS = [
+  "method_preserving",
+  "corpus_scale_comparable",
+  "source_topic_rater_comparable",
+  "exact_position_source_count_comparable",
+  "topic_family_comparable",
+  "rater_contribution_comparable",
+  "adapted_source_language_task_format_comparable",
+  "metric_denominator_comparable",
+  "target_label_comparable",
+  "validation_design_comparable",
+  "validation_ceiling_comparable",
+  "model_score_anchor_comparable",
+  "prompt_family_source_scope_comparable",
+  "model_snapshot_comparable",
+  "protected_split_leakage_comparable",
+  "replication_like",
+];
+const COMPARABILITY_TIER_POLICY_VERSION = "comparability-tier-rlhf90-v1";
+const REQUIRED_COMPARABILITY_TIER_STATUS_ORDER = ["fails", "partial", "passes"];
+const REQUIRED_COMPARABILITY_TIER_THRESHOLDS = {
+  method_preserving: {
+    pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 },
+    partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 },
+    fail: { sourceCriticalCoreGatePassCountMax: 3 },
+  },
+  corpus_scale_comparable: {
+    pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 },
+    partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 },
+    fail: { positionsWithAtLeastOneCritiqueMax: 119 },
+  },
+  source_topic_rater_comparable: {
+    pass: { topicFamiliesCoveredMin: 6, positionSourceCategoriesCoveredMin: 6, raterContributionRowsMin: 6 },
+    partial: { topicFamiliesCoveredMin: 3, positionSourceCategoriesCoveredMin: 3, raterContributionRowsMin: 3 },
+    fail: { topicFamiliesCoveredMax: 2 },
+  },
+  exact_position_source_count_comparable: {
+    pass: { exactLmcaSourceCategoryCountMatchesMin: 6, totalPositionsMin: 442 },
+    partial: { sourceCategoriesCoveredMin: 4, knownOtherDatasetSubsourceRowsMin: 2 },
+    fail: { sourceCategoriesCoveredMax: 3 },
+  },
+  topic_family_comparable: {
+    pass: { lmcaTopicFamiliesCoveredMin: 6 },
+    partial: { lmcaTopicFamiliesCoveredMin: 3 },
+    fail: { lmcaTopicFamiliesCoveredMax: 2 },
+  },
+  rater_contribution_comparable: {
+    pass: { knownLmcaRaterRowsComparedMin: 6, largestSingleRaterShareMax: 0.649 },
+    partial: { submittedRaterProfilesMin: 4, individualRaterDominanceReported: 1 },
+    fail: { submittedRaterProfilesMax: 3 },
+  },
+  adapted_source_language_task_format_comparable: {
+    pass: { adaptedSourceDisclosureFieldsMin: 5, knownSubsourceRowsMin: 2, machineTranslationStatusRowsMin: 1 },
+    partial: { adaptedSourceDisclosureFieldsMin: 3, knownSubsourceRowsMin: 1 },
+    fail: { adaptedSourceDisclosureFieldsMax: 2 },
+  },
+  metric_denominator_comparable: {
+    pass: { weightedPairwisePositionsMin: 255, weightedPairwiseCritiquePairsMin: 856, customMetricDialoguesMin: 933 },
+    partial: { weightedPairwisePositionsMin: 52, weightedPairwiseCritiquePairsMin: 100, customMetricDialoguesMin: 120 },
+    fail: { weightedPairwiseCritiquePairsMax: 99 },
+  },
+  target_label_comparable: {
+    pass: { primaryRaterAnchorSnapshotsMin: 1, targetLabelVersionPrimaryRaterAnchorRequired: 1 },
+    partial: { pairedPrimaryAndConsensusSnapshotsMin: 1 },
+    fail: { primaryRaterAnchorSnapshotsMax: 0 },
+  },
+  validation_design_comparable: {
+    pass: { validationCritiquesMin: 52, validationPositionsMin: 19, coreAllItemsRatersMin: 4 },
+    partial: { validationCritiquesMin: 26, validationPositionsMin: 10, coreAllItemsRatersMin: 2 },
+    fail: { validationCritiquesMax: 25 },
+  },
+  validation_ceiling_comparable: {
+    pass: { appendixCNumericBaselineSectionsMin: 5, humanCeilingRunsMin: 1, intervalMetadataComplete: 1 },
+    partial: { appendixCNumericBaselineSectionsMin: 3, humanCeilingRunsMin: 1 },
+    fail: { humanCeilingRunsMax: 0 },
+  },
+  model_score_anchor_comparable: {
+    pass: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3, cleanLeaderboardRunsMin: 1 },
+    partial: { table5WeightedPairwiseAnchorsMin: 4, table7CustomMetricAnchorsMin: 3 },
+    fail: { table5WeightedPairwiseAnchorsMax: 3 },
+  },
+  prompt_family_source_scope_comparable: {
+    pass: { commonPromptPolicyRowsMin: 1, appendixGExactBaselineRowsMin: 1, promptScopeSensitivityRowsMin: 1 },
+    partial: { promptPolicyRowsMin: 1 },
+    fail: { promptPolicyRowsMax: 0 },
+  },
+  model_snapshot_comparable: {
+    pass: { resolvedModelSnapshotShareMin: 1, aliasStabilityRowsMin: 1 },
+    partial: { resolvedModelSnapshotShareMin: 0.5 },
+    fail: { resolvedModelSnapshotShareMax: 0.49 },
+  },
+  protected_split_leakage_comparable: {
+    pass: { protectedLeakageIncidentMax: 0, accessAuditRowsMin: 1, protectedSplitIsolationFailuresMax: 0 },
+    partial: { accessAuditRowsMin: 1 },
+    fail: { protectedLeakageIncidentMin: 1 },
+  },
+  replication_like: {
+    pass: { passingComparabilityTierCountMin: 15, failingComparabilityTierCountMax: 0 },
+    partial: { passingComparabilityTierCountMin: 12, failingComparabilityTierCountMax: 2 },
+    fail: { failingComparabilityTierCountMin: 3 },
+  },
+};
+
+function defaultComparabilityTierPolicy(releaseId) {
+  return {
+    id: `comparability-tier-policy-${releaseId}`,
+    policyVersion: COMPARABILITY_TIER_POLICY_VERSION,
+    statusOrder: REQUIRED_COMPARABILITY_TIER_STATUS_ORDER,
+    tierThresholds: REQUIRED_COMPARABILITY_TIER_THRESHOLDS,
+    guardrailRule:
+      "Computed release evidence remains authoritative; submitted comparability statuses can only narrow or annotate tiers and the stricter status wins.",
+    notApplicableRule:
+      "not_applicable is allowed only for tiers outside a release claim scope and ranks no higher than partial for overclaim prevention.",
+    publicWordingRule:
+      "Public claim wording must name the tier, status, threshold policy, limitations, and whether the claim is LMCA-style rather than target-identical replication.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeComparabilityTierPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.comparabilityTierPolicyId;
+  if (!id) return null;
+  const statusOrder = normalizeStringArray(policy.statusOrder);
+  const tierThresholds =
+    policy.tierThresholds && typeof policy.tierThresholds === "object" && !Array.isArray(policy.tierThresholds)
+      ? policy.tierThresholds
+      : {};
+  const missingTiers = COMPARABILITY_CLAIM_TIERS.filter((tier) => !Object.hasOwn(tierThresholds, tier));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === COMPARABILITY_TIER_POLICY_VERSION ? null : `policyVersion:${COMPARABILITY_TIER_POLICY_VERSION}`,
+    stableJsonKey(statusOrder) === stableJsonKey(REQUIRED_COMPARABILITY_TIER_STATUS_ORDER) ? null : "statusOrder",
+    missingTiers.length ? `tierThresholds:${missingTiers.join(",")}` : null,
+    stableJsonKey(tierThresholds) === stableJsonKey(REQUIRED_COMPARABILITY_TIER_THRESHOLDS) ? null : "tierThresholds",
+    policyMentions(policy.guardrailRule, ["computed", "stricter"]) ? null : "guardrailRule",
+    policyMentions(policy.notApplicableRule, ["not_applicable", "partial"]) ? null : "notApplicableRule",
+    policyMentions(policy.publicWordingRule, ["tier", "limitations"]) ? null : "publicWordingRule",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    statusOrder,
+    tierThresholds,
+    guardrailRule: policy.guardrailRule ?? null,
+    notApplicableRule: policy.notApplicableRule ?? null,
+    publicWordingRule: policy.publicWordingRule ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "comparability_tier_policy_review_required" : "comparability_tier_policy_complete",
+  };
+}
+
+function buildComparabilityTierPolicyEvidenceReport(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeComparabilityTierPolicy(policy, "submitted_workflow_comparability_tier_policy"))
+    .filter(Boolean);
+  const seedRows = [normalizeComparabilityTierPolicy(defaultComparabilityTierPolicy(releaseId), "seed_comparability_tier_policy")];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `comparability-tier-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredTiers: COMPARABILITY_CLAIM_TIERS,
+    requiredStatusOrder: REQUIRED_COMPARABILITY_TIER_STATUS_ORDER,
+    requiredTierThresholds: REQUIRED_COMPARABILITY_TIER_THRESHOLDS,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+      tierCount: COMPARABILITY_CLAIM_TIERS.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_comparability_tier_policy_active"
+      : reviewRows.length
+        ? "submitted_comparability_tier_policy_review_required"
+        : "submitted_comparability_tier_policy_active",
+  };
+}
+
+export function buildComparabilityClaimMatrix({
+  releaseId = "release",
+  corpusManifest,
+  metricEligibility,
+  validationDesign,
+  labelSnapshot,
+  submittedClaims = [],
+  comparabilityTierPolicies = [],
+  comparabilityTierPolicyEvidence = null,
+}) {
+  const tierPolicyEvidence = comparabilityTierPolicyEvidence ?? buildComparabilityTierPolicyEvidenceReport(releaseId, comparabilityTierPolicies);
   const computedClaims = [
     claim("method_preserving", "passes", "Position-critique units, seven-dimensional ratings, blind initial surface, immutable revisions, and the two LMCA scoring families are implemented."),
     claim(
@@ -12797,7 +13110,7 @@ export function buildComparabilityClaimMatrix({ corpusManifest, metricEligibilit
     claim("protected_split_leakage_comparable", "partial", "Protected-split leakage status is tracked independently from ordinary release-scale and validation-design claims."),
     claim("replication_like", "fails", "The current seed release is method-preserving scaffolding, not an LMCA-scale or target-identical replication."),
   ];
-  return applySubmittedComparabilityClaims(computedClaims, submittedClaims);
+  return applySubmittedComparabilityClaims(computedClaims, submittedClaims, tierPolicyEvidence);
 }
 
 function robustnessClaimsFromSubmittedComparabilityClaims(submittedClaims = []) {
@@ -12806,22 +13119,33 @@ function robustnessClaimsFromSubmittedComparabilityClaims(submittedClaims = []) 
   );
 }
 
-function applySubmittedComparabilityClaims(computedClaims, submittedClaims = []) {
+function comparabilityTierPolicyMetadata(tierPolicyEvidence, tier) {
+  return {
+    comparabilityTierPolicyId: tierPolicyEvidence?.activePolicyId ?? null,
+    comparabilityTierPolicyReleaseUseStatus: tierPolicyEvidence?.releaseUseStatus ?? null,
+    tierThresholds: tierPolicyEvidence?.activePolicy?.tierThresholds?.[tier] ?? null,
+    tierStatusOrder: tierPolicyEvidence?.activePolicy?.statusOrder ?? [],
+  };
+}
+
+function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [], tierPolicyEvidence = buildComparabilityTierPolicyEvidenceReport("release", [])) {
   const submittedClaim = submittedClaims.at(-1) ?? null;
   if (!submittedClaim) {
     return computedClaims.map((claimRow) => ({
       ...claimRow,
+      ...comparabilityTierPolicyMetadata(tierPolicyEvidence, claimRow.tier),
       statusSource: "computed_release_evidence",
       computedStatus: claimRow.status,
     }));
   }
-  const submittedClaimContractChecks = submittedComparabilityClaimContractChecks(submittedClaim);
+  const submittedClaimContractChecks = submittedComparabilityClaimContractChecks(submittedClaim, tierPolicyEvidence?.activePolicy);
   const submittedClaimContractViolations = submittedClaimContractChecks.filter((check) => check.status !== "pass");
   const submittedByTier = submittedComparabilityStatuses(submittedClaim);
   const submittedClaimMetadata = {
     submittedClaimId: submittedClaim.id ?? null,
     submittedReleaseGateProfileId: submittedClaim.releaseGateProfileId ?? null,
     submittedPrimaryRaterAnchorPolicyId: submittedClaim.primaryRaterAnchorPolicyId ?? null,
+    submittedComparabilityTierPolicyId: submittedClaim.comparabilityTierPolicyId ?? null,
     submittedLinkedReleaseIds: Array.isArray(submittedClaim.linkedReleaseIds) ? submittedClaim.linkedReleaseIds : [],
     submittedEvidenceLinks: Array.isArray(submittedClaim.evidenceLinks) ? submittedClaim.evidenceLinks : [],
     submittedApprovedBy: submittedClaim.approvedBy ?? null,
@@ -12833,6 +13157,7 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
   if (submittedClaimContractViolations.length) {
     return computedClaims.map((claimRow) => ({
       ...claimRow,
+      ...comparabilityTierPolicyMetadata(tierPolicyEvidence, claimRow.tier),
       statusSource: "computed_release_evidence_submitted_claim_contract_review_required",
       computedStatus: claimRow.status,
       ...submittedClaimMetadata,
@@ -12843,6 +13168,7 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
     if (!submitted) {
       return {
         ...claimRow,
+        ...comparabilityTierPolicyMetadata(tierPolicyEvidence, claimRow.tier),
         statusSource: "computed_release_evidence_no_submitted_tier",
         computedStatus: claimRow.status,
         ...submittedClaimMetadata,
@@ -12852,6 +13178,7 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
     const effectiveStatus = stricterComparabilityStatus(claimRow.status, normalizedSubmittedStatus);
     return {
       ...claimRow,
+      ...comparabilityTierPolicyMetadata(tierPolicyEvidence, claimRow.tier),
       status: effectiveStatus,
       evidence: submitted.evidence ?? claimRow.evidence,
       computedStatus: claimRow.status,
@@ -12873,6 +13200,7 @@ const REQUIRED_COMPARABILITY_CLAIM_FIELDS = [
   "id",
   "releaseId",
   "releaseGateProfileId",
+  "comparabilityTierPolicyId",
   "claimWording",
   "methodPreservingStatus",
   "corpusScaleStatus",
@@ -12912,7 +13240,7 @@ const COMPARABILITY_CLAIM_STATUS_FIELDS = [
 ];
 const ALLOWED_COMPARABILITY_CLAIM_STATUSES = ["passes", "partial", "fails", "not_applicable"];
 
-function submittedComparabilityClaimContractChecks(submittedClaim) {
+function submittedComparabilityClaimContractChecks(submittedClaim, activeTierPolicy = null) {
   const fieldChecks = REQUIRED_COMPARABILITY_CLAIM_FIELDS.map((field) => ({
     field,
     expected: "present",
@@ -12931,7 +13259,13 @@ function submittedComparabilityClaimContractChecks(submittedClaim) {
     observed: submittedClaim?.[field] ?? null,
     status: ALLOWED_COMPARABILITY_CLAIM_STATUSES.includes(submittedClaim?.[field]) ? "pass" : "invalid_claim_status",
   }));
-  return [...fieldChecks, ...arrayChecks, ...statusChecks];
+  const tierPolicyCheck = {
+    field: "comparabilityTierPolicyId",
+    expected: activeTierPolicy?.id ?? null,
+    observed: submittedClaim?.comparabilityTierPolicyId ?? null,
+    status: submittedClaim?.comparabilityTierPolicyId && submittedClaim.comparabilityTierPolicyId === activeTierPolicy?.id ? "pass" : "threshold_policy_mismatch",
+  };
+  return [...fieldChecks, ...arrayChecks, ...statusChecks, tierPolicyCheck];
 }
 
 function submittedComparabilityStatuses(claim) {
@@ -21434,9 +21768,10 @@ export function buildOctoberReleaseReport(
   const certification = buildCertificationAudit(certificationPacks, releaseGoldLibraryItems, OCTOBER_RELEASE_TARGETS, {
     releaseId,
     certificationRecords: options.certificationRecords ?? [],
+    certificationThresholdPolicies: options.certificationThresholdPolicies ?? [],
   });
   const certificationReports = [...new Set(certificationAttempts.map((attempt) => attempt.raterId))].map((raterId) =>
-    buildRaterCertificationReport(raterId, certificationAttempts),
+    buildRaterCertificationReport(raterId, certificationAttempts, certificationPacks, certification.activeCertificationThresholdPolicy),
   );
   const protectedSplitIsolation = buildProtectedSplitIsolationReport(releaseId, positionList, certificationPacks, releaseGoldLibraryItems);
   const rubricDrift = buildRubricVersionDriftReport(releaseId, labelSnapshot, ratings, certificationAttempts);
@@ -21461,6 +21796,7 @@ export function buildOctoberReleaseReport(
     raters: options.raters ?? [],
     raterQualificationRecords: options.raterQualificationRecords ?? [],
     certificationRecords: options.certificationRecords ?? [],
+    certificationThresholdPolicies: options.certificationThresholdPolicies ?? [],
     goldItems: options.goldItems ?? [],
     raterDataConsents: options.raterDataConsents ?? [],
     volunteerDataConsentProfiles: options.volunteerDataConsentProfiles ?? [],
@@ -21500,12 +21836,15 @@ export function buildOctoberReleaseReport(
   );
   const publicExportManifest = createExportManifest("public", releaseId, positionList, critiqueList, labelSnapshot);
   const labelChannelSeparation = buildLabelChannelSeparationReport(releaseId, labelSnapshot, trainingExport, certification, rubricQaCoverage);
+  const comparabilityTierPolicyEvidence = buildComparabilityTierPolicyEvidenceReport(releaseId, options.comparabilityTierPolicies ?? []);
   const comparabilityClaims = buildComparabilityClaimMatrix({
+    releaseId,
     corpusManifest,
     metricEligibility,
     validationDesign,
     labelSnapshot,
     submittedClaims: options.comparabilityClaims ?? [],
+    comparabilityTierPolicyEvidence,
   });
   const lmcaComparison = buildLmcaComparisonReport({ releaseId, corpusManifest, metricEligibility, validationDesign, labelSnapshot });
   const appendixCScaleMet = validationDesign.status === "appendix_c_scale";
@@ -21722,6 +22061,7 @@ export function buildOctoberReleaseReport(
     corpusManifest,
     releaseGateProfile,
     releaseGateEvaluation,
+    comparabilityTierPolicyEvidence,
     adminTagBlinding,
     positionIntakeReadiness,
     rubricQaCoverage,
@@ -21787,6 +22127,7 @@ export function buildOctoberReleaseReport(
       generatedCritiquePromotions: options.generatedCritiquePromotions ?? [],
     },
     workflowAuditTrailArtifacts: {
+      certificationThresholdPolicies: options.certificationThresholdPolicies ?? [],
       certificationRecords: options.certificationRecords ?? [],
       exposureLogs: options.exposureLogs ?? [],
       revisionRecords: options.revisionRecords ?? [],
@@ -21958,6 +22299,7 @@ export function buildOctoberReleaseReport(
     workflowGovernanceArtifacts: {
       releaseGateProfiles: options.releaseGateProfiles ?? [],
       primaryRaterAnchorPolicies: options.primaryRaterAnchorPolicies ?? [],
+      comparabilityTierPolicies: options.comparabilityTierPolicies ?? [],
       comparabilityClaims: options.comparabilityClaims ?? [],
       activeLearningSelectionAudits: options.activeLearningSelectionAudits ?? [],
     },
