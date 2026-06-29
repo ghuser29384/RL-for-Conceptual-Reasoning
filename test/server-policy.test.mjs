@@ -467,6 +467,7 @@ const auditChainProtectedDataExposureClassByEventKind = {
   training_export_release: "training_export_release_redacted",
 };
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+const qualificationWorkflowEligibility = ["release_critical", "validation", "hidden_benchmark"];
 const prohibitedIncentiveSignals = [
   "rating_direction",
   "peer_agreement_before_feedback",
@@ -914,7 +915,7 @@ function completeParticipantSafeguardWorkflowFixtures() {
       evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
       approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
       topicFamilyScope: ["AI safety", "decision theory", "normative ethics"],
-      splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+      splitWorkflowEligibility: qualificationWorkflowEligibility,
       expiryReviewDate: "2027-01-31",
       approver: "demo-admin",
       timestamp: "2026-10-01T00:20:00.000Z",
@@ -8125,6 +8126,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteRaterQualificationRecord.status, 400);
   assert.match(incompleteRaterQualificationRecord.body.detail, /evidenceArtifactReference|expiryReviewDate|approver/);
 
+  const incompleteQualificationEligibility = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rater-qualification-records",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      raterQualificationRecord: {
+        ...participantSafeguards.raterQualificationRecords.find((record) => record.qualificationScope === "hidden_benchmark_expert"),
+        id: "rater-qualification-missing-hidden-eligibility",
+        splitWorkflowEligibility: ["release_critical", "validation"],
+      },
+    }),
+  });
+  assert.equal(incompleteQualificationEligibility.status, 400);
+  assert.match(incompleteQualificationEligibility.body.detail, /splitWorkflowEligibility/);
+
   const incompleteLanguageAssessment = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/language-artifact-assessments",
@@ -8411,6 +8427,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(incompleteTaskOutputEligibilityPolicy.status, 400);
   assert.match(incompleteTaskOutputEligibilityPolicy.body.detail, /promotionToLabelRequirements|eligibleLabelSnapshotUses|adjudicationEvidencePolicy/);
+
+  const missingProtectedValidationTaskOutputPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/task-output-eligibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      taskOutputEligibilityPolicy: {
+        ...ratingExperience.taskOutputEligibilityPolicy,
+        id: "task-output-eligibility-missing-protected-validation",
+        protectedSplitExclusions: ["hidden_benchmark"],
+      },
+    }),
+  });
+  assert.equal(missingProtectedValidationTaskOutputPolicy.status, 400);
+  assert.match(missingProtectedValidationTaskOutputPolicy.body.detail, /protectedSplitExclusions/);
 
   const unsafeScoreInputPolicy = await invokeApi(context, {
     method: "POST",

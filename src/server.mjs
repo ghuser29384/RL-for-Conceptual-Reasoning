@@ -795,6 +795,7 @@ const accessibilityChecks = [
 ];
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
 const qualificationSources = ["credential", "certification_pack", "prior_rating_reliability", "manual_expert_review", "approved_exception"];
+const qualificationWorkflowEligibility = ["release_critical", "validation", "hidden_benchmark"];
 const prohibitedIncentiveSignals = [
   "rating_direction",
   "peer_agreement_before_feedback",
@@ -2811,6 +2812,7 @@ const workflowWriteEndpoints = [
       "timestamp",
     ],
     requiredNonEmptyArrayFields: ["approvedRoles", "topicFamilyScope", "splitWorkflowEligibility"],
+    requiredArrayIncludes: { splitWorkflowEligibility: qualificationWorkflowEligibility },
     allowedValues: {
       qualificationScope: qualificationScopes,
       qualificationSource: qualificationSources,

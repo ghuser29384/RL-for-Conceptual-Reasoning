@@ -8712,6 +8712,23 @@ function normalizeSubmittedHumanCeilingUncertaintyRow(run, labelSnapshot) {
   };
 }
 
+const SAME_POSITION_CONTEXT_RELEASE_CRITICAL_QUEUE_TYPES = new Set([
+  "validation",
+  "validation_subset",
+  "internal_validation",
+  "protected_validation",
+  "benchmark_candidate_review",
+  "hidden_benchmark",
+  "hidden_benchmark_review",
+  "gold_certification",
+  "release_critical",
+  "release_review",
+]);
+
+function isSamePositionContextReleaseCriticalQueue(queueType) {
+  return SAME_POSITION_CONTEXT_RELEASE_CRITICAL_QUEUE_TYPES.has(queueType);
+}
+
 export function buildSamePositionContextReport(
   releaseId,
   ratings = seedRatings,
@@ -8758,9 +8775,7 @@ export function buildSamePositionContextReport(
       ...siblingCritiqueIds.filter((id) => !visibleSet.has(id)),
       ...(snapshot?.laterSiblingCritiqueIdsAbsentAtSubmission ?? []),
     ]);
-    const releaseCritical =
-      ["internal_validation", "hidden_benchmark"].includes(position?.split) ||
-      ["validation_subset", "benchmark_candidate_review", "hidden_benchmark"].includes(assignmentQueueType);
+    const releaseCritical = isReleaseCriticalSplit(position?.split) || isSamePositionContextReleaseCriticalQueue(assignmentQueueType);
     const currentCritiqueVisible = visibleSet.has(rating.critiqueId);
     const humanModelParityStatus = snapshot?.humanModelParityStatus ?? "missing_context_snapshot";
     const contextSensitive = visibleSiblingCritiqueIds.length > 0 || humanModelParityStatus.includes("context_sensitive");
@@ -14477,6 +14492,7 @@ function governedBundleFamilyEvidenceRow(bundleFamily, rows, verificationRows) {
 }
 
 const REQUIRED_QUALIFICATION_SCOPES = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+const REQUIRED_QUALIFICATION_WORKFLOW_ELIGIBILITY = ["release_critical", "validation", "hidden_benchmark"];
 
 const PROHIBITED_INCENTIVE_SIGNALS = [
   "rating_direction",
@@ -14732,6 +14748,8 @@ function normalizeRaterQualificationRecord(record, rowSource) {
   if (!id) return null;
   const qualificationScope = record.qualificationScope ?? record.scope ?? null;
   const qualificationSource = record.qualificationSource ?? null;
+  const splitWorkflowEligibility = normalizeStringArray(record.splitWorkflowEligibility);
+  const missingWorkflowEligibility = REQUIRED_QUALIFICATION_WORKFLOW_ELIGIBILITY.filter((lane) => !splitWorkflowEligibility.includes(lane));
   const reviewReasons = [
     requiredPromptFieldReason("raterId", record.raterId),
     REQUIRED_QUALIFICATION_SCOPES.includes(qualificationScope) ? null : "qualificationScope",
@@ -14741,7 +14759,8 @@ function normalizeRaterQualificationRecord(record, rowSource) {
     requiredPromptFieldReason("evidenceArtifactReference", record.evidenceArtifactReference ?? record.evidenceArtifactId),
     normalizeStringArray(record.approvedRoles).length ? null : "approvedRoles",
     normalizeStringArray(record.topicFamilyScope).length ? null : "topicFamilyScope",
-    normalizeStringArray(record.splitWorkflowEligibility).length ? null : "splitWorkflowEligibility",
+    splitWorkflowEligibility.length ? null : "splitWorkflowEligibility",
+    ...missingWorkflowEligibility.map((lane) => `splitWorkflowEligibility:${lane}`),
     requiredPromptFieldReason("expiryReviewDate", record.expiryReviewDate),
     requiredPromptFieldReason("approver", record.approver),
   ].filter(Boolean);
@@ -14753,7 +14772,8 @@ function normalizeRaterQualificationRecord(record, rowSource) {
     qualificationSource,
     approvedRoles: normalizeStringArray(record.approvedRoles),
     topicFamilyScope: normalizeStringArray(record.topicFamilyScope),
-    splitWorkflowEligibility: normalizeStringArray(record.splitWorkflowEligibility),
+    splitWorkflowEligibility,
+    missingWorkflowEligibility,
     expiryReviewDate: record.expiryReviewDate ?? null,
     approvedException: qualificationSource === "approved_exception",
     reviewReasons,
@@ -14891,6 +14911,7 @@ function modelProviderRunClassEvidenceRow(coveredRunClass, rows) {
 }
 
 const REQUIRED_TASK_OUTPUT_USES = ["label_snapshot", "routing", "calibration", "adjudication", "training_export", "diagnostic"];
+const REQUIRED_TASK_OUTPUT_PROTECTED_SPLIT_EXCLUSIONS = ["hidden_benchmark", "protected_validation"];
 const REQUIRED_SCORE_INPUT_SPLITS = ["release_critical", "validation", "hidden_benchmark"];
 const REQUIRED_SERVER_SIDE_DRAFT_LANES = ["protected", "validation", "hidden_benchmark", "release_critical", "adjudication", "rater_data_governance"];
 const PROHIBITED_DRAFT_CLIENT_PERSISTENCE = ["local_storage", "session_storage", "indexed_db", "persistent_offline_cache", "downloaded_recovery_blob"];
@@ -15483,7 +15504,9 @@ function normalizeTaskOutputEligibilityPolicy(policy, rowSource) {
     requiredPromptFieldReason("adjudicationEvidencePolicy", policy.adjudicationEvidencePolicy),
     requiredPromptFieldReason("pairwisePreferenceExportPolicy", policy.pairwisePreferenceExportPolicy),
     requiredPromptFieldReason("trainingExportEligibility", policy.trainingExportEligibility),
-    protectedSplitExclusions.includes("hidden_benchmark") ? null : "protectedSplitExclusions:hidden_benchmark",
+    ...REQUIRED_TASK_OUTPUT_PROTECTED_SPLIT_EXCLUSIONS.filter((split) => !protectedSplitExclusions.includes(split)).map(
+      (split) => `protectedSplitExclusions:${split}`,
+    ),
     requiredPromptFieldReason("frozenAt", policy.frozenAt),
   ].filter(Boolean);
   return {

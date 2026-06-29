@@ -539,6 +539,7 @@ const auditChainProtectedDataExposureClassByEventKind = {
   training_export_release: "training_export_release_redacted",
 };
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+const qualificationWorkflowEligibility = ["release_critical", "validation", "hidden_benchmark"];
 const prohibitedIncentiveSignals = [
   "rating_direction",
   "peer_agreement_before_feedback",
@@ -1002,7 +1003,7 @@ function completeParticipantSafeguardFixtures() {
       evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
       approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
       topicFamilyScope: ["AI safety", "decision theory", "normative ethics"],
-      splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+      splitWorkflowEligibility: qualificationWorkflowEligibility,
       expiryReviewDate: "2027-01-31",
       approver: "release-admin",
       timestamp: "2026-10-01T00:01:00.000Z",
@@ -2264,6 +2265,18 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
       (section) => section.artifactType === "source_recognition_event" && section.reason === "independentBlindEligibilityEffect:counts_independent",
     ),
   );
+
+  const incompleteQualificationFixtures = completeParticipantSafeguardFixtures();
+  incompleteQualificationFixtures.raterQualificationRecords = incompleteQualificationFixtures.raterQualificationRecords.map((record) =>
+    record.qualificationScope === "hidden_benchmark_expert" ? { ...record, splitWorkflowEligibility: ["release_critical", "validation"] } : record,
+  );
+  const incompleteQualificationReport = buildParticipantSafeguardEvidenceReport("october-2026-demo", incompleteQualificationFixtures);
+  assert.equal(incompleteQualificationReport.releaseUseStatus, "participant_safeguard_review_required");
+  assert.ok(
+    incompleteQualificationReport.reviewSections.some(
+      (section) => section.artifactType === "rater_qualification_record" && section.reason === "splitWorkflowEligibility:hidden_benchmark",
+    ),
+  );
 });
 
 test("rating experience evidence gates score provenance, linting, issue triage, drafts, worksheets, and retention", () => {
@@ -2307,6 +2320,22 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const missingProtectedValidationExclusionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    taskOutputEligibilityPolicies: [
+      {
+        ...completeRatingExperienceFixtures().taskOutputEligibilityPolicies[0],
+        protectedSplitExclusions: ["hidden_benchmark"],
+      },
+    ],
+  });
+  assert.equal(missingProtectedValidationExclusionReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    missingProtectedValidationExclusionReport.reviewSections.some(
+      (section) => section.artifactType === "task_output_eligibility_policy" && section.reason === "protectedSplitExclusions:protected_validation",
+    ),
+  );
 
   const missingCorrectnessStrengthLintReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
@@ -4628,6 +4657,36 @@ test("release report same-position context consumes submitted workflow assignmen
   assert.equal(workflowContextRow.queueType, "validation_subset");
   assert.equal(workflowContextRow.releaseCritical, true);
   assert.equal(workflowContextRow.orderPolicyStatus, "fixed_or_target_only_order_disclosed");
+});
+
+test("same-position context report treats protected workflow queue aliases as release-critical", () => {
+  const aliasCases = [
+    ["rating-context-validation-assignment-type", { assignmentType: "validation" }, "validation"],
+    ["rating-context-protected-validation-queue", { queueType: "protected_validation" }, "protected_validation"],
+    ["rating-context-hidden-benchmark-review-queue", { queueType: "hidden_benchmark_review" }, "hidden_benchmark_review"],
+  ];
+  const aliasRatings = aliasCases.map(([ratingId]) => ({
+    ...seedRatings[0],
+    id: ratingId,
+    assignmentId: `assignment-${ratingId}`,
+    ratingContextSnapshotId: "rc-target-only-1",
+  }));
+  const aliasAssignments = aliasCases.map(([ratingId, queueFields]) => ({
+    id: `assignment-${ratingId}`,
+    ...queueFields,
+    positionId: "pos-ai-prior",
+    critiqueId: "crit-ai-base-rate",
+  }));
+  const report = buildSamePositionContextReport("release-test", aliasRatings, positions, critiques, ratingContextSnapshots, aliasAssignments);
+
+  assert.equal(report.counts.releaseCriticalRatingCount, aliasCases.length);
+  assert.equal(report.byOrderPolicyStatus.fixed_or_target_only_order_disclosed, aliasCases.length);
+  for (const [ratingId, , expectedQueueType] of aliasCases) {
+    const row = report.contextRows.find((contextRow) => contextRow.ratingId === ratingId);
+    assert.equal(row.queueType, expectedQueueType);
+    assert.equal(row.releaseCritical, true);
+    assert.equal(row.orderPolicyStatus, "fixed_or_target_only_order_disclosed");
+  }
 });
 
 test("aggregation excludes low-clarity provisional non-clarity fields", () => {
