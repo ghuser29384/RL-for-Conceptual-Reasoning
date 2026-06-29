@@ -145,6 +145,38 @@ const scoreConfidenceReasonCodes = [
   "rubric_boundary_case",
   "high_confidence_clear_application",
 ];
+const samePositionBatchReviewTriggerClasses = [
+  "same_position_session_completed",
+  "large_product_overall_delta",
+  "post_lock_revision_candidate",
+  "release_critical_context_sensitive",
+  "validation_or_hidden_benchmark_candidate",
+];
+const samePositionBatchReviewThresholds = {
+  minSiblingRatingsReviewed: 2,
+  productOverallDeltaTriggerMin: 0.2,
+  overallScoreDeltaTriggerMin: 0.25,
+  postLockCompletionWindowHours: 72,
+  releaseCriticalRequiredSiblingCount: 2,
+};
+const samePositionBatchReviewRules = {
+  ordinarySession:
+    "Same-position sessions with at least two sibling ratings require a post-lock self-consistency review before release-critical evidence is complete.",
+  productOverallDelta:
+    "Large centrality-strength product versus overall deltas require a product/overall summary and either no-revision-needed or append-only revision proposals.",
+  nonIndependentBoundary:
+    "Batch reviews are self-consistency metadata, not independent blind ratings, and cannot enter label denominators or independent-rater counts.",
+  revisionPreservation: "Changes proposed from batch review append revisions and preserve original locked ratings.",
+  visibility:
+    "Batch-review prompts show only the rater's own locked sibling ratings after lock, with peer, model, source, gold, protected-split, and hidden-benchmark metadata hidden.",
+};
+const samePositionBatchReviewStatuses = ["completed", "revision_proposed", "no_revision_needed"];
+const samePositionBatchReviewDecisionStatuses = [
+  "required_post_lock_before_release",
+  "optional_ordinary_complete",
+  "not_required_single_rating",
+  "deferred_with_reason",
+];
 const spotCheckSamplingStrata = [
   "non_escalated_release_critical",
   "validation_candidate",
@@ -1197,6 +1229,34 @@ const workflowTemplates = [
           "Spot-check review does not directly mutate locked labels; revisions or adjudication require explicit linked workflow artifacts.",
         lmcaSourceBoundary:
           "Project default spot-check sampling rates are frozen here; LMCA motivates blind-rater denominator integrity but does not state these exact QA sampling rates.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "same-position-batch-review-requiredness-policy",
+    label: "Batch Review Requiredness Policy",
+    endpoint: () => "/api/v1/same-position-batch-review-requiredness-policies",
+    resourceKey: "samePositionBatchReviewRequirednessPolicy",
+    requiredRole: "admin",
+    summary: "Freeze when same-position post-lock self-consistency review is required and how it stays out of label denominators.",
+    payload: () => ({
+      samePositionBatchReviewRequirednessPolicy: {
+        id: `same-position-batch-review-requiredness-policy-${releaseId}`,
+        policyVersion: "same-position-batch-review-requiredness-rlhf90-v1",
+        triggerClasses: samePositionBatchReviewTriggerClasses,
+        thresholds: samePositionBatchReviewThresholds,
+        requiredReviewRules: samePositionBatchReviewRules,
+        reviewStatuses: samePositionBatchReviewStatuses,
+        requirednessDecisionStatuses: samePositionBatchReviewDecisionStatuses,
+        nonIndependentEvidenceRule: samePositionBatchReviewRules.nonIndependentBoundary,
+        revisionPreservationRule: samePositionBatchReviewRules.revisionPreservation,
+        visibilityRule: samePositionBatchReviewRules.visibility,
+        excludedFromIndependentRaterCountRequired: true,
+        raterOwnRatingsOnlyRequired: true,
+        peerModelSourceMetadataHiddenRequired: true,
+        lmcaSourceBoundary:
+          "Project default same-position batch-review requiredness is frozen here; LMCA motivates same-position context handling but does not state these exact platform thresholds.",
         frozenAt: new Date().toISOString(),
       },
     }),

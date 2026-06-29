@@ -89,6 +89,11 @@ import {
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES,
   REQUIRED_SCORE_CONFIDENCE_BANDS,
   REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
   REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
@@ -97,6 +102,7 @@ import {
   REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
   REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
   SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+  SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
   SPOT_CHECK_SAMPLING_POLICY_VERSION,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
   VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
@@ -343,6 +349,33 @@ function scoreConfidenceScalePolicy(id = "score-confidence-scale-policy-submitte
     visibleToPeersBeforeLockRequired: false,
     lmcaSourceBoundary:
       "Project default confidence annotation scale is frozen here; LMCA motivates preserving uncertainty metadata but does not state this exact per-dimension scale.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const samePositionBatchReviewTriggerClasses = REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES;
+const samePositionBatchReviewThresholds = REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS;
+const samePositionBatchReviewRules = REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES;
+const samePositionBatchReviewStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES;
+const samePositionBatchReviewDecisionStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES;
+
+function samePositionBatchReviewRequirednessPolicy(id = "same-position-batch-review-requiredness-policy-submitted") {
+  return {
+    id,
+    policyVersion: SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: samePositionBatchReviewTriggerClasses,
+    thresholds: samePositionBatchReviewThresholds,
+    requiredReviewRules: samePositionBatchReviewRules,
+    reviewStatuses: samePositionBatchReviewStatuses,
+    requirednessDecisionStatuses: samePositionBatchReviewDecisionStatuses,
+    nonIndependentEvidenceRule: samePositionBatchReviewRules.nonIndependentBoundary,
+    revisionPreservationRule: samePositionBatchReviewRules.revisionPreservation,
+    visibilityRule: samePositionBatchReviewRules.visibility,
+    excludedFromIndependentRaterCountRequired: true,
+    raterOwnRatingsOnlyRequired: true,
+    peerModelSourceMetadataHiddenRequired: true,
+    lmcaSourceBoundary:
+      "Project default same-position batch-review requiredness is frozen here; LMCA motivates same-position context handling but does not state these exact platform thresholds.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1750,6 +1783,7 @@ function completeRatingExperienceFixtures() {
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
   const confidenceScalePolicy = scoreConfidenceScalePolicy("score-confidence-scale-policy-submitted");
+  const batchReviewRequirednessPolicy = samePositionBatchReviewRequirednessPolicy("same-position-batch-review-requiredness-policy-submitted");
   return {
     taskOutputEligibilityPolicies: [
       {
@@ -1928,9 +1962,13 @@ function completeRatingExperienceFixtures() {
         timestamp: "2026-10-01T00:04:40.000Z",
       },
     ],
+    samePositionBatchReviewRequirednessPolicies: [batchReviewRequirednessPolicy],
     samePositionBatchReviews: [
       {
         id: "same-position-batch-review-submitted",
+        samePositionBatchReviewRequirednessPolicyId: batchReviewRequirednessPolicy.id,
+        requirednessTriggerClass: "same_position_session_completed",
+        requirednessDecisionStatus: "required_post_lock_before_release",
         raterId: "demo-rater",
         positionId: "pos-ai-prior",
         samePositionSessionId: "same-position-session-submitted",
@@ -1940,6 +1978,9 @@ function completeRatingExperienceFixtures() {
         revisionIds: [],
         reviewStatus: "completed",
         nonIndependentEvidenceFlag: true,
+        excludedFromIndependentRaterCount: true,
+        raterOwnRatingsOnly: true,
+        peerModelSourceMetadataHidden: true,
         timestamp: "2026-10-01T00:04:50.000Z",
       },
     ],
@@ -3161,7 +3202,18 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.rationaleEvidenceSpanRows.at(-1).rationaleEvidenceSpanRequirednessPolicyId, "rationale-evidence-span-requiredness-policy-submitted");
   assert.equal(report.rationaleEvidenceSpanRows.at(-1).mandatoryTriggerClass, "score_explanation_triggered");
   assert.equal(report.counts.submittedSamePositionScratchpadCount, 1);
+  assert.equal(report.counts.submittedSamePositionBatchReviewRequirednessPolicyCount, 1);
   assert.equal(report.counts.submittedSamePositionBatchReviewCount, 1);
+  assert.equal(report.samePositionBatchReviewRequirednessPolicyReleaseUseStatus, "submitted_same_position_batch_review_requiredness_policy_active");
+  assert.equal(report.samePositionBatchReviewRequirednessPolicyId, "same-position-batch-review-requiredness-policy-submitted");
+  assert.deepEqual(report.requiredSamePositionBatchReviewThresholds, samePositionBatchReviewThresholds);
+  assert.deepEqual(report.requiredSamePositionBatchReviewRules, samePositionBatchReviewRules);
+  assert.equal(
+    report.samePositionBatchReviewRows.at(-1).samePositionBatchReviewRequirednessPolicyId,
+    "same-position-batch-review-requiredness-policy-submitted",
+  );
+  assert.equal(report.samePositionBatchReviewRows.at(-1).requirednessTriggerClass, "same_position_session_completed");
+  assert.equal(report.samePositionBatchReviewRows.at(-1).excludedFromIndependentRaterCount, true);
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
@@ -3299,6 +3351,46 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.ok(
     mismatchedScoreConfidenceScaleReport.reviewSections.some(
       (section) => section.artifactType === "score_confidence_annotation" && section.reason === "scoreConfidenceScalePolicyId",
+    ),
+  );
+
+  const driftedBatchReviewRequirednessReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    samePositionBatchReviewRequirednessPolicies: [
+      {
+        ...samePositionBatchReviewRequirednessPolicy("same-position-batch-review-requiredness-policy-drifted"),
+        thresholds: {
+          ...samePositionBatchReviewThresholds,
+          productOverallDeltaTriggerMin: 0.35,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedBatchReviewRequirednessReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.equal(
+    driftedBatchReviewRequirednessReport.samePositionBatchReviewRequirednessPolicyReleaseUseStatus,
+    "submitted_same_position_batch_review_requiredness_policy_review_required",
+  );
+  assert.ok(
+    driftedBatchReviewRequirednessReport.reviewSections.some(
+      (section) => section.artifactType === "same_position_batch_review_requiredness_policy" && section.reason === "thresholds",
+    ),
+  );
+
+  const staleBatchReviewRequirednessReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    samePositionBatchReviews: [
+      {
+        ...completeRatingExperienceFixtures().samePositionBatchReviews[0],
+        id: "same-position-batch-review-stale-policy",
+        samePositionBatchReviewRequirednessPolicyId: "same-position-batch-review-requiredness-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleBatchReviewRequirednessReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    staleBatchReviewRequirednessReport.reviewSections.some(
+      (section) => section.artifactType === "same_position_batch_review" && section.reason === "samePositionBatchReviewRequirednessPolicyId",
     ),
   );
 

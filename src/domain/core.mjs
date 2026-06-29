@@ -17157,6 +17157,39 @@ export const REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES = {
   postDiscussionRevision: "post_discussion_revision_requires_post_lock_or_adjudication_visible_span_linked_to_changed_claim",
   protectedVisibility: "spans_for_initial_ratings_must_hide_raw_text_and remain hidden_until_initial_rating_lock",
 };
+export const SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION = "same-position-batch-review-requiredness-rlhf90-v1";
+export const REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES = [
+  "same_position_session_completed",
+  "large_product_overall_delta",
+  "post_lock_revision_candidate",
+  "release_critical_context_sensitive",
+  "validation_or_hidden_benchmark_candidate",
+];
+export const REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS = {
+  minSiblingRatingsReviewed: 2,
+  productOverallDeltaTriggerMin: 0.2,
+  overallScoreDeltaTriggerMin: 0.25,
+  postLockCompletionWindowHours: 72,
+  releaseCriticalRequiredSiblingCount: 2,
+};
+export const REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES = {
+  ordinarySession:
+    "Same-position sessions with at least two sibling ratings require a post-lock self-consistency review before release-critical evidence is complete.",
+  productOverallDelta:
+    "Large centrality-strength product versus overall deltas require a product/overall summary and either no-revision-needed or append-only revision proposals.",
+  nonIndependentBoundary:
+    "Batch reviews are self-consistency metadata, not independent blind ratings, and cannot enter label denominators or independent-rater counts.",
+  revisionPreservation: "Changes proposed from batch review append revisions and preserve original locked ratings.",
+  visibility:
+    "Batch-review prompts show only the rater's own locked sibling ratings after lock, with peer, model, source, gold, protected-split, and hidden-benchmark metadata hidden.",
+};
+export const REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES = ["completed", "revision_proposed", "no_revision_needed"];
+export const REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES = [
+  "required_post_lock_before_release",
+  "optional_ordinary_complete",
+  "not_required_single_rating",
+  "deferred_with_reason",
+];
 export const INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION = "interpretation-target-map-requiredness-rlhf90-v1";
 export const REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES = [
   "ordinary_low_risk_optional",
@@ -17690,9 +17723,33 @@ function defaultSamePositionScratchpad(releaseId) {
   };
 }
 
-function defaultSamePositionBatchReview(releaseId) {
+function defaultSamePositionBatchReviewRequirednessPolicy(releaseId) {
+  return {
+    id: `same-position-batch-review-requiredness-policy-${releaseId}`,
+    policyVersion: SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES,
+    thresholds: REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS,
+    requiredReviewRules: REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
+    reviewStatuses: REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
+    requirednessDecisionStatuses: REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
+    nonIndependentEvidenceRule: REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES.nonIndependentBoundary,
+    revisionPreservationRule: REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES.revisionPreservation,
+    visibilityRule: REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES.visibility,
+    excludedFromIndependentRaterCountRequired: true,
+    raterOwnRatingsOnlyRequired: true,
+    peerModelSourceMetadataHiddenRequired: true,
+    lmcaSourceBoundary:
+      "Project default same-position batch-review requiredness is frozen here; LMCA motivates same-position context handling but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultSamePositionBatchReview(releaseId, samePositionBatchReviewRequirednessPolicyId = `same-position-batch-review-requiredness-policy-${releaseId}`) {
   return {
     id: `same-position-batch-review-${releaseId}`,
+    samePositionBatchReviewRequirednessPolicyId,
+    requirednessTriggerClass: "same_position_session_completed",
+    requirednessDecisionStatus: "required_post_lock_before_release",
     raterId: "demo-rater",
     positionId: "pos-ai-prior",
     samePositionSessionId: `same-position-session-${releaseId}`,
@@ -17702,6 +17759,9 @@ function defaultSamePositionBatchReview(releaseId) {
     revisionIds: [],
     reviewStatus: "completed",
     nonIndependentEvidenceFlag: true,
+    excludedFromIndependentRaterCount: true,
+    raterOwnRatingsOnly: true,
+    peerModelSourceMetadataHidden: true,
     timestamp: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -17835,10 +17895,27 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     .map((scratchpad) => normalizeSamePositionScratchpad(scratchpad, "submitted_workflow_same_position_scratchpad"))
     .filter(Boolean);
   const seedScratchpadRows = [normalizeSamePositionScratchpad(defaultSamePositionScratchpad(releaseId), "seed_same_position_scratchpad")];
-  const submittedBatchReviewRows = (options.samePositionBatchReviews ?? [])
-    .map((review) => normalizeSamePositionBatchReview(review, "submitted_workflow_same_position_batch_review"))
+  const submittedBatchReviewPolicyRows = (options.samePositionBatchReviewRequirednessPolicies ?? [])
+    .map((policy) => normalizeSamePositionBatchReviewRequirednessPolicy(policy, "submitted_workflow_same_position_batch_review_requiredness_policy"))
     .filter(Boolean);
-  const seedBatchReviewRows = [normalizeSamePositionBatchReview(defaultSamePositionBatchReview(releaseId), "seed_same_position_batch_review")];
+  const seedBatchReviewPolicyRows = [
+    normalizeSamePositionBatchReviewRequirednessPolicy(
+      defaultSamePositionBatchReviewRequirednessPolicy(releaseId),
+      "seed_same_position_batch_review_requiredness_policy",
+    ),
+  ];
+  const submittedActiveBatchReviewPolicy = submittedBatchReviewPolicyRows.find((row) => row.reviewReasons.length === 0);
+  const activeBatchReviewPolicy = submittedActiveBatchReviewPolicy ?? seedBatchReviewPolicyRows[0];
+  const submittedBatchReviewRows = (options.samePositionBatchReviews ?? [])
+    .map((review) => normalizeSamePositionBatchReview(review, activeBatchReviewPolicy, "submitted_workflow_same_position_batch_review"))
+    .filter(Boolean);
+  const seedBatchReviewRows = [
+    normalizeSamePositionBatchReview(
+      defaultSamePositionBatchReview(releaseId, seedBatchReviewPolicyRows[0].id),
+      seedBatchReviewPolicyRows[0],
+      "seed_same_position_batch_review",
+    ),
+  ];
   const submittedAssistanceRows = (options.externalAssistanceDeclarations ?? [])
     .map((declaration) => normalizeExternalAssistanceDeclaration(declaration, "submitted_workflow_external_assistance_declaration"))
     .filter(Boolean);
@@ -17871,6 +17948,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ],
     ["rationale_evidence_span", submittedRationaleSpanRows.length ? submittedRationaleSpanRows : seedRationaleSpanRows],
     ["same_position_scratchpad", submittedScratchpadRows.length ? submittedScratchpadRows : seedScratchpadRows],
+    [
+      "same_position_batch_review_requiredness_policy",
+      submittedBatchReviewPolicyRows.length ? submittedBatchReviewPolicyRows : seedBatchReviewPolicyRows,
+    ],
     ["same_position_batch_review", submittedBatchReviewRows.length ? submittedBatchReviewRows : seedBatchReviewRows],
     ["external_assistance_declaration", submittedAssistanceRows.length ? submittedAssistanceRows : seedAssistanceRows],
   ];
@@ -17902,6 +17983,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ),
     ...submittedRationaleSpanRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rationale_evidence_span", artifactId: row.id, reason }))),
     ...submittedScratchpadRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_scratchpad", artifactId: row.id, reason }))),
+    ...submittedBatchReviewPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review_requiredness_policy", artifactId: row.id, reason })),
+    ),
     ...submittedBatchReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review", artifactId: row.id, reason }))),
     ...submittedAssistanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "external_assistance_declaration", artifactId: row.id, reason }))),
     ...gateGroups
@@ -17932,6 +18016,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     rationaleSpanRequirednessPolicyEvidence.counts.submittedPolicyCount > 0 &&
     submittedRationaleSpanRows.length > 0 &&
     submittedScratchpadRows.length > 0 &&
+    submittedBatchReviewPolicyRows.length > 0 &&
     submittedBatchReviewRows.length > 0 &&
     submittedAssistanceRows.length > 0 &&
     reviewSections.length === 0;
@@ -17978,6 +18063,17 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     requiredRationaleEvidenceSpanCoverageRules: REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
     allowedRationaleEvidenceSpanLinkCategories: RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES,
     allowedRationaleEvidenceSpanVisibilityStates: RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES,
+    samePositionBatchReviewRequirednessPolicyId: activeBatchReviewPolicy.id,
+    samePositionBatchReviewRequirednessPolicyReleaseUseStatus: submittedActiveBatchReviewPolicy
+      ? "submitted_same_position_batch_review_requiredness_policy_active"
+      : submittedBatchReviewPolicyRows.length
+        ? "submitted_same_position_batch_review_requiredness_policy_review_required"
+        : "seed_same_position_batch_review_requiredness_policy_active",
+    requiredSamePositionBatchReviewTriggerClasses: REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES,
+    requiredSamePositionBatchReviewThresholds: REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS,
+    requiredSamePositionBatchReviewRules: REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
+    requiredSamePositionBatchReviewStatuses: REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
+    requiredSamePositionBatchReviewDecisionStatuses: REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
     taskOutputEligibilityPolicyRows: [...seedTaskOutputRows, ...submittedTaskOutputRows],
     scoreInputPolicyRows: [...seedScoreInputRows, ...submittedScoreInputRows],
     draftStoragePolicyRows: [...seedDraftStorageRows, ...submittedDraftStorageRows],
@@ -17997,6 +18093,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     raterScoreConfidenceRows: [...seedConfidenceRows, ...submittedConfidenceRows],
     rationaleEvidenceSpanRows: [...seedRationaleSpanRows, ...submittedRationaleSpanRows],
     samePositionScratchpadRows: [...seedScratchpadRows, ...submittedScratchpadRows],
+    samePositionBatchReviewRequirednessPolicyRows: [...seedBatchReviewPolicyRows, ...submittedBatchReviewPolicyRows],
     samePositionBatchReviewRows: [...seedBatchReviewRows, ...submittedBatchReviewRows],
     externalAssistanceDeclarationRows: [...seedAssistanceRows, ...submittedAssistanceRows],
     protectedArtifactTypeRows,
@@ -18022,6 +18119,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedRationaleEvidenceSpanRequirednessPolicyCount: rationaleSpanRequirednessPolicyEvidence.counts.submittedPolicyCount,
       submittedRationaleEvidenceSpanCount: submittedRationaleSpanRows.length,
       submittedSamePositionScratchpadCount: submittedScratchpadRows.length,
+      submittedSamePositionBatchReviewRequirednessPolicyCount: submittedBatchReviewPolicyRows.length,
       submittedSamePositionBatchReviewCount: submittedBatchReviewRows.length,
       submittedExternalAssistanceDeclarationCount: submittedAssistanceRows.length,
       passingProtectedArtifactTypeCount: protectedArtifactTypeRows.filter((row) => row.status === "protected_artifact_type_complete").length,
@@ -18910,30 +19008,102 @@ function normalizeSamePositionScratchpad(scratchpad, rowSource) {
   };
 }
 
-function normalizeSamePositionBatchReview(review, rowSource) {
+function normalizeSamePositionBatchReviewRequirednessPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.samePositionBatchReviewRequirednessPolicyId ?? policy?.batchReviewRequirednessPolicyId;
+  if (!id) return null;
+  const triggerClasses = normalizeStringArray(policy.triggerClasses ?? policy.requirednessTriggerClasses);
+  const reviewStatuses = normalizeStringArray(policy.reviewStatuses);
+  const requirednessDecisionStatuses = normalizeStringArray(policy.requirednessDecisionStatuses);
+  const thresholds = policy.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  const requiredReviewRules =
+    policy.requiredReviewRules && typeof policy.requiredReviewRules === "object" && !Array.isArray(policy.requiredReviewRules) ? policy.requiredReviewRules : {};
+  const missingTriggerClasses = REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES.filter((trigger) => !triggerClasses.includes(trigger));
+  const missingReviewStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES.filter((status) => !reviewStatuses.includes(status));
+  const missingDecisionStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES.filter((status) => !requirednessDecisionStatuses.includes(status));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION
+      ? null
+      : `policyVersion:${SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION}`,
+    missingTriggerClasses.length ? `triggerClasses:${missingTriggerClasses.join(",")}` : null,
+    stableJsonKey(thresholds) === stableJsonKey(REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS) ? null : "thresholds",
+    stableJsonKey(requiredReviewRules) === stableJsonKey(REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES) ? null : "requiredReviewRules",
+    missingReviewStatuses.length ? `reviewStatuses:${missingReviewStatuses.join(",")}` : null,
+    missingDecisionStatuses.length ? `requirednessDecisionStatuses:${missingDecisionStatuses.join(",")}` : null,
+    policyMentions(policy.nonIndependentEvidenceRule, ["not", "independent"]) && policyMentions(policy.nonIndependentEvidenceRule, ["denominator"])
+      ? null
+      : "nonIndependentEvidenceRule",
+    policyMentions(policy.revisionPreservationRule, ["append"]) && policyMentions(policy.revisionPreservationRule, ["original"]) ? null : "revisionPreservationRule",
+    policyMentions(policy.visibilityRule, ["own", "locked"]) && policyMentions(policy.visibilityRule, ["peer"]) ? null : "visibilityRule",
+    policy.excludedFromIndependentRaterCountRequired === true ? null : "excludedFromIndependentRaterCountRequired",
+    policy.raterOwnRatingsOnlyRequired === true ? null : "raterOwnRatingsOnlyRequired",
+    policy.peerModelSourceMetadataHiddenRequired === true ? null : "peerModelSourceMetadataHiddenRequired",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "lmca"]) ? null : "lmcaSourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    triggerClasses,
+    thresholds,
+    requiredReviewRules,
+    reviewStatuses,
+    requirednessDecisionStatuses,
+    missingTriggerClasses,
+    missingReviewStatuses,
+    missingDecisionStatuses,
+    reviewReasons,
+    status: reviewReasons.length ? "same_position_batch_review_requiredness_policy_review_required" : "same_position_batch_review_requiredness_policy_complete",
+  };
+}
+
+function normalizeSamePositionBatchReview(review, activeBatchReviewPolicy, rowSource) {
   const id = review?.id ?? review?.batchReviewId ?? review?.samePositionBatchReviewId;
   if (!id) return null;
+  const activePolicyId = activeBatchReviewPolicy?.id ?? null;
+  const activeTriggerClasses = activeBatchReviewPolicy?.triggerClasses ?? REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES;
+  const activeReviewStatuses = activeBatchReviewPolicy?.reviewStatuses ?? REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES;
+  const activeDecisionStatuses = activeBatchReviewPolicy?.requirednessDecisionStatuses ?? REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES;
+  const requirednessPolicyId = review.samePositionBatchReviewRequirednessPolicyId ?? review.batchReviewRequirednessPolicyId ?? null;
+  const requirednessTriggerClass = review.requirednessTriggerClass ?? review.triggerClass ?? null;
+  const requirednessDecisionStatus = review.requirednessDecisionStatus ?? review.decisionStatus ?? null;
   const siblingRatingIdsReviewed = normalizeStringArray(review.siblingRatingIdsReviewed);
   const reviewReasons = [
+    activePolicyId && requirednessPolicyId === activePolicyId ? null : "samePositionBatchReviewRequirednessPolicyId",
+    activeTriggerClasses.includes(requirednessTriggerClass) ? null : "requirednessTriggerClass",
+    activeDecisionStatuses.includes(requirednessDecisionStatus) ? null : "requirednessDecisionStatus",
     requiredPromptFieldReason("raterId", review.raterId),
     requiredPromptFieldReason("positionId", review.positionId),
     requiredPromptFieldReason("samePositionSessionId", review.samePositionSessionId),
     siblingRatingIdsReviewed.length ? null : "siblingRatingIdsReviewed",
     requiredPromptFieldReason("productOverallDeltaSummary", review.productOverallDeltaSummary),
     Array.isArray(review.revisionProposals) ? null : "revisionProposals",
-    ["completed", "revision_proposed", "no_revision_needed"].includes(review.reviewStatus) ? null : "reviewStatus",
+    review.reviewStatus === "revision_proposed" && (!Array.isArray(review.revisionProposals) || !review.revisionProposals.length)
+      ? "revisionProposals:revision_proposed"
+      : null,
+    Array.isArray(review.revisionIds) ? null : "revisionIds",
+    activeReviewStatuses.includes(review.reviewStatus) ? null : "reviewStatus",
     review.nonIndependentEvidenceFlag === true ? null : "nonIndependentEvidenceFlag",
+    review.excludedFromIndependentRaterCount === true ? null : "excludedFromIndependentRaterCount",
+    review.raterOwnRatingsOnly === true ? null : "raterOwnRatingsOnly",
+    review.peerModelSourceMetadataHidden === true ? null : "peerModelSourceMetadataHidden",
     requiredPromptFieldReason("timestamp", review.timestamp ?? review.createdAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    samePositionBatchReviewRequirednessPolicyId: requirednessPolicyId,
+    requirednessTriggerClass,
+    requirednessDecisionStatus,
     raterId: review.raterId ?? null,
     positionId: review.positionId ?? null,
     samePositionSessionId: review.samePositionSessionId ?? null,
     siblingRatingIdsReviewed,
     reviewStatus: review.reviewStatus ?? null,
     nonIndependentEvidenceFlag: review.nonIndependentEvidenceFlag === true,
+    excludedFromIndependentRaterCount: review.excludedFromIndependentRaterCount === true,
+    raterOwnRatingsOnly: review.raterOwnRatingsOnly === true,
+    peerModelSourceMetadataHidden: review.peerModelSourceMetadataHidden === true,
     reviewReasons,
     status: reviewReasons.length ? "same_position_batch_review_review_required" : "same_position_batch_review_complete",
   };
@@ -23321,6 +23491,7 @@ export function buildOctoberReleaseReport(
     rationaleEvidenceSpanRequirednessPolicies: options.rationaleEvidenceSpanRequirednessPolicies ?? [],
     rationaleEvidenceSpans: options.rationaleEvidenceSpans ?? [],
     samePositionScratchpads: options.samePositionScratchpads ?? [],
+    samePositionBatchReviewRequirednessPolicies: options.samePositionBatchReviewRequirednessPolicies ?? [],
     samePositionBatchReviews: options.samePositionBatchReviews ?? [],
     externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
   });
@@ -23617,6 +23788,7 @@ export function buildOctoberReleaseReport(
       rationaleEvidenceSpanRequirednessPolicies: options.rationaleEvidenceSpanRequirednessPolicies ?? [],
       rationaleEvidenceSpans: options.rationaleEvidenceSpans ?? [],
       samePositionScratchpads: options.samePositionScratchpads ?? [],
+      samePositionBatchReviewRequirednessPolicies: options.samePositionBatchReviewRequirednessPolicies ?? [],
       samePositionBatchReviews: options.samePositionBatchReviews ?? [],
       externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
     },

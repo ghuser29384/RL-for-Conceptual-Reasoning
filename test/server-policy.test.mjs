@@ -28,6 +28,11 @@ import {
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES,
   REQUIRED_SCORE_CONFIDENCE_BANDS,
   REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
   REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
@@ -36,6 +41,7 @@ import {
   REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
   REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
   SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
+  SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
   SPOT_CHECK_SAMPLING_POLICY_VERSION,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
@@ -311,6 +317,33 @@ function scoreConfidenceScalePolicy(id = "score-confidence-scale-policy-workflow
     visibleToPeersBeforeLockRequired: false,
     lmcaSourceBoundary:
       "Project default confidence annotation scale is frozen here; LMCA motivates preserving uncertainty metadata but does not state this exact per-dimension scale.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const samePositionBatchReviewTriggerClasses = REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES;
+const samePositionBatchReviewThresholds = REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS;
+const samePositionBatchReviewRules = REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES;
+const samePositionBatchReviewStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES;
+const samePositionBatchReviewDecisionStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES;
+
+function samePositionBatchReviewRequirednessPolicy(id = "same-position-batch-review-requiredness-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
+    triggerClasses: samePositionBatchReviewTriggerClasses,
+    thresholds: samePositionBatchReviewThresholds,
+    requiredReviewRules: samePositionBatchReviewRules,
+    reviewStatuses: samePositionBatchReviewStatuses,
+    requirednessDecisionStatuses: samePositionBatchReviewDecisionStatuses,
+    nonIndependentEvidenceRule: samePositionBatchReviewRules.nonIndependentBoundary,
+    revisionPreservationRule: samePositionBatchReviewRules.revisionPreservation,
+    visibilityRule: samePositionBatchReviewRules.visibility,
+    excludedFromIndependentRaterCountRequired: true,
+    raterOwnRatingsOnlyRequired: true,
+    peerModelSourceMetadataHiddenRequired: true,
+    lmcaSourceBoundary:
+      "Project default same-position batch-review requiredness is frozen here; LMCA motivates same-position context handling but does not state these exact platform thresholds.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1665,6 +1698,7 @@ function completeRatingExperienceWorkflowFixtures() {
     frozenAt: "2026-10-01T00:23:00.000Z",
   };
   const confidenceScalePolicy = scoreConfidenceScalePolicy("score-confidence-scale-policy-workflow-new");
+  const batchReviewRequirednessPolicy = samePositionBatchReviewRequirednessPolicy("same-position-batch-review-requiredness-policy-workflow-new");
   return {
     taskOutputEligibilityPolicy: {
       id: "task-output-eligibility-policy-workflow-new",
@@ -1799,8 +1833,12 @@ function completeRatingExperienceWorkflowFixtures() {
       excludedFromLabelAndExport: true,
       timestamp: "2026-10-01T00:26:40.000Z",
     },
+    samePositionBatchReviewRequirednessPolicy: batchReviewRequirednessPolicy,
     samePositionBatchReview: {
       id: "same-position-batch-review-workflow-new",
+      samePositionBatchReviewRequirednessPolicyId: batchReviewRequirednessPolicy.id,
+      requirednessTriggerClass: "same_position_session_completed",
+      requirednessDecisionStatus: "required_post_lock_before_release",
       raterId: "demo-rater",
       positionId: "pos-ai-prior",
       samePositionSessionId: "same-position-session-workflow-new",
@@ -1810,6 +1848,9 @@ function completeRatingExperienceWorkflowFixtures() {
       revisionIds: [],
       reviewStatus: "completed",
       nonIndependentEvidenceFlag: true,
+      excludedFromIndependentRaterCount: true,
+      raterOwnRatingsOnly: true,
+      peerModelSourceMetadataHidden: true,
       timestamp: "2026-10-01T00:26:50.000Z",
     },
     correctnessClaimWeightWorksheet: {
@@ -3055,6 +3096,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/rationale-evidence-spans/rationale-evidence-span-smoke"],
     ["POST", "/api/v1/same-position-scratchpads"],
     ["GET", "/api/v1/same-position-scratchpads/same-position-scratchpad-smoke"],
+    ["POST", "/api/v1/same-position-batch-review-requiredness-policies"],
+    ["GET", "/api/v1/same-position-batch-review-requiredness-policies/same-position-batch-review-requiredness-policy-smoke"],
     ["POST", "/api/v1/same-position-batch-reviews"],
     ["GET", "/api/v1/same-position-batch-reviews/same-position-batch-review-smoke"],
     ["POST", "/api/v1/correctness-claim-weight-worksheets"],
@@ -9891,6 +9934,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(exportingScratchpad.status, 400);
   assert.match(exportingScratchpad.body.detail, /excludedFromLabelAndExport/);
 
+  const driftedBatchReviewRequirednessPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/same-position-batch-review-requiredness-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      samePositionBatchReviewRequirednessPolicy: {
+        ...ratingExperience.samePositionBatchReviewRequirednessPolicy,
+        id: "same-position-batch-review-requiredness-policy-drifted",
+        thresholds: {
+          ...samePositionBatchReviewThresholds,
+          productOverallDeltaTriggerMin: 0.35,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedBatchReviewRequirednessPolicy.status, 400);
+  assert.match(driftedBatchReviewRequirednessPolicy.body.detail, /thresholds/);
+
   const independentBatchReview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/same-position-batch-reviews",
@@ -9901,11 +9962,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         id: "same-position-batch-review-independent",
         siblingRatingIdsReviewed: [],
         nonIndependentEvidenceFlag: false,
+        excludedFromIndependentRaterCount: false,
+        raterOwnRatingsOnly: false,
+        peerModelSourceMetadataHidden: false,
       },
     }),
   });
   assert.equal(independentBatchReview.status, 400);
-  assert.match(independentBatchReview.body.detail, /siblingRatingIdsReviewed|nonIndependentEvidenceFlag/);
+  assert.match(independentBatchReview.body.detail, /siblingRatingIdsReviewed|nonIndependentEvidenceFlag|excludedFromIndependentRaterCount|raterOwnRatingsOnly|peerModelSourceMetadataHidden/);
 
   const undeclaredExternalAssistance = await invokeApi(context, {
     method: "POST",
@@ -9969,6 +10033,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["scoreConfidenceAnnotation", "/api/v1/score-confidence-annotations"],
     ["rationaleEvidenceSpan", "/api/v1/rationale-evidence-spans"],
     ["samePositionScratchpad", "/api/v1/same-position-scratchpads"],
+    ["samePositionBatchReviewRequirednessPolicy", "/api/v1/same-position-batch-review-requiredness-policies"],
     ["samePositionBatchReview", "/api/v1/same-position-batch-reviews"],
     ["correctnessClaimWeightWorksheet", "/api/v1/correctness-claim-weight-worksheets"],
     ["externalAssistanceDeclaration", "/api/v1/external-assistance-declarations"],
@@ -10437,6 +10502,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(scratchpadById.status, 200);
   assert.equal(scratchpadById.body.visibilityState, "private_rater_only");
+
+  const batchReviewRequirednessById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/same-position-batch-review-requiredness-policies/same-position-batch-review-requiredness-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(batchReviewRequirednessById.status, 200);
+  assert.deepEqual(batchReviewRequirednessById.body.thresholds, samePositionBatchReviewThresholds);
 
   const batchReviewById = await invokeApi(context, {
     method: "GET",
@@ -13627,6 +13700,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpanRequirednessPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpans.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionScratchpads.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviewRequirednessPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviews.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.externalAssistanceDeclarations.length, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.releaseUseStatus, "submitted_rating_experience_evidence_complete");
@@ -13648,6 +13722,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterScoreConfidenceCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanRequirednessPolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewRequirednessPolicyCount, 1);
   assert.equal(
     releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus,
     "submitted_rationale_evidence_span_requiredness_policy_active",
@@ -13667,6 +13742,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(
     releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRows.at(-1).rationaleEvidenceSpanRequirednessPolicyId,
     "rationale-evidence-span-requiredness-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.samePositionBatchReviewRequirednessPolicyReleaseUseStatus,
+    "submitted_same_position_batch_review_requiredness_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.samePositionBatchReviewRequirednessPolicyId,
+    "same-position-batch-review-requiredness-policy-workflow-new",
+  );
+  assert.deepEqual(releaseReport.body.ratingExperienceEvidence.requiredSamePositionBatchReviewThresholds, samePositionBatchReviewThresholds);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.samePositionBatchReviewRows.at(-1).samePositionBatchReviewRequirednessPolicyId,
+    "same-position-batch-review-requiredness-policy-workflow-new",
   );
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewCount, 1);
@@ -14223,7 +14311,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 134 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 135 + extendedRaterItemConflictTypes.length,
   );
 });
 

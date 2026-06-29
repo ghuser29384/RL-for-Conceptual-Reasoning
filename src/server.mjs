@@ -22,6 +22,7 @@ import {
   RATING_ESCALATION_TRIGGER_RULES,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
   RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
+  SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
   SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
   SPOT_CHECK_SAMPLING_POLICY_VERSION,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
@@ -31,6 +32,11 @@ import {
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
   REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS,
+  REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES,
   REQUIRED_SCORE_CONFIDENCE_BANDS,
   REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
   REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
@@ -829,6 +835,12 @@ const scoreConfidenceScaleVersion = REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION;
 const scoreConfidenceBands = REQUIRED_SCORE_CONFIDENCE_BANDS;
 const scoreConfidenceNumericThresholds = REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS;
 const scoreConfidenceReasonCodes = REQUIRED_SCORE_CONFIDENCE_REASON_CODES;
+const samePositionBatchReviewRequirednessPolicyVersion = SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION;
+const samePositionBatchReviewTriggerClasses = REQUIRED_SAME_POSITION_BATCH_REVIEW_TRIGGER_CLASSES;
+const samePositionBatchReviewThresholds = REQUIRED_SAME_POSITION_BATCH_REVIEW_THRESHOLDS;
+const samePositionBatchReviewRules = REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES;
+const samePositionBatchReviewStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES;
+const samePositionBatchReviewDecisionStatuses = REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES;
 const rubricLintRules = [
   "missing_required_score",
   "clarity_branch_consistency",
@@ -4174,11 +4186,79 @@ const workflowWriteEndpoints = [
     requiredExactFields: { excludedFromLabelAndExport: true },
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/same-position-batch-review-requiredness-policies$/,
+    "same_position_batch_review_requiredness_policy_submitted",
+    "samePositionBatchReviewRequirednessPolicy",
+    adminRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: [
+        "id",
+        "policyVersion",
+        "nonIndependentEvidenceRule",
+        "revisionPreservationRule",
+        "visibilityRule",
+        "lmcaSourceBoundary",
+        "frozenAt",
+      ],
+      requiredNonEmptyArrayFields: ["triggerClasses", "reviewStatuses", "requirednessDecisionStatuses"],
+      requiredObjectFields: ["thresholds", "requiredReviewRules"],
+      requiredArrayIncludes: {
+        triggerClasses: samePositionBatchReviewTriggerClasses,
+        reviewStatuses: samePositionBatchReviewStatuses,
+        requirednessDecisionStatuses: samePositionBatchReviewDecisionStatuses,
+      },
+      requiredObjectKeys: {
+        thresholds: Object.keys(samePositionBatchReviewThresholds),
+        requiredReviewRules: Object.keys(samePositionBatchReviewRules),
+      },
+      requiredStructuredFields: {
+        thresholds: samePositionBatchReviewThresholds,
+        requiredReviewRules: samePositionBatchReviewRules,
+      },
+      requiredStringIncludes: {
+        nonIndependentEvidenceRule: ["not", "independent"],
+        revisionPreservationRule: ["append", "original"],
+        visibilityRule: ["own", "locked"],
+        lmcaSourceBoundary: ["Project", "LMCA"],
+      },
+      requiredExactFields: {
+        policyVersion: samePositionBatchReviewRequirednessPolicyVersion,
+        excludedFromIndependentRaterCountRequired: true,
+        raterOwnRatingsOnlyRequired: true,
+        peerModelSourceMetadataHiddenRequired: true,
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/same-position-batch-reviews$/, "same_position_batch_review_submitted", "samePositionBatchReview", ratingWorkflowRoles, {
-    requiredFields: ["id", "raterId", "positionId", "samePositionSessionId", "productOverallDeltaSummary", "revisionProposals", "reviewStatus", "nonIndependentEvidenceFlag", "timestamp"],
+    requiredFields: [
+      "id",
+      "samePositionBatchReviewRequirednessPolicyId",
+      "requirednessTriggerClass",
+      "requirednessDecisionStatus",
+      "raterId",
+      "positionId",
+      "samePositionSessionId",
+      "productOverallDeltaSummary",
+      "revisionProposals",
+      "revisionIds",
+      "reviewStatus",
+      "nonIndependentEvidenceFlag",
+      "timestamp",
+    ],
     requiredNonEmptyArrayFields: ["siblingRatingIdsReviewed"],
-    allowedValues: { reviewStatus: ["completed", "revision_proposed", "no_revision_needed"] },
-    requiredExactFields: { nonIndependentEvidenceFlag: true },
+    allowedValues: {
+      requirednessTriggerClass: samePositionBatchReviewTriggerClasses,
+      requirednessDecisionStatus: samePositionBatchReviewDecisionStatuses,
+      reviewStatus: samePositionBatchReviewStatuses,
+    },
+    requiredExactFields: {
+      nonIndependentEvidenceFlag: true,
+      excludedFromIndependentRaterCount: true,
+      raterOwnRatingsOnly: true,
+      peerModelSourceMetadataHidden: true,
+    },
     requireActorField: "raterId",
   }),
   workflowWriteSpec(/^\/api\/v1\/correctness-claim-weight-worksheets$/, "correctness_claim_weight_worksheet_submitted", "correctnessClaimWeightWorksheet", expertWorkflowRoles, {
@@ -5153,6 +5233,11 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rationale-evidence-span-requiredness-policies\/(?<id>[^/]+)$/, "rationaleEvidenceSpanRequirednessPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rationale-evidence-spans\/(?<id>[^/]+)$/, "rationaleEvidenceSpan", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/same-position-scratchpads\/(?<id>[^/]+)$/, "samePositionScratchpad", expertAuditWorkflowRoles),
+  workflowReadSpec(
+    /^\/api\/v1\/same-position-batch-review-requiredness-policies\/(?<id>[^/]+)$/,
+    "samePositionBatchReviewRequirednessPolicy",
+    adminAuditRoles,
+  ),
   workflowReadSpec(/^\/api\/v1\/same-position-batch-reviews\/(?<id>[^/]+)$/, "samePositionBatchReview", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/correctness-claim-weight-worksheets\/(?<id>[^/]+)$/, "correctnessClaimWeightWorksheet", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/external-assistance-declarations\/(?<id>[^/]+)$/, "externalAssistanceDeclaration", expertAuditWorkflowRoles),
@@ -7884,6 +7969,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const rationaleEvidenceSpanRequirednessPolicies = latestWorkflowResources(workflowEvents, "rationaleEvidenceSpanRequirednessPolicy");
   const rationaleEvidenceSpans = latestWorkflowResources(workflowEvents, "rationaleEvidenceSpan");
   const samePositionScratchpads = latestWorkflowResources(workflowEvents, "samePositionScratchpad");
+  const samePositionBatchReviewRequirednessPolicies = latestWorkflowResources(workflowEvents, "samePositionBatchReviewRequirednessPolicy");
   const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
   const externalAssistanceDeclarations = latestWorkflowResources(workflowEvents, "externalAssistanceDeclaration");
   const blindingPreviewAudits = latestWorkflowResources(workflowEvents, "blindingPreviewAudit");
@@ -8064,6 +8150,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     rationaleEvidenceSpanRequirednessPolicies,
     rationaleEvidenceSpans,
     samePositionScratchpads,
+    samePositionBatchReviewRequirednessPolicies,
     samePositionBatchReviews,
     externalAssistanceDeclarations,
     blindingPreviewAudits,
@@ -8239,6 +8326,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     rationaleEvidenceSpanRequirednessPolicies,
     rationaleEvidenceSpans,
     samePositionScratchpads,
+    samePositionBatchReviewRequirednessPolicies,
     samePositionBatchReviews,
     externalAssistanceDeclarations,
     blindingPreviewAudits,
