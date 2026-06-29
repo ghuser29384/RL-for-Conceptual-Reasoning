@@ -11249,12 +11249,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.releaseVersionManifest.linkedArtifactChecks.map((check) => check.status),
     ["matches_current_artifact", "matches_current_artifact", "matches_current_artifact", "matches_current_artifact"],
   );
+  assert.equal(releaseReport.body.releaseVersionManifest.releaseVersionContractViolations.length, 0);
+  assert.ok(releaseReport.body.releaseVersionManifest.releaseVersionContractChecks.every((check) => check.status === "pass"));
   assert.equal(releaseReport.body.releaseGateProfile.submittedProfileId, "release-gate-workflow-new");
   assert.equal(releaseReport.body.releaseGateProfile.releaseVersion, "october-2026-demo-v1");
   assert.equal(releaseReport.body.releaseGateProfile.profileCoverage.status, "submitted_profile_covers_required_gate_catalog");
+  assert.equal(releaseReport.body.releaseGateProfile.profileCoverage.contractViolationCount, 0);
+  assert.ok(releaseReport.body.releaseGateProfile.profileContractChecks.every((check) => check.status === "pass"));
   assert.equal(releaseReport.body.releaseGateEvaluation.missingRequiredProfileGateCount, 0);
+  assert.equal(releaseReport.body.releaseGateEvaluation.profileContractViolationCount, 0);
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorPolicy.id, "primary-rater-policy-workflow-new");
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorPolicy.policyStatus, "submitted_anchor_policy_predeclared");
+  assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorPolicy.policyContractViolations.length, 0);
+  assert.ok(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorPolicy.policyContractChecks.every((check) => check.status === "pass"));
   assert.equal(
     releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorSnapshot.primaryRaterAnchor.selectionPolicyId,
     "primary-rater-policy-workflow-new",
@@ -11262,6 +11269,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.pairedTargetLabelSnapshots.primaryRaterAnchorSnapshot.primaryRaterAnchor.coverageThresholdMet, true);
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedClaimId, "comparability-claim-workflow-new");
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").statusSource, "submitted_comparability_claim");
+  assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedClaimContractViolationCount, 0);
+  assert.ok(
+    releaseReport.body.comparabilityClaims
+      .find((claim) => claim.tier === "method_preserving")
+      .submittedClaimContractChecks.every((check) => check.status === "pass"),
+  );
   assert.equal(
     releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "method_preserving").submittedReleaseGateProfileId,
     "release-gate-workflow-new",
@@ -11275,9 +11288,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.comparabilityClaims.find((claim) => claim.tier === "protected_split_leakage_comparable").submittedStatus, "partial");
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.hiddenPositionCount, 2);
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.hiddenCritiqueCount, 3);
+  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.submittedSplitMembership.status, "submitted_hidden_benchmark_membership_applied");
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.submittedSplitMembership.appliedHiddenPositionCount, 1);
+  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.submittedSplitMembership.contractViolationRows.length, 0);
+  assert.equal(
+    releaseReport.body.hiddenBenchmarkFreeze.freezeChecks.find((check) => check.id === "submitted_split_membership_contract").status,
+    "pass",
+  );
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.rightsStatus.status, "pass");
   assert.equal(releaseReport.body.hiddenBenchmarkFreeze.rightsStatus.releaseScopeFailures.includes("pos-ai-prior"), false);
+  assert.equal(releaseReport.body.hiddenBenchmarkFreeze.rightsStatus.submittedRightsRecordContractFailures.length, 0);
   assert.equal(releaseReport.body.positionIntakeReadiness.rows.some((row) => row.positionId === "pos-workflow-new"), true);
   assert.equal(releaseReport.body.workflowActionArtifacts.rightsReviews.length, 1);
   assert.equal(releaseReport.body.rightsReviewEvidence.counts.submittedReviewCount, 1);
@@ -12200,7 +12220,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.sourceExampleAnchors.counts.anchorCount, 5);
   assert.equal(releaseReport.body.sourceExampleAnchors.counts.submittedAnchorCount, 1);
   assert.equal(releaseReport.body.sourceExampleAnchors.counts.submittedExposureViolationCount, 0);
+  assert.equal(releaseReport.body.sourceExampleAnchors.counts.submittedUsePolicyViolationCount, 0);
   assert.equal(releaseReport.body.sourceExampleAnchors.counts.promptRegressionEligibleCount, 5);
+  assert.deepEqual(
+    releaseReport.body.sourceExampleAnchors.anchorRows.find((row) => row.anchorId === "source-anchor-workflow-new").missingAllowedUse,
+    [],
+  );
   assert.equal(
     releaseReport.body.sourceExampleAnchors.anchorRows.find((row) => row.anchorId === "source-anchor-workflow-new").anchorSource,
     "submitted_workflow_source_anchor_example",
@@ -12214,9 +12239,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.comparabilityClaims.length, 1);
   assert.equal(releaseReport.body.workflowGovernanceArtifacts.activeLearningSelectionAudits.length, 1);
   assert.equal(releaseReport.body.activeLearning.submittedSelectionAuditIds.includes("selection-audit-workflow-new"), true);
+  assert.equal(releaseReport.body.activeLearning.submittedSelectionAuditContractViolationCount, 0);
+  assert.equal(
+    releaseReport.body.activeLearning.batches.find((batch) => batch.selectionAuditId === "selection-audit-workflow-new").selectionAuditContractStatus,
+    "selection_audit_contract_complete",
+  );
   assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.candidateBatchCount, 1);
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowContractViolationCount, 0);
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.candidateBatchContractViolationCount, 0);
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.candidateWorkflowContractViolationCount, 0);
   assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.hiddenMetadataViolationCount, 0);
   assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].candidateBatchId, "candidate-batch-workflow-new");
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].candidateWorkflowContractStatus, "candidate_workflow_contract_complete");
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].candidateBatchContractStatus, "candidate_batch_contract_complete");
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].candidateCritiqueContractViolationCount, 0);
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].modelJudgeScoreContractViolationCount, 0);
+  assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].scoreSubmissionContractViolationCount, 0);
   assert.equal(releaseReport.body.activeLearning.candidateWorkflowEvidence.rows[0].promoted, 1);
   assert.equal(releaseReport.body.activeLearning.derivedCandidateWorkflowBatchCount, 0);
   assert.equal(releaseReport.body.activeLearning.acceptedCritiqueIds.includes("crit-workflow-new"), true);

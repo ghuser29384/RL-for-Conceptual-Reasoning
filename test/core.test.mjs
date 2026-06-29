@@ -3830,9 +3830,13 @@ test("submitted source-anchor examples extend calibration and prompt-regression 
   assert.equal(report.counts.anchorCount, 5);
   assert.equal(report.counts.submittedAnchorCount, 1);
   assert.equal(report.counts.submittedExposureViolationCount, 0);
+  assert.equal(report.counts.submittedUsePolicyViolationCount, 0);
   assert.equal(report.counts.promptRegressionEligibleCount, 5);
   assert.equal(report.counts.certificationExposureEligibleCount, 5);
-  assert.equal(report.anchorRows.find((row) => row.anchorId === "source-anchor-submitted").anchorSource, "submitted_workflow_source_anchor_example");
+  const submittedAnchorRow = report.anchorRows.find((row) => row.anchorId === "source-anchor-submitted");
+  assert.equal(submittedAnchorRow.anchorSource, "submitted_workflow_source_anchor_example");
+  assert.deepEqual(submittedAnchorRow.missingAllowedUse, []);
+  assert.equal(submittedAnchorRow.submittedUsePolicyViolation, false);
   assert.equal(report.releaseUseStatus, "source_anchor_suite_public_training_only");
 
   const protectedReport = buildLmcaSourceExampleAnchorReport("release-test", lmcaSourceExampleAnchors, {
@@ -3851,6 +3855,34 @@ test("submitted source-anchor examples extend calibration and prompt-regression 
   assert.equal(protectedReport.counts.submittedAnchorCount, 1);
   assert.equal(protectedReport.counts.submittedExposureViolationCount, 1);
   assert.equal(protectedReport.releaseUseStatus, "source_anchor_protection_review_required");
+
+  const underdeclaredReport = buildLmcaSourceExampleAnchorReport("release-test", lmcaSourceExampleAnchors, {
+    sourceAnchorExamples: [
+      {
+        id: "source-anchor-missing-release-uses",
+        suiteVersion: "lmca-public-source-anchors-2026-10-submitted",
+        sourceExampleFamily: "table4_model_failure",
+        publicSourceReference: "Submitted public Table 4 model-failure anchor without release-use declarations",
+        itemId: "lmca-public::table4-model-failure-underdeclared",
+        positionClusterId: "lmca-public-table4-model-failure",
+        split: "public_training_qa_anchor",
+        exposurePolicy: "public_training_qa_only",
+        allowedUse: ["training"],
+        excludedFromProtectedEvaluation: true,
+        expectedLabelSummary: "over_crediting_generic_or_vague_critique",
+        targetDimensions: ["overall"],
+      },
+    ],
+  });
+  assert.equal(underdeclaredReport.counts.submittedAnchorCount, 1);
+  assert.equal(underdeclaredReport.counts.submittedExposureViolationCount, 0);
+  assert.equal(underdeclaredReport.counts.submittedUsePolicyViolationCount, 1);
+  const underdeclaredRow = underdeclaredReport.submittedUsePolicyViolationRows[0];
+  assert.equal(underdeclaredRow.anchorId, "source-anchor-missing-release-uses");
+  assert.deepEqual(underdeclaredRow.missingAllowedUse, ["certification", "prompt_regression"]);
+  assert.equal(underdeclaredRow.promptRegressionEligible, false);
+  assert.equal(underdeclaredRow.certificationExposureEligible, false);
+  assert.equal(underdeclaredReport.releaseUseStatus, "source_anchor_protection_review_required");
 });
 
 test("derived utility normalizes dead_weight as a badness field", () => {
@@ -5425,9 +5457,24 @@ test("submitted primary-rater anchor policies drive paired target-label policy e
   );
   assert.equal(report.primaryRaterAnchorPolicy.id, "primary-rater-policy-submitted");
   assert.equal(report.primaryRaterAnchorPolicy.policyStatus, "submitted_anchor_policy_predeclared");
+  assert.equal(report.primaryRaterAnchorPolicy.policyContractViolations.length, 0);
+  assert.ok(report.primaryRaterAnchorPolicy.policyContractChecks.every((check) => check.status === "pass"));
   assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.selectionPolicyId, "primary-rater-policy-submitted");
   assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.coverageThresholdMet, true);
   assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.missingProhibitedPostHocCriteria.length, 0);
+
+  const contractReviewPolicy = buildEffectivePrimaryRaterAnchorPolicy("release-test", [
+    {
+      id: "primary-rater-policy-contract-review",
+      releaseId: "release-test",
+      predeclaredAt: "2026-09-30T12:00:00.000Z",
+      prohibitedPostHocCriteria: ["agreement_with_model_outputs"],
+    },
+  ]);
+  assert.equal(contractReviewPolicy.policyStatus, "submitted_anchor_policy_contract_review_required");
+  assert.ok(contractReviewPolicy.policyContractViolations.some((check) => check.field === "selectionRule"));
+  assert.ok(contractReviewPolicy.policyContractViolations.some((check) => check.field === "coverageThreshold"));
+  assert.ok(contractReviewPolicy.policyContractViolations.some((check) => check.field === "prohibitedPostHocCriteria"));
 });
 
 test("model-assisted label overlap report gates clean evaluation claims and exposes a human-only target", () => {
@@ -5697,21 +5744,51 @@ test("submitted release gate profiles become effective governance evidence with 
   assert.equal(evaluateReleaseGateProfile(defaultProfile).missingRequiredProfileGateCount, 0);
 
   const submittedProfile = buildEffectiveReleaseGateProfile("release-test", [
-    {
-      id: "release-gate-submitted",
-      releaseId: "release-test",
-      sourceCriticalCoreGates: ["position_critique_units", "blind_initial"],
-      benchmarkQualityGates: ["split_isolation"],
-      claimGatedDiagnostics: ["derived_utility"],
-    },
-  ]);
+      {
+        id: "release-gate-submitted",
+        releaseId: "release-test",
+        releaseVersion: "release-test.1",
+        profileName: "release_test_profile",
+        sourceCriticalCoreGates: ["position_critique_units", "blind_initial"],
+        benchmarkQualityGates: ["split_isolation"],
+        claimGatedDiagnostics: ["derived_utility"],
+        requiredIfClaimedRules: [
+          "lmca-comparability-claim-requires-method-core-and-comparability-matrix",
+          "hidden-benchmark-claim-requires-split-isolation-access-audit-and-artifact-balance",
+          "robustness-claim-requires-matching-diagnostic-or-deferral",
+        ],
+        notRunRationalePolicy: "deferred claim-gated diagnostics require not-run rationale and stronger claim suppression",
+        approvedBy: "release-admin",
+        frozenAt: "2026-09-30T12:00:00.000Z",
+        timestamp: "2026-09-30T12:00:00.000Z",
+      },
+    ]);
   const submittedSummary = evaluateReleaseGateProfile(submittedProfile);
   assert.equal(submittedProfile.profileSource, "submitted_workflow_gate_profile");
   assert.equal(submittedProfile.submittedProfileId, "release-gate-submitted");
   assert.equal(submittedProfile.profileCoverage.groups.sourceCriticalCore.missingRequiredIds.includes("seven-dimensions"), true);
   assert.equal(submittedSummary.profileCoverageStatus, "submitted_profile_missing_required_gates");
   assert.equal(submittedSummary.missingRequiredProfileGateCount, 8);
+  assert.equal(submittedSummary.profileContractViolationCount, 0);
   assert.equal(submittedProfile.sourceCriticalCore.find((gate) => gate.id === "blind-initial").submittedDeclarationStatus, "declared_in_submitted_profile");
+
+  const contractReviewProfile = buildEffectiveReleaseGateProfile("release-test", [
+    {
+      id: "release-gate-contract-review",
+      releaseId: "release-test",
+      sourceCriticalCoreGates: ["position-critique-units", "seven-dimensions", "blind-initial", "immutable-revisions", "metric-families"],
+      benchmarkQualityGates: ["split-isolation", "release-manifests", "artifact-balance", "access-audit"],
+      claimGatedDiagnostics: ["derived-utility", "sycophancy", "obfuscation"],
+      requiredIfClaimedRules: ["hidden-benchmark-claim-requires-split-isolation-access-audit-and-artifact-balance"],
+    },
+  ]);
+  const contractSummary = evaluateReleaseGateProfile(contractReviewProfile);
+  assert.equal(contractSummary.profileCoverageStatus, "submitted_profile_contract_review_required");
+  assert.equal(contractSummary.missingRequiredProfileGateCount, 0);
+  assert.ok(contractSummary.profileContractViolationCount > 0);
+  assert.ok(contractReviewProfile.profileContractViolations.some((check) => check.field === "releaseVersion"));
+  assert.ok(contractReviewProfile.profileContractViolations.some((check) => check.field === "requiredIfClaimedRules"));
+  assert.ok(contractReviewProfile.profileContractViolations.some((check) => check.field === "notRunRationalePolicy"));
 });
 
 test("submitted release versions and freezes become effective release manifest evidence", () => {
@@ -5730,6 +5807,9 @@ test("submitted release versions and freezes become effective release manifest e
     labelSnapshotId: snapshot.id,
     metricConfigId: `metric-config-${releaseId}`,
     gateProfileId: `gate-${releaseId}`,
+    releaseConfigManifestId: `release-config-manifest-${releaseId}`,
+    releaseConfigManifestHash: `sha256:release-config-manifest-${releaseId}`,
+    immutableOutputArtifactIds: [`public-export-manifest-${releaseId}`, `training-export-${releaseId}`],
     status: "method_preserving_demo_not_target_scale",
     releaseNotes: "Demo release remains target-scale incomplete.",
     frozenAt: "2026-10-01T00:00:00.000Z",
@@ -5765,6 +5845,36 @@ test("submitted release versions and freezes become effective release manifest e
   assert.equal(report.releaseVersionManifest.targetScaleStatus, "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings");
   assert.equal(report.releaseVersionManifest.releaseUseStatus, "submitted_release_manifest_recorded_but_target_scale_incomplete");
   assert.ok(report.releaseVersionManifest.linkedArtifactChecks.every((check) => check.status === "matches_current_artifact"));
+  assert.equal(report.releaseVersionManifest.releaseVersionContractViolations.length, 0);
+  assert.ok(report.releaseVersionManifest.releaseVersionContractChecks.every((check) => check.status === "pass"));
+
+  const contractReviewReport = buildOctoberReleaseReport(
+    releaseId,
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      releaseVersions: [
+        {
+          ...releaseVersion,
+          id: "release-version-contract-review",
+          releaseConfigManifestHash: "release-config-manifest-without-sha256-prefix",
+          immutableOutputArtifactIds: [],
+        },
+      ],
+      releaseFreezes: [releaseFreeze],
+    },
+  );
+  assert.equal(contractReviewReport.releaseVersionManifest.linkedArtifactStatus, "release_manifest_links_current_artifacts");
+  assert.equal(contractReviewReport.releaseVersionManifest.releaseUseStatus, "submitted_release_manifest_contract_review_required");
+  assert.deepEqual(
+    contractReviewReport.releaseVersionManifest.releaseVersionContractViolations.map((check) => check.field),
+    ["immutableOutputArtifactIds", "releaseConfigManifestHash"],
+  );
 
   const staleReport = buildOctoberReleaseReport(
     releaseId,
@@ -6043,6 +6153,31 @@ test("submitted rights records update release rights audits without broadening s
   const hiddenRecords = buildReleaseRightsRecords([
     {
       id: "rights-hidden",
+      releaseId: "release-test",
+      artifactId: "pos-ai-prior::crit-ai-base-rate",
+      artifactKind: "position_critique_item",
+      sourceOrigin: "project_authored_hidden_benchmark_candidate",
+      licenseType: "project_owned_or_public_domain",
+      rightsStatus: "hidden_benchmark_export_allowed",
+      releaseScope: "internal_and_hidden_benchmark_export_allowed",
+      reviewerId: "release-admin",
+      reviewedAt: "2026-10-01T00:00:00.000Z",
+      sourceLanguage: "en",
+      translationRoute: "none_original_english",
+      taskFormat: "short essay claim",
+      sourceDomainSuitability: "suitable_conceptual",
+      removalPolicy: "tombstone_and_rebuild_export_manifest",
+    },
+  ]);
+  const hiddenAudit = auditProvenanceRights("hidden_benchmark", hiddenCandidatePositions, hiddenRecords);
+  assert.equal(hiddenAudit.status, "pass");
+  assert.deepEqual(hiddenAudit.releaseScopeFailures, []);
+  assert.deepEqual(hiddenAudit.unclearedRecords, []);
+  assert.deepEqual(hiddenAudit.submittedRightsRecordContractFailures, []);
+
+  const underdeclaredHiddenRecords = buildReleaseRightsRecords([
+    {
+      id: "rights-hidden-underdeclared",
       artifactId: "pos-ai-prior::crit-ai-base-rate",
       rightsStatus: "hidden_benchmark_export_allowed",
       sourceLanguage: "en",
@@ -6051,10 +6186,15 @@ test("submitted rights records update release rights audits without broadening s
       sourceDomainSuitability: "suitable_conceptual",
     },
   ]);
-  const hiddenAudit = auditProvenanceRights("hidden_benchmark", hiddenCandidatePositions, hiddenRecords);
-  assert.equal(hiddenAudit.status, "pass");
-  assert.deepEqual(hiddenAudit.releaseScopeFailures, []);
-  assert.deepEqual(hiddenAudit.unclearedRecords, []);
+  const underdeclaredHiddenAudit = auditProvenanceRights("hidden_benchmark", hiddenCandidatePositions, underdeclaredHiddenRecords);
+  assert.equal(underdeclaredHiddenAudit.status, "blocked");
+  assert.deepEqual(underdeclaredHiddenAudit.releaseScopeFailures, []);
+  assert.deepEqual(underdeclaredHiddenAudit.unclearedRecords, []);
+  assert.deepEqual(underdeclaredHiddenAudit.submittedRightsRecordContractFailures[0].positionId, "pos-ai-prior");
+  assert.ok(underdeclaredHiddenAudit.submittedRightsRecordContractFailures[0].contractViolations.includes("releaseId"));
+  assert.ok(underdeclaredHiddenAudit.submittedRightsRecordContractFailures[0].contractViolations.includes("releaseScope"));
+  assert.ok(underdeclaredHiddenAudit.submittedRightsRecordContractFailures[0].contractViolations.includes("reviewerId"));
+  assert.ok(underdeclaredHiddenAudit.submittedRightsRecordContractFailures[0].contractViolations.includes("removalPolicy"));
 });
 
 test("release report derives rights-review evidence from submitted workflow actions", () => {
@@ -6269,12 +6409,13 @@ test("active-learning audit reports denominator flow and preserves blinding", ()
 
 test("submitted active-learning selection audits update denominator and reason-code evidence", () => {
   const audit = buildActiveLearningAudit(undefined, [
-    {
-      id: "selection-audit-submitted",
-      candidateBatchId: "candidate-batch-submitted",
-      generatedOrIngestedCount: 20,
-      judgedCount: 18,
-      disagreementSelectedCount: 3,
+      {
+        id: "selection-audit-submitted",
+        candidateBatchId: "candidate-batch-submitted",
+        positionId: "pos-ai-prior",
+        generatedOrIngestedCount: 20,
+        judgedCount: 18,
+        disagreementSelectedCount: 3,
       highRatedSelectedCount: 2,
       suspectedJudgeFalsePositiveCount: 1,
       humanSelectedForDiversityCount: 3,
@@ -6293,9 +6434,37 @@ test("submitted active-learning selection audits update denominator and reason-c
   assert.equal(audit.totals.promoted, 9);
   assert.equal(audit.submittedSelectionAuditCount, 1);
   assert.deepEqual(audit.submittedSelectionAuditIds, ["selection-audit-submitted"]);
+  assert.equal(audit.submittedSelectionAuditContractViolationCount, 0);
+  assert.equal(audit.batches.find((batch) => batch.selectionAuditId === "selection-audit-submitted").selectionAuditContractStatus, "selection_audit_contract_complete");
   assert.equal(audit.selectionReasonCounts.judge_disagreement, 3);
   assert.equal(audit.rejectionReasonCounts.near_duplicate, 5);
   assert.equal(audit.batches.find((batch) => batch.selectionAuditId === "selection-audit-submitted").batchSource, "submitted_workflow_selection_audit");
+
+  const malformedAudit = buildActiveLearningAudit(undefined, [
+    {
+      id: "selection-audit-malformed",
+      candidateBatchId: "candidate-batch-submitted",
+      generatedOrIngestedCount: 20,
+      judgedCount: 18,
+      disagreementSelectedCount: 3,
+      highRatedSelectedCount: 2,
+      suspectedJudgeFalsePositiveCount: 1,
+      humanSelectedForDiversityCount: 3,
+      promotedToRatingCount: 4,
+    },
+  ]);
+  assert.equal(malformedAudit.releaseUseStatus, "active_learning_selection_audit_review_required");
+  assert.equal(malformedAudit.submittedSelectionAuditContractViolationCount, 1);
+  assert.equal(
+    malformedAudit.batches.find((batch) => batch.selectionAuditId === "selection-audit-malformed").selectionAuditContractStatus,
+    "selection_audit_contract_review_required",
+  );
+  assert.ok(
+    malformedAudit.submittedSelectionAuditContractViolationRows[0].selectionAuditContractViolations.some((check) => check.field === "positionId"),
+  );
+  assert.ok(
+    malformedAudit.submittedSelectionAuditContractViolationRows[0].selectionAuditContractViolations.some((check) => check.field === "rejectedCountByReason"),
+  );
 });
 
 test("submitted candidate intake workflow artifacts produce active-learning denominator evidence", () => {
@@ -6303,16 +6472,34 @@ test("submitted candidate intake workflow artifacts produce active-learning deno
     candidateBatches: [
       {
         id: "candidate-batch-submitted",
+        positionId: "pos-ai-prior",
+        generatorSourceDescription: "Mixed human and LLM-generated active-learning intake batch.",
+        promptTemplateVersion: "critique-generator-v1",
+        judgeModelSet: ["judge-model-a", "judge-model-b"],
         generatedOrIngestedCandidateCount: 20,
         judgedCandidateCount: 18,
+        candidatePoolDenominatorPolicy: "all_generated_or_ingested_outputs_preserved_before_filtering",
+        selectionPolicyVersion: "selection-policy-release-test-v1",
+        selectionReasonHiddenFromInitialRaters: true,
+        modelJudgeScoresVisibleToInitialRaters: false,
         batchStatus: "judged_pending_selection_audit",
+        createdAt: "2026-10-01T00:00:00.000Z",
       },
     ],
     candidateCritiques: [
       {
         id: "candidate-critique-submitted",
         candidateBatchId: "candidate-batch-submitted",
+        positionId: "pos-ai-prior",
+        text: "A generated critique that raises a new base-rate objection.",
+        sourceType: "llm_generated",
+        generationRoute: "active_learning_candidate_generation",
+        rightsStatus: "project_owned_training_candidate",
         selectionReason: "judge_disagreement_and_new_objection_type",
+        selectionReasonVisibleToRatersBeforeInitialLock: false,
+        nearDuplicateClusterId: "near-duplicate-cluster-new-objection",
+        marginalInformativenessRationale: "Adds a distinct base-rate objection not present in the existing critique set.",
+        reviewStatus: "approved_for_live_queue",
       },
     ],
     modelJudgeScores: [
@@ -6320,8 +6507,17 @@ test("submitted candidate intake workflow artifacts produce active-learning deno
         id: "model-judge-score-submitted",
         candidateId: "candidate-critique-submitted",
         candidateBatchId: "candidate-batch-submitted",
+        judgeRequestedModelAlias: "judge-model-a",
+        judgeProvider: "openai",
+        judgeResolvedModelSnapshot: "judge-model-a-2026-10-01",
+        promptVersion: "candidate-screening-v1",
+        modelParameters: { temperature: 0 },
+        aliasStabilityStatus: "resolved_snapshot_logged",
+        rawOutput: "{\"overallScore\":0.71}",
+        parseStatus: "parsed",
         overallScore: 0.71,
         disagreementStatistics: { judgePairSpread: 0.18 },
+        timestamp: "2026-10-01T00:01:00.000Z",
         hiddenFromRatersBeforeInitialLock: true,
       },
     ],
@@ -6343,6 +6539,9 @@ test("submitted candidate intake workflow artifacts produce active-learning deno
     ],
   });
   assert.equal(audit.derivedCandidateWorkflowBatchCount, 1);
+  assert.equal(audit.releaseUseStatus, "active_learning_selection_denominators_audited");
+  assert.equal(audit.candidateWorkflowContractViolationCount, 0);
+  assert.equal(audit.candidateWorkflowEvidence.candidateBatchContractViolationCount, 0);
   assert.equal(audit.totals.generated, 62);
   assert.equal(audit.totals.judged, 30);
   assert.equal(audit.totals.promoted, 6);
@@ -6352,7 +6551,88 @@ test("submitted candidate intake workflow artifacts produce active-learning deno
   assert.equal(audit.acceptedCritiqueIds.includes("crit-submitted-active-learning"), true);
   assert.equal(audit.candidateWorkflowEvidence.hiddenMetadataViolationCount, 0);
   assert.equal(audit.candidateWorkflowEvidence.rows[0].batchSource, "submitted_workflow_candidate_batch");
+  assert.equal(audit.candidateWorkflowEvidence.rows[0].candidateWorkflowContractStatus, "candidate_workflow_contract_complete");
+  assert.equal(audit.candidateWorkflowEvidence.rows[0].candidateBatchContractStatus, "candidate_batch_contract_complete");
+  assert.equal(audit.candidateWorkflowEvidence.rows[0].candidateCritiqueContractViolationCount, 0);
+  assert.equal(audit.candidateWorkflowEvidence.rows[0].modelJudgeScoreContractViolationCount, 0);
   assert.equal(audit.batches.find((batch) => batch.id === "candidate-batch-submitted").batchSource, "submitted_workflow_candidate_batch");
+
+  const underdeclaredAudit = buildActiveLearningAudit(undefined, [], {
+    candidateBatches: [
+      {
+        id: "candidate-batch-underdeclared",
+        generatedOrIngestedCandidateCount: 20,
+        judgedCandidateCount: 18,
+        selectionReasonHiddenFromInitialRaters: true,
+        modelJudgeScoresVisibleToInitialRaters: false,
+        batchStatus: "judged_pending_selection_audit",
+      },
+    ],
+  });
+  assert.equal(underdeclaredAudit.releaseUseStatus, "candidate_workflow_evidence_review_required");
+  assert.equal(underdeclaredAudit.candidateWorkflowContractViolationCount, 1);
+  assert.equal(underdeclaredAudit.candidateWorkflowEvidence.rows[0].candidateBatchContractStatus, "candidate_batch_contract_review_required");
+  assert.ok(
+    underdeclaredAudit.candidateWorkflowEvidence.candidateBatchContractViolationRows[0].candidateBatchContractViolations.some(
+      (check) => check.field === "positionId",
+    ),
+  );
+  assert.ok(
+    underdeclaredAudit.candidateWorkflowEvidence.candidateBatchContractViolationRows[0].candidateBatchContractViolations.some(
+      (check) => check.field === "judgeModelSet",
+    ),
+  );
+
+  const underdeclaredChildAudit = buildActiveLearningAudit(undefined, [], {
+    candidateBatches: [
+      {
+        id: "candidate-batch-child-underdeclared",
+        positionId: "pos-ai-prior",
+        generatorSourceDescription: "Mixed human and LLM-generated active-learning intake batch.",
+        promptTemplateVersion: "critique-generator-v1",
+        judgeModelSet: ["judge-model-a", "judge-model-b"],
+        generatedOrIngestedCandidateCount: 20,
+        judgedCandidateCount: 18,
+        candidatePoolDenominatorPolicy: "all_generated_or_ingested_outputs_preserved_before_filtering",
+        selectionPolicyVersion: "selection-policy-release-test-v1",
+        selectionReasonHiddenFromInitialRaters: true,
+        modelJudgeScoresVisibleToInitialRaters: false,
+        batchStatus: "judged_pending_selection_audit",
+        createdAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+    candidateCritiques: [
+      {
+        id: "candidate-critique-child-underdeclared",
+        candidateBatchId: "candidate-batch-child-underdeclared",
+        selectionReasonVisibleToRatersBeforeInitialLock: false,
+      },
+    ],
+    modelJudgeScores: [
+      {
+        id: "model-judge-score-child-underdeclared",
+        candidateId: "candidate-critique-child-underdeclared",
+        candidateBatchId: "candidate-batch-child-underdeclared",
+        overallScore: 0.71,
+        hiddenFromRatersBeforeInitialLock: true,
+      },
+    ],
+  });
+  assert.equal(underdeclaredChildAudit.releaseUseStatus, "candidate_workflow_evidence_review_required");
+  assert.equal(underdeclaredChildAudit.candidateWorkflowContractViolationCount, 1);
+  assert.equal(underdeclaredChildAudit.candidateWorkflowEvidence.rows[0].candidateWorkflowContractStatus, "candidate_workflow_contract_review_required");
+  assert.equal(underdeclaredChildAudit.candidateWorkflowEvidence.rows[0].candidateCritiqueContractViolationCount, 1);
+  assert.equal(underdeclaredChildAudit.candidateWorkflowEvidence.rows[0].modelJudgeScoreContractViolationCount, 1);
+  assert.ok(
+    underdeclaredChildAudit.candidateWorkflowEvidence.rows[0].candidateCritiqueContractViolationRows[0].contractViolations.some(
+      (check) => check.field === "positionId",
+    ),
+  );
+  assert.ok(
+    underdeclaredChildAudit.candidateWorkflowEvidence.rows[0].modelJudgeScoreContractViolationRows[0].contractViolations.some(
+      (check) => check.field === "judgeRequestedModelAlias",
+    ),
+  );
 
   const leakedAudit = buildActiveLearningAudit(undefined, [], {
     candidateBatches: [{ id: "candidate-batch-leaky", generatedOrIngestedCandidateCount: 1 }],
@@ -6666,18 +6946,49 @@ test("hidden benchmark freeze report applies submitted benchmark split members",
     benchmarkSplitMembers: [
       {
         id: "split-member-core-test",
+        releaseId: "release-test",
+        itemId: "pos-ai-prior::crit-ai-base-rate",
+        positionClusterId: "cluster-ai-prior",
+        split: "hidden_benchmark_candidate",
+        splitUnit: "position_cluster",
+        customWeightedLossEligible: true,
+        pairwiseRankingEligible: true,
+        pointwiseOnly: false,
+        freezeVersion: "release-test.1",
+        artifactBalanceBucket: "ai_safety_short_medium",
+        crossSplitExceptionReason: "none",
+        exposureRestricted: true,
+        leakPreventionStatus: "excluded_from_training_prompt_tuning_and_public_export",
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  });
+  assert.equal(report.submittedSplitMembership.status, "submitted_hidden_benchmark_membership_applied");
+  assert.equal(report.submittedSplitMembership.appliedHiddenPositionCount, 1);
+  assert.equal(report.submittedSplitMembership.contractViolationRows.length, 0);
+  assert.equal(report.freezeChecks.find((check) => check.id === "submitted_split_membership_contract").status, "pass");
+  assert.deepEqual(report.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
+  assert.equal(report.hiddenCritiqueCount, 3);
+  assert.equal(report.rightsStatus.status, "blocked");
+  assert.deepEqual(report.rightsStatus.releaseScopeFailures, ["pos-ai-prior"]);
+
+  const underdeclaredReport = buildHiddenBenchmarkFreezeReport("release-test", snapshot, positions, critiques, undefined, seedBenchmarkExposureEvents, {
+    includeRestrictedIds: true,
+    benchmarkSplitMembers: [
+      {
+        id: "split-member-underdeclared",
         itemId: "pos-ai-prior::crit-ai-base-rate",
         split: "hidden_benchmark_candidate",
         leakPreventionStatus: "excluded_from_training_prompt_tuning_and_public_export",
       },
     ],
   });
-  assert.equal(report.submittedSplitMembership.status, "submitted_hidden_benchmark_membership_applied");
-  assert.equal(report.submittedSplitMembership.appliedHiddenPositionCount, 1);
-  assert.deepEqual(report.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
-  assert.equal(report.hiddenCritiqueCount, 3);
-  assert.equal(report.rightsStatus.status, "blocked");
-  assert.deepEqual(report.rightsStatus.releaseScopeFailures, ["pos-ai-prior"]);
+  assert.equal(underdeclaredReport.submittedSplitMembership.status, "submitted_membership_contract_review_required");
+  assert.equal(underdeclaredReport.submittedSplitMembership.appliedHiddenPositionCount, 0);
+  assert.deepEqual(underdeclaredReport.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-mind"]);
+  assert.ok(underdeclaredReport.submittedSplitMembership.contractViolationRows[0].contractViolations.includes("releaseId"));
+  assert.ok(underdeclaredReport.submittedSplitMembership.contractViolationRows[0].contractViolations.includes("splitUnit"));
+  assert.equal(underdeclaredReport.freezeChecks.find((check) => check.id === "submitted_split_membership_contract").status, "blocked");
 });
 
 test("hidden benchmark initial blinding gate excludes source/tag-visible blind ratings unless exception is disclosed", () => {
@@ -8039,6 +8350,8 @@ test("submitted comparability claims annotate release claim tiers without bypass
   assert.equal(methodClaim.submittedReleaseGateProfileId, "gate-release-test");
   assert.equal(methodClaim.submittedPrimaryRaterAnchorPolicyId, "primary-rater-anchor-policy-release-test");
   assert.deepEqual(methodClaim.submittedEvidenceLinks, ["release-config-manifest", "label-snapshot", "validation-report"]);
+  assert.equal(methodClaim.submittedClaimContractViolationCount, 0);
+  assert.ok(methodClaim.submittedClaimContractChecks.every((check) => check.status === "pass"));
   assert.equal(methodClaim.evidence, "Seven-dimensional blind rating workflow and scoring families are implemented.");
   assert.equal(corpusClaim.status, "fails");
   assert.equal(corpusClaim.submittedStatus, "fails");
@@ -8048,6 +8361,34 @@ test("submitted comparability claims annotate release claim tiers without bypass
   assert.equal(targetClaim.statusSource, "computed_guardrail_with_submitted_claim");
   assert.equal(protectedSplitClaim.submittedStatus, "partial");
   assert.equal(protectedSplitClaim.statusSource, "submitted_comparability_claim");
+
+  const malformedReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      comparabilityClaims: [
+        {
+          id: "comparability-claim-malformed",
+          releaseId: "release-test",
+          releaseGateProfileId: "gate-release-test",
+          claimWording: "Overbroad claim without complete evidence matrix.",
+          methodPreservingStatus: "overstated",
+        },
+      ],
+    },
+  );
+  const malformedMethodClaim = malformedReport.comparabilityClaims.find((claim) => claim.tier === "method_preserving");
+  assert.equal(malformedMethodClaim.status, "passes");
+  assert.equal(malformedMethodClaim.statusSource, "computed_release_evidence_submitted_claim_contract_review_required");
+  assert.ok(malformedMethodClaim.submittedClaimContractViolationCount > 0);
+  assert.ok(malformedMethodClaim.submittedClaimContractViolations.some((check) => check.field === "linkedReleaseIds"));
+  assert.ok(malformedMethodClaim.submittedClaimContractViolations.some((check) => check.field === "methodPreservingStatus"));
 });
 
 test("rubric QA coverage report freezes Appendix-F edge cases as public-only fixtures", () => {

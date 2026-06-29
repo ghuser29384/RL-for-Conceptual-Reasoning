@@ -3713,24 +3713,35 @@ export function createPrimaryRaterAnchorSnapshot(id, releaseId, ratings, pairs, 
   };
 }
 
+const REQUIRED_PRIMARY_RATER_ANCHOR_POLICY_FIELDS = ["id", "releaseId", "selectionRule", "coverageThreshold", "predeclaredAt"];
+const REQUIRED_PRIMARY_RATER_ANCHOR_PROHIBITED_POSTHOC_CRITERIA = [
+  "agreement_with_model_outputs",
+  "desired_leaderboard_effect",
+  "post_hoc_target_label_switching",
+];
+
 export function buildEffectivePrimaryRaterAnchorPolicy(releaseId, submittedPolicies = []) {
-  const requiredProhibitedPostHocCriteria = ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"];
+  const requiredProhibitedPostHocCriteria = REQUIRED_PRIMARY_RATER_ANCHOR_PROHIBITED_POSTHOC_CRITERIA;
   const submittedPolicy = submittedPolicies.at(-1) ?? null;
   const prohibitedPostHocCriteria = submittedPolicy?.prohibitedPostHocCriteria ?? requiredProhibitedPostHocCriteria;
   const missingProhibitedPostHocCriteria = requiredProhibitedPostHocCriteria.filter((criterion) => !prohibitedPostHocCriteria.includes(criterion));
+  const policyContractChecks = submittedPolicy ? submittedPrimaryRaterAnchorPolicyContractChecks(submittedPolicy) : [];
+  const policyContractViolations = policyContractChecks.filter((check) => check.status !== "pass");
   const predeclaredAt = submittedPolicy?.predeclaredAt ?? submittedPolicy?.frozenAt ?? null;
   const policySource = submittedPolicy ? "submitted_workflow_primary_rater_anchor_policy" : "default_project_anchor_policy";
   const fixedRaterId = submittedPolicy?.primaryRaterId ?? submittedPolicy?.raterId ?? null;
   const coverageThreshold = Number.isFinite(Number(submittedPolicy?.coverageThreshold)) ? Number(submittedPolicy.coverageThreshold) : 0;
   const frozenBeforeModelEvaluation = submittedPolicy ? Boolean(predeclaredAt) : true;
   const policyStatus =
-    submittedPolicy && !predeclaredAt
-      ? "submitted_anchor_policy_missing_predeclaration_time"
-      : missingProhibitedPostHocCriteria.length
-        ? "submitted_anchor_policy_missing_posthoc_prohibitions"
-        : submittedPolicy
-          ? "submitted_anchor_policy_predeclared"
-          : "default_primary_rater_anchor_policy_applied";
+    submittedPolicy && policyContractViolations.length
+      ? "submitted_anchor_policy_contract_review_required"
+      : submittedPolicy && !predeclaredAt
+        ? "submitted_anchor_policy_missing_predeclaration_time"
+        : missingProhibitedPostHocCriteria.length
+          ? "submitted_anchor_policy_missing_posthoc_prohibitions"
+          : submittedPolicy
+            ? "submitted_anchor_policy_predeclared"
+            : "default_primary_rater_anchor_policy_applied";
   return {
     id: submittedPolicy?.id ?? `primary-rater-anchor-policy-${releaseId}`,
     releaseId: submittedPolicy?.releaseId ?? releaseId,
@@ -3745,8 +3756,27 @@ export function buildEffectivePrimaryRaterAnchorPolicy(releaseId, submittedPolic
     prohibitedPostHocCriteria,
     requiredProhibitedPostHocCriteria,
     missingProhibitedPostHocCriteria,
+    policyContractChecks,
+    policyContractViolations,
     policyStatus,
   };
+}
+
+function submittedPrimaryRaterAnchorPolicyContractChecks(submittedPolicy) {
+  const fieldChecks = REQUIRED_PRIMARY_RATER_ANCHOR_POLICY_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: submittedPolicy?.[field] ?? null,
+    status: hasRequiredValue(submittedPolicy?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const prohibitedCriteria = normalizeStringArray(submittedPolicy?.prohibitedPostHocCriteria);
+  const prohibitedCriterionChecks = REQUIRED_PRIMARY_RATER_ANCHOR_PROHIBITED_POSTHOC_CRITERIA.map((criterion) => ({
+    field: "prohibitedPostHocCriteria",
+    expected: criterion,
+    observed: prohibitedCriteria,
+    status: prohibitedCriteria.includes(criterion) ? "pass" : "missing_required_criterion",
+  }));
+  return [...fieldChecks, ...prohibitedCriterionChecks];
 }
 
 export function buildReleaseGateProfile(releaseId) {
@@ -3776,6 +3806,14 @@ export function buildReleaseGateProfile(releaseId) {
   };
 }
 
+const REQUIRED_RELEASE_GATE_PROFILE_FIELDS = ["id", "releaseId", "releaseVersion", "profileName", "notRunRationalePolicy", "approvedBy", "frozenAt", "timestamp"];
+const REQUIRED_RELEASE_GATE_REQUIRED_IF_CLAIMED_RULES = [
+  "lmca-comparability-claim-requires-method-core-and-comparability-matrix",
+  "hidden-benchmark-claim-requires-split-isolation-access-audit-and-artifact-balance",
+  "robustness-claim-requires-matching-diagnostic-or-deferral",
+];
+const RELEASE_GATE_NOT_RUN_POLICY_FRAGMENTS = ["deferred", "not-run", "not run", "suppress", "claim"];
+
 export function buildEffectiveReleaseGateProfile(releaseId, submittedProfiles = []) {
   const baseProfile = buildReleaseGateProfile(releaseId);
   const submittedProfile = submittedProfiles.at(-1) ?? null;
@@ -3795,6 +3833,8 @@ export function buildEffectiveReleaseGateProfile(releaseId, submittedProfiles = 
     "benchmarkQualityGates",
   );
   const claimGatedDiagnostics = mergeSubmittedGateGroup(baseProfile.claimGatedDiagnostics, submittedProfile, "claimGatedDiagnostics", "claimGatedDiagnostics");
+  const profileContractChecks = submittedReleaseGateProfileContractChecks(submittedProfile);
+  const profileContractViolations = profileContractChecks.filter((check) => check.status !== "pass");
   const profile = {
     ...baseProfile,
     id: submittedProfile.id ?? baseProfile.id,
@@ -3812,6 +3852,8 @@ export function buildEffectiveReleaseGateProfile(releaseId, submittedProfiles = 
     sourceCriticalCore: sourceCriticalCore.rows,
     benchmarkQualitySafeguards: benchmarkQualitySafeguards.rows,
     claimGatedDiagnostics: claimGatedDiagnostics.rows,
+    profileContractChecks,
+    profileContractViolations,
   };
   return {
     ...profile,
@@ -3819,8 +3861,34 @@ export function buildEffectiveReleaseGateProfile(releaseId, submittedProfiles = 
       sourceCriticalCore,
       benchmarkQualitySafeguards,
       claimGatedDiagnostics,
-    }),
+    }, profileContractViolations),
   };
+}
+
+function submittedReleaseGateProfileContractChecks(submittedProfile) {
+  const requiredFieldChecks = REQUIRED_RELEASE_GATE_PROFILE_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: submittedProfile?.[field] ?? null,
+    status: hasRequiredValue(submittedProfile?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const requiredIfClaimedRules = normalizeStringArray(submittedProfile?.requiredIfClaimedRules ?? submittedProfile?.required_if_claimed_rules);
+  const requiredIfClaimedChecks = REQUIRED_RELEASE_GATE_REQUIRED_IF_CLAIMED_RULES.map((rule) => ({
+    field: "requiredIfClaimedRules",
+    expected: rule,
+    observed: requiredIfClaimedRules,
+    status: requiredIfClaimedRules.includes(rule) ? "pass" : "missing_required_rule",
+  }));
+  const normalizedNotRunPolicy = String(submittedProfile?.notRunRationalePolicy ?? submittedProfile?.not_run_deferred_rationale_policy ?? "").toLowerCase();
+  const notRunPolicyCheck = {
+    field: "notRunRationalePolicy",
+    expected: "mentions deferred/not-run/suppressed claim policy",
+    observed: submittedProfile?.notRunRationalePolicy ?? submittedProfile?.not_run_deferred_rationale_policy ?? null,
+    status: RELEASE_GATE_NOT_RUN_POLICY_FRAGMENTS.some((fragment) => normalizedNotRunPolicy.includes(fragment))
+      ? "pass"
+      : "missing_claim_deferred_not_run_policy",
+  };
+  return [...requiredFieldChecks, ...requiredIfClaimedChecks, notRunPolicyCheck];
 }
 
 function mergeSubmittedGateGroup(baseRows, submittedProfile, objectKey, listKey) {
@@ -3877,11 +3945,12 @@ function normalizeGateId(id) {
   return typeof id === "string" ? id.trim().toLowerCase().replace(/[_\s]+/g, "-") : "";
 }
 
-function gateProfileCoverageSummary(profile, groups) {
+function gateProfileCoverageSummary(profile, groups, contractViolations = []) {
   if (!groups) {
     return {
       status: "default_gate_catalog_used_no_submitted_profile",
       missingRequiredGateCount: 0,
+      contractViolationCount: 0,
       groups: {},
     };
   }
@@ -3900,8 +3969,14 @@ function gateProfileCoverageSummary(profile, groups) {
   const missingRequiredGateCount = Object.values(summaryGroups).reduce((sum, group) => sum + group.missingRequiredIds.length, 0);
   return {
     submittedProfileId: profile.submittedProfileId,
-    status: missingRequiredGateCount ? "submitted_profile_missing_required_gates" : "submitted_profile_covers_required_gate_catalog",
+    status: contractViolations.length
+      ? "submitted_profile_contract_review_required"
+      : missingRequiredGateCount
+        ? "submitted_profile_missing_required_gates"
+        : "submitted_profile_covers_required_gate_catalog",
     missingRequiredGateCount,
+    contractViolationCount: contractViolations.length,
+    contractViolations,
     groups: summaryGroups,
   };
 }
@@ -3916,6 +3991,7 @@ export function evaluateReleaseGateProfile(profile) {
     blockingFailures: checks.filter((check) => check.status === "fail" && check.tier !== "claim_gated_diagnostic"),
     profileCoverageStatus: profile.profileCoverage?.status ?? "profile_coverage_not_reported",
     missingRequiredProfileGateCount: profile.profileCoverage?.missingRequiredGateCount ?? 0,
+    profileContractViolationCount: profile.profileCoverage?.contractViolationCount ?? 0,
   };
 }
 
@@ -5792,6 +5868,26 @@ export function buildRubricVersionDriftReport(
   };
 }
 
+const REQUIRED_SUBMITTED_RIGHTS_RECORD_FIELDS = [
+  "id",
+  "releaseId",
+  "artifactId",
+  "artifactKind",
+  "sourceOrigin",
+  "licenseType",
+  "rightsStatus",
+  "releaseScope",
+  "reviewerId",
+  "reviewedAt",
+  "sourceLanguage",
+  "translationRoute",
+  "taskFormat",
+  "sourceDomainSuitability",
+  "removalPolicy",
+];
+const SUBMITTED_RIGHTS_STATUS_FRAGMENTS = ["allowed", "cleared"];
+const SUBMITTED_RIGHTS_RELEASE_SCOPE_FRAGMENTS = ["public", "training", "internal", "hidden", "benchmark"];
+
 export function auditProvenanceRights(exportKind = "public", positionList = positions, records = provenanceRightsRecords) {
   const includedSplits = allowedSplitsForExport(exportKind);
   const includedPositions = positionList.filter((position) => includedSplits.includes(position.split));
@@ -5799,6 +5895,7 @@ export function auditProvenanceRights(exportKind = "public", positionList = posi
   const missingRecords = [];
   const releaseScopeFailures = [];
   const unclearedRecords = [];
+  const submittedRightsRecordContractFailures = [];
   includedPositions.forEach((position) => {
     const record = recordsByPosition.get(position.id);
     if (!record) {
@@ -5807,6 +5904,13 @@ export function auditProvenanceRights(exportKind = "public", positionList = posi
     }
     if (!record.releaseScopes.includes(exportKind)) releaseScopeFailures.push(position.id);
     if (!isRightsStatusAllowed(exportKind, record.rightsStatus)) unclearedRecords.push(position.id);
+    if (record.submittedRightsRecord && record.submittedRightsRecordContractViolations?.length) {
+      submittedRightsRecordContractFailures.push({
+        positionId: position.id,
+        recordId: record.id,
+        contractViolations: record.submittedRightsRecordContractViolations,
+      });
+    }
   });
   return {
     id: `${exportKind}-provenance-rights-audit`,
@@ -5816,7 +5920,8 @@ export function auditProvenanceRights(exportKind = "public", positionList = posi
     missingRecords,
     releaseScopeFailures,
     unclearedRecords,
-    status: missingRecords.length || releaseScopeFailures.length || unclearedRecords.length ? "blocked" : "pass",
+    submittedRightsRecordContractFailures,
+    status: missingRecords.length || releaseScopeFailures.length || unclearedRecords.length || submittedRightsRecordContractFailures.length ? "blocked" : "pass",
     adaptedSourceFieldsPresent: records.every(
       (record) => record.sourceLanguage && record.translationRoute && record.taskFormat && record.sourceDomainSuitability,
     ),
@@ -5837,6 +5942,7 @@ export function buildReleaseRightsRecords(submittedRightsRecords = [], baseRecor
 
 function normalizeSubmittedRightsRecord(record, positionId, base = {}) {
   const releaseScopes = normalizeRightsReleaseScopes(record, base);
+  const contractViolations = submittedRightsRecordContractViolations(record);
   return {
     ...base,
     ...record,
@@ -5852,7 +5958,29 @@ function normalizeSubmittedRightsRecord(record, positionId, base = {}) {
     lsatDerived: record.lsatDerived ?? base.lsatDerived ?? false,
     clearedAt: record.clearedAt ?? record.reviewedAt ?? base.clearedAt ?? null,
     submittedRightsRecord: true,
+    submittedRightsRecordContractViolations: contractViolations,
   };
+}
+
+function submittedRightsRecordContractViolations(record) {
+  const missingFields = REQUIRED_SUBMITTED_RIGHTS_RECORD_FIELDS.filter((field) => !hasRequiredValue(record[field]));
+  const rightsStatus = String(record.rightsStatus ?? "").toLowerCase();
+  const releaseScope = String(record.releaseScope ?? "").toLowerCase();
+  return [
+    ...missingFields,
+    SUBMITTED_RIGHTS_STATUS_FRAGMENTS.some((fragment) => rightsStatus.includes(fragment))
+      ? null
+      : "rightsStatus:allowed_or_cleared",
+    SUBMITTED_RIGHTS_RELEASE_SCOPE_FRAGMENTS.some((fragment) => releaseScope.includes(fragment))
+      ? null
+      : "releaseScope:release_scope_class",
+  ].filter(Boolean);
+}
+
+function hasRequiredValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim().length > 0;
+  return value !== null && value !== undefined;
 }
 
 function normalizeRightsReleaseScopes(record, base = {}) {
@@ -6228,9 +6356,33 @@ function normalizeAssignmentWorkflowEvidenceRow(assignment, linkedEvidence) {
   };
 }
 
+const REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_FIELDS = [
+  "id",
+  "candidateBatchId",
+  "positionId",
+  "generatedOrIngestedCount",
+  "judgedCount",
+  "disagreementSelectedCount",
+  "highRatedSelectedCount",
+  "suspectedJudgeFalsePositiveCount",
+  "humanSelectedForDiversityCount",
+  "rejectedCountByReason",
+  "promotedToRatingCount",
+];
+const REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_NUMBER_FIELDS = [
+  "generatedOrIngestedCount",
+  "judgedCount",
+  "disagreementSelectedCount",
+  "highRatedSelectedCount",
+  "suspectedJudgeFalsePositiveCount",
+  "humanSelectedForDiversityCount",
+  "promotedToRatingCount",
+];
+
 export function buildActiveLearningAudit(batches = activeLearningBatches, submittedSelectionAudits = [], workflowArtifacts = {}) {
   const candidateWorkflowEvidence = buildCandidateWorkflowEvidence(workflowArtifacts);
   const submittedBatches = submittedSelectionAudits.map((audit) => normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflowEvidence)).filter(Boolean);
+  const submittedSelectionAuditContractViolationRows = submittedBatches.filter((batch) => batch.selectionAuditContractViolations.length);
   const auditedBatchIds = new Set(submittedBatches.map((batch) => batch.id).filter(Boolean));
   const candidateWorkflowBatches = buildCandidateWorkflowActiveLearningBatches(candidateWorkflowEvidence, auditedBatchIds);
   const allBatches = [...batches, ...submittedBatches, ...candidateWorkflowBatches];
@@ -6248,7 +6400,10 @@ export function buildActiveLearningAudit(batches = activeLearningBatches, submit
     totals,
     submittedSelectionAuditCount: submittedBatches.length,
     submittedSelectionAuditIds: submittedBatches.map((batch) => batch.selectionAuditId),
+    submittedSelectionAuditContractViolationCount: submittedSelectionAuditContractViolationRows.length,
+    submittedSelectionAuditContractViolationRows,
     candidateWorkflowEvidence,
+    candidateWorkflowContractViolationCount: candidateWorkflowEvidence.candidateWorkflowContractViolationCount ?? 0,
     derivedCandidateWorkflowBatchCount: candidateWorkflowBatches.length,
     acceptedCritiqueIds: [...new Set(allBatches.flatMap((batch) => batch.acceptedCritiqueIds))],
     blindingPass:
@@ -6275,11 +6430,21 @@ export function buildActiveLearningAudit(batches = activeLearningBatches, submit
         promotedFromGenerated: batch.generated ? round(batch.promoted / batch.generated) : null,
         handSelectedFromJudged: batch.judged ? round(batch.handSelected / batch.judged) : null,
       },
+      selectionAuditContractStatus: batch.selectionAuditContractViolations?.length
+        ? "selection_audit_contract_review_required"
+        : batch.batchSource === "submitted_workflow_selection_audit"
+          ? "selection_audit_contract_complete"
+          : "not_submitted_selection_audit",
+      selectionAuditContractViolations: batch.selectionAuditContractViolations ?? [],
     })),
     releaseUseStatus:
-      submittedBatches.length || batches.length
-        ? "active_learning_selection_denominators_audited"
-        : "active_learning_selection_denominators_missing",
+      submittedSelectionAuditContractViolationRows.length
+        ? "active_learning_selection_audit_review_required"
+        : candidateWorkflowEvidence.candidateWorkflowContractViolationCount
+          ? "candidate_workflow_evidence_review_required"
+          : submittedBatches.length || batches.length
+            ? "active_learning_selection_denominators_audited"
+            : "active_learning_selection_denominators_missing",
   };
 }
 
@@ -6299,9 +6464,12 @@ function normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflow
   }
   const batchId = audit.candidateBatchId ?? audit.batchId ?? audit.id;
   const workflowRow = (candidateWorkflowEvidence.rows ?? []).find((row) => row.candidateBatchId === batchId);
+  const selectionAuditContractChecks = submittedActiveLearningSelectionAuditContractChecks(audit);
+  const selectionAuditContractViolations = selectionAuditContractChecks.filter((check) => check.status !== "pass");
   return {
     id: batchId,
     selectionAuditId: audit.id ?? null,
+    positionId: audit.positionId ?? workflowRow?.positionId ?? null,
     batchSource: "submitted_workflow_selection_audit",
     generated: numberOrDefault(audit.generatedOrIngestedCount ?? audit.generatedOrIngestedCandidateCount ?? audit.generatedCount, 0),
     ingested: numberOrDefault(audit.ingestedCount, 0),
@@ -6317,8 +6485,78 @@ function normalizeSubmittedActiveLearningSelectionAudit(audit, candidateWorkflow
     selectionReasonHiddenFromInitialRaters: audit.selectionReasonHiddenFromInitialRaters !== false && workflowRow?.selectionReasonHiddenFromInitialRaters !== false,
     selectionReasonCounts,
     rejectedCountByReason,
+    selectionAuditContractChecks,
+    selectionAuditContractViolations,
   };
 }
+
+function submittedActiveLearningSelectionAuditContractChecks(audit) {
+  const requiredFieldChecks = REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: audit?.[field] ?? null,
+    status: hasRequiredValue(audit?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const finiteNumberChecks = REQUIRED_ACTIVE_LEARNING_SELECTION_AUDIT_NUMBER_FIELDS.map((field) => ({
+    field,
+    expected: "finite_number",
+    observed: audit?.[field] ?? null,
+    status: Number.isFinite(Number(audit?.[field])) ? "pass" : "invalid_number",
+  }));
+  const rejectedCountByReasonCheck = {
+    field: "rejectedCountByReason",
+    expected: "object",
+    observed: audit?.rejectedCountByReason ?? null,
+    status: audit?.rejectedCountByReason && typeof audit.rejectedCountByReason === "object" && !Array.isArray(audit.rejectedCountByReason)
+      ? "pass"
+      : "invalid_object",
+  };
+  return [...requiredFieldChecks, ...finiteNumberChecks, rejectedCountByReasonCheck];
+}
+
+const REQUIRED_CANDIDATE_BATCH_FIELDS = [
+  "id",
+  "positionId",
+  "generatorSourceDescription",
+  "promptTemplateVersion",
+  "judgeModelSet",
+  "generatedOrIngestedCandidateCount",
+  "judgedCandidateCount",
+  "candidatePoolDenominatorPolicy",
+  "selectionPolicyVersion",
+  "batchStatus",
+  "createdAt",
+];
+const REQUIRED_CANDIDATE_CRITIQUE_FIELDS = [
+  "id",
+  "candidateBatchId",
+  "positionId",
+  "text",
+  "sourceType",
+  "generationRoute",
+  "rightsStatus",
+  "selectionReason",
+  "nearDuplicateClusterId",
+  "marginalInformativenessRationale",
+  "reviewStatus",
+];
+const REQUIRED_MODEL_JUDGE_SCORE_FIELDS = [
+  "id",
+  "candidateId",
+  "candidateBatchId",
+  "judgeRequestedModelAlias",
+  "judgeProvider",
+  "judgeResolvedModelSnapshot",
+  "promptVersion",
+  "modelParameters",
+  "aliasStabilityStatus",
+  "rawOutput",
+  "parseStatus",
+  "overallScore",
+  "disagreementStatistics",
+  "timestamp",
+];
+const REQUIRED_MODEL_JUDGE_SCORE_SUBMISSION_FIELDS = ["id", "submittedScoreIds", "batchCoveragePolicy", "judgedCandidateCount", "submittedAt"];
 
 function buildCandidateWorkflowEvidence({
   candidateBatches = [],
@@ -6331,12 +6569,33 @@ function buildCandidateWorkflowEvidence({
   const critiqueById = new Map(candidateCritiques.map((critique) => [critique.id, critique]));
   const batchRows = candidateBatches.map((batch) => {
     const batchId = batch.id;
+    const candidateBatchContractChecks = submittedCandidateBatchContractChecks(batch);
+    const candidateBatchContractViolations = candidateBatchContractChecks.filter((check) => check.status !== "pass");
     const batchCritiques = candidateCritiques.filter((critique) => critique.candidateBatchId === batchId || critique.batchId === batchId);
     const batchCandidateIds = new Set(batchCritiques.map((critique) => critique.id));
     const batchScores = modelJudgeScores.filter(
       (score) => score.candidateBatchId === batchId || score.batchId === batchId || batchCandidateIds.has(score.candidateId),
     );
     const scoreSubmissions = candidateBatchModelJudgeScoreSubmissions.filter((submission) => submission.candidateBatchId === batchId || submission.batchId === batchId);
+    const candidateCritiqueContractViolationRows = batchCritiques
+      .map((critique) => ({
+        id: critique.id,
+        contractViolations: submittedCandidateCritiqueContractChecks(critique).filter((check) => check.status !== "pass"),
+      }))
+      .filter((row) => row.contractViolations.length);
+    const modelJudgeScoreContractViolationRows = batchScores
+      .map((score) => ({
+        id: score.id,
+        candidateId: score.candidateId ?? null,
+        contractViolations: submittedModelJudgeScoreContractChecks(score).filter((check) => check.status !== "pass"),
+      }))
+      .filter((row) => row.contractViolations.length);
+    const scoreSubmissionContractViolationRows = scoreSubmissions
+      .map((submission) => ({
+        id: submission.id,
+        contractViolations: submittedModelJudgeScoreSubmissionContractChecks(submission).filter((check) => check.status !== "pass"),
+      }))
+      .filter((row) => row.contractViolations.length);
     const reviews = candidateReviews.filter((review) => {
       const candidateId = review.candidateId ?? review.id;
       return batchCandidateIds.has(candidateId) || critiqueById.get(candidateId)?.candidateBatchId === batchId;
@@ -6358,6 +6617,7 @@ function buildCandidateWorkflowEvidence({
       promotions.every((promotion) => promotion.sourceMetadataHiddenFromRaters !== false);
     return {
       candidateBatchId: batchId,
+      positionId: batch.positionId ?? null,
       candidateBatchStatus: batch.batchStatus ?? null,
       batchSource: "submitted_workflow_candidate_batch",
       generated: numberOrDefault(batch.generatedOrIngestedCandidateCount ?? batch.generatedOrIngestedCount ?? batch.generatedCount, batchCritiques.length),
@@ -6382,6 +6642,24 @@ function buildCandidateWorkflowEvidence({
       scoreSubmissionCount: scoreSubmissions.length,
       reviewCount: reviews.length,
       promotionCount: promotions.length,
+      candidateBatchContractChecks,
+      candidateBatchContractViolations,
+      candidateBatchContractStatus: candidateBatchContractViolations.length
+        ? "candidate_batch_contract_review_required"
+        : "candidate_batch_contract_complete",
+      candidateCritiqueContractViolationCount: candidateCritiqueContractViolationRows.length,
+      candidateCritiqueContractViolationRows,
+      modelJudgeScoreContractViolationCount: modelJudgeScoreContractViolationRows.length,
+      modelJudgeScoreContractViolationRows,
+      scoreSubmissionContractViolationCount: scoreSubmissionContractViolationRows.length,
+      scoreSubmissionContractViolationRows,
+      candidateWorkflowContractStatus:
+        candidateBatchContractViolations.length ||
+        candidateCritiqueContractViolationRows.length ||
+        modelJudgeScoreContractViolationRows.length ||
+        scoreSubmissionContractViolationRows.length
+          ? "candidate_workflow_contract_review_required"
+          : "candidate_workflow_contract_complete",
       hiddenMetadataStatus:
         !modelJudgeScoresVisibleToInitialRaters && selectionReasonHiddenFromInitialRaters
           ? "candidate_intake_metadata_hidden_before_initial_lock"
@@ -6389,6 +6667,8 @@ function buildCandidateWorkflowEvidence({
     };
   });
   const hiddenMetadataViolationRows = batchRows.filter((row) => row.hiddenMetadataStatus === "candidate_intake_metadata_visibility_review_required");
+  const candidateBatchContractViolationRows = batchRows.filter((row) => row.candidateBatchContractViolations.length);
+  const candidateWorkflowContractViolationRows = batchRows.filter((row) => row.candidateWorkflowContractStatus === "candidate_workflow_contract_review_required");
   return {
     candidateBatchCount: candidateBatches.length,
     candidateCritiqueCount: candidateCritiques.length,
@@ -6396,10 +6676,132 @@ function buildCandidateWorkflowEvidence({
     scoreSubmissionCount: candidateBatchModelJudgeScoreSubmissions.length,
     reviewCount: candidateReviews.length,
     promotionCount: candidatePromotions.length,
+    candidateBatchContractViolationCount: candidateBatchContractViolationRows.length,
+    candidateBatchContractViolationRows,
+    candidateWorkflowContractViolationCount: candidateWorkflowContractViolationRows.length,
+    candidateWorkflowContractViolationRows,
     hiddenMetadataViolationCount: hiddenMetadataViolationRows.length,
     hiddenMetadataViolationRows,
     rows: batchRows,
   };
+}
+
+function submittedCandidateBatchContractChecks(batch) {
+  const fieldChecks = REQUIRED_CANDIDATE_BATCH_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: batch?.[field] ?? null,
+    status: hasRequiredValue(batch?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const judgeModelSetCheck = {
+    field: "judgeModelSet",
+    expected: "non_empty_array",
+    observed: batch?.judgeModelSet ?? null,
+    status: Array.isArray(batch?.judgeModelSet) && batch.judgeModelSet.length ? "pass" : "missing_required_array_values",
+  };
+  const generatedCountCheck = {
+    field: "generatedOrIngestedCandidateCount",
+    expected: "finite_number",
+    observed: batch?.generatedOrIngestedCandidateCount ?? null,
+    status: Number.isFinite(Number(batch?.generatedOrIngestedCandidateCount)) ? "pass" : "invalid_number",
+  };
+  const judgedCountCheck = {
+    field: "judgedCandidateCount",
+    expected: "finite_number",
+    observed: batch?.judgedCandidateCount ?? null,
+    status: Number.isFinite(Number(batch?.judgedCandidateCount)) ? "pass" : "invalid_number",
+  };
+  const selectionReasonHiddenCheck = {
+    field: "selectionReasonHiddenFromInitialRaters",
+    expected: true,
+    observed: batch?.selectionReasonHiddenFromInitialRaters ?? null,
+    status: batch?.selectionReasonHiddenFromInitialRaters === true ? "pass" : "must_equal_true",
+  };
+  const modelJudgeHiddenCheck = {
+    field: "modelJudgeScoresVisibleToInitialRaters",
+    expected: false,
+    observed: batch?.modelJudgeScoresVisibleToInitialRaters ?? null,
+    status: batch?.modelJudgeScoresVisibleToInitialRaters === false ? "pass" : "must_equal_false",
+  };
+  return [...fieldChecks, judgeModelSetCheck, generatedCountCheck, judgedCountCheck, selectionReasonHiddenCheck, modelJudgeHiddenCheck];
+}
+
+function submittedCandidateCritiqueContractChecks(critique) {
+  const fieldChecks = REQUIRED_CANDIDATE_CRITIQUE_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: critique?.[field] ?? null,
+    status: hasRequiredValue(critique?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const selectionReasonHiddenCheck = {
+    field: "selectionReasonVisibleToRatersBeforeInitialLock",
+    expected: false,
+    observed: critique?.selectionReasonVisibleToRatersBeforeInitialLock ?? null,
+    status: critique?.selectionReasonVisibleToRatersBeforeInitialLock === false ? "pass" : "must_equal_false",
+  };
+  return [...fieldChecks, selectionReasonHiddenCheck];
+}
+
+function submittedModelJudgeScoreContractChecks(score) {
+  const fieldChecks = REQUIRED_MODEL_JUDGE_SCORE_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: score?.[field] ?? null,
+    status: hasRequiredValue(score?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const modelParametersCheck = {
+    field: "modelParameters",
+    expected: "object",
+    observed: score?.modelParameters ?? null,
+    status: score?.modelParameters && typeof score.modelParameters === "object" && !Array.isArray(score.modelParameters) ? "pass" : "invalid_object",
+  };
+  const disagreementStatisticsCheck = {
+    field: "disagreementStatistics",
+    expected: "object",
+    observed: score?.disagreementStatistics ?? null,
+    status: score?.disagreementStatistics && typeof score.disagreementStatistics === "object" && !Array.isArray(score.disagreementStatistics) ? "pass" : "invalid_object",
+  };
+  const overallScoreCheck = {
+    field: "overallScore",
+    expected: "finite_number",
+    observed: score?.overallScore ?? null,
+    status: Number.isFinite(Number(score?.overallScore)) ? "pass" : "invalid_number",
+  };
+  const hiddenCheck = {
+    field: "hiddenFromRatersBeforeInitialLock",
+    expected: true,
+    observed: score?.hiddenFromRatersBeforeInitialLock ?? null,
+    status: score?.hiddenFromRatersBeforeInitialLock === true ? "pass" : "must_equal_true",
+  };
+  return [...fieldChecks, modelParametersCheck, disagreementStatisticsCheck, overallScoreCheck, hiddenCheck];
+}
+
+function submittedModelJudgeScoreSubmissionContractChecks(submission) {
+  const fieldChecks = REQUIRED_MODEL_JUDGE_SCORE_SUBMISSION_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: submission?.[field] ?? null,
+    status: hasRequiredValue(submission?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const submittedScoreIdsCheck = {
+    field: "submittedScoreIds",
+    expected: "non_empty_array",
+    observed: submission?.submittedScoreIds ?? null,
+    status: Array.isArray(submission?.submittedScoreIds) && submission.submittedScoreIds.length ? "pass" : "missing_required_array_values",
+  };
+  const judgedCountCheck = {
+    field: "judgedCandidateCount",
+    expected: "finite_number",
+    observed: submission?.judgedCandidateCount ?? null,
+    status: Number.isFinite(Number(submission?.judgedCandidateCount)) ? "pass" : "invalid_number",
+  };
+  const hiddenCheck = {
+    field: "hiddenFromRatersBeforeInitialLock",
+    expected: true,
+    observed: submission?.hiddenFromRatersBeforeInitialLock ?? null,
+    status: submission?.hiddenFromRatersBeforeInitialLock === true ? "pass" : "must_equal_true",
+  };
+  return [...fieldChecks, submittedScoreIdsCheck, judgedCountCheck, hiddenCheck];
 }
 
 function buildCandidateWorkflowActiveLearningBatches(candidateWorkflowEvidence, auditedBatchIds = new Set()) {
@@ -6904,6 +7306,8 @@ export function buildRubricQaCoverageReport(
   };
 }
 
+const REQUIRED_SOURCE_ANCHOR_ALLOWED_USES = ["training", "certification", "prompt_regression"];
+
 export function buildLmcaSourceExampleAnchorReport(
   releaseId,
   anchors = lmcaSourceExampleAnchors,
@@ -6914,37 +7318,69 @@ export function buildLmcaSourceExampleAnchorReport(
   const submittedAnchors = (options.sourceAnchorExamples ?? []).map((anchor) => normalizeSubmittedSourceAnchorExample(anchor, releaseId)).filter(Boolean);
   const allAnchors = [...anchors, ...submittedAnchors];
   const anchorRows = allAnchors
-    .map((anchor) => ({
-      anchorId: anchor.id,
-      anchorSource: anchor.anchorSource ?? "seed_lmca_public_source_anchor",
-      submittedAnchorId: anchor.submittedAnchorId ?? null,
-      suiteVersion: anchor.suiteVersion,
-      sourceExampleFamily: anchor.sourceExampleFamily,
-      publicSourceReference: anchor.publicSourceReference,
-      itemId: anchor.itemId,
-      positionClusterId: anchor.positionClusterId,
-      split: anchor.split,
-      rubricVersion: anchor.rubricVersion,
-      exposurePolicy: anchor.exposurePolicy,
-      protectedValidationEligible: anchor.protectedValidationEligible === true,
-      hiddenBenchmarkEligible: anchor.hiddenBenchmarkEligible === true,
-      humanCeilingEligible: anchor.humanCeilingEligible === true,
-      promptRegressionEligible: anchor.promptRegressionEligible === true,
-      certificationExposureEligible: anchor.certificationExposureEligible === true,
-      expectedLabelSummary: anchor.expectedLabelSummary,
-      targetDimensions: anchor.targetDimensions ?? [],
-      protectedSplitLeakage:
-        protectedSplits.has(anchor.split) ||
-        anchor.protectedValidationEligible === true ||
-        anchor.hiddenBenchmarkEligible === true ||
-        anchor.humanCeilingEligible === true,
-      requiredIdsPresent:
-        Boolean(anchor.id) &&
-        Boolean(anchor.itemId) &&
-        Boolean(anchor.positionClusterId) &&
-        Boolean(anchor.split) &&
-        Boolean(anchor.suiteVersion),
-    }))
+    .map((anchor) => {
+      const anchorSource = anchor.anchorSource ?? "seed_lmca_public_source_anchor";
+      const submittedAnchor = anchorSource === "submitted_workflow_source_anchor_example";
+      const rawAllowedUse = uniqueStrings(normalizeStringArray(anchor.allowedUse ?? anchor.allowedUses));
+      const allowedUse = rawAllowedUse.length ? rawAllowedUse : submittedAnchor ? [] : REQUIRED_SOURCE_ANCHOR_ALLOWED_USES;
+      const targetDimensions = uniqueStrings(normalizeStringArray(anchor.targetDimensions));
+      const promptRegressionEligible = anchor.promptRegressionEligible === true;
+      const certificationExposureEligible = anchor.certificationExposureEligible === true;
+      const excludedFromProtectedEvaluation =
+        anchor.excludedFromProtectedEvaluation === true ||
+        anchor.protectedEvaluationExclusion === true ||
+        anchor.protectedSplitExclusionStatus === true ||
+        (!submittedAnchor &&
+          anchor.protectedValidationEligible !== true &&
+          anchor.hiddenBenchmarkEligible !== true &&
+          anchor.humanCeilingEligible !== true);
+      const missingAllowedUse = submittedAnchor
+        ? REQUIRED_SOURCE_ANCHOR_ALLOWED_USES.filter((use) => !allowedUse.includes(use))
+        : [];
+      const submittedUsePolicyViolation =
+        submittedAnchor &&
+        (missingAllowedUse.length > 0 ||
+          !excludedFromProtectedEvaluation ||
+          !promptRegressionEligible ||
+          !certificationExposureEligible ||
+          !targetDimensions.length ||
+          !anchor.expectedLabelSummary);
+      return {
+        anchorId: anchor.id,
+        anchorSource,
+        submittedAnchorId: anchor.submittedAnchorId ?? null,
+        suiteVersion: anchor.suiteVersion,
+        sourceExampleFamily: anchor.sourceExampleFamily,
+        publicSourceReference: anchor.publicSourceReference,
+        itemId: anchor.itemId,
+        positionClusterId: anchor.positionClusterId,
+        split: anchor.split,
+        rubricVersion: anchor.rubricVersion,
+        exposurePolicy: anchor.exposurePolicy,
+        allowedUse,
+        missingAllowedUse,
+        excludedFromProtectedEvaluation,
+        protectedValidationEligible: anchor.protectedValidationEligible === true,
+        hiddenBenchmarkEligible: anchor.hiddenBenchmarkEligible === true,
+        humanCeilingEligible: anchor.humanCeilingEligible === true,
+        promptRegressionEligible,
+        certificationExposureEligible,
+        expectedLabelSummary: anchor.expectedLabelSummary,
+        targetDimensions,
+        submittedUsePolicyViolation,
+        protectedSplitLeakage:
+          protectedSplits.has(anchor.split) ||
+          anchor.protectedValidationEligible === true ||
+          anchor.hiddenBenchmarkEligible === true ||
+          anchor.humanCeilingEligible === true,
+        requiredIdsPresent:
+          Boolean(anchor.id) &&
+          Boolean(anchor.itemId) &&
+          Boolean(anchor.positionClusterId) &&
+          Boolean(anchor.split) &&
+          Boolean(anchor.suiteVersion),
+      };
+    })
     .sort((left, right) => left.anchorId.localeCompare(right.anchorId));
   const coveredFamilies = uniqueStrings(anchorRows.map((row) => row.sourceExampleFamily)).sort();
   const missingFamilies = requiredFamilies.filter((family) => !coveredFamilies.includes(family)).sort();
@@ -6952,6 +7388,7 @@ export function buildLmcaSourceExampleAnchorReport(
     (row) => row.exposurePolicy !== "public_training_qa_only" || row.protectedSplitLeakage,
   );
   const missingRequiredIdRows = anchorRows.filter((row) => !row.requiredIdsPresent);
+  const submittedUsePolicyViolationRows = anchorRows.filter((row) => row.submittedUsePolicyViolation);
   const suiteVersions = uniqueStrings(anchorRows.map((row) => row.suiteVersion)).sort();
   return {
     id: `lmca-source-example-anchors-${releaseId}`,
@@ -6964,6 +7401,8 @@ export function buildLmcaSourceExampleAnchorReport(
         "The suite must include is/ought near-zero and near-perfect anchors, approval-voting mid-range strength/centrality calibration, and the Table 4 over-crediting model-failure anchor.",
       denominatorExclusionRule:
         "Anchor item ids and position clusters are excluded from protected validation, hidden benchmark, human-ceiling, and clean leaderboard denominators.",
+      submittedUsePolicyRule:
+        "Submitted source-anchor examples must declare training, certification, and prompt-regression allowed uses, prompt/certification eligibility, protected-evaluation exclusion, expected-label summary, and target dimensions before release use.",
     },
     suiteVersions,
     coveredFamilies,
@@ -6977,6 +7416,7 @@ export function buildLmcaSourceExampleAnchorReport(
       missingFamilyCount: missingFamilies.length,
       exposureViolationCount: exposureViolationRows.length,
       submittedExposureViolationCount: exposureViolationRows.filter((row) => row.anchorSource === "submitted_workflow_source_anchor_example").length,
+      submittedUsePolicyViolationCount: submittedUsePolicyViolationRows.length,
       missingRequiredIdCount: missingRequiredIdRows.length,
       humanCeilingEligibleCount: anchorRows.filter((row) => row.humanCeilingEligible).length,
       promptRegressionEligibleCount: anchorRows.filter((row) => row.promptRegressionEligible).length,
@@ -6985,9 +7425,10 @@ export function buildLmcaSourceExampleAnchorReport(
     anchorRows,
     exposureViolationRows,
     missingRequiredIdRows,
+    submittedUsePolicyViolationRows,
     byFamily: countBy(anchorRows, "sourceExampleFamily"),
     releaseUseStatus:
-      exposureViolationRows.length || missingRequiredIdRows.length
+      exposureViolationRows.length || missingRequiredIdRows.length || submittedUsePolicyViolationRows.length
         ? "source_anchor_protection_review_required"
         : missingFamilies.length
           ? "source_anchor_required_family_missing"
@@ -6998,7 +7439,7 @@ export function buildLmcaSourceExampleAnchorReport(
 function normalizeSubmittedSourceAnchorExample(anchor, releaseId) {
   const id = anchor?.id ?? anchor?.sourceAnchorId ?? anchor?.source_anchor_id;
   if (!id) return null;
-  const allowedUses = Array.isArray(anchor.allowedUse) ? anchor.allowedUse : Array.isArray(anchor.allowedUses) ? anchor.allowedUses : [];
+  const allowedUses = uniqueStrings(normalizeStringArray(anchor.allowedUse ?? anchor.allowedUses));
   const protectedSplitExplicitlyIncluded =
     anchor.protectedSplitExclusionStatus === false ||
     anchor.excludedFromProtectedEvaluation === false ||
@@ -7015,6 +7456,11 @@ function normalizeSubmittedSourceAnchorExample(anchor, releaseId) {
     split: anchor.split ?? "public_training_qa_anchor",
     rubricVersion: anchor.rubricVersion ?? anchor.rubricVersionMapping ?? CURRENT_RUBRIC_VERSION,
     exposurePolicy: anchor.exposurePolicy ?? "public_training_qa_only",
+    allowedUse: allowedUses,
+    excludedFromProtectedEvaluation:
+      anchor.excludedFromProtectedEvaluation === true ||
+      anchor.protectedEvaluationExclusion === true ||
+      anchor.protectedSplitExclusionStatus === true,
     protectedValidationEligible: anchor.protectedValidationEligible === true || protectedSplitExplicitlyIncluded,
     hiddenBenchmarkEligible: anchor.hiddenBenchmarkEligible === true,
     humanCeilingEligible: anchor.humanCeilingEligible === true,
@@ -7849,6 +8295,9 @@ function promptArtifactForSubmittedWorkflow(id, promptFamily, promptScope, promp
   };
 }
 
+const BENCHMARK_SPLIT_MEMBER_ALLOWED_SPLITS = ["hidden_benchmark_candidate", "hidden_benchmark"];
+const BENCHMARK_SPLIT_MEMBER_LEAK_PREVENTION_FRAGMENTS = ["excluded", "training", "public"];
+
 export function buildHiddenBenchmarkFreezeReport(
   releaseId,
   labelSnapshot,
@@ -7951,6 +8400,11 @@ export function buildHiddenBenchmarkFreezeReport(
       initialBlinding.releaseUseStatus === "hidden_benchmark_initial_blinding_violation" ? "blocked" : "pass",
       `${initialBlinding.counts.sourceTagVisibleInitialRows} source/tag-visible hidden-benchmark initial rows; ${initialBlinding.counts.excludedFromBlindAggregationRows} excluded and ${initialBlinding.counts.adjudicatedExceptionRows} disclosed exceptions.`,
     ),
+    freezeCheck(
+      "submitted_split_membership_contract",
+      submittedSplitMembership.report.contractViolationRows.length ? "blocked" : "pass",
+      `${submittedSplitMembership.report.contractViolationRows.length} submitted benchmark split membership rows failed cluster, freeze, eligibility, exposure, or leak-prevention contract checks.`,
+    ),
   ];
   return {
     id: `hidden-benchmark-freeze-${releaseId}`,
@@ -7984,23 +8438,61 @@ export function buildHiddenBenchmarkFreezeReport(
 }
 
 function buildSubmittedBenchmarkSplitMembership(positionList, splitMembers = []) {
-  const positionIds = new Set(positionList.map((position) => position.id));
+  const positionById = new Map(positionList.map((position) => [position.id, position]));
   const rows = splitMembers
     .map((member) => {
       if (!member || typeof member !== "object") return null;
       const positionId = member.positionId ?? parsePositionIdFromItemId(member.itemId);
+      const position = positionById.get(positionId);
       const requestedSplit = member.split ?? "unknown";
       const effectiveSplit = requestedSplit === "hidden_benchmark_candidate" ? "hidden_benchmark" : requestedSplit;
+      const leakPreventionStatus = member.leakPreventionStatus ?? "not_declared";
+      const normalizedLeakPreventionStatus = String(leakPreventionStatus).toLowerCase();
+      const missingLeakPreventionFragments = BENCHMARK_SPLIT_MEMBER_LEAK_PREVENTION_FRAGMENTS.filter(
+        (fragment) => !normalizedLeakPreventionStatus.includes(fragment),
+      );
+      const positionClusterId = member.positionClusterId ?? member.clusterId ?? null;
+      const contractViolations = [
+        member.id ? null : "id",
+        member.releaseId ? null : "releaseId",
+        member.itemId ? null : "itemId",
+        positionClusterId ? null : "positionClusterId",
+        position && positionClusterId === position.clusterId ? null : "positionClusterId:position_cluster_mismatch",
+        BENCHMARK_SPLIT_MEMBER_ALLOWED_SPLITS.includes(requestedSplit) ? null : "split",
+        member.splitUnit === "position_cluster" ? null : "splitUnit",
+        member.freezeVersion ? null : "freezeVersion",
+        member.artifactBalanceBucket ? null : "artifactBalanceBucket",
+        member.crossSplitExceptionReason ? null : "crossSplitExceptionReason",
+        member.frozenAt ? null : "frozenAt",
+        member.customWeightedLossEligible === true ? null : "customWeightedLossEligible",
+        member.pairwiseRankingEligible === true ? null : "pairwiseRankingEligible",
+        member.pointwiseOnly === false ? null : "pointwiseOnly",
+        member.exposureRestricted === true ? null : "exposureRestricted",
+        ...missingLeakPreventionFragments.map((fragment) => `leakPreventionStatus:${fragment}`),
+      ].filter(Boolean);
+      const contractReady = contractViolations.length === 0;
       return {
         id: member.id,
         itemId: member.itemId ?? null,
         positionId,
+        positionClusterId,
         requestedSplit,
         effectiveSplit,
-        leakPreventionStatus: member.leakPreventionStatus ?? "not_declared",
+        splitUnit: member.splitUnit ?? null,
+        freezeVersion: member.freezeVersion ?? null,
+        artifactBalanceBucket: member.artifactBalanceBucket ?? null,
+        crossSplitExceptionReason: member.crossSplitExceptionReason ?? null,
+        leakPreventionStatus,
+        missingLeakPreventionFragments,
+        customWeightedLossEligible: member.customWeightedLossEligible === true,
+        pairwiseRankingEligible: member.pairwiseRankingEligible === true,
+        pointwiseOnly: member.pointwiseOnly === true,
+        exposureRestricted: member.exposureRestricted === true,
         frozenAt: member.frozenAt ?? null,
-        positionKnown: positionIds.has(positionId),
-        appliedToFreezeMembership: positionIds.has(positionId) && effectiveSplit === "hidden_benchmark",
+        positionKnown: Boolean(position),
+        contractViolations,
+        contractReady,
+        appliedToFreezeMembership: Boolean(position) && contractReady && effectiveSplit === "hidden_benchmark",
       };
     })
     .filter(Boolean);
@@ -8027,8 +8519,11 @@ function buildSubmittedBenchmarkSplitMembership(positionList, splitMembers = [])
       rowCount: rows.length,
       appliedHiddenPositionCount: hiddenOverrideByPosition.size,
       unknownPositionRows: rows.filter((row) => !row.positionKnown),
+      contractViolationRows: rows.filter((row) => !row.contractReady),
       rows,
-      status: rows.length
+      status: rows.some((row) => !row.contractReady)
+        ? "submitted_membership_contract_review_required"
+        : rows.length
         ? hiddenOverrideByPosition.size
           ? "submitted_hidden_benchmark_membership_applied"
           : "submitted_membership_no_hidden_benchmark_rows"
@@ -10675,6 +11170,21 @@ export function buildCorpusCompositionManifest(releaseId, positionList = positio
   };
 }
 
+const REQUIRED_RELEASE_VERSION_FIELDS = [
+  "id",
+  "releaseId",
+  "version",
+  "corpusManifestId",
+  "labelSnapshotId",
+  "metricConfigId",
+  "gateProfileId",
+  "releaseConfigManifestId",
+  "releaseConfigManifestHash",
+  "status",
+  "releaseNotes",
+  "frozenAt",
+];
+
 export function buildEffectiveReleaseVersionManifest(
   releaseId,
   { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps },
@@ -10711,6 +11221,8 @@ export function buildEffectiveReleaseVersionManifest(
   ];
   const mismatchedLinkChecks = linkChecks.filter((check) => check.status === "mismatch");
   const missingLinkChecks = linkChecks.filter((check) => check.status === "missing_submitted_artifact_link");
+  const releaseVersionContractChecks = submittedReleaseVersion ? submittedReleaseVersionContractChecks(submittedReleaseVersion) : [];
+  const releaseVersionContractViolations = releaseVersionContractChecks.filter((check) => check.status !== "pass");
   const linkedArtifactStatus =
     submittedReleaseVersion || submittedReleaseFreeze
       ? mismatchedLinkChecks.length || missingLinkChecks.length
@@ -10743,6 +11255,8 @@ export function buildEffectiveReleaseVersionManifest(
     linkedArtifactChecks: linkChecks,
     mismatchedLinkChecks,
     missingLinkChecks,
+    releaseVersionContractChecks,
+    releaseVersionContractViolations,
     currentStatus,
     targetGaps,
     effectiveArtifactIds: {
@@ -10756,12 +11270,40 @@ export function buildEffectiveReleaseVersionManifest(
     releaseUseStatus:
       !submittedReleaseVersion && !submittedReleaseFreeze
         ? "working_release_not_frozen"
-        : linkedArtifactStatus !== "release_manifest_links_current_artifacts"
-          ? "submitted_release_manifest_requires_link_review"
-          : currentStatus !== "target_scale_met"
-            ? "submitted_release_manifest_recorded_but_target_scale_incomplete"
-            : "submitted_release_manifest_current_and_target_scale_met",
+        : releaseVersionContractViolations.length
+          ? "submitted_release_manifest_contract_review_required"
+          : linkedArtifactStatus !== "release_manifest_links_current_artifacts"
+            ? "submitted_release_manifest_requires_link_review"
+            : currentStatus !== "target_scale_met"
+              ? "submitted_release_manifest_recorded_but_target_scale_incomplete"
+              : "submitted_release_manifest_current_and_target_scale_met",
   };
+}
+
+function submittedReleaseVersionContractChecks(submitted) {
+  const requiredFieldChecks = REQUIRED_RELEASE_VERSION_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: submitted?.[field] ?? null,
+    status: hasRequiredValue(submitted?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const immutableOutputCheck = {
+    field: "immutableOutputArtifactIds",
+    expected: "non_empty_array",
+    observed: submitted?.immutableOutputArtifactIds ?? null,
+    status: Array.isArray(submitted?.immutableOutputArtifactIds) && submitted.immutableOutputArtifactIds.length
+      ? "pass"
+      : "missing_required_array_values",
+  };
+  const manifestHashCheck = {
+    field: "releaseConfigManifestHash",
+    expected: "sha256:*",
+    observed: submitted?.releaseConfigManifestHash ?? null,
+    status: typeof submitted?.releaseConfigManifestHash === "string" && submitted.releaseConfigManifestHash.startsWith("sha256:")
+      ? "pass"
+      : "invalid_hash_prefix",
+  };
+  return [...requiredFieldChecks, immutableOutputCheck, manifestHashCheck];
 }
 
 function latestSubmittedReleaseArtifact(records = [], releaseId) {
@@ -11636,6 +12178,8 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
       computedStatus: claimRow.status,
     }));
   }
+  const submittedClaimContractChecks = submittedComparabilityClaimContractChecks(submittedClaim);
+  const submittedClaimContractViolations = submittedClaimContractChecks.filter((check) => check.status !== "pass");
   const submittedByTier = submittedComparabilityStatuses(submittedClaim);
   const submittedClaimMetadata = {
     submittedClaimId: submittedClaim.id ?? null,
@@ -11645,7 +12189,18 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
     submittedEvidenceLinks: Array.isArray(submittedClaim.evidenceLinks) ? submittedClaim.evidenceLinks : [],
     submittedApprovedBy: submittedClaim.approvedBy ?? null,
     submittedTimestamp: submittedClaim.timestamp ?? null,
+    submittedClaimContractChecks,
+    submittedClaimContractViolations,
+    submittedClaimContractViolationCount: submittedClaimContractViolations.length,
   };
+  if (submittedClaimContractViolations.length) {
+    return computedClaims.map((claimRow) => ({
+      ...claimRow,
+      statusSource: "computed_release_evidence_submitted_claim_contract_review_required",
+      computedStatus: claimRow.status,
+      ...submittedClaimMetadata,
+    }));
+  }
   return computedClaims.map((claimRow) => {
     const submitted = submittedByTier[claimRow.tier] ?? null;
     if (!submitted) {
@@ -11675,6 +12230,71 @@ function applySubmittedComparabilityClaims(computedClaims, submittedClaims = [])
           : "computed_guardrail_with_submitted_claim",
     };
   });
+}
+
+const REQUIRED_COMPARABILITY_CLAIM_FIELDS = [
+  "id",
+  "releaseId",
+  "releaseGateProfileId",
+  "claimWording",
+  "methodPreservingStatus",
+  "corpusScaleStatus",
+  "exactPositionSourceCountStatus",
+  "topicFamilyStatus",
+  "raterContributionStatus",
+  "adaptedSourceLanguageTaskFormatStatus",
+  "metricDenominatorStatus",
+  "targetLabelRaterStatus",
+  "primaryRaterAnchorPolicyId",
+  "validationDesignStatus",
+  "validationNumericCeilingStatus",
+  "modelScoreAnchorStatus",
+  "promptFamilySourceScopeStatus",
+  "modelSnapshotStatus",
+  "protectedSplitLeakageStatus",
+  "limitationsText",
+  "approvedBy",
+  "timestamp",
+];
+const REQUIRED_COMPARABILITY_CLAIM_ARRAY_FIELDS = ["linkedReleaseIds", "evidenceLinks"];
+const COMPARABILITY_CLAIM_STATUS_FIELDS = [
+  "methodPreservingStatus",
+  "corpusScaleStatus",
+  "exactPositionSourceCountStatus",
+  "topicFamilyStatus",
+  "raterContributionStatus",
+  "adaptedSourceLanguageTaskFormatStatus",
+  "metricDenominatorStatus",
+  "targetLabelRaterStatus",
+  "validationDesignStatus",
+  "validationNumericCeilingStatus",
+  "modelScoreAnchorStatus",
+  "promptFamilySourceScopeStatus",
+  "modelSnapshotStatus",
+  "protectedSplitLeakageStatus",
+];
+const ALLOWED_COMPARABILITY_CLAIM_STATUSES = ["passes", "partial", "fails", "not_applicable"];
+
+function submittedComparabilityClaimContractChecks(submittedClaim) {
+  const fieldChecks = REQUIRED_COMPARABILITY_CLAIM_FIELDS.map((field) => ({
+    field,
+    expected: "present",
+    observed: submittedClaim?.[field] ?? null,
+    status: hasRequiredValue(submittedClaim?.[field]) ? "pass" : "missing_required_field",
+  }));
+  const arrayChecks = REQUIRED_COMPARABILITY_CLAIM_ARRAY_FIELDS.map((field) => ({
+    field,
+    expected: "non_empty_array",
+    observed: submittedClaim?.[field] ?? null,
+    status: Array.isArray(submittedClaim?.[field]) && submittedClaim[field].length ? "pass" : "missing_required_array_values",
+  }));
+  const statusChecks = COMPARABILITY_CLAIM_STATUS_FIELDS.map((field) => ({
+    field,
+    expected: ALLOWED_COMPARABILITY_CLAIM_STATUSES,
+    observed: submittedClaim?.[field] ?? null,
+    status: ALLOWED_COMPARABILITY_CLAIM_STATUSES.includes(submittedClaim?.[field]) ? "pass" : "invalid_claim_status",
+  }));
+  return [...fieldChecks, ...arrayChecks, ...statusChecks];
 }
 
 function submittedComparabilityStatuses(claim) {
