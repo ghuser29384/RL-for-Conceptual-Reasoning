@@ -67,6 +67,13 @@ import {
   buildValidationTrancheReport,
   buildWorkflowStateMachineEvidenceReport,
   buildValidationDesignReport,
+  REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
+  REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+  RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
   createBlindRatingView,
   createExportManifest,
   createLabelSnapshot,
@@ -245,6 +252,59 @@ function activeLearningSelectionPolicy(id = "active-learning-selection-policy-re
       "Selection policy ids, judge thresholds, reason codes, and model-judge scores remain admin-only before initial rating lock.",
     lmcaSourceBoundary:
       "Project default active-learning thresholds and hand-selection quotas are frozen here; LMCA motivates active-learning denominator audits but does not state these exact platform values.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
+const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+
+function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-policy-release-test") {
+  return {
+    id,
+    policyVersion: TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+    thresholds: trainingExportUncertaintyThresholds,
+    downweightRules: trainingExportDownweightRules,
+    labelMetadataRule:
+      "Training exports must preserve rater-count, expert-count, spread, uncertainty-flag, disagreement-taxonomy, and label-status metadata before applying downstream weights.",
+    protectedSplitRule:
+      "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
+    lmcaSourceBoundary:
+      "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const rationaleEvidenceSpanMandatoryTriggerClasses = REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES;
+const rationaleEvidenceSpanRequirednessThresholds = REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS;
+const rationaleEvidenceSpanCoverageRules = REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES;
+const rationaleEvidenceSpanLinkCategories = [
+  ...RUBRIC_DIMENSIONS,
+  "attacked_claim",
+  "critique_support",
+  "wrong_claim",
+  "dead_weight_span",
+  "side_issue",
+  "unclear_language",
+  "unclear_text",
+];
+const rationaleEvidenceSpanVisibilityStates = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
+
+function rationaleEvidenceSpanRequirednessPolicy(id = "rationale-evidence-span-requiredness-policy-submitted") {
+  return {
+    id,
+    policyVersion: RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+    mandatoryTriggerClasses: rationaleEvidenceSpanMandatoryTriggerClasses,
+    thresholds: rationaleEvidenceSpanRequirednessThresholds,
+    coverageRules: rationaleEvidenceSpanCoverageRules,
+    requiredLinkCategories: rationaleEvidenceSpanLinkCategories,
+    allowedVisibilityStates: rationaleEvidenceSpanVisibilityStates,
+    coverageManifestRule:
+      "Every mandatory rating or adjudication trigger must have at least one span id linked to the active policy before release-critical rationale evidence is complete.",
+    protectedVisibilityRule:
+      "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
+    lmcaSourceBoundary:
+      "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1638,10 +1698,15 @@ function completeRatingExperienceFixtures() {
         timestamp: "2026-10-01T00:04:30.000Z",
       },
     ],
+    rationaleEvidenceSpanRequirednessPolicies: [
+      rationaleEvidenceSpanRequirednessPolicy("rationale-evidence-span-requiredness-policy-submitted"),
+    ],
     rationaleEvidenceSpans: [
       {
         id: "rationale-evidence-span-submitted",
         ratingId: "rating-seed-ai-base-rate-r1",
+        rationaleEvidenceSpanRequirednessPolicyId: "rationale-evidence-span-requiredness-policy-submitted",
+        mandatoryTriggerClass: "score_explanation_triggered",
         itemTextVersionId: "ctv-ai-base-rate-v1",
         spanTarget: "critique",
         startOffset: 0,
@@ -2842,7 +2907,13 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
   assert.equal(report.counts.submittedScoreConfidenceAnnotationCount, 1);
   assert.equal(report.counts.submittedRaterScoreConfidenceCount, 1);
+  assert.equal(report.counts.submittedRationaleEvidenceSpanRequirednessPolicyCount, 1);
   assert.equal(report.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(report.rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus, "submitted_rationale_evidence_span_requiredness_policy_active");
+  assert.equal(report.rationaleEvidenceSpanRequirednessPolicyId, "rationale-evidence-span-requiredness-policy-submitted");
+  assert.deepEqual(report.requiredRationaleEvidenceSpanMandatoryTriggerClasses, rationaleEvidenceSpanMandatoryTriggerClasses);
+  assert.deepEqual(report.requiredRationaleEvidenceSpanRequirednessThresholds, rationaleEvidenceSpanRequirednessThresholds);
+  assert.deepEqual(report.requiredRationaleEvidenceSpanCoverageRules, rationaleEvidenceSpanCoverageRules);
   assert.equal(report.itemIssueReportRows.at(-1).itemIssueQuarantinePolicyId, "item-issue-quarantine-policy-submitted");
   assert.equal(report.itemIssueReportRows.at(-1).reporterExposureState, "initial_blind");
   assert.equal(report.itemIssueReportRows.at(-1).quarantineStalePropagationState, "quarantine_stale_propagation_pending_review");
@@ -2860,6 +2931,8 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.ok(report.allowedRationaleEvidenceSpanLinkCategories.includes("unclear_language"));
   assert.equal(report.rationaleEvidenceSpanRows.at(-1).visibilityState, "locked_initial_hidden");
   assert.equal(report.rationaleEvidenceSpanRows.at(-1).hiddenUntilInitialRatingLock, true);
+  assert.equal(report.rationaleEvidenceSpanRows.at(-1).rationaleEvidenceSpanRequirednessPolicyId, "rationale-evidence-span-requiredness-policy-submitted");
+  assert.equal(report.rationaleEvidenceSpanRows.at(-1).mandatoryTriggerClass, "score_explanation_triggered");
   assert.equal(report.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(report.counts.submittedSamePositionBatchReviewCount, 1);
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
@@ -2978,6 +3051,26 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.ok(unsafeRationaleSpanReport.reviewSections.some((section) => section.artifactType === "rationale_evidence_span" && section.reason === "visibilityState"));
   assert.ok(
     unsafeRationaleSpanReport.reviewSections.some((section) => section.artifactType === "rationale_evidence_span" && section.reason === "hiddenUntilInitialRatingLock"),
+  );
+
+  const driftedRationaleRequirednessPolicyReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    rationaleEvidenceSpanRequirednessPolicies: [
+      {
+        ...rationaleEvidenceSpanRequirednessPolicy("rationale-evidence-span-requiredness-policy-drifted"),
+        thresholds: { ...rationaleEvidenceSpanRequirednessThresholds, lowClarityMax: 0.45 },
+      },
+    ],
+  });
+  assert.equal(driftedRationaleRequirednessPolicyReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.equal(
+    driftedRationaleRequirednessPolicyReport.rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus,
+    "submitted_rationale_evidence_span_requiredness_policy_review_required",
+  );
+  assert.ok(
+    driftedRationaleRequirednessPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "rationale_evidence_span_requiredness_policy" && section.reason === "thresholds",
+    ),
   );
 
   const unsafeItemIssueReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
@@ -5629,13 +5722,21 @@ test("training export preserves uncertainty and excludes protected splits", () =
     seedRatings,
     critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
   );
-  const trainingExport = buildTrainingExport("release-test", snapshot, positions, critiques, seedRatings, ratingContextSnapshots);
+  const trainingExport = buildTrainingExport("release-test", snapshot, positions, critiques, seedRatings, ratingContextSnapshots, {
+    trainingExportUncertaintyPolicies: [trainingExportUncertaintyPolicy("training-export-uncertainty-policy-release-test-submitted")],
+  });
   assert.equal(trainingExport.protectedSplitPolicy.hiddenBenchmarkExcluded, true);
   assert.equal(trainingExport.protectedSplitPolicy.internalValidationExcluded, true);
   assert.deepEqual(trainingExport.protectedSplitPolicy.includedSplits, ["public_train"]);
   assert.equal(trainingExport.protectedSplitPolicy.positionClusterIsolationStatus, "pass");
   assert.equal(trainingExport.counts.pointwiseExamples, 2);
   assert.equal(trainingExport.counts.pairwisePreferenceExamples, 1);
+  assert.equal(trainingExport.trainingExportUncertaintyPolicyEvidence.releaseUseStatus, "submitted_training_export_uncertainty_policy_active");
+  assert.equal(trainingExport.trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-test-submitted");
+  assert.deepEqual(trainingExport.uncertaintyThresholdsApplied, trainingExportUncertaintyThresholds);
+  assert.deepEqual(trainingExport.labelUncertaintyDownweightingRules, trainingExportDownweightRules);
+  assert.equal(trainingExport.counts.uncertaintyDownweightedPointwiseExamples, 1);
+  assert.equal(trainingExport.counts.uncertaintyDownweightedPairwisePreferences, 1);
   assert.equal(trainingExport.positionBalancedWeighting.status, "position_balanced_training_weights_complete");
   assert.deepEqual(trainingExport.positionBalancedWeighting.pointwiseRowsByPosition, { "pos-ai-prior": 2 });
   assert.deepEqual(trainingExport.positionBalancedWeighting.pairwiseRowsByPosition, { "pos-ai-prior": 1 });
@@ -5646,12 +5747,27 @@ test("training export preserves uncertainty and excludes protected splits", () =
   assert.equal(trainingExport.pointwiseExamples[0].positionExampleCount, 2);
   assert.equal(trainingExport.pointwiseExamples[0].positionBalancedWeight, 0.5);
   assert.equal(trainingExport.pointwiseExamples[0].normalizedPositionBalancedWeight, 0.5);
+  assert.equal(trainingExport.pointwiseExamples[0].trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-test-submitted");
+  assert.equal(trainingExport.pointwiseExamples[0].uncertaintyWeight, 1);
+  assert.equal(trainingExport.pointwiseExamples[0].trainingWeight, 0.5);
+  assert.deepEqual(trainingExport.pointwiseExamples[0].uncertaintyDownweightReasons, []);
+  const downweightedPointwise = trainingExport.pointwiseExamples.find((example) => example.uncertaintyWeight < 1);
+  assert.equal(downweightedPointwise.critiqueId, "crit-ai-generic");
+  assert.equal(downweightedPointwise.trainingWeight, 0.25);
+  assert.deepEqual(downweightedPointwise.uncertaintyDownweightReasons, ["uncertainty_flagged_label", "thin_rater_coverage"]);
   assert.equal(trainingExport.ratingContextSnapshots[0].humanModelParityStatus, "matchable_target_only");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferredCritiqueId, "crit-ai-base-rate");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferenceWeight, 0.46);
   assert.equal(trainingExport.pairwisePreferenceExamples[0].pairwiseMargin, 0.46);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-test-submitted");
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].uncertaintyWeight, 0.5);
+  assert.deepEqual(trainingExport.pairwisePreferenceExamples[0].uncertaintyDownweightReasons, [
+    "critiqueB_uncertainty_flagged_label",
+    "critiqueB_thin_rater_coverage",
+  ]);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].uncertaintyAdjustedPreferenceWeight, 0.23);
   assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPairWeight, 1);
-  assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPreferenceWeight, 0.46);
+  assert.equal(trainingExport.pairwisePreferenceExamples[0].positionBalancedPreferenceWeight, 0.23);
   assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].labelStatus, "initial_only");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].raterCount, 2);
   assert.equal(trainingExport.pairwisePreferenceExamples[0].labelMetadataByCritique["crit-ai-base-rate"].expertCount, 2);
@@ -5670,7 +5786,22 @@ test("training export preserves uncertainty and excludes protected splits", () =
   assert.deepEqual(trainingExport.pairwiseComparisonSnapshot.exclusions.missingTextVersionItemIds, []);
   assert.equal(trainingExport.optimizedSurrogateObjective.lmcaEvaluationMetricsSeparate, true);
   assert.equal(trainingExport.scalarRewardTargets[0].positionBalancedWeight, 0.5);
+  assert.equal(trainingExport.scalarRewardTargets[0].trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-test-submitted");
+  assert.equal(trainingExport.scalarRewardTargets[0].uncertaintyWeight, 1);
+  assert.equal(trainingExport.scalarRewardTargets[0].trainingWeight, 0.5);
   assert.match(trainingExport.scalarRewardTargets[0].rewardPolicy, /not_personal_agreement/);
+
+  const driftedPolicyExport = buildTrainingExport("release-test", snapshot, positions, critiques, seedRatings, ratingContextSnapshots, {
+    trainingExportUncertaintyPolicies: [
+      {
+        ...trainingExportUncertaintyPolicy("training-export-uncertainty-policy-drifted"),
+        thresholds: { ...trainingExportUncertaintyThresholds, uncertainLabelWeight: 0.25 },
+      },
+    ],
+  });
+  assert.equal(driftedPolicyExport.trainingExportUncertaintyPolicyEvidence.releaseUseStatus, "submitted_training_export_uncertainty_policy_review_required");
+  assert.equal(driftedPolicyExport.trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-test");
+  assert.equal(driftedPolicyExport.trainingExportUncertaintyPolicyEvidence.reviewRows[0].reviewReasons.includes("thresholds"), true);
 });
 
 test("submitted reproducibility artifacts drive release training export evidence", () => {
@@ -8818,6 +8949,7 @@ test("submitted label, corpus, training, and export manifests are checked agains
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      trainingExportUncertaintyPolicies: [trainingExportUncertaintyPolicy("training-export-uncertainty-policy-release-artifact-submitted")],
       labelSnapshots: [
         {
           id: "label-snapshot-submitted",
@@ -8851,7 +8983,13 @@ test("submitted label, corpus, training, and export manifests are checked agains
           promptTrackExposurePolicy: "project_full_rubric_training",
           pairwiseComparisonSnapshotId: `training-pairwise-${releaseId}`,
           pairwiseComparisonSnapshotStatus: "computed_pairwise_snapshot_used",
-          labelUncertaintyDownweightingPolicy: "preserve_label_uncertainty_and_downweight_high_uncertainty_labels",
+          trainingExportUncertaintyPolicyId: "training-export-uncertainty-policy-release-artifact-submitted",
+          trainingExportUncertaintyPolicyReleaseUseStatus: "submitted_training_export_uncertainty_policy_active",
+          labelUncertaintyDownweightingPolicy:
+            "exact_policy_backed_downweighting_for_uncertainty_flagged_high_spread_thin_coverage_and_low_margin_training_rows",
+          labelUncertaintyDownweightingPolicyId: "training-export-uncertainty-policy-release-artifact-submitted",
+          uncertaintyThresholdsApplied: trainingExportUncertaintyThresholds,
+          labelUncertaintyDownweightingRules: trainingExportDownweightRules,
           pairwiseMarginThresholdPolicy: "pairwise_margin_threshold_0_20_with_continuous_weights",
           lowMarginHandlingPolicy: "low_margin_pairs_retained_with_downweighting_and_flags",
           humanTargetTiePolicy: "human_ties_excluded_from_pairwise_preferences",
@@ -8961,6 +9099,20 @@ test("submitted label, corpus, training, and export manifests are checked agains
   assert.equal(report.releaseArtifactEvidence.labelSnapshotEvidence.status, "submitted_label_snapshot_matches_current_release_target");
   assert.equal(report.releaseArtifactEvidence.corpusManifestEvidence.status, "submitted_corpus_manifest_matches_current_release_counts");
   assert.equal(report.releaseArtifactEvidence.trainingExportEvidence.status, "submitted_training_export_preserves_current_release_policy");
+  assert.equal(report.trainingExport.trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-artifact-submitted");
+  assert.equal(report.trainingExport.trainingExportUncertaintyPolicyEvidence.releaseUseStatus, "submitted_training_export_uncertainty_policy_active");
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "trainingExportUncertaintyPolicyId").status,
+    "matches",
+  );
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "uncertaintyThresholdsApplied").status,
+    "matches",
+  );
+  assert.equal(
+    report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "labelUncertaintyDownweightingRules").status,
+    "matches",
+  );
   assert.equal(
     report.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "positionBalancedWeighting.status").status,
     "matches",

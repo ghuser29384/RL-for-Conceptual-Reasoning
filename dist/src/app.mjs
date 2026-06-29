@@ -79,6 +79,63 @@ const activeLearningHandSelectionQuotas = {
   interestingnessSelectedMin: 1,
   promotedPerBatchMin: 1,
 };
+const trainingExportUncertaintyThresholds = {
+  highSpreadPostDiscussionMin: 0.3,
+  highSpreadPreDiscussionMin: 0.35,
+  lowRaterCountMax: 1,
+  lowExpertCountMax: 0,
+  lowPairwiseMarginMax: 0.2,
+  standardWeight: 1,
+  uncertainLabelWeight: 0.5,
+  highSpreadWeight: 0.5,
+  thinCoverageWeight: 0.5,
+  lowPairwiseMarginWeight: 0.5,
+  protectedSplitWeight: 0,
+};
+const trainingExportDownweightRules = {
+  uncertaintyFlaggedLabel: "downweight_to_0_50_preserve_metadata_and_review_before_training",
+  highPostDiscussionSpread: "downweight_to_0_50_and_route_adjudication_before_clean_training",
+  thinRaterCoverage: "downweight_to_0_50_and_route_review_before_training",
+  lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
+  protectedSplit: "exclude_from_training_exports_with_weight_0",
+};
+const rationaleEvidenceSpanMandatoryTriggerClasses = [
+  "score_explanation_triggered",
+  "low_clarity_or_unclear_target",
+  "correctness_sensitive_verification",
+  "dead_weight_or_pseudo_substance",
+  "side_issue_or_single_issue",
+  "post_discussion_revision",
+  "release_critical_adjudication_or_validation",
+];
+const rationaleEvidenceSpanRequirednessThresholds = {
+  lowClarityMax: 0.5,
+  deadWeightMin: 0.7,
+  lowSingleIssueMax: 0.5,
+  overallProductGapMin: 0.25,
+  extremeScoreLowMax: 0.1,
+  extremeScoreHighMin: 0.9,
+};
+const rationaleEvidenceSpanCoverageRules = {
+  scoreExplanationTriggered: "rating_with_required_score_explanation_requires_at_least_one_locked_hidden_span_or_post_lock_span",
+  lowClarityOrUnclearTarget: "unclear_target_or_clarity_below_0_50_requires_span_linked_to_attacked_claim_or_unclear_language",
+  correctnessSensitiveVerification: "correctness_verification_requires_span_linked_to_wrong_claim_or_critique_support",
+  deadWeightOrPseudoSubstance: "dead_weight_or_content_free_pseudo_substance_requires_span_linked_to_dead_weight_span",
+  sideIssueOrSingleIssue: "side_issue_or_low_single_issue_requires_span_linked_to_side_issue_or_attacked_claim",
+  postDiscussionRevision: "post_discussion_revision_requires_post_lock_or_adjudication_visible_span_linked_to_changed_claim",
+  protectedVisibility: "spans_for_initial_ratings_must_hide_raw_text_and remain hidden_until_initial_rating_lock",
+};
+const rationaleEvidenceSpanLinkCategories = [
+  ...RUBRIC_DIMENSIONS,
+  "attacked_claim",
+  "critique_support",
+  "wrong_claim",
+  "dead_weight_span",
+  "side_issue",
+  "unclear_language",
+  "unclear_text",
+];
+const rationaleEvidenceSpanVisibilityStates = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
 const comparabilityTierThresholds = {
   method_preserving: { pass: { sourceCriticalCoreGatePassCountMin: 5, requiredMetricFamilyCountMin: 2 }, partial: { sourceCriticalCoreGatePassCountMin: 4, requiredMetricFamilyCountMin: 1 }, fail: { sourceCriticalCoreGatePassCountMax: 3 } },
   corpus_scale_comparable: { pass: { positionsWithAtLeastOneCritiqueMin: 442, critiquesMin: 951, ratingsIgnoringRevisionsMin: 1458 }, partial: { positionsWithAtLeastOneCritiqueMin: 120, critiquesMin: 360, blindInitialRatingsMin: 1440 }, fail: { positionsWithAtLeastOneCritiqueMax: 119 } },
@@ -855,6 +912,55 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "training-export-uncertainty-policy",
+    label: "Training Export Uncertainty Policy",
+    endpoint: () => "/api/v1/training-export-uncertainty-policies",
+    resourceKey: "trainingExportUncertaintyPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exact uncertainty thresholds, downweight rules, and protected-split exclusions before training export claims.",
+    payload: () => ({
+      trainingExportUncertaintyPolicy: {
+        id: `training-export-uncertainty-policy-${releaseId}`,
+        policyVersion: "training-export-uncertainty-rlhf90-v1",
+        thresholds: trainingExportUncertaintyThresholds,
+        downweightRules: trainingExportDownweightRules,
+        labelMetadataRule:
+          "Training exports must preserve rater-count, expert-count, spread, uncertainty-flag, disagreement-taxonomy, and label-status metadata before applying downstream weights.",
+        protectedSplitRule:
+          "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
+        lmcaSourceBoundary:
+          "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "rationale-evidence-span-requiredness-policy",
+    label: "Rationale Span Requiredness Policy",
+    endpoint: () => "/api/v1/rationale-evidence-span-requiredness-policies",
+    resourceKey: "rationaleEvidenceSpanRequirednessPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exactly when span-linked rationale evidence is mandatory rather than optional.",
+    payload: () => ({
+      rationaleEvidenceSpanRequirednessPolicy: {
+        id: `rationale-evidence-span-requiredness-policy-${releaseId}`,
+        policyVersion: "rationale-evidence-span-requiredness-rlhf90-v1",
+        mandatoryTriggerClasses: rationaleEvidenceSpanMandatoryTriggerClasses,
+        thresholds: rationaleEvidenceSpanRequirednessThresholds,
+        coverageRules: rationaleEvidenceSpanCoverageRules,
+        requiredLinkCategories: rationaleEvidenceSpanLinkCategories,
+        allowedVisibilityStates: rationaleEvidenceSpanVisibilityStates,
+        coverageManifestRule:
+          "Every mandatory rating or adjudication trigger must have at least one span id linked to the active policy before release-critical rationale evidence is complete.",
+        protectedVisibilityRule:
+          "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
+        lmcaSourceBoundary:
+          "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "training-export-artifact",
     label: "Training Export Artifact",
     endpoint: () => "/api/v1/training-exports",
@@ -870,9 +976,103 @@ const workflowTemplates = [
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
         targetLabelVersion: "initial_mean",
         targetFields: ["overall", "centrality_x_strength"],
-        pairwiseMarginThreshold: 0.2,
-        lowMarginHandling: "retain_continuous_weight_and_flag_below_threshold",
+        exportKind: "model_improvement_training_export",
         promptTrackExposurePolicy: "project_full_rubric_training",
+        pairwiseComparisonSnapshotId: `training-pairwise-${releaseId}`,
+        pairwiseComparisonSnapshotStatus: "computed_pairwise_snapshot_used",
+        positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
+        trainingExportUncertaintyPolicyId: `training-export-uncertainty-policy-${releaseId}`,
+        trainingExportUncertaintyPolicyReleaseUseStatus: "submitted_training_export_uncertainty_policy_active",
+        labelUncertaintyDownweightingPolicy:
+          "exact_policy_backed_downweighting_for_uncertainty_flagged_high_spread_thin_coverage_and_low_margin_training_rows",
+        labelUncertaintyDownweightingPolicyId: `training-export-uncertainty-policy-${releaseId}`,
+        uncertaintyThresholdsApplied: trainingExportUncertaintyThresholds,
+        labelUncertaintyDownweightingRules: trainingExportDownweightRules,
+        pairwiseMarginThresholdPolicy: "pairwise_margin_threshold_0_20_with_continuous_weights",
+        lowMarginHandlingPolicy: "low_margin_pairs_retained_with_downweighting_and_flags",
+        humanTargetTiePolicy: "human_ties_excluded_from_pairwise_preferences",
+        modelPredictionIndifferencePolicy: "model_indifference_costs_half_margin",
+        lowClarityPolicy: "low_clarity_rows_keep_clarity_and_overall_with_provisional_subscores",
+        rationaleInclusionPolicy: "rationales_included_only_when_rights_and_release_policy_allow",
+        promptExampleContaminationCheck: "protected_and_hidden_prompt_examples_excluded_from_training_export",
+        releaseRightsEligibilitySummary: "rights_cleared_public_train_only",
+        positionBalancedWeighting: {
+          policy: "average_or_sample_within_position_before_cross_position_training_weighting",
+          status: "position_balanced_training_weights_complete",
+          pointwiseRowsByPosition: { "pos-ai-prior": 2 },
+          pairwiseRowsByPosition: { "pos-ai-prior": 1 },
+          pointwiseWeightSumByPosition: { "pos-ai-prior": 1 },
+        },
+        itemTextVersionHashManifest: {
+          itemTextVersionIds: ["ctv-ai-base-rate-v1", "ctv-ai-generic-v1", "ptv-ai-prior-v1"],
+          rows: [
+            {
+              itemId: "pos-ai-prior::crit-ai-base-rate",
+              positionId: "pos-ai-prior",
+              critiqueId: "crit-ai-base-rate",
+              positionTextVersionId: "ptv-ai-prior-v1",
+              critiqueTextVersionId: "ctv-ai-base-rate-v1",
+              positionCanonicalHash: "sha256:ptv-ai-prior-v1:canonical",
+              critiqueCanonicalHash: "sha256:ctv-ai-base-rate-v1:canonical",
+            },
+            {
+              itemId: "pos-ai-prior::crit-ai-generic",
+              positionId: "pos-ai-prior",
+              critiqueId: "crit-ai-generic",
+              positionTextVersionId: "ptv-ai-prior-v1",
+              critiqueTextVersionId: "ctv-ai-generic-v1",
+              positionCanonicalHash: "sha256:ptv-ai-prior-v1:canonical",
+              critiqueCanonicalHash: "sha256:ctv-ai-generic-v1:canonical",
+            },
+          ],
+        },
+        ratingContextSnapshotManifest: {
+          snapshotIds: ["rc-target-only-1", "rc-target-only-ai-generic"],
+          rows: [
+            {
+              id: "rc-target-only-1",
+              positionId: "pos-ai-prior",
+              policy: "target_only",
+              visibleCritiqueIds: ["crit-ai-base-rate"],
+              priorSiblingCritiqueIds: [],
+              orderPolicy: "single_target_no_sibling_context",
+              siblingExposurePattern: "none",
+              humanModelParityStatus: "matchable_target_only",
+            },
+            {
+              id: "rc-target-only-ai-generic",
+              positionId: "pos-ai-prior",
+              policy: "target_only",
+              visibleCritiqueIds: ["crit-ai-generic"],
+              priorSiblingCritiqueIds: [],
+              orderPolicy: "single_target_no_sibling_context",
+              siblingExposurePattern: "none",
+              humanModelParityStatus: "matchable_target_only",
+            },
+          ],
+        },
+        labelMetadataManifest: {
+          rows: [
+            {
+              itemId: "pos-ai-prior::crit-ai-base-rate",
+              labelStatus: "initial_only",
+              raterCount: 2,
+              expertCount: 2,
+              spreadPreDiscussion: 0.04,
+              spreadPostDiscussion: 0.04,
+              unresolvedDisagreementClass: "none_recorded",
+            },
+            {
+              itemId: "pos-ai-prior::crit-ai-generic",
+              labelStatus: "initial_only",
+              raterCount: 1,
+              expertCount: 1,
+              spreadPreDiscussion: 0,
+              spreadPostDiscussion: 0,
+              unresolvedDisagreementClass: "review_before_training",
+            },
+          ],
+        },
         protectedSplitExclusionProof: "position_cluster_isolation_checked",
         createdBy: state.session?.user?.id ?? "demo-admin",
         timestamp: new Date().toISOString(),
@@ -4564,10 +4764,13 @@ function exportsPanel(manifests, labelSnapshot, trainingExport, labelChannelSepa
           ${metricCard("Pairwise preferences", String(trainingExport.counts.pairwisePreferenceExamples), humanize(trainingExport.optimizedSurrogateObjective.pairwise))}
           ${metricCard("Protected exclusion", humanize(trainingExport.protectedSplitPolicy.positionClusterIsolationStatus), trainingExport.protectedSplitPolicy.excludedSplits.join(", "))}
           ${metricCard("Prompt track", humanize(trainingExport.promptTrackExposure), "training exposure")}
+          ${metricCard("Uncertainty policy", humanize(trainingExport.trainingExportUncertaintyPolicyReleaseUseStatus), trainingExport.trainingExportUncertaintyPolicyId)}
         </div>
         ${metricList([
           ["Label snapshot", trainingExport.labelSnapshotId],
           ["Target label", humanize(trainingExport.targetLabelVersion)],
+          ["Downweighted pointwise", String(trainingExport.counts.uncertaintyDownweightedPointwiseExamples ?? 0)],
+          ["Downweighted pairwise", String(trainingExport.counts.uncertaintyDownweightedPairwisePreferences ?? 0)],
           ["Hidden excluded", trainingExport.protectedSplitPolicy.hiddenBenchmarkExcluded ? "yes" : "no"],
           ["Validation excluded", trainingExport.protectedSplitPolicy.internalValidationExcluded ? "yes" : "no"],
           ["Pairwise snapshot", trainingExport.pairwiseComparisonSnapshot.id],

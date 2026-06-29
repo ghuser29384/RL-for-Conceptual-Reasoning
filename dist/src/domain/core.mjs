@@ -4269,15 +4269,23 @@ export function buildTrainingExport(
 ) {
   const includedSplits = options.includedSplits ?? ["public_train"];
   const excludedSplits = options.excludedSplits ?? ["public_dev", "internal_validation", "hidden_benchmark", "stress_test"];
+  const uncertaintyPolicyEvidence = buildTrainingExportUncertaintyPolicyEvidenceReport(releaseId, options.trainingExportUncertaintyPolicies ?? []);
+  const activeUncertaintyPolicy = uncertaintyPolicyEvidence.activePolicy;
+  const uncertaintyThresholdsApplied = trainingExportUncertaintyThresholdValues(activeUncertaintyPolicy);
   const includedPositions = positionList.filter((position) => includedSplits.includes(position.split));
   const excludedPositions = positionList.filter((position) => excludedSplits.includes(position.split));
   const includedPositionIds = new Set(includedPositions.map((position) => position.id));
   const includedCritiques = critiqueList.filter((critique) => includedPositionIds.has(critique.positionId));
   const includedCritiqueIds = new Set(includedCritiques.map((critique) => critique.id));
   const includedRatings = ratings.filter((rating) => includedPositionIds.has(rating.positionId) && includedCritiqueIds.has(rating.critiqueId));
-  const pointwiseExamples = applyPositionBalancedPointwiseWeights(includedCritiques
-    .map((critique) => buildPointwiseTrainingExample(critique, positionList, labelSnapshot, includedRatings, contextSnapshots))
-    .filter(Boolean));
+  const pointwiseExamples = applyTrainingExportUncertaintyPointwiseWeights(
+    applyPositionBalancedPointwiseWeights(
+      includedCritiques
+        .map((critique) => buildPointwiseTrainingExample(critique, positionList, labelSnapshot, includedRatings, contextSnapshots))
+        .filter(Boolean),
+    ),
+    activeUncertaintyPolicy,
+  );
   const positionToOveralls = Object.fromEntries(
     includedPositions.map((position) => [
       position.id,
@@ -4305,6 +4313,7 @@ export function buildTrainingExport(
     const overallB = itemB.weightedMeanScores.overall;
     const preferred = overallA > overallB ? edge.critiqueA : edge.critiqueB;
     const pairwiseMargin = round(Math.abs(overallA - overallB));
+    const uncertaintyAssessment = trainingExportPairwiseUncertaintyAssessment(itemA, itemB, pairwiseMargin, activeUncertaintyPolicy);
     return {
       id: `pref-${edge.positionId}-${edge.critiqueA}-${edge.critiqueB}`,
       positionId: edge.positionId,
@@ -4320,13 +4329,14 @@ export function buildTrainingExport(
       },
       pairwiseMargin,
       marginBin: edge.marginBin,
-      lowMarginFlag: pairwiseMargin < (options.lowMarginThreshold ?? 0.2),
-      labelUncertaintyClass:
-        itemA.uncertaintyFlag || itemB.uncertaintyFlag
-          ? "review_before_training"
-          : pairwiseMargin < (options.lowMarginThreshold ?? 0.2)
-            ? "low_margin_downweight"
-            : "standard_weighted_preference",
+      lowMarginFlag: pairwiseMargin < uncertaintyThresholdsApplied.lowPairwiseMarginMax,
+      labelUncertaintyClass: uncertaintyAssessment.uncertaintyDownweightReasons.some((reason) => reason.includes("uncertainty_flagged"))
+        ? "review_before_training"
+        : pairwiseMargin < uncertaintyThresholdsApplied.lowPairwiseMarginMax
+          ? "low_margin_downweight"
+          : "standard_weighted_preference",
+      ...uncertaintyAssessment,
+      uncertaintyAdjustedPreferenceWeight: round(pairwiseMargin * uncertaintyAssessment.uncertaintyWeight),
     };
   }));
   const scalarRewardTargets = pointwiseExamples.map((example) => ({
@@ -4339,6 +4349,11 @@ export function buildTrainingExport(
     singleIssueDiagnosticTarget: example.scores.single_issue,
     positionBalancedWeight: example.positionBalancedWeight,
     normalizedPositionBalancedWeight: example.normalizedPositionBalancedWeight,
+    uncertaintyWeight: example.uncertaintyWeight,
+    trainingWeight: example.trainingWeight,
+    trainingExportUncertaintyPolicyId: example.trainingExportUncertaintyPolicyId,
+    uncertaintyDownweightStatus: example.uncertaintyDownweightStatus,
+    uncertaintyDownweightReasons: example.uncertaintyDownweightReasons,
     rewardPolicy: "overall_and_cent_x_strength_separate_dead_weight_badness_not_personal_agreement",
   }));
   const positionBalancedWeighting = buildTrainingExportPositionBalancedWeighting(pointwiseExamples, pairwisePreferenceExamples);
@@ -4379,7 +4394,17 @@ export function buildTrainingExport(
       includedRatings: includedRatings.length,
       includedPositions: includedPositions.length,
       excludedProtectedPositions: excludedPositions.length,
+      uncertaintyDownweightedPointwiseExamples: pointwiseExamples.filter((example) => example.uncertaintyWeight < uncertaintyThresholdsApplied.standardWeight).length,
+      uncertaintyDownweightedPairwisePreferences: pairwisePreferenceExamples.filter((example) => example.uncertaintyWeight < uncertaintyThresholdsApplied.standardWeight).length,
     },
+    trainingExportUncertaintyPolicyEvidence: uncertaintyPolicyEvidence,
+    trainingExportUncertaintyPolicyId: activeUncertaintyPolicy.id,
+    trainingExportUncertaintyPolicyReleaseUseStatus: uncertaintyPolicyEvidence.releaseUseStatus,
+    labelUncertaintyDownweightingPolicyId: activeUncertaintyPolicy.id,
+    labelUncertaintyDownweightingPolicy:
+      "exact_policy_backed_downweighting_for_uncertainty_flagged_high_spread_thin_coverage_and_low_margin_training_rows",
+    labelUncertaintyDownweightingRules: activeUncertaintyPolicy.downweightRules,
+    uncertaintyThresholdsApplied,
     positionBalancedWeighting,
     ratingContextSnapshots: contextSnapshots.filter((snapshot) => includedPositionIds.has(snapshot.positionId)),
     pairwiseComparisonSnapshot,
@@ -4437,13 +4462,16 @@ function applyPositionBalancedPairwiseWeights(examples) {
   return examples.map((example) => {
     const positionPairCount = rowsByPosition[example.positionId] ?? 1;
     const positionBalancedPairWeight = 1 / positionPairCount;
+    const effectivePreferenceWeight = Number.isFinite(example.uncertaintyAdjustedPreferenceWeight)
+      ? example.uncertaintyAdjustedPreferenceWeight
+      : example.preferenceWeight;
     return {
       ...example,
       positionPairCount,
       positionBalancedPairWeight: round(positionBalancedPairWeight),
-      positionBalancedPreferenceWeight: round(example.preferenceWeight * positionBalancedPairWeight),
+      positionBalancedPreferenceWeight: round(effectivePreferenceWeight * positionBalancedPairWeight),
       normalizedPositionBalancedPreferenceWeight: scoredPairwisePositionCount
-        ? round((example.preferenceWeight * positionBalancedPairWeight) / scoredPairwisePositionCount)
+        ? round((effectivePreferenceWeight * positionBalancedPairWeight) / scoredPairwisePositionCount)
         : 0,
       positionBalancedWeightingPolicy: "average_pairwise_edges_within_position_before_cross_position_training_weighting",
     };
@@ -12385,7 +12413,7 @@ export function buildSubmittedReleaseArtifactEvidence(
       corpusManifestRule:
         "Submitted CorpusManifest artifacts must match current position, critique, and blind-initial denominator counts rather than merely existing in workflow storage.",
       trainingExportRule:
-        "Submitted TrainingExport artifacts must point to the active or submitted label snapshot and preserve protected-split exclusions.",
+        "Submitted TrainingExport artifacts must point to the active or submitted label snapshot, preserve protected-split exclusions, and bind the active uncertainty/downweighting policy.",
       exportManifestRule:
         "Submitted public ExportManifest artifacts must preserve public split scope, rights-only policy, hidden-benchmark exclusion, and label-snapshot linkage.",
     },
@@ -12837,6 +12865,8 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
   const submittedWeighting = submitted?.positionBalancedWeighting ?? submitted?.positionBalancedWeightingSummary ?? {};
   const submittedWeightingPolicy = submitted?.positionBalancedWeightingPolicy ?? submittedWeighting.policy;
   const submittedPairwiseSnapshotId = submitted?.pairwiseComparisonSnapshotId ?? submitted?.pairwiseComparisonSnapshot?.id;
+  const submittedUncertaintyPolicyId =
+    submitted?.trainingExportUncertaintyPolicyId ?? submitted?.labelUncertaintyDownweightingPolicyId ?? submitted?.uncertaintyPolicyId;
   const submittedTimestamp = submitted?.timestamp ?? submitted?.createdAt;
   const checks = [
     requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
@@ -12849,6 +12879,12 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
     requiredNonEmptyCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy ?? submitted?.promptTrackExposure),
     requiredManifestCheck("pairwiseComparisonSnapshotId", trainingExport.pairwiseComparisonSnapshot.id, submittedPairwiseSnapshotId),
     requiredManifestCheck("pairwiseComparisonSnapshotStatus", trainingExport.pairwiseComparisonSnapshotStatus, submitted?.pairwiseComparisonSnapshotStatus),
+    requiredManifestCheck("trainingExportUncertaintyPolicyId", trainingExport.trainingExportUncertaintyPolicyId, submittedUncertaintyPolicyId),
+    requiredManifestCheck(
+      "trainingExportUncertaintyPolicyReleaseUseStatus",
+      trainingExport.trainingExportUncertaintyPolicyReleaseUseStatus,
+      submitted?.trainingExportUncertaintyPolicyReleaseUseStatus,
+    ),
     requiredPolicyIncludesCheck("labelUncertaintyDownweightingPolicy", submitted?.labelUncertaintyDownweightingPolicy, ["uncertainty"]),
     requiredPolicyIncludesCheck("pairwiseMarginThresholdPolicy", submitted?.pairwiseMarginThresholdPolicy, ["margin"]),
     requiredPolicyIncludesCheck("lowMarginHandlingPolicy", submitted?.lowMarginHandlingPolicy, ["low", "margin"]),
@@ -12858,6 +12894,12 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
     requiredPolicyIncludesCheck("rationaleInclusionPolicy", submitted?.rationaleInclusionPolicy, ["rationale"]),
     requiredPolicyIncludesAnyCheck("promptExampleContaminationCheck", submitted?.promptExampleContaminationCheck, ["protected", "hidden"]),
     requiredPolicyIncludesCheck("releaseRightsEligibilitySummary", submitted?.releaseRightsEligibilitySummary, ["rights"]),
+    requiredStructuredManifestCheck("uncertaintyThresholdsApplied", trainingExport.uncertaintyThresholdsApplied, submitted?.uncertaintyThresholdsApplied),
+    requiredStructuredManifestCheck(
+      "labelUncertaintyDownweightingRules",
+      trainingExport.labelUncertaintyDownweightingRules,
+      submitted?.labelUncertaintyDownweightingRules,
+    ),
     requiredStructuredManifestCheck(
       "itemTextVersionHashManifest",
       trainingExportItemTextVersionHashManifest(trainingExport),
@@ -17088,6 +17130,33 @@ const RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES = [
   "unclear_text",
 ];
 const RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
+export const RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION = "rationale-evidence-span-requiredness-rlhf90-v1";
+export const REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES = [
+  "score_explanation_triggered",
+  "low_clarity_or_unclear_target",
+  "correctness_sensitive_verification",
+  "dead_weight_or_pseudo_substance",
+  "side_issue_or_single_issue",
+  "post_discussion_revision",
+  "release_critical_adjudication_or_validation",
+];
+export const REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS = {
+  lowClarityMax: 0.5,
+  deadWeightMin: 0.7,
+  lowSingleIssueMax: 0.5,
+  overallProductGapMin: 0.25,
+  extremeScoreLowMax: 0.1,
+  extremeScoreHighMin: 0.9,
+};
+export const REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES = {
+  scoreExplanationTriggered: "rating_with_required_score_explanation_requires_at_least_one_locked_hidden_span_or_post_lock_span",
+  lowClarityOrUnclearTarget: "unclear_target_or_clarity_below_0_50_requires_span_linked_to_attacked_claim_or_unclear_language",
+  correctnessSensitiveVerification: "correctness_verification_requires_span_linked_to_wrong_claim_or_critique_support",
+  deadWeightOrPseudoSubstance: "dead_weight_or_content_free_pseudo_substance_requires_span_linked_to_dead_weight_span",
+  sideIssueOrSingleIssue: "side_issue_or_low_single_issue_requires_span_linked_to_side_issue_or_attacked_claim",
+  postDiscussionRevision: "post_discussion_revision_requires_post_lock_or_adjudication_visible_span_linked_to_changed_claim",
+  protectedVisibility: "spans_for_initial_ratings_must_hide_raw_text_and remain hidden_until_initial_rating_lock",
+};
 const BENCHMARK_SUBMISSION_BUDGET_KEYS = [
   "maxSubmissionsPerWindow",
   "windowHours",
@@ -17370,7 +17439,7 @@ function defaultScoreConfidenceAnnotation(releaseId) {
 function defaultRationaleEvidenceSpan(releaseId) {
   return {
     id: `rationale-evidence-span-${releaseId}`,
-    ratingId: "rating-seed-ai-base-rate-r1",
+    ratingId: "rating-ai-base-rate-b",
     itemTextVersionId: "ctv-ai-base-rate-v1",
     spanTarget: "critique",
     startOffset: 0,
@@ -17382,6 +17451,25 @@ function defaultRationaleEvidenceSpan(releaseId) {
     hiddenUntilInitialRatingLock: true,
     rawSelectedTextStored: false,
     timestamp: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRationaleEvidenceSpanRequirednessPolicy(releaseId) {
+  return {
+    id: `rationale-evidence-span-requiredness-policy-${releaseId}`,
+    policyVersion: RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+    mandatoryTriggerClasses: REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
+    thresholds: REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+    coverageRules: REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
+    requiredLinkCategories: RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES,
+    allowedVisibilityStates: RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES,
+    coverageManifestRule:
+      "Every mandatory rating or adjudication trigger must have at least one span id linked to the active policy before release-critical rationale evidence is complete.",
+    protectedVisibilityRule:
+      "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
+    lmcaSourceBoundary:
+      "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -17504,10 +17592,17 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     .map((annotation) => normalizeScoreConfidenceAnnotation(annotation, "submitted_workflow_score_confidence_annotation"))
     .filter(Boolean);
   const seedConfidenceRows = [normalizeScoreConfidenceAnnotation(defaultScoreConfidenceAnnotation(releaseId), "seed_score_confidence_annotation")];
+  const rationaleSpanRequirednessPolicyEvidence = buildRationaleEvidenceSpanRequirednessPolicyEvidenceReport(
+    releaseId,
+    options.rationaleEvidenceSpanRequirednessPolicies ?? [],
+  );
+  const activeRationaleSpanRequirednessPolicy = rationaleSpanRequirednessPolicyEvidence.activePolicy;
   const submittedRationaleSpanRows = (options.rationaleEvidenceSpans ?? [])
-    .map((span) => normalizeRationaleEvidenceSpan(span, "submitted_workflow_rationale_evidence_span"))
+    .map((span) => normalizeRationaleEvidenceSpan(span, "submitted_workflow_rationale_evidence_span", activeRationaleSpanRequirednessPolicy))
     .filter(Boolean);
-  const seedRationaleSpanRows = [normalizeRationaleEvidenceSpan(defaultRationaleEvidenceSpan(releaseId), "seed_rationale_evidence_span")];
+  const seedRationaleSpanRows = [
+    normalizeRationaleEvidenceSpan(defaultRationaleEvidenceSpan(releaseId), "seed_rationale_evidence_span", activeRationaleSpanRequirednessPolicy),
+  ];
   const submittedScratchpadRows = (options.samePositionScratchpads ?? [])
     .map((scratchpad) => normalizeSamePositionScratchpad(scratchpad, "submitted_workflow_same_position_scratchpad"))
     .filter(Boolean);
@@ -17538,6 +17633,12 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ["rating_draft_session", submittedDraftRows.length ? submittedDraftRows : seedDraftRows],
     ["correctness_claim_weight_worksheet", submittedWorksheetRows.length ? submittedWorksheetRows : seedWorksheetRows],
     ["score_confidence_annotation", submittedConfidenceRows.length ? submittedConfidenceRows : seedConfidenceRows],
+    [
+      "rationale_evidence_span_requiredness_policy",
+      rationaleSpanRequirednessPolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("submitted_")).length
+        ? rationaleSpanRequirednessPolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("submitted_"))
+        : rationaleSpanRequirednessPolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("seed_")),
+    ],
     ["rationale_evidence_span", submittedRationaleSpanRows.length ? submittedRationaleSpanRows : seedRationaleSpanRows],
     ["same_position_scratchpad", submittedScratchpadRows.length ? submittedScratchpadRows : seedScratchpadRows],
     ["same_position_batch_review", submittedBatchReviewRows.length ? submittedBatchReviewRows : seedBatchReviewRows],
@@ -17560,6 +17661,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ...submittedWorksheetRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "correctness_claim_weight_worksheet", artifactId: row.id, reason }))),
     ...submittedRetentionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "protected_artifact_retention_record", artifactId: row.id, reason }))),
     ...submittedConfidenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "score_confidence_annotation", artifactId: row.id, reason }))),
+    ...rationaleSpanRequirednessPolicyEvidence.reviewRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "rationale_evidence_span_requiredness_policy", artifactId: row.id, reason })),
+    ),
     ...submittedRationaleSpanRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rationale_evidence_span", artifactId: row.id, reason }))),
     ...submittedScratchpadRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_scratchpad", artifactId: row.id, reason }))),
     ...submittedBatchReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review", artifactId: row.id, reason }))),
@@ -17587,6 +17691,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedWorksheetRows.length > 0 &&
     submittedRetentionRows.length > 0 &&
     submittedConfidenceRows.length > 0 &&
+    rationaleSpanRequirednessPolicyEvidence.counts.submittedPolicyCount > 0 &&
     submittedRationaleSpanRows.length > 0 &&
     submittedScratchpadRows.length > 0 &&
     submittedBatchReviewRows.length > 0 &&
@@ -17607,6 +17712,12 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     requiredItemIssueQuarantineSlaHoursBySeverity: REQUIRED_ITEM_ISSUE_QUARANTINE_SLA_HOURS,
     requiredItemIssueQuarantineActionRequirementBySeverity: REQUIRED_ITEM_ISSUE_QUARANTINE_ACTION_REQUIREMENTS,
     requiredProtectedArtifactTypes: REQUIRED_PROTECTED_ARTIFACT_TYPES,
+    rationaleEvidenceSpanRequirednessPolicyEvidence: rationaleSpanRequirednessPolicyEvidence,
+    rationaleEvidenceSpanRequirednessPolicyId: rationaleSpanRequirednessPolicyEvidence.activePolicyId,
+    rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus: rationaleSpanRequirednessPolicyEvidence.releaseUseStatus,
+    requiredRationaleEvidenceSpanMandatoryTriggerClasses: REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
+    requiredRationaleEvidenceSpanRequirednessThresholds: REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+    requiredRationaleEvidenceSpanCoverageRules: REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
     allowedRationaleEvidenceSpanLinkCategories: RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES,
     allowedRationaleEvidenceSpanVisibilityStates: RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES,
     taskOutputEligibilityPolicyRows: [...seedTaskOutputRows, ...submittedTaskOutputRows],
@@ -17646,6 +17757,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedProtectedArtifactRetentionRecordCount: submittedRetentionRows.length,
       submittedScoreConfidenceAnnotationCount: submittedConfidenceRows.length,
       submittedRaterScoreConfidenceCount: submittedConfidenceRows.length,
+      submittedRationaleEvidenceSpanRequirednessPolicyCount: rationaleSpanRequirednessPolicyEvidence.counts.submittedPolicyCount,
       submittedRationaleEvidenceSpanCount: submittedRationaleSpanRows.length,
       submittedSamePositionScratchpadCount: submittedScratchpadRows.length,
       submittedSamePositionBatchReviewCount: submittedBatchReviewRows.length,
@@ -18221,7 +18333,90 @@ function normalizeScoreConfidenceAnnotation(annotation, rowSource) {
   };
 }
 
-function normalizeRationaleEvidenceSpan(span, rowSource) {
+function normalizeRationaleEvidenceSpanRequirednessPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.rationaleEvidenceSpanRequirednessPolicyId;
+  if (!id) return null;
+  const mandatoryTriggerClasses = normalizeStringArray(policy.mandatoryTriggerClasses);
+  const thresholds = policy.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  const coverageRules = policy.coverageRules && typeof policy.coverageRules === "object" && !Array.isArray(policy.coverageRules) ? policy.coverageRules : {};
+  const requiredLinkCategories = normalizeStringArray(policy.requiredLinkCategories);
+  const allowedVisibilityStates = normalizeStringArray(policy.allowedVisibilityStates);
+  const missingTriggerClasses = REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES.filter((trigger) => !mandatoryTriggerClasses.includes(trigger));
+  const missingThresholdKeys = Object.keys(REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS).filter((key) => !Object.hasOwn(thresholds, key));
+  const missingRuleKeys = Object.keys(REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES).filter((key) => !Object.hasOwn(coverageRules, key));
+  const missingLinkCategories = RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES.filter((category) => !requiredLinkCategories.includes(category));
+  const missingVisibilityStates = RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES.filter((state) => !allowedVisibilityStates.includes(state));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION
+      ? null
+      : `policyVersion:${RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION}`,
+    missingTriggerClasses.length ? `mandatoryTriggerClasses:${missingTriggerClasses.join(",")}` : null,
+    missingThresholdKeys.length ? `thresholds:${missingThresholdKeys.join(",")}` : null,
+    stableJsonKey(thresholds) === stableJsonKey(REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS) ? null : "thresholds",
+    missingRuleKeys.length ? `coverageRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(coverageRules) === stableJsonKey(REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES) ? null : "coverageRules",
+    missingLinkCategories.length ? `requiredLinkCategories:${missingLinkCategories.join(",")}` : null,
+    missingVisibilityStates.length ? `allowedVisibilityStates:${missingVisibilityStates.join(",")}` : null,
+    policyMentions(policy.coverageManifestRule, ["mandatory", "span id", "active policy"]) ? null : "coverageManifestRule",
+    policyMentions(policy.protectedVisibilityRule, ["raw selected text", "locked_initial_hidden"]) ? null : "protectedVisibilityRule",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "lmca"]) ? null : "lmcaSourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    mandatoryTriggerClasses,
+    thresholds,
+    coverageRules,
+    requiredLinkCategories,
+    allowedVisibilityStates,
+    coverageManifestRule: policy.coverageManifestRule ?? null,
+    protectedVisibilityRule: policy.protectedVisibilityRule ?? null,
+    lmcaSourceBoundary: policy.lmcaSourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rationale_evidence_span_requiredness_policy_review_required" : "rationale_evidence_span_requiredness_policy_complete",
+  };
+}
+
+function buildRationaleEvidenceSpanRequirednessPolicyEvidenceReport(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeRationaleEvidenceSpanRequirednessPolicy(policy, "submitted_workflow_rationale_evidence_span_requiredness_policy"))
+    .filter(Boolean);
+  const seedRows = [
+    normalizeRationaleEvidenceSpanRequirednessPolicy(
+      defaultRationaleEvidenceSpanRequirednessPolicy(releaseId),
+      "seed_rationale_evidence_span_requiredness_policy",
+    ),
+  ];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `rationale-evidence-span-requiredness-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredMandatoryTriggerClasses: REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
+    requiredThresholds: REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+    requiredCoverageRules: REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
+    requiredLinkCategories: RATIONALE_EVIDENCE_SPAN_LINK_CATEGORIES,
+    allowedVisibilityStates: RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_rationale_evidence_span_requiredness_policy_active"
+      : reviewRows.length
+        ? "submitted_rationale_evidence_span_requiredness_policy_review_required"
+        : "submitted_rationale_evidence_span_requiredness_policy_active",
+  };
+}
+
+function normalizeRationaleEvidenceSpan(span, rowSource, activeRequirednessPolicy = null) {
   const id = span?.id ?? span?.spanId ?? span?.rationaleEvidenceSpanId;
   if (!id) return null;
   const spanTarget = span.spanTarget ?? span.target ?? null;
@@ -18229,6 +18424,8 @@ function normalizeRationaleEvidenceSpan(span, rowSource) {
   const endOffset = Number(span.endOffset ?? span.end ?? span.characterEndOffset);
   const linkedDimensionOrFlag = span.linkedDimensionOrFlag ?? span.dimensionOrFlagLinked ?? span.dimension ?? span.flagKey ?? null;
   const visibilityState = span.visibilityState ?? null;
+  const requirednessPolicyId = span.rationaleEvidenceSpanRequirednessPolicyId ?? span.requirednessPolicyId ?? null;
+  const mandatoryTriggerClass = span.mandatoryTriggerClass ?? span.requirednessTriggerClass ?? null;
   const reviewReasons = [
     span.ratingId || span.adjudicationMemoId ? null : "ratingIdOrAdjudicationMemoId",
     requiredPromptFieldReason("itemTextVersionId", span.itemTextVersionId),
@@ -18241,6 +18438,12 @@ function normalizeRationaleEvidenceSpan(span, rowSource) {
     RATIONALE_EVIDENCE_SPAN_VISIBILITY_STATES.includes(visibilityState) ? null : "visibilityState",
     span.hiddenUntilInitialRatingLock === true ? null : "hiddenUntilInitialRatingLock",
     span.rawSelectedTextStored === false ? null : "rawSelectedTextStored",
+    requirednessPolicyId && activeRequirednessPolicy?.id && requirednessPolicyId !== activeRequirednessPolicy.id
+      ? "rationaleEvidenceSpanRequirednessPolicyId"
+      : null,
+    mandatoryTriggerClass && !REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES.includes(mandatoryTriggerClass)
+      ? "mandatoryTriggerClass"
+      : null,
     requiredPromptFieldReason("timestamp", span.timestamp ?? span.createdAt),
   ].filter(Boolean);
   return {
@@ -18258,6 +18461,8 @@ function normalizeRationaleEvidenceSpan(span, rowSource) {
     visibilityState,
     hiddenUntilInitialRatingLock: span.hiddenUntilInitialRatingLock === true,
     rawSelectedTextStored: span.rawSelectedTextStored === true,
+    rationaleEvidenceSpanRequirednessPolicyId: requirednessPolicyId,
+    mandatoryTriggerClass,
     reviewReasons,
     status: reviewReasons.length ? "rationale_evidence_span_review_required" : "rationale_evidence_span_complete",
   };
@@ -22217,7 +22422,10 @@ export function buildOctoberReleaseReport(
     submittedTextArtifacts.critiqueList,
     ratings,
     effectiveRatingContextSnapshots,
-    { pairwiseComparisonSnapshots: options.pairwiseComparisonSnapshots ?? [] },
+    {
+      pairwiseComparisonSnapshots: options.pairwiseComparisonSnapshots ?? [],
+      trainingExportUncertaintyPolicies: options.trainingExportUncertaintyPolicies ?? [],
+    },
   );
   const publicExportManifest = createExportManifest("public", releaseId, positionList, critiqueList, labelSnapshot);
   const labelChannelSeparation = buildLabelChannelSeparationReport(releaseId, labelSnapshot, trainingExport, certification, rubricQaCoverage);
@@ -22329,6 +22537,7 @@ export function buildOctoberReleaseReport(
     protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
     scoreConfidenceAnnotations: options.scoreConfidenceAnnotations ?? [],
     raterScoreConfidences: options.raterScoreConfidences ?? [],
+    rationaleEvidenceSpanRequirednessPolicies: options.rationaleEvidenceSpanRequirednessPolicies ?? [],
     rationaleEvidenceSpans: options.rationaleEvidenceSpans ?? [],
     samePositionScratchpads: options.samePositionScratchpads ?? [],
     samePositionBatchReviews: options.samePositionBatchReviews ?? [],
@@ -22553,6 +22762,7 @@ export function buildOctoberReleaseReport(
       validationTrancheEvidenceRecords: options.validationTrancheEvidenceRecords ?? options.validationTrancheEvidence ?? [],
       leaderboards: options.leaderboards ?? [],
       modelFailureAudits: options.modelFailureAudits ?? [],
+      trainingExportUncertaintyPolicies: options.trainingExportUncertaintyPolicies ?? [],
     },
     workflowReleaseArtifacts: {
       labelSnapshots: options.labelSnapshots ?? [],
@@ -22617,6 +22827,7 @@ export function buildOctoberReleaseReport(
       protectedArtifactRetentionRecords: options.protectedArtifactRetentionRecords ?? [],
       scoreConfidenceAnnotations: options.scoreConfidenceAnnotations ?? [],
       raterScoreConfidences: options.raterScoreConfidences ?? [],
+      rationaleEvidenceSpanRequirednessPolicies: options.rationaleEvidenceSpanRequirednessPolicies ?? [],
       rationaleEvidenceSpans: options.rationaleEvidenceSpans ?? [],
       samePositionScratchpads: options.samePositionScratchpads ?? [],
       samePositionBatchReviews: options.samePositionBatchReviews ?? [],
@@ -23751,6 +23962,181 @@ function normalizeArtifactProbeFamilies(families = []) {
       return [family];
     }),
   );
+}
+
+export const TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION = "training-export-uncertainty-rlhf90-v1";
+export const REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS = {
+  highSpreadPostDiscussionMin: 0.3,
+  highSpreadPreDiscussionMin: 0.35,
+  lowRaterCountMax: 1,
+  lowExpertCountMax: 0,
+  lowPairwiseMarginMax: 0.2,
+  standardWeight: 1,
+  uncertainLabelWeight: 0.5,
+  highSpreadWeight: 0.5,
+  thinCoverageWeight: 0.5,
+  lowPairwiseMarginWeight: 0.5,
+  protectedSplitWeight: 0,
+};
+export const REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES = {
+  uncertaintyFlaggedLabel: "downweight_to_0_50_preserve_metadata_and_review_before_training",
+  highPostDiscussionSpread: "downweight_to_0_50_and_route_adjudication_before_clean_training",
+  thinRaterCoverage: "downweight_to_0_50_and_route_review_before_training",
+  lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
+  protectedSplit: "exclude_from_training_exports_with_weight_0",
+};
+
+function defaultTrainingExportUncertaintyPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `training-export-uncertainty-policy-${releaseId}`,
+    policyVersion: TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+    thresholds: REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+    downweightRules: REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
+    labelMetadataRule:
+      "Training exports must preserve rater-count, expert-count, spread, uncertainty-flag, disagreement-taxonomy, and label-status metadata before applying downstream weights.",
+    protectedSplitRule:
+      "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
+    lmcaSourceBoundary:
+      "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function trainingExportUncertaintyThresholdValues(policy) {
+  const thresholds = policy?.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  return { ...REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS, ...thresholds };
+}
+
+function normalizeTrainingExportUncertaintyPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.trainingExportUncertaintyPolicyId ?? policy?.labelUncertaintyDownweightingPolicyId;
+  if (!id) return null;
+  const thresholds = policy.thresholds && typeof policy.thresholds === "object" && !Array.isArray(policy.thresholds) ? policy.thresholds : {};
+  const downweightRules =
+    policy.downweightRules && typeof policy.downweightRules === "object" && !Array.isArray(policy.downweightRules) ? policy.downweightRules : {};
+  const missingThresholdKeys = Object.keys(REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS).filter((key) => !Object.hasOwn(thresholds, key));
+  const missingRuleKeys = Object.keys(REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES).filter((key) => !Object.hasOwn(downweightRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION
+      ? null
+      : `policyVersion:${TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION}`,
+    missingThresholdKeys.length ? `thresholds:${missingThresholdKeys.join(",")}` : null,
+    stableJsonKey(thresholds) === stableJsonKey(REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS) ? null : "thresholds",
+    missingRuleKeys.length ? `downweightRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(downweightRules) === stableJsonKey(REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES) ? null : "downweightRules",
+    policyMentions(policy.labelMetadataRule, ["rater-count", "spread", "uncertainty"]) ? null : "labelMetadataRule",
+    policyMentions(policy.protectedSplitRule, ["internal validation", "hidden benchmark", "excluded"]) ? null : "protectedSplitRule",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "lmca"]) ? null : "lmcaSourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    thresholds,
+    downweightRules,
+    labelMetadataRule: policy.labelMetadataRule ?? null,
+    protectedSplitRule: policy.protectedSplitRule ?? null,
+    lmcaSourceBoundary: policy.lmcaSourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "training_export_uncertainty_policy_review_required" : "training_export_uncertainty_policy_complete",
+  };
+}
+
+function buildTrainingExportUncertaintyPolicyEvidenceReport(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeTrainingExportUncertaintyPolicy(policy, "submitted_workflow_training_export_uncertainty_policy"))
+    .filter(Boolean);
+  const seedRows = [normalizeTrainingExportUncertaintyPolicy(defaultTrainingExportUncertaintyPolicy(releaseId), "seed_training_export_uncertainty_policy")];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `training-export-uncertainty-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredThresholds: REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+    requiredDownweightRules: REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_training_export_uncertainty_policy_active"
+      : reviewRows.length
+        ? "submitted_training_export_uncertainty_policy_review_required"
+        : "submitted_training_export_uncertainty_policy_active",
+  };
+}
+
+function trainingExportPointwiseUncertaintyAssessment(example, policy) {
+  const thresholds = trainingExportUncertaintyThresholdValues(policy);
+  const reasons = [];
+  const spreadPost = example?.uncertainty?.spreadPostDiscussion;
+  const spreadPre = example?.uncertainty?.spreadPreDiscussion;
+  if (example?.uncertainty?.uncertaintyFlag) reasons.push("uncertainty_flagged_label");
+  if (Number.isFinite(spreadPost) && spreadPost > thresholds.highSpreadPostDiscussionMin) reasons.push("high_post_discussion_spread");
+  if (Number.isFinite(spreadPre) && spreadPre > thresholds.highSpreadPreDiscussionMin) reasons.push("high_pre_discussion_spread");
+  if (Number.isFinite(example?.raterCount) && example.raterCount <= thresholds.lowRaterCountMax) reasons.push("thin_rater_coverage");
+  if (Number.isFinite(example?.expertCount) && example.expertCount <= thresholds.lowExpertCountMax) reasons.push("thin_expert_coverage");
+  const uncertaintyWeight = reasons.length ? thresholds.uncertainLabelWeight : thresholds.standardWeight;
+  return {
+    trainingExportUncertaintyPolicyId: policy.id,
+    labelUncertaintyDownweightingPolicyId: policy.id,
+    uncertaintyWeight: round(uncertaintyWeight),
+    uncertaintyDownweightReasons: reasons,
+    uncertaintyDownweightStatus: reasons.length ? "included_downweighted_uncertain_label" : "included_standard_weight",
+  };
+}
+
+function trainingExportPairwiseUncertaintyAssessment(itemA, itemB, pairwiseMargin, policy) {
+  const thresholds = trainingExportUncertaintyThresholdValues(policy);
+  const reasons = [];
+  const itemReasons = [
+    ...trainingLabelUncertaintyReasons(itemA, "critiqueA", thresholds),
+    ...trainingLabelUncertaintyReasons(itemB, "critiqueB", thresholds),
+  ];
+  reasons.push(...itemReasons);
+  if (Number.isFinite(pairwiseMargin) && pairwiseMargin < thresholds.lowPairwiseMarginMax) reasons.push("low_pairwise_margin");
+  const uncertaintyWeight = reasons.includes("low_pairwise_margin")
+    ? Math.min(thresholds.lowPairwiseMarginWeight, reasons.length > 1 ? thresholds.uncertainLabelWeight : thresholds.standardWeight)
+    : reasons.length
+      ? thresholds.uncertainLabelWeight
+      : thresholds.standardWeight;
+  return {
+    trainingExportUncertaintyPolicyId: policy.id,
+    labelUncertaintyDownweightingPolicyId: policy.id,
+    uncertaintyWeight: round(uncertaintyWeight),
+    uncertaintyDownweightReasons: reasons,
+    uncertaintyDownweightStatus: reasons.length ? "included_downweighted_pairwise_preference" : "included_standard_weight",
+  };
+}
+
+function trainingLabelUncertaintyReasons(label, prefix, thresholds) {
+  const reasons = [];
+  if (label?.uncertaintyFlag) reasons.push(`${prefix}_uncertainty_flagged_label`);
+  if (Number.isFinite(label?.spreadPostDiscussion) && label.spreadPostDiscussion > thresholds.highSpreadPostDiscussionMin) {
+    reasons.push(`${prefix}_high_post_discussion_spread`);
+  }
+  if (Number.isFinite(label?.spreadPreDiscussion) && label.spreadPreDiscussion > thresholds.highSpreadPreDiscussionMin) {
+    reasons.push(`${prefix}_high_pre_discussion_spread`);
+  }
+  if (Number.isFinite(label?.raterCount) && label.raterCount <= thresholds.lowRaterCountMax) reasons.push(`${prefix}_thin_rater_coverage`);
+  if (Number.isFinite(label?.expertCount) && label.expertCount <= thresholds.lowExpertCountMax) reasons.push(`${prefix}_thin_expert_coverage`);
+  return reasons;
+}
+
+function applyTrainingExportUncertaintyPointwiseWeights(examples, policy) {
+  return examples.map((example) => {
+    const assessment = trainingExportPointwiseUncertaintyAssessment(example, policy);
+    return {
+      ...example,
+      ...assessment,
+      trainingWeight: round(example.normalizedPositionBalancedWeight * assessment.uncertaintyWeight),
+    };
+  });
 }
 
 function buildPointwiseTrainingExample(critique, positionList, labelSnapshot, ratings, contextSnapshots) {

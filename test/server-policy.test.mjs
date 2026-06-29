@@ -8,6 +8,15 @@ import { pathToFileURL } from "node:url";
 
 import vercelHealthHandler from "../api/health.mjs";
 import {
+  RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
+  REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
+  REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+  TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+} from "../src/domain/core.mjs";
+import {
   authenticateRequest,
   createAuditEvent,
   createApiContext,
@@ -211,6 +220,65 @@ function activeLearningSelectionPolicy(id = "active-learning-selection-policy-wo
       "Selection policy ids, judge thresholds, reason codes, and model-judge scores remain admin-only before initial rating lock.",
     lmcaSourceBoundary:
       "Project default active-learning thresholds and hand-selection quotas are frozen here; LMCA motivates active-learning denominator audits but does not state these exact platform values.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
+const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+
+function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+    thresholds: trainingExportUncertaintyThresholds,
+    downweightRules: trainingExportDownweightRules,
+    labelMetadataRule:
+      "Training exports must preserve rater-count, expert-count, spread, uncertainty-flag, disagreement-taxonomy, and label-status metadata before applying downstream weights.",
+    protectedSplitRule:
+      "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
+    lmcaSourceBoundary:
+      "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const rationaleEvidenceSpanMandatoryTriggerClasses = REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES;
+const rationaleEvidenceSpanRequirednessThresholds = REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS;
+const rationaleEvidenceSpanCoverageRules = REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES;
+const rationaleEvidenceSpanLinkCategories = [
+  "centrality",
+  "strength",
+  "correctness",
+  "clarity",
+  "dead_weight",
+  "single_issue",
+  "overall",
+  "attacked_claim",
+  "critique_support",
+  "wrong_claim",
+  "dead_weight_span",
+  "side_issue",
+  "unclear_language",
+  "unclear_text",
+];
+const rationaleEvidenceSpanVisibilityStates = ["locked_initial_hidden", "post_lock_visible", "adjudication_visible"];
+
+function rationaleEvidenceSpanRequirednessPolicy(id = "rationale-evidence-span-requiredness-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+    mandatoryTriggerClasses: rationaleEvidenceSpanMandatoryTriggerClasses,
+    thresholds: rationaleEvidenceSpanRequirednessThresholds,
+    coverageRules: rationaleEvidenceSpanCoverageRules,
+    requiredLinkCategories: rationaleEvidenceSpanLinkCategories,
+    allowedVisibilityStates: rationaleEvidenceSpanVisibilityStates,
+    coverageManifestRule:
+      "Every mandatory rating or adjudication trigger must have at least one span id linked to the active policy before release-critical rationale evidence is complete.",
+    protectedVisibilityRule:
+      "Initial-rating spans must store only normalized hashes, hide raw selected text, and remain locked_initial_hidden until initial rating lock.",
+    lmcaSourceBoundary:
+      "Project default requiredness triggers are frozen here; LMCA motivates span-linked rationale evidence but does not state these exact mandatory platform triggers.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1507,9 +1575,12 @@ function completeRatingExperienceWorkflowFixtures() {
       visibleToPeersBeforeLock: false,
       timestamp: "2026-10-01T00:26:30.000Z",
     },
+    rationaleEvidenceSpanRequirednessPolicy: rationaleEvidenceSpanRequirednessPolicy(),
     rationaleEvidenceSpan: {
       id: "rationale-evidence-span-workflow-new",
       ratingId: "rating-seed-ai-base-rate-r1",
+      rationaleEvidenceSpanRequirednessPolicyId: "rationale-evidence-span-requiredness-policy-workflow-new",
+      mandatoryTriggerClass: "score_explanation_triggered",
       itemTextVersionId: "ctv-ai-base-rate-v1",
       spanTarget: "critique",
       startOffset: 0,
@@ -2590,6 +2661,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/model-judge-scores/model-judge-score-smoke"],
     ["POST", "/api/v1/active-learning-selection-policies"],
     ["GET", "/api/v1/active-learning-selection-policies/active-learning-selection-policy-smoke"],
+    ["POST", "/api/v1/training-export-uncertainty-policies"],
+    ["GET", "/api/v1/training-export-uncertainty-policies/training-export-uncertainty-policy-smoke"],
     ["POST", "/api/v1/active-learning-selection-audits"],
     ["GET", "/api/v1/active-learning-selection-audits/selection-audit-smoke"],
     ["POST", "/api/v1/candidate-batches/candidate-batch-smoke/model-judge-scores"],
@@ -2757,6 +2830,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/score-confidence-annotations/score-confidence-annotation-smoke"],
     ["POST", "/api/v1/rater-score-confidences"],
     ["GET", "/api/v1/rater-score-confidences/rater-score-confidence-smoke"],
+    ["POST", "/api/v1/rationale-evidence-span-requiredness-policies"],
+    ["GET", "/api/v1/rationale-evidence-span-requiredness-policies/rationale-requiredness-smoke"],
     ["POST", "/api/v1/rationale-evidence-spans"],
     ["GET", "/api/v1/rationale-evidence-spans/rationale-evidence-span-smoke"],
     ["POST", "/api/v1/same-position-scratchpads"],
@@ -5294,7 +5369,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         promptTrackExposurePolicy: "project_full_rubric_training",
         pairwiseComparisonSnapshotId: "pairwise-snapshot-workflow-new",
         pairwiseComparisonSnapshotStatus: "submitted_pairwise_snapshot_applied",
-        labelUncertaintyDownweightingPolicy: "preserve_label_uncertainty_and_downweight_high_uncertainty_labels",
+        trainingExportUncertaintyPolicyId: "training-export-uncertainty-policy-workflow-new",
+        trainingExportUncertaintyPolicyReleaseUseStatus: "submitted_training_export_uncertainty_policy_active",
+        labelUncertaintyDownweightingPolicy:
+          "exact_policy_backed_downweighting_for_uncertainty_flagged_high_spread_thin_coverage_and_low_margin_training_rows",
+        labelUncertaintyDownweightingPolicyId: "training-export-uncertainty-policy-workflow-new",
+        uncertaintyThresholdsApplied: trainingExportUncertaintyThresholds,
+        labelUncertaintyDownweightingRules: trainingExportDownweightRules,
         pairwiseMarginThresholdPolicy: "pairwise_margin_threshold_0_20_with_continuous_weights",
         lowMarginHandlingPolicy: "low_margin_pairs_retained_with_downweighting_and_flags",
         humanTargetTiePolicy: "human_ties_excluded_from_pairwise_preferences",
@@ -5887,6 +5968,30 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(activeLearningSelectionPolicySubmission.status, 201);
 
+  const driftedTrainingExportUncertaintyPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/training-export-uncertainty-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      trainingExportUncertaintyPolicy: {
+        ...trainingExportUncertaintyPolicy("training-export-uncertainty-policy-drifted"),
+        thresholds: { ...trainingExportUncertaintyThresholds, uncertainLabelWeight: 0.25 },
+      },
+    }),
+  });
+  assert.equal(driftedTrainingExportUncertaintyPolicy.status, 400);
+  assert.match(driftedTrainingExportUncertaintyPolicy.body.detail, /thresholds/);
+
+  const trainingExportUncertaintyPolicySubmission = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/training-export-uncertainty-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      trainingExportUncertaintyPolicy: trainingExportUncertaintyPolicy(),
+    }),
+  });
+  assert.equal(trainingExportUncertaintyPolicySubmission.status, 201);
+
   const incompleteActiveLearningSelectionAudit = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/active-learning-selection-audits",
@@ -5945,6 +6050,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(activeLearningSelectionPolicyById.status, 200);
   assert.deepEqual(activeLearningSelectionPolicyById.body.thresholds, activeLearningSelectionThresholds);
   assert.deepEqual(activeLearningSelectionPolicyById.body.handSelectionQuotas, activeLearningHandSelectionQuotas);
+
+  const trainingExportUncertaintyPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/training-export-uncertainty-policies/training-export-uncertainty-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(trainingExportUncertaintyPolicyById.status, 200);
+  assert.deepEqual(trainingExportUncertaintyPolicyById.body.thresholds, trainingExportUncertaintyThresholds);
+  assert.deepEqual(trainingExportUncertaintyPolicyById.body.downweightRules, trainingExportDownweightRules);
 
   const assignmentFlag = await invokeApi(context, {
     method: "POST",
@@ -9434,6 +9548,31 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(peerVisibleScoreConfidence.status, 400);
   assert.match(peerVisibleScoreConfidence.body.detail, /visibleToPeersBeforeLock/);
 
+  const driftedRationaleRequirednessPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rationale-evidence-span-requiredness-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rationaleEvidenceSpanRequirednessPolicy: {
+        ...ratingExperience.rationaleEvidenceSpanRequirednessPolicy,
+        id: "rationale-evidence-span-requiredness-policy-drifted",
+        thresholds: { ...rationaleEvidenceSpanRequirednessThresholds, lowClarityMax: 0.45 },
+      },
+    }),
+  });
+  assert.equal(driftedRationaleRequirednessPolicy.status, 400);
+  assert.match(driftedRationaleRequirednessPolicy.body.detail, /thresholds/);
+
+  const rationaleRequirednessPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rationale-evidence-span-requiredness-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rationaleEvidenceSpanRequirednessPolicy: ratingExperience.rationaleEvidenceSpanRequirednessPolicy,
+    }),
+  });
+  assert.equal(rationaleRequirednessPolicy.status, 201);
+
   const unsupportedRationaleSpanCategory = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rationale-evidence-spans",
@@ -9981,6 +10120,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(scoreConfidenceById.status, 200);
   assert.equal(scoreConfidenceById.body.excludedFromScoreComputation, true);
+
+  const rationaleRequirednessPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rationale-evidence-span-requiredness-policies/rationale-evidence-span-requiredness-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(rationaleRequirednessPolicyById.status, 200);
+  assert.deepEqual(rationaleRequirednessPolicyById.body.mandatoryTriggerClasses, rationaleEvidenceSpanMandatoryTriggerClasses);
+  assert.deepEqual(rationaleRequirednessPolicyById.body.thresholds, rationaleEvidenceSpanRequirednessThresholds);
 
   const rationaleSpanById = await invokeApi(context, {
     method: "GET",
@@ -13059,6 +13207,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.protectedArtifactRetentionRecords.length, protectedArtifactTypes.length);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.scoreConfidenceAnnotations.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpanRequirednessPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.rationaleEvidenceSpans.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionScratchpads.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviews.length, 1);
@@ -13078,10 +13227,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedProtectedArtifactRetentionRecordCount, protectedArtifactTypes.length);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreConfidenceAnnotationCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRaterScoreConfidenceCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanRequirednessPolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanCount, 1);
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus,
+    "submitted_rationale_evidence_span_requiredness_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRequirednessPolicyId,
+    "rationale-evidence-span-requiredness-policy-workflow-new",
+  );
+  assert.deepEqual(
+    releaseReport.body.ratingExperienceEvidence.requiredRationaleEvidenceSpanMandatoryTriggerClasses,
+    rationaleEvidenceSpanMandatoryTriggerClasses,
+  );
   assert.equal(
     releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRows.at(-1).normalizedSelectedTextHash,
     "sha256:workflow-rationale-evidence-span",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRows.at(-1).rationaleEvidenceSpanRequirednessPolicyId,
+    "rationale-evidence-span-requiredness-policy-workflow-new",
   );
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewCount, 1);
@@ -13408,6 +13574,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowReleaseArtifacts.corpusManifests.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.trainingExports.length, 1);
   assert.equal(releaseReport.body.workflowReleaseArtifacts.exportManifests.length, 1);
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.trainingExportUncertaintyPolicies.length, 1);
   assert.equal(releaseReport.body.releaseArtifactEvidence.releaseUseStatus, "submitted_release_artifacts_match_current_release");
   assert.equal(releaseReport.body.releaseArtifactEvidence.labelSnapshotEvidence.submittedArtifactId, "label-snapshot-workflow-new");
   assert.equal(releaseReport.body.releaseArtifactEvidence.labelSnapshotEvidence.status, "submitted_label_snapshot_matches_current_release_target");
@@ -13417,6 +13584,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.releaseArtifactEvidence.trainingExportEvidence.status, "submitted_training_export_preserves_current_release_policy");
   assert.equal(
     releaseReport.body.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "pairwiseComparisonSnapshotId").status,
+    "matches",
+  );
+  assert.equal(releaseReport.body.trainingExport.trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-workflow-new");
+  assert.equal(releaseReport.body.trainingExport.trainingExportUncertaintyPolicyEvidence.releaseUseStatus, "submitted_training_export_uncertainty_policy_active");
+  assert.deepEqual(releaseReport.body.trainingExport.uncertaintyThresholdsApplied, trainingExportUncertaintyThresholds);
+  assert.equal(
+    releaseReport.body.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "trainingExportUncertaintyPolicyId").status,
+    "matches",
+  );
+  assert.equal(
+    releaseReport.body.releaseArtifactEvidence.trainingExportEvidence.checks.find((check) => check.field === "labelUncertaintyDownweightingRules").status,
     "matches",
   );
   assert.equal(
@@ -13563,7 +13741,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
 	assert.equal(
 	  (await auditStore.readWorkflowEvents()).length,
-	  243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 126 + extendedRaterItemConflictTypes.length,
+	  243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 128 + extendedRaterItemConflictTypes.length,
 	);
 });
 

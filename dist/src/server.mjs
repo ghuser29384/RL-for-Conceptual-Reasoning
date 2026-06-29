@@ -18,12 +18,18 @@ import {
   RATING_ESCALATION_POST_DISCUSSION_MAX_SPREAD_TARGET,
   RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
   RATING_ESCALATION_TRIGGER_RULES,
+  RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
+  REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
   REQUIRED_DISAGREEMENT_ESCALATION_RULES,
   REQUIRED_DISAGREEMENT_THRESHOLDS,
   REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
   REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
   REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
   REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+  REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
+  REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   RUBRIC_DIMENSIONS,
   SANITY_BASELINE_TYPES,
   SCORE_CONFIDENCE_LEVELS,
@@ -35,6 +41,7 @@ import {
   SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD,
   SCORE_EXPLANATION_TRIGGER_RULES,
   SYCOPHANCY_ORTHODOXY_CUE_TYPES,
+  TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
   assignments,
   buildHiddenBenchmarkFreezeReport,
   buildEffectiveRatingContextSnapshots,
@@ -769,6 +776,13 @@ const activeLearningSelectionThresholds = REQUIRED_ACTIVE_LEARNING_SELECTION_THR
 const activeLearningHandSelectionQuotas = REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS;
 const activeLearningSelectionReasonCodes = REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES;
 const activeLearningRejectionReasonCodes = REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES;
+const trainingExportUncertaintyPolicyVersion = TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION;
+const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
+const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+const rationaleEvidenceSpanRequirednessPolicyVersion = RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION;
+const rationaleEvidenceSpanMandatoryTriggerClasses = REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES;
+const rationaleEvidenceSpanRequirednessThresholds = REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS;
+const rationaleEvidenceSpanCoverageRules = REQUIRED_RATIONALE_EVIDENCE_SPAN_COVERAGE_RULES;
 const comparabilityClaimTiers = [
   "method_preserving",
   "corpus_scale_comparable",
@@ -2185,6 +2199,34 @@ const workflowWriteEndpoints = [
       lmcaSourceBoundary: ["Project", "LMCA"],
     },
     requiredExactFields: { policyVersion: activeLearningSelectionPolicyVersion },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/training-export-uncertainty-policies$/, "training_export_uncertainty_policy_submitted", "trainingExportUncertaintyPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "thresholds",
+      "downweightRules",
+      "labelMetadataRule",
+      "protectedSplitRule",
+      "lmcaSourceBoundary",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["thresholds", "downweightRules"],
+    requiredObjectKeys: {
+      thresholds: Object.keys(trainingExportUncertaintyThresholds),
+      downweightRules: Object.keys(trainingExportDownweightRules),
+    },
+    requiredStructuredFields: {
+      thresholds: trainingExportUncertaintyThresholds,
+      downweightRules: trainingExportDownweightRules,
+    },
+    requiredStringIncludes: {
+      labelMetadataRule: ["rater-count", "spread", "uncertainty"],
+      protectedSplitRule: ["internal validation", "hidden benchmark", "excluded"],
+      lmcaSourceBoundary: ["Project", "LMCA"],
+    },
+    requiredExactFields: { policyVersion: trainingExportUncertaintyPolicyVersion },
   }),
   workflowWriteSpec(/^\/api\/v1\/active-learning-selection-audits$/, "active_learning_selection_audit_submitted", "activeLearningSelectionAudit", adminRoles, {
     allowHiddenMetadata: true,
@@ -3718,6 +3760,53 @@ const workflowWriteEndpoints = [
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/rationale-evidence-span-requiredness-policies$/,
+    "rationale_evidence_span_requiredness_policy_submitted",
+    "rationaleEvidenceSpanRequirednessPolicy",
+    adminRoles,
+    {
+      requiredFields: [
+        "id",
+        "policyVersion",
+        "mandatoryTriggerClasses",
+        "thresholds",
+        "coverageRules",
+        "requiredLinkCategories",
+        "allowedVisibilityStates",
+        "coverageManifestRule",
+        "protectedVisibilityRule",
+        "lmcaSourceBoundary",
+        "frozenAt",
+      ],
+      requiredNonEmptyArrayFields: ["mandatoryTriggerClasses", "requiredLinkCategories", "allowedVisibilityStates"],
+      requiredObjectFields: ["thresholds", "coverageRules"],
+      requiredObjectKeys: {
+        thresholds: Object.keys(rationaleEvidenceSpanRequirednessThresholds),
+        coverageRules: Object.keys(rationaleEvidenceSpanCoverageRules),
+      },
+      requiredStructuredFields: {
+        thresholds: rationaleEvidenceSpanRequirednessThresholds,
+        coverageRules: rationaleEvidenceSpanCoverageRules,
+      },
+      requiredArrayIncludes: {
+        mandatoryTriggerClasses: rationaleEvidenceSpanMandatoryTriggerClasses,
+        requiredLinkCategories: rationaleEvidenceSpanLinkCategories,
+        allowedVisibilityStates: rationaleEvidenceSpanVisibilityStates,
+      },
+      allowedArrayValues: {
+        mandatoryTriggerClasses: rationaleEvidenceSpanMandatoryTriggerClasses,
+        requiredLinkCategories: rationaleEvidenceSpanLinkCategories,
+        allowedVisibilityStates: rationaleEvidenceSpanVisibilityStates,
+      },
+      requiredStringIncludes: {
+        coverageManifestRule: ["mandatory", "span id", "active policy"],
+        protectedVisibilityRule: ["raw selected text", "locked_initial_hidden"],
+        lmcaSourceBoundary: ["Project", "LMCA"],
+      },
+      requiredExactFields: { policyVersion: rationaleEvidenceSpanRequirednessPolicyVersion },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/rationale-evidence-spans$/, "rationale_evidence_span_submitted", "rationaleEvidenceSpan", ratingWorkflowRoles, {
     requiredFields: [
       "id",
@@ -4629,6 +4718,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/candidate-critiques\/(?<id>[^/]+)$/, "candidateCritique", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/model-judge-scores\/(?<id>[^/]+)$/, "modelJudgeScore", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/active-learning-selection-policies\/(?<id>[^/]+)$/, "activeLearningSelectionPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/training-export-uncertainty-policies\/(?<id>[^/]+)$/, "trainingExportUncertaintyPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/active-learning-selection-audits\/(?<id>[^/]+)$/, "activeLearningSelectionAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/critique-generation-runs\/(?<id>[^/]+)$/, "critiqueGenerationRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/generated-critiques\/(?<id>[^/]+)$/, "generatedCritiqueSubmission", adminAuditRoles),
@@ -4681,6 +4771,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rating-draft-sessions\/(?<id>[^/]+)$/, "ratingDraftSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/score-confidence-annotations\/(?<id>[^/]+)$/, "scoreConfidenceAnnotation", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rater-score-confidences\/(?<id>[^/]+)$/, "raterScoreConfidence", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/rationale-evidence-span-requiredness-policies\/(?<id>[^/]+)$/, "rationaleEvidenceSpanRequirednessPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rationale-evidence-spans\/(?<id>[^/]+)$/, "rationaleEvidenceSpan", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/same-position-scratchpads\/(?<id>[^/]+)$/, "samePositionScratchpad", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/same-position-batch-reviews\/(?<id>[^/]+)$/, "samePositionBatchReview", expertAuditWorkflowRoles),
@@ -5480,7 +5571,10 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
         "pairwiseComparisonSnapshotId",
         "pairwiseComparisonSnapshotStatus",
         "positionBalancedWeightingPolicy",
+        "trainingExportUncertaintyPolicyId",
+        "trainingExportUncertaintyPolicyReleaseUseStatus",
         "labelUncertaintyDownweightingPolicy",
+        "labelUncertaintyDownweightingPolicyId",
         "pairwiseMarginThresholdPolicy",
         "lowMarginHandlingPolicy",
         "humanTargetTiePolicy",
@@ -5493,12 +5587,25 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
         "timestamp",
       ],
       requiredNonEmptyArrayFields: ["sourceSplits", "excludedProtectedSplits", "targetFields"],
-      requiredObjectFields: ["positionBalancedWeighting", "itemTextVersionHashManifest", "ratingContextSnapshotManifest", "labelMetadataManifest"],
+      requiredObjectFields: [
+        "positionBalancedWeighting",
+        "uncertaintyThresholdsApplied",
+        "labelUncertaintyDownweightingRules",
+        "itemTextVersionHashManifest",
+        "ratingContextSnapshotManifest",
+        "labelMetadataManifest",
+      ],
       requiredObjectKeys: {
         positionBalancedWeighting: ["policy", "status", "pointwiseRowsByPosition", "pairwiseRowsByPosition", "pointwiseWeightSumByPosition"],
+        uncertaintyThresholdsApplied: Object.keys(trainingExportUncertaintyThresholds),
+        labelUncertaintyDownweightingRules: Object.keys(trainingExportDownweightRules),
         itemTextVersionHashManifest: ["itemTextVersionIds", "rows"],
         ratingContextSnapshotManifest: ["snapshotIds", "rows"],
         labelMetadataManifest: ["rows"],
+      },
+      requiredStructuredFields: {
+        uncertaintyThresholdsApplied: trainingExportUncertaintyThresholds,
+        labelUncertaintyDownweightingRules: trainingExportDownweightRules,
       },
       requiredArrayIncludes: {
         excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
@@ -7353,6 +7460,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const comparabilityTierPolicies = latestWorkflowResources(workflowEvents, "comparabilityTierPolicy");
   const comparabilityClaims = latestWorkflowResources(workflowEvents, "comparabilityClaim");
   const activeLearningSelectionPolicies = latestWorkflowResources(workflowEvents, "activeLearningSelectionPolicy");
+  const trainingExportUncertaintyPolicies = latestWorkflowResources(workflowEvents, "trainingExportUncertaintyPolicy");
   const activeLearningSelectionAudits = latestWorkflowResources(workflowEvents, "activeLearningSelectionAudit");
   const sycophancyProbeRuns = latestWorkflowResources(workflowEvents, "sycophancyProbeRun");
   const obfuscationStressRuns = latestWorkflowResources(workflowEvents, "obfuscationStressRun");
@@ -7391,6 +7499,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const protectedArtifactRetentionRecords = latestWorkflowResources(workflowEvents, "protectedArtifactRetentionRecord");
   const scoreConfidenceAnnotations = latestWorkflowResources(workflowEvents, "scoreConfidenceAnnotation");
   const raterScoreConfidences = latestWorkflowResources(workflowEvents, "raterScoreConfidence");
+  const rationaleEvidenceSpanRequirednessPolicies = latestWorkflowResources(workflowEvents, "rationaleEvidenceSpanRequirednessPolicy");
   const rationaleEvidenceSpans = latestWorkflowResources(workflowEvents, "rationaleEvidenceSpan");
   const samePositionScratchpads = latestWorkflowResources(workflowEvents, "samePositionScratchpad");
   const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
@@ -7525,6 +7634,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     comparabilityTierPolicies,
     comparabilityClaims,
     activeLearningSelectionPolicies,
+    trainingExportUncertaintyPolicies,
     activeLearningSelectionAudits,
     sycophancyProbeRuns,
     obfuscationStressRuns,
@@ -7563,6 +7673,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     protectedArtifactRetentionRecords,
     scoreConfidenceAnnotations,
     raterScoreConfidences,
+    rationaleEvidenceSpanRequirednessPolicies,
     rationaleEvidenceSpans,
     samePositionScratchpads,
     samePositionBatchReviews,
@@ -7692,6 +7803,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     comparabilityTierPolicies,
     comparabilityClaims,
     activeLearningSelectionPolicies,
+    trainingExportUncertaintyPolicies,
     activeLearningSelectionAudits,
     sycophancyProbeRuns,
     obfuscationStressRuns,
@@ -7730,6 +7842,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     protectedArtifactRetentionRecords,
     scoreConfidenceAnnotations,
     raterScoreConfidences,
+    rationaleEvidenceSpanRequirednessPolicies,
     rationaleEvidenceSpans,
     samePositionScratchpads,
     samePositionBatchReviews,
@@ -9954,6 +10067,9 @@ async function buildAdminBenchmarkFreezeReport(context) {
 
 async function buildAdminTrainingExport(context) {
   const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const trainingExportUncertaintyPolicies = latestWorkflowResources(workflowEvents, "trainingExportUncertaintyPolicy");
+  const pairwiseComparisonSnapshots = latestWorkflowResources(workflowEvents, "pairwiseComparisonSnapshot");
   const ratings = [...seedRatings, ...(await readPersistedRatings(context.auditStore))];
   const snapshot = createLabelSnapshot(
     "snapshot-oct-training-api",
@@ -9963,7 +10079,10 @@ async function buildAdminTrainingExport(context) {
     "initial_only",
     positionList,
   );
-  return buildTrainingExport(releaseId, snapshot, positionList, critiqueList, ratings, ratingContextSnapshots);
+  return buildTrainingExport(releaseId, snapshot, positionList, critiqueList, ratings, ratingContextSnapshots, {
+    trainingExportUncertaintyPolicies,
+    pairwiseComparisonSnapshots,
+  });
 }
 
 async function serveStatic(response, rootDir, pathname) {
