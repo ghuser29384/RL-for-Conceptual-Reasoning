@@ -16130,6 +16130,16 @@ const REQUIRED_RUBRIC_LINT_RULES = [
   "dead_weight_rationale",
   "verification_status_missing",
 ];
+const RUBRIC_LINT_THRESHOLD_VERSION = "rubric-lint-thresholds-rlhf90-v1";
+const REQUIRED_RUBRIC_LINT_ACKNOWLEDGEMENT_MODES = ["acknowledge", "explain", "route_to_qa"];
+const REQUIRED_RUBRIC_LINT_TRIGGER_THRESHOLDS = {
+  missing_required_score: { missingScoreCountMin: 1 },
+  clarity_branch_consistency: { clarityBelow: 0.5, provisionalNonClarityRequiresReview: true },
+  correctness_strength_consistency: { correctnessMax: 0.25, strengthMin: 0.75 },
+  centrality_strength_product_gap: { overallProductGapMin: 0.25 },
+  dead_weight_rationale: { deadWeightMin: 0.7 },
+  verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
+};
 const REQUIRED_ITEM_ISSUE_CATEGORIES = [
   "source_leakage",
   "missing_context",
@@ -16257,8 +16267,11 @@ function defaultRubricLintConfig(releaseId) {
     workflowProfileId: `rating-workflow-profile-${releaseId}`,
     preSubmitAssistPolicyId: `pre-submit-assist-${releaseId}`,
     lintRuleIds: REQUIRED_RUBRIC_LINT_RULES,
+    thresholdVersion: RUBRIC_LINT_THRESHOLD_VERSION,
+    triggerThresholds: REQUIRED_RUBRIC_LINT_TRIGGER_THRESHOLDS,
     triggerConditions: "deterministic rubric consistency checks only",
     severityPolicy: "warn_acknowledge_or_route_to_qa",
+    acknowledgementModes: REQUIRED_RUBRIC_LINT_ACKNOWLEDGEMENT_MODES,
     requiredAcknowledgementExplanationPolicy: "acknowledge or explain before lock; never auto-change score",
     qaRoutingPolicy: "route suspicious or unresolved lints to QA without exposing labels",
     protectedSplitEligible: true,
@@ -16848,14 +16861,30 @@ function normalizeRubricLintConfig(config, rowSource) {
   const id = config?.id ?? config?.rubricLintConfigId;
   if (!id) return null;
   const lintRuleIds = normalizeStringArray(config.lintRuleIds);
+  const acknowledgementModes = normalizeStringArray(config.acknowledgementModes ?? config.allowedAcknowledgementModes);
+  const triggerThresholds =
+    config.triggerThresholds && typeof config.triggerThresholds === "object" && !Array.isArray(config.triggerThresholds)
+      ? config.triggerThresholds
+      : {};
   const missingRules = REQUIRED_RUBRIC_LINT_RULES.filter((rule) => !lintRuleIds.includes(rule));
+  const missingAcknowledgementModes = REQUIRED_RUBRIC_LINT_ACKNOWLEDGEMENT_MODES.filter((mode) => !acknowledgementModes.includes(mode));
+  const missingThresholdRules = REQUIRED_RUBRIC_LINT_RULES.filter((rule) => !triggerThresholds[rule]);
+  const mismatchedThresholdRules = REQUIRED_RUBRIC_LINT_RULES.filter(
+    (rule) => triggerThresholds[rule] && stableJsonKey(triggerThresholds[rule]) !== stableJsonKey(REQUIRED_RUBRIC_LINT_TRIGGER_THRESHOLDS[rule]),
+  );
   const reviewReasons = [
     requiredPromptFieldReason("rubricVersion", config.rubricVersion),
     requiredPromptFieldReason("workflowProfileId", config.workflowProfileId),
     requiredPromptFieldReason("preSubmitAssistPolicyId", config.preSubmitAssistPolicyId),
     missingRules.length ? `lintRuleIds:${missingRules.join(",")}` : null,
+    (config.thresholdVersion ?? config.triggerThresholdVersion) === RUBRIC_LINT_THRESHOLD_VERSION
+      ? null
+      : `thresholdVersion:${RUBRIC_LINT_THRESHOLD_VERSION}`,
+    missingThresholdRules.length ? `triggerThresholds:${missingThresholdRules.join(",")}` : null,
+    mismatchedThresholdRules.length ? `triggerThresholds:mismatch:${mismatchedThresholdRules.join(",")}` : null,
     requiredPromptFieldReason("triggerConditions", config.triggerConditions),
     requiredPromptFieldReason("severityPolicy", config.severityPolicy),
+    missingAcknowledgementModes.length ? `acknowledgementModes:${missingAcknowledgementModes.join(",")}` : null,
     policyMentions(config.requiredAcknowledgementExplanationPolicy, ["acknowledge"]) ? null : "requiredAcknowledgementExplanationPolicy",
     policyMentions(config.qaRoutingPolicy, ["qa"]) ? null : "qaRoutingPolicy",
     config.protectedSplitEligible === true ? null : "protectedSplitEligible",
@@ -16867,6 +16896,12 @@ function normalizeRubricLintConfig(config, rowSource) {
     rubricVersion: config.rubricVersion ?? null,
     lintRuleIds,
     missingRules,
+    thresholdVersion: config.thresholdVersion ?? config.triggerThresholdVersion ?? null,
+    triggerThresholds,
+    missingThresholdRules,
+    mismatchedThresholdRules,
+    acknowledgementModes,
+    missingAcknowledgementModes,
     protectedSplitEligible: config.protectedSplitEligible === true,
     reviewReasons,
     status: reviewReasons.length ? "rubric_lint_config_review_required" : "rubric_lint_config_complete",

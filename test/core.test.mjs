@@ -563,6 +563,15 @@ const rubricLintRules = [
   "dead_weight_rationale",
   "verification_status_missing",
 ];
+const rubricLintTriggerThresholds = {
+  missing_required_score: { missingScoreCountMin: 1 },
+  clarity_branch_consistency: { clarityBelow: 0.5, provisionalNonClarityRequiresReview: true },
+  correctness_strength_consistency: { correctnessMax: 0.25, strengthMin: 0.75 },
+  centrality_strength_product_gap: { overallProductGapMin: 0.25 },
+  dead_weight_rationale: { deadWeightMin: 0.7 },
+  verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
+};
+const rubricLintAcknowledgementModes = ["acknowledge", "explain", "route_to_qa"];
 const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
@@ -1136,8 +1145,11 @@ function completeRatingExperienceFixtures() {
     workflowProfileId: "rating-workflow-profile-submitted",
     preSubmitAssistPolicyId: "pre-submit-assist-submitted",
     lintRuleIds: rubricLintRules,
+    thresholdVersion: "rubric-lint-thresholds-rlhf90-v1",
+    triggerThresholds: rubricLintTriggerThresholds,
     triggerConditions: "deterministic rubric consistency checks only",
     severityPolicy: "warn_acknowledge_or_route_to_qa",
+    acknowledgementModes: rubricLintAcknowledgementModes,
     requiredAcknowledgementExplanationPolicy: "rater must acknowledge or explain before lock",
     qaRoutingPolicy: "route unresolved lint findings to QA without exposing labels",
     protectedSplitEligible: true,
@@ -2363,6 +2375,8 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedRaterInstructionRenderVersionCount, 1);
   assert.equal(report.counts.submittedRubricLintConfigCount, 1);
   assert.equal(report.counts.submittedRubricLintEventCount, 1);
+  assert.deepEqual(report.rubricLintConfigRows.at(-1).triggerThresholds, rubricLintTriggerThresholds);
+  assert.deepEqual(report.rubricLintConfigRows.at(-1).acknowledgementModes, rubricLintAcknowledgementModes);
   assert.equal(report.counts.submittedItemIssueReportCount, 1);
   assert.equal(report.counts.submittedItemIssueActionCount, 2);
   assert.equal(report.counts.submittedItemIssueQuarantineActionCount, 1);
@@ -2426,6 +2440,32 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
     missingCorrectnessStrengthLintReport.reviewSections.some(
       (section) => section.artifactType === "rubric_lint_config" && section.reason === "lintRuleIds:correctness_strength_consistency",
     ),
+  );
+
+  const mismatchedLintThresholdReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    rubricLintConfigs: [
+      {
+        ...completeRatingExperienceFixtures().rubricLintConfigs[0],
+        id: "rubric-lint-config-mismatched-threshold",
+        thresholdVersion: "rubric-lint-thresholds-draft",
+        triggerThresholds: {
+          ...rubricLintTriggerThresholds,
+          centrality_strength_product_gap: { overallProductGapMin: 0.4 },
+        },
+        acknowledgementModes: ["acknowledge"],
+      },
+    ],
+  });
+  assert.equal(mismatchedLintThresholdReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    mismatchedLintThresholdReport.reviewSections.some((section) => section.artifactType === "rubric_lint_config" && section.reason === "thresholdVersion:rubric-lint-thresholds-rlhf90-v1"),
+  );
+  assert.ok(
+    mismatchedLintThresholdReport.reviewSections.some((section) => section.artifactType === "rubric_lint_config" && section.reason === "triggerThresholds:mismatch:centrality_strength_product_gap"),
+  );
+  assert.ok(
+    mismatchedLintThresholdReport.reviewSections.some((section) => section.artifactType === "rubric_lint_config" && section.reason === "acknowledgementModes:explain,route_to_qa"),
   );
 
   const unsafeRationaleSpanReport = buildRatingExperienceEvidenceReport("october-2026-demo", {

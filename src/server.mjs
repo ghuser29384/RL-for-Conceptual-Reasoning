@@ -637,6 +637,16 @@ const rubricLintRules = [
   "dead_weight_rationale",
   "verification_status_missing",
 ];
+const rubricLintThresholdVersion = "rubric-lint-thresholds-rlhf90-v1";
+const rubricLintAcknowledgementModes = ["acknowledge", "explain", "route_to_qa"];
+const rubricLintTriggerThresholds = {
+  missing_required_score: { missingScoreCountMin: 1 },
+  clarity_branch_consistency: { clarityBelow: 0.5, provisionalNonClarityRequiresReview: true },
+  correctness_strength_consistency: { correctnessMax: 0.25, strengthMin: 0.75 },
+  centrality_strength_product_gap: { overallProductGapMin: 0.25 },
+  dead_weight_rationale: { deadWeightMin: 0.7 },
+  verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
+};
 const partialTaskOutputTypes = [
   "pairwise_preference_only",
   "clarity_triage",
@@ -3026,15 +3036,19 @@ const workflowWriteEndpoints = [
       "rubricVersion",
       "workflowProfileId",
       "preSubmitAssistPolicyId",
+      "thresholdVersion",
       "triggerConditions",
       "severityPolicy",
       "requiredAcknowledgementExplanationPolicy",
       "qaRoutingPolicy",
       "frozenAt",
     ],
-    requiredNonEmptyArrayFields: ["lintRuleIds"],
-    requiredArrayIncludes: { lintRuleIds: rubricLintRules },
-    requiredExactFields: { protectedSplitEligible: true },
+    requiredNonEmptyArrayFields: ["lintRuleIds", "acknowledgementModes"],
+    requiredObjectFields: ["triggerThresholds"],
+    requiredObjectKeys: { triggerThresholds: rubricLintRules },
+    requiredArrayIncludes: { lintRuleIds: rubricLintRules, acknowledgementModes: rubricLintAcknowledgementModes },
+    requiredExactFields: { protectedSplitEligible: true, thresholdVersion: rubricLintThresholdVersion },
+    requiredStructuredFields: { triggerThresholds: rubricLintTriggerThresholds },
   }),
   workflowWriteSpec(/^\/api\/v1\/rubric-lint-events$/, "rubric_lint_event_submitted", "rubricLintEvent", ratingWorkflowRoles, {
     requiredFields: ["id", "assignmentId", "lintConfigId", "lintRuleId", "triggerState", "severity", "resolvedStatus"],
@@ -8641,6 +8655,10 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}, vali
   for (const [fieldPath, expectedValue] of Object.entries(spec.requiredExactFields ?? {})) {
     const observedValue = workflowFieldValue(normalized, fieldPath);
     if (observedValue !== expectedValue) return invalid(`${spec.resourceKey}.${fieldPath} must equal ${JSON.stringify(expectedValue)}`);
+  }
+  for (const [fieldPath, expectedValue] of Object.entries(spec.requiredStructuredFields ?? {})) {
+    const observedValue = workflowFieldValue(normalized, fieldPath);
+    if (canonicalJson(observedValue) !== canonicalJson(expectedValue)) return invalid(`${spec.resourceKey}.${fieldPath} must match the frozen policy structure`);
   }
   for (const conditional of spec.requiredWhen ?? []) {
     const observedValue = workflowFieldValue(normalized, conditional.field);

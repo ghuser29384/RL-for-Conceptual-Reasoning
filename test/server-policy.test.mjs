@@ -492,6 +492,15 @@ const rubricLintRules = [
   "dead_weight_rationale",
   "verification_status_missing",
 ];
+const rubricLintTriggerThresholds = {
+  missing_required_score: { missingScoreCountMin: 1 },
+  clarity_branch_consistency: { clarityBelow: 0.5, provisionalNonClarityRequiresReview: true },
+  correctness_strength_consistency: { correctnessMax: 0.25, strengthMin: 0.75 },
+  centrality_strength_product_gap: { overallProductGapMin: 0.25 },
+  dead_weight_rationale: { deadWeightMin: 0.7 },
+  verification_status_missing: { correctnessSensitiveQueuesRequireStatus: true },
+};
+const rubricLintAcknowledgementModes = ["acknowledge", "explain", "route_to_qa"];
 const scoreExplanationTriggerRules = [
   "extreme_score",
   "score_inconsistency",
@@ -1043,8 +1052,11 @@ function completeRatingExperienceWorkflowFixtures() {
     workflowProfileId: "rating-workflow-profile-workflow-new",
     preSubmitAssistPolicyId: "pre-submit-assist-workflow-new",
     lintRuleIds: rubricLintRules,
+    thresholdVersion: "rubric-lint-thresholds-rlhf90-v1",
+    triggerThresholds: rubricLintTriggerThresholds,
     triggerConditions: "deterministic rubric consistency checks only",
     severityPolicy: "warn_acknowledge_or_route_to_qa",
+    acknowledgementModes: rubricLintAcknowledgementModes,
     requiredAcknowledgementExplanationPolicy: "rater must acknowledge or explain before lock",
     qaRoutingPolicy: "route unresolved lint findings to QA without exposing labels",
     protectedSplitEligible: true,
@@ -8696,6 +8708,26 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(missingCorrectnessStrengthLintConfig.status, 400);
   assert.match(missingCorrectnessStrengthLintConfig.body.detail, /correctness_strength_consistency/);
+
+  const mismatchedRubricLintThresholds = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/rubric-lint-configs",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      rubricLintConfig: {
+        ...ratingExperience.rubricLintConfig,
+        id: "rubric-lint-config-mismatched-thresholds",
+        thresholdVersion: "rubric-lint-thresholds-draft",
+        triggerThresholds: {
+          ...rubricLintTriggerThresholds,
+          centrality_strength_product_gap: { overallProductGapMin: 0.4 },
+        },
+        acknowledgementModes: ["acknowledge"],
+      },
+    }),
+  });
+  assert.equal(mismatchedRubricLintThresholds.status, 400);
+  assert.match(mismatchedRubricLintThresholds.body.detail, /thresholdVersion|triggerThresholds|acknowledgementModes/);
 
   const correctnessStrengthLintEvent = await invokeApi(context, {
     method: "POST",
