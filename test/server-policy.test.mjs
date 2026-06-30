@@ -52,6 +52,10 @@ import {
   REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
   MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
@@ -391,6 +395,27 @@ function externalAssistanceContaminationPolicy(id = "external-assistance-contami
     denominatorExclusionRule: externalAssistanceContaminationRules.denominatorExclusion,
     accessibilityExceptionRule: externalAssistanceContaminationRules.accessibilityException,
     sourceBoundary: externalAssistanceContaminationRules.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const modelRunReproducibilityConfigFields = REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS;
+const modelRunReproducibilityEnvironmentFields = REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS;
+const modelRunReproducibilityRules = REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES;
+
+function modelRunReproducibilityPolicy(id = "model-run-reproducibility-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
+    requiredInferenceConfigFields: modelRunReproducibilityConfigFields,
+    requiredRunEnvironmentFields: modelRunReproducibilityEnvironmentFields,
+    reproducibilityRules: modelRunReproducibilityRules,
+    snapshotBindingRule: modelRunReproducibilityRules.snapshotBinding,
+    deterministicParameterRule: modelRunReproducibilityRules.deterministicParameters,
+    environmentCaptureRule: modelRunReproducibilityRules.environmentCapture,
+    parserPromptLinkageRule: modelRunReproducibilityRules.parserPromptLinkage,
+    cleanComparisonBoundaryRule: modelRunReproducibilityRules.cleanComparisonBoundary,
+    sourceBoundary: modelRunReproducibilityRules.sourceBoundary,
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -2193,6 +2218,7 @@ function completeAuxiliaryWorkflowFixtures() {
     frozenAt: "2026-10-01T00:29:00.000Z",
     timestamp: "2026-10-01T00:29:00.000Z",
   };
+  const modelReproducibilityPolicy = modelRunReproducibilityPolicy("model-run-reproducibility-policy-workflow-new");
   return {
     blindingPreviewAudit: {
       id: "blinding-preview-audit-workflow-new",
@@ -2317,8 +2343,10 @@ function completeAuxiliaryWorkflowFixtures() {
       compositionChangedLabelDenominators: false,
       createdAt: "2026-10-01T00:36:00.000Z",
     },
+    modelRunReproducibilityPolicy: modelReproducibilityPolicy,
     modelInferenceConfig: {
       id: "model-inference-config-workflow-new",
+      modelRunReproducibilityPolicyId: modelReproducibilityPolicy.id,
       evaluationRunId: "eval-full-rubric-demo",
       providerEndpoint: "approved-model-evaluation-endpoint",
       modelSnapshot: "gpt-demo-full-rubric-2026-06-01",
@@ -2332,6 +2360,7 @@ function completeAuxiliaryWorkflowFixtures() {
     },
     modelRunEnvironment: {
       id: "model-run-environment-workflow-new",
+      modelRunReproducibilityPolicyId: modelReproducibilityPolicy.id,
       evaluationRunId: "eval-full-rubric-demo",
       runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
       apiRouteDeploymentId: "deployment-october-2026-demo",
@@ -3444,6 +3473,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/assignment-selection-audits"],
     ["GET", "/api/v1/assignment-selection-audits"],
     ["GET", "/api/v1/assignment-selection-audits/assignment-selection-smoke"],
+    ["POST", "/api/v1/model-run-reproducibility-policies"],
+    ["GET", "/api/v1/model-run-reproducibility-policies/model-run-reproducibility-policy-smoke"],
     ["POST", "/api/v1/model-inference-configs"],
     ["GET", "/api/v1/model-inference-configs/model-inference-smoke"],
     ["POST", "/api/v1/model-run-environments"],
@@ -3554,6 +3585,8 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/model-prompt-sibling-context-policies"',
     'id: "external-assistance-contamination-policy"',
     'endpoint: () => "/api/v1/external-assistance-contamination-policies"',
+    'id: "model-run-reproducibility-policy"',
+    'endpoint: () => "/api/v1/model-run-reproducibility-policies"',
     'id: "rating-check-action"',
     'endpoint: () => "/api/v1/ratings/rating-seed-ai-base-rate-r1/check"',
     'id: "label-snapshot"',
@@ -11147,6 +11180,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteAssignmentSelectionAudit.status, 400);
   assert.match(incompleteAssignmentSelectionAudit.body.detail, /topicSourceLengthDistribution|compositionChangedLabelDenominators/);
 
+  const driftedModelRunReproducibilityPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-run-reproducibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelRunReproducibilityPolicy: {
+        ...auxiliaryWorkflow.modelRunReproducibilityPolicy,
+        id: "model-run-reproducibility-policy-drifted",
+        requiredInferenceConfigFields: modelRunReproducibilityConfigFields.filter((field) => field !== "seedDeterminismArtifact"),
+      },
+    }),
+  });
+  assert.equal(driftedModelRunReproducibilityPolicy.status, 400);
+  assert.match(driftedModelRunReproducibilityPolicy.body.detail, /requiredInferenceConfigFields/);
+
   const incompleteModelInferenceConfig = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/model-inference-configs",
@@ -11492,6 +11540,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["diagnosticDeferralRecord", "/api/v1/diagnostic-deferrals"],
     ["queuePolicySnapshot", "/api/v1/queue-policy-snapshots"],
     ["assignmentSelectionAudit", "/api/v1/assignment-selection-audits"],
+    ["modelRunReproducibilityPolicy", "/api/v1/model-run-reproducibility-policies"],
     ["modelInferenceConfig", "/api/v1/model-inference-configs"],
     ["modelRunEnvironment", "/api/v1/model-run-environments"],
     ["raterItemConflict", "/api/v1/rater-item-conflicts"],
@@ -11695,6 +11744,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(assignmentSelectionList.status, 200);
   assert.equal(assignmentSelectionList.body.assignmentSelectionAudits.length, 1);
+
+  const modelRunReproducibilityPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-reproducibility-policies/model-run-reproducibility-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(modelRunReproducibilityPolicyById.status, 200);
+  assert.deepEqual(modelRunReproducibilityPolicyById.body.requiredInferenceConfigFields, modelRunReproducibilityConfigFields);
 
   const modelInferenceById = await invokeApi(context, {
     method: "GET",
@@ -14023,6 +14080,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "mixed_model_run_provenance_sensitivity_declared",
   );
   assert.deepEqual(releaseReport.body.leaderboardReport.modelRunProvenance.reviewSections, []);
+  assert.equal(
+    releaseReport.body.leaderboardReport.modelRunProvenance.modelRunReproducibilityPolicyReleaseUseStatus,
+    "submitted_model_run_reproducibility_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.leaderboardReport.modelRunProvenance.modelRunReproducibilityPolicyId,
+    "model-run-reproducibility-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.leaderboardReport.modelRunProvenance.submittedModelInferenceConfigCount, 2);
   assert.equal(releaseReport.body.leaderboardReport.modelRunProvenance.submittedModelRunEnvironmentCount, 2);
   assert.deepEqual(releaseReport.body.leaderboardReport.modelRunProvenance.modelSnapshots, [
@@ -14117,6 +14182,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.status,
     "submitted_model_run_provenance_preserves_inference_and_environment",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelRunReproducibilityPolicyId,
+    "model-run-reproducibility-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelRunReproducibilityPolicyReleaseUseStatus,
+    "submitted_model_run_reproducibility_policy_active",
   );
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelInferenceConfigId,
@@ -14461,6 +14534,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.diagnosticDeferralRecords.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.queuePolicySnapshots.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.assignmentSelectionAudits.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunReproducibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelInferenceConfigs.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunEnvironments.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterItemConflicts.length, 2 + extendedRaterItemConflictTypes.length);
@@ -14474,6 +14548,9 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedModelRunReproducibilityPolicyCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.modelRunReproducibilityPolicyReleaseUseStatus, "submitted_model_run_reproducibility_policy_active");
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.modelRunReproducibilityPolicyId, "model-run-reproducibility-policy-workflow-new");
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingModelRunProvenanceCount, 3);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSpotCheckSamplingPolicyCount, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.spotCheckSamplingPolicyReleaseUseStatus, "submitted_spot_check_sampling_policy_active");
@@ -15060,7 +15137,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 144 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 145 + extendedRaterItemConflictTypes.length,
   );
 });
 

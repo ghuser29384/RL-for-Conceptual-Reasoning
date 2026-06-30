@@ -101,6 +101,10 @@ import {
   REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
   MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
@@ -357,6 +361,9 @@ const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
 const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
 const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
 const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
+const modelRunReproducibilityConfigFields = REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS;
+const modelRunReproducibilityEnvironmentFields = REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS;
+const modelRunReproducibilityRules = REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES;
 const modelPromptSiblingContextModes = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES;
 const modelPromptSiblingContextEvidenceFields = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS;
 const modelPromptSiblingContextRules = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES;
@@ -403,6 +410,23 @@ function modelPromptSiblingContextPolicy(id = "model-prompt-sibling-context-poli
     contextSensitiveClaimRule: modelPromptSiblingContextRules.contextSensitiveClaim,
     targetOnlyRestrictionRule: modelPromptSiblingContextRules.targetOnlyRestriction,
     sourceBoundary: modelPromptSiblingContextRules.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelRunReproducibilityPolicy(id = "model-run-reproducibility-policy-release-test") {
+  return {
+    id,
+    policyVersion: MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
+    requiredInferenceConfigFields: modelRunReproducibilityConfigFields,
+    requiredRunEnvironmentFields: modelRunReproducibilityEnvironmentFields,
+    reproducibilityRules: modelRunReproducibilityRules,
+    snapshotBindingRule: modelRunReproducibilityRules.snapshotBinding,
+    deterministicParameterRule: modelRunReproducibilityRules.deterministicParameters,
+    environmentCaptureRule: modelRunReproducibilityRules.environmentCapture,
+    parserPromptLinkageRule: modelRunReproducibilityRules.parserPromptLinkage,
+    cleanComparisonBoundaryRule: modelRunReproducibilityRules.cleanComparisonBoundary,
+    sourceBoundary: modelRunReproducibilityRules.sourceBoundary,
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -2451,9 +2475,13 @@ function completeAuxiliaryWorkflowFixtures() {
         createdAt: "2026-10-01T00:06:00.000Z",
       },
     ],
+    modelRunReproducibilityPolicies: [
+      modelRunReproducibilityPolicy("model-run-reproducibility-policy-submitted"),
+    ],
     modelInferenceConfigs: [
       {
         id: "model-inference-config-submitted",
+        modelRunReproducibilityPolicyId: "model-run-reproducibility-policy-submitted",
         evaluationRunId: "eval-full-rubric-demo",
         providerEndpoint: "approved-model-evaluation-endpoint",
         modelSnapshot: "gpt-demo-full-rubric-2026-06-01",
@@ -2469,6 +2497,7 @@ function completeAuxiliaryWorkflowFixtures() {
     modelRunEnvironments: [
       {
         id: "model-run-environment-submitted",
+        modelRunReproducibilityPolicyId: "model-run-reproducibility-policy-submitted",
         evaluationRunId: "eval-full-rubric-demo",
         runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
         apiRouteDeploymentId: "deployment-october-2026-demo",
@@ -3947,9 +3976,18 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.counts.submittedQueuePolicySnapshotCount, 1);
   assert.equal(report.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
   assert.equal(report.counts.submittedAssignmentSelectionAuditCount, 1);
+  assert.equal(report.counts.submittedModelRunReproducibilityPolicyCount, 1);
+  assert.equal(report.counts.modelRunReproducibilityPolicyReviewRows, 0);
+  assert.equal(report.modelRunReproducibilityPolicyReleaseUseStatus, "submitted_model_run_reproducibility_policy_active");
+  assert.equal(report.modelRunReproducibilityPolicyId, "model-run-reproducibility-policy-submitted");
+  assert.deepEqual(report.requiredModelRunReproducibilityConfigFields, modelRunReproducibilityConfigFields);
+  assert.deepEqual(report.requiredModelRunReproducibilityEnvironmentFields, modelRunReproducibilityEnvironmentFields);
+  assert.deepEqual(report.requiredModelRunReproducibilityRules, modelRunReproducibilityRules);
   assert.equal(report.counts.submittedModelInferenceConfigCount, 1);
   assert.equal(report.counts.submittedModelRunEnvironmentCount, 1);
   assert.equal(report.counts.passingModelRunProvenanceCount, 1);
+  assert.equal(report.modelInferenceConfigRows.at(-1).modelRunReproducibilityPolicyId, "model-run-reproducibility-policy-submitted");
+  assert.equal(report.modelRunEnvironmentRows.at(-1).modelRunReproducibilityPolicyId, "model-run-reproducibility-policy-submitted");
   assert.equal(report.counts.submittedRaterItemConflictCount, 1);
   assert.equal(report.raterItemConflictRows.at(-1).independentBlindEligibilityEffect, "excluded_from_independent_blind_protected_denominators");
   assert.equal(report.counts.submittedRaterTrainingExposurePolicyCount, 1);
@@ -3971,6 +4009,26 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.scheduleStatusRows.at(-1).slipDays, 0);
   assert.equal(report.scheduleStatusRows.at(-1).supportsCompletionClaim, false);
   assert.deepEqual(report.reviewSections, []);
+
+  const driftedModelRunReproducibilityPolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    modelRunReproducibilityPolicies: [
+      {
+        ...modelRunReproducibilityPolicy("model-run-reproducibility-policy-drifted"),
+        requiredInferenceConfigFields: modelRunReproducibilityConfigFields.filter((field) => field !== "seedDeterminismArtifact"),
+      },
+    ],
+  });
+  assert.equal(driftedModelRunReproducibilityPolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.equal(
+    driftedModelRunReproducibilityPolicyReport.modelRunReproducibilityPolicyReleaseUseStatus,
+    "submitted_model_run_reproducibility_policy_review_required",
+  );
+  assert.ok(
+    driftedModelRunReproducibilityPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "model_run_reproducibility_policy" && section.reason === "requiredInferenceConfigFields",
+    ),
+  );
 
   const unsafePositionClusterExposureReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),

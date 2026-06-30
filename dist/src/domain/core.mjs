@@ -10981,8 +10981,10 @@ export function buildUncertaintyAwareLeaderboardReport(
       modelFamilyOverlapPolicies: options.modelFamilyOverlapPolicies ?? [],
     });
   const modelRunProvenance = buildLeaderboardModelRunProvenanceSummary(runs, {
+    releaseId,
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
     modelRunEnvironments: options.modelRunEnvironments ?? [],
+    modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
   });
   const modelRunProvenanceByRun = new Map(modelRunProvenance.perModelRows.map((row) => [row.evaluationRunId, row]));
   const rows = runs.map((run) =>
@@ -11269,11 +11271,18 @@ function buildLeaderboardParserPromptIntegritySummary(runs = []) {
 }
 
 function buildLeaderboardModelRunProvenanceSummary(runs = [], options = {}) {
+  const modelRunReproducibilityPolicyEvidence = buildModelRunReproducibilityPolicyEvidence(
+    options.releaseId ?? "leaderboard",
+    options.modelRunReproducibilityPolicies ?? [],
+  );
+  const activeModelRunReproducibilityPolicy = options.modelRunReproducibilityPolicies?.length
+    ? modelRunReproducibilityPolicyEvidence.activePolicy
+    : null;
   const configRows = (options.modelInferenceConfigs ?? [])
-    .map((config) => normalizeModelInferenceConfig(config, "submitted_leaderboard_model_inference_config"))
+    .map((config) => normalizeModelInferenceConfig(config, "submitted_leaderboard_model_inference_config", activeModelRunReproducibilityPolicy))
     .filter(Boolean);
   const environmentRows = (options.modelRunEnvironments ?? [])
-    .map((environment) => normalizeModelRunEnvironment(environment, "submitted_leaderboard_model_run_environment"))
+    .map((environment) => normalizeModelRunEnvironment(environment, "submitted_leaderboard_model_run_environment", activeModelRunReproducibilityPolicy))
     .filter(Boolean);
   const perModelRows = runs.map((run) => {
     const matchingConfigs = configRows.filter((row) => row.evaluationRunId === run.id);
@@ -11291,6 +11300,7 @@ function buildLeaderboardModelRunProvenanceSummary(runs = [], options = {}) {
       evaluationRunId: run.id,
       requestedModelAlias: run.requestedModelAlias,
       resolvedModelSnapshot: run.resolvedModelSnapshot,
+      modelRunReproducibilityPolicyId: activeModelRunReproducibilityPolicy?.id ?? config?.modelRunReproducibilityPolicyId ?? environment?.modelRunReproducibilityPolicyId ?? null,
       modelInferenceConfigId: config?.id ?? null,
       modelRunEnvironmentId: environment?.id ?? null,
       providerEndpoint: config?.providerEndpoint ?? null,
@@ -11310,9 +11320,14 @@ function buildLeaderboardModelRunProvenanceSummary(runs = [], options = {}) {
       status: reviewReasons.length ? "model_run_provenance_review_required" : "model_run_provenance_declared",
     };
   });
-  const reviewSections = perModelRows.flatMap((row) =>
-    row.reviewReasons.map((reason) => ({ artifactType: "leaderboard_model_run_provenance", artifactId: row.evaluationRunId, reason })),
-  );
+  const reviewSections = [
+    ...modelRunReproducibilityPolicyEvidence.reviewRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "model_run_reproducibility_policy", artifactId: row.id, reason })),
+    ),
+    ...perModelRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "leaderboard_model_run_provenance", artifactId: row.evaluationRunId, reason })),
+    ),
+  ];
   const commonReasoningBudgets = uniqueStrings(perModelRows.map((row) => row.reasoningBudget));
   const commonToolAvailability = uniqueStrings(perModelRows.map((row) => stableJsonKey(row.toolAvailability)));
   const commonMessageStackTemplates = uniqueStrings(perModelRows.map((row) => row.messageStackTemplate));
@@ -11322,6 +11337,9 @@ function buildLeaderboardModelRunProvenanceSummary(runs = [], options = {}) {
   return {
     submittedModelInferenceConfigCount: perModelRows.filter((row) => row.modelInferenceConfigId).length,
     submittedModelRunEnvironmentCount: perModelRows.filter((row) => row.modelRunEnvironmentId).length,
+    modelRunReproducibilityPolicyEvidence,
+    modelRunReproducibilityPolicyId: activeModelRunReproducibilityPolicy?.id ?? null,
+    modelRunReproducibilityPolicyReleaseUseStatus: modelRunReproducibilityPolicyEvidence.releaseUseStatus,
     availableModelInferenceConfigCount: configRows.length,
     availableModelRunEnvironmentCount: environmentRows.length,
     providerEndpoints: uniqueStrings(perModelRows.map((row) => row.providerEndpoint)),
@@ -12906,6 +12924,7 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
     modelFailureAuditArtifacts = [],
     modelInferenceConfigs = [],
     modelRunEnvironments = [],
+    modelRunReproducibilityPolicies = [],
     modelProviderDataHandlingPolicies = [],
   } = {},
 ) {
@@ -12941,7 +12960,12 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
   const calibrationRunEvidence = submittedCalibrationRunEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedCalibrationRun, recalibratedEvaluation);
   const leaderboardEvidence = submittedLeaderboardEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedLeaderboard, leaderboardReport);
   const failureAuditEvidence = submittedModelFailureAuditEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedFailureAudit, modelFailureAudits);
-  const modelRunProvenanceEvidence = submittedModelRunProvenanceEvidence(submittedEvaluationRun, modelInferenceConfigs, modelRunEnvironments);
+  const modelRunProvenanceEvidence = submittedModelRunProvenanceEvidence(
+    submittedEvaluationRun,
+    modelInferenceConfigs,
+    modelRunEnvironments,
+    modelRunReproducibilityPolicies,
+  );
   const modelProviderPolicyEvidence = submittedModelProviderPolicyEvidence(submittedEvaluationRun, modelProviderDataHandlingPolicies);
   const sections = [
     modelImprovementRunEvidence,
@@ -13227,15 +13251,31 @@ function submittedModelFailureAuditEvidence(releaseId, labelSnapshot, evaluation
   };
 }
 
-function submittedModelRunProvenanceEvidence(evaluationRun, modelInferenceConfigs = [], modelRunEnvironments = []) {
+function submittedModelRunProvenanceEvidence(
+  evaluationRun,
+  modelInferenceConfigs = [],
+  modelRunEnvironments = [],
+  modelRunReproducibilityPolicies = [],
+) {
+  const modelRunReproducibilityPolicyEvidence = buildModelRunReproducibilityPolicyEvidence(
+    evaluationRun?.releaseId ?? "model-evaluation",
+    modelRunReproducibilityPolicies,
+  );
+  const activeModelRunReproducibilityPolicy = modelRunReproducibilityPolicies.length
+    ? modelRunReproducibilityPolicyEvidence.activePolicy
+    : null;
   const rawConfig = evaluationRun
     ? latestSubmittedWorkflowArtifactByField(modelInferenceConfigs, "evaluationRunId", evaluationRun.id, evaluationRun.releaseId)
     : null;
   const rawEnvironment = evaluationRun
     ? latestSubmittedWorkflowArtifactByField(modelRunEnvironments, "evaluationRunId", evaluationRun.id, evaluationRun.releaseId)
     : null;
-  const config = rawConfig ? normalizeModelInferenceConfig(rawConfig, "submitted_model_evaluation_model_inference_config") : null;
-  const environment = rawEnvironment ? normalizeModelRunEnvironment(rawEnvironment, "submitted_model_evaluation_model_run_environment") : null;
+  const config = rawConfig
+    ? normalizeModelInferenceConfig(rawConfig, "submitted_model_evaluation_model_inference_config", activeModelRunReproducibilityPolicy)
+    : null;
+  const environment = rawEnvironment
+    ? normalizeModelRunEnvironment(rawEnvironment, "submitted_model_evaluation_model_run_environment", activeModelRunReproducibilityPolicy)
+    : null;
   const submitted =
     config || environment
       ? {
@@ -13263,6 +13303,9 @@ function submittedModelRunProvenanceEvidence(evaluationRun, modelInferenceConfig
     requiredMinimumCheck("parserExtractorVersionLinkCount", 1, environment?.parserExtractorVersionLinks?.length),
     requiredManifestCheck("modelInferenceConfigReviewReasonCount", 0, config?.reviewReasons?.length),
     requiredManifestCheck("modelRunEnvironmentReviewReasonCount", 0, environment?.reviewReasons?.length),
+    ...(modelRunReproducibilityPolicies.length
+      ? [requiredManifestCheck("modelRunReproducibilityPolicyReviewReasonCount", 0, modelRunReproducibilityPolicyEvidence.reviewRows.length)]
+      : []),
   ];
   return {
     ...releaseArtifactEvidenceRow(
@@ -13272,6 +13315,9 @@ function submittedModelRunProvenanceEvidence(evaluationRun, modelInferenceConfig
       "submitted_model_run_provenance_preserves_inference_and_environment",
     ),
     evaluationRunId: evaluationRun?.id ?? null,
+    modelRunReproducibilityPolicyId:
+      activeModelRunReproducibilityPolicy?.id ?? config?.modelRunReproducibilityPolicyId ?? environment?.modelRunReproducibilityPolicyId ?? null,
+    modelRunReproducibilityPolicyReleaseUseStatus: modelRunReproducibilityPolicyEvidence.releaseUseStatus,
     modelInferenceConfigId: config?.id ?? null,
     modelRunEnvironmentId: environment?.id ?? null,
     providerEndpoint: config?.providerEndpoint ?? null,
@@ -15390,12 +15436,12 @@ function uniqueRowsById(rows) {
 
 function policyMentions(value, fragments) {
   const normalized = String(value ?? "").toLowerCase();
-  return fragments.every((fragment) => normalized.includes(fragment));
+  return fragments.every((fragment) => normalized.includes(String(fragment).toLowerCase()));
 }
 
 function policyMentionsAny(value, fragments) {
   const normalized = String(value ?? "").toLowerCase();
-  return fragments.some((fragment) => normalized.includes(fragment));
+  return fragments.some((fragment) => normalized.includes(String(fragment).toLowerCase()));
 }
 
 function visibleFieldIsForbidden(field) {
@@ -20533,9 +20579,151 @@ function defaultAssignmentSelectionAudit(releaseId, queuePolicySnapshotId) {
   };
 }
 
-function defaultModelInferenceConfig(releaseId) {
+export const MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION = "model-run-reproducibility-rlhf90-v1";
+export const REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS = [
+  "providerEndpoint",
+  "modelSnapshot",
+  "decodingParameters",
+  "reasoningBudget",
+  "toolAvailability",
+  "messageStackTemplate",
+  "retryPolicy",
+  "seedDeterminismArtifact",
+];
+export const REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS = [
+  "runtimeOrchestratorVersion",
+  "apiRouteDeploymentId",
+  "libraryVersions",
+  "rateLimitRetryMetadata",
+  "parserExtractorVersionLinks",
+];
+export const REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES = {
+  snapshotBinding:
+    "Every model-evaluation run must bind to an approved provider endpoint, resolved model snapshot, and frozen model inference config before leaderboard, validation, or release-artifact use.",
+  deterministicParameters:
+    "Decoding parameters, reasoning budget, tool availability, message stack template, retry policy, and seed or determinism artifacts are recorded exactly; retries may not mutate the prompt or add protected context.",
+  environmentCapture:
+    "Runtime orchestrator version, API route deployment id, library versions, parser/extractor links, timestamp, and rate-limit retry metadata are captured for each run environment.",
+  parserPromptLinkage:
+    "Parser and prompt/extractor versions are linked so model outputs can be interpreted against the same schema, prompt track, and extraction rules used in the run.",
+  cleanComparisonBoundary:
+    "Only runs with complete config and environment provenance can support clean common-subset leaderboard, validation, or release-artifact claims; incomplete rows require review or sensitivity labeling.",
+  sourceBoundary:
+    "Project default model-run reproducibility requirements are frozen here; LMCA motivates reproducible model evaluation but does not state these exact platform capture fields.",
+};
+
+function defaultModelRunReproducibilityPolicy(releaseId) {
+  return {
+    id: `model-run-reproducibility-policy-${releaseId}`,
+    policyVersion: MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
+    requiredInferenceConfigFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
+    requiredRunEnvironmentFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
+    reproducibilityRules: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
+    snapshotBindingRule: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES.snapshotBinding,
+    deterministicParameterRule: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES.deterministicParameters,
+    environmentCaptureRule: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES.environmentCapture,
+    parserPromptLinkageRule: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES.parserPromptLinkage,
+    cleanComparisonBoundaryRule: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES.cleanComparisonBoundary,
+    sourceBoundary: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeModelRunReproducibilityPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.modelRunReproducibilityPolicyId ?? policy?.model_run_reproducibility_policy_id;
+  if (!id) return null;
+  const requiredInferenceConfigFields = uniqueStrings(
+    normalizeStringArray(policy.requiredInferenceConfigFields ?? policy.required_inference_config_fields),
+  );
+  const requiredRunEnvironmentFields = uniqueStrings(
+    normalizeStringArray(policy.requiredRunEnvironmentFields ?? policy.required_run_environment_fields),
+  );
+  const reproducibilityRules =
+    policy.reproducibilityRules && typeof policy.reproducibilityRules === "object" && !Array.isArray(policy.reproducibilityRules)
+      ? policy.reproducibilityRules
+      : {};
+  const missingRuleKeys = Object.keys(REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES).filter((key) => !Object.hasOwn(reproducibilityRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION
+      ? null
+      : `policyVersion:${MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION}`,
+    REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS.every((field) => requiredInferenceConfigFields.includes(field))
+      ? null
+      : "requiredInferenceConfigFields",
+    stableJsonKey(requiredInferenceConfigFields) === stableJsonKey(REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS)
+      ? null
+      : "requiredInferenceConfigFields",
+    REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS.every((field) => requiredRunEnvironmentFields.includes(field))
+      ? null
+      : "requiredRunEnvironmentFields",
+    stableJsonKey(requiredRunEnvironmentFields) === stableJsonKey(REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS)
+      ? null
+      : "requiredRunEnvironmentFields",
+    missingRuleKeys.length ? `reproducibilityRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(reproducibilityRules) === stableJsonKey(REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES) ? null : "reproducibilityRules",
+    policyMentions(policy.snapshotBindingRule, ["provider endpoint", "model snapshot", "inference config"]) ? null : "snapshotBindingRule",
+    policyMentions(policy.deterministicParameterRule, ["decoding", "retry", "prompt"]) ? null : "deterministicParameterRule",
+    policyMentions(policy.environmentCaptureRule, ["orchestrator", "deployment", "library"]) ? null : "environmentCaptureRule",
+    policyMentions(policy.parserPromptLinkageRule, ["parser", "prompt", "schema"]) ? null : "parserPromptLinkageRule",
+    policyMentions(policy.cleanComparisonBoundaryRule, ["complete", "leaderboard", "validation"]) ? null : "cleanComparisonBoundaryRule",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    requiredInferenceConfigFields,
+    requiredRunEnvironmentFields,
+    reproducibilityRules,
+    snapshotBindingRule: policy.snapshotBindingRule ?? policy.snapshot_binding_rule ?? null,
+    deterministicParameterRule: policy.deterministicParameterRule ?? policy.deterministic_parameter_rule ?? null,
+    environmentCaptureRule: policy.environmentCaptureRule ?? policy.environment_capture_rule ?? null,
+    parserPromptLinkageRule: policy.parserPromptLinkageRule ?? policy.parser_prompt_linkage_rule ?? null,
+    cleanComparisonBoundaryRule: policy.cleanComparisonBoundaryRule ?? policy.clean_comparison_boundary_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_run_reproducibility_policy_review_required" : "model_run_reproducibility_policy_complete",
+  };
+}
+
+function buildModelRunReproducibilityPolicyEvidence(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeModelRunReproducibilityPolicy(policy, "submitted_workflow_model_run_reproducibility_policy"))
+    .filter(Boolean);
+  const seedRows = [
+    normalizeModelRunReproducibilityPolicy(defaultModelRunReproducibilityPolicy(releaseId), "seed_model_run_reproducibility_policy"),
+  ];
+  const activeSubmittedPolicy = submittedRows.find((row) => row.reviewReasons.length === 0);
+  const activePolicy = activeSubmittedPolicy ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `model-run-reproducibility-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredInferenceConfigFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
+    requiredRunEnvironmentFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
+    requiredReproducibilityRules: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: activeSubmittedPolicy
+      ? "submitted_model_run_reproducibility_policy_active"
+      : reviewRows.length
+        ? "submitted_model_run_reproducibility_policy_review_required"
+        : "seed_model_run_reproducibility_policy_active",
+  };
+}
+
+function defaultModelInferenceConfig(releaseId, modelRunReproducibilityPolicyId = `model-run-reproducibility-policy-${releaseId}`) {
   return {
     id: `model-inference-config-${releaseId}`,
+    modelRunReproducibilityPolicyId,
     evaluationRunId: "eval-full-rubric-demo",
     providerEndpoint: "approved-model-evaluation-endpoint",
     modelSnapshot: "gpt-demo-2026-10-01",
@@ -20549,9 +20737,10 @@ function defaultModelInferenceConfig(releaseId) {
   };
 }
 
-function defaultModelRunEnvironment(releaseId) {
+function defaultModelRunEnvironment(releaseId, modelRunReproducibilityPolicyId = `model-run-reproducibility-policy-${releaseId}`) {
   return {
     id: `model-run-environment-${releaseId}`,
+    modelRunReproducibilityPolicyId,
     evaluationRunId: "eval-full-rubric-demo",
     runtimeOrchestratorVersion: "lmca-eval-orchestrator-v1",
     apiRouteDeploymentId: "deployment-october-2026-demo",
@@ -20757,14 +20946,31 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
   const seedAssignmentAuditRows = [
     normalizeAssignmentSelectionAudit(defaultAssignmentSelectionAudit(releaseId, seedQueuePolicyRows[0].id), seedQueuePolicyRows[0].id, "seed_assignment_selection_audit"),
   ];
+  const modelRunReproducibilityPolicyEvidence = buildModelRunReproducibilityPolicyEvidence(
+    releaseId,
+    options.modelRunReproducibilityPolicies ?? [],
+  );
+  const activeModelRunReproducibilityPolicy = modelRunReproducibilityPolicyEvidence.activePolicy;
   const submittedInferenceRows = (options.modelInferenceConfigs ?? [])
-    .map((config) => normalizeModelInferenceConfig(config, "submitted_workflow_model_inference_config"))
+    .map((config) => normalizeModelInferenceConfig(config, "submitted_workflow_model_inference_config", activeModelRunReproducibilityPolicy))
     .filter(Boolean);
-  const seedInferenceRows = [normalizeModelInferenceConfig(defaultModelInferenceConfig(releaseId), "seed_model_inference_config")];
+  const seedInferenceRows = [
+    normalizeModelInferenceConfig(
+      defaultModelInferenceConfig(releaseId, modelRunReproducibilityPolicyEvidence.policyRows.find((row) => row.rowSource === "seed_model_run_reproducibility_policy")?.id),
+      "seed_model_inference_config",
+      modelRunReproducibilityPolicyEvidence.policyRows.find((row) => row.rowSource === "seed_model_run_reproducibility_policy"),
+    ),
+  ];
   const submittedEnvironmentRows = (options.modelRunEnvironments ?? [])
-    .map((environment) => normalizeModelRunEnvironment(environment, "submitted_workflow_model_run_environment"))
+    .map((environment) => normalizeModelRunEnvironment(environment, "submitted_workflow_model_run_environment", activeModelRunReproducibilityPolicy))
     .filter(Boolean);
-  const seedEnvironmentRows = [normalizeModelRunEnvironment(defaultModelRunEnvironment(releaseId), "seed_model_run_environment")];
+  const seedEnvironmentRows = [
+    normalizeModelRunEnvironment(
+      defaultModelRunEnvironment(releaseId, modelRunReproducibilityPolicyEvidence.policyRows.find((row) => row.rowSource === "seed_model_run_reproducibility_policy")?.id),
+      "seed_model_run_environment",
+      modelRunReproducibilityPolicyEvidence.policyRows.find((row) => row.rowSource === "seed_model_run_reproducibility_policy"),
+    ),
+  ];
   const submittedConflictRows = (options.raterItemConflicts ?? [])
     .map((conflict) => normalizeRaterItemConflict(conflict, "submitted_workflow_rater_item_conflict"))
     .filter(Boolean);
@@ -20826,6 +21032,12 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ["diagnostic_deferral_record", submittedDeferralRows.length ? submittedDeferralRows : seedDeferralRows],
     ["queue_policy_snapshot", submittedQueuePolicyRows.length ? submittedQueuePolicyRows : seedQueuePolicyRows],
     ["assignment_selection_audit", submittedAssignmentAuditRows.length ? submittedAssignmentAuditRows : seedAssignmentAuditRows],
+    [
+      "model_run_reproducibility_policy",
+      modelRunReproducibilityPolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("submitted_")).length
+        ? modelRunReproducibilityPolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("submitted_"))
+        : modelRunReproducibilityPolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("seed_")),
+    ],
     ["model_inference_config", submittedInferenceRows.length ? submittedInferenceRows : seedInferenceRows],
     ["model_run_environment", submittedEnvironmentRows.length ? submittedEnvironmentRows : seedEnvironmentRows],
     ["rater_item_conflict", submittedConflictRows.length ? submittedConflictRows : seedConflictRows],
@@ -20849,6 +21061,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ...submittedDeferralRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "diagnostic_deferral_record", artifactId: row.id, reason }))),
     ...submittedQueuePolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_policy_snapshot", artifactId: row.id, reason }))),
     ...submittedAssignmentAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "assignment_selection_audit", artifactId: row.id, reason }))),
+    ...modelRunReproducibilityPolicyEvidence.reviewRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "model_run_reproducibility_policy", artifactId: row.id, reason })),
+    ),
     ...submittedInferenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_inference_config", artifactId: row.id, reason }))),
     ...submittedEnvironmentRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_run_environment", artifactId: row.id, reason }))),
     ...submittedConflictRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_item_conflict", artifactId: row.id, reason }))),
@@ -20894,6 +21109,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     submittedDeferralRows.length > 0 &&
     submittedQueuePolicyRows.length > 0 &&
     submittedAssignmentAuditRows.length > 0 &&
+    modelRunReproducibilityPolicyEvidence.policyRows.some((row) => row.rowSource === "submitted_workflow_model_run_reproducibility_policy") &&
     submittedInferenceRows.length > 0 &&
     submittedEnvironmentRows.length > 0 &&
     submittedConflictRows.length > 0 &&
@@ -20944,6 +21160,12 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     requiredScheduleRebaselineDelayThresholdDays: REQUIRED_SCHEDULE_REBASELINE_DELAY_THRESHOLDS_DAYS,
     requiredScheduleRebaselineRules: REQUIRED_SCHEDULE_REBASELINE_RULES,
     scheduleSnapshotStatuses: SCHEDULE_SNAPSHOT_STATUSES,
+    modelRunReproducibilityPolicyEvidence,
+    modelRunReproducibilityPolicyId: activeModelRunReproducibilityPolicy?.id ?? null,
+    modelRunReproducibilityPolicyReleaseUseStatus: modelRunReproducibilityPolicyEvidence.releaseUseStatus,
+    requiredModelRunReproducibilityConfigFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
+    requiredModelRunReproducibilityEnvironmentFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
+    requiredModelRunReproducibilityRules: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
     blindingPreviewAuditRows: [...seedBlindingRows, ...submittedBlindingRows],
     partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
     raterPositionClusterExposureRows: [...seedExposureRows, ...submittedExposureRows],
@@ -20979,6 +21201,10 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       submittedDiagnosticDeferralRecordCount: submittedDeferralRows.length,
       submittedQueuePolicySnapshotCount: submittedQueuePolicyRows.length,
       submittedAssignmentSelectionAuditCount: submittedAssignmentAuditRows.length,
+      submittedModelRunReproducibilityPolicyCount: modelRunReproducibilityPolicyEvidence.policyRows.filter(
+        (row) => row.rowSource === "submitted_workflow_model_run_reproducibility_policy",
+      ).length,
+      modelRunReproducibilityPolicyReviewRows: modelRunReproducibilityPolicyEvidence.reviewRows.length,
       submittedModelInferenceConfigCount: submittedInferenceRows.length,
       submittedModelRunEnvironmentCount: submittedEnvironmentRows.length,
       submittedRaterItemConflictCount: submittedConflictRows.length,
@@ -21432,24 +21658,50 @@ function normalizeAssignmentSelectionAudit(audit, activeQueuePolicyId, rowSource
   };
 }
 
-function normalizeModelInferenceConfig(config, rowSource) {
+function normalizeModelInferenceConfig(config, rowSource, activeReproducibilityPolicy = null) {
   const id = config?.id ?? config?.modelInferenceConfigId ?? config?.model_inference_config_id;
   if (!id) return null;
+  const modelRunReproducibilityPolicyId =
+    config.modelRunReproducibilityPolicyId ?? config.model_run_reproducibility_policy_id ?? null;
+  const activePolicyId = activeReproducibilityPolicy?.id ?? null;
+  const requiredConfigFields = activeReproducibilityPolicy?.requiredInferenceConfigFields?.length
+    ? activeReproducibilityPolicy.requiredInferenceConfigFields
+    : REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS;
   const reviewReasons = [
+    activePolicyId
+      ? modelRunReproducibilityPolicyId === activePolicyId
+        ? null
+        : "modelRunReproducibilityPolicyId"
+      : null,
     requiredPromptFieldReason("evaluationRunId", config.evaluationRunId ?? config.evaluation_run_id),
-    requiredPromptFieldReason("providerEndpoint", config.providerEndpoint ?? config.provider_endpoint),
-    requiredPromptFieldReason("modelSnapshot", config.modelSnapshot ?? config.model_snapshot),
-    objectHasEntries(config.decodingParameters ?? config.decoding_parameters) ? null : "decodingParameters",
-    requiredPromptFieldReason("reasoningBudget", config.reasoningBudget ?? config.reasoning_budget),
-    normalizeStringArray(config.toolAvailability ?? config.tool_availability).length ? null : "toolAvailability",
-    requiredPromptFieldReason("messageStackTemplate", config.messageStackTemplate ?? config.message_stack_template),
-    requiredPromptFieldReason("retryPolicy", config.retryPolicy ?? config.retry_policy),
-    requiredPromptFieldReason("seedDeterminismArtifact", config.seedDeterminismArtifact ?? config.seed_determinism_artifact),
+    requiredConfigFields.includes("providerEndpoint")
+      ? requiredPromptFieldReason("providerEndpoint", config.providerEndpoint ?? config.provider_endpoint)
+      : null,
+    requiredConfigFields.includes("modelSnapshot") ? requiredPromptFieldReason("modelSnapshot", config.modelSnapshot ?? config.model_snapshot) : null,
+    requiredConfigFields.includes("decodingParameters")
+      ? objectHasEntries(config.decodingParameters ?? config.decoding_parameters)
+        ? null
+        : "decodingParameters"
+      : null,
+    requiredConfigFields.includes("reasoningBudget") ? requiredPromptFieldReason("reasoningBudget", config.reasoningBudget ?? config.reasoning_budget) : null,
+    requiredConfigFields.includes("toolAvailability")
+      ? normalizeStringArray(config.toolAvailability ?? config.tool_availability).length
+        ? null
+        : "toolAvailability"
+      : null,
+    requiredConfigFields.includes("messageStackTemplate")
+      ? requiredPromptFieldReason("messageStackTemplate", config.messageStackTemplate ?? config.message_stack_template)
+      : null,
+    requiredConfigFields.includes("retryPolicy") ? requiredPromptFieldReason("retryPolicy", config.retryPolicy ?? config.retry_policy) : null,
+    requiredConfigFields.includes("seedDeterminismArtifact")
+      ? requiredPromptFieldReason("seedDeterminismArtifact", config.seedDeterminismArtifact ?? config.seed_determinism_artifact)
+      : null,
     requiredPromptFieldReason("createdAt", config.createdAt ?? config.created_at),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    modelRunReproducibilityPolicyId,
     evaluationRunId: config.evaluationRunId ?? config.evaluation_run_id ?? null,
     providerEndpoint: config.providerEndpoint ?? config.provider_endpoint ?? null,
     modelSnapshot: config.modelSnapshot ?? config.model_snapshot ?? null,
@@ -21465,21 +21717,47 @@ function normalizeModelInferenceConfig(config, rowSource) {
   };
 }
 
-function normalizeModelRunEnvironment(environment, rowSource) {
+function normalizeModelRunEnvironment(environment, rowSource, activeReproducibilityPolicy = null) {
   const id = environment?.id ?? environment?.modelRunEnvironmentId ?? environment?.model_run_environment_id;
   if (!id) return null;
+  const modelRunReproducibilityPolicyId =
+    environment.modelRunReproducibilityPolicyId ?? environment.model_run_reproducibility_policy_id ?? null;
+  const activePolicyId = activeReproducibilityPolicy?.id ?? null;
+  const requiredEnvironmentFields = activeReproducibilityPolicy?.requiredRunEnvironmentFields?.length
+    ? activeReproducibilityPolicy.requiredRunEnvironmentFields
+    : REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS;
   const reviewReasons = [
+    activePolicyId
+      ? modelRunReproducibilityPolicyId === activePolicyId
+        ? null
+        : "modelRunReproducibilityPolicyId"
+      : null,
     requiredPromptFieldReason("evaluationRunId", environment.evaluationRunId ?? environment.evaluation_run_id),
-    requiredPromptFieldReason("runtimeOrchestratorVersion", environment.runtimeOrchestratorVersion ?? environment.runtime_orchestrator_version),
-    requiredPromptFieldReason("apiRouteDeploymentId", environment.apiRouteDeploymentId ?? environment.api_route_deployment_id),
-    objectHasEntries(environment.libraryVersions ?? environment.library_versions) ? null : "libraryVersions",
+    requiredEnvironmentFields.includes("runtimeOrchestratorVersion")
+      ? requiredPromptFieldReason("runtimeOrchestratorVersion", environment.runtimeOrchestratorVersion ?? environment.runtime_orchestrator_version)
+      : null,
+    requiredEnvironmentFields.includes("apiRouteDeploymentId")
+      ? requiredPromptFieldReason("apiRouteDeploymentId", environment.apiRouteDeploymentId ?? environment.api_route_deployment_id)
+      : null,
+    requiredEnvironmentFields.includes("libraryVersions")
+      ? objectHasEntries(environment.libraryVersions ?? environment.library_versions)
+        ? null
+        : "libraryVersions"
+      : null,
     requiredPromptFieldReason("timestamp", environment.timestamp ?? environment.createdAt ?? environment.created_at),
-    requiredPromptFieldReason("rateLimitRetryMetadata", environment.rateLimitRetryMetadata ?? environment.rate_limit_retry_metadata),
-    normalizeStringArray(environment.parserExtractorVersionLinks ?? environment.parser_extractor_version_links).length ? null : "parserExtractorVersionLinks",
+    requiredEnvironmentFields.includes("rateLimitRetryMetadata")
+      ? requiredPromptFieldReason("rateLimitRetryMetadata", environment.rateLimitRetryMetadata ?? environment.rate_limit_retry_metadata)
+      : null,
+    requiredEnvironmentFields.includes("parserExtractorVersionLinks")
+      ? normalizeStringArray(environment.parserExtractorVersionLinks ?? environment.parser_extractor_version_links).length
+        ? null
+        : "parserExtractorVersionLinks"
+      : null,
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    modelRunReproducibilityPolicyId,
     evaluationRunId: environment.evaluationRunId ?? environment.evaluation_run_id ?? null,
     runtimeOrchestratorVersion: environment.runtimeOrchestratorVersion ?? environment.runtime_orchestrator_version ?? null,
     apiRouteDeploymentId: environment.apiRouteDeploymentId ?? environment.api_route_deployment_id ?? null,
@@ -24592,6 +24870,7 @@ export function buildOctoberReleaseReport(
     benchmarkSubmissions: options.benchmarkSubmissions ?? [],
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
     modelRunEnvironments: options.modelRunEnvironments ?? [],
+    modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
   });
   const metricDirectionalityConfig = buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, leaderboardReport, humanCeiling, {
     metricConfigs: options.metricConfigs ?? [],
@@ -24769,6 +25048,7 @@ export function buildOctoberReleaseReport(
       modelFailureAuditArtifacts: options.modelFailureAudits ?? [],
       modelInferenceConfigs: options.modelInferenceConfigs ?? [],
       modelRunEnvironments: options.modelRunEnvironments ?? [],
+      modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
       modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
     },
   );
@@ -24853,6 +25133,7 @@ export function buildOctoberReleaseReport(
     diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
     queuePolicySnapshots: options.queuePolicySnapshots ?? [],
     assignmentSelectionAudits: options.assignmentSelectionAudits ?? [],
+    modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
     modelRunEnvironments: options.modelRunEnvironments ?? [],
     raterItemConflicts: options.raterItemConflicts ?? [],
@@ -25149,6 +25430,7 @@ export function buildOctoberReleaseReport(
       diagnosticDeferralRecords: options.diagnosticDeferralRecords ?? [],
       queuePolicySnapshots: options.queuePolicySnapshots ?? [],
       assignmentSelectionAudits: options.assignmentSelectionAudits ?? [],
+      modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
       modelInferenceConfigs: options.modelInferenceConfigs ?? [],
       modelRunEnvironments: options.modelRunEnvironments ?? [],
       raterItemConflicts: options.raterItemConflicts ?? [],

@@ -18,6 +18,7 @@ import {
   MODEL_FAMILY_OVERLAP_POLICY_VERSION,
   MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
   MODEL_IMPROVEMENT_POLICY_VERSION,
+  MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
@@ -103,6 +104,9 @@ import {
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
+  REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
   REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
   REQUIRED_MODEL_IMPROVEMENT_METHODS,
   REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES,
@@ -979,6 +983,10 @@ const modelPromptSiblingContextPolicyVersion = MODEL_PROMPT_SIBLING_CONTEXT_POLI
 const modelPromptSiblingContextModes = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES;
 const modelPromptSiblingContextEvidenceFields = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS;
 const modelPromptSiblingContextRules = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES;
+const modelRunReproducibilityPolicyVersion = MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION;
+const modelRunReproducibilityConfigFields = REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS;
+const modelRunReproducibilityEnvironmentFields = REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS;
+const modelRunReproducibilityRules = REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES;
 const externalAssistanceContaminationPolicyVersion = EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION;
 const externalAssistanceTypes = REQUIRED_EXTERNAL_ASSISTANCE_TYPES;
 const externalAssistanceContaminatingTypes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES;
@@ -1433,6 +1441,7 @@ const phaseGateEvaluationResourceKeys = new Set([
   "leaderboard",
   "modelFailureAudit",
   "modelProviderDataHandlingPolicy",
+  "modelRunReproducibilityPolicy",
   "modelInferenceConfig",
   "modelRunEnvironment",
 ]);
@@ -5046,15 +5055,53 @@ const workflowWriteEndpoints = [
     requiredObjectFields: ["declinesReassignmentsByReason", "raterTierDistribution", "topicSourceLengthDistribution"],
     requiredExactFields: { compositionChangedLabelDenominators: false },
   }),
+  workflowWriteSpec(/^\/api\/v1\/model-run-reproducibility-policies$/, "model_run_reproducibility_policy_submitted", "modelRunReproducibilityPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "requiredInferenceConfigFields",
+      "requiredRunEnvironmentFields",
+      "reproducibilityRules",
+      "snapshotBindingRule",
+      "deterministicParameterRule",
+      "environmentCaptureRule",
+      "parserPromptLinkageRule",
+      "cleanComparisonBoundaryRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["requiredInferenceConfigFields", "requiredRunEnvironmentFields"],
+    requiredObjectFields: ["reproducibilityRules"],
+    requiredArrayIncludes: {
+      requiredInferenceConfigFields: modelRunReproducibilityConfigFields,
+      requiredRunEnvironmentFields: modelRunReproducibilityEnvironmentFields,
+    },
+    allowedArrayValues: {
+      requiredInferenceConfigFields: modelRunReproducibilityConfigFields,
+      requiredRunEnvironmentFields: modelRunReproducibilityEnvironmentFields,
+    },
+    requiredObjectKeys: { reproducibilityRules: Object.keys(modelRunReproducibilityRules) },
+    requiredStructuredFields: { reproducibilityRules: modelRunReproducibilityRules },
+    requiredStringIncludes: {
+      snapshotBindingRule: ["provider endpoint", "model snapshot", "inference config"],
+      deterministicParameterRule: ["decoding", "retry", "prompt"],
+      environmentCaptureRule: ["orchestrator", "deployment", "library"],
+      parserPromptLinkageRule: ["parser", "prompt", "schema"],
+      cleanComparisonBoundaryRule: ["complete", "leaderboard", "validation"],
+      sourceBoundary: ["Project default", "LMCA", "does not state"],
+    },
+    requiredExactFields: { policyVersion: modelRunReproducibilityPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/model-inference-configs$/, "model_inference_config_submitted", "modelInferenceConfig", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "evaluationRunId", "providerEndpoint", "modelSnapshot", "reasoningBudget", "messageStackTemplate", "retryPolicy", "seedDeterminismArtifact", "createdAt"],
+    requiredFields: ["id", "modelRunReproducibilityPolicyId", "evaluationRunId", "providerEndpoint", "modelSnapshot", "reasoningBudget", "messageStackTemplate", "retryPolicy", "seedDeterminismArtifact", "createdAt"],
     requiredNonEmptyArrayFields: ["toolAvailability"],
     requiredObjectFields: ["decodingParameters"],
   }),
   workflowWriteSpec(/^\/api\/v1\/model-run-environments$/, "model_run_environment_submitted", "modelRunEnvironment", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "evaluationRunId", "runtimeOrchestratorVersion", "apiRouteDeploymentId", "timestamp", "rateLimitRetryMetadata"],
+    requiredFields: ["id", "modelRunReproducibilityPolicyId", "evaluationRunId", "runtimeOrchestratorVersion", "apiRouteDeploymentId", "timestamp", "rateLimitRetryMetadata"],
     requiredNonEmptyArrayFields: ["parserExtractorVersionLinks"],
     requiredObjectFields: ["libraryVersions"],
   }),
@@ -5826,6 +5873,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/diagnostic-deferrals\/(?<id>[^/]+)$/, "diagnosticDeferralRecord", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/queue-policy-snapshots\/(?<id>[^/]+)$/, "queuePolicySnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/assignment-selection-audits\/(?<id>[^/]+)$/, "assignmentSelectionAudit", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-run-reproducibility-policies\/(?<id>[^/]+)$/, "modelRunReproducibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/model-inference-configs\/(?<id>[^/]+)$/, "modelInferenceConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/model-run-environments\/(?<id>[^/]+)$/, "modelRunEnvironment", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-item-conflicts\/(?<id>[^/]+)$/, "raterItemConflict", expertAuditWorkflowRoles),
@@ -8580,6 +8628,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const diagnosticDeferralRecords = latestWorkflowResources(workflowEvents, "diagnosticDeferralRecord");
   const queuePolicySnapshots = latestWorkflowResources(workflowEvents, "queuePolicySnapshot");
   const assignmentSelectionAudits = latestWorkflowResources(workflowEvents, "assignmentSelectionAudit");
+  const modelRunReproducibilityPolicies = latestWorkflowResources(workflowEvents, "modelRunReproducibilityPolicy");
   const modelInferenceConfigs = latestWorkflowResources(workflowEvents, "modelInferenceConfig");
   const modelRunEnvironments = latestWorkflowResources(workflowEvents, "modelRunEnvironment");
   const raterItemConflicts = latestWorkflowResources(workflowEvents, "raterItemConflict");
@@ -8770,6 +8819,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     diagnosticDeferralRecords,
     queuePolicySnapshots,
     assignmentSelectionAudits,
+    modelRunReproducibilityPolicies,
     modelInferenceConfigs,
     modelRunEnvironments,
     raterItemConflicts,
@@ -8955,6 +9005,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     diagnosticDeferralRecords,
     queuePolicySnapshots,
     assignmentSelectionAudits,
+    modelRunReproducibilityPolicies,
     modelInferenceConfigs,
     modelRunEnvironments,
     raterItemConflicts,

@@ -99,6 +99,37 @@ const trainingExportDownweightRules = {
   lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
   protectedSplit: "exclude_from_training_exports_with_weight_0",
 };
+const modelRunReproducibilityConfigFields = [
+  "providerEndpoint",
+  "modelSnapshot",
+  "decodingParameters",
+  "reasoningBudget",
+  "toolAvailability",
+  "messageStackTemplate",
+  "retryPolicy",
+  "seedDeterminismArtifact",
+];
+const modelRunReproducibilityEnvironmentFields = [
+  "runtimeOrchestratorVersion",
+  "apiRouteDeploymentId",
+  "libraryVersions",
+  "rateLimitRetryMetadata",
+  "parserExtractorVersionLinks",
+];
+const modelRunReproducibilityRules = {
+  snapshotBinding:
+    "Every model-evaluation run must bind to an approved provider endpoint, resolved model snapshot, and frozen model inference config before leaderboard, validation, or release-artifact use.",
+  deterministicParameters:
+    "Decoding parameters, reasoning budget, tool availability, message stack template, retry policy, and seed or determinism artifacts are recorded exactly; retries may not mutate the prompt or add protected context.",
+  environmentCapture:
+    "Runtime orchestrator version, API route deployment id, library versions, parser/extractor links, timestamp, and rate-limit retry metadata are captured for each run environment.",
+  parserPromptLinkage:
+    "Parser and prompt/extractor versions are linked so model outputs can be interpreted against the same schema, prompt track, and extraction rules used in the run.",
+  cleanComparisonBoundary:
+    "Only runs with complete config and environment provenance can support clean common-subset leaderboard, validation, or release-artifact claims; incomplete rows require review or sensitivity labeling.",
+  sourceBoundary:
+    "Project default model-run reproducibility requirements are frozen here; LMCA motivates reproducible model evaluation but does not state these exact platform capture fields.",
+};
 const itemTextNormalizationFieldPolicies = {
   canonicalText:
     "Canonical item text preserves the source-authored position or critique wording with Unicode NFC, LF line endings, and transport-only trimming; semantic edits require a new ItemTextVersion and diff artifact.",
@@ -1502,6 +1533,30 @@ const workflowTemplates = [
           "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
         lmcaSourceBoundary:
           "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "model-run-reproducibility-policy",
+    label: "Model Run Reproducibility Policy",
+    endpoint: () => "/api/v1/model-run-reproducibility-policies",
+    resourceKey: "modelRunReproducibilityPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exact model-evaluation config and run-environment fields required for reproducible release claims.",
+    payload: () => ({
+      modelRunReproducibilityPolicy: {
+        id: `model-run-reproducibility-policy-${releaseId}`,
+        policyVersion: "model-run-reproducibility-rlhf90-v1",
+        requiredInferenceConfigFields: modelRunReproducibilityConfigFields,
+        requiredRunEnvironmentFields: modelRunReproducibilityEnvironmentFields,
+        reproducibilityRules: modelRunReproducibilityRules,
+        snapshotBindingRule: modelRunReproducibilityRules.snapshotBinding,
+        deterministicParameterRule: modelRunReproducibilityRules.deterministicParameters,
+        environmentCaptureRule: modelRunReproducibilityRules.environmentCapture,
+        parserPromptLinkageRule: modelRunReproducibilityRules.parserPromptLinkage,
+        cleanComparisonBoundaryRule: modelRunReproducibilityRules.cleanComparisonBoundary,
+        sourceBoundary: modelRunReproducibilityRules.sourceBoundary,
         frozenAt: new Date().toISOString(),
       },
     }),
