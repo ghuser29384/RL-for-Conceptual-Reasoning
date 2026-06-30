@@ -12,6 +12,7 @@ import {
   BENCHMARK_REFRESH_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+  EXPOSURE_QUARANTINE_POLICY_VERSION,
   EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
@@ -101,6 +102,11 @@ import {
   REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
   REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
   REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
+  REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
+  REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
+  REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
+  REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES,
+  REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES,
   REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
   REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
@@ -1131,6 +1137,12 @@ const spotCheckSamplingPolicyVersion = SPOT_CHECK_SAMPLING_POLICY_VERSION;
 const spotCheckSamplingStrata = REQUIRED_SPOT_CHECK_SAMPLING_STRATA;
 const spotCheckMinimumRateByStratum = REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM;
 const spotCheckMinimumCountByStratum = REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM;
+const exposureQuarantinePolicyVersion = EXPOSURE_QUARANTINE_POLICY_VERSION;
+const exposureQuarantineTriggerClasses = REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES;
+const exposureQuarantineAssignmentChecks = REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS;
+const exposureQuarantineActions = REQUIRED_EXPOSURE_QUARANTINE_ACTIONS;
+const exposureQuarantineReviewStatuses = REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES;
+const exposureQuarantineEffects = REQUIRED_EXPOSURE_QUARANTINE_EFFECTS;
 const positionClusterExposureSources = [
   "own_rating",
   "peer_score",
@@ -4975,12 +4987,67 @@ const workflowWriteEndpoints = [
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
   }),
+  workflowWriteSpec(/^\/api\/v1\/exposure-quarantine-policies$/, "exposure_quarantine_policy_submitted", "exposureQuarantinePolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "assignmentRecheckRule",
+      "denominatorBoundaryRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: [
+      "quarantineTriggerClasses",
+      "requiredAssignmentExposureChecks",
+      "allowedExposureSources",
+      "allowedQuarantineReviewStatuses",
+      "requiredBlindEligibilityEffects",
+    ],
+    requiredObjectFields: ["quarantineActionsByTrigger"],
+    requiredArrayIncludes: {
+      quarantineTriggerClasses: exposureQuarantineTriggerClasses,
+      requiredAssignmentExposureChecks: exposureQuarantineAssignmentChecks,
+      allowedExposureSources: positionClusterExposureSources,
+      allowedQuarantineReviewStatuses: exposureQuarantineReviewStatuses,
+      requiredBlindEligibilityEffects: exposureQuarantineEffects,
+    },
+    requiredObjectKeys: { quarantineActionsByTrigger: exposureQuarantineTriggerClasses },
+    requiredStructuredFields: { quarantineActionsByTrigger: exposureQuarantineActions },
+    requiredStringIncludes: {
+      assignmentRecheckRule: ["Later-added sibling", "post-lock discussion", "model-assisted checks"],
+      denominatorBoundaryRule: ["fresh blind initial", "human-only", "independent"],
+      sourceBoundary: ["Project default", "LMCA"],
+    },
+    requiredExactFields: {
+      policyVersion: exposureQuarantinePolicyVersion,
+      siblingContextRecheckRequired: true,
+      postLockExposureQuarantineRequired: true,
+      modelAssistedCheckHumanOnlyExclusionRequired: true,
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/raters\/(?<id>[^/]+)\/position-cluster-exposures$/, "rater_position_cluster_exposure_submitted", "raterPositionClusterExposure", expertWorkflowRoles, {
     allowHiddenMetadata: true,
     pathParamField: "raterId",
-    requiredFields: ["id", "raterId", "positionClusterId", "exposureSource", "exposureTimestamp", "exposureVisibilityScope", "blindEligibilityEffect", "createdBy", "timestamp"],
-    allowedValues: { exposureSource: positionClusterExposureSources },
-    requiredStringIncludesAny: { blindEligibilityEffect: ["excluded", "blocked", "non_blind"] },
+    requiredFields: [
+      "id",
+      "exposureQuarantinePolicyId",
+      "raterId",
+      "positionClusterId",
+      "exposureSource",
+      "exposureTimestamp",
+      "exposureVisibilityScope",
+      "blindEligibilityEffect",
+      "quarantineReviewStatus",
+      "quarantineAction",
+      "createdBy",
+      "timestamp",
+    ],
+    allowedValues: { exposureSource: positionClusterExposureSources, quarantineReviewStatus: exposureQuarantineReviewStatuses },
+    requiredStringIncludesAny: {
+      blindEligibilityEffect: ["excluded", "blocked", "non_blind"],
+      quarantineAction: ["reassign", "non_blind", "excluded", "block", "training"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/spot-check-sampling-policies$/, "spot_check_sampling_policy_submitted", "spotCheckSamplingPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -5235,15 +5302,19 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     requiredFields: [
       "id",
+      "exposureQuarantinePolicyId",
       "raterTrainingExposurePolicyId",
       "raterId",
       "assignmentId",
       "rubricVersion",
+      "exposureQuarantineCheckStatus",
       "protectedSplitConflictStatus",
       "protectedClusterEligibilityEffect",
       "createdAt",
     ],
     requiredNonEmptyArrayFields: ["publicSourceAnchorExampleIdsPreviouslySeen", "samePositionPositionClusterExposureChecks"],
+    requiredArrayIncludes: { samePositionPositionClusterExposureChecks: exposureQuarantineAssignmentChecks },
+    allowedValues: { exposureQuarantineCheckStatus: exposureQuarantineReviewStatuses },
     requiredStringIncludesAny: {
       protectedClusterEligibilityEffect: ["eligible_after_checks", "excluded", "blocked", "non_blind", "reassign"],
     },
@@ -5937,6 +6008,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/blinding-preview-audits\/(?<id>[^/]+)$/, "blindingPreviewAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/partial-task-promotion-policies\/(?<id>[^/]+)$/, "partialTaskPromotionPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/partial-task-outputs\/(?<id>[^/]+)$/, "partialTaskOutput", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/exposure-quarantine-policies\/(?<id>[^/]+)$/, "exposureQuarantinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/spot-check-sampling-policies\/(?<id>[^/]+)$/, "spotCheckSamplingPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/spot-checks\/(?<id>[^/]+)$/, "spotCheckQaItem", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-effort-qa-reviews\/(?<id>[^/]+)$/, "ratingEffortQaReview", expertAuditWorkflowRoles),
@@ -8697,6 +8769,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const blindingPreviewAudits = latestWorkflowResources(workflowEvents, "blindingPreviewAudit");
   const partialTaskPromotionPolicies = latestWorkflowResources(workflowEvents, "partialTaskPromotionPolicy");
   const partialTaskOutputs = latestWorkflowResources(workflowEvents, "partialTaskOutput");
+  const exposureQuarantinePolicies = latestWorkflowResources(workflowEvents, "exposureQuarantinePolicy");
   const raterPositionClusterExposures = latestWorkflowResources(workflowEvents, "raterPositionClusterExposure");
   const spotCheckSamplingPolicies = latestWorkflowResources(workflowEvents, "spotCheckSamplingPolicy");
   const spotCheckQaItems = latestWorkflowResources(workflowEvents, "spotCheckQaItem");
@@ -8890,6 +8963,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     blindingPreviewAudits,
     partialTaskPromotionPolicies,
     partialTaskOutputs,
+    exposureQuarantinePolicies,
     raterPositionClusterExposures,
     spotCheckSamplingPolicies,
     spotCheckQaItems,
@@ -9078,6 +9152,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     blindingPreviewAudits,
     partialTaskPromotionPolicies,
     partialTaskOutputs,
+    exposureQuarantinePolicies,
     raterPositionClusterExposures,
     spotCheckSamplingPolicies,
     spotCheckQaItems,

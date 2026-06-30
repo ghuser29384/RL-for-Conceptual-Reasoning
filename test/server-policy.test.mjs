@@ -79,6 +79,12 @@ import {
   REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
   REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
   REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+  EXPOSURE_QUARANTINE_POLICY_VERSION,
+  REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
+  REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
+  REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
+  REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES,
+  REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES,
   RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
@@ -698,6 +704,27 @@ const sourceIdentifiabilityReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVI
 const partialTaskPromotionEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
 const partialTaskPromotionCriteria = REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA;
 const partialTaskPromotionReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
+const exposureQuarantineTriggerClasses = REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES;
+const exposureQuarantineAssignmentChecks = REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS;
+const exposureQuarantineActions = REQUIRED_EXPOSURE_QUARANTINE_ACTIONS;
+const exposureQuarantineReviewStatuses = REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES;
+const exposureQuarantineEffects = REQUIRED_EXPOSURE_QUARANTINE_EFFECTS;
+const exposureQuarantineAllowedSources = [
+  "own_rating",
+  "peer_score",
+  "peer_rationale",
+  "post_lock_discussion",
+  "adjudication_memo",
+  "gold_feedback",
+  "practice_feedback",
+  "source_metadata",
+  "model_judge_output",
+  "model_assisted_check",
+  "protected_label",
+  "hidden_benchmark_access",
+  "external_assistance",
+  "declared_custom",
+];
 const verificationClaimGranularityReviewStatuses = [
   "policy_applied_claim_level",
   "compound_claim_justified",
@@ -756,6 +783,29 @@ function partialTaskPromotionPolicy(id = "partial-task-promotion-policy-workflow
       "Partial-task outputs stay outside full-rubric blind-rating counts, custom-loss targets, hidden-benchmark labels, and human-ceiling denominators unless a future governed policy creates a new labeled sensitivity artifact.",
     sourceBoundary:
       "Project default partial-output promotion criteria are frozen here; LMCA motivates preserved full-rubric labels but does not state these auxiliary workflow promotion rules.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function exposureQuarantinePolicy(id = "exposure-quarantine-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: EXPOSURE_QUARANTINE_POLICY_VERSION,
+    quarantineTriggerClasses: exposureQuarantineTriggerClasses,
+    requiredAssignmentExposureChecks: exposureQuarantineAssignmentChecks,
+    allowedExposureSources: exposureQuarantineAllowedSources,
+    quarantineActionsByTrigger: exposureQuarantineActions,
+    allowedQuarantineReviewStatuses: exposureQuarantineReviewStatuses,
+    requiredBlindEligibilityEffects: exposureQuarantineEffects,
+    siblingContextRecheckRequired: true,
+    postLockExposureQuarantineRequired: true,
+    modelAssistedCheckHumanOnlyExclusionRequired: true,
+    assignmentRecheckRule:
+      "Later-added sibling critiques, post-lock discussion, and model-assisted checks require same-position cluster recheck before any fresh blind initial or protected assignment.",
+    denominatorBoundaryRule:
+      "Exposure-quarantined rows stay outside fresh blind initial, independent blind, human-only, hidden-benchmark, and protected assignment denominators unless deprotected or routed non-blind.",
+    sourceBoundary:
+      "Project default exposure-quarantine rules are frozen here; LMCA motivates preserved blind initial labels but does not state these exact late-sibling, post-lock, or model-assisted exposure rules.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -2276,9 +2326,11 @@ function completeAuxiliaryWorkflowFixtures() {
   const modelReproducibilityPolicy = modelRunReproducibilityPolicy("model-run-reproducibility-policy-workflow-new");
   const sourceLeakagePolicy = sourceLeakageRedactionPolicy("source-leakage-redaction-policy-workflow-new");
   const partialPromotionPolicy = partialTaskPromotionPolicy("partial-task-promotion-policy-workflow-new");
+  const exposureQuarantine = exposureQuarantinePolicy("exposure-quarantine-policy-workflow-new");
   return {
     sourceLeakageRedactionPolicy: sourceLeakagePolicy,
     partialTaskPromotionPolicy: partialPromotionPolicy,
+    exposureQuarantinePolicy: exposureQuarantine,
     blindingPreviewAudit: {
       id: "blinding-preview-audit-workflow-new",
       sourceLeakageRedactionPolicyId: sourceLeakagePolicy.id,
@@ -2314,6 +2366,7 @@ function completeAuxiliaryWorkflowFixtures() {
     })),
     raterPositionClusterExposure: {
       id: "position-cluster-exposure-workflow-new",
+      exposureQuarantinePolicyId: exposureQuarantine.id,
       raterId: "demo-rater",
       positionClusterId: "lmca-public-is-ought-gap",
       itemIds: ["pos-ai-prior"],
@@ -2321,6 +2374,8 @@ function completeAuxiliaryWorkflowFixtures() {
       exposureTimestamp: "2026-10-01T00:32:00.000Z",
       exposureVisibilityScope: "same_position_cluster_peer_rationales",
       blindEligibilityEffect: "excluded_from_fresh_blind_initial_on_cluster",
+      quarantineReviewStatus: "quarantine_applied",
+      quarantineAction: "reassign_same_cluster_fresh_blind_initial_without_label",
       deprotectionTrainingExposureStatus: "training_exposure_recorded",
       createdBy: "demo-admin",
       timestamp: "2026-10-01T00:32:00.000Z",
@@ -2472,6 +2527,7 @@ function completeAuxiliaryWorkflowFixtures() {
     },
     raterTrainingExposureSnapshot: {
       id: "training-exposure-snapshot-workflow-new",
+      exposureQuarantinePolicyId: exposureQuarantine.id,
       raterTrainingExposurePolicyId: "rater-training-exposure-policy-workflow-new",
       raterId: "demo-rater",
       assignmentId: "assign-ai-base-rate",
@@ -2484,7 +2540,8 @@ function completeAuxiliaryWorkflowFixtures() {
       calibrationFeedbackEventIds: ["calibration-feedback-workflow-new"],
       remediationModuleState: "not_required",
       practiceSessionIds: ["practice-session-workflow-new"],
-      samePositionPositionClusterExposureChecks: ["no_prior_same_position_exposure", "position_cluster_checked"],
+      samePositionPositionClusterExposureChecks: exposureQuarantineAssignmentChecks,
+      exposureQuarantineCheckStatus: "quarantine_applied",
       protectedSplitConflictStatus: "no_conflict_for_current_assignment",
       protectedClusterEligibilityEffect: "eligible_after_checks",
       createdAt: "2026-10-01T00:40:00.000Z",
@@ -3449,6 +3506,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/source-leakage-redaction-policies/source-leakage-redaction-policy-smoke"],
     ["POST", "/api/v1/partial-task-promotion-policies"],
     ["GET", "/api/v1/partial-task-promotion-policies/partial-task-promotion-policy-smoke"],
+    ["POST", "/api/v1/exposure-quarantine-policies"],
+    ["GET", "/api/v1/exposure-quarantine-policies/exposure-quarantine-policy-smoke"],
     ["POST", "/api/v1/rating-workflow-profiles"],
     ["GET", "/api/v1/rating-workflow-profiles/rating-profile-smoke"],
     ["POST", "/api/v1/ui-experiment-policies"],
@@ -3629,6 +3688,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'id: "partial-task-promotion-policy"',
     'endpoint: () => "/api/v1/partial-task-promotion-policies"',
     "promotionCriteriaByTaskType: partialTaskPromotionCriteria",
+    'id: "exposure-quarantine-policy"',
+    'endpoint: () => "/api/v1/exposure-quarantine-policies"',
+    "quarantineActionsByTrigger: exposureQuarantineActions",
     'id: "visibility-policy"',
     'endpoint: () => "/api/v1/visibility-policies"',
     "roleFieldActionMatrix: visibilityRoleFieldActionMatrix",
@@ -11230,6 +11292,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(driftedPartialTaskPromotionPolicy.status, 400);
   assert.match(driftedPartialTaskPromotionPolicy.body.detail, /promotionCriteriaByTaskType/);
 
+  const driftedExposureQuarantinePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/exposure-quarantine-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      exposureQuarantinePolicy: {
+        ...auxiliaryWorkflow.exposureQuarantinePolicy,
+        id: "exposure-quarantine-policy-drifted",
+        quarantineTriggerClasses: exposureQuarantineTriggerClasses.filter((trigger) => trigger !== "later_added_sibling_critique"),
+      },
+    }),
+  });
+  assert.equal(driftedExposureQuarantinePolicy.status, 400);
+  assert.match(driftedExposureQuarantinePolicy.body.detail, /quarantineTriggerClasses/);
+
   const incompleteBlindingPreview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/blinding-preview-audits",
@@ -11661,6 +11738,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   for (const [resourceKey, url] of [
     ["sourceLeakageRedactionPolicy", "/api/v1/source-leakage-redaction-policies"],
     ["partialTaskPromotionPolicy", "/api/v1/partial-task-promotion-policies"],
+    ["exposureQuarantinePolicy", "/api/v1/exposure-quarantine-policies"],
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
     ["spotCheckSamplingPolicy", "/api/v1/spot-check-sampling-policies"],
@@ -11845,6 +11923,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(partialTaskPromotionPolicyById.body.promotionCriteriaByTaskType, partialTaskPromotionCriteria);
   assert.deepEqual(partialTaskPromotionPolicyById.body.allowedPromotionReviewStatuses, partialTaskPromotionReviewStatuses);
 
+  const exposureQuarantinePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/exposure-quarantine-policies/exposure-quarantine-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(exposureQuarantinePolicyById.status, 200);
+  assert.deepEqual(exposureQuarantinePolicyById.body.quarantineActionsByTrigger, exposureQuarantineActions);
+  assert.deepEqual(exposureQuarantinePolicyById.body.requiredAssignmentExposureChecks, exposureQuarantineAssignmentChecks);
+
   const blindingPreviewById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/blinding-preview-audits/blinding-preview-audit-workflow-new",
@@ -11918,7 +12005,10 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     headers: raterHeaders,
   });
   assert.equal(trainingExposureForAssignment.status, 200);
+  assert.equal(trainingExposureForAssignment.body.exposureQuarantinePolicyId, "exposure-quarantine-policy-workflow-new");
   assert.equal(trainingExposureForAssignment.body.raterTrainingExposurePolicyId, "rater-training-exposure-policy-workflow-new");
+  assert.deepEqual(trainingExposureForAssignment.body.samePositionPositionClusterExposureChecks, exposureQuarantineAssignmentChecks);
+  assert.equal(trainingExposureForAssignment.body.exposureQuarantineCheckStatus, "quarantine_applied");
   assert.equal(trainingExposureForAssignment.body.protectedSplitConflictStatus, "no_conflict_for_current_assignment");
 
   const trainingExposurePolicyById = await invokeApi(context, {
@@ -14676,6 +14766,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(releaseReport.body.ratingExperienceEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.sourceLeakageRedactionPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.partialTaskPromotionPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.exposureQuarantinePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.blindingPreviewAudits.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.partialTaskOutputs.length, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterPositionClusterExposures.length, 1);
@@ -14707,6 +14798,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.partialTaskPromotionPolicyId, "partial-task-promotion-policy-workflow-new");
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredPartialTaskPromotionCriteria, partialTaskPromotionCriteria);
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredPartialTaskPromotionReviewStatuses, partialTaskPromotionReviewStatuses);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedExposureQuarantinePolicyCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.exposureQuarantinePolicyReviewRows, 0);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.exposureQuarantinePolicyReleaseUseStatus,
+    "submitted_exposure_quarantine_policy_active",
+  );
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.exposureQuarantinePolicyId, "exposure-quarantine-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredExposureQuarantineTriggerClasses, exposureQuarantineTriggerClasses);
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredExposureQuarantineActions, exposureQuarantineActions);
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredExposureQuarantineAssignmentChecks, exposureQuarantineAssignmentChecks);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
   assert.equal(
@@ -14750,6 +14851,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   );
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedRaterTrainingExposurePolicyCount, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.raterTrainingExposurePolicyRows.at(-1).exposureWindowDays.goldFeedbackSameCluster, 180);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.raterPositionClusterExposureRows.at(-1).exposureQuarantinePolicyId,
+    "exposure-quarantine-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.raterTrainingExposureRows.at(-1).exposureQuarantinePolicyId,
+    "exposure-quarantine-policy-workflow-new",
+  );
   assert.equal(
     releaseReport.body.auxiliaryWorkflowEvidence.raterTrainingExposureRows.at(-1).raterTrainingExposurePolicyId,
     "rater-training-exposure-policy-workflow-new",
@@ -15317,7 +15426,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 147 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 148 + extendedRaterItemConflictTypes.length,
   );
 });
 

@@ -20211,6 +20211,46 @@ const POSITION_CLUSTER_EXPOSURE_SOURCES = [
   "declared_custom",
 ];
 
+export const EXPOSURE_QUARANTINE_POLICY_VERSION = "exposure-quarantine-rlhf90-v1";
+export const REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES = [
+  "later_added_sibling_critique",
+  "post_lock_discussion",
+  "model_assisted_check",
+  "peer_or_adjudication_context",
+  "protected_or_source_metadata",
+];
+export const REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS = [
+  "later_sibling_absence_checked",
+  "post_lock_discussion_exposure_checked",
+  "model_assisted_check_exposure_checked",
+  "same_position_cluster_checked",
+];
+export const REQUIRED_EXPOSURE_QUARANTINE_ACTIONS = {
+  later_added_sibling_critique:
+    "recheck_same_position_context_snapshot_and_block_fresh_blind_initial_until_absence_or_counterbalance_is_recorded",
+  post_lock_discussion:
+    "quarantine_same_position_cluster_from_fresh_blind_initial_and_route_only_to_revision_adjudication_or_training_context",
+  model_assisted_check:
+    "exclude_from_human_only_blind_denominators_and_reassign_same_cluster_unless_non_blind_expert_check",
+  peer_or_adjudication_context:
+    "exclude_from_independent_blind_denominators_after_peer_rationale_score_or_adjudication_memo_exposure",
+  protected_or_source_metadata:
+    "block_protected_assignment_until_deprotection_admin_exception_or_non_blind_role",
+};
+export const REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES = [
+  "quarantine_applied",
+  "reassigned_without_label",
+  "routed_to_non_blind_expert_check",
+  "training_exposure_recorded",
+  "admin_exception_deprotected",
+];
+export const REQUIRED_EXPOSURE_QUARANTINE_EFFECTS = [
+  "excluded_from_fresh_blind_initial_on_cluster",
+  "excluded_from_human_only_blind_denominator",
+  "blocked_from_protected_assignment_until_recheck",
+  "context_sensitive_release_label_required",
+];
+
 const ADJUDICATION_TRIAGE_LANES = [
   "release_blocking_disagreement",
   "low_clarity",
@@ -20566,6 +20606,107 @@ function normalizeSourceLeakageRedactionPolicy(policy, rowSource) {
   };
 }
 
+function defaultExposureQuarantinePolicy(releaseId) {
+  return {
+    id: `exposure-quarantine-policy-${releaseId}`,
+    policyVersion: EXPOSURE_QUARANTINE_POLICY_VERSION,
+    quarantineTriggerClasses: REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES,
+    requiredAssignmentExposureChecks: REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
+    allowedExposureSources: POSITION_CLUSTER_EXPOSURE_SOURCES,
+    quarantineActionsByTrigger: REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
+    allowedQuarantineReviewStatuses: REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES,
+    requiredBlindEligibilityEffects: REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
+    siblingContextRecheckRequired: true,
+    postLockExposureQuarantineRequired: true,
+    modelAssistedCheckHumanOnlyExclusionRequired: true,
+    assignmentRecheckRule:
+      "Later-added sibling critiques, post-lock discussion, and model-assisted checks require same-position cluster recheck before any fresh blind initial or protected assignment.",
+    denominatorBoundaryRule:
+      "Exposure-quarantined rows stay outside fresh blind initial, independent blind, human-only, hidden-benchmark, and protected assignment denominators unless deprotected or routed non-blind.",
+    sourceBoundary:
+      "Project default exposure-quarantine rules are frozen here; LMCA motivates preserved blind initial labels but does not state these exact late-sibling, post-lock, or model-assisted exposure rules.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeExposureQuarantinePolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.exposureQuarantinePolicyId ?? policy?.exposure_quarantine_policy_id;
+  if (!id) return null;
+  const quarantineTriggerClasses = uniqueStrings(normalizeStringArray(policy.quarantineTriggerClasses ?? policy.quarantine_trigger_classes));
+  const requiredAssignmentExposureChecks = uniqueStrings(
+    normalizeStringArray(policy.requiredAssignmentExposureChecks ?? policy.required_assignment_exposure_checks),
+  );
+  const allowedExposureSources = uniqueStrings(normalizeStringArray(policy.allowedExposureSources ?? policy.allowed_exposure_sources));
+  const quarantineActionsByTrigger =
+    policy.quarantineActionsByTrigger && typeof policy.quarantineActionsByTrigger === "object" && !Array.isArray(policy.quarantineActionsByTrigger)
+      ? policy.quarantineActionsByTrigger
+      : {};
+  const allowedQuarantineReviewStatuses = uniqueStrings(
+    normalizeStringArray(policy.allowedQuarantineReviewStatuses ?? policy.allowed_quarantine_review_statuses),
+  );
+  const requiredBlindEligibilityEffects = uniqueStrings(
+    normalizeStringArray(policy.requiredBlindEligibilityEffects ?? policy.required_blind_eligibility_effects),
+  );
+  const missingTriggerClasses = REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES.filter((trigger) => !quarantineTriggerClasses.includes(trigger));
+  const missingAssignmentChecks = REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS.filter((check) => !requiredAssignmentExposureChecks.includes(check));
+  const missingAllowedSources = POSITION_CLUSTER_EXPOSURE_SOURCES.filter((source) => !allowedExposureSources.includes(source));
+  const missingReviewStatuses = REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES.filter((status) => !allowedQuarantineReviewStatuses.includes(status));
+  const missingBlindEffects = REQUIRED_EXPOSURE_QUARANTINE_EFFECTS.filter((effect) => !requiredBlindEligibilityEffects.includes(effect));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === EXPOSURE_QUARANTINE_POLICY_VERSION
+      ? null
+      : `policyVersion:${EXPOSURE_QUARANTINE_POLICY_VERSION}`,
+    missingTriggerClasses.length ? `quarantineTriggerClasses:${missingTriggerClasses.join(",")}` : null,
+    stableJsonKey(quarantineTriggerClasses) === stableJsonKey(REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES) ? null : "quarantineTriggerClasses",
+    missingAssignmentChecks.length ? `requiredAssignmentExposureChecks:${missingAssignmentChecks.join(",")}` : null,
+    stableJsonKey(requiredAssignmentExposureChecks) === stableJsonKey(REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS)
+      ? null
+      : "requiredAssignmentExposureChecks",
+    missingAllowedSources.length ? `allowedExposureSources:${missingAllowedSources.join(",")}` : null,
+    stableJsonKey(allowedExposureSources) === stableJsonKey(POSITION_CLUSTER_EXPOSURE_SOURCES) ? null : "allowedExposureSources",
+    stableJsonKey(quarantineActionsByTrigger) === stableJsonKey(REQUIRED_EXPOSURE_QUARANTINE_ACTIONS)
+      ? null
+      : "quarantineActionsByTrigger",
+    missingReviewStatuses.length ? `allowedQuarantineReviewStatuses:${missingReviewStatuses.join(",")}` : null,
+    stableJsonKey(allowedQuarantineReviewStatuses) === stableJsonKey(REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES)
+      ? null
+      : "allowedQuarantineReviewStatuses",
+    missingBlindEffects.length ? `requiredBlindEligibilityEffects:${missingBlindEffects.join(",")}` : null,
+    stableJsonKey(requiredBlindEligibilityEffects) === stableJsonKey(REQUIRED_EXPOSURE_QUARANTINE_EFFECTS)
+      ? null
+      : "requiredBlindEligibilityEffects",
+    policy.siblingContextRecheckRequired === true ? null : "siblingContextRecheckRequired",
+    policy.postLockExposureQuarantineRequired === true ? null : "postLockExposureQuarantineRequired",
+    policy.modelAssistedCheckHumanOnlyExclusionRequired === true ? null : "modelAssistedCheckHumanOnlyExclusionRequired",
+    policyMentions(policy.assignmentRecheckRule, ["Later-added sibling", "post-lock discussion", "model-assisted checks"])
+      ? null
+      : "assignmentRecheckRule",
+    policyMentions(policy.denominatorBoundaryRule, ["fresh blind initial", "human-only", "independent"]) ? null : "denominatorBoundaryRule",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    quarantineTriggerClasses,
+    requiredAssignmentExposureChecks,
+    allowedExposureSources,
+    quarantineActionsByTrigger,
+    allowedQuarantineReviewStatuses,
+    requiredBlindEligibilityEffects,
+    siblingContextRecheckRequired: policy.siblingContextRecheckRequired === true,
+    postLockExposureQuarantineRequired: policy.postLockExposureQuarantineRequired === true,
+    modelAssistedCheckHumanOnlyExclusionRequired: policy.modelAssistedCheckHumanOnlyExclusionRequired === true,
+    assignmentRecheckRule: policy.assignmentRecheckRule ?? policy.assignment_recheck_rule ?? null,
+    denominatorBoundaryRule: policy.denominatorBoundaryRule ?? policy.denominator_boundary_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "exposure_quarantine_policy_review_required" : "exposure_quarantine_policy_complete",
+  };
+}
+
 function defaultBlindingPreviewAudit(releaseId, sourceLeakageRedactionPolicyId = `source-leakage-redaction-policy-${releaseId}`) {
   return {
     id: `blinding-preview-audit-${releaseId}`,
@@ -20683,9 +20824,10 @@ function defaultPartialTaskOutputs(releaseId, partialTaskPromotionPolicyId = `pa
   }));
 }
 
-function defaultRaterPositionClusterExposure(releaseId) {
+function defaultRaterPositionClusterExposure(releaseId, exposureQuarantinePolicyId = `exposure-quarantine-policy-${releaseId}`) {
   return {
     id: `position-cluster-exposure-${releaseId}`,
+    exposureQuarantinePolicyId,
     raterId: "seed-rater",
     positionClusterId: "lmca-public-is-ought-gap",
     itemIds: ["pos-ai-prior"],
@@ -20693,6 +20835,8 @@ function defaultRaterPositionClusterExposure(releaseId) {
     exposureTimestamp: "2026-10-01T00:00:00.000Z",
     exposureVisibilityScope: "same_position_cluster_peer_rationales",
     blindEligibilityEffect: "excluded_from_fresh_blind_initial_on_cluster",
+    quarantineReviewStatus: "quarantine_applied",
+    quarantineAction: "reassign_same_cluster_fresh_blind_initial_without_label",
     deprotectionTrainingExposureStatus: "training_exposure_recorded",
     createdBy: "seed-release-admin",
     timestamp: "2026-10-01T00:00:00.000Z",
@@ -21019,9 +21163,13 @@ function defaultRaterItemConflict(releaseId) {
   };
 }
 
-function defaultRaterTrainingExposureSnapshot(releaseId) {
+function defaultRaterTrainingExposureSnapshot(
+  releaseId,
+  exposureQuarantinePolicyId = `exposure-quarantine-policy-${releaseId}`,
+) {
   return {
     id: `training-exposure-snapshot-${releaseId}`,
+    exposureQuarantinePolicyId,
     raterTrainingExposurePolicyId: `rater-training-exposure-policy-${releaseId}`,
     raterId: "seed-rater",
     assignmentId: "assign-ai-base-rate",
@@ -21034,7 +21182,8 @@ function defaultRaterTrainingExposureSnapshot(releaseId) {
     calibrationFeedbackEventIds: ["calibration-feedback-seed"],
     remediationModuleState: "not_required",
     practiceSessionIds: ["practice-session-seed"],
-    samePositionPositionClusterExposureChecks: ["no_prior_same_position_exposure", "position_cluster_checked"],
+    samePositionPositionClusterExposureChecks: REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
+    exposureQuarantineCheckStatus: "quarantine_applied",
     protectedSplitConflictStatus: "no_conflict_for_current_assignment",
     protectedClusterEligibilityEffect: "eligible_after_checks",
     createdAt: "2026-10-01T00:00:00.000Z",
@@ -21170,10 +21319,30 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
   const seedPartialRows = defaultPartialTaskOutputs(releaseId, seedPartialTaskPromotionPolicyRows[0].id).map((output) =>
     normalizePartialTaskOutput(output, seedPartialTaskPromotionPolicyRows[0], "seed_partial_task_output"),
   );
-  const submittedExposureRows = (options.raterPositionClusterExposures ?? [])
-    .map((exposure) => normalizeRaterPositionClusterExposure(exposure, "submitted_workflow_rater_position_cluster_exposure"))
+  const submittedExposureQuarantinePolicyRows = (options.exposureQuarantinePolicies ?? [])
+    .map((policy) => normalizeExposureQuarantinePolicy(policy, "submitted_workflow_exposure_quarantine_policy"))
     .filter(Boolean);
-  const seedExposureRows = [normalizeRaterPositionClusterExposure(defaultRaterPositionClusterExposure(releaseId), "seed_rater_position_cluster_exposure")];
+  const seedExposureQuarantinePolicyRows = [
+    normalizeExposureQuarantinePolicy(defaultExposureQuarantinePolicy(releaseId), "seed_exposure_quarantine_policy"),
+  ];
+  const submittedActiveExposureQuarantinePolicy = submittedExposureQuarantinePolicyRows.find((row) => row.reviewReasons.length === 0);
+  const activeExposureQuarantinePolicy = submittedActiveExposureQuarantinePolicy ?? seedExposureQuarantinePolicyRows[0];
+  const submittedExposureRows = (options.raterPositionClusterExposures ?? [])
+    .map((exposure) =>
+      normalizeRaterPositionClusterExposure(
+        exposure,
+        activeExposureQuarantinePolicy,
+        "submitted_workflow_rater_position_cluster_exposure",
+      ),
+    )
+    .filter(Boolean);
+  const seedExposureRows = [
+    normalizeRaterPositionClusterExposure(
+      defaultRaterPositionClusterExposure(releaseId, seedExposureQuarantinePolicyRows[0].id),
+      seedExposureQuarantinePolicyRows[0],
+      "seed_rater_position_cluster_exposure",
+    ),
+  ];
   const submittedSpotCheckPolicyRows = (options.spotCheckSamplingPolicies ?? [])
     .map((policy) => normalizeSpotCheckSamplingPolicy(policy, "submitted_workflow_spot_check_sampling_policy"))
     .filter(Boolean);
@@ -21257,10 +21426,22 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
   const seedTrainingExposurePolicyRows = [normalizeRaterTrainingExposurePolicy(defaultRaterTrainingExposurePolicy(releaseId), "seed_rater_training_exposure_policy")];
   const activeTrainingExposurePolicy = submittedTrainingExposurePolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedTrainingExposurePolicyRows[0];
   const submittedTrainingExposureRows = (options.raterTrainingExposureSnapshots ?? [])
-    .map((snapshot) => normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposurePolicy, "submitted_workflow_rater_training_exposure_snapshot"))
+    .map((snapshot) =>
+      normalizeRaterTrainingExposureSnapshot(
+        snapshot,
+        activeTrainingExposurePolicy,
+        activeExposureQuarantinePolicy,
+        "submitted_workflow_rater_training_exposure_snapshot",
+      ),
+    )
     .filter(Boolean);
   const seedTrainingExposureRows = [
-    normalizeRaterTrainingExposureSnapshot(defaultRaterTrainingExposureSnapshot(releaseId), seedTrainingExposurePolicyRows[0], "seed_rater_training_exposure_snapshot"),
+    normalizeRaterTrainingExposureSnapshot(
+      defaultRaterTrainingExposureSnapshot(releaseId, seedExposureQuarantinePolicyRows[0].id),
+      seedTrainingExposurePolicyRows[0],
+      seedExposureQuarantinePolicyRows[0],
+      "seed_rater_training_exposure_snapshot",
+    ),
   ];
   const submittedReleaseErratumPolicyRows = (options.releaseErratumDisclosurePolicies ?? [])
     .map((policy) => normalizeReleaseErratumDisclosurePolicy(policy, "submitted_workflow_release_erratum_disclosure_policy"))
@@ -21302,6 +21483,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ["source_leakage_redaction_policy", submittedSourceLeakagePolicyRows.length ? submittedSourceLeakagePolicyRows : seedSourceLeakagePolicyRows],
     ["blinding_preview_audit", submittedBlindingRows.length ? submittedBlindingRows : seedBlindingRows],
     ["partial_task_promotion_policy", submittedPartialTaskPromotionPolicyRows.length ? submittedPartialTaskPromotionPolicyRows : seedPartialTaskPromotionPolicyRows],
+    ["exposure_quarantine_policy", submittedExposureQuarantinePolicyRows.length ? submittedExposureQuarantinePolicyRows : seedExposureQuarantinePolicyRows],
     ["rater_position_cluster_exposure", submittedExposureRows.length ? submittedExposureRows : seedExposureRows],
     ["spot_check_sampling_policy", submittedSpotCheckPolicyRows.length ? submittedSpotCheckPolicyRows : seedSpotCheckPolicyRows],
     ["spot_check_qa_item", submittedSpotCheckRows.length ? submittedSpotCheckRows : seedSpotCheckRows],
@@ -21335,6 +21517,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       row.reviewReasons.map((reason) => ({ artifactType: "partial_task_promotion_policy", artifactId: row.id, reason })),
     ),
     ...submittedPartialRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "partial_task_output", artifactId: row.id, reason }))),
+    ...submittedExposureQuarantinePolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "exposure_quarantine_policy", artifactId: row.id, reason })),
+    ),
     ...submittedExposureRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_position_cluster_exposure", artifactId: row.id, reason }))),
     ...submittedSpotCheckPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "spot_check_sampling_policy", artifactId: row.id, reason }))),
     ...submittedSpotCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "spot_check_qa_item", artifactId: row.id, reason }))),
@@ -21387,6 +21572,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     submittedBlindingRows.length > 0 &&
     submittedPartialTaskPromotionPolicyRows.length > 0 &&
     submittedPartialRows.length >= REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.length &&
+    submittedExposureQuarantinePolicyRows.length > 0 &&
     submittedExposureRows.length > 0 &&
     submittedSpotCheckPolicyRows.length > 0 &&
     submittedSpotCheckRows.length > 0 &&
@@ -21421,6 +21607,17 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     partialTaskEligibleUses: REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
     requiredPartialTaskPromotionCriteria: REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
     requiredPartialTaskPromotionReviewStatuses: REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+    exposureQuarantinePolicyId: activeExposureQuarantinePolicy.id,
+    exposureQuarantinePolicyReleaseUseStatus: submittedActiveExposureQuarantinePolicy
+      ? "submitted_exposure_quarantine_policy_active"
+      : submittedExposureQuarantinePolicyRows.length
+        ? "submitted_exposure_quarantine_policy_review_required"
+        : "seed_exposure_quarantine_policy_active",
+    requiredExposureQuarantineTriggerClasses: REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES,
+    requiredExposureQuarantineAssignmentChecks: REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
+    requiredExposureQuarantineActions: REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
+    requiredExposureQuarantineReviewStatuses: REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES,
+    requiredExposureQuarantineEffects: REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
     positionClusterExposureSources: POSITION_CLUSTER_EXPOSURE_SOURCES,
     adjudicationTriageLanes: ADJUDICATION_TRIAGE_LANES,
     requiredQueuePolicyComponents: REQUIRED_QUEUE_POLICY_COMPONENTS,
@@ -21474,6 +21671,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     blindingPreviewAuditRows: [...seedBlindingRows, ...submittedBlindingRows],
     partialTaskPromotionPolicyRows: [...seedPartialTaskPromotionPolicyRows, ...submittedPartialTaskPromotionPolicyRows],
     partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
+    exposureQuarantinePolicyRows: [...seedExposureQuarantinePolicyRows, ...submittedExposureQuarantinePolicyRows],
     raterPositionClusterExposureRows: [...seedExposureRows, ...submittedExposureRows],
     spotCheckSamplingPolicyRows: [...seedSpotCheckPolicyRows, ...submittedSpotCheckPolicyRows],
     spotCheckQaRows: [...seedSpotCheckRows, ...submittedSpotCheckRows],
@@ -21502,6 +21700,8 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       submittedPartialTaskPromotionPolicyCount: submittedPartialTaskPromotionPolicyRows.length,
       partialTaskPromotionPolicyReviewRows: submittedPartialTaskPromotionPolicyRows.filter((row) => row.reviewReasons.length).length,
       submittedPartialTaskOutputCount: submittedPartialRows.length,
+      submittedExposureQuarantinePolicyCount: submittedExposureQuarantinePolicyRows.length,
+      exposureQuarantinePolicyReviewRows: submittedExposureQuarantinePolicyRows.filter((row) => row.reviewReasons.length).length,
       submittedRaterPositionClusterExposureCount: submittedExposureRows.length,
       submittedSpotCheckSamplingPolicyCount: submittedSpotCheckPolicyRows.length,
       submittedSpotCheckQaItemCount: submittedSpotCheckRows.length,
@@ -21652,26 +21852,50 @@ function normalizePartialTaskOutput(output, activePromotionPolicy, rowSource) {
   };
 }
 
-function normalizeRaterPositionClusterExposure(exposure, rowSource) {
+function normalizeRaterPositionClusterExposure(exposure, activeExposureQuarantinePolicy, rowSource) {
   const id = exposure?.id ?? exposure?.exposureId ?? exposure?.exposure_id;
   if (!id) return null;
   const exposureSource = exposure.exposureSource ?? exposure.exposure_source ?? null;
   const blindEligibilityEffect = exposure.blindEligibilityEffect ?? exposure.blind_eligibility_effect ?? null;
+  const exposureQuarantinePolicyId = exposure.exposureQuarantinePolicyId ?? exposure.exposure_quarantine_policy_id ?? null;
+  const activePolicyId = activeExposureQuarantinePolicy?.id ?? null;
+  const allowedExposureSources = activeExposureQuarantinePolicy?.allowedExposureSources?.length
+    ? activeExposureQuarantinePolicy.allowedExposureSources
+    : POSITION_CLUSTER_EXPOSURE_SOURCES;
+  const allowedQuarantineReviewStatuses = activeExposureQuarantinePolicy?.allowedQuarantineReviewStatuses?.length
+    ? activeExposureQuarantinePolicy.allowedQuarantineReviewStatuses
+    : REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES;
+  const requiredBlindEligibilityEffects = activeExposureQuarantinePolicy?.requiredBlindEligibilityEffects?.length
+    ? activeExposureQuarantinePolicy.requiredBlindEligibilityEffects
+    : REQUIRED_EXPOSURE_QUARANTINE_EFFECTS;
+  const quarantineReviewStatus = exposure.quarantineReviewStatus ?? exposure.quarantine_review_status ?? null;
+  const quarantineAction = exposure.quarantineAction ?? exposure.quarantine_action ?? null;
   const reviewReasons = [
+    activePolicyId
+      ? exposureQuarantinePolicyId === activePolicyId
+        ? null
+        : "exposureQuarantinePolicyId"
+      : requiredPromptFieldReason("exposureQuarantinePolicyId", exposureQuarantinePolicyId),
     requiredPromptFieldReason("raterId", exposure.raterId ?? exposure.rater_id),
     requiredPromptFieldReason("positionClusterId", exposure.positionClusterId ?? exposure.position_cluster_id),
-    POSITION_CLUSTER_EXPOSURE_SOURCES.includes(exposureSource) ? null : "exposureSource",
+    allowedExposureSources.includes(exposureSource) ? null : "exposureSource",
     requiredPromptFieldReason("exposureTimestamp", exposure.exposureTimestamp ?? exposure.exposure_timestamp),
     requiredPromptFieldReason("exposureVisibilityScope", exposure.exposureVisibilityScope ?? exposure.exposure_visibility_scope),
-    policyMentions(blindEligibilityEffect, ["excluded"]) || policyMentions(blindEligibilityEffect, ["blocked"]) || policyMentions(blindEligibilityEffect, ["non_blind"])
+    requiredBlindEligibilityEffects.includes(blindEligibilityEffect) ||
+    policyMentions(blindEligibilityEffect, ["excluded"]) ||
+    policyMentions(blindEligibilityEffect, ["blocked"]) ||
+    policyMentions(blindEligibilityEffect, ["non_blind"])
       ? null
       : "blindEligibilityEffect",
+    allowedQuarantineReviewStatuses.includes(quarantineReviewStatus) ? null : "quarantineReviewStatus",
+    policyMentionsAny(quarantineAction, ["reassign", "non_blind", "excluded", "block", "training"]) ? null : "quarantineAction",
     requiredPromptFieldReason("createdBy", exposure.createdBy ?? exposure.created_by),
     requiredPromptFieldReason("timestamp", exposure.timestamp ?? exposure.createdAt ?? exposure.created_at),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    exposureQuarantinePolicyId,
     raterId: exposure.raterId ?? exposure.rater_id ?? null,
     positionClusterId: exposure.positionClusterId ?? exposure.position_cluster_id ?? null,
     itemIds: normalizeStringArray(exposure.itemIds ?? exposure.item_ids),
@@ -21679,6 +21903,8 @@ function normalizeRaterPositionClusterExposure(exposure, rowSource) {
     exposureTimestamp: exposure.exposureTimestamp ?? exposure.exposure_timestamp ?? null,
     exposureVisibilityScope: exposure.exposureVisibilityScope ?? exposure.exposure_visibility_scope ?? null,
     blindEligibilityEffect,
+    quarantineReviewStatus,
+    quarantineAction,
     deprotectionTrainingExposureStatus: exposure.deprotectionTrainingExposureStatus ?? exposure.deprotection_training_exposure_status ?? null,
     reviewReasons,
     status: reviewReasons.length ? "rater_position_cluster_exposure_review_required" : "rater_position_cluster_exposure_complete",
@@ -22205,10 +22431,23 @@ function normalizeRaterTrainingExposurePolicy(policy, rowSource) {
   };
 }
 
-function normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposurePolicy, rowSource) {
+function normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposurePolicy, activeExposureQuarantinePolicy, rowSource) {
   const id = snapshot?.id ?? snapshot?.trainingExposureSnapshotId ?? snapshot?.training_exposure_snapshot_id;
   if (!id) return null;
   const activePolicyId = activeTrainingExposurePolicy?.id ?? null;
+  const activeExposureQuarantinePolicyId = activeExposureQuarantinePolicy?.id ?? null;
+  const exposureQuarantinePolicyId = snapshot.exposureQuarantinePolicyId ?? snapshot.exposure_quarantine_policy_id ?? null;
+  const samePositionExposureChecks = normalizeStringArray(
+    snapshot.samePositionPositionClusterExposureChecks ?? snapshot.same_position_position_cluster_exposure_checks,
+  );
+  const requiredAssignmentExposureChecks = activeExposureQuarantinePolicy?.requiredAssignmentExposureChecks?.length
+    ? activeExposureQuarantinePolicy.requiredAssignmentExposureChecks
+    : REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS;
+  const missingAssignmentExposureChecks = requiredAssignmentExposureChecks.filter((check) => !samePositionExposureChecks.includes(check));
+  const allowedQuarantineReviewStatuses = activeExposureQuarantinePolicy?.allowedQuarantineReviewStatuses?.length
+    ? activeExposureQuarantinePolicy.allowedQuarantineReviewStatuses
+    : REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES;
+  const exposureQuarantineCheckStatus = snapshot.exposureQuarantineCheckStatus ?? snapshot.exposure_quarantine_check_status ?? null;
   const protectedClusterEligibilityEffect = snapshot.protectedClusterEligibilityEffect ?? snapshot.protected_cluster_eligibility_effect ?? null;
   const safeProtectedClusterEligibilityEffect =
     protectedClusterEligibilityEffect === "eligible_after_checks" ||
@@ -22218,13 +22457,18 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposure
     policyMentions(protectedClusterEligibilityEffect, ["reassign"]);
   const reviewReasons = [
     snapshot.raterTrainingExposurePolicyId === activePolicyId ? null : "raterTrainingExposurePolicyId",
+    activeExposureQuarantinePolicyId
+      ? exposureQuarantinePolicyId === activeExposureQuarantinePolicyId
+        ? null
+        : "exposureQuarantinePolicyId"
+      : requiredPromptFieldReason("exposureQuarantinePolicyId", exposureQuarantinePolicyId),
     requiredPromptFieldReason("raterId", snapshot.raterId ?? snapshot.rater_id),
     requiredPromptFieldReason("assignmentId", snapshot.assignmentId ?? snapshot.assignment_id),
     requiredPromptFieldReason("rubricVersion", snapshot.rubricVersion ?? snapshot.rubric_version),
     normalizeStringArray(snapshot.publicSourceAnchorExampleIdsPreviouslySeen ?? snapshot.public_source_anchor_example_ids_previously_seen).length ? null : "publicSourceAnchorExampleIdsPreviouslySeen",
-    normalizeStringArray(snapshot.samePositionPositionClusterExposureChecks ?? snapshot.same_position_position_cluster_exposure_checks).length
-      ? null
-      : "samePositionPositionClusterExposureChecks",
+    samePositionExposureChecks.length ? null : "samePositionPositionClusterExposureChecks",
+    missingAssignmentExposureChecks.length ? `samePositionPositionClusterExposureChecks:${missingAssignmentExposureChecks.join(",")}` : null,
+    allowedQuarantineReviewStatuses.includes(exposureQuarantineCheckStatus) ? null : "exposureQuarantineCheckStatus",
     requiredPromptFieldReason("protectedSplitConflictStatus", snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status),
     safeProtectedClusterEligibilityEffect ? null : "protectedClusterEligibilityEffect",
     policyMentionsAny(protectedClusterEligibilityEffect, BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS)
@@ -22235,10 +22479,14 @@ function normalizeRaterTrainingExposureSnapshot(snapshot, activeTrainingExposure
   return {
     id,
     rowSource,
+    exposureQuarantinePolicyId,
     raterTrainingExposurePolicyId: snapshot.raterTrainingExposurePolicyId ?? null,
     raterId: snapshot.raterId ?? snapshot.rater_id ?? null,
     assignmentId: snapshot.assignmentId ?? snapshot.assignment_id ?? null,
     ratingId: snapshot.ratingId ?? snapshot.rating_id ?? null,
+    samePositionPositionClusterExposureChecks: samePositionExposureChecks,
+    missingAssignmentExposureChecks,
+    exposureQuarantineCheckStatus,
     protectedSplitConflictStatus: snapshot.protectedSplitConflictStatus ?? snapshot.protected_split_conflict_status ?? null,
     protectedClusterEligibilityEffect,
     reviewReasons,
@@ -25476,6 +25724,7 @@ export function buildOctoberReleaseReport(
     blindingPreviewAudits: options.blindingPreviewAudits ?? [],
     partialTaskPromotionPolicies: options.partialTaskPromotionPolicies ?? [],
     partialTaskOutputs: options.partialTaskOutputs ?? [],
+    exposureQuarantinePolicies: options.exposureQuarantinePolicies ?? [],
     raterPositionClusterExposures: options.raterPositionClusterExposures ?? [],
     spotCheckSamplingPolicies: options.spotCheckSamplingPolicies ?? [],
     spotCheckQaItems: options.spotCheckQaItems ?? [],
@@ -25774,6 +26023,7 @@ export function buildOctoberReleaseReport(
       blindingPreviewAudits: options.blindingPreviewAudits ?? [],
       partialTaskPromotionPolicies: options.partialTaskPromotionPolicies ?? [],
       partialTaskOutputs: options.partialTaskOutputs ?? [],
+      exposureQuarantinePolicies: options.exposureQuarantinePolicies ?? [],
       raterPositionClusterExposures: options.raterPositionClusterExposures ?? [],
       spotCheckSamplingPolicies: options.spotCheckSamplingPolicies ?? [],
       spotCheckQaItems: options.spotCheckQaItems ?? [],

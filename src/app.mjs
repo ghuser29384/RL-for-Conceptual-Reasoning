@@ -3,7 +3,13 @@ import {
   RATER_DATA_GOVERNANCE_CATEGORIES,
   RATER_DATA_USE_SCOPES,
   REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
+  EXPOSURE_QUARANTINE_POLICY_VERSION,
   SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+  REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
+  REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
+  REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
+  REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES,
+  REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES,
   REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
   REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
   REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
@@ -808,7 +814,58 @@ const sourceIdentifiabilityReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVI
 const partialTaskPromotionEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
 const partialTaskPromotionCriteria = REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA;
 const partialTaskPromotionReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
+const exposureQuarantineTriggerClasses = REQUIRED_EXPOSURE_QUARANTINE_TRIGGER_CLASSES;
+const exposureQuarantineAssignmentChecks = REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS;
+const exposureQuarantineActions = REQUIRED_EXPOSURE_QUARANTINE_ACTIONS;
+const exposureQuarantineReviewStatuses = REQUIRED_EXPOSURE_QUARANTINE_REVIEW_STATUSES;
+const exposureQuarantineEffects = REQUIRED_EXPOSURE_QUARANTINE_EFFECTS;
+const exposureQuarantineAllowedSources = [
+  "own_rating",
+  "peer_score",
+  "peer_rationale",
+  "post_lock_discussion",
+  "adjudication_memo",
+  "gold_feedback",
+  "practice_feedback",
+  "source_metadata",
+  "model_judge_output",
+  "model_assisted_check",
+  "protected_label",
+  "hidden_benchmark_access",
+  "external_assistance",
+  "declared_custom",
+];
 const workflowTemplates = [
+  {
+    id: "exposure-quarantine-policy",
+    label: "Exposure Quarantine Policy",
+    endpoint: () => "/api/v1/exposure-quarantine-policies",
+    resourceKey: "exposureQuarantinePolicy",
+    requiredRole: "admin",
+    summary: "Freeze recheck and denominator rules for late siblings, post-lock discussion, and model-assisted-check exposure.",
+    payload: () => ({
+      exposureQuarantinePolicy: {
+        id: `exposure-quarantine-policy-${releaseId}`,
+        policyVersion: EXPOSURE_QUARANTINE_POLICY_VERSION,
+        quarantineTriggerClasses: exposureQuarantineTriggerClasses,
+        requiredAssignmentExposureChecks: exposureQuarantineAssignmentChecks,
+        allowedExposureSources: exposureQuarantineAllowedSources,
+        quarantineActionsByTrigger: exposureQuarantineActions,
+        allowedQuarantineReviewStatuses: exposureQuarantineReviewStatuses,
+        requiredBlindEligibilityEffects: exposureQuarantineEffects,
+        siblingContextRecheckRequired: true,
+        postLockExposureQuarantineRequired: true,
+        modelAssistedCheckHumanOnlyExclusionRequired: true,
+        assignmentRecheckRule:
+          "Later-added sibling critiques, post-lock discussion, and model-assisted checks require same-position cluster recheck before any fresh blind initial or protected assignment.",
+        denominatorBoundaryRule:
+          "Exposure-quarantined rows stay outside fresh blind initial, independent blind, human-only, hidden-benchmark, and protected assignment denominators unless deprotected or routed non-blind.",
+        sourceBoundary:
+          "Project default exposure-quarantine rules are frozen here; LMCA motivates preserved blind initial labels but does not state these exact late-sibling, post-lock, or model-assisted exposure rules.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
   {
     id: "partial-task-promotion-policy",
     label: "Partial Task Promotion Policy",
