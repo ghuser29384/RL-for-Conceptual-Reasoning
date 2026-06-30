@@ -11,6 +11,7 @@ import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   BENCHMARK_REFRESH_POLICY_VERSION,
+  CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
@@ -31,6 +32,10 @@ import {
   REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
   REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
   REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
+  REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
+  REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
+  REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
+  REQUIRED_CLOUD_SECURITY_CONTROLS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
@@ -1250,6 +1255,10 @@ const clientSurfaceChecks = [
   "screen_state_output_schema_binding",
   "csp",
 ];
+const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
+const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
+const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
+const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
 const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
@@ -1942,6 +1951,32 @@ function completeOperationalControlWorkflowFixtures() {
 	    failures: [],
 	    checkedAt: "2026-10-01T00:16:00.000Z",
 	  })),
+    cloudSecurityBudgetPolicy: {
+      id: "cloud-security-budget-policy-workflow-new",
+      releaseId: "october-2026-demo",
+      policyVersion: CLOUD_SECURITY_BUDGET_POLICY_VERSION,
+      currency: "USD",
+      budgetWindow: "2026-07-01_to_2026-10-31",
+      totalBudgetRangeUsd: cloudSecurityBudgetRangeUsd,
+      categoryMinimumUsd: cloudSecurityBudgetCategoryMinimumUsd,
+      requiredControls: cloudSecurityControls,
+      approvalStatuses: cloudSecurityApprovalStatuses,
+      monthlySpendReviewRequired: true,
+      protectedSplitCostIsolationRequired: true,
+      productionReleaseBlockedUntilReserved: true,
+      externalWormAuditLogFundingRequired: true,
+      overrunEscalationRule:
+        "Any cloud or security overrun that threatens protected storage, restore, identity, observability, WORM audit logging, or incident response reserves blocks production release until scope or budget is reapproved.",
+      productionReleaseBlockRule:
+        "Production release claims require reserved cloud/security budget for hosting, database restore, protected storage, identity/RBAC, observability, security review, incident response, and external WORM audit logging.",
+      protectedSplitIsolationFundingRule:
+        "Hidden benchmark, protected validation, private rater data, and audit-log retention infrastructure must remain funded independently from public-demo or static-site hosting.",
+      sourceBoundary:
+        "Project default cloud/security spend controls are frozen here; LMCA motivates protected blinding and audit integrity but does not state exact platform spend bands.",
+      owner: "release-operations",
+      approver: "security-reviewer",
+      frozenAt: "2026-10-01T00:16:30.000Z",
+    },
     sensitiveAuditChainEvents,
     sensitiveAuditChainGovernanceApprovalRecords,
   };
@@ -3508,6 +3543,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/partial-task-promotion-policies/partial-task-promotion-policy-smoke"],
     ["POST", "/api/v1/exposure-quarantine-policies"],
     ["GET", "/api/v1/exposure-quarantine-policies/exposure-quarantine-policy-smoke"],
+    ["POST", "/api/v1/cloud-security-budget-policies"],
+    ["GET", "/api/v1/cloud-security-budget-policies/cloud-security-budget-policy-smoke"],
     ["POST", "/api/v1/rating-workflow-profiles"],
     ["GET", "/api/v1/rating-workflow-profiles/rating-profile-smoke"],
     ["POST", "/api/v1/ui-experiment-policies"],
@@ -3691,6 +3728,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'id: "exposure-quarantine-policy"',
     'endpoint: () => "/api/v1/exposure-quarantine-policies"',
     "quarantineActionsByTrigger: exposureQuarantineActions",
+    'id: "cloud-security-budget-policy"',
+    'endpoint: () => "/api/v1/cloud-security-budget-policies"',
+    "categoryMinimumUsd: cloudSecurityBudgetCategoryMinimumUsd",
     'id: "visibility-policy"',
     'endpoint: () => "/api/v1/visibility-policies"',
     "roleFieldActionMatrix: visibilityRoleFieldActionMatrix",
@@ -13684,6 +13724,45 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 	  assert.equal(incompleteClientSurfaceCheck.status, 400);
 	  assert.match(incompleteClientSurfaceCheck.body.detail, /no_heatmaps|no_third_party_pixels|screen_state_output_schema_binding/);
 
+  const cloudSecurityBudgetPolicyResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/cloud-security-budget-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ cloudSecurityBudgetPolicy: operationalControls.cloudSecurityBudgetPolicy }),
+  });
+  assert.equal(cloudSecurityBudgetPolicyResponse.status, 201);
+
+  const cloudSecurityBudgetPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/cloud-security-budget-policies/cloud-security-budget-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(cloudSecurityBudgetPolicyById.status, 200);
+  assert.deepEqual(cloudSecurityBudgetPolicyById.body.categoryMinimumUsd, cloudSecurityBudgetCategoryMinimumUsd);
+  assert.equal(cloudSecurityBudgetPolicyById.body.productionReleaseBlockedUntilReserved, true);
+
+  const underfundedCloudSecurityBudgetPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/cloud-security-budget-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      cloudSecurityBudgetPolicy: {
+        ...operationalControls.cloudSecurityBudgetPolicy,
+        id: "cloud-security-budget-policy-underfunded",
+        totalBudgetRangeUsd: { minimum: 10000, maximum: 20000 },
+        categoryMinimumUsd: {
+          ...cloudSecurityBudgetCategoryMinimumUsd,
+          externalWormAuditLogOrLedger: 0,
+        },
+        requiredControls: cloudSecurityControls.filter((control) => control !== "external_worm_audit_log"),
+        approvalStatuses: ["budget_reserved"],
+        productionReleaseBlockedUntilReserved: false,
+      },
+    }),
+  });
+  assert.equal(underfundedCloudSecurityBudgetPolicy.status, 400);
+  assert.match(underfundedCloudSecurityBudgetPolicy.body.detail, /totalBudgetRangeUsd|categoryMinimumUsd|requiredControls|approvalStatuses|productionReleaseBlockedUntilReserved/);
+
   for (const governanceApprovalRecord of operationalControls.sensitiveAuditChainGovernanceApprovalRecords) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -15238,6 +15317,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.queueStaleByDelayScans.length, queueFreshnessLanes.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.clientSurfaceIntegrityPolicies.length, clientSurfaces.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.clientSurfaceIntegrityChecks.length, clientSurfaces.length);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.cloudSecurityBudgetPolicies.length, 1);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainEvents.length, auditChainEventKinds.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainVerifications.length, 1);
   assert.equal(releaseReport.body.operationalControlEvidence.releaseUseStatus, "submitted_operational_control_evidence_complete");
@@ -15246,6 +15326,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingClientSurfaceCount, clientSurfaces.length);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedCloudSecurityBudgetPolicyCount, 1);
+  assert.equal(releaseReport.body.operationalControlEvidence.cloudSecurityBudgetPolicyId, "cloud-security-budget-policy-workflow-new");
+  assert.equal(releaseReport.body.operationalControlEvidence.cloudSecurityBudgetPolicyReleaseUseStatus, "submitted_cloud_security_budget_policy_active");
+  assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredCloudSecurityBudgetRangeUsd, cloudSecurityBudgetRangeUsd);
+  assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredCloudSecurityBudgetCategoryMinimumUsd, cloudSecurityBudgetCategoryMinimumUsd);
+  assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredCloudSecurityControls, cloudSecurityControls);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingAuditChainKindCount, auditChainEventKinds.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedSensitiveAuditChainGovernanceApprovalCount, 1 + auditChainEventKinds.length);
   assert.equal(
@@ -15426,7 +15512,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 148 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 149 + extendedRaterItemConflictTypes.length,
   );
 });
 

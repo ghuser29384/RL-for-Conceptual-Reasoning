@@ -3,8 +3,13 @@ import {
   RATER_DATA_GOVERNANCE_CATEGORIES,
   RATER_DATA_USE_SCOPES,
   REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
+  CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   EXPOSURE_QUARANTINE_POLICY_VERSION,
   SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+  REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
+  REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
+  REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
+  REQUIRED_CLOUD_SECURITY_CONTROLS,
   REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
   REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
   REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
@@ -835,7 +840,47 @@ const exposureQuarantineAllowedSources = [
   "external_assistance",
   "declared_custom",
 ];
+const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
+const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
+const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
+const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
 const workflowTemplates = [
+  {
+    id: "cloud-security-budget-policy",
+    label: "Cloud Security Budget Policy",
+    endpoint: () => "/api/v1/cloud-security-budget-policies",
+    resourceKey: "cloudSecurityBudgetPolicy",
+    requiredRole: "admin",
+    summary: "Reserve production cloud and security spend for protected storage, restore, identity, observability, incident response, and WORM audit logging.",
+    payload: () => ({
+      cloudSecurityBudgetPolicy: {
+        id: `cloud-security-budget-policy-${releaseId}`,
+        releaseId,
+        policyVersion: CLOUD_SECURITY_BUDGET_POLICY_VERSION,
+        currency: "USD",
+        budgetWindow: "2026-07-01_to_2026-10-31",
+        totalBudgetRangeUsd: cloudSecurityBudgetRangeUsd,
+        categoryMinimumUsd: cloudSecurityBudgetCategoryMinimumUsd,
+        requiredControls: cloudSecurityControls,
+        approvalStatuses: cloudSecurityApprovalStatuses,
+        monthlySpendReviewRequired: true,
+        protectedSplitCostIsolationRequired: true,
+        productionReleaseBlockedUntilReserved: true,
+        externalWormAuditLogFundingRequired: true,
+        overrunEscalationRule:
+          "Any cloud or security overrun that threatens protected storage, restore, identity, observability, WORM audit logging, or incident response reserves blocks production release until scope or budget is reapproved.",
+        productionReleaseBlockRule:
+          "Production release claims require reserved cloud/security budget for hosting, database restore, protected storage, identity/RBAC, observability, security review, incident response, and external WORM audit logging.",
+        protectedSplitIsolationFundingRule:
+          "Hidden benchmark, protected validation, private rater data, and audit-log retention infrastructure must remain funded independently from public-demo or static-site hosting.",
+        sourceBoundary:
+          "Project default cloud/security spend controls are frozen here; LMCA motivates protected blinding and audit integrity but does not state exact platform spend bands.",
+        owner: "release-operations",
+        approver: "security-reviewer",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
   {
     id: "exposure-quarantine-policy",
     label: "Exposure Quarantine Policy",

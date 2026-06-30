@@ -10,6 +10,7 @@ import {
   ARTIFACT_PROBE_INPUT_VIEWS,
   ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
   BENCHMARK_REFRESH_POLICY_VERSION,
+  CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   EXPOSURE_QUARANTINE_POLICY_VERSION,
@@ -91,6 +92,10 @@ import {
   REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
   REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
   REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
+  REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
+  REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
+  REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
+  REQUIRED_CLOUD_SECURITY_CONTROLS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
@@ -1527,6 +1532,11 @@ const clientSurfaceRequiredChecks = [
   "screen_state_output_schema_binding",
   "csp",
 ];
+const cloudSecurityBudgetPolicyVersion = CLOUD_SECURITY_BUDGET_POLICY_VERSION;
+const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
+const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
+const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
+const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
 const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
@@ -5872,6 +5882,52 @@ const workflowWriteEndpoints = [
     allowedValues: { surface: clientSurfaces },
     requiredExactFields: { checkStatus: "passed" },
   }),
+  workflowWriteSpec(/^\/api\/v1\/cloud-security-budget-policies$/, "cloud_security_budget_policy_submitted", "cloudSecurityBudgetPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "policyVersion",
+      "currency",
+      "budgetWindow",
+      "totalBudgetRangeUsd",
+      "categoryMinimumUsd",
+      "requiredControls",
+      "approvalStatuses",
+      "overrunEscalationRule",
+      "productionReleaseBlockRule",
+      "protectedSplitIsolationFundingRule",
+      "sourceBoundary",
+      "owner",
+      "approver",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["totalBudgetRangeUsd", "categoryMinimumUsd"],
+    requiredObjectKeys: { totalBudgetRangeUsd: Object.keys(cloudSecurityBudgetRangeUsd), categoryMinimumUsd: Object.keys(cloudSecurityBudgetCategoryMinimumUsd) },
+    requiredStructuredFields: {
+      totalBudgetRangeUsd: cloudSecurityBudgetRangeUsd,
+      categoryMinimumUsd: cloudSecurityBudgetCategoryMinimumUsd,
+    },
+    requiredNonEmptyArrayFields: ["requiredControls", "approvalStatuses"],
+    requiredArrayIncludes: {
+      requiredControls: cloudSecurityControls,
+      approvalStatuses: cloudSecurityApprovalStatuses,
+    },
+    requiredStringIncludes: {
+      overrunEscalationRule: ["overrun", "blocks", "release"],
+      productionReleaseBlockRule: ["release", "reserved", "cloud"],
+      protectedSplitIsolationFundingRule: ["hidden", "protected", "funded"],
+      sourceBoundary: ["project default", "lmca", "spend"],
+    },
+    requiredExactFields: {
+      policyVersion: cloudSecurityBudgetPolicyVersion,
+      currency: "USD",
+      monthlySpendReviewRequired: true,
+      protectedSplitCostIsolationRequired: true,
+      productionReleaseBlockedUntilReserved: true,
+      externalWormAuditLogFundingRequired: true,
+    },
+  }),
 	  workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
 	    allowHiddenMetadata: true,
 	    validateSensitiveAuditChainBindings: true,
@@ -6046,6 +6102,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/implementation-phase-gate-bundles\/(?<id>[^/]+)$/, "implementationPhaseGateBundle", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/queue-freshness-policies\/(?<id>[^/]+)$/, "queueFreshnessPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/client-surface-integrity-policies\/(?<id>[^/]+)$/, "clientSurfaceIntegrityPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/cloud-security-budget-policies\/(?<id>[^/]+)$/, "cloudSecurityBudgetPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/sensitive-audit-chain\/events\/(?<id>[^/]+)$/, "sensitiveAuditChainEvent", adminAuditRoles),
 ];
 
@@ -8828,6 +8885,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const queueStaleByDelayScans = latestWorkflowResources(workflowEvents, "queueStaleByDelayScan");
   const clientSurfaceIntegrityPolicies = latestWorkflowResources(workflowEvents, "clientSurfaceIntegrityPolicy");
   const clientSurfaceIntegrityChecks = latestWorkflowResources(workflowEvents, "clientSurfaceIntegrityCheck");
+  const cloudSecurityBudgetPolicies = latestWorkflowResources(workflowEvents, "cloudSecurityBudgetPolicy");
   const sensitiveAuditChainEvents = latestWorkflowResources(workflowEvents, "sensitiveAuditChainEvent");
   const sensitiveAuditChainVerifications = latestWorkflowResources(workflowEvents, "sensitiveAuditChainVerification");
   const ratings = [...seedRatings, ...persistedRatings];
@@ -9022,6 +9080,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     queueStaleByDelayScans,
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks,
+    cloudSecurityBudgetPolicies,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications,
   });
@@ -9210,6 +9269,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     queueStaleByDelayScans,
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks,
+    cloudSecurityBudgetPolicies,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications,
   };

@@ -69,7 +69,12 @@ import {
   buildValidationTrancheReport,
   buildWorkflowStateMachineEvidenceReport,
   buildValidationDesignReport,
+  CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+  REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
+  REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
+  REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
+  REQUIRED_CLOUD_SECURITY_CONTROLS,
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
@@ -1312,6 +1317,10 @@ const clientSurfaceChecks = [
   "screen_state_output_schema_binding",
   "csp",
 ];
+const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
+const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
+const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
+const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
 const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
@@ -2011,6 +2020,34 @@ function completeOperationalControlFixtures() {
 	    failures: [],
 	    checkedAt: "2026-10-01T00:06:00.000Z",
 	    })),
+    cloudSecurityBudgetPolicies: [
+      {
+        id: "cloud-security-budget-policy-submitted",
+        releaseId: "october-2026-demo",
+        policyVersion: CLOUD_SECURITY_BUDGET_POLICY_VERSION,
+        currency: "USD",
+        budgetWindow: "2026-07-01_to_2026-10-31",
+        totalBudgetRangeUsd: cloudSecurityBudgetRangeUsd,
+        categoryMinimumUsd: cloudSecurityBudgetCategoryMinimumUsd,
+        requiredControls: cloudSecurityControls,
+        approvalStatuses: cloudSecurityApprovalStatuses,
+        monthlySpendReviewRequired: true,
+        protectedSplitCostIsolationRequired: true,
+        productionReleaseBlockedUntilReserved: true,
+        externalWormAuditLogFundingRequired: true,
+        overrunEscalationRule:
+          "Any cloud or security overrun that threatens protected storage, restore, identity, observability, WORM audit logging, or incident response reserves blocks production release until scope or budget is reapproved.",
+        productionReleaseBlockRule:
+          "Production release claims require reserved cloud/security budget for hosting, database restore, protected storage, identity/RBAC, observability, security review, incident response, and external WORM audit logging.",
+        protectedSplitIsolationFundingRule:
+          "Hidden benchmark, protected validation, private rater data, and audit-log retention infrastructure must remain funded independently from public-demo or static-site hosting.",
+        sourceBoundary:
+          "Project default cloud/security spend controls are frozen here; LMCA motivates protected blinding and audit integrity but does not state exact platform spend bands.",
+        owner: "release-operations",
+        approver: "security-reviewer",
+        frozenAt: "2026-10-01T00:06:30.000Z",
+      },
+    ],
     governanceApprovalRecords: sensitiveAuditChainGovernanceApprovalRecords,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications: [
@@ -5187,6 +5224,14 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
   assert.equal(report.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
   assert.equal(report.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
   assert.equal(report.counts.passingClientSurfaceCount, clientSurfaces.length);
+  assert.equal(report.counts.submittedCloudSecurityBudgetPolicyCount, 1);
+  assert.equal(report.cloudSecurityBudgetPolicyId, "cloud-security-budget-policy-submitted");
+  assert.equal(report.cloudSecurityBudgetPolicyReleaseUseStatus, "submitted_cloud_security_budget_policy_active");
+  assert.deepEqual(report.requiredCloudSecurityBudgetRangeUsd, cloudSecurityBudgetRangeUsd);
+  assert.deepEqual(report.requiredCloudSecurityBudgetCategoryMinimumUsd, cloudSecurityBudgetCategoryMinimumUsd);
+  assert.deepEqual(report.requiredCloudSecurityControls, cloudSecurityControls);
+  assert.deepEqual(report.requiredCloudSecurityApprovalStatuses, cloudSecurityApprovalStatuses);
+  assert.equal(report.cloudSecurityBudgetPolicyRows.at(-1).externalWormAuditLogFundingRequired, true);
   assert.equal(report.counts.passingAuditChainKindCount, auditChainEventKinds.length);
   assert.equal(report.counts.submittedSensitiveAuditChainGovernanceApprovalCount, auditChainEventKinds.length);
   assert.equal(report.sensitiveAuditChainGovernanceApprovalRows.filter((row) => row.rowSource === "submitted_workflow_audit_chain_governance_approval").length, auditChainEventKinds.length);
@@ -5328,6 +5373,36 @@ test("operational control evidence rejects client-surface telemetry and instrume
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "no_third_party_pixels"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "first_party_telemetry_allowlist"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "screen_state_output_schema_binding"));
+});
+
+test("operational control evidence rejects underfunded cloud and security budget policy", () => {
+  const unsafeFixtures = completeOperationalControlFixtures();
+  unsafeFixtures.cloudSecurityBudgetPolicies = [
+    {
+      ...unsafeFixtures.cloudSecurityBudgetPolicies[0],
+      id: "cloud-security-budget-policy-underfunded",
+      totalBudgetRangeUsd: { minimum: 10000, maximum: 20000 },
+      categoryMinimumUsd: {
+        ...cloudSecurityBudgetCategoryMinimumUsd,
+        externalWormAuditLogOrLedger: 0,
+      },
+      requiredControls: cloudSecurityControls.filter((control) => control !== "external_worm_audit_log"),
+      approvalStatuses: ["budget_reserved"],
+      productionReleaseBlockedUntilReserved: false,
+      externalWormAuditLogFundingRequired: false,
+      protectedSplitIsolationFundingRule: "public demo hosting only",
+    },
+  ];
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", unsafeFixtures);
+
+  assert.equal(report.releaseUseStatus, "operational_control_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason === "totalBudgetRangeUsd"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason === "categoryMinimumUsd"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason.includes("requiredControls:external_worm_audit_log")));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason.includes("approvalStatuses:security_review_approved")));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason === "productionReleaseBlockedUntilReserved"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason === "externalWormAuditLogFundingRequired"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason === "protectedSplitIsolationFundingRule"));
 });
 
 test("operational control evidence rejects incomplete or failed sensitive audit chains", () => {

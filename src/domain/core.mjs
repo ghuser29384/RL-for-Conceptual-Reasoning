@@ -24335,6 +24335,37 @@ const REQUIRED_CLIENT_SURFACE_CHECKS = [
   "csp",
 ];
 
+export const CLOUD_SECURITY_BUDGET_POLICY_VERSION = "cloud-security-budget-rlhf90-v1";
+export const REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD = {
+  minimum: 60000,
+  maximum: 140000,
+};
+export const REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD = {
+  productionHostingAndFunctions: 12000,
+  managedPostgresBackupsAndRestore: 12000,
+  protectedObjectStorageAndRetention: 6000,
+  identityRbacAndAuditAccess: 8000,
+  observabilityAlertingAndIncidentResponse: 10000,
+  securityReviewAndPenTestReserve: 15000,
+  externalWormAuditLogOrLedger: 5000,
+};
+export const REQUIRED_CLOUD_SECURITY_CONTROLS = [
+  "deployment_isolation",
+  "managed_postgres_backup_restore",
+  "protected_object_storage_retention",
+  "identity_rbac_audit_access",
+  "secrets_rotation",
+  "observability_alerting",
+  "incident_response_reserve",
+  "security_review_pen_test",
+  "external_worm_audit_log",
+];
+export const REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES = [
+  "budget_reserved",
+  "security_review_approved",
+  "production_release_blocked_until_reserved",
+];
+
 const REQUIRED_AUDIT_CHAIN_EVENT_KINDS = [
   "governance_approval",
   "manifest_activation",
@@ -24513,6 +24544,35 @@ function defaultClientSurfaceIntegrityChecks(releaseId, policies) {
 	  }));
 }
 
+function defaultCloudSecurityBudgetPolicy(releaseId) {
+  return {
+    id: `cloud-security-budget-policy-${releaseId}`,
+    releaseId,
+    policyVersion: CLOUD_SECURITY_BUDGET_POLICY_VERSION,
+    currency: "USD",
+    budgetWindow: "2026-07-01_to_2026-10-31",
+    totalBudgetRangeUsd: REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
+    categoryMinimumUsd: REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
+    requiredControls: REQUIRED_CLOUD_SECURITY_CONTROLS,
+    approvalStatuses: REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
+    monthlySpendReviewRequired: true,
+    protectedSplitCostIsolationRequired: true,
+    productionReleaseBlockedUntilReserved: true,
+    externalWormAuditLogFundingRequired: true,
+    overrunEscalationRule:
+      "Any cloud or security overrun that threatens protected storage, restore, identity, observability, WORM audit logging, or incident response reserves blocks production release until scope or budget is reapproved.",
+    productionReleaseBlockRule:
+      "Production release claims require reserved cloud/security budget for hosting, database restore, protected storage, identity/RBAC, observability, security review, incident response, and external WORM audit logging.",
+    protectedSplitIsolationFundingRule:
+      "Hidden benchmark, protected validation, private rater data, and audit-log retention infrastructure must remain funded independently from public-demo or static-site hosting.",
+    sourceBoundary:
+      "Project default cloud/security spend controls are frozen here; LMCA motivates protected blinding and audit integrity but does not state exact platform spend bands.",
+    owner: "release-operations",
+    approver: "security-reviewer",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultSensitiveAuditChainEvents(releaseId) {
   let previousEventHash = null;
   return REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind, index) => {
@@ -24617,6 +24677,14 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     normalizeClientSurfaceIntegrityCheck(check, seedClientPolicyRows, "seed_client_surface_integrity_check"),
   );
   const clientCheckRowsForGate = submittedClientCheckRows.length ? submittedClientCheckRows : seedClientCheckRows;
+  const submittedCloudSecurityBudgetPolicyRows = (options.cloudSecurityBudgetPolicies ?? [])
+    .map((policy) => normalizeCloudSecurityBudgetPolicy(policy, "submitted_workflow_cloud_security_budget_policy"))
+    .filter(Boolean);
+  const seedCloudSecurityBudgetPolicyRows = [
+    normalizeCloudSecurityBudgetPolicy(defaultCloudSecurityBudgetPolicy(releaseId), "seed_cloud_security_budget_policy"),
+  ];
+  const activeCloudSecurityBudgetPolicy =
+    submittedCloudSecurityBudgetPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedCloudSecurityBudgetPolicyRows[0];
   const submittedAuditGovernanceRows = (options.governanceApprovalRecords ?? [])
     .map((record) => normalizeAuditChainGovernanceApprovalRecord(record, "submitted_workflow_audit_chain_governance_approval"))
     .filter(Boolean);
@@ -24664,6 +24732,9 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     ...submittedScanRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "queue_stale_by_delay_scan", artifactId: row.id, reason }))),
     ...submittedClientPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_policy", artifactId: row.id, reason }))),
     ...submittedClientCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_check", artifactId: row.id, reason }))),
+    ...submittedCloudSecurityBudgetPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "cloud_security_budget_policy", artifactId: row.id, reason })),
+    ),
     ...submittedAuditGovernanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "audit_chain_governance_approval", artifactId: row.id, reason }))),
     ...submittedAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_event", artifactId: row.id, reason }))),
     ...submittedAuditVerificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_verification", artifactId: row.id, reason }))),
@@ -24705,6 +24776,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     submittedScanRows.length > 0 &&
     submittedClientPolicyRows.length > 0 &&
     submittedClientCheckRows.length > 0 &&
+    submittedCloudSecurityBudgetPolicyRows.length > 0 &&
     submittedAuditGovernanceRows.length > 0 &&
     submittedAuditRows.length > 0 &&
     submittedAuditVerificationRows.length > 0 &&
@@ -24720,6 +24792,16 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
 	    requiredQueueRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
 	    requiredClientSurfaces: REQUIRED_CLIENT_SURFACES,
 	    requiredClientSurfaceChecks: REQUIRED_CLIENT_SURFACE_CHECKS,
+    requiredCloudSecurityBudgetRangeUsd: REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
+    requiredCloudSecurityBudgetCategoryMinimumUsd: REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
+    requiredCloudSecurityControls: REQUIRED_CLOUD_SECURITY_CONTROLS,
+    requiredCloudSecurityApprovalStatuses: REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
+    cloudSecurityBudgetPolicyId: activeCloudSecurityBudgetPolicy?.id ?? null,
+    cloudSecurityBudgetPolicyReleaseUseStatus: submittedCloudSecurityBudgetPolicyRows.find((row) => row.reviewReasons.length === 0)
+      ? "submitted_cloud_security_budget_policy_active"
+      : submittedCloudSecurityBudgetPolicyRows.length
+        ? "submitted_cloud_security_budget_policy_review_required"
+        : "seed_cloud_security_budget_policy_active",
 	    requiredAuditChainEventKinds: REQUIRED_AUDIT_CHAIN_EVENT_KINDS,
     policyActionKindRows: [...seedActionRows, ...submittedActionRows],
     policyDecisionRows: [...seedDecisionRows, ...submittedDecisionRows],
@@ -24730,6 +24812,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     queueStaleByDelayScanRows: [...seedScanRows, ...submittedScanRows],
     clientSurfaceIntegrityPolicyRows: [...seedClientPolicyRows, ...submittedClientPolicyRows],
     clientSurfaceIntegrityCheckRows: [...seedClientCheckRows, ...submittedClientCheckRows],
+    cloudSecurityBudgetPolicyRows: [...seedCloudSecurityBudgetPolicyRows, ...submittedCloudSecurityBudgetPolicyRows],
     sensitiveAuditChainGovernanceApprovalRows: [...seedAuditGovernanceRows, ...submittedAuditGovernanceRows],
     sensitiveAuditChainEventRows: [...seedAuditRows, ...submittedAuditRows],
     sensitiveAuditChainVerificationRows: [...seedAuditVerificationRows, ...submittedAuditVerificationRows],
@@ -24747,6 +24830,8 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
       submittedQueueStaleByDelayScanCount: submittedScanRows.length,
       submittedClientSurfaceIntegrityPolicyCount: submittedClientPolicyRows.length,
       submittedClientSurfaceIntegrityCheckCount: submittedClientCheckRows.length,
+      submittedCloudSecurityBudgetPolicyCount: submittedCloudSecurityBudgetPolicyRows.length,
+      cloudSecurityBudgetPolicyReviewRows: submittedCloudSecurityBudgetPolicyRows.filter((row) => row.reviewReasons.length).length,
       submittedSensitiveAuditChainGovernanceApprovalCount: submittedAuditGovernanceRows.length,
       submittedSensitiveAuditChainEventCount: submittedAuditRows.length,
       submittedSensitiveAuditChainVerificationCount: submittedAuditVerificationRows.length,
@@ -25090,6 +25175,71 @@ function normalizeClientSurfaceIntegrityCheck(check, policyRows, rowSource) {
     checkedAt: check.checkedAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "client_surface_integrity_check_review_required" : "client_surface_integrity_check_passed",
+  };
+}
+
+function normalizeCloudSecurityBudgetPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.cloudSecurityBudgetPolicyId;
+  if (!id) return null;
+  const totalBudgetRangeUsd =
+    policy.totalBudgetRangeUsd && typeof policy.totalBudgetRangeUsd === "object" && !Array.isArray(policy.totalBudgetRangeUsd)
+      ? policy.totalBudgetRangeUsd
+      : {};
+  const categoryMinimumUsd =
+    policy.categoryMinimumUsd && typeof policy.categoryMinimumUsd === "object" && !Array.isArray(policy.categoryMinimumUsd)
+      ? policy.categoryMinimumUsd
+      : {};
+  const requiredControls = normalizeStringArray(policy.requiredControls);
+  const approvalStatuses = normalizeStringArray(policy.approvalStatuses);
+  const missingCategoryKeys = Object.keys(REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD).filter((key) => !Object.hasOwn(categoryMinimumUsd, key));
+  const missingControls = REQUIRED_CLOUD_SECURITY_CONTROLS.filter((control) => !requiredControls.includes(control));
+  const missingApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES.filter((status) => !approvalStatuses.includes(status));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === CLOUD_SECURITY_BUDGET_POLICY_VERSION ? null : `policyVersion:${CLOUD_SECURITY_BUDGET_POLICY_VERSION}`,
+    requiredPromptFieldReason("releaseId", policy.releaseId),
+    policy.currency === "USD" ? null : "currency",
+    requiredPromptFieldReason("budgetWindow", policy.budgetWindow),
+    stableJsonKey(totalBudgetRangeUsd) === stableJsonKey(REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD) ? null : "totalBudgetRangeUsd",
+    missingCategoryKeys.length ? `categoryMinimumUsd:${missingCategoryKeys.join(",")}` : null,
+    stableJsonKey(categoryMinimumUsd) === stableJsonKey(REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD) ? null : "categoryMinimumUsd",
+    missingControls.length ? `requiredControls:${missingControls.join(",")}` : null,
+    missingApprovalStatuses.length ? `approvalStatuses:${missingApprovalStatuses.join(",")}` : null,
+    policy.monthlySpendReviewRequired === true ? null : "monthlySpendReviewRequired",
+    policy.protectedSplitCostIsolationRequired === true ? null : "protectedSplitCostIsolationRequired",
+    policy.productionReleaseBlockedUntilReserved === true ? null : "productionReleaseBlockedUntilReserved",
+    policy.externalWormAuditLogFundingRequired === true ? null : "externalWormAuditLogFundingRequired",
+    policyMentions(policy.overrunEscalationRule, ["overrun", "blocks", "release"]) ? null : "overrunEscalationRule",
+    policyMentions(policy.productionReleaseBlockRule, ["release", "reserved", "cloud"]) ? null : "productionReleaseBlockRule",
+    policyMentions(policy.protectedSplitIsolationFundingRule, ["hidden", "protected", "funded"]) ? null : "protectedSplitIsolationFundingRule",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "spend"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("owner", policy.owner),
+    requiredPromptFieldReason("approver", policy.approver),
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: policy.releaseId ?? null,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    currency: policy.currency ?? null,
+    budgetWindow: policy.budgetWindow ?? null,
+    totalBudgetRangeUsd,
+    categoryMinimumUsd,
+    requiredControls,
+    approvalStatuses,
+    monthlySpendReviewRequired: policy.monthlySpendReviewRequired === true,
+    protectedSplitCostIsolationRequired: policy.protectedSplitCostIsolationRequired === true,
+    productionReleaseBlockedUntilReserved: policy.productionReleaseBlockedUntilReserved === true,
+    externalWormAuditLogFundingRequired: policy.externalWormAuditLogFundingRequired === true,
+    overrunEscalationRule: policy.overrunEscalationRule ?? null,
+    productionReleaseBlockRule: policy.productionReleaseBlockRule ?? null,
+    protectedSplitIsolationFundingRule: policy.protectedSplitIsolationFundingRule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? null,
+    owner: policy.owner ?? null,
+    approver: policy.approver ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "cloud_security_budget_policy_review_required" : "cloud_security_budget_policy_complete",
   };
 }
 
@@ -25801,6 +25951,7 @@ export function buildOctoberReleaseReport(
     queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
     clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
     clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
+    cloudSecurityBudgetPolicies: options.cloudSecurityBudgetPolicies ?? [],
     sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
     sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
   });
@@ -26088,6 +26239,7 @@ export function buildOctoberReleaseReport(
       queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
       clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
       clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
+      cloudSecurityBudgetPolicies: options.cloudSecurityBudgetPolicies ?? [],
       sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
       sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
     },
