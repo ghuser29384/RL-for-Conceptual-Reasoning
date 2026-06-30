@@ -10084,12 +10084,26 @@ export function buildHumanCeilingAndSaturationReport(
   const thinValidation = validationDesign.status !== "appendix_c_scale";
   const submittedHumanCeilingUncertainty = buildSubmittedHumanCeilingUncertaintyEvidence(options.humanCeilingRuns ?? [], labelSnapshot);
   const activeSubmittedUncertaintyPolicy = submittedHumanCeilingUncertainty.activeRun?.uncertaintyPolicy ?? null;
+  const benchmarkRefreshPolicyEvidence = buildBenchmarkRefreshPolicyEvidence(releaseId, options.benchmarkRefreshPolicies ?? []);
+  const activeBenchmarkRefreshPolicy = benchmarkRefreshPolicyEvidence.activePolicy;
   const bestHumanMeanAbsOverallDiff = minValid(comparisonRows.map((row) => row.meanAbsOverallDiff));
   const closestModelMeanAbsOverallDiff = minValid(modelProximityRows.map((row) => row.meanAbsOverallDiff));
   const modelWithinHumanBand =
     bestHumanMeanAbsOverallDiff !== null &&
     closestModelMeanAbsOverallDiff !== null &&
     closestModelMeanAbsOverallDiff <= bestHumanMeanAbsOverallDiff + 0.02;
+  const saturationStatus = thinValidation
+    ? "not_assessable_thin_validation"
+    : modelWithinHumanBand
+      ? "saturation_risk_refresh_required"
+      : "no_saturation_signal_current_release";
+  const refreshCadenceDays = activeBenchmarkRefreshPolicy?.cadenceDaysBySaturationStatus?.[saturationStatus] ?? null;
+  const refreshQueue = buildSaturationRefreshQueue(labelSnapshot, positionList, critiqueList).map((row) => ({
+    ...row,
+    benchmarkRefreshPolicyId: activeBenchmarkRefreshPolicy?.id ?? null,
+    refreshCadenceDays,
+    requiredQueueFields: activeBenchmarkRefreshPolicy?.requiredQueueFields ?? [],
+  }));
   return {
     id: `human-ceiling-saturation-${releaseId}`,
     releaseId,
@@ -10138,6 +10152,7 @@ export function buildHumanCeilingAndSaturationReport(
     modelProximityRows,
     submittedHumanCeilingRuns: options.humanCeilingRuns ?? [],
     submittedHumanCeilingUncertainty,
+    benchmarkRefreshPolicyEvidence,
     uncertaintyPolicy:
       activeSubmittedUncertaintyPolicy ?? {
         intervalType: "descriptive_seed_no_interval",
@@ -10152,16 +10167,17 @@ export function buildHumanCeilingAndSaturationReport(
       bestHumanMeanAbsOverallDiff,
       closestModelMeanAbsOverallDiff,
       modelWithinHumanBand,
-      status: thinValidation
-        ? "not_assessable_thin_validation"
-        : modelWithinHumanBand
-          ? "saturation_risk_refresh_required"
-          : "no_saturation_signal_current_release",
+      status: saturationStatus,
+      benchmarkRefreshPolicyId: activeBenchmarkRefreshPolicy?.id ?? null,
+      refreshCadenceDays,
+      requiredRefreshActions: activeBenchmarkRefreshPolicy?.requiredRefreshActions ?? [],
       releaseUsePolicy:
         "Do not make human-ceiling or saturation claims unless the validation design is Appendix-C-scale or explicitly labeled thinner with reduced claim strength.",
     },
-    refreshQueue: buildSaturationRefreshQueue(labelSnapshot, positionList, critiqueList),
-    releaseUseStatus: thinValidation
+    refreshQueue,
+    releaseUseStatus: benchmarkRefreshPolicyEvidence.reviewRows.length
+      ? "benchmark_refresh_policy_review_required"
+      : thinValidation
       ? "human_ceiling_claims_blocked_thinner_than_appendix_c"
       : submittedHumanCeilingUncertainty.activeRun
         ? "human_ceiling_claims_allowed_with_declared_uncertainty"
@@ -10185,6 +10201,163 @@ function buildSubmittedHumanCeilingUncertaintyEvidence(humanCeilingRuns = [], la
       : rows.length
         ? "submitted_human_ceiling_uncertainty_review_required"
         : "no_submitted_human_ceiling_uncertainty",
+  };
+}
+
+export const BENCHMARK_REFRESH_POLICY_VERSION = "benchmark-refresh-cadence-rlhf90-v1";
+export const REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS = {
+  saturation_risk_refresh_required: 30,
+  not_assessable_thin_validation: 90,
+  no_saturation_signal_current_release: 180,
+};
+export const REQUIRED_BENCHMARK_REFRESH_ACTIONS = [
+  "double_rate",
+  "expert_double_check",
+  "adjudicate_or_preserve_disagreement",
+  "harder_or_obfuscated_item",
+];
+export const REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS = [
+  "itemId",
+  "split",
+  "topicFamily",
+  "priorityScore",
+  "refreshActions",
+];
+export const REQUIRED_BENCHMARK_REFRESH_POLICY_RULES = {
+  saturationCadence:
+    "Saturation-risk releases require a governed benchmark refresh plan within 30 days before stronger hidden-benchmark progress claims continue.",
+  thinValidationCadence:
+    "Thin validation requires a 90-day refresh or validation-floor remediation review before human-ceiling or saturation claims are strengthened.",
+  maintenanceCadence:
+    "No-saturation releases still receive a 180-day benchmark maintenance review so hidden benchmark freeze is not treated as permanent.",
+  refreshActionMinimum:
+    "Refresh queues must prioritize double rating, expert double-checking, adjudication or preserved disagreement, and harder or obfuscated item replenishment.",
+  protectedSplitGovernance:
+    "Protected validation and hidden-benchmark refresh candidates require split-governed review before any item is deprotected, replaced, or added to headline denominators.",
+  claimSuppression:
+    "Unsupported saturation, human-ceiling, or progress claims remain suppressed until the active benchmark refresh policy is satisfied or a diagnostic deferral records the weaker claim.",
+};
+
+function defaultBenchmarkRefreshPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `benchmark-refresh-policy-${releaseId}`,
+    policyVersion: BENCHMARK_REFRESH_POLICY_VERSION,
+    cadenceDaysBySaturationStatus: REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
+    requiredRefreshActions: REQUIRED_BENCHMARK_REFRESH_ACTIONS,
+    requiredQueueFields: REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
+    policyRules: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
+    saturationCadenceRule: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES.saturationCadence,
+    thinValidationCadenceRule: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES.thinValidationCadence,
+    maintenanceCadenceRule: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES.maintenanceCadence,
+    refreshActionMinimumRule: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES.refreshActionMinimum,
+    protectedSplitGovernanceRule: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES.protectedSplitGovernance,
+    claimSuppressionRule: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES.claimSuppression,
+    sourceBoundary:
+      "Project default benchmark-refresh cadence is frozen here; LMCA motivates saturation response but does not state exact refresh timing.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeBenchmarkRefreshPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.benchmarkRefreshPolicyId ?? policy?.benchmark_refresh_policy_id;
+  if (!id) return null;
+  const cadenceDaysBySaturationStatus =
+    policy.cadenceDaysBySaturationStatus && typeof policy.cadenceDaysBySaturationStatus === "object" && !Array.isArray(policy.cadenceDaysBySaturationStatus)
+      ? policy.cadenceDaysBySaturationStatus
+      : {};
+  const requiredRefreshActions = uniqueStrings(normalizeStringArray(policy.requiredRefreshActions ?? policy.refreshActions));
+  const requiredQueueFields = uniqueStrings(normalizeStringArray(policy.requiredQueueFields ?? policy.queueFields));
+  const policyRules =
+    policy.policyRules && typeof policy.policyRules === "object" && !Array.isArray(policy.policyRules) ? policy.policyRules : {};
+  const missingCadenceStatuses = Object.keys(REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS).filter(
+    (status) => !Object.hasOwn(cadenceDaysBySaturationStatus, status),
+  );
+  const missingRefreshActions = REQUIRED_BENCHMARK_REFRESH_ACTIONS.filter((action) => !requiredRefreshActions.includes(action));
+  const missingQueueFields = REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS.filter((field) => !requiredQueueFields.includes(field));
+  const missingRuleKeys = Object.keys(REQUIRED_BENCHMARK_REFRESH_POLICY_RULES).filter((key) => !Object.hasOwn(policyRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === BENCHMARK_REFRESH_POLICY_VERSION
+      ? null
+      : `policyVersion:${BENCHMARK_REFRESH_POLICY_VERSION}`,
+    missingCadenceStatuses.length ? `cadenceDaysBySaturationStatus:${missingCadenceStatuses.join(",")}` : null,
+    stableJsonKey(cadenceDaysBySaturationStatus) === stableJsonKey(REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS)
+      ? null
+      : "cadenceDaysBySaturationStatus",
+    missingRefreshActions.length ? `requiredRefreshActions:${missingRefreshActions.join(",")}` : null,
+    stableJsonKey(requiredRefreshActions) === stableJsonKey(REQUIRED_BENCHMARK_REFRESH_ACTIONS) ? null : "requiredRefreshActions",
+    missingQueueFields.length ? `requiredQueueFields:${missingQueueFields.join(",")}` : null,
+    stableJsonKey(requiredQueueFields) === stableJsonKey(REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS) ? null : "requiredQueueFields",
+    missingRuleKeys.length ? `policyRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(policyRules) === stableJsonKey(REQUIRED_BENCHMARK_REFRESH_POLICY_RULES) ? null : "policyRules",
+    policyMentions(policy.saturationCadenceRule ?? policyRules.saturationCadence, ["saturation-risk", "30 days", "benchmark refresh"])
+      ? null
+      : "saturationCadenceRule",
+    policyMentions(policy.thinValidationCadenceRule ?? policyRules.thinValidationCadence, ["thin validation", "90-day", "human-ceiling"])
+      ? null
+      : "thinValidationCadenceRule",
+    policyMentions(policy.maintenanceCadenceRule ?? policyRules.maintenanceCadence, ["no-saturation", "180-day", "maintenance"])
+      ? null
+      : "maintenanceCadenceRule",
+    policyMentions(policy.refreshActionMinimumRule ?? policyRules.refreshActionMinimum, ["double rating", "expert double-checking", "harder"])
+      ? null
+      : "refreshActionMinimumRule",
+    policyMentions(policy.protectedSplitGovernanceRule ?? policyRules.protectedSplitGovernance, ["protected validation", "hidden-benchmark", "governed"])
+      ? null
+      : "protectedSplitGovernanceRule",
+    policyMentions(policy.claimSuppressionRule ?? policyRules.claimSuppression, ["claims", "suppressed", "diagnostic deferral"])
+      ? null
+      : "claimSuppressionRule",
+    policyMentions(policy.sourceBoundary, ["project default", "lmca", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    cadenceDaysBySaturationStatus,
+    requiredRefreshActions,
+    requiredQueueFields,
+    policyRules,
+    saturationCadenceRule: policy.saturationCadenceRule ?? policyRules.saturationCadence ?? null,
+    thinValidationCadenceRule: policy.thinValidationCadenceRule ?? policyRules.thinValidationCadence ?? null,
+    maintenanceCadenceRule: policy.maintenanceCadenceRule ?? policyRules.maintenanceCadence ?? null,
+    refreshActionMinimumRule: policy.refreshActionMinimumRule ?? policyRules.refreshActionMinimum ?? null,
+    protectedSplitGovernanceRule: policy.protectedSplitGovernanceRule ?? policyRules.protectedSplitGovernance ?? null,
+    claimSuppressionRule: policy.claimSuppressionRule ?? policyRules.claimSuppression ?? null,
+    sourceBoundary: policy.sourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "benchmark_refresh_policy_review_required" : "benchmark_refresh_policy_complete",
+  };
+}
+
+function buildBenchmarkRefreshPolicyEvidence(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeBenchmarkRefreshPolicy(policy, "submitted_workflow_benchmark_refresh_policy"))
+    .filter(Boolean);
+  const seedRows = [normalizeBenchmarkRefreshPolicy(defaultBenchmarkRefreshPolicy(releaseId), "seed_benchmark_refresh_policy")];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `benchmark-refresh-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredCadenceDaysBySaturationStatus: REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
+    requiredRefreshActions: REQUIRED_BENCHMARK_REFRESH_ACTIONS,
+    requiredQueueFields: REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
+    requiredPolicyRules: REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_benchmark_refresh_policy_active"
+      : reviewRows.length
+        ? "submitted_benchmark_refresh_policy_review_required"
+        : "submitted_benchmark_refresh_policy_active",
   };
 }
 
@@ -10671,7 +10844,9 @@ export function buildUncertaintyAwareLeaderboardReport(
   );
   const modelAssistedLabelOverlap =
     options.modelAssistedLabelOverlapReport ??
-    buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, options.ratings ?? seedRatings, runs, options.pairs);
+    buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, options.ratings ?? seedRatings, runs, options.pairs, {
+      modelFamilyOverlapPolicies: options.modelFamilyOverlapPolicies ?? [],
+    });
   const modelRunProvenance = buildLeaderboardModelRunProvenanceSummary(runs, {
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
     modelRunEnvironments: options.modelRunEnvironments ?? [],
@@ -11453,6 +11628,143 @@ export function buildPairedTargetLabelSnapshotReport(
 
 const MODEL_ASSISTED_CHECK_REQUIRED_AUXILIARY_MATERIALS = ["own_initial_rationale", "assisting_model_commentary"];
 const MODEL_ASSISTED_CHECK_REQUIRED_EXPOSURE_TIMING = "post_human_only_self_check_lock";
+export const MODEL_FAMILY_OVERLAP_POLICY_VERSION = "model-family-overlap-rlhf90-v1";
+export const REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES = [
+  "exact_resolved_snapshot",
+  "exact_requested_alias",
+  "declared_model_family",
+  "inferred_model_family",
+];
+export const REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES = ["provider_only", "organization_only", "deployment_region_only"];
+export const REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS = [
+  "require_human_only_pre_assistance_target",
+  "label_overlap_sensitive",
+  "suppress_clean_independent_claim",
+];
+export const REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES = {
+  exactSnapshot:
+    "An exact resolved model snapshot match between the assisting model and evaluated model is always overlap-sensitive.",
+  exactAlias:
+    "An exact requested model alias match between the assisting model and evaluated model is overlap-sensitive when a resolved snapshot is absent or shared.",
+  familyMatch:
+    "Declared or inferred close model-family matches are overlap-sensitive because variants can share training, behavior, or label-assistance contamination.",
+  providerOnlyExclusion:
+    "Provider-only, organization-only, endpoint-only, and deployment-region-only matches are not sufficient by themselves for close-family overlap.",
+  cleanClaim:
+    "Clean independent leaderboard claims require an overlap-free target, a human-only pre-assistance target snapshot, or explicit overlap-sensitive labeling.",
+  sourceBoundary:
+    "Project default close model-family overlap rules are frozen here; LMCA motivates model-assisted contamination separation but does not state exact family-match rules.",
+};
+
+function defaultModelFamilyOverlapPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `model-family-overlap-policy-${releaseId}`,
+    policyVersion: MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+    overlapMatchBases: REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
+    forbiddenOverlapBases: REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
+    cleanClaimActions: REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
+    policyRules: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+    exactSnapshotRule: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.exactSnapshot,
+    exactAliasRule: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.exactAlias,
+    familyMatchRule: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.familyMatch,
+    providerOnlyExclusionRule: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.providerOnlyExclusion,
+    cleanClaimRule: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.cleanClaim,
+    sourceBoundary: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeModelFamilyOverlapPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.modelFamilyOverlapPolicyId ?? policy?.model_family_overlap_policy_id;
+  if (!id) return null;
+  const overlapMatchBases = uniqueStrings(normalizeStringArray(policy.overlapMatchBases ?? policy.matchBases));
+  const forbiddenOverlapBases = uniqueStrings(normalizeStringArray(policy.forbiddenOverlapBases ?? policy.forbiddenBases));
+  const cleanClaimActions = uniqueStrings(normalizeStringArray(policy.cleanClaimActions ?? policy.cleanClaimRequirements));
+  const policyRules =
+    policy.policyRules && typeof policy.policyRules === "object" && !Array.isArray(policy.policyRules) ? policy.policyRules : {};
+  const missingMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES.filter((basis) => !overlapMatchBases.includes(basis));
+  const missingForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES.filter((basis) => !forbiddenOverlapBases.includes(basis));
+  const missingCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS.filter((action) => !cleanClaimActions.includes(action));
+  const missingRuleKeys = Object.keys(REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES).filter((key) => !Object.hasOwn(policyRules, key));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === MODEL_FAMILY_OVERLAP_POLICY_VERSION
+      ? null
+      : `policyVersion:${MODEL_FAMILY_OVERLAP_POLICY_VERSION}`,
+    missingMatchBases.length ? `overlapMatchBases:${missingMatchBases.join(",")}` : null,
+    stableJsonKey(overlapMatchBases) === stableJsonKey(REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES) ? null : "overlapMatchBases",
+    missingForbiddenBases.length ? `forbiddenOverlapBases:${missingForbiddenBases.join(",")}` : null,
+    stableJsonKey(forbiddenOverlapBases) === stableJsonKey(REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES) ? null : "forbiddenOverlapBases",
+    missingCleanClaimActions.length ? `cleanClaimActions:${missingCleanClaimActions.join(",")}` : null,
+    stableJsonKey(cleanClaimActions) === stableJsonKey(REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS) ? null : "cleanClaimActions",
+    missingRuleKeys.length ? `policyRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(policyRules) === stableJsonKey(REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES) ? null : "policyRules",
+    policyMentions(policy.exactSnapshotRule ?? policyRules.exactSnapshot, ["exact resolved model snapshot", "overlap-sensitive"])
+      ? null
+      : "exactSnapshotRule",
+    policyMentions(policy.exactAliasRule ?? policyRules.exactAlias, ["exact requested model alias", "overlap-sensitive"])
+      ? null
+      : "exactAliasRule",
+    policyMentions(policy.familyMatchRule ?? policyRules.familyMatch, ["close model-family", "overlap-sensitive"])
+      ? null
+      : "familyMatchRule",
+    policyMentions(policy.providerOnlyExclusionRule ?? policyRules.providerOnlyExclusion, ["provider-only", "not sufficient"])
+      ? null
+      : "providerOnlyExclusionRule",
+    policyMentions(policy.cleanClaimRule ?? policyRules.cleanClaim, ["clean independent", "human-only pre-assistance", "overlap-sensitive"])
+      ? null
+      : "cleanClaimRule",
+    policyMentions(policy.sourceBoundary, ["project default", "lmca", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    overlapMatchBases,
+    forbiddenOverlapBases,
+    cleanClaimActions,
+    policyRules,
+    exactSnapshotRule: policy.exactSnapshotRule ?? policyRules.exactSnapshot ?? null,
+    exactAliasRule: policy.exactAliasRule ?? policyRules.exactAlias ?? null,
+    familyMatchRule: policy.familyMatchRule ?? policyRules.familyMatch ?? null,
+    providerOnlyExclusionRule: policy.providerOnlyExclusionRule ?? policyRules.providerOnlyExclusion ?? null,
+    cleanClaimRule: policy.cleanClaimRule ?? policyRules.cleanClaim ?? null,
+    sourceBoundary: policy.sourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_family_overlap_policy_review_required" : "model_family_overlap_policy_complete",
+  };
+}
+
+function buildModelFamilyOverlapPolicyEvidence(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeModelFamilyOverlapPolicy(policy, "submitted_workflow_model_family_overlap_policy"))
+    .filter(Boolean);
+  const seedRows = [normalizeModelFamilyOverlapPolicy(defaultModelFamilyOverlapPolicy(releaseId), "seed_model_family_overlap_policy")];
+  const activePolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? seedRows[0];
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length);
+  return {
+    id: `model-family-overlap-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredOverlapMatchBases: REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
+    requiredForbiddenOverlapBases: REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
+    requiredCleanClaimActions: REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
+    requiredPolicyRules: REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+    policyRows: [...seedRows, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    counts: {
+      submittedPolicyCount: submittedRows.length,
+      reviewRequiredPolicyCount: reviewRows.length,
+    },
+    releaseUseStatus: !submittedRows.length
+      ? "seed_model_family_overlap_policy_active"
+      : reviewRows.length
+        ? "submitted_model_family_overlap_policy_review_required"
+        : "submitted_model_family_overlap_policy_active",
+  };
+}
 
 export function buildModelAssistedLabelOverlapReport(
   releaseId,
@@ -11464,6 +11776,8 @@ export function buildModelAssistedLabelOverlapReport(
 ) {
   const snapshotItemIds = new Set(Object.keys(labelSnapshot.itemLabels));
   const ratingById = new Map(ratings.map((rating) => [rating.id, rating]));
+  const modelFamilyOverlapPolicyEvidence = buildModelFamilyOverlapPolicyEvidence(releaseId, options.modelFamilyOverlapPolicies ?? []);
+  const activeModelFamilyOverlapPolicy = modelFamilyOverlapPolicyEvidence.activePolicy;
   const modelProviderPolicyRows = (options.modelProviderDataHandlingPolicies?.length
     ? options.modelProviderDataHandlingPolicies
     : defaultModelProviderDataHandlingPolicies(releaseId)
@@ -11480,6 +11794,7 @@ export function buildModelAssistedLabelOverlapReport(
       .filter((row) => row && snapshotItemIds.has(row.itemId)),
   ].map((row) => ({
     ...row,
+    modelFamilyOverlapPolicyId: activeModelFamilyOverlapPolicy?.id ?? null,
     modelProviderPolicyBinding: modelProviderPolicyBindingForRunClass(
       { runSource: row.assistanceSource },
       "model_assisted_check",
@@ -11497,7 +11812,8 @@ export function buildModelAssistedLabelOverlapReport(
     const overlapRows = targetModelAssistedRows
       .map((row) => ({
         ...row,
-        overlapBasis: modelOverlapBasis(evaluatedModel, row.assistingModel),
+        modelFamilyOverlapPolicyId: activeModelFamilyOverlapPolicy?.id ?? null,
+        overlapBasis: modelOverlapBasis(evaluatedModel, row.assistingModel, activeModelFamilyOverlapPolicy),
       }))
       .filter((row) => row.overlapBasis !== "none");
     const status =
@@ -11538,6 +11854,14 @@ export function buildModelAssistedLabelOverlapReport(
       reason,
     })),
   );
+  const policyReviewSections = modelFamilyOverlapPolicyEvidence.reviewRows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({
+      artifactType: "model_family_overlap_policy",
+      artifactId: row.id,
+      reason,
+    })),
+  );
+  const allReviewSections = [...reviewSections, ...policyReviewSections];
   return {
     id: `model-assisted-label-overlap-${releaseId}-${labelSnapshot.id}`,
     releaseId,
@@ -11545,14 +11869,16 @@ export function buildModelAssistedLabelOverlapReport(
     targetLabelVersion: labelSnapshot.targetLabelVersion,
     generatedAt: new Date().toISOString(),
     policy: {
-      closeModelFamilyDefinition:
-        "Exact evaluated-model alias, exact resolved snapshot, or declared modelFamily match counts as overlap-sensitive; provider-only matches are not enough.",
-      cleanClaimRule:
-        "Clean leaderboard claims must use no model-assisted target rows, no evaluated-model-family overlap, or a paired human-only/pre-assistance target snapshot.",
+      closeModelFamilyDefinition: activeModelFamilyOverlapPolicy?.familyMatchRule ?? REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.familyMatch,
+      cleanClaimRule: activeModelFamilyOverlapPolicy?.cleanClaimRule ?? REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.cleanClaim,
+      providerOnlyExclusionRule:
+        activeModelFamilyOverlapPolicy?.providerOnlyExclusionRule ?? REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES.providerOnlyExclusion,
       modelAssistedRowsIndependentHumanEvidence: false,
       preAssistanceTargetPolicy:
         "Rows with model-assisted exposure are excluded from the human-only/pre-assistance target; blind initial, self-check, expert-check, adjudication, and unassisted revision rows remain eligible.",
     },
+    modelFamilyOverlapPolicyEvidence,
+    modelFamilyOverlapPolicyId: activeModelFamilyOverlapPolicy?.id ?? null,
     counts: {
       targetLabelItemCount: snapshotItemIds.size,
       targetModelAssistedRatingRows: targetModelAssistedRows.length,
@@ -11566,11 +11892,12 @@ export function buildModelAssistedLabelOverlapReport(
       ).length,
       evaluatedRunCount: runRows.length,
       overlapSensitiveRunCount: overlapRunRows.length,
-      reviewSectionCount: reviewSections.length,
+      modelFamilyOverlapPolicyReviewRows: modelFamilyOverlapPolicyEvidence.reviewRows.length,
+      reviewSectionCount: allReviewSections.length,
     },
     assistanceRows: targetModelAssistedRows,
     runRows,
-    reviewSections,
+    reviewSections: allReviewSections,
     humanOnlyPreAssistanceTarget: {
       id: humanOnlySnapshot.id,
       targetLabelVersion: humanOnlySnapshot.targetLabelVersion,
@@ -11581,7 +11908,9 @@ export function buildModelAssistedLabelOverlapReport(
       sameAsTargetLabelSnapshot: targetModelAssistedRows.length === 0,
     },
     releaseUseStatus:
-      reviewSections.length > 0
+      policyReviewSections.length > 0
+        ? "model_family_overlap_policy_review_required"
+        : reviewSections.length > 0
         ? "model_assisted_rating_check_review_required"
         : overlapRunRows.length > 0
         ? "model_assisted_overlap_sensitive_reports_require_human_only_target"
@@ -11806,6 +12135,7 @@ export function buildModelFailureAudit(
       options.ratings ?? seedRatings,
       [run],
       critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+      { modelFamilyOverlapPolicies: options.modelFamilyOverlapPolicies ?? [] },
     );
   const modelAssistedLabelOverlap =
     modelAssistedLabelOverlapReport.runRows.find((row) => row.evaluationRunId === run.id) ??
@@ -12434,6 +12764,7 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
   releaseId,
   { labelSnapshot, trainingExport, leaderboardReport, recalibratedEvaluation, modelFailureAudits },
   {
+    modelImprovementPolicies = [],
     modelImprovementRuns = [],
     evaluationRuns = [],
     modelEvaluationPredictions = [],
@@ -12445,6 +12776,15 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
     modelProviderDataHandlingPolicies = [],
   } = {},
 ) {
+  const submittedModelImprovementPolicyRows = (modelImprovementPolicies ?? [])
+    .map((policy) => normalizeModelImprovementPolicy(policy, "submitted_workflow_model_improvement_policy"))
+    .filter(Boolean);
+  const seedModelImprovementPolicyRows = [
+    normalizeModelImprovementPolicy(defaultModelImprovementPolicy(releaseId), "seed_model_improvement_policy"),
+  ];
+  const activeModelImprovementPolicy =
+    submittedModelImprovementPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedModelImprovementPolicyRows[0];
+  const modelImprovementPolicyReviewRows = submittedModelImprovementPolicyRows.filter((row) => row.reviewReasons.length);
   const submittedModelImprovementRun = latestSubmittedReleaseArtifact(modelImprovementRuns, releaseId);
   const submittedEvaluationRun = latestSubmittedReleaseArtifact(evaluationRuns, releaseId);
   const submittedPredictions = submittedEvaluationRun
@@ -12457,7 +12797,12 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
   const submittedFailureAudit = submittedEvaluationRun
     ? latestSubmittedWorkflowArtifactByField(modelFailureAuditArtifacts, "evaluationRunId", submittedEvaluationRun.id, releaseId)
     : null;
-  const modelImprovementRunEvidence = submittedModelImprovementRunEvidence(releaseId, trainingExport, submittedModelImprovementRun);
+  const modelImprovementRunEvidence = submittedModelImprovementRunEvidence(
+    releaseId,
+    trainingExport,
+    submittedModelImprovementRun,
+    activeModelImprovementPolicy,
+  );
   const evaluationRunEvidence = submittedEvaluationRunEvidence(releaseId, labelSnapshot, submittedEvaluationRun);
   const predictionEvidence = submittedModelEvaluationPredictionEvidence(labelSnapshot, submittedEvaluationRun, submittedPredictions);
   const calibrationRunEvidence = submittedCalibrationRunEvidence(releaseId, labelSnapshot, submittedEvaluationRun, submittedCalibrationRun, recalibratedEvaluation);
@@ -12476,9 +12821,17 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
     modelProviderPolicyEvidence,
   ];
   const submittedSections = sections.filter((section) => section.submittedArtifactId);
-  const allReviewSections = sections.filter(
-    (section) => section.status.endsWith("_review_required") || (submittedSections.length && section.status === "no_submitted_artifact"),
-  );
+  const modelImprovementPolicyReviewSections = modelImprovementPolicyReviewRows.map((row) => ({
+    artifactKind: "model_improvement_policy",
+    submittedArtifactId: row.id,
+    status: "model_improvement_policy_review_required",
+  }));
+  const allReviewSections = [
+    ...sections.filter(
+      (section) => section.status.endsWith("_review_required") || (submittedSections.length && section.status === "no_submitted_artifact"),
+    ),
+    ...modelImprovementPolicyReviewSections,
+  ];
   return {
     id: `submitted-model-evaluation-artifact-evidence-${releaseId}`,
     releaseId,
@@ -12501,6 +12854,17 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
       modelProviderPolicyRule:
         "Submitted protected model-evaluation runs must reference an approved ModelProviderDataHandlingPolicy with no training, no reuse, no unnecessary human review, bounded retention, and protected-content eligibility.",
     },
+    modelImprovementPolicyRows: [...seedModelImprovementPolicyRows, ...submittedModelImprovementPolicyRows],
+    modelImprovementPolicyId: activeModelImprovementPolicy?.id ?? null,
+    modelImprovementPolicyReleaseUseStatus: !submittedModelImprovementPolicyRows.length
+      ? "seed_model_improvement_policy_active"
+      : modelImprovementPolicyReviewRows.length
+        ? "submitted_model_improvement_policy_review_required"
+        : "submitted_model_improvement_policy_active",
+    requiredModelImprovementMethods: activeModelImprovementPolicy?.allowedTrainingMethods ?? [],
+    requiredModelImprovementObjectiveFamilies: activeModelImprovementPolicy?.allowedObjectiveFamilies ?? [],
+    requiredModelImprovementTargetFields: activeModelImprovementPolicy?.requiredTargetFields ?? [],
+    requiredModelImprovementPolicyRules: activeModelImprovementPolicy?.policyRules ?? {},
     modelImprovementRunEvidence,
     evaluationRunEvidence,
     predictionEvidence,
@@ -12518,16 +12882,27 @@ export function buildSubmittedModelEvaluationArtifactEvidence(
   };
 }
 
-function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitted) {
+function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitted, activeModelImprovementPolicy = null) {
+  const targetFields = uniqueStrings(normalizeStringArray(submitted?.targetFields));
   const excludedProtectedSplits = protectedSplitList(submitted);
+  const modelImprovementPolicyId = submitted?.modelImprovementPolicyId ?? submitted?.model_improvement_policy_id ?? submitted?.policyId;
+  const trainingMethod = submitted?.trainingMethod ?? submitted?.training_method ?? submitted?.rlhfMethod ?? submitted?.downstreamTrainingMethod;
+  const objectiveFamily =
+    submitted?.optimizedSurrogateObjectiveFamily ??
+    submitted?.optimized_surrogate_objective_family ??
+    submitted?.optimizedSurrogateObjective;
+  const approvalStatus = submitted?.modelImprovementApprovalStatus ?? submitted?.model_improvement_approval_status ?? submitted?.approvalStatus;
   const checks = [
     requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("modelImprovementPolicyId", activeModelImprovementPolicy?.id ?? "model_improvement_policy", modelImprovementPolicyId),
+    requiredSetMembershipCheck("trainingMethod", activeModelImprovementPolicy?.allowedTrainingMethods ?? [], trainingMethod),
+    requiredSetMembershipCheck("optimizedSurrogateObjectiveFamily", activeModelImprovementPolicy?.allowedObjectiveFamilies ?? [], objectiveFamily),
     requiredManifestCheck("trainingExportId", trainingExport.id, submitted?.trainingExportId),
     requiredManifestCheck("targetLabelSnapshotId", trainingExport.labelSnapshotId, submitted?.targetLabelSnapshotId ?? submitted?.labelSnapshotId),
     requiredManifestCheck("targetLabelVersion", trainingExport.targetLabelVersion, submitted?.targetLabelVersion),
     requiredNonEmptyCheck("modelFamilyOrCheckpoint", submitted?.modelFamilyOrCheckpoint ?? submitted?.modelFamily ?? submitted?.checkpointId),
-    requiredNonEmptyCheck("optimizedSurrogateObjective", submitted?.optimizedSurrogateObjectiveFamily ?? submitted?.optimizedSurrogateObjective),
-    requiredNonEmptyCheck("targetFields", submitted?.targetFields),
+    requiredNonEmptyCheck("optimizedSurrogateObjective", objectiveFamily),
+    requiredArrayIncludesCheck("targetFields", activeModelImprovementPolicy?.requiredTargetFields ?? [], targetFields),
     requiredNonEmptyCheck("humanMarginWeightingPolicy", submitted?.humanMarginWeightingPolicy),
     requiredNonEmptyCheck("tieIndifferenceHandling", submitted?.tieIndifferenceHandling),
     requiredNonEmptyCheck("positionBalancedWeightingPolicy", submitted?.positionBalancedWeightingPolicy),
@@ -12536,7 +12911,8 @@ function submittedModelImprovementRunEvidence(releaseId, trainingExport, submitt
     requiredNonEmptyCheck("calibrationTargetDistribution", submitted?.calibrationTargetDistribution),
     requiredNonEmptyCheck("fitSplit", submitted?.fitSplit),
     requiredNonEmptyCheck("devSplit", submitted?.devSplit),
-    requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    requiredArrayIncludesCheck("excludedProtectedSplits", activeModelImprovementPolicy?.protectedSplitExclusions ?? [], excludedProtectedSplits),
+    requiredSetMembershipCheck("modelImprovementApprovalStatus", activeModelImprovementPolicy?.allowedApprovalStatuses ?? [], approvalStatus),
     requiredPolicyIncludesCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy, ["prompt", "track"]),
     requiredNonEmptyCheck("trainingPromptTemplateId", submitted?.trainingPromptTemplateId ?? submitted?.trainingPromptId),
     requiredNonEmptyCheck("linkedPostTrainingEvaluationRunIds", submitted?.linkedPostTrainingEvaluationRunIds ?? submitted?.postTrainingEvaluationRunIds),
@@ -23681,6 +24057,7 @@ export function buildOctoberReleaseReport(
   );
   const humanCeiling = buildHumanCeilingAndSaturationReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, [fullRubricEvaluationRun], {
     humanCeilingRuns: options.humanCeilingRuns ?? [],
+    benchmarkRefreshPolicies: options.benchmarkRefreshPolicies ?? [],
   });
   const samePositionContext = buildSamePositionContextReport(
     releaseId,
@@ -23725,6 +24102,7 @@ export function buildOctoberReleaseReport(
   const evaluationPairs = critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id }));
   const modelAssistedLabelOverlap = buildModelAssistedLabelOverlapReport(releaseId, labelSnapshot, ratings, evaluationRuns, evaluationPairs, {
     ratingChecks: options.ratingChecks ?? [],
+    modelFamilyOverlapPolicies: options.modelFamilyOverlapPolicies ?? [],
     modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
   });
   const releaseRobustnessClaims = uniqueStrings([
@@ -23913,6 +24291,7 @@ export function buildOctoberReleaseReport(
     releaseId,
     { labelSnapshot, trainingExport, leaderboardReport, recalibratedEvaluation, modelFailureAudits },
     {
+      modelImprovementPolicies: options.modelImprovementPolicies ?? [],
       modelImprovementRuns: options.modelImprovementRuns ?? [],
       evaluationRuns: options.evaluationRuns ?? [],
       modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
@@ -24197,13 +24576,16 @@ export function buildOctoberReleaseReport(
       generationEvaluationReports: options.generationEvaluationReports ?? [],
       promptTemplates: options.promptTemplates ?? [],
       parserConfigs: options.parserConfigs ?? [],
+      modelImprovementPolicies: options.modelImprovementPolicies ?? [],
       modelImprovementRuns: options.modelImprovementRuns ?? [],
       evaluationRuns: options.evaluationRuns ?? [],
       modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
       calibrationRuns: options.calibrationRuns ?? [],
+      modelFamilyOverlapPolicies: options.modelFamilyOverlapPolicies ?? [],
       artifactProbeRuns: options.artifactProbeRuns ?? [],
       sanityBaselineRuns: options.sanityBaselineRuns ?? [],
       humanCeilingRuns: options.humanCeilingRuns ?? [],
+      benchmarkRefreshPolicies: options.benchmarkRefreshPolicies ?? [],
       validationTrancheEvidenceRecords: options.validationTrancheEvidenceRecords ?? options.validationTrancheEvidence ?? [],
       leaderboards: options.leaderboards ?? [],
       modelFailureAudits: options.modelFailureAudits ?? [],
@@ -24967,23 +25349,41 @@ function modelIdentityForRun(run) {
 }
 
 function modelIdentityFromValues(identity) {
-  const modelFamily =
-    normalizeModelKey(identity.modelFamily) ??
-    inferModelFamily(identity.resolvedModelSnapshot, identity.requestedModelAlias, identity.provider);
+  const declaredModelFamily = normalizeModelKey(identity.modelFamily);
+  const inferredModelFamily = inferModelFamily(identity.resolvedModelSnapshot, identity.requestedModelAlias, identity.provider);
+  const modelFamily = declaredModelFamily ?? inferredModelFamily;
   return {
     requestedModelAlias: identity.requestedModelAlias ?? null,
     resolvedModelSnapshot: identity.resolvedModelSnapshot ?? null,
     provider: identity.provider ?? null,
     modelFamily,
+    declaredModelFamily,
+    inferredModelFamily,
     normalizedAlias: normalizeModelKey(identity.requestedModelAlias),
     normalizedSnapshot: normalizeModelKey(identity.resolvedModelSnapshot),
   };
 }
 
-function modelOverlapBasis(evaluatedModel, assistingModel) {
-  if (evaluatedModel.normalizedSnapshot && evaluatedModel.normalizedSnapshot === assistingModel.normalizedSnapshot) return "exact_resolved_snapshot";
-  if (evaluatedModel.normalizedAlias && evaluatedModel.normalizedAlias === assistingModel.normalizedAlias) return "exact_requested_alias";
-  if (evaluatedModel.modelFamily && evaluatedModel.modelFamily === assistingModel.modelFamily) return "close_model_family";
+function modelOverlapBasis(evaluatedModel, assistingModel, policy = null) {
+  const overlapMatchBases = policy?.overlapMatchBases ?? REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
+  if (
+    overlapMatchBases.includes("exact_resolved_snapshot") &&
+    evaluatedModel.normalizedSnapshot &&
+    evaluatedModel.normalizedSnapshot === assistingModel.normalizedSnapshot
+  ) {
+    return "exact_resolved_snapshot";
+  }
+  if (
+    overlapMatchBases.includes("exact_requested_alias") &&
+    evaluatedModel.normalizedAlias &&
+    evaluatedModel.normalizedAlias === assistingModel.normalizedAlias
+  ) {
+    return "exact_requested_alias";
+  }
+  if (evaluatedModel.modelFamily && evaluatedModel.modelFamily === assistingModel.modelFamily) {
+    const familyBasis = evaluatedModel.declaredModelFamily || assistingModel.declaredModelFamily ? "declared_model_family" : "inferred_model_family";
+    if (overlapMatchBases.includes(familyBasis)) return "close_model_family";
+  }
   return "none";
 }
 
@@ -25420,6 +25820,51 @@ function normalizeArtifactProbeFamilies(families = []) {
 }
 
 export const TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION = "training-export-uncertainty-rlhf90-v1";
+export const MODEL_IMPROVEMENT_POLICY_VERSION = "model-improvement-method-rlhf90-v1";
+export const REQUIRED_MODEL_IMPROVEMENT_METHODS = [
+  "pairwise_reward_model",
+  "scalar_reward_model",
+  "preference_distillation",
+  "supervised_rationale_free_baseline",
+];
+export const REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES = [
+  "pairwise_logistic",
+  "bradley_terry",
+  "scalar_regression",
+  "direct_preference_optimization",
+];
+export const REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS = [
+  "overall",
+  "centrality_x_strength",
+  "label_uncertainty",
+  "rater_count",
+  "disagreement_taxonomy",
+];
+export const REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS = [
+  "hidden_benchmark",
+  "protected_validation",
+  "internal_validation",
+  "stress_test",
+];
+export const REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES = {
+  lmcaSeparation:
+    "Downstream optimization is a project-level model-improvement method and never replaces frozen LMCA evaluation metrics or leaderboard reports.",
+  protectedSplitExclusion:
+    "Hidden benchmark, protected validation, internal validation, and stress-test rows are excluded from downstream model-improvement training unless a later governed export explicitly permits them.",
+  uncertaintyPropagation:
+    "Rater count, expert count, score spread, label status, uncertainty flags, and disagreement taxonomy must be preserved for downweighting or exclusion.",
+  positionBalance:
+    "Training weights must average or sample within position before cross-position weighting so many critiques from one position cannot dominate.",
+  promptTrackSeparation:
+    "Training prompts, optimized prompt tracks, and source-comparable LMCA evaluation prompts remain separately versioned and reported.",
+  postTrainingEvaluation:
+    "A model-improvement run must link at least one post-training evaluation run that recomputes frozen LMCA metrics separately from the training surrogate.",
+};
+export const REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES = [
+  "policy_approved_for_training",
+  "review_required_before_training",
+  "blocked_protected_split_or_metric_leak",
+];
 export const REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS = {
   highSpreadPostDiscussionMin: 0.3,
   highSpreadPreDiscussionMin: 0.35,
@@ -25440,6 +25885,118 @@ export const REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES = {
   lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
   protectedSplit: "exclude_from_training_exports_with_weight_0",
 };
+
+function defaultModelImprovementPolicy(releaseId = "october-2026-demo") {
+  return {
+    id: `model-improvement-policy-${releaseId}`,
+    policyVersion: MODEL_IMPROVEMENT_POLICY_VERSION,
+    allowedTrainingMethods: REQUIRED_MODEL_IMPROVEMENT_METHODS,
+    allowedObjectiveFamilies: REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES,
+    requiredTargetFields: REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS,
+    protectedSplitExclusions: REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS,
+    policyRules: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES,
+    allowedApprovalStatuses: REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
+    defaultTrainingMethod: "pairwise_reward_model",
+    defaultObjectiveFamily: "pairwise_logistic",
+    lmcaMetricSeparationRule: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES.lmcaSeparation,
+    protectedSplitRule: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES.protectedSplitExclusion,
+    uncertaintyPropagationRule: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES.uncertaintyPropagation,
+    positionBalanceRule: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES.positionBalance,
+    promptTrackRule: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES.promptTrackSeparation,
+    postTrainingEvaluationRule: REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES.postTrainingEvaluation,
+    sourceBoundary:
+      "Project default downstream model-improvement method is frozen here; LMCA motivates evaluation metrics but does not state exact RLHF or fine-tuning methods.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeModelImprovementPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.modelImprovementPolicyId ?? policy?.model_improvement_policy_id;
+  if (!id) return null;
+  const allowedTrainingMethods = uniqueStrings(
+    normalizeStringArray(policy.allowedTrainingMethods ?? policy.trainingMethods ?? policy.allowedMethods),
+  );
+  const allowedObjectiveFamilies = uniqueStrings(
+    normalizeStringArray(policy.allowedObjectiveFamilies ?? policy.objectiveFamilies ?? policy.optimizedSurrogateObjectiveFamilies),
+  );
+  const requiredTargetFields = uniqueStrings(normalizeStringArray(policy.requiredTargetFields ?? policy.targetFields));
+  const protectedSplitExclusions = uniqueStrings(
+    normalizeStringArray(policy.protectedSplitExclusions ?? policy.excludedProtectedSplits ?? policy.protectedSplitsExcluded),
+  );
+  const allowedApprovalStatuses = uniqueStrings(
+    normalizeStringArray(policy.allowedApprovalStatuses ?? policy.approvalStatuses ?? policy.modelImprovementApprovalStatuses),
+  );
+  const policyRules =
+    policy.policyRules && typeof policy.policyRules === "object" && !Array.isArray(policy.policyRules) ? policy.policyRules : {};
+  const lmcaMetricSeparationRule = policy.lmcaMetricSeparationRule ?? policyRules.lmcaSeparation ?? null;
+  const protectedSplitRule = policy.protectedSplitRule ?? policyRules.protectedSplitExclusion ?? null;
+  const uncertaintyPropagationRule = policy.uncertaintyPropagationRule ?? policyRules.uncertaintyPropagation ?? null;
+  const positionBalanceRule = policy.positionBalanceRule ?? policyRules.positionBalance ?? null;
+  const promptTrackRule = policy.promptTrackRule ?? policyRules.promptTrackSeparation ?? null;
+  const postTrainingEvaluationRule = policy.postTrainingEvaluationRule ?? policyRules.postTrainingEvaluation ?? null;
+  const missingTrainingMethods = REQUIRED_MODEL_IMPROVEMENT_METHODS.filter((method) => !allowedTrainingMethods.includes(method));
+  const missingObjectiveFamilies = REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES.filter((family) => !allowedObjectiveFamilies.includes(family));
+  const missingTargetFields = REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS.filter((field) => !requiredTargetFields.includes(field));
+  const missingProtectedSplits = REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS.filter(
+    (split) => !protectedSplitExclusions.includes(split),
+  );
+  const missingApprovalStatuses = REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES.filter((status) => !allowedApprovalStatuses.includes(status));
+  const missingRuleKeys = Object.keys(REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES).filter((key) => !Object.hasOwn(policyRules, key));
+  const defaultTrainingMethod = policy.defaultTrainingMethod ?? policy.default_training_method ?? null;
+  const defaultObjectiveFamily = policy.defaultObjectiveFamily ?? policy.default_objective_family ?? null;
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === MODEL_IMPROVEMENT_POLICY_VERSION
+      ? null
+      : `policyVersion:${MODEL_IMPROVEMENT_POLICY_VERSION}`,
+    missingTrainingMethods.length ? `allowedTrainingMethods:${missingTrainingMethods.join(",")}` : null,
+    stableJsonKey(allowedTrainingMethods) === stableJsonKey(REQUIRED_MODEL_IMPROVEMENT_METHODS) ? null : "allowedTrainingMethods",
+    missingObjectiveFamilies.length ? `allowedObjectiveFamilies:${missingObjectiveFamilies.join(",")}` : null,
+    stableJsonKey(allowedObjectiveFamilies) === stableJsonKey(REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES) ? null : "allowedObjectiveFamilies",
+    missingTargetFields.length ? `requiredTargetFields:${missingTargetFields.join(",")}` : null,
+    stableJsonKey(requiredTargetFields) === stableJsonKey(REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS) ? null : "requiredTargetFields",
+    missingProtectedSplits.length ? `protectedSplitExclusions:${missingProtectedSplits.join(",")}` : null,
+    stableJsonKey(protectedSplitExclusions) === stableJsonKey(REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS)
+      ? null
+      : "protectedSplitExclusions",
+    missingApprovalStatuses.length ? `allowedApprovalStatuses:${missingApprovalStatuses.join(",")}` : null,
+    stableJsonKey(allowedApprovalStatuses) === stableJsonKey(REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES) ? null : "allowedApprovalStatuses",
+    missingRuleKeys.length ? `policyRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(policyRules) === stableJsonKey(REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES) ? null : "policyRules",
+    allowedTrainingMethods.includes(defaultTrainingMethod) ? null : "defaultTrainingMethod",
+    allowedObjectiveFamilies.includes(defaultObjectiveFamily) ? null : "defaultObjectiveFamily",
+    policyMentions(lmcaMetricSeparationRule, ["project-level", "never replaces", "lmca"]) ? null : "lmcaMetricSeparationRule",
+    policyMentions(protectedSplitRule, ["hidden benchmark", "protected validation", "excluded"]) ? null : "protectedSplitRule",
+    policyMentions(uncertaintyPropagationRule, ["rater count", "uncertainty", "disagreement"]) ? null : "uncertaintyPropagationRule",
+    policyMentions(positionBalanceRule, ["within position", "cross-position"]) ? null : "positionBalanceRule",
+    policyMentions(promptTrackRule, ["training prompts", "evaluation prompts", "separately"]) ? null : "promptTrackRule",
+    policyMentions(postTrainingEvaluationRule, ["post-training", "frozen lmca metrics"]) ? null : "postTrainingEvaluationRule",
+    policyMentions(policy.sourceBoundary, ["project default", "lmca", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    allowedTrainingMethods,
+    allowedObjectiveFamilies,
+    requiredTargetFields,
+    protectedSplitExclusions,
+    policyRules,
+    allowedApprovalStatuses,
+    defaultTrainingMethod,
+    defaultObjectiveFamily,
+    lmcaMetricSeparationRule,
+    protectedSplitRule,
+    uncertaintyPropagationRule,
+    positionBalanceRule,
+    promptTrackRule,
+    postTrainingEvaluationRule,
+    sourceBoundary: policy.sourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_improvement_policy_review_required" : "model_improvement_policy_complete",
+  };
+}
 
 function defaultTrainingExportUncertaintyPolicy(releaseId = "october-2026-demo") {
   return {

@@ -99,6 +99,108 @@ const trainingExportDownweightRules = {
   lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
   protectedSplit: "exclude_from_training_exports_with_weight_0",
 };
+const modelImprovementMethods = [
+  "pairwise_reward_model",
+  "scalar_reward_model",
+  "preference_distillation",
+  "supervised_rationale_free_baseline",
+];
+const modelImprovementObjectiveFamilies = [
+  "pairwise_logistic",
+  "bradley_terry",
+  "scalar_regression",
+  "direct_preference_optimization",
+];
+const modelImprovementTargetFields = [
+  "overall",
+  "centrality_x_strength",
+  "label_uncertainty",
+  "rater_count",
+  "disagreement_taxonomy",
+];
+const modelImprovementProtectedSplitExclusions = [
+  "hidden_benchmark",
+  "protected_validation",
+  "internal_validation",
+  "stress_test",
+];
+const modelImprovementPolicyRules = {
+  lmcaSeparation:
+    "Downstream optimization is a project-level model-improvement method and never replaces frozen LMCA evaluation metrics or leaderboard reports.",
+  protectedSplitExclusion:
+    "Hidden benchmark, protected validation, internal validation, and stress-test rows are excluded from downstream model-improvement training unless a later governed export explicitly permits them.",
+  uncertaintyPropagation:
+    "Rater count, expert count, score spread, label status, uncertainty flags, and disagreement taxonomy must be preserved for downweighting or exclusion.",
+  positionBalance:
+    "Training weights must average or sample within position before cross-position weighting so many critiques from one position cannot dominate.",
+  promptTrackSeparation:
+    "Training prompts, optimized prompt tracks, and source-comparable LMCA evaluation prompts remain separately versioned and reported.",
+  postTrainingEvaluation:
+    "A model-improvement run must link at least one post-training evaluation run that recomputes frozen LMCA metrics separately from the training surrogate.",
+};
+const modelImprovementApprovalStatuses = [
+  "policy_approved_for_training",
+  "review_required_before_training",
+  "blocked_protected_split_or_metric_leak",
+];
+const benchmarkRefreshCadenceDaysByStatus = {
+  saturation_risk_refresh_required: 30,
+  not_assessable_thin_validation: 90,
+  no_saturation_signal_current_release: 180,
+};
+const benchmarkRefreshActions = [
+  "double_rate",
+  "expert_double_check",
+  "adjudicate_or_preserve_disagreement",
+  "harder_or_obfuscated_item",
+];
+const benchmarkRefreshQueueFields = [
+  "itemId",
+  "split",
+  "topicFamily",
+  "priorityScore",
+  "refreshActions",
+];
+const benchmarkRefreshPolicyRules = {
+  saturationCadence:
+    "Saturation-risk releases require a governed benchmark refresh plan within 30 days before stronger hidden-benchmark progress claims continue.",
+  thinValidationCadence:
+    "Thin validation requires a 90-day refresh or validation-floor remediation review before human-ceiling or saturation claims are strengthened.",
+  maintenanceCadence:
+    "No-saturation releases still receive a 180-day benchmark maintenance review so hidden benchmark freeze is not treated as permanent.",
+  refreshActionMinimum:
+    "Refresh queues must prioritize double rating, expert double-checking, adjudication or preserved disagreement, and harder or obfuscated item replenishment.",
+  protectedSplitGovernance:
+    "Protected validation and hidden-benchmark refresh candidates require split-governed review before any item is deprotected, replaced, or added to headline denominators.",
+  claimSuppression:
+    "Unsupported saturation, human-ceiling, or progress claims remain suppressed until the active benchmark refresh policy is satisfied or a diagnostic deferral records the weaker claim.",
+};
+const modelFamilyOverlapMatchBases = [
+  "exact_resolved_snapshot",
+  "exact_requested_alias",
+  "declared_model_family",
+  "inferred_model_family",
+];
+const modelFamilyOverlapForbiddenBases = ["provider_only", "organization_only", "deployment_region_only"];
+const modelFamilyOverlapCleanClaimActions = [
+  "require_human_only_pre_assistance_target",
+  "label_overlap_sensitive",
+  "suppress_clean_independent_claim",
+];
+const modelFamilyOverlapPolicyRules = {
+  exactSnapshot:
+    "An exact resolved model snapshot match between the assisting model and evaluated model is always overlap-sensitive.",
+  exactAlias:
+    "An exact requested model alias match between the assisting model and evaluated model is overlap-sensitive when a resolved snapshot is absent or shared.",
+  familyMatch:
+    "Declared or inferred close model-family matches are overlap-sensitive because variants can share training, behavior, or label-assistance contamination.",
+  providerOnlyExclusion:
+    "Provider-only, organization-only, endpoint-only, and deployment-region-only matches are not sufficient by themselves for close-family overlap.",
+  cleanClaim:
+    "Clean independent leaderboard claims require an overlap-free target, a human-only pre-assistance target snapshot, or explicit overlap-sensitive labeling.",
+  sourceBoundary:
+    "Project default close model-family overlap rules are frozen here; LMCA motivates model-assisted contamination separation but does not state exact family-match rules.",
+};
 const raterInstructionCompatibilityClasses = [
   "protected_release_critical_same_policy_family",
   "quarantined_sensitivity_snapshot_required",
@@ -1796,6 +1898,31 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "model-family-overlap-policy",
+    label: "Model Family Overlap Policy",
+    endpoint: () => "/api/v1/model-family-overlap-policies",
+    resourceKey: "modelFamilyOverlapPolicy",
+    requiredRole: "admin",
+    summary: "Freeze close model-family overlap rules for model-assisted-label contamination checks.",
+    payload: () => ({
+      modelFamilyOverlapPolicy: {
+        id: `model-family-overlap-policy-${releaseId}`,
+        policyVersion: "model-family-overlap-rlhf90-v1",
+        overlapMatchBases: modelFamilyOverlapMatchBases,
+        forbiddenOverlapBases: modelFamilyOverlapForbiddenBases,
+        cleanClaimActions: modelFamilyOverlapCleanClaimActions,
+        policyRules: modelFamilyOverlapPolicyRules,
+        exactSnapshotRule: modelFamilyOverlapPolicyRules.exactSnapshot,
+        exactAliasRule: modelFamilyOverlapPolicyRules.exactAlias,
+        familyMatchRule: modelFamilyOverlapPolicyRules.familyMatch,
+        providerOnlyExclusionRule: modelFamilyOverlapPolicyRules.providerOnlyExclusion,
+        cleanClaimRule: modelFamilyOverlapPolicyRules.cleanClaim,
+        sourceBoundary: modelFamilyOverlapPolicyRules.sourceBoundary,
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "rating-check",
     label: "Rating Check",
     endpoint: () => "/api/v1/rating-checks",
@@ -2299,6 +2426,37 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "model-improvement-policy",
+    label: "Model Improvement Policy",
+    endpoint: () => "/api/v1/model-improvement-policies",
+    resourceKey: "modelImprovementPolicy",
+    requiredRole: "admin",
+    summary: "Freeze the downstream RLHF/reward-model method policy separately from LMCA evaluation metrics.",
+    payload: () => ({
+      modelImprovementPolicy: {
+        id: `model-improvement-policy-${releaseId}`,
+        policyVersion: "model-improvement-method-rlhf90-v1",
+        allowedTrainingMethods: modelImprovementMethods,
+        allowedObjectiveFamilies: modelImprovementObjectiveFamilies,
+        requiredTargetFields: modelImprovementTargetFields,
+        protectedSplitExclusions: modelImprovementProtectedSplitExclusions,
+        policyRules: modelImprovementPolicyRules,
+        allowedApprovalStatuses: modelImprovementApprovalStatuses,
+        defaultTrainingMethod: "pairwise_reward_model",
+        defaultObjectiveFamily: "pairwise_logistic",
+        lmcaMetricSeparationRule: modelImprovementPolicyRules.lmcaSeparation,
+        protectedSplitRule: modelImprovementPolicyRules.protectedSplitExclusion,
+        uncertaintyPropagationRule: modelImprovementPolicyRules.uncertaintyPropagation,
+        positionBalanceRule: modelImprovementPolicyRules.positionBalance,
+        promptTrackRule: modelImprovementPolicyRules.promptTrackSeparation,
+        postTrainingEvaluationRule: modelImprovementPolicyRules.postTrainingEvaluation,
+        sourceBoundary:
+          "Project default downstream model-improvement method is frozen here; LMCA motivates evaluation metrics but does not state exact RLHF or fine-tuning methods.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "model-improvement-run",
     label: "Model Improvement Run",
     endpoint: () => "/api/v1/model-improvement-runs",
@@ -2309,12 +2467,14 @@ const workflowTemplates = [
       modelImprovementRun: {
         id: `model-improvement-run-${Date.now()}`,
         releaseId: "october-2026-demo",
+        modelImprovementPolicyId: `model-improvement-policy-${releaseId}`,
+        trainingMethod: "pairwise_reward_model",
         trainingExportId: "training-export-october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
         targetLabelVersion: "initial_only",
         modelFamilyOrCheckpoint: "reward-model-candidate-a",
         optimizedSurrogateObjectiveFamily: "pairwise_logistic",
-        targetFields: ["overall", "centrality_x_strength"],
+        targetFields: modelImprovementTargetFields,
         humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
         tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
         positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
@@ -2323,7 +2483,8 @@ const workflowTemplates = [
         calibrationTargetDistribution: "public_train_label_snapshot_prior",
         fitSplit: "public_train",
         devSplit: "public_dev",
-        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        excludedProtectedSplits: modelImprovementProtectedSplitExclusions,
+        modelImprovementApprovalStatus: "policy_approved_for_training",
         promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
         trainingPromptTemplateId: "prompt-template-demo",
         linkedPostTrainingEvaluationRunIds: ["eval-full-rubric-demo"],
@@ -2517,6 +2678,33 @@ const workflowTemplates = [
         coverageCounts: { itemsScored: 6, lowClarityBranchItems: 1 },
         createdBy: state.session?.user?.id ?? "demo-admin",
         timestamp: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "benchmark-refresh-policy",
+    label: "Benchmark Refresh Policy",
+    endpoint: () => "/api/v1/benchmark-refresh-policies",
+    resourceKey: "benchmarkRefreshPolicy",
+    requiredRole: "admin",
+    summary: "Freeze refresh cadence and queue requirements after saturation or thin-validation signals.",
+    payload: () => ({
+      benchmarkRefreshPolicy: {
+        id: `benchmark-refresh-policy-${releaseId}`,
+        policyVersion: "benchmark-refresh-cadence-rlhf90-v1",
+        cadenceDaysBySaturationStatus: benchmarkRefreshCadenceDaysByStatus,
+        requiredRefreshActions: benchmarkRefreshActions,
+        requiredQueueFields: benchmarkRefreshQueueFields,
+        policyRules: benchmarkRefreshPolicyRules,
+        saturationCadenceRule: benchmarkRefreshPolicyRules.saturationCadence,
+        thinValidationCadenceRule: benchmarkRefreshPolicyRules.thinValidationCadence,
+        maintenanceCadenceRule: benchmarkRefreshPolicyRules.maintenanceCadence,
+        refreshActionMinimumRule: benchmarkRefreshPolicyRules.refreshActionMinimum,
+        protectedSplitGovernanceRule: benchmarkRefreshPolicyRules.protectedSplitGovernance,
+        claimSuppressionRule: benchmarkRefreshPolicyRules.claimSuppression,
+        sourceBoundary:
+          "Project default benchmark-refresh cadence is frozen here; LMCA motivates saturation response but does not state exact refresh timing.",
+        frozenAt: new Date().toISOString(),
       },
     }),
   },

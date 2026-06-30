@@ -9,9 +9,12 @@ import {
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   ARTIFACT_PROBE_INPUT_VIEWS,
   ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
+  BENCHMARK_REFRESH_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+  MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+  MODEL_IMPROVEMENT_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
@@ -70,11 +73,25 @@ import {
   REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
   REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
   REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+  REQUIRED_BENCHMARK_REFRESH_ACTIONS,
+  REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
+  REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
+  REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
+  REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
+  REQUIRED_MODEL_IMPROVEMENT_METHODS,
+  REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES,
+  REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES,
+  REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS,
+  REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   RUBRIC_DIMENSIONS,
@@ -918,6 +935,23 @@ const activeLearningRejectionReasonCodes = REQUIRED_ACTIVE_LEARNING_REJECTION_RE
 const trainingExportUncertaintyPolicyVersion = TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION;
 const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
 const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+const modelImprovementPolicyVersion = MODEL_IMPROVEMENT_POLICY_VERSION;
+const modelImprovementMethods = REQUIRED_MODEL_IMPROVEMENT_METHODS;
+const modelImprovementObjectiveFamilies = REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES;
+const modelImprovementTargetFields = REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS;
+const modelImprovementProtectedSplitExclusions = REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS;
+const modelImprovementPolicyRules = REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES;
+const modelImprovementApprovalStatuses = REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES;
+const benchmarkRefreshPolicyVersion = BENCHMARK_REFRESH_POLICY_VERSION;
+const benchmarkRefreshCadenceDaysByStatus = REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS;
+const benchmarkRefreshActions = REQUIRED_BENCHMARK_REFRESH_ACTIONS;
+const benchmarkRefreshQueueFields = REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS;
+const benchmarkRefreshPolicyRules = REQUIRED_BENCHMARK_REFRESH_POLICY_RULES;
+const modelFamilyOverlapPolicyVersion = MODEL_FAMILY_OVERLAP_POLICY_VERSION;
+const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
+const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
+const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
+const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
 const rationaleEvidenceSpanRequirednessPolicyVersion = RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION;
 const rationaleEvidenceSpanMandatoryTriggerClasses = REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES;
 const rationaleEvidenceSpanRequirednessThresholds = REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS;
@@ -2446,6 +2480,61 @@ const workflowWriteEndpoints = [
     },
     requiredExactFields: { policyVersion: trainingExportUncertaintyPolicyVersion },
   }),
+  workflowWriteSpec(/^\/api\/v1\/model-improvement-policies$/, "model_improvement_policy_submitted", "modelImprovementPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "defaultTrainingMethod",
+      "defaultObjectiveFamily",
+      "lmcaMetricSeparationRule",
+      "protectedSplitRule",
+      "uncertaintyPropagationRule",
+      "positionBalanceRule",
+      "promptTrackRule",
+      "postTrainingEvaluationRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: [
+      "allowedTrainingMethods",
+      "allowedObjectiveFamilies",
+      "requiredTargetFields",
+      "protectedSplitExclusions",
+      "allowedApprovalStatuses",
+    ],
+    requiredObjectFields: ["policyRules"],
+    requiredArrayIncludes: {
+      allowedTrainingMethods: modelImprovementMethods,
+      allowedObjectiveFamilies: modelImprovementObjectiveFamilies,
+      requiredTargetFields: modelImprovementTargetFields,
+      protectedSplitExclusions: modelImprovementProtectedSplitExclusions,
+      allowedApprovalStatuses: modelImprovementApprovalStatuses,
+    },
+    allowedArrayValues: {
+      allowedTrainingMethods: modelImprovementMethods,
+      allowedObjectiveFamilies: modelImprovementObjectiveFamilies,
+      requiredTargetFields: modelImprovementTargetFields,
+      protectedSplitExclusions: modelImprovementProtectedSplitExclusions,
+      allowedApprovalStatuses: modelImprovementApprovalStatuses,
+    },
+    requiredObjectKeys: { policyRules: Object.keys(modelImprovementPolicyRules) },
+    requiredStructuredFields: { policyRules: modelImprovementPolicyRules },
+    allowedValues: {
+      defaultTrainingMethod: modelImprovementMethods,
+      defaultObjectiveFamily: modelImprovementObjectiveFamilies,
+    },
+    requiredStringIncludes: {
+      lmcaMetricSeparationRule: ["project-level", "never replaces", "LMCA"],
+      protectedSplitRule: ["hidden benchmark", "protected validation", "excluded"],
+      uncertaintyPropagationRule: ["rater count", "uncertainty", "disagreement"],
+      positionBalanceRule: ["within position", "cross-position"],
+      promptTrackRule: ["training prompts", "evaluation prompts", "separately"],
+      postTrainingEvaluationRule: ["post-training", "frozen LMCA metrics"],
+      sourceBoundary: ["Project default", "LMCA", "does not state"],
+    },
+    requiredExactFields: { policyVersion: modelImprovementPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/active-learning-selection-audits$/, "active_learning_selection_audit_submitted", "activeLearningSelectionAudit", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -3051,6 +3140,44 @@ const workflowWriteEndpoints = [
     },
     requiredWhen: [{ field: "verificationStatus", equals: "not_practicable", requiredFields: ["notPracticableJustification"] }],
   }),
+  workflowWriteSpec(/^\/api\/v1\/model-family-overlap-policies$/, "model_family_overlap_policy_submitted", "modelFamilyOverlapPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "policyRules",
+      "exactSnapshotRule",
+      "exactAliasRule",
+      "familyMatchRule",
+      "providerOnlyExclusionRule",
+      "cleanClaimRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["overlapMatchBases", "forbiddenOverlapBases", "cleanClaimActions"],
+    requiredObjectFields: ["policyRules"],
+    requiredArrayIncludes: {
+      overlapMatchBases: modelFamilyOverlapMatchBases,
+      forbiddenOverlapBases: modelFamilyOverlapForbiddenBases,
+      cleanClaimActions: modelFamilyOverlapCleanClaimActions,
+    },
+    allowedArrayValues: {
+      overlapMatchBases: modelFamilyOverlapMatchBases,
+      forbiddenOverlapBases: modelFamilyOverlapForbiddenBases,
+      cleanClaimActions: modelFamilyOverlapCleanClaimActions,
+    },
+    requiredObjectKeys: { policyRules: Object.keys(modelFamilyOverlapPolicyRules) },
+    requiredStructuredFields: { policyRules: modelFamilyOverlapPolicyRules },
+    requiredStringIncludes: {
+      exactSnapshotRule: ["exact resolved model snapshot", "overlap-sensitive"],
+      exactAliasRule: ["exact requested model alias", "overlap-sensitive"],
+      familyMatchRule: ["close model-family", "overlap-sensitive"],
+      providerOnlyExclusionRule: ["provider-only", "not sufficient"],
+      cleanClaimRule: ["clean independent", "human-only pre-assistance", "overlap-sensitive"],
+      sourceBoundary: ["Project default", "LMCA", "does not state"],
+    },
+    requiredExactFields: { policyVersion: modelFamilyOverlapPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/rating-checks$/, "rating_check_record_submitted", "ratingCheck", ratingWorkflowRoles, {
     requiredFields: ratingCheckRecordRequiredFields,
     requiredNonEmptyArrayFields: ["auxiliaryMaterialSeen"],
@@ -3213,6 +3340,8 @@ const workflowWriteEndpoints = [
     requiredFields: [
       "id",
       "releaseId",
+      "modelImprovementPolicyId",
+      "trainingMethod",
       "trainingExportId",
       "targetLabelSnapshotId",
       "targetLabelVersion",
@@ -3226,6 +3355,7 @@ const workflowWriteEndpoints = [
       "calibrationTargetDistribution",
       "fitSplit",
       "devSplit",
+      "modelImprovementApprovalStatus",
       "promptTrackExposurePolicy",
       "trainingPromptTemplateId",
       "createdBy",
@@ -3233,7 +3363,13 @@ const workflowWriteEndpoints = [
     ],
     requiredNonEmptyArrayFields: ["targetFields", "excludedProtectedSplits", "linkedPostTrainingEvaluationRunIds"],
     requiredArrayIncludes: {
-      excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+      targetFields: modelImprovementTargetFields,
+      excludedProtectedSplits: modelImprovementProtectedSplitExclusions,
+    },
+    allowedValues: {
+      trainingMethod: modelImprovementMethods,
+      optimizedSurrogateObjectiveFamily: modelImprovementObjectiveFamilies,
+      modelImprovementApprovalStatus: modelImprovementApprovalStatuses,
     },
     requiredExactFields: {
       lmcaEvaluationMetricsSeparate: true,
@@ -3402,6 +3538,51 @@ const workflowWriteEndpoints = [
       excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
     },
     allowedValues: { baselineType: SANITY_BASELINE_TYPES },
+  }),
+  workflowWriteSpec(/^\/api\/v1\/benchmark-refresh-policies$/, "benchmark_refresh_policy_submitted", "benchmarkRefreshPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "cadenceDaysBySaturationStatus",
+      "policyRules",
+      "saturationCadenceRule",
+      "thinValidationCadenceRule",
+      "maintenanceCadenceRule",
+      "refreshActionMinimumRule",
+      "protectedSplitGovernanceRule",
+      "claimSuppressionRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["requiredRefreshActions", "requiredQueueFields"],
+    requiredObjectFields: ["cadenceDaysBySaturationStatus", "policyRules"],
+    requiredObjectKeys: {
+      cadenceDaysBySaturationStatus: Object.keys(benchmarkRefreshCadenceDaysByStatus),
+      policyRules: Object.keys(benchmarkRefreshPolicyRules),
+    },
+    requiredStructuredFields: {
+      cadenceDaysBySaturationStatus: benchmarkRefreshCadenceDaysByStatus,
+      policyRules: benchmarkRefreshPolicyRules,
+    },
+    requiredArrayIncludes: {
+      requiredRefreshActions: benchmarkRefreshActions,
+      requiredQueueFields: benchmarkRefreshQueueFields,
+    },
+    allowedArrayValues: {
+      requiredRefreshActions: benchmarkRefreshActions,
+      requiredQueueFields: benchmarkRefreshQueueFields,
+    },
+    requiredStringIncludes: {
+      saturationCadenceRule: ["saturation-risk", "30 days", "benchmark refresh"],
+      thinValidationCadenceRule: ["thin validation", "90-day", "human-ceiling"],
+      maintenanceCadenceRule: ["no-saturation", "180-day", "maintenance"],
+      refreshActionMinimumRule: ["double rating", "expert double-checking", "harder"],
+      protectedSplitGovernanceRule: ["protected validation", "hidden-benchmark", "governed"],
+      claimSuppressionRule: ["claims", "suppressed", "diagnostic deferral"],
+      sourceBoundary: ["Project default", "LMCA", "does not state"],
+    },
+    requiredExactFields: { policyVersion: benchmarkRefreshPolicyVersion },
   }),
   workflowWriteSpec(/^\/api\/v1\/human-ceiling-runs$/, "human_ceiling_run_submitted", "humanCeilingRun", adminRoles, {
     allowHiddenMetadata: true,
@@ -5377,6 +5558,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/model-judge-scores\/(?<id>[^/]+)$/, "modelJudgeScore", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/active-learning-selection-policies\/(?<id>[^/]+)$/, "activeLearningSelectionPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/training-export-uncertainty-policies\/(?<id>[^/]+)$/, "trainingExportUncertaintyPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-improvement-policies\/(?<id>[^/]+)$/, "modelImprovementPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/active-learning-selection-audits\/(?<id>[^/]+)$/, "activeLearningSelectionAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/critique-generation-runs\/(?<id>[^/]+)$/, "critiqueGenerationRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/generated-critiques\/(?<id>[^/]+)$/, "generatedCritiqueSubmission", adminAuditRoles),
@@ -5395,6 +5577,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/interpretation-target-maps\/(?<id>[^/]+)$/, "interpretationTargetMap", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-claim-granularity-policies\/(?<id>[^/]+)$/, "verificationClaimGranularityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/verification-workspace-sessions\/(?<id>[^/]+)$/, "verificationWorkspaceSession", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/model-family-overlap-policies\/(?<id>[^/]+)$/, "modelFamilyOverlapPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rating-checks\/(?<id>[^/]+)$/, "ratingCheck", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/calibration-feedback-events\/(?<id>[^/]+)$/, "calibrationFeedbackEvent", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/parser-configs\/(?<id>[^/]+)$/, "parserConfig", adminAuditRoles),
@@ -5405,6 +5588,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/sycophancy-probes\/(?<id>[^/]+)$/, "sycophancyProbeRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/obfuscation-stress-runs\/(?<id>[^/]+)$/, "obfuscationStressRun", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/sanity-baselines\/(?<id>[^/]+)$/, "sanityBaselineRun", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/benchmark-refresh-policies\/(?<id>[^/]+)$/, "benchmarkRefreshPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/validation-tranche-evidence\/(?<id>[^/]+)$/, "validationTrancheEvidence", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ux-simplification-policies\/(?<id>[^/]+)$/, "uxSimplificationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/ux-simplification-reviews\/(?<id>[^/]+)$/, "uxSimplificationReview", adminAuditRoles),
@@ -8106,6 +8290,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const adjudicationMemos = latestWorkflowResources(workflowEvents, "adjudicationMemo");
   const verificationRecords = latestWorkflowResources(workflowEvents, "verificationRecord");
   const verificationEvidenceArtifacts = latestWorkflowResources(workflowEvents, "verificationEvidenceArtifact");
+  const modelFamilyOverlapPolicies = latestWorkflowResources(workflowEvents, "modelFamilyOverlapPolicy");
   const ratingChecks = latestWorkflowResources(workflowEvents, "ratingCheck");
   const labelSnapshots = latestWorkflowResources(workflowEvents, "labelSnapshot");
   const corpusManifests = latestWorkflowResources(workflowEvents, "corpusManifest");
@@ -8129,6 +8314,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const generationEvaluationReports = latestWorkflowResources(workflowEvents, "generationEvaluationReport");
   const promptTemplates = latestWorkflowResources(workflowEvents, "promptTemplate");
   const parserConfigs = latestWorkflowResources(workflowEvents, "parserConfig");
+  const modelImprovementPolicies = latestWorkflowResources(workflowEvents, "modelImprovementPolicy");
   const modelImprovementRuns = latestWorkflowResources(workflowEvents, "modelImprovementRun");
   const evaluationRuns = latestWorkflowResources(workflowEvents, "evaluationRun");
   const modelEvaluationPredictions = latestWorkflowResources(workflowEvents, "modelEvaluationPrediction");
@@ -8136,6 +8322,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const artifactProbeRuns = latestWorkflowResources(workflowEvents, "artifactProbeRun");
   const sanityBaselineRuns = latestWorkflowResources(workflowEvents, "sanityBaselineRun");
   const humanCeilingRuns = latestWorkflowResources(workflowEvents, "humanCeilingRun");
+  const benchmarkRefreshPolicies = latestWorkflowResources(workflowEvents, "benchmarkRefreshPolicy");
   const validationTrancheEvidenceRecords = latestWorkflowResources(workflowEvents, "validationTrancheEvidence");
   const leaderboards = latestWorkflowResources(workflowEvents, "leaderboard");
   const modelFailureAudits = latestWorkflowResources(workflowEvents, "modelFailureAudit");
@@ -8289,6 +8476,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     adjudicationMemos,
     verificationRecords,
     verificationEvidenceArtifacts,
+    modelFamilyOverlapPolicies,
     ratingChecks,
     labelSnapshots,
     corpusManifests,
@@ -8312,6 +8500,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     generationEvaluationReports,
     promptTemplates,
     parserConfigs,
+    modelImprovementPolicies,
     modelImprovementRuns,
     evaluationRuns,
     modelEvaluationPredictions,
@@ -8319,6 +8508,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     artifactProbeRuns,
     sanityBaselineRuns,
     humanCeilingRuns,
+    benchmarkRefreshPolicies,
     validationTrancheEvidenceRecords,
     leaderboards,
     modelFailureAudits,
@@ -8469,6 +8659,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     adjudicationMemos,
     verificationRecords,
     verificationEvidenceArtifacts,
+    modelFamilyOverlapPolicies,
     ratingChecks,
     labelSnapshots,
     corpusManifests,
@@ -8492,6 +8683,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     generationEvaluationReports,
     promptTemplates,
     parserConfigs,
+    modelImprovementPolicies,
     modelImprovementRuns,
     evaluationRuns,
     modelEvaluationPredictions,
@@ -8499,6 +8691,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     artifactProbeRuns,
     sanityBaselineRuns,
     humanCeilingRuns,
+    benchmarkRefreshPolicies,
     validationTrancheEvidenceRecords,
     leaderboards,
     modelFailureAudits,

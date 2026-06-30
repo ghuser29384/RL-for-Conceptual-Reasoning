@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
+  BENCHMARK_REFRESH_POLICY_VERSION,
   aggregateRatings,
   adjudicationMemos,
   appendRatingRevision,
@@ -78,12 +79,28 @@ import {
   REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
   REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
   REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+  REQUIRED_BENCHMARK_REFRESH_ACTIONS,
+  REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
+  REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
+  REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+  MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+  REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
+  REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  MODEL_IMPROVEMENT_POLICY_VERSION,
+  REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
+  REQUIRED_MODEL_IMPROVEMENT_METHODS,
+  REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES,
+  REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES,
+  REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS,
+  REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
@@ -309,6 +326,20 @@ function activeLearningSelectionPolicy(id = "active-learning-selection-policy-re
 
 const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
 const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+const modelImprovementMethods = REQUIRED_MODEL_IMPROVEMENT_METHODS;
+const modelImprovementObjectiveFamilies = REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES;
+const modelImprovementTargetFields = REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS;
+const modelImprovementProtectedSplitExclusions = REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS;
+const modelImprovementPolicyRules = REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES;
+const modelImprovementApprovalStatuses = REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES;
+const benchmarkRefreshCadenceDaysByStatus = REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS;
+const benchmarkRefreshActions = REQUIRED_BENCHMARK_REFRESH_ACTIONS;
+const benchmarkRefreshQueueFields = REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS;
+const benchmarkRefreshPolicyRules = REQUIRED_BENCHMARK_REFRESH_POLICY_RULES;
+const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
+const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
+const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
+const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
 
 function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-policy-release-test") {
   return {
@@ -322,6 +353,68 @@ function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-polic
       "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
     lmcaSourceBoundary:
       "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelImprovementPolicy(id = "model-improvement-policy-release-test") {
+  return {
+    id,
+    policyVersion: MODEL_IMPROVEMENT_POLICY_VERSION,
+    allowedTrainingMethods: modelImprovementMethods,
+    allowedObjectiveFamilies: modelImprovementObjectiveFamilies,
+    requiredTargetFields: modelImprovementTargetFields,
+    protectedSplitExclusions: modelImprovementProtectedSplitExclusions,
+    policyRules: modelImprovementPolicyRules,
+    allowedApprovalStatuses: modelImprovementApprovalStatuses,
+    defaultTrainingMethod: "pairwise_reward_model",
+    defaultObjectiveFamily: "pairwise_logistic",
+    lmcaMetricSeparationRule: modelImprovementPolicyRules.lmcaSeparation,
+    protectedSplitRule: modelImprovementPolicyRules.protectedSplitExclusion,
+    uncertaintyPropagationRule: modelImprovementPolicyRules.uncertaintyPropagation,
+    positionBalanceRule: modelImprovementPolicyRules.positionBalance,
+    promptTrackRule: modelImprovementPolicyRules.promptTrackSeparation,
+    postTrainingEvaluationRule: modelImprovementPolicyRules.postTrainingEvaluation,
+    sourceBoundary:
+      "Project default downstream model-improvement method is frozen here; LMCA motivates evaluation metrics but does not state exact RLHF or fine-tuning methods.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function benchmarkRefreshPolicy(id = "benchmark-refresh-policy-release-test") {
+  return {
+    id,
+    policyVersion: BENCHMARK_REFRESH_POLICY_VERSION,
+    cadenceDaysBySaturationStatus: benchmarkRefreshCadenceDaysByStatus,
+    requiredRefreshActions: benchmarkRefreshActions,
+    requiredQueueFields: benchmarkRefreshQueueFields,
+    policyRules: benchmarkRefreshPolicyRules,
+    saturationCadenceRule: benchmarkRefreshPolicyRules.saturationCadence,
+    thinValidationCadenceRule: benchmarkRefreshPolicyRules.thinValidationCadence,
+    maintenanceCadenceRule: benchmarkRefreshPolicyRules.maintenanceCadence,
+    refreshActionMinimumRule: benchmarkRefreshPolicyRules.refreshActionMinimum,
+    protectedSplitGovernanceRule: benchmarkRefreshPolicyRules.protectedSplitGovernance,
+    claimSuppressionRule: benchmarkRefreshPolicyRules.claimSuppression,
+    sourceBoundary:
+      "Project default benchmark-refresh cadence is frozen here; LMCA motivates saturation response but does not state exact refresh timing.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelFamilyOverlapPolicy(id = "model-family-overlap-policy-release-test") {
+  return {
+    id,
+    policyVersion: MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+    overlapMatchBases: modelFamilyOverlapMatchBases,
+    forbiddenOverlapBases: modelFamilyOverlapForbiddenBases,
+    cleanClaimActions: modelFamilyOverlapCleanClaimActions,
+    policyRules: modelFamilyOverlapPolicyRules,
+    exactSnapshotRule: modelFamilyOverlapPolicyRules.exactSnapshot,
+    exactAliasRule: modelFamilyOverlapPolicyRules.exactAlias,
+    familyMatchRule: modelFamilyOverlapPolicyRules.familyMatch,
+    providerOnlyExclusionRule: modelFamilyOverlapPolicyRules.providerOnlyExclusion,
+    cleanClaimRule: modelFamilyOverlapPolicyRules.cleanClaim,
+    sourceBoundary: modelFamilyOverlapPolicyRules.sourceBoundary,
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -7293,10 +7386,13 @@ test("model-assisted label overlap report gates clean evaluation claims and expo
   const fullRubricRow = report.runRows.find((row) => row.evaluationRunId === fullRubricEvaluationRun.id);
   const overallOnlyRow = report.runRows.find((row) => row.evaluationRunId === overallOnlyEvaluationRun.id);
   assert.equal(report.counts.targetModelAssistedRatingRows, 1);
+  assert.equal(report.modelFamilyOverlapPolicyId, "model-family-overlap-policy-release-test");
+  assert.equal(report.modelFamilyOverlapPolicyEvidence.releaseUseStatus, "seed_model_family_overlap_policy_active");
   assert.equal(report.humanOnlyPreAssistanceTarget.excludedModelAssistedRows, 1);
   assert.equal(report.humanOnlyPreAssistanceTarget.denominatorCounts.modelAssistedChecks, 0);
   assert.equal(fullRubricRow.status, "model_assisted_label_overlap_sensitive");
   assert.equal(fullRubricRow.overlapRows[0].overlapBasis, "close_model_family");
+  assert.equal(fullRubricRow.overlapRows[0].modelFamilyOverlapPolicyId, "model-family-overlap-policy-release-test");
   assert.equal(fullRubricRow.cleanClaimStatus, "clean_claim_requires_human_only_pre_assistance_target_or_overlap_sensitive_label");
   assert.deepEqual(fullRubricRow.overlapItemIds, ["pos-voting::crit-voting-bullet"]);
   assert.equal(overallOnlyRow.status, "model_assisted_rows_present_no_evaluated_model_overlap");
@@ -7330,12 +7426,15 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
         timestamp: "2026-10-01T00:31:00.000Z",
       },
     ],
+    modelFamilyOverlapPolicies: [modelFamilyOverlapPolicy("model-family-overlap-policy-submitted")],
     modelProviderDataHandlingPolicies: completeParticipantSafeguardFixtures().modelProviderDataHandlingPolicies,
   });
   const fullRubricRow = report.runRows.find((row) => row.evaluationRunId === fullRubricEvaluationRun.id);
   const overallOnlyRow = report.runRows.find((row) => row.evaluationRunId === overallOnlyEvaluationRun.id);
   assert.equal(report.counts.targetModelAssistedRatingRows, 1);
   assert.equal(report.counts.submittedRatingCheckRows, 1);
+  assert.equal(report.modelFamilyOverlapPolicyId, "model-family-overlap-policy-submitted");
+  assert.equal(report.modelFamilyOverlapPolicyEvidence.releaseUseStatus, "submitted_model_family_overlap_policy_active");
   assert.equal(report.counts.submittedModelAssistedRatingCheckRows, 1);
   assert.equal(report.counts.submittedModelAssistedRatingCheckReviewRows, 0);
   assert.equal(report.assistanceRows[0].assistanceSource, "submitted_workflow_rating_check");
@@ -7348,6 +7447,7 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
   assert.deepEqual(report.reviewSections, []);
   assert.equal(report.counts.submittedModelAssistedProviderPolicyReviewRows, 0);
   assert.equal(fullRubricRow.status, "model_assisted_label_overlap_sensitive");
+  assert.equal(fullRubricRow.overlapRows[0].modelFamilyOverlapPolicyId, "model-family-overlap-policy-submitted");
   assert.deepEqual(fullRubricRow.overlapItemIds, ["pos-voting::crit-voting-bullet"]);
   assert.equal(overallOnlyRow.status, "model_assisted_rows_present_no_evaluated_model_overlap");
   assert.equal(report.releaseUseStatus, "model_assisted_overlap_sensitive_reports_require_human_only_target");
@@ -7384,6 +7484,19 @@ test("submitted RatingCheck artifacts feed model-assisted overlap evidence", () 
   assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "preModelRatingCheckId"));
   assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "auxiliaryMaterialSeen:own_initial_rationale"));
   assert.ok(unstagedReport.reviewSections.some((section) => section.reason === "modelAssistanceDeltaSummary:human-only"));
+
+  const driftedPolicyReport = buildModelAssistedLabelOverlapReport("release-test", snapshot, seedRatings, [fullRubricEvaluationRun], pairs, {
+    modelFamilyOverlapPolicies: [
+      {
+        ...modelFamilyOverlapPolicy("model-family-overlap-policy-drifted"),
+        overlapMatchBases: ["exact_resolved_snapshot", "exact_requested_alias"],
+      },
+    ],
+    modelProviderDataHandlingPolicies: completeParticipantSafeguardFixtures().modelProviderDataHandlingPolicies,
+  });
+  assert.equal(driftedPolicyReport.modelFamilyOverlapPolicyEvidence.releaseUseStatus, "submitted_model_family_overlap_policy_review_required");
+  assert.equal(driftedPolicyReport.releaseUseStatus, "model_family_overlap_policy_review_required");
+  assert.ok(driftedPolicyReport.reviewSections.some((section) => section.artifactType === "model_family_overlap_policy"));
 });
 
 test("model failure audits preserve raw outputs and enforce protected-split handling", () => {
@@ -9136,9 +9249,15 @@ test("human-ceiling report separates check types and blocks saturation claims fo
   assert.equal(report.checkSeparation.modelAssistedTreatedAsIndependentHuman, false);
   assert.equal(report.modelProximityRows[0].meanAbsOverallDiff, 0.155);
   assert.equal(report.saturationRisk.status, "not_assessable_thin_validation");
+  assert.equal(report.saturationRisk.benchmarkRefreshPolicyId, "benchmark-refresh-policy-release-test");
+  assert.equal(report.saturationRisk.refreshCadenceDays, 90);
+  assert.deepEqual(report.saturationRisk.requiredRefreshActions, benchmarkRefreshActions);
+  assert.equal(report.benchmarkRefreshPolicyEvidence.releaseUseStatus, "seed_benchmark_refresh_policy_active");
   assert.equal(report.releaseUseStatus, "human_ceiling_claims_blocked_thinner_than_appendix_c");
   assert.equal(report.refreshQueue[0].itemId, "pos-voting::crit-voting-style");
   assert.ok(report.refreshQueue[0].refreshActions.includes("expert_double_check"));
+  assert.equal(report.refreshQueue[0].benchmarkRefreshPolicyId, "benchmark-refresh-policy-release-test");
+  assert.equal(report.refreshQueue[0].refreshCadenceDays, 90);
 });
 
 test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", () => {
@@ -9193,12 +9312,37 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
 
   const completeHumanCeiling = buildHumanCeilingAndSaturationReport("release-test", snapshot, seedRatings, positions, critiques, [fullRubricEvaluationRun], {
     humanCeilingRuns: [submittedRunWithUncertainty],
+    benchmarkRefreshPolicies: [benchmarkRefreshPolicy("benchmark-refresh-policy-submitted")],
   });
   assert.equal(completeHumanCeiling.submittedHumanCeilingUncertainty.status, "submitted_human_ceiling_uncertainty_complete");
   assert.equal(completeHumanCeiling.submittedHumanCeilingUncertainty.activeRunId, "human-ceiling-submitted-appendix-c-with-uncertainty");
+  assert.equal(completeHumanCeiling.benchmarkRefreshPolicyEvidence.activePolicyId, "benchmark-refresh-policy-submitted");
+  assert.equal(completeHumanCeiling.benchmarkRefreshPolicyEvidence.releaseUseStatus, "submitted_benchmark_refresh_policy_active");
+  assert.equal(completeHumanCeiling.saturationRisk.benchmarkRefreshPolicyId, "benchmark-refresh-policy-submitted");
   assert.equal(completeHumanCeiling.uncertaintyPolicy.intervalType, "confidence_interval");
   assert.equal(completeHumanCeiling.uncertaintyPolicy.resamplingUnit, "position");
   assert.equal(completeHumanCeiling.releaseUseStatus, "human_ceiling_claims_allowed_with_declared_uncertainty");
+
+  const driftedRefreshPolicy = buildHumanCeilingAndSaturationReport("release-test", snapshot, seedRatings, positions, critiques, [fullRubricEvaluationRun], {
+    humanCeilingRuns: [submittedRunWithUncertainty],
+    benchmarkRefreshPolicies: [
+      {
+        ...benchmarkRefreshPolicy("benchmark-refresh-policy-drifted"),
+        cadenceDaysBySaturationStatus: {
+          ...benchmarkRefreshCadenceDaysByStatus,
+          saturation_risk_refresh_required: 120,
+        },
+      },
+    ],
+  });
+  assert.equal(driftedRefreshPolicy.benchmarkRefreshPolicyEvidence.releaseUseStatus, "submitted_benchmark_refresh_policy_review_required");
+  assert.equal(driftedRefreshPolicy.benchmarkRefreshPolicyEvidence.policyRows.at(-1).status, "benchmark_refresh_policy_review_required");
+  assert.ok(
+    driftedRefreshPolicy.benchmarkRefreshPolicyEvidence.policyRows
+      .at(-1)
+      .reviewReasons.includes("cadenceDaysBySaturationStatus"),
+  );
+  assert.equal(driftedRefreshPolicy.releaseUseStatus, "benchmark_refresh_policy_review_required");
 
   const releaseReport = buildOctoberReleaseReport(
     "release-test",
@@ -9209,7 +9353,10 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
     seedCertificationAttempts,
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
-    { humanCeilingRuns: [submittedRunWithUncertainty] },
+    {
+      humanCeilingRuns: [submittedRunWithUncertainty],
+      benchmarkRefreshPolicies: [benchmarkRefreshPolicy("benchmark-refresh-policy-submitted")],
+    },
   );
   assert.equal(releaseReport.validationDesign.status, "appendix_c_scale");
   assert.equal(releaseReport.targetGaps.validationCritiquesRemaining, 0);
@@ -9217,6 +9364,8 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
   assert.equal(releaseReport.targetGaps.validationCoreAllItemsRatersRemaining, 0);
   assert.equal(releaseReport.lmcaComparison.validationHumanCeilingComparison.status, "appendix_c_comparable");
   assert.equal(releaseReport.comparabilityClaims.find((claim) => claim.tier === "validation_design_comparable").status, "passes");
+  assert.equal(releaseReport.humanCeiling.benchmarkRefreshPolicyEvidence.activePolicyId, "benchmark-refresh-policy-submitted");
+  assert.equal(releaseReport.workflowModelEvaluationArtifacts.benchmarkRefreshPolicies.length, 1);
 });
 
 test("release report includes corpus baselines and explicit anti-overclaim claim tiers", () => {
@@ -9985,16 +10134,19 @@ test("submitted model-evaluation artifacts are checked against current release e
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      modelImprovementPolicies: [modelImprovementPolicy("model-improvement-policy-release-artifact-submitted")],
       modelImprovementRuns: [
         {
           id: "model-improvement-submitted",
           releaseId,
+          modelImprovementPolicyId: "model-improvement-policy-release-artifact-submitted",
+          trainingMethod: "pairwise_reward_model",
           trainingExportId: `training-export-${releaseId}`,
           targetLabelSnapshotId: `snapshot-${releaseId}`,
           targetLabelVersion: snapshot.targetLabelVersion,
           modelFamilyOrCheckpoint: "reward-model-candidate-a",
           optimizedSurrogateObjectiveFamily: "pairwise_logistic",
-          targetFields: ["overall", "centrality_x_strength"],
+          targetFields: modelImprovementTargetFields,
           humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
           tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
           positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
@@ -10003,7 +10155,8 @@ test("submitted model-evaluation artifacts are checked against current release e
           calibrationTargetDistribution: "public_train_label_snapshot_prior",
           fitSplit: "public_train",
           devSplit: "public_dev",
-          excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          excludedProtectedSplits: modelImprovementProtectedSplitExclusions,
+          modelImprovementApprovalStatus: "policy_approved_for_training",
           promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
           trainingPromptTemplateId: "project-full-rubric-v1",
           linkedPostTrainingEvaluationRunIds: ["evaluation-run-submitted"],
@@ -10152,9 +10305,31 @@ test("submitted model-evaluation artifacts are checked against current release e
     },
   );
   assert.equal(report.modelEvaluationArtifactEvidence.releaseUseStatus, "submitted_model_evaluation_artifacts_release_evidence_complete");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelImprovementPolicyId, "model-improvement-policy-release-artifact-submitted");
+  assert.equal(report.modelEvaluationArtifactEvidence.modelImprovementPolicyReleaseUseStatus, "submitted_model_improvement_policy_active");
+  assert.deepEqual(report.modelEvaluationArtifactEvidence.requiredModelImprovementMethods, modelImprovementMethods);
+  assert.deepEqual(report.modelEvaluationArtifactEvidence.requiredModelImprovementObjectiveFamilies, modelImprovementObjectiveFamilies);
+  assert.deepEqual(report.modelEvaluationArtifactEvidence.requiredModelImprovementTargetFields, modelImprovementTargetFields);
+  assert.deepEqual(report.modelEvaluationArtifactEvidence.requiredModelImprovementPolicyRules, modelImprovementPolicyRules);
   assert.equal(
     report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.status,
     "submitted_model_improvement_run_preserves_surrogate_separation",
+  );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "modelImprovementPolicyId").status,
+    "matches",
+  );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "trainingMethod").status,
+    "matches",
+  );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "optimizedSurrogateObjectiveFamily").status,
+    "matches",
+  );
+  assert.equal(
+    report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "modelImprovementApprovalStatus").status,
+    "matches",
   );
   assert.equal(
     report.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "targetLabelSnapshotId").status,
@@ -10214,16 +10389,19 @@ test("submitted model-evaluation artifacts are checked against current release e
     seedBenchmarkExposureEvents,
     postLockSourceStyleAudits,
     {
+      modelImprovementPolicies: [modelImprovementPolicy("model-improvement-policy-release-artifact-submitted")],
       modelImprovementRuns: [
         {
           id: "model-improvement-missing-position-balance",
           releaseId,
+          modelImprovementPolicyId: "model-improvement-policy-release-artifact-submitted",
+          trainingMethod: "pairwise_reward_model",
           trainingExportId: `training-export-${releaseId}`,
           targetLabelSnapshotId: snapshot.id,
           targetLabelVersion: snapshot.targetLabelVersion,
           modelFamilyOrCheckpoint: "reward-model-candidate-a",
           optimizedSurrogateObjectiveFamily: "pairwise_logistic",
-          targetFields: ["overall", "centrality_x_strength"],
+          targetFields: modelImprovementTargetFields,
           humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
           tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
           labelUncertaintyPropagationPolicy: "preserve_rater_count_spread_disagreement_taxonomy_and_label_status",
@@ -10231,7 +10409,8 @@ test("submitted model-evaluation artifacts are checked against current release e
           calibrationTargetDistribution: "public_train_label_snapshot_prior",
           fitSplit: "public_train",
           devSplit: "public_dev",
-          excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          excludedProtectedSplits: modelImprovementProtectedSplitExclusions,
+          modelImprovementApprovalStatus: "policy_approved_for_training",
           promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
           trainingPromptTemplateId: "project-full-rubric-v1",
           linkedPostTrainingEvaluationRunIds: ["evaluation-run-submitted"],
@@ -10249,6 +10428,37 @@ test("submitted model-evaluation artifacts are checked against current release e
     ).status,
     "missing_required_field",
   );
+
+  const driftedPolicyReport = buildOctoberReleaseReport(
+    releaseId,
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      modelImprovementPolicies: [
+        {
+          ...modelImprovementPolicy("model-improvement-policy-drifted"),
+          policyRules: {
+            ...modelImprovementPolicyRules,
+            lmcaSeparation: "Downstream training may replace the frozen evaluation metric.",
+          },
+        },
+      ],
+    },
+  );
+  assert.equal(driftedPolicyReport.modelEvaluationArtifactEvidence.modelImprovementPolicyReleaseUseStatus, "submitted_model_improvement_policy_review_required");
+  assert.equal(
+    driftedPolicyReport.modelEvaluationArtifactEvidence.modelImprovementPolicyRows.at(-1).status,
+    "model_improvement_policy_review_required",
+  );
+  assert.ok(
+    driftedPolicyReport.modelEvaluationArtifactEvidence.modelImprovementPolicyRows.at(-1).reviewReasons.includes("policyRules"),
+  );
+  assert.ok(driftedPolicyReport.modelEvaluationArtifactEvidence.reviewSections.includes("model_improvement_policy"));
 
   const staleReport = buildOctoberReleaseReport(
     releaseId,

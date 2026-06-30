@@ -10,6 +10,7 @@ import vercelHealthHandler from "../api/health.mjs";
 import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
+  BENCHMARK_REFRESH_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
@@ -24,11 +25,27 @@ import {
   REQUIRED_ADJUDICATOR_PRE_READ_THRESHOLDS,
   REQUIRED_ADJUDICATOR_PRE_READ_TRIGGER_CLASSES,
   REQUIRED_ADJUDICATOR_PRE_READ_VISIBILITY_POLICIES,
+  REQUIRED_BENCHMARK_REFRESH_ACTIONS,
+  REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS,
+  REQUIRED_BENCHMARK_REFRESH_POLICY_RULES,
+  REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+  MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+  REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
+  REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
+  REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  MODEL_IMPROVEMENT_POLICY_VERSION,
+  REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
+  REQUIRED_MODEL_IMPROVEMENT_METHODS,
+  REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES,
+  REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES,
+  REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS,
+  REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
@@ -277,6 +294,20 @@ function activeLearningSelectionPolicy(id = "active-learning-selection-policy-wo
 
 const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
 const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+const modelImprovementMethods = REQUIRED_MODEL_IMPROVEMENT_METHODS;
+const modelImprovementObjectiveFamilies = REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES;
+const modelImprovementTargetFields = REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS;
+const modelImprovementProtectedSplitExclusions = REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS;
+const modelImprovementPolicyRules = REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES;
+const modelImprovementApprovalStatuses = REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES;
+const benchmarkRefreshCadenceDaysByStatus = REQUIRED_BENCHMARK_REFRESH_CADENCE_DAYS_BY_STATUS;
+const benchmarkRefreshActions = REQUIRED_BENCHMARK_REFRESH_ACTIONS;
+const benchmarkRefreshQueueFields = REQUIRED_BENCHMARK_REFRESH_QUEUE_FIELDS;
+const benchmarkRefreshPolicyRules = REQUIRED_BENCHMARK_REFRESH_POLICY_RULES;
+const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
+const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
+const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
+const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
 
 function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-policy-workflow-new") {
   return {
@@ -290,6 +321,68 @@ function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-polic
       "Internal validation, hidden benchmark, stress-test, and public-dev rows are excluded from model-improvement training exports with protectedSplitWeight 0 unless a future governed export explicitly includes them.",
     lmcaSourceBoundary:
       "Project default downstream weights are frozen here; LMCA motivates uncertainty propagation but does not state exact RLHF fine-tuning weights.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelImprovementPolicy(id = "model-improvement-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: MODEL_IMPROVEMENT_POLICY_VERSION,
+    allowedTrainingMethods: modelImprovementMethods,
+    allowedObjectiveFamilies: modelImprovementObjectiveFamilies,
+    requiredTargetFields: modelImprovementTargetFields,
+    protectedSplitExclusions: modelImprovementProtectedSplitExclusions,
+    policyRules: modelImprovementPolicyRules,
+    allowedApprovalStatuses: modelImprovementApprovalStatuses,
+    defaultTrainingMethod: "pairwise_reward_model",
+    defaultObjectiveFamily: "pairwise_logistic",
+    lmcaMetricSeparationRule: modelImprovementPolicyRules.lmcaSeparation,
+    protectedSplitRule: modelImprovementPolicyRules.protectedSplitExclusion,
+    uncertaintyPropagationRule: modelImprovementPolicyRules.uncertaintyPropagation,
+    positionBalanceRule: modelImprovementPolicyRules.positionBalance,
+    promptTrackRule: modelImprovementPolicyRules.promptTrackSeparation,
+    postTrainingEvaluationRule: modelImprovementPolicyRules.postTrainingEvaluation,
+    sourceBoundary:
+      "Project default downstream model-improvement method is frozen here; LMCA motivates evaluation metrics but does not state exact RLHF or fine-tuning methods.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function benchmarkRefreshPolicy(id = "benchmark-refresh-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: BENCHMARK_REFRESH_POLICY_VERSION,
+    cadenceDaysBySaturationStatus: benchmarkRefreshCadenceDaysByStatus,
+    requiredRefreshActions: benchmarkRefreshActions,
+    requiredQueueFields: benchmarkRefreshQueueFields,
+    policyRules: benchmarkRefreshPolicyRules,
+    saturationCadenceRule: benchmarkRefreshPolicyRules.saturationCadence,
+    thinValidationCadenceRule: benchmarkRefreshPolicyRules.thinValidationCadence,
+    maintenanceCadenceRule: benchmarkRefreshPolicyRules.maintenanceCadence,
+    refreshActionMinimumRule: benchmarkRefreshPolicyRules.refreshActionMinimum,
+    protectedSplitGovernanceRule: benchmarkRefreshPolicyRules.protectedSplitGovernance,
+    claimSuppressionRule: benchmarkRefreshPolicyRules.claimSuppression,
+    sourceBoundary:
+      "Project default benchmark-refresh cadence is frozen here; LMCA motivates saturation response but does not state exact refresh timing.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelFamilyOverlapPolicy(id = "model-family-overlap-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+    overlapMatchBases: modelFamilyOverlapMatchBases,
+    forbiddenOverlapBases: modelFamilyOverlapForbiddenBases,
+    cleanClaimActions: modelFamilyOverlapCleanClaimActions,
+    policyRules: modelFamilyOverlapPolicyRules,
+    exactSnapshotRule: modelFamilyOverlapPolicyRules.exactSnapshot,
+    exactAliasRule: modelFamilyOverlapPolicyRules.exactAlias,
+    familyMatchRule: modelFamilyOverlapPolicyRules.familyMatch,
+    providerOnlyExclusionRule: modelFamilyOverlapPolicyRules.providerOnlyExclusion,
+    cleanClaimRule: modelFamilyOverlapPolicyRules.cleanClaim,
+    sourceBoundary: modelFamilyOverlapPolicyRules.sourceBoundary,
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -3093,6 +3186,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/verification-claim-granularity-policies/verification-granularity-smoke"],
     ["POST", "/api/v1/verification-workspace-sessions"],
     ["GET", "/api/v1/verification-workspace-sessions/verification-workspace-smoke"],
+    ["POST", "/api/v1/model-family-overlap-policies"],
+    ["GET", "/api/v1/model-family-overlap-policies/model-family-overlap-policy-smoke"],
     ["POST", "/api/v1/rating-checks"],
     ["GET", "/api/v1/rating-checks/rating-check-smoke"],
     ["POST", "/api/v1/calibration-feedback-events"],
@@ -3119,6 +3214,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/derived-utility-formulas/derived-utility-smoke"],
     ["POST", "/api/v1/training-exports"],
     ["GET", "/api/v1/training-exports/training-smoke"],
+    ["POST", "/api/v1/model-improvement-policies"],
+    ["GET", "/api/v1/model-improvement-policies/model-improvement-policy-smoke"],
     ["POST", "/api/v1/model-improvement-runs"],
     ["GET", "/api/v1/model-improvement-runs/model-improvement-smoke"],
     ["POST", "/api/v1/evaluations/run"],
@@ -3136,6 +3233,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/obfuscation-stress-runs/obfuscation-stress-smoke"],
     ["POST", "/api/v1/sanity-baselines/run"],
     ["GET", "/api/v1/sanity-baselines/sanity-baseline-smoke"],
+    ["POST", "/api/v1/benchmark-refresh-policies"],
+    ["GET", "/api/v1/benchmark-refresh-policies/benchmark-refresh-policy-smoke"],
     ["POST", "/api/v1/human-ceiling-runs"],
     ["GET", "/api/v1/human-ceiling-runs/human-ceiling-smoke"],
     ["POST", "/api/v1/leaderboards"],
@@ -3352,6 +3451,8 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/adjudications"',
     'id: "adjudication-finalization"',
     'endpoint: () => "/api/v1/adjudications/adjudication-demo/finalize"',
+    'id: "model-family-overlap-policy"',
+    'endpoint: () => "/api/v1/model-family-overlap-policies"',
     'id: "rating-check-action"',
     'endpoint: () => "/api/v1/ratings/rating-seed-ai-base-rate-r1/check"',
     'id: "label-snapshot"',
@@ -3364,6 +3465,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/exports/public"',
     'id: "prompt-template"',
     'endpoint: () => "/api/v1/prompt-templates"',
+    'id: "model-improvement-policy"',
+    'endpoint: () => "/api/v1/model-improvement-policies"',
+    'modelImprovementPolicyId: `model-improvement-policy-${releaseId}`',
     'id: "model-improvement-run"',
     'endpoint: () => "/api/v1/model-improvement-runs"',
     'positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting"',
@@ -3373,6 +3477,8 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/artifact-probes/run"',
     'id: "sanity-baseline"',
     'endpoint: () => "/api/v1/sanity-baselines/run"',
+    'id: "benchmark-refresh-policy"',
+    'endpoint: () => "/api/v1/benchmark-refresh-policies"',
     'id: "human-ceiling-run"',
     'endpoint: () => "/api/v1/human-ceiling-runs"',
     'id: "leaderboard"',
@@ -6841,6 +6947,37 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(adjudicationFinalizedEvent.accessAudit.policyDecisionId, adjudicationFinalization.body.policyDecisionId);
   assert.equal(adjudicationFinalizedEvent.accessAudit.policyDecisionConsumed, true);
 
+  const driftedModelFamilyOverlapPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-family-overlap-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelFamilyOverlapPolicy: {
+        ...modelFamilyOverlapPolicy("model-family-overlap-policy-drifted"),
+        overlapMatchBases: ["exact_resolved_snapshot", "exact_requested_alias"],
+      },
+    }),
+  });
+  assert.equal(driftedModelFamilyOverlapPolicy.status, 400);
+  assert.match(driftedModelFamilyOverlapPolicy.body.detail, /overlapMatchBases/);
+
+  const modelFamilyOverlapPolicyResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-family-overlap-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ modelFamilyOverlapPolicy: modelFamilyOverlapPolicy("model-family-overlap-policy-workflow-new") }),
+  });
+  assert.equal(modelFamilyOverlapPolicyResponse.status, 201);
+
+  const modelFamilyOverlapPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-family-overlap-policies/model-family-overlap-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(modelFamilyOverlapPolicyById.status, 200);
+  assert.equal(modelFamilyOverlapPolicyById.body.id, "model-family-overlap-policy-workflow-new");
+  assert.deepEqual(modelFamilyOverlapPolicyById.body.overlapMatchBases, modelFamilyOverlapMatchBases);
+
   const ratingCheck = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rating-checks",
@@ -7664,6 +7801,40 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(generationEvaluationReportById.status, 200);
   assert.equal(generationEvaluationReportById.body.id, "generation-evaluation-report-workflow-new");
 
+  const driftedModelImprovementPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-improvement-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelImprovementPolicy: {
+        ...modelImprovementPolicy("model-improvement-policy-drifted"),
+        policyRules: {
+          ...modelImprovementPolicyRules,
+          lmcaSeparation: "Downstream training may replace the frozen evaluation metric.",
+        },
+      },
+    }),
+  });
+  assert.equal(driftedModelImprovementPolicy.status, 400);
+  assert.match(driftedModelImprovementPolicy.body.detail, /policyRules/);
+
+  const modelImprovementPolicyResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-improvement-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ modelImprovementPolicy: modelImprovementPolicy("model-improvement-policy-workflow-new") }),
+  });
+  assert.equal(modelImprovementPolicyResponse.status, 201);
+
+  const modelImprovementPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-improvement-policies/model-improvement-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(modelImprovementPolicyById.status, 200);
+  assert.equal(modelImprovementPolicyById.body.id, "model-improvement-policy-workflow-new");
+  assert.deepEqual(modelImprovementPolicyById.body.allowedTrainingMethods, modelImprovementMethods);
+
   const incompleteModelImprovementRun = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/model-improvement-runs",
@@ -7687,12 +7858,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
       modelImprovementRun: {
         id: "model-improvement-workflow-new",
         releaseId: "october-2026-demo",
+        modelImprovementPolicyId: "model-improvement-policy-workflow-new",
+        trainingMethod: "pairwise_reward_model",
         trainingExportId: "training-export-october-2026-demo",
         targetLabelSnapshotId: "snapshot-oct-api",
         targetLabelVersion: "initial_mean",
         modelFamilyOrCheckpoint: "reward-model-candidate-a",
         optimizedSurrogateObjectiveFamily: "pairwise_logistic",
-        targetFields: ["overall", "centrality_x_strength"],
+        targetFields: modelImprovementTargetFields,
         humanMarginWeightingPolicy: "weight_by_absolute_overall_gap",
         tieIndifferenceHandling: "low_margin_downweighted_or_excluded_by_export_policy",
         positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
@@ -7701,7 +7874,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
         calibrationTargetDistribution: "public_train_label_snapshot_prior",
         fitSplit: "public_train",
         devSplit: "public_dev",
-        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+        excludedProtectedSplits: modelImprovementProtectedSplitExclusions,
+        modelImprovementApprovalStatus: "policy_approved_for_training",
         promptTrackExposurePolicy: "source_comparable_prompt_track_separate_from_training_prompts",
         trainingPromptTemplateId: "prompt-template-workflow-new",
         linkedPostTrainingEvaluationRunIds: ["eval-workflow-new"],
@@ -8397,6 +8571,40 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(sanityBaselineRunById.status, 200);
   assert.equal(sanityBaselineRunById.body.id, "sanity-baseline-workflow-constant-mean");
+
+  const driftedBenchmarkRefreshPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark-refresh-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      benchmarkRefreshPolicy: {
+        ...benchmarkRefreshPolicy("benchmark-refresh-policy-drifted"),
+        cadenceDaysBySaturationStatus: {
+          ...benchmarkRefreshCadenceDaysByStatus,
+          saturation_risk_refresh_required: 120,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedBenchmarkRefreshPolicy.status, 400);
+  assert.match(driftedBenchmarkRefreshPolicy.body.detail, /cadenceDaysBySaturationStatus/);
+
+  const benchmarkRefreshPolicyResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark-refresh-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ benchmarkRefreshPolicy: benchmarkRefreshPolicy("benchmark-refresh-policy-workflow-new") }),
+  });
+  assert.equal(benchmarkRefreshPolicyResponse.status, 201);
+
+  const benchmarkRefreshPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/benchmark-refresh-policies/benchmark-refresh-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(benchmarkRefreshPolicyById.status, 200);
+  assert.equal(benchmarkRefreshPolicyById.body.id, "benchmark-refresh-policy-workflow-new");
+  assert.deepEqual(benchmarkRefreshPolicyById.body.requiredRefreshActions, benchmarkRefreshActions);
 
   const humanCeilingRun = await invokeApi(context, {
     method: "POST",
@@ -13378,6 +13586,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowMemoRow.rubricVersionConsidered, "lmca-seven-dim-v1");
   assert.equal(workflowMemoRow.maxFinalRaterSpread, 0.18);
   assert.equal(releaseReport.body.workflowAuditTrailArtifacts.ratingChecks.length, 2);
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelFamilyOverlapPolicies.length, 1);
+  assert.equal(releaseReport.body.modelAssistedLabelOverlap.modelFamilyOverlapPolicyId, "model-family-overlap-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.modelAssistedLabelOverlap.modelFamilyOverlapPolicyEvidence.releaseUseStatus,
+    "submitted_model_family_overlap_policy_active",
+  );
   assert.equal(releaseReport.body.modelAssistedLabelOverlap.counts.submittedRatingCheckRows, 2);
   assert.equal(releaseReport.body.modelAssistedLabelOverlap.counts.submittedModelAssistedRatingCheckRows, 1);
   const workflowRatingCheckOverlapRow = releaseReport.body.modelAssistedLabelOverlap.assistanceRows.find(
@@ -13390,6 +13604,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     "model-provider-data-handling-workflow-model_assisted_check",
   );
   assert.equal(workflowRatingCheckOverlapRow.modelProviderPolicyBinding.status, "model_provider_policy_approved");
+  assert.equal(workflowRatingCheckOverlapRow.modelFamilyOverlapPolicyId, "model-family-overlap-policy-workflow-new");
   assert.equal(releaseReport.body.modelAssistedLabelOverlap.counts.submittedModelAssistedProviderPolicyReviewRows, 0);
   assert.equal(
     releaseReport.body.modelAssistedLabelOverlap.runRows.find((row) => row.evaluationRunId === "eval-full-rubric-demo").status,
@@ -13506,6 +13721,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ),
     true,
   );
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelImprovementPolicies.length, 1);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelImprovementRuns.length, 1);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.evaluationRuns.length, 1);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.modelEvaluationPredictions.length, 1);
@@ -13559,6 +13775,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     true,
   );
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.humanCeilingRuns.length, 1);
+  assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.benchmarkRefreshPolicies.length, 1);
+  assert.equal(releaseReport.body.humanCeiling.benchmarkRefreshPolicyEvidence.activePolicyId, "benchmark-refresh-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.humanCeiling.benchmarkRefreshPolicyEvidence.releaseUseStatus,
+    "submitted_benchmark_refresh_policy_active",
+  );
+  assert.deepEqual(releaseReport.body.humanCeiling.saturationRisk.requiredRefreshActions, benchmarkRefreshActions);
   assert.equal(releaseReport.body.workflowModelEvaluationArtifacts.validationTrancheEvidenceRecords.length, 1);
   assert.equal(releaseReport.body.validationTrancheReport.releaseUseStatus, "submitted_validation_tranche_evidence_complete");
   assert.equal(
@@ -13630,9 +13853,33 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.modelEvaluationArtifactEvidence.releaseUseStatus,
     "submitted_model_evaluation_artifacts_release_evidence_complete",
   );
+  assert.equal(releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementPolicyId, "model-improvement-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementPolicyReleaseUseStatus,
+    "submitted_model_improvement_policy_active",
+  );
+  assert.deepEqual(releaseReport.body.modelEvaluationArtifactEvidence.requiredModelImprovementMethods, modelImprovementMethods);
+  assert.deepEqual(releaseReport.body.modelEvaluationArtifactEvidence.requiredModelImprovementObjectiveFamilies, modelImprovementObjectiveFamilies);
+  assert.deepEqual(releaseReport.body.modelEvaluationArtifactEvidence.requiredModelImprovementTargetFields, modelImprovementTargetFields);
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.status,
     "submitted_model_improvement_run_preserves_surrogate_separation",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "modelImprovementPolicyId").status,
+    "matches",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "trainingMethod").status,
+    "matches",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "optimizedSurrogateObjectiveFamily").status,
+    "matches",
+  );
+  assert.equal(
+    releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "modelImprovementApprovalStatus").status,
+    "matches",
   );
   assert.equal(
     releaseReport.body.modelEvaluationArtifactEvidence.modelImprovementRunEvidence.checks.find((check) => check.field === "targetLabelSnapshotId").status,
@@ -14596,7 +14843,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 138 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 141 + extendedRaterItemConflictTypes.length,
   );
 });
 
