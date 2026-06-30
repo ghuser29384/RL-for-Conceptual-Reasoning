@@ -12,7 +12,9 @@ import {
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   BENCHMARK_REFRESH_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+  EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+  ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
   REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
@@ -34,11 +36,26 @@ import {
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+  REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
+  REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS,
   MODEL_FAMILY_OVERLAP_POLICY_VERSION,
   REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
   REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
   MODEL_IMPROVEMENT_POLICY_VERSION,
   REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
   REQUIRED_MODEL_IMPROVEMENT_METHODS,
@@ -308,6 +325,75 @@ const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
 const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
 const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
 const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
+const modelPromptSiblingContextModes = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES;
+const modelPromptSiblingContextEvidenceFields = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS;
+const modelPromptSiblingContextRules = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES;
+const itemTextNormalizationFieldPolicies = REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES;
+const itemTextNormalizationHashRules = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES;
+const itemTextNormalizationHashTargets = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS;
+const itemTextNormalizationProhibitedMutations = REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS;
+const itemTextNormalizationReviewActions = REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS;
+
+function itemTextNormalizationPolicy(id = "item-text-normalization-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
+    fieldPolicies: itemTextNormalizationFieldPolicies,
+    hashRules: itemTextNormalizationHashRules,
+    hashTargets: itemTextNormalizationHashTargets,
+    prohibitedMutations: itemTextNormalizationProhibitedMutations,
+    reviewActions: itemTextNormalizationReviewActions,
+    raterVisibleRule:
+      "Rater-visible text hashes must preserve the visible item wording while excluding source tags, admin notes, hidden benchmark metadata, split labels, model labels, and peer labels before initial lock.",
+    modelVisibleRule:
+      "Model-visible text hashes must use the same canonical item text boundary as the rater-visible text; prompt instructions, wrappers, hidden labels, and protected metadata stay outside item text.",
+    sourceBoundary:
+      "Project default per-field text-normalization choices are frozen here; LMCA requires stable text and blinding, but does not state these exact platform hash rules.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelPromptSiblingContextPolicy(id = "model-prompt-sibling-context-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
+    allowedComparisonModes: modelPromptSiblingContextModes,
+    requiredEvidenceFields: modelPromptSiblingContextEvidenceFields,
+    policyRules: modelPromptSiblingContextRules,
+    sequentialHumanRatingsRule: modelPromptSiblingContextRules.sequentialHumanRatings,
+    laterSiblingHandlingRule: modelPromptSiblingContextRules.laterSiblingHandling,
+    contextSensitiveClaimRule: modelPromptSiblingContextRules.contextSensitiveClaim,
+    targetOnlyRestrictionRule: modelPromptSiblingContextRules.targetOnlyRestriction,
+    sourceBoundary: modelPromptSiblingContextRules.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+const externalAssistanceTypes = REQUIRED_EXTERNAL_ASSISTANCE_TYPES;
+const externalAssistanceContaminatingTypes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES;
+const externalAssistanceContaminationRoutes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES;
+const externalAssistanceCleanRoutes = REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES;
+const externalAssistanceAccessibilityStatuses = REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES;
+const externalAssistanceContaminationRules = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES;
+
+function externalAssistanceContaminationPolicy(id = "external-assistance-contamination-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
+    allowedAssistanceTypes: externalAssistanceTypes,
+    contaminatingAssistanceTypes: externalAssistanceContaminatingTypes,
+    requiredContaminationRoutes: externalAssistanceContaminationRoutes,
+    allowedCleanRoutes: externalAssistanceCleanRoutes,
+    accessibilityExceptionStatuses: externalAssistanceAccessibilityStatuses,
+    policyRules: externalAssistanceContaminationRules,
+    outsideSystemDisclosureRule: externalAssistanceContaminationRules.outsideSystemDisclosure,
+    protectedTextEventRule: externalAssistanceContaminationRules.protectedTextEvent,
+    denominatorExclusionRule: externalAssistanceContaminationRules.denominatorExclusion,
+    accessibilityExceptionRule: externalAssistanceContaminationRules.accessibilityException,
+    sourceBoundary: externalAssistanceContaminationRules.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
 
 function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-policy-workflow-new") {
   return {
@@ -1888,6 +1974,7 @@ function completeRatingExperienceWorkflowFixtures() {
   };
   const confidenceScalePolicy = scoreConfidenceScalePolicy("score-confidence-scale-policy-workflow-new");
   const batchReviewRequirednessPolicy = samePositionBatchReviewRequirednessPolicy("same-position-batch-review-requiredness-policy-workflow-new");
+  const externalAssistancePolicy = externalAssistanceContaminationPolicy("external-assistance-contamination-policy-workflow-new");
   return {
     taskOutputEligibilityPolicy: {
       id: "task-output-eligibility-policy-workflow-new",
@@ -2059,6 +2146,7 @@ function completeRatingExperienceWorkflowFixtures() {
     },
     externalAssistanceDeclaration: {
       id: "external-assistance-declaration-workflow-new",
+      externalAssistanceContaminationPolicyId: externalAssistancePolicy.id,
       assignmentId: "assign-ai-base-rate",
       raterId: "demo-rater",
       assistanceType: "LLM",
@@ -2068,6 +2156,7 @@ function completeRatingExperienceWorkflowFixtures() {
       accessibilityExceptionStatus: "not_applicable",
       timestamp: "2026-10-01T00:27:30.000Z",
     },
+    externalAssistanceContaminationPolicy: externalAssistancePolicy,
     protectedArtifactRetentionRecords: protectedArtifactTypes.map((artifactType) => ({
       id: `protected-artifact-retention-workflow-${artifactType}`,
       artifactType,
@@ -3072,8 +3161,12 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/exposure-logs/exposure-log-smoke"],
     ["POST", "/api/v1/revisions"],
     ["GET", "/api/v1/revisions/revision-record-smoke"],
+    ["POST", "/api/v1/item-text-normalization-policies"],
+    ["GET", "/api/v1/item-text-normalization-policies/item-text-normalization-policy-smoke"],
     ["POST", "/api/v1/item-text-versions"],
     ["GET", "/api/v1/item-text-versions/item-text-version-smoke"],
+    ["POST", "/api/v1/model-prompt-sibling-context-policies"],
+    ["GET", "/api/v1/model-prompt-sibling-context-policies/model-prompt-sibling-context-policy-smoke"],
     ["POST", "/api/v1/rating-context-snapshots"],
     ["GET", "/api/v1/rating-context-snapshots/rating-context-smoke"],
     ["POST", "/api/v1/pairwise-comparison-snapshots"],
@@ -3324,6 +3417,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/same-position-batch-reviews/same-position-batch-review-smoke"],
     ["POST", "/api/v1/correctness-claim-weight-worksheets"],
     ["GET", "/api/v1/correctness-claim-weight-worksheets/correctness-claim-weight-worksheet-smoke"],
+    ["POST", "/api/v1/external-assistance-contamination-policies"],
+    ["GET", "/api/v1/external-assistance-contamination-policies/external-assistance-contamination-policy-smoke"],
     ["POST", "/api/v1/external-assistance-declarations"],
     ["GET", "/api/v1/external-assistance-declarations/external-assistance-declaration-smoke"],
     ["POST", "/api/v1/protected-artifact-retention-records"],
@@ -3453,6 +3548,12 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/adjudications/adjudication-demo/finalize"',
     'id: "model-family-overlap-policy"',
     'endpoint: () => "/api/v1/model-family-overlap-policies"',
+    'id: "item-text-normalization-policy"',
+    'endpoint: () => "/api/v1/item-text-normalization-policies"',
+    'id: "model-prompt-sibling-context-policy"',
+    'endpoint: () => "/api/v1/model-prompt-sibling-context-policies"',
+    'id: "external-assistance-contamination-policy"',
+    'endpoint: () => "/api/v1/external-assistance-contamination-policies"',
     'id: "rating-check-action"',
     'endpoint: () => "/api/v1/ratings/rating-seed-ai-base-rate-r1/check"',
     'id: "label-snapshot"',
@@ -5096,6 +5197,38 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(revisionRecordById.status, 200);
   assert.equal(revisionRecordById.body.id, "revision-record-workflow-new");
 
+  const driftedItemTextNormalizationPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-text-normalization-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemTextNormalizationPolicy: {
+        ...itemTextNormalizationPolicy("item-text-normalization-policy-drifted"),
+        hashTargets: ["canonical_text"],
+      },
+    }),
+  });
+  assert.equal(driftedItemTextNormalizationPolicy.status, 400);
+  assert.match(driftedItemTextNormalizationPolicy.body.detail, /hashTargets/);
+
+  const submittedItemTextNormalizationPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/item-text-normalization-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      itemTextNormalizationPolicy: itemTextNormalizationPolicy("item-text-normalization-policy-workflow-new"),
+    }),
+  });
+  assert.equal(submittedItemTextNormalizationPolicy.status, 201);
+
+  const submittedItemTextNormalizationPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/item-text-normalization-policies/item-text-normalization-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(submittedItemTextNormalizationPolicyById.status, 200);
+  assert.deepEqual(submittedItemTextNormalizationPolicyById.body.hashTargets, itemTextNormalizationHashTargets);
+
   const incompleteItemTextVersion = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/item-text-versions",
@@ -5143,6 +5276,38 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(itemTextVersionById.status, 200);
   assert.equal(itemTextVersionById.body.id, "item-text-version-workflow-new");
+
+  const driftedModelPromptSiblingContextPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-prompt-sibling-context-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelPromptSiblingContextPolicy: {
+        ...modelPromptSiblingContextPolicy("model-prompt-sibling-context-policy-drifted"),
+        allowedComparisonModes: ["target_only_restricted_snapshot"],
+      },
+    }),
+  });
+  assert.equal(driftedModelPromptSiblingContextPolicy.status, 400);
+  assert.match(driftedModelPromptSiblingContextPolicy.body.detail, /allowedComparisonModes/);
+
+  const submittedModelPromptSiblingContextPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-prompt-sibling-context-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelPromptSiblingContextPolicy: modelPromptSiblingContextPolicy("model-prompt-sibling-context-policy-workflow-new"),
+    }),
+  });
+  assert.equal(submittedModelPromptSiblingContextPolicy.status, 201);
+
+  const submittedModelPromptSiblingContextPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-prompt-sibling-context-policies/model-prompt-sibling-context-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(submittedModelPromptSiblingContextPolicyById.status, 200);
+  assert.deepEqual(submittedModelPromptSiblingContextPolicyById.body.allowedComparisonModes, modelPromptSiblingContextModes);
 
   const incompleteRatingContextSnapshot = await invokeApi(context, {
     method: "POST",
@@ -10304,6 +10469,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(independentBatchReview.status, 400);
   assert.match(independentBatchReview.body.detail, /siblingRatingIdsReviewed|nonIndependentEvidenceFlag|excludedFromIndependentRaterCount|raterOwnRatingsOnly|peerModelSourceMetadataHidden/);
 
+  const driftedExternalAssistancePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/external-assistance-contamination-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      externalAssistanceContaminationPolicy: {
+        ...ratingExperience.externalAssistanceContaminationPolicy,
+        id: "external-assistance-contamination-policy-drifted",
+        contaminatingAssistanceTypes: ["LLM"],
+      },
+    }),
+  });
+  assert.equal(driftedExternalAssistancePolicy.status, 400);
+  assert.match(driftedExternalAssistancePolicy.body.detail, /contaminatingAssistanceTypes/);
+
   const undeclaredExternalAssistance = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/external-assistance-declarations",
@@ -10369,6 +10549,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["samePositionBatchReviewRequirednessPolicy", "/api/v1/same-position-batch-review-requiredness-policies"],
     ["samePositionBatchReview", "/api/v1/same-position-batch-reviews"],
     ["correctnessClaimWeightWorksheet", "/api/v1/correctness-claim-weight-worksheets"],
+    ["externalAssistanceContaminationPolicy", "/api/v1/external-assistance-contamination-policies"],
     ["externalAssistanceDeclaration", "/api/v1/external-assistance-declarations"],
   ]) {
     const response = await invokeApi(context, {
@@ -10859,6 +11040,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(worksheetById.status, 200);
   assert.deepEqual(worksheetById.body.claimSignificanceWeights, [0.7, 0.3]);
+
+  const externalAssistancePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/external-assistance-contamination-policies/external-assistance-contamination-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(externalAssistancePolicyById.status, 200);
+  assert.deepEqual(externalAssistancePolicyById.body.allowedAssistanceTypes, externalAssistanceTypes);
+  assert.deepEqual(externalAssistancePolicyById.body.requiredContaminationRoutes, externalAssistanceContaminationRoutes);
 
   const externalAssistanceById = await invokeApi(context, {
     method: "GET",
@@ -13610,7 +13800,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     releaseReport.body.modelAssistedLabelOverlap.runRows.find((row) => row.evaluationRunId === "eval-full-rubric-demo").status,
     "model_assisted_label_overlap_sensitive",
   );
+  assert.equal(releaseReport.body.workflowReproducibilityArtifacts.itemTextNormalizationPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowReleaseConfigArtifacts.itemTextNormalizationPolicies.length, 1);
+  assert.equal(releaseReport.body.releaseConfigManifestEvidence.activeItemTextNormalizationPolicyId, "item-text-normalization-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.releaseConfigManifestEvidence.itemTextNormalizationPolicyEvidence.releaseUseStatus,
+    "submitted_item_text_normalization_policy_active",
+  );
   assert.equal(releaseReport.body.workflowReproducibilityArtifacts.itemTextVersions.length, 1);
+  assert.equal(releaseReport.body.workflowReproducibilityArtifacts.modelPromptSiblingContextPolicies.length, 1);
+  assert.equal(releaseReport.body.samePositionContext.modelPromptSiblingContextPolicyId, "model-prompt-sibling-context-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.samePositionContext.modelPromptSiblingContextPolicyEvidence.releaseUseStatus,
+    "submitted_model_prompt_sibling_context_policy_active",
+  );
   assert.equal(releaseReport.body.workflowReproducibilityArtifacts.ratingContextSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowReproducibilityArtifacts.pairwiseComparisonSnapshots.length, 1);
   assert.equal(releaseReport.body.workflowReproducibilityArtifacts.raterReliabilityWeightModels.length, 1);
@@ -14174,6 +14377,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionScratchpads.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviewRequirednessPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.samePositionBatchReviews.length, 1);
+  assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.externalAssistanceContaminationPolicies.length, 1);
   assert.equal(releaseReport.body.workflowRatingExperienceArtifacts.externalAssistanceDeclarations.length, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.releaseUseStatus, "submitted_rating_experience_evidence_complete");
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedScoreInputPolicyCount, 1);
@@ -14195,6 +14399,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanRequirednessPolicyCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedRationaleEvidenceSpanCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewRequirednessPolicyCount, 1);
+  assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedExternalAssistanceContaminationPolicyCount, 1);
   assert.equal(
     releaseReport.body.ratingExperienceEvidence.rationaleEvidenceSpanRequirednessPolicyReleaseUseStatus,
     "submitted_rationale_evidence_span_requiredness_policy_active",
@@ -14227,6 +14432,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(
     releaseReport.body.ratingExperienceEvidence.samePositionBatchReviewRows.at(-1).samePositionBatchReviewRequirednessPolicyId,
     "same-position-batch-review-requiredness-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.externalAssistanceContaminationPolicyReleaseUseStatus,
+    "submitted_external_assistance_contamination_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.externalAssistanceContaminationPolicyId,
+    "external-assistance-contamination-policy-workflow-new",
+  );
+  assert.equal(
+    releaseReport.body.ratingExperienceEvidence.externalAssistanceDeclarationRows.at(-1).externalAssistanceContaminationPolicyId,
+    "external-assistance-contamination-policy-workflow-new",
   );
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionScratchpadCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedSamePositionBatchReviewCount, 1);
@@ -14843,7 +15060,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 141 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 144 + extendedRaterItemConflictTypes.length,
   );
 });
 

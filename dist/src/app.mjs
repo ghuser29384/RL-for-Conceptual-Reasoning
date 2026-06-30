@@ -99,6 +99,92 @@ const trainingExportDownweightRules = {
   lowPairwiseMargin: "downweight_pairwise_preference_by_0_50_multiplier_and_mark_low_margin",
   protectedSplit: "exclude_from_training_exports_with_weight_0",
 };
+const itemTextNormalizationFieldPolicies = {
+  canonicalText:
+    "Canonical item text preserves the source-authored position or critique wording with Unicode NFC, LF line endings, and transport-only trimming; semantic edits require a new ItemTextVersion and diff artifact.",
+  raterVisibleRenderedText:
+    "Rater-visible rendered text is hashed after the active rater render pipeline and must exclude source tags, admin notes, split labels, model labels, peer labels, and hidden benchmark metadata.",
+  modelVisibleRenderedText:
+    "Model-visible rendered text is hashed after the active model prompt render pipeline; prompt wrappers are outside item text, and hidden labels or protected split metadata are never inserted into the item text hash target.",
+  normalizedSelectedSpanText:
+    "Evidence-span selected text hashes use Unicode NFC, LF line endings, and exact character offsets against the active ItemTextVersion; raw selected protected text remains hidden until allowed by the span visibility policy.",
+  sourceProvenanceFields:
+    "Rights, source, authorship, adaptation, translation, and normalization notes are linked by provenance identifiers and excluded from rater-visible and model-visible text hashes unless explicitly part of the visible item text.",
+};
+const itemTextNormalizationHashRules = {
+  hashAlgorithm: "sha256",
+  unicodeNormalization: "NFC",
+  lineEndingNormalization: "LF",
+  whitespacePolicy: "preserve_internal_whitespace_trim_transport_only",
+  renderedHashBoundary: "hash_after_render_sanitization_before_display_or_prompt_wrapping",
+  hiddenMetadataExclusionRule: "exclude_source_admin_split_model_peer_gold_and_protected_label_metadata_from_visible_hashes",
+  semanticMutationPolicy: "new_item_text_version_and_diff_artifact_required",
+};
+const itemTextNormalizationHashTargets = [
+  "canonical_text",
+  "rater_visible_rendered_text",
+  "model_visible_rendered_text",
+  "normalized_selected_span_text",
+];
+const itemTextNormalizationProhibitedMutations = [
+  "semantic_rewrite_without_new_version",
+  "source_tag_injection",
+  "style_smoothing_without_diff_artifact",
+  "hidden_label_or_split_metadata_in_visible_text",
+  "model_prompt_instruction_inside_item_text",
+];
+const itemTextNormalizationReviewActions = [
+  "create_new_item_text_version",
+  "link_diff_from_prior_or_source_artifact",
+  "bind_active_policy_id",
+  "review_before_release_use",
+];
+const modelPromptSiblingContextModes = [
+  "match_human_frozen_context",
+  "target_only_restricted_snapshot",
+  "paired_context_sensitivity_run",
+];
+const modelPromptSiblingContextEvidenceFields = [
+  "ratingContextSnapshotId",
+  "visibleCritiqueIds",
+  "priorSiblingCritiqueIds",
+  "laterSiblingCritiqueIdsAbsentAtSubmission",
+  "orderIndexByCritiqueId",
+  "modelPredictionRatingContextSnapshotId",
+];
+const modelPromptSiblingContextRules = {
+  sequentialHumanRatings:
+    "When human ratings used sequential same-position sibling context, clean model comparisons must bind model predictions to the same frozen RatingContextSnapshot or to a declared target-only restricted snapshot.",
+  laterSiblingHandling:
+    "Later-added same-position sibling critiques absent from the human RatingContextSnapshot are excluded from the model prompt unless a paired context-sensitivity run is labeled separately.",
+  contextSensitiveClaim:
+    "Context-sensitive labels require matching model-prompt sibling-context evidence before clean leaderboard claims or must be restricted to a target-only snapshot.",
+  targetOnlyRestriction:
+    "Target-only model prompts may support clean claims only against target-only or restricted target-label snapshots, not against sibling-context-sensitive labels.",
+  sourceBoundary:
+    "Project default model-prompt sibling-context rules are frozen here; LMCA motivates same-position context preservation but does not state exact model-prompt sibling policy.",
+};
+const externalAssistanceTypes = ["none", "search", "LLM", "collaborator", "accessibility_tool", "other"];
+const externalAssistanceContaminatingTypes = ["search", "LLM", "collaborator", "accessibility_tool", "other"];
+const externalAssistanceContaminationRoutes = [
+  "excluded_from_blind_initial_denominator_and_quarantined",
+  "excluded_from_blind_initial_denominator",
+  "quarantined_pending_review",
+];
+const externalAssistanceCleanRoutes = ["none_recorded", "preserved_in_blind_initial_denominator"];
+const externalAssistanceAccessibilityStatuses = ["not_applicable", "approved_non_content_transform", "review_required"];
+const externalAssistanceContaminationRules = {
+  outsideSystemDisclosure:
+    "Search, LLM, collaborator, accessibility-tool, or other external-assistance use must disclose the outside system before the row can be release-used.",
+  protectedTextEvent:
+    "Any protected item text or hidden benchmark content pasted, copied, or exposed outside the platform is contamination-sensitive and cannot remain in blind initial denominators.",
+  denominatorExclusion:
+    "Contaminated rows are excluded from blind initial, expert-independent, validation, hidden-benchmark, and clean training-export denominators until quarantine review resolves them.",
+  accessibilityException:
+    "Accessibility tools avoid contamination only when approved as non-content transforms, with no protected-text exfiltration and the same rater-visible content boundary.",
+  sourceBoundary:
+    "Project default external-assistance contamination routes are frozen here; LMCA assumes controlled expert rating and does not state exact volunteer-platform exfiltration rules.",
+};
 const modelImprovementMethods = [
   "pairwise_reward_model",
   "scalar_reward_model",
@@ -894,6 +980,32 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "item-text-normalization-policy",
+    label: "Item Text Normalization Policy",
+    endpoint: () => "/api/v1/item-text-normalization-policies",
+    resourceKey: "itemTextNormalizationPolicy",
+    requiredRole: "admin",
+    summary: "Freeze per-field text normalization, visible-hash boundaries, and mutation review rules before item text release use.",
+    payload: () => ({
+      itemTextNormalizationPolicy: {
+        id: `item-text-normalization-policy-${releaseId}`,
+        policyVersion: "item-text-normalization-rlhf90-v1",
+        fieldPolicies: itemTextNormalizationFieldPolicies,
+        hashRules: itemTextNormalizationHashRules,
+        hashTargets: itemTextNormalizationHashTargets,
+        prohibitedMutations: itemTextNormalizationProhibitedMutations,
+        reviewActions: itemTextNormalizationReviewActions,
+        raterVisibleRule:
+          "Rater-visible text hashes must preserve the visible item wording while excluding source tags, admin notes, hidden benchmark metadata, split labels, model labels, and peer labels before initial lock.",
+        modelVisibleRule:
+          "Model-visible text hashes must use the same canonical item text boundary as the rater-visible text; prompt instructions, wrappers, hidden labels, and protected metadata stay outside item text.",
+        sourceBoundary:
+          "Project default per-field text-normalization choices are frozen here; LMCA requires stable text and blinding, but does not state these exact platform hash rules.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "item-text-version",
     label: "Item Text Version",
     endpoint: () => "/api/v1/item-text-versions",
@@ -917,6 +1029,29 @@ const workflowTemplates = [
         sourceProvenanceLink: "rights-record-demo",
         createdBy: state.session?.user?.id ?? "demo-admin",
         createdAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "model-prompt-sibling-context-policy",
+    label: "Model Prompt Sibling Context Policy",
+    endpoint: () => "/api/v1/model-prompt-sibling-context-policies",
+    resourceKey: "modelPromptSiblingContextPolicy",
+    requiredRole: "admin",
+    summary: "Freeze how model prompts match sequential human same-position sibling context before clean model-comparison claims.",
+    payload: () => ({
+      modelPromptSiblingContextPolicy: {
+        id: `model-prompt-sibling-context-policy-${releaseId}`,
+        policyVersion: "model-prompt-sibling-context-rlhf90-v1",
+        allowedComparisonModes: modelPromptSiblingContextModes,
+        requiredEvidenceFields: modelPromptSiblingContextEvidenceFields,
+        policyRules: modelPromptSiblingContextRules,
+        sequentialHumanRatingsRule: modelPromptSiblingContextRules.sequentialHumanRatings,
+        laterSiblingHandlingRule: modelPromptSiblingContextRules.laterSiblingHandling,
+        contextSensitiveClaimRule: modelPromptSiblingContextRules.contextSensitiveClaim,
+        targetOnlyRestrictionRule: modelPromptSiblingContextRules.targetOnlyRestriction,
+        sourceBoundary: modelPromptSiblingContextRules.sourceBoundary,
+        frozenAt: new Date().toISOString(),
       },
     }),
   },
@@ -1525,6 +1660,32 @@ const workflowTemplates = [
         peerModelSourceMetadataHiddenRequired: true,
         lmcaSourceBoundary:
           "Project default same-position batch-review requiredness is frozen here; LMCA motivates same-position context handling but does not state these exact platform thresholds.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "external-assistance-contamination-policy",
+    label: "External Assistance Contamination Policy",
+    endpoint: () => "/api/v1/external-assistance-contamination-policies",
+    resourceKey: "externalAssistanceContaminationPolicy",
+    requiredRole: "admin",
+    summary: "Freeze how external tools, collaborators, and protected-text exfiltration affect blind rating denominators.",
+    payload: () => ({
+      externalAssistanceContaminationPolicy: {
+        id: `external-assistance-contamination-policy-${releaseId}`,
+        policyVersion: "external-assistance-contamination-rlhf90-v1",
+        allowedAssistanceTypes: externalAssistanceTypes,
+        contaminatingAssistanceTypes: externalAssistanceContaminatingTypes,
+        requiredContaminationRoutes: externalAssistanceContaminationRoutes,
+        allowedCleanRoutes: externalAssistanceCleanRoutes,
+        accessibilityExceptionStatuses: externalAssistanceAccessibilityStatuses,
+        policyRules: externalAssistanceContaminationRules,
+        outsideSystemDisclosureRule: externalAssistanceContaminationRules.outsideSystemDisclosure,
+        protectedTextEventRule: externalAssistanceContaminationRules.protectedTextEvent,
+        denominatorExclusionRule: externalAssistanceContaminationRules.denominatorExclusion,
+        accessibilityExceptionRule: externalAssistanceContaminationRules.accessibilityException,
+        sourceBoundary: externalAssistanceContaminationRules.sourceBoundary,
         frozenAt: new Date().toISOString(),
       },
     }),

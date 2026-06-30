@@ -89,11 +89,22 @@ import {
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+  EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
+  REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
+  REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
   MODEL_FAMILY_OVERLAP_POLICY_VERSION,
   REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
   REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
   MODEL_IMPROVEMENT_POLICY_VERSION,
   REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
   REQUIRED_MODEL_IMPROVEMENT_METHODS,
@@ -106,6 +117,12 @@ import {
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
   REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
   REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+  ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
@@ -340,6 +357,74 @@ const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
 const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
 const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
 const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
+const modelPromptSiblingContextModes = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES;
+const modelPromptSiblingContextEvidenceFields = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS;
+const modelPromptSiblingContextRules = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES;
+const externalAssistanceTypes = REQUIRED_EXTERNAL_ASSISTANCE_TYPES;
+const externalAssistanceContaminatingTypes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES;
+const externalAssistanceContaminationRoutes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES;
+const externalAssistanceCleanRoutes = REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES;
+const externalAssistanceAccessibilityStatuses = REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES;
+const externalAssistanceContaminationRules = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES;
+const itemTextNormalizationFieldPolicies = REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES;
+const itemTextNormalizationHashRules = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES;
+const itemTextNormalizationHashTargets = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS;
+const itemTextNormalizationProhibitedMutations = REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS;
+const itemTextNormalizationReviewActions = REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS;
+
+function itemTextNormalizationPolicy(id = "item-text-normalization-policy-release-test") {
+  return {
+    id,
+    policyVersion: ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
+    fieldPolicies: itemTextNormalizationFieldPolicies,
+    hashRules: itemTextNormalizationHashRules,
+    hashTargets: itemTextNormalizationHashTargets,
+    prohibitedMutations: itemTextNormalizationProhibitedMutations,
+    reviewActions: itemTextNormalizationReviewActions,
+    raterVisibleRule:
+      "Rater-visible text hashes must preserve the visible item wording while excluding source tags, admin notes, hidden benchmark metadata, split labels, model labels, and peer labels before initial lock.",
+    modelVisibleRule:
+      "Model-visible text hashes must use the same canonical item text boundary as the rater-visible text; prompt instructions, wrappers, hidden labels, and protected metadata stay outside item text.",
+    sourceBoundary:
+      "Project default per-field text-normalization choices are frozen here; LMCA requires stable text and blinding, but does not state these exact platform hash rules.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function modelPromptSiblingContextPolicy(id = "model-prompt-sibling-context-policy-release-test") {
+  return {
+    id,
+    policyVersion: MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
+    allowedComparisonModes: modelPromptSiblingContextModes,
+    requiredEvidenceFields: modelPromptSiblingContextEvidenceFields,
+    policyRules: modelPromptSiblingContextRules,
+    sequentialHumanRatingsRule: modelPromptSiblingContextRules.sequentialHumanRatings,
+    laterSiblingHandlingRule: modelPromptSiblingContextRules.laterSiblingHandling,
+    contextSensitiveClaimRule: modelPromptSiblingContextRules.contextSensitiveClaim,
+    targetOnlyRestrictionRule: modelPromptSiblingContextRules.targetOnlyRestriction,
+    sourceBoundary: modelPromptSiblingContextRules.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function externalAssistanceContaminationPolicy(id = "external-assistance-contamination-policy-release-test") {
+  return {
+    id,
+    policyVersion: EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
+    allowedAssistanceTypes: externalAssistanceTypes,
+    contaminatingAssistanceTypes: externalAssistanceContaminatingTypes,
+    requiredContaminationRoutes: externalAssistanceContaminationRoutes,
+    allowedCleanRoutes: externalAssistanceCleanRoutes,
+    accessibilityExceptionStatuses: externalAssistanceAccessibilityStatuses,
+    policyRules: externalAssistanceContaminationRules,
+    outsideSystemDisclosureRule: externalAssistanceContaminationRules.outsideSystemDisclosure,
+    protectedTextEventRule: externalAssistanceContaminationRules.protectedTextEvent,
+    denominatorExclusionRule: externalAssistanceContaminationRules.denominatorExclusion,
+    accessibilityExceptionRule: externalAssistanceContaminationRules.accessibilityException,
+    sourceBoundary: externalAssistanceContaminationRules.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
 
 function trainingExportUncertaintyPolicy(id = "training-export-uncertainty-policy-release-test") {
   return {
@@ -1595,6 +1680,7 @@ function completeReleaseConfigManifestFixtures() {
     frozenAt: "2026-10-01T00:02:00.000Z",
   };
 	  return {
+    itemTextNormalizationPolicies: [itemTextNormalizationPolicy("item-text-normalization-policy-submitted")],
 	    governedBundleCanonicalizationProfiles: [canonicalizationProfile],
 	    governedBundleRecords,
 	    governedBundleVerifications,
@@ -2189,6 +2275,9 @@ function completeRatingExperienceFixtures() {
         createdBy: "demo-expert",
         timestamp: "2026-10-01T00:04:00.000Z",
       },
+    ],
+    externalAssistanceContaminationPolicies: [
+      externalAssistanceContaminationPolicy("external-assistance-contamination-policy-submitted"),
     ],
     externalAssistanceDeclarations: [
       {
@@ -3232,6 +3321,10 @@ test("release config manifest evidence gates governed bundle families and manife
   const report = buildReleaseConfigManifestEvidenceReport("october-2026-demo", completeReleaseConfigManifestFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_release_config_manifest_evidence_complete");
+  assert.equal(report.activeItemTextNormalizationPolicyId, "item-text-normalization-policy-submitted");
+  assert.equal(report.itemTextNormalizationPolicyEvidence.releaseUseStatus, "submitted_item_text_normalization_policy_active");
+  assert.equal(report.counts.submittedItemTextNormalizationPolicyCount, 1);
+  assert.equal(report.counts.itemTextNormalizationPolicyReviewRows, 0);
 	  assert.equal(report.counts.submittedCanonicalizationProfileCount, 1);
 	  assert.equal(report.counts.submittedGovernedBundleCount, governedBundleFamilies.length);
 	  assert.equal(report.counts.submittedGovernedBundleVerificationCount, governedBundleFamilies.length);
@@ -3274,9 +3367,20 @@ test("release config manifest evidence rejects unverified or semantically mutate
           }
         : verification
     );
+  fixtures.itemTextNormalizationPolicies = [
+    ...fixtures.itemTextNormalizationPolicies,
+    {
+      ...itemTextNormalizationPolicy("item-text-normalization-policy-drifted"),
+      hashRules: {
+        ...itemTextNormalizationHashRules,
+        whitespacePolicy: "collapse_all_whitespace_before_hashing",
+      },
+    },
+  ];
   const report = buildReleaseConfigManifestEvidenceReport("october-2026-demo", fixtures);
 
   assert.equal(report.releaseUseStatus, "release_config_manifest_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "item_text_normalization_policy" && section.reason === "hashRules"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_canonicalization_profile" && section.reason === "environmentScopeFields"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_verification" && section.reason === "observedHash"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "governed_bundle_verification" && section.reason === "manifestActivationBlockedOnMismatch"));
@@ -3426,9 +3530,43 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   );
   assert.equal(report.samePositionBatchReviewRows.at(-1).requirednessTriggerClass, "same_position_session_completed");
   assert.equal(report.samePositionBatchReviewRows.at(-1).excludedFromIndependentRaterCount, true);
+  assert.equal(report.counts.submittedExternalAssistanceContaminationPolicyCount, 1);
+  assert.equal(report.counts.externalAssistanceContaminationPolicyReviewRows, 0);
+  assert.equal(report.externalAssistanceContaminationPolicyReleaseUseStatus, "submitted_external_assistance_contamination_policy_active");
+  assert.equal(report.externalAssistanceContaminationPolicyId, "external-assistance-contamination-policy-submitted");
+  assert.deepEqual(report.requiredExternalAssistanceTypes, externalAssistanceTypes);
+  assert.deepEqual(report.requiredExternalAssistanceContaminatingTypes, externalAssistanceContaminatingTypes);
+  assert.deepEqual(report.requiredExternalAssistanceContaminationRoutes, externalAssistanceContaminationRoutes);
+  assert.deepEqual(report.requiredExternalAssistanceCleanRoutes, externalAssistanceCleanRoutes);
+  assert.deepEqual(report.requiredExternalAssistanceAccessibilityStatuses, externalAssistanceAccessibilityStatuses);
+  assert.deepEqual(report.requiredExternalAssistanceContaminationRules, externalAssistanceContaminationRules);
   assert.equal(report.counts.submittedExternalAssistanceDeclarationCount, 1);
+  assert.equal(
+    report.externalAssistanceDeclarationRows.at(-1).externalAssistanceContaminationPolicyId,
+    "external-assistance-contamination-policy-submitted",
+  );
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const driftedExternalAssistancePolicyReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    externalAssistanceContaminationPolicies: [
+      {
+        ...externalAssistanceContaminationPolicy("external-assistance-contamination-policy-drifted"),
+        contaminatingAssistanceTypes: ["LLM"],
+      },
+    ],
+  });
+  assert.equal(driftedExternalAssistancePolicyReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.equal(
+    driftedExternalAssistancePolicyReport.externalAssistanceContaminationPolicyReleaseUseStatus,
+    "submitted_external_assistance_contamination_policy_review_required",
+  );
+  assert.ok(
+    driftedExternalAssistancePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "external_assistance_contamination_policy" && section.reason === "contaminatingAssistanceTypes",
+    ),
+  );
 
   const missingProtectedValidationExclusionReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
@@ -6463,27 +6601,54 @@ test("same-position context report freezes sibling exposure and model-context pa
   assert.equal(report.counts.absentSiblingDisclosureCount, 3);
   assert.equal(report.byPolicy.target_only, 4);
   assert.equal(report.byPolicy.counterbalanced_sibling_context, 3);
+  assert.equal(report.modelPromptSiblingContextPolicyId, "model-prompt-sibling-context-policy-release-test");
+  assert.equal(report.modelPromptSiblingContextPolicyEvidence.releaseUseStatus, "seed_model_prompt_sibling_context_policy_active");
+  assert.equal(report.counts.submittedModelPromptSiblingContextPolicyRows, 0);
   assert.equal(report.releaseUseStatus, "rating_context_sensitive_model_prompt_matching_required");
   const votingStyle = report.contextRows.find((row) => row.ratingId === "rating-voting-style-a");
+  assert.equal(votingStyle.modelPromptSiblingContextPolicyId, "model-prompt-sibling-context-policy-release-test");
   assert.deepEqual(votingStyle.priorSiblingCritiqueIds, ["crit-voting-bullet"]);
   assert.deepEqual(votingStyle.absentSiblingCritiqueIds, []);
   assert.deepEqual(votingStyle.modelContextPredictionIds, []);
   assert.equal(votingStyle.modelContextParityEvidenceStatus, "model_prompt_context_parity_evidence_missing");
-  assert.equal(votingStyle.cleanModelPromptRequirement, "model_prompt_must_match_frozen_sibling_context_or_restrict_target_snapshot");
+  assert.equal(votingStyle.cleanModelPromptRequirement, modelPromptSiblingContextRules.contextSensitiveClaim);
 });
 
 test("same-position context report accepts matching model prediction context snapshots", () => {
   const report = buildSamePositionContextReport("release-test", seedRatings, positions, critiques, ratingContextSnapshots, assignments, {
+    modelPromptSiblingContextPolicies: [modelPromptSiblingContextPolicy("model-prompt-sibling-context-policy-submitted")],
     modelEvaluationPredictions: [...fullRubricEvaluationRun.predictions, ...overallOnlyEvaluationRun.predictions],
   });
   const votingStyle = report.contextRows.find((row) => row.ratingId === "rating-voting-style-a");
 
   assert.equal(report.releaseUseStatus, "same_position_context_parity_preserved");
+  assert.equal(report.modelPromptSiblingContextPolicyId, "model-prompt-sibling-context-policy-submitted");
+  assert.equal(report.modelPromptSiblingContextPolicyEvidence.releaseUseStatus, "submitted_model_prompt_sibling_context_policy_active");
+  assert.equal(report.counts.submittedModelPromptSiblingContextPolicyRows, 1);
   assert.equal(report.counts.contextSensitiveModelContextMatchedCount, 3);
   assert.equal(report.counts.contextSensitiveModelContextMissingCount, 0);
   assert.equal(report.byModelContextParityEvidenceStatus.model_prompt_context_matches_frozen_rating_context, 3);
   assert.ok(votingStyle.modelContextPredictionIds.includes("pred-voting-style"));
   assert.ok(votingStyle.modelContextPredictionIds.includes("pred-overall-voting-style"));
+});
+
+test("same-position context report reviews drifted model prompt sibling-context policies", () => {
+  const report = buildSamePositionContextReport("release-test", seedRatings, positions, critiques, ratingContextSnapshots, assignments, {
+    modelPromptSiblingContextPolicies: [
+      {
+        ...modelPromptSiblingContextPolicy("model-prompt-sibling-context-policy-drifted"),
+        allowedComparisonModes: ["target_only_restricted_snapshot"],
+      },
+    ],
+    modelEvaluationPredictions: [...fullRubricEvaluationRun.predictions, ...overallOnlyEvaluationRun.predictions],
+  });
+
+  assert.equal(report.releaseUseStatus, "model_prompt_sibling_context_policy_review_required");
+  assert.equal(report.modelPromptSiblingContextPolicyEvidence.releaseUseStatus, "submitted_model_prompt_sibling_context_policy_review_required");
+  assert.equal(report.counts.modelPromptSiblingContextPolicyReviewRows, 1);
+  assert.ok(
+    report.modelPromptSiblingContextPolicyEvidence.reviewRows[0].reviewReasons.includes("allowedComparisonModes"),
+  );
 });
 
 test("release report same-position context consumes submitted workflow assignments", () => {

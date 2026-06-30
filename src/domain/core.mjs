@@ -10445,6 +10445,120 @@ const SAME_POSITION_CONTEXT_RELEASE_CRITICAL_QUEUE_TYPES = new Set([
   "release_review",
 ]);
 
+export const MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION = "model-prompt-sibling-context-rlhf90-v1";
+export const REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES = [
+  "match_human_frozen_context",
+  "target_only_restricted_snapshot",
+  "paired_context_sensitivity_run",
+];
+export const REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS = [
+  "ratingContextSnapshotId",
+  "visibleCritiqueIds",
+  "priorSiblingCritiqueIds",
+  "laterSiblingCritiqueIdsAbsentAtSubmission",
+  "orderIndexByCritiqueId",
+  "modelPredictionRatingContextSnapshotId",
+];
+export const REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES = {
+  sequentialHumanRatings:
+    "When human ratings used sequential same-position sibling context, clean model comparisons must bind model predictions to the same frozen RatingContextSnapshot or to a declared target-only restricted snapshot.",
+  laterSiblingHandling:
+    "Later-added same-position sibling critiques absent from the human RatingContextSnapshot are excluded from the model prompt unless a paired context-sensitivity run is labeled separately.",
+  contextSensitiveClaim:
+    "Context-sensitive labels require matching model-prompt sibling-context evidence before clean leaderboard claims or must be restricted to a target-only snapshot.",
+  targetOnlyRestriction:
+    "Target-only model prompts may support clean claims only against target-only or restricted target-label snapshots, not against sibling-context-sensitive labels.",
+  sourceBoundary:
+    "Project default model-prompt sibling-context rules are frozen here; LMCA motivates same-position context preservation but does not state exact model-prompt sibling policy.",
+};
+
+function defaultModelPromptSiblingContextPolicy(releaseId) {
+  return {
+    id: `model-prompt-sibling-context-policy-${releaseId}`,
+    policyVersion: MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
+    allowedComparisonModes: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
+    requiredEvidenceFields: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
+    policyRules: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
+    sequentialHumanRatingsRule: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.sequentialHumanRatings,
+    laterSiblingHandlingRule: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.laterSiblingHandling,
+    contextSensitiveClaimRule: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.contextSensitiveClaim,
+    targetOnlyRestrictionRule: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.targetOnlyRestriction,
+    sourceBoundary: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeModelPromptSiblingContextPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.modelPromptSiblingContextPolicyId ?? policy?.model_prompt_sibling_context_policy_id;
+  if (!id) return null;
+  const policyRules = policy.policyRules && typeof policy.policyRules === "object" && !Array.isArray(policy.policyRules) ? policy.policyRules : {};
+  const allowedComparisonModes = normalizeStringArray(policy.allowedComparisonModes);
+  const requiredEvidenceFields = normalizeStringArray(policy.requiredEvidenceFields);
+  const missingRuleKeys = Object.keys(REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES).filter((key) => !Object.hasOwn(policyRules, key));
+  const reviewReasons = [
+    policy.policyVersion === MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION ? null : "policyVersion",
+    REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES.every((mode) => allowedComparisonModes.includes(mode)) ? null : "allowedComparisonModes",
+    allowedComparisonModes.every((mode) => REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES.includes(mode)) ? null : "allowedComparisonModes:unsupported",
+    REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS.every((field) => requiredEvidenceFields.includes(field)) ? null : "requiredEvidenceFields",
+    requiredEvidenceFields.every((field) => REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS.includes(field))
+      ? null
+      : "requiredEvidenceFields:unsupported",
+    missingRuleKeys.length ? `policyRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(policyRules) === stableJsonKey(REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES) ? null : "policyRules",
+    policyMentions(policy.sequentialHumanRatingsRule, ["same-position", "ratingcontextsnapshot"]) ? null : "sequentialHumanRatingsRule",
+    policyMentions(policy.laterSiblingHandlingRule, ["later-added", "absent"]) ? null : "laterSiblingHandlingRule",
+    policyMentions(policy.contextSensitiveClaimRule, ["context-sensitive", "model-prompt"]) ? null : "contextSensitiveClaimRule",
+    policyMentions(policy.targetOnlyRestrictionRule, ["target-only", "sibling-context-sensitive"]) ? null : "targetOnlyRestrictionRule",
+    policyMentions(policy.sourceBoundary, ["project", "lmca"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.policy_version ?? null,
+    allowedComparisonModes,
+    requiredEvidenceFields,
+    policyRules,
+    sequentialHumanRatingsRule: policy.sequentialHumanRatingsRule ?? policy.sequential_human_ratings_rule ?? null,
+    laterSiblingHandlingRule: policy.laterSiblingHandlingRule ?? policy.later_sibling_handling_rule ?? null,
+    contextSensitiveClaimRule: policy.contextSensitiveClaimRule ?? policy.context_sensitive_claim_rule ?? null,
+    targetOnlyRestrictionRule: policy.targetOnlyRestrictionRule ?? policy.target_only_restriction_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "model_prompt_sibling_context_policy_review_required" : "model_prompt_sibling_context_policy_complete",
+  };
+}
+
+function buildModelPromptSiblingContextPolicyEvidence(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeModelPromptSiblingContextPolicy(policy, "submitted_workflow_model_prompt_sibling_context_policy"))
+    .filter(Boolean);
+  const seedRow = normalizeModelPromptSiblingContextPolicy(
+    defaultModelPromptSiblingContextPolicy(releaseId),
+    "seed_model_prompt_sibling_context_policy",
+  );
+  const activeSubmittedPolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? null;
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length > 0);
+  const activePolicy = activeSubmittedPolicy ?? seedRow;
+  return {
+    id: `model-prompt-sibling-context-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredComparisonModes: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
+    requiredEvidenceFields: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
+    requiredPolicyRules: REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
+    policyRows: [seedRow, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    releaseUseStatus: activeSubmittedPolicy
+      ? "submitted_model_prompt_sibling_context_policy_active"
+      : reviewRows.length
+        ? "submitted_model_prompt_sibling_context_policy_review_required"
+        : "seed_model_prompt_sibling_context_policy_active",
+  };
+}
+
 function isSamePositionContextReleaseCriticalQueue(queueType) {
   return SAME_POSITION_CONTEXT_RELEASE_CRITICAL_QUEUE_TYPES.has(queueType);
 }
@@ -10461,6 +10575,11 @@ export function buildSamePositionContextReport(
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const assignmentById = new Map(assignmentList.map((assignment) => [assignment.id, assignment]));
   const snapshotById = new Map(contextSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+  const modelPromptSiblingContextPolicyEvidence = buildModelPromptSiblingContextPolicyEvidence(
+    releaseId,
+    options.modelPromptSiblingContextPolicies ?? [],
+  );
+  const activeModelPromptSiblingContextPolicy = modelPromptSiblingContextPolicyEvidence.activePolicy;
   const predictionRowsByItem = (options.modelEvaluationPredictions ?? []).reduce((acc, prediction) => {
     const itemId = makeItemId(prediction.positionId, prediction.critiqueId);
     acc[itemId] ??= [];
@@ -10527,6 +10646,7 @@ export function buildSamePositionContextReport(
       ratingContextSnapshotId: rating.ratingContextSnapshotId,
       contextSnapshotFrozen: Boolean(snapshot?.frozenAt),
       currentCritiqueVisible,
+      modelPromptSiblingContextPolicyId: activeModelPromptSiblingContextPolicy?.id ?? null,
       policy: snapshot?.policy ?? "missing_context_snapshot",
       orderPolicy: snapshot?.orderPolicy ?? "missing_context_snapshot",
       orderPolicyStatus,
@@ -10541,7 +10661,7 @@ export function buildSamePositionContextReport(
       modelContextPredictionIds,
       modelContextParityEvidenceStatus,
       cleanModelPromptRequirement: contextSensitive
-        ? "model_prompt_must_match_frozen_sibling_context_or_restrict_target_snapshot"
+        ? (activeModelPromptSiblingContextPolicy?.contextSensitiveClaimRule ?? REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.contextSensitiveClaim)
         : "target_only_context_is_matchable",
     };
   });
@@ -10555,12 +10675,23 @@ export function buildSamePositionContextReport(
     generatedAt: new Date().toISOString(),
     policy: {
       requiredArtifact: "RatingContextSnapshot",
-      releaseRule: "Ratings and model prompts must bind to frozen same-position context snapshots; context-sensitive labels require matching model sibling context or target-snapshot restriction.",
+      activeModelPromptSiblingContextPolicyId: activeModelPromptSiblingContextPolicy?.id ?? null,
+      releaseRule:
+        activeModelPromptSiblingContextPolicy?.sequentialHumanRatingsRule ?? REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.sequentialHumanRatings,
       orderRule: "Validation and benchmark-candidate queues must counterbalance order where feasible or disclose fixed target-only order.",
-      lateSiblingRule: "Later-added same-position critiques absent at submission are recorded so historical context does not mutate.",
+      lateSiblingRule:
+        activeModelPromptSiblingContextPolicy?.laterSiblingHandlingRule ?? REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.laterSiblingHandling,
+      targetOnlyRestrictionRule:
+        activeModelPromptSiblingContextPolicy?.targetOnlyRestrictionRule ?? REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES.targetOnlyRestriction,
     },
+    modelPromptSiblingContextPolicyEvidence,
+    modelPromptSiblingContextPolicyId: activeModelPromptSiblingContextPolicy?.id ?? null,
     counts: {
       totalRatings: rows.length,
+      submittedModelPromptSiblingContextPolicyRows: modelPromptSiblingContextPolicyEvidence.policyRows.filter(
+        (row) => row.rowSource === "submitted_workflow_model_prompt_sibling_context_policy",
+      ).length,
+      modelPromptSiblingContextPolicyReviewRows: modelPromptSiblingContextPolicyEvidence.reviewRows.length,
       ratingsWithFrozenContext: rows.filter((row) => row.contextSnapshotFrozen).length,
       missingContextSnapshotCount: missingContextRows.length,
       currentCritiqueVisibilityViolationCount: currentCritiqueVisibilityViolations.length,
@@ -10581,7 +10712,9 @@ export function buildSamePositionContextReport(
     currentCritiqueVisibilityViolations,
     contextRows: rows,
     releaseUseStatus:
-      missingContextRows.length || currentCritiqueVisibilityViolations.length
+      modelPromptSiblingContextPolicyEvidence.reviewRows.length
+        ? "model_prompt_sibling_context_policy_review_required"
+        : missingContextRows.length || currentCritiqueVisibilityViolations.length
         ? "rating_context_snapshot_repair_required"
         : missingModelContextParityRows.length
           ? "rating_context_sensitive_model_prompt_matching_required"
@@ -16526,6 +16659,143 @@ const REQUIRED_GOVERNED_BUNDLE_FAMILIES = [
   "phase_gate",
 ];
 
+export const ITEM_TEXT_NORMALIZATION_POLICY_VERSION = "item-text-normalization-rlhf90-v1";
+export const REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES = {
+  canonicalText:
+    "Canonical item text preserves the source-authored position or critique wording with Unicode NFC, LF line endings, and transport-only trimming; semantic edits require a new ItemTextVersion and diff artifact.",
+  raterVisibleRenderedText:
+    "Rater-visible rendered text is hashed after the active rater render pipeline and must exclude source tags, admin notes, split labels, model labels, peer labels, and hidden benchmark metadata.",
+  modelVisibleRenderedText:
+    "Model-visible rendered text is hashed after the active model prompt render pipeline; prompt wrappers are outside item text, and hidden labels or protected split metadata are never inserted into the item text hash target.",
+  normalizedSelectedSpanText:
+    "Evidence-span selected text hashes use Unicode NFC, LF line endings, and exact character offsets against the active ItemTextVersion; raw selected protected text remains hidden until allowed by the span visibility policy.",
+  sourceProvenanceFields:
+    "Rights, source, authorship, adaptation, translation, and normalization notes are linked by provenance identifiers and excluded from rater-visible and model-visible text hashes unless explicitly part of the visible item text.",
+};
+export const REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES = {
+  hashAlgorithm: "sha256",
+  unicodeNormalization: "NFC",
+  lineEndingNormalization: "LF",
+  whitespacePolicy: "preserve_internal_whitespace_trim_transport_only",
+  renderedHashBoundary: "hash_after_render_sanitization_before_display_or_prompt_wrapping",
+  hiddenMetadataExclusionRule: "exclude_source_admin_split_model_peer_gold_and_protected_label_metadata_from_visible_hashes",
+  semanticMutationPolicy: "new_item_text_version_and_diff_artifact_required",
+};
+export const REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS = [
+  "canonical_text",
+  "rater_visible_rendered_text",
+  "model_visible_rendered_text",
+  "normalized_selected_span_text",
+];
+export const REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS = [
+  "semantic_rewrite_without_new_version",
+  "source_tag_injection",
+  "style_smoothing_without_diff_artifact",
+  "hidden_label_or_split_metadata_in_visible_text",
+  "model_prompt_instruction_inside_item_text",
+];
+export const REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS = [
+  "create_new_item_text_version",
+  "link_diff_from_prior_or_source_artifact",
+  "bind_active_policy_id",
+  "review_before_release_use",
+];
+
+function defaultItemTextNormalizationPolicy(releaseId) {
+  return {
+    id: `item-text-normalization-policy-${releaseId}`,
+    policyVersion: ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
+    fieldPolicies: REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES,
+    hashRules: REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES,
+    hashTargets: REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS,
+    prohibitedMutations: REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS,
+    reviewActions: REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS,
+    raterVisibleRule:
+      "Rater-visible text hashes must preserve the visible item wording while excluding source tags, admin notes, hidden benchmark metadata, split labels, model labels, and peer labels before initial lock.",
+    modelVisibleRule:
+      "Model-visible text hashes must use the same canonical item text boundary as the rater-visible text; prompt instructions, wrappers, hidden labels, and protected metadata stay outside item text.",
+    sourceBoundary:
+      "Project default per-field text-normalization choices are frozen here; LMCA requires stable text and blinding, but does not state these exact platform hash rules.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeItemTextNormalizationPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.itemTextNormalizationPolicyId ?? policy?.item_text_normalization_policy_id;
+  if (!id) return null;
+  const fieldPolicies =
+    policy.fieldPolicies && typeof policy.fieldPolicies === "object" && !Array.isArray(policy.fieldPolicies) ? policy.fieldPolicies : {};
+  const hashRules = policy.hashRules && typeof policy.hashRules === "object" && !Array.isArray(policy.hashRules) ? policy.hashRules : {};
+  const missingFieldPolicyKeys = Object.keys(REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES).filter((key) => !Object.hasOwn(fieldPolicies, key));
+  const missingHashRuleKeys = Object.keys(REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES).filter((key) => !Object.hasOwn(hashRules, key));
+  const hashTargets = normalizeStringArray(policy.hashTargets);
+  const prohibitedMutations = normalizeStringArray(policy.prohibitedMutations);
+  const reviewActions = normalizeStringArray(policy.reviewActions);
+  const reviewReasons = [
+    policy.policyVersion === ITEM_TEXT_NORMALIZATION_POLICY_VERSION ? null : "policyVersion",
+    missingFieldPolicyKeys.length ? `fieldPolicies:${missingFieldPolicyKeys.join(",")}` : null,
+    stableJsonKey(fieldPolicies) === stableJsonKey(REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES) ? null : "fieldPolicies",
+    missingHashRuleKeys.length ? `hashRules:${missingHashRuleKeys.join(",")}` : null,
+    stableJsonKey(hashRules) === stableJsonKey(REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES) ? null : "hashRules",
+    REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS.every((target) => hashTargets.includes(target)) ? null : "hashTargets",
+    hashTargets.every((target) => REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS.includes(target)) ? null : "hashTargets:unsupported",
+    REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS.every((mutation) => prohibitedMutations.includes(mutation)) ? null : "prohibitedMutations",
+    prohibitedMutations.every((mutation) => REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS.includes(mutation))
+      ? null
+      : "prohibitedMutations:unsupported",
+    REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS.every((action) => reviewActions.includes(action)) ? null : "reviewActions",
+    reviewActions.every((action) => REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS.includes(action)) ? null : "reviewActions:unsupported",
+    policyMentions(policy.raterVisibleRule, ["source", "admin", "hidden"]) ? null : "raterVisibleRule",
+    policyMentions(policy.modelVisibleRule, ["prompt", "item text", "hidden"]) ? null : "modelVisibleRule",
+    policyMentions(policy.sourceBoundary, ["project", "lmca"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.policy_version ?? null,
+    fieldPolicies,
+    hashRules,
+    hashTargets,
+    prohibitedMutations,
+    reviewActions,
+    raterVisibleRule: policy.raterVisibleRule ?? policy.rater_visible_rule ?? null,
+    modelVisibleRule: policy.modelVisibleRule ?? policy.model_visible_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "item_text_normalization_policy_review_required" : "item_text_normalization_policy_complete",
+  };
+}
+
+function buildItemTextNormalizationPolicyEvidence(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeItemTextNormalizationPolicy(policy, "submitted_workflow_item_text_normalization_policy"))
+    .filter(Boolean);
+  const seedRow = normalizeItemTextNormalizationPolicy(defaultItemTextNormalizationPolicy(releaseId), "seed_item_text_normalization_policy");
+  const activeSubmittedPolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? null;
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length > 0);
+  const activePolicy = activeSubmittedPolicy ?? seedRow;
+  return {
+    id: `item-text-normalization-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredFieldPolicies: REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES,
+    requiredHashRules: REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES,
+    requiredHashTargets: REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS,
+    requiredProhibitedMutations: REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS,
+    requiredReviewActions: REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS,
+    policyRows: [seedRow, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    releaseUseStatus: activeSubmittedPolicy
+      ? "submitted_item_text_normalization_policy_active"
+      : reviewRows.length
+        ? "submitted_item_text_normalization_policy_review_required"
+        : "seed_item_text_normalization_policy_active",
+  };
+}
+
 function defaultGovernedBundleCanonicalizationProfile(releaseId) {
   return {
     id: `canonicalization-profile-${releaseId}`,
@@ -16628,6 +16898,7 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
     .filter(Boolean);
   const seedProfile = normalizeGovernedBundleCanonicalizationProfile(defaultGovernedBundleCanonicalizationProfile(releaseId), "seed_canonicalization_profile");
   const activeProfile = submittedProfileRows.find((row) => row.reviewReasons.length === 0) ?? seedProfile;
+  const itemTextNormalizationPolicyEvidence = buildItemTextNormalizationPolicyEvidence(releaseId, options.itemTextNormalizationPolicies ?? []);
 	  const submittedBundleRows = (options.governedBundleRecords ?? [])
 	    .map((bundle) => normalizeGovernedBundleRecord(bundle, activeProfile.id, "submitted_workflow_governed_bundle"))
 	    .filter(Boolean);
@@ -16656,6 +16927,9 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
     ? submittedVerificationRows.find((row) => row.manifestId === activeManifest.id && row.reviewReasons.length === 0) ?? null
     : null;
   const reviewSections = [
+    ...itemTextNormalizationPolicyEvidence.reviewRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "item_text_normalization_policy", artifactId: row.id, reason })),
+    ),
 	    ...submittedProfileRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle_canonicalization_profile", artifactId: row.id, reason }))),
 	    ...submittedBundleRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle", artifactId: row.id, reason }))),
 	    ...submittedBundleVerificationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "governed_bundle_verification", artifactId: row.id, reason }))),
@@ -16672,6 +16946,7 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
       : null,
   ].filter(Boolean);
   const submittedEvidenceComplete =
+    itemTextNormalizationPolicyEvidence.releaseUseStatus === "submitted_item_text_normalization_policy_active" &&
 	    submittedProfileRows.length > 0 &&
 	    submittedBundleRows.length > 0 &&
 	    submittedBundleVerificationRows.length > 0 &&
@@ -16684,6 +16959,8 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
     generatedAt: new Date().toISOString(),
     requiredManifestBindings: REQUIRED_RELEASE_CONFIG_BINDINGS,
     requiredGovernedBundleFamilies: REQUIRED_GOVERNED_BUNDLE_FAMILIES,
+    itemTextNormalizationPolicyEvidence,
+    activeItemTextNormalizationPolicyId: itemTextNormalizationPolicyEvidence.activePolicyId,
 	    canonicalizationProfiles: [seedProfile, ...submittedProfileRows],
 	    governedBundleRows: [...seedBundleRows, ...submittedBundleRows],
 	    governedBundleVerificationRows: [...seedBundleVerificationRows, ...submittedBundleVerificationRows],
@@ -16693,6 +16970,10 @@ export function buildReleaseConfigManifestEvidenceReport(releaseId, options = {}
     activeManifestId: activeManifest?.id ?? null,
     activeManifestHash: activeManifest?.canonicalManifestHash ?? null,
     counts: {
+      submittedItemTextNormalizationPolicyCount: itemTextNormalizationPolicyEvidence.policyRows.filter(
+        (row) => row.rowSource === "submitted_workflow_item_text_normalization_policy",
+      ).length,
+      itemTextNormalizationPolicyReviewRows: itemTextNormalizationPolicyEvidence.reviewRows.length,
 	      submittedCanonicalizationProfileCount: submittedProfileRows.length,
 	      submittedGovernedBundleCount: submittedBundleRows.length,
 	      submittedGovernedBundleVerificationCount: submittedBundleVerificationRows.length,
@@ -18188,6 +18469,144 @@ function defaultExternalAssistanceDeclaration(releaseId) {
   };
 }
 
+export const EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION = "external-assistance-contamination-rlhf90-v1";
+export const REQUIRED_EXTERNAL_ASSISTANCE_TYPES = ["none", "search", "LLM", "collaborator", "accessibility_tool", "other"];
+export const REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES = ["search", "LLM", "collaborator", "accessibility_tool", "other"];
+export const REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES = [
+  "excluded_from_blind_initial_denominator_and_quarantined",
+  "excluded_from_blind_initial_denominator",
+  "quarantined_pending_review",
+];
+export const REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES = ["none_recorded", "preserved_in_blind_initial_denominator"];
+export const REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES = [
+  "not_applicable",
+  "approved_non_content_transform",
+  "review_required",
+];
+export const REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES = {
+  outsideSystemDisclosure:
+    "Search, LLM, collaborator, accessibility-tool, or other external-assistance use must disclose the outside system before the row can be release-used.",
+  protectedTextEvent:
+    "Any protected item text or hidden benchmark content pasted, copied, or exposed outside the platform is contamination-sensitive and cannot remain in blind initial denominators.",
+  denominatorExclusion:
+    "Contaminated rows are excluded from blind initial, expert-independent, validation, hidden-benchmark, and clean training-export denominators until quarantine review resolves them.",
+  accessibilityException:
+    "Accessibility tools avoid contamination only when approved as non-content transforms, with no protected-text exfiltration and the same rater-visible content boundary.",
+  sourceBoundary:
+    "Project default external-assistance contamination routes are frozen here; LMCA assumes controlled expert rating and does not state exact volunteer-platform exfiltration rules.",
+};
+
+function defaultExternalAssistanceContaminationPolicy(releaseId) {
+  return {
+    id: `external-assistance-contamination-policy-${releaseId}`,
+    policyVersion: EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
+    allowedAssistanceTypes: REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
+    contaminatingAssistanceTypes: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES,
+    requiredContaminationRoutes: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
+    allowedCleanRoutes: REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES,
+    accessibilityExceptionStatuses: REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES,
+    policyRules: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
+    outsideSystemDisclosureRule: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES.outsideSystemDisclosure,
+    protectedTextEventRule: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES.protectedTextEvent,
+    denominatorExclusionRule: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES.denominatorExclusion,
+    accessibilityExceptionRule: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES.accessibilityException,
+    sourceBoundary: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES.sourceBoundary,
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeExternalAssistanceContaminationPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.externalAssistanceContaminationPolicyId ?? policy?.external_assistance_contamination_policy_id;
+  if (!id) return null;
+  const allowedAssistanceTypes = normalizeStringArray(policy.allowedAssistanceTypes);
+  const contaminatingAssistanceTypes = normalizeStringArray(policy.contaminatingAssistanceTypes);
+  const requiredContaminationRoutes = normalizeStringArray(policy.requiredContaminationRoutes);
+  const allowedCleanRoutes = normalizeStringArray(policy.allowedCleanRoutes);
+  const accessibilityExceptionStatuses = normalizeStringArray(policy.accessibilityExceptionStatuses);
+  const policyRules = policy.policyRules && typeof policy.policyRules === "object" && !Array.isArray(policy.policyRules) ? policy.policyRules : {};
+  const missingRuleKeys = Object.keys(REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES).filter((key) => !Object.hasOwn(policyRules, key));
+  const reviewReasons = [
+    policy.policyVersion === EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION ? null : "policyVersion",
+    REQUIRED_EXTERNAL_ASSISTANCE_TYPES.every((type) => allowedAssistanceTypes.includes(type)) ? null : "allowedAssistanceTypes",
+    allowedAssistanceTypes.every((type) => REQUIRED_EXTERNAL_ASSISTANCE_TYPES.includes(type)) ? null : "allowedAssistanceTypes:unsupported",
+    REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES.every((type) => contaminatingAssistanceTypes.includes(type)) ? null : "contaminatingAssistanceTypes",
+    contaminatingAssistanceTypes.every((type) => REQUIRED_EXTERNAL_ASSISTANCE_TYPES.includes(type)) ? null : "contaminatingAssistanceTypes:unsupported",
+    REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES.every((route) => requiredContaminationRoutes.includes(route))
+      ? null
+      : "requiredContaminationRoutes",
+    requiredContaminationRoutes.every((route) => REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES.includes(route))
+      ? null
+      : "requiredContaminationRoutes:unsupported",
+    REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES.every((route) => allowedCleanRoutes.includes(route)) ? null : "allowedCleanRoutes",
+    allowedCleanRoutes.every((route) => REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES.includes(route)) ? null : "allowedCleanRoutes:unsupported",
+    REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES.every((status) => accessibilityExceptionStatuses.includes(status))
+      ? null
+      : "accessibilityExceptionStatuses",
+    accessibilityExceptionStatuses.every((status) => REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES.includes(status))
+      ? null
+      : "accessibilityExceptionStatuses:unsupported",
+    missingRuleKeys.length ? `policyRules:${missingRuleKeys.join(",")}` : null,
+    stableJsonKey(policyRules) === stableJsonKey(REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES) ? null : "policyRules",
+    policyMentions(policy.outsideSystemDisclosureRule, ["external-assistance", "outside system"]) ? null : "outsideSystemDisclosureRule",
+    policyMentions(policy.protectedTextEventRule, ["protected", "contamination-sensitive"]) ? null : "protectedTextEventRule",
+    policyMentions(policy.denominatorExclusionRule, ["excluded", "denominators"]) ? null : "denominatorExclusionRule",
+    policyMentions(policy.accessibilityExceptionRule, ["accessibility", "non-content"]) ? null : "accessibilityExceptionRule",
+    policyMentions(policy.sourceBoundary, ["project", "lmca"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.policy_version ?? null,
+    allowedAssistanceTypes,
+    contaminatingAssistanceTypes,
+    requiredContaminationRoutes,
+    allowedCleanRoutes,
+    accessibilityExceptionStatuses,
+    policyRules,
+    outsideSystemDisclosureRule: policy.outsideSystemDisclosureRule ?? policy.outside_system_disclosure_rule ?? null,
+    protectedTextEventRule: policy.protectedTextEventRule ?? policy.protected_text_event_rule ?? null,
+    denominatorExclusionRule: policy.denominatorExclusionRule ?? policy.denominator_exclusion_rule ?? null,
+    accessibilityExceptionRule: policy.accessibilityExceptionRule ?? policy.accessibility_exception_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "external_assistance_contamination_policy_review_required" : "external_assistance_contamination_policy_complete",
+  };
+}
+
+function buildExternalAssistanceContaminationPolicyEvidence(releaseId, submittedPolicies = []) {
+  const submittedRows = submittedPolicies
+    .map((policy) => normalizeExternalAssistanceContaminationPolicy(policy, "submitted_workflow_external_assistance_contamination_policy"))
+    .filter(Boolean);
+  const seedRow = normalizeExternalAssistanceContaminationPolicy(
+    defaultExternalAssistanceContaminationPolicy(releaseId),
+    "seed_external_assistance_contamination_policy",
+  );
+  const activeSubmittedPolicy = submittedRows.find((row) => row.reviewReasons.length === 0) ?? null;
+  const reviewRows = submittedRows.filter((row) => row.reviewReasons.length > 0);
+  const activePolicy = activeSubmittedPolicy ?? seedRow;
+  return {
+    id: `external-assistance-contamination-policy-evidence-${releaseId}`,
+    releaseId,
+    requiredAssistanceTypes: REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
+    requiredContaminatingAssistanceTypes: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES,
+    requiredContaminationRoutes: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
+    requiredCleanRoutes: REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES,
+    requiredAccessibilityExceptionStatuses: REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES,
+    requiredPolicyRules: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
+    policyRows: [seedRow, ...submittedRows],
+    activePolicy,
+    activePolicyId: activePolicy?.id ?? null,
+    reviewRows,
+    releaseUseStatus: activeSubmittedPolicy
+      ? "submitted_external_assistance_contamination_policy_active"
+      : reviewRows.length
+        ? "submitted_external_assistance_contamination_policy_review_required"
+        : "seed_external_assistance_contamination_policy_active",
+  };
+}
+
 export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
   const submittedTaskOutputRows = (options.taskOutputEligibilityPolicies ?? [])
     .map((policy) => normalizeTaskOutputEligibilityPolicy(policy, "submitted_workflow_task_output_eligibility_policy"))
@@ -18324,10 +18743,21 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       "seed_same_position_batch_review",
     ),
   ];
+  const externalAssistancePolicyEvidence = buildExternalAssistanceContaminationPolicyEvidence(
+    releaseId,
+    options.externalAssistanceContaminationPolicies ?? [],
+  );
+  const activeExternalAssistancePolicy = externalAssistancePolicyEvidence.activePolicy;
   const submittedAssistanceRows = (options.externalAssistanceDeclarations ?? [])
-    .map((declaration) => normalizeExternalAssistanceDeclaration(declaration, "submitted_workflow_external_assistance_declaration"))
+    .map((declaration) => normalizeExternalAssistanceDeclaration(declaration, activeExternalAssistancePolicy, "submitted_workflow_external_assistance_declaration"))
     .filter(Boolean);
-  const seedAssistanceRows = [normalizeExternalAssistanceDeclaration(defaultExternalAssistanceDeclaration(releaseId), "seed_external_assistance_declaration")];
+  const seedAssistanceRows = [
+    normalizeExternalAssistanceDeclaration(
+      defaultExternalAssistanceDeclaration(releaseId),
+      externalAssistancePolicyEvidence.policyRows.find((row) => row.rowSource === "seed_external_assistance_contamination_policy"),
+      "seed_external_assistance_declaration",
+    ),
+  ];
   const retentionRowsForGate = submittedRetentionRows.length ? submittedRetentionRows : seedRetentionRows;
   const protectedArtifactTypeRows = REQUIRED_PROTECTED_ARTIFACT_TYPES.map((artifactType) => protectedArtifactTypeEvidenceRow(artifactType, retentionRowsForGate));
   const itemIssueRowsForGate = submittedItemIssueRows.length ? submittedItemIssueRows : seedItemIssueRows;
@@ -18361,6 +18791,12 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedBatchReviewPolicyRows.length ? submittedBatchReviewPolicyRows : seedBatchReviewPolicyRows,
     ],
     ["same_position_batch_review", submittedBatchReviewRows.length ? submittedBatchReviewRows : seedBatchReviewRows],
+    [
+      "external_assistance_contamination_policy",
+      externalAssistancePolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("submitted_")).length
+        ? externalAssistancePolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("submitted_"))
+        : externalAssistancePolicyEvidence.policyRows.filter((row) => row.rowSource.startsWith("seed_")),
+    ],
     ["external_assistance_declaration", submittedAssistanceRows.length ? submittedAssistanceRows : seedAssistanceRows],
   ];
   const reviewSections = [
@@ -18395,6 +18831,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review_requiredness_policy", artifactId: row.id, reason })),
     ),
     ...submittedBatchReviewRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "same_position_batch_review", artifactId: row.id, reason }))),
+    ...externalAssistancePolicyEvidence.reviewRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "external_assistance_contamination_policy", artifactId: row.id, reason })),
+    ),
     ...submittedAssistanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "external_assistance_declaration", artifactId: row.id, reason }))),
     ...gateGroups
       .filter(([, rows]) => !rows.some((row) => row.reviewReasons.length === 0))
@@ -18426,6 +18865,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedScratchpadRows.length > 0 &&
     submittedBatchReviewPolicyRows.length > 0 &&
     submittedBatchReviewRows.length > 0 &&
+    externalAssistancePolicyEvidence.policyRows.some((row) => row.rowSource === "submitted_workflow_external_assistance_contamination_policy") &&
     submittedAssistanceRows.length > 0 &&
     reviewSections.length === 0;
   return {
@@ -18482,6 +18922,15 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     requiredSamePositionBatchReviewRules: REQUIRED_SAME_POSITION_BATCH_REVIEW_RULES,
     requiredSamePositionBatchReviewStatuses: REQUIRED_SAME_POSITION_BATCH_REVIEW_STATUSES,
     requiredSamePositionBatchReviewDecisionStatuses: REQUIRED_SAME_POSITION_BATCH_REVIEW_DECISION_STATUSES,
+    externalAssistanceContaminationPolicyEvidence: externalAssistancePolicyEvidence,
+    externalAssistanceContaminationPolicyId: activeExternalAssistancePolicy?.id ?? null,
+    externalAssistanceContaminationPolicyReleaseUseStatus: externalAssistancePolicyEvidence.releaseUseStatus,
+    requiredExternalAssistanceTypes: REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
+    requiredExternalAssistanceContaminatingTypes: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES,
+    requiredExternalAssistanceContaminationRoutes: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
+    requiredExternalAssistanceCleanRoutes: REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES,
+    requiredExternalAssistanceAccessibilityStatuses: REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES,
+    requiredExternalAssistanceContaminationRules: REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
     taskOutputEligibilityPolicyRows: [...seedTaskOutputRows, ...submittedTaskOutputRows],
     scoreInputPolicyRows: [...seedScoreInputRows, ...submittedScoreInputRows],
     draftStoragePolicyRows: [...seedDraftStorageRows, ...submittedDraftStorageRows],
@@ -18529,6 +18978,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedSamePositionScratchpadCount: submittedScratchpadRows.length,
       submittedSamePositionBatchReviewRequirednessPolicyCount: submittedBatchReviewPolicyRows.length,
       submittedSamePositionBatchReviewCount: submittedBatchReviewRows.length,
+      submittedExternalAssistanceContaminationPolicyCount: externalAssistancePolicyEvidence.policyRows.filter(
+        (row) => row.rowSource === "submitted_workflow_external_assistance_contamination_policy",
+      ).length,
+      externalAssistanceContaminationPolicyReviewRows: externalAssistancePolicyEvidence.reviewRows.length,
       submittedExternalAssistanceDeclarationCount: submittedAssistanceRows.length,
       passingProtectedArtifactTypeCount: protectedArtifactTypeRows.filter((row) => row.status === "protected_artifact_type_complete").length,
       completeArtifactGroupCount: gateGroups.filter(([, rows]) => rows.some((row) => row.reviewReasons.length === 0)).length,
@@ -19517,28 +19970,43 @@ function normalizeSamePositionBatchReview(review, activeBatchReviewPolicy, rowSo
   };
 }
 
-function normalizeExternalAssistanceDeclaration(declaration, rowSource) {
+function normalizeExternalAssistanceDeclaration(declaration, policy, rowSource) {
   const id = declaration?.id ?? declaration?.assistanceDeclarationId ?? declaration?.externalAssistanceDeclarationId;
   if (!id) return null;
   const assistanceType = declaration.assistanceType ?? null;
-  const allowedTypes = ["none", "search", "LLM", "collaborator", "accessibility_tool", "other"];
-  const contaminationRequired = assistanceType !== "none" || declaration.protectedTextEventFlag === true;
+  const allowedTypes = policy?.allowedAssistanceTypes?.length ? policy.allowedAssistanceTypes : REQUIRED_EXTERNAL_ASSISTANCE_TYPES;
+  const contaminatingTypes = policy?.contaminatingAssistanceTypes?.length
+    ? policy.contaminatingAssistanceTypes
+    : REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES;
+  const requiredContaminationRoutes = policy?.requiredContaminationRoutes?.length
+    ? policy.requiredContaminationRoutes
+    : REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES;
+  const allowedCleanRoutes = policy?.allowedCleanRoutes?.length ? policy.allowedCleanRoutes : REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES;
+  const accessibilityStatuses = policy?.accessibilityExceptionStatuses?.length
+    ? policy.accessibilityExceptionStatuses
+    : REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES;
+  const contaminationRequired = contaminatingTypes.includes(assistanceType) || declaration.protectedTextEventFlag === true;
+  const contaminationRouting = declaration.contaminationRouting ?? "";
   const routingPreservesOrExcludes = contaminationRequired
-    ? policyMentions(declaration.contaminationRouting, ["excluded"]) || policyMentions(declaration.contaminationRouting, ["quarantine"])
-    : policyMentions(declaration.contaminationRouting, ["preserved"]) || policyMentions(declaration.contaminationRouting, ["none"]);
+    ? requiredContaminationRoutes.includes(contaminationRouting) ||
+      policyMentions(contaminationRouting, ["excluded"]) ||
+      policyMentions(contaminationRouting, ["quarantine"])
+    : allowedCleanRoutes.includes(contaminationRouting) || policyMentions(contaminationRouting, ["preserved"]) || policyMentions(contaminationRouting, ["none"]);
   const reviewReasons = [
+    requiredPromptFieldReason("externalAssistanceContaminationPolicyId", policy?.id),
     requiredPromptFieldReason("assignmentId", declaration.assignmentId),
     requiredPromptFieldReason("raterId", declaration.raterId),
     allowedTypes.includes(assistanceType) ? null : "assistanceType",
     typeof declaration.protectedTextEventFlag === "boolean" ? null : "protectedTextEventFlag",
     contaminationRequired ? requiredPromptFieldReason("outsideSystemDescription", declaration.outsideSystemDescription) : null,
     routingPreservesOrExcludes ? null : "contaminationRouting",
-    requiredPromptFieldReason("accessibilityExceptionStatus", declaration.accessibilityExceptionStatus),
+    accessibilityStatuses.includes(declaration.accessibilityExceptionStatus) ? null : "accessibilityExceptionStatus",
     requiredPromptFieldReason("timestamp", declaration.timestamp ?? declaration.createdAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    externalAssistanceContaminationPolicyId: policy?.id ?? null,
     assignmentId: declaration.assignmentId ?? null,
     raterId: declaration.raterId ?? null,
     assistanceType,
@@ -24067,6 +24535,7 @@ export function buildOctoberReleaseReport(
     effectiveRatingContextSnapshots,
     [...assignments, ...(options.workflowAssignments ?? [])],
     {
+      modelPromptSiblingContextPolicies: options.modelPromptSiblingContextPolicies ?? [],
       modelEvaluationPredictions: [
         ...fullRubricEvaluationRun.predictions,
         ...overallOnlyEvaluationRun.predictions,
@@ -24358,6 +24827,7 @@ export function buildOctoberReleaseReport(
     samePositionScratchpads: options.samePositionScratchpads ?? [],
     samePositionBatchReviewRequirednessPolicies: options.samePositionBatchReviewRequirednessPolicies ?? [],
     samePositionBatchReviews: options.samePositionBatchReviews ?? [],
+    externalAssistanceContaminationPolicies: options.externalAssistanceContaminationPolicies ?? [],
     externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
   });
   const scoreExplanationAudit = buildScoreExplanationAuditReport(releaseId, ratings, {
@@ -24433,6 +24903,7 @@ export function buildOctoberReleaseReport(
     adjudicationFinalizations: options.adjudicationFinalizations ?? [],
   });
 	  const releaseConfigManifestEvidence = buildReleaseConfigManifestEvidenceReport(releaseId, {
+	    itemTextNormalizationPolicies: options.itemTextNormalizationPolicies ?? [],
 	    governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
 	    governedBundleRecords: options.governedBundleRecords ?? [],
 	    governedBundleVerifications: options.governedBundleVerifications ?? [],
@@ -24557,8 +25028,10 @@ export function buildOctoberReleaseReport(
       ratingChecks: options.ratingChecks ?? [],
     },
     workflowReproducibilityArtifacts: {
+      itemTextNormalizationPolicies: options.itemTextNormalizationPolicies ?? [],
       itemTextVersions: options.itemTextVersions ?? [],
       ratingContextSnapshots: options.ratingContextSnapshots ?? [],
+      modelPromptSiblingContextPolicies: options.modelPromptSiblingContextPolicies ?? [],
       pairwiseComparisonSnapshots: options.pairwiseComparisonSnapshots ?? [],
       raterReliabilityWeightModels: options.raterReliabilityWeightModels ?? [],
     },
@@ -24661,6 +25134,7 @@ export function buildOctoberReleaseReport(
       samePositionScratchpads: options.samePositionScratchpads ?? [],
       samePositionBatchReviewRequirednessPolicies: options.samePositionBatchReviewRequirednessPolicies ?? [],
       samePositionBatchReviews: options.samePositionBatchReviews ?? [],
+      externalAssistanceContaminationPolicies: options.externalAssistanceContaminationPolicies ?? [],
       externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
     },
     workflowAuxiliaryArtifacts: {
@@ -24713,6 +25187,7 @@ export function buildOctoberReleaseReport(
       simplifiedCopyPreviews: options.simplifiedCopyPreviews ?? [],
     },
 	    workflowReleaseConfigArtifacts: {
+      itemTextNormalizationPolicies: options.itemTextNormalizationPolicies ?? [],
 	      governedBundleCanonicalizationProfiles: options.governedBundleCanonicalizationProfiles ?? [],
 	      governedBundleRecords: options.governedBundleRecords ?? [],
 	      governedBundleVerifications: options.governedBundleVerifications ?? [],

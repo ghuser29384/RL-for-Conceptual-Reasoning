@@ -12,8 +12,11 @@ import {
   BENCHMARK_REFRESH_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
+  EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
+  ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
   MODEL_FAMILY_OVERLAP_POLICY_VERSION,
+  MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
   MODEL_IMPROVEMENT_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
   RATER_ISSUE_FLAG_DEFINITIONS,
@@ -59,6 +62,11 @@ import {
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
   REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
   REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS,
+  REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS,
   REQUIRED_DISAGREEMENT_ESCALATION_RULES,
   REQUIRED_DISAGREEMENT_THRESHOLDS,
   REQUIRED_ACTIVE_LEARNING_HAND_SELECTION_QUOTAS,
@@ -82,10 +90,19 @@ import {
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_REVIEW_STATUSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_VISIBILITY_RULES,
+  REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
+  REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
+  REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
   REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS,
   REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES,
   REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
+  REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
   REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
   REQUIRED_MODEL_IMPROVEMENT_METHODS,
   REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES,
@@ -935,6 +952,12 @@ const activeLearningRejectionReasonCodes = REQUIRED_ACTIVE_LEARNING_REJECTION_RE
 const trainingExportUncertaintyPolicyVersion = TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION;
 const trainingExportUncertaintyThresholds = REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS;
 const trainingExportDownweightRules = REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES;
+const itemTextNormalizationPolicyVersion = ITEM_TEXT_NORMALIZATION_POLICY_VERSION;
+const itemTextNormalizationFieldPolicies = REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES;
+const itemTextNormalizationHashRules = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES;
+const itemTextNormalizationHashTargets = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS;
+const itemTextNormalizationProhibitedMutations = REQUIRED_ITEM_TEXT_NORMALIZATION_PROHIBITED_MUTATIONS;
+const itemTextNormalizationReviewActions = REQUIRED_ITEM_TEXT_NORMALIZATION_REVIEW_ACTIONS;
 const modelImprovementPolicyVersion = MODEL_IMPROVEMENT_POLICY_VERSION;
 const modelImprovementMethods = REQUIRED_MODEL_IMPROVEMENT_METHODS;
 const modelImprovementObjectiveFamilies = REQUIRED_MODEL_IMPROVEMENT_OBJECTIVE_FAMILIES;
@@ -952,6 +975,17 @@ const modelFamilyOverlapMatchBases = REQUIRED_MODEL_FAMILY_OVERLAP_MATCH_BASES;
 const modelFamilyOverlapForbiddenBases = REQUIRED_MODEL_FAMILY_OVERLAP_FORBIDDEN_BASES;
 const modelFamilyOverlapCleanClaimActions = REQUIRED_MODEL_FAMILY_OVERLAP_CLEAN_CLAIM_ACTIONS;
 const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES;
+const modelPromptSiblingContextPolicyVersion = MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION;
+const modelPromptSiblingContextModes = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES;
+const modelPromptSiblingContextEvidenceFields = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS;
+const modelPromptSiblingContextRules = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES;
+const externalAssistanceContaminationPolicyVersion = EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION;
+const externalAssistanceTypes = REQUIRED_EXTERNAL_ASSISTANCE_TYPES;
+const externalAssistanceContaminatingTypes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATING_TYPES;
+const externalAssistanceContaminationRoutes = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES;
+const externalAssistanceCleanRoutes = REQUIRED_EXTERNAL_ASSISTANCE_CLEAN_ROUTES;
+const externalAssistanceAccessibilityStatuses = REQUIRED_EXTERNAL_ASSISTANCE_ACCESSIBILITY_STATUSES;
+const externalAssistanceContaminationRules = REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES;
 const rationaleEvidenceSpanRequirednessPolicyVersion = RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION;
 const rationaleEvidenceSpanMandatoryTriggerClasses = REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES;
 const rationaleEvidenceSpanRequirednessThresholds = REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS;
@@ -1784,6 +1818,53 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "ratingIdPrior", "ratingIdNew", "reasonCode", "revisionComment", "discussionThreadId", "timestamp"],
     requiredDistinctFieldSets: [["ratingIdPrior", "ratingIdNew"]],
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/item-text-normalization-policies$/,
+    "item_text_normalization_policy_submitted",
+    "itemTextNormalizationPolicy",
+    adminRoles,
+    {
+      requiredFields: [
+        "id",
+        "policyVersion",
+        "fieldPolicies",
+        "hashRules",
+        "hashTargets",
+        "prohibitedMutations",
+        "reviewActions",
+        "raterVisibleRule",
+        "modelVisibleRule",
+        "sourceBoundary",
+        "frozenAt",
+      ],
+      requiredObjectFields: ["fieldPolicies", "hashRules"],
+      requiredObjectKeys: {
+        fieldPolicies: Object.keys(itemTextNormalizationFieldPolicies),
+        hashRules: Object.keys(itemTextNormalizationHashRules),
+      },
+      requiredStructuredFields: {
+        fieldPolicies: itemTextNormalizationFieldPolicies,
+        hashRules: itemTextNormalizationHashRules,
+      },
+      requiredNonEmptyArrayFields: ["hashTargets", "prohibitedMutations", "reviewActions"],
+      requiredArrayIncludes: {
+        hashTargets: itemTextNormalizationHashTargets,
+        prohibitedMutations: itemTextNormalizationProhibitedMutations,
+        reviewActions: itemTextNormalizationReviewActions,
+      },
+      allowedArrayValues: {
+        hashTargets: itemTextNormalizationHashTargets,
+        prohibitedMutations: itemTextNormalizationProhibitedMutations,
+        reviewActions: itemTextNormalizationReviewActions,
+      },
+      requiredStringIncludes: {
+        raterVisibleRule: ["source", "admin", "hidden"],
+        modelVisibleRule: ["prompt", "item text", "hidden"],
+        sourceBoundary: ["project", "lmca"],
+      },
+      requiredExactFields: { policyVersion: itemTextNormalizationPolicyVersion },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/item-text-versions$/, "item_text_version_submitted", "itemTextVersion", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -1809,6 +1890,47 @@ const workflowWriteEndpoints = [
       modelVisibleRenderedTextHash: "sha256:",
     },
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/model-prompt-sibling-context-policies$/,
+    "model_prompt_sibling_context_policy_submitted",
+    "modelPromptSiblingContextPolicy",
+    adminRoles,
+    {
+      requiredFields: [
+        "id",
+        "policyVersion",
+        "allowedComparisonModes",
+        "requiredEvidenceFields",
+        "policyRules",
+        "sequentialHumanRatingsRule",
+        "laterSiblingHandlingRule",
+        "contextSensitiveClaimRule",
+        "targetOnlyRestrictionRule",
+        "sourceBoundary",
+        "frozenAt",
+      ],
+      requiredNonEmptyArrayFields: ["allowedComparisonModes", "requiredEvidenceFields"],
+      requiredObjectFields: ["policyRules"],
+      requiredObjectKeys: { policyRules: Object.keys(modelPromptSiblingContextRules) },
+      requiredStructuredFields: { policyRules: modelPromptSiblingContextRules },
+      requiredArrayIncludes: {
+        allowedComparisonModes: modelPromptSiblingContextModes,
+        requiredEvidenceFields: modelPromptSiblingContextEvidenceFields,
+      },
+      allowedArrayValues: {
+        allowedComparisonModes: modelPromptSiblingContextModes,
+        requiredEvidenceFields: modelPromptSiblingContextEvidenceFields,
+      },
+      requiredStringIncludes: {
+        sequentialHumanRatingsRule: ["same-position", "RatingContextSnapshot"],
+        laterSiblingHandlingRule: ["later-added", "absent"],
+        contextSensitiveClaimRule: ["context-sensitive", "model-prompt"],
+        targetOnlyRestrictionRule: ["target-only", "sibling-context-sensitive"],
+        sourceBoundary: ["project", "lmca"],
+      },
+      requiredExactFields: { policyVersion: modelPromptSiblingContextPolicyVersion },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/rating-context-snapshots$/, "rating_context_snapshot_submitted", "ratingContextSnapshot", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -4601,6 +4723,62 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["claimSpanIds", "claimSignificanceWeights", "correctnessCredencesStatuses", "unclearClaimExclusionFlags"],
     requiredWhen: [{ field: "submittedScoreOverrideFlag", equals: true, requiredFields: ["overrideExplanation"] }],
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/external-assistance-contamination-policies$/,
+    "external_assistance_contamination_policy_submitted",
+    "externalAssistanceContaminationPolicy",
+    adminRoles,
+    {
+      requiredFields: [
+        "id",
+        "policyVersion",
+        "allowedAssistanceTypes",
+        "contaminatingAssistanceTypes",
+        "requiredContaminationRoutes",
+        "allowedCleanRoutes",
+        "accessibilityExceptionStatuses",
+        "policyRules",
+        "outsideSystemDisclosureRule",
+        "protectedTextEventRule",
+        "denominatorExclusionRule",
+        "accessibilityExceptionRule",
+        "sourceBoundary",
+        "frozenAt",
+      ],
+      requiredNonEmptyArrayFields: [
+        "allowedAssistanceTypes",
+        "contaminatingAssistanceTypes",
+        "requiredContaminationRoutes",
+        "allowedCleanRoutes",
+        "accessibilityExceptionStatuses",
+      ],
+      requiredObjectFields: ["policyRules"],
+      requiredObjectKeys: { policyRules: Object.keys(externalAssistanceContaminationRules) },
+      requiredStructuredFields: { policyRules: externalAssistanceContaminationRules },
+      requiredArrayIncludes: {
+        allowedAssistanceTypes: externalAssistanceTypes,
+        contaminatingAssistanceTypes: externalAssistanceContaminatingTypes,
+        requiredContaminationRoutes: externalAssistanceContaminationRoutes,
+        allowedCleanRoutes: externalAssistanceCleanRoutes,
+        accessibilityExceptionStatuses: externalAssistanceAccessibilityStatuses,
+      },
+      allowedArrayValues: {
+        allowedAssistanceTypes: externalAssistanceTypes,
+        contaminatingAssistanceTypes: externalAssistanceTypes,
+        requiredContaminationRoutes: externalAssistanceContaminationRoutes,
+        allowedCleanRoutes: externalAssistanceCleanRoutes,
+        accessibilityExceptionStatuses: externalAssistanceAccessibilityStatuses,
+      },
+      requiredStringIncludes: {
+        outsideSystemDisclosureRule: ["external-assistance", "outside system"],
+        protectedTextEventRule: ["protected", "contamination-sensitive"],
+        denominatorExclusionRule: ["excluded", "denominators"],
+        accessibilityExceptionRule: ["accessibility", "non-content"],
+        sourceBoundary: ["project", "lmca"],
+      },
+      requiredExactFields: { policyVersion: externalAssistanceContaminationPolicyVersion },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/external-assistance-declarations$/, "external_assistance_declaration_submitted", "externalAssistanceDeclaration", ratingWorkflowRoles, {
     requiredFields: ["id", "assignmentId", "raterId", "assistanceType", "protectedTextEventFlag", "contaminationRouting", "accessibilityExceptionStatus", "timestamp"],
     allowedValues: { assistanceType: ["none", "search", "LLM", "collaborator", "accessibility_tool", "other"] },
@@ -5531,7 +5709,9 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/certification-records\/(?<id>[^/]+)$/, "certificationRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/exposure-logs\/(?<id>[^/]+)$/, "exposureLog", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/revisions\/(?<id>[^/]+)$/, "revisionRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/item-text-normalization-policies\/(?<id>[^/]+)$/, "itemTextNormalizationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/item-text-versions\/(?<id>[^/]+)$/, "itemTextVersion", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-prompt-sibling-context-policies\/(?<id>[^/]+)$/, "modelPromptSiblingContextPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rating-context-snapshots\/(?<id>[^/]+)$/, "ratingContextSnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/pairwise-comparison-snapshots\/(?<id>[^/]+)$/, "pairwiseComparisonSnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-reliability-weight-models\/(?<id>[^/]+)$/, "raterReliabilityWeightModel", adminAuditRoles),
@@ -5629,6 +5809,7 @@ const workflowReadEndpoints = [
   ),
   workflowReadSpec(/^\/api\/v1\/same-position-batch-reviews\/(?<id>[^/]+)$/, "samePositionBatchReview", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/correctness-claim-weight-worksheets\/(?<id>[^/]+)$/, "correctnessClaimWeightWorksheet", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/external-assistance-contamination-policies\/(?<id>[^/]+)$/, "externalAssistanceContaminationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/external-assistance-declarations\/(?<id>[^/]+)$/, "externalAssistanceDeclaration", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/protected-artifact-retention-records\/(?<id>[^/]+)$/, "protectedArtifactRetentionRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/blinding-preview-audits\/(?<id>[^/]+)$/, "blindingPreviewAudit", adminAuditRoles),
@@ -8296,7 +8477,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const corpusManifests = latestWorkflowResources(workflowEvents, "corpusManifest");
   const trainingExports = latestWorkflowResources(workflowEvents, "trainingExport");
   const exportManifests = latestWorkflowResources(workflowEvents, "exportManifest");
+  const itemTextNormalizationPolicies = latestWorkflowResources(workflowEvents, "itemTextNormalizationPolicy");
   const itemTextVersions = latestWorkflowResources(workflowEvents, "itemTextVersion");
+  const modelPromptSiblingContextPolicies = latestWorkflowResources(workflowEvents, "modelPromptSiblingContextPolicy");
   const ratingContextSnapshotArtifacts = latestWorkflowResources(workflowEvents, "ratingContextSnapshot");
   const pairwiseComparisonSnapshots = latestWorkflowResources(workflowEvents, "pairwiseComparisonSnapshot");
   const raterReliabilityWeightModels = latestWorkflowResources(workflowEvents, "raterReliabilityWeightModel");
@@ -8384,6 +8567,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const samePositionScratchpads = latestWorkflowResources(workflowEvents, "samePositionScratchpad");
   const samePositionBatchReviewRequirednessPolicies = latestWorkflowResources(workflowEvents, "samePositionBatchReviewRequirednessPolicy");
   const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
+  const externalAssistanceContaminationPolicies = latestWorkflowResources(workflowEvents, "externalAssistanceContaminationPolicy");
   const externalAssistanceDeclarations = latestWorkflowResources(workflowEvents, "externalAssistanceDeclaration");
   const blindingPreviewAudits = latestWorkflowResources(workflowEvents, "blindingPreviewAudit");
   const partialTaskOutputs = latestWorkflowResources(workflowEvents, "partialTaskOutput");
@@ -8482,7 +8666,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     corpusManifests,
     trainingExports,
     exportManifests,
+    itemTextNormalizationPolicies,
     itemTextVersions,
+    modelPromptSiblingContextPolicies,
     ratingContextSnapshots: ratingContextSnapshotArtifacts,
     pairwiseComparisonSnapshots,
     raterReliabilityWeightModels,
@@ -8571,6 +8757,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     samePositionScratchpads,
     samePositionBatchReviewRequirednessPolicies,
     samePositionBatchReviews,
+    externalAssistanceContaminationPolicies,
     externalAssistanceDeclarations,
     blindingPreviewAudits,
     partialTaskOutputs,
@@ -8665,7 +8852,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     corpusManifests,
     trainingExports,
     exportManifests,
+    itemTextNormalizationPolicies,
     itemTextVersions,
+    modelPromptSiblingContextPolicies,
     ratingContextSnapshots: ratingContextSnapshotArtifacts,
     pairwiseComparisonSnapshots,
     raterReliabilityWeightModels,
@@ -8753,6 +8942,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     samePositionScratchpads,
     samePositionBatchReviewRequirednessPolicies,
     samePositionBatchReviews,
+    externalAssistanceContaminationPolicies,
     externalAssistanceDeclarations,
     blindingPreviewAudits,
     partialTaskOutputs,
