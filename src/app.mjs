@@ -1,4 +1,5 @@
 import {
+  ACCESSIBILITY_TOOLING_POLICY_VERSION,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATER_DATA_GOVERNANCE_CATEGORIES,
   RATER_DATA_USE_SCOPES,
@@ -18,6 +19,17 @@ import {
   REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
   REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
   REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+  SOURCE_FAMILY_CLUSTERING_POLICY_VERSION,
+  REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS,
+  REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS,
+  REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS,
+  REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES,
+  REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
+  REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
+  REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
+  REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
+  MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION,
+  REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES,
   PARTIAL_TASK_PROMOTION_POLICY_VERSION,
   REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
   REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
@@ -65,6 +77,18 @@ import {
 } from "./domain/contributions.mjs";
 
 const releaseId = "october-2026-demo";
+const accessibilityToolingPolicyVersion = ACCESSIBILITY_TOOLING_POLICY_VERSION;
+const accessibilityWcagConformanceTarget = REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET;
+const accessibilityTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN;
+const accessibilityAssistiveTechnologyMatrix = REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX;
+const accessibilityEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES;
+const modelProviderEndpointContractPolicyVersion = MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION;
+const modelProviderEndpointContractClauses = REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES;
+const sourceFamilyClusteringPolicyVersion = SOURCE_FAMILY_CLUSTERING_POLICY_VERSION;
+const sourceFamilyClusteringThresholds = REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS;
+const nearDuplicateClusteringThresholds = REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS;
+const sourceFamilyClusterFields = REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS;
+const sourceFamilyClusteringReviewStatuses = REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES;
 const disagreementThresholds = {
   lowClarityThreshold: 0.5,
   lowClarityAdjudicationCount: 2,
@@ -972,6 +996,31 @@ const workflowTemplates = [
     }),
   },
   {
+    id: "source-family-clustering-policy",
+    label: "Source Family Clustering Policy",
+    endpoint: () => "/api/v1/source-family-clustering-policies",
+    resourceKey: "sourceFamilyClusteringPolicy",
+    requiredRole: "admin",
+    summary: "Freeze source-family, adaptation-family, near-duplicate, and public-example clustering thresholds for conflict gates.",
+    payload: () => ({
+      sourceFamilyClusteringPolicy: {
+        id: `source-family-clustering-policy-${releaseId}`,
+        policyVersion: sourceFamilyClusteringPolicyVersion,
+        sourceFamilyClusteringThresholds,
+        nearDuplicateClusteringThresholds,
+        requiredConflictClusterFields: sourceFamilyClusterFields,
+        clusteringReviewStatuses: sourceFamilyClusteringReviewStatuses,
+        protectedAssignmentRule:
+          "Protected and release-critical independent blind assignments must check source-family, adaptation-family, near-duplicate, and public-example clusters before counting labels.",
+        releaseClaimDisclosureRule:
+          "Release reports disclose cluster-threshold policy id and exclude or label rows where required conflict clusters were missing or waived.",
+        sourceBoundary:
+          "Project default source-family and near-duplicate clustering thresholds are frozen here; LMCA motivates source blinding but does not state these exact clustering thresholds.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
     id: "visibility-policy",
     label: "Visibility Policy",
     endpoint: () => "/api/v1/visibility-policies",
@@ -1012,6 +1061,63 @@ const workflowTemplates = [
         backendEnforced: true,
         exposureLogRequired: true,
         frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "accessibility-conformance-report",
+    label: "Accessibility Conformance Report",
+    endpoint: () => "/api/v1/accessibility-conformance-reports",
+    resourceKey: "accessibilityConformanceReport",
+    requiredRole: "admin",
+    summary: "Submit the exact accessibility tooling, assistive-technology matrix, and retained evidence artifacts for release gating.",
+    payload: () => ({
+      accessibilityConformanceReport: {
+        id: `accessibility-conformance-${releaseId}`,
+        toolingPolicyVersion: accessibilityToolingPolicyVersion,
+        wcagConformanceTarget: accessibilityWcagConformanceTarget,
+        workflowProfileIds: [`rating-workflow-profile-${releaseId}`],
+        screenIds: ["rating", "practice", "discussion", "adjudication", "consent", "withdrawal"],
+        raterInstructionRenderVersionIds: [`rater-instruction-render-${releaseId}`],
+        uiExperimentPolicyId: `ui-experiment-policy-${releaseId}`,
+        uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
+        testedLocaleSet: ["en-US"],
+        checksPassed: [
+          "keyboard",
+          "screen_reader",
+          "focus_order",
+          "non_color_status",
+          "zoom",
+          "mobile_touch",
+          "reduced_motion",
+          "timeout_recovery",
+          "locale_sensitive_dates",
+          "readability",
+        ],
+        testToolchain: accessibilityTestToolchain,
+        assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix,
+        evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+        accessibilityEvidenceArtifactIds: [
+          `accessibility-automated-audit-${releaseId}`,
+          `accessibility-keyboard-walkthrough-${releaseId}`,
+          `accessibility-screen-reader-transcript-${releaseId}`,
+          `accessibility-focus-order-trace-${releaseId}`,
+          `accessibility-contrast-zoom-review-${releaseId}`,
+          `accessibility-mobile-touch-review-${releaseId}`,
+          `accessibility-readability-review-${releaseId}`,
+        ],
+        toolingReviewStatus: "passed",
+        readabilityReviewStatus: "passed",
+        simplificationReadabilityInteractionNotes: "Plain-language summaries preserve Appendix-F anchors and required controls.",
+        sourceBoundary:
+          "Project default accessibility test tooling is frozen here; LMCA motivates accessible volunteer workflows but does not state exact accessibility tools.",
+        failures: [],
+        mitigations: [],
+        nonStaffPromotionBlocker: false,
+        manualAssistiveTechReviewRequired: true,
+        automatedAuditAloneInsufficient: true,
+        reviewer: state.session?.user?.id ?? "accessibility-reviewer",
+        timestamp: new Date().toISOString(),
       },
     }),
   },
@@ -1964,6 +2070,37 @@ const workflowTemplates = [
         accessibilityExceptionRule: externalAssistanceContaminationRules.accessibilityException,
         sourceBoundary: externalAssistanceContaminationRules.sourceBoundary,
         frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "model-provider-data-handling-policy",
+    label: "Model Provider Data Handling Policy",
+    endpoint: () => "/api/v1/model-provider-data-handling-policies",
+    resourceKey: "modelProviderDataHandlingPolicy",
+    requiredRole: "admin",
+    summary: "Freeze exact endpoint-contract clauses before protected content is sent to a model provider.",
+    payload: () => ({
+      modelProviderDataHandlingPolicy: {
+        id: `model-provider-data-handling-${releaseId}-model_evaluation`,
+        policyVersion: modelProviderEndpointContractPolicyVersion,
+        providerEndpointClass: "model_evaluation-approved-endpoint",
+        coveredRunClass: "model_evaluation",
+        endpointContractClauses: modelProviderEndpointContractClauses,
+        endpointContractLanguageFrozen: true,
+        contractAppliesToProtectedContent: true,
+        approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
+        noTrainingOnInputsOutputs: true,
+        noPromptOrOutputReuse: true,
+        unnecessaryHumanReviewProhibited: true,
+        logRetentionWindowDays: 30,
+        subprocessorsSummary: "approved bounded processing route",
+        deletionOrRetentionProofRequired: true,
+        protectedContentEligible: true,
+        approvalStatus: "approved",
+        reviewer: state.session?.user?.id ?? "provider-reviewer",
+        approvedAt: new Date().toISOString(),
+        expiresAt: "2026-12-31T00:00:00.000Z",
       },
     }),
   },

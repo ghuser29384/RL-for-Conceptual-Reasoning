@@ -9,6 +9,7 @@ import {
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   ARTIFACT_PROBE_INPUT_VIEWS,
   ACTIVE_LEARNING_SELECTION_POLICY_VERSION,
+  ACCESSIBILITY_TOOLING_POLICY_VERSION,
   BENCHMARK_REFRESH_POLICY_VERSION,
   CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
@@ -19,6 +20,7 @@ import {
   ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
   MODEL_FAMILY_OVERLAP_POLICY_VERSION,
   MODEL_PROMPT_SIBLING_CONTEXT_POLICY_VERSION,
+  MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION,
   MODEL_IMPROVEMENT_POLICY_VERSION,
   MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
@@ -63,6 +65,11 @@ import {
   REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
   REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
   REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+  SOURCE_FAMILY_CLUSTERING_POLICY_VERSION,
+  REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS,
+  REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS,
+  REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS,
+  REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES,
   REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM,
   REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
   REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
@@ -80,6 +87,10 @@ import {
   REQUIRED_ACTIVE_LEARNING_REJECTION_REASON_CODES,
   REQUIRED_ACTIVE_LEARNING_SELECTION_REASON_CODES,
   REQUIRED_ACTIVE_LEARNING_SELECTION_THRESHOLDS,
+  REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
+  REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
+  REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
+  REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
@@ -119,6 +130,7 @@ import {
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
+  REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES,
   REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
   REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
   REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
@@ -1189,6 +1201,11 @@ const raterItemConflictTypes = [
   "close_collaboration_or_conflict",
   "declared_custom",
 ];
+const sourceFamilyClusteringPolicyVersion = SOURCE_FAMILY_CLUSTERING_POLICY_VERSION;
+const sourceFamilyClusteringThresholds = REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS;
+const nearDuplicateClusteringThresholds = REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS;
+const sourceFamilyClusterFields = REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS;
+const sourceFamilyClusteringReviewStatuses = REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES;
 const releaseErratumTypes = [
   "scoring_bug",
   "source_leakage_defect",
@@ -1334,6 +1351,11 @@ const accessibilityChecks = [
   "locale_sensitive_dates",
   "readability",
 ];
+const accessibilityToolingPolicyVersion = ACCESSIBILITY_TOOLING_POLICY_VERSION;
+const accessibilityWcagConformanceTarget = REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET;
+const accessibilityTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN;
+const accessibilityAssistiveTechnologyMatrix = REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX;
+const accessibilityEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES;
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
 const qualificationSources = ["credential", "certification_pack", "prior_rating_reliability", "manual_expert_review", "approved_exception"];
 const qualificationWorkflowEligibility = ["release_critical", "validation", "hidden_benchmark"];
@@ -1386,6 +1408,8 @@ const sourceRecognitionBlindEffectFragments = ["excluded", "blocked", "nonblind"
 const blindDenominatorCountingForbiddenFragments = ["count_as_independent", "count as independent", "counts_as_independent", "counts as independent", "fresh blind", "fresh_blind"];
 const sourceRecognitionForbiddenBlindEffectFragments = blindDenominatorCountingForbiddenFragments;
 const modelProviderRunClasses = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+const modelProviderEndpointContractPolicyVersion = MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION;
+const modelProviderEndpointContractClauses = REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES;
 const protectedArtifactTypes = ["prompt", "response", "log", "cache", "backup", "staging_replay"];
 const policyActionKinds = [
   "protected_render",
@@ -4139,15 +4163,48 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/accessibility-conformance-reports$/, "accessibility_conformance_report_submitted", "accessibilityConformanceReport", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "uiExperimentPolicyId", "uxSimplificationPolicyId", "readabilityReviewStatus", "reviewer", "timestamp"],
-    requiredNonEmptyArrayFields: ["workflowProfileIds", "screenIds", "raterInstructionRenderVersionIds", "testedLocaleSet", "checksPassed"],
+    requiredFields: [
+      "id",
+      "toolingPolicyVersion",
+      "wcagConformanceTarget",
+      "uiExperimentPolicyId",
+      "uxSimplificationPolicyId",
+      "toolingReviewStatus",
+      "readabilityReviewStatus",
+      "sourceBoundary",
+      "reviewer",
+      "timestamp",
+    ],
+    requiredObjectFields: ["assistiveTechnologyMatrix"],
+    requiredObjectKeys: { assistiveTechnologyMatrix: Object.keys(accessibilityAssistiveTechnologyMatrix) },
+    requiredStructuredFields: { assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix },
+    requiredNonEmptyArrayFields: [
+      "workflowProfileIds",
+      "screenIds",
+      "raterInstructionRenderVersionIds",
+      "testedLocaleSet",
+      "checksPassed",
+      "testToolchain",
+      "evidenceArtifactTypes",
+      "accessibilityEvidenceArtifactIds",
+    ],
     requiredArrayIncludes: {
       screenIds: accessibilitySurfaces,
       checksPassed: accessibilityChecks,
+      testToolchain: accessibilityTestToolchain,
+      evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+    },
+    requiredStringIncludes: {
+      sourceBoundary: ["project default", "LMCA", "accessibility tool"],
     },
     requiredExactFields: {
+      toolingPolicyVersion: accessibilityToolingPolicyVersion,
+      wcagConformanceTarget: accessibilityWcagConformanceTarget,
+      toolingReviewStatus: "passed",
       readabilityReviewStatus: "passed",
       nonStaffPromotionBlocker: false,
+      manualAssistiveTechReviewRequired: true,
+      automatedAuditAloneInsufficient: true,
     },
   }),
   workflowWriteSpec(/^\/api\/v1\/volunteer-incentive-policies$/, "volunteer_incentive_policy_submitted", "volunteerIncentivePolicy", adminRoles, {
@@ -4269,13 +4326,19 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/model-provider-data-handling-policies$/, "model_provider_data_handling_policy_submitted", "modelProviderDataHandlingPolicy", adminRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "providerEndpointClass", "coveredRunClass", "subprocessorsSummary", "approvalStatus", "reviewer", "expiresAt"],
+    requiredFields: ["id", "policyVersion", "providerEndpointClass", "coveredRunClass", "subprocessorsSummary", "approvalStatus", "reviewer", "expiresAt"],
+    requiredObjectFields: ["endpointContractClauses"],
+    requiredObjectKeys: { endpointContractClauses: Object.keys(modelProviderEndpointContractClauses) },
+    requiredStructuredFields: { endpointContractClauses: modelProviderEndpointContractClauses },
     requiredNonEmptyArrayFields: ["approvedSplitContentClasses"],
     requiredFiniteNumberFields: ["logRetentionWindowDays"],
     requiredNumberRanges: [{ field: "logRetentionWindowDays", min: 0, max: 30 }],
     requiredArrayIncludes: { approvedSplitContentClasses: ["protected_validation", "hidden_benchmark"] },
     allowedValues: { coveredRunClass: modelProviderRunClasses },
     requiredExactFields: {
+      policyVersion: modelProviderEndpointContractPolicyVersion,
+      endpointContractLanguageFrozen: true,
+      contractAppliesToProtectedContent: true,
       noTrainingOnInputsOutputs: true,
       noPromptOrOutputReuse: true,
       unnecessaryHumanReviewProhibited: true,
@@ -5256,9 +5319,40 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["parserExtractorVersionLinks"],
     requiredObjectFields: ["libraryVersions"],
   }),
+  workflowWriteSpec(/^\/api\/v1\/source-family-clustering-policies$/, "source_family_clustering_policy_submitted", "sourceFamilyClusteringPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "protectedAssignmentRule",
+      "releaseClaimDisclosureRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredObjectFields: ["sourceFamilyClusteringThresholds", "nearDuplicateClusteringThresholds"],
+    requiredObjectKeys: {
+      sourceFamilyClusteringThresholds: Object.keys(sourceFamilyClusteringThresholds),
+      nearDuplicateClusteringThresholds: Object.keys(nearDuplicateClusteringThresholds),
+    },
+    requiredStructuredFields: {
+      sourceFamilyClusteringThresholds,
+      nearDuplicateClusteringThresholds,
+    },
+    requiredNonEmptyArrayFields: ["requiredConflictClusterFields", "clusteringReviewStatuses"],
+    requiredArrayIncludes: {
+      requiredConflictClusterFields: sourceFamilyClusterFields,
+      clusteringReviewStatuses: sourceFamilyClusteringReviewStatuses,
+    },
+    requiredStringIncludes: {
+      protectedAssignmentRule: ["source-family", "near-duplicate", "protected"],
+      releaseClaimDisclosureRule: ["release", "exclude"],
+      sourceBoundary: ["Project default", "LMCA", "does not state"],
+    },
+    requiredExactFields: { policyVersion: sourceFamilyClusteringPolicyVersion },
+  }),
   workflowWriteSpec(/^\/api\/v1\/rater-item-conflicts$/, "rater_item_conflict_submitted", "raterItemConflict", expertWorkflowRoles, {
     allowHiddenMetadata: true,
-    requiredFields: ["id", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "reviewerResolution", "timestamp"],
+    requiredFields: ["id", "sourceFamilyClusteringPolicyId", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "reviewerResolution", "timestamp"],
     requiredAnyFields: [["positionId", "positionClusterId", "critiqueId", "sourceFamilyId", "adaptationClusterId", "nearDuplicateClusterId"]],
     requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
     allowedValues: { conflictType: raterItemConflictTypes },
@@ -5267,7 +5361,7 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/conflict-screen$/, "assignment_conflict_screen_submitted", "raterItemConflict", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
-    requiredFields: ["id", "assignmentId", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "reviewerResolution", "timestamp"],
+    requiredFields: ["id", "assignmentId", "sourceFamilyClusteringPolicyId", "raterId", "conflictType", "disclosureSource", "independentBlindEligibilityEffect", "reviewerResolution", "timestamp"],
     requiredAnyFields: [["positionId", "positionClusterId", "critiqueId", "sourceFamilyId", "adaptationClusterId", "nearDuplicateClusterId"]],
     requiredNonEmptyArrayFields: ["allowedNonBlindRoles"],
     allowedValues: { conflictType: raterItemConflictTypes },
@@ -6034,6 +6128,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/language-artifact-assessments\/(?<id>[^/]+)$/, "languageArtifactAssessment", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/source-recognition-events\/(?<id>[^/]+)$/, "sourceRecognitionEvent", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/model-provider-data-handling-policies\/(?<id>[^/]+)$/, "modelProviderDataHandlingPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/source-family-clustering-policies\/(?<id>[^/]+)$/, "sourceFamilyClusteringPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/task-output-eligibility-policies\/(?<id>[^/]+)$/, "taskOutputEligibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/score-input-policies\/(?<id>[^/]+)$/, "scoreInputPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/draft-storage-policies\/(?<id>[^/]+)$/, "draftStoragePolicy", adminAuditRoles),
@@ -8839,6 +8934,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const modelRunReproducibilityPolicies = latestWorkflowResources(workflowEvents, "modelRunReproducibilityPolicy");
   const modelInferenceConfigs = latestWorkflowResources(workflowEvents, "modelInferenceConfig");
   const modelRunEnvironments = latestWorkflowResources(workflowEvents, "modelRunEnvironment");
+  const sourceFamilyClusteringPolicies = latestWorkflowResources(workflowEvents, "sourceFamilyClusteringPolicy");
   const raterItemConflicts = latestWorkflowResources(workflowEvents, "raterItemConflict");
   const raterTrainingExposurePolicies = latestWorkflowResources(workflowEvents, "raterTrainingExposurePolicy");
   const raterTrainingExposureSnapshots = latestWorkflowResources(workflowEvents, "raterTrainingExposureSnapshot");
@@ -9034,6 +9130,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelRunReproducibilityPolicies,
     modelInferenceConfigs,
     modelRunEnvironments,
+    sourceFamilyClusteringPolicies,
     raterItemConflicts,
     raterTrainingExposurePolicies,
     raterTrainingExposureSnapshots,
@@ -9224,6 +9321,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelRunReproducibilityPolicies,
     modelInferenceConfigs,
     modelRunEnvironments,
+    sourceFamilyClusteringPolicies,
     raterItemConflicts,
     raterTrainingExposurePolicies,
     raterTrainingExposureSnapshots,

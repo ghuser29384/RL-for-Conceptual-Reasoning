@@ -65,6 +65,8 @@ import {
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES,
   REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES,
+  MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION,
+  REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES,
   MODEL_IMPROVEMENT_POLICY_VERSION,
   REQUIRED_MODEL_IMPROVEMENT_APPROVAL_STATUSES,
   REQUIRED_MODEL_IMPROVEMENT_METHODS,
@@ -80,7 +82,17 @@ import {
   REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
   REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
   REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+  SOURCE_FAMILY_CLUSTERING_POLICY_VERSION,
+  REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS,
+  REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS,
+  REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS,
+  REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES,
   PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+  ACCESSIBILITY_TOOLING_POLICY_VERSION,
+  REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
+  REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
+  REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
+  REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
   REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
   REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
   REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
@@ -352,6 +364,8 @@ const modelFamilyOverlapPolicyRules = REQUIRED_MODEL_FAMILY_OVERLAP_POLICY_RULES
 const modelPromptSiblingContextModes = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_MODES;
 const modelPromptSiblingContextEvidenceFields = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_EVIDENCE_FIELDS;
 const modelPromptSiblingContextRules = REQUIRED_MODEL_PROMPT_SIBLING_CONTEXT_RULES;
+const modelProviderEndpointContractPolicyVersion = MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION;
+const modelProviderEndpointContractClauses = REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES;
 const itemTextNormalizationFieldPolicies = REQUIRED_ITEM_TEXT_NORMALIZATION_FIELD_POLICIES;
 const itemTextNormalizationHashRules = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_RULES;
 const itemTextNormalizationHashTargets = REQUIRED_ITEM_TEXT_NORMALIZATION_HASH_TARGETS;
@@ -706,6 +720,11 @@ const visibilityRoleFieldActionMatrix = REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MA
 const sourceLeakageLintPatterns = REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS;
 const sourceLeakageRedactionActions = REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS;
 const sourceIdentifiabilityReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES;
+const sourceFamilyClusteringPolicyVersion = SOURCE_FAMILY_CLUSTERING_POLICY_VERSION;
+const sourceFamilyClusteringThresholds = REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS;
+const nearDuplicateClusteringThresholds = REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS;
+const sourceFamilyClusterFields = REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS;
+const sourceFamilyClusteringReviewStatuses = REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES;
 const partialTaskPromotionEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
 const partialTaskPromotionCriteria = REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA;
 const partialTaskPromotionReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
@@ -768,6 +787,24 @@ function sourceLeakageRedactionPolicy(id = "source-leakage-redaction-policy-work
     rawRetentionBoundary: "Raw source metadata, hidden comments, admin tags, and pasted provenance metadata remain admin-only and outside rater-visible text.",
     sourceBoundary:
       "Project default source-leakage lint and redaction policy is frozen here; LMCA motivates source/tag blinding but does not state these exact lint patterns or redaction actions.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function sourceFamilyClusteringPolicy(id = "source-family-clustering-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: sourceFamilyClusteringPolicyVersion,
+    sourceFamilyClusteringThresholds,
+    nearDuplicateClusteringThresholds,
+    requiredConflictClusterFields: sourceFamilyClusterFields,
+    clusteringReviewStatuses: sourceFamilyClusteringReviewStatuses,
+    protectedAssignmentRule:
+      "Protected and release-critical independent blind assignments must check source-family, adaptation-family, near-duplicate, and public-example clusters before counting labels.",
+    releaseClaimDisclosureRule:
+      "Release reports disclose cluster-threshold policy id and exclude or label rows where required conflict clusters were missing or waived.",
+    sourceBoundary:
+      "Project default source-family and near-duplicate clustering thresholds are frozen here; LMCA motivates source blinding but does not state these exact clustering thresholds.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1122,6 +1159,11 @@ const prohibitedAssistInputs = [
 
 const accessibilitySurfaces = ["rating", "practice", "discussion", "adjudication", "consent", "withdrawal"];
 const accessibilityChecks = ["keyboard", "screen_reader", "focus_order", "non_color_status", "zoom", "mobile_touch", "reduced_motion", "timeout_recovery", "locale_sensitive_dates", "readability"];
+const accessibilityToolingPolicyVersion = ACCESSIBILITY_TOOLING_POLICY_VERSION;
+const accessibilityWcagConformanceTarget = REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET;
+const accessibilityTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN;
+const accessibilityAssistiveTechnologyMatrix = REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX;
+const accessibilityEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES;
 const partialTaskOutputTypes = [
   "pairwise_preference_only",
   "clarity_triage",
@@ -1664,6 +1706,8 @@ function completePolicyBundleFixtures() {
     },
     accessibilityConformanceReport: {
       id: "accessibility-conformance-workflow-new",
+      toolingPolicyVersion: accessibilityToolingPolicyVersion,
+      wcagConformanceTarget: accessibilityWcagConformanceTarget,
       workflowProfileIds: ["rating-workflow-profile-workflow-new"],
       screenIds: accessibilitySurfaces,
       raterInstructionRenderVersionIds: ["rater-instruction-render-workflow-new"],
@@ -1671,10 +1715,27 @@ function completePolicyBundleFixtures() {
       uxSimplificationPolicyId: "ux-policy-workflow-new",
       testedLocaleSet: ["en-US"],
       checksPassed: accessibilityChecks,
+      testToolchain: accessibilityTestToolchain,
+      assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix,
+      evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+      accessibilityEvidenceArtifactIds: [
+        "accessibility-automated-audit-workflow-new",
+        "accessibility-keyboard-walkthrough-workflow-new",
+        "accessibility-screen-reader-transcript-workflow-new",
+        "accessibility-focus-order-trace-workflow-new",
+        "accessibility-contrast-zoom-review-workflow-new",
+        "accessibility-mobile-touch-review-workflow-new",
+        "accessibility-readability-review-workflow-new",
+      ],
+      toolingReviewStatus: "passed",
       readabilityReviewStatus: "passed",
+      sourceBoundary:
+        "Project default accessibility test tooling is frozen here; LMCA motivates accessible volunteer workflows but does not state exact accessibility tools.",
       failures: [],
       mitigations: [],
       nonStaffPromotionBlocker: false,
+      manualAssistiveTechReviewRequired: true,
+      automatedAuditAloneInsufficient: true,
       reviewer: "accessibility-reviewer",
       timestamp: "2026-10-01T00:00:00.000Z",
     },
@@ -2043,8 +2104,12 @@ function completeParticipantSafeguardWorkflowFixtures() {
     },
     modelProviderDataHandlingPolicies: modelProviderRunClasses.map((coveredRunClass) => ({
       id: `model-provider-data-handling-workflow-${coveredRunClass}`,
+      policyVersion: modelProviderEndpointContractPolicyVersion,
       providerEndpointClass: `approved-${coveredRunClass}`,
       coveredRunClass,
+      endpointContractClauses: modelProviderEndpointContractClauses,
+      endpointContractLanguageFrozen: true,
+      contractAppliesToProtectedContent: true,
       approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
       noTrainingOnInputsOutputs: true,
       noPromptOrOutputReuse: true,
@@ -2360,10 +2425,12 @@ function completeAuxiliaryWorkflowFixtures() {
   };
   const modelReproducibilityPolicy = modelRunReproducibilityPolicy("model-run-reproducibility-policy-workflow-new");
   const sourceLeakagePolicy = sourceLeakageRedactionPolicy("source-leakage-redaction-policy-workflow-new");
+  const sourceFamilyClustering = sourceFamilyClusteringPolicy("source-family-clustering-policy-workflow-new");
   const partialPromotionPolicy = partialTaskPromotionPolicy("partial-task-promotion-policy-workflow-new");
   const exposureQuarantine = exposureQuarantinePolicy("exposure-quarantine-policy-workflow-new");
   return {
     sourceLeakageRedactionPolicy: sourceLeakagePolicy,
+    sourceFamilyClusteringPolicy: sourceFamilyClustering,
     partialTaskPromotionPolicy: partialPromotionPolicy,
     exposureQuarantinePolicy: exposureQuarantine,
     blindingPreviewAudit: {
@@ -2523,6 +2590,7 @@ function completeAuxiliaryWorkflowFixtures() {
     },
     raterItemConflict: {
       id: "rater-item-conflict-workflow-new",
+      sourceFamilyClusteringPolicyId: sourceFamilyClustering.id,
       raterId: "demo-rater",
       positionClusterId: "lmca-public-is-ought-gap",
       critiqueId: "crit-ai-base-rate",
@@ -2537,6 +2605,7 @@ function completeAuxiliaryWorkflowFixtures() {
     assignmentConflictScreen: {
       id: "assignment-conflict-screen-workflow-new",
       assignmentId: "assign-ai-base-rate",
+      sourceFamilyClusteringPolicyId: sourceFamilyClustering.id,
       raterId: "demo-rater",
       positionClusterId: "lmca-public-is-ought-gap",
       critiqueId: "crit-ai-base-rate",
@@ -3641,6 +3710,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/model-inference-configs/model-inference-smoke"],
     ["POST", "/api/v1/model-run-environments"],
     ["GET", "/api/v1/model-run-environments/model-run-env-smoke"],
+    ["POST", "/api/v1/source-family-clustering-policies"],
+    ["GET", "/api/v1/source-family-clustering-policies/source-family-clustering-policy-smoke"],
     ["POST", "/api/v1/rater-item-conflicts"],
     ["GET", "/api/v1/rater-item-conflicts/rater-conflict-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/conflict-screen"],
@@ -3722,6 +3793,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'id: "source-leakage-redaction-policy"',
     'endpoint: () => "/api/v1/source-leakage-redaction-policies"',
     "redactionActions: sourceLeakageRedactionActions",
+    'id: "source-family-clustering-policy"',
+    'endpoint: () => "/api/v1/source-family-clustering-policies"',
+    "nearDuplicateClusteringThresholds",
     'id: "partial-task-promotion-policy"',
     'endpoint: () => "/api/v1/partial-task-promotion-policies"',
     "promotionCriteriaByTaskType: partialTaskPromotionCriteria",
@@ -3734,6 +3808,10 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'id: "visibility-policy"',
     'endpoint: () => "/api/v1/visibility-policies"',
     "roleFieldActionMatrix: visibilityRoleFieldActionMatrix",
+    'id: "accessibility-conformance-report"',
+    'endpoint: () => "/api/v1/accessibility-conformance-reports"',
+    "testToolchain: accessibilityTestToolchain",
+    "assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix",
     'id: "rights-review"',
     'endpoint: () => "/api/v1/rights/review"',
     'id: "release-freeze"',
@@ -3762,6 +3840,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/model-prompt-sibling-context-policies"',
     'id: "external-assistance-contamination-policy"',
     'endpoint: () => "/api/v1/external-assistance-contamination-policies"',
+    'id: "model-provider-data-handling-policy"',
+    'endpoint: () => "/api/v1/model-provider-data-handling-policies"',
+    "endpointContractClauses: modelProviderEndpointContractClauses",
     'id: "model-run-reproducibility-policy"',
     'endpoint: () => "/api/v1/model-run-reproducibility-policies"',
     'id: "rating-check-action"',
@@ -9797,6 +9878,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteAccessibilityReport.status, 400);
   assert.match(incompleteAccessibilityReport.body.detail, /uiExperimentPolicyId|uxSimplificationPolicyId|reviewer/);
 
+  const weakAccessibilityToolingReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/accessibility-conformance-reports",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      accessibilityConformanceReport: {
+        ...policyBundle.accessibilityConformanceReport,
+        id: "accessibility-conformance-weak-tooling",
+        testToolchain: accessibilityTestToolchain.filter((tool) => tool !== "manual_screen_reader_pass"),
+        assistiveTechnologyMatrix: {
+          ...accessibilityAssistiveTechnologyMatrix,
+          screenReader: ["voiceover_safari"],
+        },
+        evidenceArtifactTypes: accessibilityEvidenceArtifactTypes.filter((artifactType) => artifactType !== "screen_reader_transcript"),
+        automatedAuditAloneInsufficient: false,
+      },
+    }),
+  });
+  assert.equal(weakAccessibilityToolingReport.status, 400);
+  assert.match(weakAccessibilityToolingReport.body.detail, /testToolchain|assistiveTechnologyMatrix|evidenceArtifactTypes|automatedAuditAloneInsufficient/);
+
   const ordinaryExplanationRequiredPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/score-explanation-policies",
@@ -10260,6 +10362,25 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(overRetainedModelProviderPolicy.status, 400);
   assert.match(overRetainedModelProviderPolicy.body.detail, /logRetentionWindowDays/);
+
+  const driftedModelProviderContractPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/model-provider-data-handling-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      modelProviderDataHandlingPolicy: {
+        ...participantSafeguards.modelProviderDataHandlingPolicies[0],
+        id: "model-provider-policy-drifted-contract",
+        endpointContractClauses: {
+          ...modelProviderEndpointContractClauses,
+          retentionDeletionProof: "Provider retains protected traces until manually deleted.",
+        },
+        contractAppliesToProtectedContent: false,
+      },
+    }),
+  });
+  assert.equal(driftedModelProviderContractPolicy.status, 400);
+  assert.match(driftedModelProviderContractPolicy.body.detail, /endpointContractClauses|contractAppliesToProtectedContent/);
 
   const volunteerIncentivePolicy = await invokeApi(context, {
     method: "POST",
@@ -11315,6 +11436,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(driftedSourceLeakagePolicy.status, 400);
   assert.match(driftedSourceLeakagePolicy.body.detail, /requiredLintPatterns/);
 
+  const driftedSourceFamilyClusteringPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-family-clustering-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceFamilyClusteringPolicy: {
+        ...auxiliaryWorkflow.sourceFamilyClusteringPolicy,
+        id: "source-family-clustering-policy-drifted",
+        nearDuplicateClusteringThresholds: {
+          ...nearDuplicateClusteringThresholds,
+          embeddingCosineSimilarityMin: 0.5,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedSourceFamilyClusteringPolicy.status, 400);
+  assert.match(driftedSourceFamilyClusteringPolicy.body.detail, /nearDuplicateClusteringThresholds/);
+
   const driftedPartialTaskPromotionPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/partial-task-promotion-policies",
@@ -11792,6 +11931,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     ["modelRunReproducibilityPolicy", "/api/v1/model-run-reproducibility-policies"],
     ["modelInferenceConfig", "/api/v1/model-inference-configs"],
     ["modelRunEnvironment", "/api/v1/model-run-environments"],
+    ["sourceFamilyClusteringPolicy", "/api/v1/source-family-clustering-policies"],
     ["raterItemConflict", "/api/v1/rater-item-conflicts"],
     ["raterTrainingExposurePolicy", "/api/v1/rater-training-exposure-policies"],
     ["raterTrainingExposureSnapshot", "/api/v1/rater-training-exposure-snapshots"],
@@ -11953,6 +12093,15 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(sourceLeakagePolicyById.status, 200);
   assert.deepEqual(sourceLeakagePolicyById.body.requiredLintPatterns, sourceLeakageLintPatterns);
   assert.deepEqual(sourceLeakagePolicyById.body.redactionActions, sourceLeakageRedactionActions);
+
+  const sourceFamilyClusteringById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/source-family-clustering-policies/source-family-clustering-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(sourceFamilyClusteringById.status, 200);
+  assert.deepEqual(sourceFamilyClusteringById.body.sourceFamilyClusteringThresholds, sourceFamilyClusteringThresholds);
+  assert.deepEqual(sourceFamilyClusteringById.body.nearDuplicateClusteringThresholds, nearDuplicateClusteringThresholds);
 
   const partialTaskPromotionPolicyById = await invokeApi(context, {
     method: "GET",
@@ -14860,6 +15009,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunReproducibilityPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelInferenceConfigs.length, 3);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.modelRunEnvironments.length, 3);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.sourceFamilyClusteringPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterItemConflicts.length, 2 + extendedRaterItemConflictTypes.length);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposurePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterTrainingExposureSnapshots.length, 1);
@@ -14982,6 +15132,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(
     releaseReport.body.auxiliaryWorkflowEvidence.blindingPreviewAuditRows.at(-1).sourceLeakageRedactionPolicyId,
     "source-leakage-redaction-policy-workflow-new",
+  );
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSourceFamilyClusteringPolicyCount, 1);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.sourceFamilyClusteringPolicyReleaseUseStatus,
+    "submitted_source_family_clustering_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.sourceFamilyClusteringPolicyId,
+    "source-family-clustering-policy-workflow-new",
+  );
+  assert.deepEqual(
+    releaseReport.body.auxiliaryWorkflowEvidence.requiredSourceFamilyClusteringThresholds,
+    sourceFamilyClusteringThresholds,
+  );
+  assert.deepEqual(
+    releaseReport.body.auxiliaryWorkflowEvidence.requiredNearDuplicateClusteringThresholds,
+    nearDuplicateClusteringThresholds,
+  );
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.raterItemConflictRows.at(-1).sourceFamilyClusteringPolicyId,
+    "source-family-clustering-policy-workflow-new",
   );
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.publicExamplePracticeSessions.length, 1);
@@ -15512,7 +15683,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 149 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 150 + extendedRaterItemConflictTypes.length,
   );
 });
 

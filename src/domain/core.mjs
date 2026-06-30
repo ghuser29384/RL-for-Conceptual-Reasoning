@@ -16122,6 +16122,38 @@ const ACCESSIBILITY_REQUIRED_CHECKS = [
   "readability",
 ];
 
+export const ACCESSIBILITY_TOOLING_POLICY_VERSION = "accessibility-tooling-rlhf90-v1";
+export const REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET = "WCAG_2_2_AA";
+export const REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN = [
+  "axe_core_automated_audit",
+  "playwright_keyboard_navigation",
+  "manual_screen_reader_pass",
+  "manual_focus_order_review",
+  "manual_contrast_zoom_review",
+  "manual_mobile_touch_review",
+  "manual_reduced_motion_review",
+  "manual_timeout_recovery_review",
+  "locale_readability_review",
+];
+export const REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX = {
+  screenReader: ["voiceover_safari", "nvda_firefox"],
+  keyboard: ["macos_keyboard_only", "windows_keyboard_only"],
+  zoom: ["browser_200_percent_zoom"],
+  mobileTouch: ["ios_safari_touch", "android_chrome_touch"],
+  reducedMotion: ["prefers_reduced_motion"],
+};
+export const REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES = [
+  "automated_audit_json",
+  "keyboard_walkthrough_log",
+  "screen_reader_transcript",
+  "focus_order_trace",
+  "contrast_zoom_review",
+  "mobile_touch_review",
+  "reduced_motion_review",
+  "timeout_recovery_review",
+  "readability_review",
+];
+
 const RATING_WORKFLOW_OPTIONAL_RATIONALE_FIELDS = ["general_rating_note"];
 const RATING_WORKFLOW_TRIGGER_REQUIRED_RATIONALE_FIELDS = ["score_explanation"];
 const RATING_WORKFLOW_REQUIRED_ISSUE_PANELS = ["safe_decline", "source_recognition", "item_issue_report"];
@@ -16245,6 +16277,8 @@ function defaultPreSubmitAssistPolicy(releaseId) {
 function defaultAccessibilityConformanceReport(releaseId) {
   return {
     id: `accessibility-conformance-${releaseId}`,
+    toolingPolicyVersion: ACCESSIBILITY_TOOLING_POLICY_VERSION,
+    wcagConformanceTarget: REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
     workflowProfileIds: [`rating-workflow-profile-${releaseId}`],
     screenIds: ACCESSIBILITY_REQUIRED_SURFACES,
     raterInstructionRenderVersionIds: [`rater-instruction-render-${releaseId}`],
@@ -16252,11 +16286,28 @@ function defaultAccessibilityConformanceReport(releaseId) {
     uxSimplificationPolicyId: `ux-simplification-policy-${releaseId}`,
     testedLocaleSet: ["en-US"],
     checksPassed: ACCESSIBILITY_REQUIRED_CHECKS,
+    testToolchain: REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
+    assistiveTechnologyMatrix: REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
+    evidenceArtifactTypes: REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
+    accessibilityEvidenceArtifactIds: [
+      `accessibility-automated-audit-${releaseId}`,
+      `accessibility-keyboard-walkthrough-${releaseId}`,
+      `accessibility-screen-reader-transcript-${releaseId}`,
+      `accessibility-focus-order-trace-${releaseId}`,
+      `accessibility-contrast-zoom-review-${releaseId}`,
+      `accessibility-mobile-touch-review-${releaseId}`,
+      `accessibility-readability-review-${releaseId}`,
+    ],
+    toolingReviewStatus: "passed",
     readabilityReviewStatus: "passed",
     simplificationReadabilityInteractionNotes: "Plain-language summaries preserve Appendix-F anchors and required controls.",
+    sourceBoundary:
+      "Project default accessibility test tooling is frozen here; LMCA motivates accessible volunteer workflows but does not state exact accessibility tools.",
     failures: [],
     mitigations: [],
     nonStaffPromotionBlocker: false,
+    manualAssistiveTechReviewRequired: true,
+    automatedAuditAloneInsufficient: true,
     reviewer: "seed-accessibility-reviewer",
     timestamp: "2026-10-01T00:00:00.000Z",
   };
@@ -16325,6 +16376,11 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     prohibitedAssistInputs: PRE_SUBMIT_PROHIBITED_INPUTS,
     accessibilityRequiredSurfaces: ACCESSIBILITY_REQUIRED_SURFACES,
     accessibilityRequiredChecks: ACCESSIBILITY_REQUIRED_CHECKS,
+    accessibilityToolingPolicyVersion: ACCESSIBILITY_TOOLING_POLICY_VERSION,
+    accessibilityRequiredWcagConformanceTarget: REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
+    accessibilityRequiredTestToolchain: REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
+    accessibilityRequiredAssistiveTechnologyMatrix: REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
+    accessibilityRequiredEvidenceArtifactTypes: REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
     visibilityPolicyRows: [...seedVisibilityRows, ...submittedVisibilityRows],
     ratingWorkflowProfileRows: [...seedProfileRows, ...submittedProfileRows],
     scoreExplanationPolicyRows: [...seedScoreExplanationRows, ...submittedScoreExplanationRows],
@@ -16691,10 +16747,22 @@ function normalizeAccessibilityConformanceReport(report, rowSource) {
   if (!id) return null;
   const screenIds = normalizeStringArray(report.screenIds ?? report.coveredSurfaces);
   const checksPassed = normalizeStringArray(report.checksPassed);
+  const testToolchain = normalizeStringArray(report.testToolchain);
+  const evidenceArtifactTypes = normalizeStringArray(report.evidenceArtifactTypes);
+  const accessibilityEvidenceArtifactIds = normalizeStringArray(report.accessibilityEvidenceArtifactIds ?? report.evidenceArtifactIds);
+  const assistiveTechnologyMatrix = report.assistiveTechnologyMatrix && typeof report.assistiveTechnologyMatrix === "object" && !Array.isArray(report.assistiveTechnologyMatrix)
+    ? report.assistiveTechnologyMatrix
+    : {};
   const missingSurfaces = ACCESSIBILITY_REQUIRED_SURFACES.filter((surface) => !screenIds.includes(surface));
   const missingChecks = ACCESSIBILITY_REQUIRED_CHECKS.filter((check) => !checksPassed.includes(check));
+  const missingTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN.filter((tool) => !testToolchain.includes(tool));
+  const missingEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES.filter((artifactType) => !evidenceArtifactTypes.includes(artifactType));
+  const missingAssistiveTechnologyMatrixKeys = Object.keys(REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX).filter((key) => !Object.hasOwn(assistiveTechnologyMatrix, key));
   const failures = Array.isArray(report.failures) ? report.failures : [];
+  const sourceBoundary = String(report.sourceBoundary ?? "");
   const reviewReasons = [
+    report.toolingPolicyVersion === ACCESSIBILITY_TOOLING_POLICY_VERSION ? null : "toolingPolicyVersion",
+    report.wcagConformanceTarget === REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET ? null : "wcagConformanceTarget",
     normalizeStringArray(report.workflowProfileIds).length ? null : "workflowProfileIds",
     normalizeStringArray(report.raterInstructionRenderVersionIds).length ? null : "raterInstructionRenderVersionIds",
     requiredPromptFieldReason("uiExperimentPolicyId", report.uiExperimentPolicyId),
@@ -16702,22 +16770,46 @@ function normalizeAccessibilityConformanceReport(report, rowSource) {
     normalizeStringArray(report.testedLocaleSet).length ? null : "testedLocaleSet",
     missingSurfaces.length ? `screenIds:${missingSurfaces.join(",")}` : null,
     missingChecks.length ? `checksPassed:${missingChecks.join(",")}` : null,
+    missingTestToolchain.length ? `testToolchain:${missingTestToolchain.join(",")}` : null,
+    missingEvidenceArtifactTypes.length ? `evidenceArtifactTypes:${missingEvidenceArtifactTypes.join(",")}` : null,
+    missingAssistiveTechnologyMatrixKeys.length ? `assistiveTechnologyMatrix:${missingAssistiveTechnologyMatrixKeys.join(",")}` : null,
+    stableJsonKey(assistiveTechnologyMatrix) === stableJsonKey(REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX) ? null : "assistiveTechnologyMatrix",
+    accessibilityEvidenceArtifactIds.length ? null : "accessibilityEvidenceArtifactIds",
+    report.toolingReviewStatus === "passed" ? null : "toolingReviewStatus",
     report.readabilityReviewStatus === "passed" ? null : "readabilityReviewStatus",
+    sourceBoundary.toLowerCase().includes("project default") && sourceBoundary.toLowerCase().includes("lmca") && sourceBoundary.toLowerCase().includes("accessibility tool")
+      ? null
+      : "sourceBoundary",
     failures.length ? "failures" : null,
     report.nonStaffPromotionBlocker === false ? null : "nonStaffPromotionBlocker",
+    report.manualAssistiveTechReviewRequired === true ? null : "manualAssistiveTechReviewRequired",
+    report.automatedAuditAloneInsufficient === true ? null : "automatedAuditAloneInsufficient",
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    toolingPolicyVersion: report.toolingPolicyVersion ?? null,
+    wcagConformanceTarget: report.wcagConformanceTarget ?? null,
     screenIds,
     missingSurfaces,
     checksPassed,
     missingChecks,
+    testToolchain,
+    missingTestToolchain,
+    assistiveTechnologyMatrix,
+    missingAssistiveTechnologyMatrixKeys,
+    evidenceArtifactTypes,
+    missingEvidenceArtifactTypes,
+    accessibilityEvidenceArtifactIds,
     testedLocaleSet: normalizeStringArray(report.testedLocaleSet),
+    toolingReviewStatus: report.toolingReviewStatus ?? null,
     readabilityReviewStatus: report.readabilityReviewStatus ?? null,
+    sourceBoundary,
     failures,
     mitigations: Array.isArray(report.mitigations) ? report.mitigations : [],
     nonStaffPromotionBlocker: report.nonStaffPromotionBlocker === true,
+    manualAssistiveTechReviewRequired: report.manualAssistiveTechReviewRequired === true,
+    automatedAuditAloneInsufficient: report.automatedAuditAloneInsufficient === true,
     reviewReasons,
     status: reviewReasons.length ? "accessibility_conformance_review_required" : "accessibility_conformance_complete",
   };
@@ -17382,6 +17474,21 @@ const LANGUAGE_ARTIFACT_TYPES = [
 ];
 
 const MODEL_PROVIDER_PROTECTED_RUN_CLASSES = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
+export const MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION = "model-provider-endpoint-contract-rlhf90-v1";
+export const REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES = {
+  noTrainingOnInputsOutputs:
+    "Protected prompts, item text, labels, metadata, model outputs, and derived traces are not used for provider training, fine-tuning, evaluation, ranking, product improvement, or model-distillation datasets.",
+  noPromptOrOutputReuse:
+    "Protected prompts and outputs are processed only for the submitted request and are not reused for prompt libraries, eval corpora, support examples, demonstrations, cache warming, or service-quality review beyond the approved retention window.",
+  protectedContentIsolation:
+    "Hidden benchmark, protected validation, private rater data, and release-critical artifacts remain isolated from public-demo, training-export, analytics, and provider-default logging paths.",
+  humanReviewProhibition:
+    "Provider or subprocessor human review of protected content is prohibited unless a separate incident or abuse-review approval narrows scope, records a reason code, and preserves audit evidence.",
+  retentionDeletionProof:
+    "Request logs, raw prompts, raw outputs, and provider traces are deleted or rendered unrecoverable within the approved retention window, with deletion or retention proof available for release audit.",
+  subprocessorBoundary:
+    "Subprocessors may process protected content only under equivalent no-training, no-reuse, retention, deletion-proof, and human-review restrictions.",
+};
 
 const SOURCE_RECOGNITION_TYPES = [
   "source_recognized",
@@ -17472,8 +17579,12 @@ function defaultSourceRecognitionEvent(releaseId) {
 function defaultModelProviderDataHandlingPolicies(releaseId) {
   return MODEL_PROVIDER_PROTECTED_RUN_CLASSES.map((runClass) => ({
     id: `model-provider-data-handling-${releaseId}-${runClass}`,
+    policyVersion: MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION,
     providerEndpointClass: `${runClass}-approved-endpoint`,
     coveredRunClass: runClass,
+    endpointContractClauses: REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES,
+    endpointContractLanguageFrozen: true,
+    contractAppliesToProtectedContent: true,
     approvedSplitContentClasses: ["release_critical", "protected_validation", "hidden_benchmark"],
     noTrainingOnInputsOutputs: true,
     noPromptOrOutputReuse: true,
@@ -17561,6 +17672,8 @@ export function buildParticipantSafeguardEvidenceReport(releaseId, options = {})
     languageArtifactTypes: LANGUAGE_ARTIFACT_TYPES,
     sourceRecognitionTypes: SOURCE_RECOGNITION_TYPES,
     modelProviderProtectedRunClasses: MODEL_PROVIDER_PROTECTED_RUN_CLASSES,
+    modelProviderEndpointContractPolicyVersion: MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION,
+    requiredModelProviderEndpointContractClauses: REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES,
     volunteerIncentivePolicyRows: [...seedIncentiveRows, ...submittedIncentiveRows],
     raterQualificationRows: [...seedQualificationRows, ...submittedQualificationRows],
     languageArtifactAssessmentRows: [...seedLanguageRows, ...submittedLanguageRows],
@@ -17751,9 +17864,19 @@ function normalizeModelProviderDataHandlingPolicy(policy, rowSource) {
   if (!id) return null;
   const coveredRunClass = policy.coveredRunClass ?? policy.runClass ?? null;
   const approvedClasses = normalizeStringArray(policy.approvedSplitContentClasses);
+  const endpointContractClauses =
+    policy.endpointContractClauses && typeof policy.endpointContractClauses === "object" && !Array.isArray(policy.endpointContractClauses)
+      ? policy.endpointContractClauses
+      : {};
+  const missingEndpointContractClauses = Object.keys(REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES).filter((key) => !Object.hasOwn(endpointContractClauses, key));
   const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION ? null : `policyVersion:${MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION}`,
     requiredPromptFieldReason("providerEndpointClass", policy.providerEndpointClass ?? policy.providerEndpoint),
     MODEL_PROVIDER_PROTECTED_RUN_CLASSES.includes(coveredRunClass) ? null : "coveredRunClass",
+    missingEndpointContractClauses.length ? `endpointContractClauses:${missingEndpointContractClauses.join(",")}` : null,
+    stableJsonKey(endpointContractClauses) === stableJsonKey(REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES) ? null : "endpointContractClauses",
+    policy.endpointContractLanguageFrozen === true ? null : "endpointContractLanguageFrozen",
+    policy.contractAppliesToProtectedContent === true ? null : "contractAppliesToProtectedContent",
     approvedClasses.includes("hidden_benchmark") && approvedClasses.includes("protected_validation") ? null : "approvedSplitContentClasses",
     policy.noTrainingOnInputsOutputs === true ? null : "noTrainingOnInputsOutputs",
     policy.noPromptOrOutputReuse === true ? null : "noPromptOrOutputReuse",
@@ -17769,8 +17892,13 @@ function normalizeModelProviderDataHandlingPolicy(policy, rowSource) {
   return {
     id,
     rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
     providerEndpointClass: policy.providerEndpointClass ?? policy.providerEndpoint ?? null,
     coveredRunClass,
+    endpointContractClauses,
+    missingEndpointContractClauses,
+    endpointContractLanguageFrozen: policy.endpointContractLanguageFrozen === true,
+    contractAppliesToProtectedContent: policy.contractAppliesToProtectedContent === true,
     approvedSplitContentClasses: approvedClasses,
     noTrainingOnInputsOutputs: policy.noTrainingOnInputsOutputs === true,
     noPromptOrOutputReuse: policy.noPromptOrOutputReuse === true,
@@ -17803,7 +17931,9 @@ function modelProviderRunClassEvidenceRow(coveredRunClass, rows) {
   return {
     coveredRunClass,
     modelProviderDataHandlingPolicyId: latestRow?.id ?? null,
+    policyVersion: latestRow?.policyVersion ?? null,
     protectedContentEligible: latestRow?.protectedContentEligible === true,
+    endpointContractLanguageFrozen: latestRow?.endpointContractLanguageFrozen === true,
     status: latestRow ? "model_provider_run_class_complete" : "model_provider_run_class_missing",
   };
 }
@@ -20459,6 +20589,35 @@ const RATER_ITEM_CONFLICT_TYPES = [
   "declared_custom",
 ];
 
+export const SOURCE_FAMILY_CLUSTERING_POLICY_VERSION = "source-family-clustering-rlhf90-v1";
+export const REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS = {
+  sameCanonicalSourceIdAlwaysCluster: true,
+  normalizedSourceTitleAuthorOverlapMin: 0.8,
+  sourcePassageTokenJaccardMin: 0.6,
+  adaptationLineageMatchRequired: true,
+  publicExampleOverlapMin: 0.8,
+};
+export const REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS = {
+  normalizedTextSimilarityMin: 0.88,
+  embeddingCosineSimilarityMin: 0.92,
+  sharedClaimSpanJaccardMin: 0.7,
+  samePositionCritiqueOverlapMin: 0.75,
+};
+export const REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS = [
+  "sourceId",
+  "sourceFamilyId",
+  "adaptationClusterId",
+  "nearDuplicateClusterId",
+  "sourceAnchorExampleId",
+];
+export const REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES = [
+  "auto_clustered",
+  "manual_review_required",
+  "manual_cluster_confirmed",
+  "cluster_rejected",
+  "quarantined_until_clustered",
+];
+
 export const SOURCE_LEAKAGE_REDACTION_POLICY_VERSION = "source-leakage-redaction-rlhf90-v1";
 export const REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS = [
   "author_name",
@@ -21147,9 +21306,28 @@ function defaultModelRunEnvironment(releaseId, modelRunReproducibilityPolicyId =
   };
 }
 
+function defaultSourceFamilyClusteringPolicy(releaseId) {
+  return {
+    id: `source-family-clustering-policy-${releaseId}`,
+    policyVersion: SOURCE_FAMILY_CLUSTERING_POLICY_VERSION,
+    sourceFamilyClusteringThresholds: REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS,
+    nearDuplicateClusteringThresholds: REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS,
+    requiredConflictClusterFields: REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS,
+    clusteringReviewStatuses: REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES,
+    protectedAssignmentRule:
+      "Protected and release-critical independent blind assignments must check source-family, adaptation-family, near-duplicate, and public-example clusters before counting labels.",
+    releaseClaimDisclosureRule:
+      "Release reports disclose cluster-threshold policy id and exclude or label rows where required conflict clusters were missing or waived.",
+    sourceBoundary:
+      "Project default source-family and near-duplicate clustering thresholds are frozen here; LMCA motivates source blinding but does not state these exact clustering thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
 function defaultRaterItemConflict(releaseId) {
   return {
     id: `rater-item-conflict-${releaseId}`,
+    sourceFamilyClusteringPolicyId: `source-family-clustering-policy-${releaseId}`,
     raterId: "seed-rater",
     positionClusterId: "lmca-public-is-ought-gap",
     critiqueId: "crit-ai-base-rate",
@@ -21416,10 +21594,18 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       modelRunReproducibilityPolicyEvidence.policyRows.find((row) => row.rowSource === "seed_model_run_reproducibility_policy"),
     ),
   ];
-  const submittedConflictRows = (options.raterItemConflicts ?? [])
-    .map((conflict) => normalizeRaterItemConflict(conflict, "submitted_workflow_rater_item_conflict"))
+  const submittedSourceFamilyClusteringPolicyRows = (options.sourceFamilyClusteringPolicies ?? [])
+    .map((policy) => normalizeSourceFamilyClusteringPolicy(policy, "submitted_workflow_source_family_clustering_policy"))
     .filter(Boolean);
-  const seedConflictRows = [normalizeRaterItemConflict(defaultRaterItemConflict(releaseId), "seed_rater_item_conflict")];
+  const seedSourceFamilyClusteringPolicyRows = [
+    normalizeSourceFamilyClusteringPolicy(defaultSourceFamilyClusteringPolicy(releaseId), "seed_source_family_clustering_policy"),
+  ];
+  const submittedActiveSourceFamilyClusteringPolicy = submittedSourceFamilyClusteringPolicyRows.find((row) => row.reviewReasons.length === 0);
+  const activeSourceFamilyClusteringPolicy = submittedActiveSourceFamilyClusteringPolicy ?? seedSourceFamilyClusteringPolicyRows[0];
+  const submittedConflictRows = (options.raterItemConflicts ?? [])
+    .map((conflict) => normalizeRaterItemConflict(conflict, activeSourceFamilyClusteringPolicy, "submitted_workflow_rater_item_conflict"))
+    .filter(Boolean);
+  const seedConflictRows = [normalizeRaterItemConflict(defaultRaterItemConflict(releaseId), seedSourceFamilyClusteringPolicyRows[0], "seed_rater_item_conflict")];
   const submittedTrainingExposurePolicyRows = (options.raterTrainingExposurePolicies ?? [])
     .map((policy) => normalizeRaterTrainingExposurePolicy(policy, "submitted_workflow_rater_training_exposure_policy"))
     .filter(Boolean);
@@ -21500,6 +21686,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ],
     ["model_inference_config", submittedInferenceRows.length ? submittedInferenceRows : seedInferenceRows],
     ["model_run_environment", submittedEnvironmentRows.length ? submittedEnvironmentRows : seedEnvironmentRows],
+    ["source_family_clustering_policy", submittedSourceFamilyClusteringPolicyRows.length ? submittedSourceFamilyClusteringPolicyRows : seedSourceFamilyClusteringPolicyRows],
     ["rater_item_conflict", submittedConflictRows.length ? submittedConflictRows : seedConflictRows],
     ["rater_training_exposure_policy", submittedTrainingExposurePolicyRows.length ? submittedTrainingExposurePolicyRows : seedTrainingExposurePolicyRows],
     ["rater_training_exposure_snapshot", submittedTrainingExposureRows.length ? submittedTrainingExposureRows : seedTrainingExposureRows],
@@ -21535,6 +21722,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ),
     ...submittedInferenceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_inference_config", artifactId: row.id, reason }))),
     ...submittedEnvironmentRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "model_run_environment", artifactId: row.id, reason }))),
+    ...submittedSourceFamilyClusteringPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "source_family_clustering_policy", artifactId: row.id, reason })),
+    ),
     ...submittedConflictRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_item_conflict", artifactId: row.id, reason }))),
     ...submittedTrainingExposurePolicyRows.flatMap((row) =>
       row.reviewReasons.map((reason) => ({ artifactType: "rater_training_exposure_policy", artifactId: row.id, reason })),
@@ -21584,6 +21774,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     modelRunReproducibilityPolicyEvidence.policyRows.some((row) => row.rowSource === "submitted_workflow_model_run_reproducibility_policy") &&
     submittedInferenceRows.length > 0 &&
     submittedEnvironmentRows.length > 0 &&
+    submittedSourceFamilyClusteringPolicyRows.length > 0 &&
     submittedConflictRows.length > 0 &&
     submittedTrainingExposurePolicyRows.length > 0 &&
     submittedTrainingExposureRows.length > 0 &&
@@ -21642,6 +21833,16 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     spotCheckRequiredSamplingDimensions: SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS,
     spotCheckSelectionMethods: SPOT_CHECK_SELECTION_METHODS,
     raterItemConflictTypes: RATER_ITEM_CONFLICT_TYPES,
+    sourceFamilyClusteringPolicyId: activeSourceFamilyClusteringPolicy.id,
+    sourceFamilyClusteringPolicyReleaseUseStatus: submittedActiveSourceFamilyClusteringPolicy
+      ? "submitted_source_family_clustering_policy_active"
+      : submittedSourceFamilyClusteringPolicyRows.length
+        ? "submitted_source_family_clustering_policy_review_required"
+        : "seed_source_family_clustering_policy_active",
+    requiredSourceFamilyClusteringThresholds: REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS,
+    requiredNearDuplicateClusteringThresholds: REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS,
+    requiredSourceFamilyClusterFields: REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS,
+    requiredSourceFamilyClusteringReviewStatuses: REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES,
     diagnosticDeferralVisibilityPolicyId: activeDeferralVisibilityPolicy.id,
     diagnosticDeferralVisibilityPolicyReleaseUseStatus: submittedActiveDeferralVisibilityPolicy
       ? "submitted_diagnostic_deferral_visibility_policy_active"
@@ -21683,6 +21884,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     assignmentSelectionAuditRows: [...seedAssignmentAuditRows, ...submittedAssignmentAuditRows],
     modelInferenceConfigRows: [...seedInferenceRows, ...submittedInferenceRows],
     modelRunEnvironmentRows: [...seedEnvironmentRows, ...submittedEnvironmentRows],
+    sourceFamilyClusteringPolicyRows: [...seedSourceFamilyClusteringPolicyRows, ...submittedSourceFamilyClusteringPolicyRows],
     raterItemConflictRows: [...seedConflictRows, ...submittedConflictRows],
     raterTrainingExposurePolicyRows: [...seedTrainingExposurePolicyRows, ...submittedTrainingExposurePolicyRows],
     raterTrainingExposureRows: [...seedTrainingExposureRows, ...submittedTrainingExposureRows],
@@ -21717,6 +21919,8 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       modelRunReproducibilityPolicyReviewRows: modelRunReproducibilityPolicyEvidence.reviewRows.length,
       submittedModelInferenceConfigCount: submittedInferenceRows.length,
       submittedModelRunEnvironmentCount: submittedEnvironmentRows.length,
+      submittedSourceFamilyClusteringPolicyCount: submittedSourceFamilyClusteringPolicyRows.length,
+      sourceFamilyClusteringPolicyReviewRows: submittedSourceFamilyClusteringPolicyRows.filter((row) => row.reviewReasons.length).length,
       submittedRaterItemConflictCount: submittedConflictRows.length,
       submittedRaterTrainingExposurePolicyCount: submittedTrainingExposurePolicyRows.length,
       submittedRaterTrainingExposureSnapshotCount: submittedTrainingExposureRows.length,
@@ -22345,9 +22549,54 @@ function normalizeModelRunEnvironment(environment, rowSource, activeReproducibil
   };
 }
 
-function normalizeRaterItemConflict(conflict, rowSource) {
+function normalizeSourceFamilyClusteringPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.sourceFamilyClusteringPolicyId;
+  if (!id) return null;
+  const sourceFamilyThresholds =
+    policy.sourceFamilyClusteringThresholds && typeof policy.sourceFamilyClusteringThresholds === "object" && !Array.isArray(policy.sourceFamilyClusteringThresholds)
+      ? policy.sourceFamilyClusteringThresholds
+      : {};
+  const nearDuplicateThresholds =
+    policy.nearDuplicateClusteringThresholds && typeof policy.nearDuplicateClusteringThresholds === "object" && !Array.isArray(policy.nearDuplicateClusteringThresholds)
+      ? policy.nearDuplicateClusteringThresholds
+      : {};
+  const requiredConflictClusterFields = normalizeStringArray(policy.requiredConflictClusterFields);
+  const clusteringReviewStatuses = normalizeStringArray(policy.clusteringReviewStatuses);
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === SOURCE_FAMILY_CLUSTERING_POLICY_VERSION ? null : `policyVersion:${SOURCE_FAMILY_CLUSTERING_POLICY_VERSION}`,
+    stableJsonKey(sourceFamilyThresholds) === stableJsonKey(REQUIRED_SOURCE_FAMILY_CLUSTERING_THRESHOLDS) ? null : "sourceFamilyClusteringThresholds",
+    stableJsonKey(nearDuplicateThresholds) === stableJsonKey(REQUIRED_NEAR_DUPLICATE_CLUSTERING_THRESHOLDS) ? null : "nearDuplicateClusteringThresholds",
+    REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS.every((field) => requiredConflictClusterFields.includes(field)) ? null : "requiredConflictClusterFields",
+    stableJsonKey(requiredConflictClusterFields) === stableJsonKey(REQUIRED_SOURCE_FAMILY_CLUSTER_FIELDS) ? null : "requiredConflictClusterFields",
+    REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES.every((status) => clusteringReviewStatuses.includes(status)) ? null : "clusteringReviewStatuses",
+    stableJsonKey(clusteringReviewStatuses) === stableJsonKey(REQUIRED_SOURCE_FAMILY_CLUSTERING_REVIEW_STATUSES) ? null : "clusteringReviewStatuses",
+    policyMentions(policy.protectedAssignmentRule, ["source-family", "near-duplicate", "protected"]) ? null : "protectedAssignmentRule",
+    policyMentions(policy.releaseClaimDisclosureRule, ["release", "exclude"]) ? null : "releaseClaimDisclosureRule",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    sourceFamilyClusteringThresholds: sourceFamilyThresholds,
+    nearDuplicateClusteringThresholds: nearDuplicateThresholds,
+    requiredConflictClusterFields,
+    clusteringReviewStatuses,
+    protectedAssignmentRule: policy.protectedAssignmentRule ?? null,
+    releaseClaimDisclosureRule: policy.releaseClaimDisclosureRule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "source_family_clustering_policy_review_required" : "source_family_clustering_policy_complete",
+  };
+}
+
+function normalizeRaterItemConflict(conflict, activeSourceFamilyClusteringPolicy, rowSource) {
   const id = conflict?.id ?? conflict?.conflictId ?? conflict?.conflict_id;
   if (!id) return null;
+  const sourceFamilyClusteringPolicyId = conflict.sourceFamilyClusteringPolicyId ?? conflict.source_family_clustering_policy_id ?? null;
+  const activePolicyId = activeSourceFamilyClusteringPolicy?.id ?? null;
   const conflictType = conflict.conflictType ?? conflict.conflict_type ?? null;
   const independentEffect = conflict.independentBlindEligibilityEffect ?? conflict.independent_blind_eligibility_effect ?? null;
   const itemScopePresent = [
@@ -22359,6 +22608,11 @@ function normalizeRaterItemConflict(conflict, rowSource) {
     conflict.nearDuplicateClusterId,
   ].some(Boolean);
   const reviewReasons = [
+    activePolicyId
+      ? sourceFamilyClusteringPolicyId === activePolicyId
+        ? null
+        : "sourceFamilyClusteringPolicyId"
+      : requiredPromptFieldReason("sourceFamilyClusteringPolicyId", sourceFamilyClusteringPolicyId),
     requiredPromptFieldReason("raterId", conflict.raterId ?? conflict.rater_id),
     itemScopePresent ? null : "itemOrClusterScope",
     RATER_ITEM_CONFLICT_TYPES.includes(conflictType) ? null : "conflictType",
@@ -22376,6 +22630,7 @@ function normalizeRaterItemConflict(conflict, rowSource) {
   return {
     id,
     rowSource,
+    sourceFamilyClusteringPolicyId,
     raterId: conflict.raterId ?? conflict.rater_id ?? null,
     positionClusterId: conflict.positionClusterId ?? conflict.position_cluster_id ?? null,
     conflictType,
@@ -25886,6 +26141,7 @@ export function buildOctoberReleaseReport(
     modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
     modelInferenceConfigs: options.modelInferenceConfigs ?? [],
     modelRunEnvironments: options.modelRunEnvironments ?? [],
+    sourceFamilyClusteringPolicies: options.sourceFamilyClusteringPolicies ?? [],
     raterItemConflicts: options.raterItemConflicts ?? [],
     raterTrainingExposurePolicies: options.raterTrainingExposurePolicies ?? [],
     raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
@@ -26187,6 +26443,7 @@ export function buildOctoberReleaseReport(
       modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
       modelInferenceConfigs: options.modelInferenceConfigs ?? [],
       modelRunEnvironments: options.modelRunEnvironments ?? [],
+      sourceFamilyClusteringPolicies: options.sourceFamilyClusteringPolicies ?? [],
       raterItemConflicts: options.raterItemConflicts ?? [],
       raterTrainingExposurePolicies: options.raterTrainingExposurePolicies ?? [],
       raterTrainingExposureSnapshots: options.raterTrainingExposureSnapshots ?? [],
