@@ -20,6 +20,7 @@ import {
   MODEL_IMPROVEMENT_POLICY_VERSION,
   MODEL_RUN_REPRODUCIBILITY_POLICY_VERSION,
   OBFUSCATION_STRESS_VARIANT_FAMILIES,
+  PARTIAL_TASK_PROMOTION_POLICY_VERSION,
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATING_EFFORT_QA_REVIEW_DECISIONS,
   RATER_DASHBOARD_POLICY_VERSION,
@@ -57,6 +58,9 @@ import {
   REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
   REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
   REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION,
+  REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
+  REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+  REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
   REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM,
   REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
   REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
@@ -113,6 +117,9 @@ import {
   REQUIRED_MODEL_IMPROVEMENT_POLICY_RULES,
   REQUIRED_MODEL_IMPROVEMENT_PROTECTED_SPLIT_EXCLUSIONS,
   REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS,
+  REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+  REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
+  REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   RUBRIC_DIMENSIONS,
@@ -125,6 +132,7 @@ import {
   SCORE_EXPLANATION_ORDINARY_REQUIRED_FIELDS,
   SCORE_EXPLANATION_OVERALL_PRODUCT_GAP_THRESHOLD,
   SCORE_EXPLANATION_TRIGGER_RULES,
+  SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
   SYCOPHANCY_ORTHODOXY_CUE_TYPES,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
   assignments,
@@ -160,6 +168,7 @@ import {
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+  REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
 } from "./domain/core.mjs";
 import {
   CONTRIBUTION_ARCHITECTURE,
@@ -1263,6 +1272,7 @@ const policyBundleFieldClasses = [
   "verification_evidence",
   "volunteer_performance_metadata",
 ];
+const visibilityRoleFieldActionMatrix = REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX;
 const ratingWorkflowTaskModes = [
   "ordinary_live",
   "validation",
@@ -3908,6 +3918,9 @@ const workflowWriteEndpoints = [
       "exportVisibilityRules",
       "frozenAt",
     ],
+    requiredObjectFields: ["roleFieldActionMatrix"],
+    requiredObjectKeys: { roleFieldActionMatrix: Object.keys(visibilityRoleFieldActionMatrix) },
+    requiredStructuredFields: { roleFieldActionMatrix: visibilityRoleFieldActionMatrix },
     requiredNonEmptyArrayFields: ["roleClasses", "workflowStates", "fieldClasses", "allowedReadActions", "allowedWriteActions"],
     requiredArrayIncludes: { fieldClasses: policyBundleFieldClasses },
     requiredExactFields: {
@@ -4865,10 +4878,40 @@ const workflowWriteEndpoints = [
       staleSupersededBehavior: "fail_closed_if_stale_or_superseded",
     },
   }),
+  workflowWriteSpec(/^\/api\/v1\/source-leakage-redaction-policies$/, "source_leakage_redaction_policy_submitted", "sourceLeakageRedactionPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "sourceIdentifiabilityRule",
+      "raterVisibleChecksumRule",
+      "unresolvedLeakageRule",
+      "rawRetentionBoundary",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["requiredLintPatterns", "sourceIdentifiabilityReviewStatuses"],
+    requiredObjectFields: ["redactionActions"],
+    requiredArrayIncludes: {
+      requiredLintPatterns: REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+      sourceIdentifiabilityReviewStatuses: REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
+    },
+    requiredObjectKeys: { redactionActions: REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS },
+    requiredStructuredFields: { redactionActions: REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS },
+    requiredStringIncludes: {
+      sourceIdentifiabilityRule: ["substantively necessary", "expert", "sensitive"],
+      raterVisibleChecksumRule: ["sha256", "rater-visible", "redaction"],
+      unresolvedLeakageRule: ["no unresolved", "source-leakage", "blind"],
+      rawRetentionBoundary: ["raw source metadata", "admin-only", "rater-visible"],
+      sourceBoundary: ["Project default", "LMCA"],
+    },
+    requiredExactFields: { policyVersion: SOURCE_LEAKAGE_REDACTION_POLICY_VERSION },
+  }),
   workflowWriteSpec(/^\/api\/v1\/blinding-preview-audits$/, "blinding_preview_audit_submitted", "blindingPreviewAudit", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
       "id",
+      "sourceLeakageRedactionPolicyId",
       "renderedRaterVisibleTextChecksum",
       "reviewerId",
       "reviewerRole",
@@ -4877,6 +4920,7 @@ const workflowWriteEndpoints = [
       "createdAt",
     ],
     requiredNonEmptyArrayFields: ["itemKeys", "itemTextVersionIds", "lintedSourceLeakagePatterns"],
+    requiredArrayIncludes: { lintedSourceLeakagePatterns: REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS },
     requiredStringPrefixes: { renderedRaterVisibleTextChecksum: "sha256:" },
     requiredExactFields: {
       approvalStatus: "passed",
@@ -4891,12 +4935,42 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
+  workflowWriteSpec(/^\/api\/v1\/partial-task-promotion-policies$/, "partial_task_promotion_policy_submitted", "partialTaskPromotionPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "policyVersion",
+      "denominatorExclusionRule",
+      "sourceBoundary",
+      "frozenAt",
+    ],
+    requiredNonEmptyArrayFields: ["coveredTaskTypes", "allowedEligibleUses", "excludedDenominators", "allowedPromotionReviewStatuses"],
+    requiredObjectFields: ["promotionCriteriaByTaskType"],
+    requiredArrayIncludes: {
+      coveredTaskTypes: partialTaskOutputTypes,
+      allowedEligibleUses: REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+      excludedDenominators: partialTaskExcludedDenominators,
+      allowedPromotionReviewStatuses: REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+    },
+    requiredObjectKeys: { promotionCriteriaByTaskType: partialTaskOutputTypes },
+    requiredStructuredFields: { promotionCriteriaByTaskType: REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA },
+    requiredStringIncludes: {
+      denominatorExclusionRule: ["full-rubric", "custom-loss", "hidden-benchmark", "human-ceiling"],
+      sourceBoundary: ["Project default", "LMCA"],
+    },
+    requiredExactFields: {
+      policyVersion: PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+      fullRubricPromotionProhibited: true,
+      explicitPairwiseExportLabelRequired: true,
+      adjudicationLinkRequiredForPromotion: true,
+    },
+  }),
   workflowWriteSpec(/^\/api\/v1\/partial-task-outputs$/, "partial_task_output_submitted", "partialTaskOutput", ratingWorkflowRoles, {
-    requiredFields: ["id", "assignmentId", "raterId", "taskType", "visibilityExposureState", "timestamp"],
+    requiredFields: ["id", "partialTaskPromotionPolicyId", "assignmentId", "raterId", "taskType", "visibilityExposureState", "promotionReviewStatus", "timestamp"],
     requiredNonEmptyArrayFields: ["itemKeys", "eligibleUses", "excludedDenominators"],
     requiredObjectFields: ["outputFields"],
-    requiredArrayIncludes: { excludedDenominators: partialTaskExcludedDenominators },
-    allowedValues: { taskType: partialTaskOutputTypes },
+    requiredArrayIncludes: { eligibleUses: REQUIRED_PARTIAL_TASK_ELIGIBLE_USES, excludedDenominators: partialTaskExcludedDenominators },
+    allowedValues: { taskType: partialTaskOutputTypes, promotionReviewStatus: REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES },
     requiredExactFields: { countedAsFullRubricRating: false },
     requireAssignmentClaimField: "assignmentId",
     requireActorField: "raterId",
@@ -5859,7 +5933,9 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/external-assistance-contamination-policies\/(?<id>[^/]+)$/, "externalAssistanceContaminationPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/external-assistance-declarations\/(?<id>[^/]+)$/, "externalAssistanceDeclaration", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/protected-artifact-retention-records\/(?<id>[^/]+)$/, "protectedArtifactRetentionRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/source-leakage-redaction-policies\/(?<id>[^/]+)$/, "sourceLeakageRedactionPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/blinding-preview-audits\/(?<id>[^/]+)$/, "blindingPreviewAudit", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/partial-task-promotion-policies\/(?<id>[^/]+)$/, "partialTaskPromotionPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/partial-task-outputs\/(?<id>[^/]+)$/, "partialTaskOutput", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/spot-check-sampling-policies\/(?<id>[^/]+)$/, "spotCheckSamplingPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/spot-checks\/(?<id>[^/]+)$/, "spotCheckQaItem", expertAuditWorkflowRoles),
@@ -8617,7 +8693,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const samePositionBatchReviews = latestWorkflowResources(workflowEvents, "samePositionBatchReview");
   const externalAssistanceContaminationPolicies = latestWorkflowResources(workflowEvents, "externalAssistanceContaminationPolicy");
   const externalAssistanceDeclarations = latestWorkflowResources(workflowEvents, "externalAssistanceDeclaration");
+  const sourceLeakageRedactionPolicies = latestWorkflowResources(workflowEvents, "sourceLeakageRedactionPolicy");
   const blindingPreviewAudits = latestWorkflowResources(workflowEvents, "blindingPreviewAudit");
+  const partialTaskPromotionPolicies = latestWorkflowResources(workflowEvents, "partialTaskPromotionPolicy");
   const partialTaskOutputs = latestWorkflowResources(workflowEvents, "partialTaskOutput");
   const raterPositionClusterExposures = latestWorkflowResources(workflowEvents, "raterPositionClusterExposure");
   const spotCheckSamplingPolicies = latestWorkflowResources(workflowEvents, "spotCheckSamplingPolicy");
@@ -8808,7 +8886,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     samePositionBatchReviews,
     externalAssistanceContaminationPolicies,
     externalAssistanceDeclarations,
+    sourceLeakageRedactionPolicies,
     blindingPreviewAudits,
+    partialTaskPromotionPolicies,
     partialTaskOutputs,
     raterPositionClusterExposures,
     spotCheckSamplingPolicies,
@@ -8994,7 +9074,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     samePositionBatchReviews,
     externalAssistanceContaminationPolicies,
     externalAssistanceDeclarations,
+    sourceLeakageRedactionPolicies,
     blindingPreviewAudits,
+    partialTaskPromotionPolicies,
     partialTaskOutputs,
     raterPositionClusterExposures,
     spotCheckSamplingPolicies,

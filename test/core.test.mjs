@@ -130,6 +130,7 @@ import {
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+  REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
   RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
@@ -155,6 +156,14 @@ import {
   REQUIRED_SCORE_CONFIDENCE_NUMERIC_THRESHOLDS,
   REQUIRED_SCORE_CONFIDENCE_REASON_CODES,
   REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION,
+  SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+  REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
+  REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+  REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+  PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+  REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+  REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
+  REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
   REQUIRED_SPOT_CHECK_MINIMUM_COUNT_BY_STRATUM,
   REQUIRED_SPOT_CHECK_MINIMUM_RATE_BY_STRATUM,
   REQUIRED_SPOT_CHECK_SAMPLING_STRATA,
@@ -706,6 +715,13 @@ function interpretationTargetMapRequirednessPolicy(id = "interpretation-target-m
 const verificationClaimGranularityClasses = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES;
 const verificationClaimGranularityThresholds = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS;
 const verificationClaimGranularityRules = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES;
+const visibilityRoleFieldActionMatrix = REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX;
+const sourceLeakageLintPatterns = REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS;
+const sourceLeakageRedactionActions = REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS;
+const sourceIdentifiabilityReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES;
+const partialTaskPromotionEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
+const partialTaskPromotionCriteria = REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA;
+const partialTaskPromotionReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
 const verificationClaimGranularityReviewStatuses = [
   "policy_applied_claim_level",
   "compound_claim_justified",
@@ -726,6 +742,44 @@ function verificationClaimGranularityPolicy(id = "verification-claim-granularity
       "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
     sourceBoundary:
       "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function sourceLeakageRedactionPolicy(id = "source-leakage-redaction-policy-submitted") {
+  return {
+    id,
+    policyVersion: SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+    requiredLintPatterns: sourceLeakageLintPatterns,
+    redactionActions: sourceLeakageRedactionActions,
+    sourceIdentifiabilityReviewStatuses,
+    sourceIdentifiabilityRule:
+      "Substantively necessary source-identifying spans require expert approval, sensitive marking, and release-claim disclosure before rating use.",
+    raterVisibleChecksumRule: "Rendered rater-visible text must be checksummed with sha256 after source-leakage redaction and before initial assignment.",
+    unresolvedLeakageRule: "No unresolved source-leakage pattern may remain in ordinary blind initial rating surfaces.",
+    rawRetentionBoundary: "Raw source metadata, hidden comments, admin tags, and pasted provenance metadata remain admin-only and outside rater-visible text.",
+    sourceBoundary:
+      "Project default source-leakage lint and redaction policy is frozen here; LMCA motivates source/tag blinding but does not state these exact lint patterns or redaction actions.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function partialTaskPromotionPolicy(id = "partial-task-promotion-policy-submitted") {
+  return {
+    id,
+    policyVersion: PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+    coveredTaskTypes: partialTaskOutputTypes,
+    allowedEligibleUses: partialTaskPromotionEligibleUses,
+    excludedDenominators: partialTaskExcludedDenominators,
+    promotionCriteriaByTaskType: partialTaskPromotionCriteria,
+    allowedPromotionReviewStatuses: partialTaskPromotionReviewStatuses,
+    fullRubricPromotionProhibited: true,
+    explicitPairwiseExportLabelRequired: true,
+    adjudicationLinkRequiredForPromotion: true,
+    denominatorExclusionRule:
+      "Partial-task outputs stay outside full-rubric blind-rating counts, custom-loss targets, hidden-benchmark labels, and human-ceiling denominators unless a future governed policy creates a new labeled sensitivity artifact.",
+    sourceBoundary:
+      "Project default partial-output promotion criteria are frozen here; LMCA motivates preserved full-rubric labels but does not state these auxiliary workflow promotion rules.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1510,6 +1564,7 @@ function completePolicyBundleFixtures() {
         fieldClasses: policyBundleFieldClasses,
         allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment", "read_authorized_audit_summary"],
         allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
+        roleFieldActionMatrix: visibilityRoleFieldActionMatrix,
         sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters",
         benchmarkGoldModelPeerVisibilityRules: "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
         backendEnforced: true,
@@ -2353,13 +2408,20 @@ function completeAuxiliaryWorkflowFixtures() {
     timestamp: "2026-10-01T00:00:00.000Z",
   };
   return {
+    sourceLeakageRedactionPolicies: [
+      sourceLeakageRedactionPolicy("source-leakage-redaction-policy-submitted"),
+    ],
+    partialTaskPromotionPolicies: [
+      partialTaskPromotionPolicy("partial-task-promotion-policy-submitted"),
+    ],
     blindingPreviewAudits: [
       {
         id: "blinding-preview-audit-submitted",
+        sourceLeakageRedactionPolicyId: "source-leakage-redaction-policy-submitted",
         itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
         itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
         renderedRaterVisibleTextChecksum: "sha256:submitted-rater-visible-text",
-        lintedSourceLeakagePatterns: ["author_name", "url", "source_title", "admin_tag"],
+        lintedSourceLeakagePatterns: sourceLeakageLintPatterns,
         redactedSourceIdentifyingSpans: ["source-title"],
         retainedSourceIdentifyingSpans: [],
         substantiveNecessityRationale: "No source-identifying spans retained for initial blind rendering.",
@@ -2373,6 +2435,7 @@ function completeAuxiliaryWorkflowFixtures() {
     ],
     partialTaskOutputs: partialTaskOutputTypes.map((taskType) => ({
       id: `partial-task-output-submitted-${taskType}`,
+      partialTaskPromotionPolicyId: "partial-task-promotion-policy-submitted",
       assignmentId: "assign-ai-base-rate",
       raterId: "demo-rater",
       taskType,
@@ -2381,6 +2444,7 @@ function completeAuxiliaryWorkflowFixtures() {
       visibilityExposureState: taskType === "practice" ? "training_exposure_recorded" : "not_full_blind_initial_rating",
       eligibleUses: ["routing", "calibration", "adjudication", "explicit_pairwise_export"],
       excludedDenominators: partialTaskExcludedDenominators,
+      promotionReviewStatus: "not_promoted_auxiliary_only",
       promotionAdjudicationLink: null,
       countedAsFullRubricRating: false,
       timestamp: "2026-10-01T00:01:00.000Z",
@@ -2998,6 +3062,8 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.equal(report.releaseUseStatus, "submitted_policy_bundle_evidence_complete");
   assert.equal(report.counts.completePolicyGroupCount, 7);
   assert.equal(report.counts.submittedVisibilityPolicyCount, 1);
+  assert.deepEqual(report.requiredVisibilityRoleFieldActionMatrix, visibilityRoleFieldActionMatrix);
+  assert.deepEqual(report.visibilityPolicyRows.at(-1).roleFieldActionMatrix, visibilityRoleFieldActionMatrix);
   assert.equal(report.counts.submittedScoreExplanationPolicyCount, 1);
   assert.equal(report.counts.submittedRatingEscalationPolicyCount, 1);
   assert.deepEqual(report.ratingWorkflowProfileRows.at(-1).optionalIssuePanels, [
@@ -3011,6 +3077,25 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.equal(report.ratingEscalationPolicyRows.at(-1).initialOverallSpreadThreshold, 0.35);
   assert.equal(report.counts.submittedAccessibilityConformanceReportCount, 1);
   assert.deepEqual(report.reviewSections, []);
+
+  const missingVisibilityMatrixEntryReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    visibilityPolicies: [
+      {
+        ...completePolicyBundleFixtures().visibilityPolicies[0],
+        id: "visibility-policy-missing-auditor-matrix",
+        roleFieldActionMatrix: Object.fromEntries(
+          Object.entries(visibilityRoleFieldActionMatrix).filter(([key]) => key !== "auditorReleaseRead"),
+        ),
+      },
+    ],
+  });
+  assert.equal(missingVisibilityMatrixEntryReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(
+    missingVisibilityMatrixEntryReport.reviewSections.some(
+      (section) => section.artifactType === "visibility_policy" && section.reason === "roleFieldActionMatrix:auditorReleaseRead",
+    ),
+  );
 
   const ordinaryEvidenceSpanRequiredReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
     ...completePolicyBundleFixtures(),
@@ -3940,9 +4025,27 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   const report = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", completeAuxiliaryWorkflowFixtures());
 
   assert.equal(report.releaseUseStatus, "submitted_auxiliary_workflow_evidence_complete");
+  assert.equal(report.counts.submittedSourceLeakageRedactionPolicyCount, 1);
+  assert.equal(report.counts.sourceLeakageRedactionPolicyReviewRows, 0);
+  assert.equal(report.sourceLeakageRedactionPolicyReleaseUseStatus, "submitted_source_leakage_redaction_policy_active");
+  assert.equal(report.sourceLeakageRedactionPolicyId, "source-leakage-redaction-policy-submitted");
+  assert.deepEqual(report.requiredSourceLeakageLintPatterns, sourceLeakageLintPatterns);
+  assert.deepEqual(report.requiredSourceLeakageRedactionActions, sourceLeakageRedactionActions);
+  assert.deepEqual(report.requiredSourceIdentifiabilityReviewStatuses, sourceIdentifiabilityReviewStatuses);
   assert.equal(report.counts.submittedBlindingPreviewAuditCount, 1);
+  assert.equal(report.blindingPreviewAuditRows.at(-1).sourceLeakageRedactionPolicyId, "source-leakage-redaction-policy-submitted");
+  assert.deepEqual(report.blindingPreviewAuditRows.at(-1).lintedSourceLeakagePatterns, sourceLeakageLintPatterns);
   assert.equal(report.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
   assert.equal(report.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
+  assert.equal(report.counts.submittedPartialTaskPromotionPolicyCount, 1);
+  assert.equal(report.counts.partialTaskPromotionPolicyReviewRows, 0);
+  assert.equal(report.partialTaskPromotionPolicyReleaseUseStatus, "submitted_partial_task_promotion_policy_active");
+  assert.equal(report.partialTaskPromotionPolicyId, "partial-task-promotion-policy-submitted");
+  assert.deepEqual(report.partialTaskEligibleUses, partialTaskPromotionEligibleUses);
+  assert.deepEqual(report.requiredPartialTaskPromotionCriteria, partialTaskPromotionCriteria);
+  assert.deepEqual(report.requiredPartialTaskPromotionReviewStatuses, partialTaskPromotionReviewStatuses);
+  assert.equal(report.partialTaskOutputRows.at(-1).partialTaskPromotionPolicyId, "partial-task-promotion-policy-submitted");
+  assert.equal(report.partialTaskOutputRows.at(-1).promotionReviewStatus, "not_promoted_auxiliary_only");
   assert.equal(report.counts.submittedRaterPositionClusterExposureCount, 1);
   assert.equal(report.raterPositionClusterExposureRows.at(-1).blindEligibilityEffect, "excluded_from_fresh_blind_initial_on_cluster");
   assert.equal(report.counts.submittedSpotCheckSamplingPolicyCount, 1);
@@ -4009,6 +4112,94 @@ test("auxiliary workflow evidence gates blinding, partial outputs, exposure, que
   assert.equal(report.scheduleStatusRows.at(-1).slipDays, 0);
   assert.equal(report.scheduleStatusRows.at(-1).supportsCompletionClaim, false);
   assert.deepEqual(report.reviewSections, []);
+
+  const driftedSourceLeakagePolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    sourceLeakageRedactionPolicies: [
+      {
+        ...sourceLeakageRedactionPolicy("source-leakage-redaction-policy-drifted"),
+        requiredLintPatterns: sourceLeakageLintPatterns.filter((pattern) => pattern !== "pasted_metadata"),
+      },
+    ],
+  });
+  assert.equal(driftedSourceLeakagePolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.equal(driftedSourceLeakagePolicyReport.sourceLeakageRedactionPolicyReleaseUseStatus, "submitted_source_leakage_redaction_policy_review_required");
+  assert.ok(
+    driftedSourceLeakagePolicyReport.reviewSections.some(
+      (section) => section.artifactType === "source_leakage_redaction_policy" && section.reason === "requiredLintPatterns:pasted_metadata",
+    ),
+  );
+
+  const staleSourceLeakagePolicyAuditReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    blindingPreviewAudits: [
+      {
+        ...completeAuxiliaryWorkflowFixtures().blindingPreviewAudits[0],
+        sourceLeakageRedactionPolicyId: "source-leakage-redaction-policy-old",
+      },
+    ],
+  });
+  assert.equal(staleSourceLeakagePolicyAuditReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    staleSourceLeakagePolicyAuditReport.reviewSections.some(
+      (section) => section.artifactType === "blinding_preview_audit" && section.reason === "sourceLeakageRedactionPolicyId",
+    ),
+  );
+
+  const driftedPartialTaskPromotionPolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    partialTaskPromotionPolicies: [
+      {
+        ...partialTaskPromotionPolicy("partial-task-promotion-policy-drifted"),
+        promotionCriteriaByTaskType: Object.fromEntries(
+          Object.entries(partialTaskPromotionCriteria).filter(([taskType]) => taskType !== "discussion_comment"),
+        ),
+      },
+    ],
+  });
+  assert.equal(driftedPartialTaskPromotionPolicyReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.equal(
+    driftedPartialTaskPromotionPolicyReport.partialTaskPromotionPolicyReleaseUseStatus,
+    "submitted_partial_task_promotion_policy_review_required",
+  );
+  assert.ok(
+    driftedPartialTaskPromotionPolicyReport.reviewSections.some(
+      (section) => section.artifactType === "partial_task_promotion_policy" && section.reason === "promotionCriteriaByTaskType",
+    ),
+  );
+
+  const stalePartialTaskPromotionPolicyOutputReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    partialTaskOutputs: completeAuxiliaryWorkflowFixtures().partialTaskOutputs.map((output) => ({
+      ...output,
+      partialTaskPromotionPolicyId: "partial-task-promotion-policy-old",
+    })),
+  });
+  assert.equal(stalePartialTaskPromotionPolicyOutputReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    stalePartialTaskPromotionPolicyOutputReport.reviewSections.some(
+      (section) => section.artifactType === "partial_task_output" && section.reason === "partialTaskPromotionPolicyId",
+    ),
+  );
+
+  const unlinkedPromotedPartialTaskReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
+    ...completeAuxiliaryWorkflowFixtures(),
+    partialTaskOutputs: completeAuxiliaryWorkflowFixtures().partialTaskOutputs.map((output, index) =>
+      index === 0
+        ? {
+            ...output,
+            promotionReviewStatus: "promoted_to_adjudication_context",
+            promotionAdjudicationLink: null,
+          }
+        : output,
+    ),
+  });
+  assert.equal(unlinkedPromotedPartialTaskReport.releaseUseStatus, "auxiliary_workflow_evidence_review_required");
+  assert.ok(
+    unlinkedPromotedPartialTaskReport.reviewSections.some(
+      (section) => section.artifactType === "partial_task_output" && section.reason === "promotionAdjudicationLink",
+    ),
+  );
 
   const driftedModelRunReproducibilityPolicyReport = buildAuxiliaryWorkflowEvidenceReport("october-2026-demo", {
     ...completeAuxiliaryWorkflowFixtures(),

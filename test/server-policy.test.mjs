@@ -70,6 +70,15 @@ import {
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES,
   REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS,
+  REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
+  SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+  REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
+  REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+  REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+  PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+  REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+  REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
+  REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
   RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
@@ -682,6 +691,13 @@ function interpretationTargetMapRequirednessPolicy(id = "interpretation-target-m
 const verificationClaimGranularityClasses = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_CLASSES;
 const verificationClaimGranularityThresholds = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_THRESHOLDS;
 const verificationClaimGranularityRules = REQUIRED_VERIFICATION_CLAIM_GRANULARITY_RULES;
+const visibilityRoleFieldActionMatrix = REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX;
+const sourceLeakageLintPatterns = REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS;
+const sourceLeakageRedactionActions = REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS;
+const sourceIdentifiabilityReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES;
+const partialTaskPromotionEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
+const partialTaskPromotionCriteria = REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA;
+const partialTaskPromotionReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
 const verificationClaimGranularityReviewStatuses = [
   "policy_applied_claim_level",
   "compound_claim_justified",
@@ -702,6 +718,44 @@ function verificationClaimGranularityPolicy(id = "verification-claim-granularity
       "Release-critical, validation, adjudication, and high-disagreement correctness workspaces must either link a claim-weight worksheet or record why a worksheet is not practicable.",
     sourceBoundary:
       "Project default claim-granularity standards are frozen here; LMCA motivates claim-level verification but does not state these exact split thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function sourceLeakageRedactionPolicy(id = "source-leakage-redaction-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+    requiredLintPatterns: sourceLeakageLintPatterns,
+    redactionActions: sourceLeakageRedactionActions,
+    sourceIdentifiabilityReviewStatuses,
+    sourceIdentifiabilityRule:
+      "Substantively necessary source-identifying spans require expert approval, sensitive marking, and release-claim disclosure before rating use.",
+    raterVisibleChecksumRule: "Rendered rater-visible text must be checksummed with sha256 after source-leakage redaction and before initial assignment.",
+    unresolvedLeakageRule: "No unresolved source-leakage pattern may remain in ordinary blind initial rating surfaces.",
+    rawRetentionBoundary: "Raw source metadata, hidden comments, admin tags, and pasted provenance metadata remain admin-only and outside rater-visible text.",
+    sourceBoundary:
+      "Project default source-leakage lint and redaction policy is frozen here; LMCA motivates source/tag blinding but does not state these exact lint patterns or redaction actions.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function partialTaskPromotionPolicy(id = "partial-task-promotion-policy-workflow-new") {
+  return {
+    id,
+    policyVersion: PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+    coveredTaskTypes: partialTaskOutputTypes,
+    allowedEligibleUses: partialTaskPromotionEligibleUses,
+    excludedDenominators: partialTaskExcludedDenominators,
+    promotionCriteriaByTaskType: partialTaskPromotionCriteria,
+    allowedPromotionReviewStatuses: partialTaskPromotionReviewStatuses,
+    fullRubricPromotionProhibited: true,
+    explicitPairwiseExportLabelRequired: true,
+    adjudicationLinkRequiredForPromotion: true,
+    denominatorExclusionRule:
+      "Partial-task outputs stay outside full-rubric blind-rating counts, custom-loss targets, hidden-benchmark labels, and human-ceiling denominators unless a future governed policy creates a new labeled sensitivity artifact.",
+    sourceBoundary:
+      "Project default partial-output promotion criteria are frozen here; LMCA motivates preserved full-rubric labels but does not state these auxiliary workflow promotion rules.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1448,6 +1502,7 @@ function completePolicyBundleFixtures() {
       fieldClasses: policyBundleFieldClasses,
       allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment", "read_authorized_audit_summary"],
       allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
+      roleFieldActionMatrix: visibilityRoleFieldActionMatrix,
       sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters",
       benchmarkGoldModelPeerVisibilityRules: "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
       discussionIdentityRevealRules: "identity masked until configured post-lock reveal state",
@@ -2219,13 +2274,18 @@ function completeAuxiliaryWorkflowFixtures() {
     timestamp: "2026-10-01T00:29:00.000Z",
   };
   const modelReproducibilityPolicy = modelRunReproducibilityPolicy("model-run-reproducibility-policy-workflow-new");
+  const sourceLeakagePolicy = sourceLeakageRedactionPolicy("source-leakage-redaction-policy-workflow-new");
+  const partialPromotionPolicy = partialTaskPromotionPolicy("partial-task-promotion-policy-workflow-new");
   return {
+    sourceLeakageRedactionPolicy: sourceLeakagePolicy,
+    partialTaskPromotionPolicy: partialPromotionPolicy,
     blindingPreviewAudit: {
       id: "blinding-preview-audit-workflow-new",
+      sourceLeakageRedactionPolicyId: sourceLeakagePolicy.id,
       itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
       itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
       renderedRaterVisibleTextChecksum: "sha256:workflow-rater-visible-text",
-      lintedSourceLeakagePatterns: ["author_name", "url", "source_title", "admin_tag"],
+      lintedSourceLeakagePatterns: sourceLeakageLintPatterns,
       redactedSourceIdentifyingSpans: ["source-title"],
       retainedSourceIdentifyingSpans: [],
       substantiveNecessityRationale: "No source-identifying spans retained for initial blind rendering.",
@@ -2238,6 +2298,7 @@ function completeAuxiliaryWorkflowFixtures() {
     },
     partialTaskOutputs: partialTaskOutputTypes.map((taskType) => ({
       id: `partial-task-output-workflow-${taskType}`,
+      partialTaskPromotionPolicyId: partialPromotionPolicy.id,
       assignmentId: "assign-ai-base-rate",
       raterId: "demo-rater",
       taskType,
@@ -2246,6 +2307,7 @@ function completeAuxiliaryWorkflowFixtures() {
       visibilityExposureState: taskType === "practice" ? "training_exposure_recorded" : "not_full_blind_initial_rating",
       eligibleUses: ["routing", "calibration", "adjudication", "explicit_pairwise_export"],
       excludedDenominators: partialTaskExcludedDenominators,
+      promotionReviewStatus: "not_promoted_auxiliary_only",
       promotionAdjudicationLink: null,
       countedAsFullRubricRating: false,
       timestamp: "2026-10-01T00:31:00.000Z",
@@ -3383,6 +3445,10 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/raters/me/remediation/module-smoke/complete"],
     ["POST", "/api/v1/visibility-policies"],
     ["GET", "/api/v1/visibility-policies/visibility-policy-smoke"],
+    ["POST", "/api/v1/source-leakage-redaction-policies"],
+    ["GET", "/api/v1/source-leakage-redaction-policies/source-leakage-redaction-policy-smoke"],
+    ["POST", "/api/v1/partial-task-promotion-policies"],
+    ["GET", "/api/v1/partial-task-promotion-policies/partial-task-promotion-policy-smoke"],
     ["POST", "/api/v1/rating-workflow-profiles"],
     ["GET", "/api/v1/rating-workflow-profiles/rating-profile-smoke"],
     ["POST", "/api/v1/ui-experiment-policies"],
@@ -3557,6 +3623,15 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
 test("Workflow console exposes templates for RLHF77 operator action endpoints", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   const requiredTemplateSnippets = [
+    'id: "source-leakage-redaction-policy"',
+    'endpoint: () => "/api/v1/source-leakage-redaction-policies"',
+    "redactionActions: sourceLeakageRedactionActions",
+    'id: "partial-task-promotion-policy"',
+    'endpoint: () => "/api/v1/partial-task-promotion-policies"',
+    "promotionCriteriaByTaskType: partialTaskPromotionCriteria",
+    'id: "visibility-policy"',
+    'endpoint: () => "/api/v1/visibility-policies"',
+    "roleFieldActionMatrix: visibilityRoleFieldActionMatrix",
     'id: "rights-review"',
     'endpoint: () => "/api/v1/rights/review"',
     'id: "release-freeze"',
@@ -9502,6 +9577,27 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteVisibilityPolicy.status, 400);
   assert.match(incompleteVisibilityPolicy.body.detail, /sourceTagVisibilityRules|discussionIdentityRevealRules|frozenAt/);
 
+  const driftedVisibilityMatrixPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/visibility-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      visibilityPolicy: {
+        ...policyBundle.visibilityPolicy,
+        id: "visibility-policy-drifted-matrix",
+        roleFieldActionMatrix: {
+          ...visibilityRoleFieldActionMatrix,
+          initialBlindRater: {
+            ...visibilityRoleFieldActionMatrix.initialBlindRater,
+            allowedFieldClasses: ["source_metadata", "rater_role"],
+          },
+        },
+      },
+    }),
+  });
+  assert.equal(driftedVisibilityMatrixPolicy.status, 400);
+  assert.match(driftedVisibilityMatrixPolicy.body.detail, /roleFieldActionMatrix/);
+
   const incompleteWorkflowProfile = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/rating-workflow-profiles",
@@ -9794,6 +9890,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(visibilityPolicyById.status, 200);
   assert.equal(visibilityPolicyById.body.backendEnforced, true);
+  assert.deepEqual(visibilityPolicyById.body.roleFieldActionMatrix, visibilityRoleFieldActionMatrix);
 
   const participantSafeguards = completeParticipantSafeguardWorkflowFixtures();
 
@@ -11101,6 +11198,38 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   const auxiliaryWorkflow = completeAuxiliaryWorkflowFixtures();
 
+  const driftedSourceLeakagePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-leakage-redaction-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sourceLeakageRedactionPolicy: {
+        ...auxiliaryWorkflow.sourceLeakageRedactionPolicy,
+        id: "source-leakage-redaction-policy-drifted",
+        requiredLintPatterns: sourceLeakageLintPatterns.filter((pattern) => pattern !== "pasted_metadata"),
+      },
+    }),
+  });
+  assert.equal(driftedSourceLeakagePolicy.status, 400);
+  assert.match(driftedSourceLeakagePolicy.body.detail, /requiredLintPatterns/);
+
+  const driftedPartialTaskPromotionPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/partial-task-promotion-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      partialTaskPromotionPolicy: {
+        ...auxiliaryWorkflow.partialTaskPromotionPolicy,
+        id: "partial-task-promotion-policy-drifted",
+        promotionCriteriaByTaskType: Object.fromEntries(
+          Object.entries(partialTaskPromotionCriteria).filter(([taskType]) => taskType !== "discussion_comment"),
+        ),
+      },
+    }),
+  });
+  assert.equal(driftedPartialTaskPromotionPolicy.status, 400);
+  assert.match(driftedPartialTaskPromotionPolicy.body.detail, /promotionCriteriaByTaskType/);
+
   const incompleteBlindingPreview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/blinding-preview-audits",
@@ -11530,6 +11659,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.match(unsafeDiagnosticDeferral.body.detail, /protectedContentDisclosureCheck|diagnosticDeferralReviewStatus/);
 
   for (const [resourceKey, url] of [
+    ["sourceLeakageRedactionPolicy", "/api/v1/source-leakage-redaction-policies"],
+    ["partialTaskPromotionPolicy", "/api/v1/partial-task-promotion-policies"],
     ["blindingPreviewAudit", "/api/v1/blinding-preview-audits"],
     ["raterPositionClusterExposure", "/api/v1/raters/demo-rater/position-cluster-exposures"],
     ["spotCheckSamplingPolicy", "/api/v1/spot-check-sampling-policies"],
@@ -11696,6 +11827,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(releaseSupersession.status, 201);
 
+  const sourceLeakagePolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/source-leakage-redaction-policies/source-leakage-redaction-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(sourceLeakagePolicyById.status, 200);
+  assert.deepEqual(sourceLeakagePolicyById.body.requiredLintPatterns, sourceLeakageLintPatterns);
+  assert.deepEqual(sourceLeakagePolicyById.body.redactionActions, sourceLeakageRedactionActions);
+
+  const partialTaskPromotionPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/partial-task-promotion-policies/partial-task-promotion-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(partialTaskPromotionPolicyById.status, 200);
+  assert.deepEqual(partialTaskPromotionPolicyById.body.promotionCriteriaByTaskType, partialTaskPromotionCriteria);
+  assert.deepEqual(partialTaskPromotionPolicyById.body.allowedPromotionReviewStatuses, partialTaskPromotionReviewStatuses);
+
   const blindingPreviewById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/blinding-preview-audits/blinding-preview-audit-workflow-new",
@@ -11711,6 +11860,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(partialTaskById.status, 200);
   assert.equal(partialTaskById.body.countedAsFullRubricRating, false);
+  assert.equal(partialTaskById.body.partialTaskPromotionPolicyId, "partial-task-promotion-policy-workflow-new");
+  assert.equal(partialTaskById.body.promotionReviewStatus, "not_promoted_auxiliary_only");
 
   const ratingEffortQaReviewById = await invokeApi(context, {
     method: "GET",
@@ -14523,6 +14674,8 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.submittedExternalAssistanceDeclarationCount, 1);
   assert.equal(releaseReport.body.ratingExperienceEvidence.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(releaseReport.body.ratingExperienceEvidence.reviewSections, []);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.sourceLeakageRedactionPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.partialTaskPromotionPolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.blindingPreviewAudits.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.partialTaskOutputs.length, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.raterPositionClusterExposures.length, 1);
@@ -14545,8 +14698,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.scheduleRebaselinePolicies.length, 1);
   assert.equal(releaseReport.body.workflowAuxiliaryArtifacts.scheduleStatusSnapshots.length, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.releaseUseStatus, "submitted_auxiliary_workflow_evidence_complete");
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedPartialTaskPromotionPolicyCount, 1);
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.partialTaskPromotionPolicyReviewRows, 0);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.partialTaskPromotionPolicyReleaseUseStatus,
+    "submitted_partial_task_promotion_policy_active",
+  );
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.partialTaskPromotionPolicyId, "partial-task-promotion-policy-workflow-new");
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredPartialTaskPromotionCriteria, partialTaskPromotionCriteria);
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredPartialTaskPromotionReviewStatuses, partialTaskPromotionReviewStatuses);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedPartialTaskOutputCount, partialTaskOutputTypes.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingPartialTaskTypeCount, partialTaskOutputTypes.length);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.partialTaskOutputRows.at(-1).partialTaskPromotionPolicyId,
+    "partial-task-promotion-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.passingQueuePolicyComponentCount, queuePolicyComponents.length);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedModelRunReproducibilityPolicyCount, 1);
   assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.modelRunReproducibilityPolicyReleaseUseStatus, "submitted_model_run_reproducibility_policy_active");
@@ -14615,6 +14781,20 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(workflowScheduleClaim.rowSource, "submitted_workflow_schedule_status_snapshot");
   assert.equal(workflowScheduleClaim.completionClaimStatus, "completion_claim_blocked_until_complete_or_rebaselined");
   assert.equal(releaseReport.body.releaseClaimWarnings.releaseUseStatus, "release_claims_limited_by_errata_or_schedule");
+  assert.equal(releaseReport.body.auxiliaryWorkflowEvidence.counts.submittedSourceLeakageRedactionPolicyCount, 1);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.sourceLeakageRedactionPolicyReleaseUseStatus,
+    "submitted_source_leakage_redaction_policy_active",
+  );
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.sourceLeakageRedactionPolicyId,
+    "source-leakage-redaction-policy-workflow-new",
+  );
+  assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.requiredSourceLeakageLintPatterns, sourceLeakageLintPatterns);
+  assert.equal(
+    releaseReport.body.auxiliaryWorkflowEvidence.blindingPreviewAuditRows.at(-1).sourceLeakageRedactionPolicyId,
+    "source-leakage-redaction-policy-workflow-new",
+  );
   assert.deepEqual(releaseReport.body.auxiliaryWorkflowEvidence.reviewSections, []);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.publicExamplePracticeSessions.length, 1);
   assert.equal(releaseReport.body.workflowInteractionArtifacts.practiceSandboxPolicies.length, 1);
@@ -15137,7 +15317,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 145 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 147 + extendedRaterItemConflictTypes.length,
   );
 });
 

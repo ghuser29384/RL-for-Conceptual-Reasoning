@@ -2,6 +2,15 @@ import {
   RATER_ISSUE_FLAG_DEFINITIONS,
   RATER_DATA_GOVERNANCE_CATEGORIES,
   RATER_DATA_USE_SCOPES,
+  REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
+  SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+  REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
+  REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+  REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+  PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+  REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+  REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
+  REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
   RUBRIC_DIMENSIONS,
   SCORE_CONFIDENCE_LEVELS,
   adjudicationMemos,
@@ -792,7 +801,118 @@ const navItems = [
 ];
 
 const raterIssueFlags = RATER_ISSUE_FLAG_DEFINITIONS;
+const visibilityRoleFieldActionMatrix = REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX;
+const sourceLeakageLintPatterns = REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS;
+const sourceLeakageRedactionActions = REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS;
+const sourceIdentifiabilityReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES;
+const partialTaskPromotionEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
+const partialTaskPromotionCriteria = REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA;
+const partialTaskPromotionReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
 const workflowTemplates = [
+  {
+    id: "partial-task-promotion-policy",
+    label: "Partial Task Promotion Policy",
+    endpoint: () => "/api/v1/partial-task-promotion-policies",
+    resourceKey: "partialTaskPromotionPolicy",
+    requiredRole: "admin",
+    summary: "Freeze when auxiliary task outputs may support routing, adjudication, or explicitly labeled exports without becoming full labels.",
+    payload: () => ({
+      partialTaskPromotionPolicy: {
+        id: `partial-task-promotion-policy-${releaseId}`,
+        policyVersion: PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+        coveredTaskTypes: [
+          "pairwise_preference_only",
+          "clarity_triage",
+          "dead_weight_triage",
+          "verification_only",
+          "practice",
+          "safe_decline",
+          "discussion_comment",
+        ],
+        allowedEligibleUses: partialTaskPromotionEligibleUses,
+        excludedDenominators: ["full_rubric_blind_rating_count", "custom_loss_target", "hidden_benchmark_label", "human_ceiling_denominator"],
+        promotionCriteriaByTaskType: partialTaskPromotionCriteria,
+        allowedPromotionReviewStatuses: partialTaskPromotionReviewStatuses,
+        fullRubricPromotionProhibited: true,
+        explicitPairwiseExportLabelRequired: true,
+        adjudicationLinkRequiredForPromotion: true,
+        denominatorExclusionRule:
+          "Partial-task outputs stay outside full-rubric blind-rating counts, custom-loss targets, hidden-benchmark labels, and human-ceiling denominators unless a future governed policy creates a new labeled sensitivity artifact.",
+        sourceBoundary:
+          "Project default partial-output promotion criteria are frozen here; LMCA motivates preserved full-rubric labels but does not state these auxiliary workflow promotion rules.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "source-leakage-redaction-policy",
+    label: "Source Leakage Redaction Policy",
+    endpoint: () => "/api/v1/source-leakage-redaction-policies",
+    resourceKey: "sourceLeakageRedactionPolicy",
+    requiredRole: "admin",
+    summary: "Freeze source-leakage lint patterns, redaction actions, and sensitive-source review handling before blinding previews pass.",
+    payload: () => ({
+      sourceLeakageRedactionPolicy: {
+        id: `source-leakage-redaction-policy-${releaseId}`,
+        policyVersion: SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+        requiredLintPatterns: sourceLeakageLintPatterns,
+        redactionActions: sourceLeakageRedactionActions,
+        sourceIdentifiabilityReviewStatuses,
+        sourceIdentifiabilityRule:
+          "Substantively necessary source-identifying spans require expert approval, sensitive marking, and release-claim disclosure before rating use.",
+        raterVisibleChecksumRule: "Rendered rater-visible text must be checksummed with sha256 after source-leakage redaction and before initial assignment.",
+        unresolvedLeakageRule: "No unresolved source-leakage pattern may remain in ordinary blind initial rating surfaces.",
+        rawRetentionBoundary: "Raw source metadata, hidden comments, admin tags, and pasted provenance metadata remain admin-only and outside rater-visible text.",
+        sourceBoundary:
+          "Project default source-leakage lint and redaction policy is frozen here; LMCA motivates source/tag blinding but does not state these exact lint patterns or redaction actions.",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "visibility-policy",
+    label: "Visibility Policy",
+    endpoint: () => "/api/v1/visibility-policies",
+    resourceKey: "visibilityPolicy",
+    requiredRole: "admin",
+    summary: "Freeze the role, field, and action matrix that governs hidden metadata, peer/model outputs, and release-review access.",
+    payload: () => ({
+      visibilityPolicy: {
+        id: `visibility-policy-${releaseId}`,
+        policyVersion: "visibility-policy-rlhf88-v1",
+        roleClasses: ["rater", "graduate", "phd", "expert", "admin", "auditor"],
+        workflowStates: ["queued", "draft", "locked_initial", "post_lock", "adjudication", "release_review"],
+        fieldClasses: [
+          "source_metadata",
+          "admin_tags",
+          "benchmark_membership",
+          "gold_answers",
+          "peer_ratings",
+          "peer_rationales",
+          "model_judge_scores",
+          "active_learning_selection_reasons",
+          "rater_identity",
+          "rater_role",
+          "discussion_identity",
+          "verification_evidence",
+          "volunteer_performance_metadata",
+        ],
+        allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment", "read_authorized_audit_summary"],
+        allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
+        roleFieldActionMatrix: visibilityRoleFieldActionMatrix,
+        sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters; admin or authorized post-lock review only",
+        benchmarkGoldModelPeerVisibilityRules:
+          "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
+        discussionIdentityRevealRules: "identity masked until configured post-lock reveal state",
+        volunteerPerformanceMetadataVisibility: "rater-facing own profile or approved operational/research roles only",
+        verificationMaterialVisibility: "expert/admin verification workspace only until release-safe summary",
+        exportVisibilityRules: "public exports deidentify ordinary rater data and exclude protected raw fields",
+        backendEnforced: true,
+        exposureLogRequired: true,
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
   {
     id: "position-intake",
     label: "Position Intake",

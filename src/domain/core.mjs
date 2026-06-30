@@ -16022,6 +16022,57 @@ const POLICY_BUNDLE_FIELD_CLASSES = [
   "volunteer_performance_metadata",
 ];
 
+export const REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX = {
+  initialBlindRater: {
+    roleClasses: ["rater", "graduate", "phd", "expert"],
+    workflowStates: ["queued", "draft"],
+    allowedFieldClasses: ["rater_role"],
+    hiddenFieldClasses: [
+      "source_metadata",
+      "admin_tags",
+      "benchmark_membership",
+      "gold_answers",
+      "peer_ratings",
+      "peer_rationales",
+      "model_judge_scores",
+      "active_learning_selection_reasons",
+      "rater_identity",
+      "discussion_identity",
+      "volunteer_performance_metadata",
+    ],
+    allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment"],
+    allowedWriteActions: ["submit_rating", "submit_issue"],
+    prohibitedActions: ["read_hidden_metadata", "read_peer_or_model_scores", "read_benchmark_gold_labels"],
+  },
+  postLockExpertReview: {
+    roleClasses: ["expert", "admin"],
+    workflowStates: ["post_lock", "adjudication"],
+    allowedFieldClasses: ["peer_ratings", "peer_rationales", "discussion_identity", "verification_evidence", "rater_role"],
+    hiddenFieldClasses: ["benchmark_membership", "gold_answers", "volunteer_performance_metadata"],
+    allowedReadActions: ["read_authorized_audit_summary"],
+    allowedWriteActions: ["submit_guarded_transition", "submit_authorized_workflow_artifact"],
+    prohibitedActions: ["read_unapproved_source_metadata", "export_private_rater_data"],
+  },
+  adminReleaseGovernance: {
+    roleClasses: ["admin"],
+    workflowStates: ["adjudication", "release_review"],
+    allowedFieldClasses: POLICY_BUNDLE_FIELD_CLASSES,
+    hiddenFieldClasses: [],
+    allowedReadActions: ["read_authorized_audit_summary", "read_sanitized_screen_state"],
+    allowedWriteActions: ["submit_guarded_transition", "submit_authorized_workflow_artifact"],
+    prohibitedActions: ["mutate_frozen_artifact_in_place", "bypass_policy_decision"],
+  },
+  auditorReleaseRead: {
+    roleClasses: ["auditor", "admin"],
+    workflowStates: ["release_review"],
+    allowedFieldClasses: ["source_metadata", "admin_tags", "benchmark_membership", "rater_role", "verification_evidence", "volunteer_performance_metadata"],
+    hiddenFieldClasses: ["gold_answers", "peer_rationales", "model_judge_scores", "rater_identity", "discussion_identity"],
+    allowedReadActions: ["read_authorized_audit_summary"],
+    allowedWriteActions: [],
+    prohibitedActions: ["submit_rating", "submit_guarded_transition", "export_private_rater_data"],
+  },
+};
+
 const RATING_WORKFLOW_TASK_MODES = [
   "ordinary_live",
   "validation",
@@ -16093,6 +16144,7 @@ function defaultVisibilityPolicy(releaseId) {
     fieldClasses: POLICY_BUNDLE_FIELD_CLASSES,
     allowedReadActions: ["read_sanitized_screen_state", "read_own_assignment", "read_authorized_audit_summary"],
     allowedWriteActions: ["submit_rating", "submit_issue", "submit_guarded_transition", "submit_authorized_workflow_artifact"],
+    roleFieldActionMatrix: REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
     sourceTagVisibilityRules: "hide source metadata and admin tags from initial raters; admin or authorized post-lock review only",
     benchmarkGoldModelPeerVisibilityRules: "hide benchmark membership, gold answers, model judge scores, peer scores, and peer rationales before allowed locks",
     discussionIdentityRevealRules: "identity masked until configured post-lock reveal state",
@@ -16266,6 +16318,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     releaseId,
     generatedAt: new Date().toISOString(),
     requiredFieldClasses: POLICY_BUNDLE_FIELD_CLASSES,
+    requiredVisibilityRoleFieldActionMatrix: REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX,
     requiredWorkflowTaskModes: RATING_WORKFLOW_TASK_MODES,
     protectedUiLaneClasses: PROTECTED_UI_LANE_CLASSES,
     blockedExperimentClasses: UI_EXPERIMENT_BLOCKED_CLASSES,
@@ -16303,7 +16356,12 @@ function normalizeVisibilityPolicy(policy, rowSource) {
   const id = policy?.id ?? policy?.visibilityPolicyId;
   if (!id) return null;
   const fieldClasses = normalizeStringArray(policy.fieldClasses);
+  const roleFieldActionMatrix =
+    policy.roleFieldActionMatrix && typeof policy.roleFieldActionMatrix === "object" && !Array.isArray(policy.roleFieldActionMatrix)
+      ? policy.roleFieldActionMatrix
+      : {};
   const missingFieldClasses = POLICY_BUNDLE_FIELD_CLASSES.filter((fieldClass) => !fieldClasses.includes(fieldClass));
+  const missingMatrixEntries = Object.keys(REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX).filter((key) => !Object.hasOwn(roleFieldActionMatrix, key));
   const reviewReasons = [
     requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
     normalizeStringArray(policy.roleClasses).length ? null : "roleClasses",
@@ -16311,6 +16369,8 @@ function normalizeVisibilityPolicy(policy, rowSource) {
     missingFieldClasses.length ? `fieldClasses:${missingFieldClasses.join(",")}` : null,
     normalizeStringArray(policy.allowedReadActions).length ? null : "allowedReadActions",
     normalizeStringArray(policy.allowedWriteActions).length ? null : "allowedWriteActions",
+    missingMatrixEntries.length ? `roleFieldActionMatrix:${missingMatrixEntries.join(",")}` : null,
+    stableJsonKey(roleFieldActionMatrix) === stableJsonKey(REQUIRED_VISIBILITY_ROLE_FIELD_ACTION_MATRIX) ? null : "roleFieldActionMatrix",
     policyMentions(policy.sourceTagVisibilityRules, ["hide", "source"]) ? null : "sourceTagVisibilityRules",
     policyMentions(policy.benchmarkGoldModelPeerVisibilityRules, ["hide", "model", "peer"]) ? null : "benchmarkGoldModelPeerVisibilityRules",
     policy.backendEnforced === true ? null : "backendEnforced",
@@ -16326,6 +16386,7 @@ function normalizeVisibilityPolicy(policy, rowSource) {
     workflowStates: normalizeStringArray(policy.workflowStates),
     allowedReadActions: normalizeStringArray(policy.allowedReadActions),
     allowedWriteActions: normalizeStringArray(policy.allowedWriteActions),
+    roleFieldActionMatrix,
     backendEnforced: policy.backendEnforced === true,
     exposureLogRequired: policy.exposureLogRequired === true,
     reviewReasons,
@@ -20091,6 +20152,24 @@ const PARTIAL_TASK_EXCLUDED_DENOMINATORS = [
   "human_ceiling_denominator",
 ];
 
+export const PARTIAL_TASK_PROMOTION_POLICY_VERSION = "partial-task-promotion-rlhf90-v1";
+export const REQUIRED_PARTIAL_TASK_ELIGIBLE_USES = ["routing", "calibration", "adjudication", "explicit_pairwise_export"];
+export const REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA = {
+  pairwise_preference_only: "may_support_explicit_pairwise_export_only_when_labeled_pairwise_and_never_custom_loss_target",
+  clarity_triage: "may_route_to_low_clarity_review_or_adjudication_but_cannot_supply_non_clarity_scores",
+  dead_weight_triage: "may_route_dead_weight_review_or_adjudication_but_cannot_supply_strength_or_overall_scores",
+  verification_only: "may_support_correctness_verification_workspace_or_adjudication_but_cannot_replace_rater_scores",
+  practice: "training_exposure_only_never_release_or_training_denominator",
+  safe_decline: "reassign_without_label_and_exclude_from_rating_denominators",
+  discussion_comment: "post_lock_context_only_no_score_imputation_or_initial_rating_count",
+};
+export const REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES = [
+  "not_promoted_auxiliary_only",
+  "promoted_to_labeled_pairwise_export",
+  "promoted_to_adjudication_context",
+  "rejected_for_denominator_use",
+];
+
 export const SPOT_CHECK_SAMPLING_POLICY_VERSION = "spot-check-sampling-rlhf90-v1";
 export const SPOT_CHECK_REQUIRED_SAMPLING_DIMENSIONS = ["source_family", "topic", "item_length", "rater_tier", "score_band"];
 export const SPOT_CHECK_SELECTION_METHODS = ["random", "stratified_random"];
@@ -20340,6 +20419,37 @@ const RATER_ITEM_CONFLICT_TYPES = [
   "declared_custom",
 ];
 
+export const SOURCE_LEAKAGE_REDACTION_POLICY_VERSION = "source-leakage-redaction-rlhf90-v1";
+export const REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS = [
+  "author_name",
+  "url",
+  "source_title",
+  "admin_tag",
+  "forum_boilerplate",
+  "coursework_marker",
+  "citation_provenance",
+  "model_output_wrapper",
+  "hidden_comment",
+  "pasted_metadata",
+];
+export const REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS = {
+  author_name: "redact_or_replace_with_role_neutral_reference_before_initial_rating",
+  url: "remove_or_replace_with_non_identifying_citation_token",
+  source_title: "redact_title_unless_substantively_required_for_argument",
+  admin_tag: "strip_admin_only_tags_from_rater_visible_text",
+  forum_boilerplate: "remove_forum_course_or_platform_boilerplate",
+  coursework_marker: "remove_course_assignment_headers_and_grading_language",
+  citation_provenance: "preserve_argument_relevant_citation_content_without_source_identity_when_possible",
+  model_output_wrapper: "strip_model_output_wrappers_and_instruction_markers",
+  hidden_comment: "remove_hidden_comments_and_editorial_metadata",
+  pasted_metadata: "remove_pasted_headers_footers_and_tracking_metadata",
+};
+export const REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES = [
+  "redacted_before_rating",
+  "approved_substantive_necessity_sensitive",
+  "quarantined_for_rewrite_or_exclusion",
+];
+
 const RELEASE_ERRATUM_TYPES = [
   "scoring_bug",
   "source_leakage_defect",
@@ -20392,13 +20502,78 @@ const REQUIRED_REBASELINED_SNAPSHOT_FIELDS = [
   "rebaselineApprovalRecordIds",
 ];
 
-function defaultBlindingPreviewAudit(releaseId) {
+function defaultSourceLeakageRedactionPolicy(releaseId) {
+  return {
+    id: `source-leakage-redaction-policy-${releaseId}`,
+    policyVersion: SOURCE_LEAKAGE_REDACTION_POLICY_VERSION,
+    requiredLintPatterns: REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+    redactionActions: REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+    sourceIdentifiabilityReviewStatuses: REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
+    sourceIdentifiabilityRule:
+      "Substantively necessary source-identifying spans require expert approval, sensitive marking, and release-claim disclosure before rating use.",
+    raterVisibleChecksumRule: "Rendered rater-visible text must be checksummed with sha256 after source-leakage redaction and before initial assignment.",
+    unresolvedLeakageRule: "No unresolved source-leakage pattern may remain in ordinary blind initial rating surfaces.",
+    rawRetentionBoundary: "Raw source metadata, hidden comments, admin tags, and pasted provenance metadata remain admin-only and outside rater-visible text.",
+    sourceBoundary:
+      "Project default source-leakage lint and redaction policy is frozen here; LMCA motivates source/tag blinding but does not state these exact lint patterns or redaction actions.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizeSourceLeakageRedactionPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.sourceLeakageRedactionPolicyId ?? policy?.source_leakage_redaction_policy_id;
+  if (!id) return null;
+  const requiredLintPatterns = uniqueStrings(normalizeStringArray(policy.requiredLintPatterns ?? policy.required_lint_patterns));
+  const redactionActions =
+    policy.redactionActions && typeof policy.redactionActions === "object" && !Array.isArray(policy.redactionActions)
+      ? policy.redactionActions
+      : {};
+  const sourceIdentifiabilityReviewStatuses = uniqueStrings(
+    normalizeStringArray(policy.sourceIdentifiabilityReviewStatuses ?? policy.source_identifiability_review_statuses),
+  );
+  const missingLintPatterns = REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS.filter((pattern) => !requiredLintPatterns.includes(pattern));
+  const missingReviewStatuses = REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES.filter((status) => !sourceIdentifiabilityReviewStatuses.includes(status));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === SOURCE_LEAKAGE_REDACTION_POLICY_VERSION
+      ? null
+      : `policyVersion:${SOURCE_LEAKAGE_REDACTION_POLICY_VERSION}`,
+    missingLintPatterns.length ? `requiredLintPatterns:${missingLintPatterns.join(",")}` : null,
+    stableJsonKey(requiredLintPatterns) === stableJsonKey(REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS) ? null : "requiredLintPatterns",
+    stableJsonKey(redactionActions) === stableJsonKey(REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS) ? null : "redactionActions",
+    missingReviewStatuses.length ? `sourceIdentifiabilityReviewStatuses:${missingReviewStatuses.join(",")}` : null,
+    policyMentions(policy.sourceIdentifiabilityRule, ["substantively necessary", "expert", "sensitive"]) ? null : "sourceIdentifiabilityRule",
+    policyMentions(policy.raterVisibleChecksumRule, ["sha256", "rater-visible", "redaction"]) ? null : "raterVisibleChecksumRule",
+    policyMentions(policy.unresolvedLeakageRule, ["no unresolved", "source-leakage", "blind"]) ? null : "unresolvedLeakageRule",
+    policyMentions(policy.rawRetentionBoundary, ["raw source metadata", "admin-only", "rater-visible"]) ? null : "rawRetentionBoundary",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    requiredLintPatterns,
+    redactionActions,
+    sourceIdentifiabilityReviewStatuses,
+    sourceIdentifiabilityRule: policy.sourceIdentifiabilityRule ?? policy.source_identifiability_rule ?? null,
+    raterVisibleChecksumRule: policy.raterVisibleChecksumRule ?? policy.rater_visible_checksum_rule ?? null,
+    unresolvedLeakageRule: policy.unresolvedLeakageRule ?? policy.unresolved_leakage_rule ?? null,
+    rawRetentionBoundary: policy.rawRetentionBoundary ?? policy.raw_retention_boundary ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "source_leakage_redaction_policy_review_required" : "source_leakage_redaction_policy_complete",
+  };
+}
+
+function defaultBlindingPreviewAudit(releaseId, sourceLeakageRedactionPolicyId = `source-leakage-redaction-policy-${releaseId}`) {
   return {
     id: `blinding-preview-audit-${releaseId}`,
+    sourceLeakageRedactionPolicyId,
     itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
     itemTextVersionIds: ["ptv-ai-prior-v1", "ctv-ai-base-rate-v1"],
     renderedRaterVisibleTextChecksum: "sha256:seed-rater-visible-text",
-    lintedSourceLeakagePatterns: ["author_name", "url", "source_title", "admin_tag"],
+    lintedSourceLeakagePatterns: REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
     redactedSourceIdentifyingSpans: ["source-title"],
     retainedSourceIdentifyingSpans: [],
     substantiveNecessityRationale: "No source-identifying spans retained for initial blind rendering.",
@@ -20411,9 +20586,86 @@ function defaultBlindingPreviewAudit(releaseId) {
   };
 }
 
-function defaultPartialTaskOutputs(releaseId) {
+function defaultPartialTaskPromotionPolicy(releaseId) {
+  return {
+    id: `partial-task-promotion-policy-${releaseId}`,
+    policyVersion: PARTIAL_TASK_PROMOTION_POLICY_VERSION,
+    coveredTaskTypes: REQUIRED_PARTIAL_TASK_OUTPUT_TYPES,
+    allowedEligibleUses: REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+    excludedDenominators: PARTIAL_TASK_EXCLUDED_DENOMINATORS,
+    promotionCriteriaByTaskType: REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
+    allowedPromotionReviewStatuses: REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+    fullRubricPromotionProhibited: true,
+    explicitPairwiseExportLabelRequired: true,
+    adjudicationLinkRequiredForPromotion: true,
+    denominatorExclusionRule:
+      "Partial-task outputs stay outside full-rubric blind-rating counts, custom-loss targets, hidden-benchmark labels, and human-ceiling denominators unless a future governed policy creates a new labeled sensitivity artifact.",
+    sourceBoundary:
+      "Project default partial-output promotion criteria are frozen here; LMCA motivates preserved full-rubric labels but does not state these auxiliary workflow promotion rules.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function normalizePartialTaskPromotionPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.partialTaskPromotionPolicyId ?? policy?.partial_task_promotion_policy_id;
+  if (!id) return null;
+  const coveredTaskTypes = uniqueStrings(normalizeStringArray(policy.coveredTaskTypes ?? policy.covered_task_types));
+  const allowedEligibleUses = uniqueStrings(normalizeStringArray(policy.allowedEligibleUses ?? policy.allowed_eligible_uses));
+  const excludedDenominators = uniqueStrings(normalizeStringArray(policy.excludedDenominators ?? policy.excluded_denominators));
+  const promotionCriteriaByTaskType =
+    policy.promotionCriteriaByTaskType && typeof policy.promotionCriteriaByTaskType === "object" && !Array.isArray(policy.promotionCriteriaByTaskType)
+      ? policy.promotionCriteriaByTaskType
+      : {};
+  const allowedPromotionReviewStatuses = uniqueStrings(
+    normalizeStringArray(policy.allowedPromotionReviewStatuses ?? policy.allowed_promotion_review_statuses),
+  );
+  const missingTaskTypes = REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.filter((taskType) => !coveredTaskTypes.includes(taskType));
+  const missingEligibleUses = REQUIRED_PARTIAL_TASK_ELIGIBLE_USES.filter((use) => !allowedEligibleUses.includes(use));
+  const missingExcludedDenominators = PARTIAL_TASK_EXCLUDED_DENOMINATORS.filter((denominator) => !excludedDenominators.includes(denominator));
+  const missingReviewStatuses = REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES.filter((status) => !allowedPromotionReviewStatuses.includes(status));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === PARTIAL_TASK_PROMOTION_POLICY_VERSION
+      ? null
+      : `policyVersion:${PARTIAL_TASK_PROMOTION_POLICY_VERSION}`,
+    missingTaskTypes.length ? `coveredTaskTypes:${missingTaskTypes.join(",")}` : null,
+    stableJsonKey(coveredTaskTypes) === stableJsonKey(REQUIRED_PARTIAL_TASK_OUTPUT_TYPES) ? null : "coveredTaskTypes",
+    missingEligibleUses.length ? `allowedEligibleUses:${missingEligibleUses.join(",")}` : null,
+    stableJsonKey(allowedEligibleUses) === stableJsonKey(REQUIRED_PARTIAL_TASK_ELIGIBLE_USES) ? null : "allowedEligibleUses",
+    missingExcludedDenominators.length ? `excludedDenominators:${missingExcludedDenominators.join(",")}` : null,
+    stableJsonKey(excludedDenominators) === stableJsonKey(PARTIAL_TASK_EXCLUDED_DENOMINATORS) ? null : "excludedDenominators",
+    stableJsonKey(promotionCriteriaByTaskType) === stableJsonKey(REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA) ? null : "promotionCriteriaByTaskType",
+    missingReviewStatuses.length ? `allowedPromotionReviewStatuses:${missingReviewStatuses.join(",")}` : null,
+    policy.fullRubricPromotionProhibited === true ? null : "fullRubricPromotionProhibited",
+    policy.explicitPairwiseExportLabelRequired === true ? null : "explicitPairwiseExportLabelRequired",
+    policy.adjudicationLinkRequiredForPromotion === true ? null : "adjudicationLinkRequiredForPromotion",
+    policyMentions(policy.denominatorExclusionRule, ["full-rubric", "custom-loss", "hidden-benchmark", "human-ceiling"]) ? null : "denominatorExclusionRule",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "does not state"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("frozenAt", policy.frozenAt ?? policy.frozen_at),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    coveredTaskTypes,
+    allowedEligibleUses,
+    excludedDenominators,
+    promotionCriteriaByTaskType,
+    allowedPromotionReviewStatuses,
+    fullRubricPromotionProhibited: policy.fullRubricPromotionProhibited === true,
+    explicitPairwiseExportLabelRequired: policy.explicitPairwiseExportLabelRequired === true,
+    adjudicationLinkRequiredForPromotion: policy.adjudicationLinkRequiredForPromotion === true,
+    denominatorExclusionRule: policy.denominatorExclusionRule ?? policy.denominator_exclusion_rule ?? null,
+    sourceBoundary: policy.sourceBoundary ?? policy.source_boundary ?? null,
+    frozenAt: policy.frozenAt ?? policy.frozen_at ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "partial_task_promotion_policy_review_required" : "partial_task_promotion_policy_complete",
+  };
+}
+
+function defaultPartialTaskOutputs(releaseId, partialTaskPromotionPolicyId = `partial-task-promotion-policy-${releaseId}`) {
   return REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.map((taskType) => ({
     id: `partial-task-output-${releaseId}-${taskType}`,
+    partialTaskPromotionPolicyId,
     assignmentId: `assignment-${taskType}`,
     raterId: "seed-rater",
     taskType,
@@ -20886,14 +21138,38 @@ function defaultScheduleStatusSnapshot(releaseId) {
 }
 
 export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
+  const submittedSourceLeakagePolicyRows = (options.sourceLeakageRedactionPolicies ?? [])
+    .map((policy) => normalizeSourceLeakageRedactionPolicy(policy, "submitted_workflow_source_leakage_redaction_policy"))
+    .filter(Boolean);
+  const seedSourceLeakagePolicyRows = [
+    normalizeSourceLeakageRedactionPolicy(defaultSourceLeakageRedactionPolicy(releaseId), "seed_source_leakage_redaction_policy"),
+  ];
+  const submittedActiveSourceLeakagePolicy = submittedSourceLeakagePolicyRows.find((row) => row.reviewReasons.length === 0);
+  const activeSourceLeakagePolicy = submittedActiveSourceLeakagePolicy ?? seedSourceLeakagePolicyRows[0];
   const submittedBlindingRows = (options.blindingPreviewAudits ?? [])
-    .map((audit) => normalizeBlindingPreviewAudit(audit, "submitted_workflow_blinding_preview_audit"))
+    .map((audit) => normalizeBlindingPreviewAudit(audit, activeSourceLeakagePolicy, "submitted_workflow_blinding_preview_audit"))
     .filter(Boolean);
-  const seedBlindingRows = [normalizeBlindingPreviewAudit(defaultBlindingPreviewAudit(releaseId), "seed_blinding_preview_audit")];
+  const seedBlindingRows = [
+    normalizeBlindingPreviewAudit(
+      defaultBlindingPreviewAudit(releaseId, seedSourceLeakagePolicyRows[0].id),
+      seedSourceLeakagePolicyRows[0],
+      "seed_blinding_preview_audit",
+    ),
+  ];
+  const submittedPartialTaskPromotionPolicyRows = (options.partialTaskPromotionPolicies ?? [])
+    .map((policy) => normalizePartialTaskPromotionPolicy(policy, "submitted_workflow_partial_task_promotion_policy"))
+    .filter(Boolean);
+  const seedPartialTaskPromotionPolicyRows = [
+    normalizePartialTaskPromotionPolicy(defaultPartialTaskPromotionPolicy(releaseId), "seed_partial_task_promotion_policy"),
+  ];
+  const submittedActivePartialTaskPromotionPolicy = submittedPartialTaskPromotionPolicyRows.find((row) => row.reviewReasons.length === 0);
+  const activePartialTaskPromotionPolicy = submittedActivePartialTaskPromotionPolicy ?? seedPartialTaskPromotionPolicyRows[0];
   const submittedPartialRows = (options.partialTaskOutputs ?? [])
-    .map((output) => normalizePartialTaskOutput(output, "submitted_workflow_partial_task_output"))
+    .map((output) => normalizePartialTaskOutput(output, activePartialTaskPromotionPolicy, "submitted_workflow_partial_task_output"))
     .filter(Boolean);
-  const seedPartialRows = defaultPartialTaskOutputs(releaseId).map((output) => normalizePartialTaskOutput(output, "seed_partial_task_output"));
+  const seedPartialRows = defaultPartialTaskOutputs(releaseId, seedPartialTaskPromotionPolicyRows[0].id).map((output) =>
+    normalizePartialTaskOutput(output, seedPartialTaskPromotionPolicyRows[0], "seed_partial_task_output"),
+  );
   const submittedExposureRows = (options.raterPositionClusterExposures ?? [])
     .map((exposure) => normalizeRaterPositionClusterExposure(exposure, "submitted_workflow_rater_position_cluster_exposure"))
     .filter(Boolean);
@@ -21023,7 +21299,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     submittedEnvironmentRows.length ? submittedEnvironmentRows : seedEnvironmentRows,
   );
   const gateGroups = [
+    ["source_leakage_redaction_policy", submittedSourceLeakagePolicyRows.length ? submittedSourceLeakagePolicyRows : seedSourceLeakagePolicyRows],
     ["blinding_preview_audit", submittedBlindingRows.length ? submittedBlindingRows : seedBlindingRows],
+    ["partial_task_promotion_policy", submittedPartialTaskPromotionPolicyRows.length ? submittedPartialTaskPromotionPolicyRows : seedPartialTaskPromotionPolicyRows],
     ["rater_position_cluster_exposure", submittedExposureRows.length ? submittedExposureRows : seedExposureRows],
     ["spot_check_sampling_policy", submittedSpotCheckPolicyRows.length ? submittedSpotCheckPolicyRows : seedSpotCheckPolicyRows],
     ["spot_check_qa_item", submittedSpotCheckRows.length ? submittedSpotCheckRows : seedSpotCheckRows],
@@ -21049,7 +21327,13 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     ["schedule_status_snapshot", submittedScheduleRows.length ? submittedScheduleRows : seedScheduleRows],
   ];
   const reviewSections = [
+    ...submittedSourceLeakagePolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "source_leakage_redaction_policy", artifactId: row.id, reason })),
+    ),
     ...submittedBlindingRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "blinding_preview_audit", artifactId: row.id, reason }))),
+    ...submittedPartialTaskPromotionPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "partial_task_promotion_policy", artifactId: row.id, reason })),
+    ),
     ...submittedPartialRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "partial_task_output", artifactId: row.id, reason }))),
     ...submittedExposureRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_position_cluster_exposure", artifactId: row.id, reason }))),
     ...submittedSpotCheckPolicyRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "spot_check_sampling_policy", artifactId: row.id, reason }))),
@@ -21099,7 +21383,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
       .map(([artifactType]) => ({ artifactType, artifactId: artifactType, reason: "missing_complete_auxiliary_workflow_artifact" })),
   ];
   const submittedEvidenceComplete =
+    submittedSourceLeakagePolicyRows.length > 0 &&
     submittedBlindingRows.length > 0 &&
+    submittedPartialTaskPromotionPolicyRows.length > 0 &&
     submittedPartialRows.length >= REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.length &&
     submittedExposureRows.length > 0 &&
     submittedSpotCheckPolicyRows.length > 0 &&
@@ -21126,9 +21412,27 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     generatedAt: new Date().toISOString(),
     requiredPartialTaskOutputTypes: REQUIRED_PARTIAL_TASK_OUTPUT_TYPES,
     partialTaskExcludedDenominators: PARTIAL_TASK_EXCLUDED_DENOMINATORS,
+    partialTaskPromotionPolicyId: activePartialTaskPromotionPolicy.id,
+    partialTaskPromotionPolicyReleaseUseStatus: submittedActivePartialTaskPromotionPolicy
+      ? "submitted_partial_task_promotion_policy_active"
+      : submittedPartialTaskPromotionPolicyRows.length
+        ? "submitted_partial_task_promotion_policy_review_required"
+        : "seed_partial_task_promotion_policy_active",
+    partialTaskEligibleUses: REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
+    requiredPartialTaskPromotionCriteria: REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
+    requiredPartialTaskPromotionReviewStatuses: REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
     positionClusterExposureSources: POSITION_CLUSTER_EXPOSURE_SOURCES,
     adjudicationTriageLanes: ADJUDICATION_TRIAGE_LANES,
     requiredQueuePolicyComponents: REQUIRED_QUEUE_POLICY_COMPONENTS,
+    sourceLeakageRedactionPolicyId: activeSourceLeakagePolicy.id,
+    sourceLeakageRedactionPolicyReleaseUseStatus: submittedActiveSourceLeakagePolicy
+      ? "submitted_source_leakage_redaction_policy_active"
+      : submittedSourceLeakagePolicyRows.length
+        ? "submitted_source_leakage_redaction_policy_review_required"
+        : "seed_source_leakage_redaction_policy_active",
+    requiredSourceLeakageLintPatterns: REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS,
+    requiredSourceLeakageRedactionActions: REQUIRED_SOURCE_LEAKAGE_REDACTION_ACTIONS,
+    requiredSourceIdentifiabilityReviewStatuses: REQUIRED_SOURCE_IDENTIFIABILITY_REVIEW_STATUSES,
     spotCheckSamplingPolicyId: activeSpotCheckPolicy.id,
     spotCheckSamplingPolicyReleaseUseStatus: submittedActiveSpotCheckPolicy
       ? "submitted_spot_check_sampling_policy_active"
@@ -21166,7 +21470,9 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     requiredModelRunReproducibilityConfigFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_CONFIG_FIELDS,
     requiredModelRunReproducibilityEnvironmentFields: REQUIRED_MODEL_RUN_REPRODUCIBILITY_ENVIRONMENT_FIELDS,
     requiredModelRunReproducibilityRules: REQUIRED_MODEL_RUN_REPRODUCIBILITY_RULES,
+    sourceLeakageRedactionPolicyRows: [...seedSourceLeakagePolicyRows, ...submittedSourceLeakagePolicyRows],
     blindingPreviewAuditRows: [...seedBlindingRows, ...submittedBlindingRows],
+    partialTaskPromotionPolicyRows: [...seedPartialTaskPromotionPolicyRows, ...submittedPartialTaskPromotionPolicyRows],
     partialTaskOutputRows: [...seedPartialRows, ...submittedPartialRows],
     raterPositionClusterExposureRows: [...seedExposureRows, ...submittedExposureRows],
     spotCheckSamplingPolicyRows: [...seedSpotCheckPolicyRows, ...submittedSpotCheckPolicyRows],
@@ -21191,6 +21497,10 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
     modelRunProvenanceRows,
     counts: {
       submittedBlindingPreviewAuditCount: submittedBlindingRows.length,
+      submittedSourceLeakageRedactionPolicyCount: submittedSourceLeakagePolicyRows.length,
+      sourceLeakageRedactionPolicyReviewRows: submittedSourceLeakagePolicyRows.filter((row) => row.reviewReasons.length).length,
+      submittedPartialTaskPromotionPolicyCount: submittedPartialTaskPromotionPolicyRows.length,
+      partialTaskPromotionPolicyReviewRows: submittedPartialTaskPromotionPolicyRows.filter((row) => row.reviewReasons.length).length,
       submittedPartialTaskOutputCount: submittedPartialRows.length,
       submittedRaterPositionClusterExposureCount: submittedExposureRows.length,
       submittedSpotCheckSamplingPolicyCount: submittedSpotCheckPolicyRows.length,
@@ -21229,7 +21539,7 @@ export function buildAuxiliaryWorkflowEvidenceReport(releaseId, options = {}) {
   };
 }
 
-function normalizeBlindingPreviewAudit(audit, rowSource) {
+function normalizeBlindingPreviewAudit(audit, activeSourceLeakagePolicy, rowSource) {
   const id = audit?.id ?? audit?.blindingPreviewAuditId ?? audit?.blinding_preview_audit_id;
   if (!id) return null;
   const itemKeys = normalizeStringArray(audit.itemKeys ?? audit.item_keys);
@@ -21237,11 +21547,24 @@ function normalizeBlindingPreviewAudit(audit, rowSource) {
   const leakagePatterns = normalizeStringArray(audit.lintedSourceLeakagePatterns ?? audit.sourceLeakagePatterns ?? audit.linted_source_leakage_patterns);
   const retainedSpans = normalizeStringArray(audit.retainedSourceIdentifyingSpans ?? audit.retained_source_identifying_spans);
   const sourceSensitive = audit.sourceIdentifiabilitySensitive === true;
+  const sourceLeakageRedactionPolicyId =
+    audit.sourceLeakageRedactionPolicyId ?? audit.source_leakage_redaction_policy_id ?? null;
+  const activePolicyId = activeSourceLeakagePolicy?.id ?? null;
+  const requiredLintPatterns = activeSourceLeakagePolicy?.requiredLintPatterns?.length
+    ? activeSourceLeakagePolicy.requiredLintPatterns
+    : REQUIRED_SOURCE_LEAKAGE_LINT_PATTERNS;
+  const missingRequiredLintPatterns = requiredLintPatterns.filter((pattern) => !leakagePatterns.includes(pattern));
   const reviewReasons = [
+    activePolicyId
+      ? sourceLeakageRedactionPolicyId === activePolicyId
+        ? null
+        : "sourceLeakageRedactionPolicyId"
+      : requiredPromptFieldReason("sourceLeakageRedactionPolicyId", sourceLeakageRedactionPolicyId),
     itemKeys.length ? null : "itemKeys",
     itemTextVersionIds.length ? null : "itemTextVersionIds",
     String(audit.renderedRaterVisibleTextChecksum ?? audit.rendered_rater_visible_text_checksum ?? "").startsWith("sha256:") ? null : "renderedRaterVisibleTextChecksum",
     leakagePatterns.length ? null : "lintedSourceLeakagePatterns",
+    missingRequiredLintPatterns.length ? `lintedSourceLeakagePatterns:${missingRequiredLintPatterns.join(",")}` : null,
     Number(audit.unresolvedSourceLeakagePatternCount ?? 0) === 0 ? null : "unresolvedSourceLeakagePatternCount",
     sourceSensitive && retainedSpans.length ? requiredPromptFieldReason("substantiveNecessityRationale", audit.substantiveNecessityRationale) : null,
     requiredPromptFieldReason("reviewerId", audit.reviewerId ?? audit.reviewer_id),
@@ -21252,6 +21575,7 @@ function normalizeBlindingPreviewAudit(audit, rowSource) {
   return {
     id,
     rowSource,
+    sourceLeakageRedactionPolicyId,
     itemKeys,
     itemTextVersionIds,
     renderedRaterVisibleTextChecksum: audit.renderedRaterVisibleTextChecksum ?? audit.rendered_rater_visible_text_checksum ?? null,
@@ -21266,30 +21590,54 @@ function normalizeBlindingPreviewAudit(audit, rowSource) {
   };
 }
 
-function normalizePartialTaskOutput(output, rowSource) {
+function normalizePartialTaskOutput(output, activePromotionPolicy, rowSource) {
   const id = output?.id ?? output?.partialTaskOutputId ?? output?.partial_task_output_id;
   if (!id) return null;
   const taskType = output.taskType ?? output.task_type ?? null;
   const itemKeys = normalizeStringArray(output.itemKeys ?? output.item_keys);
   const eligibleUses = normalizeStringArray(output.eligibleUses ?? output.eligible_uses);
   const excludedDenominators = normalizeStringArray(output.excludedDenominators ?? output.excluded_denominators);
-  const missingExcludedDenominators = PARTIAL_TASK_EXCLUDED_DENOMINATORS.filter((denominator) => !excludedDenominators.includes(denominator));
+  const partialTaskPromotionPolicyId = output.partialTaskPromotionPolicyId ?? output.partial_task_promotion_policy_id ?? null;
+  const activePolicyId = activePromotionPolicy?.id ?? null;
+  const allowedEligibleUses = activePromotionPolicy?.allowedEligibleUses?.length
+    ? activePromotionPolicy.allowedEligibleUses
+    : REQUIRED_PARTIAL_TASK_ELIGIBLE_USES;
+  const requiredExcludedDenominators = activePromotionPolicy?.excludedDenominators?.length
+    ? activePromotionPolicy.excludedDenominators
+    : PARTIAL_TASK_EXCLUDED_DENOMINATORS;
+  const missingExcludedDenominators = requiredExcludedDenominators.filter((denominator) => !excludedDenominators.includes(denominator));
+  const disallowedEligibleUses = eligibleUses.filter((use) => !allowedEligibleUses.includes(use));
   const outputFields = output.outputFields ?? output.output_fields ?? null;
+  const promotionReviewStatus = output.promotionReviewStatus ?? output.promotion_review_status ?? "not_promoted_auxiliary_only";
+  const allowedPromotionReviewStatuses = activePromotionPolicy?.allowedPromotionReviewStatuses?.length
+    ? activePromotionPolicy.allowedPromotionReviewStatuses
+    : REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES;
+  const promotionAdjudicationLink = output.promotionAdjudicationLink ?? output.promotion_adjudication_link ?? null;
+  const promotionNeedsLink = ["promoted_to_labeled_pairwise_export", "promoted_to_adjudication_context"].includes(promotionReviewStatus);
   const reviewReasons = [
+    activePolicyId
+      ? partialTaskPromotionPolicyId === activePolicyId
+        ? null
+        : "partialTaskPromotionPolicyId"
+      : requiredPromptFieldReason("partialTaskPromotionPolicyId", partialTaskPromotionPolicyId),
     requiredPromptFieldReason("assignmentId", output.assignmentId ?? output.assignment_id),
     requiredPromptFieldReason("raterId", output.raterId ?? output.rater_id),
-    REQUIRED_PARTIAL_TASK_OUTPUT_TYPES.includes(taskType) || taskType === "declared_custom" ? null : "taskType",
+    (activePromotionPolicy?.coveredTaskTypes ?? REQUIRED_PARTIAL_TASK_OUTPUT_TYPES).includes(taskType) || taskType === "declared_custom" ? null : "taskType",
     itemKeys.length ? null : "itemKeys",
     outputFields && typeof outputFields === "object" && Object.keys(outputFields).length ? null : "outputFields",
     requiredPromptFieldReason("visibilityExposureState", output.visibilityExposureState ?? output.visibility_exposure_state),
     eligibleUses.length ? null : "eligibleUses",
+    disallowedEligibleUses.length ? `eligibleUses:${disallowedEligibleUses.join(",")}` : null,
     missingExcludedDenominators.length ? `excludedDenominators:${missingExcludedDenominators.join(",")}` : null,
+    allowedPromotionReviewStatuses.includes(promotionReviewStatus) ? null : "promotionReviewStatus",
+    promotionNeedsLink && !promotionAdjudicationLink ? "promotionAdjudicationLink" : null,
     output.countedAsFullRubricRating === true || output.ordinaryFullRubricRatingRow === true ? "must_not_count_as_full_rubric_rating" : null,
     requiredPromptFieldReason("timestamp", output.timestamp ?? output.createdAt ?? output.created_at),
   ].filter(Boolean);
   return {
     id,
     rowSource,
+    partialTaskPromotionPolicyId,
     assignmentId: output.assignmentId ?? output.assignment_id ?? null,
     raterId: output.raterId ?? output.rater_id ?? null,
     taskType,
@@ -21297,7 +21645,8 @@ function normalizePartialTaskOutput(output, rowSource) {
     eligibleUses,
     excludedDenominators,
     missingExcludedDenominators,
-    promotionAdjudicationLink: output.promotionAdjudicationLink ?? output.promotion_adjudication_link ?? null,
+    promotionReviewStatus,
+    promotionAdjudicationLink,
     reviewReasons,
     status: reviewReasons.length ? "partial_task_output_review_required" : "partial_task_output_complete",
   };
@@ -25123,7 +25472,9 @@ export function buildOctoberReleaseReport(
     assignmentDeclines: options.assignmentDeclines ?? [],
   });
   const auxiliaryWorkflowEvidence = buildAuxiliaryWorkflowEvidenceReport(releaseId, {
+    sourceLeakageRedactionPolicies: options.sourceLeakageRedactionPolicies ?? [],
     blindingPreviewAudits: options.blindingPreviewAudits ?? [],
+    partialTaskPromotionPolicies: options.partialTaskPromotionPolicies ?? [],
     partialTaskOutputs: options.partialTaskOutputs ?? [],
     raterPositionClusterExposures: options.raterPositionClusterExposures ?? [],
     spotCheckSamplingPolicies: options.spotCheckSamplingPolicies ?? [],
@@ -25419,7 +25770,9 @@ export function buildOctoberReleaseReport(
       externalAssistanceDeclarations: options.externalAssistanceDeclarations ?? [],
     },
     workflowAuxiliaryArtifacts: {
+      sourceLeakageRedactionPolicies: options.sourceLeakageRedactionPolicies ?? [],
       blindingPreviewAudits: options.blindingPreviewAudits ?? [],
+      partialTaskPromotionPolicies: options.partialTaskPromotionPolicies ?? [],
       partialTaskOutputs: options.partialTaskOutputs ?? [],
       raterPositionClusterExposures: options.raterPositionClusterExposures ?? [],
       spotCheckSamplingPolicies: options.spotCheckSamplingPolicies ?? [],
