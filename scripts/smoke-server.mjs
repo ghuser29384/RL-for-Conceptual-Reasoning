@@ -315,7 +315,7 @@ async function main() {
     assert.equal(report.body.recalibratedEvaluation.releaseUseStatus, "recalibrated_report_protected_fit_excluded");
     assert.equal(report.body.samePositionContext.counts.currentCritiqueVisibilityViolationCount, 0);
     assert.equal(report.body.samePositionContext.counts.contextSensitiveRatingCount, 3);
-    assert.equal(report.body.samePositionContext.releaseUseStatus, "rating_context_sensitive_model_prompt_matching_required");
+    assert.equal(report.body.samePositionContext.releaseUseStatus, "same_position_context_parity_preserved");
     assert.equal(report.body.leaderboardReport.rows.length, 2);
     assert.equal(report.body.leaderboardReport.pairwiseComparisonSnapshot.nonTiedEdges.length, 2);
     assert.equal(report.body.leaderboardReport.unresolvedComparisonGroups.length, 1);
@@ -405,7 +405,7 @@ function validBlindRating(id) {
     rubricVersion: "lmca-app-f-2026-10",
     scoreInputPolicyId: "score-input-policy-workflow-new",
     workflowProfileId: "rating-workflow-profile-workflow-new",
-    scoreExplanationPolicyId: "score-explanation-policy-workflow-new",
+    scoreExplanationPolicyId: "score-explanation-policy-october-2026-demo",
     positionTextVersionId: "ptv-ai-prior-v1",
     critiqueTextVersionId: "ctv-ai-base-rate-v1",
     ratingContextSnapshotId: "rc-target-only-1",

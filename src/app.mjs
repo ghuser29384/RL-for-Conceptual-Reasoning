@@ -5076,14 +5076,14 @@ function evaluationPanel(weightedPairwise, unweightedPairwise, customLoss, deriv
       <section class="panel">
         ${panelTitle("chart", "Metric Families", "Weighted pairwise, custom weighted loss, unweighted pairwise, and derived-utility diagnostics remain separate.")}
         <div class="metricCards">
-          ${metricCard("Weighted pairwise", formatNumber(weightedPairwise.loss), `${weightedPairwise.coverage.nPairsScored} scored pairs`)}
+          ${metricCard("Weighted pairwise", formatNumber(weightedPairwise.loss), `${weightedPairwise.coverage.nPairsScored} scored pairs, ${weightedPairwise.coverage.nModelTiePairsScored} model ties`)}
           ${metricCard("Custom weighted loss", formatNumber(customLoss.loss), `${customLoss.coverage.nItemsScored} item-level labels`)}
           ${metricCard("Unweighted diagnostic", formatNumber(unweightedPairwise.loss), "Appendix-B/Kendall-style only")}
           ${metricCard("Derived utility diagnostic", formatNumber(derivedUtility.loss), "Full-rubric sensitivity only")}
         </div>
         <div class="metricTable">
           <div><span>Pairwise snapshot</span><strong>${escapeHtml(pairwiseSnapshot.id)}</strong></div>
-          <div><span>Tie policy</span><strong>${humanize(pairwiseSnapshot.scoreRoundingPolicy)}, tolerance ${pairwiseSnapshot.tieTolerance}</strong></div>
+          <div><span>Tie policy</span><strong>${humanize(pairwiseSnapshot.scoreRoundingPolicy)}, ${pairwiseSnapshot.humanTieTolerance} human / ${pairwiseSnapshot.modelTieTolerance} model</strong></div>
           <div><span>No-pair exclusions</span><strong>${escapeHtml(pairwiseSnapshot.excludedNoPairPositions.join(", ") || "none")}</strong></div>
           <div><span>Low-margin share</span><strong>${Math.round(marginDistribution.lowMarginPairShare * 100)}% of pairs / ${Math.round(marginDistribution.lowMarginWeightShare * 100)}% of weight</strong></div>
         </div>
@@ -6032,6 +6032,8 @@ function operationalControlPanel(operationalControls) {
   const requiredQueueLaneCount = controls.requiredQueueFreshnessLanes?.length ?? 0;
   const requiredClientSurfaceCount = controls.requiredClientSurfaces?.length ?? 0;
   const requiredAuditKindCount = controls.requiredAuditChainEventKinds?.length ?? 0;
+  const requiredTelemetryAllowlist = controls.requiredClientSurfaceTelemetryAllowlist ?? [];
+  const requiredCspDirectiveCount = Object.keys(controls.requiredClientSurfaceCspDirectives ?? {}).length;
   const auditVerification = controls.sensitiveAuditChainVerificationRows?.at(-1);
   const reviewSections = controls.reviewSections ?? [];
   return `
@@ -6048,6 +6050,8 @@ function operationalControlPanel(operationalControls) {
         <div><span>Release use</span><strong>${humanize(controls.releaseUseStatus ?? "operational_control_missing")}</strong></div>
         <div><span>Review sections</span><strong>${String(counts.reviewSectionCount ?? reviewSections.length)}</strong></div>
         <div><span>Queue revalidation</span><strong>${(controls.requiredQueueRevalidationChecks ?? []).map(humanize).join(", ") || "not recorded"}</strong></div>
+        <div><span>Client CSP</span><strong>${requiredCspDirectiveCount ? `${requiredCspDirectiveCount} frozen directives` : "not recorded"}</strong></div>
+        <div><span>Telemetry allowlist</span><strong>${requiredTelemetryAllowlist.map(humanize).join(", ") || "not recorded"}</strong></div>
         <div><span>WORM policy</span><strong>${controls.externalWormAuditLogPolicyId ?? "not recorded"}</strong></div>
         <div><span>Audit verification</span><strong>${auditVerification ? `${humanize(auditVerification.chainStatus)} / ${auditVerification.verifiedEventCount ?? 0} events` : "not recorded"}</strong></div>
       </div>

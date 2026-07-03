@@ -70,6 +70,7 @@ import {
   buildWorkflowStateMachineEvidenceReport,
   buildValidationDesignReport,
   ACCESSIBILITY_TOOLING_POLICY_VERSION,
+  CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
   CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
@@ -80,6 +81,11 @@ import {
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
   REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
   REQUIRED_CLOUD_SECURITY_CONTROLS,
+  REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
+  REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+  REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
+  REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
+  REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY,
   EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
   REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
   REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
@@ -138,6 +144,11 @@ import {
   REQUIRED_MODEL_IMPROVEMENT_TARGET_FIELDS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+  REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
   REQUIRED_INTERPRETATION_TARGET_MAP_COVERAGE_RULES,
   REQUIRED_INTERPRETATION_TARGET_MAP_REQUIREDNESS_THRESHOLDS,
   REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
@@ -202,6 +213,7 @@ import {
   SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
   SPOT_CHECK_SAMPLING_POLICY_VERSION,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+  UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
   VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
   createBlindRatingView,
   createExportManifest,
@@ -1757,11 +1769,22 @@ function completePolicyBundleFixtures() {
       {
         id: "ui-experiment-policy-submitted",
         policyVersion: "ui-experiment-policy-rlhf88-v1",
+        sensitivityPowerPolicyVersion: UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
         coveredSplitLaneClasses: protectedUiLaneClasses,
+        allowedUiVariantIds: ["rlhf88-task-first-compatible"],
         blockedExperimentClasses: blockedUiExperimentClasses,
         unregisteredMaterialChangesBlocked: true,
         sensitivitySnapshotRequired: true,
+        sensitivityPrimaryOutcomeMetric: "overall_score_mean_difference",
+        sensitivityMinimumPower: REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+        sensitivityAlpha: REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
+        sensitivityMinimumDetectableEffectOverall: REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+        sensitivityMinimumPerVariantCellCount: REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
+        sensitivityMaxProtectedVariantImbalance: REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE,
+        sensitivityUnderpoweredDisposition: "block_or_quarantine_protected_claims_until_powered_sensitivity_snapshot_exists",
         uxSimplificationCompatibilityRule: "UX simplification requires passing review",
+        lmcaSourceBoundary:
+          "Project default UI-variant sensitivity power thresholds are frozen here; LMCA does not state exact statistical power thresholds.",
       },
     ],
     preSubmitAssistPolicies: [
@@ -1958,6 +1981,7 @@ function completeOperationalControlFixtures() {
     id: `client-surface-integrity-submitted-${surface}`,
 	    releaseId: "october-2026-demo",
 	    surface,
+    policyVersion: CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
 	    thirdPartyAnalyticsProhibited: true,
 	    thirdPartyPixelsProhibited: true,
 	    thirdPartyResourcesProhibited: true,
@@ -1967,14 +1991,18 @@ function completeOperationalControlFixtures() {
 	    domCaptureProhibited: true,
 	    keystrokeLoggingProhibited: true,
 	    sensitiveUrlIdsProhibited: true,
+    urlIdentifierPolicy: REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY,
 	    referrerLeakageBlocked: true,
+    referrerPolicy: REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
 	    persistentOfflineCacheProhibited: true,
+    cacheOfflineStoragePolicy: REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
 	    firstPartyTelemetryOnly: true,
 	    telemetryAllowlistEnforced: true,
 	    screenStateOutputSchemaBound: true,
 	    nonStaffPromotionBlockedOnViolation: true,
 	    cspEnforced: true,
-	    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
+    cspDirectives: REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+	    firstPartyTelemetryAllowlist: REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
 	  }));
   const externalWormAuditLogPolicy = {
     id: "external-worm-audit-log-policy-submitted",
@@ -3271,6 +3299,13 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.deepEqual(report.visibilityPolicyRows.at(-1).roleFieldActionMatrix, visibilityRoleFieldActionMatrix);
   assert.equal(report.counts.submittedScoreExplanationPolicyCount, 1);
   assert.equal(report.counts.submittedRatingEscalationPolicyCount, 1);
+  assert.equal(report.uiVariantSensitivityPowerThresholds.policyVersion, UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION);
+  assert.equal(report.uiVariantSensitivityPowerThresholds.minimumPower, REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER);
+  assert.equal(report.uiVariantSensitivityPowerThresholds.alpha, REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA);
+  assert.equal(report.uiVariantSensitivityPowerThresholds.minimumDetectableEffectOverall, REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL);
+  assert.equal(report.uiVariantSensitivityPowerThresholds.minimumPerVariantCellCount, REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT);
+  assert.equal(report.uiExperimentPolicyRows.at(-1).sensitivityMinimumPower, REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER);
+  assert.equal(report.uiExperimentPolicyRows.at(-1).sensitivityMinimumDetectableEffectOverall, REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL);
   assert.deepEqual(report.ratingWorkflowProfileRows.at(-1).optionalIssuePanels, [
     "evidence_spans",
     "interpretation_target_map",
@@ -3517,6 +3552,32 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.ok(mismatchedEscalationThresholdReport.reviewSections.some((section) => section.reason === "initialOverallSpreadThreshold:0.35"));
   assert.ok(
     mismatchedEscalationThresholdReport.reviewSections.some((section) => section.reason === "serviceLevelByTrigger:unexpected:hidden_status_routing"),
+  );
+
+  const driftedUiPolicyFixtures = completePolicyBundleFixtures();
+  driftedUiPolicyFixtures.uiExperimentPolicies = [
+    {
+      ...driftedUiPolicyFixtures.uiExperimentPolicies[0],
+      id: "ui-experiment-policy-underpowered",
+      sensitivityMinimumPower: 0.6,
+      sensitivityMinimumPerVariantCellCount: 30,
+    },
+  ];
+  const driftedUiPolicyReport = buildPolicyBundleEvidenceReport("october-2026-demo", driftedUiPolicyFixtures);
+  assert.equal(driftedUiPolicyReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(
+    driftedUiPolicyReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "ui_experiment_policy" &&
+        section.reason === `sensitivityMinimumPower:${REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER}`,
+    ),
+  );
+  assert.ok(
+    driftedUiPolicyReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "ui_experiment_policy" &&
+        section.reason === `sensitivityMinimumPerVariantCellCount:${REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT}`,
+    ),
   );
 });
 
@@ -5446,6 +5507,13 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
   assert.equal(report.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
   assert.equal(report.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
   assert.equal(report.counts.passingClientSurfaceCount, clientSurfaces.length);
+  assert.equal(report.requiredClientSurfaceIntegrityPolicyVersion, CLIENT_SURFACE_INTEGRITY_POLICY_VERSION);
+  assert.deepEqual(report.requiredClientSurfaceCspDirectives, REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
+  assert.deepEqual(report.requiredClientSurfaceTelemetryAllowlist, REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST);
+  assert.equal(report.clientSurfaceIntegrityPolicyRows.at(-1).referrerPolicy, REQUIRED_CLIENT_SURFACE_REFERRER_POLICY);
+  assert.equal(report.clientSurfaceIntegrityPolicyRows.at(-1).cacheOfflineStoragePolicy, REQUIRED_CLIENT_SURFACE_CACHE_POLICY);
+  assert.deepEqual(report.clientSurfaceIntegrityPolicyRows.at(-1).cspDirectives, REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
+  assert.deepEqual(report.clientSurfaceIntegrityPolicyRows.at(-1).firstPartyTelemetryAllowlist, REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST);
   assert.equal(report.counts.submittedCloudSecurityBudgetPolicyCount, 1);
   assert.equal(report.cloudSecurityBudgetPolicyId, "cloud-security-budget-policy-submitted");
   assert.equal(report.cloudSecurityBudgetPolicyReleaseUseStatus, "submitted_cloud_security_budget_policy_active");
@@ -5578,6 +5646,8 @@ test("operational control evidence rejects client-surface telemetry and instrume
           thirdPartyResourceAllowlist: ["https://analytics.example.test/pixel.js"],
           heatmapTrackingProhibited: false,
           firstPartyTelemetryOnly: false,
+          cspDirectives: { "default-src": ["*"], "script-src": ["*"] },
+          firstPartyTelemetryAllowlist: ["page_load", "session_replay_event"],
           screenStateOutputSchemaBound: false,
         }
       : policy
@@ -5599,6 +5669,8 @@ test("operational control evidence rejects client-surface telemetry and instrume
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "thirdPartyResourceAllowlist"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "heatmapTrackingProhibited"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "firstPartyTelemetryOnly"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "cspDirectives"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "firstPartyTelemetryAllowlist"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_policy" && section.reason === "screenStateOutputSchemaBound"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "no_heatmaps"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "client_surface_integrity_check" && section.reason === "no_third_party_pixels"));
@@ -6368,8 +6440,46 @@ test("weighted pairwise scoring excludes human ties and penalizes model ties by 
   assert.deepEqual(result.coverage, {
     nPairsScored: 2,
     nHumanTiePairsExcluded: 1,
+    nModelTiePairsScored: 0,
   });
-  assert.equal(round(weightedPairwiseLossForPosition({ a: 0.8, b: 0.2 }, { a: 0.5, b: 0.5 }).loss), 0.3);
+  const modelTieResult = weightedPairwiseLossForPosition({ a: 0.8, b: 0.2 }, { a: 0.5, b: 0.5 });
+  assert.equal(round(modelTieResult.loss), 0.3);
+  assert.deepEqual(modelTieResult.coverage, {
+    nPairsScored: 1,
+    nHumanTiePairsExcluded: 0,
+    nModelTiePairsScored: 1,
+  });
+});
+
+test("pairwise scoring applies separate human-target and model-prediction tie tolerances", () => {
+  const modelTied = weightedPairwiseLossForPosition(
+    { a: 0.8, b: 0.7 },
+    { a: 0.6, b: 0.57 },
+    { humanTieTolerance: 0.01, modelTieTolerance: 0.04 },
+  );
+  assert.equal(round(modelTied.loss), 0.05);
+  assert.equal(modelTied.coverage.nPairsScored, 1);
+  assert.equal(modelTied.coverage.nModelTiePairsScored, 1);
+
+  const modelOrdered = weightedPairwiseLossForPosition(
+    { a: 0.8, b: 0.7 },
+    { a: 0.6, b: 0.57 },
+    { humanTieTolerance: 0.01, modelTieTolerance: 0.01 },
+  );
+  assert.equal(modelOrdered.loss, 0);
+  assert.equal(modelOrdered.coverage.nModelTiePairsScored, 0);
+
+  const humanExcluded = weightedPairwiseLossForPosition(
+    { a: 0.8, b: 0.77 },
+    { a: 0.2, b: 0.9 },
+    { humanTieTolerance: 0.04, modelTieTolerance: 0 },
+  );
+  assert.equal(humanExcluded.loss, null);
+  assert.deepEqual(humanExcluded.coverage, {
+    nPairsScored: 0,
+    nHumanTiePairsExcluded: 1,
+    nModelTiePairsScored: 0,
+  });
 });
 
 test("dataset pairwise averaging occurs within positions before averaging across positions", () => {
@@ -6642,6 +6752,22 @@ test("pairwise snapshots freeze comparison denominators, text versions, and marg
   assert.deepEqual(snapshot.exclusions.noPairPositionIds, ["p2"]);
   assert.deepEqual(snapshot.exclusions.missingTextVersionItemIds, []);
   assert.deepEqual(pairwiseMarginDistribution(snapshot).bins, { low: 1, medium: 1, high: 1 });
+});
+
+test("pairwise snapshots use human tie tolerance for frozen edges while preserving model tolerance", () => {
+  const snapshot = buildPairwiseComparisonSnapshot(
+    "snap-role-specific-ties",
+    "labels",
+    "adjudicated",
+    { p1: { a: 0.9, b: 0.86, c: 0.5 } },
+    { humanTieTolerance: 0.05, modelTieTolerance: 0.02 },
+  );
+  assert.equal(snapshot.tieTolerance, 0.05);
+  assert.equal(snapshot.humanTieTolerance, 0.05);
+  assert.equal(snapshot.modelTieTolerance, 0.02);
+  assert.equal(snapshot.nonTiedEdges.length, 2);
+  assert.equal(snapshot.excludedHumanTieEdges, 1);
+  assert.equal(snapshot.scoreRoundingPolicy, "declared_tolerance");
 });
 
 test("blind rating view strips protected metadata", () => {
@@ -8110,7 +8236,8 @@ test("submitted metric configs and derived-utility formulas become effective met
         id: "metric-config-submitted",
         releaseId: "release-test",
         metricVersion: "lmca-october-2026-submitted",
-        pairwiseTieTolerance: 0,
+        pairwiseHumanTieTolerance: 0.01,
+        pairwiseModelTieTolerance: 0.02,
         pairwiseHumanTiePolicy: "exclude_human_ties",
         pairwiseModelTiePolicy: "model_tie_costs_half_margin",
         scoreRoundingPolicy: "stored_exact",
@@ -8132,6 +8259,8 @@ test("submitted metric configs and derived-utility formulas become effective met
   const derivedRow = report.pairwiseConfigRows.find((row) => row.metricFamily === "derived_utility_pairwise_diagnostic");
   assert.equal(report.effectiveMetricConfig.submittedMetricConfigId, "metric-config-submitted");
   assert.equal(report.effectiveMetricConfig.metricVersion, "lmca-october-2026-submitted");
+  assert.equal(report.effectiveMetricConfig.humanTieTolerance, 0.01);
+  assert.equal(report.effectiveMetricConfig.modelTieTolerance, 0.02);
   assert.equal(report.derivedUtilityFormula.submittedFormulaId, "derived-utility-submitted");
   assert.equal(report.counts.pairwiseConfigRows, 4);
   assert.equal(derivedRow.commonMetricConfigStatus, "submitted_metric_config_applied");

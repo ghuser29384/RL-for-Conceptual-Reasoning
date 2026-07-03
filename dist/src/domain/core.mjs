@@ -2157,6 +2157,21 @@ export function isTie(diff, tieTolerance = 0) {
   return Math.abs(diff) <= tieTolerance;
 }
 
+function resolvePairwiseTieTolerances(tieConfig = 0) {
+  const options = typeof tieConfig === "object" && tieConfig !== null ? tieConfig : { tieTolerance: tieConfig };
+  const declaredTieTolerance = numberOrDefault(options.tieTolerance ?? options.pairwiseTieTolerance, 0);
+  const humanTieTolerance = numberOrDefault(options.humanTieTolerance ?? options.pairwiseHumanTieTolerance, declaredTieTolerance);
+  const modelTieTolerance = numberOrDefault(options.modelTieTolerance ?? options.pairwiseModelTieTolerance, declaredTieTolerance);
+  if (declaredTieTolerance < 0 || humanTieTolerance < 0 || modelTieTolerance < 0) {
+    throw new Error("pairwise tie tolerances must be non-negative");
+  }
+  return {
+    tieTolerance: declaredTieTolerance,
+    humanTieTolerance,
+    modelTieTolerance,
+  };
+}
+
 function assertSameKeys(a, b, subject) {
   const aKeys = Object.keys(a).sort();
   const bKeys = Object.keys(b).sort();
@@ -2167,64 +2182,72 @@ function assertSameKeys(a, b, subject) {
   }
 }
 
-export function weightedPairwiseLossForPosition(humanOveralls, modelOveralls, tieTolerance = 0) {
+export function weightedPairwiseLossForPosition(humanOveralls, modelOveralls, tieConfig = 0) {
   validateScoreMap(humanOveralls, "human_overalls");
   validateScoreMap(modelOveralls, "model_overalls");
   assertSameKeys(humanOveralls, modelOveralls, "Human/model critique");
+  const { humanTieTolerance, modelTieTolerance } = resolvePairwiseTieTolerances(tieConfig);
   const losses = [];
   let nHumanTiePairsExcluded = 0;
+  let nModelTiePairsScored = 0;
   const ids = Object.keys(humanOveralls);
   ids.forEach((a, index) => {
     ids.slice(index + 1).forEach((b) => {
       const hdiff = humanOveralls[a] - humanOveralls[b];
-      if (isTie(hdiff, tieTolerance)) {
+      if (isTie(hdiff, humanTieTolerance)) {
         nHumanTiePairsExcluded += 1;
         return;
       }
       const humanPref = hdiff > 0 ? 1 : -1;
       const mdiff = modelOveralls[a] - modelOveralls[b];
       const weight = Math.abs(hdiff);
-      if (isTie(mdiff, tieTolerance)) losses.push(weight / 2);
-      else if ((mdiff > 0 ? 1 : -1) === humanPref) losses.push(0);
+      if (isTie(mdiff, modelTieTolerance)) {
+        nModelTiePairsScored += 1;
+        losses.push(weight / 2);
+      } else if ((mdiff > 0 ? 1 : -1) === humanPref) losses.push(0);
       else losses.push(weight);
     });
   });
-  return { loss: losses.length ? mean(losses) : null, coverage: { nPairsScored: losses.length, nHumanTiePairsExcluded } };
+  return { loss: losses.length ? mean(losses) : null, coverage: { nPairsScored: losses.length, nHumanTiePairsExcluded, nModelTiePairsScored } };
 }
 
-export function unweightedPairwiseLossForPosition(humanOveralls, modelOveralls, tieTolerance = 0) {
+export function unweightedPairwiseLossForPosition(humanOveralls, modelOveralls, tieConfig = 0) {
   validateScoreMap(humanOveralls, "human_overalls");
   validateScoreMap(modelOveralls, "model_overalls");
   assertSameKeys(humanOveralls, modelOveralls, "Human/model critique");
+  const { humanTieTolerance, modelTieTolerance } = resolvePairwiseTieTolerances(tieConfig);
   const losses = [];
   let nHumanTiePairsExcluded = 0;
+  let nModelTiePairsScored = 0;
   const ids = Object.keys(humanOveralls);
   ids.forEach((a, index) => {
     ids.slice(index + 1).forEach((b) => {
       const hdiff = humanOveralls[a] - humanOveralls[b];
-      if (isTie(hdiff, tieTolerance)) {
+      if (isTie(hdiff, humanTieTolerance)) {
         nHumanTiePairsExcluded += 1;
         return;
       }
       const humanPref = hdiff > 0 ? 1 : -1;
       const mdiff = modelOveralls[a] - modelOveralls[b];
-      if (isTie(mdiff, tieTolerance)) losses.push(0.5);
-      else if ((mdiff > 0 ? 1 : -1) === humanPref) losses.push(0);
+      if (isTie(mdiff, modelTieTolerance)) {
+        nModelTiePairsScored += 1;
+        losses.push(0.5);
+      } else if ((mdiff > 0 ? 1 : -1) === humanPref) losses.push(0);
       else losses.push(1);
     });
   });
-  return { loss: losses.length ? mean(losses) : null, coverage: { nPairsScored: losses.length, nHumanTiePairsExcluded } };
+  return { loss: losses.length ? mean(losses) : null, coverage: { nPairsScored: losses.length, nHumanTiePairsExcluded, nModelTiePairsScored } };
 }
 
-export function weightedPairwiseErrorRateByPosition(human, model, tieTolerance = 0) {
-  return pairwiseErrorRateByPosition(human, model, weightedPairwiseLossForPosition, tieTolerance);
+export function weightedPairwiseErrorRateByPosition(human, model, tieConfig = 0) {
+  return pairwiseErrorRateByPosition(human, model, weightedPairwiseLossForPosition, tieConfig);
 }
 
-export function unweightedPairwiseErrorRateByPosition(human, model, tieTolerance = 0) {
-  return pairwiseErrorRateByPosition(human, model, unweightedPairwiseLossForPosition, tieTolerance);
+export function unweightedPairwiseErrorRateByPosition(human, model, tieConfig = 0) {
+  return pairwiseErrorRateByPosition(human, model, unweightedPairwiseLossForPosition, tieConfig);
 }
 
-function pairwiseErrorRateByPosition(positionToHuman, positionToModel, scorer, tieTolerance) {
+function pairwiseErrorRateByPosition(positionToHuman, positionToModel, scorer, tieConfig) {
   assertSameKeys(positionToHuman, positionToModel, "Human/model position");
   const positionLosses = [];
   const excludedNoNonTiedPairs = [];
@@ -2233,11 +2256,13 @@ function pairwiseErrorRateByPosition(positionToHuman, positionToModel, scorer, t
     nPositionsExcludedNoNonTiedPairs: 0,
     nPairsScored: 0,
     nHumanTiePairsExcluded: 0,
+    nModelTiePairsScored: 0,
   };
   Object.entries(positionToHuman).forEach(([positionId, humanOveralls]) => {
-    const result = scorer(humanOveralls, positionToModel[positionId], tieTolerance);
+    const result = scorer(humanOveralls, positionToModel[positionId], tieConfig);
     coverage.nPairsScored += result.coverage.nPairsScored;
     coverage.nHumanTiePairsExcluded += result.coverage.nHumanTiePairsExcluded;
+    coverage.nModelTiePairsScored += result.coverage.nModelTiePairsScored;
     if (result.loss === null) {
       excludedNoNonTiedPairs.push(positionId);
       coverage.nPositionsExcludedNoNonTiedPairs += 1;
@@ -2261,7 +2286,7 @@ export function defaultFullRubricUtility(label, targetLabel) {
   return 0.5 * label.overall + 0.2 * label.centrality * label.strength + 0.1 * label.clarity + 0.1 * label.correctness + 0.05 * (1 - label.dead_weight) + 0.05 * label.single_issue;
 }
 
-export function derivedUtilityPairwiseErrorRateByPosition(humanRatings, modelRatings, tieTolerance = 0) {
+export function derivedUtilityPairwiseErrorRateByPosition(humanRatings, modelRatings, tieConfig = 0) {
   assertSameKeys(humanRatings, modelRatings, "Human/model position");
   const humanUtilities = {};
   const modelUtilities = {};
@@ -2275,7 +2300,7 @@ export function derivedUtilityPairwiseErrorRateByPosition(humanRatings, modelRat
       modelUtilities[positionId][critiqueId] = defaultFullRubricUtility(model, human);
     });
   });
-  return weightedPairwiseErrorRateByPosition(humanUtilities, modelUtilities, tieTolerance);
+  return weightedPairwiseErrorRateByPosition(humanUtilities, modelUtilities, tieConfig);
 }
 
 export function customWeightedLossForDataset(humanRatings, modelRatings) {
@@ -2293,7 +2318,7 @@ export function customWeightedLossForDataset(humanRatings, modelRatings) {
 
 export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabelVersion, positionToHumanOveralls, tieTolerance = 0) {
   const options = typeof tieTolerance === "object" && tieTolerance !== null ? tieTolerance : { tieTolerance };
-  const resolvedTieTolerance = numberOrDefault(options.tieTolerance, 0);
+  const { humanTieTolerance, modelTieTolerance } = resolvePairwiseTieTolerances(options);
   const positionTextVersionIdsByPosition = options.positionTextVersionIdsByPosition ?? {};
   const critiqueTextVersionIdsByPosition = options.critiqueTextVersionIdsByPosition ?? {};
   const itemTextVersionIdsByItem = options.itemTextVersionIdsByItem ?? {};
@@ -2315,7 +2340,7 @@ export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabel
           critiqueTextVersionIdsByPosition,
           itemTextVersionIdsByItem,
         );
-        if (isTie(margin, resolvedTieTolerance)) {
+        if (isTie(margin, humanTieTolerance)) {
           excludedHumanTieEdges += 1;
           excludedHumanTieEdgeRows.push({ positionId, critiqueA: a, critiqueB: b, humanMargin: margin, ...textVersionRefs });
           return;
@@ -2339,13 +2364,13 @@ export function buildPairwiseComparisonSnapshot(id, labelSnapshotId, targetLabel
     targetLabelVersion,
     targetScoreField: options.targetScoreField ?? "overall",
     humanTargetScoreSource: options.humanTargetScoreSource ?? `${labelSnapshotId}:${targetLabelVersion}:weighted_mean_overall`,
-    tieTolerance: resolvedTieTolerance,
-    humanTieTolerance: resolvedTieTolerance,
-    modelTieTolerance: resolvedTieTolerance,
-    humanTiePolicy: "exclude_human_tied_pairs_from_pairwise_loss",
-    modelTiePolicy: "score_model_tied_predictions_as_half_error",
-    scoreRoundingPolicy: resolvedTieTolerance === 0 ? "stored_exact" : "declared_tolerance",
-    scoreQuantizationPolicy: "unit_interval_decimal_scores_no_bucket_quantization",
+    tieTolerance: humanTieTolerance,
+    humanTieTolerance,
+    modelTieTolerance,
+    humanTiePolicy: options.humanTiePolicy ?? options.pairwiseHumanTiePolicy ?? "exclude_human_tied_pairs_from_pairwise_loss",
+    modelTiePolicy: options.modelTiePolicy ?? options.pairwiseModelTiePolicy ?? "score_model_tied_predictions_as_half_error",
+    scoreRoundingPolicy: options.scoreRoundingPolicy ?? (humanTieTolerance === 0 && modelTieTolerance === 0 ? "stored_exact" : "declared_tolerance"),
+    scoreQuantizationPolicy: options.scoreQuantizationPolicy ?? "unit_interval_decimal_scores_no_bucket_quantization",
     positionIds: Object.keys(positionToHumanOveralls),
     critiqueIdsByPosition: Object.fromEntries(Object.entries(positionToHumanOveralls).map(([positionId, scores]) => [positionId, Object.keys(scores)])),
     positionTextVersionIdsByPosition,
@@ -11566,7 +11591,7 @@ export function buildMetricDirectionalityConfigReport(releaseId, labelSnapshot, 
     derivedUtilityFormula: effectiveMetricConfig.derivedUtilityFormula,
     policy: {
       scoreRoundingRule: "Score rounding and quantization must be declared before pairwise ranking or leaderboard claims.",
-      tieToleranceRule: "Human-tied pairs are excluded; model-tied predictions are scored as half-error under the same declared tolerance.",
+      tieToleranceRule: "Human-target tie tolerance controls edge exclusion; model-prediction tie tolerance separately controls half-error indifference.",
       directionalityRule: "Custom weighted loss is always reported as lower-is-better distance from the target label to the prediction.",
       finalAverageRule: humanCeiling.finalAverageApproximationPolicy,
     },
@@ -16097,6 +16122,13 @@ const UI_EXPERIMENT_BLOCKED_CLASSES = [
   "score_affecting_wording",
 ];
 
+export const UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION = "ui-variant-sensitivity-power-rlhf90-v1";
+export const REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER = 0.8;
+export const REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA = 0.05;
+export const REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL = 0.05;
+export const REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT = 120;
+export const REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE = 0.1;
+
 const PRE_SUBMIT_PROHIBITED_INPUTS = [
   "target_scores",
   "gold_answers",
@@ -16244,14 +16276,24 @@ function defaultUIExperimentPolicy(releaseId) {
   return {
     id: `ui-experiment-policy-${releaseId}`,
     policyVersion: "ui-experiment-policy-rlhf88-v1",
+    sensitivityPowerPolicyVersion: UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
     coveredSplitLaneClasses: PROTECTED_UI_LANE_CLASSES,
     allowedUiVariantIds: ["rlhf88-task-first-compatible"],
     blockedExperimentClasses: UI_EXPERIMENT_BLOCKED_CLASSES,
     materialChangeDefinition: "changes to score controls, anchor copy, lint behavior, issue-panel requiredness, example visibility, layout density, accessibility variants, or score-affecting wording",
     unregisteredMaterialChangesBlocked: true,
     sensitivitySnapshotRequired: true,
+    sensitivityPrimaryOutcomeMetric: "overall_score_mean_difference",
+    sensitivityMinimumPower: REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+    sensitivityAlpha: REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
+    sensitivityMinimumDetectableEffectOverall: REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+    sensitivityMinimumPerVariantCellCount: REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
+    sensitivityMaxProtectedVariantImbalance: REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE,
+    sensitivityUnderpoweredDisposition: "block_or_quarantine_protected_claims_until_powered_sensitivity_snapshot_exists",
     compatibilityRuleForMixedRenderVersions: "separate sensitivity snapshot or block protected merge",
     uxSimplificationCompatibilityRule: "requires passing UXSimplificationReview with no feature loss",
+    lmcaSourceBoundary:
+      "Project default UI-variant sensitivity power thresholds are frozen here; LMCA motivates protected-split measurement discipline but does not state exact statistical power thresholds.",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -16373,6 +16415,15 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     requiredWorkflowTaskModes: RATING_WORKFLOW_TASK_MODES,
     protectedUiLaneClasses: PROTECTED_UI_LANE_CLASSES,
     blockedExperimentClasses: UI_EXPERIMENT_BLOCKED_CLASSES,
+    uiVariantSensitivityPowerThresholds: {
+      policyVersion: UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
+      minimumPower: REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+      alpha: REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
+      minimumDetectableEffectOverall: REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+      minimumPerVariantCellCount: REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
+      maxProtectedVariantImbalance: REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE,
+      primaryOutcomeMetric: "overall_score_mean_difference",
+    },
     prohibitedAssistInputs: PRE_SUBMIT_PROHIBITED_INPUTS,
     accessibilityRequiredSurfaces: ACCESSIBILITY_REQUIRED_SURFACES,
     accessibilityRequiredChecks: ACCESSIBILITY_REQUIRED_CHECKS,
@@ -16684,22 +16735,50 @@ function normalizeUIExperimentPolicy(policy, rowSource) {
   const missingBlockedClasses = UI_EXPERIMENT_BLOCKED_CLASSES.filter((experimentClass) => !blockedExperimentClasses.includes(experimentClass));
   const reviewReasons = [
     requiredPromptFieldReason("policyVersion", policy.policyVersion ?? policy.version),
+    policy.sensitivityPowerPolicyVersion === UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION
+      ? null
+      : `sensitivityPowerPolicyVersion:${UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION}`,
     missingLaneClasses.length ? `coveredSplitLaneClasses:${missingLaneClasses.join(",")}` : null,
     missingBlockedClasses.length ? `blockedExperimentClasses:${missingBlockedClasses.join(",")}` : null,
     policy.unregisteredMaterialChangesBlocked === true ? null : "unregisteredMaterialChangesBlocked",
     policy.sensitivitySnapshotRequired === true ? null : "sensitivitySnapshotRequired",
+    policy.sensitivityPrimaryOutcomeMetric === "overall_score_mean_difference" ? null : "sensitivityPrimaryOutcomeMetric",
+    policy.sensitivityMinimumPower === REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER
+      ? null
+      : `sensitivityMinimumPower:${REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER}`,
+    policy.sensitivityAlpha === REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA ? null : `sensitivityAlpha:${REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA}`,
+    policy.sensitivityMinimumDetectableEffectOverall === REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL
+      ? null
+      : `sensitivityMinimumDetectableEffectOverall:${REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL}`,
+    policy.sensitivityMinimumPerVariantCellCount === REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT
+      ? null
+      : `sensitivityMinimumPerVariantCellCount:${REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT}`,
+    policy.sensitivityMaxProtectedVariantImbalance === REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE
+      ? null
+      : `sensitivityMaxProtectedVariantImbalance:${REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE}`,
+    policyMentions(policy.sensitivityUnderpoweredDisposition, ["block", "quarantine"]) ? null : "sensitivityUnderpoweredDisposition",
     policyMentions(policy.uxSimplificationCompatibilityRule, ["ux", "simplification"]) ? null : "uxSimplificationCompatibilityRule",
+    policyMentions(policy.lmcaSourceBoundary, ["project", "default"]) ? null : "lmcaSourceBoundary",
   ].filter(Boolean);
   return {
     id,
     rowSource,
     policyVersion: policy.policyVersion ?? policy.version ?? null,
+    sensitivityPowerPolicyVersion: policy.sensitivityPowerPolicyVersion ?? null,
     coveredSplitLaneClasses,
     blockedExperimentClasses,
     missingLaneClasses,
     missingBlockedClasses,
     unregisteredMaterialChangesBlocked: policy.unregisteredMaterialChangesBlocked === true,
     sensitivitySnapshotRequired: policy.sensitivitySnapshotRequired === true,
+    sensitivityPrimaryOutcomeMetric: policy.sensitivityPrimaryOutcomeMetric ?? null,
+    sensitivityMinimumPower: policy.sensitivityMinimumPower ?? null,
+    sensitivityAlpha: policy.sensitivityAlpha ?? null,
+    sensitivityMinimumDetectableEffectOverall: policy.sensitivityMinimumDetectableEffectOverall ?? null,
+    sensitivityMinimumPerVariantCellCount: policy.sensitivityMinimumPerVariantCellCount ?? null,
+    sensitivityMaxProtectedVariantImbalance: policy.sensitivityMaxProtectedVariantImbalance ?? null,
+    sensitivityUnderpoweredDisposition: policy.sensitivityUnderpoweredDisposition ?? null,
+    lmcaSourceBoundary: policy.lmcaSourceBoundary ?? null,
     reviewReasons,
     status: reviewReasons.length ? "ui_experiment_policy_review_required" : "ui_experiment_policy_complete",
   };
@@ -24590,6 +24669,25 @@ const REQUIRED_CLIENT_SURFACE_CHECKS = [
   "csp",
 ];
 
+export const CLIENT_SURFACE_INTEGRITY_POLICY_VERSION = "client-surface-integrity-rlhf90-v1";
+export const REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES = {
+  "default-src": ["'self'"],
+  "script-src": ["'self'"],
+  "connect-src": ["'self'"],
+  "img-src": ["'self'", "data:"],
+  "style-src": ["'self'", "'unsafe-inline'"],
+  "font-src": ["'self'"],
+  "object-src": ["'none'"],
+  "base-uri": ["'self'"],
+  "form-action": ["'self'"],
+  "frame-ancestors": ["'none'"],
+  "worker-src": ["'none'"],
+};
+export const REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST = ["page_load", "submit_click", "validation_error"];
+export const REQUIRED_CLIENT_SURFACE_REFERRER_POLICY = "no-referrer";
+export const REQUIRED_CLIENT_SURFACE_CACHE_POLICY = "no_store_no_service_worker_no_persistent_offline_cache";
+export const REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY = "opaque_route_ids_no_hidden_item_ids_no_protected_status_in_url";
+
 export const CLOUD_SECURITY_BUDGET_POLICY_VERSION = "cloud-security-budget-rlhf90-v1";
 export const REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD = {
   minimum: 60000,
@@ -24784,6 +24882,7 @@ function defaultClientSurfaceIntegrityPolicies(releaseId) {
     id: `client-surface-integrity-${releaseId}-${surface}`,
 	    releaseId,
 	    surface,
+    policyVersion: CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
 	    thirdPartyAnalyticsProhibited: true,
 	    thirdPartyPixelsProhibited: true,
 	    thirdPartyResourcesProhibited: true,
@@ -24793,14 +24892,18 @@ function defaultClientSurfaceIntegrityPolicies(releaseId) {
 	    domCaptureProhibited: true,
 	    keystrokeLoggingProhibited: true,
 	    sensitiveUrlIdsProhibited: true,
+    urlIdentifierPolicy: REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY,
 	    referrerLeakageBlocked: true,
+    referrerPolicy: REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
 	    persistentOfflineCacheProhibited: true,
+    cacheOfflineStoragePolicy: REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
 	    firstPartyTelemetryOnly: true,
 	    telemetryAllowlistEnforced: true,
 	    screenStateOutputSchemaBound: true,
 	    nonStaffPromotionBlockedOnViolation: true,
 	    cspEnforced: true,
-	    firstPartyTelemetryAllowlist: ["page_load", "submit_click", "validation_error"],
+    cspDirectives: REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+	    firstPartyTelemetryAllowlist: REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
 	    promotedToNonStaffAt: "2026-10-01T00:00:00.000Z",
 	  }));
 }
@@ -25119,6 +25222,12 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
 	    requiredQueueRevalidationChecks: REQUIRED_QUEUE_REVALIDATION_CHECKS,
 	    requiredClientSurfaces: REQUIRED_CLIENT_SURFACES,
 	    requiredClientSurfaceChecks: REQUIRED_CLIENT_SURFACE_CHECKS,
+    requiredClientSurfaceIntegrityPolicyVersion: CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
+    requiredClientSurfaceCspDirectives: REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+    requiredClientSurfaceTelemetryAllowlist: REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
+    requiredClientSurfaceReferrerPolicy: REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
+    requiredClientSurfaceCachePolicy: REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
+    requiredClientSurfaceUrlIdentifierPolicy: REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY,
     requiredCloudSecurityBudgetRangeUsd: REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
     requiredCloudSecurityBudgetCategoryMinimumUsd: REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
     requiredCloudSecurityControls: REQUIRED_CLOUD_SECURITY_CONTROLS,
@@ -25460,7 +25569,15 @@ function normalizeClientSurfaceIntegrityPolicy(policy, rowSource) {
   const id = policy?.id ?? policy?.clientSurfaceIntegrityPolicyId;
   if (!id) return null;
   const surface = policy.surface ?? policy.screenKind ?? null;
+  const cspDirectives =
+    policy.cspDirectives && typeof policy.cspDirectives === "object" && !Array.isArray(policy.cspDirectives)
+      ? policy.cspDirectives
+      : {};
+  const firstPartyTelemetryAllowlist = normalizeStringArray(policy.firstPartyTelemetryAllowlist);
 	  const reviewReasons = [
+      (policy.policyVersion ?? policy.version) === CLIENT_SURFACE_INTEGRITY_POLICY_VERSION
+        ? null
+        : `policyVersion:${CLIENT_SURFACE_INTEGRITY_POLICY_VERSION}`,
 	    REQUIRED_CLIENT_SURFACES.includes(surface) ? null : "surface",
 	    policy.thirdPartyAnalyticsProhibited === true ? null : "thirdPartyAnalyticsProhibited",
 	    policy.thirdPartyPixelsProhibited === true ? null : "thirdPartyPixelsProhibited",
@@ -25471,22 +25588,31 @@ function normalizeClientSurfaceIntegrityPolicy(policy, rowSource) {
 	    policy.domCaptureProhibited === true ? null : "domCaptureProhibited",
 	    policy.keystrokeLoggingProhibited === true ? null : "keystrokeLoggingProhibited",
 	    policy.sensitiveUrlIdsProhibited === true ? null : "sensitiveUrlIdsProhibited",
+    policy.urlIdentifierPolicy === REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY ? null : "urlIdentifierPolicy",
 	    policy.referrerLeakageBlocked === true ? null : "referrerLeakageBlocked",
+    policy.referrerPolicy === REQUIRED_CLIENT_SURFACE_REFERRER_POLICY ? null : "referrerPolicy",
 	    policy.persistentOfflineCacheProhibited === true ? null : "persistentOfflineCacheProhibited",
+    policy.cacheOfflineStoragePolicy === REQUIRED_CLIENT_SURFACE_CACHE_POLICY ? null : "cacheOfflineStoragePolicy",
 	    policy.firstPartyTelemetryOnly === true ? null : "firstPartyTelemetryOnly",
 	    policy.telemetryAllowlistEnforced === true ? null : "telemetryAllowlistEnforced",
 	    policy.screenStateOutputSchemaBound === true ? null : "screenStateOutputSchemaBound",
 	    policy.nonStaffPromotionBlockedOnViolation === true ? null : "nonStaffPromotionBlockedOnViolation",
 	    policy.cspEnforced === true ? null : "cspEnforced",
-	    normalizeStringArray(policy.firstPartyTelemetryAllowlist).length ? null : "firstPartyTelemetryAllowlist",
+    stableJsonKey(cspDirectives) === stableJsonKey(REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES) ? null : "cspDirectives",
+	    stableJsonKey(firstPartyTelemetryAllowlist) === stableJsonKey(REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST) ? null : "firstPartyTelemetryAllowlist",
 	  ].filter(Boolean);
   return {
     id,
     rowSource,
 	    releaseId: policy.releaseId ?? null,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
 	    surface,
 	    thirdPartyResourceAllowlist: normalizeStringArray(policy.thirdPartyResourceAllowlist),
-	    firstPartyTelemetryAllowlist: normalizeStringArray(policy.firstPartyTelemetryAllowlist),
+    cspDirectives,
+    urlIdentifierPolicy: policy.urlIdentifierPolicy ?? null,
+    referrerPolicy: policy.referrerPolicy ?? null,
+    cacheOfflineStoragePolicy: policy.cacheOfflineStoragePolicy ?? null,
+	    firstPartyTelemetryAllowlist,
 	    reviewReasons,
 	    status: reviewReasons.length ? "client_surface_integrity_policy_review_required" : "client_surface_integrity_policy_complete",
 	  };
@@ -27332,8 +27458,12 @@ function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, 
     acc[prediction.positionId][prediction.critiqueId] = prediction.scores.overall;
     return acc;
   }, {});
-  const weightedPairwise = weightedPairwiseErrorRateByPosition(humanOveralls, modelOveralls, pairwiseSnapshot.tieTolerance);
-  const unweightedPairwise = unweightedPairwiseErrorRateByPosition(humanOveralls, modelOveralls, pairwiseSnapshot.tieTolerance);
+  const pairwiseTieConfig = {
+    humanTieTolerance: pairwiseSnapshot.humanTieTolerance ?? pairwiseSnapshot.tieTolerance,
+    modelTieTolerance: pairwiseSnapshot.modelTieTolerance ?? pairwiseSnapshot.tieTolerance,
+  };
+  const weightedPairwise = weightedPairwiseErrorRateByPosition(humanOveralls, modelOveralls, pairwiseTieConfig);
+  const unweightedPairwise = unweightedPairwiseErrorRateByPosition(humanOveralls, modelOveralls, pairwiseTieConfig);
   const fullRubricAvailable = predictions.every((prediction) => FULL_RUBRIC_FIELDS.every((field) => isValidScore(prediction.scores[field])));
   const commonMaps = buildCommonMaps(
     {
@@ -27392,6 +27522,7 @@ function leaderboardRunRow(run, labelSnapshot, commonItemIds, pairwiseSnapshot, 
       nPositionsScored: weightedPairwise.coverage.nPositionsScored,
       nPairsScored: weightedPairwise.coverage.nPairsScored,
       nHumanTiePairsExcluded: weightedPairwise.coverage.nHumanTiePairsExcluded,
+      nModelTiePairsScored: weightedPairwise.coverage.nModelTiePairsScored,
       nItemsScored: commonItemIds.length,
     },
   };

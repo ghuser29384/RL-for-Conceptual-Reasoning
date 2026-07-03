@@ -11,6 +11,7 @@ import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   BENCHMARK_REFRESH_POLICY_VERSION,
+  CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
   CLOUD_SECURITY_BUDGET_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
@@ -36,6 +37,11 @@ import {
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
   REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
   REQUIRED_CLOUD_SECURITY_CONTROLS,
+  REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
+  REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+  REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
+  REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
+  REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY,
   EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
   REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
   REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
@@ -142,7 +148,13 @@ import {
   SPOT_CHECK_SAMPLING_POLICY_VERSION,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
+  REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
+  REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
   TRAINING_EXPORT_UNCERTAINTY_POLICY_VERSION,
+  UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
   VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
 } from "../src/domain/core.mjs";
 import {
@@ -1695,14 +1707,24 @@ function completePolicyBundleFixtures() {
     uiExperimentPolicy: {
       id: "ui-experiment-policy-workflow-new",
       policyVersion: "ui-experiment-policy-rlhf88-v1",
+      sensitivityPowerPolicyVersion: UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
       coveredSplitLaneClasses: protectedUiLaneClasses,
       allowedUiVariantIds: ["rlhf88-task-first-compatible"],
       blockedExperimentClasses: blockedUiExperimentClasses,
       materialChangeDefinition: "changes to score controls, anchor copy, lint behavior, issue-panel requiredness, example visibility, layout density, accessibility variants, or score-affecting wording",
       unregisteredMaterialChangesBlocked: true,
       sensitivitySnapshotRequired: true,
+      sensitivityPrimaryOutcomeMetric: "overall_score_mean_difference",
+      sensitivityMinimumPower: REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+      sensitivityAlpha: REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
+      sensitivityMinimumDetectableEffectOverall: REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+      sensitivityMinimumPerVariantCellCount: REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
+      sensitivityMaxProtectedVariantImbalance: REQUIRED_UI_VARIANT_SENSITIVITY_MAX_IMBALANCE,
+      sensitivityUnderpoweredDisposition: "block_or_quarantine_protected_claims_until_powered_sensitivity_snapshot_exists",
       compatibilityRuleForMixedRenderVersions: "separate sensitivity snapshot or block protected merge",
       uxSimplificationCompatibilityRule: "UX simplification requires passing review",
+      lmcaSourceBoundary:
+        "Project default UI-variant sensitivity power thresholds are frozen here; LMCA does not state exact statistical power thresholds.",
       frozenAt: "2026-10-01T00:00:00.000Z",
     },
     preSubmitAssistPolicy: {
@@ -1898,6 +1920,7 @@ function completeOperationalControlWorkflowFixtures() {
     id: `client-surface-integrity-workflow-${surface}`,
 	    releaseId: "october-2026-demo",
 	    surface,
+    policyVersion: CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
 	    thirdPartyAnalyticsProhibited: true,
 	    thirdPartyPixelsProhibited: true,
 	    thirdPartyResourcesProhibited: true,
@@ -1907,14 +1930,18 @@ function completeOperationalControlWorkflowFixtures() {
 	    domCaptureProhibited: true,
 	    keystrokeLoggingProhibited: true,
 	    sensitiveUrlIdsProhibited: true,
+    urlIdentifierPolicy: REQUIRED_CLIENT_SURFACE_URL_IDENTIFIER_POLICY,
 	    referrerLeakageBlocked: true,
+    referrerPolicy: REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
 	    persistentOfflineCacheProhibited: true,
+    cacheOfflineStoragePolicy: REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
 	    firstPartyTelemetryOnly: true,
 	    telemetryAllowlistEnforced: true,
 	    screenStateOutputSchemaBound: true,
 	    nonStaffPromotionBlockedOnViolation: true,
 	    cspEnforced: true,
-	    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
+    cspDirectives: REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+	    firstPartyTelemetryAllowlist: REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
 	  }));
   const externalWormAuditLogPolicy = {
     id: "external-worm-audit-log-policy-workflow-new",
@@ -9890,6 +9917,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(incompleteUiExperimentPolicy.status, 400);
   assert.match(incompleteUiExperimentPolicy.body.detail, /materialChangeDefinition|compatibilityRuleForMixedRenderVersions|frozenAt/);
 
+  const underpoweredUiExperimentPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/ui-experiment-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      uiExperimentPolicy: {
+        ...policyBundle.uiExperimentPolicy,
+        id: "ui-experiment-policy-underpowered",
+        sensitivityMinimumPower: 0.6,
+        sensitivityMinimumPerVariantCellCount: 30,
+      },
+    }),
+  });
+  assert.equal(underpoweredUiExperimentPolicy.status, 400);
+  assert.match(underpoweredUiExperimentPolicy.body.detail, /sensitivityMinimumPower|sensitivityMinimumPerVariantCellCount/);
+
   const incompletePreSubmitAssistPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/pre-submit-assist-policies",
@@ -13887,6 +13930,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 	  assert.equal(thirdPartyClientSurfacePolicy.status, 400);
 	  assert.match(thirdPartyClientSurfacePolicy.body.detail, /thirdPartyResourceAllowlist|heatmapTrackingProhibited|telemetryAllowlistEnforced/);
 
+  const driftedClientSurfacePolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/client-surface-integrity-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      clientSurfaceIntegrityPolicy: {
+        ...operationalControls.clientSurfaceIntegrityPolicies[0],
+        id: "client-surface-integrity-workflow-drifted-csp",
+        cspDirectives: { "default-src": ["*"], "script-src": ["*"] },
+        firstPartyTelemetryAllowlist: ["page_load", "submit_click", "session_replay_event"],
+      },
+    }),
+  });
+  assert.equal(driftedClientSurfacePolicy.status, 400);
+  assert.match(driftedClientSurfacePolicy.body.detail, /cspDirectives|firstPartyTelemetryAllowlist/);
+
 	  const failingClientSurfaceCheck = await invokeApi(context, {
 	    method: "POST",
 	    url: "/api/v1/client-surfaces/client-surface-integrity-workflow-rating/integrity-check",
@@ -14886,6 +14945,14 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.policyBundleEvidence.counts.completePolicyGroupCount, 7);
   assert.equal(releaseReport.body.policyBundleEvidence.counts.submittedScoreExplanationPolicyCount, 1);
   assert.equal(releaseReport.body.policyBundleEvidence.counts.submittedRatingEscalationPolicyCount, 1);
+  assert.equal(
+    releaseReport.body.policyBundleEvidence.uiVariantSensitivityPowerThresholds.minimumPower,
+    REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+  );
+  assert.equal(
+    releaseReport.body.policyBundleEvidence.uiExperimentPolicyRows.at(-1).sensitivityMinimumDetectableEffectOverall,
+    REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
+  );
   const submittedWorkflowProfile = releaseReport.body.policyBundleEvidence.ratingWorkflowProfileRows.find(
     (row) => row.id === "rating-workflow-profile-workflow-new" && row.rowSource === "submitted_workflow_rating_profile",
   );
@@ -15601,6 +15668,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingPhaseLaneCount, phaseGateLaneKinds.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingQueueFreshnessLaneCount, queueFreshnessLanes.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingClientSurfaceCount, clientSurfaces.length);
+  assert.equal(
+    releaseReport.body.operationalControlEvidence.requiredClientSurfaceIntegrityPolicyVersion,
+    CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
+  );
+  assert.deepEqual(
+    releaseReport.body.operationalControlEvidence.requiredClientSurfaceCspDirectives,
+    REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES,
+  );
+  assert.deepEqual(
+    releaseReport.body.operationalControlEvidence.requiredClientSurfaceTelemetryAllowlist,
+    REQUIRED_CLIENT_SURFACE_TELEMETRY_ALLOWLIST,
+  );
+  assert.equal(
+    releaseReport.body.operationalControlEvidence.clientSurfaceIntegrityPolicyRows.at(-1).cacheOfflineStoragePolicy,
+    REQUIRED_CLIENT_SURFACE_CACHE_POLICY,
+  );
   assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedCloudSecurityBudgetPolicyCount, 1);
   assert.equal(releaseReport.body.operationalControlEvidence.cloudSecurityBudgetPolicyId, "cloud-security-budget-policy-workflow-new");
   assert.equal(releaseReport.body.operationalControlEvidence.cloudSecurityBudgetPolicyReleaseUseStatus, "submitted_cloud_security_budget_policy_active");
