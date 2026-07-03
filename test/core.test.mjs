@@ -77,6 +77,7 @@ import {
   REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
   REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
   REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
+  REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
   REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
   REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
@@ -1817,6 +1818,7 @@ function completePolicyBundleFixtures() {
         testToolchain: accessibilityTestToolchain,
         assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix,
         evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+        raterUxAcceptanceChecks: REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
         accessibilityEvidenceArtifactIds: [
           "accessibility-automated-audit-submitted",
           "accessibility-keyboard-walkthrough-submitted",
@@ -1825,6 +1827,7 @@ function completePolicyBundleFixtures() {
           "accessibility-contrast-zoom-review-submitted",
           "accessibility-mobile-touch-review-submitted",
           "accessibility-readability-review-submitted",
+          "rater-ux-acceptance-submitted",
         ],
         toolingReviewStatus: "passed",
         readabilityReviewStatus: "passed",
@@ -3321,11 +3324,13 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.deepEqual(report.accessibilityRequiredTestToolchain, accessibilityTestToolchain);
   assert.deepEqual(report.accessibilityRequiredAssistiveTechnologyMatrix, accessibilityAssistiveTechnologyMatrix);
   assert.deepEqual(report.accessibilityRequiredEvidenceArtifactTypes, accessibilityEvidenceArtifactTypes);
+  assert.deepEqual(report.requiredRaterUxAcceptanceChecks, REQUIRED_RATER_UX_ACCEPTANCE_CHECKS);
   assert.equal(report.accessibilityConformanceRows.at(-1).toolingPolicyVersion, accessibilityToolingPolicyVersion);
   assert.equal(report.accessibilityConformanceRows.at(-1).wcagConformanceTarget, accessibilityWcagConformanceTarget);
   assert.deepEqual(report.accessibilityConformanceRows.at(-1).testToolchain, accessibilityTestToolchain);
   assert.deepEqual(report.accessibilityConformanceRows.at(-1).assistiveTechnologyMatrix, accessibilityAssistiveTechnologyMatrix);
   assert.deepEqual(report.accessibilityConformanceRows.at(-1).evidenceArtifactTypes, accessibilityEvidenceArtifactTypes);
+  assert.deepEqual(report.accessibilityConformanceRows.at(-1).raterUxAcceptanceChecks, REQUIRED_RATER_UX_ACCEPTANCE_CHECKS);
   assert.equal(report.accessibilityConformanceRows.at(-1).manualAssistiveTechReviewRequired, true);
   assert.equal(report.accessibilityConformanceRows.at(-1).automatedAuditAloneInsufficient, true);
   assert.deepEqual(report.reviewSections, []);
@@ -3365,6 +3370,25 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.ok(
     missingAccessibilityToolingReport.reviewSections.some(
       (section) => section.artifactType === "accessibility_conformance_report" && section.reason === "automatedAuditAloneInsufficient",
+    ),
+  );
+
+  const missingRaterUxAcceptanceReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    accessibilityConformanceReports: [
+      {
+        ...completePolicyBundleFixtures().accessibilityConformanceReports[0],
+        id: "accessibility-conformance-missing-rater-ux-acceptance",
+        raterUxAcceptanceChecks: REQUIRED_RATER_UX_ACCEPTANCE_CHECKS.filter((check) => check !== "autosaved_drafts_not_submitted"),
+      },
+    ],
+  });
+  assert.equal(missingRaterUxAcceptanceReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(
+    missingRaterUxAcceptanceReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "accessibility_conformance_report" &&
+        section.reason === "raterUxAcceptanceChecks:autosaved_drafts_not_submitted",
     ),
   );
 
@@ -12306,10 +12330,25 @@ test("release report links submitted discussion threads through adjudication fin
       {
         id: "post-lock-discussion-complete",
         discussionThreadId: "discussion-thread-complete",
+        itemKeys: ["pos-ai-prior::crit-ai-base-rate"],
+        participantIds: ["demo-rater", "expert-1"],
+        participantRoles: ["graduate_rater", "expert_adjudicator"],
         initialRatingLockCheck: "all_initial_ratings_locked",
+        identityStagingPolicy: "role_neutral_handles_first",
+        identityMaskPhaseStatus: "completed_before_role_reveal",
+        roleRevealPolicy: "moderator_exception_logged",
+        moderatorAdjudicatorVisibilityExceptions: "adjudicator can inspect pre-read notes only after initial locks",
+        visibleMaterialPolicy: "peer_rationales_visible_post_lock_only",
+        peerScoreRationaleVisibilityTimestamp: "2026-10-01T00:31:30.000Z",
         objectLevelCommentRecords: ["discussion-comment-complete"],
+        spanReferenceLinks: ["rationale-span-complete"],
+        overlookedPointFlags: ["target_mapping_updated"],
         revisionProposalIds: ["discussion-revision-proposal-complete"],
+        majorityPressureWarningState: "displayed",
         transcriptArtifact: "discussion-transcript-complete",
+        writtenFollowUpStatus: "not_required",
+        discussionStatus: "object_level_discussion_complete",
+        timestamp: "2026-10-01T00:31:30.000Z",
       },
     ],
     adjudications: [
@@ -12372,10 +12411,61 @@ test("release report links submitted discussion threads through adjudication fin
   assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.completeDiscussionThreadCount, 1);
   assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionCommentCount, 1);
   assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionRevisionProposalCount, 1);
+  assert.equal(
+    report.discussionAdjudicationWorkflowEvidence.postLockDiscussionSessionRows.at(-1).identityStagingPolicy,
+    "role_neutral_handles_first",
+  );
+  assert.equal(
+    report.discussionAdjudicationWorkflowEvidence.postLockDiscussionSessionRows.at(-1).identityMaskPhaseStatus,
+    "completed_before_role_reveal",
+  );
+  assert.equal(report.discussionAdjudicationWorkflowEvidence.postLockDiscussionSessionRows.at(-1).roleRevealPolicy, "moderator_exception_logged");
   assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].reviewReasons, []);
   assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].objectLevelCommentIds, ["discussion-comment-complete"]);
   assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].revisionProposalIds, ["discussion-revision-proposal-complete"]);
   assert.deepEqual(report.discussionAdjudicationWorkflowEvidence.coverageRows[0].adjudicationFinalizationIds, ["adjudication-finalization-complete"]);
+
+  const unsafeIdentityReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      ...completeOptions,
+      postLockDiscussionSessions: [
+        {
+          ...completeOptions.postLockDiscussionSessions[0],
+          id: "post-lock-discussion-unsafe-identity",
+          identityStagingPolicy: "real_names_visible_immediately",
+          identityMaskPhaseStatus: "skipped",
+          roleRevealPolicy: "seniority_visible_before_comments",
+          moderatorAdjudicatorVisibilityExceptions: "moderator can inspect notes",
+          visibleMaterialPolicy: "peer_rationales_visible_before_lock",
+          majorityPressureWarningState: "hidden",
+        },
+      ],
+    },
+  );
+  assert.equal(unsafeIdentityReport.discussionAdjudicationWorkflowEvidence.releaseUseStatus, "discussion_adjudication_workflow_review_required");
+  assert.ok(
+    unsafeIdentityReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactType === "post_lock_discussion_session" && section.reason === "identityStagingPolicy",
+    ),
+  );
+  assert.ok(
+    unsafeIdentityReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactType === "post_lock_discussion_session" && section.reason === "identityMaskPhaseStatus",
+    ),
+  );
+  assert.ok(
+    unsafeIdentityReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactType === "post_lock_discussion_session" && section.reason === "roleRevealPolicy",
+    ),
+  );
 
   const incompleteReport = buildOctoberReleaseReport(
     "release-test",

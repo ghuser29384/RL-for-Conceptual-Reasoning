@@ -157,6 +157,7 @@ import {
   REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
   REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
   REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+  REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
   REQUIRED_UI_VARIANT_SENSITIVITY_ALPHA,
@@ -1376,6 +1377,7 @@ const accessibilityWcagConformanceTarget = REQUIRED_ACCESSIBILITY_WCAG_CONFORMAN
 const accessibilityTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN;
 const accessibilityAssistiveTechnologyMatrix = REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX;
 const accessibilityEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES;
+const raterUxAcceptanceChecks = REQUIRED_RATER_UX_ACCEPTANCE_CHECKS;
 const qualificationScopes = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
 const qualificationSources = ["credential", "certification_pack", "prior_rating_reliability", "manual_expert_review", "approved_exception"];
 const qualificationWorkflowEligibility = ["release_critical", "validation", "hidden_benchmark"];
@@ -4244,6 +4246,7 @@ const workflowWriteEndpoints = [
       "checksPassed",
       "testToolchain",
       "evidenceArtifactTypes",
+      "raterUxAcceptanceChecks",
       "accessibilityEvidenceArtifactIds",
     ],
     requiredArrayIncludes: {
@@ -4251,6 +4254,7 @@ const workflowWriteEndpoints = [
       checksPassed: accessibilityChecks,
       testToolchain: accessibilityTestToolchain,
       evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+      raterUxAcceptanceChecks,
     },
     requiredStringIncludes: {
       sourceBoundary: ["project default", "LMCA", "accessibility tool"],

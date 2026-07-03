@@ -110,6 +110,7 @@ import {
   REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
   REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
   REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+  REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
   EXPOSURE_QUARANTINE_POLICY_VERSION,
   REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
   REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
@@ -1756,6 +1757,7 @@ function completePolicyBundleFixtures() {
       testToolchain: accessibilityTestToolchain,
       assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix,
       evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+      raterUxAcceptanceChecks: REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
       accessibilityEvidenceArtifactIds: [
         "accessibility-automated-audit-workflow-new",
         "accessibility-keyboard-walkthrough-workflow-new",
@@ -1764,6 +1766,7 @@ function completePolicyBundleFixtures() {
         "accessibility-contrast-zoom-review-workflow-new",
         "accessibility-mobile-touch-review-workflow-new",
         "accessibility-readability-review-workflow-new",
+        "rater-ux-acceptance-workflow-new",
       ],
       toolingReviewStatus: "passed",
       readabilityReviewStatus: "passed",
@@ -3885,6 +3888,7 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/accessibility-conformance-reports"',
     "testToolchain: accessibilityTestToolchain",
     "assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix",
+    "raterUxAcceptanceChecks",
     'id: "rights-review"',
     'endpoint: () => "/api/v1/rights/review"',
     'id: "release-freeze"',
@@ -9988,6 +9992,21 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(weakAccessibilityToolingReport.status, 400);
   assert.match(weakAccessibilityToolingReport.body.detail, /testToolchain|assistiveTechnologyMatrix|evidenceArtifactTypes|automatedAuditAloneInsufficient/);
 
+  const missingRaterUxAcceptanceReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/accessibility-conformance-reports",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      accessibilityConformanceReport: {
+        ...policyBundle.accessibilityConformanceReport,
+        id: "accessibility-conformance-missing-rater-ux-acceptance",
+        raterUxAcceptanceChecks: REQUIRED_RATER_UX_ACCEPTANCE_CHECKS.filter((check) => check !== "draft_recovery"),
+      },
+    }),
+  });
+  assert.equal(missingRaterUxAcceptanceReport.status, 400);
+  assert.match(missingRaterUxAcceptanceReport.body.detail, /raterUxAcceptanceChecks/);
+
   const ordinaryExplanationRequiredPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/score-explanation-policies",
@@ -14351,6 +14370,18 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionCommentCount, 1);
   assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionRevisionProposalCount, 1);
   assert.equal(releaseReport.body.discussionAdjudicationWorkflowEvidence.counts.completeDiscussionThreadCount, 1);
+  assert.equal(
+    releaseReport.body.discussionAdjudicationWorkflowEvidence.postLockDiscussionSessionRows.at(-1).identityStagingPolicy,
+    "role_neutral_handles_first",
+  );
+  assert.equal(
+    releaseReport.body.discussionAdjudicationWorkflowEvidence.postLockDiscussionSessionRows.at(-1).identityMaskPhaseStatus,
+    "completed_before_role_reveal",
+  );
+  assert.equal(
+    releaseReport.body.discussionAdjudicationWorkflowEvidence.postLockDiscussionSessionRows.at(-1).roleRevealPolicy,
+    "moderator_exception_logged",
+  );
   assert.deepEqual(releaseReport.body.discussionAdjudicationWorkflowEvidence.coverageRows[0].reviewReasons, []);
   assert.deepEqual(releaseReport.body.discussionAdjudicationWorkflowEvidence.coverageRows[0].objectLevelCommentIds, [
     "discussion-comment-workflow-new",

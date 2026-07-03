@@ -36,6 +36,7 @@ import {
   REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
   REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
   REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
+  REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
   MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION,
   REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES,
   PARTIAL_TASK_PROMOTION_POLICY_VERSION,
@@ -90,6 +91,7 @@ const accessibilityWcagConformanceTarget = REQUIRED_ACCESSIBILITY_WCAG_CONFORMAN
 const accessibilityTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN;
 const accessibilityAssistiveTechnologyMatrix = REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX;
 const accessibilityEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES;
+const raterUxAcceptanceChecks = REQUIRED_RATER_UX_ACCEPTANCE_CHECKS;
 const modelProviderEndpointContractPolicyVersion = MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION;
 const modelProviderEndpointContractClauses = REQUIRED_MODEL_PROVIDER_ENDPOINT_CONTRACT_CLAUSES;
 const sourceFamilyClusteringPolicyVersion = SOURCE_FAMILY_CLUSTERING_POLICY_VERSION;
@@ -1145,6 +1147,7 @@ const workflowTemplates = [
         testToolchain: accessibilityTestToolchain,
         assistiveTechnologyMatrix: accessibilityAssistiveTechnologyMatrix,
         evidenceArtifactTypes: accessibilityEvidenceArtifactTypes,
+        raterUxAcceptanceChecks,
         accessibilityEvidenceArtifactIds: [
           `accessibility-automated-audit-${releaseId}`,
           `accessibility-keyboard-walkthrough-${releaseId}`,
@@ -1153,6 +1156,7 @@ const workflowTemplates = [
           `accessibility-contrast-zoom-review-${releaseId}`,
           `accessibility-mobile-touch-review-${releaseId}`,
           `accessibility-readability-review-${releaseId}`,
+          `rater-ux-acceptance-${releaseId}`,
         ],
         toolingReviewStatus: "passed",
         readabilityReviewStatus: "passed",

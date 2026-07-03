@@ -5036,6 +5036,7 @@ function buildDiscussionAdjudicationWorkflowEvidenceReport(releaseId, options = 
     ...threadRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_thread", artifactId: row.id, reason }))),
     ...commentRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_comment", artifactId: row.id, reason }))),
     ...revisionProposalRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_revision_proposal", artifactId: row.id, reason }))),
+    ...postLockSessionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "post_lock_discussion_session", artifactId: row.id, reason }))),
     ...adjudicationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication", artifactId: row.id, reason }))),
     ...coverageRows.flatMap((row) =>
       row.reviewReasons.map((reason) => ({ artifactType: "discussion_adjudication_thread_coverage", artifactId: row.discussionThreadId, reason })),
@@ -5192,23 +5193,58 @@ function normalizePostLockDiscussionSessionLinkRow(session) {
   const id = session?.id;
   if (!id) return null;
   const threadId = workflowDiscussionThreadId(session);
+  const objectLevelCommentRecords = normalizeStringArray(session.objectLevelCommentRecords);
+  const revisionProposalIds = normalizeStringArray(session.revisionProposalIds);
+  const participantRoles = normalizeStringArray(session.participantRoles);
+  const spanReferenceLinks = normalizeStringArray(session.spanReferenceLinks);
+  const overlookedPointFlags = normalizeStringArray(session.overlookedPointFlags);
+  const identityStagingPolicy = session.identityStagingPolicy ?? null;
+  const identityMaskPhaseStatus = session.identityMaskPhaseStatus ?? null;
+  const roleRevealPolicy = session.roleRevealPolicy ?? null;
   const reviewReasons = [
     requiredPromptFieldReason("discussionThreadId", threadId),
     session.initialRatingLockCheck === "all_initial_ratings_locked" ? null : "initialRatingLockCheck",
-    normalizeStringArray(session.objectLevelCommentRecords).length ? null : "objectLevelCommentRecords",
-    normalizeStringArray(session.revisionProposalIds).length ? null : "revisionProposalIds",
+    objectLevelCommentRecords.length ? null : "objectLevelCommentRecords",
+    revisionProposalIds.length ? null : "revisionProposalIds",
+    participantRoles.length ? null : "participantRoles",
+    spanReferenceLinks.length ? null : "spanReferenceLinks",
+    overlookedPointFlags.length ? null : "overlookedPointFlags",
+    DISCUSSION_IDENTITY_STAGING_POLICIES.includes(identityStagingPolicy) ? null : "identityStagingPolicy",
+    DISCUSSION_IDENTITY_MASK_PHASE_STATUSES.includes(identityMaskPhaseStatus) ? null : "identityMaskPhaseStatus",
+    DISCUSSION_ROLE_REVEAL_POLICIES.includes(roleRevealPolicy) ? null : "roleRevealPolicy",
+    requiredPromptFieldReason("moderatorAdjudicatorVisibilityExceptions", session.moderatorAdjudicatorVisibilityExceptions),
+    policyMentions(session.moderatorAdjudicatorVisibilityExceptions, ["adjudicator", "initial locks"])
+      ? null
+      : "moderatorAdjudicatorVisibilityExceptions",
+    requiredPromptFieldReason("visibleMaterialPolicy", session.visibleMaterialPolicy),
+    policyMentions(session.visibleMaterialPolicy, ["post_lock"]) ? null : "visibleMaterialPolicy",
+    requiredPromptFieldReason("peerScoreRationaleVisibilityTimestamp", session.peerScoreRationaleVisibilityTimestamp),
+    session.majorityPressureWarningState === "displayed" ? null : "majorityPressureWarningState",
     requiredPromptFieldReason("transcriptArtifact", session.transcriptArtifact),
+    requiredPromptFieldReason("writtenFollowUpStatus", session.writtenFollowUpStatus),
+    requiredPromptFieldReason("discussionStatus", session.discussionStatus),
+    requiredPromptFieldReason("timestamp", session.timestamp ?? session.createdAt),
   ].filter(Boolean);
   return {
     id,
     rowSource: "submitted_workflow_post_lock_discussion_session",
     discussionThreadId: threadId,
-    objectLevelCommentRecords: normalizeStringArray(session.objectLevelCommentRecords),
-    revisionProposalIds: normalizeStringArray(session.revisionProposalIds),
-    identityStagingPolicy: session.identityStagingPolicy ?? null,
-    identityMaskPhaseStatus: session.identityMaskPhaseStatus ?? null,
-    roleRevealPolicy: session.roleRevealPolicy ?? null,
+    objectLevelCommentRecords,
+    revisionProposalIds,
+    participantRoles,
+    spanReferenceLinks,
+    overlookedPointFlags,
+    identityStagingPolicy,
+    identityMaskPhaseStatus,
+    roleRevealPolicy,
+    moderatorAdjudicatorVisibilityExceptions: session.moderatorAdjudicatorVisibilityExceptions ?? null,
+    visibleMaterialPolicy: session.visibleMaterialPolicy ?? null,
+    peerScoreRationaleVisibilityTimestamp: session.peerScoreRationaleVisibilityTimestamp ?? null,
+    majorityPressureWarningState: session.majorityPressureWarningState ?? null,
     transcriptArtifact: session.transcriptArtifact ?? null,
+    writtenFollowUpStatus: session.writtenFollowUpStatus ?? null,
+    discussionStatus: session.discussionStatus ?? null,
+    timestamp: session.timestamp ?? session.createdAt ?? null,
     reviewReasons,
     status: reviewReasons.length ? "post_lock_discussion_session_link_review_required" : "post_lock_discussion_session_link_complete",
   };
@@ -16185,6 +16221,13 @@ export const REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES = [
   "timeout_recovery_review",
   "readability_review",
 ];
+export const REQUIRED_RATER_UX_ACCEPTANCE_CHECKS = [
+  "keyboard_navigation",
+  "screen_reader_labels",
+  "non_color_status_cues",
+  "draft_recovery",
+  "autosaved_drafts_not_submitted",
+];
 
 const RATING_WORKFLOW_OPTIONAL_RATIONALE_FIELDS = ["general_rating_note"];
 const RATING_WORKFLOW_TRIGGER_REQUIRED_RATIONALE_FIELDS = ["score_explanation"];
@@ -16331,6 +16374,7 @@ function defaultAccessibilityConformanceReport(releaseId) {
     testToolchain: REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
     assistiveTechnologyMatrix: REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
     evidenceArtifactTypes: REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
+    raterUxAcceptanceChecks: REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
     accessibilityEvidenceArtifactIds: [
       `accessibility-automated-audit-${releaseId}`,
       `accessibility-keyboard-walkthrough-${releaseId}`,
@@ -16339,6 +16383,7 @@ function defaultAccessibilityConformanceReport(releaseId) {
       `accessibility-contrast-zoom-review-${releaseId}`,
       `accessibility-mobile-touch-review-${releaseId}`,
       `accessibility-readability-review-${releaseId}`,
+      `rater-ux-acceptance-${releaseId}`,
     ],
     toolingReviewStatus: "passed",
     readabilityReviewStatus: "passed",
@@ -16432,6 +16477,7 @@ export function buildPolicyBundleEvidenceReport(releaseId, options = {}) {
     accessibilityRequiredTestToolchain: REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
     accessibilityRequiredAssistiveTechnologyMatrix: REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX,
     accessibilityRequiredEvidenceArtifactTypes: REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
+    requiredRaterUxAcceptanceChecks: REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
     visibilityPolicyRows: [...seedVisibilityRows, ...submittedVisibilityRows],
     ratingWorkflowProfileRows: [...seedProfileRows, ...submittedProfileRows],
     scoreExplanationPolicyRows: [...seedScoreExplanationRows, ...submittedScoreExplanationRows],
@@ -16828,6 +16874,7 @@ function normalizeAccessibilityConformanceReport(report, rowSource) {
   const checksPassed = normalizeStringArray(report.checksPassed);
   const testToolchain = normalizeStringArray(report.testToolchain);
   const evidenceArtifactTypes = normalizeStringArray(report.evidenceArtifactTypes);
+  const raterUxAcceptanceChecks = normalizeStringArray(report.raterUxAcceptanceChecks);
   const accessibilityEvidenceArtifactIds = normalizeStringArray(report.accessibilityEvidenceArtifactIds ?? report.evidenceArtifactIds);
   const assistiveTechnologyMatrix = report.assistiveTechnologyMatrix && typeof report.assistiveTechnologyMatrix === "object" && !Array.isArray(report.assistiveTechnologyMatrix)
     ? report.assistiveTechnologyMatrix
@@ -16836,6 +16883,7 @@ function normalizeAccessibilityConformanceReport(report, rowSource) {
   const missingChecks = ACCESSIBILITY_REQUIRED_CHECKS.filter((check) => !checksPassed.includes(check));
   const missingTestToolchain = REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN.filter((tool) => !testToolchain.includes(tool));
   const missingEvidenceArtifactTypes = REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES.filter((artifactType) => !evidenceArtifactTypes.includes(artifactType));
+  const missingRaterUxAcceptanceChecks = REQUIRED_RATER_UX_ACCEPTANCE_CHECKS.filter((check) => !raterUxAcceptanceChecks.includes(check));
   const missingAssistiveTechnologyMatrixKeys = Object.keys(REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX).filter((key) => !Object.hasOwn(assistiveTechnologyMatrix, key));
   const failures = Array.isArray(report.failures) ? report.failures : [];
   const sourceBoundary = String(report.sourceBoundary ?? "");
@@ -16851,6 +16899,7 @@ function normalizeAccessibilityConformanceReport(report, rowSource) {
     missingChecks.length ? `checksPassed:${missingChecks.join(",")}` : null,
     missingTestToolchain.length ? `testToolchain:${missingTestToolchain.join(",")}` : null,
     missingEvidenceArtifactTypes.length ? `evidenceArtifactTypes:${missingEvidenceArtifactTypes.join(",")}` : null,
+    missingRaterUxAcceptanceChecks.length ? `raterUxAcceptanceChecks:${missingRaterUxAcceptanceChecks.join(",")}` : null,
     missingAssistiveTechnologyMatrixKeys.length ? `assistiveTechnologyMatrix:${missingAssistiveTechnologyMatrixKeys.join(",")}` : null,
     stableJsonKey(assistiveTechnologyMatrix) === stableJsonKey(REQUIRED_ACCESSIBILITY_ASSISTIVE_TECH_MATRIX) ? null : "assistiveTechnologyMatrix",
     accessibilityEvidenceArtifactIds.length ? null : "accessibilityEvidenceArtifactIds",
@@ -16879,6 +16928,8 @@ function normalizeAccessibilityConformanceReport(report, rowSource) {
     missingAssistiveTechnologyMatrixKeys,
     evidenceArtifactTypes,
     missingEvidenceArtifactTypes,
+    raterUxAcceptanceChecks,
+    missingRaterUxAcceptanceChecks,
     accessibilityEvidenceArtifactIds,
     testedLocaleSet: normalizeStringArray(report.testedLocaleSet),
     toolingReviewStatus: report.toolingReviewStatus ?? null,
