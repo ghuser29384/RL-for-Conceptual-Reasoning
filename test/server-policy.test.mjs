@@ -36,6 +36,14 @@ import {
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
   REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
   REQUIRED_CLOUD_SECURITY_CONTROLS,
+  EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
+  REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
+  REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
+  REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE,
   REQUIRED_DIAGNOSTIC_DEFERRAL_CLAIM_SUPPRESSION_ACTIONS,
   REQUIRED_DIAGNOSTIC_DEFERRAL_DIAGNOSTIC_CLASSES,
   REQUIRED_DIAGNOSTIC_DEFERRAL_PUBLIC_VISIBILITY_LEVELS,
@@ -1301,6 +1309,14 @@ const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
 const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
 const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
 const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
+const externalWormAuditLogPolicyVersion = EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION;
+const externalWormAuditLedgerBackend = REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND;
+const externalWormAuditPointerPrefix = REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX;
+const externalWormAuditReceiptHashAlgorithm = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM;
+const externalWormAuditReceiptFields = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS;
+const externalWormAuditRetentionYears = REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS;
+const externalWormAuditVerificationCadence = REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE;
+const externalWormAuditFallbackRule = REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE;
 const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
@@ -1900,6 +1916,28 @@ function completeOperationalControlWorkflowFixtures() {
 	    cspEnforced: true,
 	    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
 	  }));
+  const externalWormAuditLogPolicy = {
+    id: "external-worm-audit-log-policy-workflow-new",
+    releaseId: "october-2026-demo",
+    policyVersion: externalWormAuditLogPolicyVersion,
+    ledgerBackend: externalWormAuditLedgerBackend,
+    ledgerPointerPrefix: externalWormAuditPointerPrefix,
+    receiptHashAlgorithm: externalWormAuditReceiptHashAlgorithm,
+    receiptFields: externalWormAuditReceiptFields,
+    retentionYears: externalWormAuditRetentionYears,
+    appendOnlyMode: "compliance_lock_no_delete_no_overwrite",
+    verificationCadence: externalWormAuditVerificationCadence,
+    receiptVerificationRule:
+      "Every sensitive audit-chain event must include a sha256 receipt hash and a WORM ledger pointer using the frozen prefix.",
+    fallbackRule: externalWormAuditFallbackRule,
+    redactionBoundary:
+      "External WORM receipts contain hashes, redacted roles, event kinds, and artifact ids only; protected labels, hidden text, raw source text, and private rater data are excluded.",
+    sourceBoundary:
+      "Project default external WORM audit-log implementation is frozen here; LMCA motivates audit integrity but does not state exact WORM tooling.",
+    owner: "release-operations",
+    approver: "security-reviewer",
+    frozenAt: "2026-10-01T00:16:30.000Z",
+  };
 	  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
 	    id: `sensitive-audit-chain-event-workflow-${index + 1}`,
 	    chainId: "sensitive-audit-chain-workflow",
@@ -1918,7 +1956,9 @@ function completeOperationalControlWorkflowFixtures() {
 	    eventHash: `sha256:workflow-event-${index + 1}`,
 	    redactedReasonClasses: ["high_impact_action", eventKind],
 	    protectedDataExposureClass: auditChainProtectedDataExposureClassByEventKind[eventKind],
+	    externalWormAuditLogPolicyId: externalWormAuditLogPolicy.id,
 	    externalWormLedgerPointer: `worm:workflow:${index + 1}`,
+	    externalWormReceiptHash: `sha256:workflow-worm-receipt-${index + 1}`,
 	    redactionPolicy: "redact protected labels, hidden text, raw source text, and private rater data",
 	    occurredAt: "2026-10-01T00:17:00.000Z",
 	  }));
@@ -2038,6 +2078,7 @@ function completeOperationalControlWorkflowFixtures() {
       approver: "security-reviewer",
       frozenAt: "2026-10-01T00:16:30.000Z",
     },
+    externalWormAuditLogPolicy,
     sensitiveAuditChainEvents,
     sensitiveAuditChainGovernanceApprovalRecords,
   };
@@ -3770,6 +3811,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/client-surface-integrity-policies"],
     ["GET", "/api/v1/client-surface-integrity-policies/client-surface-policy-smoke"],
     ["POST", "/api/v1/client-surfaces/client-surface-policy-smoke/integrity-check"],
+    ["POST", "/api/v1/external-worm-audit-log-policies"],
+    ["GET", "/api/v1/external-worm-audit-log-policies/external-worm-policy-smoke"],
     ["POST", "/api/v1/sensitive-audit-chain/events"],
     ["GET", "/api/v1/sensitive-audit-chain/events"],
     ["GET", "/api/v1/sensitive-audit-chain/events/audit-event-smoke"],
@@ -3805,6 +3848,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'id: "cloud-security-budget-policy"',
     'endpoint: () => "/api/v1/cloud-security-budget-policies"',
     "categoryMinimumUsd: cloudSecurityBudgetCategoryMinimumUsd",
+    'id: "external-worm-audit-log-policy"',
+    'endpoint: () => "/api/v1/external-worm-audit-log-policies"',
+    "receiptFields: externalWormAuditReceiptFields",
     'id: "visibility-policy"',
     'endpoint: () => "/api/v1/visibility-policies"',
     "roleFieldActionMatrix: visibilityRoleFieldActionMatrix",
@@ -13912,6 +13958,40 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(underfundedCloudSecurityBudgetPolicy.status, 400);
   assert.match(underfundedCloudSecurityBudgetPolicy.body.detail, /totalBudgetRangeUsd|categoryMinimumUsd|requiredControls|approvalStatuses|productionReleaseBlockedUntilReserved/);
 
+  const externalWormAuditLogPolicyResponse = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/external-worm-audit-log-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ externalWormAuditLogPolicy: operationalControls.externalWormAuditLogPolicy }),
+  });
+  assert.equal(externalWormAuditLogPolicyResponse.status, 201);
+
+  const externalWormAuditLogPolicyById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/external-worm-audit-log-policies/external-worm-audit-log-policy-workflow-new",
+    headers: adminHeaders,
+  });
+  assert.equal(externalWormAuditLogPolicyById.status, 200);
+  assert.equal(externalWormAuditLogPolicyById.body.ledgerBackend, externalWormAuditLedgerBackend);
+  assert.deepEqual(externalWormAuditLogPolicyById.body.receiptFields, externalWormAuditReceiptFields);
+
+  const driftedExternalWormAuditLogPolicy = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/external-worm-audit-log-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      externalWormAuditLogPolicy: {
+        ...operationalControls.externalWormAuditLogPolicy,
+        id: "external-worm-audit-log-policy-drifted",
+        ledgerBackend: "ordinary_database_audit_rows",
+        receiptFields: externalWormAuditReceiptFields.filter((field) => field !== "externalWormLedgerPointer"),
+        fallbackRule: "continue release with ordinary database rows",
+      },
+    }),
+  });
+  assert.equal(driftedExternalWormAuditLogPolicy.status, 400);
+  assert.match(driftedExternalWormAuditLogPolicy.body.detail, /ledgerBackend|receiptFields|fallbackRule/);
+
   for (const governanceApprovalRecord of operationalControls.sensitiveAuditChainGovernanceApprovalRecords) {
     const response = await invokeApi(context, {
       method: "POST",
@@ -13953,6 +14033,22 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(wrongGovernanceApprovalAuditChainEvent.status, 409);
   assert.equal(wrongGovernanceApprovalAuditChainEvent.body.error, "sensitive_audit_chain_binding_failed");
   assert.match(wrongGovernanceApprovalAuditChainEvent.body.detail, /governanceApprovalRecordId:actionKind/);
+
+  const missingWormPolicyAuditChainEvent = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/sensitive-audit-chain/events",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      sensitiveAuditChainEvent: {
+        ...operationalControls.sensitiveAuditChainEvents[0],
+        id: "sensitive-audit-chain-event-workflow-missing-worm-policy",
+        externalWormAuditLogPolicyId: "external-worm-audit-log-policy-missing",
+      },
+    }),
+  });
+  assert.equal(missingWormPolicyAuditChainEvent.status, 409);
+  assert.equal(missingWormPolicyAuditChainEvent.body.error, "sensitive_audit_chain_binding_failed");
+  assert.match(missingWormPolicyAuditChainEvent.body.detail, /externalWormAuditLogPolicyId:not_found/);
 
 	  for (const sensitiveAuditChainEvent of operationalControls.sensitiveAuditChainEvents) {
 	    const response = await invokeApi(context, {
@@ -14021,6 +14117,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     });
     assert.equal(response.status, 201, governanceApprovalRecord.actionKind);
   }
+  const tamperedWormPolicy = await invokeApi(tamperedAuditContext, {
+    method: "POST",
+    url: "/api/v1/external-worm-audit-log-policies",
+    headers: adminHeaders,
+    body: JSON.stringify({ externalWormAuditLogPolicy: operationalControls.externalWormAuditLogPolicy }),
+  });
+  assert.equal(tamperedWormPolicy.status, 201);
 	  const firstTamperedAuditEvent = await invokeApi(tamperedAuditContext, {
 	    method: "POST",
 	    url: "/api/v1/sensitive-audit-chain/events",
@@ -15489,6 +15592,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.clientSurfaceIntegrityPolicies.length, clientSurfaces.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.clientSurfaceIntegrityChecks.length, clientSurfaces.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.cloudSecurityBudgetPolicies.length, 1);
+  assert.equal(releaseReport.body.workflowOperationalControlArtifacts.externalWormAuditLogPolicies.length, 1);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainEvents.length, auditChainEventKinds.length);
   assert.equal(releaseReport.body.workflowOperationalControlArtifacts.sensitiveAuditChainVerifications.length, 1);
   assert.equal(releaseReport.body.operationalControlEvidence.releaseUseStatus, "submitted_operational_control_evidence_complete");
@@ -15503,6 +15607,17 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredCloudSecurityBudgetRangeUsd, cloudSecurityBudgetRangeUsd);
   assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredCloudSecurityBudgetCategoryMinimumUsd, cloudSecurityBudgetCategoryMinimumUsd);
   assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredCloudSecurityControls, cloudSecurityControls);
+  assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedExternalWormAuditLogPolicyCount, 1);
+  assert.equal(releaseReport.body.operationalControlEvidence.externalWormAuditLogPolicyId, "external-worm-audit-log-policy-workflow-new");
+  assert.equal(
+    releaseReport.body.operationalControlEvidence.externalWormAuditLogPolicyReleaseUseStatus,
+    "submitted_external_worm_audit_log_policy_active",
+  );
+  assert.deepEqual(releaseReport.body.operationalControlEvidence.requiredExternalWormAuditReceiptFields, externalWormAuditReceiptFields);
+  assert.equal(
+    releaseReport.body.operationalControlEvidence.sensitiveAuditChainEventRows.at(-1).externalWormAuditLogPolicyId,
+    "external-worm-audit-log-policy-workflow-new",
+  );
   assert.equal(releaseReport.body.operationalControlEvidence.counts.passingAuditChainKindCount, auditChainEventKinds.length);
   assert.equal(releaseReport.body.operationalControlEvidence.counts.submittedSensitiveAuditChainGovernanceApprovalCount, 1 + auditChainEventKinds.length);
   assert.equal(
@@ -15683,7 +15798,7 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
 
   assert.equal(
     (await auditStore.readWorkflowEvents()).length,
-    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 150 + extendedRaterItemConflictTypes.length,
+    243 + uxSimplificationSurfaces.length * 3 + releaseConfig.governedBundleRecords.length - 1 + 151 + extendedRaterItemConflictTypes.length,
   );
 });
 

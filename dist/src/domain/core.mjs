@@ -24653,6 +24653,24 @@ const AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND = {
 
 const REQUIRED_AUDIT_CHAIN_EXPOSURE_CLASSES = Object.values(AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND);
 
+export const EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION = "external-worm-audit-log-rlhf90-v1";
+export const REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND = "cloud_object_lock";
+export const REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX = "worm:";
+export const REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS = 7;
+export const REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM = "sha256";
+export const REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS = [
+  "chainId",
+  "sequence",
+  "eventKind",
+  "previousEventHash",
+  "eventHash",
+  "externalWormLedgerPointer",
+  "occurredAt",
+];
+export const REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE = "per_release_and_monthly";
+export const REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE =
+  "Production release claims are blocked when external WORM storage is unavailable unless a signed repository-equivalent append-only log is activated by independent two-person approval.";
+
 function defaultPolicyActionKindRecords(releaseId) {
   return REQUIRED_POLICY_ACTION_KINDS.map((actionKind) => ({
     id: `policy-action-kind-${releaseId}-${actionKind}`,
@@ -24828,7 +24846,32 @@ function defaultCloudSecurityBudgetPolicy(releaseId) {
   };
 }
 
-function defaultSensitiveAuditChainEvents(releaseId) {
+function defaultExternalWormAuditLogPolicy(releaseId) {
+  return {
+    id: `external-worm-audit-log-policy-${releaseId}`,
+    releaseId,
+    policyVersion: EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
+    ledgerBackend: REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
+    ledgerPointerPrefix: REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX,
+    receiptHashAlgorithm: REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM,
+    receiptFields: REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS,
+    retentionYears: REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS,
+    appendOnlyMode: "compliance_lock_no_delete_no_overwrite",
+    verificationCadence: REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE,
+    receiptVerificationRule:
+      "Every sensitive audit-chain event must include a sha256 receipt hash and a WORM ledger pointer using the frozen prefix.",
+    fallbackRule: REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
+    redactionBoundary:
+      "External WORM receipts contain hashes, redacted roles, event kinds, and artifact ids only; protected labels, hidden text, raw source text, and private rater data are excluded.",
+    sourceBoundary:
+      "Project default external WORM audit-log implementation is frozen here; LMCA motivates audit integrity but does not state exact WORM tooling.",
+    owner: "release-operations",
+    approver: "security-reviewer",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultSensitiveAuditChainEvents(releaseId, externalWormAuditLogPolicy = defaultExternalWormAuditLogPolicy(releaseId)) {
   let previousEventHash = null;
   return REQUIRED_AUDIT_CHAIN_EVENT_KINDS.map((eventKind, index) => {
     const eventHash = `sha256:seed-audit-chain-${releaseId}-${index + 1}-${eventKind}`;
@@ -24850,7 +24893,9 @@ function defaultSensitiveAuditChainEvents(releaseId) {
 	      eventHash,
 	      redactedReasonClasses: ["high_impact_action", eventKind],
 	      protectedDataExposureClass: AUDIT_CHAIN_PROTECTED_DATA_EXPOSURE_CLASS_BY_EVENT_KIND[eventKind],
+	      externalWormAuditLogPolicyId: externalWormAuditLogPolicy.id,
 	      externalWormLedgerPointer: `worm:${releaseId}:${index + 1}`,
+	      externalWormReceiptHash: `sha256:worm-receipt-${releaseId}-${index + 1}`,
 	      redactionPolicy: "no_protected_labels_no_hidden_text_no_raw_source_text_no_private_rater_data",
 	      occurredAt: "2026-10-01T00:00:00.000Z",
 	    };
@@ -24940,6 +24985,15 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   ];
   const activeCloudSecurityBudgetPolicy =
     submittedCloudSecurityBudgetPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedCloudSecurityBudgetPolicyRows[0];
+  const submittedExternalWormAuditLogPolicyRows = (options.externalWormAuditLogPolicies ?? [])
+    .map((policy) => normalizeExternalWormAuditLogPolicy(policy, "submitted_workflow_external_worm_audit_log_policy"))
+    .filter(Boolean);
+  const seedExternalWormAuditLogPolicyRows = [
+    normalizeExternalWormAuditLogPolicy(defaultExternalWormAuditLogPolicy(releaseId), "seed_external_worm_audit_log_policy"),
+  ];
+  const activeExternalWormAuditLogPolicy =
+    submittedExternalWormAuditLogPolicyRows.find((row) => row.reviewReasons.length === 0) ?? seedExternalWormAuditLogPolicyRows[0];
+  const externalWormAuditLogPolicyRowsForGate = [...seedExternalWormAuditLogPolicyRows, ...submittedExternalWormAuditLogPolicyRows];
   const submittedAuditGovernanceRows = (options.governanceApprovalRecords ?? [])
     .map((record) => normalizeAuditChainGovernanceApprovalRecord(record, "submitted_workflow_audit_chain_governance_approval"))
     .filter(Boolean);
@@ -24948,10 +25002,24 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   );
   const auditGovernanceRowsForGate = [...seedAuditGovernanceRows, ...submittedAuditGovernanceRows];
   const submittedAuditRows = (options.sensitiveAuditChainEvents ?? [])
-    .map((event) => normalizeSensitiveAuditChainEvent(event, "submitted_workflow_sensitive_audit_chain_event", decisionRowsForGate, auditGovernanceRowsForGate))
+    .map((event) =>
+      normalizeSensitiveAuditChainEvent(
+        event,
+        "submitted_workflow_sensitive_audit_chain_event",
+        decisionRowsForGate,
+        auditGovernanceRowsForGate,
+        externalWormAuditLogPolicyRowsForGate,
+      ),
+    )
     .filter(Boolean);
-  const seedAuditRows = defaultSensitiveAuditChainEvents(releaseId).map((event) =>
-    normalizeSensitiveAuditChainEvent(event, "seed_sensitive_audit_chain_event", decisionRowsForGate, auditGovernanceRowsForGate),
+  const seedAuditRows = defaultSensitiveAuditChainEvents(releaseId, defaultExternalWormAuditLogPolicy(releaseId)).map((event) =>
+    normalizeSensitiveAuditChainEvent(
+      event,
+      "seed_sensitive_audit_chain_event",
+      decisionRowsForGate,
+      auditGovernanceRowsForGate,
+      seedExternalWormAuditLogPolicyRows,
+    ),
   );
   const auditRowsForGate = submittedAuditRows.length ? submittedAuditRows : seedAuditRows;
   const submittedAuditVerificationRows = (options.sensitiveAuditChainVerifications ?? [])
@@ -24989,6 +25057,9 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     ...submittedClientCheckRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "client_surface_integrity_check", artifactId: row.id, reason }))),
     ...submittedCloudSecurityBudgetPolicyRows.flatMap((row) =>
       row.reviewReasons.map((reason) => ({ artifactType: "cloud_security_budget_policy", artifactId: row.id, reason })),
+    ),
+    ...submittedExternalWormAuditLogPolicyRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "external_worm_audit_log_policy", artifactId: row.id, reason })),
     ),
     ...submittedAuditGovernanceRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "audit_chain_governance_approval", artifactId: row.id, reason }))),
     ...submittedAuditRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "sensitive_audit_chain_event", artifactId: row.id, reason }))),
@@ -25032,6 +25103,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     submittedClientPolicyRows.length > 0 &&
     submittedClientCheckRows.length > 0 &&
     submittedCloudSecurityBudgetPolicyRows.length > 0 &&
+    submittedExternalWormAuditLogPolicyRows.length > 0 &&
     submittedAuditGovernanceRows.length > 0 &&
     submittedAuditRows.length > 0 &&
     submittedAuditVerificationRows.length > 0 &&
@@ -25057,6 +25129,20 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
       : submittedCloudSecurityBudgetPolicyRows.length
         ? "submitted_cloud_security_budget_policy_review_required"
         : "seed_cloud_security_budget_policy_active",
+    externalWormAuditLogPolicyId: activeExternalWormAuditLogPolicy?.id ?? null,
+    externalWormAuditLogPolicyReleaseUseStatus: submittedExternalWormAuditLogPolicyRows.find((row) => row.reviewReasons.length === 0)
+      ? "submitted_external_worm_audit_log_policy_active"
+      : submittedExternalWormAuditLogPolicyRows.length
+        ? "submitted_external_worm_audit_log_policy_review_required"
+        : "seed_external_worm_audit_log_policy_active",
+    requiredExternalWormAuditLogPolicyVersion: EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
+    requiredExternalWormAuditLedgerBackend: REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
+    requiredExternalWormAuditPointerPrefix: REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX,
+    requiredExternalWormAuditRetentionYears: REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS,
+    requiredExternalWormAuditReceiptHashAlgorithm: REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM,
+    requiredExternalWormAuditReceiptFields: REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS,
+    requiredExternalWormAuditVerificationCadence: REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE,
+    requiredExternalWormAuditFallbackRule: REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
 	    requiredAuditChainEventKinds: REQUIRED_AUDIT_CHAIN_EVENT_KINDS,
     policyActionKindRows: [...seedActionRows, ...submittedActionRows],
     policyDecisionRows: [...seedDecisionRows, ...submittedDecisionRows],
@@ -25068,6 +25154,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     clientSurfaceIntegrityPolicyRows: [...seedClientPolicyRows, ...submittedClientPolicyRows],
     clientSurfaceIntegrityCheckRows: [...seedClientCheckRows, ...submittedClientCheckRows],
     cloudSecurityBudgetPolicyRows: [...seedCloudSecurityBudgetPolicyRows, ...submittedCloudSecurityBudgetPolicyRows],
+    externalWormAuditLogPolicyRows: [...seedExternalWormAuditLogPolicyRows, ...submittedExternalWormAuditLogPolicyRows],
     sensitiveAuditChainGovernanceApprovalRows: [...seedAuditGovernanceRows, ...submittedAuditGovernanceRows],
     sensitiveAuditChainEventRows: [...seedAuditRows, ...submittedAuditRows],
     sensitiveAuditChainVerificationRows: [...seedAuditVerificationRows, ...submittedAuditVerificationRows],
@@ -25087,6 +25174,8 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
       submittedClientSurfaceIntegrityCheckCount: submittedClientCheckRows.length,
       submittedCloudSecurityBudgetPolicyCount: submittedCloudSecurityBudgetPolicyRows.length,
       cloudSecurityBudgetPolicyReviewRows: submittedCloudSecurityBudgetPolicyRows.filter((row) => row.reviewReasons.length).length,
+      submittedExternalWormAuditLogPolicyCount: submittedExternalWormAuditLogPolicyRows.length,
+      externalWormAuditLogPolicyReviewRows: submittedExternalWormAuditLogPolicyRows.filter((row) => row.reviewReasons.length).length,
       submittedSensitiveAuditChainGovernanceApprovalCount: submittedAuditGovernanceRows.length,
       submittedSensitiveAuditChainEventCount: submittedAuditRows.length,
       submittedSensitiveAuditChainVerificationCount: submittedAuditVerificationRows.length,
@@ -25498,6 +25587,54 @@ function normalizeCloudSecurityBudgetPolicy(policy, rowSource) {
   };
 }
 
+function normalizeExternalWormAuditLogPolicy(policy, rowSource) {
+  const id = policy?.id ?? policy?.externalWormAuditLogPolicyId;
+  if (!id) return null;
+  const receiptFields = normalizeStringArray(policy.receiptFields);
+  const missingReceiptFields = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS.filter((field) => !receiptFields.includes(field));
+  const reviewReasons = [
+    (policy.policyVersion ?? policy.version) === EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION ? null : `policyVersion:${EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION}`,
+    requiredPromptFieldReason("releaseId", policy.releaseId),
+    policy.ledgerBackend === REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND ? null : "ledgerBackend",
+    policy.ledgerPointerPrefix === REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX ? null : "ledgerPointerPrefix",
+    policy.receiptHashAlgorithm === REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM ? null : "receiptHashAlgorithm",
+    missingReceiptFields.length ? `receiptFields:${missingReceiptFields.join(",")}` : null,
+    stableJsonKey(receiptFields) === stableJsonKey(REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS) ? null : "receiptFields",
+    policy.retentionYears === REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS ? null : "retentionYears",
+    policy.appendOnlyMode === "compliance_lock_no_delete_no_overwrite" ? null : "appendOnlyMode",
+    policy.verificationCadence === REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE ? null : "verificationCadence",
+    policyMentions(policy.receiptVerificationRule, ["sha256", "WORM", "ledger"]) ? null : "receiptVerificationRule",
+    policy.fallbackRule === REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE ? null : "fallbackRule",
+    policyMentions(policy.redactionBoundary, ["protected", "hidden", "raw", "private", "excluded"]) ? null : "redactionBoundary",
+    policyMentions(policy.sourceBoundary, ["Project default", "LMCA", "WORM"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("owner", policy.owner),
+    requiredPromptFieldReason("approver", policy.approver),
+    requiredPromptFieldReason("frozenAt", policy.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    releaseId: policy.releaseId ?? null,
+    policyVersion: policy.policyVersion ?? policy.version ?? null,
+    ledgerBackend: policy.ledgerBackend ?? null,
+    ledgerPointerPrefix: policy.ledgerPointerPrefix ?? null,
+    receiptHashAlgorithm: policy.receiptHashAlgorithm ?? null,
+    receiptFields,
+    retentionYears: policy.retentionYears ?? null,
+    appendOnlyMode: policy.appendOnlyMode ?? null,
+    verificationCadence: policy.verificationCadence ?? null,
+    receiptVerificationRule: policy.receiptVerificationRule ?? null,
+    fallbackRule: policy.fallbackRule ?? null,
+    redactionBoundary: policy.redactionBoundary ?? null,
+    sourceBoundary: policy.sourceBoundary ?? null,
+    owner: policy.owner ?? null,
+    approver: policy.approver ?? null,
+    frozenAt: policy.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "external_worm_audit_log_policy_review_required" : "external_worm_audit_log_policy_complete",
+  };
+}
+
 function normalizeAuditChainGovernanceApprovalRecord(record, rowSource) {
   const id = record?.id ?? record?.governanceApprovalRecordId;
   if (!id) return null;
@@ -25542,13 +25679,16 @@ function latestRowById(rows, id) {
   return null;
 }
 
-function normalizeSensitiveAuditChainEvent(event, rowSource, decisionRows = [], governanceApprovalRows = []) {
+function normalizeSensitiveAuditChainEvent(event, rowSource, decisionRows = [], governanceApprovalRows = [], externalWormAuditLogPolicyRows = []) {
   const id = event?.id ?? event?.sensitiveAuditChainEventId;
   if (!id) return null;
   const eventKind = event.eventKind ?? event.actionKind ?? null;
   const expectedPolicyActionKind = AUDIT_CHAIN_POLICY_ACTION_KIND_BY_EVENT_KIND[eventKind] ?? null;
   const policyDecisionRow = latestRowById(decisionRows, event.policyDecisionId);
   const governanceApprovalRow = latestRowById(governanceApprovalRows, event.governanceApprovalRecordId);
+  const externalWormAuditLogPolicyId = event.externalWormAuditLogPolicyId ?? event.wormAuditLogPolicyId ?? null;
+  const externalWormAuditLogPolicyRow = latestRowById(externalWormAuditLogPolicyRows, externalWormAuditLogPolicyId);
+  const ledgerPointerPrefix = externalWormAuditLogPolicyRow?.ledgerPointerPrefix ?? REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX;
   const approverHashes = normalizeStringArray(event.approverHashes);
   const redactedReasonClasses = normalizeStringArray(event.redactedReasonClasses);
   const affectedArtifactIds = normalizeStringArray(event.affectedArtifactIds);
@@ -25580,7 +25720,11 @@ function normalizeSensitiveAuditChainEvent(event, rowSource, decisionRows = [], 
     event.beforeHash && event.afterHash && event.beforeHash !== event.afterHash ? null : "beforeAfterHash",
     redactedReasonClasses.length ? null : "redactedReasonClasses",
     REQUIRED_AUDIT_CHAIN_EXPOSURE_CLASSES.includes(event.protectedDataExposureClass) ? null : "protectedDataExposureClass",
-    String(event.externalWormLedgerPointer ?? "").startsWith("worm:") ? null : "externalWormLedgerPointer",
+    requiredPromptFieldReason("externalWormAuditLogPolicyId", externalWormAuditLogPolicyId),
+    externalWormAuditLogPolicyId && !externalWormAuditLogPolicyRow ? "externalWormAuditLogPolicyId:not_found" : null,
+    externalWormAuditLogPolicyRow?.reviewReasons.length ? "externalWormAuditLogPolicyId:reviewReasons" : null,
+    String(event.externalWormLedgerPointer ?? "").startsWith(ledgerPointerPrefix) ? null : "externalWormLedgerPointer",
+    String(event.externalWormReceiptHash ?? "").startsWith(`${REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM}:`) ? null : "externalWormReceiptHash",
     ["protected", "hidden", "raw", "private"].every((fragment) => redactionPolicy.includes(fragment)) ? null : "redactionPolicy",
     requiredPromptFieldReason("occurredAt", event.occurredAt),
   ].filter(Boolean);
@@ -25607,7 +25751,9 @@ function normalizeSensitiveAuditChainEvent(event, rowSource, decisionRows = [], 
     eventHash: event.eventHash ?? null,
     redactedReasonClasses,
     protectedDataExposureClass: event.protectedDataExposureClass ?? null,
+    externalWormAuditLogPolicyId,
     externalWormLedgerPointer: event.externalWormLedgerPointer ?? null,
+    externalWormReceiptHash: event.externalWormReceiptHash ?? null,
     redactionPolicy: event.redactionPolicy ?? null,
     occurredAt: event.occurredAt ?? null,
     reviewReasons,
@@ -26208,6 +26354,7 @@ export function buildOctoberReleaseReport(
     clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
     clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
     cloudSecurityBudgetPolicies: options.cloudSecurityBudgetPolicies ?? [],
+    externalWormAuditLogPolicies: options.externalWormAuditLogPolicies ?? [],
     sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
     sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
   });
@@ -26497,6 +26644,7 @@ export function buildOctoberReleaseReport(
       clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
       clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
       cloudSecurityBudgetPolicies: options.cloudSecurityBudgetPolicies ?? [],
+      externalWormAuditLogPolicies: options.externalWormAuditLogPolicies ?? [],
       sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
       sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
     },

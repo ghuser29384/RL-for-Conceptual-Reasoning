@@ -11,6 +11,14 @@ import {
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
   REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
   REQUIRED_CLOUD_SECURITY_CONTROLS,
+  EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
+  REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
+  REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
+  REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE,
   REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
   REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
   REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
@@ -868,6 +876,14 @@ const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
 const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
 const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
 const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
+const externalWormAuditLogPolicyVersion = EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION;
+const externalWormAuditLedgerBackend = REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND;
+const externalWormAuditPointerPrefix = REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX;
+const externalWormAuditReceiptHashAlgorithm = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM;
+const externalWormAuditReceiptFields = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS;
+const externalWormAuditRetentionYears = REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS;
+const externalWormAuditVerificationCadence = REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE;
+const externalWormAuditFallbackRule = REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE;
 const workflowTemplates = [
   {
     id: "cloud-security-budget-policy",
@@ -899,6 +915,38 @@ const workflowTemplates = [
           "Hidden benchmark, protected validation, private rater data, and audit-log retention infrastructure must remain funded independently from public-demo or static-site hosting.",
         sourceBoundary:
           "Project default cloud/security spend controls are frozen here; LMCA motivates protected blinding and audit integrity but does not state exact platform spend bands.",
+        owner: "release-operations",
+        approver: "security-reviewer",
+        frozenAt: new Date().toISOString(),
+      },
+    }),
+  },
+  {
+    id: "external-worm-audit-log-policy",
+    label: "External WORM Audit Log Policy",
+    endpoint: () => "/api/v1/external-worm-audit-log-policies",
+    resourceKey: "externalWormAuditLogPolicy",
+    requiredRole: "admin",
+    summary: "Freeze the accepted append-only WORM audit-log backend, receipt format, retention, and fallback rule.",
+    payload: () => ({
+      externalWormAuditLogPolicy: {
+        id: `external-worm-audit-log-policy-${releaseId}`,
+        releaseId,
+        policyVersion: externalWormAuditLogPolicyVersion,
+        ledgerBackend: externalWormAuditLedgerBackend,
+        ledgerPointerPrefix: externalWormAuditPointerPrefix,
+        receiptHashAlgorithm: externalWormAuditReceiptHashAlgorithm,
+        receiptFields: externalWormAuditReceiptFields,
+        retentionYears: externalWormAuditRetentionYears,
+        appendOnlyMode: "compliance_lock_no_delete_no_overwrite",
+        verificationCadence: externalWormAuditVerificationCadence,
+        receiptVerificationRule:
+          "Every sensitive audit-chain event must include a sha256 receipt hash and a WORM ledger pointer using the frozen prefix.",
+        fallbackRule: externalWormAuditFallbackRule,
+        redactionBoundary:
+          "External WORM receipts contain hashes, redacted roles, event kinds, and artifact ids only; protected labels, hidden text, raw source text, and private rater data are excluded.",
+        sourceBoundary:
+          "Project default external WORM audit-log implementation is frozen here; LMCA motivates audit integrity but does not state exact WORM tooling.",
         owner: "release-operations",
         approver: "security-reviewer",
         frozenAt: new Date().toISOString(),
@@ -6000,6 +6048,7 @@ function operationalControlPanel(operationalControls) {
         <div><span>Release use</span><strong>${humanize(controls.releaseUseStatus ?? "operational_control_missing")}</strong></div>
         <div><span>Review sections</span><strong>${String(counts.reviewSectionCount ?? reviewSections.length)}</strong></div>
         <div><span>Queue revalidation</span><strong>${(controls.requiredQueueRevalidationChecks ?? []).map(humanize).join(", ") || "not recorded"}</strong></div>
+        <div><span>WORM policy</span><strong>${controls.externalWormAuditLogPolicyId ?? "not recorded"}</strong></div>
         <div><span>Audit verification</span><strong>${auditVerification ? `${humanize(auditVerification.chainStatus)} / ${auditVerification.verifiedEventCount ?? 0} events` : "not recorded"}</strong></div>
       </div>
       <div class="failureList operationalControlList">

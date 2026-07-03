@@ -80,6 +80,14 @@ import {
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
   REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD,
   REQUIRED_CLOUD_SECURITY_CONTROLS,
+  EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
+  REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
+  REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
+  REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE,
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
@@ -1363,6 +1371,14 @@ const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
 const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
 const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
 const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
+const externalWormAuditLogPolicyVersion = EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION;
+const externalWormAuditLedgerBackend = REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND;
+const externalWormAuditPointerPrefix = REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX;
+const externalWormAuditReceiptHashAlgorithm = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM;
+const externalWormAuditReceiptFields = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS;
+const externalWormAuditRetentionYears = REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS;
+const externalWormAuditVerificationCadence = REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE;
+const externalWormAuditFallbackRule = REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE;
 const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
@@ -1960,6 +1976,28 @@ function completeOperationalControlFixtures() {
 	    cspEnforced: true,
 	    firstPartyTelemetryAllowlist: ["page_load", "submit_click"],
 	  }));
+  const externalWormAuditLogPolicy = {
+    id: "external-worm-audit-log-policy-submitted",
+    releaseId: "october-2026-demo",
+    policyVersion: externalWormAuditLogPolicyVersion,
+    ledgerBackend: externalWormAuditLedgerBackend,
+    ledgerPointerPrefix: externalWormAuditPointerPrefix,
+    receiptHashAlgorithm: externalWormAuditReceiptHashAlgorithm,
+    receiptFields: externalWormAuditReceiptFields,
+    retentionYears: externalWormAuditRetentionYears,
+    appendOnlyMode: "compliance_lock_no_delete_no_overwrite",
+    verificationCadence: externalWormAuditVerificationCadence,
+    receiptVerificationRule:
+      "Every sensitive audit-chain event must include a sha256 receipt hash and a WORM ledger pointer using the frozen prefix.",
+    fallbackRule: externalWormAuditFallbackRule,
+    redactionBoundary:
+      "External WORM receipts contain hashes, redacted roles, event kinds, and artifact ids only; protected labels, hidden text, raw source text, and private rater data are excluded.",
+    sourceBoundary:
+      "Project default external WORM audit-log implementation is frozen here; LMCA motivates audit integrity but does not state exact WORM tooling.",
+    owner: "release-operations",
+    approver: "security-reviewer",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
 	  const sensitiveAuditChainEvents = auditChainEventKinds.map((eventKind, index) => ({
 	    id: `sensitive-audit-event-submitted-${index + 1}`,
 	    chainId: "sensitive-audit-chain-submitted",
@@ -1978,7 +2016,9 @@ function completeOperationalControlFixtures() {
 	    eventHash: `sha256:event-${index + 1}`,
 	    redactedReasonClasses: ["high_impact_action", eventKind],
 	    protectedDataExposureClass: auditChainProtectedDataExposureClassByEventKind[eventKind],
+	    externalWormAuditLogPolicyId: externalWormAuditLogPolicy.id,
 	    externalWormLedgerPointer: `worm:submitted:${index + 1}`,
+	    externalWormReceiptHash: `sha256:submitted-worm-receipt-${index + 1}`,
 	    redactionPolicy: "redact protected labels, hidden text, raw source text, and private rater data",
 	    occurredAt: "2026-10-01T00:02:00.000Z",
 	  }));
@@ -2109,6 +2149,7 @@ function completeOperationalControlFixtures() {
         frozenAt: "2026-10-01T00:06:30.000Z",
       },
     ],
+    externalWormAuditLogPolicies: [externalWormAuditLogPolicy],
     governanceApprovalRecords: sensitiveAuditChainGovernanceApprovalRecords,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications: [
@@ -5413,6 +5454,15 @@ test("operational control evidence gates policy decisions, phase gates, queue fr
   assert.deepEqual(report.requiredCloudSecurityControls, cloudSecurityControls);
   assert.deepEqual(report.requiredCloudSecurityApprovalStatuses, cloudSecurityApprovalStatuses);
   assert.equal(report.cloudSecurityBudgetPolicyRows.at(-1).externalWormAuditLogFundingRequired, true);
+  assert.equal(report.counts.submittedExternalWormAuditLogPolicyCount, 1);
+  assert.equal(report.externalWormAuditLogPolicyId, "external-worm-audit-log-policy-submitted");
+  assert.equal(report.externalWormAuditLogPolicyReleaseUseStatus, "submitted_external_worm_audit_log_policy_active");
+  assert.equal(report.requiredExternalWormAuditLogPolicyVersion, externalWormAuditLogPolicyVersion);
+  assert.equal(report.requiredExternalWormAuditLedgerBackend, externalWormAuditLedgerBackend);
+  assert.equal(report.requiredExternalWormAuditPointerPrefix, externalWormAuditPointerPrefix);
+  assert.deepEqual(report.requiredExternalWormAuditReceiptFields, externalWormAuditReceiptFields);
+  assert.equal(report.sensitiveAuditChainEventRows.at(-1).externalWormAuditLogPolicyId, "external-worm-audit-log-policy-submitted");
+  assert.equal(report.sensitiveAuditChainEventRows.at(-1).externalWormReceiptHash.startsWith("sha256:"), true);
   assert.equal(report.counts.passingAuditChainKindCount, auditChainEventKinds.length);
   assert.equal(report.counts.submittedSensitiveAuditChainGovernanceApprovalCount, auditChainEventKinds.length);
   assert.equal(report.sensitiveAuditChainGovernanceApprovalRows.filter((row) => row.rowSource === "submitted_workflow_audit_chain_governance_approval").length, auditChainEventKinds.length);
@@ -5586,6 +5636,33 @@ test("operational control evidence rejects underfunded cloud and security budget
   assert.ok(report.reviewSections.some((section) => section.artifactType === "cloud_security_budget_policy" && section.reason === "protectedSplitIsolationFundingRule"));
 });
 
+test("operational control evidence rejects drifted external WORM audit-log policy", () => {
+  const unsafeFixtures = completeOperationalControlFixtures();
+  unsafeFixtures.externalWormAuditLogPolicies = [
+    {
+      ...unsafeFixtures.externalWormAuditLogPolicies[0],
+      id: "external-worm-audit-log-policy-drifted",
+      ledgerBackend: "ordinary_database_audit_rows",
+      ledgerPointerPrefix: "db:",
+      receiptFields: externalWormAuditReceiptFields.filter((field) => field !== "externalWormLedgerPointer"),
+      retentionYears: 1,
+      fallbackRule: "continue release with ordinary database rows",
+    },
+  ];
+  unsafeFixtures.sensitiveAuditChainEvents = unsafeFixtures.sensitiveAuditChainEvents.map((event) => ({
+    ...event,
+    externalWormAuditLogPolicyId: "external-worm-audit-log-policy-drifted",
+    externalWormLedgerPointer: "db:ordinary-row",
+  }));
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", unsafeFixtures);
+
+  assert.equal(report.releaseUseStatus, "operational_control_review_required");
+  assert.equal(report.externalWormAuditLogPolicyReleaseUseStatus, "submitted_external_worm_audit_log_policy_review_required");
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "external_worm_audit_log_policy" && section.reason === "ledgerBackend"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "external_worm_audit_log_policy" && section.reason === "ledgerPointerPrefix"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "externalWormAuditLogPolicyId:reviewReasons"));
+});
+
 test("operational control evidence rejects incomplete or failed sensitive audit chains", () => {
   const unsafeFixtures = completeOperationalControlFixtures();
   unsafeFixtures.sensitiveAuditChainEvents = unsafeFixtures.sensitiveAuditChainEvents.map((event, index) => {
@@ -5599,6 +5676,7 @@ test("operational control evidence rejects incomplete or failed sensitive audit 
         redactedReasonClasses: [],
         protectedDataExposureClass: "raw_hidden_text",
         externalWormLedgerPointer: "ordinary-db-row",
+        externalWormReceiptHash: "ordinary-receipt-row",
         redactionPolicy: "redact private rater data only",
       };
     }
@@ -5648,6 +5726,7 @@ test("operational control evidence rejects incomplete or failed sensitive audit 
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "redactedReasonClasses"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "protectedDataExposureClass"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "externalWormLedgerPointer"));
+  assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "externalWormReceiptHash"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "redactionPolicy"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "actionKind"));
   assert.ok(report.reviewSections.some((section) => section.artifactType === "sensitive_audit_chain_event" && section.reason === "policyDecisionId"));

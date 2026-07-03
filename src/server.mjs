@@ -15,6 +15,7 @@ import {
   DISAGREEMENT_THRESHOLD_POLICY_VERSION,
   DIAGNOSTIC_DEFERRAL_VISIBILITY_POLICY_VERSION,
   EXPOSURE_QUARANTINE_POLICY_VERSION,
+  EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION,
   EXTERNAL_ASSISTANCE_CONTAMINATION_POLICY_VERSION,
   INTERPRETATION_TARGET_MAP_REQUIREDNESS_POLICY_VERSION,
   ITEM_TEXT_NORMALIZATION_POLICY_VERSION,
@@ -118,6 +119,13 @@ import {
   REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_ROUTES,
   REQUIRED_EXTERNAL_ASSISTANCE_CONTAMINATION_RULES,
   REQUIRED_EXTERNAL_ASSISTANCE_TYPES,
+  REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE,
+  REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND,
+  REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM,
+  REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS,
+  REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE,
   REQUIRED_EXPOSURE_QUARANTINE_ACTIONS,
   REQUIRED_EXPOSURE_QUARANTINE_ASSIGNMENT_CHECKS,
   REQUIRED_EXPOSURE_QUARANTINE_EFFECTS,
@@ -1453,6 +1461,7 @@ const phaseGateGovernanceResourceKeys = new Set([
   "policyDecisionRecord",
   "policyDecisionConsumption",
   "implementationPhaseGateBundle",
+  "externalWormAuditLogPolicy",
   "sensitiveAuditChainEvent",
   "sensitiveAuditChainVerification",
 ]);
@@ -1561,6 +1570,14 @@ const cloudSecurityBudgetRangeUsd = REQUIRED_CLOUD_SECURITY_BUDGET_RANGE_USD;
 const cloudSecurityBudgetCategoryMinimumUsd = REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD;
 const cloudSecurityControls = REQUIRED_CLOUD_SECURITY_CONTROLS;
 const cloudSecurityApprovalStatuses = REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES;
+const externalWormAuditLogPolicyVersion = EXTERNAL_WORM_AUDIT_LOG_POLICY_VERSION;
+const externalWormAuditLedgerBackend = REQUIRED_EXTERNAL_WORM_AUDIT_LEDGER_BACKEND;
+const externalWormAuditPointerPrefix = REQUIRED_EXTERNAL_WORM_AUDIT_POINTER_PREFIX;
+const externalWormAuditReceiptHashAlgorithm = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_HASH_ALGORITHM;
+const externalWormAuditReceiptFields = REQUIRED_EXTERNAL_WORM_AUDIT_RECEIPT_FIELDS;
+const externalWormAuditRetentionYears = REQUIRED_EXTERNAL_WORM_AUDIT_RETENTION_YEARS;
+const externalWormAuditVerificationCadence = REQUIRED_EXTERNAL_WORM_AUDIT_VERIFICATION_CADENCE;
+const externalWormAuditFallbackRule = REQUIRED_EXTERNAL_WORM_AUDIT_FALLBACK_RULE;
 const auditChainEventKinds = [
   "governance_approval",
   "manifest_activation",
@@ -6022,10 +6039,50 @@ const workflowWriteEndpoints = [
       externalWormAuditLogFundingRequired: true,
     },
   }),
+  workflowWriteSpec(/^\/api\/v1\/external-worm-audit-log-policies$/, "external_worm_audit_log_policy_submitted", "externalWormAuditLogPolicy", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "policyVersion",
+      "ledgerBackend",
+      "ledgerPointerPrefix",
+      "receiptHashAlgorithm",
+      "receiptFields",
+      "retentionYears",
+      "appendOnlyMode",
+      "verificationCadence",
+      "receiptVerificationRule",
+      "fallbackRule",
+      "redactionBoundary",
+      "sourceBoundary",
+      "owner",
+      "approver",
+      "frozenAt",
+    ],
+    requiredPositiveIntegerFields: ["retentionYears"],
+    requiredNonEmptyArrayFields: ["receiptFields"],
+    requiredArrayIncludes: { receiptFields: externalWormAuditReceiptFields },
+    requiredStringIncludes: {
+      receiptVerificationRule: ["sha256", "WORM", "ledger"],
+      redactionBoundary: ["protected", "hidden", "raw", "private", "excluded"],
+      sourceBoundary: ["project default", "lmca", "worm"],
+    },
+    requiredExactFields: {
+      policyVersion: externalWormAuditLogPolicyVersion,
+      ledgerBackend: externalWormAuditLedgerBackend,
+      ledgerPointerPrefix: externalWormAuditPointerPrefix,
+      receiptHashAlgorithm: externalWormAuditReceiptHashAlgorithm,
+      retentionYears: externalWormAuditRetentionYears,
+      appendOnlyMode: "compliance_lock_no_delete_no_overwrite",
+      verificationCadence: externalWormAuditVerificationCadence,
+      fallbackRule: externalWormAuditFallbackRule,
+    },
+  }),
 	  workflowWriteSpec(/^\/api\/v1\/sensitive-audit-chain\/events$/, "sensitive_audit_chain_event_submitted", "sensitiveAuditChainEvent", adminRoles, {
 	    allowHiddenMetadata: true,
 	    validateSensitiveAuditChainBindings: true,
-	    requiredFields: ["id", "chainId", "sequence", "eventKind", "actionKind", "policyDecisionId", "governanceApprovalRecordId", "actorHash", "protectedDataExposureClass", "externalWormLedgerPointer", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "redactionPolicy", "occurredAt"],
+	    requiredFields: ["id", "chainId", "sequence", "eventKind", "actionKind", "policyDecisionId", "governanceApprovalRecordId", "actorHash", "protectedDataExposureClass", "externalWormAuditLogPolicyId", "externalWormLedgerPointer", "externalWormReceiptHash", "affectedArtifactIds", "beforeHash", "afterHash", "eventHash", "redactionPolicy", "occurredAt"],
 	    requiredPositiveIntegerFields: ["sequence"],
 	    requiredNonEmptyArrayFields: ["affectedArtifactIds", "approverHashes", "redactedReasonClasses"],
 	    requiredStringPrefixes: {
@@ -6033,7 +6090,8 @@ const workflowWriteEndpoints = [
 	      beforeHash: "sha256:",
 	      afterHash: "sha256:",
 	      eventHash: "sha256:",
-	      externalWormLedgerPointer: "worm:",
+	      externalWormLedgerPointer: externalWormAuditPointerPrefix,
+	      externalWormReceiptHash: `${externalWormAuditReceiptHashAlgorithm}:`,
 	    },
 	    requiredArrayValuePrefixes: { approverHashes: "sha256:" },
 	    requiredStringIncludes: { redactionPolicy: ["protected", "hidden", "raw", "private"] },
@@ -6198,6 +6256,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/queue-freshness-policies\/(?<id>[^/]+)$/, "queueFreshnessPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/client-surface-integrity-policies\/(?<id>[^/]+)$/, "clientSurfaceIntegrityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/cloud-security-budget-policies\/(?<id>[^/]+)$/, "cloudSecurityBudgetPolicy", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/external-worm-audit-log-policies\/(?<id>[^/]+)$/, "externalWormAuditLogPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/sensitive-audit-chain\/events\/(?<id>[^/]+)$/, "sensitiveAuditChainEvent", adminAuditRoles),
 ];
 
@@ -8542,7 +8601,9 @@ async function sensitiveAuditChainVerifyEndpoint(request, response, context) {
     return;
   }
   const body = await readJsonBody(request);
-  const events = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "sensitiveAuditChainEvent").sort(
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const externalWormAuditLogPolicies = latestWorkflowResources(workflowEvents, "externalWormAuditLogPolicy");
+  const events = latestWorkflowResources(workflowEvents, "sensitiveAuditChainEvent").sort(
     (left, right) => Number(left.sequence ?? 0) - Number(right.sequence ?? 0) || String(left.id).localeCompare(String(right.id)),
   );
   const failures = [];
@@ -8568,7 +8629,19 @@ async function sensitiveAuditChainVerifyEndpoint(request, response, context) {
 	    if (!String(event.eventHash ?? "").startsWith("sha256:")) failures.push(`eventHash:${event.id}`);
 	    if (!redactedReasonClasses.length) failures.push(`redactedReasonClasses:${event.id}`);
 	    if (!auditChainProtectedDataExposureClasses.includes(event.protectedDataExposureClass)) failures.push(`protectedDataExposureClass:${event.id}`);
-	    if (!String(event.externalWormLedgerPointer ?? "").startsWith("worm:")) failures.push(`externalWormLedgerPointer:${event.id}`);
+	    const externalWormAuditLogPolicy = externalWormAuditLogPolicies.find((policy) => policy.id === event.externalWormAuditLogPolicyId);
+	    if (!externalWormAuditLogPolicy) {
+	      failures.push(`externalWormAuditLogPolicyId:${event.id}`);
+	    } else {
+	      if (externalWormAuditLogPolicy.policyVersion !== externalWormAuditLogPolicyVersion) failures.push(`externalWormAuditLogPolicyId:policyVersion:${event.id}`);
+	      if (externalWormAuditLogPolicy.ledgerBackend !== externalWormAuditLedgerBackend) failures.push(`externalWormAuditLogPolicyId:ledgerBackend:${event.id}`);
+	      if (!String(event.externalWormLedgerPointer ?? "").startsWith(externalWormAuditLogPolicy.ledgerPointerPrefix ?? externalWormAuditPointerPrefix)) {
+	        failures.push(`externalWormLedgerPointer:${event.id}`);
+	      }
+	      if (!String(event.externalWormReceiptHash ?? "").startsWith(`${externalWormAuditLogPolicy.receiptHashAlgorithm ?? externalWormAuditReceiptHashAlgorithm}:`)) {
+	        failures.push(`externalWormReceiptHash:${event.id}`);
+	      }
+	    }
 	    const redactionPolicy = String(event.redactionPolicy ?? "").toLowerCase();
 	    if (!["protected", "hidden", "raw", "private"].every((fragment) => redactionPolicy.includes(fragment))) failures.push(`redactionPolicy:${event.id}`);
 	    if (!Number.isFinite(Date.parse(event.occurredAt))) failures.push(`occurredAt:${event.id}`);
@@ -8982,6 +9055,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const clientSurfaceIntegrityPolicies = latestWorkflowResources(workflowEvents, "clientSurfaceIntegrityPolicy");
   const clientSurfaceIntegrityChecks = latestWorkflowResources(workflowEvents, "clientSurfaceIntegrityCheck");
   const cloudSecurityBudgetPolicies = latestWorkflowResources(workflowEvents, "cloudSecurityBudgetPolicy");
+  const externalWormAuditLogPolicies = latestWorkflowResources(workflowEvents, "externalWormAuditLogPolicy");
   const sensitiveAuditChainEvents = latestWorkflowResources(workflowEvents, "sensitiveAuditChainEvent");
   const sensitiveAuditChainVerifications = latestWorkflowResources(workflowEvents, "sensitiveAuditChainVerification");
   const ratings = [...seedRatings, ...persistedRatings];
@@ -9178,6 +9252,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks,
     cloudSecurityBudgetPolicies,
+    externalWormAuditLogPolicies,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications,
   });
@@ -9368,6 +9443,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     clientSurfaceIntegrityPolicies,
     clientSurfaceIntegrityChecks,
     cloudSecurityBudgetPolicies,
+    externalWormAuditLogPolicies,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications,
   };
@@ -10064,6 +10140,20 @@ async function validateSensitiveAuditChainEventBindings(context, event) {
     const approvedArtifactIds = new Set(Array.isArray(governanceApproval.affectedArtifactIds) ? governanceApproval.affectedArtifactIds : []);
     const uncoveredArtifactIds = (Array.isArray(event.affectedArtifactIds) ? event.affectedArtifactIds : []).filter((id) => !approvedArtifactIds.has(id));
     if (uncoveredArtifactIds.length) failures.push("governanceApprovalRecordId:affectedArtifactIds");
+  }
+
+  const externalWormAuditLogPolicy = await workflowResourceById(context, "externalWormAuditLogPolicy", event.externalWormAuditLogPolicyId);
+  if (!externalWormAuditLogPolicy) {
+    failures.push("externalWormAuditLogPolicyId:not_found");
+  } else {
+    if (externalWormAuditLogPolicy.policyVersion !== externalWormAuditLogPolicyVersion) failures.push("externalWormAuditLogPolicyId:policyVersion");
+    if (externalWormAuditLogPolicy.ledgerBackend !== externalWormAuditLedgerBackend) failures.push("externalWormAuditLogPolicyId:ledgerBackend");
+    if (!String(event.externalWormLedgerPointer ?? "").startsWith(externalWormAuditLogPolicy.ledgerPointerPrefix ?? externalWormAuditPointerPrefix)) {
+      failures.push("externalWormLedgerPointer");
+    }
+    if (!String(event.externalWormReceiptHash ?? "").startsWith(`${externalWormAuditLogPolicy.receiptHashAlgorithm ?? externalWormAuditReceiptHashAlgorithm}:`)) {
+      failures.push("externalWormReceiptHash");
+    }
   }
 
   if (failures.length) {
