@@ -5499,6 +5499,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/public-dataset-documents"',
     'resourceKey: "publicDatasetDocument"',
     "Submitted dataset-card and methodology-report evidence for Dataset v0.1 readiness.",
+    'id: "public-dataset-document-template"',
+    'endpoint: "/api/v1/public-dataset-documents/template"',
+    'resourceKey: "publicDatasetDocumentTemplate"',
+    "Read-only dataset-card and methodology-report request templates with current linked release-object ids.",
     'id: "rater-profile-evidence"',
     'endpoint: "/api/v1/rater-profile-evidence"',
     'resourceKey: "raterProfileEvidenceRow"',
@@ -8131,6 +8135,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingPublicDatasetDocumentsAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-documents" });
   assert.equal(missingPublicDatasetDocumentsAuth.status, 401);
 
+  const missingPublicDatasetDocumentTemplateAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-documents/template" });
+  assert.equal(missingPublicDatasetDocumentTemplateAuth.status, 401);
+
   const missingRaterProfileEvidenceAuth = await invokeApi(context, { method: "GET", url: "/api/v1/rater-profile-evidence" });
   assert.equal(missingRaterProfileEvidenceAuth.status, 401);
 
@@ -10425,6 +10432,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetById.body.count, 1);
   assert.equal(publicDatasetById.body.item.id, "dataset_card");
   assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-readiness/dataset_card"));
+  assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-documents/template?documentKind=dataset_card"));
+  assert.ok(publicDatasetById.body.item.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template"));
 
   const publicDatasetMissing = await invokeApi(context, {
     method: "GET",
@@ -13453,6 +13462,71 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
   const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
   const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+
+  const deniedTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents/template",
+    headers: raterHeaders,
+  });
+  assert.equal(deniedTemplate.status, 403);
+
+  const documentTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents/template",
+    headers: adminHeaders,
+  });
+  assert.equal(documentTemplate.status, 200, JSON.stringify(documentTemplate.body));
+  assert.equal(documentTemplate.body.resourceKey, "publicDatasetDocumentTemplate");
+  assert.equal(documentTemplate.body.templateOnly, true);
+  assert.equal(documentTemplate.body.count, 2);
+  assert.equal(documentTemplate.body.counts.byDocumentKind.dataset_card, 1);
+  assert.equal(documentTemplate.body.counts.byDocumentKind.methodology_report, 1);
+  assert.equal(documentTemplate.body.counts.openReadinessRows, 2);
+  assert.equal(documentTemplate.body.writeRoute, "/api/v1/public-dataset-documents");
+  assert.equal(documentTemplate.body.singleRecordValidateOnlyRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  const datasetCardTemplate = documentTemplate.body.items.find((item) => item.documentKind === "dataset_card");
+  const methodologyTemplate = documentTemplate.body.items.find((item) => item.documentKind === "methodology_report");
+  assert.ok(datasetCardTemplate);
+  assert.ok(methodologyTemplate);
+  assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.templateOnly, true);
+  assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.artifactName, "Metaphilosophy Critique Ratings Dataset v0.1");
+  assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.corpusManifestId, "corpus-composition-october-2026-demo");
+  assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.labelSnapshotId, "snapshot-oct-api");
+  assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.publicExportManifestId, "public-manifest-october-2026-demo");
+  assert.equal(
+    datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.releaseVersionManifestId,
+    "release-version-manifest-october-2026-demo",
+  );
+  assert.ok(datasetCardTemplate.requiredFields.includes("bodyHash"));
+  assert.ok(datasetCardTemplate.routes.includes("/api/v1/public-dataset-documents/template"));
+
+  const datasetCardTemplateOnly = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents/template?documentKind=dataset_card",
+    headers: adminHeaders,
+  });
+  assert.equal(datasetCardTemplateOnly.status, 200, JSON.stringify(datasetCardTemplateOnly.body));
+  assert.equal(datasetCardTemplateOnly.body.count, 1);
+  assert.equal(datasetCardTemplateOnly.body.items[0].documentKind, "dataset_card");
+
+  const templateByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-documents/template?route=${encodeURIComponent("/api/v1/public-dataset-documents?dryRun=true")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(templateByRoute.status, 200, JSON.stringify(templateByRoute.body));
+  assert.equal(templateByRoute.body.count, 2);
+
+  const unchangedTemplateWrite = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+    body: JSON.stringify(datasetCardTemplate.requestBody),
+  });
+  assert.equal(unchangedTemplateWrite.status, 400, JSON.stringify(unchangedTemplateWrite.body));
+  assert.equal(unchangedTemplateWrite.body.error, "workflow_template_record");
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
   const documentPayload = (id, documentKind) => ({
     publicDatasetDocument: {
       id,
@@ -13574,6 +13648,8 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(methodologyRow.status, "ready");
   assert.equal(datasetCardRow.documentSummary.id, "dataset-card-v0-1-doc");
   assert.ok(datasetCardRow.readbackRoutes.includes("/api/v1/public-dataset-documents/dataset-card-v0-1-doc"));
+  assert.ok(datasetCardRow.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template?documentKind=dataset_card"));
+  assert.ok(methodologyRow.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template?documentKind=methodology_report"));
   const ladderRow = readiness.body.items.find((item) => item.id === "public_first_ladder_gate");
   assert.equal(ladderRow.status, "downstream_blocked_until_dataset_v0_1_ready");
   assert.equal(
@@ -13891,9 +13967,15 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('id: "public-dataset-documents"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-documents"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetDocument"'));
+  assert.ok(appSource.includes('id: "public-dataset-document-template"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-documents/template"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetDocumentTemplate"'));
   assert.ok(appSource.includes("function publicDatasetReadinessPreviewRow(item)"));
+  assert.ok(appSource.includes("function publicDatasetDocumentTemplatePreviewRow(item)"));
   assert.ok(appSource.includes("workflowPublicDatasetGateKindFilter"));
   assert.ok(appSource.includes("workflowPublicDatasetReviewReasonFilter"));
+  assert.ok(appSource.includes("workflowPublicDatasetDocumentKindFilter"));
+  assert.ok(appSource.includes("workflowPublicDatasetDocumentStatusFilter"));
   assert.ok(appSource.includes("counts.deliverableGroups"));
   assert.ok(appSource.includes("counts.submitOperatorEvidence"));
   assert.ok(appSource.includes("counts.linkedEvidenceIds"));
@@ -14236,6 +14318,7 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/{id}"));
   assert.ok(architectureDoc.includes("does not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents/template"));
   assert.ok(architectureDoc.includes("Metaphilosophy Critique Ratings Dataset v0.1"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-documents"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents"));

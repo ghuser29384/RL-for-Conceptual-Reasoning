@@ -16694,6 +16694,10 @@ function buildPublicDatasetReadinessReport(
           ? ["datasetCard:not_submitted"]
           : datasetCardEvidence.reviewReasons,
       readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections", ...datasetCardEvidence.readbackRoutes],
+      templateReadbackRoutes: [
+        "/api/v1/public-dataset-documents/template",
+        "/api/v1/public-dataset-documents/template?documentKind=dataset_card",
+      ],
       documentSummary: datasetCardEvidence.documentSummary,
     }),
     publicDatasetReadinessRow({
@@ -16713,6 +16717,10 @@ function buildPublicDatasetReadinessReport(
           ? ["methodologyReport:not_submitted"]
           : methodologyReportEvidence.reviewReasons,
       readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections", ...methodologyReportEvidence.readbackRoutes],
+      templateReadbackRoutes: [
+        "/api/v1/public-dataset-documents/template",
+        "/api/v1/public-dataset-documents/template?documentKind=methodology_report",
+      ],
       documentSummary: methodologyReportEvidence.documentSummary,
     }),
     publicDatasetReadinessRow({
@@ -16841,6 +16849,7 @@ function publicDatasetReadinessRow({
   protectedExclusions = null,
   downstreamArtifacts = null,
   documentSummary = null,
+  templateReadbackRoutes = [],
 }) {
   return {
     id,
@@ -16850,7 +16859,8 @@ function publicDatasetReadinessRow({
     sourceEvidenceIds: uniqueStrings(sourceEvidenceIds),
     sourceStatuses: uniqueStrings(sourceStatuses),
     reviewReasons: uniqueStrings(reviewReasons),
-    readbackRoutes: uniqueStrings(readbackRoutes),
+    readbackRoutes: uniqueStrings([...readbackRoutes, ...templateReadbackRoutes]),
+    templateReadbackRoutes: uniqueStrings(templateReadbackRoutes),
     targetGapIds: uniqueStrings(targetGapIds),
     ...(counts ? { counts } : {}),
     ...(protectedExclusions ? { protectedExclusions } : {}),

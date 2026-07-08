@@ -940,6 +940,8 @@ const state = {
   workflowPublicDatasetReviewReasonFilter: "",
   workflowPublicDatasetTargetGapFilter: "",
   workflowPublicDatasetDownstreamFilter: "",
+  workflowPublicDatasetDocumentKindFilter: "",
+  workflowPublicDatasetDocumentStatusFilter: "",
   workflowRaterProfileRaterFilter: "",
   workflowRaterProfileTierFilter: "",
   workflowRaterProfileStatusFilter: "",
@@ -1148,6 +1150,14 @@ const workflowEvidenceCollections = [
     resourceKey: "publicDatasetDocument",
     group: "Release",
     summary: "Submitted dataset-card and methodology-report evidence for Dataset v0.1 readiness.",
+  },
+  {
+    id: "public-dataset-document-template",
+    label: "Dataset v0.1 document templates",
+    endpoint: "/api/v1/public-dataset-documents/template",
+    resourceKey: "publicDatasetDocumentTemplate",
+    group: "Release",
+    summary: "Read-only dataset-card and methodology-report request templates with current linked release-object ids.",
   },
   {
     id: "rater-profile-evidence",
@@ -8163,6 +8173,30 @@ function workflowReadbackPanel(collection) {
           </label>
         </div>`
       : "";
+  const publicDatasetDocumentTemplateFilters =
+    collection.id === "public-dataset-document-template"
+      ? `<div class="workflowReadbackControls">
+          <label>
+            <span>Document kind</span>
+            <select id="workflowPublicDatasetDocumentKindFilter">
+              ${["", "dataset_card", "methodology_report"]
+                .map(
+                  (item) =>
+                    `<option ${item === state.workflowPublicDatasetDocumentKindFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All document kinds")}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Readiness</span>
+            <input id="workflowPublicDatasetDocumentStatusFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetDocumentStatusFilter)}" placeholder="open" />
+          </label>
+          <label>
+            <span>Route</span>
+            <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/public-dataset-documents/template" />
+          </label>
+        </div>`
+      : "";
   const raterProfileEvidenceFilters =
     collection.id === "rater-profile-evidence"
       ? `<div class="workflowReadbackControls">
@@ -8367,6 +8401,7 @@ function workflowReadbackPanel(collection) {
       ${releaseReportSectionFilters}
       ${releaseVersionManifestFilters}
       ${publicDatasetReadinessFilters}
+      ${publicDatasetDocumentTemplateFilters}
       ${raterProfileEvidenceFilters}
       ${derivedChecklistFilters}
       ${scoreExplanationAuditFilters}
@@ -8482,6 +8517,17 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Gate definitions", result.count ?? items.length],
       ["Prepared-draft required", counts.requiredForPreparedDraftReadiness ?? "not reported"],
       ["Policy rows", workflowCountMapSummary(counts.byWorkflowPolicyId)],
+    ];
+  }
+  if (collection.id === "public-dataset-document-template") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    return [
+      ["Template rows", counts.templateRows ?? result.count ?? "not reported"],
+      ["Open readiness rows", counts.openReadinessRows ?? "not reported"],
+      ["Document kinds", workflowCountMapSummary(counts.byDocumentKind)],
+      ["Readiness states", workflowCountMapSummary(counts.byReadinessStatus)],
+      ["Write route", result.writeRoute ?? "not available"],
+      ["Validate route", result.singleRecordValidateOnlyRoute ?? "not available"],
     ];
   }
   if (collection.id === "model-run-provenance") {
@@ -8671,6 +8717,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "public-dataset-readiness") {
     return `<div class="operatorActionPreview">${previewItems.map(publicDatasetReadinessPreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "public-dataset-document-template") {
+    return `<div class="operatorActionPreview">${previewItems.map(publicDatasetDocumentTemplatePreviewRow).join("")}</div>`;
   }
   if (collection.id === "rater-profile-evidence") {
     return `<div class="operatorActionPreview">${previewItems.map(raterProfileEvidencePreviewRow).join("")}</div>`;
@@ -8955,6 +9004,39 @@ function publicDatasetReadinessPreviewRow(item) {
         ["Target gaps", targetGaps],
         ["Downstream artifacts", downstream],
         ["Readbacks", routes],
+      ])}
+    </article>
+  `;
+}
+
+function publicDatasetDocumentTemplatePreviewRow(item) {
+  const reviewReasons =
+    Array.isArray(item.readinessReviewReasons) && item.readinessReviewReasons.length
+      ? item.readinessReviewReasons.slice(0, 4).join(", ")
+      : "no readiness review reasons";
+  const linkedIds = item.linkedReleaseObjectIds ?? {};
+  const linkedSummary = Object.entries(linkedIds)
+    .map(([key, value]) => `${humanize(key)}: ${value}`)
+    .join(", ");
+  const requiredFields = Array.isArray(item.requiredFields) ? item.requiredFields : [];
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.label ?? humanize(item.documentKind ?? "dataset document"))}</strong>
+          <span>${escapeHtml(humanize(item.documentKind ?? "public dataset document"))}</span>
+        </div>
+        <span>${escapeHtml(item.templateOnly ? "template only" : "review")}</span>
+      </div>
+      ${metricList([
+        ["Readiness", item.readinessStatus ? humanize(item.readinessStatus) : "not reported"],
+        ["Review reasons", reviewReasons],
+        ["POST route", item.writeRoute ?? "not available"],
+        ["Dry-run route", item.singleRecordDryRunRoute ?? "not available"],
+        ["Validate route", item.singleRecordValidateOnlyRoute ?? "not available"],
+        ["Readiness row", item.readinessRowReadbackRoute ?? "not available"],
+        ["Linked release objects", linkedSummary || "not reported"],
+        ["Required fields", requiredFields.length ? requiredFields.slice(0, 7).join(", ") : "not reported"],
       ])}
     </article>
   `;
@@ -14348,6 +14430,10 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       state.workflowPublicDatasetTargetGapFilter = "";
       state.workflowPublicDatasetDownstreamFilter = "";
     }
+    if (collection.id !== "public-dataset-document-template") {
+      state.workflowPublicDatasetDocumentKindFilter = "";
+      state.workflowPublicDatasetDocumentStatusFilter = "";
+    }
     if (collection.id !== "rater-profile-evidence") {
       state.workflowRaterProfileRaterFilter = "";
       state.workflowRaterProfileTierFilter = "";
@@ -14666,6 +14752,8 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     "workflowPublicDatasetReviewReasonFilter",
     "workflowPublicDatasetTargetGapFilter",
     "workflowPublicDatasetDownstreamFilter",
+    "workflowPublicDatasetDocumentKindFilter",
+    "workflowPublicDatasetDocumentStatusFilter",
   ].forEach((elementId) => {
     document.getElementById(elementId)?.addEventListener("change", (event) => {
       state[elementId] = event.target.value.trim();
@@ -16772,6 +16860,7 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "release-report-sections" ||
     collection.id === "release-version-manifest" ||
     collection.id === "public-dataset-readiness" ||
+    collection.id === "public-dataset-document-template" ||
     collection.id === "rater-profile-evidence" ||
     collection.id === "release-workflow-readiness" ||
     collection.id === "score-explanation-audit" ||
@@ -16931,6 +17020,17 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowPublicDatasetTargetGapFilter) url.searchParams.set("targetGapId", state.workflowPublicDatasetTargetGapFilter);
     if (state.workflowPublicDatasetDownstreamFilter) url.searchParams.set("downstreamArtifact", state.workflowPublicDatasetDownstreamFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (collection.id === "public-dataset-document-template" && state.workflowRouteFilter) {
+    url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (collection.id === "public-dataset-document-template") {
+    if (state.workflowPublicDatasetDocumentKindFilter) {
+      url.searchParams.set("documentKind", state.workflowPublicDatasetDocumentKindFilter);
+    }
+    if (state.workflowPublicDatasetDocumentStatusFilter) {
+      url.searchParams.set("status", state.workflowPublicDatasetDocumentStatusFilter);
+    }
   }
   if (collection.id === "rater-profile-evidence") {
     if (state.workflowRaterProfileRaterFilter) url.searchParams.set("raterId", state.workflowRaterProfileRaterFilter);

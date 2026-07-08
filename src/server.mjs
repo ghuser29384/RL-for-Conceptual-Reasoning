@@ -7879,6 +7879,13 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/v1/public-dataset-documents/template") {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetDocumentTemplateReadback(report, { searchParams: url.searchParams }),
+    );
+    return;
+  }
+
   const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
   if (workflowWriteMatch) {
     await workflowWriteEndpoint(request, response, context, workflowWriteMatch);
@@ -11423,6 +11430,200 @@ function releaseVersionManifestCounts(items) {
     byStatus: countItemsBy(items, "status"),
     byRoute: countValues(items.flatMap(releaseVersionManifestItemRoutes)),
     byTargetGapId: countExpandedValues(items, "targetGapIds"),
+  };
+}
+
+function publicDatasetDocumentTemplateReadback(report, options = {}) {
+  const allItems = publicDatasetDocumentTemplateItems(report);
+  const filters = publicDatasetDocumentTemplateFilters(options.searchParams);
+  const items = allItems.filter((item) => publicDatasetDocumentTemplateMatchesFilters(item, filters));
+  return {
+    id: `public-dataset-document-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetDocumentTemplate",
+    templateOnly: true,
+    writeRoute: "/api/v1/public-dataset-documents",
+    singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
+    singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
+    collectionReadbackRoute: "/api/v1/public-dataset-documents",
+    readinessReadbackRoute: "/api/v1/public-dataset-readiness",
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 documentation templates derived from /api/release/report; they do not submit public documentation, publish a dataset, launch downstream public surfaces, or waive release gates.",
+      access:
+        "Admin/auditor only because templates expose current release-object ids and public-artifact readiness blockers.",
+      templateOnly:
+        "Generated request bodies include templateOnly=true and TODO placeholders; POST /api/v1/public-dataset-documents rejects unchanged templates before workflow side effects.",
+      replacement:
+        "Operators must replace title, summary, bodyMarkdown, bodyHash, preparedBy, reviewedBy, and timestamps with real reviewed documentation before submission.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: publicDatasetDocumentTemplateCounts(allItems),
+    filteredCounts: publicDatasetDocumentTemplateCounts(items),
+    items,
+  };
+}
+
+function publicDatasetDocumentTemplateItems(report) {
+  const readiness = report.publicDatasetReadiness ?? {};
+  const readinessRows = Array.isArray(readiness.rows) ? readiness.rows : [];
+  const linkedReleaseObjectIds = publicDatasetDocumentTemplateLinkedReleaseObjectIds(report, readinessRows);
+  return ["dataset_card", "methodology_report"].map((documentKind, index) => {
+    const readinessRow = readinessRows.find((row) => row.id === documentKind) ?? {};
+    const requestBody = {
+      publicDatasetDocument: publicDatasetDocumentTemplateResource(documentKind, report, linkedReleaseObjectIds, index),
+    };
+    const templateReadbackRoute = `/api/v1/public-dataset-documents/template?documentKind=${encodeURIComponent(documentKind)}`;
+    return {
+      id: `public-dataset-document-template:${documentKind}`,
+      sequence: index + 1,
+      templateOnly: true,
+      documentKind,
+      templateKind: "public_dataset_document",
+      label: readinessRow.label ?? humanizeServerLabel(documentKind),
+      artifactName: readiness.artifactName ?? publicDatasetArtifactName,
+      artifactKind: readiness.artifactKind ?? "expert_rated_position_critique_dataset",
+      readinessStatus: readinessRow.status ?? "not_reported",
+      readinessReviewReasons: Array.isArray(readinessRow.reviewReasons) ? readinessRow.reviewReasons : [],
+      readinessRowReadbackRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(documentKind)}`,
+      templateReadbackRoute,
+      writeRoute: "/api/v1/public-dataset-documents",
+      singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
+      singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
+      collectionReadbackRoute: "/api/v1/public-dataset-documents",
+      publicDatasetReadinessRoute: "/api/v1/public-dataset-readiness",
+      linkedReleaseObjectIds,
+      requiredFields: [
+        "id",
+        "releaseId",
+        "documentKind",
+        "artifactName",
+        "documentVersion",
+        "title",
+        "summary",
+        "bodyMarkdown",
+        "bodyHash",
+        "hiddenProtectedExclusionSummary",
+        "downstreamLaunchBoundary",
+        "linkedReleaseObjectIds",
+        "preparedBy",
+        "reviewedBy",
+        "createdAt",
+      ],
+      requestBody,
+      routes: [
+        templateReadbackRoute,
+        "/api/v1/public-dataset-documents/template",
+        "/api/v1/public-dataset-documents",
+        routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
+        routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
+        `/api/v1/public-dataset-readiness/${encodeURIComponent(documentKind)}`,
+        "/api/v1/public-dataset-readiness",
+      ],
+    };
+  });
+}
+
+function publicDatasetDocumentTemplateResource(documentKind, report, linkedReleaseObjectIds, index) {
+  const suffix = index + 1;
+  const isDatasetCard = documentKind === "dataset_card";
+  return {
+    templateOnly: true,
+    id: `TODO_${documentKind}_document_id_${suffix}`,
+    releaseId: report.releaseId ?? releaseId,
+    documentKind,
+    artifactName: publicDatasetArtifactName,
+    documentVersion: isDatasetCard ? "dataset-card-v0.1" : "methodology-report-v0.1",
+    title: isDatasetCard
+      ? "TODO Metaphilosophy Critique Ratings Dataset v0.1 dataset card"
+      : "TODO Metaphilosophy Critique Ratings Dataset v0.1 methodology report",
+    summary: isDatasetCard
+      ? "TODO dataset card summary covering expert-rated position-critique pairs, seven-dimensional labels, split governance, and release limitations."
+      : "TODO methodology report summary covering source-blind rating, preserved initial ratings, label snapshots, split governance, and release limitations.",
+    bodyMarkdown: isDatasetCard
+      ? "TODO dataset card body: describe Dataset v0.1 scope, target-scale limitations, seven-dimensional labels, confidence/explanation metadata, item-text hashes, split manifests, corpus composition, hidden/protected exclusions, and no downstream public launch."
+      : "TODO methodology report body: describe method, source-blind initial rating, preserved originals/revisions, adjudication, label snapshot, public split boundaries, corpus manifest, hidden/protected exclusions, and no downstream public launch.",
+    bodyHash: "sha256:TODO_REPLACE_WITH_BODY_MARKDOWN_HASH",
+    linkedReleaseObjectIds,
+    hiddenProtectedExclusionSummary:
+      "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded.",
+    downstreamLaunchBoundary:
+      "No public leaderboard, API evaluator, public training export launch, or judge-model launch before Dataset v0.1 readiness is complete.",
+    preparedBy: "TODO_OPERATOR_ID",
+    reviewedBy: "TODO_REVIEWER_ID",
+    createdAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function publicDatasetDocumentTemplateLinkedReleaseObjectIds(report, readinessRows) {
+  const rowById = new Map(readinessRows.map((row) => [row.id, row]));
+  const sourceEvidenceId = (rowId, index = 0) => rowById.get(rowId)?.sourceEvidenceIds?.[index] ?? null;
+  return {
+    corpusManifestId:
+      report.corpusManifest?.id ??
+      releaseVersionManifestExpectedArtifactId(report, "corpus_manifest") ??
+      sourceEvidenceId("corpus_manifest") ??
+      sourceEvidenceId("release_cleared_position_critique_pairs", 0) ??
+      `corpus-composition-${report.releaseId ?? releaseId}`,
+    labelSnapshotId:
+      releaseVersionManifestExpectedArtifactId(report, "label_snapshot") ??
+      sourceEvidenceId("seven_dimension_labels") ??
+      `snapshot-${report.releaseId ?? releaseId}`,
+    publicExportManifestId:
+      sourceEvidenceId("split_manifest") ??
+      sourceEvidenceId("release_cleared_position_critique_pairs", 1) ??
+      `public-manifest-${report.releaseId ?? releaseId}`,
+    releaseVersionManifestId: report.releaseVersionManifest?.id ?? `release-version-manifest-${report.releaseId ?? releaseId}`,
+  };
+}
+
+function releaseVersionManifestExpectedArtifactId(report, artifact) {
+  const checks = Array.isArray(report.releaseVersionManifest?.linkedArtifactChecks) ? report.releaseVersionManifest.linkedArtifactChecks : [];
+  return checks.find((check) => check.artifact === artifact)?.expectedId ?? null;
+}
+
+function publicDatasetDocumentTemplateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    documentKind: value("documentKind"),
+    status: value("status") ?? value("readinessStatus"),
+    route: value("route"),
+  };
+}
+
+function publicDatasetDocumentTemplateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.documentKind === value;
+    if (key === "status") {
+      if (value === "open") return item.readinessStatus !== "ready";
+      if (value === "closed") return item.readinessStatus === "ready";
+      return item.readinessStatus === value;
+    }
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetDocumentTemplateCounts(items) {
+  return {
+    rows: items.length,
+    templateRows: items.length,
+    openReadinessRows: items.filter((item) => item.readinessStatus !== "ready").length,
+    readyReadinessRows: items.filter((item) => item.readinessStatus === "ready").length,
+    byDocumentKind: countItemsBy(items, "documentKind"),
+    byReadinessStatus: countItemsBy(items, "readinessStatus"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }
 
