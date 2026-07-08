@@ -484,7 +484,110 @@ export const METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE = "Metaphilosophy_Decision_
 
 export const METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES = ["accepted_edit", "rejected_idea", "pruning_decision"];
 
+export const METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS = [
+  "RLHF84",
+  "RLHF85",
+  "RLHF86",
+  "RLHF87",
+  "RLHF88",
+  "RLHF89",
+  "RLHF90",
+  "RLHF91",
+  "RLHF92",
+];
+
 export const METAPHILOSOPHY_DECISION_LOG_ENTRIES = [
+  {
+    id: "rlhf84-volunteer-platform-safeguards",
+    title: "Volunteer-platform measurement safeguards",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF84",
+    credence: 0.82,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF84 treated volunteer incentive neutrality, language and translation artifact handling, protected-split UI variant control, label-blind pre-submit assistance, volunteer withdrawal handling, and accessibility/readability gating as project-level safeguards that reduce measurement error without changing LMCA labels.",
+  },
+  {
+    id: "rlhf85-production-measurement-hardening",
+    title: "Production measurement hardening",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF85",
+    credence: 0.85,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF85 added protected model-run data handling, evidence-backed expert-role qualification, critique-not-position rating reminders, unset score entry with raw-score provenance, stale-draft invalidation, label/model-result-blind issue triage, separate human-target and model-prediction tie tolerances, source-family/authorship conflict gating, server-derived screen states, correctness claim-weight worksheets, and release/config manifest integrity as safeguards against leakage, provenance, client-state, and scoring drift.",
+  },
+  {
+    id: "rlhf86-leakage-benchmark-and-governance-controls",
+    title: "Leakage, benchmark, and governance controls",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF86",
+    credence: 0.84,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF86 added source-recognition escape hatches, protected-artifact storage/cache/backup and incident controls, aggregate-only hidden-benchmark submission feedback, prompt-injection-resistant model-evaluation rendering, and two-person governance for high-impact unblinding or release changes to reduce leakage, benchmark overfitting, prompt contamination, and governance drift.",
+  },
+  {
+    id: "rlhf87-operational-control-plane",
+    title: "Operational control plane",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF87",
+    credence: 0.87,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF87 added centralized side-effect policy decisions, governed implementation-phase gates, canonical append-only bundle hashing, queue freshness/backpressure controls, sensitive client-surface isolation, and tamper-evident high-impact audit events to reduce partial implementation, configuration mutation, delayed work, UI telemetry, and audit-integrity risk.",
+  },
+  {
+    id: "rlhf88-feature-preserving-ux-simplification",
+    title: "Feature-preserving UX simplification",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF88",
+    credence: 0.83,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF88 accepted task-first layouts, progressive disclosure, role-specific screen states, short plain-language summaries, and glossary support for rating, practice, consent, calibration, discussion, adjudication, release-review, and admin screens, while requiring that simplification not remove features, weaken guards, change rubric semantics, lose provenance, or expose hidden metadata.",
+  },
+  {
+    id: "rlhf89-schedule-copy-verification-and-draft-provenance",
+    title: "Schedule, copy, verification, and draft provenance",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF89",
+    credence: 0.81,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF89 added date-current schedule re-baselining, clause-traceable simplified rubric copy, source-blind verification-evidence provenance, and server-side/ephemeral-only draft persistence to reduce stale-plan, rubric-paraphrase, correctness-evidence, and client-storage leakage risks.",
+  },
+  {
+    id: "rlhf90-triggered-score-explanation-policy",
+    title: "Triggered score-explanation policy",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF90",
+    credence: 0.84,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF90 kept ordinary ratings focused on seven scores plus confidence while requiring short explanations only for extreme, inconsistent, surprising, unclear-target, high-stakes, post-discussion-revision, or exposure/familiarity/conflict-uncertainty cases.",
+  },
   {
     id: "rlhf91-greenfield-task-track-separation",
     title: "Greenfield task-track separation",
@@ -10627,6 +10730,17 @@ export function buildMetaphilosophyDecisionLogReport(releaseId, options = {}) {
     entries.filter((entry) => entry.reviewReasons.length === 0).map((entry) => entry.decisionType),
   );
   const missingDecisionTypes = METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.filter((decisionType) => !coveredDecisionTypes.includes(decisionType));
+  const coveredHistoricalSourceVersionSet = new Set(
+    entries
+      .filter((entry) => entry.reviewReasons.length === 0 && METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS.includes(entry.sourceVersion))
+      .map((entry) => entry.sourceVersion),
+  );
+  const coveredHistoricalSourceVersions = METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS.filter((sourceVersion) =>
+    coveredHistoricalSourceVersionSet.has(sourceVersion),
+  );
+  const missingHistoricalSourceVersions = METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS.filter(
+    (sourceVersion) => !coveredHistoricalSourceVersions.includes(sourceVersion),
+  );
   const reviewSections = [
     ...entries.flatMap((entry) =>
       entry.reviewReasons.map((reason) => ({ artifactType: "metaphilosophy_decision_log_entry", artifactId: entry.artifactId, reason })),
@@ -10635,6 +10749,11 @@ export function buildMetaphilosophyDecisionLogReport(releaseId, options = {}) {
       artifactType: "metaphilosophy_decision_log_entry",
       artifactId: decisionType,
       reason: "required_decision_type_missing",
+    })),
+    ...missingHistoricalSourceVersions.map((sourceVersion) => ({
+      artifactType: "metaphilosophy_decision_log_entry",
+      artifactId: sourceVersion,
+      reason: "required_historical_source_version_missing",
     })),
   ];
 
@@ -10648,18 +10767,26 @@ export function buildMetaphilosophyDecisionLogReport(releaseId, options = {}) {
         "RLHF93 keeps the main specification focused on current build, release, measurement, governance, and UX requirements.",
       auditabilityRule:
         "The decision log must preserve accepted edits, rejected ideas, pruning decisions, credences, and rationale after historical detail is pruned from the main spec.",
+      historicalCoverageRule:
+        "The pruned historical revision log through RLHF92 is preserved only if RLHF84-RLHF92 source-version rows remain represented in the decision log.",
       releaseGateBoundary:
         "Decision-log preservation is audit evidence only; it does not waive release gates, promote source-derived material, or create candidate, queue, label, benchmark, or training-export records.",
     },
     requiredDecisionTypes: METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES,
     coveredDecisionTypes,
     missingDecisionTypes,
+    requiredHistoricalSourceVersions: METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS,
+    coveredHistoricalSourceVersions,
+    missingHistoricalSourceVersions,
     entries,
     counts: {
       decisionEntries: entries.length,
       requiredDecisionTypes: METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.length,
       coveredDecisionTypes: coveredDecisionTypes.length,
       missingDecisionTypes: missingDecisionTypes.length,
+      requiredHistoricalSourceVersions: METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS.length,
+      coveredHistoricalSourceVersions: coveredHistoricalSourceVersions.length,
+      missingHistoricalSourceVersions: missingHistoricalSourceVersions.length,
       acceptedEntries: entries.filter((entry) => entry.decisionType === "accepted_edit").length,
       rejectedEntries: entries.filter((entry) => entry.decisionType === "rejected_idea").length,
       prunedEntries: entries.filter((entry) => entry.decisionType === "pruning_decision").length,

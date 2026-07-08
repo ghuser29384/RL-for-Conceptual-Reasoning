@@ -16494,6 +16494,8 @@ function metaphilosophyDecisionLogReadback(report, options = {}) {
       scope:
         "Read-only RLHF93 decision-log readback derived from /api/release/report and Metaphilosophy_Decision_Log.md; it preserves accepted, rejected, and pruned design decisions without creating workflow evidence.",
       access: "Admin/auditor readback only because the log exposes governance rationale, credence, and historical pruning decisions.",
+      historicalCoverage:
+        "Decision-log preservation covers the pruned RLHF84-RLHF92 historical source-version rows while RLHF93 records the pruning decision.",
       releaseGateBoundary:
         "Decision-log entries are audit evidence only; they do not waive release gates, promote source-derived material, or create candidate, queue, label, benchmark, or training-export records.",
     },

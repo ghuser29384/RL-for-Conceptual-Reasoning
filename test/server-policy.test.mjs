@@ -181,6 +181,7 @@ import {
   REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
   REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
   METAPHILOSOPHY_DECISION_LOG_ENTRIES,
+  METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS,
   METAPHILOSOPHY_RD_BACKLOG_ITEMS,
   METAPHILOSOPHY_TASK_TRACKS,
   scoreExplanationOverallProductDiagnostic,
@@ -22858,12 +22859,20 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(decisionLogCollection.body.sourceFile, "Metaphilosophy_Decision_Log.md");
   assert.equal(decisionLogCollection.body.count, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
   assert.equal(decisionLogCollection.body.totalCount, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
-  assert.equal(decisionLogCollection.body.counts.byDecisionType.accepted_edit, 2);
+  assert.equal(decisionLogCollection.body.counts.byDecisionType.accepted_edit, 9);
   assert.equal(decisionLogCollection.body.counts.byDecisionType.rejected_idea, 1);
   assert.equal(decisionLogCollection.body.counts.byDecisionType.pruning_decision, 1);
+  assert.equal(
+    decisionLogCollection.body.counts.coveredHistoricalSourceVersions,
+    METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS.length,
+  );
+  assert.equal(decisionLogCollection.body.counts.bySourceVersion.RLHF84, 1);
+  assert.equal(decisionLogCollection.body.counts.bySourceVersion.RLHF92, 1);
   assert.equal(decisionLogCollection.body.counts.closedRows, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
   assert.ok(decisionLogCollection.body.items.every((item) => item.status === "complete"));
+  assert.ok(decisionLogCollection.body.items.some((item) => item.id === "rlhf84-volunteer-platform-safeguards"));
   assert.ok(decisionLogCollection.body.items.some((item) => item.id === "rlhf93-prune-historical-revision-log"));
+  assert.match(decisionLogCollection.body.policy.historicalCoverage, /RLHF84-RLHF92/);
   assert.match(decisionLogCollection.body.policy.releaseGateBoundary, /do not waive release gates/);
 
   const pruningDecisionLog = await invokeApi(context, {

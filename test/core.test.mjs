@@ -116,6 +116,7 @@ import {
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
   METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS,
   METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES,
+  METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS,
   METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS,
   METAPHILOSOPHY_DECISION_LOG_ENTRIES,
   METAPHILOSOPHY_TASK_TRACKS,
@@ -13906,6 +13907,8 @@ test("metaphilosophy decision log preserves RLHF93 accepted rejected and pruned 
   assert.match(decisionLogFile, /rejected_idea/);
   assert.match(decisionLogFile, /pruning_decision/);
   assert.match(decisionLogFile, /credence/);
+  assert.match(decisionLogFile, /rlhf84-volunteer-platform-safeguards/);
+  assert.match(decisionLogFile, /rlhf90-triggered-score-explanation-policy/);
   assert.match(decisionLogFile, /rlhf93-prune-historical-revision-log/);
 
   const decisionLog = buildMetaphilosophyDecisionLogReport("release-test");
@@ -13913,12 +13916,19 @@ test("metaphilosophy decision log preserves RLHF93 accepted rejected and pruned 
   assert.deepEqual(decisionLog.missingDecisionTypes, []);
   assert.equal(decisionLog.counts.requiredDecisionTypes, METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.length);
   assert.equal(decisionLog.counts.coveredDecisionTypes, METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.length);
+  assert.deepEqual(decisionLog.coveredHistoricalSourceVersions, METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS);
+  assert.deepEqual(decisionLog.missingHistoricalSourceVersions, []);
+  assert.equal(
+    decisionLog.counts.coveredHistoricalSourceVersions,
+    METAPHILOSOPHY_REQUIRED_HISTORICAL_DECISION_LOG_SOURCE_VERSIONS.length,
+  );
   assert.equal(decisionLog.counts.reviewRequiredEntries, 0);
-  assert.equal(decisionLog.counts.acceptedEntries, 2);
+  assert.equal(decisionLog.counts.acceptedEntries, 9);
   assert.equal(decisionLog.counts.rejectedEntries, 1);
   assert.equal(decisionLog.counts.prunedEntries, 1);
   assert.equal(decisionLog.entries.length, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
   assert.ok(decisionLog.entries.every((entry) => entry.status === "complete"));
+  assert.ok(decisionLog.entries.some((entry) => entry.id === "rlhf84-volunteer-platform-safeguards" && entry.sourceVersion === "RLHF84"));
   assert.ok(decisionLog.entries.some((entry) => entry.id === "rlhf93-prune-historical-revision-log" && entry.decisionStatus === "pruned"));
   assert.match(decisionLog.policy.releaseGateBoundary, /does not waive release gates/);
 
@@ -13944,6 +13954,8 @@ test("metaphilosophy decision log preserves RLHF93 accepted rejected and pruned 
   assert.ok(unsafeDecisionLog.reviewSections.some((section) => section.reason === "preservedIn:must_point_to_decision_log"));
   assert.ok(unsafeDecisionLog.missingDecisionTypes.includes("rejected_idea"));
   assert.ok(unsafeDecisionLog.missingDecisionTypes.includes("pruning_decision"));
+  assert.ok(unsafeDecisionLog.missingHistoricalSourceVersions.includes("RLHF84"));
+  assert.ok(unsafeDecisionLog.reviewSections.some((section) => section.reason === "required_historical_source_version_missing"));
 });
 
 test("metaphilosophy deliverable checklist binds RLHF91 and RLHF93 additions to release evidence", () => {
