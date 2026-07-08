@@ -4906,6 +4906,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/metaphilosophy/research-backlog-items/backlog-smoke"],
     ["GET", "/api/v1/metaphilosophy/decision-log"],
     ["GET", "/api/v1/metaphilosophy/decision-log/rlhf93-prune-historical-revision-log"],
+    ["GET", "/api/v1/metaphilosophy/rlhf93-completion-audit"],
+    ["GET", "/api/v1/metaphilosophy/rlhf93-completion-audit/release-current-status"],
     ["POST", "/api/v1/corpus-manifests"],
     ["GET", "/api/v1/corpus-manifests"],
     ["GET", "/api/v1/corpus-manifests/corpus-smoke"],
@@ -5566,6 +5568,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/metaphilosophy/decision-log"',
     'resourceKey: "metaphilosophyDecisionLogEntry"',
     "accepted, rejected, and pruned decision-log entries",
+    'id: "rlhf93-completion-audit"',
+    'endpoint: "/api/v1/metaphilosophy/rlhf93-completion-audit"',
+    'resourceKey: "rlhf93CompletionAuditRequirement"',
+    "RLHF93 requirement audit over existing release-report",
     'id: "target-gaps"',
     'endpoint: "/api/v1/target-gaps"',
     'resourceKey: "targetGap"',
@@ -16208,6 +16214,7 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("/api/v1/metaphilosophy/task-tracks"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/research-backlog-items"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/decision-log"));
+  assert.ok(appSource.includes("/api/v1/metaphilosophy/rlhf93-completion-audit"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/deliverable-checklist"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/source-workbench-readiness"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/source-workbench-template"));
@@ -16218,6 +16225,8 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("metaphilosophyResearchBacklogItemPreviewRow(item)"));
   assert.ok(appSource.includes("function metaphilosophyResearchBacklogItemPreviewRow(item)"));
   assert.ok(appSource.includes("metaphilosophyDecisionLogEntryPreviewRow(item)"));
+  assert.ok(appSource.includes("rlhf93CompletionAuditPreviewRow(item)"));
+  assert.ok(appSource.includes("function rlhf93CompletionAuditPreviewRow(item)"));
   assert.ok(appSource.includes("function metaphilosophyDecisionLogEntryPreviewRow(item)"));
   assert.ok(appSource.includes('["Release claim roles", workflowUniqueHumanizedValues(items, "releaseClaimRole")]'));
   assert.ok(appSource.includes('["LMCA relationships", workflowUniqueHumanizedValues(items, "lmcaRelationship")]'));
@@ -16597,6 +16606,8 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("Metaphilosophy_Decision_Log.md"));
   assert.ok(architectureDoc.includes("metaphilosophyDecisionLog"));
   assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/decision-log"));
+  assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/rlhf93-completion-audit"));
+  assert.ok(architectureDoc.includes("reports completion as unproven while target data"));
   assert.ok(architectureDoc.includes("does not create release gates, promote rejected or pruned ideas, create candidates, or mutate the main spec"));
   assert.ok(
     architectureDoc.includes(
@@ -22784,6 +22795,12 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   });
   assert.equal(missingDecisionLogAuth.status, 401);
 
+  const missingRlhf93CompletionAuditAuth = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit",
+  });
+  assert.equal(missingRlhf93CompletionAuditAuth.status, 401);
+
   const effectiveTaskTrackCollection = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/metaphilosophy/task-tracks",
@@ -22928,6 +22945,88 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(decisionLogItem.body.count, 1);
   assert.equal(decisionLogItem.body.item.id, "rlhf93-prune-historical-revision-log");
   assert.equal(decisionLogItem.body.item.decisionStatus, "pruned");
+
+  const rlhf93CompletionAudit = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAudit.status, 200, JSON.stringify(rlhf93CompletionAudit.body));
+  assert.equal(rlhf93CompletionAudit.body.resourceKey, "rlhf93CompletionAuditRequirement");
+  assert.equal(rlhf93CompletionAudit.body.releaseUseStatus, "rlhf93_completion_unproven");
+  assert.equal(rlhf93CompletionAudit.body.currentStatus, "incomplete_against_october_target");
+  assert.ok(rlhf93CompletionAudit.body.counts.openRows > 0);
+  assert.ok(rlhf93CompletionAudit.body.counts.closedRows > 0);
+  assert.ok(rlhf93CompletionAudit.body.counts.byRequirementGroup.october_completion > 0);
+  assert.ok(rlhf93CompletionAudit.body.counts.byRequirementGroup.metaphilosophy_deliverable > 0);
+  assert.ok(rlhf93CompletionAudit.body.counts.byRequirementGroup.public_dataset_v0_1 > 0);
+  assert.match(rlhf93CompletionAudit.body.policy.completionBoundary, /route availability/);
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
+        item.id === "release-current-status" &&
+        item.completionState === "open" &&
+        item.reviewReasons.includes("targetGaps.remainingTotal:2034"),
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
+        item.id === "public-dataset-public_first_ladder_gate" &&
+        item.requirementGroup === "public_dataset_v0_1" &&
+        item.completionState === "open" &&
+        item.routes.includes("/api/v1/public-dataset-readiness/public_first_ladder_gate"),
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
+        item.id === "metaphilosophy-decision_log_preserved" &&
+        item.requirementGroup === "metaphilosophy_deliverable" &&
+        item.completionState === "closed",
+    ),
+  );
+
+  const rlhf93CompletionAuditOpen = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?status=open",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditOpen.status, 200, JSON.stringify(rlhf93CompletionAuditOpen.body));
+  assert.ok(rlhf93CompletionAuditOpen.body.items.every((item) => item.completionState === "open"));
+
+  const rlhf93CompletionAuditClosed = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?status=closed",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditClosed.status, 200, JSON.stringify(rlhf93CompletionAuditClosed.body));
+  assert.ok(rlhf93CompletionAuditClosed.body.items.every((item) => item.completionState === "closed"));
+
+  const rlhf93CompletionAuditRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/public-dataset-readiness/public_first_ladder_gate")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditRouteFilter.body));
+  assert.ok(rlhf93CompletionAuditRouteFilter.body.count >= 1);
+  assert.ok(rlhf93CompletionAuditRouteFilter.body.items.some((item) => item.id === "public-dataset-public_first_ladder_gate"));
+
+  const rlhf93CompletionAuditItem = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit/release-current-status",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditItem.status, 200, JSON.stringify(rlhf93CompletionAuditItem.body));
+  assert.equal(rlhf93CompletionAuditItem.body.count, 1);
+  assert.equal(rlhf93CompletionAuditItem.body.item.id, "release-current-status");
+
+  const missingRlhf93CompletionAuditItem = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit/not-present",
+    headers: adminHeaders,
+  });
+  assert.equal(missingRlhf93CompletionAuditItem.status, 404);
 
   const effectiveArchitectureCollection = await invokeApi(context, {
     method: "GET",

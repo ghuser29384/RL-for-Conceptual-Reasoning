@@ -8168,6 +8168,15 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  const rlhf93CompletionAuditMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/rlhf93-completion-audit(?:\/([^/]+))?$/);
+  if (request.method === "GET" && rlhf93CompletionAuditMatch) {
+    const itemId = rlhf93CompletionAuditMatch[1] ? decodeURIComponent(rlhf93CompletionAuditMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      rlhf93CompletionAuditReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
   const metaphilosophySourceWorkbenchReadinessMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/source-workbench-readiness(?:\/([^/]+))?$/);
   if (request.method === "GET" && metaphilosophySourceWorkbenchReadinessMatch) {
     const itemId = metaphilosophySourceWorkbenchReadinessMatch[1] ? decodeURIComponent(metaphilosophySourceWorkbenchReadinessMatch[1]) : null;
@@ -16528,6 +16537,378 @@ function metaphilosophyDecisionLogReadback(report, options = {}) {
     ...(options.itemId ? { item: items[0] } : {}),
     items,
   };
+}
+
+function rlhf93CompletionAuditReadback(report, options = {}) {
+  const allItems = rlhf93CompletionAuditItems(report);
+  const filters = rlhf93CompletionAuditFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => rlhf93CompletionAuditMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.requirementId === options.itemId || item.sourceRowId === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = rlhf93CompletionAuditCounts(allItems);
+  const filteredCounts = rlhf93CompletionAuditCounts(items);
+  const releaseUseStatus = counts.openRows ? "rlhf93_completion_unproven" : "rlhf93_completion_verified";
+  return {
+    id: `rlhf93-completion-audit-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.releaseId ?? releaseId,
+    releaseUseStatus,
+    resourceKey: "rlhf93CompletionAuditRequirement",
+    policy: {
+      scope:
+        "Read-only RLHF93 completion audit derived from /api/release/report; it consolidates existing release, Metaphilosophy, public-dataset, target-data, and model-evaluation proof routes without creating evidence or redefining completion.",
+      completionBoundary:
+        "Rows are complete only when current submitted evidence proves the requirement; route availability, seed defaults, templates, and readback-only scaffolds are not treated as completion evidence.",
+      evidenceBoundary:
+        "This audit does not submit target data, append operator evidence, freeze releases, publish datasets, launch downstream surfaces, or waive gates.",
+      access: "Admin/auditor readback only because rows expose release blockers, operator evidence routes, and protected workflow-readiness status.",
+    },
+    filters,
+    currentStatus: report.currentStatus ?? "unknown",
+    targetGapTotals: report.targetGaps?.totals ?? report.targetGaps?.counts ?? null,
+    nextBlockingGroup: report.releaseCompletionNavigation?.currentBlockingGroup ?? null,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts,
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function rlhf93CompletionAuditItems(report) {
+  const generatedAt = report.generatedAt ?? new Date().toISOString();
+  const releaseIdValue = report.releaseId ?? releaseId;
+  const items = [
+    rlhf93CompletionAuditDecoratedItem({
+      id: "release-current-status",
+      requirementId: "release-current-status",
+      requirementGroup: "release_status",
+      requirementKind: "overall_release",
+      requirement:
+        "Full RLHF93 platform/release objective must be proven against current release, target-data, operator-evidence, public-dataset, and Metaphilosophy evidence.",
+      status: report.currentStatus ?? "unknown",
+      releaseUseStatus: report.currentStatus ?? "unknown",
+      sourceEvidenceId: report.releaseId ?? releaseIdValue,
+      sourceStatuses: [report.currentStatus ?? "unknown"],
+      reviewReasons: rlhf93ReleaseCurrentReviewReasons(report),
+      evidenceRoutes: ["/api/release/report"],
+      verificationRoutes: [
+        "/api/release/report",
+        "/api/v1/october-completion-checklist",
+        "/api/v1/operator-action-items",
+        "/api/v1/target-gaps",
+      ],
+      remediationRoutes: report.releaseCompletionNavigation?.currentBlockingGroup
+        ? [
+            report.releaseCompletionNavigation.currentBlockingGroup.firstReadbackRoute,
+            report.releaseCompletionNavigation.currentBlockingGroup.firstTargetGapRoute,
+            report.releaseCompletionNavigation.currentBlockingGroup.firstTemplateRoute,
+            report.releaseCompletionNavigation.currentBlockingGroup.firstImportRoute,
+            report.releaseCompletionNavigation.currentBlockingGroup.firstDryRunRoute,
+            report.releaseCompletionNavigation.currentBlockingGroup.firstValidateOnlyRoute,
+          ]
+        : [],
+      generatedAt,
+    }),
+  ];
+
+  const octoberChecklist = report.octoberCompletionChecklist ?? {};
+  for (const [index, row] of (Array.isArray(octoberChecklist.rows) ? octoberChecklist.rows : []).entries()) {
+    const sourceRowId = row.id ?? `october-row-${index + 1}`;
+    items.push(
+      rlhf93CompletionAuditDecoratedItem({
+        ...row,
+        id: `october-${sourceRowId}`,
+        requirementId: sourceRowId,
+        sourceRowId,
+        requirementGroup: "october_completion",
+        requirementKind: "release_deliverable",
+        requirement: row.deliverableGroup ?? row.deliverable ?? humanizeIdentifier(sourceRowId),
+        status: row.status ?? "unknown",
+        releaseUseStatus: octoberChecklist.releaseUseStatus ?? report.currentStatus ?? "unknown",
+        sourceChecklistId: octoberChecklist.id ?? null,
+        sourceEvidenceId: Array.isArray(row.evidenceIds) ? row.evidenceIds[0] : null,
+        evidenceRoutes: ["/api/release/report", `/api/v1/october-completion-checklist/${encodeURIComponent(sourceRowId)}`],
+        verificationRoutes: [
+          `/api/v1/october-completion-checklist/${encodeURIComponent(sourceRowId)}`,
+          `/api/v1/operator-action-items?checklistRowId=${encodeURIComponent(sourceRowId)}`,
+        ],
+        remediationRoutes: rlhf93ChecklistRowRoutes(row),
+        generatedAt,
+      }),
+    );
+  }
+
+  const metaphilosophyChecklist = report.metaphilosophyDeliverableChecklist ?? {};
+  for (const [index, row] of (Array.isArray(metaphilosophyChecklist.rows) ? metaphilosophyChecklist.rows : []).entries()) {
+    const sourceRowId = row.id ?? `metaphilosophy-row-${index + 1}`;
+    items.push(
+      rlhf93CompletionAuditDecoratedItem({
+        ...row,
+        id: `metaphilosophy-${sourceRowId}`,
+        requirementId: sourceRowId,
+        sourceRowId,
+        requirementGroup: "metaphilosophy_deliverable",
+        requirementKind: "rlhf91_rlhf93_metaphilosophy_deliverable",
+        requirement: row.deliverable ?? humanizeIdentifier(sourceRowId),
+        status: row.status ?? "unknown",
+        releaseUseStatus: metaphilosophyChecklist.releaseUseStatus ?? "metaphilosophy_deliverable_checklist_missing",
+        sourceChecklistId: metaphilosophyChecklist.id ?? null,
+        sourceEvidenceId: Array.isArray(row.evidenceIds) ? row.evidenceIds[0] : null,
+        evidenceRoutes: ["/api/release/report", `/api/v1/metaphilosophy/deliverable-checklist/${encodeURIComponent(sourceRowId)}`],
+        verificationRoutes: [
+          `/api/v1/metaphilosophy/deliverable-checklist/${encodeURIComponent(sourceRowId)}`,
+          ...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : []),
+        ],
+        generatedAt,
+      }),
+    );
+  }
+
+  const publicDataset = report.publicDatasetReadiness ?? {};
+  for (const [index, row] of (Array.isArray(publicDataset.rows) ? publicDataset.rows : []).entries()) {
+    const sourceRowId = row.id ?? `public-dataset-row-${index + 1}`;
+    items.push(
+      rlhf93CompletionAuditDecoratedItem({
+        ...row,
+        id: `public-dataset-${sourceRowId}`,
+        requirementId: sourceRowId,
+        sourceRowId,
+        requirementGroup: "public_dataset_v0_1",
+        requirementKind: row.gateKind ?? "public_dataset_readiness_gate",
+        requirement: row.requirement ?? row.label ?? humanizeIdentifier(sourceRowId),
+        status: row.status ?? "unknown",
+        releaseUseStatus: publicDataset.releaseUseStatus ?? "public_dataset_readiness_missing",
+        sourceEvidenceId: Array.isArray(row.sourceEvidenceIds) ? row.sourceEvidenceIds[0] : row.sourceEvidenceId ?? publicDataset.id ?? null,
+        sourceStatuses: row.sourceStatuses ?? [row.status ?? "unknown"],
+        evidenceRoutes: ["/api/release/report", `/api/v1/public-dataset-readiness/${encodeURIComponent(sourceRowId)}`],
+        verificationRoutes: [
+          `/api/v1/public-dataset-readiness/${encodeURIComponent(sourceRowId)}`,
+          ...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : []),
+          ...(Array.isArray(row.routes) ? row.routes : []),
+        ],
+        remediationRoutes: [
+          row.packageManifestRoute,
+          row.releasePackageRoute,
+          row.publicationGateRoute,
+          row.downstreamLaunchRoute,
+          ...(Array.isArray(row.remediationRoutes) ? row.remediationRoutes : []),
+        ],
+        generatedAt,
+      }),
+    );
+  }
+
+  rlhf93CompletionAuditDerivedChecklistRows(report, "candidate_generation_intake", report.candidateGenerationIntakeChecklist).forEach((item) =>
+    items.push(item),
+  );
+  rlhf93CompletionAuditDerivedChecklistRows(report, "label_aggregation_reliability", report.labelAggregationReliabilityChecklist).forEach((item) =>
+    items.push(item),
+  );
+  rlhf93CompletionAuditDerivedChecklistRows(report, "model_evaluation_reproducibility", report.modelEvaluationReproducibilityChecklist).forEach((item) =>
+    items.push(item),
+  );
+
+  return items.map((item, index) => ({ ...item, sequence: index + 1, releaseId: releaseIdValue }));
+}
+
+function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, checklist = {}) {
+  const routeBaseByGroup = {
+    candidate_generation_intake: "/api/v1/candidate-generation-intake-checklist",
+    label_aggregation_reliability: "/api/v1/label-aggregation-reliability-checklist",
+    model_evaluation_reproducibility: "/api/v1/model-evaluation-reproducibility-checklist",
+  };
+  const routeBase = routeBaseByGroup[requirementGroup] ?? "/api/release/report";
+  return (Array.isArray(checklist.rows) ? checklist.rows : []).map((row, index) => {
+    const sourceRowId = row.id ?? row.rowId ?? `${requirementGroup}-row-${index + 1}`;
+    return rlhf93CompletionAuditDecoratedItem({
+      ...row,
+      id: `${requirementGroup}-${sourceRowId}`,
+      requirementId: sourceRowId,
+      sourceRowId,
+      requirementGroup,
+      requirementKind: "derived_checklist_row",
+      requirement: row.requirement ?? row.label ?? row.check ?? humanizeIdentifier(sourceRowId),
+      status: row.status ?? row.releaseUseStatus ?? "unknown",
+      releaseUseStatus: checklist.releaseUseStatus ?? row.releaseUseStatus ?? "unknown",
+      sourceChecklistId: checklist.id ?? null,
+      sourceEvidenceId: row.sourceEvidenceId ?? (Array.isArray(row.evidenceIds) ? row.evidenceIds[0] : null),
+      evidenceRoutes: ["/api/release/report", `${routeBase}/${encodeURIComponent(sourceRowId)}`],
+      verificationRoutes: [`${routeBase}/${encodeURIComponent(sourceRowId)}`, ...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : [])],
+      remediationRoutes: Array.isArray(row.remediationRoutes) ? row.remediationRoutes : [],
+      generatedAt: report.generatedAt ?? new Date().toISOString(),
+    });
+  });
+}
+
+function rlhf93CompletionAuditDecoratedItem(item) {
+  const readbackItemRoute = `/api/v1/metaphilosophy/rlhf93-completion-audit/${encodeURIComponent(item.id)}`;
+  const collectionReadbackRoute = "/api/v1/metaphilosophy/rlhf93-completion-audit";
+  const routes = rlhf93CompletionAuditItemRoutes({
+    ...item,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    releaseReportRoute: "/api/release/report",
+  });
+  const open = rlhf93CompletionAuditItemIsOpen(item);
+  return {
+    ...item,
+    completionState: open ? "open" : "closed",
+    isComplete: !open,
+    routeCount: routes.length,
+    reviewReasonCount: Array.isArray(item.reviewReasons) ? item.reviewReasons.length : 0,
+    evidenceIdCount: Array.isArray(item.evidenceIds) ? item.evidenceIds.length : item.sourceEvidenceId ? 1 : 0,
+    routes,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    releaseReportRoute: "/api/release/report",
+  };
+}
+
+function rlhf93ReleaseCurrentReviewReasons(report) {
+  const reasons = [];
+  const totals = report.targetGaps?.totals ?? report.targetGaps?.counts ?? {};
+  if (Number(totals.remainingTotal ?? 0) > 0) reasons.push(`targetGaps.remainingTotal:${totals.remainingTotal}`);
+  const octoberCounts = report.octoberCompletionChecklist?.counts ?? {};
+  if (Number(octoberCounts.operatorEvidenceRequired ?? 0) > 0) reasons.push(`octoberCompletionChecklist.operatorEvidenceRequired:${octoberCounts.operatorEvidenceRequired}`);
+  if (Number(octoberCounts.dataCollectionRequired ?? 0) > 0) reasons.push(`octoberCompletionChecklist.dataCollectionRequired:${octoberCounts.dataCollectionRequired}`);
+  if (Number(octoberCounts.reviewRequired ?? 0) > 0) reasons.push(`octoberCompletionChecklist.reviewRequired:${octoberCounts.reviewRequired}`);
+  if (!reasons.length && report.currentStatus !== "complete") reasons.push(`releaseStatus:${report.currentStatus ?? "unknown"}`);
+  return reasons;
+}
+
+function rlhf93ChecklistRowRoutes(row) {
+  return uniqueValues([
+    row?.writeRoute,
+    row?.readbackRoute,
+    row?.bulkImportRoute,
+    row?.packageImportRoute,
+    row?.packageDryRunImportRoute,
+    row?.packageValidateOnlyImportRoute,
+    row?.templateReadbackRoute,
+    row?.firstReadbackRoute,
+    row?.firstTargetGapRoute,
+    row?.firstTemplateRoute,
+    row?.firstImportRoute,
+    row?.firstDryRunRoute,
+    row?.firstValidateOnlyRoute,
+    ...(Array.isArray(row?.writeRoutes) ? row.writeRoutes : []),
+    ...(Array.isArray(row?.readbackRoutes) ? row.readbackRoutes : []),
+    ...(Array.isArray(row?.bulkImportRoutes) ? row.bulkImportRoutes : []),
+    ...(Array.isArray(row?.setupBulkImportRoutes) ? row.setupBulkImportRoutes : []),
+    ...(Array.isArray(row?.packageImportRoutes) ? row.packageImportRoutes : []),
+    ...(Array.isArray(row?.dryRunImportRoutes) ? row.dryRunImportRoutes : []),
+    ...(Array.isArray(row?.validateOnlyImportRoutes) ? row.validateOnlyImportRoutes : []),
+    ...(Array.isArray(row?.operatorActionSummaries) ? row.operatorActionSummaries.flatMap(rlhf93CompletionAuditItemRoutes) : []),
+  ]);
+}
+
+function rlhf93CompletionAuditFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    requirementId: value("requirementId"),
+    requirementGroup: value("requirementGroup") ?? value("group"),
+    requirementKind: value("requirementKind") ?? value("kind"),
+    status: value("status"),
+    sourceStatus: value("sourceStatus"),
+    evidenceId: value("evidenceId") ?? value("sourceEvidenceId"),
+    reviewReason: value("reviewReason"),
+    route: value("route"),
+  };
+}
+
+function rlhf93CompletionAuditMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.requirementId === value || item.sourceRowId === value;
+    if (key === "status") return rlhf93CompletionAuditMatchesStatus(item, value);
+    if (key === "sourceStatus") return Array.isArray(item.sourceStatuses) && item.sourceStatuses.includes(value);
+    if (key === "evidenceId") {
+      return item.sourceEvidenceId === value || (Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value));
+    }
+    if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
+    if (key === "route") return item.routes.includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function rlhf93CompletionAuditMatchesStatus(item, value) {
+  if (value === "open") return rlhf93CompletionAuditItemIsOpen(item);
+  if (value === "closed") return !rlhf93CompletionAuditItemIsOpen(item);
+  return [item.status, item.releaseUseStatus, item.completionState].includes(value);
+}
+
+function rlhf93CompletionAuditItemIsOpen(item) {
+  const status = String(item?.status ?? item?.releaseUseStatus ?? "").trim();
+  if (!status) return true;
+  if (status.startsWith("not_applicable")) return false;
+  if (
+    [
+      "incomplete",
+      "required",
+      "blocked",
+      "missing",
+      "not_submitted",
+      "not_ready",
+      "review",
+      "unproven",
+      "failed",
+      "invalid",
+    ].some((marker) => status.includes(marker))
+  ) {
+    return true;
+  }
+  if (["complete", "completed", "closed", "ready", "pass", "passed"].includes(status)) return false;
+  if (status.includes("complete") || status.includes("passed") || status.includes("preserved") || status.includes("declared")) return false;
+  return true;
+}
+
+function rlhf93CompletionAuditItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    ...(Array.isArray(item?.evidenceRoutes) ? item.evidenceRoutes : []),
+    ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
+    ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    item?.readbackRoute,
+    item?.writeRoute,
+    item?.bulkImportRoute,
+    item?.packageImportRoute,
+    item?.dryRunImportRoute,
+    item?.validateOnlyImportRoute,
+    item?.templateReadbackRoute,
+  ]);
+}
+
+function rlhf93CompletionAuditCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(rlhf93CompletionAuditItemIsOpen).length,
+    closedRows: items.filter((item) => !rlhf93CompletionAuditItemIsOpen(item)).length,
+    byRequirementGroup: countItemsBy(items, "requirementGroup"),
+    byRequirementKind: countItemsBy(items, "requirementKind"),
+    byStatus: countItemsBy(items, "status"),
+    byCompletionState: countItemsBy(items, "completionState"),
+    bySourceEvidenceId: countItemsBy(items, "sourceEvidenceId"),
+    byRoute: countValues(items.flatMap(rlhf93CompletionAuditItemRoutes)),
+  };
+}
+
+function humanizeIdentifier(value) {
+  return String(value ?? "not_reported")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function metaphilosophySourceWorkbenchReadinessReadback(report, options = {}) {

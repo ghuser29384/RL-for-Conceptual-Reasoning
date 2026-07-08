@@ -1384,6 +1384,14 @@ const workflowEvidenceCollections = [
     summary: "Read-only RLHF93 accepted, rejected, and pruned decision-log entries with credence and rationale.",
   },
   {
+    id: "rlhf93-completion-audit",
+    label: "RLHF93 completion audit",
+    endpoint: "/api/v1/metaphilosophy/rlhf93-completion-audit",
+    resourceKey: "rlhf93CompletionAuditRequirement",
+    group: "Metaphilosophy",
+    summary: "Read-only RLHF93 requirement audit over existing release-report, Metaphilosophy, public-dataset, and operator evidence.",
+  },
+  {
     id: "metaphilosophy-source-workbench-readiness",
     label: "Source workbench readiness",
     endpoint: "/api/v1/metaphilosophy/source-workbench-readiness",
@@ -8772,6 +8780,17 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Review required", counts.reviewRequired ?? result.counts?.reviewRequiredEntries ?? "not reported"],
     ];
   }
+  if (collection.id === "rlhf93-completion-audit") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    return [
+      ["Audit status", humanize(result.releaseUseStatus ?? "not reported")],
+      ["Current release status", humanize(result.currentStatus ?? "not reported")],
+      ["Open requirements", counts.openRows ?? "not reported"],
+      ["Closed requirements", counts.closedRows ?? "not reported"],
+      ["Requirement groups", workflowCountMapSummary(counts.byRequirementGroup)],
+      ["Remaining target records", result.targetGapTotals?.remainingTotal ?? "not reported"],
+    ];
+  }
   if (collection.id === "metaphilosophy-source-workbench-readiness") {
     const readiness = result.item ?? (Array.isArray(result.items) ? result.items[0] : null);
     const counts = readiness?.counts ?? {};
@@ -9193,6 +9212,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "metaphilosophy-decision-log") {
     return `<div class="operatorActionPreview">${previewItems.map(metaphilosophyDecisionLogEntryPreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "rlhf93-completion-audit") {
+    return `<div class="operatorActionPreview">${previewItems.map(rlhf93CompletionAuditPreviewRow).join("")}</div>`;
   }
   if (collection.id === "metaphilosophy-source-workbench-readiness") {
     return `<div class="operatorActionPreview">${previewItems.map(metaphilosophySourceWorkbenchReadinessPreviewRow).join("")}</div>`;
@@ -10328,6 +10350,36 @@ function metaphilosophyDecisionLogEntryPreviewRow(item) {
         ["Release-gate impact", humanize(item.releaseGateImpact ?? "not reported")],
         ["Preserved in", item.sourceFile ?? item.preservedIn ?? "not reported"],
         ["Review reasons", workflowPreviewReviewReasons(item)],
+      ])}
+    </article>
+  `;
+}
+
+function rlhf93CompletionAuditPreviewRow(item) {
+  const evidenceIds =
+    Array.isArray(item.evidenceIds) && item.evidenceIds.length
+      ? item.evidenceIds.join(", ")
+      : item.sourceEvidenceId ?? "not linked";
+  const sourceStatuses =
+    Array.isArray(item.sourceStatuses) && item.sourceStatuses.length ? item.sourceStatuses.map(humanize).join(", ") : "not reported";
+  const routes = Array.isArray(item.routes) && item.routes.length ? item.routes : item.verificationRoutes ?? [];
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.requirement ?? humanize(item.requirementId ?? item.id ?? "RLHF93 requirement"))}</strong>
+          <span>${escapeHtml(humanize(item.requirementGroup ?? "rlhf93 completion"))}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.completionState ?? item.status ?? "audit"))}</span>
+      </div>
+      ${metricList([
+        ["Requirement", item.requirementId ?? item.id ?? "not reported"],
+        ["Kind", humanize(item.requirementKind ?? "not reported")],
+        ["Status", humanize(item.status ?? item.releaseUseStatus ?? "not reported")],
+        ["Evidence", evidenceIds],
+        ["Source statuses", sourceStatuses],
+        ["Review reasons", workflowPreviewReviewReasons(item)],
+        ["Routes", workflowPreviewPathSummary(routes, "not linked", 5)],
       ])}
     </article>
   `;
@@ -17734,9 +17786,13 @@ function currentWorkflowCollection() {
 
 function isMetaphilosophyEvidenceCollection(collection) {
   return [
+    "metaphilosophy-deliverable-checklist",
     "metaphilosophy-architecture-layers",
     "metaphilosophy-task-tracks",
     "metaphilosophy-research-backlog-items",
+    "metaphilosophy-decision-log",
+    "rlhf93-completion-audit",
+    "metaphilosophy-source-workbench-readiness",
   ].includes(collection.id);
 }
 
@@ -17834,6 +17890,7 @@ function isTargetGapCollection(collection) {
 
 function isWorkflowRouteFilterCollection(collection) {
   return (
+    collection.id === "rlhf93-completion-audit" ||
     collection.id === "metaphilosophy-source-workbench-template" ||
     collection.id === "target-gap-collection-plan" ||
     collection.id === "october-completion-checklist" ||
@@ -17949,6 +18006,7 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowMetaphilosophyItemIdFilter) url.searchParams.set("id", state.workflowMetaphilosophyItemIdFilter);
     if (state.workflowMetaphilosophyStatusFilter) url.searchParams.set("status", state.workflowMetaphilosophyStatusFilter);
     if (state.workflowMetaphilosophyReadbackSourceFilter) url.searchParams.set("readbackSource", state.workflowMetaphilosophyReadbackSourceFilter);
+    if (collection.id === "rlhf93-completion-audit" && state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
     if (collection.id === "metaphilosophy-architecture-layers" && state.workflowMetaphilosophyArchitectureRoleFilter) {
       url.searchParams.set("releaseClaimRole", state.workflowMetaphilosophyArchitectureRoleFilter);
     }
