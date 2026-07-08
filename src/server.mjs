@@ -7899,6 +7899,14 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  const publicDatasetDownstreamLaunchMatch = url.pathname.match(/^\/api\/v1\/public-dataset-downstream-launches(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetDownstreamLaunchMatch) {
+    const itemId = publicDatasetDownstreamLaunchMatch[1] ? decodeURIComponent(publicDatasetDownstreamLaunchMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetDownstreamLaunchGuardReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
   const releaseArtifactTemplateMatch = url.pathname.match(/^\/api\/v1\/release-artifacts\/template(?:\/([^/]+))?$/);
   if (request.method === "GET" && releaseArtifactTemplateMatch) {
     const itemId = releaseArtifactTemplateMatch[1] ? decodeURIComponent(releaseArtifactTemplateMatch[1]) : null;
@@ -12401,6 +12409,241 @@ function publicDatasetPackageManifestCounts(items) {
     byStatus: countItemsBy(items, "status"),
     byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
     byTargetGapId: countExpandedValues(items, "targetGapIds"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+const publicDatasetDownstreamLaunchDefinitions = [
+  {
+    id: "public-leaderboard",
+    launchKind: "leaderboard",
+    downstreamArtifact: "public_leaderboard",
+    label: "Public leaderboard",
+    summary:
+      "Keep public model ranking and rank-tier presentation behind Dataset v0.1 readiness, release freeze, documentation, and hidden/protected exclusion checks.",
+    guardedRoutes: ["/api/v1/leaderboards", "/api/v1/model-run-provenance", "/api/v1/model-evaluation-reproducibility-checklist"],
+    evidenceRoutes: ["/api/v1/leaderboards", "/api/v1/model-run-provenance", "/api/v1/evaluations", "/api/v1/model-evaluation-predictions"],
+    launchBoundary: "No public leaderboard launch before Dataset v0.1 readiness is complete and release governance approves the downstream surface.",
+  },
+  {
+    id: "api-evaluator",
+    launchKind: "api_evaluator",
+    downstreamArtifact: "api_evaluator",
+    label: "API evaluator",
+    summary:
+      "Keep public evaluator/API access behind Dataset v0.1 readiness, prompt/parser provenance, protected-split isolation, and release governance.",
+    guardedRoutes: ["/api/v1/evaluations", "/api/v1/model-evaluation-predictions", "/api/v1/prompt-templates", "/api/v1/parser-configs"],
+    evidenceRoutes: ["/api/v1/evaluations", "/api/v1/model-evaluation-predictions", "/api/v1/prompt-templates", "/api/v1/parser-configs"],
+    launchBoundary: "No public API evaluator launch before Dataset v0.1 readiness is complete and protected splits remain isolated.",
+  },
+  {
+    id: "public-training-export",
+    launchKind: "training_export",
+    downstreamArtifact: "training_export_launch",
+    label: "Public training export",
+    summary:
+      "Keep public training export launch behind Dataset v0.1 readiness, uncertainty metadata, split exclusions, and model-improvement export policy.",
+    guardedRoutes: ["/api/v1/training-exports", "/api/training/export", "/api/v1/model-improvement-policies", "/api/v1/model-improvement-runs"],
+    evidenceRoutes: ["/api/v1/training-exports", "/api/training/export", "/api/v1/model-improvement-policies", "/api/v1/model-improvement-runs"],
+    launchBoundary: "No public training export launch before Dataset v0.1 readiness is complete and governed export policy permits it.",
+  },
+  {
+    id: "judge-model-launch",
+    launchKind: "judge_model",
+    downstreamArtifact: "judge_model_launch",
+    label: "Judge-model launch",
+    summary:
+      "Keep judge-model launch behind Dataset v0.1 readiness and prevent model-judge scores from replacing human/expert labels or gold evidence.",
+    guardedRoutes: ["/api/v1/model-judge-scores", "/api/v1/model-provider-data-handling-policies", "/api/v1/model-run-provenance"],
+    evidenceRoutes: ["/api/v1/model-judge-scores", "/api/v1/model-provider-data-handling-policies", "/api/v1/model-run-provenance"],
+    launchBoundary: "No judge-model launch before Dataset v0.1 readiness is complete; model-judge scores remain downstream diagnostics, not gold labels.",
+  },
+];
+
+function publicDatasetDownstreamLaunchGuardReadback(report, options = {}) {
+  const allItems = publicDatasetDownstreamLaunchGuardItems(report);
+  const filters = publicDatasetDownstreamLaunchGuardFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => publicDatasetDownstreamLaunchGuardMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) => item.id === options.itemId || item.launchKind === options.itemId || item.downstreamArtifact === options.itemId,
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = publicDatasetDownstreamLaunchGuardCounts(allItems);
+  const currentBlockingLaunch = allItems.find(publicDatasetDownstreamLaunchGuardItemIsOpen) ?? null;
+  return {
+    id: `public-dataset-downstream-launches-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetDownstreamLaunchGuard",
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    launchGuardStatus: currentBlockingLaunch ? "downstream_launches_blocked_until_dataset_v0_1_ready" : "downstream_launches_ready_for_governed_review",
+    currentBlockingLaunchId: currentBlockingLaunch?.id ?? null,
+    currentBlockingLaunch,
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 downstream-launch guard derived from /api/release/report, public dataset readiness, and the public dataset package manifest. It expands the public-first ladder into per-surface blockers for leaderboard, API evaluator, public training export, and judge-model launch.",
+      access:
+        "Admin/auditor readback only because rows expose release-governance ids, downstream public-launch blockers, protected-split boundaries, and model-evaluation/export routes.",
+      authority:
+        "This projection cannot launch downstream surfaces, submit artifacts, create release evidence, create a Dataset object, deprotect hidden/protected content, or waive public-first gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      publicDatasetReadiness: "/api/v1/public-dataset-readiness",
+      publicDatasetPackageManifest: "/api/v1/public-dataset-package-manifest",
+      publicFirstGate: "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts: publicDatasetDownstreamLaunchGuardCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetDownstreamLaunchGuardItems(report) {
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const publicFirstGate = readinessItems.find((item) => item.id === "public_first_ladder_gate") ?? null;
+  const packageManifest = publicDatasetPackageManifestReadback(report);
+  const packageItems = Array.isArray(packageManifest.items) ? packageManifest.items : [];
+  const openReadinessRows = readinessItems.filter(publicDatasetReadinessItemIsOpen);
+  const openPackageSteps = packageItems.filter(publicDatasetPackageManifestItemIsOpen);
+  const datasetReady = openReadinessRows.length === 0 && openPackageSteps.length === 0;
+  const publicFirstGateOpen = publicFirstGate ? publicDatasetReadinessItemIsOpen(publicFirstGate) : true;
+  return publicDatasetDownstreamLaunchDefinitions.map((definition, index) =>
+    publicDatasetDownstreamLaunchGuardItem({
+      definition,
+      sequence: index + 1,
+      report,
+      publicFirstGate,
+      datasetReady,
+      publicFirstGateOpen,
+      openReadinessRows,
+      openPackageSteps,
+      packageManifest,
+    }),
+  );
+}
+
+function publicDatasetDownstreamLaunchGuardItem({
+  definition,
+  sequence,
+  report,
+  publicFirstGate,
+  datasetReady,
+  publicFirstGateOpen,
+  openReadinessRows,
+  openPackageSteps,
+  packageManifest,
+}) {
+  const launchBlocked = !datasetReady || publicFirstGateOpen;
+  const blockingReadinessRowIds = openReadinessRows.map((row) => row.id).filter(Boolean);
+  const blockingPackageStepIds = openPackageSteps.map((step) => step.id).filter(Boolean);
+  const readinessReviewReasons = uniqueValues(openReadinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])));
+  const publicFirstReviewReasons = Array.isArray(publicFirstGate?.reviewReasons) ? publicFirstGate.reviewReasons : [];
+  const routes = uniqueValues([
+    "/api/v1/public-dataset-downstream-launches",
+    `/api/v1/public-dataset-downstream-launches/${encodeURIComponent(definition.id)}`,
+    "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+    "/api/v1/public-dataset-readiness",
+    "/api/v1/public-dataset-package-manifest",
+    "/api/v1/public-dataset-package-manifest/public-first-ladder",
+    "/api/release/report",
+    ...(definition.guardedRoutes ?? []),
+    ...(definition.evidenceRoutes ?? []),
+    ...(publicFirstGate ? publicDatasetReadinessRoutes(publicFirstGate) : []),
+  ]);
+  return {
+    id: definition.id,
+    rowId: definition.id,
+    sequence,
+    launchKind: definition.launchKind,
+    downstreamArtifact: definition.downstreamArtifact,
+    label: definition.label,
+    status: launchBlocked ? "blocked_until_dataset_v0_1_ready" : "ready_for_governed_launch_review",
+    launchBlocked,
+    guardAllowsLaunchReview: !launchBlocked,
+    launchActionAvailable: false,
+    summary: definition.summary,
+    launchBoundary: definition.launchBoundary,
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    datasetPackageStatus: packageManifest.packageStatus ?? "public_dataset_package_status_missing",
+    publicFirstGateStatus: publicFirstGate?.status ?? "public_first_ladder_gate_missing",
+    currentBlockingPackageStepId: packageManifest.currentBlockingStepId ?? null,
+    blockingReadinessRowIds,
+    blockingPackageStepIds,
+    readinessReviewReasons,
+    publicFirstReviewReasons,
+    sourceEvidenceIds: Array.isArray(publicFirstGate?.sourceEvidenceIds) ? publicFirstGate.sourceEvidenceIds : [],
+    sourceStatuses: Array.isArray(publicFirstGate?.sourceStatuses) ? publicFirstGate.sourceStatuses : [],
+    guardedRoutes: uniqueValues(definition.guardedRoutes ?? []),
+    evidenceRoutes: uniqueValues(definition.evidenceRoutes ?? []),
+    verificationRoutes: [
+      "/api/release/report",
+      "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+      "/api/v1/public-dataset-package-manifest/public-first-ladder",
+      "/api/v1/public-dataset-downstream-launches",
+    ],
+    routes,
+  };
+}
+
+function publicDatasetDownstreamLaunchGuardFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    launchKind: value("launchKind"),
+    downstreamArtifact: value("downstreamArtifact"),
+    status: value("status"),
+    route: value("route"),
+    blockingReadinessRowId: value("blockingReadinessRowId"),
+    blockingPackageStepId: value("blockingPackageStepId"),
+  };
+}
+
+function publicDatasetDownstreamLaunchGuardMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.launchKind === value || item.downstreamArtifact === value;
+    if (key === "status") return publicDatasetDownstreamLaunchGuardMatchesStatus(item, value);
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    if (key === "blockingReadinessRowId") return Array.isArray(item.blockingReadinessRowIds) && item.blockingReadinessRowIds.includes(value);
+    if (key === "blockingPackageStepId") return Array.isArray(item.blockingPackageStepIds) && item.blockingPackageStepIds.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetDownstreamLaunchGuardMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetDownstreamLaunchGuardItemIsOpen(item);
+  if (value === "closed") return !publicDatasetDownstreamLaunchGuardItemIsOpen(item);
+  return item.status === value;
+}
+
+function publicDatasetDownstreamLaunchGuardItemIsOpen(item) {
+  return item.status !== "ready_for_governed_launch_review";
+}
+
+function publicDatasetDownstreamLaunchGuardCounts(items) {
+  return {
+    rows: items.length,
+    blockedRows: items.filter(publicDatasetDownstreamLaunchGuardItemIsOpen).length,
+    readyRows: items.filter((item) => item.status === "ready_for_governed_launch_review").length,
+    launchActionAvailableRows: items.filter((item) => item.launchActionAvailable === true).length,
+    byLaunchKind: countItemsBy(items, "launchKind"),
+    byDownstreamArtifact: countItemsBy(items, "downstreamArtifact"),
+    byStatus: countItemsBy(items, "status"),
+    byBlockingReadinessRowId: countExpandedValues(items, "blockingReadinessRowIds"),
+    byBlockingPackageStepId: countExpandedValues(items, "blockingPackageStepIds"),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }

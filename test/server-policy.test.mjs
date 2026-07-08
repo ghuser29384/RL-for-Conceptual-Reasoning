@@ -8276,6 +8276,12 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingPublicDatasetPackageManifestAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-package-manifest" });
   assert.equal(missingPublicDatasetPackageManifestAuth.status, 401);
 
+  const missingPublicDatasetDownstreamLaunchAuth = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches",
+  });
+  assert.equal(missingPublicDatasetDownstreamLaunchAuth.status, 401);
+
   const missingRaterProfileEvidenceAuth = await invokeApi(context, { method: "GET", url: "/api/v1/rater-profile-evidence" });
   assert.equal(missingRaterProfileEvidenceAuth.status, 401);
 
@@ -8436,6 +8442,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedPublicDatasetPackageManifest.status, 403);
+
+  const deniedPublicDatasetDownstreamLaunch = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetDownstreamLaunch.status, 403);
 
   const deniedRaterProfileEvidence = await invokeApi(context, {
     method: "GET",
@@ -10840,6 +10853,110 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(publicDatasetPackageMissing.status, 404);
   assert.equal(publicDatasetPackageMissing.body.error, "artifact_not_found");
+
+  const publicDatasetDownstreamLaunches = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamLaunches.status, 200, JSON.stringify(publicDatasetDownstreamLaunches.body));
+  assert.equal(publicDatasetDownstreamLaunches.body.resourceKey, "publicDatasetDownstreamLaunchGuard");
+  assert.equal(publicDatasetDownstreamLaunches.body.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.equal(publicDatasetDownstreamLaunches.body.launchGuardStatus, "downstream_launches_blocked_until_dataset_v0_1_ready");
+  assert.equal(publicDatasetDownstreamLaunches.body.currentBlockingLaunchId, "public-leaderboard");
+  assert.equal(publicDatasetDownstreamLaunches.body.count, 4);
+  assert.equal(publicDatasetDownstreamLaunches.body.totalCount, 4);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.blockedRows, 4);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.readyRows, 0);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.launchActionAvailableRows, 0);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byLaunchKind.leaderboard, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byLaunchKind.api_evaluator, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byLaunchKind.training_export, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byLaunchKind.judge_model, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byDownstreamArtifact.public_leaderboard, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byDownstreamArtifact.api_evaluator, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byDownstreamArtifact.training_export_launch, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byDownstreamArtifact.judge_model_launch, 1);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byStatus.blocked_until_dataset_v0_1_ready, 4);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byBlockingReadinessRowId.public_first_ladder_gate, 4);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byBlockingPackageStepId["public-first-ladder"], 4);
+  assert.equal(publicDatasetDownstreamLaunches.body.counts.byRoute["/api/v1/public-dataset-downstream-launches"], 4);
+  assert.match(publicDatasetDownstreamLaunches.body.policy.scope, /per-surface blockers/);
+  assert.match(publicDatasetDownstreamLaunches.body.policy.authority, /cannot launch downstream surfaces/);
+  assert.equal(publicDatasetDownstreamLaunches.body.sourceRoutes.publicDatasetReadiness, "/api/v1/public-dataset-readiness");
+  assert.equal(publicDatasetDownstreamLaunches.body.sourceRoutes.publicDatasetPackageManifest, "/api/v1/public-dataset-package-manifest");
+
+  const publicLeaderboardLaunch = publicDatasetDownstreamLaunches.body.items.find((item) => item.id === "public-leaderboard");
+  assert.equal(publicLeaderboardLaunch.status, "blocked_until_dataset_v0_1_ready");
+  assert.equal(publicLeaderboardLaunch.launchKind, "leaderboard");
+  assert.equal(publicLeaderboardLaunch.downstreamArtifact, "public_leaderboard");
+  assert.equal(publicLeaderboardLaunch.launchBlocked, true);
+  assert.equal(publicLeaderboardLaunch.guardAllowsLaunchReview, false);
+  assert.equal(publicLeaderboardLaunch.launchActionAvailable, false);
+  assert.equal(publicLeaderboardLaunch.datasetPackageStatus, "public_dataset_package_blocked");
+  assert.equal(publicLeaderboardLaunch.publicFirstGateStatus, "downstream_blocked_until_dataset_v0_1_ready");
+  assert.equal(publicLeaderboardLaunch.currentBlockingPackageStepId, "target-data-package");
+  assert.ok(publicLeaderboardLaunch.blockingReadinessRowIds.includes("release_cleared_position_critique_pairs"));
+  assert.ok(publicLeaderboardLaunch.blockingReadinessRowIds.includes("public_first_ladder_gate"));
+  assert.ok(publicLeaderboardLaunch.blockingPackageStepIds.includes("target-data-package"));
+  assert.ok(publicLeaderboardLaunch.blockingPackageStepIds.includes("public-first-ladder"));
+  assert.ok(publicLeaderboardLaunch.publicFirstReviewReasons.includes("publicFirstLadder:target_scale_incomplete"));
+  assert.ok(publicLeaderboardLaunch.publicFirstReviewReasons.includes("publicFirstLadder:release_not_frozen"));
+  assert.ok(
+    publicLeaderboardLaunch.publicFirstReviewReasons.includes(
+      "publicFirstLadder:dataset_card_and_methodology_required_before_downstream_public_launch",
+    ),
+  );
+  assert.ok(publicLeaderboardLaunch.guardedRoutes.includes("/api/v1/leaderboards"));
+  assert.ok(publicLeaderboardLaunch.evidenceRoutes.includes("/api/v1/model-evaluation-predictions"));
+  assert.ok(publicLeaderboardLaunch.verificationRoutes.includes("/api/v1/public-dataset-package-manifest/public-first-ladder"));
+  assert.ok(publicLeaderboardLaunch.routes.includes("/api/v1/public-dataset-downstream-launches/public-leaderboard"));
+
+  const publicDatasetDownstreamByLaunchKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches?launchKind=leaderboard",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamByLaunchKind.status, 200, JSON.stringify(publicDatasetDownstreamByLaunchKind.body));
+  assert.equal(publicDatasetDownstreamByLaunchKind.body.count, 1);
+  assert.equal(publicDatasetDownstreamByLaunchKind.body.items[0].id, "public-leaderboard");
+
+  const publicDatasetDownstreamByArtifact = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches?downstreamArtifact=training_export_launch",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamByArtifact.status, 200, JSON.stringify(publicDatasetDownstreamByArtifact.body));
+  assert.equal(publicDatasetDownstreamByArtifact.body.count, 1);
+  assert.equal(publicDatasetDownstreamByArtifact.body.items[0].id, "public-training-export");
+
+  const publicDatasetDownstreamByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-downstream-launches?route=${encodeURIComponent("/api/v1/leaderboards")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamByRoute.status, 200, JSON.stringify(publicDatasetDownstreamByRoute.body));
+  assert.equal(publicDatasetDownstreamByRoute.body.count, 1);
+  assert.equal(publicDatasetDownstreamByRoute.body.items[0].id, "public-leaderboard");
+  assert.equal(publicDatasetDownstreamByRoute.body.filteredCounts.byRoute["/api/v1/leaderboards"], 1);
+
+  const publicDatasetDownstreamById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches/public-leaderboard",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamById.status, 200, JSON.stringify(publicDatasetDownstreamById.body));
+  assert.equal(publicDatasetDownstreamById.body.count, 1);
+  assert.equal(publicDatasetDownstreamById.body.item.launchKind, "leaderboard");
+  assert.equal(publicDatasetDownstreamById.body.item.downstreamArtifact, "public_leaderboard");
+
+  const publicDatasetDownstreamMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-downstream-launches/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamMissing.status, 404);
+  assert.equal(publicDatasetDownstreamMissing.body.error, "artifact_not_found");
 
   const candidateGenerationChecklist = await invokeApi(context, {
     method: "GET",
@@ -14380,6 +14497,12 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageManifestStep"'));
   assert.ok(appSource.includes("function publicDatasetPackageManifestPreviewRow(item)"));
   assert.ok(appSource.includes('url.searchParams.set("stepKind", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('id: "public-dataset-downstream-launches"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-downstream-launches"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetDownstreamLaunchGuard"'));
+  assert.ok(appSource.includes("function publicDatasetDownstreamLaunchGuardPreviewRow(item)"));
+  assert.ok(appSource.includes('url.searchParams.set("launchKind", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("downstreamArtifact", state.workflowPublicDatasetDownstreamFilter)'));
   assert.ok(appSource.includes('id: "public-dataset-readiness"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-readiness"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetReadinessRow"'));
@@ -14748,6 +14871,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageManifestStep"));
   assert.ok(architectureDoc.includes("does not create a Dataset object, submit release artifacts or documentation, publish a dataset"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-downstream-launches"));
+  assert.ok(architectureDoc.includes("publicDatasetDownstreamLaunchGuard"));
+  assert.ok(architectureDoc.includes("public leaderboard, API evaluator, public training export, and judge-model launch"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents/template"));
   assert.ok(architectureDoc.includes("Metaphilosophy Critique Ratings Dataset v0.1"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-documents"));
