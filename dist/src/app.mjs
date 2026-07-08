@@ -1180,6 +1180,15 @@ const workflowEvidenceCollections = [
       "Template-only expected file bodies for the Dataset v0.1 release package; operators must replace every template value with reviewed release evidence.",
   },
   {
+    id: "public-dataset-package-validation-template",
+    label: "Dataset v0.1 package validation template",
+    endpoint: "/api/v1/public-dataset-package-files/validate/template",
+    resourceKey: "publicDatasetPackageFileValidationTemplate",
+    group: "Release",
+    summary:
+      "Validation-only request body templates for checking replaced Dataset v0.1 package files before any package write or public release.",
+  },
+  {
     id: "public-dataset-publication-gate",
     label: "Dataset v0.1 publication gate",
     endpoint: "/api/v1/public-dataset-publication-gate",
@@ -8294,6 +8303,31 @@ function workflowReadbackPanel(collection) {
           </label>
         </div>`
       : "";
+  const publicDatasetPackageValidationTemplateFilters =
+    collection.id === "public-dataset-package-validation-template"
+      ? `<div class="workflowReadbackControls">
+          <label>
+            <span>Artifact kind</span>
+            <input id="workflowArtifactKindFilter" type="text" value="${escapeHtml(state.workflowArtifactKindFilter)}" placeholder="dataset_records" />
+          </label>
+          <label>
+            <span>File format</span>
+            <input id="workflowTemplateKindFilter" type="text" value="${escapeHtml(state.workflowTemplateKindFilter)}" placeholder="jsonl" />
+          </label>
+          <label>
+            <span>Status</span>
+            <input id="workflowActionStatusFilter" type="text" value="${escapeHtml(state.workflowActionStatusFilter)}" placeholder="open" />
+          </label>
+          <label>
+            <span>Artifact id</span>
+            <input id="workflowArtifactIdFilter" type="text" value="${escapeHtml(state.workflowArtifactIdFilter)}" placeholder="dataset-card" />
+          </label>
+          <label>
+            <span>Route</span>
+            <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/public-dataset-package-files/validate/template/dataset-card" />
+          </label>
+        </div>`
+      : "";
   const publicDatasetPublicationGateFilters =
     collection.id === "public-dataset-publication-gate"
       ? `<div class="workflowReadbackControls">
@@ -8634,6 +8668,7 @@ function workflowReadbackPanel(collection) {
       ${publicDatasetPackageManifestFilters}
       ${publicDatasetReleasePackageFilters}
       ${publicDatasetPackageFileTemplateFilters}
+      ${publicDatasetPackageValidationTemplateFilters}
       ${publicDatasetPublicationGateFilters}
       ${publicDatasetDownstreamLaunchFilters}
       ${publicDatasetReadinessFilters}
@@ -8809,6 +8844,17 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Open rows", counts.openRows ?? "not reported"],
       ["File formats", workflowCountMapSummary(counts.byFileFormat)],
       ["Publication gate", result.sourceRoutes?.publicDatasetPublicationGate ?? "not available"],
+    ];
+  }
+  if (collection.id === "public-dataset-package-validation-template") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    return [
+      ["Validation template", humanize(result.validationTemplateStatus ?? "not reported")],
+      ["Current blocker", result.currentBlockingTemplate ? humanize(result.currentBlockingTemplate.label ?? result.currentBlockingTemplate.id) : "none"],
+      ["Request files", counts.requestTemplateRows ?? result.requestBodyTemplate?.files?.length ?? result.count ?? "not reported"],
+      ["Open rows", counts.openRows ?? "not reported"],
+      ["File formats", workflowCountMapSummary(counts.byFileFormat)],
+      ["Validation route", result.validationRoute ?? "not available"],
     ];
   }
   if (collection.id === "public-dataset-publication-gate") {
@@ -9058,6 +9104,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "public-dataset-package-file-template") {
     return `<div class="operatorActionPreview">${previewItems.map(publicDatasetPackageFileTemplatePreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "public-dataset-package-validation-template") {
+    return `<div class="operatorActionPreview">${previewItems.map(publicDatasetPackageValidationTemplatePreviewRow).join("")}</div>`;
   }
   if (collection.id === "public-dataset-publication-gate") {
     return `<div class="operatorActionPreview">${previewItems.map(publicDatasetPublicationGatePreviewRow).join("")}</div>`;
@@ -9489,6 +9538,38 @@ function publicDatasetPackageFileTemplatePreviewRow(item) {
         ["Readiness rows", readinessRows],
         ["Required fields", requiredFields],
         ["Publishable", item.packageFilePublishable ? "yes" : "no"],
+        ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],
+        ["Validation notes", notes],
+        ["Verification routes", routes],
+      ])}
+    </article>
+  `;
+}
+
+function publicDatasetPackageValidationTemplatePreviewRow(item) {
+  const requiredFields =
+    Array.isArray(item.requiredFields) && item.requiredFields.length ? item.requiredFields.slice(0, 6).map(humanize).join(", ") : "not reported";
+  const routes =
+    Array.isArray(item.verificationRoutes) && item.verificationRoutes.length ? item.verificationRoutes.slice(0, 5).join(", ") : "not available";
+  const notes = Array.isArray(item.validationNotes) && item.validationNotes.length ? item.validationNotes.slice(0, 3).join(", ") : "not reported";
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.label ?? item.id ?? "Package validation template")}</strong>
+          <span>${escapeHtml(item.expectedFilename ?? "expected package file")}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.status ?? "not reported"))}</span>
+      </div>
+      ${metricList([
+        ["Validation route", item.validationRoute ?? "not available"],
+        ["Validation only", item.validationOnly ? "yes" : "no"],
+        ["Replacement required", item.replacementRequired ? "yes" : "no"],
+        ["Format", item.fileFormat ? humanize(item.fileFormat) : "not reported"],
+        ["Template hash", item.templateContentHash ?? "not reported"],
+        ["Request body hash", item.validationRequestBodyHash ?? "not reported"],
+        ["Unchanged POST result", humanize(item.unchangedTemplateValidationExpectedStatus ?? "not reported")],
+        ["Required fields", requiredFields],
         ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],
         ["Validation notes", notes],
         ["Verification routes", routes],
@@ -14952,6 +15033,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
         collection.id !== "public-dataset-package-manifest" &&
         collection.id !== "public-dataset-release-package" &&
         collection.id !== "public-dataset-package-file-template" &&
+        collection.id !== "public-dataset-package-validation-template" &&
         collection.id !== "public-dataset-publication-gate" &&
         collection.id !== "public-dataset-downstream-launches"
       ) {
@@ -14960,14 +15042,16 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       if (
         collection.id !== "release-artifact-package-template" &&
         collection.id !== "public-dataset-release-package" &&
-        collection.id !== "public-dataset-package-file-template"
+        collection.id !== "public-dataset-package-file-template" &&
+        collection.id !== "public-dataset-package-validation-template"
       ) {
         state.workflowArtifactKindFilter = "";
       }
       if (
         collection.id !== "release-report-sections" &&
         collection.id !== "public-dataset-publication-gate" &&
-        collection.id !== "public-dataset-package-file-template"
+        collection.id !== "public-dataset-package-file-template" &&
+        collection.id !== "public-dataset-package-validation-template"
       ) {
         state.workflowArtifactTypeFilter = "";
         state.workflowArtifactIdFilter = "";
@@ -15043,6 +15127,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       collection.id !== "public-dataset-package-manifest" &&
       collection.id !== "public-dataset-release-package" &&
       collection.id !== "public-dataset-package-file-template" &&
+      collection.id !== "public-dataset-package-validation-template" &&
       collection.id !== "public-dataset-publication-gate" &&
       collection.id !== "public-dataset-downstream-launches"
     ) {
@@ -17559,6 +17644,7 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "public-dataset-package-manifest" ||
     collection.id === "public-dataset-release-package" ||
     collection.id === "public-dataset-package-file-template" ||
+    collection.id === "public-dataset-package-validation-template" ||
     collection.id === "public-dataset-publication-gate" ||
     collection.id === "public-dataset-downstream-launches" ||
     collection.id === "public-dataset-readiness" ||
@@ -17741,6 +17827,13 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if (collection.id === "public-dataset-package-file-template") {
+    if (state.workflowArtifactKindFilter) url.searchParams.set("artifactKind", state.workflowArtifactKindFilter);
+    if (state.workflowTemplateKindFilter) url.searchParams.set("fileFormat", state.workflowTemplateKindFilter);
+    if (state.workflowActionStatusFilter) url.searchParams.set("status", state.workflowActionStatusFilter);
+    if (state.workflowArtifactIdFilter) url.searchParams.set("releasePackageArtifactId", state.workflowArtifactIdFilter);
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (collection.id === "public-dataset-package-validation-template") {
     if (state.workflowArtifactKindFilter) url.searchParams.set("artifactKind", state.workflowArtifactKindFilter);
     if (state.workflowTemplateKindFilter) url.searchParams.set("fileFormat", state.workflowTemplateKindFilter);
     if (state.workflowActionStatusFilter) url.searchParams.set("status", state.workflowActionStatusFilter);

@@ -11146,6 +11146,103 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageFileTemplateMissing.status, 404);
   assert.equal(publicDatasetPackageFileTemplateMissing.body.error, "artifact_not_found");
 
+  const publicDatasetPackageValidationTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/validate/template",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageValidationTemplate.status, 200, JSON.stringify(publicDatasetPackageValidationTemplate.body));
+  assert.equal(publicDatasetPackageValidationTemplate.body.resourceKey, "publicDatasetPackageFileValidationTemplate");
+  assert.equal(publicDatasetPackageValidationTemplate.body.templateOnly, true);
+  assert.equal(publicDatasetPackageValidationTemplate.body.validationOnly, true);
+  assert.equal(publicDatasetPackageValidationTemplate.body.noSideEffects, true);
+  assert.equal(publicDatasetPackageValidationTemplate.body.validationTemplateStatus, "public_dataset_package_file_validation_template_blocked");
+  assert.equal(publicDatasetPackageValidationTemplate.body.currentBlockingTemplateId, "release-cleared-position-critique-pairs");
+  assert.equal(publicDatasetPackageValidationTemplate.body.validationRoute, "/api/v1/public-dataset-package-files/validate");
+  assert.equal(publicDatasetPackageValidationTemplate.body.validationMethod, "POST");
+  assert.equal(publicDatasetPackageValidationTemplate.body.count, 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.totalCount, 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.requestBodyTemplate.files.length, 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.fullRequestBodyTemplate.files.length, 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.requestTemplateRows, 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.openRows, 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.readyRows, 0);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.packageFileReadyForReviewRows, 0);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.byFileFormat.jsonl, 3);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 11);
+  assert.equal(publicDatasetPackageValidationTemplate.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 11);
+  assert.equal(
+    publicDatasetPackageValidationTemplate.body.sourceRoutes.packageFileValidation,
+    "/api/v1/public-dataset-package-files/validate",
+  );
+  assert.match(publicDatasetPackageValidationTemplate.body.policy.scope, /validation request template/);
+  assert.match(publicDatasetPackageValidationTemplate.body.policy.templateOnly, /replace it with reviewed release evidence/);
+  assert.match(publicDatasetPackageValidationTemplate.body.policy.authority, /cannot validate by itself/);
+  const validationDatasetRecordsTemplate = publicDatasetPackageValidationTemplate.body.items.find(
+    (item) => item.id === "release-cleared-position-critique-pairs",
+  );
+  assert.equal(validationDatasetRecordsTemplate.status, "blocked_by_target_scale");
+  assert.equal(validationDatasetRecordsTemplate.validationOnly, true);
+  assert.equal(validationDatasetRecordsTemplate.replacementRequired, true);
+  assert.equal(validationDatasetRecordsTemplate.validationRequestFile.expectedFilename, datasetRecordsTemplate.expectedFilename);
+  assert.equal(validationDatasetRecordsTemplate.validationRequestFile.content, datasetRecordsTemplate.templateContent);
+  assert.equal(validationDatasetRecordsTemplate.validationRequestFile.sha256, datasetRecordsTemplate.templateContentHash);
+  assert.deepEqual(validationDatasetRecordsTemplate.validationRequestBody.files, [validationDatasetRecordsTemplate.validationRequestFile]);
+  assert.match(validationDatasetRecordsTemplate.validationRequestBodyHash, /^sha256:/);
+  assert.equal(validationDatasetRecordsTemplate.unchangedTemplateValidationExpectedStatus, "public_dataset_package_files_invalid");
+  assert.equal(validationDatasetRecordsTemplate.packageWriteActionAvailable, false);
+  assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
+  assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate"));
+
+  const publicDatasetPackageValidationTemplateJsonl = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/validate/template?fileFormat=jsonl",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageValidationTemplateJsonl.status, 200, JSON.stringify(publicDatasetPackageValidationTemplateJsonl.body));
+  assert.equal(publicDatasetPackageValidationTemplateJsonl.body.count, 3);
+  assert.equal(publicDatasetPackageValidationTemplateJsonl.body.requestBodyTemplate.files.length, 3);
+
+  const publicDatasetPackageValidationTemplateByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-files/validate/template?route=${encodeURIComponent("/api/v1/public-dataset-package-files/validate")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageValidationTemplateByRoute.status, 200, JSON.stringify(publicDatasetPackageValidationTemplateByRoute.body));
+  assert.equal(publicDatasetPackageValidationTemplateByRoute.body.count, 11);
+  assert.equal(publicDatasetPackageValidationTemplateByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-package-files/validate"], 11);
+
+  const publicDatasetPackageValidationTemplateById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/validate/template/dataset-card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageValidationTemplateById.status, 200, JSON.stringify(publicDatasetPackageValidationTemplateById.body));
+  assert.equal(publicDatasetPackageValidationTemplateById.body.count, 1);
+  assert.equal(publicDatasetPackageValidationTemplateById.body.item.artifactKind, "dataset_card");
+  assert.equal(publicDatasetPackageValidationTemplateById.body.item.validationRequestFile.expectedFilename, "dataset-v0.1/DATASET_CARD.md");
+
+  const publicDatasetPackageValidationTemplateMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/validate/template/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageValidationTemplateMissing.status, 404);
+  assert.equal(publicDatasetPackageValidationTemplateMissing.body.error, "artifact_not_found");
+
+  const unchangedPackageFileValidationFromTemplate = await invokeApi(context, {
+    method: "POST",
+    url: publicDatasetPackageValidationTemplate.body.validationRoute,
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(publicDatasetPackageValidationTemplate.body.requestBodyTemplate),
+  });
+  assert.equal(unchangedPackageFileValidationFromTemplate.status, 200, JSON.stringify(unchangedPackageFileValidationFromTemplate.body));
+  assert.equal(unchangedPackageFileValidationFromTemplate.body.packageValidationStatus, "public_dataset_package_files_invalid");
+  assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.submittedExpectedFiles, 11);
+  assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.missingFiles, 0);
+  assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.unchangedTemplateFiles, 11);
+  assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.invalidContentFiles, 11);
+
   const unchangedPackageFileValidation = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/public-dataset-package-files/validate",
@@ -15038,6 +15135,12 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("function publicDatasetPackageFileTemplatePreviewRow(item)"));
   assert.ok(appSource.includes('url.searchParams.set("fileFormat", state.workflowTemplateKindFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("releasePackageArtifactId", state.workflowArtifactIdFilter)'));
+  assert.ok(appSource.includes('id: "public-dataset-package-validation-template"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-files/validate/template"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetPackageFileValidationTemplate"'));
+  assert.ok(appSource.includes("function publicDatasetPackageValidationTemplatePreviewRow(item)"));
+  assert.ok(appSource.includes('["Validation route", result.validationRoute ?? "not available"]'));
+  assert.ok(appSource.includes('["Unchanged POST result", humanize(item.unchangedTemplateValidationExpectedStatus ?? "not reported")]'));
   assert.ok(appSource.includes('id: "public-dataset-publication-gate"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-publication-gate"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPublicationGate"'));
@@ -15424,6 +15527,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/template"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileTemplate"));
   assert.ok(architectureDoc.includes("template content hashes, required field placeholders, replacement-required flags"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/validate/template"));
+  assert.ok(architectureDoc.includes("publicDatasetPackageFileValidationTemplate"));
+  assert.ok(architectureDoc.includes("unchanged template bodies are expected to fail validation"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-files/validate"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileValidation"));
   assert.ok(architectureDoc.includes("unchanged template hashes, `templateOnly` markers, JSONL/JSON/Markdown structure"));

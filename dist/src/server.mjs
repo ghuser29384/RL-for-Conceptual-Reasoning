@@ -7923,6 +7923,18 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  const publicDatasetPackageFileValidationTemplateMatch = url.pathname.match(
+    /^\/api\/v1\/public-dataset-package-files\/validate\/template(?:\/([^/]+))?$/,
+  );
+  if (request.method === "GET" && publicDatasetPackageFileValidationTemplateMatch) {
+    const itemId = publicDatasetPackageFileValidationTemplateMatch[1]
+      ? decodeURIComponent(publicDatasetPackageFileValidationTemplateMatch[1])
+      : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetPackageFileValidationTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
   if (request.method === "POST" && url.pathname === "/api/v1/public-dataset-package-files/validate") {
     await publicDatasetPackageFileValidationEndpoint(request, response, context);
     return;
@@ -13654,6 +13666,210 @@ function publicDatasetPackageFileTemplateCounts(items) {
     openRows: items.filter(publicDatasetPackageFileTemplateItemIsOpen).length,
     readyRows: items.filter((item) => item.status === "ready_for_operator_replacement").length,
     packageFilePublishableRows: items.filter((item) => item.packageFilePublishable === true).length,
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byFileFormat: countItemsBy(items, "fileFormat"),
+    byStatus: countItemsBy(items, "status"),
+    bySourceArtifactStatus: countItemsBy(items, "sourceArtifactStatus"),
+    byPackageStepId: countItemsBy(items, "packageStepId"),
+    byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+function publicDatasetPackageFileValidationTemplateReadback(report, options = {}) {
+  const allItems = publicDatasetPackageFileValidationTemplateItems(report);
+  const filters = publicDatasetPackageFileValidationTemplateFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => publicDatasetPackageFileValidationTemplateMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) =>
+          item.id === options.itemId ||
+          item.releasePackageArtifactId === options.itemId ||
+          item.artifactKind === options.itemId ||
+          item.expectedFilename === options.itemId,
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = publicDatasetPackageFileValidationTemplateCounts(allItems);
+  const currentBlockingTemplate = allItems.find(publicDatasetPackageFileValidationTemplateItemIsOpen) ?? null;
+  const templateReadback = publicDatasetPackageFileTemplateReadback(report);
+  return {
+    id: `public-dataset-package-file-validation-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetPackageFileValidationTemplate",
+    templateOnly: true,
+    validationOnly: true,
+    noSideEffects: true,
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    releasePackageStatus: templateReadback.releasePackageStatus ?? "public_dataset_release_package_status_missing",
+    publicationGateStatus: templateReadback.publicationGateStatus ?? "public_dataset_publication_gate_status_missing",
+    validationTemplateStatus: currentBlockingTemplate
+      ? "public_dataset_package_file_validation_template_blocked"
+      : "public_dataset_package_file_validation_template_ready_for_operator_replacement",
+    currentBlockingTemplateId: currentBlockingTemplate?.id ?? null,
+    currentBlockingTemplate,
+    validationRoute: "/api/v1/public-dataset-package-files/validate",
+    validationMethod: "POST",
+    requestBodyTemplate: publicDatasetPackageFileValidationTemplateRequestBody(items),
+    fullRequestBodyTemplate: publicDatasetPackageFileValidationTemplateRequestBody(allItems),
+    unchangedTemplateValidationExpectedStatus: "public_dataset_package_files_invalid",
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 package-file validation request template derived from the expected package-file template rows. It gives operators the POST body shape for validation only.",
+      access:
+        "Admin/auditor readback only because package files can include release ids, public-documentation text, exclusion manifests, and release-governance metadata.",
+      templateOnly:
+        "Every generated file entry still contains template content; operators must replace it with reviewed release evidence before validation can pass.",
+      authority:
+        "This endpoint cannot validate by itself, create package files, append workflow evidence, publish a dataset, launch downstream public surfaces, deprotect hidden/protected content, or waive release/package/publication gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      packageFileTemplates: "/api/v1/public-dataset-package-files/template",
+      packageFileValidationTemplate: "/api/v1/public-dataset-package-files/validate/template",
+      packageFileValidation: "/api/v1/public-dataset-package-files/validate",
+      publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
+      publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts: publicDatasetPackageFileValidationTemplateCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetPackageFileValidationTemplateItems(report) {
+  const templateReadback = publicDatasetPackageFileTemplateReadback(report);
+  const templates = Array.isArray(templateReadback.items) ? templateReadback.items : [];
+  return templates.map((template, index) => publicDatasetPackageFileValidationTemplateItem(template, index + 1, templateReadback));
+}
+
+function publicDatasetPackageFileValidationTemplateItem(template, sequence, templateReadback) {
+  const validationRequestFile = {
+    expectedFilename: template.expectedFilename,
+    content: template.templateContent,
+    sha256: template.templateContentHash,
+  };
+  const routes = uniqueValues([
+    "/api/v1/public-dataset-package-files/validate/template",
+    `/api/v1/public-dataset-package-files/validate/template/${encodeURIComponent(template.id)}`,
+    "/api/v1/public-dataset-package-files/validate",
+    "/api/v1/public-dataset-package-files/template",
+    `/api/v1/public-dataset-package-files/template/${encodeURIComponent(template.id)}`,
+    "/api/v1/public-dataset-release-package",
+    `/api/v1/public-dataset-release-package/${encodeURIComponent(template.releasePackageArtifactId ?? template.id)}`,
+    "/api/v1/public-dataset-publication-gate",
+    "/api/release/report",
+    ...(Array.isArray(template.routes) ? template.routes : []),
+  ]);
+  return {
+    id: template.id,
+    rowId: template.id,
+    sequence,
+    templateOnly: true,
+    validationOnly: true,
+    noSideEffects: true,
+    replacementRequired: true,
+    releasePackageArtifactId: template.releasePackageArtifactId,
+    artifactKind: template.artifactKind,
+    fileFormat: template.fileFormat,
+    expectedFilename: template.expectedFilename,
+    label: template.label,
+    status: template.status,
+    sourceArtifactStatus: template.sourceArtifactStatus,
+    releaseUseStatus: template.releaseUseStatus,
+    releasePackageStatus: template.releasePackageStatus,
+    publicationGateStatus: template.publicationGateStatus,
+    packageStepId: template.packageStepId,
+    readinessRowIds: Array.isArray(template.readinessRowIds) ? template.readinessRowIds : [],
+    sourceEvidenceIds: Array.isArray(template.sourceEvidenceIds) ? template.sourceEvidenceIds : [],
+    targetGapIds: Array.isArray(template.targetGapIds) ? template.targetGapIds : [],
+    requiredFields: Array.isArray(template.requiredFields) ? template.requiredFields : [],
+    validationRoute: "/api/v1/public-dataset-package-files/validate",
+    validationMethod: "POST",
+    templateContentHash: template.templateContentHash,
+    validationRequestFile,
+    validationRequestBody: { files: [validationRequestFile] },
+    validationRequestBodyHash: `sha256:${sha256(canonicalJson({ files: [validationRequestFile] }))}`,
+    unchangedTemplateValidationExpectedStatus: "public_dataset_package_files_invalid",
+    packageFileReadyForReview: false,
+    packageWriteActionAvailable: false,
+    validationNotes: [
+      "replace the content field with reviewed release evidence before calling the validation route",
+      "posting this unchanged template is expected to fail as public_dataset_package_files_invalid",
+      "validation remains non-publishing and does not append release evidence",
+    ],
+    sourceRoutes: templateReadback.sourceRoutes ?? {},
+    verificationRoutes: uniqueValues([
+      "/api/release/report",
+      "/api/v1/public-dataset-package-files/template",
+      "/api/v1/public-dataset-package-files/validate/template",
+      "/api/v1/public-dataset-package-files/validate",
+      "/api/v1/public-dataset-publication-gate",
+    ]),
+    routes,
+  };
+}
+
+function publicDatasetPackageFileValidationTemplateRequestBody(items) {
+  return {
+    files: (Array.isArray(items) ? items : []).map((item) => item.validationRequestFile),
+  };
+}
+
+function publicDatasetPackageFileValidationTemplateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    artifactKind: value("artifactKind"),
+    fileFormat: value("fileFormat"),
+    status: value("status"),
+    packageStepId: value("packageStepId"),
+    readinessRowId: value("readinessRowId"),
+    releasePackageArtifactId: value("releasePackageArtifactId"),
+    route: value("route"),
+  };
+}
+
+function publicDatasetPackageFileValidationTemplateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.artifactKind === value || item.expectedFilename === value;
+    if (key === "status") return publicDatasetPackageFileValidationTemplateMatchesStatus(item, value);
+    if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
+    if (key === "releasePackageArtifactId") return item.releasePackageArtifactId === value;
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetPackageFileValidationTemplateMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetPackageFileValidationTemplateItemIsOpen(item);
+  if (value === "closed") return !publicDatasetPackageFileValidationTemplateItemIsOpen(item);
+  return item.status === value || item.sourceArtifactStatus === value;
+}
+
+function publicDatasetPackageFileValidationTemplateItemIsOpen(item) {
+  return item.status !== "ready_for_operator_replacement";
+}
+
+function publicDatasetPackageFileValidationTemplateCounts(items) {
+  return {
+    rows: items.length,
+    requestTemplateRows: items.length,
+    openRows: items.filter(publicDatasetPackageFileValidationTemplateItemIsOpen).length,
+    readyRows: items.filter((item) => item.status === "ready_for_operator_replacement").length,
+    packageFileReadyForReviewRows: items.filter((item) => item.packageFileReadyForReview === true).length,
     byArtifactKind: countItemsBy(items, "artifactKind"),
     byFileFormat: countItemsBy(items, "fileFormat"),
     byStatus: countItemsBy(items, "status"),
