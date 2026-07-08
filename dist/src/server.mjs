@@ -7885,6 +7885,14 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  const releaseArtifactTemplateMatch = url.pathname.match(/^\/api\/v1\/release-artifacts\/template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && releaseArtifactTemplateMatch) {
+    const itemId = releaseArtifactTemplateMatch[1] ? decodeURIComponent(releaseArtifactTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      releaseArtifactPackageTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
 
   const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
   if (workflowWriteMatch) {
@@ -11623,6 +11631,336 @@ function publicDatasetDocumentTemplateCounts(items) {
     readyReadinessRows: items.filter((item) => item.readinessStatus === "ready").length,
     byDocumentKind: countItemsBy(items, "documentKind"),
     byReadinessStatus: countItemsBy(items, "readinessStatus"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+const releaseArtifactPackageChecklistRowId = "release_artifact_submission_package";
+const releaseArtifactPackageTemplateDefinitions = [
+  {
+    artifactKind: "label_snapshot",
+    writeRoute: "/api/v1/label-snapshots",
+    readbackRoute: "/api/v1/label-snapshots",
+    workflowTemplateId: "label-snapshot",
+    submissionMode: "single_record_payload",
+  },
+  {
+    artifactKind: "corpus_manifest",
+    writeRoute: "/api/v1/corpus-manifests",
+    readbackRoute: "/api/v1/corpus-manifests",
+    workflowTemplateId: "corpus-manifest",
+    bulkImportWorkflowTemplateId: "operator-evidence-package-jsonl-import",
+    submissionMode: "operator_evidence_jsonl_package",
+  },
+  {
+    artifactKind: "training_export",
+    writeRoute: "/api/v1/training-exports",
+    readbackRoute: "/api/v1/training-exports",
+    workflowTemplateId: "training-export-artifact",
+    submissionMode: "single_record_payload",
+  },
+  {
+    artifactKind: "public_export_manifest",
+    writeRoute: "/api/v1/exports/public",
+    readbackRoute: "/api/v1/export-manifests",
+    workflowTemplateId: "export-manifest",
+    bulkImportWorkflowTemplateId: "operator-evidence-package-jsonl-import",
+    submissionMode: "operator_evidence_jsonl_package",
+  },
+  {
+    artifactKind: "internal_export_manifest",
+    writeRoute: "/api/v1/exports/internal",
+    readbackRoute: "/api/v1/export-manifests",
+    workflowTemplateId: "internal-export-manifest",
+    bulkImportWorkflowTemplateId: "operator-evidence-package-jsonl-import",
+    submissionMode: "operator_evidence_jsonl_package",
+  },
+  {
+    artifactKind: "release_report_snapshot",
+    writeRoute: "/api/v1/release-reports",
+    readbackRoute: "/api/v1/release-reports",
+    workflowTemplateId: "release-report-snapshot",
+    submissionMode: "single_record_payload",
+  },
+];
+const releaseArtifactPackageClosedEvidenceStatuses = new Set([
+  "submitted_label_snapshot_matches_current_release_target",
+  "submitted_corpus_manifest_matches_current_release_counts",
+  "submitted_training_export_preserves_current_release_policy",
+  "submitted_public_export_manifest_preserves_current_release_policy",
+  "submitted_internal_export_manifest_preserves_current_release_policy",
+  "submitted_release_report_snapshot_matches_current_release",
+]);
+
+function releaseArtifactPackageTemplateReadback(report, options = {}) {
+  const allItems = releaseArtifactPackageTemplateItems(report);
+  const filters = releaseArtifactPackageTemplateFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => releaseArtifactPackageTemplateMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.artifactKind === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const packageJsonlItems = items.filter((item) => item.jsonlRecord);
+  return {
+    id: `release-artifact-package-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.releaseArtifactEvidence?.id ?? null,
+    sourceChecklistRowId: releaseArtifactPackageChecklistRowId,
+    resourceKey: "releaseArtifactPackageTemplate",
+    templateOnly: true,
+    checklistReadbackRoute: `/api/v1/operator-submission-checklist?checklistRowId=${releaseArtifactPackageChecklistRowId}`,
+    operatorActionReadbackRoute: `/api/v1/operator-action-items?checklistRowId=${releaseArtifactPackageChecklistRowId}`,
+    releaseReportSectionRoute: report.releaseArtifactEvidence?.id
+      ? `/api/v1/release-report-sections/${encodeURIComponent(report.releaseArtifactEvidence.id)}`
+      : "/api/v1/release-report-sections",
+    packageImportRoute: operatorEvidencePackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+    policy: {
+      scope:
+        "Read-only release-artifact package templates derived from /api/release/report and existing operator action templates. This endpoint does not submit artifacts, materialize a release report, waive gates, or create production evidence.",
+      access:
+        "Admin/auditor only because release-artifact templates expose release object ids, operator routes, and current release-evidence blockers.",
+      templateOnly:
+        "Generated request bodies and JSONL records include templateOnly=true and TODO placeholders. The underlying POST/import routes reject unchanged templates before append.",
+      architecture:
+        "This is a packaging readback over existing LabelSnapshot, CorpusManifest, TrainingExport, ExportManifest, and ReleaseReport routes; it does not introduce a new release-artifact record type.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: releaseArtifactPackageTemplateCounts(allItems),
+    filteredCounts: releaseArtifactPackageTemplateCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    packageJsonl: packageJsonlItems.map((item) => JSON.stringify(item.jsonlRecord)).join("\n"),
+    items,
+  };
+}
+
+function releaseArtifactPackageTemplateItems(report) {
+  const actionItems = releaseArtifactPackageTemplateActionItems(report);
+  const checklistItems = releaseArtifactTemplateChecklistItems(report);
+  const actionByArtifactKind = new Map(actionItems.map((item) => [item.artifactKind, item]));
+  const checklistByArtifactKind = new Map(checklistItems.map((item) => [item.artifactKind, item]));
+  return releaseArtifactPackageTemplateDefinitions.map((definition, index) => {
+    const evidence = releaseArtifactPackageEvidenceForKind(report, definition.artifactKind);
+    const action =
+      actionByArtifactKind.get(definition.artifactKind) ??
+      releaseArtifactPackageTemplateSyntheticAction(definition, report, evidence);
+    const payloadTemplate =
+      definition.submissionMode === "single_record_payload"
+        ? releaseArtifactTemplatePayloadItemForAction(action, report, index)
+        : null;
+    const jsonlTemplate =
+      definition.submissionMode === "operator_evidence_jsonl_package"
+        ? releaseArtifactTemplateJsonlItemForAction(action, report, index)
+        : null;
+    const checklistItem = checklistByArtifactKind.get(action.artifactKind) ?? null;
+    const submissionMode = jsonlTemplate ? "operator_evidence_jsonl_package" : payloadTemplate ? "single_record_payload" : "template_missing";
+    const routes = releaseArtifactPackageTemplateRoutes(action, payloadTemplate, jsonlTemplate, checklistItem);
+    return {
+      id: `release-artifact-package-template:${action.artifactKind ?? index + 1}`,
+      sequence: index + 1,
+      templateOnly: true,
+      artifactKind: action.artifactKind ?? null,
+      actionId: action.id ?? null,
+      checklistRowId: action.checklistRowId ?? releaseArtifactPackageChecklistRowId,
+      actionStatus: action.actionStatus ?? action.status ?? null,
+      executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+      executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+      sourceEvidenceId: action.sourceEvidenceId ?? report.releaseArtifactEvidence?.id ?? null,
+      submissionMode,
+      method: "POST",
+      writeRoute: action.writeRoute ?? payloadTemplate?.route ?? jsonlTemplate?.route ?? null,
+      readbackRoute: action.readbackRoute ?? checklistItem?.readbackRoute ?? null,
+      checklistItemRoute: checklistItem?.operatorPlanItemRoute ?? null,
+      payloadTemplateReadbackRoute: payloadTemplate?.id
+        ? `/api/v1/operator-action-items/payload-template/${encodeURIComponent(payloadTemplate.id)}`
+        : action.payloadTemplateReadbackRoute ?? null,
+      jsonlTemplateReadbackRoute: jsonlTemplate?.id
+        ? `/api/v1/operator-evidence/import-jsonl-template/${encodeURIComponent(jsonlTemplate.id)}`
+        : action.operatorEvidenceTemplateReadbackRoute ?? null,
+      operatorActionRoute: action.id ? `/api/v1/operator-action-items/${encodeURIComponent(action.id)}` : null,
+      singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
+      singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
+      packageImportRoute: jsonlTemplate?.importRoute ?? action.packageImportRoute ?? null,
+      packageDryRunImportRoute: jsonlTemplate?.dryRunImportRoute ?? action.packageDryRunImportRoute ?? null,
+      packageValidateOnlyImportRoute: jsonlTemplate?.validateOnlyImportRoute ?? action.packageValidateOnlyImportRoute ?? null,
+      dryRunImportRoute: jsonlTemplate?.dryRunImportRoute ?? action.dryRunImportRoute ?? null,
+      validateOnlyImportRoute: jsonlTemplate?.validateOnlyImportRoute ?? action.validateOnlyImportRoute ?? null,
+      completionEvidence: action.completionEvidence ?? checklistItem?.completionEvidence ?? null,
+      evidenceStatus: evidence?.status ?? "evidence_status_missing",
+      submittedArtifactId: evidence?.submittedArtifactId ?? null,
+      submittedAt: evidence?.submittedAt ?? null,
+      reviewCheckCount: Array.isArray(evidence?.reviewChecks) ? evidence.reviewChecks.length : 0,
+      blockingFields: releaseArtifactPackageBlockingFields(evidence),
+      requiredFields: payloadTemplate?.requiredFields ?? jsonlTemplate?.requiredFields ?? [],
+      requestBody: payloadTemplate?.requestBody ?? jsonlTemplate?.record?.payload ?? null,
+      jsonlRecord: jsonlTemplate?.record ?? null,
+      routes,
+    };
+  });
+}
+
+function releaseArtifactPackageTemplateSyntheticAction(definition, report, evidence) {
+  const status = releaseArtifactPackageClosedEvidenceStatuses.has(evidence?.status)
+    ? "closed"
+    : evidence?.submittedArtifactId
+      ? "submitted_review_required"
+      : "not_submitted";
+  const action = {
+    id: `${releaseArtifactPackageChecklistRowId}:template:${definition.artifactKind}`,
+    checklistRowId: releaseArtifactPackageChecklistRowId,
+    actionType: "submit_artifact",
+    label: definition.artifactKind,
+    status,
+    actionStatus: status,
+    artifactKind: definition.artifactKind,
+    submittedArtifactId: evidence?.submittedArtifactId ?? null,
+    sourceEvidenceId: report.releaseArtifactEvidence?.id ?? null,
+    writeRoute: definition.writeRoute,
+    readbackRoute: definition.readbackRoute,
+    workflowTemplateId: definition.workflowTemplateId,
+    bulkImportWorkflowTemplateId: definition.bulkImportWorkflowTemplateId ?? null,
+    actorRole: "admin_or_operator",
+    completionEvidence: `${definition.artifactKind} release-artifact evidence status is ${evidence?.status ?? "not reported"} in /api/release/report`,
+  };
+  if (definition.submissionMode === "operator_evidence_jsonl_package") {
+    action.bulkImportRoute = operatorEvidencePackageImportRoute;
+    action.dryRunImportRoute = routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true");
+    action.validateOnlyImportRoute = routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true");
+    action.packageImportRoute = operatorEvidencePackageImportRoute;
+    action.packageDryRunImportRoute = routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true");
+    action.packageValidateOnlyImportRoute = routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true");
+    action.operatorEvidenceTemplateReadbackRoute = `/api/v1/operator-evidence/import-jsonl-template?checklistRowId=${releaseArtifactPackageChecklistRowId}&artifactKind=${definition.artifactKind}`;
+    action.templateReadbackRoutes = [action.operatorEvidenceTemplateReadbackRoute];
+    return operatorActionItemWithExecutionStatus(action);
+  }
+  action.singleRecordDryRunRoute = routeWithQueryFlag(definition.writeRoute, "dryRun", "true");
+  action.singleRecordValidateOnlyRoute = routeWithQueryFlag(definition.writeRoute, "validateOnly", "true");
+  action.payloadTemplateReadbackRoute = `/api/v1/operator-action-items/payload-template?checklistRowId=${releaseArtifactPackageChecklistRowId}&actionType=submit_artifact&artifactKind=${definition.artifactKind}`;
+  action.templateReadbackRoutes = [action.payloadTemplateReadbackRoute];
+  return operatorActionItemWithExecutionStatus(action);
+}
+
+function releaseArtifactTemplatePayloadItemForAction(action, report, index) {
+  return operatorActionPayloadTemplateRows(action, index, report).find((row) => row.ok)?.item ?? null;
+}
+
+function releaseArtifactTemplateJsonlItemForAction(action, report, index) {
+  const row = operatorEvidencePackageJsonlTemplateRow(action, index, report);
+  return row.ok ? row.item : null;
+}
+
+function releaseArtifactPackageTemplateActionItems(report) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const rowActions = (Array.isArray(plan.rows) ? plan.rows : [])
+    .find((row) => row.checklistRowId === releaseArtifactPackageChecklistRowId)?.actionItems;
+  const actions = Array.isArray(rowActions)
+    ? rowActions
+    : (Array.isArray(plan.actionItems) ? plan.actionItems : []).filter(
+        (item) => item.checklistRowId === releaseArtifactPackageChecklistRowId,
+      );
+  return actions.map((item) => operatorActionItemWithExecutionStatus(item));
+}
+
+function releaseArtifactTemplateChecklistItems(report) {
+  const params = new URLSearchParams({ checklistRowId: releaseArtifactPackageChecklistRowId });
+  return operatorPlanCollectionReadback(report, "operator-submission-checklist", { searchParams: params }).items ?? [];
+}
+
+function releaseArtifactPackageEvidenceForKind(report, artifactKind) {
+  const evidence = report.releaseArtifactEvidence ?? {};
+  const byKind = {
+    label_snapshot: evidence.labelSnapshotEvidence,
+    corpus_manifest: evidence.corpusManifestEvidence,
+    training_export: evidence.trainingExportEvidence,
+    public_export_manifest: evidence.exportManifestEvidence,
+    internal_export_manifest: evidence.internalExportManifestEvidence,
+    release_report_snapshot: evidence.releaseReportSnapshotEvidence,
+  };
+  return byKind[artifactKind] ?? null;
+}
+
+function releaseArtifactPackageBlockingFields(evidence) {
+  return Array.isArray(evidence?.reviewChecks)
+    ? evidence.reviewChecks.map((check) => check.field).filter((field) => typeof field === "string" && field.trim())
+    : [];
+}
+
+function releaseArtifactPackageTemplateRoutes(action, payloadTemplate, jsonlTemplate, checklistItem) {
+  return uniqueValues([
+    action?.writeRoute,
+    action?.readbackRoute,
+    action?.singleRecordDryRunRoute,
+    action?.singleRecordValidateOnlyRoute,
+    action?.dryRunImportRoute,
+    action?.validateOnlyImportRoute,
+    payloadTemplate?.route,
+    payloadTemplate?.id ? `/api/v1/operator-action-items/payload-template/${encodeURIComponent(payloadTemplate.id)}` : null,
+    jsonlTemplate?.route,
+    jsonlTemplate?.importRoute,
+    jsonlTemplate?.dryRunImportRoute,
+    jsonlTemplate?.validateOnlyImportRoute,
+    jsonlTemplate?.id ? `/api/v1/operator-evidence/import-jsonl-template/${encodeURIComponent(jsonlTemplate.id)}` : null,
+    checklistItem?.operatorPlanItemRoute,
+    checklistItem?.readbackRoute,
+    checklistItem?.dryRunImportRoute,
+    checklistItem?.validateOnlyImportRoute,
+    ...(Array.isArray(action?.templateReadbackRoutes) ? action.templateReadbackRoutes : []),
+    ...(Array.isArray(action?.preflightCoverageRoutes) ? action.preflightCoverageRoutes : []),
+  ]);
+}
+
+function releaseArtifactPackageTemplateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    artifactKind: value("artifactKind"),
+    status: value("status"),
+    evidenceStatus: value("evidenceStatus"),
+    submissionMode: value("submissionMode"),
+    route: value("route"),
+  };
+}
+
+function releaseArtifactPackageTemplateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.artifactKind === value || item.actionId === value;
+    if (key === "status") return releaseArtifactPackageTemplateMatchesStatus(item, value);
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function releaseArtifactPackageTemplateMatchesStatus(item, value) {
+  if (value === "open") return releaseArtifactPackageTemplateItemIsOpen(item);
+  if (value === "closed") return !releaseArtifactPackageTemplateItemIsOpen(item);
+  return [item.evidenceStatus, item.actionStatus, item.executionStatus, item.submissionMode].includes(value);
+}
+
+function releaseArtifactPackageTemplateItemIsOpen(item) {
+  return !releaseArtifactPackageClosedEvidenceStatuses.has(item.evidenceStatus);
+}
+
+function releaseArtifactPackageTemplateCounts(items) {
+  return {
+    rows: items.length,
+    templateRows: items.length,
+    openRows: items.filter(releaseArtifactPackageTemplateItemIsOpen).length,
+    closedRows: items.filter((item) => !releaseArtifactPackageTemplateItemIsOpen(item)).length,
+    packageJsonlRows: items.filter((item) => item.jsonlRecord).length,
+    singleRecordRows: items.filter((item) => item.requestBody && !item.jsonlRecord).length,
+    reviewCheckCount: items.reduce((sum, item) => sum + (Number(item.reviewCheckCount) || 0), 0),
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byEvidenceStatus: countItemsBy(items, "evidenceStatus"),
+    bySubmissionMode: countItemsBy(items, "submissionMode"),
+    byExecutionStatus: countItemsBy(items, "executionStatus"),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }

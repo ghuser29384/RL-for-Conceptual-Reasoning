@@ -930,6 +930,7 @@ const state = {
   workflowReleaseSectionEvidenceFilter: "",
   workflowReleaseSectionStatusFilter: "",
   workflowReleaseSectionChecklistFilter: "",
+  workflowReleaseArtifactEvidenceStatusFilter: "",
   workflowReleaseManifestArtifactFilter: "",
   workflowReleaseManifestStatusFilter: "",
   workflowReleaseManifestCheckKindFilter: "",
@@ -1126,6 +1127,14 @@ const workflowEvidenceCollections = [
     resourceKey: "releaseReportSection",
     group: "Release",
     summary: "Read-only bounded release-report sections keyed by evidence id, checklist row, and review blocker.",
+  },
+  {
+    id: "release-artifact-package-template",
+    label: "Release artifact templates",
+    endpoint: "/api/v1/release-artifacts/template",
+    resourceKey: "releaseArtifactPackageTemplate",
+    group: "Release",
+    summary: "Read-only package templates for the six submitted release artifacts that gate release verification.",
   },
   {
     id: "release-version-manifest",
@@ -8090,6 +8099,27 @@ function workflowReadbackPanel(collection) {
           </label>
         </div>`
       : "";
+  const releaseArtifactPackageTemplateFilters =
+    collection.id === "release-artifact-package-template"
+      ? `<div class="workflowReadbackControls">
+          <label>
+            <span>Artifact kind</span>
+            <input id="workflowArtifactKindFilter" type="text" value="${escapeHtml(state.workflowArtifactKindFilter)}" placeholder="label_snapshot" />
+          </label>
+          <label>
+            <span>Evidence status</span>
+            <input id="workflowReleaseArtifactEvidenceStatusFilter" type="text" value="${escapeHtml(state.workflowReleaseArtifactEvidenceStatusFilter)}" placeholder="no_submitted_artifact" />
+          </label>
+          <label>
+            <span>Status</span>
+            <input id="workflowActionStatusFilter" type="text" value="${escapeHtml(state.workflowActionStatusFilter)}" placeholder="open" />
+          </label>
+          <label>
+            <span>Route</span>
+            <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/release-artifacts/template/label_snapshot" />
+          </label>
+        </div>`
+      : "";
   const releaseVersionManifestFilters =
     collection.id === "release-version-manifest"
       ? `<div class="workflowReadbackControls">
@@ -8399,6 +8429,7 @@ function workflowReadbackPanel(collection) {
       ${octoberOperatingPlanFilters}
       ${octoberCompletionChecklistFilters}
       ${releaseReportSectionFilters}
+      ${releaseArtifactPackageTemplateFilters}
       ${releaseVersionManifestFilters}
       ${publicDatasetReadinessFilters}
       ${publicDatasetDocumentTemplateFilters}
@@ -8528,6 +8559,17 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Readiness states", workflowCountMapSummary(counts.byReadinessStatus)],
       ["Write route", result.writeRoute ?? "not available"],
       ["Validate route", result.singleRecordValidateOnlyRoute ?? "not available"],
+    ];
+  }
+  if (collection.id === "release-artifact-package-template") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    return [
+      ["Template rows", counts.templateRows ?? result.count ?? "not reported"],
+      ["Open artifacts", counts.openRows ?? "not reported"],
+      ["Package JSONL rows", counts.packageJsonlRows ?? "not reported"],
+      ["Single-record rows", counts.singleRecordRows ?? "not reported"],
+      ["Evidence states", workflowCountMapSummary(counts.byEvidenceStatus)],
+      ["Package validate-only", result.packageValidateOnlyImportRoute ?? "not available"],
     ];
   }
   if (collection.id === "model-run-provenance") {
@@ -8720,6 +8762,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "public-dataset-document-template") {
     return `<div class="operatorActionPreview">${previewItems.map(publicDatasetDocumentTemplatePreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "release-artifact-package-template") {
+    return `<div class="operatorActionPreview">${previewItems.map(releaseArtifactPackageTemplatePreviewRow).join("")}</div>`;
   }
   if (collection.id === "rater-profile-evidence") {
     return `<div class="operatorActionPreview">${previewItems.map(raterProfileEvidencePreviewRow).join("")}</div>`;
@@ -9037,6 +9082,50 @@ function publicDatasetDocumentTemplatePreviewRow(item) {
         ["Readiness row", item.readinessRowReadbackRoute ?? "not available"],
         ["Linked release objects", linkedSummary || "not reported"],
         ["Required fields", requiredFields.length ? requiredFields.slice(0, 7).join(", ") : "not reported"],
+      ])}
+    </article>
+  `;
+}
+
+function releaseArtifactPackageTemplatePreviewRow(item) {
+  const blockingFields =
+    Array.isArray(item.blockingFields) && item.blockingFields.length
+      ? item.blockingFields.slice(0, 6).join(", ")
+      : "no blocking fields";
+  const requiredFields =
+    Array.isArray(item.requiredFields) && item.requiredFields.length
+      ? item.requiredFields.slice(0, 7).join(", ")
+      : "not reported";
+  const routes =
+    [
+      item.payloadTemplateReadbackRoute,
+      item.jsonlTemplateReadbackRoute,
+      item.singleRecordDryRunRoute,
+      item.singleRecordValidateOnlyRoute,
+      item.packageDryRunImportRoute,
+      item.packageValidateOnlyImportRoute,
+    ]
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(", ") || "not available";
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(humanize(item.artifactKind ?? item.id ?? "release artifact"))}</strong>
+          <span>${escapeHtml(item.submissionMode ? humanize(item.submissionMode) : "submission mode not reported")}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.evidenceStatus ?? item.actionStatus ?? "not reported"))}</span>
+      </div>
+      ${metricList([
+        ["Action", item.actionId ?? "not reported"],
+        ["Execution", item.executionStatus ? humanize(item.executionStatus) : "not reported"],
+        ["Write route", item.writeRoute ?? "not available"],
+        ["Readback route", item.readbackRoute ?? "not available"],
+        ["Submitted artifact", item.submittedArtifactId ?? "none"],
+        ["Blocking fields", blockingFields],
+        ["Required fields", requiredFields],
+        ["Template routes", routes],
       ])}
     </article>
   `;
@@ -14294,13 +14383,15 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (!isOperatorPlanCollection(collection)) {
       state.workflowActionIdFilter = "";
       state.workflowActionTypeFilter = "";
-      state.workflowActionStatusFilter = "";
       state.workflowChecklistRowFilter = "";
-      state.workflowArtifactKindFilter = "";
       state.workflowBlockedByTargetGapIdFilter = "";
       state.workflowTemplateCoverageStatusFilter = "";
       state.workflowPreflightCoverageStatusFilter = "";
       state.workflowGovernanceCoverageStatusFilter = "";
+      if (collection.id !== "release-artifact-package-template") {
+        state.workflowActionStatusFilter = "";
+        state.workflowArtifactKindFilter = "";
+      }
       if (collection.id !== "release-report-sections") {
         state.workflowArtifactTypeFilter = "";
         state.workflowArtifactIdFilter = "";
@@ -14415,6 +14506,9 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       state.workflowReleaseSectionEvidenceFilter = "";
       state.workflowReleaseSectionStatusFilter = "";
       state.workflowReleaseSectionChecklistFilter = "";
+    }
+    if (collection.id !== "release-artifact-package-template") {
+      state.workflowReleaseArtifactEvidenceStatusFilter = "";
     }
     if (collection.id !== "release-version-manifest") {
       state.workflowReleaseManifestArtifactFilter = "";
@@ -14742,6 +14836,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     render();
   });
   [
+    "workflowReleaseArtifactEvidenceStatusFilter",
     "workflowReleaseManifestArtifactFilter",
     "workflowReleaseManifestStatusFilter",
     "workflowReleaseManifestCheckKindFilter",
@@ -16858,6 +16953,7 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "october-completion-checklist" ||
     collection.id === "october-completion-runbook" ||
     collection.id === "release-report-sections" ||
+    collection.id === "release-artifact-package-template" ||
     collection.id === "release-version-manifest" ||
     collection.id === "public-dataset-readiness" ||
     collection.id === "public-dataset-document-template" ||
@@ -17003,6 +17099,14 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowReleaseSectionChecklistFilter) url.searchParams.set("checklistRowId", state.workflowReleaseSectionChecklistFilter);
     if (state.workflowArtifactTypeFilter) url.searchParams.set("artifactType", state.workflowArtifactTypeFilter);
     if (state.workflowArtifactIdFilter) url.searchParams.set("artifactId", state.workflowArtifactIdFilter);
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (collection.id === "release-artifact-package-template") {
+    if (state.workflowArtifactKindFilter) url.searchParams.set("artifactKind", state.workflowArtifactKindFilter);
+    if (state.workflowReleaseArtifactEvidenceStatusFilter) {
+      url.searchParams.set("evidenceStatus", state.workflowReleaseArtifactEvidenceStatusFilter);
+    }
+    if (state.workflowActionStatusFilter) url.searchParams.set("status", state.workflowActionStatusFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if (collection.id === "release-version-manifest") {

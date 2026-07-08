@@ -5487,6 +5487,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/release-report-sections"',
     'resourceKey: "releaseReportSection"',
     "Read-only bounded release-report sections keyed by evidence id, checklist row, and review blocker.",
+    'id: "release-artifact-package-template"',
+    'endpoint: "/api/v1/release-artifacts/template"',
+    'resourceKey: "releaseArtifactPackageTemplate"',
+    "Read-only package templates for the six submitted release artifacts that gate release verification.",
     'id: "release-version-manifest"',
     'endpoint: "/api/v1/release-version-manifest"',
     'resourceKey: "releaseVersionManifestCheck"',
@@ -5661,6 +5665,7 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     "workflowReleaseSectionEvidenceFilter",
     "workflowReleaseSectionStatusFilter",
     "workflowReleaseSectionChecklistFilter",
+    "workflowReleaseArtifactEvidenceStatusFilter",
     "workflowRunbookPhaseFilter",
     "workflowRunbookStatusFilter",
     "workflowRunbookExecutionStatusFilter",
@@ -5726,6 +5731,8 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'url.searchParams.set("status", state.workflowReleaseSectionStatusFilter)',
     'url.searchParams.set("checklistRowId", state.workflowReleaseSectionChecklistFilter)',
     'collection.id === "release-report-sections" ||',
+    'collection.id === "release-artifact-package-template" ||',
+    'url.searchParams.set("evidenceStatus", state.workflowReleaseArtifactEvidenceStatusFilter)',
     'url.searchParams.set("phase", state.workflowRunbookPhaseFilter)',
     'url.searchParams.set("status", state.workflowRunbookStatusFilter)',
     'url.searchParams.set("executionStatus", state.workflowRunbookExecutionStatusFilter)',
@@ -5769,6 +5776,7 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'input id="workflowReleaseSectionEvidenceFilter"',
     'input id="workflowReleaseSectionStatusFilter"',
     'input id="workflowReleaseSectionChecklistFilter"',
+    'input id="workflowReleaseArtifactEvidenceStatusFilter"',
     'placeholder="model_evaluation_reproducibility_checklist"',
     'placeholder="leaderboard_model_run_provenance"',
     'input id="workflowRunbookPhaseFilter"',
@@ -5879,6 +5887,9 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     "[\"Verification\", verificationRoutes]",
     "releaseReportSectionPreviewRow",
     "function releaseReportSectionPreviewRow(item)",
+    "releaseArtifactPackageTemplatePreviewRow",
+    "function releaseArtifactPackageTemplatePreviewRow(item)",
+    '["Submitted artifact", item.submittedArtifactId ?? "none"]',
     "derivedChecklistPreviewRow",
     "function derivedChecklistPreviewRow(item)",
     "isDerivedChecklistCollection(collection)",
@@ -8081,6 +8092,118 @@ test("operator evidence package JSONL import validates concrete routes and appen
   assert.equal(raterImport.status, 403);
 });
 
+test("release artifact package template readback composes existing operator templates", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+
+  const collection = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template",
+    headers: adminHeaders,
+  });
+  assert.equal(collection.status, 200, JSON.stringify(collection.body));
+  assert.equal(collection.body.resourceKey, "releaseArtifactPackageTemplate");
+  assert.equal(collection.body.templateOnly, true);
+  assert.equal(collection.body.count, 6);
+  assert.equal(collection.body.totalCount, 6);
+  assert.equal(collection.body.counts.templateRows, 6);
+  assert.equal(collection.body.counts.closedRows, 0);
+  assert.equal(collection.body.counts.openRows, 6);
+  assert.equal(collection.body.counts.packageJsonlRows, 3);
+  assert.equal(collection.body.counts.singleRecordRows, 3);
+  assert.equal(collection.body.packageValidateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.deepEqual(
+    collection.body.items.map((item) => item.artifactKind),
+    [
+      "label_snapshot",
+      "corpus_manifest",
+      "training_export",
+      "public_export_manifest",
+      "internal_export_manifest",
+      "release_report_snapshot",
+    ],
+  );
+
+  const labelTemplate = collection.body.items.find((item) => item.artifactKind === "label_snapshot");
+  assert.equal(labelTemplate.submissionMode, "single_record_payload");
+  assert.equal(labelTemplate.writeRoute, "/api/v1/label-snapshots");
+  assert.equal(labelTemplate.singleRecordValidateOnlyRoute, "/api/v1/label-snapshots?validateOnly=true");
+  assert.equal(labelTemplate.requestBody.labelSnapshot.templateOnly, true);
+  assert.equal(labelTemplate.evidenceStatus, "no_submitted_artifact");
+  assert.equal(labelTemplate.executionStatus, "ready_to_submit_evidence");
+
+  const corpusTemplate = collection.body.items.find((item) => item.artifactKind === "corpus_manifest");
+  assert.equal(corpusTemplate.submissionMode, "operator_evidence_jsonl_package");
+  assert.equal(corpusTemplate.jsonlRecord.route, "/api/v1/corpus-manifests");
+  assert.equal(corpusTemplate.jsonlRecord.payload.corpusManifest.templateOnly, true);
+  assert.equal(corpusTemplate.jsonlRecord.payload.corpusManifest.releaseId, "october-2026-demo");
+  assert.equal(corpusTemplate.packageValidateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(corpusTemplate.requiredFields.includes("id"), true);
+  assert.equal(collection.body.packageJsonl.split("\n").filter(Boolean).length, 3);
+
+  const byId = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template/label_snapshot",
+    headers: adminHeaders,
+  });
+  assert.equal(byId.status, 200, JSON.stringify(byId.body));
+  assert.equal(byId.body.count, 1);
+  assert.equal(byId.body.item.artifactKind, "label_snapshot");
+
+  const byArtifactKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template?artifactKind=corpus_manifest",
+    headers: adminHeaders,
+  });
+  assert.equal(byArtifactKind.status, 200, JSON.stringify(byArtifactKind.body));
+  assert.equal(byArtifactKind.body.count, 1);
+  assert.equal(byArtifactKind.body.items[0].artifactKind, "corpus_manifest");
+
+  const byEvidenceStatus = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template?evidenceStatus=no_submitted_artifact",
+    headers: adminHeaders,
+  });
+  assert.equal(byEvidenceStatus.status, 200, JSON.stringify(byEvidenceStatus.body));
+  assert.equal(byEvidenceStatus.body.count, 6);
+
+  const closedTemplates = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template?status=closed",
+    headers: adminHeaders,
+  });
+  assert.equal(closedTemplates.status, 200, JSON.stringify(closedTemplates.body));
+  assert.equal(closedTemplates.body.count, 0);
+
+  const openTemplates = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template?status=open",
+    headers: adminHeaders,
+  });
+  assert.equal(openTemplates.status, 200, JSON.stringify(openTemplates.body));
+  assert.equal(openTemplates.body.count, 6);
+
+  const byRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/release-artifacts/template?route=${encodeURIComponent("/api/v1/label-snapshots?validateOnly=true")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(byRoute.status, 200, JSON.stringify(byRoute.body));
+  assert.equal(byRoute.body.count, 1);
+  assert.equal(byRoute.body.items[0].artifactKind, "label_snapshot");
+
+  const unchangedTemplate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/label-snapshots",
+    headers: adminHeaders,
+    body: JSON.stringify(labelTemplate.requestBody),
+  });
+  assert.equal(unchangedTemplate.status, 400, JSON.stringify(unchangedTemplate.body));
+  assert.equal(unchangedTemplate.body.error, "workflow_template_record");
+});
+
 test("operator action item queue is admin/auditor readback derived from the release report", async () => {
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
@@ -8125,6 +8248,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
 
   const missingReleaseReportSectionsAuth = await invokeApi(context, { method: "GET", url: "/api/v1/release-report-sections" });
   assert.equal(missingReleaseReportSectionsAuth.status, 401);
+
+  const missingReleaseArtifactTemplateAuth = await invokeApi(context, { method: "GET", url: "/api/v1/release-artifacts/template" });
+  assert.equal(missingReleaseArtifactTemplateAuth.status, 401);
 
   const missingReleaseVersionManifestAuth = await invokeApi(context, { method: "GET", url: "/api/v1/release-version-manifest" });
   assert.equal(missingReleaseVersionManifestAuth.status, 401);
@@ -8249,6 +8375,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedReleaseReportSections.status, 403);
+
+  const deniedReleaseArtifactTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-artifacts/template",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedReleaseArtifactTemplate.status, 403);
 
   const deniedReleaseVersionManifest = await invokeApi(context, {
     method: "GET",
@@ -14314,6 +14447,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("Public dataset-card and methodology-report submissions project into `public_dataset_documents`"));
   assert.ok(architectureDoc.includes("Admins can also materialize the current server-derived release report through `/api/v1/release-reports`"));
   assert.ok(architectureDoc.includes("GET /api/release/report` endpoint remains read-only and side-effect-free"));
+  assert.ok(architectureDoc.includes("GET /api/v1/release-artifacts/template"));
+  assert.ok(architectureDoc.includes("label snapshot, corpus manifest, training export, public export manifest, internal export manifest, and release report snapshot"));
+  assert.ok(architectureDoc.includes("does not submit artifacts, materialize release reports, waive gates, create a new release-artifact type"));
   assert.ok(architectureDoc.includes("GET `/api/v1/release-version-manifest`"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/{id}"));
   assert.ok(architectureDoc.includes("does not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
