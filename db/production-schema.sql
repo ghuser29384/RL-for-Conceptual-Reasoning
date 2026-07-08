@@ -397,6 +397,21 @@ create table if not exists export_manifests (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public_dataset_documents (
+  id text primary key,
+  release_id text,
+  resource_key text not null,
+  related_release_artifact_id text,
+  related_evaluation_run_id text,
+  target_label_snapshot_id text,
+  artifact_status text not null,
+  input_hash text not null,
+  artifact_json jsonb not null,
+  event_id text,
+  record_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists model_improvement_policies (
   id text primary key,
   release_id text,
@@ -2275,6 +2290,9 @@ create index if not exists training_exports_release_idx
 create index if not exists export_manifests_release_idx
   on export_manifests (release_id);
 
+create index if not exists public_dataset_documents_release_idx
+  on public_dataset_documents (release_id);
+
 create index if not exists model_improvement_policies_release_idx
   on model_improvement_policies (release_id);
 
@@ -2832,6 +2850,7 @@ alter table metaphilosophy_research_backlog_items enable row level security;
 alter table corpus_manifests enable row level security;
 alter table training_exports enable row level security;
 alter table export_manifests enable row level security;
+alter table public_dataset_documents enable row level security;
 alter table model_improvement_policies enable row level security;
 alter table model_improvement_runs enable row level security;
 alter table evaluation_runs enable row level security;
@@ -3208,6 +3227,17 @@ create policy export_manifests_read_auditors on export_manifests
 
 drop policy if exists export_manifests_write_admin_or_service on export_manifests;
 create policy export_manifests_write_admin_or_service on export_manifests
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists public_dataset_documents_read_auditors on public_dataset_documents;
+create policy public_dataset_documents_read_auditors on public_dataset_documents
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists public_dataset_documents_write_admin_or_service on public_dataset_documents;
+create policy public_dataset_documents_write_admin_or_service on public_dataset_documents
   for all
   using (app_auth.has_role('admin', 'service'))
   with check (app_auth.has_role('admin', 'service'));

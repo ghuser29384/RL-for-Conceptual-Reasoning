@@ -5398,6 +5398,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     'endpoint: () => "/api/v1/release-reports"',
     'id: "corpus-manifest"',
     'endpoint: () => "/api/v1/corpus-manifests"',
+    'id: "public-dataset-document"',
+    'endpoint: () => "/api/v1/public-dataset-documents"',
+    'resourceKey: "publicDatasetDocument"',
     'id: "training-export-artifact"',
     'endpoint: () => "/api/v1/training-exports"',
     'id: "export-manifest"',
@@ -5489,6 +5492,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/public-dataset-readiness"',
     'resourceKey: "publicDatasetReadinessRow"',
     "Read-only Dataset v0.1 public-artifact readiness gates over existing release objects.",
+    'id: "public-dataset-documents"',
+    'endpoint: "/api/v1/public-dataset-documents"',
+    'resourceKey: "publicDatasetDocument"',
+    "Submitted dataset-card and methodology-report evidence for Dataset v0.1 readiness.",
     'id: "rater-profile-evidence"',
     'endpoint: "/api/v1/rater-profile-evidence"',
     'resourceKey: "raterProfileEvidenceRow"',
@@ -8114,6 +8121,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingPublicDatasetReadinessAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-readiness" });
   assert.equal(missingPublicDatasetReadinessAuth.status, 401);
 
+  const missingPublicDatasetDocumentsAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-documents" });
+  assert.equal(missingPublicDatasetDocumentsAuth.status, 401);
+
   const missingRaterProfileEvidenceAuth = await invokeApi(context, { method: "GET", url: "/api/v1/rater-profile-evidence" });
   assert.equal(missingRaterProfileEvidenceAuth.status, 401);
 
@@ -8239,6 +8249,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedPublicDatasetReadiness.status, 403);
+
+  const deniedPublicDatasetDocuments = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetDocuments.status, 403);
 
   const deniedRaterProfileEvidence = await invokeApi(context, {
     method: "GET",
@@ -13423,6 +13440,164 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(missingItem.status, 404);
 });
 
+test("public dataset document submissions satisfy Dataset v0.1 documentation readiness only", async () => {
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const documentPayload = (id, documentKind) => ({
+    publicDatasetDocument: {
+      id,
+      releaseId: "october-2026-demo",
+      documentKind,
+      artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+      documentVersion: `${documentKind}-v0.1`,
+      title:
+        documentKind === "dataset_card"
+          ? "Metaphilosophy Critique Ratings Dataset v0.1 dataset card"
+          : "Metaphilosophy Critique Ratings Dataset v0.1 methodology report",
+      summary:
+        documentKind === "dataset_card"
+          ? "Dataset card for expert-rated position-critique pairs, seven-dimensional labels, split governance, and release limitations."
+          : "Methodology report for the expert rating workflow, label snapshot, split governance, and release limitations.",
+      bodyMarkdown:
+        documentKind === "dataset_card"
+          ? "Dataset v0.1 documents release-cleared position-critique pairs, seven-dimensional labels, confidence metadata, item-text hashes, split manifests, corpus composition, and explicit limitations."
+          : "Methodology report explains the source-blind rating workflow, preserved initial ratings, label snapshot, public split boundaries, corpus manifest, and explicit limitations.",
+      bodyHash: `sha256:${id}`,
+      linkedReleaseObjectIds: {
+        corpusManifestId: "corpus-composition-october-2026-demo",
+        labelSnapshotId: "snapshot-oct-api",
+        publicExportManifestId: "public-manifest-october-2026-demo",
+        releaseVersionManifestId: "release-version-manifest-october-2026-demo",
+      },
+      hiddenProtectedExclusionSummary:
+        "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded.",
+      downstreamLaunchBoundary:
+        "No public leaderboard, API evaluator, public training export launch, or judge-model launch before Dataset v0.1 readiness is complete.",
+      preparedBy: "demo-admin",
+      reviewedBy: "demo-admin",
+      createdAt: "2026-10-01T00:00:00.000Z",
+    },
+  });
+
+  const unauthenticated = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    body: JSON.stringify(documentPayload("dataset-card-unauthenticated", "dataset_card")),
+  });
+  assert.equal(unauthenticated.status, 401);
+
+  const denied = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: raterHeaders,
+    body: JSON.stringify(documentPayload("dataset-card-rater-denied", "dataset_card")),
+  });
+  assert.equal(denied.status, 403);
+
+  const invalid = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      publicDatasetDocument: {
+        ...documentPayload("dataset-card-invalid", "dataset_card").publicDatasetDocument,
+        artifactName: "Wrong artifact",
+      },
+    }),
+  });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.body.detail, /artifactName/);
+
+  const datasetCard = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+    body: JSON.stringify(documentPayload("dataset-card-v0-1-doc", "dataset_card")),
+  });
+  assert.equal(datasetCard.status, 201, JSON.stringify(datasetCard.body));
+  assert.equal(datasetCard.body.eventType, "public_dataset_document_submitted");
+  assert.equal(datasetCard.body.resourceKey, "publicDatasetDocument");
+  assert.equal(datasetCard.body.resourceId, "dataset-card-v0-1-doc");
+
+  const methodologyReport = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+    body: JSON.stringify(documentPayload("methodology-report-v0-1-doc", "methodology_report")),
+  });
+  assert.equal(methodologyReport.status, 201, JSON.stringify(methodologyReport.body));
+
+  const collection = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+  });
+  assert.equal(collection.status, 200, JSON.stringify(collection.body));
+  assert.equal(collection.body.resourceKey, "publicDatasetDocument");
+  assert.equal(collection.body.count, 2);
+  assert.equal(collection.body.items.some((item) => item.id === "dataset-card-v0-1-doc"), true);
+  assert.equal(collection.body.items.some((item) => item.id === "methodology-report-v0-1-doc"), true);
+
+  const byId = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents/dataset-card-v0-1-doc",
+    headers: adminHeaders,
+  });
+  assert.equal(byId.status, 200, JSON.stringify(byId.body));
+  assert.equal(byId.body.id, "dataset-card-v0-1-doc");
+  assert.equal(byId.body.documentKind, "dataset_card");
+
+  const readiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness",
+    headers: adminHeaders,
+  });
+  assert.equal(readiness.status, 200, JSON.stringify(readiness.body));
+  assert.equal(readiness.body.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.equal(readiness.body.counts.readyRows, 8);
+  assert.equal(readiness.body.counts.openRows, 5);
+  assert.equal(readiness.body.counts.missingDocumentationRows, 0);
+  assert.equal(readiness.body.counts.downstreamBlockedRows, 1);
+  const datasetCardRow = readiness.body.items.find((item) => item.id === "dataset_card");
+  const methodologyRow = readiness.body.items.find((item) => item.id === "methodology_report");
+  assert.equal(datasetCardRow.status, "ready");
+  assert.equal(methodologyRow.status, "ready");
+  assert.equal(datasetCardRow.documentSummary.id, "dataset-card-v0-1-doc");
+  assert.ok(datasetCardRow.readbackRoutes.includes("/api/v1/public-dataset-documents/dataset-card-v0-1-doc"));
+  const ladderRow = readiness.body.items.find((item) => item.id === "public_first_ladder_gate");
+  assert.equal(ladderRow.status, "downstream_blocked_until_dataset_v0_1_ready");
+  assert.equal(
+    ladderRow.reviewReasons.includes("publicFirstLadder:dataset_card_and_methodology_required_before_downstream_public_launch"),
+    false,
+  );
+
+  const documentationReadiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness?gateKind=public_documentation",
+    headers: adminHeaders,
+  });
+  assert.equal(documentationReadiness.status, 200, JSON.stringify(documentationReadiness.body));
+  assert.equal(documentationReadiness.body.count, 2);
+  assert.equal(documentationReadiness.body.filteredCounts.readyRows, 2);
+  assert.equal(documentationReadiness.body.filteredCounts.missingDocumentationRows, 0);
+
+  const routeFiltered = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/public-dataset-documents/dataset-card-v0-1-doc")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(routeFiltered.status, 200, JSON.stringify(routeFiltered.body));
+  assert.equal(routeFiltered.body.count, 1);
+  assert.equal(routeFiltered.body.items[0].id, "dataset_card");
+
+  const releaseReport = await invokeApi(context, { method: "GET", url: "/api/release/report", headers: adminHeaders });
+  assert.equal(releaseReport.status, 200, JSON.stringify(releaseReport.body));
+  assert.equal(releaseReport.body.workflowReleaseArtifacts.publicDatasetDocuments.length, 2);
+});
+
 test("model-evaluation operator evidence collections are routed for admin readback", async () => {
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
@@ -13695,6 +13870,9 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('id: "public-dataset-readiness"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-readiness"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetReadinessRow"'));
+  assert.ok(appSource.includes('id: "public-dataset-documents"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-documents"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetDocument"'));
   assert.ok(appSource.includes("function publicDatasetReadinessPreviewRow(item)"));
   assert.ok(appSource.includes("workflowPublicDatasetGateKindFilter"));
   assert.ok(appSource.includes("workflowPublicDatasetReviewReasonFilter"));
@@ -14014,19 +14192,22 @@ test("production schema includes normalized work-unit projection tables with ser
 test("production schema includes release-artifact projections for label snapshots and release reports", () => {
   const schema = readFileSync("db/production-schema.sql", "utf8");
   const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
-  for (const table of ["label_snapshots", "release_reports"]) {
+  for (const table of ["label_snapshots", "release_reports", "public_dataset_documents"]) {
     assert.ok(schema.includes(`create table if not exists ${table}`), table);
     assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
     assert.ok(schema.includes(`create policy ${table}_write_admin_or_service on ${table}`), table);
-    assert.ok(schema.includes(`alter table ${table} add column if not exists event_id text`), table);
-    assert.ok(schema.includes(`alter table ${table} add column if not exists record_json jsonb not null default '{}'::jsonb`), table);
+    assert.ok(schema.includes("event_id text"), table);
+    assert.ok(schema.includes("record_json jsonb not null default '{}'::jsonb"), table);
   }
   assert.ok(schema.includes("create index if not exists label_snapshots_release_idx"));
   assert.ok(schema.includes("create index if not exists release_reports_release_idx"));
+  assert.ok(schema.includes("create index if not exists public_dataset_documents_release_idx"));
   assert.ok(schema.includes("snapshot_json jsonb not null"));
   assert.ok(schema.includes("report_json jsonb not null"));
+  assert.ok(schema.includes("artifact_json jsonb not null"));
   assert.ok(architectureDoc.includes("release-artifact projections"));
   assert.ok(architectureDoc.includes("Submitted label snapshots project into immutable target-label rows"));
+  assert.ok(architectureDoc.includes("Public dataset-card and methodology-report submissions project into `public_dataset_documents`"));
   assert.ok(architectureDoc.includes("Admins can also materialize the current server-derived release report through `/api/v1/release-reports`"));
   assert.ok(architectureDoc.includes("GET /api/release/report` endpoint remains read-only and side-effect-free"));
   assert.ok(architectureDoc.includes("GET `/api/v1/release-version-manifest`"));
@@ -14034,7 +14215,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("does not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
   assert.ok(architectureDoc.includes("Metaphilosophy Critique Ratings Dataset v0.1"));
-  assert.ok(architectureDoc.includes("This endpoint does not publish a dataset, create a separate product object, launch a leaderboard/API/training export"));
+  assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-documents"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents"));
+  assert.ok(architectureDoc.includes("These endpoints do not publish a dataset, create a separate product object, launch a leaderboard/API/training export"));
   assert.ok(architectureDoc.includes("GET /api/v1/score-explanation-audit"));
   assert.ok(architectureDoc.includes("GET /api/v1/score-explanation-audit/{ratingId}"));
   assert.ok(architectureDoc.includes("does not create ratings, score explanations, policy decisions, labels, or release claims"));
@@ -14444,6 +14627,20 @@ test("postgres audit store projects release artifact workflow events into normal
       "export_manifests",
     ],
     [
+      "publicDatasetDocument",
+      {
+        id: "public-dataset-document-projection",
+        releaseId: "october-2026-demo",
+        labelSnapshotId: "label-snapshot-projection",
+        corpusManifestId: "corpus-manifest-projection",
+        publicExportManifestId: "public-manifest-october-2026-demo",
+        documentKind: "dataset_card",
+        bodyHash: "sha256:public-dataset-document-projection",
+        status: "submitted_document_matches_current_release",
+      },
+      "public_dataset_documents",
+    ],
+    [
       "modelImprovementPolicy",
       {
         id: "model-improvement-policy-projection",
@@ -14639,6 +14836,9 @@ test("postgres audit store projects release artifact workflow events into normal
     assert.equal(projection.values.artifact_json.id, resource.id, resourceKey);
     assert.equal(projection.values.record_json.resourceKey, resourceKey, resourceKey);
     assert.equal(projection.values.input_hash.startsWith("sha256:"), true, resourceKey);
+    if (resourceKey === "publicDatasetDocument") {
+      assert.equal(projection.values.input_hash, resource.bodyHash, resourceKey);
+    }
   }
   const evaluationProjection = releaseArtifactProjectionForWorkflowEvent(
     baseEvent("evaluationRun", {

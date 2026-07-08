@@ -1142,6 +1142,14 @@ const workflowEvidenceCollections = [
     summary: "Read-only Dataset v0.1 public-artifact readiness gates over existing release objects.",
   },
   {
+    id: "public-dataset-documents",
+    label: "Dataset v0.1 documents",
+    endpoint: "/api/v1/public-dataset-documents",
+    resourceKey: "publicDatasetDocument",
+    group: "Release",
+    summary: "Submitted dataset-card and methodology-report evidence for Dataset v0.1 readiness.",
+  },
+  {
     id: "rater-profile-evidence",
     label: "Rater profile evidence",
     endpoint: "/api/v1/rater-profile-evidence",
@@ -4183,6 +4191,45 @@ const workflowTemplates = [
         createdAt: new Date().toISOString(),
       },
     }),
+  },
+  {
+    id: "public-dataset-document",
+    label: "Dataset Document",
+    endpoint: () => "/api/v1/public-dataset-documents",
+    resourceKey: "publicDatasetDocument",
+    requiredRole: "admin",
+    summary: "Submit a Dataset v0.1 dataset-card or methodology-report evidence record without publishing the dataset.",
+    payload: () => {
+      const now = Date.now();
+      return {
+        publicDatasetDocument: {
+          id: `public-dataset-document-${now}`,
+          releaseId,
+          documentKind: "dataset_card",
+          artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+          documentVersion: "dataset-card-v0.1-draft",
+          title: "Metaphilosophy Critique Ratings Dataset v0.1 dataset card",
+          summary:
+            "Dataset card for an expert-rated position-critique dataset with seven-dimensional labels, split governance, and release limitations.",
+          bodyMarkdown:
+            "Dataset v0.1 documents release-cleared position-critique pairs, seven-dimensional expert-supervised labels, confidence and triggered explanations where available, item-text hashes, split manifests, corpus composition, and release limitations.",
+          bodyHash: `sha256:public-dataset-document-${now}`,
+          linkedReleaseObjectIds: {
+            corpusManifestId: `corpus-composition-${releaseId}`,
+            labelSnapshotId: "snapshot-oct-api",
+            publicExportManifestId: `public-manifest-${releaseId}`,
+            releaseVersionManifestId: `release-version-manifest-${releaseId}`,
+          },
+          hiddenProtectedExclusionSummary:
+            "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded.",
+          downstreamLaunchBoundary:
+            "No public leaderboard, API evaluator, public training export launch, or judge-model launch before Dataset v0.1 readiness is complete.",
+          preparedBy: state.session?.user?.id ?? "demo-admin",
+          reviewedBy: state.session?.user?.id ?? "demo-admin",
+          createdAt: new Date().toISOString(),
+        },
+      };
+    },
   },
   {
     id: "operator-evidence-package-jsonl-import",

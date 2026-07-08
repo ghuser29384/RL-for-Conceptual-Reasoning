@@ -267,6 +267,7 @@ import { createExternalJwtAuthConfig, verifyExternalJwtToken } from "./auth/exte
 import { createLocalAuditStore } from "./storage/local-audit-store.mjs";
 
 const releaseId = "october-2026-demo";
+const publicDatasetArtifactName = "Metaphilosophy Critique Ratings Dataset v0.1";
 const clientSurfaceCspHeader = clientSurfaceCspHeaderValue(REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
 const clientSurfaceSecurityHeaders = {
   "content-security-policy": clientSurfaceCspHeader,
@@ -6174,6 +6175,59 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
+  workflowWriteSpec(/^\/api\/v1\/public-dataset-documents$/, "public_dataset_document_submitted", "publicDatasetDocument", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "documentKind",
+      "artifactName",
+      "documentVersion",
+      "title",
+      "summary",
+      "bodyMarkdown",
+      "bodyHash",
+      "hiddenProtectedExclusionSummary",
+      "downstreamLaunchBoundary",
+      "linkedReleaseObjectIds",
+      "preparedBy",
+      "reviewedBy",
+      "createdAt",
+    ],
+    requiredObjectFields: ["linkedReleaseObjectIds"],
+    requiredObjectKeys: {
+      linkedReleaseObjectIds: ["corpusManifestId", "labelSnapshotId", "publicExportManifestId", "releaseVersionManifestId"],
+    },
+    requiredStringPrefixes: { bodyHash: "sha256:" },
+    requiredStringIncludes: {
+      hiddenProtectedExclusionSummary: ["hidden", "protected", "excluded"],
+      downstreamLaunchBoundary: ["leaderboard", "api", "training"],
+    },
+    allowedValues: { documentKind: ["dataset_card", "methodology_report"] },
+    requiredExactFields: {
+      artifactName: publicDatasetArtifactName,
+    },
+    requiredWhen: [
+      {
+        field: "documentKind",
+        equals: "dataset_card",
+        requiredStringIncludesAny: {
+          title: ["dataset"],
+          summary: ["dataset"],
+          bodyMarkdown: ["dataset"],
+        },
+      },
+      {
+        field: "documentKind",
+        equals: "methodology_report",
+        requiredStringIncludesAny: {
+          title: ["method"],
+          summary: ["method"],
+          bodyMarkdown: ["method"],
+        },
+      },
+    ],
+  }),
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/supersede$/, "release_supersession_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "releaseId",
@@ -6949,6 +7003,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rater-training-exposure-snapshots\/(?<id>[^/]+)$/, "raterTrainingExposureSnapshot", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies\/(?<id>[^/]+)$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-errata\/(?<id>[^/]+)$/, "releaseErratum", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/public-dataset-documents\/(?<id>[^/]+)$/, "publicDatasetDocument", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/schedule-rebaseline-policies\/(?<id>[^/]+)$/, "scheduleRebaselinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/schedule-status-snapshots\/(?<id>[^/]+)$/, "scheduleStatusSnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governance-approvals\/(?<id>[^/]+)$/, "governanceApprovalRecord", adminAuditRoles),
@@ -7093,6 +7148,7 @@ const workflowCollectionReadEndpoints = [
   workflowCollectionReadSpec(/^\/api\/v1\/comparability-claims$/, "comparabilityClaim", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/release-errata$/, "releaseErratum", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/public-dataset-documents$/, "publicDatasetDocument", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/benchmark-submission-policies$/, "benchmarkSubmissionPolicy", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmarkSubmission", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/governance-approvals$/, "governanceApprovalRecord", adminAuditRoles),
@@ -22187,6 +22243,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const raterTrainingExposureSnapshots = latestWorkflowResources(workflowEvents, "raterTrainingExposureSnapshot");
   const releaseErratumDisclosurePolicies = latestWorkflowResources(workflowEvents, "releaseErratumDisclosurePolicy");
   const releaseErrata = latestWorkflowResources(workflowEvents, "releaseErratum");
+  const publicDatasetDocuments = latestWorkflowResources(workflowEvents, "publicDatasetDocument");
   const scheduleRebaselinePolicies = latestWorkflowResources(workflowEvents, "scheduleRebaselinePolicy");
   const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
@@ -22399,6 +22456,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterTrainingExposureSnapshots,
     releaseErratumDisclosurePolicies,
     releaseErrata,
+    publicDatasetDocuments,
     scheduleRebaselinePolicies,
     scheduleStatusSnapshots,
     publicExamplePracticeSessions,
@@ -22609,6 +22667,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     raterTrainingExposureSnapshots,
     releaseErratumDisclosurePolicies,
     releaseErrata,
+    publicDatasetDocuments,
     scheduleRebaselinePolicies,
     scheduleStatusSnapshots,
       publicExamplePracticeSessions,

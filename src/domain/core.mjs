@@ -16110,6 +16110,99 @@ function latestSubmittedReleaseArtifact(records = [], releaseId) {
   return [...records].reverse().find((record) => !record?.releaseId || record.releaseId === releaseId) ?? null;
 }
 
+const PUBLIC_DATASET_ARTIFACT_NAME = "Metaphilosophy Critique Ratings Dataset v0.1";
+const publicDatasetDocumentKinds = new Set(["dataset_card", "methodology_report"]);
+
+function latestSubmittedPublicDatasetDocument(records = [], releaseId, documentKind) {
+  return [...records]
+    .reverse()
+    .find(
+      (record) =>
+        record?.releaseId === releaseId &&
+        record?.documentKind === documentKind &&
+        record?.artifactName === PUBLIC_DATASET_ARTIFACT_NAME,
+    ) ?? null;
+}
+
+function publicDatasetDocumentEvidence(records = [], releaseId, documentKind, expectedLinks = {}) {
+  const submitted = latestSubmittedPublicDatasetDocument(records, releaseId, documentKind);
+  const readbackRoutes = ["/api/v1/public-dataset-documents"];
+  if (!publicDatasetDocumentKinds.has(documentKind)) {
+    return {
+      documentKind,
+      status: "unsupported_public_dataset_document_kind",
+      sourceEvidenceIds: [],
+      sourceStatuses: ["unsupported_public_dataset_document_kind"],
+      reviewReasons: [`publicDatasetDocument:${documentKind}:unsupported_kind`],
+      readbackRoutes,
+    };
+  }
+  if (!submitted) {
+    return {
+      documentKind,
+      status: "no_submitted_document",
+      sourceEvidenceIds: [],
+      sourceStatuses: ["not_submitted"],
+      reviewReasons: [`publicDatasetDocument:${documentKind}:not_submitted`],
+      readbackRoutes,
+    };
+  }
+
+  const linkedIds = submitted.linkedReleaseObjectIds ?? {};
+  const missingFields = ["id", "documentVersion", "title", "summary", "bodyMarkdown", "bodyHash", "preparedBy", "reviewedBy", "createdAt"].filter(
+    (field) => !hasRequiredValue(submitted?.[field]),
+  );
+  const linkReviewReasons = Object.entries(expectedLinks)
+    .filter(([, expectedValue]) => hasRequiredValue(expectedValue))
+    .map(([field, expectedValue]) =>
+      linkedIds?.[field] === expectedValue ? null : `publicDatasetDocument:${documentKind}:linkedReleaseObjectIds.${field}_mismatch`,
+    )
+    .filter(Boolean);
+  const hiddenSummary = String(submitted.hiddenProtectedExclusionSummary ?? "").toLowerCase();
+  const downstreamBoundary = String(submitted.downstreamLaunchBoundary ?? "").toLowerCase();
+  const bodyText = `${submitted.title ?? ""} ${submitted.summary ?? ""} ${submitted.bodyMarkdown ?? ""}`.toLowerCase();
+  const reviewReasons = [
+    ...missingFields.map((field) => `publicDatasetDocument:${documentKind}:${field}_missing`),
+    typeof submitted.bodyHash === "string" && submitted.bodyHash.startsWith("sha256:")
+      ? null
+      : `publicDatasetDocument:${documentKind}:bodyHash_invalid`,
+    ...linkReviewReasons,
+    ["hidden", "protected", "excluded"].every((fragment) => hiddenSummary.includes(fragment))
+      ? null
+      : `publicDatasetDocument:${documentKind}:hidden_protected_exclusion_summary_incomplete`,
+    ["leaderboard", "api", "training"].every((fragment) => downstreamBoundary.includes(fragment))
+      ? null
+      : `publicDatasetDocument:${documentKind}:downstream_launch_boundary_incomplete`,
+    documentKind === "dataset_card" && !bodyText.includes("dataset")
+      ? `publicDatasetDocument:${documentKind}:dataset_card_copy_missing`
+      : null,
+    documentKind === "methodology_report" && !bodyText.includes("method")
+      ? `publicDatasetDocument:${documentKind}:methodology_copy_missing`
+      : null,
+  ].filter(Boolean);
+
+  const readbackItemRoute = `/api/v1/public-dataset-documents/${encodeURIComponent(submitted.id)}`;
+  return {
+    documentKind,
+    submittedDocumentId: submitted.id,
+    status: reviewReasons.length ? "submitted_document_review_required" : "submitted_document_matches_current_release",
+    sourceEvidenceIds: [submitted.id],
+    sourceStatuses: [reviewReasons.length ? "submitted_document_review_required" : "submitted_document_matches_current_release"],
+    reviewReasons,
+    readbackRoutes: [...readbackRoutes, readbackItemRoute],
+    documentSummary: {
+      id: submitted.id,
+      documentKind: submitted.documentKind,
+      documentVersion: submitted.documentVersion,
+      bodyHash: submitted.bodyHash,
+      linkedReleaseObjectIds: submitted.linkedReleaseObjectIds ?? {},
+      preparedBy: submitted.preparedBy,
+      reviewedBy: submitted.reviewedBy,
+      createdAt: submitted.createdAt,
+    },
+  };
+}
+
 function releaseManifestLinkCheck(artifact, expectedId, submittedId) {
   return {
     artifact,
@@ -16205,6 +16298,7 @@ function buildPublicDatasetReadinessReport(
     publicExportManifest,
     hiddenBenchmarkFreeze,
     validationDesign,
+    publicDatasetDocuments = [],
   },
 ) {
   const targetScaleOpen = currentStatus !== "target_scale_met";
@@ -16222,6 +16316,19 @@ function buildPublicDatasetReadinessReport(
   const publicPairCount = publicExportManifest?.counts?.critiques ?? 0;
   const publicPositionCount = publicExportManifest?.counts?.positions ?? 0;
   const itemLabelCount = publicExportManifest?.counts?.itemLabels ?? Object.keys(labelSnapshot?.itemLabels ?? {}).length;
+  const expectedDocumentLinks = {
+    corpusManifestId: corpusManifest?.id,
+    labelSnapshotId: labelSnapshot?.id,
+    publicExportManifestId: publicExportManifest?.id,
+    releaseVersionManifestId: releaseVersionManifest?.id,
+  };
+  const datasetCardEvidence = publicDatasetDocumentEvidence(publicDatasetDocuments, releaseId, "dataset_card", expectedDocumentLinks);
+  const methodologyReportEvidence = publicDatasetDocumentEvidence(
+    publicDatasetDocuments,
+    releaseId,
+    "methodology_report",
+    expectedDocumentLinks,
+  );
   const releaseReportRoute = "/api/release/report";
   const routeBase = "/api/v1/public-dataset-readiness";
   const targetGapRoutes = ["/api/v1/target-gaps", ...(targetGaps?.rows ?? []).map((row) => `/api/v1/target-gaps/${row.id}`)];
@@ -16381,21 +16488,39 @@ function buildPublicDatasetReadinessReport(
       id: "dataset_card",
       label: "Dataset card",
       gateKind: "public_documentation",
-      status: "documentation_not_submitted",
-      sourceEvidenceIds: [],
-      sourceStatuses: ["not_submitted"],
-      reviewReasons: ["datasetCard:not_submitted"],
-      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections"],
+      status:
+        datasetCardEvidence.status === "submitted_document_matches_current_release"
+          ? "ready"
+          : datasetCardEvidence.status === "no_submitted_document"
+            ? "documentation_not_submitted"
+            : "documentation_review_required",
+      sourceEvidenceIds: datasetCardEvidence.sourceEvidenceIds,
+      sourceStatuses: datasetCardEvidence.sourceStatuses,
+      reviewReasons:
+        datasetCardEvidence.status === "no_submitted_document"
+          ? ["datasetCard:not_submitted"]
+          : datasetCardEvidence.reviewReasons,
+      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections", ...datasetCardEvidence.readbackRoutes],
+      documentSummary: datasetCardEvidence.documentSummary,
     }),
     publicDatasetReadinessRow({
       id: "methodology_report",
       label: "Short methodology report",
       gateKind: "public_documentation",
-      status: "documentation_not_submitted",
-      sourceEvidenceIds: [],
-      sourceStatuses: ["not_submitted"],
-      reviewReasons: ["methodologyReport:not_submitted"],
-      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections"],
+      status:
+        methodologyReportEvidence.status === "submitted_document_matches_current_release"
+          ? "ready"
+          : methodologyReportEvidence.status === "no_submitted_document"
+            ? "documentation_not_submitted"
+            : "documentation_review_required",
+      sourceEvidenceIds: methodologyReportEvidence.sourceEvidenceIds,
+      sourceStatuses: methodologyReportEvidence.sourceStatuses,
+      reviewReasons:
+        methodologyReportEvidence.status === "no_submitted_document"
+          ? ["methodologyReport:not_submitted"]
+          : methodologyReportEvidence.reviewReasons,
+      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections", ...methodologyReportEvidence.readbackRoutes],
+      documentSummary: methodologyReportEvidence.documentSummary,
     }),
     publicDatasetReadinessRow({
       id: "hidden_protected_exclusions",
@@ -16439,11 +16564,15 @@ function buildPublicDatasetReadinessReport(
       ],
       readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-version-manifest"],
     }),
+  ];
+  const upstreamOpenRows = rows.filter((row) => row.status !== "ready");
+  const documentationOpen = rows.some((row) => row.gateKind === "public_documentation" && row.status !== "ready");
+  rows.push(
     publicDatasetReadinessRow({
       id: "public_first_ladder_gate",
       label: "Public-first ladder blocks leaderboard, API evaluator, and training-export launch",
       gateKind: "release_ladder",
-      status: "downstream_blocked_until_dataset_v0_1_ready",
+      status: upstreamOpenRows.length ? "downstream_blocked_until_dataset_v0_1_ready" : "ready",
       sourceEvidenceIds: [
         releaseArtifactEvidence?.id,
         releaseVersionManifest?.id,
@@ -16454,18 +16583,22 @@ function buildPublicDatasetReadinessReport(
       reviewReasons: [
         targetScaleOpen ? "publicFirstLadder:target_scale_incomplete" : null,
         releaseFreezeOpen ? "publicFirstLadder:release_not_frozen" : null,
-        "publicFirstLadder:dataset_card_and_methodology_required_before_downstream_public_launch",
+        documentationOpen ? "publicFirstLadder:dataset_card_and_methodology_required_before_downstream_public_launch" : null,
+        ...upstreamOpenRows
+          .filter((row) => !["release_cleared_position_critique_pairs", "release_version_freeze", "dataset_card", "methodology_report"].includes(row.id))
+          .map((row) => `publicFirstLadder:upstream_row_open:${row.id}`),
       ],
       readbackRoutes: [
         routeBase,
         releaseReportRoute,
         "/api/v1/release-version-manifest",
         "/api/v1/release-report-sections",
+        "/api/v1/public-dataset-documents",
         "/api/v1/model-evaluation-reproducibility-checklist",
       ],
       downstreamArtifacts: ["public_leaderboard", "api_evaluator", "training_export_launch", "judge_model_launch"],
     }),
-  ];
+  );
   const openRows = rows.filter((row) => row.status !== "ready");
   const status = targetScaleOpen
     ? "public_dataset_v0_1_blocked_by_target_scale"
@@ -16479,7 +16612,7 @@ function buildPublicDatasetReadinessReport(
   return {
     id: `public-dataset-readiness-${releaseId}`,
     releaseId,
-    artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+    artifactName: PUBLIC_DATASET_ARTIFACT_NAME,
     artifactKind: "expert_rated_position_critique_dataset",
     generatedAt: new Date().toISOString(),
     releaseUseStatus: status,
@@ -16514,6 +16647,7 @@ function publicDatasetReadinessRow({
   targetGapIds = [],
   protectedExclusions = null,
   downstreamArtifacts = null,
+  documentSummary = null,
 }) {
   return {
     id,
@@ -16528,6 +16662,7 @@ function publicDatasetReadinessRow({
     ...(counts ? { counts } : {}),
     ...(protectedExclusions ? { protectedExclusions } : {}),
     ...(downstreamArtifacts ? { downstreamArtifacts } : {}),
+    ...(documentSummary ? { documentSummary } : {}),
   };
 }
 
@@ -33797,6 +33932,7 @@ export function buildOctoberReleaseReport(
     publicExportManifest,
     hiddenBenchmarkFreeze,
     validationDesign,
+    publicDatasetDocuments: options.publicDatasetDocuments ?? [],
   });
   const modelEvaluationArtifactEvidence = buildSubmittedModelEvaluationArtifactEvidence(
     releaseId,
@@ -34209,6 +34345,7 @@ export function buildOctoberReleaseReport(
       rightsRecords: options.rightsRecords ?? [],
       rightsClearancePolicies: options.rightsClearancePolicies ?? [],
       releaseVersions: options.releaseVersions ?? [],
+      publicDatasetDocuments: options.publicDatasetDocuments ?? [],
     },
     workflowMetricArtifacts: {
       metricConfigs: options.metricConfigs ?? [],
