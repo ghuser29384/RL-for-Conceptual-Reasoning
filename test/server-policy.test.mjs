@@ -11495,6 +11495,98 @@ test("operator action item queue is admin/auditor readback derived from the rele
     structurallyValidBlockedPackageReviewManifest.body.sourceRoutes.packageFileValidationTemplate,
     "/api/v1/public-dataset-package-files/validate/template",
   );
+  assert.equal(
+    structurallyValidBlockedPackageReviewManifest.body.sourceRoutes.packageReviews,
+    "/api/v1/public-dataset-package-reviews",
+  );
+
+  const packageReviewPayload = {
+    publicDatasetPackageReview: {
+      id: "dataset-v0-1-package-review-blocked",
+      releaseId: structurallyValidBlockedPackageReviewManifest.body.releaseId,
+      artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+      packageManifestHash: structurallyValidBlockedPackageReviewManifest.body.packageManifestHash,
+      packageValidationStatus: structurallyValidBlockedPackageReviewManifest.body.packageValidationStatus,
+      packageReviewStatus: structurallyValidBlockedPackageReviewManifest.body.packageReviewStatus,
+      releasePackageStatus: structurallyValidBlockedPackageReviewManifest.body.releasePackageStatus,
+      publicationGateStatus: structurallyValidBlockedPackageReviewManifest.body.publicationGateStatus,
+      packageReadyForPublicationReview: structurallyValidBlockedPackageReviewManifest.body.packageReadyForPublicationReview,
+      packageManifest: structurallyValidBlockedPackageReviewManifest.body.packageManifest,
+      validationSummary: structurallyValidBlockedPackageReviewManifest.body.validationSummary,
+      reviewDecision: "blocked_until_release_gates_close",
+      reviewedBy: "demo-admin",
+      reviewedAt: "2026-10-01T00:00:00.000Z",
+      rawPackageContentsStored: false,
+      packageWriteActionAvailable: false,
+      publicationActionAvailable: false,
+    },
+  };
+
+  const rawPackageReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      publicDatasetPackageReview: {
+        ...packageReviewPayload.publicDatasetPackageReview,
+        id: "dataset-v0-1-package-review-raw-content",
+        packageManifest: {
+          ...packageReviewPayload.publicDatasetPackageReview.packageManifest,
+          files: [
+            {
+              ...packageReviewPayload.publicDatasetPackageReview.packageManifest.files[0],
+              content: "raw package file content must not be stored in review evidence",
+            },
+          ],
+        },
+      },
+    }),
+  });
+  assert.equal(rawPackageReview.status, 400);
+  assert.match(rawPackageReview.body.detail, /raw package content/);
+
+  const packageReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(packageReviewPayload),
+  });
+  assert.equal(packageReview.status, 201, JSON.stringify(packageReview.body));
+  assert.equal(packageReview.body.eventType, "public_dataset_package_review_submitted");
+  assert.equal(packageReview.body.resourceKey, "publicDatasetPackageReview");
+  assert.equal(packageReview.body.resourceId, "dataset-v0-1-package-review-blocked");
+
+  const packageReviews = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(packageReviews.status, 200, JSON.stringify(packageReviews.body));
+  assert.equal(packageReviews.body.resourceKey, "publicDatasetPackageReview");
+  assert.equal(packageReviews.body.count, 1);
+  assert.equal(packageReviews.body.items[0].packageManifestHash, structurallyValidBlockedPackageReviewManifest.body.packageManifestHash);
+  assert.equal(packageReviews.body.items[0].rawPackageContentsStored, false);
+
+  const packageReviewById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-reviews/dataset-v0-1-package-review-blocked",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(packageReviewById.status, 200, JSON.stringify(packageReviewById.body));
+  assert.equal(packageReviewById.body.id, "dataset-v0-1-package-review-blocked");
+  assert.equal(packageReviewById.body.packageReviewStatus, "public_dataset_package_review_blocked_by_release_gates");
+
+  const releaseReportWithPackageReview = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseReportWithPackageReview.status, 200, JSON.stringify(releaseReportWithPackageReview.body));
+  assert.equal(releaseReportWithPackageReview.body.workflowReleaseArtifacts.publicDatasetPackageReviews.length, 1);
+  assert.equal(
+    releaseReportWithPackageReview.body.workflowReleaseArtifacts.publicDatasetPackageReviews[0].packageManifestHash,
+    structurallyValidBlockedPackageReviewManifest.body.packageManifestHash,
+  );
 
   const publicDatasetDownstreamLaunches = await invokeApi(context, {
     method: "GET",
@@ -15292,6 +15384,10 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-files/validate/template"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageFileValidationTemplate"'));
   assert.ok(appSource.includes("function publicDatasetPackageValidationTemplatePreviewRow(item)"));
+  assert.ok(appSource.includes('id: "public-dataset-package-reviews"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-reviews"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetPackageReview"'));
+  assert.ok(appSource.includes("function publicDatasetPackageReviewPreviewRow(item)"));
   assert.ok(appSource.includes('["Validation route", result.validationRoute ?? "not available"]'));
   assert.ok(appSource.includes('["Review manifest route", result.sourceRoutes?.packageFileReviewManifest ?? "not available"]'));
   assert.ok(appSource.includes('["Review manifest route", item.sourceRoutes?.packageFileReviewManifest ?? "not available"]'));
@@ -15643,7 +15739,7 @@ test("production schema includes normalized work-unit projection tables with ser
 test("production schema includes release-artifact projections for label snapshots and release reports", () => {
   const schema = readFileSync("db/production-schema.sql", "utf8");
   const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
-  for (const table of ["label_snapshots", "release_reports", "public_dataset_documents"]) {
+  for (const table of ["label_snapshots", "release_reports", "public_dataset_documents", "public_dataset_package_reviews"]) {
     assert.ok(schema.includes(`create table if not exists ${table}`), table);
     assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
     assert.ok(schema.includes(`create policy ${table}_write_admin_or_service on ${table}`), table);
@@ -15653,12 +15749,14 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(schema.includes("create index if not exists label_snapshots_release_idx"));
   assert.ok(schema.includes("create index if not exists release_reports_release_idx"));
   assert.ok(schema.includes("create index if not exists public_dataset_documents_release_idx"));
+  assert.ok(schema.includes("create index if not exists public_dataset_package_reviews_release_idx"));
   assert.ok(schema.includes("snapshot_json jsonb not null"));
   assert.ok(schema.includes("report_json jsonb not null"));
   assert.ok(schema.includes("artifact_json jsonb not null"));
   assert.ok(architectureDoc.includes("release-artifact projections"));
   assert.ok(architectureDoc.includes("Submitted label snapshots project into immutable target-label rows"));
   assert.ok(architectureDoc.includes("Public dataset-card and methodology-report submissions project into `public_dataset_documents`"));
+  assert.ok(architectureDoc.includes("Hash-only Dataset v0.1 package-review submissions project into `public_dataset_package_reviews`"));
   assert.ok(architectureDoc.includes("Admins can also materialize the current server-derived release report through `/api/v1/release-reports`"));
   assert.ok(architectureDoc.includes("GET /api/release/report` endpoint remains read-only and side-effect-free"));
   assert.ok(architectureDoc.includes("GET /api/v1/target-gaps/current-package-manifest"));
@@ -15687,6 +15785,10 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-files/review-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageReviewManifest"));
   assert.ok(architectureDoc.includes("does not store package contents, append evidence, create files, publish the dataset"));
+  assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-reviews"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-reviews"));
+  assert.ok(architectureDoc.includes("publicDatasetPackageReview"));
+  assert.ok(architectureDoc.includes("public_dataset_package_reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/validate/template"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileValidationTemplate"));
   assert.ok(architectureDoc.includes("unchanged template bodies are expected to fail validation"));
@@ -15808,6 +15910,8 @@ test("production schema includes operator-evidence projection tables for release
     "corpus_manifests",
     "training_exports",
     "export_manifests",
+    "public_dataset_documents",
+    "public_dataset_package_reviews",
     "model_improvement_policies",
     "model_improvement_runs",
     "evaluation_runs",
@@ -15847,7 +15951,7 @@ test("production schema includes operator-evidence projection tables for release
   assert.ok(architectureDoc.includes("sanity_baseline_runs"));
   assert.ok(architectureDoc.includes("model_run_reproducibility_policies"));
   assert.ok(architectureDoc.includes("make submitted operator evidence queryable for the release-artifact package"));
-  assert.ok(architectureDoc.includes("do not run models, create label snapshots, or close release gates"));
+  assert.ok(architectureDoc.includes("do not run models, create label snapshots, store raw dataset package files, publish public datasets, or close release gates"));
 });
 
 test("production schema includes discussion and adjudication projection tables with expert readback RLS", () => {
@@ -16131,6 +16235,17 @@ test("postgres audit store projects release artifact workflow events into normal
       "public_dataset_documents",
     ],
     [
+      "publicDatasetPackageReview",
+      {
+        id: "public-dataset-package-review-projection",
+        releaseId: "october-2026-demo",
+        packageManifestHash: "sha256:public-dataset-package-review-projection",
+        packageReviewStatus: "public_dataset_package_review_blocked_by_release_gates",
+        packageValidationStatus: "public_dataset_package_files_valid_but_release_blocked",
+      },
+      "public_dataset_package_reviews",
+    ],
+    [
       "modelImprovementPolicy",
       {
         id: "model-improvement-policy-projection",
@@ -16328,6 +16443,9 @@ test("postgres audit store projects release artifact workflow events into normal
     assert.equal(projection.values.input_hash.startsWith("sha256:"), true, resourceKey);
     if (resourceKey === "publicDatasetDocument") {
       assert.equal(projection.values.input_hash, resource.bodyHash, resourceKey);
+    }
+    if (resourceKey === "publicDatasetPackageReview") {
+      assert.equal(projection.values.input_hash, resource.packageManifestHash, resourceKey);
     }
   }
   const evaluationProjection = releaseArtifactProjectionForWorkflowEvent(

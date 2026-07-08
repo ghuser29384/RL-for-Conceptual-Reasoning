@@ -1189,6 +1189,15 @@ const workflowEvidenceCollections = [
       "Validation-only request body templates for checking replaced Dataset v0.1 package files before any package write or public release.",
   },
   {
+    id: "public-dataset-package-reviews",
+    label: "Dataset v0.1 package reviews",
+    endpoint: "/api/v1/public-dataset-package-reviews",
+    resourceKey: "publicDatasetPackageReview",
+    group: "Release",
+    summary:
+      "Append-only hash-only review evidence for Dataset v0.1 package manifests; stores no raw package files and exposes no publish action.",
+  },
+  {
     id: "public-dataset-publication-gate",
     label: "Dataset v0.1 publication gate",
     endpoint: "/api/v1/public-dataset-publication-gate",
@@ -9109,6 +9118,9 @@ function workflowCollectionPreview(collection, previewItems) {
   if (collection.id === "public-dataset-package-validation-template") {
     return `<div class="operatorActionPreview">${previewItems.map(publicDatasetPackageValidationTemplatePreviewRow).join("")}</div>`;
   }
+  if (collection.id === "public-dataset-package-reviews") {
+    return `<div class="operatorActionPreview">${previewItems.map(publicDatasetPackageReviewPreviewRow).join("")}</div>`;
+  }
   if (collection.id === "public-dataset-publication-gate") {
     return `<div class="operatorActionPreview">${previewItems.map(publicDatasetPublicationGatePreviewRow).join("")}</div>`;
   }
@@ -9575,6 +9587,39 @@ function publicDatasetPackageValidationTemplatePreviewRow(item) {
         ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],
         ["Validation notes", notes],
         ["Verification routes", routes],
+      ])}
+    </article>
+  `;
+}
+
+function publicDatasetPackageReviewPreviewRow(item) {
+  const manifestFiles = Array.isArray(item.packageManifest?.files) ? item.packageManifest.files.length : item.counts?.reviewManifestFiles;
+  const validationCounts = item.validationSummary?.counts ?? item.counts ?? {};
+  const fileSummary = [
+    `files: ${manifestFiles ?? "not reported"}`,
+    `hashes: ${validationCounts.submittedFileHashes ?? item.counts?.submittedFileHashes ?? "not reported"}`,
+    `invalid: ${validationCounts.invalidContentFiles ?? "not reported"}`,
+  ].join(", ");
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.id ?? "Package review")}</strong>
+          <span>${escapeHtml(item.packageManifestHash ?? "hash not reported")}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.packageReviewStatus ?? item.status ?? "not reported"))}</span>
+      </div>
+      ${metricList([
+        ["Validation", humanize(item.packageValidationStatus ?? "not reported")],
+        ["Release package", humanize(item.releasePackageStatus ?? "not reported")],
+        ["Publication gate", humanize(item.publicationGateStatus ?? "not reported")],
+        ["Decision", humanize(item.reviewDecision ?? "not reported")],
+        ["Reviewed by", item.reviewedBy ?? "not reported"],
+        ["Reviewed at", item.reviewedAt ?? "not reported"],
+        ["Raw contents stored", item.rawPackageContentsStored ? "yes" : "no"],
+        ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],
+        ["Publish action", item.publicationActionAvailable ? "available" : "not exposed"],
+        ["Manifest summary", fileSummary],
       ])}
     </article>
   `;
@@ -15036,6 +15081,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
         collection.id !== "public-dataset-release-package" &&
         collection.id !== "public-dataset-package-file-template" &&
         collection.id !== "public-dataset-package-validation-template" &&
+        collection.id !== "public-dataset-package-reviews" &&
         collection.id !== "public-dataset-publication-gate" &&
         collection.id !== "public-dataset-downstream-launches"
       ) {
@@ -17647,6 +17693,7 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "public-dataset-release-package" ||
     collection.id === "public-dataset-package-file-template" ||
     collection.id === "public-dataset-package-validation-template" ||
+    collection.id === "public-dataset-package-reviews" ||
     collection.id === "public-dataset-publication-gate" ||
     collection.id === "public-dataset-downstream-launches" ||
     collection.id === "public-dataset-readiness" ||

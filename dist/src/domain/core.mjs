@@ -16309,6 +16309,7 @@ const publicDatasetPackageFileReadbackRoutes = [
   "/api/v1/public-dataset-package-files/validate/template",
   "/api/v1/public-dataset-package-files/validate",
   "/api/v1/public-dataset-package-files/review-manifest",
+  "/api/v1/public-dataset-package-reviews",
 ];
 const publicDatasetDocumentKinds = new Set(["dataset_card", "methodology_report"]);
 
@@ -34735,6 +34736,7 @@ export function buildOctoberReleaseReport(
       rightsClearancePolicies: options.rightsClearancePolicies ?? [],
       releaseVersions: options.releaseVersions ?? [],
       publicDatasetDocuments: options.publicDatasetDocuments ?? [],
+      publicDatasetPackageReviews: options.publicDatasetPackageReviews ?? [],
     },
     workflowMetricArtifacts: {
       metricConfigs: options.metricConfigs ?? [],

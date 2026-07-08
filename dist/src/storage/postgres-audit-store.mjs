@@ -53,6 +53,7 @@ const operatorEvidenceProjectionTables = Object.freeze({
   trainingExport: "training_exports",
   exportManifest: "export_manifests",
   publicDatasetDocument: "public_dataset_documents",
+  publicDatasetPackageReview: "public_dataset_package_reviews",
   modelImprovementPolicy: "model_improvement_policies",
   modelImprovementRun: "model_improvement_runs",
   evaluationRun: "evaluation_runs",
@@ -1046,6 +1047,8 @@ function operatorEvidenceProjectionValuesForWorkflowResource(resourceKey, resour
       resource.corpus_manifest_id ??
       resource.exportManifestId ??
       resource.export_manifest_id ??
+      resource.packageManifestId ??
+      resource.package_manifest_id ??
       null,
     related_evaluation_run_id:
       resource.evaluationRunId ??
@@ -1069,6 +1072,8 @@ function operatorEvidenceProjectionValuesForWorkflowResource(resourceKey, resour
       resource.input_hash ??
       resource.artifactHash ??
       resource.artifact_hash ??
+      resource.packageManifestHash ??
+      resource.package_manifest_hash ??
       resource.manifestHash ??
       resource.manifest_hash ??
       resource.exportHash ??

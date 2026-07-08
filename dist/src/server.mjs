@@ -272,6 +272,7 @@ const publicDatasetPackageFileTemplateRoute = "/api/v1/public-dataset-package-fi
 const publicDatasetPackageFileValidationTemplateRoute = "/api/v1/public-dataset-package-files/validate/template";
 const publicDatasetPackageFileValidationRoute = "/api/v1/public-dataset-package-files/validate";
 const publicDatasetPackageFileReviewManifestRoute = "/api/v1/public-dataset-package-files/review-manifest";
+const publicDatasetPackageReviewsRoute = "/api/v1/public-dataset-package-reviews";
 const clientSurfaceCspHeader = clientSurfaceCspHeaderValue(REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
 const clientSurfaceSecurityHeaders = {
   "content-security-policy": clientSurfaceCspHeader,
@@ -2121,6 +2122,75 @@ function validateSourceIntakePhase1Boundary(resource) {
     }
   }
   return { ok: true };
+}
+
+function validatePublicDatasetPackageReviewResource(resource) {
+  const rawContentPaths = publicDatasetPackageReviewRawContentPaths(resource);
+  if (rawContentPaths.length) {
+    return invalid(`publicDatasetPackageReview cannot include raw package content fields: ${rawContentPaths.join(", ")}`);
+  }
+  const manifest = resource.packageManifest;
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return invalid("publicDatasetPackageReview.packageManifest must be an object");
+  }
+  const files = Array.isArray(manifest.files) ? manifest.files : [];
+  const missingFileFields = [];
+  for (const [index, file] of files.entries()) {
+    for (const field of ["expectedFilename", "artifactKind", "fileFormat", "validationStatus", "contentStatus"]) {
+      if (!hasWorkflowField(file, field)) missingFileFields.push(`packageManifest.files[${index}].${field}`);
+    }
+    if (file?.submittedContentHash && !String(file.submittedContentHash).startsWith("sha256:")) {
+      return invalid(`publicDatasetPackageReview.packageManifest.files[${index}].submittedContentHash must start with sha256:`);
+    }
+  }
+  if (missingFileFields.length) return invalid(`missing package manifest file fields: ${missingFileFields.join(", ")}`);
+  if (!Array.isArray(manifest.unexpectedFiles)) return invalid("publicDatasetPackageReview.packageManifest.unexpectedFiles must be an array");
+  const packageValidationStatus = resource.packageValidationStatus;
+  const packageReviewStatus = resource.packageReviewStatus;
+  if (packageValidationStatus === "public_dataset_package_files_invalid" && packageReviewStatus !== "public_dataset_package_review_blocked_by_invalid_files") {
+    return invalid("invalid package-file validation must map to public_dataset_package_review_blocked_by_invalid_files");
+  }
+  if (
+    packageValidationStatus === "public_dataset_package_files_valid_but_release_blocked" &&
+    packageReviewStatus !== "public_dataset_package_review_blocked_by_release_gates"
+  ) {
+    return invalid("release-blocked package validation must map to public_dataset_package_review_blocked_by_release_gates");
+  }
+  if (
+    packageValidationStatus === "public_dataset_package_files_ready_for_governed_review" &&
+    packageReviewStatus !== "public_dataset_package_review_ready_for_governed_publication_review"
+  ) {
+    return invalid("ready package validation must map to public_dataset_package_review_ready_for_governed_publication_review");
+  }
+  if (
+    resource.reviewDecision === "approved_for_governed_publication_review" &&
+    packageReviewStatus !== "public_dataset_package_review_ready_for_governed_publication_review"
+  ) {
+    return invalid("approval for governed publication review requires a ready package review status");
+  }
+  if (
+    resource.reviewDecision === "blocked_until_release_gates_close" &&
+    packageReviewStatus !== "public_dataset_package_review_blocked_by_release_gates"
+  ) {
+    return invalid("blocked_until_release_gates_close requires a release-gate-blocked package review status");
+  }
+  return { ok: true };
+}
+
+function publicDatasetPackageReviewRawContentPaths(value, path = "") {
+  const rawKeys = new Set(["content", "body", "bodymarkdown", "rawtext", "filecontent", "packagefiles", "filescontent", "markdownbody", "jsonlcontent"]);
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => publicDatasetPackageReviewRawContentPaths(item, `${path}[${index}]`));
+  }
+  const paths = [];
+  for (const [key, nestedValue] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const nextPath = path ? `${path}.${key}` : key;
+    if (rawKeys.has(normalizedKey)) paths.push(nextPath);
+    paths.push(...publicDatasetPackageReviewRawContentPaths(nestedValue, nextPath));
+  }
+  return paths;
 }
 
 const scoreExplanationRaterCopyForbiddenContextFragments = [
@@ -6232,6 +6302,70 @@ const workflowWriteEndpoints = [
       },
     ],
   }),
+  workflowWriteSpec(/^\/api\/v1\/public-dataset-package-reviews$/, "public_dataset_package_review_submitted", "publicDatasetPackageReview", adminRoles, {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "releaseId",
+      "artifactName",
+      "packageManifestHash",
+      "packageValidationStatus",
+      "packageReviewStatus",
+      "releasePackageStatus",
+      "publicationGateStatus",
+      "packageManifest",
+      "validationSummary",
+      "reviewDecision",
+      "reviewedBy",
+      "reviewedAt",
+      "rawPackageContentsStored",
+      "packageWriteActionAvailable",
+      "publicationActionAvailable",
+    ],
+    requiredObjectFields: ["packageManifest", "validationSummary"],
+    requiredObjectKeys: {
+      packageManifest: ["manifestVersion", "packageManifestHash", "artifactName", "releaseId", "files", "unexpectedFiles"],
+      validationSummary: ["id", "packageValidationStatus", "packageReadyForPublicationReview", "counts"],
+    },
+    requiredNonEmptyArrayFields: ["packageManifest.files"],
+    requiredBooleanFields: ["rawPackageContentsStored", "packageWriteActionAvailable", "publicationActionAvailable"],
+    requiredStringPrefixes: {
+      packageManifestHash: "sha256:",
+      "packageManifest.packageManifestHash": "sha256:",
+    },
+    allowedValues: {
+      packageValidationStatus: [
+        "public_dataset_package_files_invalid",
+        "public_dataset_package_files_ready_for_governed_review",
+        "public_dataset_package_files_valid_but_release_blocked",
+      ],
+      packageReviewStatus: [
+        "public_dataset_package_review_blocked_by_invalid_files",
+        "public_dataset_package_review_blocked_by_release_gates",
+        "public_dataset_package_review_ready_for_governed_publication_review",
+      ],
+      reviewDecision: [
+        "record_hash_only_review_for_followup",
+        "blocked_until_release_gates_close",
+        "approved_for_governed_publication_review",
+      ],
+    },
+    requiredExactFields: {
+      artifactName: publicDatasetArtifactName,
+      rawPackageContentsStored: false,
+      packageWriteActionAvailable: false,
+      publicationActionAvailable: false,
+      "packageManifest.manifestVersion": "dataset_v0_1_package_review_manifest_v1",
+      "packageManifest.artifactName": publicDatasetArtifactName,
+    },
+    requiredFieldMatches: [
+      { field: "releaseId", matchesField: "packageManifest.releaseId" },
+      { field: "artifactName", matchesField: "packageManifest.artifactName" },
+      { field: "packageManifestHash", matchesField: "packageManifest.packageManifestHash" },
+      { field: "packageValidationStatus", matchesField: "validationSummary.packageValidationStatus" },
+    ],
+    customValidator: validatePublicDatasetPackageReviewResource,
+  }),
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/supersede$/, "release_supersession_erratum_submitted", "releaseErratum", adminRoles, {
     allowHiddenMetadata: true,
     pathParamField: "releaseId",
@@ -7008,6 +7142,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies\/(?<id>[^/]+)$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-errata\/(?<id>[^/]+)$/, "releaseErratum", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/public-dataset-documents\/(?<id>[^/]+)$/, "publicDatasetDocument", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/public-dataset-package-reviews\/(?<id>[^/]+)$/, "publicDatasetPackageReview", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/schedule-rebaseline-policies\/(?<id>[^/]+)$/, "scheduleRebaselinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/schedule-status-snapshots\/(?<id>[^/]+)$/, "scheduleStatusSnapshot", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governance-approvals\/(?<id>[^/]+)$/, "governanceApprovalRecord", adminAuditRoles),
@@ -7153,6 +7288,7 @@ const workflowCollectionReadEndpoints = [
   workflowCollectionReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/release-errata$/, "releaseErratum", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/public-dataset-documents$/, "publicDatasetDocument", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/public-dataset-package-reviews$/, "publicDatasetPackageReview", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/benchmark-submission-policies$/, "benchmarkSubmissionPolicy", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmarkSubmission", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/governance-approvals$/, "governanceApprovalRecord", adminAuditRoles),
@@ -12168,6 +12304,7 @@ function publicDatasetPackageManifestReadback(report, options = {}) {
       packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
       packageFileValidation: publicDatasetPackageFileValidationRoute,
       packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      packageReviews: publicDatasetPackageReviewsRoute,
     },
     filters,
     count: items.length,
@@ -12639,6 +12776,7 @@ function publicDatasetReleasePackageReadback(report, options = {}) {
       packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
       packageFileValidation: publicDatasetPackageFileValidationRoute,
       packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      packageReviews: publicDatasetPackageReviewsRoute,
       publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
     },
     filters,
@@ -12687,6 +12825,7 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
     `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`,
     publicDatasetPackageFileValidationRoute,
     publicDatasetPackageFileReviewManifestRoute,
+    publicDatasetPackageReviewsRoute,
     "/api/release/report",
     ...readinessRows.flatMap(publicDatasetReadinessRoutes),
     ...(Array.isArray(packageStep?.routes) ? packageStep.routes : []),
@@ -12728,6 +12867,7 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
       `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`,
       publicDatasetPackageFileValidationRoute,
       publicDatasetPackageFileReviewManifestRoute,
+      publicDatasetPackageReviewsRoute,
     ]),
     routes,
   };
@@ -13200,6 +13340,7 @@ function publicDatasetPublicationGateReadback(report, options = {}) {
       packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
       packageFileValidation: publicDatasetPackageFileValidationRoute,
       packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      packageReviews: publicDatasetPackageReviewsRoute,
     },
     filters,
     count: items.length,
@@ -14020,6 +14161,7 @@ function publicDatasetPackageFileValidationReadback(report, body = {}, actor = {
       packageFileTemplates: "/api/v1/public-dataset-package-files/template",
       packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
       packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      packageReviews: publicDatasetPackageReviewsRoute,
       publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
       publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
     },
@@ -14111,6 +14253,7 @@ function publicDatasetPackageFileReviewManifestReadback(report, body = {}, actor
       packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
       packageFileValidation: publicDatasetPackageFileValidationRoute,
       packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      packageReviews: publicDatasetPackageReviewsRoute,
       publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
       publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
     },
@@ -25586,6 +25729,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const releaseErratumDisclosurePolicies = latestWorkflowResources(workflowEvents, "releaseErratumDisclosurePolicy");
   const releaseErrata = latestWorkflowResources(workflowEvents, "releaseErratum");
   const publicDatasetDocuments = latestWorkflowResources(workflowEvents, "publicDatasetDocument");
+  const publicDatasetPackageReviews = latestWorkflowResources(workflowEvents, "publicDatasetPackageReview");
   const scheduleRebaselinePolicies = latestWorkflowResources(workflowEvents, "scheduleRebaselinePolicy");
   const scheduleStatusSnapshots = latestWorkflowResources(workflowEvents, "scheduleStatusSnapshot");
   const publicExamplePracticeSessions = latestWorkflowResources(workflowEvents, "publicExamplePracticeSession");
@@ -25799,6 +25943,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     releaseErratumDisclosurePolicies,
     releaseErrata,
     publicDatasetDocuments,
+    publicDatasetPackageReviews,
     scheduleRebaselinePolicies,
     scheduleStatusSnapshots,
     publicExamplePracticeSessions,
@@ -26011,6 +26156,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     releaseErratumDisclosurePolicies,
     releaseErrata,
     publicDatasetDocuments,
+    publicDatasetPackageReviews,
     scheduleRebaselinePolicies,
     scheduleStatusSnapshots,
       publicExamplePracticeSessions,
