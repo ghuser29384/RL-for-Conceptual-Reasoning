@@ -7695,7 +7695,13 @@ test("operator evidence package JSONL import validates concrete routes and appen
               rightsStatus: "internal_review_allowed",
               sourceLanguage: "en",
               translationStatus: "original_language",
+              translationRoute: "none_original_english",
               taskFormat: "mixed_position_and_critique_source",
+              sourceDatasetName: "none",
+              sourceSubsource: "none",
+              sourceDomainSuitability: "suitable_conceptual",
+              sourceDomainConcentration: "none",
+              lsatDerived: false,
               adminNotes: "Admin-only package dry-run source metadata.",
               sourceAccessPolicy: "internal_review_allowed",
               releasePolicy: "prepared_text_only_after_review",
@@ -13617,7 +13623,13 @@ test("production schema includes normalized Phase 1 source-intake tables with se
     "publication_year text not null",
     "uploaded_file_id text",
     "translation_status text not null check",
+    "translation_route text not null",
     "task_format text not null check",
+    "source_dataset_name text not null",
+    "source_subsource text not null",
+    "source_domain_suitability text not null check",
+    "source_domain_concentration text not null",
+    "lsat_derived boolean not null default false",
     "admin_notes text not null",
     "source_access_policy text not null check",
     "release_policy text not null check",
@@ -15503,7 +15515,13 @@ test("postgres audit store projects Phase 1 source-intake workflow events into n
     rightsStatus: "internal_review_allowed",
     sourceLanguage: "en",
     translationStatus: "original_language",
+    translationRoute: "none_original_english",
     taskFormat: "mixed_position_and_critique_source",
+    sourceDatasetName: "none",
+    sourceSubsource: "none",
+    sourceDomainSuitability: "suitable_conceptual",
+    sourceDomainConcentration: "none",
+    lsatDerived: false,
     adminNotes: "Projection test admin-only notes.",
     sourceAccessPolicy: "internal_review_allowed",
     releasePolicy: "prepared_text_only_after_review",
@@ -15520,7 +15538,13 @@ test("postgres audit store projects Phase 1 source-intake workflow events into n
   assert.equal(sourceCardProjection.values.publication_year, "2026");
   assert.equal(sourceCardProjection.values.uploaded_file_id, "upload-source-card-projection");
   assert.equal(sourceCardProjection.values.translation_status, "original_language");
+  assert.equal(sourceCardProjection.values.translation_route, "none_original_english");
   assert.equal(sourceCardProjection.values.task_format, "mixed_position_and_critique_source");
+  assert.equal(sourceCardProjection.values.source_dataset_name, "none");
+  assert.equal(sourceCardProjection.values.source_subsource, "none");
+  assert.equal(sourceCardProjection.values.source_domain_suitability, "suitable_conceptual");
+  assert.equal(sourceCardProjection.values.source_domain_concentration, "none");
+  assert.equal(sourceCardProjection.values.lsat_derived, false);
   assert.equal(sourceCardProjection.values.admin_notes, "Projection test admin-only notes.");
   assert.equal(sourceCardProjection.values.source_access_policy, "internal_review_allowed");
   assert.equal(sourceCardProjection.values.release_policy, "prepared_text_only_after_review");
@@ -18689,7 +18713,13 @@ test("admin source-intake aliases record Phase 1 sources, JSONL import, and extr
     rightsStatus: "internal_review_allowed",
     sourceLanguage: "en",
     translationStatus: "original_language",
+    translationRoute: "none_original_english",
     taskFormat: "mixed_position_and_critique_source",
+    sourceDatasetName: "none",
+    sourceSubsource: "none",
+    sourceDomainSuitability: "suitable_conceptual",
+    sourceDomainConcentration: "none",
+    lsatDerived: false,
     adminNotes: "Admin-only source metadata for alias route coverage.",
     sourceAccessPolicy: "internal_review_allowed",
     releasePolicy: "prepared_text_only_after_review",
@@ -19214,7 +19244,13 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
     rightsStatus: "internal_review_allowed",
     sourceLanguage: "en",
     translationStatus: "original_language",
+    translationRoute: "none_original_english",
     taskFormat: "mixed_position_and_critique_source",
+    sourceDatasetName: "none",
+    sourceSubsource: "none",
+    sourceDomainSuitability: "suitable_conceptual",
+    sourceDomainConcentration: "none",
+    lsatDerived: false,
     adminNotes: "Admin-only source metadata for source preparation.",
     sourceAccessPolicy: "internal_review_allowed",
     releasePolicy: "prepared_text_only_after_review",
@@ -20506,6 +20542,12 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(sourceCardTemplate.sourceWorkbenchRouteLane, "source_intake");
   assert.equal(sourceCardTemplate.requestBody.sourceCard.templateOnly, true);
   assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceVisibility, "admin_only_not_rater_visible");
+  assert.equal(sourceCardTemplate.requestBody.sourceCard.translationRoute, "none_original_english");
+  assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceDatasetName, "none");
+  assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceSubsource, "none");
+  assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceDomainSuitability, "suitable_conceptual");
+  assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceDomainConcentration, "none");
+  assert.equal(sourceCardTemplate.requestBody.sourceCard.lsatDerived, false);
   assert.ok(sourceCardTemplate.readbackRoutes.includes("/api/v1/admin/sources/{id}"));
   assert.equal(sourceCardTemplate.templateReadbackRoute, "/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_write");
   assert.equal(sourceCardTemplate.readinessReadbackRoute, "/api/v1/metaphilosophy/source-workbench-readiness");
@@ -21700,7 +21742,13 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
     rightsStatus: "internal_review_allowed",
     sourceLanguage: "en",
     translationStatus: "original_language",
+    translationRoute: "none_original_english",
     taskFormat: "mixed_position_and_critique_source",
+    sourceDatasetName: "none",
+    sourceSubsource: "none",
+    sourceDomainSuitability: "suitable_conceptual",
+    sourceDomainConcentration: "none",
+    lsatDerived: false,
     adminNotes: "Admin-only source metadata; title, author, locator, and notes remain hidden from ordinary raters.",
     sourceAccessPolicy: "internal_review_allowed",
     releasePolicy: "prepared_text_only_after_review",
@@ -21723,6 +21771,12 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(sourceCardById.status, 200);
   assert.equal(sourceCardById.body.id, "source-card-workflow-new");
+  assert.equal(sourceCardById.body.translationRoute, "none_original_english");
+  assert.equal(sourceCardById.body.sourceDatasetName, "none");
+  assert.equal(sourceCardById.body.sourceSubsource, "none");
+  assert.equal(sourceCardById.body.sourceDomainSuitability, "suitable_conceptual");
+  assert.equal(sourceCardById.body.sourceDomainConcentration, "none");
+  assert.equal(sourceCardById.body.lsatDerived, false);
 
   const sourceCardCollection = await invokeApi(context, {
     method: "GET",
@@ -21733,6 +21787,24 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(sourceCardCollection.body.resourceKey, "sourceCard");
   assert.equal(sourceCardCollection.body.count, 1);
   assert.equal(sourceCardCollection.body.items[0].id, "source-card-workflow-new");
+
+  const invalidSourceCardDomainSuitability = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-cards",
+    headers: adminHeaders,
+    body: JSON.stringify({ sourceCard: { ...sourceCard, id: "source-card-invalid-domain", sourceDomainSuitability: "generic_adapted_source" } }),
+  });
+  assert.equal(invalidSourceCardDomainSuitability.status, 400);
+  assert.match(invalidSourceCardDomainSuitability.body.detail, /sourceDomainSuitability/);
+
+  const invalidSourceCardLsatFlag = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/source-cards",
+    headers: adminHeaders,
+    body: JSON.stringify({ sourceCard: { ...sourceCard, id: "source-card-invalid-lsat", lsatDerived: "false" } }),
+  });
+  assert.equal(invalidSourceCardLsatFlag.status, 400);
+  assert.match(invalidSourceCardLsatFlag.body.detail, /lsatDerived/);
 
   const adminSourceCollection = await invokeApi(context, {
     method: "GET",

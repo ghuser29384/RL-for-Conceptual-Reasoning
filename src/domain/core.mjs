@@ -85,6 +85,14 @@ export const SOURCE_CARD_TYPES = ["book", "article", "paper", "blog_forum_magazi
 export const SOURCE_SPAN_KINDS = ["argumentative_claim", "argument_context", "objection_target", "definition", "example", "other"];
 export const SOURCE_CARD_TASK_FORMATS = ["position_source", "critique_source", "mixed_position_and_critique_source", "background_context_source"];
 export const SOURCE_CARD_TRANSLATION_STATUSES = ["original_language", "human_translated", "machine_translated", "mixed_or_unknown"];
+export const SOURCE_CARD_DOMAIN_SUITABILITY_STATUSES = [
+  "suitable_conceptual",
+  "mixed_conceptual_empirical",
+  "argumentative_debate_material_not_ordinary_conceptual_position_by_default",
+  "translation_and_topic_concentration_must_be_disclosed_before_comparability_claims",
+  "usually_not_suitable_domains_unless_explicitly_labeled",
+  "unknown_review_required",
+];
 export const SOURCE_CARD_ACCESS_POLICIES = [
   "admin_review_only",
   "internal_review_allowed",
@@ -10084,7 +10092,13 @@ function sourceCardReviewReasons(card) {
       "rightsStatus",
       "sourceLanguage",
       "translationStatus",
+      "translationRoute",
       "taskFormat",
+      "sourceDatasetName",
+      "sourceSubsource",
+      "sourceDomainSuitability",
+      "sourceDomainConcentration",
+      "lsatDerived",
       "adminNotes",
       "sourceAccessPolicy",
       "releasePolicy",
@@ -10095,6 +10109,8 @@ function sourceCardReviewReasons(card) {
     SOURCE_CARD_TYPES.includes(card.sourceType) ? null : "sourceType",
     SOURCE_CARD_TRANSLATION_STATUSES.includes(card.translationStatus) ? null : "translationStatus",
     SOURCE_CARD_TASK_FORMATS.includes(card.taskFormat) ? null : "taskFormat",
+    SOURCE_CARD_DOMAIN_SUITABILITY_STATUSES.includes(card.sourceDomainSuitability) ? null : "sourceDomainSuitability",
+    typeof card.lsatDerived === "boolean" ? null : "lsatDerived",
     SOURCE_CARD_ACCESS_POLICIES.includes(card.sourceAccessPolicy) ? null : "sourceAccessPolicy",
     SOURCE_CARD_RELEASE_POLICIES.includes(card.releasePolicy) ? null : "releasePolicy",
     card.sourceVisibility === SOURCE_INTAKE_VISIBILITY ? null : "sourceVisibility",
@@ -15753,26 +15769,57 @@ export function buildAdminTagBlindingReport(releaseId, positionList = positions)
   };
 }
 
-export function buildCorpusCompositionManifest(releaseId, positionList = positions, critiqueList = critiques, ratings = seedRatings) {
+export function buildCorpusCompositionManifest(releaseId, positionList = positions, critiqueList = critiques, ratings = seedRatings, rightsRecords = provenanceRightsRecords) {
   const critiqueCountsByPosition = Object.fromEntries(positionList.map((position) => [position.id, critiqueList.filter((critique) => critique.positionId === position.id).length]));
   const ratingRowsIgnoringRevisions = ratings.filter((rating) => rating.kind !== "revision");
   const adminTagRows = buildAdminTagRows(positionList);
-  const sourceDetailRows = positionList.map((position) => ({
-    positionId: position.id,
-    clusterId: position.clusterId,
-    split: position.split,
-    sourceCategory: position.sourceCategory,
-    authorshipRoute: position.authorshipRoute ?? "unknown",
-    sourceLanguage: position.sourceLanguage ?? "unknown",
-    translationStatus: position.translationStatus ?? "unknown",
-    sourceTaskFormat: position.sourceTaskFormat ?? "unknown",
-    sourceDomainSuitability: position.intakeScreening?.ordinaryHeadlineEligibility ?? "unknown",
-    vivesDebateMachineTranslationStatus: position.sourceSubsource === "VivesDebate" ? (position.translationStatus ?? "machine_translation_status_missing") : "not_vivesdebate",
-    lsatDerivedStatus: String(position.sourceTaskFormat ?? "").toLowerCase().includes("lsat") ? "lsat_derived_item" : "not_lsat_derived",
-  }));
+  const rightsByPosition = new Map((rightsRecords ?? []).map((record) => [record.positionId, record]));
+  const sourceDetailRows = positionList.map((position) => {
+    const rightsRecord = rightsByPosition.get(position.id) ?? {};
+    const preferRightsRecord = rightsRecord.submittedRightsRecord === true;
+    const provenanceValue = (positionValue, rightsValue, fallback = "unknown") =>
+      preferRightsRecord ? (rightsValue ?? positionValue ?? fallback) : (positionValue ?? rightsValue ?? fallback);
+    const sourceTaskFormat = provenanceValue(position.sourceTaskFormat, rightsRecord.taskFormat);
+    const lsatDerived =
+      position.lsatDerived === true ||
+      rightsRecord.lsatDerived === true ||
+      String(sourceTaskFormat).toLowerCase().includes("lsat");
+    const sourceSubsource = provenanceValue(position.sourceSubsource, rightsRecord.sourceSubsource, "none");
+    return {
+      positionId: position.id,
+      clusterId: position.clusterId,
+      split: position.split,
+      sourceCategory: position.sourceCategory,
+      authorshipRoute: position.authorshipRoute ?? "unknown",
+      sourceDatasetName: provenanceValue(position.sourceDatasetName, rightsRecord.sourceDatasetName, "none"),
+      sourceSubsource,
+      sourceLanguage: provenanceValue(position.sourceLanguage, rightsRecord.sourceLanguage),
+      translationStatus: provenanceValue(position.translationStatus, rightsRecord.translationStatus),
+      translationRoute: provenanceValue(position.translationRoute, rightsRecord.translationRoute),
+      sourceTaskFormat,
+      sourceDomainSuitability:
+        provenanceValue(position.sourceDomainSuitability ?? position.sourceDomainSuitabilityStatus, rightsRecord.sourceDomainSuitability),
+      sourceDomainConcentration:
+        provenanceValue(position.sourceDomainConcentration ?? position.singleTopicConcentration, rightsRecord.singleTopicConcentration),
+      vivesDebateMachineTranslationStatus: sourceSubsource === "VivesDebate" ? provenanceValue(position.translationStatus, rightsRecord.translationStatus, "machine_translation_status_missing") : "not_vivesdebate",
+      lsatDerived,
+      lsatDerivedStatus: lsatDerived ? "lsat_derived_item" : "not_lsat_derived",
+    };
+  });
   const sourceDetailMissingRows = sourceDetailRows.filter(
     (row) =>
-      ["sourceCategory", "authorshipRoute", "sourceLanguage", "translationStatus", "sourceTaskFormat", "sourceDomainSuitability"].some(
+      [
+        "sourceCategory",
+        "authorshipRoute",
+        "sourceDatasetName",
+        "sourceSubsource",
+        "sourceLanguage",
+        "translationStatus",
+        "translationRoute",
+        "sourceTaskFormat",
+        "sourceDomainSuitability",
+        "sourceDomainConcentration",
+      ].some(
         (field) => row[field] === "unknown" || row[field] === "",
       ),
   );
@@ -15785,6 +15832,8 @@ export function buildCorpusCompositionManifest(releaseId, positionList = positio
       translationRoute: "transcribed_competitive_debate_speeches",
       sourceTaskFormat: "competitive_debate_speech_with_judge_rating_context",
       sourceDomainSuitability: "argumentative_debate_material_not_ordinary_conceptual_position_by_default",
+      sourceDomainConcentration: "competitive_debate_topic_specific",
+      lsatDerived: false,
     },
     {
       subsource: "VivesDebate",
@@ -15794,6 +15843,8 @@ export function buildCorpusCompositionManifest(releaseId, positionList = positio
       translationRoute: "machine_translated_catalan_to_english",
       sourceTaskFormat: "debate_material_topically_concentrated_on_gestational_surrogacy",
       sourceDomainSuitability: "translation_and_topic_concentration_must_be_disclosed_before_comparability_claims",
+      sourceDomainConcentration: "gestational_surrogacy_legalization",
+      lsatDerived: false,
     },
     {
       subsource: "LSAT-derived",
@@ -15803,6 +15854,8 @@ export function buildCorpusCompositionManifest(releaseId, positionList = positio
       translationRoute: "none_or_source_specific",
       sourceTaskFormat: "standardized_test_question_adaptation",
       sourceDomainSuitability: "usually_not_suitable_domains_unless_explicitly_labeled",
+      sourceDomainConcentration: "standardized_test_logic_question",
+      lsatDerived: true,
     },
   ];
   return {
@@ -15832,8 +15885,13 @@ export function buildCorpusCompositionManifest(releaseId, positionList = positio
       missingRows: sourceDetailMissingRows,
       bySourceLanguage: countBy(sourceDetailRows, "sourceLanguage"),
       byTranslationStatus: countBy(sourceDetailRows, "translationStatus"),
+      byTranslationRoute: countBy(sourceDetailRows, "translationRoute"),
       bySourceTaskFormat: countBy(sourceDetailRows, "sourceTaskFormat"),
       bySourceDomainSuitability: countBy(sourceDetailRows, "sourceDomainSuitability"),
+      bySourceDomainConcentration: countBy(sourceDetailRows, "sourceDomainConcentration"),
+      bySourceDatasetName: countBy(sourceDetailRows, "sourceDatasetName"),
+      bySourceSubsource: countBy(sourceDetailRows, "sourceSubsource"),
+      byLsatDerivedStatus: countBy(sourceDetailRows, "lsatDerivedStatus"),
       status: sourceDetailMissingRows.length ? "source_detail_metadata_review_required" : "source_detail_metadata_declared",
     },
     knownAdaptedSubsourceRows,
@@ -32919,7 +32977,8 @@ export function buildOctoberReleaseReport(
   const effectiveVerificationRecords = buildEffectiveVerificationRecords(options.verificationRecords ?? []);
   const effectiveVerificationEvidenceArtifacts = buildEffectiveVerificationEvidenceArtifacts(options.verificationEvidenceArtifacts ?? [], effectiveVerificationRecords);
   const effectiveRatingContextSnapshots = buildEffectiveRatingContextSnapshots(options.ratingContextSnapshots ?? []);
-  const corpusManifest = buildCorpusCompositionManifest(releaseId, positionList, critiqueList, ratings);
+  const releaseRightsRecords = buildReleaseRightsRecords(options.rightsRecords ?? [], provenanceRightsRecords);
+  const corpusManifest = buildCorpusCompositionManifest(releaseId, positionList, critiqueList, ratings, releaseRightsRecords);
   const releaseGateProfile = buildEffectiveReleaseGateProfile(releaseId, options.releaseGateProfiles ?? []);
   const releaseGateEvaluation = evaluateReleaseGateProfile(releaseGateProfile);
   const adminTagBlinding = buildAdminTagBlindingReport(releaseId, positionList);
@@ -33123,7 +33182,6 @@ export function buildOctoberReleaseReport(
     }),
   ];
   const releaseGoldLibraryItems = buildReleaseGoldLibraryItems(options.goldItems ?? [], positionList);
-  const releaseRightsRecords = buildReleaseRightsRecords(options.rightsRecords ?? [], provenanceRightsRecords);
   const rightsReviewEvidence = buildRightsReviewEvidenceReport(
     releaseId,
     positionList,

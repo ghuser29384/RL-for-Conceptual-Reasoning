@@ -439,7 +439,13 @@ async function main() {
       rightsStatus: "internal_review_allowed",
       sourceLanguage: "en",
       translationStatus: "original_language",
+      translationRoute: "none_original_english",
       taskFormat: "mixed_position_and_critique_source",
+      sourceDatasetName: "none",
+      sourceSubsource: "none",
+      sourceDomainSuitability: "suitable_conceptual",
+      sourceDomainConcentration: "none",
+      lsatDerived: false,
       adminNotes: "Smoke-test source metadata remains admin-only and hidden from ordinary raters.",
       sourceAccessPolicy: "internal_review_allowed",
       releasePolicy: "prepared_text_only_after_review",
@@ -461,6 +467,8 @@ async function main() {
     assert.equal(sourceCardCollection.body.resourceKey, "sourceCard");
     assert.equal(sourceCardCollection.body.count, 1);
     assert.equal(sourceCardCollection.body.items[0].id, sourceCard.id);
+    assert.equal(sourceCardCollection.body.items[0].sourceDomainSuitability, "suitable_conceptual");
+    assert.equal(sourceCardCollection.body.items[0].lsatDerived, false);
 
     const sourceSpan = {
       id: "source-span-smoke-server",

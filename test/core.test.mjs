@@ -7443,10 +7443,23 @@ test("admin tag blinding audit publishes risk distributions without pre-lock exp
   assert.equal(manifest.sourceDetailCoverage.completeRows, 3);
   assert.equal(manifest.sourceDetailCoverage.status, "source_detail_metadata_declared");
   assert.equal(manifest.sourceDetailCoverage.bySourceLanguage.en, 3);
-  assert.equal(manifest.sourceDetailRows.find((row) => row.positionId === "pos-voting").sourceTaskFormat, "coursework prompt adaptation");
+  assert.equal(manifest.sourceDetailCoverage.byTranslationRoute.none_original_english, 3);
+  assert.equal(manifest.sourceDetailCoverage.bySourceSubsource.none, 3);
+  assert.equal(manifest.sourceDetailCoverage.bySourceDomainSuitability.suitable_conceptual, 2);
+  assert.equal(manifest.sourceDetailCoverage.bySourceDomainSuitability.mixed_conceptual_empirical, 1);
+  assert.equal(manifest.sourceDetailCoverage.bySourceDomainConcentration.voting_methods, 1);
+  assert.equal(manifest.sourceDetailCoverage.byLsatDerivedStatus.not_lsat_derived, 3);
+  const votingSourceDetail = manifest.sourceDetailRows.find((row) => row.positionId === "pos-voting");
+  assert.equal(votingSourceDetail.sourceTaskFormat, "coursework prompt adaptation");
+  assert.equal(votingSourceDetail.translationRoute, "none_original_english");
+  assert.equal(votingSourceDetail.sourceDomainSuitability, "mixed_conceptual_empirical");
+  assert.equal(votingSourceDetail.sourceDomainConcentration, "voting_methods");
+  assert.equal(votingSourceDetail.lsatDerived, false);
   assert.equal(manifest.knownAdaptedSubsourceRows.find((row) => row.subsource === "DebateBench").lmcaCount, 18);
   assert.equal(manifest.knownAdaptedSubsourceRows.find((row) => row.subsource === "VivesDebate").translationRoute, "machine_translated_catalan_to_english");
+  assert.equal(manifest.knownAdaptedSubsourceRows.find((row) => row.subsource === "VivesDebate").sourceDomainConcentration, "gestational_surrogacy_legalization");
   assert.equal(manifest.knownAdaptedSubsourceRows.find((row) => row.subsource === "LSAT-derived").sourceDomainSuitability, "usually_not_suitable_domains_unless_explicitly_labeled");
+  assert.equal(manifest.knownAdaptedSubsourceRows.find((row) => row.subsource === "LSAT-derived").lsatDerived, true);
   assert.deepEqual(manifest.adminTagRisk.byVisibilityClass, {
     safe_topic_routing: 1,
     possible_confounder: 1,
@@ -9855,9 +9868,13 @@ test("release report derives rights-review evidence from submitted workflow acti
           reviewerId: "rights-admin",
           reviewedAt: "2026-06-12T09:55:00.000Z",
           sourceLanguage: "en",
-          translationRoute: "none_original_english",
-          taskFormat: "short essay claim",
-          sourceDomainSuitability: "suitable_conceptual",
+          translationRoute: "transcribed_competitive_debate_speeches",
+          taskFormat: "competitive_debate_speech_with_judge_rating_context",
+          sourceDatasetName: "DebateBench",
+          sourceSubsource: "DebateBench",
+          sourceDomainSuitability: "argumentative_debate_material_not_ordinary_conceptual_position_by_default",
+          singleTopicConcentration: "competitive_debate_topic_specific",
+          lsatDerived: false,
           removalPolicy: "tombstone_and_rebuild_export_manifest",
         },
       ],
@@ -9890,6 +9907,13 @@ test("release report derives rights-review evidence from submitted workflow acti
   assert.equal(report.rightsReviewEvidence.counts.completeReviewCount, 1);
   assert.equal(report.rightsReviewEvidence.counts.reviewRequiredCount, 1);
   assert.equal(report.rightsReviewEvidence.releaseUseStatus, "rights_review_evidence_review_required");
+  const publicSourceDetail = report.corpusManifest.sourceDetailRows.find((row) => row.positionId === "pos-ai-prior");
+  assert.equal(publicSourceDetail.sourceDatasetName, "DebateBench");
+  assert.equal(publicSourceDetail.sourceSubsource, "DebateBench");
+  assert.equal(publicSourceDetail.translationRoute, "transcribed_competitive_debate_speeches");
+  assert.equal(publicSourceDetail.sourceTaskFormat, "competitive_debate_speech_with_judge_rating_context");
+  assert.equal(publicSourceDetail.sourceDomainSuitability, "argumentative_debate_material_not_ordinary_conceptual_position_by_default");
+  assert.equal(publicSourceDetail.sourceDomainConcentration, "competitive_debate_topic_specific");
   const completeRow = report.rightsReviewEvidence.rows.find((row) => row.id === "rights-review-public-ai-prior");
   assert.equal(completeRow.status, "rights_review_evidence_complete");
   assert.equal(completeRow.rightsRecordId, "rights-record-public-ai-prior");
@@ -13275,7 +13299,13 @@ test("source-intake evidence keeps Phase 1 extraction separate from candidate pr
     rightsStatus: "internal_review_allowed",
     sourceLanguage: "en",
     translationStatus: "original_language",
+    translationRoute: "none_original_english",
     taskFormat: "mixed_position_and_critique_source",
+    sourceDatasetName: "none",
+    sourceSubsource: "none",
+    sourceDomainSuitability: "suitable_conceptual",
+    sourceDomainConcentration: "none",
+    lsatDerived: false,
     adminNotes: "Admin-only source metadata for future preparation; hidden from ordinary raters.",
     sourceAccessPolicy: "internal_review_allowed",
     releasePolicy: "prepared_text_only_after_review",

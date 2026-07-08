@@ -1709,9 +1709,24 @@ create table if not exists source_cards (
   translation_status text not null check (
     translation_status in ('original_language', 'human_translated', 'machine_translated', 'mixed_or_unknown')
   ),
+  translation_route text not null,
   task_format text not null check (
     task_format in ('position_source', 'critique_source', 'mixed_position_and_critique_source', 'background_context_source')
   ),
+  source_dataset_name text not null,
+  source_subsource text not null,
+  source_domain_suitability text not null check (
+    source_domain_suitability in (
+      'suitable_conceptual',
+      'mixed_conceptual_empirical',
+      'argumentative_debate_material_not_ordinary_conceptual_position_by_default',
+      'translation_and_topic_concentration_must_be_disclosed_before_comparability_claims',
+      'usually_not_suitable_domains_unless_explicitly_labeled',
+      'unknown_review_required'
+    )
+  ),
+  source_domain_concentration text not null,
+  lsat_derived boolean not null default false,
   admin_notes text not null,
   source_access_policy text not null check (
     source_access_policy in ('admin_review_only', 'internal_review_allowed', 'rights_cleared_for_preparation', 'metadata_only_until_rights_review')
@@ -2097,8 +2112,25 @@ alter table source_cards add column if not exists publication_year text not null
 alter table source_cards add column if not exists uploaded_file_id text;
 alter table source_cards add column if not exists translation_status text not null default 'original_language'
   check (translation_status in ('original_language', 'human_translated', 'machine_translated', 'mixed_or_unknown'));
+alter table source_cards add column if not exists translation_route text not null default 'unknown_or_review_required';
 alter table source_cards add column if not exists task_format text not null default 'position_source'
   check (task_format in ('position_source', 'critique_source', 'mixed_position_and_critique_source', 'background_context_source'));
+alter table source_cards add column if not exists source_dataset_name text not null default 'unknown_or_review_required';
+alter table source_cards add column if not exists source_subsource text not null default 'unknown_or_review_required';
+alter table source_cards add column if not exists source_domain_suitability text not null default 'unknown_review_required';
+alter table source_cards drop constraint if exists source_cards_source_domain_suitability_check;
+alter table source_cards add constraint source_cards_source_domain_suitability_check check (
+  source_domain_suitability in (
+    'suitable_conceptual',
+    'mixed_conceptual_empirical',
+    'argumentative_debate_material_not_ordinary_conceptual_position_by_default',
+    'translation_and_topic_concentration_must_be_disclosed_before_comparability_claims',
+    'usually_not_suitable_domains_unless_explicitly_labeled',
+    'unknown_review_required'
+  )
+);
+alter table source_cards add column if not exists source_domain_concentration text not null default 'unknown_or_review_required';
+alter table source_cards add column if not exists lsat_derived boolean not null default false;
 alter table source_cards add column if not exists admin_notes text not null default '';
 alter table source_cards add column if not exists source_access_policy text not null default 'admin_review_only'
   check (source_access_policy in ('admin_review_only', 'internal_review_allowed', 'rights_cleared_for_preparation', 'metadata_only_until_rights_review'));
