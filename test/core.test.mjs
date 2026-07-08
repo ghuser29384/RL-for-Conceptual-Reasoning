@@ -16335,6 +16335,38 @@ test("LMCA comparison report separates scale, source, rater, target, and anchor 
   assert.equal(comparison.modelScoreAnchorComparison.weightedPairwiseTable5[0].targetLabelRegime, "Emery Cooper ratings");
   assert.equal(comparison.targetLabelComparison.status, "lmca_style_not_target_identical");
   assert.equal(comparison.validationHumanCeilingComparison.status, "numeric_baselines_declared_but_seed_validation_thin");
+  assert.equal(
+    comparison.sourceScaleComparison.find((row) => row.metric === "rated_critiques").readbackItemRoute,
+    "/api/v1/lmca-comparison/lmca-comparison%3Asource-scale%3Arated_critiques",
+  );
+  assert.ok(
+    comparison.sourceScaleComparison
+      .find((row) => row.metric === "rated_critiques")
+      .routes.includes("/api/v1/target-gaps/current-package-manifest"),
+  );
+  assert.ok(
+    comparison.positionSourceComparison
+      .find((row) => row.sourceCategory === "magazine_blog_forum_derived")
+      .remediationRoutes.includes("/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_create"),
+  );
+  assert.ok(
+    comparison.topicFamilyComparison
+      .find((row) => row.topicFamily === "decision_theory")
+      .remediationRoutes.includes("/api/v1/rater-profile-evidence?topicFamily=decision_theory"),
+  );
+  assert.ok(
+    comparison.raterContributionComparison
+      .find((row) => row.rater === "Emery Cooper")
+      .remediationRoutes.includes("/api/v1/rater-qualification-records"),
+  );
+  assert.ok(
+    comparison.modelDenominatorComparison
+      .find((row) => row.metric === "weighted_pairwise_critique_pairs")
+      .remediationRoutes.includes("/api/v1/operator-evidence/package-manifest"),
+  );
+  assert.ok(comparison.targetLabelComparison.rows[0].evidenceReadbackRoutes.includes("/api/v1/primary-rater-anchor-policies"));
+  assert.ok(comparison.modelScoreAnchorComparison.weightedPairwiseTable5[0].remediationRoutes.includes("/api/v1/evaluations/run"));
+  assert.ok(comparison.validationHumanCeilingComparison.remediationRoutes.includes("/api/v1/validation-tranche-evidence/import-jsonl"));
 });
 
 function round(value) {

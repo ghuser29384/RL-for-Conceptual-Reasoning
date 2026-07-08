@@ -9326,7 +9326,15 @@ function lmcaComparisonItemMatchesFilters(item, filters) {
 }
 
 function lmcaComparisonItemRoutes(item) {
-  return uniqueValues([item?.readbackItemRoute]);
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    ...(Array.isArray(item?.evidenceReadbackRoutes) ? item.evidenceReadbackRoutes : []),
+    ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
+    ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+  ]);
 }
 
 function lmcaComparisonCounts(items) {
@@ -9409,6 +9417,7 @@ function lmcaComparisonItems(comparison) {
       id: "lmca-comparison:validation-human-ceiling:summary",
       section: "validation_human_ceiling",
       label: "Validation and human ceiling",
+      ...validation,
       status: validation.status ?? null,
       currentValidationStatus: validation.currentValidationStatus ?? null,
       appendixCScaleMet: validation.appendixCScaleMet === true,
@@ -9417,8 +9426,34 @@ function lmcaComparisonItems(comparison) {
   }
   return rows.map((item) => ({
     ...item,
-    readbackItemRoute: `/api/v1/lmca-comparison/${encodeURIComponent(item.id)}`,
+    ...lmcaComparisonRouteMetadata(item),
   }));
+}
+
+function lmcaComparisonRouteMetadata(item) {
+  const collectionReadbackRoute = item.collectionReadbackRoute ?? "/api/v1/lmca-comparison";
+  const readbackItemRoute = item.readbackItemRoute ?? `/api/v1/lmca-comparison/${encodeURIComponent(item.id)}`;
+  const releaseReportRoute = item.releaseReportRoute ?? "/api/release/report";
+  const evidenceReadbackRoutes = uniqueValues(item.evidenceReadbackRoutes ?? []);
+  const remediationRoutes = uniqueValues(item.remediationRoutes ?? []);
+  const verificationRoutes = uniqueValues([...(Array.isArray(item.verificationRoutes) ? item.verificationRoutes : []), releaseReportRoute, readbackItemRoute]);
+  return {
+    collectionReadbackRoute,
+    readbackItemRoute,
+    releaseReportRoute,
+    evidenceReadbackRoutes,
+    remediationRoutes,
+    verificationRoutes,
+    routes: uniqueValues([
+      collectionReadbackRoute,
+      readbackItemRoute,
+      releaseReportRoute,
+      ...evidenceReadbackRoutes,
+      ...remediationRoutes,
+      ...verificationRoutes,
+      ...(Array.isArray(item.routes) ? item.routes : []),
+    ]),
+  };
 }
 
 function humanizeServerLabel(value) {

@@ -10231,6 +10231,11 @@ function workflowPreviewArraySummary(values, fallback = "none", limit = 5) {
   return `${values.slice(0, limit).map(humanize).join(", ")}${values.length > limit ? ", ..." : ""}`;
 }
 
+function workflowPreviewPathSummary(values, fallback = "none", limit = 4) {
+  if (!Array.isArray(values) || !values.length) return fallback;
+  return `${values.slice(0, limit).join(", ")}${values.length > limit ? ", ..." : ""}`;
+}
+
 function workflowPreviewReviewReasons(item) {
   return workflowPreviewArraySummary(item?.reviewReasons, "none", 5);
 }
@@ -10355,6 +10360,9 @@ function lmcaComparisonPreviewRow(item) {
         ["Loss", item.loss ?? "not applicable"],
         ["CI95", item.ci95 ?? "not applicable"],
         ["Denominator", denominator ?? "not applicable"],
+        ["Evidence routes", workflowPreviewPathSummary(item.evidenceReadbackRoutes, "not linked")],
+        ["Remediation routes", workflowPreviewPathSummary(item.remediationRoutes, "not linked")],
+        ["Verify", workflowPreviewPathSummary(item.verificationRoutes, item.readbackItemRoute ?? "/api/release/report")],
       ])}
     </article>
   `;

@@ -5852,6 +5852,9 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     "function workflowUniqueRoutes(items, fieldName)",
     "lmcaComparisonPreviewRow",
     "function lmcaComparisonPreviewRow(item)",
+    "function workflowPreviewPathSummary(values",
+    '["Evidence routes", workflowPreviewPathSummary(item.evidenceReadbackRoutes, "not linked")]',
+    '["Remediation routes", workflowPreviewPathSummary(item.remediationRoutes, "not linked")]',
     "octoberOperatingPlanPreviewRow",
     "function octoberOperatingPlanPreviewRow(item)",
     "octoberCompletionChecklistPreviewRow",
@@ -9312,10 +9315,21 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(lmcaComparison.body.filteredCounts.bySection.model_score_anchor, 7);
   assert.equal(lmcaComparison.body.filteredCounts.modelScoreAnchors, 7);
   assert.equal(lmcaComparison.body.filteredCounts.missingFromSeed, 6);
+  assert.equal(lmcaComparison.body.filteredCounts.byRoute["/api/v1/lmca-comparison"], 40);
+  assert.ok(lmcaComparison.body.filteredCounts.byRoute["/api/v1/corpus-manifests"] >= 1);
+  assert.ok(lmcaComparison.body.filteredCounts.byRoute["/api/v1/target-gaps/current-package-manifest"] >= 1);
+  assert.ok(lmcaComparison.body.filteredCounts.byRoute["/api/v1/operator-evidence/package-manifest"] >= 1);
+  assert.equal(lmcaComparison.body.filteredCounts.byRoute["/api/v1/rater-qualification-records"], 10);
+  assert.equal(lmcaComparison.body.filteredCounts.byRoute["/api/v1/validation-tranche-evidence/import-jsonl"], 1);
   assert.match(lmcaComparison.body.policy.scope, /Read-only LMCA baseline/);
   const sourceScaleRow = lmcaComparison.body.items.find((item) => item.section === "source_scale");
   assert.ok(sourceScaleRow);
   assert.equal(sourceScaleRow.readbackItemRoute, `/api/v1/lmca-comparison/${encodeURIComponent(sourceScaleRow.id)}`);
+  assert.ok(sourceScaleRow.collectionReadbackRoute === "/api/v1/lmca-comparison");
+  assert.ok(sourceScaleRow.evidenceReadbackRoutes.includes("/api/v1/corpus-manifests"));
+  assert.ok(sourceScaleRow.remediationRoutes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(sourceScaleRow.routes.includes(sourceScaleRow.readbackItemRoute));
+  assert.ok(sourceScaleRow.routes.includes("/api/v1/target-gaps/critiques"));
 
   const sourceScaleItem = await invokeApi(context, {
     method: "GET",
@@ -9329,6 +9343,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(sourceScaleItem.body.item.section, "source_scale");
   assert.equal(sourceScaleItem.body.item.readbackItemRoute, sourceScaleRow.readbackItemRoute);
   assert.equal(sourceScaleItem.body.filteredCounts.byRoute[sourceScaleRow.readbackItemRoute], 1);
+  assert.equal(sourceScaleItem.body.item.releaseReportRoute, "/api/release/report");
+  assert.ok(sourceScaleItem.body.item.routes.includes("/api/v1/target-gaps/import-jsonl-package?validateOnly=true"));
 
   const sourceScaleByRoute = await invokeApi(context, {
     method: "GET",
@@ -9366,6 +9382,50 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(missingTopicRows.status, 200, JSON.stringify(missingTopicRows.body));
   assert.equal(missingTopicRows.body.count, 3);
   assert.ok(missingTopicRows.body.items.every((item) => item.section === "topic_family" && item.status === "missing_from_seed"));
+  assert.ok(missingTopicRows.body.items.every((item) => item.evidenceReadbackRoutes.includes("/api/v1/intake/positions")));
+  assert.ok(
+    missingTopicRows.body.items.some((item) =>
+      item.remediationRoutes.includes(`/api/v1/rater-profile-evidence?topicFamily=${encodeURIComponent(item.topicFamily)}`),
+    ),
+  );
+
+  const positionSourceBySourceWorkbenchRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/lmca-comparison?section=position_source&route=${encodeURIComponent(
+      "/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_create",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(positionSourceBySourceWorkbenchRoute.status, 200, JSON.stringify(positionSourceBySourceWorkbenchRoute.body));
+  assert.equal(positionSourceBySourceWorkbenchRoute.body.count, 6);
+  assert.equal(
+    positionSourceBySourceWorkbenchRoute.body.filteredCounts.byRoute[
+      "/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_create"
+    ],
+    6,
+  );
+
+  const missingTopicByRaterEvidenceRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/lmca-comparison?section=topic_family&route=${encodeURIComponent(
+      "/api/v1/rater-profile-evidence?topicFamily=normative_ethics",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(missingTopicByRaterEvidenceRoute.status, 200, JSON.stringify(missingTopicByRaterEvidenceRoute.body));
+  assert.equal(missingTopicByRaterEvidenceRoute.body.count, 1);
+  assert.equal(missingTopicByRaterEvidenceRoute.body.items[0].topicFamily, "normative_ethics");
+
+  const validationComparisonByImportRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/lmca-comparison?section=validation_human_ceiling&route=${encodeURIComponent(
+      "/api/v1/validation-tranche-evidence/import-jsonl",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(validationComparisonByImportRoute.status, 200, JSON.stringify(validationComparisonByImportRoute.body));
+  assert.equal(validationComparisonByImportRoute.body.count, 1);
+  assert.equal(validationComparisonByImportRoute.body.items[0].id, "lmca-comparison:validation-human-ceiling:summary");
 
   const octoberOperatingPlan = await invokeApi(context, {
     method: "GET",
@@ -34186,6 +34246,19 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(releaseReport.body.lmcaComparison.modelScoreAnchorComparison.lowerIsBetter, true);
   assert.equal(releaseReport.body.lmcaComparison.modelScoreAnchorComparison.denominators.weightedPairwiseTable5.critiquePairs, 856);
   assert.equal(releaseReport.body.lmcaComparison.modelScoreAnchorComparison.customMetricTable7[2].denominator.dialogues, 933);
+  assert.ok(
+    releaseReport.body.lmcaComparison.sourceScaleComparison
+      .find((row) => row.metric === "rated_critiques")
+      .routes.includes("/api/v1/target-gaps/current-package-manifest"),
+  );
+  assert.ok(
+    releaseReport.body.lmcaComparison.positionSourceComparison
+      .find((row) => row.sourceCategory === "magazine_blog_forum_derived")
+      .remediationRoutes.includes("/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_create"),
+  );
+  assert.ok(
+    releaseReport.body.lmcaComparison.validationHumanCeilingComparison.routes.includes("/api/v1/validation-tranche-evidence/import-jsonl"),
+  );
   assert.deepEqual(
     releaseReport.body.lmcaComparison.raterContributionComparison
       .filter((row) => row.sourceTable === "LMCA Table 1")

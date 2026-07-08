@@ -17749,39 +17749,63 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
       lmcaShare: share(lmcaCount, lmcaRaterTotal),
       status: lmcaCount ? (releaseCount > 0 ? "lmca_table_1_rater_present_in_release" : "lmca_table_1_rater_not_in_release") : "release_only_rater_not_in_lmca_table_1",
     };
+  }).map((row) => withLmcaComparisonRouteMetadata("rater_contribution", `lmca-comparison:rater-contribution:${row.rater}`, row));
+  const sourceScaleComparison = [
+    comparisonRow("rated_critiques", corpusManifest.counts.critiques, LMCA_BASELINES.corpusScale.ratedCritiques),
+    comparisonRow("ratings_ignoring_revisions", corpusManifest.counts.ratingsIgnoringRevisions, LMCA_BASELINES.corpusScale.ratingsIgnoringRevisions),
+    comparisonRow("model_written_critiques", corpusManifest.counts.modelWrittenCritiques, LMCA_BASELINES.corpusScale.modelWrittenCritiques),
+    comparisonRow("positions_with_at_least_one_critique", corpusManifest.counts.positions, LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique),
+    comparisonRow(
+      "positions_with_at_least_two_critiques",
+      corpusManifest.counts.positionsWithAtLeastTwoCritiques,
+      LMCA_BASELINES.corpusScale.positionsWithAtLeastTwoCritiques,
+    ),
+  ].map((row) => withLmcaComparisonRouteMetadata("source_scale", `lmca-comparison:source-scale:${row.metric}`, row));
+  const positionSourceComparison = Object.entries(LMCA_BASELINES.positionSourceCounts).map(([sourceCategory, lmcaCount]) => {
+    const releaseCount = corpusManifest.positionSourceCategory[sourceCategory] ?? 0;
+    return withLmcaComparisonRouteMetadata("position_source", `lmca-comparison:position-source:${sourceCategory}`, {
+      sourceCategory,
+      releaseCount,
+      lmcaCount,
+      releaseShare: share(releaseCount, corpusManifest.counts.positions),
+      lmcaShare: share(lmcaCount, LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique),
+      status: releaseCount > 0 ? "covered_in_seed" : "missing_from_seed",
+    });
   });
+  const topicFamilyComparison = LMCA_BASELINES.topicFamilies.map((topicFamily) =>
+    withLmcaComparisonRouteMetadata("topic_family", `lmca-comparison:topic-family:${topicFamily}`, {
+      topicFamily,
+      releaseCount: corpusManifest.topicFamily[topicFamily] ?? 0,
+      status: corpusManifest.topicFamily[topicFamily] ? "covered_in_seed" : "missing_from_seed",
+    }),
+  );
+  const modelDenominatorComparison = [
+    comparisonRow("weighted_pairwise_positions", metricEligibility.pairwiseEligiblePositions.length, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwisePositions),
+    comparisonRow("weighted_pairwise_critique_pairs", metricEligibility.pairwiseEligiblePairCount, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs),
+    comparisonRow("custom_metric_dialogues", metricEligibility.customLossEligibleItems.length, LMCA_BASELINES.modelEvaluationDenominators.customMetricDialogues),
+  ].map((row) => withLmcaComparisonRouteMetadata("model_denominator", `lmca-comparison:model-denominator:${row.metric}`, row));
+  const targetLabelRows = [
+    {
+      comparison: "lmca_table_5_weighted_pairwise",
+      lmcaTarget: "Emery Cooper ratings",
+      releaseTarget: labelSnapshot.targetLabelVersion,
+      cleanClaimAllowed: labelSnapshot.targetLabelVersion === "primary_rater_anchor",
+    },
+    {
+      comparison: "volunteer_consensus_or_adjudicated",
+      lmcaTarget: "not Table 5 target-identical",
+      releaseTarget: labelSnapshot.targetLabelVersion,
+      cleanClaimAllowed: true,
+    },
+  ].map((row) => withLmcaComparisonRouteMetadata("target_label", `lmca-comparison:target-label:${row.comparison}`, row));
   return {
     id: `lmca-comparison-${releaseId}`,
     releaseId,
     comparisonScope: "compressed_october_seed_vs_lmca_source_baselines",
-    sourceScaleComparison: [
-      comparisonRow("rated_critiques", corpusManifest.counts.critiques, LMCA_BASELINES.corpusScale.ratedCritiques),
-      comparisonRow("ratings_ignoring_revisions", corpusManifest.counts.ratingsIgnoringRevisions, LMCA_BASELINES.corpusScale.ratingsIgnoringRevisions),
-      comparisonRow("model_written_critiques", corpusManifest.counts.modelWrittenCritiques, LMCA_BASELINES.corpusScale.modelWrittenCritiques),
-      comparisonRow("positions_with_at_least_one_critique", corpusManifest.counts.positions, LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique),
-      comparisonRow(
-        "positions_with_at_least_two_critiques",
-        corpusManifest.counts.positionsWithAtLeastTwoCritiques,
-        LMCA_BASELINES.corpusScale.positionsWithAtLeastTwoCritiques,
-      ),
-    ],
-    positionSourceComparison: Object.entries(LMCA_BASELINES.positionSourceCounts).map(([sourceCategory, lmcaCount]) => {
-      const releaseCount = corpusManifest.positionSourceCategory[sourceCategory] ?? 0;
-      return {
-        sourceCategory,
-        releaseCount,
-        lmcaCount,
-        releaseShare: share(releaseCount, corpusManifest.counts.positions),
-        lmcaShare: share(lmcaCount, LMCA_BASELINES.corpusScale.positionsWithAtLeastOneCritique),
-        status: releaseCount > 0 ? "covered_in_seed" : "missing_from_seed",
-      };
-    }),
+    sourceScaleComparison,
+    positionSourceComparison,
     knownOtherDatasetSubsources: LMCA_BASELINES.knownOtherDatasetSubsources,
-    topicFamilyComparison: LMCA_BASELINES.topicFamilies.map((topicFamily) => ({
-      topicFamily,
-      releaseCount: corpusManifest.topicFamily[topicFamily] ?? 0,
-      status: corpusManifest.topicFamily[topicFamily] ? "covered_in_seed" : "missing_from_seed",
-    })),
+    topicFamilyComparison,
     raterCompositionComparison: {
       releaseDistributionIgnoringRevisions: corpusManifest.raterDistributionIgnoringRevisions,
       lmcaDistributionIgnoringRevisions: LMCA_BASELINES.raterDistributionIgnoringRevisions,
@@ -17794,40 +17818,172 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
       note: "Rater-composition claims compare independent rows ignoring revisions; revisions, checks, and adjudication labels are tracked separately.",
     },
     raterContributionComparison,
-    modelDenominatorComparison: [
-      comparisonRow("weighted_pairwise_positions", metricEligibility.pairwiseEligiblePositions.length, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwisePositions),
-      comparisonRow("weighted_pairwise_critique_pairs", metricEligibility.pairwiseEligiblePairCount, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs),
-      comparisonRow("custom_metric_dialogues", metricEligibility.customLossEligibleItems.length, LMCA_BASELINES.modelEvaluationDenominators.customMetricDialogues),
-    ],
+    modelDenominatorComparison,
     modelScoreAnchorComparison,
     targetLabelComparison: {
       currentTargetLabelVersion: labelSnapshot.targetLabelVersion,
       requiredForTable5StyleTarget: "primary_rater_anchor",
       lmcaTable5Target: "Emery Cooper ratings",
       status: labelSnapshot.targetLabelVersion === "primary_rater_anchor" ? "target_identical_candidate" : "lmca_style_not_target_identical",
-      rows: [
-        {
-          comparison: "lmca_table_5_weighted_pairwise",
-          lmcaTarget: "Emery Cooper ratings",
-          releaseTarget: labelSnapshot.targetLabelVersion,
-          cleanClaimAllowed: labelSnapshot.targetLabelVersion === "primary_rater_anchor",
-        },
-        {
-          comparison: "volunteer_consensus_or_adjudicated",
-          lmcaTarget: "not Table 5 target-identical",
-          releaseTarget: labelSnapshot.targetLabelVersion,
-          cleanClaimAllowed: true,
-        },
-      ],
+      rows: targetLabelRows,
     },
-    validationHumanCeilingComparison: {
+    validationHumanCeilingComparison: withLmcaComparisonRouteMetadata("validation_human_ceiling", "lmca-comparison:validation-human-ceiling:summary", {
       currentValidationStatus: validationDesign.status,
       appendixCScaleMet: validationDesign.status === "appendix_c_scale",
       numericBaselines: LMCA_BASELINES.appendixCNumericBaselines,
       status: validationDesign.status === "appendix_c_scale" ? "appendix_c_comparable" : "numeric_baselines_declared_but_seed_validation_thin",
-    },
+    }),
     overclaimGuardrail:
       "This comparison is descriptive unless the relevant scale, source composition, rater composition, target-label, validation, denominator, and prompt-track gates pass independently.",
+  };
+}
+
+function withLmcaComparisonRouteMetadata(section, id, row) {
+  const collectionReadbackRoute = "/api/v1/lmca-comparison";
+  const readbackItemRoute = `/api/v1/lmca-comparison/${encodeURIComponent(id)}`;
+  const releaseReportRoute = "/api/release/report";
+  const targetDataPackageRoutes = [
+    "/api/v1/target-gaps/current-package-manifest",
+    "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=100",
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+    "/api/v1/operator-action-items?executionStatus=ready_to_collect_data",
+  ];
+  const releaseArtifactRoutes = [
+    "/api/v1/operator-evidence/package-manifest",
+    "/api/v1/operator-evidence/import-jsonl?validateOnly=true",
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+    "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+  ];
+  const evidenceReadbackRoutes = [];
+  const remediationRoutes = [];
+  const verificationRoutes = [releaseReportRoute, readbackItemRoute];
+
+  if (section === "source_scale") {
+    evidenceReadbackRoutes.push("/api/v1/corpus-manifests", "/api/v1/public-dataset-readiness");
+    remediationRoutes.push("/api/v1/target-gaps", ...targetDataPackageRoutes);
+    if (["rated_critiques", "model_written_critiques"].includes(row.metric)) {
+      evidenceReadbackRoutes.push("/api/v1/intake/critiques");
+      remediationRoutes.push("/api/v1/intake/critiques/import-jsonl", "/api/v1/target-gaps/critiques");
+    }
+    if (String(row.metric ?? "").startsWith("positions_")) {
+      evidenceReadbackRoutes.push("/api/v1/intake/positions");
+      remediationRoutes.push("/api/v1/intake/positions/import-jsonl", "/api/v1/target-gaps/positions");
+    }
+    if (row.metric === "ratings_ignoring_revisions") {
+      evidenceReadbackRoutes.push("/api/v1/ratings", "/api/v1/label-snapshots", "/api/v1/rater-profile-evidence");
+      remediationRoutes.push("/api/v1/assignments/import-jsonl", "/api/v1/ratings/import-jsonl", "/api/v1/target-gaps/blind_initial_ratings");
+    }
+    if (row.metric === "model_written_critiques") {
+      evidenceReadbackRoutes.push("/api/v1/candidate-generation-intake-checklist", "/api/v1/critique-generation-evaluation");
+    }
+  }
+
+  if (section === "position_source") {
+    evidenceReadbackRoutes.push(
+      "/api/v1/corpus-manifests",
+      "/api/v1/intake/positions",
+      "/api/v1/source-cards",
+      "/api/v1/source-spans",
+      "/api/v1/admin/sources",
+      "/api/v1/metaphilosophy/source-workbench-readiness",
+    );
+    remediationRoutes.push(
+      "/api/v1/intake/positions/import-jsonl",
+      "/api/v1/source-cards",
+      "/api/v1/admin/sources",
+      "/api/v1/target-gaps/positions",
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions",
+      "/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_create",
+      ...targetDataPackageRoutes,
+    );
+  }
+
+  if (section === "topic_family") {
+    evidenceReadbackRoutes.push("/api/v1/corpus-manifests", "/api/v1/intake/positions", "/api/v1/rater-profile-evidence");
+    remediationRoutes.push(
+      "/api/v1/intake/positions/import-jsonl",
+      "/api/v1/target-gaps/positions",
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions",
+      `/api/v1/rater-profile-evidence?topicFamily=${encodeURIComponent(row.topicFamily ?? "unknown")}`,
+      ...targetDataPackageRoutes,
+    );
+  }
+
+  if (section === "rater_contribution") {
+    const encodedRater = encodeURIComponent(row.rater ?? "unknown");
+    evidenceReadbackRoutes.push("/api/v1/rater-profile-evidence", `/api/v1/ratings?raterId=${encodedRater}`, "/api/v1/label-snapshots");
+    remediationRoutes.push(
+      "/api/v1/rater-profile-evidence",
+      "/api/v1/rater-qualification-records",
+      "/api/v1/assignments/import-jsonl",
+      "/api/v1/ratings/import-jsonl",
+      ...targetDataPackageRoutes,
+    );
+  }
+
+  if (section === "model_denominator") {
+    evidenceReadbackRoutes.push("/api/v1/evaluations", "/api/v1/leaderboards", "/api/v1/model-evaluation-reproducibility-checklist");
+    remediationRoutes.push(
+      "/api/v1/model-evaluation-predictions",
+      "/api/v1/model-failure-audits",
+      "/api/v1/prompt-track-separation",
+      ...releaseArtifactRoutes,
+    );
+  }
+
+  if (section === "target_label") {
+    evidenceReadbackRoutes.push("/api/v1/label-snapshots", "/api/v1/primary-rater-anchor-policies", "/api/v1/label-aggregation-reliability-checklist");
+    remediationRoutes.push("/api/v1/label-snapshots", "/api/v1/primary-rater-anchor-policies", ...releaseArtifactRoutes);
+  }
+
+  if (section === "model_score_anchor") {
+    evidenceReadbackRoutes.push(
+      "/api/v1/leaderboards",
+      "/api/v1/evaluations",
+      "/api/v1/model-run-provenance",
+      "/api/v1/prompt-track-separation",
+      "/api/v1/model-evaluation-reproducibility-checklist",
+    );
+    remediationRoutes.push(
+      "/api/v1/evaluations/run",
+      "/api/v1/evaluations",
+      "/api/v1/leaderboards",
+      "/api/v1/prompt-templates",
+      "/api/v1/parser-configs",
+      ...releaseArtifactRoutes,
+    );
+  }
+
+  if (section === "validation_human_ceiling") {
+    evidenceReadbackRoutes.push(
+      "/api/v1/validation-tranche-evidence",
+      "/api/v1/validation-tranche-evidence/appendix-c-validation-design-report",
+      "/api/v1/human-ceiling-runs",
+    );
+    remediationRoutes.push(
+      "/api/v1/validation-tranche-evidence/import-jsonl",
+      "/api/v1/target-gaps/validation_critiques",
+      "/api/v1/target-gaps/validation_positions",
+      "/api/v1/target-gaps/validation_core_all_items_raters",
+      ...targetDataPackageRoutes,
+    );
+  }
+
+  const evidenceRoutes = uniqueStrings(evidenceReadbackRoutes);
+  const remediation = uniqueStrings(remediationRoutes);
+  const verification = uniqueStrings(verificationRoutes);
+  return {
+    id,
+    section,
+    ...row,
+    collectionReadbackRoute,
+    readbackItemRoute,
+    releaseReportRoute,
+    evidenceReadbackRoutes: evidenceRoutes,
+    remediationRoutes: remediation,
+    verificationRoutes: verification,
+    routes: uniqueStrings([collectionReadbackRoute, readbackItemRoute, releaseReportRoute, ...evidenceRoutes, ...remediation, ...verification]),
   };
 }
 
@@ -17849,26 +18005,30 @@ function buildLmcaModelScoreAnchorComparison() {
       "Treat LMCA Table 5/Table 7 scores as source-reference anchors unless target labels, prompt family/scope, protected-split policy, topic/source composition, and resolved model snapshots are comparable.",
     resolvedSnapshotRequiredForDirectReproduction: true,
   };
-  const weightedPairwiseTable5 = LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5.map((anchor) => ({
-    ...anchor,
-    table: "LMCA Table 5",
-    metricFamily: "weighted_pairwise",
-    lowerIsBetter: true,
-    denominator: weightedPairwiseDenominator,
-    targetLabelRegime: "Emery Cooper ratings",
-    uncertaintyIntervalPolicy,
-    promptSnapshotPolicy,
-  }));
-  const customMetricTable7 = LMCA_BASELINES.modelScoreAnchors.customMetricTable7.map((anchor) => ({
-    ...anchor,
-    table: "LMCA Table 7",
-    metricFamily: "custom_weighted_loss",
-    lowerIsBetter: true,
-    denominator: customMetricDenominator,
-    targetLabelRegime: "LMCA custom-metric human-rating target",
-    uncertaintyIntervalPolicy,
-    promptSnapshotPolicy,
-  }));
+  const weightedPairwiseTable5 = LMCA_BASELINES.modelScoreAnchors.weightedPairwiseTable5.map((anchor) =>
+    withLmcaComparisonRouteMetadata("model_score_anchor", `lmca-comparison:model-score-anchor:weighted-pairwise:${anchor.model}`, {
+      ...anchor,
+      table: "LMCA Table 5",
+      metricFamily: "weighted_pairwise",
+      lowerIsBetter: true,
+      denominator: weightedPairwiseDenominator,
+      targetLabelRegime: "Emery Cooper ratings",
+      uncertaintyIntervalPolicy,
+      promptSnapshotPolicy,
+    }),
+  );
+  const customMetricTable7 = LMCA_BASELINES.modelScoreAnchors.customMetricTable7.map((anchor) =>
+    withLmcaComparisonRouteMetadata("model_score_anchor", `lmca-comparison:model-score-anchor:custom-metric:${anchor.model}`, {
+      ...anchor,
+      table: "LMCA Table 7",
+      metricFamily: "custom_weighted_loss",
+      lowerIsBetter: true,
+      denominator: customMetricDenominator,
+      targetLabelRegime: "LMCA custom-metric human-rating target",
+      uncertaintyIntervalPolicy,
+      promptSnapshotPolicy,
+    }),
+  );
   const anchorRows = [...weightedPairwiseTable5, ...customMetricTable7];
   return {
     lowerIsBetter: true,
