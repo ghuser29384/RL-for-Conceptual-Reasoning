@@ -10280,9 +10280,19 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifest.body.counts.estimatedRecordsRequired, 4834);
   assert.equal(currentPackageManifest.body.counts.expectedResourceDelta, 2034);
   assert.equal(currentPackageManifest.body.counts.setupBeforePrimary, true);
+  assert.equal(currentPackageManifest.body.counts.byStepKind.setup_data_import, 2);
+  assert.equal(currentPackageManifest.body.counts.byStepKind.primary_data_import, 7);
+  assert.equal(currentPackageManifest.body.counts.byTargetGapId.blind_initial_ratings, 3);
+  assert.equal(currentPackageManifest.body.counts.byRoute["/api/v1/assignments/import-jsonl"], 1);
   assert.equal(currentPackageManifest.body.totalCount, 9);
   assert.equal(currentPackageManifest.body.items[0].stepKind, "setup_data_import");
   assert.equal(currentPackageManifest.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
+  assert.ok(currentPackageManifest.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
+  assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/assignments/import-jsonl"));
+  assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/assignments/import-jsonl?dryRun=true"));
+  assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/assignments/import-jsonl?validateOnly=true"));
+  assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/target-gaps/collection-plan/blind_initial_ratings"));
+  assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/target-gaps/blind_initial_ratings"));
   assert.equal(
     currentPackageManifest.body.items[0].packageManifestItemRoute,
     `/api/v1/target-gaps/current-package-manifest/${encodeURIComponent(currentPackageManifest.body.items[0].id)}`,
@@ -10302,7 +10312,36 @@ test("operator action item queue is admin/auditor readback derived from the rele
     currentPackageManifestById.body.item.packageManifestItemRoute,
     releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.executionSequencePreview[0].packageManifestItemRoute,
   );
+  assert.ok(currentPackageManifestById.body.item.routes.includes(currentPackageManifest.body.items[0].packageManifestItemRoute));
   assert.deepEqual(currentPackageManifestById.body.items.map((item) => item.id), [currentPackageManifest.body.items[0].id]);
+  const currentPackageManifestByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/target-gaps/current-package-manifest?route=${encodeURIComponent("/api/v1/ratings/import-jsonl")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestByRoute.status, 200, JSON.stringify(currentPackageManifestByRoute.body));
+  assert.equal(currentPackageManifestByRoute.body.count, 1);
+  assert.equal(currentPackageManifestByRoute.body.filteredCounts.byRoute["/api/v1/ratings/import-jsonl"], 1);
+  assert.equal(currentPackageManifestByRoute.body.items[0].targetGapId, "blind_initial_ratings");
+  assert.equal(currentPackageManifestByRoute.body.items[0].stepKind, "primary_data_import");
+  const currentPackageManifestByTargetGap = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest?targetGapId=validation_critiques",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestByTargetGap.status, 200, JSON.stringify(currentPackageManifestByTargetGap.body));
+  assert.equal(currentPackageManifestByTargetGap.body.count, 1);
+  assert.equal(currentPackageManifestByTargetGap.body.filteredCounts.expectedResourceDelta, 50);
+  assert.equal(currentPackageManifestByTargetGap.body.items[0].collectionPlanRoute, "/api/v1/target-gaps/collection-plan/validation_critiques");
+  const currentPackageManifestSetupSteps = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest?stepKind=setup_data_import",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestSetupSteps.status, 200, JSON.stringify(currentPackageManifestSetupSteps.body));
+  assert.equal(currentPackageManifestSetupSteps.body.count, 2);
+  assert.equal(currentPackageManifestSetupSteps.body.filteredCounts.setupStepCount, 2);
+  assert.equal(currentPackageManifestSetupSteps.body.filteredCounts.primaryStepCount, 0);
   const missingCurrentPackageManifestById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/target-gaps/current-package-manifest/not-present",
@@ -15434,6 +15473,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes("targetDataPackageManifestPreviewRow(item)"));
   assert.ok(appSource.includes("function targetDataPackageManifestPreviewRow(item)"));
   assert.ok(appSource.includes('["Package manifest item", item.packageManifestItemRoute ?? "not available"]'));
+  assert.ok(appSource.includes("targetDataCurrentPackageManifestFilters"));
+  assert.ok(appSource.includes("workflowTargetPackageImportRouteFilter"));
+  assert.ok(appSource.includes('collection.id === "target-data-current-package-manifest"'));
+  assert.ok(appSource.includes('url.searchParams.set("importRoute", state.workflowTargetPackageImportRouteFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("route", state.workflowRouteFilter)'));
+  assert.ok(appSource.includes('["Collection plan", item.collectionPlanRoute ?? "not available"]'));
+  assert.ok(appSource.includes('["Route coverage", routes.length ?'));
   assert.ok(appSource.includes('["Manifest status", humanize(result.status ?? "not reported")]'));
   assert.ok(appSource.includes('["Package records needed", counts.estimatedRecordsRequired ?? manifest?.estimatedRecordsRequired ?? "not reported"]'));
   assert.ok(appSource.includes('["Setup before primary", counts.setupBeforePrimary ? "yes" : "no"]'));

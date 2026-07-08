@@ -7736,7 +7736,7 @@ export async function handleApiRequest(request, response, url, context) {
   if (request.method === "GET" && targetGapCurrentPackageManifestMatch) {
     const itemId = targetGapCurrentPackageManifestMatch[1] ? decodeURIComponent(targetGapCurrentPackageManifestMatch[1]) : null;
     await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
-      targetDataCurrentPackageManifestReadback(report, { itemId }),
+      targetDataCurrentPackageManifestReadback(report, { itemId, searchParams: url.searchParams }),
     );
     return;
   }
@@ -9183,9 +9183,11 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
   const executionPreview = targetDataCurrentPackageManifestItems(
     Array.isArray(currentBlockingPackageManifest?.executionSequencePreview) ? currentBlockingPackageManifest.executionSequencePreview : [],
   );
+  const filters = targetDataCurrentPackageManifestFilters(options.searchParams);
+  const filteredItems = executionPreview.filter((item) => targetDataCurrentPackageManifestMatchesFilters(item, filters));
   const items = options.itemId
-    ? executionPreview.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
-    : executionPreview;
+    ? filteredItems.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
+    : filteredItems;
   if (options.itemId && items.length === 0) return null;
   const manifestStatus =
     currentBlockingPackageManifest?.status ??
@@ -9224,6 +9226,7 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       authority:
         "The full October completion runbook and target-gap collection plan remain the detailed step authorities; /api/release/report remains authoritative for completion status after real data is submitted.",
     },
+    filters,
     count: items.length,
     totalCount: currentBlockingPackageManifest?.stepCount ?? executionPreview.length,
     counts: {
@@ -9240,6 +9243,21 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       targetResourceDeltaBeyondPrimaryRecords: currentBlockingPackageManifest?.targetResourceDeltaBeyondPrimaryRecords ?? 0,
       setupBeforePrimary: currentBlockingPackageManifest?.setupBeforePrimary === true,
       omittedExecutionStepCount: currentBlockingPackageManifest?.omittedExecutionStepCount ?? 0,
+      byStepKind: countItemsBy(executionPreview, "stepKind"),
+      byTargetGapId: countItemsBy(executionPreview, "targetGapId"),
+      byImportRoute: countItemsBy(executionPreview, "importRoute"),
+      byRoute: countValues(executionPreview.flatMap(targetDataCurrentPackageManifestStepRoutes)),
+    },
+    filteredCounts: {
+      stepCount: items.length,
+      setupStepCount: items.filter((item) => item.stepKind === "setup_data_import" || item.importKind === "setup_data_import").length,
+      primaryStepCount: items.filter((item) => item.stepKind === "primary_data_import" || item.importKind === "primary_data_import").length,
+      estimatedRecordsRequired: sumNumericField(items, "estimatedRecordsRequired"),
+      expectedResourceDelta: sumNumericField(items, "expectedResourceDelta"),
+      byStepKind: countItemsBy(items, "stepKind"),
+      byTargetGapId: countItemsBy(items, "targetGapId"),
+      byImportRoute: countItemsBy(items, "importRoute"),
+      byRoute: countValues(items.flatMap(targetDataCurrentPackageManifestStepRoutes)),
     },
     routes: {
       packageImportRoute: currentBlockingPackageManifest?.packageImportRoute ?? targetDataCollectionPackageImportRoute,
@@ -9270,12 +9288,62 @@ function targetDataCurrentPackageManifestItems(items) {
     const id =
       item?.id ??
       `target-data-current-package-step:${item?.sequence ?? index + 1}:${item?.targetGapId ?? "target-gap"}:${item?.stepKind ?? "step"}:${encodeURIComponent(route)}`;
-    return {
+    const packageManifestItemRoute = `/api/v1/target-gaps/current-package-manifest/${encodeURIComponent(id)}`;
+    const stepItem = {
       ...item,
       id,
-      packageManifestItemRoute: `/api/v1/target-gaps/current-package-manifest/${encodeURIComponent(id)}`,
+      packageManifestItemRoute,
+    };
+    const routes = targetDataCurrentPackageManifestStepRoutes(stepItem);
+    return {
+      ...stepItem,
+      routes,
+      routeCount: routes.length,
     };
   });
+}
+
+function targetDataCurrentPackageManifestFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    targetGapId: value("targetGapId"),
+    stepKind: value("stepKind") ?? value("importKind"),
+    checklistRowId: value("checklistRowId"),
+    actionId: value("actionId"),
+    importRoute: value("importRoute"),
+    route: value("route"),
+  };
+}
+
+function targetDataCurrentPackageManifestMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "stepKind") return item?.stepKind === value || item?.importKind === value;
+    if (key === "route") return targetDataCurrentPackageManifestStepRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function targetDataCurrentPackageManifestStepRoutes(item) {
+  return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+    item?.packageManifestItemRoute,
+    item?.importRoute,
+    item?.dryRunImportRoute,
+    item?.validateOnlyImportRoute,
+    item?.packageImportRoute,
+    item?.packageDryRunImportRoute,
+    item?.packageValidateOnlyImportRoute,
+    item?.templateReadbackRoute,
+    item?.expandedTemplateReadbackRoute,
+    item?.starterExpandedTemplateReadbackRoute,
+    item?.cappedExpandedTemplateReadbackRoute,
+    item?.collectionPlanRoute,
+    item?.verificationRoute,
+  ]);
 }
 
 function lmcaComparisonReadback(report, options = {}) {

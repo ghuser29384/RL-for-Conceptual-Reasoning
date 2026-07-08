@@ -895,6 +895,7 @@ const state = {
   workflowTargetCollectionImportKindFilter: "",
   workflowTargetCollectionSetupFilter: "",
   workflowTargetCollectionDuplicateFilter: "",
+  workflowTargetPackageImportRouteFilter: "",
   workflowTargetDataTemplateExpand: false,
   workflowTargetDataTemplateMaxExpandedRecords: "100",
   workflowTemplateKindFilter: "",
@@ -7964,6 +7965,50 @@ function workflowReadbackPanel(collection) {
           </label>
         </div>`
       : "";
+  const targetDataCurrentPackageManifestFilters =
+    collection.id === "target-data-current-package-manifest"
+      ? `<div class="workflowReadbackControls">
+          <label>
+            <span>Target gap</span>
+            <select id="workflowTargetGapIdFilter">
+              ${targetGapIdFilters
+                .map((item) => `<option ${item === state.workflowTargetGapIdFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All target gaps")}</option>`)
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Import step</span>
+            <select id="workflowTargetCollectionImportKindFilter">
+              ${["", "setup_data_import", "primary_data_import"]
+                .map(
+                  (item) =>
+                    `<option ${item === state.workflowTargetCollectionImportKindFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All package steps")}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Checklist row</span>
+            <select id="workflowTargetCollectionChecklistFilter">
+              ${operatorChecklistRowFilters
+                .map((item) => `<option ${item === state.workflowTargetCollectionChecklistFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All checklist rows")}</option>`)
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Action</span>
+            <input id="workflowActionIdFilter" type="text" value="${escapeHtml(state.workflowActionIdFilter)}" placeholder="target_scale_and_data_collection:collect:blind_initial_ratings" />
+          </label>
+          <label>
+            <span>Import route</span>
+            <input id="workflowTargetPackageImportRouteFilter" type="text" value="${escapeHtml(state.workflowTargetPackageImportRouteFilter)}" placeholder="/api/v1/ratings/import-jsonl" />
+          </label>
+          <label>
+            <span>Route</span>
+            <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/target-gaps/collection-plan/blind_initial_ratings" />
+          </label>
+        </div>`
+      : "";
   const targetDataTemplateExpansionControls =
     collection.id === "target-data-jsonl-template"
       ? `<div class="workflowReadbackControls">
@@ -8680,6 +8725,7 @@ function workflowReadbackPanel(collection) {
       ${operatorQueueFilters}
       ${targetGapFilters}
       ${targetGapCollectionPlanFilters}
+      ${targetDataCurrentPackageManifestFilters}
       ${targetDataTemplateExpansionControls}
       ${sourceWorkbenchTemplateFilters}
       ${metaphilosophyCollectionFilters}
@@ -10820,6 +10866,7 @@ function targetGapCollectionPlanPreviewRow(item) {
 }
 
 function targetDataPackageManifestPreviewRow(item) {
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10836,9 +10883,12 @@ function targetDataPackageManifestPreviewRow(item) {
         ["Validate-only", item.validateOnlyImportRoute ?? "not available"],
         ["Template", item.templateReadbackRoute ?? "not available"],
         ["Starter template", item.starterExpandedTemplateReadbackRoute ?? "not available"],
+        ["Collection plan", item.collectionPlanRoute ?? "not available"],
+        ["Package manifest item", item.packageManifestItemRoute ?? "not available"],
         ["Records needed", item.estimatedRecordsRequired ?? "not reported"],
         ["Expected target-resource delta", item.expectedResourceDelta ?? "not reported"],
         ["Verification", item.verificationRoute ?? item.targetGapReadbackItemRoute ?? "/api/release/report"],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 5)}` : "not linked"],
         ["Effect", item.closesTargetGapWhenValidated ? "can close target gap after real data is validated" : humanize(item.effect ?? "setup only")],
       ])}
     </article>
@@ -15297,8 +15347,10 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   document.getElementById("workflowCollection")?.addEventListener("change", (event) => {
     state.workflowCollectionId = event.target.value;
     const collection = currentWorkflowCollection();
+    const targetCollectionFilterCollection =
+      collection.id === "target-gap-collection-plan" || collection.id === "target-data-current-package-manifest";
     if (!isOperatorPlanCollection(collection)) {
-      state.workflowActionIdFilter = "";
+      if (collection.id !== "target-data-current-package-manifest") state.workflowActionIdFilter = "";
       state.workflowActionTypeFilter = "";
       state.workflowChecklistRowFilter = "";
       state.workflowBlockedByTargetGapIdFilter = "";
@@ -15366,20 +15418,21 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
         state.workflowArtifactTypeFilter = "";
         state.workflowArtifactIdFilter = "";
       }
-    if (collection.id !== "operator-action-items") {
-      state.workflowBlockedByTargetGapIdFilter = "";
-      state.workflowTemplateCoverageStatusFilter = "";
-      state.workflowPreflightCoverageStatusFilter = "";
-      state.workflowGovernanceCoverageStatusFilter = "";
+      if (collection.id !== "operator-action-items") {
+        state.workflowBlockedByTargetGapIdFilter = "";
+        state.workflowTemplateCoverageStatusFilter = "";
+        state.workflowPreflightCoverageStatusFilter = "";
+        state.workflowGovernanceCoverageStatusFilter = "";
+      }
+      if (!isOperatorRelatedSubmitFilterCollection(collection)) {
+        state.workflowRelatedSubmitActionIdFilter = "";
+        state.workflowRelatedArtifactKindFilter = "";
+      }
     }
-    if (!isOperatorRelatedSubmitFilterCollection(collection)) {
-      state.workflowRelatedSubmitActionIdFilter = "";
-      state.workflowRelatedArtifactKindFilter = "";
-    }
-  }
     if (
       !isTargetGapCollection(collection) &&
-      collection.id !== "target-gap-collection-plan" &&
+      !targetCollectionFilterCollection &&
+      collection.id !== "target-data-current-package-manifest" &&
       collection.id !== "operator-action-items" &&
       collection.id !== "operator-action-payload-template" &&
       collection.id !== "operator-evidence-jsonl-template" &&
@@ -15393,11 +15446,16 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       collection.id !== "operator-evidence-jsonl-template" &&
       collection.id !== "target-data-jsonl-template"
     ) state.workflowExecutionStatusFilter = "";
-    if (collection.id !== "target-gap-collection-plan") {
+    if (!targetCollectionFilterCollection) {
       state.workflowTargetCollectionChecklistFilter = "";
       state.workflowTargetCollectionImportKindFilter = "";
+    }
+    if (collection.id !== "target-gap-collection-plan") {
       state.workflowTargetCollectionSetupFilter = "";
       state.workflowTargetCollectionDuplicateFilter = "";
+    }
+    if (collection.id !== "target-data-current-package-manifest") {
+      state.workflowTargetPackageImportRouteFilter = "";
     }
     if (collection.id !== "target-data-jsonl-template") state.workflowTargetDataTemplateExpand = false;
     if (
@@ -15663,6 +15721,12 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   });
   document.getElementById("workflowTargetDataTemplateMaxExpandedRecords")?.addEventListener("change", (event) => {
     state.workflowTargetDataTemplateMaxExpandedRecords = event.target.value.trim();
+    state.workflowCollectionResult = null;
+    state.lastWorkflowReadbackStatus = null;
+    render();
+  });
+  document.getElementById("workflowTargetPackageImportRouteFilter")?.addEventListener("change", (event) => {
+    state.workflowTargetPackageImportRouteFilter = event.target.value.trim();
     state.workflowCollectionResult = null;
     state.lastWorkflowReadbackStatus = null;
     render();
@@ -17919,6 +17983,7 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "rlhf93-completion-audit" ||
     collection.id === "metaphilosophy-source-workbench-template" ||
     collection.id === "target-gap-collection-plan" ||
+    collection.id === "target-data-current-package-manifest" ||
     collection.id === "october-completion-checklist" ||
     collection.id === "october-completion-runbook" ||
     collection.id === "release-report-sections" ||
@@ -18015,6 +18080,14 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowTargetCollectionDuplicateFilter) {
       url.searchParams.set("hasDuplicateActions", state.workflowTargetCollectionDuplicateFilter);
     }
+  }
+  if (collection.id === "target-data-current-package-manifest") {
+    if (state.workflowTargetGapIdFilter) url.searchParams.set("targetGapId", state.workflowTargetGapIdFilter);
+    if (state.workflowTargetCollectionImportKindFilter) url.searchParams.set("importKind", state.workflowTargetCollectionImportKindFilter);
+    if (state.workflowTargetCollectionChecklistFilter) url.searchParams.set("checklistRowId", state.workflowTargetCollectionChecklistFilter);
+    if (state.workflowActionIdFilter) url.searchParams.set("actionId", state.workflowActionIdFilter);
+    if (state.workflowTargetPackageImportRouteFilter) url.searchParams.set("importRoute", state.workflowTargetPackageImportRouteFilter);
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if ((isOperatorPlanCollection(collection) || isTargetGapCollection(collection)) && state.workflowRouteFilter) {
     url.searchParams.set("route", state.workflowRouteFilter);
