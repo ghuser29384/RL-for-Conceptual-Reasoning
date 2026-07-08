@@ -9553,11 +9553,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(octoberCompletionChecklist.body.releaseUseStatus, "october_completion_checklist_open_items");
   assert.equal(octoberCompletionChecklist.body.count, 19);
   assert.equal(octoberCompletionChecklist.body.totalCount, 19);
-  assert.equal(octoberCompletionChecklist.body.filteredCounts.complete, 12);
+  assert.equal(octoberCompletionChecklist.body.filteredCounts.complete, 11);
   assert.equal(octoberCompletionChecklist.body.filteredCounts.operatorEvidenceRequired, 4);
   assert.equal(octoberCompletionChecklist.body.filteredCounts.dataCollectionRequired, 3);
-  assert.equal(octoberCompletionChecklist.body.filteredCounts.reviewRequired, 0);
-  assert.equal(octoberCompletionChecklist.body.filteredCounts.openOperatorActions, 48);
+  assert.equal(octoberCompletionChecklist.body.filteredCounts.reviewRequired, 1);
+  assert.equal(octoberCompletionChecklist.body.filteredCounts.openOperatorActions, 49);
   assert.equal(
     octoberCompletionChecklist.body.filteredCounts.withOpenOperatorActions,
     octoberCompletionChecklist.body.items.filter((item) => item.openOperatorActionCount > 0).length,
@@ -9579,6 +9579,17 @@ test("operator action item queue is admin/auditor readback derived from the rele
         item.targetGapRoutes.includes("/api/v1/target-gaps/positions"),
     ),
   );
+  const sourceMetaphilosophyChecklistRow = octoberCompletionChecklist.body.items.find(
+    (item) => item.checklistRowId === "source_intake_and_metaphilosophy",
+  );
+  assert.ok(sourceMetaphilosophyChecklistRow);
+  assert.equal(sourceMetaphilosophyChecklistRow.status, "review_required");
+  assert.deepEqual(sourceMetaphilosophyChecklistRow.relatedSubmitActionIds ?? [], []);
+  assert.ok(sourceMetaphilosophyChecklistRow.relatedReviewActionIds.includes(
+    "source_intake_and_metaphilosophy:review:metaphilosophy_deliverable:public_dataset_v0_1_first_artifact",
+  ));
+  assert.ok(sourceMetaphilosophyChecklistRow.readbackRoutes.includes("/api/v1/metaphilosophy/deliverable-checklist"));
+  assert.ok(sourceMetaphilosophyChecklistRow.readbackRoutes.includes("/api/v1/public-dataset-readiness"));
   const targetScaleChecklistRow = octoberCompletionChecklist.body.items.find(
     (item) => item.checklistRowId === "target_scale_and_data_collection",
   );
@@ -10770,8 +10781,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(allReleaseReportSections.status, 200, JSON.stringify(allReleaseReportSections.body));
   assert.equal(allReleaseReportSections.body.count, 26);
-  assert.equal(allReleaseReportSections.body.filteredCounts.openSections, 12);
-  assert.equal(allReleaseReportSections.body.filteredCounts.closedSections, 14);
+  assert.equal(allReleaseReportSections.body.filteredCounts.openSections, 15);
+  assert.equal(allReleaseReportSections.body.filteredCounts.closedSections, 11);
 
   const openReleaseReportSections = await invokeApi(context, {
     method: "GET",
@@ -10779,7 +10790,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(openReleaseReportSections.status, 200, JSON.stringify(openReleaseReportSections.body));
-  assert.equal(openReleaseReportSections.body.count, 12);
+  assert.equal(openReleaseReportSections.body.count, 15);
   assert.equal(openReleaseReportSections.body.filters.status, "open");
   assert.equal(openReleaseReportSections.body.filteredCounts.openSections, openReleaseReportSections.body.count);
   assert.equal(openReleaseReportSections.body.filteredCounts.closedSections, 0);
@@ -10788,6 +10799,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.ok(
     openReleaseReportSections.body.items.some((item) => item.sourceEvidenceId === "model-evaluation-reproducibility-checklist-october-2026-demo"),
+  );
+  assert.ok(
+    openReleaseReportSections.body.items.some((item) => item.sourceEvidenceId === "metaphilosophy-deliverable-checklist-october-2026-demo"),
   );
   assert.ok(
     openReleaseReportSections.body.items.every((item) => item.sourceEvidenceId !== "policy-bundle-evidence-october-2026-demo"),
@@ -10799,7 +10813,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(closedReleaseReportSections.status, 200, JSON.stringify(closedReleaseReportSections.body));
-  assert.equal(closedReleaseReportSections.body.count, 14);
+  assert.equal(closedReleaseReportSections.body.count, 11);
   assert.equal(closedReleaseReportSections.body.filters.status, "closed");
   assert.equal(closedReleaseReportSections.body.filteredCounts.openSections, 0);
   assert.equal(closedReleaseReportSections.body.filteredCounts.closedSections, closedReleaseReportSections.body.count);
@@ -10807,7 +10821,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
     closedReleaseReportSections.body.items.some((item) => item.sourceEvidenceId === "policy-bundle-evidence-october-2026-demo"),
   );
   assert.ok(
-    closedReleaseReportSections.body.items.some((item) => item.sourceEvidenceId === "source-intake-evidence-october-2026-demo"),
+    closedReleaseReportSections.body.items.every((item) => item.sourceEvidenceId !== "metaphilosophy-deliverable-checklist-october-2026-demo"),
   );
 
   const exactStatusReleaseReportSections = await invokeApi(context, {
@@ -13607,7 +13621,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(submissionChecklist.body.sourcePlanId, queue.body.sourcePlanId);
   assert.equal(submissionChecklist.body.resourceKey, "operatorSubmissionChecklistItem");
   assert.equal(submissionChecklist.body.count, queue.body.counts.submissionChecklistItems);
-  assert.equal(submissionChecklist.body.items.length, 36);
+  assert.equal(submissionChecklist.body.items.length, 41);
   assert.equal(submissionChecklist.body.filteredCounts.items, submissionChecklist.body.items.length);
   assert.ok(submissionChecklist.body.items.every((item) => item.sourceEvidenceId));
   const bulkImportableChecklistItems = submissionChecklist.body.items.filter((item) => item.bulkImportRoute);
@@ -13870,9 +13884,17 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(reviewEvidencePointers.status, 200, JSON.stringify(reviewEvidencePointers.body));
   assert.equal(reviewEvidencePointers.body.resourceKey, "operatorReviewEvidencePointer");
   assert.equal(reviewEvidencePointers.body.count, queue.body.counts.reviewEvidencePointers);
-  assert.equal(reviewEvidencePointers.body.items.length, 22);
+  assert.equal(reviewEvidencePointers.body.items.length, 25);
   assert.ok(reviewEvidencePointers.body.items.every((item) => item.checklistRowId && item.readbackRoute));
   assert.ok(reviewEvidencePointers.body.items.some((item) => item.artifactType === "checklist_review_reason"));
+  assert.ok(
+    reviewEvidencePointers.body.items.some(
+      (item) =>
+        item.artifactType === "metaphilosophy_deliverable" &&
+        item.artifactId === "public_dataset_v0_1_first_artifact" &&
+        item.readbackItemRoute === "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact",
+    ),
+  );
   assert.ok(reviewEvidencePointers.body.filteredCounts.withRelatedSubmitActions > 0);
   const positionReviewPointer = reviewEvidencePointers.body.items.find((item) => item.targetGapId === "positions");
   assert.ok(positionReviewPointer);
@@ -14110,10 +14132,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(reviewArtifactSummaries.status, 200, JSON.stringify(reviewArtifactSummaries.body));
   assert.equal(reviewArtifactSummaries.body.resourceKey, "operatorReviewArtifactSummary");
   assert.equal(reviewArtifactSummaries.body.count, queue.body.counts.reviewArtifactSummaries);
-  assert.equal(reviewArtifactSummaries.body.items.length, 3);
+  assert.equal(reviewArtifactSummaries.body.items.length, 4);
   assert.ok(reviewArtifactSummaries.body.items.every((item) => item.checklistRowId && item.artifactType && item.artifactId));
   assert.ok(reviewArtifactSummaries.body.items.every((item) => item.id && item.operatorPlanItemRoute));
   assert.equal(reviewArtifactSummaries.body.filteredCounts.withRelatedSubmitActions, 3);
+  const publicDatasetReviewSummary = reviewArtifactSummaries.body.items.find((item) => item.artifactId === "public_dataset_v0_1_first_artifact");
+  assert.equal(publicDatasetReviewSummary.artifactType, "metaphilosophy_deliverable");
+  assert.deepEqual(publicDatasetReviewSummary.relatedSubmitActionIds ?? [], []);
   const leaderboardReviewSummary = reviewArtifactSummaries.body.items.find((item) => item.artifactId === "leaderboard_model_run_provenance");
   assert.deepEqual(leaderboardReviewSummary.relatedSubmitActionIds, [
     "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
@@ -23225,16 +23250,24 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(deliverableChecklist.status, 200, JSON.stringify(deliverableChecklist.body));
   assert.equal(deliverableChecklist.body.resourceKey, "metaphilosophyDeliverableChecklistRow");
   assert.equal(deliverableChecklist.body.releaseUseStatus, "metaphilosophy_deliverable_checklist_review_required");
-  assert.equal(deliverableChecklist.body.count, 5);
-  assert.equal(deliverableChecklist.body.totalCount, 5);
-  assert.equal(deliverableChecklist.body.counts.openRows, 1);
+  assert.equal(deliverableChecklist.body.count, 6);
+  assert.equal(deliverableChecklist.body.totalCount, 6);
+  assert.equal(deliverableChecklist.body.counts.openRows, 2);
   assert.equal(deliverableChecklist.body.counts.closedRows, 4);
-  assert.equal(deliverableChecklist.body.filteredCounts.openRows, 1);
+  assert.equal(deliverableChecklist.body.filteredCounts.openRows, 2);
   assert.equal(deliverableChecklist.body.filteredCounts.closedRows, 4);
-  assert.equal(deliverableChecklist.body.filteredCounts.byStatus.review_required, 1);
+  assert.equal(deliverableChecklist.body.filteredCounts.byStatus.review_required, 2);
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.complete, 3);
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.not_applicable_without_source_derived_items, 1);
   assert.ok(deliverableChecklist.body.items.some((row) => row.deliverableId === "greenfield_task_track_taxonomy" && row.status === "review_required"));
+  assert.ok(
+    deliverableChecklist.body.items.some(
+      (row) =>
+        row.deliverableId === "public_dataset_v0_1_first_artifact" &&
+        row.status === "review_required" &&
+        row.readbackRoutes.includes("/api/v1/public-dataset-readiness/public_first_ladder_gate"),
+    ),
+  );
   assert.ok(deliverableChecklist.body.items.some((row) => row.deliverableId === "decision_log_preserved" && row.status === "complete"));
   assert.match(deliverableChecklist.body.policy.scope, /does not submit source artifacts/);
 
@@ -23254,12 +23287,13 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
     headers: adminHeaders,
   });
   assert.equal(openDeliverableChecklist.status, 200, JSON.stringify(openDeliverableChecklist.body));
-  assert.equal(openDeliverableChecklist.body.count, 1);
+  assert.equal(openDeliverableChecklist.body.count, 2);
   assert.equal(openDeliverableChecklist.body.filters.status, "open");
-  assert.equal(openDeliverableChecklist.body.filteredCounts.openRows, 1);
+  assert.equal(openDeliverableChecklist.body.filteredCounts.openRows, 2);
   assert.equal(openDeliverableChecklist.body.filteredCounts.closedRows, 0);
-  assert.equal(openDeliverableChecklist.body.items[0].deliverableId, "greenfield_task_track_taxonomy");
-  assert.equal(openDeliverableChecklist.body.items[0].status, "review_required");
+  assert.ok(openDeliverableChecklist.body.items.some((item) => item.deliverableId === "greenfield_task_track_taxonomy"));
+  assert.ok(openDeliverableChecklist.body.items.some((item) => item.deliverableId === "public_dataset_v0_1_first_artifact"));
+  assert.ok(openDeliverableChecklist.body.items.every((item) => item.status === "review_required"));
 
   const closedDeliverableChecklist = await invokeApi(context, {
     method: "GET",

@@ -13962,6 +13962,7 @@ test("metaphilosophy deliverable checklist binds RLHF91 and RLHF93 additions to 
   const releaseReport = buildOctoberReleaseReport();
   const sourceWorkbenchRow = releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench");
   const decisionLogRow = releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "decision_log_preserved");
+  const publicDatasetRow = releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "public_dataset_v0_1_first_artifact");
 
   assert.equal(releaseReport.sourcePreparationEvidence.releaseUseStatus, "source_preparation_not_started");
   assert.equal(releaseReport.sourcePreparationEvidence.counts.preparedDrafts, 0);
@@ -13969,10 +13970,10 @@ test("metaphilosophy deliverable checklist binds RLHF91 and RLHF93 additions to 
   assert.equal(releaseReport.sourcePreparationEvidence.counts.promotionRecords, 0);
   assert.equal(Object.hasOwn(releaseReport, "workflowSourcePreparationArtifacts"), false);
   assert.equal(releaseReport.metaphilosophyDecisionLog.releaseUseStatus, "metaphilosophy_decision_log_preserved");
-  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.releaseUseStatus, "metaphilosophy_deliverable_checklist_complete");
-  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.deliverables, 5);
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.releaseUseStatus, "metaphilosophy_deliverable_checklist_review_required");
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.deliverables, 6);
   assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.notApplicable, 1);
-  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.reviewRequired, 0);
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.reviewRequired, 1);
   assert.match(
     releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "greenfield_task_track_taxonomy").deliverable,
     /adjudication explanation/,
@@ -13984,6 +13985,20 @@ test("metaphilosophy deliverable checklist binds RLHF91 and RLHF93 additions to 
   assert.equal(decisionLogRow.status, "complete");
   assert.ok(decisionLogRow.evidenceIds.includes(releaseReport.metaphilosophyDecisionLog.id));
   assert.ok(decisionLogRow.sourceStatuses.includes("metaphilosophy_decision_log_preserved"));
+  assert.equal(publicDatasetRow.status, "review_required");
+  assert.equal(publicDatasetRow.operatorSubmissionMode, "readback_only");
+  assert.ok(publicDatasetRow.evidenceIds.includes(releaseReport.publicDatasetReadiness.id));
+  assert.ok(publicDatasetRow.sourceStatuses.includes("public_dataset_v0_1_blocked_by_target_scale"));
+  assert.ok(publicDatasetRow.readbackRoutes.includes("/api/v1/public-dataset-readiness/public_first_ladder_gate"));
+  assert.ok(publicDatasetRow.readbackRoutes.includes("/api/v1/public-dataset-readiness"));
+  assert.ok(publicDatasetRow.reviewReasons.includes("publicDatasetReadiness.openRows:7"));
+  assert.ok(
+    releaseReport.metaphilosophyDeliverableChecklist.reviewSections.some(
+      (section) =>
+        section.artifactId === "public_dataset_v0_1_first_artifact" &&
+        section.reason === "publicDatasetReadiness:public_dataset_v0_1_blocked_by_target_scale",
+    ),
+  );
 
   const sourceIntakeEvidence = buildSourceIntakeEvidenceReport("release-test", {
     sourceCards: [{ id: "source-card-incomplete" }],
@@ -14183,17 +14198,47 @@ test("October completion checklist records operator-evidence statuses when child
   const rowById = Object.fromEntries(releaseReport.octoberCompletionChecklist.rows.map((row) => [row.id, row]));
   const planById = Object.fromEntries(releaseReport.operatorEvidenceSubmissionPlan.rows.map((row) => [row.checklistRowId, row]));
 
-  assert.equal(rowById.source_intake_and_metaphilosophy.status, "complete");
+  assert.equal(rowById.source_intake_and_metaphilosophy.status, "review_required");
   assert.deepEqual(rowById.source_intake_and_metaphilosophy.sourceStatuses, [
-    "metaphilosophy_deliverable_checklist_complete",
+    "metaphilosophy_deliverable_checklist_review_required",
     "not_applicable_without_source_derived_items",
     "workbench_route_lane_available",
+  ]);
+  assert.deepEqual(rowById.source_intake_and_metaphilosophy.reviewReasons, [
+    "metaphilosophyDeliverableChecklist:public_dataset_v0_1_first_artifact",
   ]);
   assert.equal(rowById.source_intake_and_metaphilosophy.sourceWorkbenchApplicability.status, "not_applicable_without_source_derived_items");
   assert.deepEqual(rowById.source_intake_and_metaphilosophy.sourceWorkbenchApplicability.sourceEvidenceStatuses, [
     "phase1_source_intake_not_started",
     "source_preparation_not_started",
   ]);
+  assert.deepEqual(rowById.source_intake_and_metaphilosophy.relatedSubmitActionIds ?? [], []);
+  assert.deepEqual(rowById.source_intake_and_metaphilosophy.relatedReviewActionIds, [
+    "source_intake_and_metaphilosophy:review:metaphilosophy_deliverable:public_dataset_v0_1_first_artifact",
+  ]);
+  assert.deepEqual(planById.source_intake_and_metaphilosophy.writeRoutes, []);
+  assert.ok(planById.source_intake_and_metaphilosophy.readbackRoutes.includes("/api/v1/metaphilosophy/deliverable-checklist"));
+  assert.ok(planById.source_intake_and_metaphilosophy.readbackRoutes.includes("/api/v1/public-dataset-readiness"));
+  assert.equal(planById.source_intake_and_metaphilosophy.actionItems.length, 1);
+  assert.equal(planById.source_intake_and_metaphilosophy.actionItems[0].actionType, "review_artifact");
+  assert.equal(planById.source_intake_and_metaphilosophy.actionItems[0].artifactType, "metaphilosophy_deliverable");
+  assert.equal(planById.source_intake_and_metaphilosophy.actionItems[0].artifactId, "public_dataset_v0_1_first_artifact");
+  assert.equal(
+    planById.source_intake_and_metaphilosophy.actionItems[0].readbackItemRoute,
+    "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact",
+  );
+  assert.equal(
+    planById.source_intake_and_metaphilosophy.submissionChecklist.some(
+      (item) => item.artifactKind === "public_dataset_v0_1_first_artifact",
+    ),
+    false,
+  );
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.some(
+      (item) => item.actionType === "submit_artifact" && item.artifactKind === "public_dataset_v0_1_first_artifact",
+    ),
+    false,
+  );
   assert.equal(rowById.release_artifact_submission_package.status, "operator_evidence_required");
   assert.deepEqual(rowById.release_artifact_submission_package.reviewReasons, [
     "releaseArtifactEvidence:computed_release_artifacts_no_submitted_manifests",
@@ -14252,10 +14297,11 @@ test("October completion checklist records operator-evidence statuses when child
     planById.target_scale_and_data_collection.actionItems.map((item) => item.id),
   );
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.releaseUseStatus, "operator_evidence_submission_plan_open");
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.openRows, 7);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.openRows, 8);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.submitOperatorEvidence, 4);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.collectDataBeforeSubmission, 3);
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.linkedEvidenceIds, 11);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewCurrentEvidence, 1);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.linkedEvidenceIds, 14);
   assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewEvidencePointers > 0);
   assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewArtifactSummaries > 0);
   assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.submissionChecklistItems > 0);
@@ -14313,15 +14359,15 @@ test("October completion checklist records operator-evidence statuses when child
     ),
   );
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.blockingTargetGapRows, 11);
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.actionItems, 48);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.actionItems, 49);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.collectDataActionItems, 11);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.submitArtifactActionItems, 30);
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewArtifactActionItems, 3);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewArtifactActionItems, 4);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewReportSectionActionItems, 4);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageAvailableActionItems, 14);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageMissingActionItems, 0);
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageNotRequiredActionItems, 34);
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems.length, 48);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageNotRequiredActionItems, 35);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems.length, 49);
   assert.equal(
     new Set(releaseReport.operatorEvidenceSubmissionPlan.actionItems.map((item) => item.id)).size,
     releaseReport.operatorEvidenceSubmissionPlan.actionItems.length,
@@ -14478,7 +14524,7 @@ test("October completion checklist records operator-evidence statuses when child
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].deliverableGroup, rowById.target_scale_and_data_collection.deliverableGroup);
   assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].governanceCoverageStatus, "governance_coverage_not_required");
   assert.deepEqual(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].governanceCoverageKinds, []);
-  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems.at(-1).globalSequence, 48);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems.at(-1).globalSequence, 49);
   assert.equal(
     releaseReport.operatorEvidenceSubmissionPlan.actionItems.filter((item) => item.actionType === "submit_artifact").length,
     releaseReport.operatorEvidenceSubmissionPlan.counts.submitArtifactActionItems,

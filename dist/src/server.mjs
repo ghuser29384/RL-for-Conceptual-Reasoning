@@ -9770,13 +9770,13 @@ function octoberCompletionChecklistItems(report) {
       openOperatorActionCount: rowActions.filter((item) => item.actionStatus !== "complete" && item.status !== "complete").length,
       operatorActionSummaries,
       nextOperatorActionSummary: operatorActionSummaries[0] ?? null,
-      writeRoutes: uniqueValues(rowActions.map((item) => item.writeRoute)),
-      bulkImportRoutes: uniqueValues(rowActions.map((item) => item.bulkImportRoute)),
+      writeRoutes: uniqueValues([...(Array.isArray(row.writeRoutes) ? row.writeRoutes : []), ...rowActions.map((item) => item.writeRoute)]),
+      bulkImportRoutes: uniqueValues([...(Array.isArray(row.bulkImportRoutes) ? row.bulkImportRoutes : []), ...rowActions.map((item) => item.bulkImportRoute)]),
       setupBulkImportRoutes: uniqueValues(
         rowActions.flatMap((item) => [item.setupBulkImportRoute, ...(Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : [])]),
       ),
-      readbackRoutes: uniqueValues(rowActions.map((item) => item.readbackRoute)),
-      readbackItemRoutes: uniqueValues(rowActions.map((item) => item.readbackItemRoute)),
+      readbackRoutes: uniqueValues([...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : []), ...rowActions.map((item) => item.readbackRoute)]),
+      readbackItemRoutes: uniqueValues([...(Array.isArray(row.readbackItemRoutes) ? row.readbackItemRoutes : []), ...rowActions.map((item) => item.readbackItemRoute)]),
       targetGapReadbackItemRoutes: uniqueValues(rowActions.map((item) => item.targetGapReadbackItemRoute)),
       templateReadbackRoutes: uniqueValues(rowActions.flatMap((item) => (Array.isArray(item.templateReadbackRoutes) ? item.templateReadbackRoutes : []))),
       dryRunImportRoutes: uniqueValues(

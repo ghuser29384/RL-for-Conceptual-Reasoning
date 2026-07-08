@@ -10838,6 +10838,7 @@ export function buildMetaphilosophyDeliverableChecklistReport(
     taskTrackTaxonomy,
     researchBacklog,
     metaphilosophyDecisionLog,
+    publicDatasetReadiness,
     operationalControlEvidence,
   } = {},
 ) {
@@ -10908,6 +10909,35 @@ export function buildMetaphilosophyDeliverableChecklistReport(
       ],
     }),
     metaphilosophyChecklistRow({
+      id: "public_dataset_v0_1_first_artifact",
+      deliverable:
+        "Metaphilosophy Critique Ratings Dataset v0.1 is the first serious public artifact before any public leaderboard, API evaluator, public training-export launch, or judge-model launch.",
+      completionRule:
+        "Required for the RLHF92/RLHF93 public-first ladder; delegated to the existing publicDatasetReadiness release-report evidence rather than a parallel Dataset object.",
+      evidenceIds: [publicDatasetReadiness?.id].filter(Boolean),
+      sourceStatuses: [publicDatasetReadiness?.releaseUseStatus].filter(Boolean),
+      readbackRoutes: [
+        "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+        "/api/v1/public-dataset-readiness",
+        "/api/v1/public-dataset-package-manifest",
+        "/api/v1/public-dataset-release-package",
+        "/api/v1/public-dataset-publication-gate",
+        "/api/v1/public-dataset-downstream-launches",
+      ],
+      status: publicDatasetReadiness?.releaseUseStatus === "public_dataset_v0_1_ready" ? "complete" : "review_required",
+      reviewReasons:
+        publicDatasetReadiness?.releaseUseStatus === "public_dataset_v0_1_ready"
+          ? []
+          : [
+              `publicDatasetReadiness:${publicDatasetReadiness?.releaseUseStatus ?? "missing"}`,
+              (publicDatasetReadiness?.counts?.openRows ?? 0) ? `publicDatasetReadiness.openRows:${publicDatasetReadiness.counts.openRows}` : null,
+              (publicDatasetReadiness?.counts?.missingDocumentationRows ?? 0)
+                ? `publicDatasetReadiness.missingDocumentationRows:${publicDatasetReadiness.counts.missingDocumentationRows}`
+                : null,
+            ],
+      operatorSubmissionMode: "readback_only",
+    }),
+    metaphilosophyChecklistRow({
       id: "decision_log_preserved",
       deliverable:
         "Metaphilosophy_Decision_Log.md preserves accepted/rejected/pruned design decisions and credences, so the main specification can remain focused on current build and release requirements.",
@@ -10965,6 +10995,8 @@ export function buildMetaphilosophyDeliverableChecklistReport(
         "The source workbench row is not applicable when no source-derived items are used. Source-intake import/review must remain admin-only and non-promotional; source-preparation may create PreparedDraft and CandidateItem artifacts only through the existing gates.",
       sourceWorkbenchPhaseGateRule:
         "Source-derived items require the implementation phase route lane to be enabled or staff_only; otherwise the source workbench is treated as disabled and cannot support source-derived release claims.",
+      publicDatasetDelegationRule:
+        "The Dataset v0.1 first-public-artifact row reuses publicDatasetReadiness, package, publication-gate, and downstream-launch evidence; it does not create a duplicate dataset architecture or publication action.",
       decisionLogRule:
         "RLHF93 historical pruning is complete only when the decision log preserves accepted edits, rejected ideas, pruning decisions, credences, and rationale without turning logged decisions into release gates.",
     },
@@ -10980,7 +11012,18 @@ export function buildMetaphilosophyDeliverableChecklistReport(
   };
 }
 
-function metaphilosophyChecklistRow({ id, deliverable, completionRule, evidenceIds, sourceStatuses, phaseGate, status, reviewReasons }) {
+function metaphilosophyChecklistRow({
+  id,
+  deliverable,
+  completionRule,
+  evidenceIds,
+  sourceStatuses,
+  phaseGate,
+  readbackRoutes,
+  status,
+  reviewReasons,
+  operatorSubmissionMode,
+}) {
   return {
     id,
     deliverable,
@@ -10988,6 +11031,8 @@ function metaphilosophyChecklistRow({ id, deliverable, completionRule, evidenceI
     evidenceIds,
     sourceStatuses,
     ...(phaseGate ? { phaseGate } : {}),
+    ...(readbackRoutes?.length ? { readbackRoutes: uniqueStrings(readbackRoutes) } : {}),
+    ...(operatorSubmissionMode ? { operatorSubmissionMode } : {}),
     status,
     reviewReasons: reviewReasons.filter(Boolean),
   };
@@ -29072,6 +29117,7 @@ const OPERATOR_REVIEW_READBACK_ROUTE_BY_ARTIFACT_TYPE = {
   adjudication_finalization: "/api/v1/adjudication-finalizations",
   screen_feature_parity_check: "/api/v1/screen-feature-parity-checks",
   simplified_copy_preview: "/api/v1/simplified-copy-previews",
+  metaphilosophy_deliverable: "/api/v1/metaphilosophy/deliverable-checklist",
 };
 
 function operatorReviewEvidencePointersForChecklistRow(row, action, evidence) {
@@ -29242,6 +29288,7 @@ function operatorSubmissionChecklistItem(checklistRowId, section, action) {
 }
 
 function operatorChecklistRowSubmissionItems(checklistRowId, row, action = {}) {
+  if (row.operatorSubmissionMode === "readback_only") return [];
   if (checklistRowId === "model_evaluation_reproducibility" && row.id === "submitted_evaluation_artifacts_bound_to_release") {
     return [operatorChecklistRowSubmissionItem(checklistRowId, { ...row, readbackRoute: "/api/v1/evaluations" }, action)];
   }
@@ -29270,11 +29317,12 @@ function operatorChecklistRowSubmissionItems(checklistRowId, row, action = {}) {
 function operatorChecklistRowSubmissionItem(checklistRowId, row, action = {}) {
   const blockingReasons = normalizeStringArray(row.reviewReasons);
   const artifactKind = row.id ?? "checklist_row";
+  const rowStatus = String(row.status ?? "unknown");
   return {
     id: `${checklistRowId}:${artifactKind}`,
     artifactKind,
-    status: row.status ?? "unknown",
-    submissionStatus: row.status === "complete" ? "submitted_complete" : "review_required",
+    status: rowStatus,
+    submissionStatus: rowStatus === "complete" || rowStatus.startsWith("not_applicable") ? "submitted_complete" : "review_required",
     submittedArtifactId: null,
     submittedAt: null,
     writeRoute: operatorSubmissionWriteRoute(artifactKind, action.writeRoutes),
@@ -30959,6 +31007,20 @@ function operatorSubmissionActionForChecklistRow(rowId) {
       notes: [
         "This row is review-required when submitted interaction artifacts drift from their active policies; use readbackRoutes to inspect submitted rows before replacing or accepting them.",
         "Assignment self-screen, decline, and deferral evidence remains summarized through /api/release/report because those are assignment-scoped rater events, not broad operator collections.",
+      ],
+    },
+    source_intake_and_metaphilosophy: {
+      requiredSubmissions: [],
+      writeRoutes: [],
+      readbackRoutes: [
+        "/api/v1/metaphilosophy/deliverable-checklist",
+        "/api/v1/metaphilosophy/source-workbench-readiness",
+        "/api/v1/public-dataset-readiness",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: [],
+      notes: [
+        "This row is review/readback work over existing Metaphilosophy and public-dataset readiness evidence; it must not create a duplicate Dataset v0.1 submission path.",
       ],
     },
     rubric_practice_and_certification_pack: {
@@ -34232,15 +34294,6 @@ export function buildOctoberReleaseReport(
     sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
     sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
   });
-  const metaphilosophyDeliverableChecklist = buildMetaphilosophyDeliverableChecklistReport(releaseId, {
-    greenfieldArchitecture,
-    sourceIntakeEvidence,
-    sourcePreparationEvidence,
-    taskTrackTaxonomy,
-    researchBacklog,
-    metaphilosophyDecisionLog,
-    operationalControlEvidence,
-  });
   const rubricQaCoverage = buildRubricQaCoverageReport(releaseId);
   const sourceExampleAnchors = buildLmcaSourceExampleAnchorReport(releaseId, lmcaSourceExampleAnchors, {
     sourceAnchorExamples: options.sourceAnchorExamples ?? [],
@@ -34636,6 +34689,16 @@ export function buildOctoberReleaseReport(
     hiddenBenchmarkFreeze,
     validationDesign,
     publicDatasetDocuments: options.publicDatasetDocuments ?? [],
+  });
+  const metaphilosophyDeliverableChecklist = buildMetaphilosophyDeliverableChecklistReport(releaseId, {
+    greenfieldArchitecture,
+    sourceIntakeEvidence,
+    sourcePreparationEvidence,
+    taskTrackTaxonomy,
+    researchBacklog,
+    metaphilosophyDecisionLog,
+    publicDatasetReadiness,
+    operationalControlEvidence,
   });
   const modelEvaluationArtifactEvidence = buildSubmittedModelEvaluationArtifactEvidence(
     releaseId,
