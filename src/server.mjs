@@ -12479,6 +12479,7 @@ function publicDatasetPackageManifestItems(report) {
   const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
   const targetPackage = targetDataCurrentPackageManifestReadback(report);
   const releaseArtifactTemplates = releaseArtifactPackageTemplateReadback(report);
+  const operatorEvidencePackage = operatorEvidencePackageManifestReadback(report);
   const releaseVersionTemplates = releaseVersionManifestTemplateReadback(report);
   const documentTemplates = publicDatasetDocumentTemplateReadback(report);
   const targetRows = publicDatasetPackageManifestReadinessRows(readinessById, ["release_cleared_position_critique_pairs"]);
@@ -12499,6 +12500,8 @@ function publicDatasetPackageManifestItems(report) {
         "Replace target-data templates with real position, critique, blind-rating, gold-item, and validation rows before validating the package import.",
       routes: [
         "/api/v1/target-gaps/current-package-manifest",
+        targetPackage.routes?.sourceRunbookGroupRoute,
+        targetPackage.routes?.sourceActionGroupRoute,
         targetPackage.routes?.packageValidateOnlyImportRoute,
         targetPackage.routes?.packageDryRunImportRoute,
         targetPackage.routes?.packageImportRoute,
@@ -12516,6 +12519,9 @@ function publicDatasetPackageManifestItems(report) {
       },
       nextActionRoute:
         targetPackage.routes?.packageValidateOnlyImportRoute ?? targetPackage.routes?.packageDryRunImportRoute ?? "/api/v1/target-gaps/current-package-manifest",
+      sourcePackageManifestRoute: "/api/v1/target-gaps/current-package-manifest",
+      sourceRunbookGroupRoute: targetPackage.routes?.sourceRunbookGroupRoute ?? null,
+      sourceActionGroupRoute: targetPackage.routes?.sourceActionGroupRoute ?? null,
       templateRoutes: [targetPackage.routes?.starterTemplateRoute, targetPackage.routes?.fullTemplateRoute],
       verificationRoutes: ["/api/release/report", "/api/v1/target-gaps", "/api/v1/public-dataset-readiness/release_cleared_position_critique_pairs"],
     }),
@@ -12531,6 +12537,9 @@ function publicDatasetPackageManifestItems(report) {
         "Submit or package-validate the label snapshot, corpus manifest, public/internal export manifests, training export, and release report snapshot through existing artifact routes.",
       routes: [
         "/api/v1/release-artifacts/template",
+        "/api/v1/operator-evidence/package-manifest",
+        operatorEvidencePackage.routes?.sourceRunbookGroupRoute,
+        operatorEvidencePackage.routes?.sourceActionGroupRoute,
         releaseArtifactTemplates.packageValidateOnlyImportRoute,
         releaseArtifactTemplates.packageDryRunImportRoute,
         releaseArtifactTemplates.packageImportRoute,
@@ -12545,6 +12554,9 @@ function publicDatasetPackageManifestItems(report) {
       },
       nextActionRoute:
         releaseArtifactTemplates.packageValidateOnlyImportRoute ?? releaseArtifactTemplates.packageDryRunImportRoute ?? "/api/v1/release-artifacts/template",
+      sourcePackageManifestRoute: "/api/v1/operator-evidence/package-manifest",
+      sourceRunbookGroupRoute: operatorEvidencePackage.routes?.sourceRunbookGroupRoute ?? null,
+      sourceActionGroupRoute: operatorEvidencePackage.routes?.sourceActionGroupRoute ?? null,
       templateRoutes: ["/api/v1/release-artifacts/template"],
       verificationRoutes: ["/api/release/report", "/api/v1/public-dataset-readiness/label_snapshot", "/api/v1/public-dataset-readiness/corpus_manifest"],
     }),
@@ -12662,6 +12674,9 @@ function publicDatasetPackageManifestStep({
   routes = [],
   counts = {},
   nextActionRoute = null,
+  sourcePackageManifestRoute = null,
+  sourceRunbookGroupRoute = null,
+  sourceActionGroupRoute = null,
   templateRoutes = [],
   verificationRoutes = [],
 }) {
@@ -12683,11 +12698,17 @@ function publicDatasetPackageManifestStep({
     downstreamArtifacts: uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.downstreamArtifacts) ? row.downstreamArtifacts : []))),
     counts,
     nextActionRoute,
+    sourcePackageManifestRoute,
+    sourceRunbookGroupRoute,
+    sourceActionGroupRoute,
     templateRoutes: uniqueValues(templateRoutes),
     verificationRoutes: uniqueValues(verificationRoutes),
     routes: uniqueValues([
       "/api/v1/public-dataset-package-manifest",
       `/api/v1/public-dataset-package-manifest/${encodeURIComponent(id)}`,
+      sourcePackageManifestRoute,
+      sourceRunbookGroupRoute,
+      sourceActionGroupRoute,
       ...routes,
       ...readinessRows.flatMap(publicDatasetReadinessRoutes),
       ...templateRoutes,
@@ -12971,12 +12992,19 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
   const sourceEvidenceIds = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.sourceEvidenceIds) ? row.sourceEvidenceIds : [])));
   const sourceStatuses = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.sourceStatuses) ? row.sourceStatuses : [])));
   const targetGapIds = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.targetGapIds) ? row.targetGapIds : [])));
+  const packageStepReadbackRoute = packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null;
+  const sourcePackageManifestRoute = packageStep?.sourcePackageManifestRoute ?? null;
+  const sourceRunbookGroupRoute = packageStep?.sourceRunbookGroupRoute ?? null;
+  const sourceActionGroupRoute = packageStep?.sourceActionGroupRoute ?? null;
   const routes = uniqueValues([
     "/api/v1/public-dataset-release-package",
     `/api/v1/public-dataset-release-package/${encodeURIComponent(definition.id)}`,
     "/api/v1/public-dataset-readiness",
     "/api/v1/public-dataset-package-manifest",
-    packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+    packageStepReadbackRoute,
+    sourcePackageManifestRoute,
+    sourceRunbookGroupRoute,
+    sourceActionGroupRoute,
     publicDatasetPackageFileTemplateRoute,
     `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`,
     publicDatasetPackageFileValidationTemplateRoute,
@@ -13012,13 +13040,19 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
     targetGapIds,
     requiredFields: definition.requiredFields,
     counts: publicDatasetReleasePackageArtifactCounts(definition, readinessRows, report),
-    packageStepReadbackRoute: packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+    packageStepReadbackRoute,
+    sourcePackageManifestRoute,
+    sourceRunbookGroupRoute,
+    sourceActionGroupRoute,
     readinessReadbackRoutes: uniqueValues(readinessRows.flatMap(publicDatasetReadinessRoutes)),
     verificationRoutes: uniqueValues([
       "/api/release/report",
       "/api/v1/public-dataset-readiness",
       "/api/v1/public-dataset-package-manifest",
-      packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+      packageStepReadbackRoute,
+      sourcePackageManifestRoute,
+      sourceRunbookGroupRoute,
+      sourceActionGroupRoute,
       publicDatasetPackageFileTemplateRoute,
       `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`,
       publicDatasetPackageFileValidationTemplateRoute,
@@ -13253,6 +13287,10 @@ function publicDatasetDownstreamLaunchGuardItem({
   const launchBlocked = !datasetReady || publicFirstGateOpen;
   const blockingReadinessRowIds = openReadinessRows.map((row) => row.id).filter(Boolean);
   const blockingPackageStepIds = openPackageSteps.map((step) => step.id).filter(Boolean);
+  const blockingPackageStepReadbackRoutes = blockingPackageStepIds.map((stepId) => `/api/v1/public-dataset-package-manifest/${encodeURIComponent(stepId)}`);
+  const sourcePackageManifestRoutes = uniqueValues(openPackageSteps.map((step) => step.sourcePackageManifestRoute).filter(Boolean));
+  const sourceRunbookGroupRoutes = uniqueValues(openPackageSteps.map((step) => step.sourceRunbookGroupRoute).filter(Boolean));
+  const sourceActionGroupRoutes = uniqueValues(openPackageSteps.map((step) => step.sourceActionGroupRoute).filter(Boolean));
   const readinessReviewReasons = uniqueValues(openReadinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])));
   const publicFirstReviewReasons = Array.isArray(publicFirstGate?.reviewReasons) ? publicFirstGate.reviewReasons : [];
   const routes = uniqueValues([
@@ -13262,6 +13300,10 @@ function publicDatasetDownstreamLaunchGuardItem({
     "/api/v1/public-dataset-readiness",
     "/api/v1/public-dataset-package-manifest",
     "/api/v1/public-dataset-package-manifest/public-first-ladder",
+    ...blockingPackageStepReadbackRoutes,
+    ...sourcePackageManifestRoutes,
+    ...sourceRunbookGroupRoutes,
+    ...sourceActionGroupRoutes,
     "/api/release/report",
     ...(definition.guardedRoutes ?? []),
     ...(definition.evidenceRoutes ?? []),
@@ -13286,6 +13328,10 @@ function publicDatasetDownstreamLaunchGuardItem({
     currentBlockingPackageStepId: packageManifest.currentBlockingStepId ?? null,
     blockingReadinessRowIds,
     blockingPackageStepIds,
+    blockingPackageStepReadbackRoutes,
+    sourcePackageManifestRoutes,
+    sourceRunbookGroupRoutes,
+    sourceActionGroupRoutes,
     readinessReviewReasons,
     publicFirstReviewReasons,
     sourceEvidenceIds: Array.isArray(publicFirstGate?.sourceEvidenceIds) ? publicFirstGate.sourceEvidenceIds : [],
@@ -13296,6 +13342,10 @@ function publicDatasetDownstreamLaunchGuardItem({
       "/api/release/report",
       "/api/v1/public-dataset-readiness/public_first_ladder_gate",
       "/api/v1/public-dataset-package-manifest/public-first-ladder",
+      ...blockingPackageStepReadbackRoutes,
+      ...sourcePackageManifestRoutes,
+      ...sourceRunbookGroupRoutes,
+      ...sourceActionGroupRoutes,
       "/api/v1/public-dataset-downstream-launches",
     ],
     routes,
@@ -13576,6 +13626,22 @@ function publicDatasetPublicationGateItem({
   const packageStepIds = packageSteps.map((step) => step.id).filter(Boolean);
   const releasePackageArtifactIds = releaseArtifacts.map((artifact) => artifact.id).filter(Boolean);
   const downstreamLaunchIds = downstreamRows.map((launch) => launch.id).filter(Boolean);
+  const packageStepReadbackRoutes = packageStepIds.map((stepId) => `/api/v1/public-dataset-package-manifest/${encodeURIComponent(stepId)}`);
+  const sourcePackageManifestRoutes = uniqueValues([
+    ...packageSteps.map((step) => step.sourcePackageManifestRoute).filter(Boolean),
+    ...releaseArtifacts.map((artifact) => artifact.sourcePackageManifestRoute).filter(Boolean),
+    ...downstreamRows.flatMap((launch) => (Array.isArray(launch.sourcePackageManifestRoutes) ? launch.sourcePackageManifestRoutes : [])),
+  ]);
+  const sourceRunbookGroupRoutes = uniqueValues([
+    ...packageSteps.map((step) => step.sourceRunbookGroupRoute).filter(Boolean),
+    ...releaseArtifacts.map((artifact) => artifact.sourceRunbookGroupRoute).filter(Boolean),
+    ...downstreamRows.flatMap((launch) => (Array.isArray(launch.sourceRunbookGroupRoutes) ? launch.sourceRunbookGroupRoutes : [])),
+  ]);
+  const sourceActionGroupRoutes = uniqueValues([
+    ...packageSteps.map((step) => step.sourceActionGroupRoute).filter(Boolean),
+    ...releaseArtifacts.map((artifact) => artifact.sourceActionGroupRoute).filter(Boolean),
+    ...downstreamRows.flatMap((launch) => (Array.isArray(launch.sourceActionGroupRoutes) ? launch.sourceActionGroupRoutes : [])),
+  ]);
   const readinessReviewReasons = uniqueValues(
     readinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])),
   );
@@ -13600,6 +13666,10 @@ function publicDatasetPublicationGateItem({
     "/api/v1/public-dataset-package-manifest",
     "/api/v1/public-dataset-release-package",
     "/api/v1/public-dataset-downstream-launches",
+    ...packageStepReadbackRoutes,
+    ...sourcePackageManifestRoutes,
+    ...sourceRunbookGroupRoutes,
+    ...sourceActionGroupRoutes,
     ...readinessRows.flatMap(publicDatasetReadinessRoutes),
     ...packageSteps.flatMap((step) => (Array.isArray(step.routes) ? step.routes : [])),
     ...releaseArtifacts.flatMap((artifact) => (Array.isArray(artifact.routes) ? artifact.routes : [])),
@@ -13624,6 +13694,10 @@ function publicDatasetPublicationGateItem({
     launchGuardStatus: downstreamLaunches.launchGuardStatus ?? "downstream_launch_status_missing",
     readinessRowIds,
     packageStepIds,
+    packageStepReadbackRoutes,
+    sourcePackageManifestRoutes,
+    sourceRunbookGroupRoutes,
+    sourceActionGroupRoutes,
     releasePackageArtifactIds,
     downstreamLaunchIds,
     downstreamArtifacts,
@@ -13676,6 +13750,10 @@ function publicDatasetPublicationGateItem({
       "/api/v1/public-dataset-package-manifest",
       "/api/v1/public-dataset-release-package",
       "/api/v1/public-dataset-downstream-launches",
+      ...packageStepReadbackRoutes,
+      ...sourcePackageManifestRoutes,
+      ...sourceRunbookGroupRoutes,
+      ...sourceActionGroupRoutes,
     ]),
     routes,
   };
@@ -13883,6 +13961,10 @@ function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, rele
     publicationGateStatus: publicationGate.publicationGateStatus ?? "public_dataset_publication_gate_status_missing",
     publicationBlocked: publicationGate.publicationBlocked !== false,
     packageStepId: artifact.packageStepId,
+    packageStepReadbackRoute: artifact.packageStepReadbackRoute ?? null,
+    sourcePackageManifestRoute: artifact.sourcePackageManifestRoute ?? null,
+    sourceRunbookGroupRoute: artifact.sourceRunbookGroupRoute ?? null,
+    sourceActionGroupRoute: artifact.sourceActionGroupRoute ?? null,
     readinessRowIds: Array.isArray(artifact.readinessRowIds) ? artifact.readinessRowIds : [],
     sourceEvidenceIds: Array.isArray(artifact.sourceEvidenceIds) ? artifact.sourceEvidenceIds : [],
     targetGapIds: Array.isArray(artifact.targetGapIds) ? artifact.targetGapIds : [],
@@ -14135,6 +14217,10 @@ function publicDatasetPackageFileValidationTemplateItem(template, sequence, temp
     releasePackageStatus: template.releasePackageStatus,
     publicationGateStatus: template.publicationGateStatus,
     packageStepId: template.packageStepId,
+    packageStepReadbackRoute: template.packageStepReadbackRoute ?? null,
+    sourcePackageManifestRoute: template.sourcePackageManifestRoute ?? null,
+    sourceRunbookGroupRoute: template.sourceRunbookGroupRoute ?? null,
+    sourceActionGroupRoute: template.sourceActionGroupRoute ?? null,
     readinessRowIds: Array.isArray(template.readinessRowIds) ? template.readinessRowIds : [],
     sourceEvidenceIds: Array.isArray(template.sourceEvidenceIds) ? template.sourceEvidenceIds : [],
     targetGapIds: Array.isArray(template.targetGapIds) ? template.targetGapIds : [],
@@ -14286,6 +14372,10 @@ function publicDatasetPackageFileValidationReadback(report, body = {}, actor = {
   const unexpectedFiles = submittedFiles.filter((file) => !expectedFilenames.has(file.expectedFilename));
   const items = expectedTemplates.map((template) => publicDatasetPackageFileValidationItem(template, submittedByFilename.get(template.expectedFilename) ?? []));
   const counts = publicDatasetPackageFileValidationCounts(items, unexpectedFiles);
+  const packageStepReadbackRoutes = uniqueValues(items.map((item) => item.packageStepReadbackRoute).filter(Boolean));
+  const sourcePackageManifestRoutes = uniqueValues(items.map((item) => item.sourcePackageManifestRoute).filter(Boolean));
+  const sourceRunbookGroupRoutes = uniqueValues(items.map((item) => item.sourceRunbookGroupRoute).filter(Boolean));
+  const sourceActionGroupRoutes = uniqueValues(items.map((item) => item.sourceActionGroupRoute).filter(Boolean));
   const packageValidationStatus =
     counts.missingFiles > 0 || counts.duplicateFiles > 0 || counts.unexpectedFiles > 0 || counts.invalidContentFiles > 0
       ? "public_dataset_package_files_invalid"
@@ -14306,6 +14396,10 @@ function publicDatasetPackageFileValidationReadback(report, body = {}, actor = {
     packageValidationStatus,
     packageReadyForPublicationReview: packageValidationStatus === "public_dataset_package_files_ready_for_governed_review",
     packageWriteActionAvailable: false,
+    packageStepReadbackRoutes,
+    sourcePackageManifestRoutes,
+    sourceRunbookGroupRoutes,
+    sourceActionGroupRoutes,
     policy: {
       scope:
         "Validation-only Dataset v0.1 package-file preflight. It checks submitted file names and bounded file content against the expected package-file templates before any package assembly or publication.",
@@ -14345,6 +14439,10 @@ function publicDatasetPackageFileReviewManifestReadback(report, body = {}, actor
     parsedRecordCount: item.parsedRecordCount ?? null,
     readinessRowIds: Array.isArray(item.readinessRowIds) ? item.readinessRowIds : [],
     packageStepId: item.packageStepId ?? null,
+    packageStepReadbackRoute: item.packageStepReadbackRoute ?? null,
+    sourcePackageManifestRoute: item.sourcePackageManifestRoute ?? null,
+    sourceRunbookGroupRoute: item.sourceRunbookGroupRoute ?? null,
+    sourceActionGroupRoute: item.sourceActionGroupRoute ?? null,
     requiredFields: Array.isArray(item.requiredFields) ? item.requiredFields : [],
     reviewReasons: Array.isArray(item.reviewReasons) ? item.reviewReasons : [],
     verificationRoutes: Array.isArray(item.verificationRoutes) ? item.verificationRoutes : [],
@@ -14363,6 +14461,10 @@ function publicDatasetPackageFileReviewManifestReadback(report, body = {}, actor
     packageValidationStatus: validation.packageValidationStatus,
     releasePackageStatus: validation.releasePackageStatus,
     publicationGateStatus: validation.publicationGateStatus,
+    packageStepReadbackRoutes: validation.packageStepReadbackRoutes,
+    sourcePackageManifestRoutes: validation.sourcePackageManifestRoutes,
+    sourceRunbookGroupRoutes: validation.sourceRunbookGroupRoutes,
+    sourceActionGroupRoutes: validation.sourceActionGroupRoutes,
     files: files.map((file) => ({
       expectedFilename: file.expectedFilename,
       artifactKind: file.artifactKind,
@@ -14397,6 +14499,10 @@ function publicDatasetPackageFileReviewManifestReadback(report, body = {}, actor
     packageReadyForPublicationReview: validation.packageReadyForPublicationReview,
     packageWriteActionAvailable: false,
     publicationActionAvailable: false,
+    packageStepReadbackRoutes: validation.packageStepReadbackRoutes,
+    sourcePackageManifestRoutes: validation.sourcePackageManifestRoutes,
+    sourceRunbookGroupRoutes: validation.sourceRunbookGroupRoutes,
+    sourceActionGroupRoutes: validation.sourceActionGroupRoutes,
     policy: {
       scope:
         "Review-only Dataset v0.1 package manifest preflight. It derives a content-addressed package manifest from submitted file hashes after validation, without storing package contents or publishing anything.",
@@ -14432,6 +14538,10 @@ function publicDatasetPackageFileReviewManifestReadback(report, body = {}, actor
       packageManifestHash,
       artifactName: publicDatasetArtifactName,
       releaseId: validation.releaseId,
+      packageStepReadbackRoutes: validation.packageStepReadbackRoutes,
+      sourcePackageManifestRoutes: validation.sourcePackageManifestRoutes,
+      sourceRunbookGroupRoutes: validation.sourceRunbookGroupRoutes,
+      sourceActionGroupRoutes: validation.sourceActionGroupRoutes,
       files,
       unexpectedFiles,
     },
@@ -14475,8 +14585,13 @@ function publicDatasetPackageFileValidationItem(template, submittedRows) {
     templateStatus: template.status,
     readinessRowIds: template.readinessRowIds,
     packageStepId: template.packageStepId,
+    packageStepReadbackRoute: template.packageStepReadbackRoute ?? null,
+    sourcePackageManifestRoute: template.sourcePackageManifestRoute ?? null,
+    sourceRunbookGroupRoute: template.sourceRunbookGroupRoute ?? null,
+    sourceActionGroupRoute: template.sourceActionGroupRoute ?? null,
     requiredFields: template.requiredFields,
     verificationRoutes: template.verificationRoutes,
+    routes: Array.isArray(template.routes) ? template.routes : [],
   };
   if (submittedRows.length === 0) {
     return {

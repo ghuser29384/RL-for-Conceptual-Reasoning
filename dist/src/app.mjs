@@ -9502,6 +9502,9 @@ function publicDatasetPackageManifestPreviewRow(item) {
         ["Readiness rows", readinessRows],
         ["Target gaps", targetGaps],
         ["Next action", item.nextActionRoute ?? "not available"],
+        ["Source package", item.sourcePackageManifestRoute ?? "not package-linked"],
+        ["Runbook group", item.sourceRunbookGroupRoute ?? "not group-linked"],
+        ["Action group", item.sourceActionGroupRoute ?? "not group-linked"],
         ["Template routes", templateRoutes],
         ["Verification routes", verificationRoutes],
         ["Counts", countSummary || "not reported"],
@@ -9534,6 +9537,10 @@ function publicDatasetReleasePackagePreviewRow(item) {
         ["Expected file", item.expectedFilename ?? "not reported"],
         ["Format", item.fileFormat ? humanize(item.fileFormat) : "not reported"],
         ["Package step", item.packageStepId ? humanize(item.packageStepId) : "not linked"],
+        ["Package step route", item.packageStepReadbackRoute ?? "not linked"],
+        ["Source package", item.sourcePackageManifestRoute ?? "not package-linked"],
+        ["Runbook group", item.sourceRunbookGroupRoute ?? "not group-linked"],
+        ["Action group", item.sourceActionGroupRoute ?? "not group-linked"],
         ["Readiness rows", readinessRows],
         ["Review reasons", reviewReasons],
         ["Required fields", requiredFields],
@@ -9567,6 +9574,10 @@ function publicDatasetPackageFileTemplatePreviewRow(item) {
         ["Format", item.fileFormat ? humanize(item.fileFormat) : "not reported"],
         ["Artifact kind", item.artifactKind ? humanize(item.artifactKind) : "not reported"],
         ["Template hash", item.templateContentHash ?? "not reported"],
+        ["Package step route", item.packageStepReadbackRoute ?? "not linked"],
+        ["Source package", item.sourcePackageManifestRoute ?? "not package-linked"],
+        ["Runbook group", item.sourceRunbookGroupRoute ?? "not group-linked"],
+        ["Action group", item.sourceActionGroupRoute ?? "not group-linked"],
         ["Readiness rows", readinessRows],
         ["Required fields", requiredFields],
         ["Publishable", item.packageFilePublishable ? "yes" : "no"],
@@ -9601,6 +9612,10 @@ function publicDatasetPackageValidationTemplatePreviewRow(item) {
         ["Template hash", item.templateContentHash ?? "not reported"],
         ["Request body hash", item.validationRequestBodyHash ?? "not reported"],
         ["Review manifest route", item.sourceRoutes?.packageFileReviewManifest ?? "not available"],
+        ["Package step route", item.packageStepReadbackRoute ?? "not linked"],
+        ["Source package", item.sourcePackageManifestRoute ?? "not package-linked"],
+        ["Runbook group", item.sourceRunbookGroupRoute ?? "not group-linked"],
+        ["Action group", item.sourceActionGroupRoute ?? "not group-linked"],
         ["Unchanged POST result", humanize(item.unchangedTemplateValidationExpectedStatus ?? "not reported")],
         ["Required fields", requiredFields],
         ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],
@@ -9619,6 +9634,18 @@ function publicDatasetPackageReviewPreviewRow(item) {
     `hashes: ${validationCounts.submittedFileHashes ?? item.counts?.submittedFileHashes ?? "not reported"}`,
     `invalid: ${validationCounts.invalidContentFiles ?? "not reported"}`,
   ].join(", ");
+  const sourcePackages =
+    Array.isArray(item.sourcePackageManifestRoutes) && item.sourcePackageManifestRoutes.length
+      ? item.sourcePackageManifestRoutes.slice(0, 4).join(", ")
+      : "not package-linked";
+  const runbookGroups =
+    Array.isArray(item.sourceRunbookGroupRoutes) && item.sourceRunbookGroupRoutes.length
+      ? item.sourceRunbookGroupRoutes.slice(0, 4).join(", ")
+      : "not group-linked";
+  const actionGroups =
+    Array.isArray(item.sourceActionGroupRoutes) && item.sourceActionGroupRoutes.length
+      ? item.sourceActionGroupRoutes.slice(0, 4).join(", ")
+      : "not group-linked";
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -9638,6 +9665,9 @@ function publicDatasetPackageReviewPreviewRow(item) {
         ["Raw contents stored", item.rawPackageContentsStored ? "yes" : "no"],
         ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],
         ["Publish action", item.publicationActionAvailable ? "available" : "not exposed"],
+        ["Source packages", sourcePackages],
+        ["Runbook groups", runbookGroups],
+        ["Action groups", actionGroups],
         ["Manifest summary", fileSummary],
       ])}
     </article>
@@ -9664,6 +9694,18 @@ function publicDatasetPublicationGatePreviewRow(item) {
   const reasons = Array.isArray(item.reviewReasons) && item.reviewReasons.length ? item.reviewReasons.slice(0, 4).join(", ") : "no open review reasons";
   const routes =
     Array.isArray(item.verificationRoutes) && item.verificationRoutes.length ? item.verificationRoutes.slice(0, 5).join(", ") : "not available";
+  const sourcePackages =
+    Array.isArray(item.sourcePackageManifestRoutes) && item.sourcePackageManifestRoutes.length
+      ? item.sourcePackageManifestRoutes.slice(0, 4).join(", ")
+      : "not package-linked";
+  const runbookGroups =
+    Array.isArray(item.sourceRunbookGroupRoutes) && item.sourceRunbookGroupRoutes.length
+      ? item.sourceRunbookGroupRoutes.slice(0, 4).join(", ")
+      : "not group-linked";
+  const actionGroups =
+    Array.isArray(item.sourceActionGroupRoutes) && item.sourceActionGroupRoutes.length
+      ? item.sourceActionGroupRoutes.slice(0, 4).join(", ")
+      : "not group-linked";
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -9678,6 +9720,9 @@ function publicDatasetPublicationGatePreviewRow(item) {
         ["Publish action", item.publicationActionAvailable ? "available" : "not exposed by this preflight"],
         ["Readiness rows", readinessRows],
         ["Package steps", packageSteps],
+        ["Source packages", sourcePackages],
+        ["Runbook groups", runbookGroups],
+        ["Action groups", actionGroups],
         ["Release artifacts", releaseArtifacts],
         ["Downstream artifacts", downstream],
         ["Blocking rows", blockers.length ? blockers.slice(0, 6).map(humanize).join(", ") : "none"],
@@ -9699,6 +9744,18 @@ function publicDatasetDownstreamLaunchGuardPreviewRow(item) {
       : "no package-step blockers";
   const guardedRoutes =
     Array.isArray(item.guardedRoutes) && item.guardedRoutes.length ? item.guardedRoutes.slice(0, 4).join(", ") : "not route-linked";
+  const sourcePackages =
+    Array.isArray(item.sourcePackageManifestRoutes) && item.sourcePackageManifestRoutes.length
+      ? item.sourcePackageManifestRoutes.slice(0, 4).join(", ")
+      : "not package-linked";
+  const runbookGroups =
+    Array.isArray(item.sourceRunbookGroupRoutes) && item.sourceRunbookGroupRoutes.length
+      ? item.sourceRunbookGroupRoutes.slice(0, 4).join(", ")
+      : "not group-linked";
+  const actionGroups =
+    Array.isArray(item.sourceActionGroupRoutes) && item.sourceActionGroupRoutes.length
+      ? item.sourceActionGroupRoutes.slice(0, 4).join(", ")
+      : "not group-linked";
   const reasons =
     Array.isArray(item.publicFirstReviewReasons) && item.publicFirstReviewReasons.length
       ? item.publicFirstReviewReasons.slice(0, 4).join(", ")
@@ -9719,6 +9776,9 @@ function publicDatasetDownstreamLaunchGuardPreviewRow(item) {
         ["Public-first gate", item.publicFirstGateStatus ? humanize(item.publicFirstGateStatus) : "not reported"],
         ["Blocking readiness rows", readinessRows],
         ["Blocking package steps", packageSteps],
+        ["Source packages", sourcePackages],
+        ["Runbook groups", runbookGroups],
+        ["Action groups", actionGroups],
         ["Review reasons", reasons],
         ["Guarded routes", guardedRoutes],
       ])}

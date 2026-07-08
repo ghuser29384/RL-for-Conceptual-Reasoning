@@ -11097,13 +11097,25 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 4834);
   assert.equal(targetDataPackageStep.counts.expectedResourceDelta, 2034);
   assert.equal(targetDataPackageStep.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(targetDataPackageStep.sourcePackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
+  assert.equal(targetDataPackageStep.sourceRunbookGroupRoute, "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data");
+  assert.equal(targetDataPackageStep.sourceActionGroupRoute, "/api/v1/operator-action-items?executionStatus=ready_to_collect_data");
   assert.ok(targetDataPackageStep.targetGapIds.includes("positions"));
+  assert.ok(targetDataPackageStep.routes.includes(targetDataPackageStep.sourcePackageManifestRoute));
+  assert.ok(targetDataPackageStep.routes.includes(targetDataPackageStep.sourceRunbookGroupRoute));
+  assert.ok(targetDataPackageStep.routes.includes(targetDataPackageStep.sourceActionGroupRoute));
 
   const releaseArtifactPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "release-artifact-package");
   assert.equal(releaseArtifactPackageStep.status, "review_required");
   assert.equal(releaseArtifactPackageStep.counts.templateRows, 6);
   assert.equal(releaseArtifactPackageStep.counts.openRows, 6);
   assert.equal(releaseArtifactPackageStep.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(releaseArtifactPackageStep.sourcePackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
+  assert.equal(releaseArtifactPackageStep.sourceRunbookGroupRoute, "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence");
+  assert.equal(releaseArtifactPackageStep.sourceActionGroupRoute, "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence");
+  assert.ok(releaseArtifactPackageStep.routes.includes(releaseArtifactPackageStep.sourcePackageManifestRoute));
+  assert.ok(releaseArtifactPackageStep.routes.includes(releaseArtifactPackageStep.sourceRunbookGroupRoute));
+  assert.ok(releaseArtifactPackageStep.routes.includes(releaseArtifactPackageStep.sourceActionGroupRoute));
 
   const releaseFreezePackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "release-version-freeze");
   assert.equal(releaseFreezePackageStep.status, "blocked_by_release_freeze");
@@ -11144,6 +11156,40 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageByRoute.body.count, 1);
   assert.equal(publicDatasetPackageByRoute.body.items[0].id, "public-documentation");
   assert.equal(publicDatasetPackageByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 1);
+
+  const publicDatasetPackageByTargetRunbookGroup = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-manifest?route=${encodeURIComponent(
+      "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByTargetRunbookGroup.status, 200, JSON.stringify(publicDatasetPackageByTargetRunbookGroup.body));
+  assert.equal(publicDatasetPackageByTargetRunbookGroup.body.count, 1);
+  assert.equal(publicDatasetPackageByTargetRunbookGroup.body.items[0].id, "target-data-package");
+  assert.equal(
+    publicDatasetPackageByTargetRunbookGroup.body.filteredCounts.byRoute[
+      "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data"
+    ],
+    1,
+  );
+
+  const publicDatasetPackageByEvidenceActionGroup = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-manifest?route=${encodeURIComponent(
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByEvidenceActionGroup.status, 200, JSON.stringify(publicDatasetPackageByEvidenceActionGroup.body));
+  assert.equal(publicDatasetPackageByEvidenceActionGroup.body.count, 1);
+  assert.equal(publicDatasetPackageByEvidenceActionGroup.body.items[0].id, "release-artifact-package");
+  assert.equal(
+    publicDatasetPackageByEvidenceActionGroup.body.filteredCounts.byRoute[
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence"
+    ],
+    1,
+  );
 
   const publicDatasetPackageById = await invokeApi(context, {
     method: "GET",
@@ -11209,9 +11255,19 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releasePackageDatasetRecords.artifactReady, false);
   assert.equal(releasePackageDatasetRecords.packagePublishable, false);
   assert.equal(releasePackageDatasetRecords.publishActionAvailable, false);
+  assert.equal(releasePackageDatasetRecords.packageStepReadbackRoute, "/api/v1/public-dataset-package-manifest/target-data-package");
+  assert.equal(releasePackageDatasetRecords.sourcePackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
+  assert.equal(
+    releasePackageDatasetRecords.sourceRunbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(releasePackageDatasetRecords.sourceActionGroupRoute, "/api/v1/operator-action-items?executionStatus=ready_to_collect_data");
   assert.ok(releasePackageDatasetRecords.readinessRowIds.includes("release_cleared_position_critique_pairs"));
   assert.ok(releasePackageDatasetRecords.targetGapIds.includes("positions"));
   assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+  assert.ok(releasePackageDatasetRecords.routes.includes(releasePackageDatasetRecords.sourcePackageManifestRoute));
+  assert.ok(releasePackageDatasetRecords.routes.includes(releasePackageDatasetRecords.sourceRunbookGroupRoute));
+  assert.ok(releasePackageDatasetRecords.routes.includes(releasePackageDatasetRecords.sourceActionGroupRoute));
   assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/template/release-cleared-position-critique-pairs"));
   assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
   assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/validate"));
@@ -11222,6 +11278,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releasePackageLabelSnapshot.status, "review_required");
   assert.equal(releasePackageLabelSnapshot.artifactKind, "label_snapshot");
   assert.equal(releasePackageLabelSnapshot.expectedFilename, "dataset-v0.1/label-snapshot.json");
+  assert.equal(releasePackageLabelSnapshot.packageStepReadbackRoute, "/api/v1/public-dataset-package-manifest/release-artifact-package");
+  assert.equal(releasePackageLabelSnapshot.sourcePackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
+  assert.equal(
+    releasePackageLabelSnapshot.sourceRunbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+  );
+  assert.equal(releasePackageLabelSnapshot.sourceActionGroupRoute, "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence");
   assert.ok(releasePackageLabelSnapshot.readinessReviewReasons.includes("labelSnapshotEvidence:no_submitted_artifact"));
   assert.ok(releasePackageLabelSnapshot.sourceEvidenceIds.includes("snapshot-oct-api"));
 
@@ -11274,6 +11337,26 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReleasePackageByRoute.status, 200, JSON.stringify(publicDatasetReleasePackageByRoute.body));
   assert.equal(publicDatasetReleasePackageByRoute.body.count, 2);
   assert.equal(publicDatasetReleasePackageByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 2);
+
+  const publicDatasetReleasePackageByEvidenceGroupRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-release-package?route=${encodeURIComponent(
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(
+    publicDatasetReleasePackageByEvidenceGroupRoute.status,
+    200,
+    JSON.stringify(publicDatasetReleasePackageByEvidenceGroupRoute.body),
+  );
+  assert.equal(publicDatasetReleasePackageByEvidenceGroupRoute.body.count, 5);
+  assert.equal(
+    publicDatasetReleasePackageByEvidenceGroupRoute.body.filteredCounts.byRoute[
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence"
+    ],
+    5,
+  );
 
   const publicDatasetReleasePackageById = await invokeApi(context, {
     method: "GET",
@@ -11341,9 +11424,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(datasetRecordsTemplate.templateContentKind, "jsonl");
   assert.equal(datasetRecordsTemplate.packageFilePublishable, false);
   assert.equal(datasetRecordsTemplate.packageWriteActionAvailable, false);
+  assert.equal(datasetRecordsTemplate.packageStepReadbackRoute, releasePackageDatasetRecords.packageStepReadbackRoute);
+  assert.equal(datasetRecordsTemplate.sourcePackageManifestRoute, releasePackageDatasetRecords.sourcePackageManifestRoute);
+  assert.equal(datasetRecordsTemplate.sourceRunbookGroupRoute, releasePackageDatasetRecords.sourceRunbookGroupRoute);
+  assert.equal(datasetRecordsTemplate.sourceActionGroupRoute, releasePackageDatasetRecords.sourceActionGroupRoute);
   assert.match(datasetRecordsTemplate.templateContentHash, /^sha256:/);
   assert.ok(datasetRecordsTemplate.requiredFields.includes("position_id"));
   assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-release-package/release-cleared-position-critique-pairs"));
+  assert.ok(datasetRecordsTemplate.routes.includes(datasetRecordsTemplate.sourcePackageManifestRoute));
+  assert.ok(datasetRecordsTemplate.routes.includes(datasetRecordsTemplate.sourceRunbookGroupRoute));
+  assert.ok(datasetRecordsTemplate.routes.includes(datasetRecordsTemplate.sourceActionGroupRoute));
   assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/template/release-cleared-position-critique-pairs"));
   assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
   assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate"));
@@ -11358,6 +11448,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(expertLabelsTemplate.sourceArtifactStatus, "ready");
   assert.equal(expertLabelsTemplate.status, "blocked_by_publication_gate");
   assert.equal(expertLabelsTemplate.packageFileReady, false);
+  assert.equal(expertLabelsTemplate.sourcePackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
+  assert.equal(expertLabelsTemplate.sourceRunbookGroupRoute, "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence");
+  assert.equal(expertLabelsTemplate.sourceActionGroupRoute, "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence");
 
   const datasetCardFileTemplate = publicDatasetPackageFileTemplates.body.items.find((item) => item.id === "dataset-card");
   assert.equal(datasetCardFileTemplate.fileFormat, "md");
@@ -11409,6 +11502,21 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageFileTemplatesByRoute.status, 200, JSON.stringify(publicDatasetPackageFileTemplatesByRoute.body));
   assert.equal(publicDatasetPackageFileTemplatesByRoute.body.count, 11);
   assert.equal(publicDatasetPackageFileTemplatesByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-publication-gate"], 11);
+
+  const publicDatasetPackageFileTemplatesBySourceGroupRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-files/template?route=${encodeURIComponent(
+      "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(
+    publicDatasetPackageFileTemplatesBySourceGroupRoute.status,
+    200,
+    JSON.stringify(publicDatasetPackageFileTemplatesBySourceGroupRoute.body),
+  );
+  assert.equal(publicDatasetPackageFileTemplatesBySourceGroupRoute.body.count, 1);
+  assert.equal(publicDatasetPackageFileTemplatesBySourceGroupRoute.body.items[0].id, "release-cleared-position-critique-pairs");
 
   const publicDatasetPackageFileTemplateById = await invokeApi(context, {
     method: "GET",
@@ -11477,7 +11585,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.match(validationDatasetRecordsTemplate.validationRequestBodyHash, /^sha256:/);
   assert.equal(validationDatasetRecordsTemplate.unchangedTemplateValidationExpectedStatus, "public_dataset_package_files_invalid");
   assert.equal(validationDatasetRecordsTemplate.packageWriteActionAvailable, false);
+  assert.equal(validationDatasetRecordsTemplate.packageStepReadbackRoute, datasetRecordsTemplate.packageStepReadbackRoute);
+  assert.equal(validationDatasetRecordsTemplate.sourcePackageManifestRoute, datasetRecordsTemplate.sourcePackageManifestRoute);
+  assert.equal(validationDatasetRecordsTemplate.sourceRunbookGroupRoute, datasetRecordsTemplate.sourceRunbookGroupRoute);
+  assert.equal(validationDatasetRecordsTemplate.sourceActionGroupRoute, datasetRecordsTemplate.sourceActionGroupRoute);
   assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
+  assert.ok(validationDatasetRecordsTemplate.routes.includes(validationDatasetRecordsTemplate.sourcePackageManifestRoute));
+  assert.ok(validationDatasetRecordsTemplate.routes.includes(validationDatasetRecordsTemplate.sourceRunbookGroupRoute));
+  assert.ok(validationDatasetRecordsTemplate.routes.includes(validationDatasetRecordsTemplate.sourceActionGroupRoute));
   assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate"));
   assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
 
@@ -11498,6 +11613,26 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageValidationTemplateByRoute.status, 200, JSON.stringify(publicDatasetPackageValidationTemplateByRoute.body));
   assert.equal(publicDatasetPackageValidationTemplateByRoute.body.count, 11);
   assert.equal(publicDatasetPackageValidationTemplateByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-package-files/validate"], 11);
+
+  const publicDatasetPackageValidationTemplateBySourceGroupRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-files/validate/template?route=${encodeURIComponent(
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(
+    publicDatasetPackageValidationTemplateBySourceGroupRoute.status,
+    200,
+    JSON.stringify(publicDatasetPackageValidationTemplateBySourceGroupRoute.body),
+  );
+  assert.equal(publicDatasetPackageValidationTemplateBySourceGroupRoute.body.count, 5);
+  assert.equal(
+    publicDatasetPackageValidationTemplateBySourceGroupRoute.body.filteredCounts.byRoute[
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence"
+    ],
+    5,
+  );
 
   const publicDatasetPackageValidationTemplateById = await invokeApi(context, {
     method: "GET",
@@ -11529,6 +11664,19 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.missingFiles, 0);
   assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.unchangedTemplateFiles, 11);
   assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.invalidContentFiles, 11);
+  assert.ok(
+    unchangedPackageFileValidationFromTemplate.body.sourcePackageManifestRoutes.includes("/api/v1/target-gaps/current-package-manifest"),
+  );
+  assert.ok(
+    unchangedPackageFileValidationFromTemplate.body.sourceRunbookGroupRoutes.includes(
+      "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+    ),
+  );
+  assert.ok(
+    unchangedPackageFileValidationFromTemplate.body.sourceActionGroupRoutes.includes(
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    ),
+  );
 
   const unchangedPackageReviewManifestFromTemplate = await invokeApi(context, {
     method: "POST",
@@ -11548,6 +11696,18 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(unchangedPackageReviewManifestFromTemplate.body.validationSummary.counts.unchangedTemplateFiles, 11);
   assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageManifest.files.length, 11);
   assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageManifest.files[0].submittedContentHash, validationDatasetRecordsTemplate.templateContentHash);
+  assert.ok(
+    unchangedPackageReviewManifestFromTemplate.body.sourcePackageManifestRoutes.includes("/api/v1/operator-evidence/package-manifest"),
+  );
+  assert.ok(
+    unchangedPackageReviewManifestFromTemplate.body.packageManifest.sourceActionGroupRoutes.includes(
+      "/api/v1/operator-action-items?executionStatus=ready_to_collect_data",
+    ),
+  );
+  assert.equal(
+    unchangedPackageReviewManifestFromTemplate.body.packageManifest.files[0].sourceRunbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
   assert.equal(
     unchangedPackageReviewManifestFromTemplate.body.sourceRoutes.packageFileValidation,
     "/api/v1/public-dataset-package-files/validate",
@@ -11588,6 +11748,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(unchangedDatasetRecordsValidation.validationStatus, "unchanged_template_file");
   assert.equal(unchangedDatasetRecordsValidation.contentStatus, "unchanged_template_file");
   assert.equal(unchangedDatasetRecordsValidation.packageFileReadyForReview, false);
+  assert.equal(unchangedDatasetRecordsValidation.sourcePackageManifestRoute, datasetRecordsTemplate.sourcePackageManifestRoute);
+  assert.equal(unchangedDatasetRecordsValidation.sourceRunbookGroupRoute, datasetRecordsTemplate.sourceRunbookGroupRoute);
+  assert.equal(unchangedDatasetRecordsValidation.sourceActionGroupRoute, datasetRecordsTemplate.sourceActionGroupRoute);
 
   const packageValidationContentForTemplate = (item) => {
     if (item.fileFormat === "jsonl") {
@@ -11656,16 +11819,28 @@ test("operator action item queue is admin/auditor readback derived from the rele
     structurallyValidBlockedPackageValidation.body.sourceRoutes.packageFileValidationTemplate,
     "/api/v1/public-dataset-package-files/validate/template",
   );
+  assert.ok(
+    structurallyValidBlockedPackageValidation.body.packageStepReadbackRoutes.includes(
+      "/api/v1/public-dataset-package-manifest/release-artifact-package",
+    ),
+  );
+  assert.ok(
+    structurallyValidBlockedPackageValidation.body.sourceRunbookGroupRoutes.includes(
+      "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+    ),
+  );
   const validBlockedDatasetRecords = structurallyValidBlockedPackageValidation.body.items.find(
     (item) => item.id === "release-cleared-position-critique-pairs",
   );
   assert.equal(validBlockedDatasetRecords.contentStatus, "content_structurally_valid");
   assert.equal(validBlockedDatasetRecords.validationStatus, "blocked_by_target_scale");
   assert.equal(validBlockedDatasetRecords.packageFileReadyForReview, false);
+  assert.equal(validBlockedDatasetRecords.packageStepReadbackRoute, datasetRecordsTemplate.packageStepReadbackRoute);
   const validBlockedExpertLabels = structurallyValidBlockedPackageValidation.body.items.find((item) => item.id === "expert-labels");
   assert.equal(validBlockedExpertLabels.contentStatus, "content_structurally_valid");
   assert.equal(validBlockedExpertLabels.validationStatus, "blocked_by_publication_gate");
   assert.equal(validBlockedExpertLabels.packageFileReadyForReview, false);
+  assert.equal(validBlockedExpertLabels.sourceActionGroupRoute, "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence");
 
   const structurallyValidBlockedPackageReviewManifest = await invokeApi(context, {
     method: "POST",
@@ -11699,6 +11874,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
     structurallyValidBlockedPackageReviewManifest.body.packageManifestHash,
   );
   assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageManifest.manifestVersion, "dataset_v0_1_package_review_manifest_v1");
+  assert.ok(
+    structurallyValidBlockedPackageReviewManifest.body.packageManifest.sourcePackageManifestRoutes.includes(
+      "/api/v1/target-gaps/current-package-manifest",
+    ),
+  );
+  assert.ok(
+    structurallyValidBlockedPackageReviewManifest.body.packageManifest.sourceActionGroupRoutes.includes(
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    ),
+  );
   assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.reviewManifestFiles, 11);
   assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.submittedFileHashes, 11);
   assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.structurallyValidFiles, 11);
@@ -11713,6 +11898,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.match(reviewManifestDatasetRecords.submittedContentHash, /^sha256:/);
   assert.equal(reviewManifestDatasetRecords.packageFileReadyForReview, false);
   assert.ok(reviewManifestDatasetRecords.reviewReasons.length === 0);
+  assert.equal(reviewManifestDatasetRecords.sourcePackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
+  assert.equal(
+    reviewManifestDatasetRecords.sourceRunbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
   assert.equal(
     structurallyValidBlockedPackageReviewManifest.body.sourceRoutes.packageFileValidationTemplate,
     "/api/v1/public-dataset-package-files/validate/template",
@@ -11733,6 +11923,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
       releasePackageStatus: structurallyValidBlockedPackageReviewManifest.body.releasePackageStatus,
       publicationGateStatus: structurallyValidBlockedPackageReviewManifest.body.publicationGateStatus,
       packageReadyForPublicationReview: structurallyValidBlockedPackageReviewManifest.body.packageReadyForPublicationReview,
+      packageStepReadbackRoutes: structurallyValidBlockedPackageReviewManifest.body.packageStepReadbackRoutes,
+      sourcePackageManifestRoutes: structurallyValidBlockedPackageReviewManifest.body.sourcePackageManifestRoutes,
+      sourceRunbookGroupRoutes: structurallyValidBlockedPackageReviewManifest.body.sourceRunbookGroupRoutes,
+      sourceActionGroupRoutes: structurallyValidBlockedPackageReviewManifest.body.sourceActionGroupRoutes,
       packageManifest: structurallyValidBlockedPackageReviewManifest.body.packageManifest,
       validationSummary: structurallyValidBlockedPackageReviewManifest.body.validationSummary,
       reviewDecision: "blocked_until_release_gates_close",
@@ -11788,6 +11982,12 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(packageReviews.body.count, 1);
   assert.equal(packageReviews.body.items[0].packageManifestHash, structurallyValidBlockedPackageReviewManifest.body.packageManifestHash);
   assert.equal(packageReviews.body.items[0].rawPackageContentsStored, false);
+  assert.ok(packageReviews.body.items[0].sourcePackageManifestRoutes.includes("/api/v1/operator-evidence/package-manifest"));
+  assert.ok(
+    packageReviews.body.items[0].sourceRunbookGroupRoutes.includes(
+      "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+    ),
+  );
 
   const packageReviewById = await invokeApi(context, {
     method: "GET",
@@ -11797,6 +11997,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(packageReviewById.status, 200, JSON.stringify(packageReviewById.body));
   assert.equal(packageReviewById.body.id, "dataset-v0-1-package-review-blocked");
   assert.equal(packageReviewById.body.packageReviewStatus, "public_dataset_package_review_blocked_by_release_gates");
+  assert.ok(packageReviewById.body.sourceActionGroupRoutes.includes("/api/v1/operator-action-items?executionStatus=ready_to_collect_data"));
 
   const releaseReportWithPackageReview = await invokeApi(context, {
     method: "GET",
@@ -11856,6 +12057,17 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(publicLeaderboardLaunch.blockingReadinessRowIds.includes("public_first_ladder_gate"));
   assert.ok(publicLeaderboardLaunch.blockingPackageStepIds.includes("target-data-package"));
   assert.ok(publicLeaderboardLaunch.blockingPackageStepIds.includes("public-first-ladder"));
+  assert.ok(publicLeaderboardLaunch.blockingPackageStepReadbackRoutes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+  assert.ok(publicLeaderboardLaunch.sourcePackageManifestRoutes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(publicLeaderboardLaunch.sourcePackageManifestRoutes.includes("/api/v1/operator-evidence/package-manifest"));
+  assert.ok(
+    publicLeaderboardLaunch.sourceRunbookGroupRoutes.includes("/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data"),
+  );
+  assert.ok(
+    publicLeaderboardLaunch.sourceRunbookGroupRoutes.includes("/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence"),
+  );
+  assert.ok(publicLeaderboardLaunch.sourceActionGroupRoutes.includes("/api/v1/operator-action-items?executionStatus=ready_to_collect_data"));
+  assert.ok(publicLeaderboardLaunch.sourceActionGroupRoutes.includes("/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence"));
   assert.ok(publicLeaderboardLaunch.publicFirstReviewReasons.includes("publicFirstLadder:target_scale_incomplete"));
   assert.ok(publicLeaderboardLaunch.publicFirstReviewReasons.includes("publicFirstLadder:release_not_frozen"));
   assert.ok(
@@ -11866,6 +12078,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(publicLeaderboardLaunch.guardedRoutes.includes("/api/v1/leaderboards"));
   assert.ok(publicLeaderboardLaunch.evidenceRoutes.includes("/api/v1/model-evaluation-predictions"));
   assert.ok(publicLeaderboardLaunch.verificationRoutes.includes("/api/v1/public-dataset-package-manifest/public-first-ladder"));
+  assert.ok(publicLeaderboardLaunch.routes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(publicLeaderboardLaunch.routes.includes("/api/v1/operator-action-items?executionStatus=ready_to_collect_data"));
   assert.ok(publicLeaderboardLaunch.routes.includes("/api/v1/public-dataset-downstream-launches/public-leaderboard"));
 
   const publicDatasetDownstreamByLaunchKind = await invokeApi(context, {
@@ -11895,6 +12109,22 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetDownstreamByRoute.body.count, 1);
   assert.equal(publicDatasetDownstreamByRoute.body.items[0].id, "public-leaderboard");
   assert.equal(publicDatasetDownstreamByRoute.body.filteredCounts.byRoute["/api/v1/leaderboards"], 1);
+
+  const publicDatasetDownstreamBySourceGroupRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-downstream-launches?route=${encodeURIComponent(
+      "/api/v1/operator-action-items?executionStatus=ready_to_collect_data",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDownstreamBySourceGroupRoute.status, 200, JSON.stringify(publicDatasetDownstreamBySourceGroupRoute.body));
+  assert.equal(publicDatasetDownstreamBySourceGroupRoute.body.count, 4);
+  assert.equal(
+    publicDatasetDownstreamBySourceGroupRoute.body.filteredCounts.byRoute[
+      "/api/v1/operator-action-items?executionStatus=ready_to_collect_data"
+    ],
+    4,
+  );
 
   const publicDatasetDownstreamById = await invokeApi(context, {
     method: "GET",
@@ -11963,7 +12193,15 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(targetDataPublicationGate.blockingPackageStepIds.includes("target-data-package"));
   assert.ok(targetDataPublicationGate.blockingReleasePackageArtifactIds.includes("release-cleared-position-critique-pairs"));
   assert.ok(targetDataPublicationGate.targetGapIds.includes("positions"));
+  assert.ok(targetDataPublicationGate.packageStepReadbackRoutes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+  assert.ok(targetDataPublicationGate.sourcePackageManifestRoutes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(
+    targetDataPublicationGate.sourceRunbookGroupRoutes.includes("/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data"),
+  );
+  assert.ok(targetDataPublicationGate.sourceActionGroupRoutes.includes("/api/v1/operator-action-items?executionStatus=ready_to_collect_data"));
   assert.ok(targetDataPublicationGate.routes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+  assert.ok(targetDataPublicationGate.routes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(targetDataPublicationGate.routes.includes("/api/v1/operator-action-items?executionStatus=ready_to_collect_data"));
 
   const publicDocumentsPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "public-documents-ready");
   assert.equal(publicDocumentsPublicationGate.status, "documentation_not_submitted");
@@ -11987,6 +12225,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(publicationBoundaryGate.blockingPackageStepIds.includes("target-data-package"));
   assert.ok(publicationBoundaryGate.blockingReleasePackageArtifactIds.includes("release-cleared-position-critique-pairs"));
   assert.ok(publicationBoundaryGate.blockingDownstreamLaunchIds.includes("public-leaderboard"));
+  assert.ok(publicationBoundaryGate.sourcePackageManifestRoutes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(publicationBoundaryGate.sourcePackageManifestRoutes.includes("/api/v1/operator-evidence/package-manifest"));
+  assert.ok(
+    publicationBoundaryGate.sourceRunbookGroupRoutes.includes("/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence"),
+  );
 
   const publicDatasetPublicationGateOpen = await invokeApi(context, {
     method: "GET",
@@ -12032,6 +12275,22 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGateByRoute.status, 200, JSON.stringify(publicDatasetPublicationGateByRoute.body));
   assert.equal(publicDatasetPublicationGateByRoute.body.count, 2);
   assert.equal(publicDatasetPublicationGateByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 2);
+
+  const publicDatasetPublicationGateBySourceGroupRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-publication-gate?route=${encodeURIComponent(
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    )}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateBySourceGroupRoute.status, 200, JSON.stringify(publicDatasetPublicationGateBySourceGroupRoute.body));
+  assert.equal(publicDatasetPublicationGateBySourceGroupRoute.body.count, 3);
+  assert.equal(
+    publicDatasetPublicationGateBySourceGroupRoute.body.filteredCounts.byRoute[
+      "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence"
+    ],
+    3,
+  );
 
   const publicDatasetPublicationGateById = await invokeApi(context, {
     method: "GET",
@@ -16130,10 +16389,17 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/template"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileTemplate"));
   assert.ok(architectureDoc.includes("template content hashes, required field placeholders, replacement-required flags"));
-  assert.ok(architectureDoc.includes("Release-package artifact rows, package-file template rows, and publication-gate rows all carry"));
+  assert.ok(
+    architectureDoc.includes(
+      "Release-package artifact rows, package-file template rows, validation-template rows, publication-gate rows, and downstream-launch guard rows all carry",
+    ),
+  );
+  assert.ok(architectureDoc.includes("sourceRunbookGroupRoute"));
+  assert.ok(architectureDoc.includes("sourceActionGroupRoute"));
   assert.ok(architectureDoc.includes("public-dataset readiness rows also include the package-file template"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-files/review-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageReviewManifest"));
+  assert.ok(architectureDoc.includes("Validation reports and hash-only review manifests retain the package-step"));
   assert.ok(architectureDoc.includes("does not store package contents, append evidence, create files, publish the dataset"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-reviews"));
