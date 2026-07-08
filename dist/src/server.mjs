@@ -9949,6 +9949,7 @@ function octoberCompletionRunbookRoutes(item) {
     ...(Array.isArray(item?.blockedTargetGapImportRoutes) ? item.blockedTargetGapImportRoutes : []),
     ...(Array.isArray(item?.blockedTargetGapDryRunImportRoutes) ? item.blockedTargetGapDryRunImportRoutes : []),
     ...(Array.isArray(item?.blockedTargetGapValidateOnlyImportRoutes) ? item.blockedTargetGapValidateOnlyImportRoutes : []),
+    ...operatorActionItemRelatedSubmitActions(item).flatMap(operatorActionItemRoutes),
   ]);
 }
 
@@ -10142,18 +10143,30 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
       const firstStep = groupItems[0];
       const reviewRoutes = octoberCompletionRunbookReviewRoutesForGroup(group.executionStatus);
       const firstPackageManifestRoute = octoberCompletionRunbookPackageManifestRouteForGroup(group.executionStatus);
-      const routes = uniqueValues([firstPackageManifestRoute, ...Object.values(reviewRoutes), ...groupItems.flatMap(octoberCompletionRunbookRoutes)]);
-      const dryRunRoutes = uniqueValues(groupItems.map((item) => item.dryRunImportRoute));
-      const validateOnlyRoutes = uniqueValues(groupItems.map((item) => item.validateOnlyImportRoute));
+      const targetDataBlockerRoutes = octoberCompletionRunbookTargetDataBlockerRoutesForGroup(group.executionStatus);
+      const routes = uniqueValues([
+        firstPackageManifestRoute,
+        ...Object.values(reviewRoutes),
+        ...Object.values(targetDataBlockerRoutes),
+        ...groupItems.flatMap(octoberCompletionRunbookRoutes),
+      ]);
+      const dryRunRoutes = uniqueValues([targetDataBlockerRoutes.firstDryRunRoute, ...groupItems.map((item) => item.dryRunImportRoute)]);
+      const validateOnlyRoutes = uniqueValues([
+        targetDataBlockerRoutes.firstValidateOnlyRoute,
+        ...groupItems.map((item) => item.validateOnlyImportRoute),
+      ]);
       const singleRecordDryRunRoutes = uniqueValues(groupItems.map((item) => item.singleRecordDryRunRoute));
       const singleRecordValidateOnlyRoutes = uniqueValues(groupItems.map((item) => item.singleRecordValidateOnlyRoute));
       const templateRoutes = uniqueValues(
-        groupItems.flatMap((item) => [
-          item.templateReadbackRoute,
-          item.expandedTemplateReadbackRoute,
-          item.starterExpandedTemplateReadbackRoute,
-          item.cappedExpandedTemplateReadbackRoute,
-        ]),
+        [
+          targetDataBlockerRoutes.firstTemplateReadbackRoute,
+          ...groupItems.flatMap((item) => [
+            item.templateReadbackRoute,
+            item.expandedTemplateReadbackRoute,
+            item.starterExpandedTemplateReadbackRoute,
+            item.cappedExpandedTemplateReadbackRoute,
+          ]),
+        ],
       );
       return {
         sequence: index + 1,
@@ -10166,13 +10179,15 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
         firstStepRoute: firstStep.runbookStepRoute ?? null,
         firstStepLabel: firstStep.label ?? humanizeServerLabel(firstStep.stepKind ?? firstStep.actionType ?? group.phase),
         firstRoute: octoberCompletionRunbookUnblockerRoute(firstStep),
-        firstDryRunRoute: firstStep.dryRunImportRoute ?? null,
-        firstValidateOnlyRoute: firstStep.validateOnlyImportRoute ?? null,
+        firstImportRoute: targetDataBlockerRoutes.firstImportRoute ?? firstStep.importRoute ?? null,
+        firstDryRunRoute: targetDataBlockerRoutes.firstDryRunRoute ?? firstStep.dryRunImportRoute ?? null,
+        firstValidateOnlyRoute: targetDataBlockerRoutes.firstValidateOnlyRoute ?? firstStep.validateOnlyImportRoute ?? null,
         firstSingleRecordDryRunRoute: firstStep.singleRecordDryRunRoute ?? null,
         firstSingleRecordValidateOnlyRoute: firstStep.singleRecordValidateOnlyRoute ?? null,
         firstPackageManifestRoute,
         firstStarterTemplateReadbackRoute: firstStep.starterExpandedTemplateReadbackRoute ?? null,
         firstTemplateReadbackRoute:
+          targetDataBlockerRoutes.firstTemplateReadbackRoute ??
           firstStep.templateReadbackRoute ??
           firstStep.expandedTemplateReadbackRoute ??
           firstStep.starterExpandedTemplateReadbackRoute ??
@@ -10202,9 +10217,24 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
 }
 
 function octoberCompletionRunbookPackageManifestRouteForGroup(executionStatus) {
-  if (executionStatus === "ready_to_collect_data") return "/api/v1/target-gaps/current-package-manifest";
+  if (executionStatus === "ready_to_collect_data" || executionStatus === "blocked_by_target_data") {
+    return "/api/v1/target-gaps/current-package-manifest";
+  }
   if (executionStatus === "ready_to_submit_evidence") return "/api/v1/operator-evidence/package-manifest";
   return null;
+}
+
+function octoberCompletionRunbookTargetDataBlockerRoutesForGroup(executionStatus) {
+  if (executionStatus !== "blocked_by_target_data") return {};
+  return {
+    firstImportRoute: targetDataCollectionPackageImportRoute,
+    firstDryRunRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    firstValidateOnlyRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    firstTemplateReadbackRoute: targetGapCollectionPackageTemplateRoute({
+      expand: "remaining",
+      maxExpandedRecords: targetDataPackageStarterRecordCap,
+    }),
+  };
 }
 
 function octoberCompletionRunbookReviewRoutesForGroup(executionStatus) {
@@ -10256,6 +10286,10 @@ function octoberCompletionRunbookUnblockerRoute(item) {
 
 function octoberCompletionRunbookUnblockerStepSummary(item) {
   const reviewRoutes = octoberCompletionRunbookReviewRoutesForGroup(octoberCompletionRunbookExecutionStatus(item));
+  const relatedSubmitActions = Array.isArray(item.relatedSubmitActions) ? item.relatedSubmitActions : [];
+  const relatedSubmitActionIds = Array.isArray(item.relatedSubmitActionIds)
+    ? item.relatedSubmitActionIds
+    : relatedSubmitActions.map((action) => action.actionId).filter(Boolean);
   return {
     id: item.id ?? null,
     sequence: item.sequence ?? null,
@@ -10272,6 +10306,8 @@ function octoberCompletionRunbookUnblockerStepSummary(item) {
     checklistRowIds: Array.isArray(item.checklistRowIds) ? item.checklistRowIds : [],
     targetGapId: item.targetGapId ?? null,
     artifactKind: item.artifactKind ?? null,
+    artifactType: item.artifactType ?? null,
+    artifactId: item.artifactId ?? null,
     route: octoberCompletionRunbookUnblockerRoute(item),
     importRoute: item.importRoute ?? null,
     dryRunImportRoute: item.dryRunImportRoute ?? null,
@@ -10288,8 +10324,36 @@ function octoberCompletionRunbookUnblockerStepSummary(item) {
     ...reviewRoutes,
     verificationRoute: item.verificationRoute ?? item.readbackRoute ?? null,
     blockedByTargetGapIds: Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [],
+    relatedSubmitActionIds,
+    relatedSubmitActionCount: relatedSubmitActionIds.length,
+    relatedSubmitActions: relatedSubmitActions.slice(0, 5),
+    omittedRelatedSubmitActionCount: Math.max(0, relatedSubmitActions.length - 5),
+    resolutionEvidence: item.resolutionEvidence ?? null,
     releaseVerificationBlockerSummary: item.releaseVerificationBlockerSummary ?? null,
   };
+}
+
+function octoberCompletionRunbookRelatedSubmitActionSummaries(actions) {
+  return (Array.isArray(actions) ? actions : []).map((action) => ({
+    actionId: action.actionId ?? action.id ?? null,
+    artifactKind: action.artifactKind ?? null,
+    artifactType: action.artifactType ?? null,
+    artifactId: action.artifactId ?? null,
+    status: action.status ?? action.actionStatus ?? null,
+    writeRoute: action.writeRoute ?? null,
+    readbackRoute: action.readbackRoute ?? null,
+    bulkImportRoute: action.bulkImportRoute ?? null,
+    dryRunImportRoute: action.dryRunImportRoute ?? null,
+    validateOnlyImportRoute: action.validateOnlyImportRoute ?? null,
+    singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
+    templateReadbackRoutes: Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes : [],
+    workflowTemplateId: action.workflowTemplateId ?? null,
+    bulkImportWorkflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+    preflightCoverageStatus: action.preflightCoverageStatus ?? null,
+    governanceCoverageStatus: action.governanceCoverageStatus ?? null,
+    completionEvidence: action.completionEvidence ?? null,
+  }));
 }
 
 function octoberCompletionRunbookReleaseCompletionBlockerSummary(items) {
@@ -10581,6 +10645,8 @@ function octoberCompletionRunbookItems(report) {
       setupWorkflowTemplateId: action.setupWorkflowTemplateId ?? null,
       actorRole: action.actorRole ?? null,
       relatedSubmitActionIds: Array.isArray(action.relatedSubmitActionIds) ? action.relatedSubmitActionIds : [],
+      relatedSubmitActions: octoberCompletionRunbookRelatedSubmitActionSummaries(action.relatedSubmitActions),
+      resolutionEvidence: action.resolutionEvidence ?? null,
       completionEvidence: action.completionEvidence ?? null,
     });
   }
@@ -18283,6 +18349,7 @@ function operatorActionItemRoutes(item) {
     ...(Array.isArray(item?.templateCoverageRoutes) ? item.templateCoverageRoutes : []),
     ...(Array.isArray(item?.preflightCoverageRoutes) ? item.preflightCoverageRoutes : []),
     ...(Array.isArray(item?.governanceCoverageRoutes) ? item.governanceCoverageRoutes : []),
+    ...operatorActionItemRelatedSubmitActions(item).flatMap(operatorActionItemRoutes),
   ]);
 }
 

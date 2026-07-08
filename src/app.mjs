@@ -10045,6 +10045,8 @@ function octoberCompletionRunbookPreviewRow(item) {
   const dryRun = item.dryRunImportRoute ?? item.validateOnlyImportRoute ?? "not required";
   const packageImport = item.packageImportRoute ? `${item.packageImportRoute}; dry-run ${item.packageDryRunImportRoute ?? "not available"}` : "not available";
   const blockedByTargetGapIds = Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [];
+  const relatedSubmitActionIds = Array.isArray(item.relatedSubmitActionIds) ? item.relatedSubmitActionIds : [];
+  const relatedSubmitSummary = operatorRelatedSubmitActionSummary(item);
   const verificationBlockerSummary = item.releaseVerificationBlockerSummary;
   return `
     <article class="operatorActionCard">
@@ -10084,6 +10086,9 @@ function octoberCompletionRunbookPreviewRow(item) {
           : []),
         ...(blockedByTargetGapIds.length ? [["Blocked target gaps", blockedByTargetGapIds.map(humanize).join(", ")]] : []),
         ...blockedTargetGapRouteMetrics(item),
+        ...(relatedSubmitActionIds.length ? [["Related submit action ids", relatedSubmitActionIds.slice(0, 3).join(", ")]] : []),
+        ...(relatedSubmitSummary ? [["Related submit actions", relatedSubmitSummary]] : []),
+        ...(item.resolutionEvidence ? [["Resolution evidence", item.resolutionEvidence]] : []),
         ["Completion", item.completionEvidence ?? "Verify through /api/release/report."],
       ])}
     </article>

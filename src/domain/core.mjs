@@ -28590,6 +28590,14 @@ function buildReleaseCompletionNavigationSummary(
           ),
           firstReadbackRoute: "/api/v1/operator-action-items?status=data_dependency_blocked",
           firstTargetGapRoute: "/api/v1/target-gaps/collection-plan",
+          firstTemplateRoute: operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
+            expand: "remaining",
+            maxExpandedRecords: 25,
+          }),
+          firstPackageManifestRoute: "/api/v1/target-gaps/current-package-manifest",
+          firstImportRoute: TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE,
+          firstDryRunRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
+          firstValidateOnlyRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
         })
       : null,
     actionsByExecutionStatus.ready_to_submit_evidence

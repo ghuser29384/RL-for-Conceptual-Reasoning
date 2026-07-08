@@ -8991,6 +8991,22 @@ test("operator action item queue is admin/auditor readback derived from the rele
     ],
     1,
   );
+  const leaderboardTemplateRoute =
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance";
+  const leaderboardTemplateRouteQueue = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/operator-action-items?route=${encodeURIComponent(leaderboardTemplateRoute)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(leaderboardTemplateRouteQueue.status, 200, JSON.stringify(leaderboardTemplateRouteQueue.body));
+  assert.equal(leaderboardTemplateRouteQueue.body.filters.route, leaderboardTemplateRoute);
+  assert.deepEqual(
+    leaderboardTemplateRouteQueue.body.items.map((item) => item.id).sort(),
+    [
+      "model_evaluation_reproducibility:review:model_evaluation_reproducibility_checklist:leaderboard_model_run_provenance",
+      "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+    ].sort(),
+  );
 
   const benchmarkFreezeRelatedQueue = await invokeApi(context, {
     method: "GET",
@@ -9187,10 +9203,18 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(operatorEvidenceRouteQueue.status, 200, JSON.stringify(operatorEvidenceRouteQueue.body));
-  assert.equal(operatorEvidenceRouteQueue.body.count, 21);
+  assert.equal(operatorEvidenceRouteQueue.body.count, 23);
   assert.equal(operatorEvidenceRouteQueue.body.filteredCounts.submitArtifactActionItems, 21);
+  assert.equal(operatorEvidenceRouteQueue.body.filteredCounts.reviewArtifactActionItems, 2);
   assert.equal(operatorEvidenceRouteQueue.body.filteredCounts.byBulkImportRoute["/api/v1/operator-evidence/import-jsonl"], 21);
-  assert.ok(operatorEvidenceRouteQueue.body.items.every((item) => item.bulkImportRoute === "/api/v1/operator-evidence/import-jsonl"));
+  assert.ok(
+    operatorEvidenceRouteQueue.body.items.every(
+      (item) =>
+        item.bulkImportRoute === "/api/v1/operator-evidence/import-jsonl" ||
+        (Array.isArray(item.relatedSubmitActions) &&
+          item.relatedSubmitActions.some((action) => action.bulkImportRoute === "/api/v1/operator-evidence/import-jsonl")),
+    ),
+  );
 
   const operatorEvidenceDryRunRouteQueue = await invokeApi(context, {
     method: "GET",
@@ -9198,10 +9222,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(operatorEvidenceDryRunRouteQueue.status, 200, JSON.stringify(operatorEvidenceDryRunRouteQueue.body));
-  assert.equal(operatorEvidenceDryRunRouteQueue.body.count, 21);
+  assert.equal(operatorEvidenceDryRunRouteQueue.body.count, 23);
   assert.ok(
     operatorEvidenceDryRunRouteQueue.body.items.every(
-      (item) => item.dryRunImportRoute === "/api/v1/operator-evidence/import-jsonl?dryRun=true",
+      (item) =>
+        item.dryRunImportRoute === "/api/v1/operator-evidence/import-jsonl?dryRun=true" ||
+        (Array.isArray(item.relatedSubmitActions) &&
+          item.relatedSubmitActions.some((action) => action.dryRunImportRoute === "/api/v1/operator-evidence/import-jsonl?dryRun=true")),
     ),
   );
 
@@ -9886,13 +9913,20 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(evaluationSetupRouteRunbook.status, 200, JSON.stringify(evaluationSetupRouteRunbook.body));
-  assert.equal(evaluationSetupRouteRunbook.body.count, 5);
-  assert.equal(evaluationSetupRouteRunbook.body.filteredCounts.byRoute["/api/v1/evaluations/run"], 5);
+  assert.equal(evaluationSetupRouteRunbook.body.count, 6);
+  assert.equal(evaluationSetupRouteRunbook.body.filteredCounts.byRoute["/api/v1/evaluations/run"], 6);
   assert.ok(
     evaluationSetupRouteRunbook.body.items.some(
       (item) =>
         item.artifactKind === "model_evaluation_predictions" &&
         item.setupWriteRoute === "/api/v1/evaluations/run",
+    ),
+  );
+  assert.ok(
+    evaluationSetupRouteRunbook.body.items.some(
+      (item) =>
+        item.actionId ===
+        "model_evaluation_reproducibility:review:model_evaluation_reproducibility_checklist:submitted_evaluation_artifacts_bound_to_release",
     ),
   );
 
@@ -10157,6 +10191,21 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(blockedTargetDataGroup);
   assert.equal(blockedTargetDataGroup.stepCount, expectedDataDependencyBlockedSteps.length);
   assert.equal(blockedTargetDataGroup.firstRoute, "/api/v1/target-gaps/collection-plan/validation_critiques");
+  assert.equal(blockedTargetDataGroup.firstPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
+  assert.equal(blockedTargetDataGroup.firstImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+  assert.equal(blockedTargetDataGroup.firstDryRunRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+  assert.equal(blockedTargetDataGroup.firstValidateOnlyRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(
+    blockedTargetDataGroup.firstTemplateReadbackRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.ok(blockedTargetDataGroup.routes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(blockedTargetDataGroup.routes.includes("/api/v1/target-gaps/import-jsonl-package?dryRun=true"));
+  assert.ok(
+    blockedTargetDataGroup.templateReadbackRoutes.includes(
+      "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+    ),
+  );
   assert.ok(blockedTargetDataGroup.blockedTargetGapIds.includes("validation_critiques"));
   assert.ok(blockedTargetDataGroup.items.every((item) => item.executionStatus === "blocked_by_target_data"));
   const submitOperatorEvidenceGroup = fullRunbook.body.nextUnblockerSequence.find(
@@ -10179,6 +10228,39 @@ test("operator action item queue is admin/auditor readback derived from the rele
     reviewCurrentEvidenceGroup.items.every(
       (item) => item.firstReviewEvidencePointersRoute === "/api/v1/operator-review-evidence-pointers?status=open",
     ),
+  );
+  const leaderboardReviewRunbookSummary = reviewCurrentEvidenceGroup.items.find(
+    (item) => item.actionId === "model_evaluation_reproducibility:review:model_evaluation_reproducibility_checklist:leaderboard_model_run_provenance",
+  );
+  assert.ok(leaderboardReviewRunbookSummary);
+  assert.equal(leaderboardReviewRunbookSummary.artifactId, "leaderboard_model_run_provenance");
+  assert.deepEqual(leaderboardReviewRunbookSummary.relatedSubmitActionIds, [
+    "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+  ]);
+  assert.equal(leaderboardReviewRunbookSummary.relatedSubmitActionCount, 1);
+  assert.equal(leaderboardReviewRunbookSummary.relatedSubmitActions[0].bulkImportRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.equal(
+    leaderboardReviewRunbookSummary.relatedSubmitActions[0].templateReadbackRoutes[0],
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance",
+  );
+  assert.match(leaderboardReviewRunbookSummary.resolutionEvidence, /Submit or repair the related action/);
+  const leaderboardReviewRunbookItem = fullRunbook.body.items.find(
+    (item) => item.actionId === "model_evaluation_reproducibility:review:model_evaluation_reproducibility_checklist:leaderboard_model_run_provenance",
+  );
+  assert.equal(leaderboardReviewRunbookItem.relatedSubmitActions[0].governanceCoverageStatus, "governance_coverage_not_required");
+  const leaderboardTemplateRouteRunbook = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/october-completion-runbook?route=${encodeURIComponent(leaderboardTemplateRoute)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(leaderboardTemplateRouteRunbook.status, 200, JSON.stringify(leaderboardTemplateRouteRunbook.body));
+  assert.equal(leaderboardTemplateRouteRunbook.body.filters.route, leaderboardTemplateRoute);
+  assert.deepEqual(
+    leaderboardTemplateRouteRunbook.body.items.map((item) => item.actionId).sort(),
+    [
+      "model_evaluation_reproducibility:review:model_evaluation_reproducibility_checklist:leaderboard_model_run_provenance",
+      "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+    ].sort(),
   );
   const releaseVerificationBlockerGroup = fullRunbook.body.nextUnblockerSequence.find(
     (item) => item.executionStatus === "blocked_by_open_release_work",
@@ -15458,6 +15540,9 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("currentGroup?.firstReviewArtifactSummariesRoute"));
   assert.ok(appSource.includes("currentGroup?.firstReleaseReportSectionsRoute"));
   assert.ok(appSource.includes("routes.currentBlockingRunbookRoute"));
+  assert.ok(appSource.includes('["Related submit action ids", relatedSubmitActionIds.slice(0, 3).join(", ")]'));
+  assert.ok(appSource.includes('["Related submit actions", relatedSubmitSummary]'));
+  assert.ok(appSource.includes('["Resolution evidence", item.resolutionEvidence]'));
   assert.ok(appSource.includes("function operatorEvidenceSubmissionPlanPanel(operatorEvidenceSubmissionPlan)"));
   assert.ok(appSource.includes("function releaseWorkflowEvidenceReadinessPanel({"));
   assert.ok(appSource.includes("function operatorPlanActionQueuePanel(plan)"));

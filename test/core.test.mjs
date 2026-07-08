@@ -14338,6 +14338,17 @@ test("October completion checklist records operator-evidence statuses when child
     releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstPackageManifestRoute,
     "/api/v1/target-gaps/current-package-manifest",
   );
+  const blockedTargetDataGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
+    (item) => item.executionStatus === "blocked_by_target_data",
+  );
+  assert.equal(blockedTargetDataGroup.firstPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
+  assert.equal(
+    blockedTargetDataGroup.firstTemplateRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.equal(blockedTargetDataGroup.firstImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+  assert.equal(blockedTargetDataGroup.firstDryRunRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+  assert.equal(blockedTargetDataGroup.firstValidateOnlyRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
   const submitOperatorEvidenceGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
     (item) => item.executionStatus === "ready_to_submit_evidence",
   );
