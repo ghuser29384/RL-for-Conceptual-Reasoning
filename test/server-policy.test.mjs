@@ -18520,6 +18520,22 @@ test("admin source-intake aliases record Phase 1 sources, JSONL import, and extr
   });
   assert.equal(readSource.status, 200);
   assert.equal(readSource.body.id, sourceCard.id);
+  assert.equal(readSource.body.resourceKey, "sourceCard");
+  assert.equal(readSource.body.readbackSource, "admin_source_review_context");
+  assert.equal(readSource.body.sourceCard.id, sourceCard.id);
+  assert.equal(readSource.body.linkedContext.sourceCardId, sourceCard.id);
+  assert.equal(readSource.body.linkedContext.sourceSpanCount, 0);
+  assert.equal(readSource.body.linkedContext.extractionBatchCount, 0);
+  assert.equal(readSource.body.linkedContext.argumentExtractionCount, 0);
+  assert.equal(readSource.body.linkedContext.createSpanRoute, "/api/v1/admin/sources/source-card-admin-alias/spans");
+  assert.equal(readSource.body.linkedContext.extractionImportRoute, "/api/v1/admin/sources/source-card-admin-alias/extract");
+  assert.equal(readSource.body.linkedContext.dryRunImportRoute, "/api/v1/admin/sources/source-card-admin-alias/extract?dryRun=true");
+  assert.equal(readSource.body.linkedContext.validateOnlyImportRoute, "/api/v1/admin/sources/source-card-admin-alias/extract?validateOnly=true");
+  assert.equal(readSource.body.linkedContext.readbackAccess, "admin_auditor_only");
+  assert.equal(readSource.body.reviewReadiness.status, "no_pending_manual_extractions");
+  assert.equal(readSource.body.reviewReadiness.createsPreparedDrafts, false);
+  assert.equal(readSource.body.reviewReadiness.createsCandidateItems, false);
+  assert.equal(readSource.body.reviewReadiness.liveQueueIntegration, false);
 
   const raterReadSource = await invokeApi(context, {
     method: "GET",
@@ -18885,6 +18901,38 @@ test("admin source-intake aliases record Phase 1 sources, JSONL import, and extr
   assert.equal(reviewedExtraction.status, 201);
   assert.equal(reviewedExtraction.body.safety.createdPreparedDrafts, false);
   assert.equal(reviewedExtraction.body.safety.createdCandidateItems, false);
+
+  const readSourceAfterReview = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/admin/sources/source-card-admin-alias",
+    headers: adminHeaders,
+  });
+  assert.equal(readSourceAfterReview.status, 200, JSON.stringify(readSourceAfterReview.body));
+  assert.equal(readSourceAfterReview.body.sourceSpans[0].id, "source-span-admin-alias");
+  assert.equal(readSourceAfterReview.body.extractionBatches[0].id, "extraction-batch-admin-alias");
+  assert.equal(readSourceAfterReview.body.argumentExtractions[0].id, "argument-extraction-admin-alias");
+  assert.deepEqual(readSourceAfterReview.body.linkedContext.sourceSpanIds, ["source-span-admin-alias"]);
+  assert.deepEqual(readSourceAfterReview.body.linkedContext.extractionBatchIds, ["extraction-batch-admin-alias"]);
+  assert.deepEqual(readSourceAfterReview.body.linkedContext.argumentExtractionIds, ["argument-extraction-admin-alias"]);
+  assert.equal(readSourceAfterReview.body.linkedContext.sourceSpanCount, 1);
+  assert.equal(readSourceAfterReview.body.linkedContext.extractionBatchCount, 1);
+  assert.equal(readSourceAfterReview.body.linkedContext.argumentExtractionCount, 1);
+  assert.equal(readSourceAfterReview.body.linkedContext.acceptedExtractionCount, 1);
+  assert.equal(readSourceAfterReview.body.linkedContext.pendingReviewCount, 0);
+  assert.equal(readSourceAfterReview.body.linkedContext.byExtractionReviewStatus.accepted_for_position_intake, 1);
+  assert.deepEqual(readSourceAfterReview.body.linkedContext.readbackRoutes.sourceSpans, ["/api/v1/source-spans/source-span-admin-alias"]);
+  assert.deepEqual(readSourceAfterReview.body.linkedContext.readbackRoutes.extractionBatches, [
+    "/api/v1/extraction-batches/extraction-batch-admin-alias",
+  ]);
+  assert.deepEqual(readSourceAfterReview.body.linkedContext.readbackRoutes.adminArgumentExtractions, [
+    "/api/v1/admin/extractions/argument-extraction-admin-alias",
+  ]);
+  assert.deepEqual(readSourceAfterReview.body.reviewReadiness.acceptedArgumentExtractionIds, ["argument-extraction-admin-alias"]);
+  assert.equal(readSourceAfterReview.body.reviewReadiness.createsPreparedDrafts, false);
+  assert.equal(readSourceAfterReview.body.reviewReadiness.createsCandidateItems, false);
+  assert.equal(readSourceAfterReview.body.reviewReadiness.createsCandidateBatches, false);
+  assert.equal(readSourceAfterReview.body.reviewReadiness.aiExtractionExecuted, false);
+  assert.match(readSourceAfterReview.body.reviewReadiness.nonPromotionBoundary, /Phase 1 review context/);
 
   const sourceIntakeReleaseReport = await invokeApi(context, { method: "GET", url: "/api/release/report" });
   assert.equal(sourceIntakeReleaseReport.status, 200);

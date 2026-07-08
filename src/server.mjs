@@ -7782,6 +7782,11 @@ export async function handleApiRequest(request, response, url, context) {
     await adminArgumentExtractionReadbackEndpoint(request, response, context, decodeURIComponent(v1AdminArgumentExtractionReadMatch[1]));
     return;
   }
+  const v1AdminSourceReadMatch = url.pathname.match(/^\/api\/v1\/admin\/sources\/([^/]+)$/);
+  if (request.method === "GET" && v1AdminSourceReadMatch) {
+    await adminSourceCardReadbackEndpoint(request, response, context, decodeURIComponent(v1AdminSourceReadMatch[1]));
+    return;
+  }
 
   const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
   if (workflowWriteMatch) {
@@ -18056,6 +18061,89 @@ async function adminArgumentExtractionReadbackEndpoint(request, response, contex
       noDownstreamArtifactsCreatedByReadback: true,
       nonPromotionBoundary:
         "Admin extraction readback is review context only; downstream preparation, candidate creation, batch membership, AI extraction, and live queue integration stay outside Phase 1 intake.",
+    },
+  });
+}
+
+async function adminSourceCardReadbackEndpoint(request, response, context, sourceCardId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const sourceCard = model.sourceCards.find((item) => item.id === sourceCardId);
+  if (!sourceCard) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  const sourceSpans = model.sourceSpans.filter((item) => item.sourceCardId === sourceCardId);
+  const sourceSpanIds = new Set(sourceSpans.map((item) => item.id));
+  const extractionBatches = model.extractionBatches.filter((item) => item.sourceCardId === sourceCardId);
+  const extractionBatchIds = new Set(extractionBatches.map((item) => item.id));
+  const argumentExtractions = model.argumentExtractions.filter((item) => {
+    if (item.sourceCardId === sourceCardId) return true;
+    if (item.extractionBatchId && extractionBatchIds.has(item.extractionBatchId)) return true;
+    return (Array.isArray(item.sourceSpanIds) ? item.sourceSpanIds : []).some((spanId) => sourceSpanIds.has(spanId));
+  });
+  const pendingReviewExtractions = argumentExtractions.filter((item) => item.reviewStatus === "pending_admin_review");
+  const acceptedExtractions = argumentExtractions.filter((item) => String(item.reviewStatus ?? "").startsWith("accepted_for_"));
+  const rejectedExtractions = argumentExtractions.filter((item) => String(item.reviewStatus ?? "").startsWith("rejected"));
+  const encodedSourceCardId = encodeURIComponent(sourceCardId);
+  sendJson(response, 200, {
+    ...sourceCard,
+    resourceKey: "sourceCard",
+    readbackSource: "admin_source_review_context",
+    sourceCard,
+    sourceSpans,
+    extractionBatches,
+    argumentExtractions,
+    linkedContext: {
+      sourceCardId,
+      sourceSpanIds: sourceSpans.map((item) => item.id),
+      extractionBatchIds: extractionBatches.map((item) => item.id),
+      argumentExtractionIds: argumentExtractions.map((item) => item.id),
+      sourceSpanCount: sourceSpans.length,
+      extractionBatchCount: extractionBatches.length,
+      argumentExtractionCount: argumentExtractions.length,
+      pendingReviewCount: pendingReviewExtractions.length,
+      acceptedExtractionCount: acceptedExtractions.length,
+      rejectedExtractionCount: rejectedExtractions.length,
+      byExtractionReviewStatus: countItemsBy(argumentExtractions, "reviewStatus"),
+      readbackRoutes: {
+        sourceCard: `/api/v1/source-cards/${encodedSourceCardId}`,
+        sourceSpans: sourceSpans.map((span) => `/api/v1/source-spans/${encodeURIComponent(span.id)}`),
+        extractionBatches: extractionBatches.map((batch) => `/api/v1/extraction-batches/${encodeURIComponent(batch.id)}`),
+        argumentExtractions: argumentExtractions.map((extraction) => `/api/v1/argument-extractions/${encodeURIComponent(extraction.id)}`),
+        adminArgumentExtractions: argumentExtractions.map((extraction) => `/api/v1/admin/extractions/${encodeURIComponent(extraction.id)}`),
+      },
+      createSpanRoute: `/api/v1/admin/sources/${encodedSourceCardId}/spans`,
+      extractionImportRoute: `/api/v1/admin/sources/${encodedSourceCardId}/extract`,
+      dryRunImportRoute: routeWithQueryFlag(`/api/v1/admin/sources/${encodedSourceCardId}/extract`, "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag(`/api/v1/admin/sources/${encodedSourceCardId}/extract`, "validateOnly", "true"),
+      adminReadbackRoute: `/api/v1/admin/sources/${encodedSourceCardId}`,
+      collectionReadbackRoute: "/api/v1/admin/sources",
+      readbackAccess: "admin_auditor_only",
+    },
+    reviewReadiness: {
+      status: pendingReviewExtractions.length ? "has_pending_manual_extractions" : "no_pending_manual_extractions",
+      canCreateSourceSpans: true,
+      canImportExtractionsWithoutCreatingDownstreamArtifacts: true,
+      pendingReviewArgumentExtractionIds: pendingReviewExtractions.map((item) => item.id),
+      acceptedArgumentExtractionIds: acceptedExtractions.map((item) => item.id),
+      rejectedArgumentExtractionIds: rejectedExtractions.map((item) => item.id),
+      createsPreparedDrafts: false,
+      createsCandidateItems: false,
+      createsCandidateBatches: false,
+      liveQueueIntegration: false,
+      aiExtractionExecuted: false,
+      noDownstreamArtifactsCreatedByReadback: true,
+      nonPromotionBoundary:
+        "Admin source readback is Phase 1 review context only; source spans, extraction batches, and argument extractions remain admin-only and cannot enter preparation, candidate promotion, or live rating without the separate reviewed workflows.",
     },
   });
 }
