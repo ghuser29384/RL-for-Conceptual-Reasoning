@@ -15774,6 +15774,7 @@ function operatorEvidencePackageJsonlTemplateRow(action, index, report) {
         ...base,
         skipReason: "not_operator_evidence_package_importable",
         route: action.writeRoute ?? null,
+        ...operatorEvidencePackageSkippedFallbackFields(action),
       },
     };
   }
@@ -15786,6 +15787,7 @@ function operatorEvidencePackageJsonlTemplateRow(action, index, report) {
         ...base,
         skipReason: "unsupported_write_route",
         route: concreteRoute,
+        ...operatorEvidencePackageSkippedFallbackFields(action, concreteRoute),
       },
     };
   }
@@ -15798,6 +15800,7 @@ function operatorEvidencePackageJsonlTemplateRow(action, index, report) {
         skipReason: spec.policyActionKind ? "policy_gated_resource_requires_single_route" : "package_import_unsupported",
         route: concreteRoute,
         resourceKey: spec.resourceKey,
+        ...operatorEvidencePackageSkippedFallbackFields(action, concreteRoute),
       },
     };
   }
@@ -15828,6 +15831,44 @@ function operatorEvidencePackageJsonlTemplateRow(action, index, report) {
       templateOnly: true,
       record,
     },
+  };
+}
+
+function operatorEvidencePackageSkippedFallbackFields(action, concreteRoute = null) {
+  const templateReadbackRoutes = Array.isArray(action?.templateReadbackRoutes) ? action.templateReadbackRoutes : [];
+  const templateCoverageKinds = Array.isArray(action?.templateCoverageKinds) ? action.templateCoverageKinds : [];
+  const templateCoverageRoutes = Array.isArray(action?.templateCoverageRoutes) ? action.templateCoverageRoutes : [];
+  const preflightCoverageKinds = Array.isArray(action?.preflightCoverageKinds) ? action.preflightCoverageKinds : [];
+  const preflightCoverageRoutes = Array.isArray(action?.preflightCoverageRoutes) ? action.preflightCoverageRoutes : [];
+  const fallbackSubmissionRoute = concreteRoute ?? action?.writeRoute ?? null;
+  const fallbackSubmissionRouteTemplate =
+    concreteRoute && action?.writeRoute && concreteRoute !== action.writeRoute ? action.writeRoute : null;
+  const hasFallbackRoute =
+    fallbackSubmissionRoute ||
+    action?.payloadTemplateReadbackRoute ||
+    action?.singleRecordDryRunRoute ||
+    action?.singleRecordValidateOnlyRoute ||
+    action?.setupSingleRecordDryRunRoute ||
+    action?.setupSingleRecordValidateOnlyRoute;
+  return {
+    payloadTemplateReadbackRoute: action?.payloadTemplateReadbackRoute ?? null,
+    templateReadbackRoutes,
+    templateCoverageStatus: action?.templateCoverageStatus ?? null,
+    templateCoverageKinds,
+    templateCoverageRoutes,
+    singleRecordDryRunRoute: action?.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: action?.singleRecordValidateOnlyRoute ?? null,
+    setupSingleRecordDryRunRoute: action?.setupSingleRecordDryRunRoute ?? null,
+    setupSingleRecordValidateOnlyRoute: action?.setupSingleRecordValidateOnlyRoute ?? null,
+    preflightCoverageStatus: action?.preflightCoverageStatus ?? null,
+    preflightCoverageKinds,
+    preflightCoverageRoutes,
+    preflightCoveragePolicy: action?.preflightCoveragePolicy ?? null,
+    fallbackSubmissionRoute,
+    fallbackSubmissionRouteTemplate,
+    fallbackSubmissionPolicy: hasFallbackRoute
+      ? "Use the action payload template and single-record dry-run/validate routes for this skipped action; the operator-evidence JSONL package import does not cover this write path."
+      : "No fallback submission route is available for this skipped action; inspect the operator action item and release report before proceeding.",
   };
 }
 

@@ -12537,6 +12537,29 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(skippedArtifactProbePackageTemplate.blockedTargetGapDryRunImportRoutes.includes("/api/v1/validation-tranche-evidence/import-jsonl?dryRun=true"));
   assert.ok(skippedArtifactProbePackageTemplate.blockedTargetGapValidateOnlyImportRoutes.includes("/api/v1/validation-tranche-evidence/import-jsonl?validateOnly=true"));
   assert.ok(skippedArtifactProbePackageTemplate.blockedTargetGapSubmissionReadbackRoutes.length > 0);
+  for (const [artifactKind, route] of [
+    ["label_snapshot", "/api/v1/label-snapshots"],
+    ["training_export", "/api/v1/training-exports"],
+    ["release_report_snapshot", "/api/v1/release-reports"],
+  ]) {
+    const skippedSingleRoutePackageTemplate = packageTemplate.body.skippedItems.find(
+      (item) => item.artifactKind === artifactKind,
+    );
+    assert.ok(skippedSingleRoutePackageTemplate, artifactKind);
+    const payloadTemplateReadbackRoute = `/api/v1/operator-action-items/payload-template?checklistRowId=release_artifact_submission_package&actionType=submit_artifact&artifactKind=${artifactKind}`;
+    assert.equal(skippedSingleRoutePackageTemplate.payloadTemplateReadbackRoute, payloadTemplateReadbackRoute);
+    assert.ok(skippedSingleRoutePackageTemplate.templateReadbackRoutes.includes(payloadTemplateReadbackRoute));
+    assert.equal(skippedSingleRoutePackageTemplate.templateCoverageStatus, "template_coverage_available");
+    assert.ok(skippedSingleRoutePackageTemplate.templateCoverageRoutes.includes(payloadTemplateReadbackRoute));
+    assert.equal(skippedSingleRoutePackageTemplate.singleRecordDryRunRoute, `${route}?dryRun=true`);
+    assert.equal(skippedSingleRoutePackageTemplate.singleRecordValidateOnlyRoute, `${route}?validateOnly=true`);
+    assert.equal(skippedSingleRoutePackageTemplate.preflightCoverageStatus, "preflight_coverage_available");
+    assert.ok(skippedSingleRoutePackageTemplate.preflightCoverageRoutes.includes(`${route}?dryRun=true`));
+    assert.ok(skippedSingleRoutePackageTemplate.preflightCoverageRoutes.includes(`${route}?validateOnly=true`));
+    assert.equal(skippedSingleRoutePackageTemplate.fallbackSubmissionRoute, route);
+    assert.equal(skippedSingleRoutePackageTemplate.fallbackSubmissionRouteTemplate, null);
+    assert.match(skippedSingleRoutePackageTemplate.fallbackSubmissionPolicy, /single-record dry-run\/validate routes/);
+  }
 
   const discussionCommentPackageTemplate = await invokeApi(context, {
     method: "GET",
