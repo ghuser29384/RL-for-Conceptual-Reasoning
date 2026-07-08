@@ -7584,6 +7584,12 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  if (request.method === "GET" && url.pathname === "/api/v1/target-gaps/current-package-manifest") {
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      targetDataCurrentPackageManifestReadback(report),
+    );
+    return;
+  }
   const targetGapCollectionPlanMatch = url.pathname.match(/^\/api\/v1\/target-gaps\/collection-plan(?:\/([^/]+))?$/);
   if (request.method === "GET" && targetGapCollectionPlanMatch) {
     const itemId = targetGapCollectionPlanMatch[1] ? decodeURIComponent(targetGapCollectionPlanMatch[1]) : null;
@@ -8941,6 +8947,79 @@ function targetGapCollectionPlanReadback(report, options = {}) {
   };
 }
 
+function targetDataCurrentPackageManifestReadback(report) {
+  const navigation = report.releaseCompletionNavigation ?? {};
+  const currentBlockingPackageManifest =
+    navigation.currentBlockingPackageManifest ??
+    octoberCompletionRunbookCurrentBlockingPackageManifest(report, navigation.currentBlockingGroup ?? null);
+  const executionPreview = Array.isArray(currentBlockingPackageManifest?.executionSequencePreview)
+    ? currentBlockingPackageManifest.executionSequencePreview
+    : [];
+  const manifestStatus =
+    currentBlockingPackageManifest?.status ??
+    (navigation.currentBlockingPhase === "collect_data" ? "target_data_package_manifest_unavailable" : "no_current_target_data_package_manifest");
+  return {
+    id: `target-data-current-package-manifest-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceReportId: report.id ?? null,
+    sourceReportRoute: "/api/release/report",
+    sourceRunbookRoute: navigation.routes?.runbookRoute ?? "/api/v1/october-completion-runbook",
+    sourceCurrentBlockingRunbookRoute:
+      navigation.routes?.currentBlockingRunbookRoute ?? "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+    sourceCollectionPlanRoute:
+      currentBlockingPackageManifest?.sourceCollectionPlanRoute ?? "/api/v1/target-gaps/collection-plan?executionStatus=ready_to_collect_data",
+    releaseUseStatus: navigation.releaseUseStatus ?? report.currentStatus ?? "release_completion_navigation_missing",
+    currentStatus: report.currentStatus ?? null,
+    currentBlockingPhase: navigation.currentBlockingPhase ?? null,
+    currentBlockingExecutionStatus: navigation.currentBlockingExecutionStatus ?? null,
+    status: manifestStatus,
+    manifestKind: currentBlockingPackageManifest?.manifestKind ?? null,
+    resourceKey: "targetDataCurrentPackageManifest",
+    policy: {
+      scope:
+        "Read-only current target-data package manifest derived from /api/release/report and the existing target-gap collection plan; it does not submit target data, create templates, append evidence, waive gates, or create completion claims.",
+      access: "Admin/auditor readback only because target-data package routes expose release target counts and operator collection routes.",
+      authority:
+        "The full October completion runbook and target-gap collection plan remain the detailed step authorities; /api/release/report remains authoritative for completion status after real data is submitted.",
+    },
+    count: executionPreview.length,
+    totalCount: currentBlockingPackageManifest?.stepCount ?? executionPreview.length,
+    counts: {
+      targetGapCount: currentBlockingPackageManifest?.targetGapCount ?? 0,
+      stepCount: currentBlockingPackageManifest?.stepCount ?? 0,
+      setupStepCount: currentBlockingPackageManifest?.setupStepCount ?? 0,
+      primaryStepCount: currentBlockingPackageManifest?.primaryStepCount ?? 0,
+      estimatedRecordsRequired: currentBlockingPackageManifest?.estimatedRecordsRequired ?? 0,
+      estimatedPrimaryRecordsRequired: currentBlockingPackageManifest?.estimatedPrimaryRecordsRequired ?? 0,
+      estimatedSetupRecordsRequired: currentBlockingPackageManifest?.estimatedSetupRecordsRequired ?? 0,
+      expectedResourceDelta: currentBlockingPackageManifest?.expectedResourceDelta ?? 0,
+      expectedPrimaryResourceDelta: currentBlockingPackageManifest?.expectedPrimaryResourceDelta ?? 0,
+      expectedSetupResourceDelta: currentBlockingPackageManifest?.expectedSetupResourceDelta ?? 0,
+      targetResourceDeltaBeyondPrimaryRecords: currentBlockingPackageManifest?.targetResourceDeltaBeyondPrimaryRecords ?? 0,
+      setupBeforePrimary: currentBlockingPackageManifest?.setupBeforePrimary === true,
+      omittedExecutionStepCount: currentBlockingPackageManifest?.omittedExecutionStepCount ?? 0,
+    },
+    routes: {
+      packageImportRoute: currentBlockingPackageManifest?.packageImportRoute ?? targetDataCollectionPackageImportRoute,
+      packageDryRunImportRoute:
+        currentBlockingPackageManifest?.packageDryRunImportRoute ?? routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+      packageValidateOnlyImportRoute:
+        currentBlockingPackageManifest?.packageValidateOnlyImportRoute ??
+        routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+      starterTemplateRoute: currentBlockingPackageManifest?.templateStarter?.starterTemplateRoute ?? null,
+      fullTemplateRoute: currentBlockingPackageManifest?.templateStarter?.fullTemplateRoute ?? null,
+      sourceReportRoute: "/api/release/report",
+      sourceRunbookRoute: navigation.routes?.runbookRoute ?? "/api/v1/october-completion-runbook",
+      sourceCollectionPlanRoute:
+        currentBlockingPackageManifest?.sourceCollectionPlanRoute ?? "/api/v1/target-gaps/collection-plan?executionStatus=ready_to_collect_data",
+    },
+    targetGapIds: Array.isArray(currentBlockingPackageManifest?.targetGapIds) ? currentBlockingPackageManifest.targetGapIds : [],
+    currentBlockingPackageManifest,
+    items: executionPreview,
+  };
+}
+
 function lmcaComparisonReadback(report, options = {}) {
   const comparison = report.lmcaComparison ?? {};
   const allItems = lmcaComparisonItems(comparison);
@@ -10025,6 +10104,22 @@ function octoberCompletionRunbookCurrentBlockingPackageManifest(report, currentB
       "Append through packageImportRoute only after validation succeeds.",
       "Verify changed remaining counts through the listed target-gap readbacks and /api/release/report.",
     ],
+  };
+}
+
+function releaseReportWithCurrentBlockingPackageManifest(report) {
+  const navigation = report?.releaseCompletionNavigation;
+  if (!navigation || navigation.currentBlockingPackageManifest) return report;
+  const runbookItems = octoberCompletionRunbookItems(report);
+  const currentBlockingGroup =
+    octoberCompletionRunbookNextUnblockerSequence(runbookItems)[0] ?? navigation.currentBlockingGroup ?? null;
+  const currentBlockingPackageManifest = octoberCompletionRunbookCurrentBlockingPackageManifest(report, currentBlockingGroup);
+  return {
+    ...report,
+    releaseCompletionNavigation: {
+      ...navigation,
+      currentBlockingPackageManifest,
+    },
   };
 }
 
@@ -22945,7 +23040,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     options.targetLabelVersion ?? "initial_only",
     positionList,
   );
-  const report = buildOctoberReleaseReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, certificationAttempts, benchmarkExposureEvents, sourceStyleAudits, {
+  const baseReport = buildOctoberReleaseReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, certificationAttempts, benchmarkExposureEvents, sourceStyleAudits, {
     rightsReviews,
     rightsClearancePolicies,
     releaseFreezes,
@@ -23150,6 +23245,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     taskTracks: metaphilosophyTaskTracks,
     researchBacklogItems: metaphilosophyResearchBacklogItems,
   });
+  const report = releaseReportWithCurrentBlockingPackageManifest(baseReport);
   return {
     report,
     labelSnapshot,

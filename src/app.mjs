@@ -1345,6 +1345,14 @@ const workflowEvidenceCollections = [
     summary: "Read-only grouped collection plan that de-duplicates target gaps shared across checklist rows.",
   },
   {
+    id: "target-data-current-package-manifest",
+    label: "Current target package",
+    endpoint: "/api/v1/target-gaps/current-package-manifest",
+    resourceKey: "targetDataCurrentPackageManifest",
+    group: "Target data collection",
+    summary: "Read-only current blocking target-data package manifest with package preflight routes and bounded execution preview.",
+  },
+  {
     id: "target-data-jsonl-template",
     label: "Target data JSONL template",
     endpoint: "/api/v1/target-gaps/import-jsonl-template",
@@ -8617,6 +8625,21 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Setup before primary", packagePlan?.setupBeforePrimary ? "yes" : "no"],
     ];
   }
+  if (collection.id === "target-data-current-package-manifest") {
+    const manifest = result.currentBlockingPackageManifest ?? null;
+    const counts = result.counts ?? {};
+    return [
+      ["Manifest status", humanize(result.status ?? "not reported")],
+      ["Current blocker", `${humanize(result.currentBlockingPhase ?? "not reported")} / ${humanize(result.currentBlockingExecutionStatus ?? "not reported")}`],
+      ["Package steps", manifest ? `${counts.stepCount ?? manifest.stepCount ?? 0} steps across ${counts.targetGapCount ?? manifest.targetGapCount ?? 0} gaps` : "not available"],
+      ["Package validate-only", result.routes?.packageValidateOnlyImportRoute ?? manifest?.packageValidateOnlyImportRoute ?? "not available"],
+      ["Starter template", result.routes?.starterTemplateRoute ?? manifest?.templateStarter?.starterTemplateRoute ?? "not available"],
+      ["Starter template cap", manifest?.templateStarter?.recommendedStarterRecordCap ?? "not reported"],
+      ["Package records needed", counts.estimatedRecordsRequired ?? manifest?.estimatedRecordsRequired ?? "not reported"],
+      ["Expected target-resource delta", counts.expectedResourceDelta ?? manifest?.expectedResourceDelta ?? "not reported"],
+      ["Setup before primary", counts.setupBeforePrimary ? "yes" : "no"],
+    ];
+  }
   if (collection.id === "release-workflow-readiness") {
     const counts = result.filteredCounts ?? result.counts ?? {};
     const items = Array.isArray(result.items) ? result.items : [];
@@ -8828,6 +8851,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "target-gap-collection-plan") {
     return `<div class="operatorActionPreview">${previewItems.map(targetGapCollectionPlanPreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "target-data-current-package-manifest") {
+    return `<div class="operatorActionPreview">${previewItems.map(targetDataPackageManifestPreviewRow).join("")}</div>`;
   }
   if (collection.id === "operator-action-items") {
     return `<div class="operatorActionPreview">${previewItems.map(operatorActionPreviewRow).join("")}</div>`;
@@ -9992,6 +10018,32 @@ function targetGapCollectionPlanPreviewRow(item) {
         ["Verify", item.targetGapReadbackItemRoute ?? item.targetGapReadbackRoute ?? "/api/release/report"],
         ["Submission readback", item.submissionReadbackRoute ?? item.readbackRoute ?? "not available"],
         ["Completion", item.releaseReadinessEffect ? humanize(item.releaseReadinessEffect) : "Verify through /api/release/report."],
+      ])}
+    </article>
+  `;
+}
+
+function targetDataPackageManifestPreviewRow(item) {
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(humanize(item.stepKind ?? "package step"))}</strong>
+          <span>${escapeHtml(item.targetGapId ?? "target data package")}</span>
+        </div>
+        <span>${escapeHtml(item.closesTargetGapWhenValidated ? "primary" : "setup")}</span>
+      </div>
+      ${metricList([
+        ["Sequence", String(item.sequence ?? "unknown")],
+        ["Import route", item.importRoute ?? "not available"],
+        ["Dry-run", item.dryRunImportRoute ?? "not available"],
+        ["Validate-only", item.validateOnlyImportRoute ?? "not available"],
+        ["Template", item.templateReadbackRoute ?? "not available"],
+        ["Starter template", item.starterExpandedTemplateReadbackRoute ?? "not available"],
+        ["Records needed", item.estimatedRecordsRequired ?? "not reported"],
+        ["Expected target-resource delta", item.expectedResourceDelta ?? "not reported"],
+        ["Verification", item.verificationRoute ?? item.targetGapReadbackItemRoute ?? "/api/release/report"],
+        ["Effect", item.closesTargetGapWhenValidated ? "can close target gap after real data is validated" : humanize(item.effect ?? "setup only")],
       ])}
     </article>
   `;
@@ -12875,6 +12927,7 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
   const counts = navigation.counts ?? {};
   const routes = navigation.routes ?? {};
   const currentGroup = navigation.currentBlockingGroup ?? navigation.nextUnblockerSequence?.[0] ?? null;
+  const packageManifest = navigation.currentBlockingPackageManifest ?? null;
   const sequence = Array.isArray(navigation.nextUnblockerSequence) ? navigation.nextUnblockerSequence : [];
   const firstSafeRoute =
     currentGroup?.firstDryRunRoute ??
@@ -12901,6 +12954,12 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
         ["Current blocker runbook", routes.currentBlockingRunbookRoute ?? routes.runbookRoute ?? "not available"],
         ["Target-data package", routes.targetDataPackageValidateOnlyRoute ?? routes.targetDataPackageDryRunRoute ?? routes.targetDataPackageImportRoute ?? "not available"],
         ["Target-data starter template", routes.targetDataStarterTemplateRoute ?? "not available"],
+        ["Current package manifest", packageManifest ? `${packageManifest.stepCount ?? 0} steps across ${packageManifest.targetGapCount ?? 0} gaps` : "not available"],
+        ["Current package validate-only", packageManifest?.packageValidateOnlyImportRoute ?? "not available"],
+        ["Current package starter", packageManifest?.templateStarter?.starterTemplateRoute ?? "not available"],
+        ["Current starter cap", packageManifest?.templateStarter?.recommendedStarterRecordCap ?? "not reported"],
+        ["Current package records", packageManifest?.estimatedRecordsRequired ?? "not reported"],
+        ["Current target-resource delta", packageManifest?.expectedResourceDelta ?? "not reported"],
         ["Operator-evidence package", routes.operatorEvidencePackageValidateOnlyRoute ?? routes.operatorEvidencePackageDryRunRoute ?? routes.operatorEvidencePackageImportRoute ?? "not available"],
         ["Operator-evidence template", routes.operatorEvidenceTemplateRoute ?? "not available"],
         ["Completion rule", navigation.policy?.completionRule ?? "Release verification remains blocked until upstream work closes."],

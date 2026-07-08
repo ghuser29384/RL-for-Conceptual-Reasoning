@@ -8231,6 +8231,12 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingTargetGapCollectionPlanAuth = await invokeApi(context, { method: "GET", url: "/api/v1/target-gaps/collection-plan" });
   assert.equal(missingTargetGapCollectionPlanAuth.status, 401);
 
+  const missingCurrentPackageManifestAuth = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest",
+  });
+  assert.equal(missingCurrentPackageManifestAuth.status, 401);
+
   const missingLmcaComparisonAuth = await invokeApi(context, { method: "GET", url: "/api/v1/lmca-comparison" });
   assert.equal(missingLmcaComparisonAuth.status, 401);
 
@@ -8333,6 +8339,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedTargetGapCollectionPlan.status, 403);
+
+  const deniedCurrentPackageManifest = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedCurrentPackageManifest.status, 403);
 
   const deniedLmcaComparison = await invokeApi(context, {
     method: "GET",
@@ -9939,6 +9952,58 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.executionSequencePreview[0].targetGapId, "blind_initial_ratings");
   assert.ok(fullRunbook.body.currentBlockingPackageManifest.targetGapIds.includes("positions"));
   assert.ok(fullRunbook.body.currentBlockingPackageManifest.operatorChecklist.every((item) => /template|validate|Append|Verify|Replace/i.test(item)));
+
+  const releaseReportWithNavigationManifest = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseReportWithNavigationManifest.status, 200, JSON.stringify(releaseReportWithNavigationManifest.body));
+  assert.equal(
+    releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.manifestKind,
+    "current_blocking_target_data_package_manifest",
+  );
+  assert.equal(
+    releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.packageValidateOnlyImportRoute,
+    "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+  );
+  assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.stepCount, 9);
+  assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.estimatedRecordsRequired, 3401);
+  assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.expectedResourceDelta, 2034);
+  assert.equal(
+    releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.templateStarter.starterTemplateRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+
+  const currentPackageManifest = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifest.status, 200, JSON.stringify(currentPackageManifest.body));
+  assert.equal(currentPackageManifest.body.resourceKey, "targetDataCurrentPackageManifest");
+  assert.equal(currentPackageManifest.body.manifestKind, "current_blocking_target_data_package_manifest");
+  assert.equal(currentPackageManifest.body.releaseUseStatus, "release_completion_unblockers_open");
+  assert.equal(currentPackageManifest.body.currentBlockingPhase, "collect_data");
+  assert.equal(currentPackageManifest.body.currentBlockingExecutionStatus, "ready_to_collect_data");
+  assert.equal(currentPackageManifest.body.routes.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(
+    currentPackageManifest.body.routes.starterTemplateRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.equal(currentPackageManifest.body.counts.targetGapCount, 7);
+  assert.equal(currentPackageManifest.body.counts.stepCount, 9);
+  assert.equal(currentPackageManifest.body.counts.setupStepCount, 2);
+  assert.equal(currentPackageManifest.body.counts.primaryStepCount, 7);
+  assert.equal(currentPackageManifest.body.counts.estimatedRecordsRequired, 3401);
+  assert.equal(currentPackageManifest.body.counts.expectedResourceDelta, 2034);
+  assert.equal(currentPackageManifest.body.counts.setupBeforePrimary, true);
+  assert.equal(currentPackageManifest.body.totalCount, 9);
+  assert.equal(currentPackageManifest.body.items[0].stepKind, "setup_data_import");
+  assert.equal(currentPackageManifest.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
+  assert.match(currentPackageManifest.body.policy.scope, /does not submit target data/);
+  assert.match(currentPackageManifest.body.policy.authority, /remains authoritative/);
+
   assert.ok(Array.isArray(fullRunbook.body.nextUnblockerSequence));
   assert.deepEqual(
     fullRunbook.body.nextUnblockerSequence.map((item) => item.executionStatus),
@@ -13403,6 +13468,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(collectionSource.includes('id: "target-gap-collection-plan"'));
   assert.ok(collectionSource.includes('endpoint: "/api/v1/target-gaps/collection-plan"'));
   assert.ok(collectionSource.includes('resourceKey: "targetGapCollectionPlan"'));
+  assert.ok(collectionSource.includes('id: "target-data-current-package-manifest"'));
+  assert.ok(collectionSource.includes('endpoint: "/api/v1/target-gaps/current-package-manifest"'));
+  assert.ok(collectionSource.includes('resourceKey: "targetDataCurrentPackageManifest"'));
   assert.ok(collectionSource.includes('id: "target-data-jsonl-template"'));
   assert.ok(collectionSource.includes('endpoint: "/api/v1/target-gaps/import-jsonl-template"'));
   assert.ok(collectionSource.includes('resourceKey: "targetDataCollectionJsonlTemplate"'));
@@ -13451,6 +13519,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes('["Package dry-run", item.packageDryRunImportRoute ?? "not available"]'));
   assert.ok(appSource.includes('["Expected target-resource delta", String(item.expectedResourceDelta ?? "unknown")]'));
   assert.ok(appSource.includes('"Delta beyond record count"'));
+  assert.ok(appSource.includes("targetDataPackageManifestPreviewRow(item)"));
+  assert.ok(appSource.includes("function targetDataPackageManifestPreviewRow(item)"));
+  assert.ok(appSource.includes('["Manifest status", humanize(result.status ?? "not reported")]'));
+  assert.ok(appSource.includes('["Package records needed", counts.estimatedRecordsRequired ?? manifest?.estimatedRecordsRequired ?? "not reported"]'));
+  assert.ok(appSource.includes('["Setup before primary", counts.setupBeforePrimary ? "yes" : "no"]'));
   assert.ok(appSource.includes('["Template policy", item.unchangedTemplatePolicy ?? "Replace template placeholders before import."]'));
   assert.ok(appSource.includes('["Expansion policy", item.templateExpansionPolicy ?? "Use expanded templates only after replacing placeholders with real data."]'));
   assert.ok(appSource.includes('["Package policy", item.packageImportPolicy ?? "Use per-route imports or package import after replacing placeholders."]'));
@@ -14024,6 +14097,10 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("Release Completion Navigation"));
   assert.ok(appSource.includes("Current blocker runbook"));
   assert.ok(appSource.includes("Target-data starter template"));
+  assert.ok(appSource.includes("Current package manifest"));
+  assert.ok(appSource.includes("Current package validate-only"));
+  assert.ok(appSource.includes("Current package starter"));
+  assert.ok(appSource.includes("Current package records"));
   assert.ok(appSource.includes("Operator-evidence package"));
   assert.ok(appSource.includes("routes.currentBlockingRunbookRoute"));
   assert.ok(appSource.includes("function operatorEvidenceSubmissionPlanPanel(operatorEvidenceSubmissionPlan)"));
@@ -14447,6 +14524,8 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("Public dataset-card and methodology-report submissions project into `public_dataset_documents`"));
   assert.ok(architectureDoc.includes("Admins can also materialize the current server-derived release report through `/api/v1/release-reports`"));
   assert.ok(architectureDoc.includes("GET /api/release/report` endpoint remains read-only and side-effect-free"));
+  assert.ok(architectureDoc.includes("GET /api/v1/target-gaps/current-package-manifest"));
+  assert.ok(architectureDoc.includes("bounded admin/auditor readback for the current blocking target-data package only"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-artifacts/template"));
   assert.ok(architectureDoc.includes("label snapshot, corpus manifest, training export, public export manifest, internal export manifest, and release report snapshot"));
   assert.ok(architectureDoc.includes("does not submit artifacts, materialize release reports, waive gates, create a new release-artifact type"));
