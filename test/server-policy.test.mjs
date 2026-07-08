@@ -8261,6 +8261,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingReleaseVersionManifestAuth = await invokeApi(context, { method: "GET", url: "/api/v1/release-version-manifest" });
   assert.equal(missingReleaseVersionManifestAuth.status, 401);
 
+  const missingReleaseVersionManifestTemplateAuth = await invokeApi(context, { method: "GET", url: "/api/v1/release-version-manifest/template" });
+  assert.equal(missingReleaseVersionManifestTemplateAuth.status, 401);
+
   const missingPublicDatasetReadinessAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-readiness" });
   assert.equal(missingPublicDatasetReadinessAuth.status, 401);
 
@@ -8269,6 +8272,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
 
   const missingPublicDatasetDocumentTemplateAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-documents/template" });
   assert.equal(missingPublicDatasetDocumentTemplateAuth.status, 401);
+
+  const missingPublicDatasetPackageManifestAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-package-manifest" });
+  assert.equal(missingPublicDatasetPackageManifestAuth.status, 401);
 
   const missingRaterProfileEvidenceAuth = await invokeApi(context, { method: "GET", url: "/api/v1/rater-profile-evidence" });
   assert.equal(missingRaterProfileEvidenceAuth.status, 401);
@@ -8403,6 +8409,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(deniedReleaseVersionManifest.status, 403);
 
+  const deniedReleaseVersionManifestTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-version-manifest/template",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedReleaseVersionManifestTemplate.status, 403);
+
   const deniedPublicDatasetReadiness = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/public-dataset-readiness",
@@ -8416,6 +8429,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedPublicDatasetDocuments.status, 403);
+
+  const deniedPublicDatasetPackageManifest = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetPackageManifest.status, 403);
 
   const deniedRaterProfileEvidence = await invokeApi(context, {
     method: "GET",
@@ -10548,6 +10568,92 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(releaseVersionManifestTargetScaleById.body.item.targetGapIds.includes("positions"));
   assert.equal(releaseVersionManifestTargetScaleById.body.item.targetGaps.totals.remainingTotal, 2034);
 
+  const releaseVersionManifestTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-version-manifest/template",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseVersionManifestTemplate.status, 200, JSON.stringify(releaseVersionManifestTemplate.body));
+  assert.equal(releaseVersionManifestTemplate.body.resourceKey, "releaseVersionManifestTemplate");
+  assert.equal(releaseVersionManifestTemplate.body.templateOnly, true);
+  assert.equal(releaseVersionManifestTemplate.body.count, 2);
+  assert.equal(releaseVersionManifestTemplate.body.totalCount, 2);
+  assert.equal(releaseVersionManifestTemplate.body.counts.templateRows, 2);
+  assert.equal(releaseVersionManifestTemplate.body.counts.openRows, 2);
+  assert.equal(releaseVersionManifestTemplate.body.counts.byTemplateKind.release_version, 1);
+  assert.equal(releaseVersionManifestTemplate.body.counts.byTemplateKind.release_freeze, 1);
+  assert.equal(releaseVersionManifestTemplate.body.counts.byRoute["/api/v1/release-version-manifest/template"], 2);
+  assert.match(releaseVersionManifestTemplate.body.policy.scope, /release-version and release-freeze request templates/);
+  assert.match(releaseVersionManifestTemplate.body.policy.templateOnly, /reject unchanged templates/);
+
+  const releaseVersionTemplate = releaseVersionManifestTemplate.body.items.find((item) => item.templateKind === "release_version");
+  assert.equal(releaseVersionTemplate.writeRoute, "/api/v1/release-versions");
+  assert.equal(releaseVersionTemplate.singleRecordValidateOnlyRoute, "/api/v1/release-versions?validateOnly=true");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.templateOnly, true);
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.corpusManifestId, "corpus-composition-october-2026-demo");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.labelSnapshotId, "snapshot-oct-api");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.metricConfigId, "metric-config-october-2026-demo");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.gateProfileId, "gate-october-2026-demo");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.releaseConfigManifestId, "release-config-manifest-october-2026-demo");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.releaseConfigManifestHash, "sha256:seed-release-config-october-2026-demo");
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.phaseGateBundleId, "implementation-phase-gate-bundle-october-2026-demo");
+  assert.equal(
+    releaseVersionTemplate.requestBody.releaseVersion.phaseGateBundleHash,
+    "sha256:implementation-phase-gate-bundle-october-2026-demo",
+  );
+  assert.deepEqual(releaseVersionTemplate.requestBody.releaseVersion.immutableOutputArtifactIds, [
+    "public-manifest-october-2026-demo",
+    "internal-manifest-october-2026-demo",
+  ]);
+  assert.equal(releaseVersionTemplate.requestBody.releaseVersion.status, "method_preserving_demo_not_target_scale");
+
+  const releaseFreezeTemplate = releaseVersionManifestTemplate.body.items.find((item) => item.templateKind === "release_freeze");
+  assert.equal(releaseFreezeTemplate.writeRoute, "/api/v1/releases/freeze");
+  assert.equal(releaseFreezeTemplate.singleRecordValidateOnlyRoute, "/api/v1/releases/freeze?validateOnly=true");
+  assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.templateOnly, true);
+  assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.releaseGateProfileId, "gate-october-2026-demo");
+  assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.freezeStatus, "not_ready_for_release_freeze");
+  assert.equal(
+    releaseFreezeTemplate.requestBody.releaseFreeze.targetScaleStatus,
+    "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings_60_gold_items_appendix_c_validation",
+  );
+
+  const releaseVersionManifestTemplateByKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-version-manifest/template?templateKind=release_version",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseVersionManifestTemplateByKind.status, 200, JSON.stringify(releaseVersionManifestTemplateByKind.body));
+  assert.equal(releaseVersionManifestTemplateByKind.body.count, 1);
+  assert.equal(releaseVersionManifestTemplateByKind.body.items[0].id, "release-version");
+
+  const releaseVersionManifestTemplateByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/release-version-manifest/template?route=${encodeURIComponent("/api/v1/release-versions?validateOnly=true")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseVersionManifestTemplateByRoute.status, 200, JSON.stringify(releaseVersionManifestTemplateByRoute.body));
+  assert.equal(releaseVersionManifestTemplateByRoute.body.count, 1);
+  assert.equal(releaseVersionManifestTemplateByRoute.body.items[0].templateKind, "release_version");
+
+  const releaseVersionManifestTemplateById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-version-manifest/template/release-freeze",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseVersionManifestTemplateById.status, 200, JSON.stringify(releaseVersionManifestTemplateById.body));
+  assert.equal(releaseVersionManifestTemplateById.body.count, 1);
+  assert.equal(releaseVersionManifestTemplateById.body.item.templateKind, "release_freeze");
+
+  const unchangedReleaseVersionTemplate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-versions",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(releaseVersionTemplate.requestBody),
+  });
+  assert.equal(unchangedReleaseVersionTemplate.status, 400, JSON.stringify(unchangedReleaseVersionTemplate.body));
+  assert.equal(unchangedReleaseVersionTemplate.body.error, "workflow_template_record");
+
   const publicDatasetReadiness = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/public-dataset-readiness",
@@ -10640,6 +10746,100 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(publicDatasetMissing.status, 404);
   assert.equal(publicDatasetMissing.body.error, "artifact_not_found");
+
+  const publicDatasetPackageManifest = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageManifest.status, 200, JSON.stringify(publicDatasetPackageManifest.body));
+  assert.equal(publicDatasetPackageManifest.body.resourceKey, "publicDatasetPackageManifestStep");
+  assert.equal(publicDatasetPackageManifest.body.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.equal(publicDatasetPackageManifest.body.packageStatus, "public_dataset_package_blocked");
+  assert.equal(publicDatasetPackageManifest.body.currentBlockingStepId, "target-data-package");
+  assert.equal(publicDatasetPackageManifest.body.count, 6);
+  assert.equal(publicDatasetPackageManifest.body.totalCount, 6);
+  assert.equal(publicDatasetPackageManifest.body.counts.openRows, 5);
+  assert.equal(publicDatasetPackageManifest.body.counts.readyRows, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byStepKind.target_data_collection, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byStepKind.public_documentation, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byStatus.blocked_by_target_scale, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byStatus.review_required, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byStatus.documentation_not_submitted, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byRoute["/api/v1/public-dataset-package-manifest"], 6);
+  assert.match(publicDatasetPackageManifest.body.policy.scope, /Read-only Dataset v0\.1 package manifest/);
+  assert.match(publicDatasetPackageManifest.body.policy.scope, /without creating a Dataset object/);
+
+  const targetDataPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "target-data-package");
+  assert.equal(targetDataPackageStep.status, "blocked_by_target_scale");
+  assert.equal(targetDataPackageStep.stepKind, "target_data_collection");
+  assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 3401);
+  assert.equal(targetDataPackageStep.counts.expectedResourceDelta, 2034);
+  assert.equal(targetDataPackageStep.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.ok(targetDataPackageStep.targetGapIds.includes("positions"));
+
+  const releaseArtifactPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "release-artifact-package");
+  assert.equal(releaseArtifactPackageStep.status, "review_required");
+  assert.equal(releaseArtifactPackageStep.counts.templateRows, 6);
+  assert.equal(releaseArtifactPackageStep.counts.openRows, 6);
+  assert.equal(releaseArtifactPackageStep.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+
+  const releaseFreezePackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "release-version-freeze");
+  assert.equal(releaseFreezePackageStep.status, "blocked_by_release_freeze");
+  assert.equal(releaseFreezePackageStep.counts.templateRows, 2);
+  assert.equal(releaseFreezePackageStep.counts.openRows, 2);
+
+  const publicDocumentationPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "public-documentation");
+  assert.equal(publicDocumentationPackageStep.status, "documentation_not_submitted");
+  assert.deepEqual(publicDocumentationPackageStep.readinessRowIds, ["dataset_card", "methodology_report"]);
+  assert.equal(publicDocumentationPackageStep.nextActionRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+
+  const publicDatasetPackageByStepKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest?stepKind=public_documentation",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByStepKind.status, 200, JSON.stringify(publicDatasetPackageByStepKind.body));
+  assert.equal(publicDatasetPackageByStepKind.body.count, 1);
+  assert.equal(publicDatasetPackageByStepKind.body.items[0].id, "public-documentation");
+  assert.equal(publicDatasetPackageByStepKind.body.filteredCounts.openRows, 1);
+
+  const publicDatasetPackageByTargetGap = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest?targetGapId=positions",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByTargetGap.status, 200, JSON.stringify(publicDatasetPackageByTargetGap.body));
+  assert.equal(publicDatasetPackageByTargetGap.body.count, 1);
+  assert.equal(publicDatasetPackageByTargetGap.body.items[0].id, "target-data-package");
+  assert.equal(publicDatasetPackageByTargetGap.body.filteredCounts.byTargetGapId.positions, 1);
+
+  const publicDatasetPackageByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-manifest?route=${encodeURIComponent("/api/v1/public-dataset-documents/template")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByRoute.status, 200, JSON.stringify(publicDatasetPackageByRoute.body));
+  assert.equal(publicDatasetPackageByRoute.body.count, 1);
+  assert.equal(publicDatasetPackageByRoute.body.items[0].id, "public-documentation");
+  assert.equal(publicDatasetPackageByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 1);
+
+  const publicDatasetPackageById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest/public-documentation",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageById.status, 200, JSON.stringify(publicDatasetPackageById.body));
+  assert.equal(publicDatasetPackageById.body.count, 1);
+  assert.equal(publicDatasetPackageById.body.item.stepKind, "public_documentation");
+
+  const publicDatasetPackageMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageMissing.status, 404);
+  assert.equal(publicDatasetPackageMissing.body.error, "artifact_not_found");
 
   const candidateGenerationChecklist = await invokeApi(context, {
     method: "GET",
@@ -14170,7 +14370,16 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/release-version-manifest"'));
   assert.ok(appSource.includes('resourceKey: "releaseVersionManifestCheck"'));
   assert.ok(appSource.includes("function releaseVersionManifestPreviewRow(item)"));
+  assert.ok(appSource.includes('id: "release-version-manifest-template"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/release-version-manifest/template"'));
+  assert.ok(appSource.includes('resourceKey: "releaseVersionManifestTemplate"'));
+  assert.ok(appSource.includes("function releaseVersionManifestTemplatePreviewRow(item)"));
   assert.ok(appSource.includes("workflowReleaseManifestArtifactFilter"));
+  assert.ok(appSource.includes('id: "public-dataset-package-manifest"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-manifest"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetPackageManifestStep"'));
+  assert.ok(appSource.includes("function publicDatasetPackageManifestPreviewRow(item)"));
+  assert.ok(appSource.includes('url.searchParams.set("stepKind", state.workflowTemplateKindFilter)'));
   assert.ok(appSource.includes('id: "public-dataset-readiness"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-readiness"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetReadinessRow"'));
@@ -14531,8 +14740,14 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("does not submit artifacts, materialize release reports, waive gates, create a new release-artifact type"));
   assert.ok(architectureDoc.includes("GET `/api/v1/release-version-manifest`"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/{id}"));
-  assert.ok(architectureDoc.includes("does not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
+  assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/template"));
+  assert.ok(architectureDoc.includes("templateOnly=true` `ReleaseVersion` and `ReleaseFreeze` request bodies"));
+  assert.ok(architectureDoc.includes("POST /api/v1/release-versions` and `POST /api/v1/releases/freeze`"));
+  assert.ok(architectureDoc.includes("do not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-manifest"));
+  assert.ok(architectureDoc.includes("publicDatasetPackageManifestStep"));
+  assert.ok(architectureDoc.includes("does not create a Dataset object, submit release artifacts or documentation, publish a dataset"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents/template"));
   assert.ok(architectureDoc.includes("Metaphilosophy Critique Ratings Dataset v0.1"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-documents"));

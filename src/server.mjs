@@ -7891,6 +7891,14 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  const publicDatasetPackageManifestMatch = url.pathname.match(/^\/api\/v1\/public-dataset-package-manifest(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetPackageManifestMatch) {
+    const itemId = publicDatasetPackageManifestMatch[1] ? decodeURIComponent(publicDatasetPackageManifestMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetPackageManifestReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
   const releaseArtifactTemplateMatch = url.pathname.match(/^\/api\/v1\/release-artifacts\/template(?:\/([^/]+))?$/);
   if (request.method === "GET" && releaseArtifactTemplateMatch) {
     const itemId = releaseArtifactTemplateMatch[1] ? decodeURIComponent(releaseArtifactTemplateMatch[1]) : null;
@@ -8017,6 +8025,15 @@ export async function handleApiRequest(request, response, url, context) {
     const itemId = releaseWorkflowReadinessMatch[1] ? decodeURIComponent(releaseWorkflowReadinessMatch[1]) : null;
     await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
       releaseWorkflowReadinessReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const releaseVersionManifestTemplateMatch = url.pathname.match(/^\/api\/v1\/release-version-manifest\/template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && releaseVersionManifestTemplateMatch) {
+    const itemId = releaseVersionManifestTemplateMatch[1] ? decodeURIComponent(releaseVersionManifestTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      releaseVersionManifestTemplateReadback(report, { itemId, searchParams: url.searchParams }),
     );
     return;
   }
@@ -11536,6 +11553,328 @@ function releaseVersionManifestCounts(items) {
   };
 }
 
+function releaseVersionManifestTemplateReadback(report, options = {}) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const filters = releaseVersionManifestTemplateFilters(options.searchParams);
+  const allItems = releaseVersionManifestTemplateItems(report);
+  const filteredItems = allItems.filter((item) => releaseVersionManifestTemplateMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.templateKind === options.itemId || item.writeRoute === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `release-version-manifest-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: manifest.id ?? null,
+    resourceKey: "releaseVersionManifestTemplate",
+    templateOnly: true,
+    releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+    currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+    targetScaleStatus: manifest.targetScaleStatus ?? null,
+    linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+    submittedReleaseVersionId: manifest.submittedReleaseVersionId ?? null,
+    submittedReleaseFreezeId: manifest.submittedReleaseFreezeId ?? null,
+    effectiveArtifactIds: manifest.effectiveArtifactIds ?? {},
+    writeRoutes: {
+      releaseVersion: "/api/v1/release-versions",
+      releaseFreeze: "/api/v1/releases/freeze",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      releaseVersionManifest: "/api/v1/release-version-manifest",
+    },
+    policy: {
+      scope:
+        "Read-only release-version and release-freeze request templates derived from /api/release/report and /api/v1/release-version-manifest. This endpoint does not submit ReleaseVersion records, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims.",
+      access:
+        "Admin/auditor readback only because templates expose current release-governance ids, release-config hashes, phase-gate bundle bindings, target-scale blockers, and artifact-link status.",
+      templateOnly:
+        "Generated request bodies include templateOnly=true and TODO placeholders; POST /api/v1/release-versions and POST /api/v1/releases/freeze reject unchanged templates before workflow side effects.",
+      replacement:
+        "Operators must replace ids, release notes, frozen timestamps, operator ids, and any TODO values with reviewed evidence before submitting through the named write route.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: releaseVersionManifestTemplateCounts(allItems),
+    filteredCounts: releaseVersionManifestTemplateCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function releaseVersionManifestTemplateItems(report) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const releaseIdValue = report.releaseId ?? releaseId;
+  const linkedIds = releaseVersionManifestTemplateLinkedIds(report);
+  const releaseVersionResource = releaseVersionManifestTemplateReleaseVersionResource(report, linkedIds);
+  const releaseFreezeResource = releaseVersionManifestTemplateReleaseFreezeResource(report, linkedIds);
+  const sharedRoutes = [
+    "/api/release/report",
+    "/api/v1/release-version-manifest",
+    `/api/v1/release-version-manifest/${encodeURIComponent("release-version-manifest")}`,
+  ];
+  return [
+    {
+      id: "release-version",
+      sequence: 1,
+      templateKind: "release_version",
+      templateOnly: true,
+      releaseId: releaseIdValue,
+      label: "ReleaseVersion submission",
+      templateStatus: manifest.submittedReleaseVersionId
+        ? "submitted_release_version_present"
+        : "release_version_submission_template_ready",
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.targetScaleStatus ?? null,
+      linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+      submittedArtifactId: manifest.submittedReleaseVersionId ?? null,
+      writeRoute: "/api/v1/release-versions",
+      singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/release-versions", "dryRun", "true"),
+      singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/release-versions", "validateOnly", "true"),
+      collectionReadbackRoute: "/api/v1/release-versions",
+      submittedArtifactReadbackRoute: manifest.submittedReleaseVersionId
+        ? `/api/v1/release-versions/${encodeURIComponent(manifest.submittedReleaseVersionId)}`
+        : null,
+      templateReadbackRoute: "/api/v1/release-version-manifest/template/release-version",
+      manifestCheckRoute: "/api/v1/release-version-manifest",
+      requiredFields: [
+        "id",
+        "releaseId",
+        "version",
+        "corpusManifestId",
+        "labelSnapshotId",
+        "metricConfigId",
+        "gateProfileId",
+        "releaseConfigManifestId",
+        "releaseConfigManifestHash",
+        "phaseGateBundleId",
+        "phaseGateBundleHash",
+        "immutableOutputArtifactIds",
+        "status",
+        "releaseNotes",
+        "frozenAt",
+      ],
+      linkedReleaseObjectIds: linkedIds,
+      requestBody: { releaseVersion: releaseVersionResource },
+      routes: uniqueValues([
+        ...sharedRoutes,
+        "/api/v1/release-version-manifest/template",
+        "/api/v1/release-version-manifest/template/release-version",
+        "/api/v1/release-versions",
+        routeWithQueryFlag("/api/v1/release-versions", "dryRun", "true"),
+        routeWithQueryFlag("/api/v1/release-versions", "validateOnly", "true"),
+        manifest.submittedReleaseVersionId ? `/api/v1/release-versions/${encodeURIComponent(manifest.submittedReleaseVersionId)}` : null,
+      ]),
+    },
+    {
+      id: "release-freeze",
+      sequence: 2,
+      templateKind: "release_freeze",
+      templateOnly: true,
+      releaseId: releaseIdValue,
+      label: "ReleaseFreeze submission",
+      templateStatus: manifest.submittedReleaseFreezeId ? "submitted_release_freeze_present" : "release_freeze_submission_template_ready",
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.targetScaleStatus ?? null,
+      freezeStatus: manifest.freezeEvidence?.freezeStatus ?? "not_frozen",
+      submittedArtifactId: manifest.submittedReleaseFreezeId ?? null,
+      writeRoute: "/api/v1/releases/freeze",
+      singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/releases/freeze", "dryRun", "true"),
+      singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/releases/freeze", "validateOnly", "true"),
+      collectionReadbackRoute: "/api/v1/release-version-manifest",
+      submittedArtifactReadbackRoute: null,
+      templateReadbackRoute: "/api/v1/release-version-manifest/template/release-freeze",
+      manifestCheckRoute: "/api/v1/release-version-manifest/release-freeze",
+      requiredFields: [
+        "id",
+        "releaseId",
+        "corpusManifestId",
+        "labelSnapshotId",
+        "releaseGateProfileId",
+        "freezeStatus",
+        "targetScaleStatus",
+        "frozenBy",
+        "frozenAt",
+      ],
+      linkedReleaseObjectIds: linkedIds,
+      requestBody: { releaseFreeze: releaseFreezeResource },
+      routes: uniqueValues([
+        ...sharedRoutes,
+        "/api/v1/release-version-manifest/template",
+        "/api/v1/release-version-manifest/template/release-freeze",
+        "/api/v1/releases/freeze",
+        routeWithQueryFlag("/api/v1/releases/freeze", "dryRun", "true"),
+        routeWithQueryFlag("/api/v1/releases/freeze", "validateOnly", "true"),
+        "/api/v1/release-version-manifest/release-freeze",
+      ]),
+    },
+  ];
+}
+
+function releaseVersionManifestTemplateReleaseVersionResource(report, linkedIds) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const releaseIdValue = report.releaseId ?? releaseId;
+  return {
+    templateOnly: true,
+    id: "TODO_RELEASE_VERSION_ID",
+    releaseId: releaseIdValue,
+    version: `${releaseIdValue}.candidate.1`,
+    corpusManifestId: linkedIds.corpusManifestId,
+    labelSnapshotId: linkedIds.labelSnapshotId,
+    metricConfigId: linkedIds.metricConfigId,
+    gateProfileId: linkedIds.releaseGateProfileId,
+    releaseConfigManifestId: linkedIds.releaseConfigManifestId,
+    releaseConfigManifestHash: linkedIds.releaseConfigManifestHash,
+    phaseGateBundleId: linkedIds.phaseGateBundleId,
+    phaseGateBundleHash: linkedIds.phaseGateBundleHash,
+    immutableOutputArtifactIds: linkedIds.immutableOutputArtifactIds,
+    status: releaseVersionManifestTemplateReleaseVersionStatus(report),
+    targetScaleStatus: manifest.targetScaleStatus ?? null,
+    linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+    releaseNotes:
+      "TODO reviewed release notes. Preserve the current target-scale limitation unless the target-gap report proves completion before submission.",
+    frozenAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function releaseVersionManifestTemplateReleaseFreezeResource(report, linkedIds) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const releaseIdValue = report.releaseId ?? releaseId;
+  return {
+    templateOnly: true,
+    id: "TODO_RELEASE_FREEZE_ID",
+    releaseId: releaseIdValue,
+    releaseVersionId: "TODO_SUBMITTED_RELEASE_VERSION_ID",
+    corpusManifestId: linkedIds.corpusManifestId,
+    labelSnapshotId: linkedIds.labelSnapshotId,
+    metricConfigId: linkedIds.metricConfigId,
+    releaseGateProfileId: linkedIds.releaseGateProfileId,
+    gateProfileId: linkedIds.releaseGateProfileId,
+    releaseConfigManifestId: linkedIds.releaseConfigManifestId,
+    releaseConfigManifestHash: linkedIds.releaseConfigManifestHash,
+    phaseGateBundleId: linkedIds.phaseGateBundleId,
+    phaseGateBundleHash: linkedIds.phaseGateBundleHash,
+    freezeStatus: releaseVersionManifestTemplateFreezeStatus(report),
+    targetScaleStatus: manifest.targetScaleStatus ?? null,
+    frozenBy: "TODO_OPERATOR_ID",
+    frozenAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function releaseVersionManifestTemplateLinkedIds(report) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const releaseIdValue = report.releaseId ?? releaseId;
+  const effective = manifest.effectiveArtifactIds ?? {};
+  const releaseConfigManifestId =
+    report.releaseConfigManifestEvidence?.activeManifestId ??
+    report.releaseConfigManifestEvidence?.manifestId ??
+    `release-config-manifest-${releaseIdValue}`;
+  const releaseConfigManifestHash =
+    report.releaseConfigManifestEvidence?.activeManifestHash ??
+    report.releaseConfigManifestEvidence?.activeCanonicalManifestHash ??
+    `sha256:${releaseConfigManifestId}`;
+  const publicExportManifestId =
+    report.releaseArtifactEvidence?.exportManifestEvidence?.submittedArtifactId ?? `public-manifest-${releaseIdValue}`;
+  const internalExportManifestId =
+    report.releaseArtifactEvidence?.internalExportManifestEvidence?.submittedArtifactId ?? `internal-manifest-${releaseIdValue}`;
+  return {
+    corpusManifestId:
+      effective.corpusManifestId ??
+      releaseVersionManifestExpectedArtifactId(report, "corpus_manifest") ??
+      `corpus-composition-${releaseIdValue}`,
+    labelSnapshotId:
+      effective.labelSnapshotId ?? releaseVersionManifestExpectedArtifactId(report, "label_snapshot") ?? `snapshot-${releaseIdValue}`,
+    metricConfigId:
+      effective.metricConfigId ?? releaseVersionManifestExpectedArtifactId(report, "metric_config") ?? `metric-config-${releaseIdValue}`,
+    releaseGateProfileId:
+      effective.releaseGateProfileId ??
+      releaseVersionManifestExpectedArtifactId(report, "release_gate_profile") ??
+      `gate-${releaseIdValue}`,
+    releaseConfigManifestId,
+    releaseConfigManifestHash,
+    phaseGateBundleId:
+      effective.phaseGateBundleId ??
+      releaseVersionManifestExpectedArtifactId(report, "implementation_phase_gate_bundle") ??
+      `implementation-phase-gate-bundle-${releaseIdValue}`,
+    phaseGateBundleHash:
+      effective.phaseGateBundleHash ??
+      releaseVersionManifestExpectedArtifactId(report, "implementation_phase_gate_bundle_hash") ??
+      `sha256:implementation-phase-gate-bundle-${releaseIdValue}`,
+    publicExportManifestId,
+    internalExportManifestId,
+    immutableOutputArtifactIds: uniqueValues([publicExportManifestId, internalExportManifestId]),
+  };
+}
+
+function releaseVersionManifestTemplateReleaseVersionStatus(report) {
+  const manifest = report.releaseVersionManifest ?? {};
+  if (manifest.targetScaleStatus === "target_scale_met" || manifest.currentStatus === "complete_against_october_target") {
+    return "candidate_release_ready_for_freeze";
+  }
+  return "method_preserving_demo_not_target_scale";
+}
+
+function releaseVersionManifestTemplateFreezeStatus(report) {
+  const manifest = report.releaseVersionManifest ?? {};
+  if (manifest.targetScaleStatus === "target_scale_met" || manifest.currentStatus === "complete_against_october_target") {
+    return "candidate_freeze_recorded";
+  }
+  return "not_ready_for_release_freeze";
+}
+
+function releaseVersionManifestTemplateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    templateKind: value("templateKind"),
+    status: value("status"),
+    writeRoute: value("writeRoute"),
+    route: value("route"),
+  };
+}
+
+function releaseVersionManifestTemplateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.templateKind === value;
+    if (key === "status") return releaseVersionManifestTemplateMatchesStatus(item, value);
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function releaseVersionManifestTemplateMatchesStatus(item, value) {
+  if (value === "open") return releaseVersionManifestTemplateItemIsOpen(item);
+  if (value === "closed") return !releaseVersionManifestTemplateItemIsOpen(item);
+  return [item.templateStatus, item.releaseUseStatus, item.currentStatus, item.targetScaleStatus, item.linkedArtifactStatus, item.freezeStatus].includes(value);
+}
+
+function releaseVersionManifestTemplateItemIsOpen(item) {
+  if (item.templateKind === "release_version") return !item.submittedArtifactId;
+  if (item.templateKind === "release_freeze") return !item.submittedArtifactId;
+  return false;
+}
+
+function releaseVersionManifestTemplateCounts(items) {
+  return {
+    rows: items.length,
+    templateRows: items.length,
+    openRows: items.filter(releaseVersionManifestTemplateItemIsOpen).length,
+    closedRows: items.filter((item) => !releaseVersionManifestTemplateItemIsOpen(item)).length,
+    byTemplateKind: countItemsBy(items, "templateKind"),
+    byTemplateStatus: countItemsBy(items, "templateStatus"),
+    byWriteRoute: countItemsBy(items, "writeRoute"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
 function publicDatasetDocumentTemplateReadback(report, options = {}) {
   const allItems = publicDatasetDocumentTemplateItems(report);
   const filters = publicDatasetDocumentTemplateFilters(options.searchParams);
@@ -11726,6 +12065,342 @@ function publicDatasetDocumentTemplateCounts(items) {
     readyReadinessRows: items.filter((item) => item.readinessStatus === "ready").length,
     byDocumentKind: countItemsBy(items, "documentKind"),
     byReadinessStatus: countItemsBy(items, "readinessStatus"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+function publicDatasetPackageManifestReadback(report, options = {}) {
+  const allItems = publicDatasetPackageManifestItems(report);
+  const filters = publicDatasetPackageManifestFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => publicDatasetPackageManifestMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.stepKind === options.itemId || item.readinessRowIds?.includes(options.itemId))
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = publicDatasetPackageManifestCounts(allItems);
+  const currentBlockingStep = allItems.find(publicDatasetPackageManifestItemIsOpen) ?? null;
+  return {
+    id: `public-dataset-package-manifest-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetPackageManifestStep",
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    packageStatus: currentBlockingStep ? "public_dataset_package_blocked" : "public_dataset_package_ready_for_release_review",
+    currentBlockingStepId: currentBlockingStep?.id ?? null,
+    currentBlockingStep,
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 package manifest derived from /api/release/report, public dataset readiness, and existing operator/template routes. It sequences target data, release artifacts, release-version/freeze, documentation, hidden/protected exclusions, and the public-first ladder without creating a Dataset object, publishing a dataset, launching downstream surfaces, submitting evidence, or waiving release gates.",
+      access:
+        "Admin/auditor readback only because package steps expose release-governance ids, target-data package routes, protected-split exclusions, and downstream launch blockers.",
+      authority:
+        "/api/release/report and the concrete readiness/template/readback routes remain the authority; this manifest is navigation and preflight context only.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      publicDatasetReadiness: "/api/v1/public-dataset-readiness",
+      targetDataPackageManifest: "/api/v1/target-gaps/current-package-manifest",
+      releaseArtifactTemplates: "/api/v1/release-artifacts/template",
+      releaseVersionTemplates: "/api/v1/release-version-manifest/template",
+      publicDatasetDocumentTemplates: "/api/v1/public-dataset-documents/template",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts: publicDatasetPackageManifestCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetPackageManifestItems(report) {
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
+  const targetPackage = targetDataCurrentPackageManifestReadback(report);
+  const releaseArtifactTemplates = releaseArtifactPackageTemplateReadback(report);
+  const releaseVersionTemplates = releaseVersionManifestTemplateReadback(report);
+  const documentTemplates = publicDatasetDocumentTemplateReadback(report);
+  const targetRows = publicDatasetPackageManifestReadinessRows(readinessById, ["release_cleared_position_critique_pairs"]);
+  const releaseArtifactRows = publicDatasetPackageManifestReadinessRows(readinessById, ["label_snapshot", "corpus_manifest", "split_manifest"]);
+  const documentationRows = publicDatasetPackageManifestReadinessRows(readinessById, ["dataset_card", "methodology_report"]);
+  const exclusionRows = publicDatasetPackageManifestReadinessRows(readinessById, ["hidden_protected_exclusions"]);
+  const releaseFreezeRows = publicDatasetPackageManifestReadinessRows(readinessById, ["release_version_freeze"]);
+  const publicFirstRows = publicDatasetPackageManifestReadinessRows(readinessById, ["public_first_ladder_gate"]);
+  return [
+    publicDatasetPackageManifestStep({
+      id: "target-data-package",
+      sequence: 1,
+      stepKind: "target_data_collection",
+      label: "Collect release-cleared Dataset v0.1 target data",
+      readinessRows: targetRows,
+      fallbackStatus: targetPackage.status ?? report.targetGaps?.releaseUseStatus ?? "target_data_status_missing",
+      summary:
+        "Replace target-data templates with real position, critique, blind-rating, gold-item, and validation rows before validating the package import.",
+      routes: [
+        "/api/v1/target-gaps/current-package-manifest",
+        targetPackage.routes?.packageValidateOnlyImportRoute,
+        targetPackage.routes?.packageDryRunImportRoute,
+        targetPackage.routes?.packageImportRoute,
+        targetPackage.routes?.starterTemplateRoute,
+        targetPackage.routes?.fullTemplateRoute,
+        targetPackage.routes?.sourceCollectionPlanRoute,
+        "/api/v1/public-dataset-readiness/release_cleared_position_critique_pairs",
+      ],
+      counts: {
+        targetGapCount: targetPackage.counts?.targetGapCount ?? 0,
+        stepCount: targetPackage.counts?.stepCount ?? 0,
+        estimatedRecordsRequired: targetPackage.counts?.estimatedRecordsRequired ?? 0,
+        expectedResourceDelta: targetPackage.counts?.expectedResourceDelta ?? 0,
+        setupBeforePrimary: targetPackage.counts?.setupBeforePrimary === true,
+      },
+      nextActionRoute:
+        targetPackage.routes?.packageValidateOnlyImportRoute ?? targetPackage.routes?.packageDryRunImportRoute ?? "/api/v1/target-gaps/current-package-manifest",
+      templateRoutes: [targetPackage.routes?.starterTemplateRoute, targetPackage.routes?.fullTemplateRoute],
+      verificationRoutes: ["/api/release/report", "/api/v1/target-gaps", "/api/v1/public-dataset-readiness/release_cleared_position_critique_pairs"],
+    }),
+    publicDatasetPackageManifestStep({
+      id: "release-artifact-package",
+      sequence: 2,
+      stepKind: "release_artifact_submission",
+      label: "Submit release artifact manifests",
+      readinessRows: releaseArtifactRows,
+      fallbackStatus:
+        Number(releaseArtifactTemplates.counts?.openRows ?? 0) > 0 ? "release_artifact_templates_open" : "release_artifact_templates_ready",
+      summary:
+        "Submit or package-validate the label snapshot, corpus manifest, public/internal export manifests, training export, and release report snapshot through existing artifact routes.",
+      routes: [
+        "/api/v1/release-artifacts/template",
+        releaseArtifactTemplates.packageValidateOnlyImportRoute,
+        releaseArtifactTemplates.packageDryRunImportRoute,
+        releaseArtifactTemplates.packageImportRoute,
+        "/api/v1/public-dataset-readiness/label_snapshot",
+        "/api/v1/public-dataset-readiness/corpus_manifest",
+      ],
+      counts: {
+        templateRows: releaseArtifactTemplates.counts?.templateRows ?? 0,
+        openRows: releaseArtifactTemplates.counts?.openRows ?? 0,
+        packageJsonlRows: releaseArtifactTemplates.counts?.packageJsonlRows ?? 0,
+        singleRecordRows: releaseArtifactTemplates.counts?.singleRecordRows ?? 0,
+      },
+      nextActionRoute:
+        releaseArtifactTemplates.packageValidateOnlyImportRoute ?? releaseArtifactTemplates.packageDryRunImportRoute ?? "/api/v1/release-artifacts/template",
+      templateRoutes: ["/api/v1/release-artifacts/template"],
+      verificationRoutes: ["/api/release/report", "/api/v1/public-dataset-readiness/label_snapshot", "/api/v1/public-dataset-readiness/corpus_manifest"],
+    }),
+    publicDatasetPackageManifestStep({
+      id: "release-version-freeze",
+      sequence: 3,
+      stepKind: "release_version_freeze",
+      label: "Submit ReleaseVersion and ReleaseFreeze evidence",
+      readinessRows: releaseFreezeRows,
+      fallbackStatus: releaseVersionTemplates.releaseUseStatus ?? "release_version_manifest_missing",
+      summary:
+        "Replace the ReleaseVersion and ReleaseFreeze templates with reviewed evidence after target scale and artifact links are current.",
+      routes: [
+        "/api/v1/release-version-manifest/template",
+        "/api/v1/release-version-manifest",
+        "/api/v1/release-versions?validateOnly=true",
+        "/api/v1/releases/freeze?validateOnly=true",
+        "/api/v1/public-dataset-readiness/release_version_freeze",
+      ],
+      counts: {
+        templateRows: releaseVersionTemplates.counts?.templateRows ?? 0,
+        openRows: releaseVersionTemplates.counts?.openRows ?? 0,
+      },
+      nextActionRoute: "/api/v1/release-version-manifest/template",
+      templateRoutes: ["/api/v1/release-version-manifest/template"],
+      verificationRoutes: ["/api/release/report", "/api/v1/release-version-manifest", "/api/v1/public-dataset-readiness/release_version_freeze"],
+    }),
+    publicDatasetPackageManifestStep({
+      id: "public-documentation",
+      sequence: 4,
+      stepKind: "public_documentation",
+      label: "Submit dataset card and methodology report",
+      readinessRows: documentationRows,
+      fallbackStatus: documentTemplates.releaseUseStatus ?? "public_dataset_document_templates_open",
+      summary:
+        "Replace the dataset-card and methodology-report templates with reviewed public documentation before any downstream public surface.",
+      routes: [
+        "/api/v1/public-dataset-documents/template",
+        "/api/v1/public-dataset-documents?validateOnly=true",
+        "/api/v1/public-dataset-documents",
+        "/api/v1/public-dataset-readiness/dataset_card",
+        "/api/v1/public-dataset-readiness/methodology_report",
+      ],
+      counts: {
+        templateRows: documentTemplates.counts?.templateRows ?? 0,
+        openReadinessRows: documentTemplates.counts?.openReadinessRows ?? 0,
+        readyReadinessRows: documentTemplates.counts?.readyReadinessRows ?? 0,
+      },
+      nextActionRoute: documentTemplates.singleRecordValidateOnlyRoute ?? "/api/v1/public-dataset-documents/template",
+      templateRoutes: ["/api/v1/public-dataset-documents/template"],
+      verificationRoutes: [
+        "/api/release/report",
+        "/api/v1/public-dataset-readiness/dataset_card",
+        "/api/v1/public-dataset-readiness/methodology_report",
+      ],
+    }),
+    publicDatasetPackageManifestStep({
+      id: "hidden-protected-exclusions",
+      sequence: 5,
+      stepKind: "hidden_protected_exclusions",
+      label: "Verify hidden/protected exclusions",
+      readinessRows: exclusionRows,
+      fallbackStatus: "hidden_protected_exclusion_status_missing",
+      summary:
+        "Confirm the public split excludes hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, and unreleased adjudication notes.",
+      routes: [
+        "/api/v1/public-dataset-readiness/hidden_protected_exclusions",
+        "/api/v1/export-manifests",
+        "/api/v1/benchmark-freeze-reports",
+        "/api/release/report",
+      ],
+      counts: {
+        readinessRows: exclusionRows.length,
+        openRows: exclusionRows.filter(publicDatasetReadinessItemIsOpen).length,
+      },
+      nextActionRoute: "/api/v1/public-dataset-readiness/hidden_protected_exclusions",
+      verificationRoutes: ["/api/release/report", "/api/v1/public-dataset-readiness/hidden_protected_exclusions"],
+    }),
+    publicDatasetPackageManifestStep({
+      id: "public-first-ladder",
+      sequence: 6,
+      stepKind: "public_first_ladder",
+      label: "Verify public-first release ladder",
+      readinessRows: publicFirstRows,
+      fallbackStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_first_ladder_status_missing",
+      summary:
+        "Keep leaderboard, API evaluator, public training export, and judge-model launch blocked until Dataset v0.1 readiness is complete.",
+      routes: [
+        "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+        "/api/v1/public-dataset-readiness",
+        "/api/release/report",
+      ],
+      counts: {
+        readinessRows: publicFirstRows.length,
+        openRows: publicFirstRows.filter(publicDatasetReadinessItemIsOpen).length,
+      },
+      nextActionRoute: "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+      verificationRoutes: ["/api/release/report", "/api/v1/public-dataset-readiness/public_first_ladder_gate"],
+    }),
+  ];
+}
+
+function publicDatasetPackageManifestReadinessRows(readinessById, rowIds) {
+  return rowIds.map((rowId) => readinessById.get(rowId)).filter(Boolean);
+}
+
+function publicDatasetPackageManifestStep({
+  id,
+  sequence,
+  stepKind,
+  label,
+  readinessRows,
+  fallbackStatus,
+  summary,
+  routes = [],
+  counts = {},
+  nextActionRoute = null,
+  templateRoutes = [],
+  verificationRoutes = [],
+}) {
+  const status = publicDatasetPackageManifestStepStatus(readinessRows, fallbackStatus);
+  const readinessRowIds = readinessRows.map((row) => row.id).filter(Boolean);
+  return {
+    id,
+    rowId: id,
+    sequence,
+    stepKind,
+    label,
+    status,
+    summary,
+    readinessRowIds,
+    readinessStatuses: readinessRows.map((row) => row.status).filter(Boolean),
+    readinessReviewReasons: uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : []))),
+    sourceEvidenceIds: uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.sourceEvidenceIds) ? row.sourceEvidenceIds : []))),
+    targetGapIds: uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.targetGapIds) ? row.targetGapIds : []))),
+    downstreamArtifacts: uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.downstreamArtifacts) ? row.downstreamArtifacts : []))),
+    counts,
+    nextActionRoute,
+    templateRoutes: uniqueValues(templateRoutes),
+    verificationRoutes: uniqueValues(verificationRoutes),
+    routes: uniqueValues([
+      "/api/v1/public-dataset-package-manifest",
+      `/api/v1/public-dataset-package-manifest/${encodeURIComponent(id)}`,
+      ...routes,
+      ...readinessRows.flatMap(publicDatasetReadinessRoutes),
+      ...templateRoutes,
+      ...verificationRoutes,
+    ]),
+  };
+}
+
+function publicDatasetPackageManifestStepStatus(readinessRows, fallbackStatus) {
+  const openRows = readinessRows.filter(publicDatasetReadinessItemIsOpen);
+  if (openRows.length) {
+    if (openRows.some((row) => row.status === "blocked_by_target_scale")) return "blocked_by_target_scale";
+    if (openRows.some((row) => row.status === "blocked_by_release_freeze")) return "blocked_by_release_freeze";
+    if (openRows.some((row) => row.status === "documentation_not_submitted")) return "documentation_not_submitted";
+    if (openRows.some((row) => row.status === "downstream_blocked_until_dataset_v0_1_ready")) {
+      return "downstream_blocked_until_dataset_v0_1_ready";
+    }
+    if (openRows.some((row) => String(row.status ?? "").includes("review_required"))) return "review_required";
+    return openRows[0].status ?? fallbackStatus ?? "open";
+  }
+  if (readinessRows.length) return "ready";
+  return fallbackStatus ?? "not_reported";
+}
+
+function publicDatasetPackageManifestFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    stepKind: value("stepKind"),
+    status: value("status"),
+    readinessRowId: value("readinessRowId"),
+    route: value("route"),
+    targetGapId: value("targetGapId"),
+  };
+}
+
+function publicDatasetPackageManifestMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.stepKind === value;
+    if (key === "status") return publicDatasetPackageManifestMatchesStatus(item, value);
+    if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetPackageManifestMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetPackageManifestItemIsOpen(item);
+  if (value === "closed") return !publicDatasetPackageManifestItemIsOpen(item);
+  return item.status === value;
+}
+
+function publicDatasetPackageManifestItemIsOpen(item) {
+  return item.status !== "ready";
+}
+
+function publicDatasetPackageManifestCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(publicDatasetPackageManifestItemIsOpen).length,
+    readyRows: items.filter((item) => item.status === "ready").length,
+    byStepKind: countItemsBy(items, "stepKind"),
+    byStatus: countItemsBy(items, "status"),
+    byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
+    byTargetGapId: countExpandedValues(items, "targetGapIds"),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }
