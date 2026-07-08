@@ -7732,9 +7732,11 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
-  if (request.method === "GET" && url.pathname === "/api/v1/target-gaps/current-package-manifest") {
+  const targetGapCurrentPackageManifestMatch = url.pathname.match(/^\/api\/v1\/target-gaps\/current-package-manifest(?:\/([^/]+))?$/);
+  if (request.method === "GET" && targetGapCurrentPackageManifestMatch) {
+    const itemId = targetGapCurrentPackageManifestMatch[1] ? decodeURIComponent(targetGapCurrentPackageManifestMatch[1]) : null;
     await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
-      targetDataCurrentPackageManifestReadback(report),
+      targetDataCurrentPackageManifestReadback(report, { itemId }),
     );
     return;
   }
@@ -9164,14 +9166,18 @@ function targetGapCollectionPlanReadback(report, options = {}) {
   };
 }
 
-function targetDataCurrentPackageManifestReadback(report) {
+function targetDataCurrentPackageManifestReadback(report, options = {}) {
   const navigation = report.releaseCompletionNavigation ?? {};
   const currentBlockingPackageManifest =
     navigation.currentBlockingPackageManifest ??
     octoberCompletionRunbookCurrentBlockingPackageManifest(report, navigation.currentBlockingGroup ?? null);
-  const executionPreview = Array.isArray(currentBlockingPackageManifest?.executionSequencePreview)
-    ? currentBlockingPackageManifest.executionSequencePreview
-    : [];
+  const executionPreview = targetDataCurrentPackageManifestItems(
+    Array.isArray(currentBlockingPackageManifest?.executionSequencePreview) ? currentBlockingPackageManifest.executionSequencePreview : [],
+  );
+  const items = options.itemId
+    ? executionPreview.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
+    : executionPreview;
+  if (options.itemId && items.length === 0) return null;
   const manifestStatus =
     currentBlockingPackageManifest?.status ??
     (navigation.currentBlockingPhase === "collect_data" ? "target_data_package_manifest_unavailable" : "no_current_target_data_package_manifest");
@@ -9200,7 +9206,7 @@ function targetDataCurrentPackageManifestReadback(report) {
       authority:
         "The full October completion runbook and target-gap collection plan remain the detailed step authorities; /api/release/report remains authoritative for completion status after real data is submitted.",
     },
-    count: executionPreview.length,
+    count: items.length,
     totalCount: currentBlockingPackageManifest?.stepCount ?? executionPreview.length,
     counts: {
       targetGapCount: currentBlockingPackageManifest?.targetGapCount ?? 0,
@@ -9233,8 +9239,23 @@ function targetDataCurrentPackageManifestReadback(report) {
     },
     targetGapIds: Array.isArray(currentBlockingPackageManifest?.targetGapIds) ? currentBlockingPackageManifest.targetGapIds : [],
     currentBlockingPackageManifest,
-    items: executionPreview,
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
   };
+}
+
+function targetDataCurrentPackageManifestItems(items) {
+  return (Array.isArray(items) ? items : []).map((item, index) => {
+    const route = item?.importRoute ?? item?.route ?? item?.templateReadbackRoute ?? `step-${index + 1}`;
+    const id =
+      item?.id ??
+      `target-data-current-package-step:${item?.sequence ?? index + 1}:${item?.targetGapId ?? "target-gap"}:${item?.stepKind ?? "step"}:${encodeURIComponent(route)}`;
+    return {
+      ...item,
+      id,
+      packageManifestItemRoute: `/api/v1/target-gaps/current-package-manifest/${encodeURIComponent(id)}`,
+    };
+  });
 }
 
 function lmcaComparisonReadback(report, options = {}) {
@@ -10312,7 +10333,7 @@ function octoberCompletionRunbookCurrentBlockingPackageManifest(report, currentB
       : [],
     collectionPlanRoutes: Array.isArray(packagePlan.collectionPlanRoutes) ? packagePlan.collectionPlanRoutes : [],
     verificationRoutes: Array.isArray(packagePlan.verificationRoutes) ? packagePlan.verificationRoutes : [],
-    executionSequencePreview: executionSequence.slice(0, 12),
+    executionSequencePreview: targetDataCurrentPackageManifestItems(executionSequence).slice(0, 12),
     omittedExecutionStepCount: Math.max(0, executionSequence.length - 12),
     operatorChecklist: [
       "Load the starter template route first for a bounded package preview, then request expanded templates deliberately.",

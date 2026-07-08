@@ -10046,6 +10046,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "primary_data_import",
   ]);
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.executionSequencePreview[0].targetGapId, "blind_initial_ratings");
+  assert.ok(
+    fullRunbook.body.currentBlockingPackageManifest.executionSequencePreview[0].packageManifestItemRoute.startsWith(
+      "/api/v1/target-gaps/current-package-manifest/",
+    ),
+  );
   assert.ok(fullRunbook.body.currentBlockingPackageManifest.targetGapIds.includes("positions"));
   assert.ok(fullRunbook.body.currentBlockingPackageManifest.operatorChecklist.every((item) => /template|validate|Append|Verify|Replace/i.test(item)));
 
@@ -10069,6 +10074,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(
     releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.templateStarter.starterTemplateRoute,
     "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.ok(
+    releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.executionSequencePreview[0].packageManifestItemRoute.startsWith(
+      "/api/v1/target-gaps/current-package-manifest/",
+    ),
   );
 
   const currentPackageManifest = await invokeApi(context, {
@@ -10097,8 +10107,32 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifest.body.totalCount, 9);
   assert.equal(currentPackageManifest.body.items[0].stepKind, "setup_data_import");
   assert.equal(currentPackageManifest.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
+  assert.equal(
+    currentPackageManifest.body.items[0].packageManifestItemRoute,
+    `/api/v1/target-gaps/current-package-manifest/${encodeURIComponent(currentPackageManifest.body.items[0].id)}`,
+  );
   assert.match(currentPackageManifest.body.policy.scope, /does not submit target data/);
   assert.match(currentPackageManifest.body.policy.authority, /remains authoritative/);
+  const currentPackageManifestById = await invokeApi(context, {
+    method: "GET",
+    url: currentPackageManifest.body.items[0].packageManifestItemRoute,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestById.status, 200, JSON.stringify(currentPackageManifestById.body));
+  assert.equal(currentPackageManifestById.body.count, 1);
+  assert.equal(currentPackageManifestById.body.totalCount, 9);
+  assert.equal(currentPackageManifestById.body.item.id, currentPackageManifest.body.items[0].id);
+  assert.equal(
+    currentPackageManifestById.body.item.packageManifestItemRoute,
+    releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.executionSequencePreview[0].packageManifestItemRoute,
+  );
+  assert.deepEqual(currentPackageManifestById.body.items.map((item) => item.id), [currentPackageManifest.body.items[0].id]);
+  const missingCurrentPackageManifestById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(missingCurrentPackageManifestById.status, 404);
 
   assert.ok(Array.isArray(fullRunbook.body.nextUnblockerSequence));
   assert.deepEqual(
@@ -14788,6 +14822,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes('"Delta beyond record count"'));
   assert.ok(appSource.includes("targetDataPackageManifestPreviewRow(item)"));
   assert.ok(appSource.includes("function targetDataPackageManifestPreviewRow(item)"));
+  assert.ok(appSource.includes('["Package manifest item", item.packageManifestItemRoute ?? "not available"]'));
   assert.ok(appSource.includes('["Manifest status", humanize(result.status ?? "not reported")]'));
   assert.ok(appSource.includes('["Package records needed", counts.estimatedRecordsRequired ?? manifest?.estimatedRecordsRequired ?? "not reported"]'));
   assert.ok(appSource.includes('["Setup before primary", counts.setupBeforePrimary ? "yes" : "no"]'));

@@ -10639,6 +10639,7 @@ function targetGapCollectionPlanPreviewRow(item) {
         ["Package JSONL import", item.packageImportRoute ?? "not available"],
         ["Package dry-run", item.packageDryRunImportRoute ?? "not available"],
         ["Package validate-only", item.packageValidateOnlyImportRoute ?? "not available"],
+        ["Package manifest item", item.packageManifestItemRoute ?? "not available"],
         ["Setup JSONL import", item.setupBulkImportRoute ?? "not required"],
         ["Setup dry-run", item.setupDryRunImportRoute ?? "not required"],
         ["Records needed", String(item.estimatedRecordsRequired ?? "unknown")],
