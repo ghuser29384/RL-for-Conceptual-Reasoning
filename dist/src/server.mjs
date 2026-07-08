@@ -7944,6 +7944,15 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  const publicDatasetReadinessMatch = url.pathname.match(/^\/api\/v1\/public-dataset-readiness(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetReadinessMatch) {
+    const itemId = publicDatasetReadinessMatch[1] ? decodeURIComponent(publicDatasetReadinessMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetReadinessReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
   const raterProfileEvidenceMatch = url.pathname.match(/^\/api\/v1\/rater-profile-evidence(?:\/([^/]+))?$/);
   if (request.method === "GET" && raterProfileEvidenceMatch) {
     const itemId = raterProfileEvidenceMatch[1] ? decodeURIComponent(raterProfileEvidenceMatch[1]) : null;
@@ -11348,6 +11357,132 @@ function releaseVersionManifestCounts(items) {
     byArtifact: countItemsBy(items, "artifact"),
     byStatus: countItemsBy(items, "status"),
     byRoute: countValues(items.flatMap(releaseVersionManifestItemRoutes)),
+    byTargetGapId: countExpandedValues(items, "targetGapIds"),
+  };
+}
+
+function publicDatasetReadinessReadback(report, options = {}) {
+  const readiness = report.publicDatasetReadiness ?? {};
+  const filters = publicDatasetReadinessFilters(options.searchParams);
+  const allItems = publicDatasetReadinessItems(readiness);
+  const filteredItems = allItems.filter((item) => publicDatasetReadinessMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.label === options.itemId || item.gateKind === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: readiness.id ?? `public-dataset-readiness-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: readiness.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: readiness.id ?? null,
+    artifactName: readiness.artifactName ?? "Metaphilosophy Critique Ratings Dataset v0.1",
+    artifactKind: readiness.artifactKind ?? "expert_rated_position_critique_dataset",
+    releaseUseStatus: readiness.releaseUseStatus ?? "public_dataset_readiness_missing",
+    targetScaleStatus: readiness.targetScaleStatus ?? null,
+    releaseVersionManifestStatus: readiness.releaseVersionManifestStatus ?? null,
+    publicFirstRule: readiness.publicFirstRule ?? null,
+    resourceKey: "publicDatasetReadinessRow",
+    policy: {
+      ...(readiness.policy ?? {}),
+      scope:
+        "Read-only RLHF93 Dataset v0.1 readiness projection derived from /api/release/report; it reuses existing release objects and reports public-artifact blockers without publishing a dataset, creating a new product surface, launching a leaderboard/API/training export, or waiving release gates.",
+      access:
+        "Admin/auditor readback only because rows expose release-governance ids, target-scale blockers, protected-split exclusions, and downstream public-launch gating.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: publicDatasetReadinessCounts(allItems),
+    filteredCounts: publicDatasetReadinessCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetReadinessItems(readiness) {
+  const routeBase = "/api/v1/public-dataset-readiness";
+  const rows = Array.isArray(readiness.rows) ? readiness.rows : [];
+  return rows.map((row, index) => ({
+    ...row,
+    sequence: index + 1,
+    rowId: row.id,
+    releaseUseStatus: readiness.releaseUseStatus ?? null,
+    artifactName: readiness.artifactName ?? "Metaphilosophy Critique Ratings Dataset v0.1",
+    collectionReadbackRoute: routeBase,
+    readbackItemRoute: `${routeBase}/${encodeURIComponent(row.id)}`,
+    releaseReportRoute: "/api/release/report",
+    readbackRoutes: uniqueValues([routeBase, `${routeBase}/${encodeURIComponent(row.id)}`, "/api/release/report", ...(row.readbackRoutes ?? [])]),
+  }));
+}
+
+function publicDatasetReadinessFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    gateKind: value("gateKind"),
+    status: value("status"),
+    sourceEvidenceId: value("sourceEvidenceId") ?? value("evidenceId"),
+    sourceStatus: value("sourceStatus"),
+    reviewReason: value("reviewReason"),
+    targetGapId: value("targetGapId"),
+    route: value("route"),
+    downstreamArtifact: value("downstreamArtifact"),
+  };
+}
+
+function publicDatasetReadinessMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.label === value || item.gateKind === value;
+    if (key === "status") return publicDatasetReadinessMatchesStatus(item, value);
+    if (key === "sourceEvidenceId") return Array.isArray(item.sourceEvidenceIds) && item.sourceEvidenceIds.includes(value);
+    if (key === "sourceStatus") return Array.isArray(item.sourceStatuses) && item.sourceStatuses.includes(value);
+    if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
+    if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
+    if (key === "downstreamArtifact") return Array.isArray(item.downstreamArtifacts) && item.downstreamArtifacts.includes(value);
+    if (key === "route") return publicDatasetReadinessRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function publicDatasetReadinessMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetReadinessItemIsOpen(item);
+  if (value === "closed") return !publicDatasetReadinessItemIsOpen(item);
+  return [item.status, item.releaseUseStatus].includes(value);
+}
+
+function publicDatasetReadinessItemIsOpen(item) {
+  return item.status !== "ready";
+}
+
+function publicDatasetReadinessRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+  ]);
+}
+
+function publicDatasetReadinessCounts(items) {
+  return {
+    rows: items.length,
+    readyRows: items.filter((item) => item.status === "ready").length,
+    openRows: items.filter(publicDatasetReadinessItemIsOpen).length,
+    blockedByTargetScaleRows: items.filter((item) => item.status === "blocked_by_target_scale").length,
+    blockedByReleaseFreezeRows: items.filter((item) => item.status === "blocked_by_release_freeze").length,
+    documentationRows: items.filter((item) => item.gateKind === "public_documentation").length,
+    missingDocumentationRows: items.filter((item) => item.gateKind === "public_documentation" && publicDatasetReadinessItemIsOpen(item)).length,
+    downstreamBlockedRows: items.filter((item) => item.status === "downstream_blocked_until_dataset_v0_1_ready").length,
+    reviewReasonCount: items.reduce((sum, item) => sum + (Array.isArray(item.reviewReasons) ? item.reviewReasons.length : 0), 0),
+    byGateKind: countItemsBy(items, "gateKind"),
+    byStatus: countItemsBy(items, "status"),
+    byRoute: countValues(items.flatMap(publicDatasetReadinessRoutes)),
+    bySourceEvidenceId: countExpandedValues(items, "sourceEvidenceIds"),
+    bySourceStatus: countExpandedValues(items, "sourceStatuses"),
     byTargetGapId: countExpandedValues(items, "targetGapIds"),
   };
 }

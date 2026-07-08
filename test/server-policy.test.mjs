@@ -5485,6 +5485,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/release-version-manifest"',
     'resourceKey: "releaseVersionManifestCheck"',
     "Read-only computed release manifest, freeze, target-scale, artifact-link, and contract checks.",
+    'id: "public-dataset-readiness"',
+    'endpoint: "/api/v1/public-dataset-readiness"',
+    'resourceKey: "publicDatasetReadinessRow"',
+    "Read-only Dataset v0.1 public-artifact readiness gates over existing release objects.",
     'id: "rater-profile-evidence"',
     'endpoint: "/api/v1/rater-profile-evidence"',
     'resourceKey: "raterProfileEvidenceRow"',
@@ -8107,6 +8111,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingReleaseVersionManifestAuth = await invokeApi(context, { method: "GET", url: "/api/v1/release-version-manifest" });
   assert.equal(missingReleaseVersionManifestAuth.status, 401);
 
+  const missingPublicDatasetReadinessAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-readiness" });
+  assert.equal(missingPublicDatasetReadinessAuth.status, 401);
+
   const missingRaterProfileEvidenceAuth = await invokeApi(context, { method: "GET", url: "/api/v1/rater-profile-evidence" });
   assert.equal(missingRaterProfileEvidenceAuth.status, 401);
 
@@ -8225,6 +8232,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedReleaseVersionManifest.status, 403);
+
+  const deniedPublicDatasetReadiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetReadiness.status, 403);
 
   const deniedRaterProfileEvidence = await invokeApi(context, {
     method: "GET",
@@ -10118,6 +10132,20 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseErrataRouteWorkflowReadiness.body.items[0].surface, "release_claim_warnings");
   assert.equal(releaseErrataRouteWorkflowReadiness.body.filteredCounts.byRoute["/api/v1/release-errata"], 1);
 
+  const liveReleaseReport = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+  });
+  assert.equal(liveReleaseReport.status, 200, JSON.stringify(liveReleaseReport.body));
+  assert.equal(liveReleaseReport.body.publicDatasetReadiness.artifactName, "Metaphilosophy Critique Ratings Dataset v0.1");
+  assert.equal(liveReleaseReport.body.publicDatasetReadiness.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.equal(liveReleaseReport.body.publicDatasetReadiness.counts.openRows, 7);
+  assert.ok(
+    liveReleaseReport.body.publicDatasetReadiness.rows.some(
+      (row) => row.id === "public_first_ladder_gate" && row.status === "downstream_blocked_until_dataset_v0_1_ready",
+    ),
+  );
+
   const releaseReportSections = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/release-report-sections?checklistRowId=model_evaluation_reproducibility",
@@ -10290,6 +10318,97 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestTargetScaleById.body.count, 1);
   assert.ok(releaseVersionManifestTargetScaleById.body.item.targetGapIds.includes("positions"));
   assert.equal(releaseVersionManifestTargetScaleById.body.item.targetGaps.totals.remainingTotal, 2034);
+
+  const publicDatasetReadiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReadiness.status, 200, JSON.stringify(publicDatasetReadiness.body));
+  assert.equal(publicDatasetReadiness.body.resourceKey, "publicDatasetReadinessRow");
+  assert.equal(publicDatasetReadiness.body.artifactName, "Metaphilosophy Critique Ratings Dataset v0.1");
+  assert.equal(publicDatasetReadiness.body.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.match(publicDatasetReadiness.body.policy.scope, /Dataset v0\.1 readiness projection/);
+  assert.equal(publicDatasetReadiness.body.count, 13);
+  assert.equal(publicDatasetReadiness.body.totalCount, 13);
+  assert.equal(publicDatasetReadiness.body.counts.openRows, 7);
+  assert.equal(publicDatasetReadiness.body.counts.readyRows, 6);
+  assert.equal(publicDatasetReadiness.body.counts.blockedByTargetScaleRows, 1);
+  assert.equal(publicDatasetReadiness.body.counts.blockedByReleaseFreezeRows, 1);
+  assert.equal(publicDatasetReadiness.body.counts.missingDocumentationRows, 2);
+  assert.equal(publicDatasetReadiness.body.counts.downstreamBlockedRows, 1);
+  assert.equal(publicDatasetReadiness.body.counts.byGateKind.public_documentation, 2);
+  assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-readiness"], 13);
+  assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "dataset_card" && item.status === "documentation_not_submitted"));
+  assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "methodology_report" && item.status === "documentation_not_submitted"));
+  assert.ok(
+    publicDatasetReadiness.body.items.some(
+      (item) => item.id === "public_first_ladder_gate" && item.downstreamArtifacts.includes("public_leaderboard"),
+    ),
+  );
+
+  const publicDatasetOpen = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness?status=open",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetOpen.status, 200, JSON.stringify(publicDatasetOpen.body));
+  assert.equal(publicDatasetOpen.body.count, 7);
+  assert.equal(publicDatasetOpen.body.filteredCounts.openRows, 7);
+
+  const publicDatasetDocs = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness?gateKind=public_documentation",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetDocs.status, 200, JSON.stringify(publicDatasetDocs.body));
+  assert.equal(publicDatasetDocs.body.count, 2);
+  assert.equal(publicDatasetDocs.body.filteredCounts.missingDocumentationRows, 2);
+
+  const publicDatasetCardReason = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?reviewReason=${encodeURIComponent("datasetCard:not_submitted")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetCardReason.status, 200, JSON.stringify(publicDatasetCardReason.body));
+  assert.equal(publicDatasetCardReason.body.count, 1);
+  assert.equal(publicDatasetCardReason.body.items[0].id, "dataset_card");
+
+  const publicDatasetTargetGap = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness?targetGapId=positions",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetTargetGap.status, 200, JSON.stringify(publicDatasetTargetGap.body));
+  assert.equal(publicDatasetTargetGap.body.count, 1);
+  assert.equal(publicDatasetTargetGap.body.items[0].id, "release_cleared_position_critique_pairs");
+
+  const publicDatasetByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/release-version-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetByRoute.status, 200, JSON.stringify(publicDatasetByRoute.body));
+  assert.equal(publicDatasetByRoute.body.count, 2);
+  assert.equal(publicDatasetByRoute.body.filteredCounts.byRoute["/api/v1/release-version-manifest"], 2);
+
+  const publicDatasetById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness/dataset_card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetById.status, 200, JSON.stringify(publicDatasetById.body));
+  assert.equal(publicDatasetById.body.count, 1);
+  assert.equal(publicDatasetById.body.item.id, "dataset_card");
+  assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-readiness/dataset_card"));
+
+  const publicDatasetMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetMissing.status, 404);
+  assert.equal(publicDatasetMissing.body.error, "artifact_not_found");
 
   const candidateGenerationChecklist = await invokeApi(context, {
     method: "GET",
@@ -13573,6 +13692,12 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('resourceKey: "releaseVersionManifestCheck"'));
   assert.ok(appSource.includes("function releaseVersionManifestPreviewRow(item)"));
   assert.ok(appSource.includes("workflowReleaseManifestArtifactFilter"));
+  assert.ok(appSource.includes('id: "public-dataset-readiness"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-readiness"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetReadinessRow"'));
+  assert.ok(appSource.includes("function publicDatasetReadinessPreviewRow(item)"));
+  assert.ok(appSource.includes("workflowPublicDatasetGateKindFilter"));
+  assert.ok(appSource.includes("workflowPublicDatasetReviewReasonFilter"));
   assert.ok(appSource.includes("counts.deliverableGroups"));
   assert.ok(appSource.includes("counts.submitOperatorEvidence"));
   assert.ok(appSource.includes("counts.linkedEvidenceIds"));
@@ -13907,6 +14032,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET `/api/v1/release-version-manifest`"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/{id}"));
   assert.ok(architectureDoc.includes("does not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
+  assert.ok(architectureDoc.includes("Metaphilosophy Critique Ratings Dataset v0.1"));
+  assert.ok(architectureDoc.includes("This endpoint does not publish a dataset, create a separate product object, launch a leaderboard/API/training export"));
   assert.ok(architectureDoc.includes("GET /api/v1/score-explanation-audit"));
   assert.ok(architectureDoc.includes("GET /api/v1/score-explanation-audit/{ratingId}"));
   assert.ok(architectureDoc.includes("does not create ratings, score explanations, policy decisions, labels, or release claims"));

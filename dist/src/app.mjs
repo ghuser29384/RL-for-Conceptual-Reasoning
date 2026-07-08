@@ -934,6 +934,12 @@ const state = {
   workflowReleaseManifestStatusFilter: "",
   workflowReleaseManifestCheckKindFilter: "",
   workflowReleaseManifestTargetGapFilter: "",
+  workflowPublicDatasetGateKindFilter: "",
+  workflowPublicDatasetStatusFilter: "",
+  workflowPublicDatasetEvidenceFilter: "",
+  workflowPublicDatasetReviewReasonFilter: "",
+  workflowPublicDatasetTargetGapFilter: "",
+  workflowPublicDatasetDownstreamFilter: "",
   workflowRaterProfileRaterFilter: "",
   workflowRaterProfileTierFilter: "",
   workflowRaterProfileStatusFilter: "",
@@ -1126,6 +1132,14 @@ const workflowEvidenceCollections = [
     resourceKey: "releaseVersionManifestCheck",
     group: "Release",
     summary: "Read-only computed release manifest, freeze, target-scale, artifact-link, and contract checks.",
+  },
+  {
+    id: "public-dataset-readiness",
+    label: "Dataset v0.1 readiness",
+    endpoint: "/api/v1/public-dataset-readiness",
+    resourceKey: "publicDatasetReadinessRow",
+    group: "Release",
+    summary: "Read-only Dataset v0.1 public-artifact readiness gates over existing release objects.",
   },
   {
     id: "rater-profile-evidence",
@@ -8036,6 +8050,39 @@ function workflowReadbackPanel(collection) {
           </label>
         </div>`
       : "";
+  const publicDatasetReadinessFilters =
+    collection.id === "public-dataset-readiness"
+      ? `<div class="workflowReadbackControls">
+          <label>
+            <span>Gate kind</span>
+            <input id="workflowPublicDatasetGateKindFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetGateKindFilter)}" placeholder="public_documentation" />
+          </label>
+          <label>
+            <span>Status</span>
+            <input id="workflowPublicDatasetStatusFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetStatusFilter)}" placeholder="open" />
+          </label>
+          <label>
+            <span>Source evidence</span>
+            <input id="workflowPublicDatasetEvidenceFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetEvidenceFilter)}" placeholder="corpus-composition-october-2026-demo" />
+          </label>
+          <label>
+            <span>Review reason</span>
+            <input id="workflowPublicDatasetReviewReasonFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetReviewReasonFilter)}" placeholder="datasetCard:not_submitted" />
+          </label>
+          <label>
+            <span>Target gap</span>
+            <input id="workflowPublicDatasetTargetGapFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetTargetGapFilter)}" placeholder="positions" />
+          </label>
+          <label>
+            <span>Downstream artifact</span>
+            <input id="workflowPublicDatasetDownstreamFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetDownstreamFilter)}" placeholder="public_leaderboard" />
+          </label>
+          <label>
+            <span>Route</span>
+            <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/public-dataset-readiness/dataset_card" />
+          </label>
+        </div>`
+      : "";
   const derivedChecklistFilters =
     isDerivedChecklistCollection(collection) || isModelRunProvenanceCollection(collection)
       ? `<div class="workflowReadbackControls">
@@ -8264,6 +8311,7 @@ function workflowReadbackPanel(collection) {
       ${octoberCompletionChecklistFilters}
       ${releaseReportSectionFilters}
       ${releaseVersionManifestFilters}
+      ${publicDatasetReadinessFilters}
       ${raterProfileEvidenceFilters}
       ${derivedChecklistFilters}
       ${scoreExplanationAuditFilters}
@@ -8556,6 +8604,9 @@ function workflowCollectionPreview(collection, previewItems) {
   if (collection.id === "release-version-manifest") {
     return `<div class="operatorActionPreview">${previewItems.map(releaseVersionManifestPreviewRow).join("")}</div>`;
   }
+  if (collection.id === "public-dataset-readiness") {
+    return `<div class="operatorActionPreview">${previewItems.map(publicDatasetReadinessPreviewRow).join("")}</div>`;
+  }
   if (collection.id === "rater-profile-evidence") {
     return `<div class="operatorActionPreview">${previewItems.map(raterProfileEvidencePreviewRow).join("")}</div>`;
   }
@@ -8800,6 +8851,41 @@ function releaseVersionManifestPreviewRow(item) {
         ["Submitted id", item.submittedId ?? "not submitted"],
         ["Link status", item.linkedArtifactStatus ? humanize(item.linkedArtifactStatus) : "not applicable"],
         ["Target gaps", targetGaps],
+        ["Readbacks", routes],
+      ])}
+    </article>
+  `;
+}
+
+function publicDatasetReadinessPreviewRow(item) {
+  const reviewReasons =
+    Array.isArray(item.reviewReasons) && item.reviewReasons.length ? item.reviewReasons.slice(0, 4).join(", ") : "no open review reasons";
+  const sourceEvidence =
+    Array.isArray(item.sourceEvidenceIds) && item.sourceEvidenceIds.length ? item.sourceEvidenceIds.slice(0, 4).join(", ") : "not linked";
+  const targetGaps = Array.isArray(item.targetGapIds) && item.targetGapIds.length ? item.targetGapIds.map(humanize).join(", ") : "not target-gap linked";
+  const downstream =
+    Array.isArray(item.downstreamArtifacts) && item.downstreamArtifacts.length ? item.downstreamArtifacts.map(humanize).join(", ") : "not a downstream gate";
+  const routes =
+    [item.readbackItemRoute, ...(Array.isArray(item.readbackRoutes) ? item.readbackRoutes : [])]
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(", ") || "not available";
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.label ?? item.id ?? "Dataset readiness row")}</strong>
+          <span>${escapeHtml(item.gateKind ? humanize(item.gateKind) : "Dataset v0.1 readiness")}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.status ?? "not reported"))}</span>
+      </div>
+      ${metricList([
+        ["Artifact", item.artifactName ?? "Metaphilosophy Critique Ratings Dataset v0.1"],
+        ["Release status", item.releaseUseStatus ? humanize(item.releaseUseStatus) : "not reported"],
+        ["Source evidence", sourceEvidence],
+        ["Review reasons", reviewReasons],
+        ["Target gaps", targetGaps],
+        ["Downstream artifacts", downstream],
         ["Readbacks", routes],
       ])}
     </article>
@@ -14022,6 +14108,14 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       state.workflowReleaseManifestCheckKindFilter = "";
       state.workflowReleaseManifestTargetGapFilter = "";
     }
+    if (collection.id !== "public-dataset-readiness") {
+      state.workflowPublicDatasetGateKindFilter = "";
+      state.workflowPublicDatasetStatusFilter = "";
+      state.workflowPublicDatasetEvidenceFilter = "";
+      state.workflowPublicDatasetReviewReasonFilter = "";
+      state.workflowPublicDatasetTargetGapFilter = "";
+      state.workflowPublicDatasetDownstreamFilter = "";
+    }
     if (collection.id !== "rater-profile-evidence") {
       state.workflowRaterProfileRaterFilter = "";
       state.workflowRaterProfileTierFilter = "";
@@ -14334,6 +14428,12 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     "workflowReleaseManifestStatusFilter",
     "workflowReleaseManifestCheckKindFilter",
     "workflowReleaseManifestTargetGapFilter",
+    "workflowPublicDatasetGateKindFilter",
+    "workflowPublicDatasetStatusFilter",
+    "workflowPublicDatasetEvidenceFilter",
+    "workflowPublicDatasetReviewReasonFilter",
+    "workflowPublicDatasetTargetGapFilter",
+    "workflowPublicDatasetDownstreamFilter",
   ].forEach((elementId) => {
     document.getElementById(elementId)?.addEventListener("change", (event) => {
       state[elementId] = event.target.value.trim();
@@ -16439,6 +16539,7 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "october-completion-runbook" ||
     collection.id === "release-report-sections" ||
     collection.id === "release-version-manifest" ||
+    collection.id === "public-dataset-readiness" ||
     collection.id === "rater-profile-evidence" ||
     collection.id === "release-workflow-readiness" ||
     collection.id === "score-explanation-audit" ||
@@ -16588,6 +16689,15 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowReleaseManifestStatusFilter) url.searchParams.set("status", state.workflowReleaseManifestStatusFilter);
     if (state.workflowReleaseManifestCheckKindFilter) url.searchParams.set("checkKind", state.workflowReleaseManifestCheckKindFilter);
     if (state.workflowReleaseManifestTargetGapFilter) url.searchParams.set("targetGapId", state.workflowReleaseManifestTargetGapFilter);
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (collection.id === "public-dataset-readiness") {
+    if (state.workflowPublicDatasetGateKindFilter) url.searchParams.set("gateKind", state.workflowPublicDatasetGateKindFilter);
+    if (state.workflowPublicDatasetStatusFilter) url.searchParams.set("status", state.workflowPublicDatasetStatusFilter);
+    if (state.workflowPublicDatasetEvidenceFilter) url.searchParams.set("sourceEvidenceId", state.workflowPublicDatasetEvidenceFilter);
+    if (state.workflowPublicDatasetReviewReasonFilter) url.searchParams.set("reviewReason", state.workflowPublicDatasetReviewReasonFilter);
+    if (state.workflowPublicDatasetTargetGapFilter) url.searchParams.set("targetGapId", state.workflowPublicDatasetTargetGapFilter);
+    if (state.workflowPublicDatasetDownstreamFilter) url.searchParams.set("downstreamArtifact", state.workflowPublicDatasetDownstreamFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if (collection.id === "rater-profile-evidence") {

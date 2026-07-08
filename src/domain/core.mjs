@@ -16192,6 +16192,363 @@ export function buildSubmittedReleaseArtifactEvidence(
   };
 }
 
+function buildPublicDatasetReadinessReport(
+  releaseId,
+  {
+    currentStatus,
+    targetGaps,
+    releaseVersionManifest,
+    releaseArtifactEvidence,
+    corpusManifest,
+    labelSnapshot,
+    trainingExport,
+    publicExportManifest,
+    hiddenBenchmarkFreeze,
+    validationDesign,
+  },
+) {
+  const targetScaleOpen = currentStatus !== "target_scale_met";
+  const releaseFrozen =
+    releaseVersionManifest?.releaseUseStatus === "submitted_release_manifest_current_and_target_scale_met" ||
+    releaseVersionManifest?.releaseUseStatus === "submitted_release_manifest_recorded_but_target_scale_incomplete";
+  const releaseFreezeOpen = !releaseFrozen;
+  const labelSnapshotStatus = releaseArtifactEvidence?.labelSnapshotEvidence?.status ?? "label_snapshot_evidence_missing";
+  const corpusManifestStatus = releaseArtifactEvidence?.corpusManifestEvidence?.status ?? "corpus_manifest_evidence_missing";
+  const exportManifestStatus = releaseArtifactEvidence?.exportManifestEvidence?.status ?? "public_export_manifest_evidence_missing";
+  const trainingExportStatus = releaseArtifactEvidence?.trainingExportEvidence?.status ?? "training_export_evidence_missing";
+  const itemTextManifest = trainingExportItemTextVersionHashManifest(trainingExport);
+  const ratingContextManifest = trainingExportRatingContextSnapshotManifest(trainingExport);
+  const labelMetadataManifest = trainingExportLabelMetadataManifest(trainingExport);
+  const publicPairCount = publicExportManifest?.counts?.critiques ?? 0;
+  const publicPositionCount = publicExportManifest?.counts?.positions ?? 0;
+  const itemLabelCount = publicExportManifest?.counts?.itemLabels ?? Object.keys(labelSnapshot?.itemLabels ?? {}).length;
+  const releaseReportRoute = "/api/release/report";
+  const routeBase = "/api/v1/public-dataset-readiness";
+  const targetGapRoutes = ["/api/v1/target-gaps", ...(targetGaps?.rows ?? []).map((row) => `/api/v1/target-gaps/${row.id}`)];
+  const rows = [
+    publicDatasetReadinessRow({
+      id: "release_cleared_position_critique_pairs",
+      label: "Release-cleared position-critique pairs",
+      gateKind: "dataset_content",
+      status: targetScaleOpen ? "blocked_by_target_scale" : publicPairCount > 0 ? "ready" : "missing_public_pairs",
+      sourceEvidenceIds: [corpusManifest?.id, publicExportManifest?.id],
+      sourceStatuses: [corpusManifestStatus, exportManifestStatus],
+      reviewReasons: [
+        publicPositionCount > 0 ? null : "publicExportManifest:positions_missing",
+        publicPairCount > 0 ? null : "publicExportManifest:critiques_missing",
+        targetScaleOpen ? "targetScale:remaining_release_data" : null,
+      ],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/corpus-manifests",
+        corpusManifest?.id ? `/api/v1/corpus-manifests/${corpusManifest.id}` : null,
+        "/api/v1/export-manifests",
+        publicExportManifest?.id ? `/api/v1/export-manifests/${publicExportManifest.id}` : null,
+        ...targetGapRoutes,
+      ],
+      counts: { publicPositions: publicPositionCount, publicCritiques: publicPairCount },
+      targetGapIds: (targetGaps?.rows ?? []).filter((row) => row.remaining > 0).map((row) => row.id),
+    }),
+    publicDatasetReadinessRow({
+      id: "seven_dimension_labels",
+      label: "Seven-dimensional expert-supervised labels",
+      gateKind: "label_foundation",
+      status: itemLabelCount > 0 && labelSnapshot ? "ready" : "label_snapshot_missing",
+      sourceEvidenceIds: [labelSnapshot?.id, releaseArtifactEvidence?.labelSnapshotEvidence?.submittedArtifactId],
+      sourceStatuses: [labelSnapshotStatus],
+      reviewReasons: [itemLabelCount > 0 ? null : "labelSnapshot:item_labels_missing"],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/label-snapshots",
+        labelSnapshot?.id ? `/api/v1/label-snapshots/${labelSnapshot.id}` : null,
+      ],
+      counts: { itemLabels: itemLabelCount, dimensions: RUBRIC_DIMENSIONS.length },
+    }),
+    publicDatasetReadinessRow({
+      id: "confidence_and_triggered_explanations",
+      label: "Confidence and triggered explanations where available",
+      gateKind: "label_metadata",
+      status: labelMetadataManifest.rows.length > 0 ? "ready" : "label_metadata_manifest_missing",
+      sourceEvidenceIds: [trainingExport?.id, releaseArtifactEvidence?.trainingExportEvidence?.submittedArtifactId],
+      sourceStatuses: [trainingExportStatus],
+      reviewReasons: [labelMetadataManifest.rows.length > 0 ? null : "trainingExport:labelMetadataManifest_missing"],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/training-exports",
+        trainingExport?.id ? `/api/v1/training-exports/${trainingExport.id}` : null,
+      ],
+      counts: { labelMetadataRows: labelMetadataManifest.rows.length },
+    }),
+    publicDatasetReadinessRow({
+      id: "item_text_version_hashes",
+      label: "Item text and rendered-text version hashes",
+      gateKind: "reproducibility_manifest",
+      status: itemTextManifest.rows.length > 0 ? "ready" : "item_text_version_hash_manifest_missing",
+      sourceEvidenceIds: [trainingExport?.id],
+      sourceStatuses: [trainingExportStatus],
+      reviewReasons: [itemTextManifest.rows.length > 0 ? null : "trainingExport:itemTextVersionHashManifest_missing"],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/training-exports",
+        trainingExport?.id ? `/api/v1/training-exports/${trainingExport.id}` : null,
+      ],
+      counts: { itemTextVersionRows: itemTextManifest.rows.length },
+    }),
+    publicDatasetReadinessRow({
+      id: "rating_context_snapshot_manifest",
+      label: "Rating-context snapshot manifest",
+      gateKind: "reproducibility_manifest",
+      status: ratingContextManifest.rows.length > 0 ? "ready" : "rating_context_snapshot_manifest_missing",
+      sourceEvidenceIds: [trainingExport?.id],
+      sourceStatuses: [trainingExportStatus],
+      reviewReasons: [ratingContextManifest.rows.length > 0 ? null : "trainingExport:ratingContextSnapshotManifest_missing"],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/training-exports",
+        trainingExport?.id ? `/api/v1/training-exports/${trainingExport.id}` : null,
+        "/api/v1/rating-context-snapshots",
+      ],
+      counts: { ratingContextSnapshotRows: ratingContextManifest.rows.length },
+    }),
+    publicDatasetReadinessRow({
+      id: "label_snapshot",
+      label: "Immutable label snapshot",
+      gateKind: "release_object",
+      status: labelSnapshotStatus === "submitted_label_snapshot_matches_current_release_target" ? "ready" : "release_artifact_review_required",
+      sourceEvidenceIds: [labelSnapshot?.id, releaseArtifactEvidence?.labelSnapshotEvidence?.submittedArtifactId],
+      sourceStatuses: [labelSnapshotStatus],
+      reviewReasons:
+        labelSnapshotStatus === "submitted_label_snapshot_matches_current_release_target"
+          ? []
+          : [`labelSnapshotEvidence:${labelSnapshotStatus}`],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/label-snapshots",
+        labelSnapshot?.id ? `/api/v1/label-snapshots/${labelSnapshot.id}` : null,
+      ],
+    }),
+    publicDatasetReadinessRow({
+      id: "split_manifest",
+      label: "Public split manifest and protected split exclusions",
+      gateKind: "split_governance",
+      status:
+        publicExportManifest?.hiddenBenchmarkExcluded === true &&
+        publicExportManifest?.excludedSplits?.includes("hidden_benchmark") &&
+        publicExportManifest?.excludedSplits?.includes("internal_validation")
+          ? "ready"
+          : "protected_split_exclusion_review_required",
+      sourceEvidenceIds: [publicExportManifest?.id, releaseArtifactEvidence?.exportManifestEvidence?.submittedArtifactId],
+      sourceStatuses: [exportManifestStatus],
+      reviewReasons: [
+        publicExportManifest?.hiddenBenchmarkExcluded === true ? null : "publicExportManifest:hiddenBenchmarkExcluded",
+        publicExportManifest?.excludedSplits?.includes("hidden_benchmark") ? null : "publicExportManifest:excluded_hidden_benchmark",
+        publicExportManifest?.excludedSplits?.includes("internal_validation") ? null : "publicExportManifest:excluded_internal_validation",
+      ],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/export-manifests",
+        publicExportManifest?.id ? `/api/v1/export-manifests/${publicExportManifest.id}` : null,
+      ],
+      protectedExclusions: publicExportManifest?.excludedSplits ?? [],
+    }),
+    publicDatasetReadinessRow({
+      id: "corpus_manifest",
+      label: "Corpus composition manifest",
+      gateKind: "release_object",
+      status: corpusManifestStatus === "submitted_corpus_manifest_matches_current_release_counts" ? "ready" : "release_artifact_review_required",
+      sourceEvidenceIds: [corpusManifest?.id, releaseArtifactEvidence?.corpusManifestEvidence?.submittedArtifactId],
+      sourceStatuses: [corpusManifestStatus],
+      reviewReasons:
+        corpusManifestStatus === "submitted_corpus_manifest_matches_current_release_counts"
+          ? []
+          : [`corpusManifestEvidence:${corpusManifestStatus}`],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/corpus-manifests",
+        corpusManifest?.id ? `/api/v1/corpus-manifests/${corpusManifest.id}` : null,
+      ],
+      counts: corpusManifest?.counts ?? {},
+    }),
+    publicDatasetReadinessRow({
+      id: "dataset_card",
+      label: "Dataset card",
+      gateKind: "public_documentation",
+      status: "documentation_not_submitted",
+      sourceEvidenceIds: [],
+      sourceStatuses: ["not_submitted"],
+      reviewReasons: ["datasetCard:not_submitted"],
+      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections"],
+    }),
+    publicDatasetReadinessRow({
+      id: "methodology_report",
+      label: "Short methodology report",
+      gateKind: "public_documentation",
+      status: "documentation_not_submitted",
+      sourceEvidenceIds: [],
+      sourceStatuses: ["not_submitted"],
+      reviewReasons: ["methodologyReport:not_submitted"],
+      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-report-sections"],
+    }),
+    publicDatasetReadinessRow({
+      id: "hidden_protected_exclusions",
+      label: "Explicit hidden/protected exclusions",
+      gateKind: "split_governance",
+      status:
+        publicExportManifest?.hiddenBenchmarkExcluded === true && hiddenBenchmarkFreeze
+          ? "ready"
+          : "hidden_protected_exclusion_review_required",
+      sourceEvidenceIds: [publicExportManifest?.id, hiddenBenchmarkFreeze?.id],
+      sourceStatuses: [exportManifestStatus, hiddenBenchmarkFreeze?.releaseUseStatus ?? hiddenBenchmarkFreeze?.status],
+      reviewReasons: [
+        publicExportManifest?.hiddenBenchmarkExcluded === true ? null : "publicExportManifest:hiddenBenchmarkExcluded",
+        hiddenBenchmarkFreeze ? null : "hiddenBenchmarkFreeze:missing",
+      ],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/export-manifests",
+        publicExportManifest?.id ? `/api/v1/export-manifests/${publicExportManifest.id}` : null,
+        "/api/v1/benchmark-freeze-reports",
+      ],
+      protectedExclusions: publicExportManifest?.excludedSplits ?? [],
+    }),
+    publicDatasetReadinessRow({
+      id: "release_version_freeze",
+      label: "Release version freeze and artifact-link review",
+      gateKind: "release_freeze",
+      status: releaseFreezeOpen ? "blocked_by_release_freeze" : "ready",
+      sourceEvidenceIds: [releaseVersionManifest?.id, releaseVersionManifest?.submittedReleaseVersionId, releaseVersionManifest?.submittedReleaseFreezeId],
+      sourceStatuses: [
+        releaseVersionManifest?.releaseUseStatus,
+        releaseVersionManifest?.targetScaleStatus,
+        releaseVersionManifest?.linkedArtifactStatus,
+      ],
+      reviewReasons: [
+        releaseFreezeOpen ? `releaseVersionManifest:${releaseVersionManifest?.releaseUseStatus ?? "missing"}` : null,
+        releaseVersionManifest?.linkedArtifactStatus === "release_manifest_links_current_artifacts"
+          ? null
+          : `releaseVersionManifest:${releaseVersionManifest?.linkedArtifactStatus ?? "artifact_links_missing"}`,
+      ],
+      readbackRoutes: [routeBase, releaseReportRoute, "/api/v1/release-version-manifest"],
+    }),
+    publicDatasetReadinessRow({
+      id: "public_first_ladder_gate",
+      label: "Public-first ladder blocks leaderboard, API evaluator, and training-export launch",
+      gateKind: "release_ladder",
+      status: "downstream_blocked_until_dataset_v0_1_ready",
+      sourceEvidenceIds: [
+        releaseArtifactEvidence?.id,
+        releaseVersionManifest?.id,
+        targetGaps?.id,
+        validationDesign?.id,
+      ],
+      sourceStatuses: [releaseArtifactEvidence?.releaseUseStatus, releaseVersionManifest?.releaseUseStatus, targetGaps?.releaseUseStatus],
+      reviewReasons: [
+        targetScaleOpen ? "publicFirstLadder:target_scale_incomplete" : null,
+        releaseFreezeOpen ? "publicFirstLadder:release_not_frozen" : null,
+        "publicFirstLadder:dataset_card_and_methodology_required_before_downstream_public_launch",
+      ],
+      readbackRoutes: [
+        routeBase,
+        releaseReportRoute,
+        "/api/v1/release-version-manifest",
+        "/api/v1/release-report-sections",
+        "/api/v1/model-evaluation-reproducibility-checklist",
+      ],
+      downstreamArtifacts: ["public_leaderboard", "api_evaluator", "training_export_launch", "judge_model_launch"],
+    }),
+  ];
+  const openRows = rows.filter((row) => row.status !== "ready");
+  const status = targetScaleOpen
+    ? "public_dataset_v0_1_blocked_by_target_scale"
+    : releaseFreezeOpen
+      ? "public_dataset_v0_1_blocked_by_release_freeze"
+      : rows.some((row) => row.gateKind === "public_documentation" && row.status !== "ready")
+        ? "public_dataset_v0_1_missing_public_documentation"
+        : openRows.length
+          ? "public_dataset_v0_1_review_required"
+          : "public_dataset_v0_1_ready";
+  return {
+    id: `public-dataset-readiness-${releaseId}`,
+    releaseId,
+    artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+    artifactKind: "expert_rated_position_critique_dataset",
+    generatedAt: new Date().toISOString(),
+    releaseUseStatus: status,
+    publicFirstRule:
+      "Dataset v0.1 is the first serious public artifact; public leaderboard, API evaluator, public training-export launch, and judge-model launch remain downstream until this label foundation and split governance are ready.",
+    policy: {
+      architecture:
+        "Read-only projection over existing ReleaseVersion, CorpusManifest, LabelSnapshot, item-text/rating-context manifests, split manifest, and release-artifact evidence; it does not create a new product surface.",
+      exclusions:
+        "Hidden-benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes stay excluded unless a later governed release deprotects them.",
+      sideEffects:
+        "This report does not publish a dataset, launch a leaderboard, launch an API evaluator, create a training export, waive release gates, or submit operator evidence.",
+    },
+    releaseVersionManifestStatus: releaseVersionManifest?.releaseUseStatus ?? null,
+    targetScaleStatus: releaseVersionManifest?.targetScaleStatus ?? currentStatus,
+    targetGaps,
+    counts: publicDatasetReadinessCounts(rows),
+    rows,
+  };
+}
+
+function publicDatasetReadinessRow({
+  id,
+  label,
+  gateKind,
+  status,
+  sourceEvidenceIds = [],
+  sourceStatuses = [],
+  reviewReasons = [],
+  readbackRoutes = [],
+  counts = null,
+  targetGapIds = [],
+  protectedExclusions = null,
+  downstreamArtifacts = null,
+}) {
+  return {
+    id,
+    label,
+    gateKind,
+    status,
+    sourceEvidenceIds: uniqueStrings(sourceEvidenceIds),
+    sourceStatuses: uniqueStrings(sourceStatuses),
+    reviewReasons: uniqueStrings(reviewReasons),
+    readbackRoutes: uniqueStrings(readbackRoutes),
+    targetGapIds: uniqueStrings(targetGapIds),
+    ...(counts ? { counts } : {}),
+    ...(protectedExclusions ? { protectedExclusions } : {}),
+    ...(downstreamArtifacts ? { downstreamArtifacts } : {}),
+  };
+}
+
+function publicDatasetReadinessCounts(rows) {
+  const byStatus = countBy(rows, "status");
+  const byGateKind = countBy(rows, "gateKind");
+  return {
+    rows: rows.length,
+    readyRows: rows.filter((row) => row.status === "ready").length,
+    openRows: rows.filter((row) => row.status !== "ready").length,
+    blockedByTargetScaleRows: rows.filter((row) => row.status === "blocked_by_target_scale").length,
+    blockedByReleaseFreezeRows: rows.filter((row) => row.status === "blocked_by_release_freeze").length,
+    documentationRows: rows.filter((row) => row.gateKind === "public_documentation").length,
+    missingDocumentationRows: rows.filter((row) => row.gateKind === "public_documentation" && row.status !== "ready").length,
+    downstreamBlockedRows: rows.filter((row) => row.status === "downstream_blocked_until_dataset_v0_1_ready").length,
+    reviewReasonCount: rows.reduce((sum, row) => sum + row.reviewReasons.length, 0),
+    byStatus,
+    byGateKind,
+  };
+}
+
 export function buildSubmittedModelEvaluationArtifactEvidence(
   releaseId,
   { labelSnapshot, trainingExport, leaderboardReport, recalibratedEvaluation, modelFailureAudits },
@@ -33429,6 +33786,18 @@ export function buildOctoberReleaseReport(
       releaseReports: options.releaseReports ?? [],
     },
   );
+  const publicDatasetReadiness = buildPublicDatasetReadinessReport(releaseId, {
+    currentStatus,
+    targetGaps,
+    releaseVersionManifest,
+    releaseArtifactEvidence,
+    corpusManifest,
+    labelSnapshot,
+    trainingExport,
+    publicExportManifest,
+    hiddenBenchmarkFreeze,
+    validationDesign,
+  });
   const modelEvaluationArtifactEvidence = buildSubmittedModelEvaluationArtifactEvidence(
     releaseId,
     { labelSnapshot, trainingExport, leaderboardReport, recalibratedEvaluation, modelFailureAudits },
@@ -33660,6 +34029,7 @@ export function buildOctoberReleaseReport(
     octoberOperatingPlan,
     releaseVersionManifest,
     releaseArtifactEvidence,
+    publicDatasetReadiness,
     modelEvaluationArtifactEvidence,
     modelEvaluationReproducibilityChecklist,
     releaseClaimWarnings,
