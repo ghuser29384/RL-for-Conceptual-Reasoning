@@ -16365,6 +16365,11 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("metaphilosophyDecisionLogEntryPreviewRow(item)"));
   assert.ok(appSource.includes("rlhf93CompletionAuditPreviewRow(item)"));
   assert.ok(appSource.includes("function rlhf93CompletionAuditPreviewRow(item)"));
+  assert.ok(appSource.includes("workflowRlhf93RequirementGroupFilter"));
+  assert.ok(appSource.includes('url.searchParams.set("requirementGroup", state.workflowRlhf93RequirementGroupFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("targetGapId", state.workflowRlhf93TargetGapFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("unblockerExecutionStatus", state.workflowRlhf93UnblockerExecutionFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("hasCurrentUnblocker", state.workflowRlhf93HasUnblockerFilter)'));
   assert.ok(appSource.includes("function metaphilosophyDecisionLogEntryPreviewRow(item)"));
   assert.ok(appSource.includes('["Release claim roles", workflowUniqueHumanizedValues(items, "releaseClaimRole")]'));
   assert.ok(appSource.includes('["LMCA relationships", workflowUniqueHumanizedValues(items, "lmcaRelationship")]'));
@@ -16748,6 +16753,7 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("reports completion as unproven while target data"));
   assert.ok(architectureDoc.includes("current release-completion unblocker"));
   assert.ok(architectureDoc.includes("package dry-run/validate-only routes"));
+  assert.ok(architectureDoc.includes("target gap, unblocker phase/execution, current-unblocker presence"));
   assert.ok(architectureDoc.includes("does not create release gates, promote rejected or pruned ideas, create candidates, or mutate the main spec"));
   assert.ok(
     architectureDoc.includes(
@@ -23158,6 +23164,61 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   });
   assert.equal(rlhf93CompletionAuditClosed.status, 200, JSON.stringify(rlhf93CompletionAuditClosed.body));
   assert.ok(rlhf93CompletionAuditClosed.body.items.every((item) => item.completionState === "closed"));
+  assert.ok(rlhf93CompletionAudit.body.counts.bySourceStatus.not_submitted >= 2);
+  assert.ok(rlhf93CompletionAudit.body.counts.byReviewReason["datasetCard:not_submitted"] >= 1);
+  assert.ok(rlhf93CompletionAudit.body.counts.byTargetGapId.positions >= 1);
+  assert.ok(rlhf93CompletionAudit.body.counts.byUnblockerExecutionStatus.ready_to_collect_data >= 1);
+  assert.ok(rlhf93CompletionAudit.body.counts.withCurrentUnblocker >= 1);
+
+  const rlhf93CompletionAuditPublicDataset = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?requirementGroup=public_dataset_v0_1",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditPublicDataset.status, 200, JSON.stringify(rlhf93CompletionAuditPublicDataset.body));
+  assert.equal(rlhf93CompletionAuditPublicDataset.body.count, 13);
+  assert.ok(rlhf93CompletionAuditPublicDataset.body.items.every((item) => item.requirementGroup === "public_dataset_v0_1"));
+
+  const rlhf93CompletionAuditPublicDocs = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?requirementKind=public_documentation",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditPublicDocs.status, 200, JSON.stringify(rlhf93CompletionAuditPublicDocs.body));
+  assert.equal(rlhf93CompletionAuditPublicDocs.body.count, 2);
+  assert.ok(rlhf93CompletionAuditPublicDocs.body.items.every((item) => item.requirementKind === "public_documentation"));
+
+  const rlhf93CompletionAuditDatasetCardReason = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?reviewReason=${encodeURIComponent("datasetCard:not_submitted")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditDatasetCardReason.status, 200, JSON.stringify(rlhf93CompletionAuditDatasetCardReason.body));
+  assert.equal(rlhf93CompletionAuditDatasetCardReason.body.count, 1);
+  assert.equal(rlhf93CompletionAuditDatasetCardReason.body.items[0].id, "public-dataset-dataset_card");
+
+  const rlhf93CompletionAuditTargetGap = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?targetGapId=positions",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditTargetGap.status, 200, JSON.stringify(rlhf93CompletionAuditTargetGap.body));
+  assert.ok(rlhf93CompletionAuditTargetGap.body.count >= 1);
+  assert.ok(rlhf93CompletionAuditTargetGap.body.filteredCounts.byTargetGapId.positions >= 1);
+  assert.ok(rlhf93CompletionAuditTargetGap.body.items.some((item) => item.id === "october-target_scale_and_data_collection"));
+
+  const rlhf93CompletionAuditCurrentUnblocker = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?unblockerExecutionStatus=ready_to_collect_data&hasCurrentUnblocker=true",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditCurrentUnblocker.status, 200, JSON.stringify(rlhf93CompletionAuditCurrentUnblocker.body));
+  assert.ok(rlhf93CompletionAuditCurrentUnblocker.body.count >= 1);
+  assert.ok(
+    rlhf93CompletionAuditCurrentUnblocker.body.items.every(
+      (item) => item.unblocker?.executionStatus === "ready_to_collect_data",
+    ),
+  );
 
   const rlhf93CompletionAuditRouteFilter = await invokeApi(context, {
     method: "GET",

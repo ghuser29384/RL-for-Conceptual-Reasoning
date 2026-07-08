@@ -910,6 +910,15 @@ const state = {
   workflowMetaphilosophyBacklogExperimentFilter: "",
   workflowMetaphilosophyBacklogGateFilter: "",
   workflowMetaphilosophyBacklogDirectRequirementFilter: "",
+  workflowRlhf93RequirementGroupFilter: "",
+  workflowRlhf93RequirementKindFilter: "",
+  workflowRlhf93SourceStatusFilter: "",
+  workflowRlhf93EvidenceFilter: "",
+  workflowRlhf93ReviewReasonFilter: "",
+  workflowRlhf93TargetGapFilter: "",
+  workflowRlhf93UnblockerPhaseFilter: "",
+  workflowRlhf93UnblockerExecutionFilter: "",
+  workflowRlhf93HasUnblockerFilter: "",
   workflowRouteFilter: "",
   workflowArtifactKindFilter: "",
   workflowArtifactTypeFilter: "",
@@ -8117,6 +8126,94 @@ function workflowReadbackPanel(collection) {
           </select>
         </label>
         ${
+          collection.id === "rlhf93-completion-audit"
+            ? `<label>
+                <span>Requirement group</span>
+                <select id="workflowRlhf93RequirementGroupFilter">
+                  ${[
+                    "",
+                    "release_status",
+                    "october_completion",
+                    "metaphilosophy_deliverable",
+                    "public_dataset_v0_1",
+                    "candidate_generation_intake",
+                    "label_aggregation_reliability",
+                    "model_evaluation_reproducibility",
+                  ]
+                    .map(
+                      (item) =>
+                        `<option ${item === state.workflowRlhf93RequirementGroupFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All requirement groups")}</option>`,
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label>
+                <span>Requirement kind</span>
+                <input id="workflowRlhf93RequirementKindFilter" type="text" value="${escapeHtml(state.workflowRlhf93RequirementKindFilter)}" placeholder="public_documentation" />
+              </label>
+              <label>
+                <span>Source status</span>
+                <input id="workflowRlhf93SourceStatusFilter" type="text" value="${escapeHtml(state.workflowRlhf93SourceStatusFilter)}" placeholder="not_submitted" />
+              </label>
+              <label>
+                <span>Evidence id</span>
+                <input id="workflowRlhf93EvidenceFilter" type="text" value="${escapeHtml(state.workflowRlhf93EvidenceFilter)}" placeholder="target-gaps-october-2026-demo" />
+              </label>
+              <label>
+                <span>Review reason</span>
+                <input id="workflowRlhf93ReviewReasonFilter" type="text" value="${escapeHtml(state.workflowRlhf93ReviewReasonFilter)}" placeholder="datasetCard:not_submitted" />
+              </label>
+              <label>
+                <span>Target gap</span>
+                <select id="workflowRlhf93TargetGapFilter">
+                  ${targetGapIdFilters
+                    .map(
+                      (item) =>
+                        `<option ${item === state.workflowRlhf93TargetGapFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All target gaps")}</option>`,
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label>
+                <span>Unblocker phase</span>
+                <select id="workflowRlhf93UnblockerPhaseFilter">
+                  ${["", "collect_data", "resolve_data_blockers", "submit_operator_evidence", "review_current_evidence", "verify_release_completion"]
+                    .map(
+                      (item) =>
+                        `<option ${item === state.workflowRlhf93UnblockerPhaseFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All phases")}</option>`,
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label>
+                <span>Unblocker execution</span>
+                <select id="workflowRlhf93UnblockerExecutionFilter">
+                  ${operatorActionExecutionStatusFilters
+                    .map(
+                      (item) =>
+                        `<option ${item === state.workflowRlhf93UnblockerExecutionFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All execution states")}</option>`,
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label>
+                <span>Current unblocker</span>
+                <select id="workflowRlhf93HasUnblockerFilter">
+                  ${["", "true", "false"]
+                    .map(
+                      (item) =>
+                        `<option ${item === state.workflowRlhf93HasUnblockerFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? (item === "true" ? "Has current unblocker" : "No current unblocker") : "All blocker bindings")}</option>`,
+                    )
+                    .join("")}
+                </select>
+              </label>
+              <label>
+                <span>Route</span>
+                <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/public-dataset-readiness/public_first_ladder_gate" />
+              </label>`
+            : ""
+        }
+        ${
           collection.id === "metaphilosophy-architecture-layers"
             ? `<label>
                 <span>Claim role</span>
@@ -10466,6 +10563,9 @@ function rlhf93CompletionAuditPreviewRow(item) {
   const unblocker = item.unblocker ?? null;
   const packageManifest = unblocker?.packageManifest ?? null;
   const unblockerStatus = unblocker ? `${humanize(unblocker.phase ?? "blocked")} / ${humanize(unblocker.executionStatus ?? "not reported")}` : "not current blocker";
+  const targetGapIds = Array.isArray(item.targetGapIds) && item.targetGapIds.length
+    ? item.targetGapIds
+    : (Array.isArray(unblocker?.targetGapIds) ? unblocker.targetGapIds : []);
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10481,6 +10581,7 @@ function rlhf93CompletionAuditPreviewRow(item) {
         ["Status", humanize(item.status ?? item.releaseUseStatus ?? "not reported")],
         ["Evidence", evidenceIds],
         ["Source statuses", sourceStatuses],
+        ["Target gaps", workflowPreviewPathSummary(targetGapIds, "not linked", 5)],
         ["Review reasons", workflowPreviewReviewReasons(item)],
         ["Current unblocker", unblockerStatus],
         ["Starter template", packageManifest?.starterTemplateRoute ?? unblocker?.firstTemplateRoute ?? "not applicable"],
@@ -15542,6 +15643,17 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       state.workflowMetaphilosophyBacklogGateFilter = "";
       state.workflowMetaphilosophyBacklogDirectRequirementFilter = "";
     }
+    if (collection.id !== "rlhf93-completion-audit") {
+      state.workflowRlhf93RequirementGroupFilter = "";
+      state.workflowRlhf93RequirementKindFilter = "";
+      state.workflowRlhf93SourceStatusFilter = "";
+      state.workflowRlhf93EvidenceFilter = "";
+      state.workflowRlhf93ReviewReasonFilter = "";
+      state.workflowRlhf93TargetGapFilter = "";
+      state.workflowRlhf93UnblockerPhaseFilter = "";
+      state.workflowRlhf93UnblockerExecutionFilter = "";
+      state.workflowRlhf93HasUnblockerFilter = "";
+    }
     if (!isWorkflowRouteFilterCollection(collection)) {
       state.workflowRouteFilter = "";
     }
@@ -15812,6 +15924,15 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     ["workflowMetaphilosophyBacklogExperimentFilter", "workflowMetaphilosophyBacklogExperimentFilter", true],
     ["workflowMetaphilosophyBacklogGateFilter", "workflowMetaphilosophyBacklogGateFilter", true],
     ["workflowMetaphilosophyBacklogDirectRequirementFilter", "workflowMetaphilosophyBacklogDirectRequirementFilter", false],
+    ["workflowRlhf93RequirementGroupFilter", "workflowRlhf93RequirementGroupFilter", false],
+    ["workflowRlhf93RequirementKindFilter", "workflowRlhf93RequirementKindFilter", true],
+    ["workflowRlhf93SourceStatusFilter", "workflowRlhf93SourceStatusFilter", true],
+    ["workflowRlhf93EvidenceFilter", "workflowRlhf93EvidenceFilter", true],
+    ["workflowRlhf93ReviewReasonFilter", "workflowRlhf93ReviewReasonFilter", true],
+    ["workflowRlhf93TargetGapFilter", "workflowRlhf93TargetGapFilter", false],
+    ["workflowRlhf93UnblockerPhaseFilter", "workflowRlhf93UnblockerPhaseFilter", false],
+    ["workflowRlhf93UnblockerExecutionFilter", "workflowRlhf93UnblockerExecutionFilter", false],
+    ["workflowRlhf93HasUnblockerFilter", "workflowRlhf93HasUnblockerFilter", false],
   ].forEach(([elementId, stateKey, shouldTrim]) => {
     document.getElementById(elementId)?.addEventListener("change", (event) => {
       state[stateKey] = shouldTrim ? event.target.value.trim() : event.target.value;
@@ -18167,7 +18288,22 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowMetaphilosophyItemIdFilter) url.searchParams.set("id", state.workflowMetaphilosophyItemIdFilter);
     if (state.workflowMetaphilosophyStatusFilter) url.searchParams.set("status", state.workflowMetaphilosophyStatusFilter);
     if (state.workflowMetaphilosophyReadbackSourceFilter) url.searchParams.set("readbackSource", state.workflowMetaphilosophyReadbackSourceFilter);
-    if (collection.id === "rlhf93-completion-audit" && state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+    if (collection.id === "rlhf93-completion-audit") {
+      if (state.workflowRlhf93RequirementGroupFilter) {
+        url.searchParams.set("requirementGroup", state.workflowRlhf93RequirementGroupFilter);
+      }
+      if (state.workflowRlhf93RequirementKindFilter) url.searchParams.set("requirementKind", state.workflowRlhf93RequirementKindFilter);
+      if (state.workflowRlhf93SourceStatusFilter) url.searchParams.set("sourceStatus", state.workflowRlhf93SourceStatusFilter);
+      if (state.workflowRlhf93EvidenceFilter) url.searchParams.set("evidenceId", state.workflowRlhf93EvidenceFilter);
+      if (state.workflowRlhf93ReviewReasonFilter) url.searchParams.set("reviewReason", state.workflowRlhf93ReviewReasonFilter);
+      if (state.workflowRlhf93TargetGapFilter) url.searchParams.set("targetGapId", state.workflowRlhf93TargetGapFilter);
+      if (state.workflowRlhf93UnblockerPhaseFilter) url.searchParams.set("unblockerPhase", state.workflowRlhf93UnblockerPhaseFilter);
+      if (state.workflowRlhf93UnblockerExecutionFilter) {
+        url.searchParams.set("unblockerExecutionStatus", state.workflowRlhf93UnblockerExecutionFilter);
+      }
+      if (state.workflowRlhf93HasUnblockerFilter) url.searchParams.set("hasCurrentUnblocker", state.workflowRlhf93HasUnblockerFilter);
+      if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+    }
     if (collection.id === "metaphilosophy-architecture-layers" && state.workflowMetaphilosophyArchitectureRoleFilter) {
       url.searchParams.set("releaseClaimRole", state.workflowMetaphilosophyArchitectureRoleFilter);
     }

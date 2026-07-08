@@ -17051,12 +17051,18 @@ function rlhf93CompletionAuditFilters(searchParams) {
   return {
     id: value("id"),
     requirementId: value("requirementId"),
+    checklistRowId: value("checklistRowId") ?? value("rowId"),
     requirementGroup: value("requirementGroup") ?? value("group"),
     requirementKind: value("requirementKind") ?? value("kind"),
     status: value("status"),
+    completionState: value("completionState"),
     sourceStatus: value("sourceStatus"),
     evidenceId: value("evidenceId") ?? value("sourceEvidenceId"),
     reviewReason: value("reviewReason"),
+    targetGapId: value("targetGapId"),
+    unblockerPhase: value("unblockerPhase") ?? value("phase"),
+    unblockerExecutionStatus: value("unblockerExecutionStatus") ?? value("executionStatus"),
+    hasCurrentUnblocker: value("hasCurrentUnblocker") ?? value("currentUnblocker"),
     route: value("route"),
   };
 }
@@ -17065,12 +17071,18 @@ function rlhf93CompletionAuditMatchesFilters(item, filters) {
   return Object.entries(filters).every(([key, value]) => {
     if (!value) return true;
     if (key === "id") return item.id === value || item.requirementId === value || item.sourceRowId === value;
+    if (key === "checklistRowId") return rlhf93CompletionAuditChecklistRowIds(item).includes(value);
     if (key === "status") return rlhf93CompletionAuditMatchesStatus(item, value);
+    if (key === "completionState") return item.completionState === value;
     if (key === "sourceStatus") return Array.isArray(item.sourceStatuses) && item.sourceStatuses.includes(value);
     if (key === "evidenceId") {
       return item.sourceEvidenceId === value || (Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value));
     }
     if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
+    if (key === "targetGapId") return rlhf93CompletionAuditTargetGapIds(item).includes(value);
+    if (key === "unblockerPhase") return item.unblocker?.phase === value;
+    if (key === "unblockerExecutionStatus") return item.unblocker?.executionStatus === value;
+    if (key === "hasCurrentUnblocker") return booleanFilterMatches(value, Boolean(item.unblocker));
     if (key === "route") return item.routes.includes(value);
     return String(item?.[key] ?? "") === value;
   });
@@ -17143,6 +17155,28 @@ function rlhf93CompletionAuditItemRoutes(item) {
   ]);
 }
 
+function rlhf93CompletionAuditChecklistRowIds(item) {
+  return uniqueValues([
+    item?.checklistRowId,
+    item?.sourceRowId,
+    item?.sourceChecklistId,
+    ...(Array.isArray(item?.checklistRowIds) ? item.checklistRowIds : []),
+    ...(Array.isArray(item?.unblocker?.checklistRowIds) ? item.unblocker.checklistRowIds : []),
+  ]);
+}
+
+function rlhf93CompletionAuditTargetGapIds(item) {
+  return uniqueValues([
+    item?.targetGapId,
+    ...(Array.isArray(item?.targetGapIds) ? item.targetGapIds : []),
+    ...(Array.isArray(item?.unblocker?.targetGapIds) ? item.unblocker.targetGapIds : []),
+    ...(Array.isArray(item?.unblocker?.packageManifest?.targetGapIds) ? item.unblocker.packageManifest.targetGapIds : []),
+    ...(Array.isArray(item?.unblocker?.packageManifest?.executionSequencePreview)
+      ? item.unblocker.packageManifest.executionSequencePreview.map((step) => step.targetGapId)
+      : []),
+  ]);
+}
+
 function rlhf93CompletionAuditCounts(items) {
   return {
     rows: items.length,
@@ -17152,7 +17186,14 @@ function rlhf93CompletionAuditCounts(items) {
     byRequirementKind: countItemsBy(items, "requirementKind"),
     byStatus: countItemsBy(items, "status"),
     byCompletionState: countItemsBy(items, "completionState"),
+    byChecklistRow: countValues(items.flatMap(rlhf93CompletionAuditChecklistRowIds)),
     bySourceEvidenceId: countItemsBy(items, "sourceEvidenceId"),
+    bySourceStatus: countExpandedValues(items, "sourceStatuses"),
+    byReviewReason: countExpandedValues(items, "reviewReasons"),
+    byTargetGapId: countValues(items.flatMap(rlhf93CompletionAuditTargetGapIds)),
+    byUnblockerPhase: countValues(items.map((item) => item.unblocker?.phase).filter(Boolean)),
+    byUnblockerExecutionStatus: countValues(items.map((item) => item.unblocker?.executionStatus).filter(Boolean)),
+    withCurrentUnblocker: items.filter((item) => Boolean(item.unblocker)).length,
     byRoute: countValues(items.flatMap(rlhf93CompletionAuditItemRoutes)),
   };
 }
