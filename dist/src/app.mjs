@@ -8855,6 +8855,7 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Open rows", counts.openRows ?? "not reported"],
       ["File formats", workflowCountMapSummary(counts.byFileFormat)],
       ["Validation route", result.validationRoute ?? "not available"],
+      ["Review manifest route", result.sourceRoutes?.packageFileReviewManifest ?? "not available"],
     ];
   }
   if (collection.id === "public-dataset-publication-gate") {
@@ -9568,6 +9569,7 @@ function publicDatasetPackageValidationTemplatePreviewRow(item) {
         ["Format", item.fileFormat ? humanize(item.fileFormat) : "not reported"],
         ["Template hash", item.templateContentHash ?? "not reported"],
         ["Request body hash", item.validationRequestBodyHash ?? "not reported"],
+        ["Review manifest route", item.sourceRoutes?.packageFileReviewManifest ?? "not available"],
         ["Unchanged POST result", humanize(item.unchangedTemplateValidationExpectedStatus ?? "not reported")],
         ["Required fields", requiredFields],
         ["Write action", item.packageWriteActionAvailable ? "available" : "not exposed"],

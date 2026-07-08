@@ -8292,6 +8292,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(missingPublicDatasetPackageFileValidationAuth.status, 401);
 
+  const missingPublicDatasetPackageFileReviewManifestAuth = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/review-manifest",
+    body: JSON.stringify({ files: [] }),
+  });
+  assert.equal(missingPublicDatasetPackageFileReviewManifestAuth.status, 401);
+
   const missingPublicDatasetPublicationGateAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-publication-gate" });
   assert.equal(missingPublicDatasetPublicationGateAuth.status, 401);
 
@@ -8483,6 +8490,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
     body: JSON.stringify({ files: [] }),
   });
   assert.equal(deniedPublicDatasetPackageFileValidation.status, 403);
+
+  const deniedPublicDatasetPackageFileReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/review-manifest",
+    headers: { authorization: `Bearer ${raterToken}` },
+    body: JSON.stringify({ files: [] }),
+  });
+  assert.equal(deniedPublicDatasetPackageFileReviewManifest.status, 403);
 
   const deniedPublicDatasetPublicationGate = await invokeApi(context, {
     method: "GET",
@@ -10735,6 +10750,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReadiness.body.counts.downstreamBlockedRows, 1);
   assert.equal(publicDatasetReadiness.body.counts.byGateKind.public_documentation, 2);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-readiness"], 13);
+  assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 13);
+  assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 13);
+  assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 13);
   assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "dataset_card" && item.status === "documentation_not_submitted"));
   assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "methodology_report" && item.status === "documentation_not_submitted"));
   assert.ok(
@@ -10788,6 +10806,24 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetByRoute.body.count, 2);
   assert.equal(publicDatasetByRoute.body.filteredCounts.byRoute["/api/v1/release-version-manifest"], 2);
 
+  const publicDatasetByPackageValidationRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/public-dataset-package-files/validate/template")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetByPackageValidationRoute.status, 200, JSON.stringify(publicDatasetByPackageValidationRoute.body));
+  assert.equal(publicDatasetByPackageValidationRoute.body.count, 13);
+  assert.equal(publicDatasetByPackageValidationRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 13);
+
+  const publicDatasetByPackageReviewRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/public-dataset-package-files/review-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetByPackageReviewRoute.status, 200, JSON.stringify(publicDatasetByPackageReviewRoute.body));
+  assert.equal(publicDatasetByPackageReviewRoute.body.count, 13);
+  assert.equal(publicDatasetByPackageReviewRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 13);
+
   const publicDatasetById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/public-dataset-readiness/dataset_card",
@@ -10798,6 +10834,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetById.body.item.id, "dataset_card");
   assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-readiness/dataset_card"));
   assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-documents/template?documentKind=dataset_card"));
+  assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-package-files/validate/template"));
+  assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-package-files/review-manifest"));
   assert.ok(publicDatasetById.body.item.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template"));
 
   const publicDatasetMissing = await invokeApi(context, {
@@ -10933,6 +10971,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.match(publicDatasetReleasePackage.body.policy.scope, /expected package files/);
   assert.match(publicDatasetReleasePackage.body.policy.authority, /cannot create files/);
   assert.equal(publicDatasetReleasePackage.body.sourceRoutes.publicDatasetPackageManifest, "/api/v1/public-dataset-package-manifest");
+  assert.equal(publicDatasetReleasePackage.body.sourceRoutes.packageFileTemplates, "/api/v1/public-dataset-package-files/template");
+  assert.equal(publicDatasetReleasePackage.body.sourceRoutes.packageFileValidationTemplate, "/api/v1/public-dataset-package-files/validate/template");
+  assert.equal(publicDatasetReleasePackage.body.sourceRoutes.packageFileValidation, "/api/v1/public-dataset-package-files/validate");
+  assert.equal(publicDatasetReleasePackage.body.sourceRoutes.packageFileReviewManifest, "/api/v1/public-dataset-package-files/review-manifest");
+  assert.equal(publicDatasetReleasePackage.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 11);
+  assert.equal(publicDatasetReleasePackage.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 11);
+  assert.equal(publicDatasetReleasePackage.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 11);
 
   const releasePackageDatasetRecords = publicDatasetReleasePackage.body.items.find((item) => item.id === "release-cleared-position-critique-pairs");
   assert.equal(releasePackageDatasetRecords.status, "blocked_by_target_scale");
@@ -10945,6 +10990,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(releasePackageDatasetRecords.readinessRowIds.includes("release_cleared_position_critique_pairs"));
   assert.ok(releasePackageDatasetRecords.targetGapIds.includes("positions"));
   assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+  assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/template/release-cleared-position-critique-pairs"));
+  assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
+  assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/validate"));
+  assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
+  assert.ok(releasePackageDatasetRecords.verificationRoutes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
 
   const releasePackageLabelSnapshot = publicDatasetReleasePackage.body.items.find((item) => item.id === "label-snapshot");
   assert.equal(releasePackageLabelSnapshot.status, "review_required");
@@ -11048,12 +11098,18 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageFileTemplates.body.counts.bySourceArtifactStatus.ready, 4);
   assert.equal(publicDatasetPackageFileTemplates.body.counts.byPackageStepId["release-artifact-package"], 5);
   assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-package-files/template"], 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 11);
   assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-publication-gate"], 11);
   assert.match(publicDatasetPackageFileTemplates.body.policy.scope, /package-file templates/);
   assert.match(publicDatasetPackageFileTemplates.body.policy.templateOnly, /templateOnly=true/);
   assert.match(publicDatasetPackageFileTemplates.body.policy.authority, /cannot create package files/);
   assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.publicDatasetReleasePackage, "/api/v1/public-dataset-release-package");
   assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.publicDatasetPublicationGate, "/api/v1/public-dataset-publication-gate");
+  assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.packageFileValidationTemplate, "/api/v1/public-dataset-package-files/validate/template");
+  assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.packageFileValidation, "/api/v1/public-dataset-package-files/validate");
+  assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.packageFileReviewManifest, "/api/v1/public-dataset-package-files/review-manifest");
 
   const datasetRecordsTemplate = publicDatasetPackageFileTemplates.body.items.find((item) => item.id === "release-cleared-position-critique-pairs");
   assert.equal(datasetRecordsTemplate.status, "blocked_by_target_scale");
@@ -11067,6 +11123,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(datasetRecordsTemplate.requiredFields.includes("position_id"));
   assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-release-package/release-cleared-position-critique-pairs"));
   assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/template/release-cleared-position-critique-pairs"));
+  assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
+  assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate"));
+  assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
+  assert.ok(datasetRecordsTemplate.verificationRoutes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
   const datasetRecordsTemplateLine = JSON.parse(datasetRecordsTemplate.templateContent.trim());
   assert.equal(datasetRecordsTemplateLine.templateOnly, true);
   assert.equal(datasetRecordsTemplateLine.position_id, "replace_with_real_position_id");
@@ -11175,6 +11235,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
     publicDatasetPackageValidationTemplate.body.sourceRoutes.packageFileValidation,
     "/api/v1/public-dataset-package-files/validate",
   );
+  assert.equal(
+    publicDatasetPackageValidationTemplate.body.sourceRoutes.packageFileReviewManifest,
+    "/api/v1/public-dataset-package-files/review-manifest",
+  );
   assert.match(publicDatasetPackageValidationTemplate.body.policy.scope, /validation request template/);
   assert.match(publicDatasetPackageValidationTemplate.body.policy.templateOnly, /replace it with reviewed release evidence/);
   assert.match(publicDatasetPackageValidationTemplate.body.policy.authority, /cannot validate by itself/);
@@ -11193,6 +11257,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(validationDatasetRecordsTemplate.packageWriteActionAvailable, false);
   assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate/template/release-cleared-position-critique-pairs"));
   assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/validate"));
+  assert.ok(validationDatasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
 
   const publicDatasetPackageValidationTemplateJsonl = await invokeApi(context, {
     method: "GET",
@@ -11242,6 +11307,33 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.missingFiles, 0);
   assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.unchangedTemplateFiles, 11);
   assert.equal(unchangedPackageFileValidationFromTemplate.body.counts.invalidContentFiles, 11);
+
+  const unchangedPackageReviewManifestFromTemplate = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/review-manifest",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(publicDatasetPackageValidationTemplate.body.requestBodyTemplate),
+  });
+  assert.equal(unchangedPackageReviewManifestFromTemplate.status, 200, JSON.stringify(unchangedPackageReviewManifestFromTemplate.body));
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.resourceKey, "publicDatasetPackageReviewManifest");
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.reviewOnly, true);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.noSideEffects, true);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageReviewStatus, "public_dataset_package_review_blocked_by_invalid_files");
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageValidationStatus, "public_dataset_package_files_invalid");
+  assert.match(unchangedPackageReviewManifestFromTemplate.body.packageManifestHash, /^sha256:/);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageWriteActionAvailable, false);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.publicationActionAvailable, false);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.validationSummary.counts.unchangedTemplateFiles, 11);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageManifest.files.length, 11);
+  assert.equal(unchangedPackageReviewManifestFromTemplate.body.packageManifest.files[0].submittedContentHash, validationDatasetRecordsTemplate.templateContentHash);
+  assert.equal(
+    unchangedPackageReviewManifestFromTemplate.body.sourceRoutes.packageFileValidation,
+    "/api/v1/public-dataset-package-files/validate",
+  );
+  assert.equal(
+    unchangedPackageReviewManifestFromTemplate.body.sourceRoutes.packageFileReviewManifest,
+    "/api/v1/public-dataset-package-files/review-manifest",
+  );
 
   const unchangedPackageFileValidation = await invokeApi(context, {
     method: "POST",
@@ -11338,6 +11430,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
     structurallyValidBlockedPackageValidation.body.sourceRoutes.packageFileTemplates,
     "/api/v1/public-dataset-package-files/template",
   );
+  assert.equal(
+    structurallyValidBlockedPackageValidation.body.sourceRoutes.packageFileValidationTemplate,
+    "/api/v1/public-dataset-package-files/validate/template",
+  );
   const validBlockedDatasetRecords = structurallyValidBlockedPackageValidation.body.items.find(
     (item) => item.id === "release-cleared-position-critique-pairs",
   );
@@ -11348,6 +11444,57 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(validBlockedExpertLabels.contentStatus, "content_structurally_valid");
   assert.equal(validBlockedExpertLabels.validationStatus, "blocked_by_publication_gate");
   assert.equal(validBlockedExpertLabels.packageFileReadyForReview, false);
+
+  const structurallyValidBlockedPackageReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/review-manifest",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      files: publicDatasetPackageFileTemplates.body.items.map((item) => ({
+        expectedFilename: item.expectedFilename,
+        content: packageValidationContentForTemplate(item),
+      })),
+    }),
+  });
+  assert.equal(
+    structurallyValidBlockedPackageReviewManifest.status,
+    200,
+    JSON.stringify(structurallyValidBlockedPackageReviewManifest.body),
+  );
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.resourceKey, "publicDatasetPackageReviewManifest");
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.reviewOnly, true);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.noSideEffects, true);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageValidationStatus, "public_dataset_package_files_valid_but_release_blocked");
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageReviewStatus, "public_dataset_package_review_blocked_by_release_gates");
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.releasePackageStatus, "public_dataset_release_package_blocked");
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.publicationGateStatus, "public_dataset_publication_blocked");
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageReadyForPublicationReview, false);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageWriteActionAvailable, false);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.publicationActionAvailable, false);
+  assert.match(structurallyValidBlockedPackageReviewManifest.body.packageManifestHash, /^sha256:/);
+  assert.equal(
+    structurallyValidBlockedPackageReviewManifest.body.packageManifest.packageManifestHash,
+    structurallyValidBlockedPackageReviewManifest.body.packageManifestHash,
+  );
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageManifest.manifestVersion, "dataset_v0_1_package_review_manifest_v1");
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.reviewManifestFiles, 11);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.submittedFileHashes, 11);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.structurallyValidFiles, 11);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.counts.readyForReviewFiles, 0);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageManifest.files.length, 11);
+  assert.equal(structurallyValidBlockedPackageReviewManifest.body.packageManifest.unexpectedFiles.length, 0);
+  const reviewManifestDatasetRecords = structurallyValidBlockedPackageReviewManifest.body.packageManifest.files.find(
+    (item) => item.id === "release-cleared-position-critique-pairs",
+  );
+  assert.equal(reviewManifestDatasetRecords.contentStatus, "content_structurally_valid");
+  assert.equal(reviewManifestDatasetRecords.validationStatus, "blocked_by_target_scale");
+  assert.match(reviewManifestDatasetRecords.submittedContentHash, /^sha256:/);
+  assert.equal(reviewManifestDatasetRecords.packageFileReadyForReview, false);
+  assert.ok(reviewManifestDatasetRecords.reviewReasons.length === 0);
+  assert.equal(
+    structurallyValidBlockedPackageReviewManifest.body.sourceRoutes.packageFileValidationTemplate,
+    "/api/v1/public-dataset-package-files/validate/template",
+  );
 
   const publicDatasetDownstreamLaunches = await invokeApi(context, {
     method: "GET",
@@ -11479,10 +11626,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGate.body.counts.byReleasePackageArtifactId["release-cleared-position-critique-pairs"], 2);
   assert.equal(publicDatasetPublicationGate.body.counts.byDownstreamArtifact.public_leaderboard, 2);
   assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-publication-gate"], 7);
+  assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 7);
+  assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 7);
+  assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 7);
   assert.match(publicDatasetPublicationGate.body.policy.scope, /publication preflight/);
   assert.match(publicDatasetPublicationGate.body.policy.authority, /cannot publish a dataset/);
   assert.equal(publicDatasetPublicationGate.body.sourceRoutes.publicDatasetReleasePackage, "/api/v1/public-dataset-release-package");
   assert.equal(publicDatasetPublicationGate.body.sourceRoutes.publicDatasetDownstreamLaunches, "/api/v1/public-dataset-downstream-launches");
+  assert.equal(publicDatasetPublicationGate.body.sourceRoutes.packageFileValidationTemplate, "/api/v1/public-dataset-package-files/validate/template");
+  assert.equal(publicDatasetPublicationGate.body.sourceRoutes.packageFileValidation, "/api/v1/public-dataset-package-files/validate");
+  assert.equal(publicDatasetPublicationGate.body.sourceRoutes.packageFileReviewManifest, "/api/v1/public-dataset-package-files/review-manifest");
 
   const targetDataPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "target-data-ready");
   assert.equal(targetDataPublicationGate.status, "blocked_by_target_scale");
@@ -15140,6 +15293,8 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageFileValidationTemplate"'));
   assert.ok(appSource.includes("function publicDatasetPackageValidationTemplatePreviewRow(item)"));
   assert.ok(appSource.includes('["Validation route", result.validationRoute ?? "not available"]'));
+  assert.ok(appSource.includes('["Review manifest route", result.sourceRoutes?.packageFileReviewManifest ?? "not available"]'));
+  assert.ok(appSource.includes('["Review manifest route", item.sourceRoutes?.packageFileReviewManifest ?? "not available"]'));
   assert.ok(appSource.includes('["Unchanged POST result", humanize(item.unchangedTemplateValidationExpectedStatus ?? "not reported")]'));
   assert.ok(appSource.includes('id: "public-dataset-publication-gate"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-publication-gate"'));
@@ -15527,6 +15682,11 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/template"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileTemplate"));
   assert.ok(architectureDoc.includes("template content hashes, required field placeholders, replacement-required flags"));
+  assert.ok(architectureDoc.includes("Release-package artifact rows, package-file template rows, and publication-gate rows all carry"));
+  assert.ok(architectureDoc.includes("public-dataset readiness rows also include the package-file template"));
+  assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-files/review-manifest"));
+  assert.ok(architectureDoc.includes("publicDatasetPackageReviewManifest"));
+  assert.ok(architectureDoc.includes("does not store package contents, append evidence, create files, publish the dataset"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/validate/template"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileValidationTemplate"));
   assert.ok(architectureDoc.includes("unchanged template bodies are expected to fail validation"));

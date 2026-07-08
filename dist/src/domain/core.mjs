@@ -16304,6 +16304,12 @@ function latestSubmittedReleaseArtifact(records = [], releaseId) {
 }
 
 const PUBLIC_DATASET_ARTIFACT_NAME = "Metaphilosophy Critique Ratings Dataset v0.1";
+const publicDatasetPackageFileReadbackRoutes = [
+  "/api/v1/public-dataset-package-files/template",
+  "/api/v1/public-dataset-package-files/validate/template",
+  "/api/v1/public-dataset-package-files/validate",
+  "/api/v1/public-dataset-package-files/review-manifest",
+];
 const publicDatasetDocumentKinds = new Set(["dataset_card", "methodology_report"]);
 
 function latestSubmittedPublicDatasetDocument(records = [], releaseId, documentKind) {
@@ -16859,7 +16865,7 @@ function publicDatasetReadinessRow({
     sourceEvidenceIds: uniqueStrings(sourceEvidenceIds),
     sourceStatuses: uniqueStrings(sourceStatuses),
     reviewReasons: uniqueStrings(reviewReasons),
-    readbackRoutes: uniqueStrings([...readbackRoutes, ...templateReadbackRoutes]),
+    readbackRoutes: uniqueStrings([...readbackRoutes, ...templateReadbackRoutes, ...publicDatasetPackageFileReadbackRoutes]),
     templateReadbackRoutes: uniqueStrings(templateReadbackRoutes),
     targetGapIds: uniqueStrings(targetGapIds),
     ...(counts ? { counts } : {}),

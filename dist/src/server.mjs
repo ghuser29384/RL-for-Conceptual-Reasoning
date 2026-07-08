@@ -268,6 +268,10 @@ import { createLocalAuditStore } from "./storage/local-audit-store.mjs";
 
 const releaseId = "october-2026-demo";
 const publicDatasetArtifactName = "Metaphilosophy Critique Ratings Dataset v0.1";
+const publicDatasetPackageFileTemplateRoute = "/api/v1/public-dataset-package-files/template";
+const publicDatasetPackageFileValidationTemplateRoute = "/api/v1/public-dataset-package-files/validate/template";
+const publicDatasetPackageFileValidationRoute = "/api/v1/public-dataset-package-files/validate";
+const publicDatasetPackageFileReviewManifestRoute = "/api/v1/public-dataset-package-files/review-manifest";
 const clientSurfaceCspHeader = clientSurfaceCspHeaderValue(REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
 const clientSurfaceSecurityHeaders = {
   "content-security-policy": clientSurfaceCspHeader,
@@ -7939,6 +7943,10 @@ export async function handleApiRequest(request, response, url, context) {
     await publicDatasetPackageFileValidationEndpoint(request, response, context);
     return;
   }
+  if (request.method === "POST" && url.pathname === publicDatasetPackageFileReviewManifestRoute) {
+    await publicDatasetPackageFileReviewManifestEndpoint(request, response, context);
+    return;
+  }
   const publicDatasetDownstreamLaunchMatch = url.pathname.match(/^\/api\/v1\/public-dataset-downstream-launches(?:\/([^/]+))?$/);
   if (request.method === "GET" && publicDatasetDownstreamLaunchMatch) {
     const itemId = publicDatasetDownstreamLaunchMatch[1] ? decodeURIComponent(publicDatasetDownstreamLaunchMatch[1]) : null;
@@ -12154,6 +12162,12 @@ function publicDatasetPackageManifestReadback(report, options = {}) {
       releaseArtifactTemplates: "/api/v1/release-artifacts/template",
       releaseVersionTemplates: "/api/v1/release-version-manifest/template",
       publicDatasetDocumentTemplates: "/api/v1/public-dataset-documents/template",
+      publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
+      publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
+      packageFileTemplates: publicDatasetPackageFileTemplateRoute,
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileValidation: publicDatasetPackageFileValidationRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
     },
     filters,
     count: items.length,
@@ -12621,6 +12635,11 @@ function publicDatasetReleasePackageReadback(report, options = {}) {
       publicDatasetPackageManifest: "/api/v1/public-dataset-package-manifest",
       publicDatasetDocuments: "/api/v1/public-dataset-documents",
       releaseArtifactTemplates: "/api/v1/release-artifacts/template",
+      packageFileTemplates: publicDatasetPackageFileTemplateRoute,
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileValidation: publicDatasetPackageFileValidationRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
     },
     filters,
     count: items.length,
@@ -12662,6 +12681,12 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
     "/api/v1/public-dataset-readiness",
     "/api/v1/public-dataset-package-manifest",
     packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+    publicDatasetPackageFileTemplateRoute,
+    `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`,
+    publicDatasetPackageFileValidationTemplateRoute,
+    `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`,
+    publicDatasetPackageFileValidationRoute,
+    publicDatasetPackageFileReviewManifestRoute,
     "/api/release/report",
     ...readinessRows.flatMap(publicDatasetReadinessRoutes),
     ...(Array.isArray(packageStep?.routes) ? packageStep.routes : []),
@@ -12697,6 +12722,12 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
       "/api/v1/public-dataset-readiness",
       "/api/v1/public-dataset-package-manifest",
       packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+      publicDatasetPackageFileTemplateRoute,
+      `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`,
+      publicDatasetPackageFileValidationTemplateRoute,
+      `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`,
+      publicDatasetPackageFileValidationRoute,
+      publicDatasetPackageFileReviewManifestRoute,
     ]),
     routes,
   };
@@ -13165,6 +13196,10 @@ function publicDatasetPublicationGateReadback(report, options = {}) {
       publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
       publicDatasetDownstreamLaunches: "/api/v1/public-dataset-downstream-launches",
       publicFirstGate: "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+      packageFileTemplates: publicDatasetPackageFileTemplateRoute,
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileValidation: publicDatasetPackageFileValidationRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
     },
     filters,
     count: items.length,
@@ -13480,6 +13515,9 @@ function publicDatasetPackageFileTemplateReadback(report, options = {}) {
       publicDatasetPackageManifest: "/api/v1/public-dataset-package-manifest",
       publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
       publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileValidation: publicDatasetPackageFileValidationRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
     },
     filters,
     count: items.length,
@@ -13510,8 +13548,12 @@ function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, rele
   const status = publicDatasetPackageFileTemplateStatus(artifact, publicationGate);
   const templateContent = publicDatasetPackageFileTemplateContent(artifact, report, publicationGate);
   const routes = uniqueValues([
-    "/api/v1/public-dataset-package-files/template",
-    `/api/v1/public-dataset-package-files/template/${encodeURIComponent(artifact.id)}`,
+    publicDatasetPackageFileTemplateRoute,
+    `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+    publicDatasetPackageFileValidationTemplateRoute,
+    `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+    publicDatasetPackageFileValidationRoute,
+    publicDatasetPackageFileReviewManifestRoute,
     "/api/v1/public-dataset-release-package",
     `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`,
     "/api/v1/public-dataset-publication-gate",
@@ -13559,7 +13601,12 @@ function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, rele
       "/api/v1/public-dataset-release-package",
       `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`,
       "/api/v1/public-dataset-publication-gate",
-      "/api/v1/public-dataset-package-files/template",
+      publicDatasetPackageFileTemplateRoute,
+      `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+      publicDatasetPackageFileValidationTemplateRoute,
+      `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+      publicDatasetPackageFileValidationRoute,
+      publicDatasetPackageFileReviewManifestRoute,
     ]),
     routes,
   };
@@ -13732,6 +13779,7 @@ function publicDatasetPackageFileValidationTemplateReadback(report, options = {}
       packageFileTemplates: "/api/v1/public-dataset-package-files/template",
       packageFileValidationTemplate: "/api/v1/public-dataset-package-files/validate/template",
       packageFileValidation: "/api/v1/public-dataset-package-files/validate",
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
       publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
       publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
     },
@@ -13810,9 +13858,10 @@ function publicDatasetPackageFileValidationTemplateItem(template, sequence, temp
     verificationRoutes: uniqueValues([
       "/api/release/report",
       "/api/v1/public-dataset-package-files/template",
-      "/api/v1/public-dataset-package-files/validate/template",
-      "/api/v1/public-dataset-package-files/validate",
-      "/api/v1/public-dataset-publication-gate",
+    publicDatasetPackageFileValidationTemplateRoute,
+    publicDatasetPackageFileValidationRoute,
+    publicDatasetPackageFileReviewManifestRoute,
+    "/api/v1/public-dataset-publication-gate",
     ]),
     routes,
   };
@@ -13902,6 +13951,28 @@ async function publicDatasetPackageFileValidationEndpoint(request, response, con
   sendJson(response, 200, publicDatasetPackageFileValidationReadback(report, body, session.user));
 }
 
+async function publicDatasetPackageFileReviewManifestEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const roles = ["admin", "auditor"];
+  if (!roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: roles });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(request);
+  } catch (error) {
+    sendJson(response, 400, { error: "invalid_json_body", detail: error.message });
+    return;
+  }
+  const { report } = await buildCurrentReleaseArtifacts(context);
+  sendJson(response, 200, publicDatasetPackageFileReviewManifestReadback(report, body, session.user));
+}
+
 function publicDatasetPackageFileValidationReadback(report, body = {}, actor = {}) {
   const templateReadback = publicDatasetPackageFileTemplateReadback(report);
   const expectedTemplates = Array.isArray(templateReadback.items) ? templateReadback.items : [];
@@ -13947,12 +14018,122 @@ function publicDatasetPackageFileValidationReadback(report, body = {}, actor = {
     sourceRoutes: {
       releaseReport: "/api/release/report",
       packageFileTemplates: "/api/v1/public-dataset-package-files/template",
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
       publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
       publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
     },
     counts,
     unexpectedFiles,
     items,
+  };
+}
+
+function publicDatasetPackageFileReviewManifestReadback(report, body = {}, actor = {}) {
+  const validation = publicDatasetPackageFileValidationReadback(report, body, actor);
+  const files = validation.items.map((item) => ({
+    id: item.id,
+    releasePackageArtifactId: item.releasePackageArtifactId,
+    artifactKind: item.artifactKind,
+    fileFormat: item.fileFormat,
+    expectedFilename: item.expectedFilename,
+    submittedContentHash: item.submittedContentHash,
+    submittedHashMatchesContent: item.submittedHashMatchesContent ?? null,
+    validationStatus: item.validationStatus,
+    contentStatus: item.contentStatus,
+    packageFileReadyForReview: item.packageFileReadyForReview === true,
+    parsedRecordCount: item.parsedRecordCount ?? null,
+    readinessRowIds: Array.isArray(item.readinessRowIds) ? item.readinessRowIds : [],
+    packageStepId: item.packageStepId ?? null,
+    requiredFields: Array.isArray(item.requiredFields) ? item.requiredFields : [],
+    reviewReasons: Array.isArray(item.reviewReasons) ? item.reviewReasons : [],
+    verificationRoutes: Array.isArray(item.verificationRoutes) ? item.verificationRoutes : [],
+  }));
+  const unexpectedFiles = validation.unexpectedFiles.map((file) => ({
+    sequence: file.sequence,
+    expectedFilename: file.expectedFilename,
+    submittedContentHash: typeof file.content === "string" ? `sha256:${sha256(file.content)}` : file.submittedHash ?? null,
+    submittedHash: file.submittedHash ?? null,
+    contentProvided: typeof file.content === "string",
+  }));
+  const manifestPayload = {
+    releaseId: validation.releaseId,
+    artifactName: publicDatasetArtifactName,
+    artifactKind: "expert_rated_position_critique_dataset",
+    packageValidationStatus: validation.packageValidationStatus,
+    releasePackageStatus: validation.releasePackageStatus,
+    publicationGateStatus: validation.publicationGateStatus,
+    files: files.map((file) => ({
+      expectedFilename: file.expectedFilename,
+      artifactKind: file.artifactKind,
+      fileFormat: file.fileFormat,
+      submittedContentHash: file.submittedContentHash,
+      validationStatus: file.validationStatus,
+      contentStatus: file.contentStatus,
+    })),
+    unexpectedFiles,
+  };
+  const packageManifestHash = `sha256:${sha256(canonicalJson(manifestPayload))}`;
+  const packageReviewStatus =
+    validation.packageValidationStatus === "public_dataset_package_files_invalid"
+      ? "public_dataset_package_review_blocked_by_invalid_files"
+      : validation.packageReadyForPublicationReview
+        ? "public_dataset_package_review_ready_for_governed_publication_review"
+        : "public_dataset_package_review_blocked_by_release_gates";
+  return {
+    id: `public-dataset-package-review-manifest-${report.releaseId ?? releaseId}`,
+    releaseId: validation.releaseId,
+    generatedAt: validation.generatedAt,
+    generatedBy: actor.id ?? null,
+    resourceKey: "publicDatasetPackageReviewManifest",
+    reviewOnly: true,
+    noSideEffects: true,
+    releaseUseStatus: validation.releaseUseStatus,
+    releasePackageStatus: validation.releasePackageStatus,
+    publicationGateStatus: validation.publicationGateStatus,
+    packageValidationStatus: validation.packageValidationStatus,
+    packageReviewStatus,
+    packageManifestHash,
+    packageReadyForPublicationReview: validation.packageReadyForPublicationReview,
+    packageWriteActionAvailable: false,
+    publicationActionAvailable: false,
+    policy: {
+      scope:
+        "Review-only Dataset v0.1 package manifest preflight. It derives a content-addressed package manifest from submitted file hashes after validation, without storing package contents or publishing anything.",
+      access:
+        "Admin/auditor only because package files may contain release ids, public documentation, source evidence pointers, exclusion manifests, and release-governance metadata.",
+      authority:
+        "This review manifest does not create package files, append workflow evidence, publish a dataset, launch downstream surfaces, deprotect hidden/protected content, or waive release/package/publication gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      packageFileTemplates: publicDatasetPackageFileTemplateRoute,
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileValidation: publicDatasetPackageFileValidationRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
+      publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
+    },
+    validationSummary: {
+      id: validation.id,
+      packageValidationStatus: validation.packageValidationStatus,
+      packageReadyForPublicationReview: validation.packageReadyForPublicationReview,
+      counts: validation.counts,
+    },
+    counts: {
+      ...validation.counts,
+      reviewManifestFiles: files.length,
+      submittedFileHashes: files.filter((file) => file.submittedContentHash).length,
+      unexpectedFileHashes: unexpectedFiles.filter((file) => file.submittedContentHash).length,
+    },
+    packageManifest: {
+      manifestVersion: "dataset_v0_1_package_review_manifest_v1",
+      packageManifestHash,
+      artifactName: publicDatasetArtifactName,
+      releaseId: validation.releaseId,
+      files,
+      unexpectedFiles,
+    },
   };
 }
 
