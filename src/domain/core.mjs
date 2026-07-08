@@ -28711,11 +28711,20 @@ function releaseCompletionChecklistRowIsOpen(row) {
 }
 
 function releaseCompletionNavigationGroup(phase, executionStatus, operatorAction, details = {}) {
+  const runbookGroupRoute =
+    details.runbookGroupRoute ?? `/api/v1/october-completion-runbook?executionStatus=${encodeURIComponent(executionStatus)}`;
+  const operatorActionGroupRoute =
+    details.operatorActionGroupRoute ??
+    (phase === "verify_release_completion"
+      ? null
+      : `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(executionStatus)}`);
   return {
     sequence: null,
     phase,
     executionStatus,
     operatorAction,
+    runbookGroupRoute,
+    operatorActionGroupRoute,
     stepCount: details.stepCount ?? 0,
     targetGapIds: uniqueStrings(details.targetGapIds ?? []),
     checklistRowIds: uniqueStrings(details.checklistRowIds ?? []),

@@ -9181,6 +9181,13 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
   const manifestStatus =
     currentBlockingPackageManifest?.status ??
     (navigation.currentBlockingPhase === "collect_data" ? "target_data_package_manifest_unavailable" : "no_current_target_data_package_manifest");
+  const sourceRunbookGroup = currentBlockingPackageManifest?.sourceRunbookGroup ?? navigation.currentBlockingGroup ?? null;
+  const sourceRunbookGroupRoute =
+    sourceRunbookGroup?.runbookGroupRoute ??
+    navigation.routes?.currentBlockingRunbookRoute ??
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data";
+  const sourceActionGroupRoute =
+    sourceRunbookGroup?.operatorActionGroupRoute ?? "/api/v1/operator-action-items?executionStatus=ready_to_collect_data";
   return {
     id: `target-data-current-package-manifest-${report.releaseId ?? releaseId}`,
     releaseId: report.releaseId ?? releaseId,
@@ -9190,6 +9197,8 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
     sourceRunbookRoute: navigation.routes?.runbookRoute ?? "/api/v1/october-completion-runbook",
     sourceCurrentBlockingRunbookRoute:
       navigation.routes?.currentBlockingRunbookRoute ?? "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+    sourceRunbookGroupRoute,
+    sourceActionGroupRoute,
     sourceCollectionPlanRoute:
       currentBlockingPackageManifest?.sourceCollectionPlanRoute ?? "/api/v1/target-gaps/collection-plan?executionStatus=ready_to_collect_data",
     releaseUseStatus: navigation.releaseUseStatus ?? report.currentStatus ?? "release_completion_navigation_missing",
@@ -9234,6 +9243,8 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       fullTemplateRoute: currentBlockingPackageManifest?.templateStarter?.fullTemplateRoute ?? null,
       sourceReportRoute: "/api/release/report",
       sourceRunbookRoute: navigation.routes?.runbookRoute ?? "/api/v1/october-completion-runbook",
+      sourceRunbookGroupRoute,
+      sourceActionGroupRoute,
       sourceCollectionPlanRoute:
         currentBlockingPackageManifest?.sourceCollectionPlanRoute ?? "/api/v1/target-gaps/collection-plan?executionStatus=ready_to_collect_data",
     },
@@ -9918,6 +9929,8 @@ function octoberCompletionRunbookMatchesFilters(item, filters) {
 
 function octoberCompletionRunbookRoutes(item) {
   return uniqueValues([
+    item.runbookGroupRoute,
+    item.operatorActionGroupRoute,
     item.runbookStepRoute,
     item.route,
     item.writeRoute,
@@ -10031,6 +10044,10 @@ function octoberCompletionRunbookStepWithExecutionStatus(item) {
   return {
     ...item,
     runbookStepRoute: `/api/v1/october-completion-runbook/${encodeURIComponent(item.id ?? item.sequence ?? "step")}`,
+    runbookGroupRoute: item?.runbookGroupRoute ?? octoberCompletionRunbookGroupRoute(executionStatus),
+    operatorActionGroupRoute:
+      item?.operatorActionGroupRoute ??
+      (item?.phase === "verify_release_completion" ? null : `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(executionStatus)}`),
     executionStatus,
     executionStatusReason:
       item?.executionStatusReason ?? octoberCompletionRunbookExecutionStatusReason(item, executionStatus),
@@ -10144,7 +10161,11 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
       const reviewRoutes = octoberCompletionRunbookReviewRoutesForGroup(group.executionStatus);
       const firstPackageManifestRoute = octoberCompletionRunbookPackageManifestRouteForGroup(group.executionStatus);
       const targetDataBlockerRoutes = octoberCompletionRunbookTargetDataBlockerRoutesForGroup(group.executionStatus);
+      const runbookGroupRoute = octoberCompletionRunbookGroupRoute(group.executionStatus);
+      const operatorActionGroupRoute = octoberCompletionRunbookOperatorActionGroupRoute(group);
       const routes = uniqueValues([
+        runbookGroupRoute,
+        operatorActionGroupRoute,
         firstPackageManifestRoute,
         ...Object.values(reviewRoutes),
         ...Object.values(targetDataBlockerRoutes),
@@ -10174,6 +10195,8 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
         phaseSequence: group.phaseSequence,
         executionStatus: group.executionStatus,
         operatorAction: group.operatorAction,
+        runbookGroupRoute,
+        operatorActionGroupRoute,
         stepCount: groupItems.length,
         firstStepId: firstStep.id ?? null,
         firstStepRoute: firstStep.runbookStepRoute ?? null,
@@ -10222,6 +10245,15 @@ function octoberCompletionRunbookPackageManifestRouteForGroup(executionStatus) {
   }
   if (executionStatus === "ready_to_submit_evidence") return "/api/v1/operator-evidence/package-manifest";
   return null;
+}
+
+function octoberCompletionRunbookGroupRoute(executionStatus) {
+  return `/api/v1/october-completion-runbook?executionStatus=${encodeURIComponent(executionStatus)}`;
+}
+
+function octoberCompletionRunbookOperatorActionGroupRoute(group) {
+  if (group?.phase === "verify_release_completion") return null;
+  return `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(group.executionStatus)}`;
 }
 
 function octoberCompletionRunbookTargetDataBlockerRoutesForGroup(executionStatus) {
@@ -10301,6 +10333,8 @@ function octoberCompletionRunbookUnblockerStepSummary(item) {
     actionType: item.actionType ?? null,
     executionStatus: item.executionStatus ?? octoberCompletionRunbookExecutionStatus(item),
     executionStatusReason: item.executionStatusReason ?? octoberCompletionRunbookExecutionStatusReason(item),
+    runbookGroupRoute: item.runbookGroupRoute ?? null,
+    operatorActionGroupRoute: item.operatorActionGroupRoute ?? null,
     preconditionStatus: item.preconditionStatus ?? null,
     checklistRowId: item.checklistRowId ?? null,
     checklistRowIds: Array.isArray(item.checklistRowIds) ? item.checklistRowIds : [],
@@ -10384,6 +10418,8 @@ function octoberCompletionRunbookCurrentBlockingPackageManifest(report, currentB
     sourceRunbookGroup: {
       phase: currentBlockingGroup.phase,
       executionStatus: currentBlockingGroup.executionStatus,
+      runbookGroupRoute: currentBlockingGroup.runbookGroupRoute ?? null,
+      operatorActionGroupRoute: currentBlockingGroup.operatorActionGroupRoute ?? null,
       stepCount: currentBlockingGroup.stepCount,
       firstStepId: currentBlockingGroup.firstStepId,
       firstStepRoute: currentBlockingGroup.firstStepRoute,
@@ -18313,6 +18349,7 @@ function operatorActionItemMatchesActionStatus(item, value) {
 
 function operatorActionItemRoutes(item) {
   return uniqueValues([
+    item?.operatorActionGroupRoute,
     item?.writeRoute,
     item?.readbackRoute,
     item?.readbackItemRoute,
@@ -18389,6 +18426,8 @@ function operatorActionItemWithExecutionStatus(item) {
   return {
     ...item,
     executionStatus,
+    operatorActionGroupRoute:
+      item?.operatorActionGroupRoute ?? `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(executionStatus)}`,
     executionStatusReason: item?.executionStatusReason ?? operatorActionExecutionStatusReason(item, executionStatus),
   };
 }
@@ -19659,6 +19698,8 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
   );
   const currentBlockingPhase = report.releaseCompletionNavigation?.currentBlockingPhase ?? null;
   const targetGapRemainingTotal = Number(report.targetGaps?.totals?.remainingTotal ?? report.targetGaps?.counts?.remainingTotal ?? 0);
+  const submitEvidenceRunbookGroupRoute = octoberCompletionRunbookGroupRoute("ready_to_submit_evidence");
+  const submitEvidenceActionGroupRoute = "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence";
   const status =
     readySubmitSteps.length === 0 && blockedByTargetDataSteps.length === 0
       ? "operator_evidence_package_manifest_clear"
@@ -19671,8 +19712,10 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
     generatedAt: report.generatedAt,
     sourceReportId: report.id ?? null,
     sourceReportRoute: "/api/release/report",
-    sourceRunbookRoute: "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
-    sourceActionQueueRoute: "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    sourceRunbookRoute: submitEvidenceRunbookGroupRoute,
+    sourceActionQueueRoute: submitEvidenceActionGroupRoute,
+    sourceRunbookGroupRoute: submitEvidenceRunbookGroupRoute,
+    sourceActionGroupRoute: submitEvidenceActionGroupRoute,
     resourceKey: "operatorEvidencePackageManifest",
     status,
     releaseUseStatus: report.currentStatus ?? "release_report_missing",
@@ -19693,8 +19736,10 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
       packageValidateOnlyImportRoute: packageTemplate.validateOnlyImportRoute,
       packageJsonlTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
       payloadTemplateRoute: "/api/v1/operator-action-items/payload-template",
-      sourceRunbookRoute: "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
-      sourceActionQueueRoute: "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+      sourceRunbookRoute: submitEvidenceRunbookGroupRoute,
+      sourceActionQueueRoute: submitEvidenceActionGroupRoute,
+      sourceRunbookGroupRoute: submitEvidenceRunbookGroupRoute,
+      sourceActionGroupRoute: submitEvidenceActionGroupRoute,
       releaseReportRoute: "/api/release/report",
     },
     count: selectedItems.length,
@@ -19775,6 +19820,10 @@ function operatorEvidencePackageManifestStep(templateRow, runbookStep, manifestS
     singleRecordDryRunRoute: templateRow.singleRecordDryRunRoute ?? runbookStep.singleRecordDryRunRoute ?? null,
     singleRecordValidateOnlyRoute: templateRow.singleRecordValidateOnlyRoute ?? runbookStep.singleRecordValidateOnlyRoute ?? null,
     templateReadbackRoute,
+    runbookGroupRoute: runbookStep.runbookGroupRoute ?? octoberCompletionRunbookGroupRoute(runbookStep.executionStatus ?? "ready_to_submit_evidence"),
+    operatorActionGroupRoute:
+      runbookStep.operatorActionGroupRoute ??
+      `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(runbookStep.executionStatus ?? "ready_to_submit_evidence")}`,
     runbookStepRoute: runbookStep.runbookStepRoute ?? null,
     readbackRoute: templateRow.readbackRoute ?? runbookStep.readbackRoute ?? null,
     verificationRoute: runbookStep.verificationRoute ?? templateRow.readbackRoute ?? "/api/release/report",
@@ -19802,6 +19851,10 @@ function operatorEvidencePackageManifestFallbackStep(runbookStep, sequence) {
     executionStatusReason: runbookStep.executionStatusReason ?? null,
     route: runbookStep.writeRoute ?? runbookStep.route ?? null,
     method: runbookStep.method ?? null,
+    runbookGroupRoute: runbookStep.runbookGroupRoute ?? octoberCompletionRunbookGroupRoute(runbookStep.executionStatus ?? "ready_to_submit_evidence"),
+    operatorActionGroupRoute:
+      runbookStep.operatorActionGroupRoute ??
+      `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(runbookStep.executionStatus ?? "ready_to_submit_evidence")}`,
     readbackRoute: runbookStep.readbackRoute ?? null,
     verificationRoute: runbookStep.verificationRoute ?? runbookStep.readbackRoute ?? "/api/release/report",
     sourceEvidenceId: runbookStep.sourceEvidenceId ?? null,

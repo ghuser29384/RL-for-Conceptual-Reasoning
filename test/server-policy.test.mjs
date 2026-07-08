@@ -10029,6 +10029,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(fullRunbook.body.currentBlockingGroup.executionStatus, "ready_to_collect_data");
   assert.equal(fullRunbook.body.currentBlockingGroup.stepCount, expectedReadyCollectSteps.length);
   assert.equal(
+    fullRunbook.body.currentBlockingGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(
+    fullRunbook.body.currentBlockingGroup.operatorActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(
     fullRunbook.body.currentBlockingGroup.firstStepId,
     "october-completion-runbook:collect:positions:primary_data_import:%2Fapi%2Fv1%2Fintake%2Fpositions%2Fimport-jsonl",
   );
@@ -10049,8 +10057,34 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes("/api/v1/target-gaps/import-jsonl-package"));
   assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes("/api/v1/target-gaps/current-package-manifest"));
+  assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes(fullRunbook.body.currentBlockingGroup.runbookGroupRoute));
+  assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes(fullRunbook.body.currentBlockingGroup.operatorActionGroupRoute));
   assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes(fullRunbook.body.currentBlockingGroup.firstStepRoute));
+  const currentRunbookGroupRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/october-completion-runbook?route=${encodeURIComponent(fullRunbook.body.currentBlockingGroup.runbookGroupRoute)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentRunbookGroupRouteFilter.status, 200, JSON.stringify(currentRunbookGroupRouteFilter.body));
+  assert.equal(currentRunbookGroupRouteFilter.body.count, expectedReadyCollectSteps.length);
+  assert.ok(currentRunbookGroupRouteFilter.body.items.every((item) => item.executionStatus === "ready_to_collect_data"));
+  const currentActionGroupRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/operator-action-items?route=${encodeURIComponent(fullRunbook.body.currentBlockingGroup.operatorActionGroupRoute)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentActionGroupRouteFilter.status, 200, JSON.stringify(currentActionGroupRouteFilter.body));
+  assert.equal(currentActionGroupRouteFilter.body.filters.route, fullRunbook.body.currentBlockingGroup.operatorActionGroupRoute);
+  assert.ok(currentActionGroupRouteFilter.body.items.every((item) => item.executionStatus === "ready_to_collect_data"));
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.manifestKind, "current_blocking_target_data_package_manifest");
+  assert.equal(
+    fullRunbook.body.currentBlockingPackageManifest.sourceRunbookGroup.runbookGroupRoute,
+    fullRunbook.body.currentBlockingGroup.runbookGroupRoute,
+  );
+  assert.equal(
+    fullRunbook.body.currentBlockingPackageManifest.sourceRunbookGroup.operatorActionGroupRoute,
+    fullRunbook.body.currentBlockingGroup.operatorActionGroupRoute,
+  );
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.status, "ready_for_operator_replacement_and_validation");
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
   assert.equal(
@@ -10132,6 +10166,22 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifest.body.releaseUseStatus, "release_completion_unblockers_open");
   assert.equal(currentPackageManifest.body.currentBlockingPhase, "collect_data");
   assert.equal(currentPackageManifest.body.currentBlockingExecutionStatus, "ready_to_collect_data");
+  assert.equal(
+    currentPackageManifest.body.sourceRunbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(
+    currentPackageManifest.body.sourceActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(
+    currentPackageManifest.body.routes.sourceRunbookGroupRoute,
+    currentPackageManifest.body.sourceRunbookGroupRoute,
+  );
+  assert.equal(
+    currentPackageManifest.body.routes.sourceActionGroupRoute,
+    currentPackageManifest.body.sourceActionGroupRoute,
+  );
   assert.equal(currentPackageManifest.body.routes.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
   assert.equal(
     currentPackageManifest.body.routes.starterTemplateRoute,
@@ -10190,6 +10240,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.ok(blockedTargetDataGroup);
   assert.equal(blockedTargetDataGroup.stepCount, expectedDataDependencyBlockedSteps.length);
+  assert.equal(blockedTargetDataGroup.runbookGroupRoute, "/api/v1/october-completion-runbook?executionStatus=blocked_by_target_data");
+  assert.equal(blockedTargetDataGroup.operatorActionGroupRoute, "/api/v1/operator-action-items?executionStatus=blocked_by_target_data");
   assert.equal(blockedTargetDataGroup.firstRoute, "/api/v1/target-gaps/collection-plan/validation_critiques");
   assert.equal(blockedTargetDataGroup.firstPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
   assert.equal(blockedTargetDataGroup.firstImportRoute, "/api/v1/target-gaps/import-jsonl-package");
@@ -10201,6 +10253,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.ok(blockedTargetDataGroup.routes.includes("/api/v1/target-gaps/current-package-manifest"));
   assert.ok(blockedTargetDataGroup.routes.includes("/api/v1/target-gaps/import-jsonl-package?dryRun=true"));
+  assert.ok(blockedTargetDataGroup.routes.includes(blockedTargetDataGroup.runbookGroupRoute));
+  assert.ok(blockedTargetDataGroup.routes.includes(blockedTargetDataGroup.operatorActionGroupRoute));
   assert.ok(
     blockedTargetDataGroup.templateReadbackRoutes.includes(
       "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
@@ -10212,18 +10266,38 @@ test("operator action item queue is admin/auditor readback derived from the rele
     (item) => item.executionStatus === "ready_to_submit_evidence",
   );
   assert.ok(submitOperatorEvidenceGroup);
+  assert.equal(
+    submitOperatorEvidenceGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+  );
+  assert.equal(
+    submitOperatorEvidenceGroup.operatorActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+  );
   assert.equal(submitOperatorEvidenceGroup.firstPackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
   assert.ok(submitOperatorEvidenceGroup.routes.includes("/api/v1/operator-evidence/package-manifest"));
+  assert.ok(submitOperatorEvidenceGroup.routes.includes(submitOperatorEvidenceGroup.runbookGroupRoute));
+  assert.ok(submitOperatorEvidenceGroup.routes.includes(submitOperatorEvidenceGroup.operatorActionGroupRoute));
   const reviewCurrentEvidenceGroup = fullRunbook.body.nextUnblockerSequence.find(
     (item) => item.executionStatus === "ready_to_review_evidence",
   );
   assert.ok(reviewCurrentEvidenceGroup);
+  assert.equal(
+    reviewCurrentEvidenceGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_review_evidence",
+  );
+  assert.equal(
+    reviewCurrentEvidenceGroup.operatorActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_review_evidence",
+  );
   assert.equal(reviewCurrentEvidenceGroup.firstReleaseReportSectionsRoute, "/api/v1/release-report-sections?status=open");
   assert.equal(reviewCurrentEvidenceGroup.firstReviewEvidencePointersRoute, "/api/v1/operator-review-evidence-pointers?status=open");
   assert.equal(reviewCurrentEvidenceGroup.firstReviewArtifactSummariesRoute, "/api/v1/operator-review-artifact-summaries?status=open");
   assert.ok(reviewCurrentEvidenceGroup.routes.includes("/api/v1/release-report-sections?status=open"));
   assert.ok(reviewCurrentEvidenceGroup.routes.includes("/api/v1/operator-review-evidence-pointers?status=open"));
   assert.ok(reviewCurrentEvidenceGroup.routes.includes("/api/v1/operator-review-artifact-summaries?status=open"));
+  assert.ok(reviewCurrentEvidenceGroup.routes.includes(reviewCurrentEvidenceGroup.runbookGroupRoute));
+  assert.ok(reviewCurrentEvidenceGroup.routes.includes(reviewCurrentEvidenceGroup.operatorActionGroupRoute));
   assert.ok(
     reviewCurrentEvidenceGroup.items.every(
       (item) => item.firstReviewEvidencePointersRoute === "/api/v1/operator-review-evidence-pointers?status=open",
@@ -10266,6 +10340,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
     (item) => item.executionStatus === "blocked_by_open_release_work",
   );
   assert.ok(releaseVerificationBlockerGroup);
+  assert.equal(
+    releaseVerificationBlockerGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=blocked_by_open_release_work",
+  );
+  assert.equal(releaseVerificationBlockerGroup.operatorActionGroupRoute, null);
   assert.equal(releaseVerificationBlockerGroup.stepCount, expectedBlockedVerifySteps.length);
   assert.equal(releaseVerificationBlockerGroup.firstRoute, "/api/v1/target-gaps");
   assert.equal(fullRunbook.body.releaseCompletionBlockerSummary.targetGapRemainingTotal, 2034);
@@ -14619,6 +14698,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifest.status, 200, JSON.stringify(operatorEvidencePackageManifest.body));
   assert.equal(operatorEvidencePackageManifest.body.resourceKey, "operatorEvidencePackageManifest");
   assert.equal(operatorEvidencePackageManifest.body.status, "operator_evidence_templates_available_target_data_still_open");
+  assert.equal(
+    operatorEvidencePackageManifest.body.sourceRunbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+  );
+  assert.equal(
+    operatorEvidencePackageManifest.body.sourceActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+  );
   assert.equal(operatorEvidencePackageManifest.body.routes.packageImportRoute, "/api/v1/operator-evidence/import-jsonl");
   assert.equal(operatorEvidencePackageManifest.body.routes.packageDryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
   assert.equal(
@@ -14627,6 +14714,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.equal(operatorEvidencePackageManifest.body.routes.packageJsonlTemplateRoute, "/api/v1/operator-evidence/import-jsonl-template");
   assert.equal(operatorEvidencePackageManifest.body.routes.payloadTemplateRoute, "/api/v1/operator-action-items/payload-template");
+  assert.equal(
+    operatorEvidencePackageManifest.body.routes.sourceRunbookGroupRoute,
+    operatorEvidencePackageManifest.body.sourceRunbookGroupRoute,
+  );
+  assert.equal(
+    operatorEvidencePackageManifest.body.routes.sourceActionGroupRoute,
+    operatorEvidencePackageManifest.body.sourceActionGroupRoute,
+  );
   assert.equal(operatorEvidencePackageManifest.body.count, 35);
   assert.equal(operatorEvidencePackageManifest.body.totalCount, 35);
   assert.equal(operatorEvidencePackageManifest.body.counts.readySubmitRunbookSteps, 28);
@@ -14642,6 +14737,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifest.body.items[0].manifestStepKind, "single_record_payload_template");
   assert.equal(operatorEvidencePackageManifest.body.items[0].artifactKind, "label_snapshot");
   assert.equal(operatorEvidencePackageManifest.body.items[0].singleRecordDryRunRoute, "/api/v1/label-snapshots?dryRun=true");
+  assert.equal(operatorEvidencePackageManifest.body.items[0].runbookGroupRoute, operatorEvidencePackageManifest.body.sourceRunbookGroupRoute);
+  assert.equal(operatorEvidencePackageManifest.body.items[0].operatorActionGroupRoute, operatorEvidencePackageManifest.body.sourceActionGroupRoute);
   assert.equal(operatorEvidencePackageManifest.body.items[0].templateReadbackRoute.includes("/api/v1/operator-action-items/payload-template/"), true);
   assert.equal(
     operatorEvidencePackageManifest.body.items[0].packageManifestItemRoute,

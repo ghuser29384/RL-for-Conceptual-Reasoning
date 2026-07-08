@@ -14325,6 +14325,14 @@ test("October completion checklist records operator-evidence statuses when child
   assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingPhase, "collect_data");
   assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingExecutionStatus, "ready_to_collect_data");
   assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstReadbackRoute, "/api/v1/target-gaps/collection-plan");
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.currentBlockingGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.currentBlockingGroup.operatorActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_collect_data",
+  );
   assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstImportRoute, "/api/v1/target-gaps/import-jsonl-package");
   assert.equal(
     releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstDryRunRoute,
@@ -14341,6 +14349,8 @@ test("October completion checklist records operator-evidence statuses when child
   const blockedTargetDataGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
     (item) => item.executionStatus === "blocked_by_target_data",
   );
+  assert.equal(blockedTargetDataGroup.runbookGroupRoute, "/api/v1/october-completion-runbook?executionStatus=blocked_by_target_data");
+  assert.equal(blockedTargetDataGroup.operatorActionGroupRoute, "/api/v1/operator-action-items?executionStatus=blocked_by_target_data");
   assert.equal(blockedTargetDataGroup.firstPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
   assert.equal(
     blockedTargetDataGroup.firstTemplateRoute,
@@ -14352,9 +14362,25 @@ test("October completion checklist records operator-evidence statuses when child
   const submitOperatorEvidenceGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
     (item) => item.executionStatus === "ready_to_submit_evidence",
   );
+  assert.equal(
+    submitOperatorEvidenceGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+  );
+  assert.equal(
+    submitOperatorEvidenceGroup.operatorActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+  );
   assert.equal(submitOperatorEvidenceGroup.firstPackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
   const reviewCurrentEvidenceGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
     (item) => item.executionStatus === "ready_to_review_evidence",
+  );
+  assert.equal(
+    reviewCurrentEvidenceGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_review_evidence",
+  );
+  assert.equal(
+    reviewCurrentEvidenceGroup.operatorActionGroupRoute,
+    "/api/v1/operator-action-items?executionStatus=ready_to_review_evidence",
   );
   assert.equal(reviewCurrentEvidenceGroup.firstReleaseReportSectionsRoute, "/api/v1/release-report-sections?status=open");
   assert.equal(reviewCurrentEvidenceGroup.firstReviewEvidencePointersRoute, "/api/v1/operator-review-evidence-pointers?status=open");
@@ -14373,6 +14399,14 @@ test("October completion checklist records operator-evidence statuses when child
     releaseReport.releaseCompletionNavigation.nextUnblockerSequence.map((item) => item.sequence),
     [1, 2, 3, 4, 5],
   );
+  const blockedVerificationGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
+    (item) => item.executionStatus === "blocked_by_open_release_work",
+  );
+  assert.equal(
+    blockedVerificationGroup.runbookGroupRoute,
+    "/api/v1/october-completion-runbook?executionStatus=blocked_by_open_release_work",
+  );
+  assert.equal(blockedVerificationGroup.operatorActionGroupRoute, null);
   assert.equal(releaseReport.releaseCompletionNavigation.counts.openTargetGaps, 7);
   assert.equal(releaseReport.releaseCompletionNavigation.counts.targetGapRemainingTotal, 2034);
   assert.equal(releaseReport.releaseCompletionNavigation.counts.openChecklistRows, releaseReport.operatorEvidenceSubmissionPlan.counts.openRows);

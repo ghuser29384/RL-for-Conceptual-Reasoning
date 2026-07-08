@@ -8959,6 +8959,8 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
     return [
       ["Manifest status", humanize(result.status ?? "not reported")],
       ["Current blocker", `${humanize(result.currentBlockingPhase ?? "not reported")} / ${humanize(result.currentBlockingExecutionStatus ?? "not reported")}`],
+      ["Runbook group", result.routes?.sourceRunbookGroupRoute ?? result.sourceRunbookGroupRoute ?? "not available"],
+      ["Action group", result.routes?.sourceActionGroupRoute ?? result.sourceActionGroupRoute ?? "not available"],
       ["Package steps", manifest ? `${counts.stepCount ?? manifest.stepCount ?? 0} steps across ${counts.targetGapCount ?? manifest.targetGapCount ?? 0} gaps` : "not available"],
       ["Package validate-only", result.routes?.packageValidateOnlyImportRoute ?? manifest?.packageValidateOnlyImportRoute ?? "not available"],
       ["Starter template", result.routes?.starterTemplateRoute ?? manifest?.templateStarter?.starterTemplateRoute ?? "not available"],
@@ -8990,6 +8992,8 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       currentGroup ? `${humanize(currentGroup.phase)} / ${humanize(currentGroup.executionStatus)}` : "no open runbook blockers",
     ],
     ["First unblocker", currentGroup?.firstStepLabel ?? "not available"],
+    ["Runbook group", currentGroup?.runbookGroupRoute ?? "not available"],
+    ["Action group", currentGroup?.operatorActionGroupRoute ?? "not applicable"],
     [
       "First safe route",
       currentGroup?.firstDryRunRoute ??
@@ -10063,6 +10067,8 @@ function octoberCompletionRunbookPreviewRow(item) {
         ["Action", item.actionId ?? item.actionType ?? "verification"],
         ["Execution", humanize(item.executionStatus ?? "not reported")],
         ["Execution reason", item.executionStatusReason ?? "not reported"],
+        ["Runbook group", item.runbookGroupRoute ?? "not available"],
+        ["Action group", item.operatorActionGroupRoute ?? "not applicable"],
         ["Runbook step", item.runbookStepRoute ?? "not available"],
         ["Route", `${item.method ?? "GET"} ${route}`],
         ["Template", item.templateReadbackRoute ?? "not required"],
@@ -10987,6 +10993,8 @@ function operatorEvidencePackageManifestPreviewRow(item) {
         ["Single-record validate-only", item.singleRecordValidateOnlyRoute ?? "not applicable"],
         ["Template", item.templateReadbackRoute ?? "not available"],
         ["Package manifest item", item.packageManifestItemRoute ?? "not available"],
+        ["Runbook group", item.runbookGroupRoute ?? "not available"],
+        ["Action group", item.operatorActionGroupRoute ?? "not available"],
         ["Runbook step", item.runbookStepRoute ?? "not available"],
         ["Readback", item.readbackRoute ?? "not available"],
         ["Verification", item.verificationRoute ?? "/api/release/report"],
@@ -13643,6 +13651,8 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
       ${metricList([
         ["First safe route", firstSafeRoute],
         ["Current blocker runbook", routes.currentBlockingRunbookRoute ?? routes.runbookRoute ?? "not available"],
+        ["Current runbook group", currentGroup?.runbookGroupRoute ?? routes.currentBlockingRunbookRoute ?? "not available"],
+        ["Current action group", currentGroup?.operatorActionGroupRoute ?? "not applicable"],
         ["Target-data package", routes.targetDataPackageValidateOnlyRoute ?? routes.targetDataPackageDryRunRoute ?? routes.targetDataPackageImportRoute ?? "not available"],
         ["Target-data package manifest", routes.targetDataCurrentPackageManifestRoute ?? "not available"],
         ["Target-data starter template", routes.targetDataStarterTemplateRoute ?? "not available"],
@@ -13672,6 +13682,8 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
                         ["Phase", humanize(group.phase ?? "not reported")],
                         ["Execution", humanize(group.executionStatus ?? "not reported")],
                         ["Steps", String(group.stepCount ?? 0)],
+                        ["Runbook group", group.runbookGroupRoute ?? "not available"],
+                        ["Action group", group.operatorActionGroupRoute ?? "not applicable"],
                         ["Target gaps", routeListSummary(Array.isArray(group.targetGapIds) ? group.targetGapIds.map(humanize) : [])],
                         ["Checklist rows", routeListSummary(Array.isArray(group.checklistRowIds) ? group.checklistRowIds.map(humanize) : [])],
                         ["Readback", group.firstReadbackRoute ?? "not available"],
