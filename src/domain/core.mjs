@@ -31474,7 +31474,7 @@ function defaultPolicyDecisionRecords(releaseId, actionKindRows) {
 	  }));
 }
 
-function defaultImplementationPhaseGateBundle(releaseId) {
+export function defaultImplementationPhaseGateBundle(releaseId) {
   return {
     id: `implementation-phase-gate-bundle-${releaseId}`,
     releaseId,

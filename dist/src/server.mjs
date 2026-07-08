@@ -207,6 +207,7 @@ import {
   UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
   assignments,
   buildHiddenBenchmarkFreezeReport,
+  defaultImplementationPhaseGateBundle,
   buildEffectiveRatingContextSnapshots,
   buildRaterCertificationReport,
   buildReleaseRightsRecords,
@@ -18241,6 +18242,54 @@ const workflowReleaseReportReadbackSelectors = {
   ],
   scoreInputPolicy: (report) => report.ratingExperienceEvidence?.scoreInputPolicyRows ?? [],
   draftStoragePolicy: (report) => report.ratingExperienceEvidence?.draftStoragePolicyRows ?? [],
+  policyActionKind: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.policyActionKindRows,
+      report.operationalControlEvidence,
+      "release_report_effective_policy_action_kind",
+    ),
+  policyDecisionRecord: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.policyDecisionRows,
+      report.operationalControlEvidence,
+      "release_report_effective_policy_decision",
+    ),
+  implementationPhaseGateBundle: (report) =>
+    (report.operationalControlEvidence?.implementationPhaseGateBundleRows ?? []).map((row) => ({
+      ...row,
+      readbackSource: "release_report_effective_phase_gate",
+      releaseReportSectionId: report.operationalControlEvidence?.id ?? null,
+    })),
+  queueFreshnessPolicy: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.queueFreshnessPolicyRows,
+      report.operationalControlEvidence,
+      "release_report_effective_queue_freshness_policy",
+    ),
+  clientSurfaceIntegrityPolicy: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.clientSurfaceIntegrityPolicyRows,
+      report.operationalControlEvidence,
+      "release_report_effective_client_surface_integrity_policy",
+    ),
+  cloudSecurityBudgetPolicy: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.cloudSecurityBudgetPolicyRows,
+      report.operationalControlEvidence,
+      "release_report_effective_cloud_security_budget_policy",
+    ),
+  externalWormAuditLogPolicy: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.externalWormAuditLogPolicyRows,
+      report.operationalControlEvidence,
+      "release_report_effective_external_worm_audit_log_policy",
+    ),
+  sensitiveAuditChainEvent: (report) =>
+    operationalControlEffectiveReadbackRows(
+      report.operationalControlEvidence?.sensitiveAuditChainEventRows,
+      report.operationalControlEvidence,
+      "release_report_effective_sensitive_audit_chain_event",
+    ),
   validationTrancheEvidence: (report) =>
     report.validationDesign
       ? [
@@ -18262,6 +18311,15 @@ function metaphilosophyEffectiveReadbackRows(rows, section) {
   return rows.map((row) => ({
     ...row,
     readbackSource: "release_report_effective_metaphilosophy",
+    releaseReportSectionId: section?.id ?? null,
+    releaseUseStatus: section?.releaseUseStatus ?? row.releaseUseStatus ?? null,
+  }));
+}
+
+function operationalControlEffectiveReadbackRows(rows = [], section, readbackSource) {
+  return rows.map((row) => ({
+    ...row,
+    readbackSource,
     releaseReportSectionId: section?.id ?? null,
     releaseUseStatus: section?.releaseUseStatus ?? row.releaseUseStatus ?? null,
   }));
@@ -21064,14 +21122,11 @@ async function implementationPhaseEndpoint(request, response, context) {
     return;
   }
   const bundles = await workflowResourcesByField(context, "implementationPhaseGateBundle", "releaseId", releaseId);
-  const activeBundle = bundles.at(-1);
-  if (!activeBundle) {
-    sendJson(response, 404, { error: "artifact_not_found" });
-    return;
-  }
+  const activeBundle = bundles.at(-1) ?? defaultImplementationPhaseGateBundle(releaseId);
   sendJson(response, 200, {
     releaseId,
     activeBundleId: activeBundle.id,
+    activeBundleSource: bundles.length ? "submitted_workflow_implementation_phase_gate_bundle" : "seed_implementation_phase_gate_bundle",
     manifestId: activeBundle.manifestId,
     futurePhaseDefault: activeBundle.futurePhaseDefault,
     broadeningRequiresManifestActivation: activeBundle.broadeningRequiresManifestActivation === true,
@@ -22973,8 +23028,7 @@ async function appendWorkflowPolicyDecisionGate(context, request, actor, resourc
 async function resolveImplementationPhaseGate(context, laneKind, actor = null) {
   if (!laneKind) return { ok: true, bundle: null, lane: null, phaseState: "enabled" };
   const bundles = await workflowResourcesByField(context, "implementationPhaseGateBundle", "releaseId", releaseId);
-  const bundle = bundles.at(-1) ?? null;
-  if (!bundle) return { ok: true, bundle: null, lane: null, phaseState: "enabled" };
+  const bundle = bundles.at(-1) ?? defaultImplementationPhaseGateBundle(releaseId);
   const lane = (bundle.laneStates ?? []).find((item) => item?.laneKind === laneKind) ?? null;
   if (!lane) {
     return { ok: false, bundle, lane: null, phaseState: bundle.futurePhaseDefault ?? "blocked", detail: `missing implementation phase lane ${laneKind}` };

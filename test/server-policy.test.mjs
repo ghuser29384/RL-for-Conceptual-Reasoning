@@ -3341,6 +3341,63 @@ test("RLHF91 documented v1 API endpoints route through auth instead of falling t
   assert.deepEqual(misses, []);
 });
 
+test("implementation phase readback exposes seed bundle before submitted workflow evidence exists", async () => {
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}` };
+  const raterHeaders = { authorization: `Bearer ${raterToken}` };
+
+  const implementationPhase = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/implementation-phase",
+    headers: adminHeaders,
+  });
+  assert.equal(implementationPhase.status, 200);
+  assert.equal(implementationPhase.body.activeBundleId, "implementation-phase-gate-bundle-october-2026-demo");
+  assert.equal(implementationPhase.body.activeBundleSource, "seed_implementation_phase_gate_bundle");
+  assert.equal(implementationPhase.body.futurePhaseDefault, "blocked");
+  assert.equal(implementationPhase.body.broadeningRequiresManifestActivation, true);
+  assert.equal(implementationPhase.body.laneStates.length, phaseGateLaneKinds.length);
+  assert.equal(
+    implementationPhase.body.laneStates.find((lane) => lane.laneKind === "hidden_benchmark_submission_lane")?.phaseState,
+    "staff_only",
+  );
+
+  const releaseReport = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: adminHeaders,
+  });
+  assert.equal(releaseReport.status, 200);
+  assert.equal(releaseReport.body.operationalControlEvidence.implementationPhaseGateBundleRows[0].id, implementationPhase.body.activeBundleId);
+  assert.equal(releaseReport.body.operationalControlEvidence.implementationPhaseGateBundleRows[0].rowSource, "seed_implementation_phase_gate_bundle");
+
+  const implementationPhaseGateBundle = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/implementation-phase-gate-bundles/${implementationPhase.body.activeBundleId}`,
+    headers: adminHeaders,
+  });
+  assert.equal(implementationPhaseGateBundle.status, 200);
+  assert.equal(implementationPhaseGateBundle.body.readbackSource, "release_report_effective_phase_gate");
+  assert.equal(implementationPhaseGateBundle.body.releaseReportSectionId, releaseReport.body.operationalControlEvidence.id);
+  assert.equal(implementationPhaseGateBundle.body.rowSource, "seed_implementation_phase_gate_bundle");
+  assert.equal(implementationPhaseGateBundle.body.futurePhaseDefault, "blocked");
+  assert.deepEqual(implementationPhaseGateBundle.body.missingLaneKinds, []);
+  assert.equal(implementationPhaseGateBundle.body.laneStates.length, phaseGateLaneKinds.length);
+  assert.equal(
+    implementationPhaseGateBundle.body.laneStates.find((lane) => lane.laneKind === "hidden_benchmark_submission_lane")?.phaseState,
+    "staff_only",
+  );
+
+  const unauthorizedPhaseGateBundle = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/implementation-phase-gate-bundles/${implementationPhase.body.activeBundleId}`,
+    headers: raterHeaders,
+  });
+  assert.equal(unauthorizedPhaseGateBundle.status, 403);
+});
+
 test("active release policy ids have by-id readback before submitted workflow evidence exists", async () => {
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
   const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
@@ -3424,6 +3481,94 @@ test("active release policy ids have by-id readback before submitted workflow ev
     headers: adminHeaders,
   });
   assert.equal(missingPolicy.status, 404);
+});
+
+test("operational control seed rows have by-id readback before submitted workflow evidence exists", async () => {
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore: createMemoryAuditStore() });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}` };
+  const raterHeaders = { authorization: `Bearer ${raterToken}` };
+
+  const releaseReport = await invokeApi(context, {
+    method: "GET",
+    url: "/api/release/report",
+    headers: adminHeaders,
+  });
+  assert.equal(releaseReport.status, 200);
+  const operational = releaseReport.body.operationalControlEvidence;
+  const seedReadbackSamples = [
+    {
+      url: `/api/v1/policy-action-kinds/${operational.policyActionKindRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_policy_action_kind",
+      expectedRowSource: "seed_policy_action_kind",
+      expectedField: ["actionKind", "protected_render"],
+    },
+    {
+      url: `/api/v1/policy-decisions/${operational.policyDecisionRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_policy_decision",
+      expectedRowSource: "seed_policy_decision",
+      expectedField: ["decisionStatus", "allow"],
+    },
+    {
+      url: `/api/v1/queue-freshness-policies/${operational.queueFreshnessPolicyRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_queue_freshness_policy",
+      expectedRowSource: "seed_queue_freshness_policy",
+      expectedField: ["lane", "assignment"],
+    },
+    {
+      url: `/api/v1/client-surface-integrity-policies/${operational.clientSurfaceIntegrityPolicyRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_client_surface_integrity_policy",
+      expectedRowSource: "seed_client_surface_integrity_policy",
+      expectedField: ["surface", "rating"],
+    },
+    {
+      url: `/api/v1/cloud-security-budget-policies/${operational.cloudSecurityBudgetPolicyRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_cloud_security_budget_policy",
+      expectedRowSource: "seed_cloud_security_budget_policy",
+      expectedField: ["status", "cloud_security_budget_policy_complete"],
+    },
+    {
+      url: `/api/v1/external-worm-audit-log-policies/${operational.externalWormAuditLogPolicyRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_external_worm_audit_log_policy",
+      expectedRowSource: "seed_external_worm_audit_log_policy",
+      expectedField: ["status", "external_worm_audit_log_policy_complete"],
+    },
+    {
+      url: `/api/v1/sensitive-audit-chain/events/${operational.sensitiveAuditChainEventRows[0].id}`,
+      expectedReadbackSource: "release_report_effective_sensitive_audit_chain_event",
+      expectedRowSource: "seed_sensitive_audit_chain_event",
+      expectedField: ["status", "sensitive_audit_chain_event_complete"],
+    },
+  ];
+
+  for (const sample of seedReadbackSamples) {
+    const response = await invokeApi(context, {
+      method: "GET",
+      url: sample.url,
+      headers: adminHeaders,
+    });
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.readbackSource, sample.expectedReadbackSource);
+    assert.equal(response.body.releaseReportSectionId, operational.id);
+    assert.equal(response.body.releaseUseStatus, operational.releaseUseStatus);
+    assert.equal(response.body.rowSource, sample.expectedRowSource);
+    assert.equal(response.body[sample.expectedField[0]], sample.expectedField[1]);
+  }
+
+  const unauthorized = await invokeApi(context, {
+    method: "GET",
+    url: seedReadbackSamples[0].url,
+    headers: raterHeaders,
+  });
+  assert.equal(unauthorized.status, 403);
+
+  const missing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/policy-action-kinds/policy-action-kind-not-present",
+    headers: adminHeaders,
+  });
+  assert.equal(missing.status, 404);
 });
 
 test("computed hidden benchmark freeze report has by-id readback with access audit", async () => {
