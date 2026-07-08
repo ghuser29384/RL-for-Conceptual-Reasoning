@@ -210,6 +210,7 @@ const SOURCE_PREPARATION_ADMIN_WRITE_ROUTES = [
 const SOURCE_PREPARATION_READBACK_ROUTES = [
   "/api/v1/admin/prepared-drafts",
   "/api/v1/admin/review-signals",
+  "/api/v1/admin/workflow-gates",
   "/api/v1/admin/gate-decisions",
   "/api/v1/admin/candidate-items",
   "/api/v1/admin/promotion-records",
@@ -9935,12 +9936,28 @@ export function buildSourcePreparationEvidenceReport(releaseId, options = {}) {
 function sourcePreparationWorkflowPolicyDefinition() {
   const workflowPolicy = WORKFLOW_POLICIES.prepared_draft_readiness ?? {};
   const requiredGateIds = requiredGateIdsForPolicy("prepared_draft_readiness");
-  const requiredGates = requiredGateIds.map((gateId) => WORKFLOW_GATES[gateId]).filter(Boolean);
+  const gateDefinitionRoute = "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness";
+  const gateDecisionRoute = "/api/v1/admin/gate-decisions";
+  const requiredGates = requiredGateIds
+    .map((gateId) => WORKFLOW_GATES[gateId])
+    .filter(Boolean)
+    .map((gate) => ({
+      ...gate,
+      readbackRoute: `/api/v1/admin/workflow-gates/${encodeURIComponent(gate.gateId)}?workflowPolicyId=prepared_draft_readiness`,
+      definitionCollectionRoute: gateDefinitionRoute,
+      decisionRoute: gateDecisionRoute,
+      readbackSource: "static_workflow_gate_definition",
+    }));
   return {
     policyId: "prepared_draft_readiness",
     appliesTo: Array.isArray(workflowPolicy.appliesTo) ? workflowPolicy.appliesTo : [],
     requiredGateIds,
     requiredGates,
+    gateDefinitionRoute,
+    gateDecisionRoute,
+    readbackSource: "static_workflow_policy_definition",
+    nonMutationBoundary:
+      "This policy summary and its gate-definition routes are read-only release-report metadata; only submitted GateDecision rows are source-preparation evidence.",
   };
 }
 

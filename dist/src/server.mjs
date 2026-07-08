@@ -7756,6 +7756,15 @@ export async function handleApiRequest(request, response, url, context) {
     await adminContributionQueueEndpoint(request, response, context, "review-signals");
     return;
   }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/workflow-gates") {
+    await adminWorkflowGateDefinitionsEndpoint(request, response, context, url.searchParams);
+    return;
+  }
+  const adminWorkflowGateMatch = url.pathname.match(/^\/api\/v1\/admin\/workflow-gates\/([^/]+)$/);
+  if (request.method === "GET" && adminWorkflowGateMatch) {
+    await adminWorkflowGateDefinitionEndpoint(request, response, context, decodeURIComponent(adminWorkflowGateMatch[1]), url.searchParams);
+    return;
+  }
   if (request.method === "GET" && url.pathname === "/api/v1/admin/gate-decisions") {
     await adminContributionQueueEndpoint(request, response, context, "gate-decisions");
     return;
@@ -12733,7 +12742,7 @@ function metaphilosophySourceWorkbenchTemplateItems(report, readiness) {
         preparedDraftReview,
       },
       readbackRoute: "/api/v1/admin/prepared-drafts",
-      readbackRoutes: ["/api/v1/admin/review-signals", "/api/v1/admin/gate-decisions"],
+      readbackRoutes: ["/api/v1/admin/review-signals", "/api/v1/admin/workflow-gates", "/api/v1/admin/gate-decisions"],
       templateReadbackRoute: sourceWorkbenchTemplateRoute("prepared_draft_review"),
       templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
       readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
@@ -13008,12 +13017,27 @@ function metaphilosophySourceWorkbenchReadinessItem(report) {
       workflowTemplateId: "source-preparation-review-and-promotion",
       validationPolicy:
         "Create PreparedDraft records only from manually accepted ArgumentExtraction records. PreparedDraft review may add ReviewSignal evidence and GateDecision rows, but promotion is blocked until the prepared_draft_readiness gates pass, are not applicable, or are waived with reason.",
+      workflowGateDefinitionsRoute: "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness",
       requiredGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
       workflowPolicy: sourcePreparationEvidence.workflowPolicy ?? {
         policyId: "prepared_draft_readiness",
         appliesTo: WORKFLOW_POLICIES.prepared_draft_readiness.appliesTo,
         requiredGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
-        requiredGates: requiredGateIdsForPolicy("prepared_draft_readiness").map((gateId) => WORKFLOW_GATES[gateId]).filter(Boolean),
+        requiredGates: requiredGateIdsForPolicy("prepared_draft_readiness")
+          .map((gateId) => WORKFLOW_GATES[gateId])
+          .filter(Boolean)
+          .map((gate) => ({
+            ...gate,
+            readbackRoute: `/api/v1/admin/workflow-gates/${encodeURIComponent(gate.gateId)}?workflowPolicyId=prepared_draft_readiness`,
+            definitionCollectionRoute: "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness",
+            decisionRoute: "/api/v1/admin/gate-decisions",
+            readbackSource: "static_workflow_gate_definition",
+          })),
+        gateDefinitionRoute: "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness",
+        gateDecisionRoute: "/api/v1/admin/gate-decisions",
+        readbackSource: "static_workflow_policy_definition",
+        nonMutationBoundary:
+          "This policy summary and its gate-definition routes are read-only release-report metadata; only submitted GateDecision rows are source-preparation evidence.",
       },
       unchangedTemplatePolicy:
         "Source-preparation route templates are operator guidance only; they must be bound to real accepted extractions and reviewed prepared drafts before append.",
@@ -18800,6 +18824,132 @@ function sourcePreparationAdminReadbackBoundary(queueName) {
     workflowBoundary: "admin_source_preparation_control_plane",
     queueName,
   };
+}
+
+const defaultWorkflowGatePolicyId = "prepared_draft_readiness";
+
+function workflowGateDefinitionReadbackPolicy() {
+  return {
+    definitionScope: "static_workflow_gate_definition",
+    nonMutationBoundary:
+      "Read-only WorkflowGate definitions; this route does not append workflow events, create GateDecision rows, waive gates, create candidates, or support release claims by itself.",
+    decisionRoute: "/api/v1/admin/gate-decisions",
+    sourcePreparationReadinessRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+    releaseReportRoute: "/api/release/report",
+  };
+}
+
+function workflowGatePolicyFilter(searchParams) {
+  return searchParams?.get?.("workflowPolicyId") ?? searchParams?.get?.("policyId") ?? defaultWorkflowGatePolicyId;
+}
+
+function workflowGateDefinitionRow(gateId, workflowPolicyId = defaultWorkflowGatePolicyId) {
+  const gate = WORKFLOW_GATES[gateId];
+  if (!gate) return null;
+  const requiredForPolicies = Object.values(WORKFLOW_POLICIES)
+    .filter((policy) => Array.isArray(policy.requiredGateIds) && policy.requiredGateIds.includes(gateId))
+    .map((policy) => policy.policyId)
+    .sort();
+  const workflowPolicy = workflowPolicyId && WORKFLOW_POLICIES[workflowPolicyId] ? WORKFLOW_POLICIES[workflowPolicyId] : null;
+  const requiredForPolicy =
+    Boolean(workflowPolicy) && Array.isArray(workflowPolicy.requiredGateIds) && workflowPolicy.requiredGateIds.includes(gateId);
+  return {
+    ...structuredClone(gate),
+    id: gateId,
+    gateId,
+    resourceKey: "workflowGate",
+    readbackSource: "static_workflow_gate_definition",
+    workflowPolicyId: workflowPolicy?.policyId ?? null,
+    workflowPolicy: workflowPolicy
+      ? {
+          policyId: workflowPolicy.policyId,
+          appliesTo: Array.isArray(workflowPolicy.appliesTo) ? [...workflowPolicy.appliesTo] : [],
+          requiredGateIds: Array.isArray(workflowPolicy.requiredGateIds) ? [...workflowPolicy.requiredGateIds] : [],
+        }
+      : null,
+    requiredForPolicy,
+    requiredForPreparedDraftReadiness: requiredGateIdsForPolicy(defaultWorkflowGatePolicyId).includes(gateId),
+    requiredForPolicies,
+    decisionRoute: "/api/v1/admin/gate-decisions",
+    decisionCollectionRoute: "/api/v1/admin/gate-decisions",
+    sourcePreparationReadinessRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+    releaseReportRoute: "/api/release/report",
+    readbackItemRoute: `/api/v1/admin/workflow-gates/${encodeURIComponent(gateId)}`,
+    raterVisibility: "not_rater_visible_before_initial_lock",
+    workflowBoundary: "admin_source_preparation_control_plane",
+  };
+}
+
+function workflowGateDefinitionRows(searchParams = new URLSearchParams()) {
+  const workflowPolicyId = workflowGatePolicyFilter(searchParams);
+  if (workflowPolicyId === "all") {
+    return Object.keys(WORKFLOW_GATES)
+      .sort()
+      .map((gateId) => workflowGateDefinitionRow(gateId, null))
+      .filter(Boolean);
+  }
+  if (!WORKFLOW_POLICIES[workflowPolicyId]) return [];
+  return requiredGateIdsForPolicy(workflowPolicyId)
+    .map((gateId) => workflowGateDefinitionRow(gateId, workflowPolicyId))
+    .filter(Boolean);
+}
+
+async function adminWorkflowGateDefinitionsEndpoint(request, response, context, searchParams = new URLSearchParams()) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const workflowPolicyId = workflowGatePolicyFilter(searchParams);
+  const rows = workflowGateDefinitionRows(searchParams);
+  sendJson(response, 200, {
+    ...sourcePreparationAdminReadbackBoundary("workflow-gates"),
+    resourceKey: "workflowGate",
+    readbackSource: "static_workflow_gate_definition",
+    filters: { workflowPolicyId },
+    policy: workflowGateDefinitionReadbackPolicy(),
+    count: rows.length,
+    totalCount: rows.length,
+    counts: {
+      byWorkflowPolicyId: countByField(rows, "workflowPolicyId"),
+      requiredForPreparedDraftReadiness: rows.filter((row) => row.requiredForPreparedDraftReadiness).length,
+    },
+    items: rows,
+    rows,
+  });
+}
+
+async function adminWorkflowGateDefinitionEndpoint(request, response, context, gateId, searchParams = new URLSearchParams()) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const workflowPolicyId = workflowGatePolicyFilter(searchParams);
+  const item = workflowGateDefinitionRows(searchParams).find((row) => row.gateId === gateId || row.id === gateId);
+  if (!item) {
+    sendJson(response, 404, { error: "workflow_gate_definition_not_found", gateId, workflowPolicyId });
+    return;
+  }
+  sendJson(response, 200, {
+    ...sourcePreparationAdminReadbackBoundary("workflow-gates"),
+    resourceKey: "workflowGate",
+    readbackSource: "static_workflow_gate_definition",
+    filters: { workflowPolicyId },
+    policy: workflowGateDefinitionReadbackPolicy(),
+    count: 1,
+    id: item.id,
+    item,
+    items: [item],
+  });
 }
 
 async function adminContributionQueueItemEndpoint(request, response, context, queueName, itemId) {

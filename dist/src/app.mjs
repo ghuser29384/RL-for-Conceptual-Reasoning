@@ -1904,6 +1904,14 @@ const workflowEvidenceCollections = [
     summary: "Admin-only review evidence for source-preparation and candidate-review objects; not final gate decisions.",
   },
   {
+    id: "workflow-gates",
+    label: "Workflow gates",
+    endpoint: "/api/v1/admin/workflow-gates",
+    resourceKey: "workflowGate",
+    group: "Source workbench",
+    summary: "Read-only static WorkflowGate definitions for prepared-draft readiness; not submitted gate evidence.",
+  },
+  {
     id: "gate-decisions",
     label: "Gate decisions",
     endpoint: "/api/v1/admin/gate-decisions",
@@ -8344,6 +8352,17 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Uncovered source-preparation routes", routeCoverage.uncoveredSourcePreparationReadinessRoutes?.length ?? "not reported"],
     ];
   }
+  if (collection.id === "workflow-gates") {
+    const items = Array.isArray(result.items) ? result.items : [];
+    const counts = result.counts ?? {};
+    return [
+      ["Readback source", humanize(result.readbackSource ?? "static workflow gate definition")],
+      ["Policy filter", humanize(result.filters?.workflowPolicyId ?? "prepared_draft_readiness")],
+      ["Gate definitions", result.count ?? items.length],
+      ["Prepared-draft required", counts.requiredForPreparedDraftReadiness ?? "not reported"],
+      ["Policy rows", workflowCountMapSummary(counts.byWorkflowPolicyId)],
+    ];
+  }
   if (collection.id === "target-data-jsonl-template") {
     const coverage = result.expansionCoverage ?? null;
     return [
@@ -8564,6 +8583,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "metaphilosophy-source-workbench-template") {
     return `<div class="operatorActionPreview">${previewItems.map(metaphilosophySourceWorkbenchTemplatePreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "workflow-gates") {
+    return `<div class="operatorActionPreview">${previewItems.map(workflowGateDefinitionPreviewRow).join("")}</div>`;
   }
   if (collection.id === "target-gaps") {
     return `<div class="operatorActionPreview">${previewItems.map(targetGapPreviewRow).join("")}</div>`;
@@ -9349,11 +9371,41 @@ function metaphilosophySourceWorkbenchReadinessPreviewRow(item) {
         ["Preparation routes", preparationRoutes],
         ["Preparation steps", preparationSteps],
         ["Preparation gates", preparationGates],
+        ["Gate definitions", item.sourcePreparationValidationPlan?.workflowGateDefinitionsRoute ?? "not available"],
         ["Preparation policy", item.sourcePreparationValidationPlan?.validationPolicy ?? "Create and promote prepared drafts only through reviewed source-preparation gates."],
         ["Readbacks", readbackRoutes],
         ["Review reasons", reviewReasons],
         ["Boundary", item.nonPromotionBoundary ?? "Source intake remains admin-only and non-promotional."],
         ["Completion", item.completionEvidence ?? "Verify through /api/release/report."],
+      ])}
+    </article>
+  `;
+}
+
+function workflowGateDefinitionPreviewRow(item) {
+  const objectTypes = Array.isArray(item.objectTypes) && item.objectTypes.length ? item.objectTypes.join(", ") : "not declared";
+  const requiredForPolicies =
+    Array.isArray(item.requiredForPolicies) && item.requiredForPolicies.length
+      ? item.requiredForPolicies.map(humanize).join(", ")
+      : "not required by a policy";
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.label ?? humanize(item.gateId ?? item.id ?? "Workflow gate"))}</strong>
+          <span>${escapeHtml(item.gateId ?? item.id ?? "workflowGate")}</span>
+        </div>
+        <span>${escapeHtml(item.requiredForPolicy ? "required" : "reference")}</span>
+      </div>
+      ${metricList([
+        ["Readback source", humanize(item.readbackSource ?? "static_workflow_gate_definition")],
+        ["Workflow policy", humanize(item.workflowPolicyId ?? "all policies")],
+        ["Object types", objectTypes],
+        ["Required for policies", requiredForPolicies],
+        ["Prepared-draft readiness", item.requiredForPreparedDraftReadiness ? "required" : "not required"],
+        ["Decision route", item.decisionRoute ?? "/api/v1/admin/gate-decisions"],
+        ["Item readback", item.readbackItemRoute ?? "not available"],
+        ["Boundary", item.workflowBoundary ?? "admin_source_preparation_control_plane"],
       ])}
     </article>
   `;
@@ -11965,6 +12017,8 @@ function sourcePreparationEvidencePanel(sourcePreparationEvidence) {
         <div><span>Phase</span><strong>${humanize(evidence.phase ?? "phase2_source_preparation")}</strong></div>
         <div><span>Workflow policy</span><strong>${workflowPolicy.policyId ?? "prepared_draft_readiness"}</strong></div>
         <div><span>Workflow gates</span><strong>${workflowGateLabels}</strong></div>
+        <div><span>Gate definitions</span><strong>${workflowPolicy.gateDefinitionRoute ?? "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness"}</strong></div>
+        <div><span>Gate decisions</span><strong>${workflowPolicy.gateDecisionRoute ?? "/api/v1/admin/gate-decisions"}</strong></div>
         <div><span>Intake boundary</span><strong>${policy.intakeBoundary ?? "Import and extraction review remain non-promotional."}</strong></div>
         <div><span>Promotion boundary</span><strong>${policy.promotionBoundary ?? "Promotion creates candidate-layer artifacts only."}</strong></div>
         <div><span>Visibility rule</span><strong>${policy.raterVisibilityRule ?? "Source provenance remains admin-only."}</strong></div>

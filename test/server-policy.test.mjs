@@ -187,7 +187,7 @@ import {
   UI_VARIANT_SENSITIVITY_POWER_POLICY_VERSION,
   VERIFICATION_CLAIM_GRANULARITY_POLICY_VERSION,
 } from "../src/domain/core.mjs";
-import { requiredGateIdsForPolicy } from "../src/domain/contributions.mjs";
+import { WORKFLOW_GATES, requiredGateIdsForPolicy } from "../src/domain/contributions.mjs";
 import {
   authenticateRequest,
   createAuditEvent,
@@ -4743,6 +4743,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/admin/extractions/argument-extraction-smoke/review"],
     ["GET", "/api/v1/admin/prepared-drafts"],
     ["GET", "/api/v1/admin/review-signals"],
+    ["GET", "/api/v1/admin/workflow-gates"],
+    ["GET", "/api/v1/admin/workflow-gates/candidate_text_quality_gate"],
     ["GET", "/api/v1/admin/gate-decisions"],
     ["GET", "/api/v1/admin/candidate-items"],
     ["GET", "/api/v1/admin/promotion-records"],
@@ -6153,6 +6155,12 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "review-signals"',
     'endpoint: "/api/v1/admin/review-signals"',
     'resourceKey: "reviewSignal"',
+    'id: "workflow-gates"',
+    'endpoint: "/api/v1/admin/workflow-gates"',
+    'resourceKey: "workflowGate"',
+    "Read-only static WorkflowGate definitions for prepared-draft readiness; not submitted gate evidence.",
+    "function workflowGateDefinitionPreviewRow(item)",
+    '["Policy filter", humanize(result.filters?.workflowPolicyId ?? "prepared_draft_readiness")]',
     'id: "gate-decisions"',
     'endpoint: "/api/v1/admin/gate-decisions"',
     'resourceKey: "gateDecision"',
@@ -13391,8 +13399,18 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('["Readiness readback", item.readinessReadbackRoute ?? "not available"]'));
   assert.ok(appSource.includes("<span>Workflow policy</span>"));
   assert.ok(appSource.includes("<span>Workflow gates</span>"));
+  assert.ok(appSource.includes("<span>Gate definitions</span>"));
+  assert.ok(appSource.includes("<span>Gate decisions</span>"));
+  assert.ok(appSource.includes('workflowPolicy.gateDefinitionRoute ?? "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness"'));
+  assert.ok(appSource.includes('workflowPolicy.gateDecisionRoute ?? "/api/v1/admin/gate-decisions"'));
   assert.ok(appSource.includes("workflowGateLabels"));
   assert.ok(appSource.includes("[\"Preparation gates\", preparationGates]"));
+  assert.ok(appSource.includes("/api/v1/admin/workflow-gates"));
+  assert.ok(appSource.includes("workflowGateDefinitionsRoute"));
+  assert.ok(appSource.includes("[\"Gate definitions\", item.sourcePreparationValidationPlan?.workflowGateDefinitionsRoute ?? \"not available\"]"));
+  assert.ok(appSource.includes("workflowGateDefinitionPreviewRow(item)"));
+  assert.ok(appSource.includes("function workflowGateDefinitionPreviewRow(item)"));
+  assert.ok(appSource.includes("[\"Prepared-draft readiness\", item.requiredForPreparedDraftReadiness ? \"required\" : \"not required\"]"));
   assert.ok(appSource.includes("function taskTrackTaxonomyPanel(taskTrackTaxonomy)"));
   assert.ok(appSource.includes("function researchBacklogPanel(researchBacklog)"));
   assert.ok(appSource.includes("function metaphilosophyDeliverableChecklistPanel(metaphilosophyDeliverableChecklist)"));
@@ -19625,6 +19643,58 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
   assert.ok(gateDecisionQueue.body.rows.every((row) => row.workflowPolicyId === "prepared_draft_readiness"));
   assert.ok(gateDecisionQueue.body.rows.every((row) => row.gateStatus === "passed"));
 
+  const workflowGateDefinitions = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness",
+    headers: adminHeaders,
+  });
+  assert.equal(workflowGateDefinitions.status, 200, JSON.stringify(workflowGateDefinitions.body));
+  assert.equal(workflowGateDefinitions.body.readbackAccess, "admin_auditor_only");
+  assert.equal(workflowGateDefinitions.body.resourceKey, "workflowGate");
+  assert.equal(workflowGateDefinitions.body.readbackSource, "static_workflow_gate_definition");
+  assert.equal(workflowGateDefinitions.body.filters.workflowPolicyId, "prepared_draft_readiness");
+  assert.equal(workflowGateDefinitions.body.count, requiredGateIdsForPolicy("prepared_draft_readiness").length);
+  assert.deepEqual(
+    workflowGateDefinitions.body.items.map((row) => row.gateId).sort(),
+    [...requiredGateIdsForPolicy("prepared_draft_readiness")].sort(),
+  );
+  assert.ok(workflowGateDefinitions.body.items.every((row) => row.workflowPolicyId === "prepared_draft_readiness"));
+  assert.ok(workflowGateDefinitions.body.items.every((row) => row.requiredForPolicy === true));
+  assert.ok(workflowGateDefinitions.body.items.every((row) => row.decisionRoute === "/api/v1/admin/gate-decisions"));
+  assert.match(workflowGateDefinitions.body.policy.nonMutationBoundary, /Read-only WorkflowGate definitions/);
+  assert.equal(workflowGateDefinitions.body.counts.requiredForPreparedDraftReadiness, requiredGateIdsForPolicy("prepared_draft_readiness").length);
+  assert.equal(workflowGateDefinitions.body.counts.byWorkflowPolicyId.prepared_draft_readiness, requiredGateIdsForPolicy("prepared_draft_readiness").length);
+
+  const workflowGateById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/admin/workflow-gates/candidate_text_quality_gate",
+    headers: adminHeaders,
+  });
+  assert.equal(workflowGateById.status, 200, JSON.stringify(workflowGateById.body));
+  assert.equal(workflowGateById.body.resourceKey, "workflowGate");
+  assert.equal(workflowGateById.body.item.gateId, "candidate_text_quality_gate");
+  assert.equal(workflowGateById.body.item.workflowPolicyId, "prepared_draft_readiness");
+  assert.equal(workflowGateById.body.item.label, WORKFLOW_GATES.candidate_text_quality_gate.label);
+  assert.equal(workflowGateById.body.item.readbackItemRoute, "/api/v1/admin/workflow-gates/candidate_text_quality_gate");
+  assert.equal(workflowGateById.body.item.releaseReportRoute, "/api/release/report");
+
+  const allWorkflowGateDefinitions = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/admin/workflow-gates?workflowPolicyId=all",
+    headers: adminHeaders,
+  });
+  assert.equal(allWorkflowGateDefinitions.status, 200, JSON.stringify(allWorkflowGateDefinitions.body));
+  assert.equal(allWorkflowGateDefinitions.body.count, Object.keys(WORKFLOW_GATES).length);
+  assert.ok(allWorkflowGateDefinitions.body.items.some((row) => row.gateId === "candidate_record_integrity_gate"));
+
+  const missingWorkflowGate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/admin/workflow-gates/not-present",
+    headers: adminHeaders,
+  });
+  assert.equal(missingWorkflowGate.status, 404);
+  assert.equal(missingWorkflowGate.body.error, "workflow_gate_definition_not_found");
+
   const candidateItemQueue = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/admin/candidate-items",
@@ -19725,6 +19795,8 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
     "/api/v1/admin/prepared-drafts",
     "/api/v1/admin/prepared-drafts/source-prepared-position",
     "/api/v1/admin/review-signals",
+    "/api/v1/admin/workflow-gates",
+    "/api/v1/admin/workflow-gates/candidate_text_quality_gate",
     "/api/v1/admin/gate-decisions",
     `/api/v1/admin/gate-decisions/${preparedReview.body.gateDecisionIds[0]}`,
     "/api/v1/admin/candidate-items",
@@ -19752,9 +19824,22 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
   assert.equal(report.body.sourcePreparationEvidence.workflowPolicy.policyId, "prepared_draft_readiness");
   assert.deepEqual(report.body.sourcePreparationEvidence.workflowPolicy.requiredGateIds, requiredGateIdsForPolicy("prepared_draft_readiness"));
   assert.equal(report.body.sourcePreparationEvidence.workflowPolicy.requiredGates.length, requiredGateIdsForPolicy("prepared_draft_readiness").length);
+  assert.equal(report.body.sourcePreparationEvidence.workflowPolicy.gateDefinitionRoute, "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness");
+  assert.equal(report.body.sourcePreparationEvidence.workflowPolicy.gateDecisionRoute, "/api/v1/admin/gate-decisions");
+  assert.equal(report.body.sourcePreparationEvidence.workflowPolicy.readbackSource, "static_workflow_policy_definition");
+  assert.match(report.body.sourcePreparationEvidence.workflowPolicy.nonMutationBoundary, /only submitted GateDecision rows/);
+  assert.ok(report.body.sourcePreparationEvidence.routes.readbackRoutes.includes("/api/v1/admin/workflow-gates"));
   assert.ok(
     report.body.sourcePreparationEvidence.workflowPolicy.requiredGates.some(
       (gate) => gate.gateId === "rater_visibility_gate" && gate.label === "Rater visibility",
+    ),
+  );
+  assert.ok(
+    report.body.sourcePreparationEvidence.workflowPolicy.requiredGates.every(
+      (gate) =>
+        gate.definitionCollectionRoute === "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness" &&
+        gate.decisionRoute === "/api/v1/admin/gate-decisions" &&
+        gate.readbackRoute === `/api/v1/admin/workflow-gates/${encodeURIComponent(gate.gateId)}?workflowPolicyId=prepared_draft_readiness`,
     ),
   );
   assert.equal(report.body.sourcePreparationEvidence.byDraftType.prepared_position_draft, 1);
@@ -19819,12 +19904,14 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
   assert.deepEqual(sourceWorkbenchReadiness.body.items[0].sourcePreparationRouteCounts, report.body.sourcePreparationEvidence.routeCounts);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceIntakeRouteCounts.byRoute["/api/v1/admin/sources/{id}/extract?dryRun=true"], 1);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourcePreparationRouteCounts.byRoute["/api/v1/admin/prepared-drafts/{id}/promote"], 1);
+  assert.equal(sourceWorkbenchReadiness.body.items[0].sourcePreparationRouteCounts.byRoute["/api/v1/admin/workflow-gates"], 1);
   assert.deepEqual(sourceWorkbenchReadiness.body.items[0].sourcePreparationAdminRoutes, [
     "/api/v1/admin/extractions/{id}/create-prepared-position",
     "/api/v1/admin/extractions/{id}/create-prepared-critique",
     "/api/v1/admin/prepared-drafts/{id}/review",
     "/api/v1/admin/prepared-drafts/{id}/promote",
   ]);
+  assert.ok(sourceWorkbenchReadiness.body.items[0].readbackRoutes.includes("/api/v1/admin/workflow-gates"));
   assert.ok(sourceWorkbenchReadiness.body.items[0].readbackRoutes.includes("/api/v1/admin/gate-decisions"));
   assert.ok(
     sourceWorkbenchReadiness.body.items[0].sourceIntakeJsonlImportRoutes.some(
@@ -19855,7 +19942,16 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
     ],
   );
   assert.deepEqual(sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.requiredGateIds, requiredGateIdsForPolicy("prepared_draft_readiness"));
+  assert.equal(
+    sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.workflowGateDefinitionsRoute,
+    "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness",
+  );
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.workflowPolicy.policyId, "prepared_draft_readiness");
+  assert.equal(
+    sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.workflowPolicy.gateDefinitionRoute,
+    "/api/v1/admin/workflow-gates?workflowPolicyId=prepared_draft_readiness",
+  );
+  assert.equal(sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.workflowPolicy.gateDecisionRoute, "/api/v1/admin/gate-decisions");
   assert.deepEqual(
     sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.workflowPolicy.requiredGateIds,
     requiredGateIdsForPolicy("prepared_draft_readiness"),
@@ -20418,6 +20514,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.deepEqual(sourceWorkbenchReadiness.body.items[0].sourcePreparationRoutes, report.body.sourcePreparationEvidence.routes);
   assert.deepEqual(sourceWorkbenchReadiness.body.items[0].sourcePreparationRouteCounts, report.body.sourcePreparationEvidence.routeCounts);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceIntakeRouteCounts.byRoute["/api/v1/admin/extractions/import-jsonl?validateOnly=true"], 1);
+  assert.equal(sourceWorkbenchReadiness.body.items[0].sourcePreparationRouteCounts.byRoute["/api/v1/admin/workflow-gates"], 1);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourcePreparationRouteCounts.byRoute["/api/v1/admin/gate-decisions"], 1);
   assert.ok(
     sourceWorkbenchReadiness.body.items[0].sourceIntakeJsonlImportRoutes.some(
@@ -20533,6 +20630,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/extraction-batches/import-jsonl"], 1);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/extractions/import-jsonl?validateOnly=true"], 1);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/review-signals"], 1);
+  assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/workflow-gates"], 1);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/gate-decisions"], 1);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/candidate-items"], 1);
   assert.match(sourceWorkbenchTemplate.body.policy.templateOnly, /reject unchanged template records/);
@@ -20575,6 +20673,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(preparedDraftReviewTemplate);
   assert.equal(preparedDraftReviewTemplate.route, "/api/v1/admin/prepared-drafts/TODO_PREPARED_DRAFT_ID/review");
   assert.ok(preparedDraftReviewTemplate.readbackRoutes.includes("/api/v1/admin/review-signals"));
+  assert.ok(preparedDraftReviewTemplate.readbackRoutes.includes("/api/v1/admin/workflow-gates"));
   assert.ok(preparedDraftReviewTemplate.readbackRoutes.includes("/api/v1/admin/gate-decisions"));
   assert.equal(preparedDraftReviewTemplate.requestBody.preparedDraftReview.templateOnly, true);
   assert.equal(preparedDraftReviewTemplate.requestBody.preparedDraftReview.gateDecisions.length, requiredGateIdsForPolicy("prepared_draft_readiness").length);
@@ -20669,6 +20768,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(routeFilteredGateDecisionTemplate.status, 200, JSON.stringify(routeFilteredGateDecisionTemplate.body));
   assert.equal(routeFilteredGateDecisionTemplate.body.count, 1);
   assert.equal(routeFilteredGateDecisionTemplate.body.items[0].templateKind, "prepared_draft_review");
+
+  const routeFilteredWorkflowGateTemplate = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/source-workbench-template?route=${encodeURIComponent("/api/v1/admin/workflow-gates")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(routeFilteredWorkflowGateTemplate.status, 200, JSON.stringify(routeFilteredWorkflowGateTemplate.body));
+  assert.equal(routeFilteredWorkflowGateTemplate.body.count, 1);
+  assert.equal(routeFilteredWorkflowGateTemplate.body.items[0].templateKind, "prepared_draft_review");
 
   const sourceWorkbenchTemplateItem = await invokeApi(context, {
     method: "GET",
