@@ -7304,6 +7304,10 @@ export async function handleApiRequest(request, response, url, context) {
     await benchmarkExposureEndpoint(request, response, context);
     return;
   }
+  if (request.method === "POST" && url.pathname === "/api/v1/benchmark/exposures") {
+    await recordBenchmarkExposureEndpoint(request, response, context);
+    return;
+  }
   if (request.method === "POST" && url.pathname === "/api/v1/label-snapshots") {
     await labelSnapshotEndpoint(request, response, context);
     return;
@@ -8172,9 +8176,15 @@ async function benchmarkExposureEndpoint(request, response, context) {
     sendJson(response, 403, { error: "benchmark_exposure_reader_role_required" });
     return;
   }
+  const events = [...seedBenchmarkExposureEvents, ...(await readPersistedBenchmarkExposureEvents(context.auditStore))];
   sendJson(response, 200, {
     releaseId,
-    events: [...seedBenchmarkExposureEvents, ...(await readPersistedBenchmarkExposureEvents(context.auditStore))],
+    resourceKey: "benchmarkExposureEvent",
+    count: events.length,
+    totalCount: events.length,
+    readbackSource: "benchmark_exposure_audit_log",
+    items: events,
+    events,
   });
 }
 

@@ -4860,6 +4860,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/benchmark-freeze-reports"],
     ["GET", "/api/v1/benchmark-freeze-reports/benchmark-freeze-report-smoke"],
     ["GET", "/api/v1/benchmark/exposure"],
+    ["POST", "/api/v1/benchmark/exposures"],
     ["POST", "/api/v1/label-snapshots"],
     ["GET", "/api/v1/label-snapshots"],
     ["GET", "/api/v1/label-snapshots/snapshot-smoke"],
@@ -8721,6 +8722,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "server_materialized_snapshot",
     "benchmark_exposure_audit",
   ]);
+  assert.ok(benchmarkFreezeItem.governanceCoverageRoutes.includes("/api/v1/benchmark/exposure"));
+  assert.ok(benchmarkFreezeItem.governanceCoverageRoutes.includes("/api/v1/benchmark/exposures"));
   assert.equal(benchmarkFreezeItem.policyGated, false);
   assert.equal(benchmarkFreezeItem.policyActionKind, null);
   assert.ok(benchmarkFreezeItem.governanceCoveragePolicy.includes("records benchmark exposure"));
@@ -18211,7 +18214,35 @@ test("v1 artifact endpoints expose existing report artifacts with role checks", 
 
   const exposure = await invokeApi(context, { method: "GET", url: "/api/v1/benchmark/exposure", headers: adminHeaders });
   assert.equal(exposure.status, 200);
+  assert.equal(exposure.body.resourceKey, "benchmarkExposureEvent");
+  assert.equal(exposure.body.count, exposure.body.events.length);
+  assert.equal(exposure.body.totalCount, exposure.body.events.length);
+  assert.equal(exposure.body.readbackSource, "benchmark_exposure_audit_log");
+  assert.deepEqual(exposure.body.items, exposure.body.events);
   assert.ok(exposure.body.events.length >= 1);
+
+  const v1ExposureAppend = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/benchmark/exposures",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      exposure: {
+        action: "post_freeze_access_review",
+        artifactId: "hidden-benchmark-freeze-october-2026-demo",
+        purpose: "access_audit_review",
+        accessPhase: "post_freeze",
+        notes: "v1 benchmark exposure alias records post-freeze audit review.",
+      },
+    }),
+  });
+  assert.equal(v1ExposureAppend.status, 201);
+  assert.equal(typeof v1ExposureAppend.body.eventId, "string");
+  assert.match(v1ExposureAppend.body.payloadHash, /^sha256:/);
+
+  const exposureAfterAppend = await invokeApi(context, { method: "GET", url: "/api/v1/benchmark/exposure", headers: adminHeaders });
+  assert.equal(exposureAfterAppend.status, 200);
+  assert.equal(exposureAfterAppend.body.count, exposure.body.count + 1);
+  assert.equal(exposureAfterAppend.body.items.at(-1).action, "post_freeze_access_review");
 
   const snapshot = await invokeApi(context, { method: "POST", url: "/api/v1/label-snapshots", headers: adminHeaders });
   assert.equal(snapshot.status, 200);

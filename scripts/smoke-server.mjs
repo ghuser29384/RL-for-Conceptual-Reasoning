@@ -676,7 +676,7 @@ async function main() {
     assert.equal(benchmarkReport.body.restrictedItemRefs.hiddenPositionIds.length, 1);
     assert.equal(benchmarkReport.body.accessAudit.authorizedAccessCount >= 2, true);
 
-    const benchmarkExposure = await requestJson(`${baseUrl}/api/benchmark/exposures`, {
+    const benchmarkExposure = await requestJson(`${baseUrl}/api/v1/benchmark/exposures`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
       body: JSON.stringify({
@@ -691,6 +691,14 @@ async function main() {
     });
     assert.equal(benchmarkExposure.status, 201);
     assert.equal(benchmarkExposure.body.report.artifactProbeDiagnostics.status, "pass");
+
+    const benchmarkExposureReadback = await requestJson(`${baseUrl}/api/v1/benchmark/exposure`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(benchmarkExposureReadback.status, 200);
+    assert.equal(benchmarkExposureReadback.body.resourceKey, "benchmarkExposureEvent");
+    assert.equal(benchmarkExposureReadback.body.count, benchmarkExposureReadback.body.events.length);
+    assert.equal(benchmarkExposureReadback.body.items.at(-1).action, "artifact_probe_run");
 
     const hiddenBenchmarkContent = await requestJson(`${baseUrl}/api/benchmark/exposures`, {
       method: "POST",

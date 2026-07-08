@@ -28950,9 +28950,9 @@ const OPERATOR_ACTION_EXTRA_GOVERNANCE_BY_ARTIFACT_KIND = {
   },
   benchmark_freeze_report: {
     governanceCoverageKinds: ["server_materialized_snapshot", "benchmark_exposure_audit"],
-    governanceCoverageRoutes: ["/api/v1/benchmark/candidates/freeze", "/api/benchmark/exposures"],
+    governanceCoverageRoutes: ["/api/v1/benchmark/candidates/freeze", "/api/v1/benchmark/exposure", "/api/v1/benchmark/exposures", "/api/benchmark/exposures"],
     governanceCoveragePolicy:
-      "The hidden-benchmark freeze snapshot route is admin-only, materializes the computed freeze report, records benchmark exposure, and rejects unchanged generated templates; it does not close the release gate by itself.",
+      "The hidden-benchmark freeze snapshot route is admin-only, materializes the computed freeze report, records benchmark exposure through the v1 audit alias, and rejects unchanged generated templates; it does not close the release gate by itself.",
   },
 };
 
