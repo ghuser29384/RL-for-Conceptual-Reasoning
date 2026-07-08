@@ -2124,6 +2124,28 @@ function validateSourceIntakePhase1Boundary(resource) {
   return { ok: true };
 }
 
+function validatePublicDatasetDocumentResource(resource) {
+  const expectedBodyHash = `sha256:${sha256(resource.bodyMarkdown)}`;
+  if (resource.bodyHash !== expectedBodyHash) {
+    return invalid("publicDatasetDocument.bodyHash must equal sha256(bodyMarkdown)");
+  }
+  const placeholderFields = ["id", "documentVersion", "title", "summary", "bodyMarkdown", "bodyHash", "preparedBy", "reviewedBy", "createdAt"].filter(
+    (field) => publicDatasetDocumentHasPlaceholder(resource[field]),
+  );
+  const linkedPlaceholderFields = Object.entries(resource.linkedReleaseObjectIds ?? {})
+    .filter(([, value]) => publicDatasetDocumentHasPlaceholder(value))
+    .map(([field]) => `linkedReleaseObjectIds.${field}`);
+  const placeholders = [...placeholderFields, ...linkedPlaceholderFields];
+  if (placeholders.length) {
+    return invalid(`publicDatasetDocument must replace generated template placeholders before submission: ${placeholders.join(", ")}`);
+  }
+  return { ok: true };
+}
+
+function publicDatasetDocumentHasPlaceholder(value) {
+  return typeof value === "string" && /\bTODO(?:_|\b)/.test(value);
+}
+
 function validatePublicDatasetPackageReviewResource(resource) {
   const rawContentPaths = publicDatasetPackageReviewRawContentPaths(resource);
   if (rawContentPaths.length) {
@@ -6281,6 +6303,7 @@ const workflowWriteEndpoints = [
     requiredExactFields: {
       artifactName: publicDatasetArtifactName,
     },
+    customValidator: validatePublicDatasetDocumentResource,
     requiredWhen: [
       {
         field: "documentKind",
@@ -12373,6 +12396,8 @@ function publicDatasetDocumentTemplateReadback(report, options = {}) {
         "Admin/auditor only because templates expose current release-object ids and public-artifact readiness blockers.",
       templateOnly:
         "Generated request bodies include templateOnly=true and TODO placeholders; POST /api/v1/public-dataset-documents rejects unchanged templates before workflow side effects.",
+      draftGeneration:
+        "Each template row includes report-derived draft sections and a draft body hash to speed human documentation review, but those draft fields are read-only guidance and are not submitted unless an admin copies, reviews, replaces TODO fields, and posts a non-template document.",
       replacement:
         "Operators must replace title, summary, bodyMarkdown, bodyHash, preparedBy, reviewedBy, and timestamps with real reviewed documentation before submission.",
     },
@@ -12391,6 +12416,8 @@ function publicDatasetDocumentTemplateItems(report) {
   const linkedReleaseObjectIds = publicDatasetDocumentTemplateLinkedReleaseObjectIds(report, readinessRows);
   return ["dataset_card", "methodology_report"].map((documentKind, index) => {
     const readinessRow = readinessRows.find((row) => row.id === documentKind) ?? {};
+    const draftSections = publicDatasetDocumentDraftSections(documentKind, report, linkedReleaseObjectIds, readinessRow);
+    const draftBodyMarkdown = publicDatasetDocumentDraftBodyMarkdown(documentKind, draftSections);
     const requestBody = {
       publicDatasetDocument: publicDatasetDocumentTemplateResource(documentKind, report, linkedReleaseObjectIds, index),
     };
@@ -12414,6 +12441,13 @@ function publicDatasetDocumentTemplateItems(report) {
       collectionReadbackRoute: "/api/v1/public-dataset-documents",
       publicDatasetReadinessRoute: "/api/v1/public-dataset-readiness",
       linkedReleaseObjectIds,
+      draftSource: "release_report_derived_review_draft",
+      draftReviewBoundary:
+        "Draft sections are generated from the current release report for admin review only; they do not satisfy Dataset v0.1 documentation readiness until submitted through POST /api/v1/public-dataset-documents.",
+      draftSections,
+      draftSectionKeys: draftSections.map((section) => section.sectionKey),
+      draftBodyMarkdown,
+      draftBodyHash: `sha256:${sha256(draftBodyMarkdown)}`,
       requiredFields: [
         "id",
         "releaseId",
@@ -12538,8 +12572,123 @@ function publicDatasetDocumentTemplateCounts(items) {
     readyReadinessRows: items.filter((item) => item.readinessStatus === "ready").length,
     byDocumentKind: countItemsBy(items, "documentKind"),
     byReadinessStatus: countItemsBy(items, "readinessStatus"),
+    byDraftSource: countItemsBy(items, "draftSource"),
+    draftSectionRows: items.reduce((total, item) => total + (Array.isArray(item.draftSections) ? item.draftSections.length : 0), 0),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
+}
+
+function publicDatasetDocumentDraftSections(documentKind, report, linkedReleaseObjectIds, readinessRow = {}) {
+  const targets = report.octoberTargets ?? {};
+  const corpusCounts = report.corpusManifest?.counts ?? {};
+  const targetGapTotals = report.targetGaps?.totals ?? report.targetGaps?.counts ?? {};
+  const targetGaps = report.targetGaps ?? {};
+  const readiness = report.publicDatasetReadiness ?? {};
+  const releaseVersion = report.releaseVersionManifest ?? {};
+  const common = [
+    {
+      sectionKey: "artifact_and_release_status",
+      heading: "Artifact and Release Status",
+      coverageStatus: "draft_from_release_report",
+      sourceEvidenceIds: uniqueValues([readiness.id, readinessRow.sourceEvidenceIds?.[0], releaseVersion.id]),
+      body:
+        `${readiness.artifactName ?? publicDatasetArtifactName} is represented as a Dataset v0.1 public-artifact readiness workflow for release ${report.releaseId ?? releaseId}. ` +
+        `Current readiness is ${readiness.releaseUseStatus ?? "not_reported"}; target scale is ${report.currentStatus ?? "not_reported"} with ` +
+        `${targetGapTotals.currentTotal ?? "unknown"} of ${targetGapTotals.targetTotal ?? "unknown"} target resources recorded and ${targetGapTotals.remainingTotal ?? "unknown"} remaining.`,
+    },
+    {
+      sectionKey: "linked_release_objects",
+      heading: "Linked Release Objects",
+      coverageStatus: "draft_from_current_ids",
+      sourceEvidenceIds: Object.values(linkedReleaseObjectIds).filter(Boolean),
+      body:
+        `The document must bind to the current corpus manifest (${linkedReleaseObjectIds.corpusManifestId}), label snapshot (${linkedReleaseObjectIds.labelSnapshotId}), public export manifest (${linkedReleaseObjectIds.publicExportManifestId}), and release-version manifest (${linkedReleaseObjectIds.releaseVersionManifestId}).`,
+    },
+    {
+      sectionKey: "public_boundary",
+      heading: "Public Boundary",
+      coverageStatus: "draft_from_policy",
+      sourceEvidenceIds: uniqueValues([readiness.id, readinessRow.id]),
+      body:
+        "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded. Public leaderboard, API evaluator, public training-export, and judge-model launches remain blocked until Dataset v0.1 readiness is complete.",
+    },
+  ];
+  if (documentKind === "dataset_card") {
+    return [
+      {
+        sectionKey: "dataset_scope",
+        heading: "Dataset Scope",
+        coverageStatus: "draft_from_release_report",
+        sourceEvidenceIds: uniqueValues([report.corpusManifest?.id, readiness.id]),
+        body:
+          `Dataset v0.1 covers expert-rated philosophical position-critique pairs with seven-dimensional LMCA-style labels. Current counts are ${corpusCounts.positions ?? "unknown"} positions, ${corpusCounts.critiques ?? "unknown"} critiques, and ${corpusCounts.blindInitialRatings ?? "unknown"} blind initial ratings against October targets of ${targets.positions ?? "unknown"} positions, ${targets.critiques ?? "unknown"} critiques, and ${targets.blindInitialRatings ?? "unknown"} blind initial ratings.`,
+      },
+      {
+        sectionKey: "label_and_metadata_scope",
+        heading: "Label and Metadata Scope",
+        coverageStatus: "draft_from_release_report",
+        sourceEvidenceIds: uniqueValues([
+          linkedReleaseObjectIds.labelSnapshotId,
+          report.scoreExplanationAudit?.id,
+          report.labelAggregationReliabilityChecklist?.id,
+        ]),
+        body:
+          "Released rows must carry seven-dimensional labels, confidence and triggered explanations where available, item-text/version hashes, split manifests, corpus-composition metadata, rating-context snapshot references, and explicit exclusions for hidden/protected material.",
+      },
+      {
+        sectionKey: "scale_limitations",
+        heading: "Scale Limitations",
+        coverageStatus: "draft_from_target_gaps",
+        sourceEvidenceIds: uniqueValues([report.targetGaps?.id, readiness.id]),
+        body:
+          `The current release is not target-scale complete: ${targetGaps.positionsRemaining ?? "unknown"} positions, ${targetGaps.critiquesRemaining ?? "unknown"} critiques, ${targetGaps.blindInitialRatingsRemaining ?? "unknown"} blind initial ratings, ${targetGaps.goldItemsRemaining ?? "unknown"} gold items, ${targetGaps.validationCritiquesRemaining ?? "unknown"} validation critiques, ${targetGaps.validationPositionsRemaining ?? "unknown"} validation positions, and ${targetGaps.validationCoreAllItemsRatersRemaining ?? "unknown"} core validation raters remain before strong October release claims are supported.`,
+      },
+      ...common,
+    ];
+  }
+  return [
+    {
+      sectionKey: "rating_workflow",
+      heading: "Rating Workflow",
+      coverageStatus: "draft_from_release_report",
+      sourceEvidenceIds: uniqueValues([
+        report.ratingExperienceEvidence?.id,
+        report.discussionAdjudicationWorkflowEvidence?.id,
+        report.workflowStateMachineEvidence?.id,
+      ]),
+      body:
+        "The methodology must describe source-blind initial rating, unset/no-default score entry, preserved original ratings, post-lock discussion and revision, structured verification/adjudication controls, and append-only workflow-state transition evidence.",
+    },
+    {
+      sectionKey: "scoring_and_label_governance",
+      heading: "Scoring and Label Governance",
+      coverageStatus: "draft_from_release_report",
+      sourceEvidenceIds: uniqueValues([
+        report.metricDirectionalityConfig?.id,
+        report.labelAggregationReliabilityChecklist?.id,
+        linkedReleaseObjectIds.labelSnapshotId,
+      ]),
+      body:
+        "The methodology must keep LMCA weighted-pairwise and custom-loss metric families separate, declare badness-field directionality and low-clarity policy, preserve target-label snapshot identity, and disclose reliability weighting plus unweighted/median sensitivity where applicable.",
+    },
+    {
+      sectionKey: "validation_and_benchmark_limits",
+      heading: "Validation and Benchmark Limits",
+      coverageStatus: "draft_from_release_report",
+      sourceEvidenceIds: uniqueValues([report.validationDesign?.id, report.hiddenBenchmarkFreeze?.id, readiness.id]),
+      body:
+        `Validation and hidden-benchmark claims remain limited while readiness is ${readiness.releaseUseStatus ?? "not_reported"} and validation status is ${report.validationDesign?.releaseUseStatus ?? "not_reported"}. Any thinner-than-Appendix-C validation, blocked benchmark freeze, or release-claim warning must be stated rather than hidden by the dataset publication workflow.`,
+    },
+    ...common,
+  ];
+}
+
+function publicDatasetDocumentDraftBodyMarkdown(documentKind, sections) {
+  const title =
+    documentKind === "dataset_card"
+      ? "Metaphilosophy Critique Ratings Dataset v0.1 Dataset Card Draft"
+      : "Metaphilosophy Critique Ratings Dataset v0.1 Methodology Report Draft";
+  return [`# ${title}`, "", ...sections.flatMap((section) => [`## ${section.heading}`, section.body, ""])].join("\n").trim();
 }
 
 function publicDatasetPackageManifestReadback(report, options = {}) {

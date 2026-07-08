@@ -4333,6 +4333,8 @@ const workflowTemplates = [
     summary: "Submit a Dataset v0.1 dataset-card or methodology-report evidence record without publishing the dataset.",
     payload: () => {
       const now = Date.now();
+      const bodyMarkdown =
+        "Dataset v0.1 documents release-cleared position-critique pairs, seven-dimensional expert-supervised labels, confidence and triggered explanations where available, item-text hashes, split manifests, corpus composition, and release limitations.";
       return {
         publicDatasetDocument: {
           id: `public-dataset-document-${now}`,
@@ -4343,9 +4345,8 @@ const workflowTemplates = [
           title: "Metaphilosophy Critique Ratings Dataset v0.1 dataset card",
           summary:
             "Dataset card for an expert-rated position-critique dataset with seven-dimensional labels, split governance, and release limitations.",
-          bodyMarkdown:
-            "Dataset v0.1 documents release-cleared position-critique pairs, seven-dimensional expert-supervised labels, confidence and triggered explanations where available, item-text hashes, split manifests, corpus composition, and release limitations.",
-          bodyHash: `sha256:public-dataset-document-${now}`,
+          bodyMarkdown,
+          bodyHash: "sha256:3838b311e7bfda6b03f61dd77f0c77fb6bb2d1122d3e55430893e2b572dfff0f",
           linkedReleaseObjectIds: {
             corpusManifestId: `corpus-composition-${releaseId}`,
             labelSnapshotId: "snapshot-oct-api",
@@ -10015,6 +10016,13 @@ function publicDatasetDocumentTemplatePreviewRow(item) {
     .map(([key, value]) => `${humanize(key)}: ${value}`)
     .join(", ");
   const requiredFields = Array.isArray(item.requiredFields) ? item.requiredFields : [];
+  const draftSections = Array.isArray(item.draftSections) ? item.draftSections : [];
+  const draftSectionSummary = draftSections.length
+    ? draftSections
+        .slice(0, 4)
+        .map((section) => humanize(section.sectionKey ?? section.heading ?? "section"))
+        .join(", ")
+    : "not generated";
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10032,6 +10040,8 @@ function publicDatasetDocumentTemplatePreviewRow(item) {
         ["Validate route", item.singleRecordValidateOnlyRoute ?? "not available"],
         ["Readiness row", item.readinessRowReadbackRoute ?? "not available"],
         ["Linked release objects", linkedSummary || "not reported"],
+        ["Draft sections", draftSectionSummary],
+        ["Draft hash", item.draftBodyHash ?? "not generated"],
         ["Required fields", requiredFields.length ? requiredFields.slice(0, 7).join(", ") : "not reported"],
       ])}
     </article>

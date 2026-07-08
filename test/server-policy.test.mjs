@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync, sign as signCrypto } from "node:crypto";
+import { createHash, generateKeyPairSync, sign as signCrypto } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -15695,14 +15695,18 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(documentTemplate.body.count, 2);
   assert.equal(documentTemplate.body.counts.byDocumentKind.dataset_card, 1);
   assert.equal(documentTemplate.body.counts.byDocumentKind.methodology_report, 1);
+  assert.equal(documentTemplate.body.counts.byDraftSource.release_report_derived_review_draft, 2);
+  assert.ok(documentTemplate.body.counts.draftSectionRows >= 12);
   assert.equal(documentTemplate.body.counts.openReadinessRows, 2);
   assert.equal(documentTemplate.body.writeRoute, "/api/v1/public-dataset-documents");
   assert.equal(documentTemplate.body.singleRecordValidateOnlyRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  assert.match(documentTemplate.body.policy.draftGeneration, /read-only guidance/);
   const datasetCardTemplate = documentTemplate.body.items.find((item) => item.documentKind === "dataset_card");
   const methodologyTemplate = documentTemplate.body.items.find((item) => item.documentKind === "methodology_report");
   assert.ok(datasetCardTemplate);
   assert.ok(methodologyTemplate);
   assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.templateOnly, true);
+  assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.bodyMarkdown.startsWith("TODO"), true);
   assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.artifactName, "Metaphilosophy Critique Ratings Dataset v0.1");
   assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.corpusManifestId, "corpus-composition-october-2026-demo");
   assert.equal(datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.labelSnapshotId, "snapshot-oct-api");
@@ -15711,6 +15715,16 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
     datasetCardTemplate.requestBody.publicDatasetDocument.linkedReleaseObjectIds.releaseVersionManifestId,
     "release-version-manifest-october-2026-demo",
   );
+  assert.equal(datasetCardTemplate.draftSource, "release_report_derived_review_draft");
+  assert.equal(datasetCardTemplate.draftReviewBoundary.includes("do not satisfy Dataset v0.1 documentation readiness"), true);
+  assert.match(datasetCardTemplate.draftBodyHash, /^sha256:[0-9a-f]{64}$/);
+  assert.match(datasetCardTemplate.draftBodyMarkdown, /# Metaphilosophy Critique Ratings Dataset v0\.1 Dataset Card Draft/);
+  assert.ok(datasetCardTemplate.draftSectionKeys.includes("dataset_scope"));
+  assert.ok(datasetCardTemplate.draftSectionKeys.includes("scale_limitations"));
+  assert.ok(datasetCardTemplate.draftSections.some((section) => section.sectionKey === "public_boundary"));
+  assert.equal(methodologyTemplate.draftSource, "release_report_derived_review_draft");
+  assert.ok(methodologyTemplate.draftSectionKeys.includes("rating_workflow"));
+  assert.ok(methodologyTemplate.draftSectionKeys.includes("validation_and_benchmark_limits"));
   assert.ok(datasetCardTemplate.requiredFields.includes("bodyHash"));
   assert.ok(datasetCardTemplate.routes.includes("/api/v1/public-dataset-documents/template"));
 
@@ -15741,41 +15755,44 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(unchangedTemplateWrite.body.error, "workflow_template_record");
   assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
 
-  const documentPayload = (id, documentKind) => ({
-    publicDatasetDocument: {
-      id,
-      releaseId: "october-2026-demo",
-      documentKind,
-      artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
-      documentVersion: `${documentKind}-v0.1`,
-      title:
-        documentKind === "dataset_card"
-          ? "Metaphilosophy Critique Ratings Dataset v0.1 dataset card"
-          : "Metaphilosophy Critique Ratings Dataset v0.1 methodology report",
-      summary:
-        documentKind === "dataset_card"
-          ? "Dataset card for expert-rated position-critique pairs, seven-dimensional labels, split governance, and release limitations."
-          : "Methodology report for the expert rating workflow, label snapshot, split governance, and release limitations.",
-      bodyMarkdown:
-        documentKind === "dataset_card"
-          ? "Dataset v0.1 documents release-cleared position-critique pairs, seven-dimensional labels, confidence metadata, item-text hashes, split manifests, corpus composition, and explicit limitations."
-          : "Methodology report explains the source-blind rating workflow, preserved initial ratings, label snapshot, public split boundaries, corpus manifest, and explicit limitations.",
-      bodyHash: `sha256:${id}`,
-      linkedReleaseObjectIds: {
-        corpusManifestId: "corpus-composition-october-2026-demo",
-        labelSnapshotId: "snapshot-oct-api",
-        publicExportManifestId: "public-manifest-october-2026-demo",
-        releaseVersionManifestId: "release-version-manifest-october-2026-demo",
+  const documentPayload = (id, documentKind) => {
+    const bodyMarkdown =
+      documentKind === "dataset_card"
+        ? "Dataset v0.1 documents release-cleared position-critique pairs, seven-dimensional labels, confidence metadata, item-text hashes, split manifests, corpus composition, and explicit limitations."
+        : "Methodology report explains the source-blind rating workflow, preserved initial ratings, label snapshot, public split boundaries, corpus manifest, and explicit limitations.";
+    return {
+      publicDatasetDocument: {
+        id,
+        releaseId: "october-2026-demo",
+        documentKind,
+        artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+        documentVersion: `${documentKind}-v0.1`,
+        title:
+          documentKind === "dataset_card"
+            ? "Metaphilosophy Critique Ratings Dataset v0.1 dataset card"
+            : "Metaphilosophy Critique Ratings Dataset v0.1 methodology report",
+        summary:
+          documentKind === "dataset_card"
+            ? "Dataset card for expert-rated position-critique pairs, seven-dimensional labels, split governance, and release limitations."
+            : "Methodology report for the expert rating workflow, label snapshot, split governance, and release limitations.",
+        bodyMarkdown,
+        bodyHash: `sha256:${createHash("sha256").update(bodyMarkdown).digest("hex")}`,
+        linkedReleaseObjectIds: {
+          corpusManifestId: "corpus-composition-october-2026-demo",
+          labelSnapshotId: "snapshot-oct-api",
+          publicExportManifestId: "public-manifest-october-2026-demo",
+          releaseVersionManifestId: "release-version-manifest-october-2026-demo",
+        },
+        hiddenProtectedExclusionSummary:
+          "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded.",
+        downstreamLaunchBoundary:
+          "No public leaderboard, API evaluator, public training export launch, or judge-model launch before Dataset v0.1 readiness is complete.",
+        preparedBy: "demo-admin",
+        reviewedBy: "demo-admin",
+        createdAt: "2026-10-01T00:00:00.000Z",
       },
-      hiddenProtectedExclusionSummary:
-        "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded.",
-      downstreamLaunchBoundary:
-        "No public leaderboard, API evaluator, public training export launch, or judge-model launch before Dataset v0.1 readiness is complete.",
-      preparedBy: "demo-admin",
-      reviewedBy: "demo-admin",
-      createdAt: "2026-10-01T00:00:00.000Z",
-    },
-  });
+    };
+  };
 
   const unauthenticated = await invokeApi(context, {
     method: "POST",
@@ -15805,6 +15822,20 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   });
   assert.equal(invalid.status, 400);
   assert.match(invalid.body.detail, /artifactName/);
+
+  const invalidHash = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      publicDatasetDocument: {
+        ...documentPayload("dataset-card-invalid-hash", "dataset_card").publicDatasetDocument,
+        bodyHash: "sha256:not-the-document-body",
+      },
+    }),
+  });
+  assert.equal(invalidHash.status, 400);
+  assert.match(invalidHash.body.detail, /bodyHash must equal sha256\(bodyMarkdown\)/);
 
   const datasetCard = await invokeApi(context, {
     method: "POST",
@@ -16656,6 +16687,8 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("publicDatasetDownstreamLaunchGuard"));
   assert.ok(architectureDoc.includes("public leaderboard, API evaluator, public training export, and judge-model launch"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents/template"));
+  assert.ok(architectureDoc.includes("draftSource=release_report_derived_review_draft"));
+  assert.ok(architectureDoc.includes("draftBodyMarkdown"));
   assert.ok(architectureDoc.includes("Metaphilosophy Critique Ratings Dataset v0.1"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-documents"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-documents"));
