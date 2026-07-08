@@ -10733,6 +10733,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.match(targetGapCollectionPlan.body.targetDataPackagePlan.packageRecordContract, /concrete importRoute/);
   assert.match(targetGapCollectionPlan.body.targetDataPackagePlan.verificationPolicy, /advisory/);
   assert.match(targetGapCollectionPlan.body.policy.scope, /de-duplicates shared collect-data actions/);
+  assert.equal(targetGapCollectionPlan.body.filteredCounts.bySetupImportRoute["/api/v1/assignments/import-jsonl"], 1);
+  assert.equal(targetGapCollectionPlan.body.filteredCounts.bySetupImportRoute["/api/v1/rating-context-snapshots/import-jsonl"], 1);
   assert.match(targetGapCollectionPlan.body.policy.duplicateHandling, /submit real data once/);
   assert.match(targetGapCollectionPlan.body.policy.packageImport, /spans multiple target gaps/);
   assert.match(targetGapCollectionPlan.body.policy.expandedTemplates, /expand=remaining/);
@@ -10904,6 +10906,24 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(blindRatingsCollectionPlan.importSequence[2].validateOnlyImportRoute, "/api/v1/ratings/import-jsonl?validateOnly=true");
   assert.equal(blindRatingsCollectionPlan.setupDryRunImportRoute, "/api/v1/assignments/import-jsonl?dryRun=true");
   assert.equal(blindRatingsCollectionPlan.setupValidateOnlyImportRoute, "/api/v1/assignments/import-jsonl?validateOnly=true");
+  assert.deepEqual(blindRatingsCollectionPlan.setupBulkImportRoutes, [
+    "/api/v1/assignments/import-jsonl",
+    "/api/v1/rating-context-snapshots/import-jsonl",
+  ]);
+  assert.deepEqual(blindRatingsCollectionPlan.setupDryRunImportRoutes, [
+    "/api/v1/assignments/import-jsonl?dryRun=true",
+    "/api/v1/rating-context-snapshots/import-jsonl?dryRun=true",
+  ]);
+  assert.deepEqual(blindRatingsCollectionPlan.setupValidateOnlyImportRoutes, [
+    "/api/v1/assignments/import-jsonl?validateOnly=true",
+    "/api/v1/rating-context-snapshots/import-jsonl?validateOnly=true",
+  ]);
+  assert.deepEqual(blindRatingsCollectionPlan.setupReadbackRoutes, ["/api/v1/assignments", "/api/v1/rating-context-snapshots"]);
+  assert.deepEqual(blindRatingsCollectionPlan.setupBulkImportWorkflowTemplateIds, [
+    "assignment-jsonl-import",
+    "rating-context-snapshot-jsonl-import",
+  ]);
+  assert.deepEqual(blindRatingsCollectionPlan.setupResourceKeys, ["assignment", "ratingContextSnapshot"]);
   assert.equal(blindRatingsCollectionPlan.estimatedRecordsRequired, 1434);
   assert.equal(blindRatingsCollectionPlan.estimatedSetupRecordsRequired, 1435);
   assert.deepEqual(

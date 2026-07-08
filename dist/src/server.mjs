@@ -13030,6 +13030,27 @@ function targetGapCollectionPlanItem(item, index) {
   });
   const estimatedSetupRecordsRequired = targetGapCollectionPlanImpactSum(setupRouteInfos, "estimatedRecordsRequired");
   const setupExpectedResourceDelta = targetGapCollectionPlanImpactSum(setupRouteInfos, "expectedResourceDelta");
+  const setupBulkImportRoutes = uniqueValues(setupRouteInfos.map((routeInfo) => routeInfo.importRoute));
+  const setupWriteRoutes = uniqueValues([
+    ...(Array.isArray(item.setupWriteRoutes) ? item.setupWriteRoutes : []),
+    setupAction.setupWriteRoute,
+    ...setupRouteInfos.map((routeInfo) => routeInfo.writeRoute),
+  ]);
+  const setupReadbackRoutes = uniqueValues([
+    ...(Array.isArray(item.setupReadbackRoutes) ? item.setupReadbackRoutes : []),
+    setupAction.setupReadbackRoute,
+    ...setupRouteInfos.map((routeInfo) => routeInfo.readbackRoute),
+  ]);
+  const setupDryRunImportRoutes = setupBulkImportRoutes.map((route) => routeWithQueryFlag(route, "dryRun", "true")).filter(Boolean);
+  const setupValidateOnlyImportRoutes = setupBulkImportRoutes
+    .map((route) => routeWithQueryFlag(route, "validateOnly", "true"))
+    .filter(Boolean);
+  const setupBulkImportWorkflowTemplateIds = uniqueValues([
+    ...(Array.isArray(item.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : []),
+    setupAction.setupBulkImportWorkflowTemplateId,
+    ...setupRouteInfos.map((routeInfo) => routeInfo.workflowTemplateId),
+  ]);
+  const setupResourceKeys = uniqueValues(setupRouteInfos.map((routeInfo) => routeInfo.resourceKey));
   const templateReadbackRoute = targetGapCollectionPlanTemplateRoute(item.id);
   const expandedTemplateReadbackRoute = targetGapCollectionPlanTemplateRoute(item.id, { expand: "remaining" });
   const cappedExpandedTemplateReadbackRoute = targetGapCollectionPlanTemplateRoute(item.id, {
@@ -13071,20 +13092,28 @@ function targetGapCollectionPlanItem(item, index) {
     packageImportRoute: targetDataCollectionPackageImportRoute,
     packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
     packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
-    setupWriteRoute: item.setupWriteRoutes?.[0] ?? setupAction.setupWriteRoute ?? null,
-    setupBulkImportRoute,
-    setupDryRunImportRoute: routeWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
-    setupValidateOnlyImportRoute: routeWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+    setupWriteRoute: setupWriteRoutes[0] ?? item.setupWriteRoutes?.[0] ?? setupAction.setupWriteRoute ?? null,
+    setupWriteRoutes,
+    setupBulkImportRoute: setupBulkImportRoutes[0] ?? setupBulkImportRoute,
+    setupBulkImportRoutes,
+    setupDryRunImportRoute: setupDryRunImportRoutes[0] ?? routeWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
+    setupDryRunImportRoutes,
+    setupValidateOnlyImportRoute: setupValidateOnlyImportRoutes[0] ?? routeWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+    setupValidateOnlyImportRoutes,
     readbackRoute: item.readbackRoutes?.[0] ?? primaryAction.readbackRoute ?? null,
     submissionReadbackRoute: item.submissionReadbackRoutes?.[0] ?? primaryAction.submissionReadbackRoute ?? primaryAction.readbackRoute ?? null,
-    setupReadbackRoute: item.setupReadbackRoutes?.[0] ?? setupAction.setupReadbackRoute ?? null,
+    setupReadbackRoute: setupReadbackRoutes[0] ?? item.setupReadbackRoutes?.[0] ?? setupAction.setupReadbackRoute ?? null,
+    setupReadbackRoutes,
     targetGapReadbackRoute: item.targetGapReadbackRoutes?.[0] ?? primaryAction.targetGapReadbackRoute ?? "/api/v1/target-gaps",
     targetGapReadbackItemRoute:
       item.targetGapReadbackItemRoutes?.[0] ?? primaryAction.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(item.id)}`,
     workflowTemplateId: item.workflowTemplateIds?.[0] ?? primaryAction.workflowTemplateId ?? null,
     bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateIds?.[0] ?? primaryAction.bulkImportWorkflowTemplateId ?? null,
     setupWorkflowTemplateId: item.setupWorkflowTemplateIds?.[0] ?? setupAction.setupWorkflowTemplateId ?? null,
-    setupBulkImportWorkflowTemplateId: item.setupBulkImportWorkflowTemplateIds?.[0] ?? setupAction.setupBulkImportWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateId:
+      setupBulkImportWorkflowTemplateIds[0] ?? item.setupBulkImportWorkflowTemplateIds?.[0] ?? setupAction.setupBulkImportWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateIds,
+    setupResourceKeys,
     actorRole: item.actorRoles?.[0] ?? primaryAction.actorRole ?? null,
     setupActorRole: item.setupActorRoles?.[0] ?? setupAction.setupActorRole ?? null,
     importImpact: primaryImportImpact,
@@ -13694,6 +13723,18 @@ function targetGapRoutes(item) {
   ]);
 }
 
+function targetGapSetupBulkImportRoutes(item) {
+  return uniqueValues([
+    item?.setupBulkImportRoute,
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+    ...(Array.isArray(item?.importSequence)
+      ? item.importSequence
+          .filter((step) => step?.stepKind === "setup_data_import" || step?.importKind === "setup_data_import")
+          .map((step) => step.importRoute)
+      : []),
+  ]);
+}
+
 function targetGapCollectionPlanMatchesFilters(item, filters) {
   return Object.entries(filters).every(([key, value]) => {
     if (!value) return true;
@@ -13762,8 +13803,11 @@ function targetGapCollectionPlanRoutes(item) {
     item?.packageValidateOnlyImportRoute,
     item?.setupWriteRoute,
     item?.setupBulkImportRoute,
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
     item?.setupDryRunImportRoute,
+    ...(Array.isArray(item?.setupDryRunImportRoutes) ? item.setupDryRunImportRoutes : []),
     item?.setupValidateOnlyImportRoute,
+    ...(Array.isArray(item?.setupValidateOnlyImportRoutes) ? item.setupValidateOnlyImportRoutes : []),
     item?.readbackRoute,
     item?.submissionReadbackRoute,
     item?.setupReadbackRoute,
@@ -13828,7 +13872,7 @@ function targetGapFilteredCounts(items) {
     readyTargetGaps: items.filter((item) => item.executionStatus === "ready_to_collect_data").length,
     byChecklistRow: countExpandedValues(items, "checklistRowIds"),
     byPrimaryImportRoute: countItemsBy(items, "bulkImportRoute"),
-    bySetupImportRoute: countItemsBy(items, "setupBulkImportRoute"),
+    bySetupImportRoute: countValues(items.flatMap(targetGapSetupBulkImportRoutes)),
     byRoute: countValues(items.flatMap(targetGapRoutes)),
     targetTotal: sumNumericField(items, "target"),
     currentTotal: sumNumericField(items, "current"),
@@ -13863,7 +13907,7 @@ function targetGapCollectionPlanCounts(items) {
     byActionId: countExpandedValues(items, "dependentActionIds"),
     byImportSequenceStepKind: countValues(items.flatMap((item) => (Array.isArray(item.importSequence) ? item.importSequence.map((step) => step.stepKind) : []))),
     byPrimaryImportRoute: countItemsBy(items, "bulkImportRoute"),
-    bySetupImportRoute: countItemsBy(items, "setupBulkImportRoute"),
+    bySetupImportRoute: countValues(items.flatMap(targetGapSetupBulkImportRoutes)),
     byRoute: countValues(items.flatMap(targetGapCollectionPlanRoutes)),
     withSetupImport: items.filter((item) => Boolean(item.setupBulkImportRoute) || Number(item.estimatedSetupRecordsRequired ?? 0) > 0 || targetGapPlanHasStep(item, "setup_data_import")).length,
     withDuplicateActions: items.filter((item) => Number(item.duplicateActionCount ?? 0) > 0).length,
