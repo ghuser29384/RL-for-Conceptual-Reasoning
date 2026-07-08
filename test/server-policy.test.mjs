@@ -6526,6 +6526,12 @@ test("target-scale position and critique intake collections are routed for admin
   assert.match(reportActionItems[0].executionStatusReason, /real target data/);
   assert.ok(report.body.operatorEvidenceSubmissionPlan.counts.byExecutionStatus.ready_to_collect_data > 0);
   assert.ok(report.body.operatorEvidenceSubmissionPlan.counts.byExecutionStatus.blocked_by_target_data > 0);
+  assert.equal(report.body.targetGaps.counts.bySetupImportRoute["/api/v1/assignments/import-jsonl"], 1);
+  assert.equal(report.body.targetGaps.counts.bySetupImportRoute["/api/v1/rating-context-snapshots/import-jsonl"], 1);
+  assert.equal(Object.hasOwn(report.body.targetGaps.counts.bySetupImportRoute, "unknown"), false);
+  assert.equal(report.body.targetGaps.counts.byRoute["/api/v1/rating-context-snapshots"], 1);
+  assert.equal(report.body.targetGaps.counts.byRoute["/api/v1/rating-context-snapshots/import-jsonl?dryRun=true"], 1);
+  assert.equal(report.body.targetGaps.counts.byRoute["/api/v1/rating-context-snapshots/import-jsonl?validateOnly=true"], 1);
   assert.deepEqual(reportPositionTargetGap.operatorActionIds, ["target_scale_and_data_collection:collect:positions"]);
   assert.deepEqual(reportPositionTargetGap.writeRoutes, ["/api/v1/intake/positions"]);
   assert.deepEqual(reportPositionTargetGap.readbackRoutes, ["/api/v1/intake/positions"]);
@@ -7280,6 +7286,15 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
     "/api/v1/assignments/import-jsonl",
     "/api/v1/rating-context-snapshots/import-jsonl",
   ]);
+  assert.deepEqual(blindInitialRatingTargetGap.setupDryRunImportRoutes, [
+    "/api/v1/assignments/import-jsonl?dryRun=true",
+    "/api/v1/rating-context-snapshots/import-jsonl?dryRun=true",
+  ]);
+  assert.deepEqual(blindInitialRatingTargetGap.setupValidateOnlyImportRoutes, [
+    "/api/v1/assignments/import-jsonl?validateOnly=true",
+    "/api/v1/rating-context-snapshots/import-jsonl?validateOnly=true",
+  ]);
+  assert.deepEqual(blindInitialRatingTargetGap.setupReadbackRoutes, ["/api/v1/assignments", "/api/v1/rating-context-snapshots"]);
   assert.deepEqual(blindInitialRatingTargetGap.setupBulkImportWorkflowTemplateIds, [
     "assignment-jsonl-import",
     "rating-context-snapshot-jsonl-import",

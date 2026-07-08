@@ -11284,6 +11284,8 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
     submissionReadbackRoutes: ["/api/v1/intake/positions"],
     setupWriteRoutes: [],
     setupBulkImportRoutes: [],
+    setupDryRunImportRoutes: [],
+    setupValidateOnlyImportRoutes: [],
     setupReadbackRoutes: [],
     targetGapReadbackRoutes: ["/api/v1/target-gaps"],
     targetGapReadbackItemRoutes: ["/api/v1/target-gaps/positions"],

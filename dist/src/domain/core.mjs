@@ -27585,6 +27585,14 @@ function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissi
       setupBulkImportRoute,
       ...matchingActions.flatMap((item) => (Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : [])),
     ]);
+    const setupDryRunImportRoutes = setupBulkImportRoutes.map((route) => operatorImportRouteWithQueryFlag(route, "dryRun", "true")).filter(Boolean);
+    const setupValidateOnlyImportRoutes = setupBulkImportRoutes
+      .map((route) => operatorImportRouteWithQueryFlag(route, "validateOnly", "true"))
+      .filter(Boolean);
+    const setupReadbackRoutes = uniqueStrings([
+      ...matchingActions.map((item) => item.setupReadbackRoute),
+      ...setupBulkImportRoutes.map((route) => operatorTargetGapDefaultSetupReadbackRoute(route)),
+    ]);
     const setupBulkImportWorkflowTemplateIds = uniqueStrings([
       setupAction.setupBulkImportWorkflowTemplateId,
       ...matchingActions.flatMap((item) =>
@@ -27619,7 +27627,9 @@ function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissi
       setupWriteRoutes: uniqueStrings(matchingActions.map((item) => item.setupWriteRoute)),
       bulkImportRoutes: uniqueStrings(matchingActions.map((item) => item.bulkImportRoute)),
       setupBulkImportRoutes,
-      setupReadbackRoutes: uniqueStrings(matchingActions.map((item) => item.setupReadbackRoute)),
+      setupDryRunImportRoutes,
+      setupValidateOnlyImportRoutes,
+      setupReadbackRoutes,
       targetGapReadbackRoutes: uniqueStrings(matchingActions.map((item) => item.targetGapReadbackRoute)),
       targetGapReadbackItemRoutes: uniqueStrings(matchingActions.map((item) => item.targetGapReadbackItemRoute)),
       workflowTemplateIds: uniqueStrings(matchingActions.map((item) => item.workflowTemplateId)),
@@ -27719,7 +27729,7 @@ function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissi
     byExecutionStatus: countBy(rows, "executionStatus"),
     readyTargetGaps: rows.filter((row) => row.executionStatus === "ready_to_collect_data").length,
     byPrimaryImportRoute: countBy(rows, "bulkImportRoute"),
-    bySetupImportRoute: countBy(rows, "setupBulkImportRoute"),
+    bySetupImportRoute: countOccurrences(rows.flatMap(targetGapSetupBulkImportRouteList)),
     byRoute: targetGapRouteCounts(rows),
   };
   return {
@@ -27727,6 +27737,22 @@ function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissi
     rows,
     counts: enrichedCounts,
   };
+}
+
+function targetGapSetupBulkImportRouteList(row) {
+  return uniqueStrings([
+    row?.setupBulkImportRoute,
+    ...(Array.isArray(row?.setupBulkImportRoutes) ? row.setupBulkImportRoutes : []),
+    ...(Array.isArray(row?.operatorActions)
+      ? row.operatorActions.flatMap((action) => [action?.setupBulkImportRoute, ...(Array.isArray(action?.setupBulkImportRoutes) ? action.setupBulkImportRoutes : [])])
+      : []),
+  ]);
+}
+
+function operatorTargetGapDefaultSetupReadbackRoute(importRoute) {
+  if (importRoute === RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE) return "/api/v1/rating-context-snapshots";
+  if (importRoute === "/api/v1/assignments/import-jsonl") return "/api/v1/assignments";
+  return null;
 }
 
 const OPERATOR_REVIEW_READBACK_ROUTE_BY_ARTIFACT_TYPE = {
@@ -32721,8 +32747,11 @@ function targetGapRouteList(row) {
     ...(Array.isArray(row?.writeRoutes) ? row.writeRoutes : []),
     ...(Array.isArray(row?.bulkImportRoutes) ? row.bulkImportRoutes : []),
     ...(Array.isArray(row?.setupBulkImportRoutes) ? row.setupBulkImportRoutes : []),
+    ...(Array.isArray(row?.setupDryRunImportRoutes) ? row.setupDryRunImportRoutes : []),
+    ...(Array.isArray(row?.setupValidateOnlyImportRoutes) ? row.setupValidateOnlyImportRoutes : []),
     ...(Array.isArray(row?.readbackRoutes) ? row.readbackRoutes : []),
     ...(Array.isArray(row?.submissionReadbackRoutes) ? row.submissionReadbackRoutes : []),
+    ...(Array.isArray(row?.setupReadbackRoutes) ? row.setupReadbackRoutes : []),
     ...(Array.isArray(row?.targetGapReadbackRoutes) ? row.targetGapReadbackRoutes : []),
     ...(Array.isArray(row?.targetGapReadbackItemRoutes) ? row.targetGapReadbackItemRoutes : []),
     ...(Array.isArray(row?.operatorActions) ? row.operatorActions.flatMap(targetGapOperatorActionRouteList) : []),
@@ -32739,6 +32768,7 @@ function targetGapOperatorActionRouteList(action) {
     action?.setupReadbackRoute,
     action?.bulkImportRoute,
     action?.setupBulkImportRoute,
+    ...(Array.isArray(action?.setupBulkImportRoutes) ? action.setupBulkImportRoutes : []),
     action?.dryRunImportRoute,
     action?.validateOnlyImportRoute,
     action?.setupDryRunImportRoute,
@@ -33996,6 +34026,15 @@ function promptTrackRowFromArtifact(trackKind, run) {
 function countBy(items, fieldName) {
   return items.reduce((acc, item) => {
     const key = String(item[fieldName] ?? "unknown");
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function countOccurrences(values) {
+  return values.reduce((acc, value) => {
+    if (value === null || value === undefined || !String(value).trim()) return acc;
+    const key = String(value);
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
