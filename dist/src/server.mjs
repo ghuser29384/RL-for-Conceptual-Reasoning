@@ -7700,6 +7700,14 @@ export async function handleApiRequest(request, response, url, context) {
     });
     return;
   }
+  const operatorEvidencePackageManifestMatch = url.pathname.match(/^\/api\/v1\/operator-evidence\/package-manifest(?:\/([^/]+))?$/);
+  if (request.method === "GET" && operatorEvidencePackageManifestMatch) {
+    const itemId = operatorEvidencePackageManifestMatch[1] ? decodeURIComponent(operatorEvidencePackageManifestMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      operatorEvidencePackageManifestReadback(report, { itemId }),
+    );
+    return;
+  }
   const operatorEvidenceTemplateMatch = url.pathname.match(/^\/api\/v1\/operator-evidence\/import-jsonl-template(?:\/([^/]+))?$/);
   if (request.method === "GET" && operatorEvidenceTemplateMatch) {
     const itemId = operatorEvidenceTemplateMatch[1] ? decodeURIComponent(operatorEvidenceTemplateMatch[1]) : null;
@@ -19493,6 +19501,210 @@ function operatorEvidencePackageJsonlTemplateReadback(report, options = {}) {
     jsonl: selectedItems.map((item) => JSON.stringify(item.record)).join("\n"),
     items: selectedItems,
     skippedItems,
+  };
+}
+
+function operatorEvidencePackageManifestReadback(report, options = {}) {
+  const packageTemplate = operatorEvidencePackageJsonlTemplateReadback(report);
+  const payloadTemplate = operatorActionPayloadTemplateReadback(report);
+  const runbookItems = octoberCompletionRunbookItems(report);
+  const readySubmitSteps = runbookItems.filter((item) => octoberCompletionRunbookExecutionStatus(item) === "ready_to_submit_evidence");
+  const blockedByTargetDataSteps = runbookItems.filter((item) => octoberCompletionRunbookExecutionStatus(item) === "blocked_by_target_data");
+  const packageRowsByAction = groupTemplateRowsByActionId(packageTemplate.items);
+  const payloadRowsByAction = groupTemplateRowsByActionId(payloadTemplate.items);
+  const executionSequence = [];
+  for (const runbookStep of readySubmitSteps) {
+    const actionId = runbookStep.actionId ?? runbookStep.id;
+    const payloadRows = payloadRowsByAction.get(actionId) ?? [];
+    const setupPayloadRows = payloadRows.filter((row) => row.templateKind === "setup_write_payload");
+    const primaryPayloadRows = payloadRows.filter((row) => row.templateKind !== "setup_write_payload");
+    const packageRows = packageRowsByAction.get(actionId) ?? [];
+    for (const row of setupPayloadRows) {
+      executionSequence.push(operatorEvidencePackageManifestStep(row, runbookStep, "setup_payload_template", executionSequence.length + 1));
+    }
+    for (const row of packageRows) {
+      executionSequence.push(operatorEvidencePackageManifestStep(row, runbookStep, "operator_evidence_jsonl_record", executionSequence.length + 1));
+    }
+    for (const row of primaryPayloadRows) {
+      executionSequence.push(operatorEvidencePackageManifestStep(row, runbookStep, "single_record_payload_template", executionSequence.length + 1));
+    }
+    if (!setupPayloadRows.length && !packageRows.length && !primaryPayloadRows.length) {
+      executionSequence.push(operatorEvidencePackageManifestFallbackStep(runbookStep, executionSequence.length + 1));
+    }
+  }
+  const selectedItems = options.itemId
+    ? executionSequence.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
+    : executionSequence;
+  if (options.itemId && selectedItems.length === 0) return null;
+  const packageActionIds = uniqueValues(packageTemplate.items.map((item) => item.actionId));
+  const payloadActionIds = uniqueValues(payloadTemplate.items.map((item) => item.actionId));
+  const setupPayloadActionIds = uniqueValues(payloadTemplate.items.filter((item) => item.templateKind === "setup_write_payload").map((item) => item.actionId));
+  const primaryPayloadActionIds = uniqueValues(
+    payloadTemplate.items.filter((item) => item.templateKind === "primary_write_payload").map((item) => item.actionId),
+  );
+  const currentBlockingPhase = report.releaseCompletionNavigation?.currentBlockingPhase ?? null;
+  const targetGapRemainingTotal = Number(report.targetGaps?.totals?.remainingTotal ?? report.targetGaps?.counts?.remainingTotal ?? 0);
+  const status =
+    readySubmitSteps.length === 0 && blockedByTargetDataSteps.length === 0
+      ? "operator_evidence_package_manifest_clear"
+      : targetGapRemainingTotal > 0
+        ? "operator_evidence_templates_available_target_data_still_open"
+        : "ready_for_operator_replacement_and_validation";
+  return {
+    id: `operator-evidence-package-manifest-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceReportId: report.id ?? null,
+    sourceReportRoute: "/api/release/report",
+    sourceRunbookRoute: "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+    sourceActionQueueRoute: "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+    resourceKey: "operatorEvidencePackageManifest",
+    status,
+    releaseUseStatus: report.currentStatus ?? "release_report_missing",
+    currentBlockingPhase,
+    currentBlockingExecutionStatus: report.releaseCompletionNavigation?.currentBlockingExecutionStatus ?? null,
+    policy: {
+      scope:
+        "Read-only operator-evidence package manifest derived from the existing runbook, operator-evidence JSONL templates, and operator action payload templates; it does not submit artifacts, waive gates, run models, freeze releases, or create production evidence.",
+      access: "Admin/auditor readback only because operator-evidence package routes expose release-evidence targets, governance-gated writes, and model-evaluation workflow routes.",
+      ordering:
+        "For each ready submit action, setup payload templates appear before package JSONL records, and single-record-only payload templates remain outside the package import route.",
+      targetDataBoundary:
+        "Open target-data gaps still control release completion; this manifest only prepares the later operator-evidence phase and remains advisory until /api/release/report changes after real submissions.",
+    },
+    routes: {
+      packageImportRoute: packageTemplate.importRoute,
+      packageDryRunImportRoute: packageTemplate.dryRunImportRoute,
+      packageValidateOnlyImportRoute: packageTemplate.validateOnlyImportRoute,
+      packageJsonlTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
+      payloadTemplateRoute: "/api/v1/operator-action-items/payload-template",
+      sourceRunbookRoute: "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
+      sourceActionQueueRoute: "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+      releaseReportRoute: "/api/release/report",
+    },
+    count: selectedItems.length,
+    totalCount: executionSequence.length,
+    counts: {
+      readySubmitRunbookSteps: readySubmitSteps.length,
+      blockedByTargetDataSteps: blockedByTargetDataSteps.length,
+      packageJsonlTemplateRecords: packageTemplate.count,
+      payloadTemplateRecords: payloadTemplate.count,
+      packageSkippedActions: packageTemplate.skippedCount,
+      payloadSkippedActions: payloadTemplate.skippedCount,
+      packageCapableActions: packageActionIds.length,
+      payloadTemplateActions: payloadActionIds.length,
+      setupPayloadTemplateActions: setupPayloadActionIds.length,
+      primaryPayloadTemplateActions: primaryPayloadActionIds.length,
+      actionsWithSetupPayloadAndPackageJsonl: packageActionIds.filter((id) => setupPayloadActionIds.includes(id)).length,
+      executionSteps: executionSequence.length,
+      byManifestStepKind: countItemsBy(executionSequence, "manifestStepKind"),
+      byChecklistRow: countItemsBy(executionSequence, "checklistRowId"),
+      byArtifactKind: countItemsBy(executionSequence, "artifactKind"),
+      byRoute: countItemsBy(executionSequence, "route"),
+    },
+    packageTemplateCounts: packageTemplate.counts,
+    payloadTemplateCounts: payloadTemplate.counts,
+    blockedByTargetDataPreview: blockedByTargetDataSteps.slice(0, 8).map(operatorEvidenceBlockedTargetDataPreview),
+    omittedBlockedByTargetDataCount: Math.max(0, blockedByTargetDataSteps.length - 8),
+    operatorChecklist: [
+      "Resolve target-data gaps first when the release completion navigation still starts with collect_data.",
+      "Submit setup payload templates before JSONL package records for actions with route parameters.",
+      "Replace every templateOnly placeholder with reviewed operator evidence.",
+      "Use packageDryRunImportRoute or single-record validateOnly routes before appending.",
+      "Verify submitted artifact status and checklist closure through /api/release/report.",
+    ],
+    ...(options.itemId ? { item: selectedItems[0] } : {}),
+    items: selectedItems,
+  };
+}
+
+function groupTemplateRowsByActionId(rows = []) {
+  const groups = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row?.actionId) continue;
+    if (!groups.has(row.actionId)) groups.set(row.actionId, []);
+    groups.get(row.actionId).push(row);
+  }
+  return groups;
+}
+
+function operatorEvidencePackageManifestStep(templateRow, runbookStep, manifestStepKind, sequence) {
+  const isPackageJsonl = manifestStepKind === "operator_evidence_jsonl_record";
+  const templateReadbackRoute = isPackageJsonl
+    ? `/api/v1/operator-evidence/import-jsonl-template/${encodeURIComponent(templateRow.id)}`
+    : `/api/v1/operator-action-items/payload-template/${encodeURIComponent(templateRow.id)}`;
+  return {
+    id: `operator-evidence-package-manifest:${sequence}:${templateRow.id}`,
+    sequence,
+    manifestStepKind,
+    actionId: templateRow.actionId ?? runbookStep.actionId ?? null,
+    runbookStepId: runbookStep.id ?? null,
+    checklistRowId: templateRow.checklistRowId ?? runbookStep.checklistRowId ?? null,
+    actionType: templateRow.actionType ?? runbookStep.actionType ?? null,
+    artifactKind: templateRow.artifactKind ?? runbookStep.artifactKind ?? null,
+    executionStatus: templateRow.executionStatus ?? runbookStep.executionStatus ?? null,
+    executionStatusReason: templateRow.executionStatusReason ?? runbookStep.executionStatusReason ?? null,
+    templateKind: templateRow.templateKind ?? (isPackageJsonl ? "operator_evidence_jsonl_record" : null),
+    route: templateRow.route ?? runbookStep.writeRoute ?? runbookStep.route ?? null,
+    routeTemplate: templateRow.routeTemplate ?? null,
+    method: templateRow.method ?? "POST",
+    resourceKey: templateRow.resourceKey ?? runbookStep.resourceKey ?? null,
+    workflowTemplateId: templateRow.workflowTemplateId ?? runbookStep.workflowTemplateId ?? null,
+    policyActionKind: templateRow.policyActionKind ?? runbookStep.policyActionKind ?? null,
+    phaseGateLaneKind: templateRow.phaseGateLaneKind ?? runbookStep.phaseGateLaneKind ?? null,
+    packageImportRoute: isPackageJsonl ? templateRow.importRoute : null,
+    packageDryRunImportRoute: isPackageJsonl ? templateRow.dryRunImportRoute : null,
+    packageValidateOnlyImportRoute: isPackageJsonl ? templateRow.validateOnlyImportRoute : null,
+    singleRecordDryRunRoute: templateRow.singleRecordDryRunRoute ?? runbookStep.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: templateRow.singleRecordValidateOnlyRoute ?? runbookStep.singleRecordValidateOnlyRoute ?? null,
+    templateReadbackRoute,
+    runbookStepRoute: runbookStep.runbookStepRoute ?? null,
+    readbackRoute: templateRow.readbackRoute ?? runbookStep.readbackRoute ?? null,
+    verificationRoute: runbookStep.verificationRoute ?? templateRow.readbackRoute ?? "/api/release/report",
+    sourceEvidenceId: templateRow.sourceEvidenceId ?? runbookStep.sourceEvidenceId ?? null,
+    requiredFields: Array.isArray(templateRow.requiredFields) ? templateRow.requiredFields : [],
+    preconditionStatus: templateRow.preconditionStatus ?? runbookStep.preconditionStatus ?? null,
+    blockedByTargetGapIds: Array.isArray(templateRow.blockedByTargetGapIds) ? templateRow.blockedByTargetGapIds : [],
+    completionEvidence: templateRow.completionEvidence ?? runbookStep.completionEvidence ?? null,
+  };
+}
+
+function operatorEvidencePackageManifestFallbackStep(runbookStep, sequence) {
+  return {
+    id: `operator-evidence-package-manifest:${sequence}:missing-template:${runbookStep.id ?? sequence}`,
+    sequence,
+    manifestStepKind: "template_unavailable",
+    actionId: runbookStep.actionId ?? null,
+    runbookStepId: runbookStep.id ?? null,
+    checklistRowId: runbookStep.checklistRowId ?? null,
+    actionType: runbookStep.actionType ?? null,
+    artifactKind: runbookStep.artifactKind ?? null,
+    executionStatus: runbookStep.executionStatus ?? null,
+    executionStatusReason: runbookStep.executionStatusReason ?? null,
+    route: runbookStep.writeRoute ?? runbookStep.route ?? null,
+    method: runbookStep.method ?? null,
+    readbackRoute: runbookStep.readbackRoute ?? null,
+    verificationRoute: runbookStep.verificationRoute ?? runbookStep.readbackRoute ?? "/api/release/report",
+    sourceEvidenceId: runbookStep.sourceEvidenceId ?? null,
+    preconditionStatus: runbookStep.preconditionStatus ?? null,
+    blockedByTargetGapIds: Array.isArray(runbookStep.blockedByTargetGapIds) ? runbookStep.blockedByTargetGapIds : [],
+    completionEvidence: runbookStep.completionEvidence ?? null,
+  };
+}
+
+function operatorEvidenceBlockedTargetDataPreview(step) {
+  return {
+    id: step.id ?? null,
+    actionId: step.actionId ?? null,
+    checklistRowId: step.checklistRowId ?? null,
+    artifactKind: step.artifactKind ?? null,
+    executionStatus: step.executionStatus ?? octoberCompletionRunbookExecutionStatus(step),
+    route: step.route ?? step.writeRoute ?? step.readbackRoute ?? null,
+    blockedByTargetGapIds: Array.isArray(step.blockedByTargetGapIds) ? step.blockedByTargetGapIds : [],
+    blockedTargetGapCollectionPlanRoutes: Array.isArray(step.blockedTargetGapCollectionPlanRoutes)
+      ? step.blockedTargetGapCollectionPlanRoutes
+      : [],
+    dataDependencyCompletionEvidence: step.dataDependencyCompletionEvidence ?? null,
   };
 }
 

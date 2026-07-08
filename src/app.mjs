@@ -1456,6 +1456,14 @@ const workflowEvidenceCollections = [
     summary: "Read-only JSONL skeleton for package-importable open operator actions.",
   },
   {
+    id: "operator-evidence-package-manifest",
+    label: "Operator package manifest",
+    endpoint: "/api/v1/operator-evidence/package-manifest",
+    resourceKey: "operatorEvidencePackageManifest",
+    group: "Operator plan",
+    summary: "Read-only execution manifest that sequences operator-evidence JSONL rows with setup and single-record payload templates.",
+  },
+  {
     id: "operator-submission-checklist",
     label: "Operator submission checklist",
     endpoint: "/api/v1/operator-submission-checklist",
@@ -9208,6 +9216,9 @@ function workflowCollectionPreview(collection, previewItems) {
   if (collection.id === "operator-evidence-jsonl-template") {
     return `<div class="operatorActionPreview">${previewItems.map(operatorEvidenceJsonlTemplatePreviewRow).join("")}</div>`;
   }
+  if (collection.id === "operator-evidence-package-manifest") {
+    return `<div class="operatorActionPreview">${previewItems.map(operatorEvidencePackageManifestPreviewRow).join("")}</div>`;
+  }
   if (collection.id === "target-data-jsonl-template") {
     return `<div class="operatorActionPreview">${previewItems.map(targetDataJsonlTemplatePreviewRow).join("")}</div>`;
   }
@@ -10933,6 +10944,44 @@ function operatorEvidenceJsonlTemplatePreviewRow(item) {
         ["Readback route", item.readbackRoute ?? "not available"],
         ["Evidence", item.sourceEvidenceId ?? "current report"],
         ...dependencyMetrics,
+      ])}
+    </article>
+  `;
+}
+
+function operatorEvidencePackageManifestPreviewRow(item) {
+  const requiredFields = Array.isArray(item.requiredFields) ? item.requiredFields : [];
+  const blockedByTargetGapIds = Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [];
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.artifactKind ?? item.resourceKey ?? "Operator evidence step")}</strong>
+          <span>${escapeHtml(`${item.sequence ?? "?"}. ${humanize(item.manifestStepKind ?? "manifest step")}`)}</span>
+        </div>
+        <span>${escapeHtml(item.templateKind ? humanize(item.templateKind) : humanize(item.executionStatus ?? "operator evidence"))}</span>
+      </div>
+      ${metricList([
+        ["Action", item.actionId ?? "not linked"],
+        ["Checklist row", humanize(item.checklistRowId ?? "not linked")],
+        ["Execution", item.executionStatus ? humanize(item.executionStatus) : "not reported"],
+        ["Execution reason", item.executionStatusReason ?? "not reported"],
+        ["POST route", item.route ?? "not available"],
+        ["Route template", item.routeTemplate ?? "not required"],
+        ["Resource", item.resourceKey ?? "resource"],
+        ["Policy action", item.policyActionKind ? humanize(item.policyActionKind) : "not policy-gated"],
+        ["Package import", item.packageImportRoute ?? "single-record route"],
+        ["Package dry-run", item.packageDryRunImportRoute ?? "not applicable"],
+        ["Package validate-only", item.packageValidateOnlyImportRoute ?? "not applicable"],
+        ["Single-record dry-run", item.singleRecordDryRunRoute ?? "not applicable"],
+        ["Single-record validate-only", item.singleRecordValidateOnlyRoute ?? "not applicable"],
+        ["Template", item.templateReadbackRoute ?? "not available"],
+        ["Runbook step", item.runbookStepRoute ?? "not available"],
+        ["Readback", item.readbackRoute ?? "not available"],
+        ["Verification", item.verificationRoute ?? "/api/release/report"],
+        ["Required fields", requiredFields.length ? requiredFields.slice(0, 6).join(", ") : "id"],
+        ...(blockedByTargetGapIds.length ? [["Blocked target gaps", blockedByTargetGapIds.map(humanize).join(", ")]] : []),
+        ["Completion", item.completionEvidence ?? "Verify through /api/release/report."],
       ])}
     </article>
   `;
