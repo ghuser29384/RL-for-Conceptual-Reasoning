@@ -9270,6 +9270,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetGaps.body.filteredCounts.readyTargetGaps, 7);
   assert.equal(targetGaps.body.filteredCounts.byExecutionStatus.ready_to_collect_data, 7);
   assert.equal(targetGaps.body.filteredCounts.byRoute["/api/v1/target-gaps/import-jsonl-package"], 7);
+  assert.ok(targetGaps.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
   assert.ok(targetGaps.body.items.every((item) => Array.isArray(item.operatorActions)));
   assert.ok(targetGaps.body.items.every((item) => item.operatorActions.length > 0));
   assert.ok(targetGaps.body.items.every((item) => item.executionStatus && item.executionStatusReason));
@@ -9289,6 +9290,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "/api/v1/target-gaps/import-jsonl-template?targetGapId=gold_library_items&expand=remaining",
   );
   assert.equal(goldTargetGapSummary.collectionPlanRoute, "/api/v1/target-gaps/collection-plan/gold_library_items");
+  assert.ok(goldTargetGapSummary.routes.includes("/api/v1/target-gaps/gold_library_items"));
+  assert.ok(goldTargetGapSummary.routes.includes("/api/v1/gold-items/import-jsonl?validateOnly=true"));
+  assert.ok(goldTargetGapSummary.routes.includes("/api/v1/target-gaps/import-jsonl-package?dryRun=true"));
+  assert.ok(goldTargetGapSummary.routes.includes("/api/v1/target-gaps/import-jsonl-template?targetGapId=gold_library_items&expand=remaining"));
+  assert.equal(goldTargetGapSummary.routeCount, goldTargetGapSummary.routes.length);
 
   const targetGapsByGoldImportRoute = await invokeApi(context, {
     method: "GET",
@@ -11058,6 +11064,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 13);
+  assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-documents/template?documentKind=dataset_card"], 1);
+  assert.ok(publicDatasetReadiness.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
   assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "dataset_card" && item.status === "documentation_not_submitted"));
   assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "methodology_report" && item.status === "documentation_not_submitted"));
   assert.ok(
@@ -11142,6 +11150,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-package-files/validate/template"));
   assert.ok(publicDatasetById.body.item.readbackRoutes.includes("/api/v1/public-dataset-package-files/review-manifest"));
   assert.ok(publicDatasetById.body.item.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template"));
+  assert.ok(publicDatasetById.body.item.routes.includes("/api/v1/public-dataset-readiness/dataset_card"));
+  assert.ok(publicDatasetById.body.item.routes.includes("/api/v1/public-dataset-documents/template?documentKind=dataset_card"));
+  assert.ok(publicDatasetById.body.item.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
+  assert.equal(publicDatasetById.body.item.routeCount, publicDatasetById.body.item.routes.length);
 
   const publicDatasetMissing = await invokeApi(context, {
     method: "GET",
@@ -12956,6 +12968,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
       "/api/v1/target-gaps/import-jsonl-template?targetGapId=validation_critiques&expand=remaining",
     ),
   );
+  assert.ok(targetGapSectionById.body.item.routes.includes("/api/v1/release-report-sections/target-gaps-october-2026-demo"));
+  assert.ok(targetGapSectionById.body.item.routes.includes("/api/v1/operator-action-items?sourceEvidenceId=target-gaps-october-2026-demo"));
+  assert.ok(targetGapSectionById.body.item.routes.includes("/api/v1/intake/positions/import-jsonl"));
+  assert.ok(targetGapSectionById.body.item.routes.includes("/api/v1/intake/positions/import-jsonl?dryRun=true"));
+  assert.equal(targetGapSectionById.body.item.routeCount, targetGapSectionById.body.item.routes.length);
 
   const validationTargetGapRouteReleaseSections = await invokeApi(context, {
     method: "GET",
@@ -13154,6 +13171,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.match(targetGapCollectionPlan.body.policy.duplicateHandling, /submit real data once/);
   assert.match(targetGapCollectionPlan.body.policy.packageImport, /spans multiple target gaps/);
   assert.match(targetGapCollectionPlan.body.policy.expandedTemplates, /expand=remaining/);
+  assert.ok(targetGapCollectionPlan.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
   const goldCollectionPlan = targetGapCollectionPlan.body.items.find((item) => item.targetGapId === "gold_library_items");
   assert.ok(goldCollectionPlan);
   assert.equal(goldCollectionPlan.dependentActionCount, 2);
@@ -13178,6 +13196,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(goldCollectionPlan.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
   assert.equal(goldCollectionPlan.packageDryRunImportRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
   assert.equal(goldCollectionPlan.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.ok(goldCollectionPlan.routes.includes("/api/v1/target-gaps/collection-plan/gold_library_items"));
+  assert.ok(goldCollectionPlan.routes.includes("/api/v1/gold-items/import-jsonl"));
+  assert.ok(goldCollectionPlan.routes.includes("/api/v1/gold-items/import-jsonl?dryRun=true"));
+  assert.ok(goldCollectionPlan.routes.includes("/api/v1/target-gaps/import-jsonl-package?validateOnly=true"));
+  assert.equal(goldCollectionPlan.routeCount, goldCollectionPlan.routes.length);
   assert.match(goldCollectionPlan.unchangedTemplatePolicy, /templateOnly=true/);
   assert.match(goldCollectionPlan.dryRunValidationPolicy, /without appending workflow or rating events/);
   assert.match(goldCollectionPlan.packageImportPolicy, /spans multiple target gaps/);
@@ -13326,6 +13349,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "/api/v1/assignments/import-jsonl",
     "/api/v1/rating-context-snapshots/import-jsonl",
   ]);
+  assert.ok(blindRatingsCollectionPlan.routes.includes("/api/v1/assignments/import-jsonl"));
+  assert.ok(blindRatingsCollectionPlan.routes.includes("/api/v1/rating-context-snapshots/import-jsonl?validateOnly=true"));
   assert.deepEqual(blindRatingsCollectionPlan.setupDryRunImportRoutes, [
     "/api/v1/assignments/import-jsonl?dryRun=true",
     "/api/v1/rating-context-snapshots/import-jsonl?dryRun=true",
@@ -13473,6 +13498,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.deepEqual(positionTargetGap.body.item.setupReadbackRoutes, []);
   assert.deepEqual(positionTargetGap.body.item.targetGapReadbackRoutes, ["/api/v1/target-gaps"]);
   assert.deepEqual(positionTargetGap.body.item.targetGapReadbackItemRoutes, ["/api/v1/target-gaps/positions"]);
+  assert.ok(positionTargetGap.body.item.routes.includes("/api/v1/target-gaps/positions"));
+  assert.ok(positionTargetGap.body.item.routes.includes("/api/v1/target-gaps/collection-plan/positions"));
+  assert.ok(positionTargetGap.body.item.routes.includes("/api/v1/intake/positions/import-jsonl?dryRun=true"));
+  assert.equal(positionTargetGap.body.item.routeCount, positionTargetGap.body.item.routes.length);
   assert.deepEqual(positionTargetGap.body.item.workflowTemplateIds, ["position-intake"]);
   assert.deepEqual(positionTargetGap.body.item.setupWorkflowTemplateIds, []);
   assert.deepEqual(positionTargetGap.body.item.bulkImportWorkflowTemplateIds, ["position-intake-jsonl-import"]);
@@ -13910,6 +13939,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(positionReviewPointer.readbackItemRoute, "/api/v1/target-gaps/positions");
   assert.equal(positionReviewPointer.submissionReadbackRoute, "/api/v1/intake/positions");
   assert.equal(positionReviewPointer.readbackScope, "target_gap");
+  assert.ok(positionReviewPointer.routes.includes(positionReviewPointer.operatorPlanItemRoute));
+  assert.ok(positionReviewPointer.routes.includes("/api/v1/target-gaps/positions"));
+  assert.ok(positionReviewPointer.routes.includes("/api/v1/intake/positions"));
+  assert.equal(positionReviewPointer.routeCount, positionReviewPointer.routes.length);
 
   const positionSubmissionRouteReviewPointers = await invokeApi(context, {
     method: "GET",
@@ -13980,6 +14013,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "/api/v1/release-report-sections/model-evaluation-reproducibility-checklist-october-2026-demo",
   );
   assert.equal(leaderboardReviewPointer.relatedSubmitActions[0].bulkImportRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.ok(leaderboardReviewPointer.routes.includes("/api/v1/release-report-sections/model-evaluation-reproducibility-checklist-october-2026-demo"));
+  assert.ok(leaderboardReviewPointer.routes.includes("/api/v1/operator-evidence/import-jsonl"));
 
   const modelReproRouteReviewPointers = await invokeApi(context, {
     method: "GET",
@@ -14147,10 +14182,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const publicDatasetReviewSummary = reviewArtifactSummaries.body.items.find((item) => item.artifactId === "public_dataset_v0_1_first_artifact");
   assert.equal(publicDatasetReviewSummary.artifactType, "metaphilosophy_deliverable");
   assert.deepEqual(publicDatasetReviewSummary.relatedSubmitActionIds ?? [], []);
+  assert.ok(publicDatasetReviewSummary.routes.includes(publicDatasetReviewSummary.operatorPlanItemRoute));
+  assert.ok(publicDatasetReviewSummary.routes.includes("/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact"));
+  assert.equal(publicDatasetReviewSummary.routeCount, publicDatasetReviewSummary.routes.length);
   const leaderboardReviewSummary = reviewArtifactSummaries.body.items.find((item) => item.artifactId === "leaderboard_model_run_provenance");
   assert.deepEqual(leaderboardReviewSummary.relatedSubmitActionIds, [
     "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
   ]);
+  assert.ok(leaderboardReviewSummary.routes.includes("/api/v1/operator-evidence/import-jsonl"));
   const runEnvironmentReviewSummary = reviewArtifactSummaries.body.items.find((item) => item.artifactId === "submitted_run_inference_environment_provenance");
   assert.deepEqual(runEnvironmentReviewSummary.relatedSubmitActionIds, [
     "model_evaluation_reproducibility:submit:model_inference_config",
@@ -15728,6 +15767,8 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(methodologyRow.status, "ready");
   assert.equal(datasetCardRow.documentSummary.id, "dataset-card-v0-1-doc");
   assert.ok(datasetCardRow.readbackRoutes.includes("/api/v1/public-dataset-documents/dataset-card-v0-1-doc"));
+  assert.ok(datasetCardRow.routes.includes("/api/v1/public-dataset-documents/dataset-card-v0-1-doc"));
+  assert.equal(datasetCardRow.routeCount, datasetCardRow.routes.length);
   assert.ok(datasetCardRow.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template?documentKind=dataset_card"));
   assert.ok(methodologyRow.templateReadbackRoutes.includes("/api/v1/public-dataset-documents/template?documentKind=methodology_report"));
   const ladderRow = readiness.body.items.find((item) => item.id === "public_first_ladder_gate");

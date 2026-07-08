@@ -11400,6 +11400,7 @@ function releaseReportSectionStatusLooksOpen(value) {
 
 function releaseReportSectionRoutes(item) {
   return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
     item?.readbackItemRoute,
     item?.operatorActionRoute,
     item?.reviewEvidencePointersRoute,
@@ -11409,6 +11410,10 @@ function releaseReportSectionRoutes(item) {
     ...(Array.isArray(item?.targetGapReadbackItemRoutes) ? item.targetGapReadbackItemRoutes : []),
     ...(Array.isArray(item?.targetGapCollectionPlanRoutes) ? item.targetGapCollectionPlanRoutes : []),
     ...(Array.isArray(item?.targetGapTemplateReadbackRoutes) ? item.targetGapTemplateReadbackRoutes : []),
+    ...(Array.isArray(item?.targetGapSubmissionReadbackRoutes) ? item.targetGapSubmissionReadbackRoutes : []),
+    ...(Array.isArray(item?.targetGapImportRoutes) ? item.targetGapImportRoutes : []),
+    ...(Array.isArray(item?.targetGapDryRunImportRoutes) ? item.targetGapDryRunImportRoutes : []),
+    ...(Array.isArray(item?.targetGapValidateOnlyImportRoutes) ? item.targetGapValidateOnlyImportRoutes : []),
   ]);
 }
 
@@ -11463,7 +11468,7 @@ function releaseReportSectionItems(report) {
       ...(!linkedPointers.length ? linkedChecklistRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])) : []),
     ]);
     const primarySection = sectionMatches[0]?.summary ?? {};
-    return {
+    const row = {
       id: `release-report-section:${sourceEvidenceId}`,
       sourceEvidenceId,
       status: primarySection.releaseUseStatus ?? primarySection.status ?? linkedChecklistRows[0]?.status ?? "reported",
@@ -11502,6 +11507,12 @@ function releaseReportSectionItems(report) {
       checklistRoute: linkedChecklistRows.length
         ? `/api/v1/october-completion-checklist?evidenceId=${encodeURIComponent(sourceEvidenceId)}`
         : null,
+    };
+    const routes = releaseReportSectionRoutes(row);
+    return {
+      ...row,
+      routes,
+      routeCount: routes.length,
     };
   });
 }
@@ -15167,17 +15178,25 @@ function publicDatasetReadinessReadback(report, options = {}) {
 function publicDatasetReadinessItems(readiness) {
   const routeBase = "/api/v1/public-dataset-readiness";
   const rows = Array.isArray(readiness.rows) ? readiness.rows : [];
-  return rows.map((row, index) => ({
-    ...row,
-    sequence: index + 1,
-    rowId: row.id,
-    releaseUseStatus: readiness.releaseUseStatus ?? null,
-    artifactName: readiness.artifactName ?? "Metaphilosophy Critique Ratings Dataset v0.1",
-    collectionReadbackRoute: routeBase,
-    readbackItemRoute: `${routeBase}/${encodeURIComponent(row.id)}`,
-    releaseReportRoute: "/api/release/report",
-    readbackRoutes: uniqueValues([routeBase, `${routeBase}/${encodeURIComponent(row.id)}`, "/api/release/report", ...(row.readbackRoutes ?? [])]),
-  }));
+  return rows.map((row, index) => {
+    const item = {
+      ...row,
+      sequence: index + 1,
+      rowId: row.id,
+      releaseUseStatus: readiness.releaseUseStatus ?? null,
+      artifactName: readiness.artifactName ?? "Metaphilosophy Critique Ratings Dataset v0.1",
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodeURIComponent(row.id)}`,
+      releaseReportRoute: "/api/release/report",
+      readbackRoutes: uniqueValues([routeBase, `${routeBase}/${encodeURIComponent(row.id)}`, "/api/release/report", ...(row.readbackRoutes ?? [])]),
+    };
+    const routes = publicDatasetReadinessRoutes(item);
+    return {
+      ...item,
+      routes,
+      routeCount: routes.length,
+    };
+  });
 }
 
 function publicDatasetReadinessFilters(searchParams) {
@@ -15225,10 +15244,16 @@ function publicDatasetReadinessItemIsOpen(item) {
 
 function publicDatasetReadinessRoutes(item) {
   return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
     item?.collectionReadbackRoute,
     item?.readbackItemRoute,
     item?.releaseReportRoute,
     ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.templateReadbackRoutes) ? item.templateReadbackRoutes : []),
+    ...(Array.isArray(item?.validationRoutes) ? item.validationRoutes : []),
+    ...(Array.isArray(item?.reviewRoutes) ? item.reviewRoutes : []),
+    ...(Array.isArray(item?.packageRoutes) ? item.packageRoutes : []),
+    ...(Array.isArray(item?.downstreamRoutes) ? item.downstreamRoutes : []),
   ]);
 }
 
@@ -17900,7 +17925,7 @@ function targetGapCollectionPlanItem(item, index) {
     (executionStatus === "ready_to_collect_data"
       ? "This target gap can accept real target data now; generated templates must be replaced and dry-run validated before append."
       : "The release report no longer shows remaining records for this target gap.");
-  return {
+  const planItem = {
     id: item.id,
     targetGapId: item.id,
     sequence: index + 1,
@@ -17943,6 +17968,7 @@ function targetGapCollectionPlanItem(item, index) {
     targetGapReadbackRoute: item.targetGapReadbackRoutes?.[0] ?? primaryAction.targetGapReadbackRoute ?? "/api/v1/target-gaps",
     targetGapReadbackItemRoute:
       item.targetGapReadbackItemRoutes?.[0] ?? primaryAction.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(item.id)}`,
+    collectionPlanRoute: item.collectionPlanRoute ?? `/api/v1/target-gaps/collection-plan/${encodeURIComponent(item.id)}`,
     workflowTemplateId: item.workflowTemplateIds?.[0] ?? primaryAction.workflowTemplateId ?? null,
     bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateIds?.[0] ?? primaryAction.bulkImportWorkflowTemplateId ?? null,
     setupWorkflowTemplateId: item.setupWorkflowTemplateIds?.[0] ?? setupAction.setupWorkflowTemplateId ?? null,
@@ -18005,6 +18031,12 @@ function targetGapCollectionPlanItem(item, index) {
       ? "Submit once through the target data route; the shared target-gap count will clear the dependent checklist rows after /api/release/report recomputes."
       : "Single checklist row depends on this target gap.",
     operatorActions,
+  };
+  const routes = targetGapCollectionPlanRoutes(planItem);
+  return {
+    ...planItem,
+    routes,
+    routeCount: routes.length,
   };
 }
 
@@ -18321,7 +18353,7 @@ function targetGapItems(rows, actionItems = []) {
       ),
     ]);
     const executionStatus = Number(row.remaining) > 0 ? "ready_to_collect_data" : "closed";
-    return {
+    const targetGapItem = {
       ...row,
       targetGapId: row.id,
       operatorActionIds: matchingActions.map((item) => item.id).filter(Boolean),
@@ -18381,6 +18413,12 @@ function targetGapItems(rows, actionItems = []) {
       expectedResourceDelta: primaryAction.importImpact?.expectedResourceDelta ?? null,
       setupExpectedResourceDelta: setupAction.setupImportImpact?.expectedResourceDelta ?? 0,
       operatorActions,
+    };
+    const routes = targetGapRoutes(targetGapItem);
+    return {
+      ...targetGapItem,
+      routes,
+      routeCount: routes.length,
     };
   });
 }
@@ -18539,6 +18577,7 @@ function targetGapItemIsOpen(item) {
 
 function targetGapRoutes(item) {
   return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
     item?.writeRoute,
     item?.bulkImportRoute,
     item?.dryRunImportRoute,
@@ -18642,6 +18681,7 @@ function targetGapPlanHasStep(item, stepKind) {
 
 function targetGapCollectionPlanRoutes(item) {
   return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
     item?.writeRoute,
     item?.bulkImportRoute,
     item?.dryRunImportRoute,
@@ -18665,6 +18705,7 @@ function targetGapCollectionPlanRoutes(item) {
     item?.setupReadbackRoute,
     item?.targetGapReadbackRoute,
     item?.targetGapReadbackItemRoute,
+    item?.collectionPlanRoute,
     item?.templateReadbackRoute,
     item?.expandedTemplateReadbackRoute,
     item?.starterExpandedTemplateReadbackRoute,
@@ -19300,7 +19341,17 @@ function operatorPlanCollectionDecoratedItem(collectionId, planKey, item, contex
     id,
     operatorPlanItemRoute: itemRoute,
   };
-  return operatorItemWithBlockedTargetGapContext(decorated, context.targetGapById ?? new Map(), blockedByTargetGapIds);
+  const withTargetGapContext = operatorItemWithBlockedTargetGapContext(
+    decorated,
+    context.targetGapById ?? new Map(),
+    blockedByTargetGapIds,
+  );
+  const routes = operatorPlanCollectionRoutes(withTargetGapContext);
+  return {
+    ...withTargetGapContext,
+    routes,
+    routeCount: routes.length,
+  };
 }
 
 function operatorPlanCollectionRelatedBlockingActions(item, actionItems = []) {
@@ -19393,6 +19444,7 @@ function operatorPlanCollectionItemMatchesStatus(item, value) {
 
 function operatorPlanCollectionRoutes(item) {
   return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
     item?.writeRoute,
     item?.readbackRoute,
     item?.readbackItemRoute,

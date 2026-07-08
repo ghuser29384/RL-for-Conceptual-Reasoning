@@ -9360,6 +9360,7 @@ function releaseReportSectionPreviewRow(item) {
   const reasons = Array.isArray(item.reviewReasons) && item.reviewReasons.length ? item.reviewReasons.slice(0, 3).join(", ") : "no open review reasons";
   const actions = Array.isArray(item.operatorActionIds) && item.operatorActionIds.length ? item.operatorActionIds.length : 0;
   const targetGapSummary = Array.isArray(item.targetGapIds) && item.targetGapIds.length ? item.targetGapIds.map(humanize).join(", ") : "not target-gap linked";
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   const targetGapReadbacks =
     Array.isArray(item.targetGapReadbackItemRoutes) && item.targetGapReadbackItemRoutes.length
       ? item.targetGapReadbackItemRoutes.slice(0, 3).join(", ")
@@ -9394,6 +9395,7 @@ function releaseReportSectionPreviewRow(item) {
         ["Target-data templates", targetGapTemplates],
         ["Related submit actions", Array.isArray(item.relatedSubmitActionIds) && item.relatedSubmitActionIds.length ? item.relatedSubmitActionIds.length : "none"],
         ["Action readback", item.operatorActionRoute ?? "not available"],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 4)}` : "not linked"],
       ])}
     </article>
   `;
@@ -9474,11 +9476,14 @@ function publicDatasetReadinessPreviewRow(item) {
   const targetGaps = Array.isArray(item.targetGapIds) && item.targetGapIds.length ? item.targetGapIds.map(humanize).join(", ") : "not target-gap linked";
   const downstream =
     Array.isArray(item.downstreamArtifacts) && item.downstreamArtifacts.length ? item.downstreamArtifacts.map(humanize).join(", ") : "not a downstream gate";
-  const routes =
-    [item.readbackItemRoute, ...(Array.isArray(item.readbackRoutes) ? item.readbackRoutes : [])]
-      .filter(Boolean)
-      .slice(0, 5)
-      .join(", ") || "not available";
+  const routes = Array.isArray(item.routes) && item.routes.length
+    ? `${item.routes.length} routes: ${workflowPreviewPathSummary(item.routes, "not available", 5)}`
+    : (
+        [item.readbackItemRoute, ...(Array.isArray(item.readbackRoutes) ? item.readbackRoutes : [])]
+          .filter(Boolean)
+          .slice(0, 5)
+          .join(", ") || "not available"
+      );
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10698,6 +10703,7 @@ function targetGapPreviewRow(item) {
     Array.isArray(item.workflowTemplateIds) && item.workflowTemplateIds.length
       ? item.workflowTemplateIds.map(workflowTemplateLabelForId).join(", ")
       : "not available";
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10736,6 +10742,7 @@ function targetGapPreviewRow(item) {
         ["Setup templates", setupTemplates],
         ["Setup bulk templates", setupBulkImportTemplates],
         ["Bulk import templates", bulkImportTemplates],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 5)}` : "not linked"],
         ["Operator actions", String(item.operatorActionIds?.length ?? item.operatorActions?.length ?? 0)],
         ["Evidence", item.sourceEvidenceId ?? "current report"],
         ["Completion", item.remaining > 0 ? "Increase submitted data, then verify through /api/release/report." : "Target gap met."],
@@ -10763,6 +10770,7 @@ function targetGapCollectionPlanPreviewRow(item) {
     item.duplicateActionCount > 0
       ? `${item.duplicateActionCount} duplicate queue action(s): ${item.duplicateActionHandling ?? "collect once and verify shared checklist rows"}`
       : "no duplicate checklist action";
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10804,6 +10812,7 @@ function targetGapCollectionPlanPreviewRow(item) {
         ["Package policy", item.packageImportPolicy ?? "Use per-route imports or package import after replacing placeholders."],
         ["Verify", item.targetGapReadbackItemRoute ?? item.targetGapReadbackRoute ?? "/api/release/report"],
         ["Submission readback", item.submissionReadbackRoute ?? item.readbackRoute ?? "not available"],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 5)}` : "not linked"],
         ["Completion", item.releaseReadinessEffect ? humanize(item.releaseReadinessEffect) : "Verify through /api/release/report."],
       ])}
     </article>
@@ -11253,6 +11262,7 @@ function operatorReviewEvidencePointerPreviewRow(item) {
   const artifact = item.artifactType ? `${item.artifactType}:${item.artifactId ?? "unknown"}` : (item.artifactId ?? item.id ?? "Review pointer");
   const relatedSubmitSummary = operatorRelatedSubmitActionSummary(item);
   const blockedByTargetGapIds = Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [];
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -11270,6 +11280,7 @@ function operatorReviewEvidencePointerPreviewRow(item) {
         ...(relatedSubmitSummary ? [["Related submit actions", relatedSubmitSummary]] : []),
         ...(item.resolutionEvidence ? [["Resolution evidence", item.resolutionEvidence]] : []),
         ["Evidence", item.sourceEvidenceId ?? "current report"],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 4)}` : "not linked"],
         ["Action status", humanize(item.actionStatus ?? "operator action")],
       ])}
     </article>
@@ -11280,6 +11291,7 @@ function operatorReviewArtifactSummaryPreviewRow(item) {
   const reasons = Array.isArray(item.reasons) ? item.reasons : [];
   const reasonSummary = reasons.length ? `${reasons.slice(0, 4).join(", ")}${item.reasonsTruncated ? ", ..." : ""}` : "review required";
   const relatedSubmitSummary = operatorRelatedSubmitActionSummary(item);
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -11295,6 +11307,7 @@ function operatorReviewArtifactSummaryPreviewRow(item) {
         ...(item.resolutionEvidence ? [["Resolution evidence", item.resolutionEvidence]] : []),
         ["Evidence", item.sourceEvidenceId ?? "current report"],
         ["Reasons", reasonSummary],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 4)}` : "not linked"],
         ["Action status", humanize(item.actionStatus ?? "operator action")],
       ])}
     </article>
