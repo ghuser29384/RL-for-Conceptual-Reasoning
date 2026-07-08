@@ -18941,6 +18941,8 @@ test("admin source-intake aliases record Phase 1 sources, JSONL import, and extr
   assert.equal(sourceIntakeReleaseReport.body.sourceIntakeEvidence.counts.extractionBatches, 1);
   assert.equal(sourceIntakeReleaseReport.body.sourceIntakeEvidence.counts.argumentExtractions, 1);
   assert.equal(sourceIntakeReleaseReport.body.sourceIntakeEvidence.releaseUseStatus, "phase1_source_intake_ready_for_future_source_preparation");
+  assert.ok(sourceIntakeReleaseReport.body.sourceIntakeEvidence.routes.readbackRoutes.includes("/api/v1/admin/sources/{id}"));
+  assert.equal(sourceIntakeReleaseReport.body.sourceIntakeEvidence.routeCounts.byRoute["/api/v1/admin/sources/{id}"], 1);
   assert.equal(sourceIntakeReleaseReport.body.sourcePreparationEvidence.releaseUseStatus, "source_preparation_not_started");
   assert.equal(sourceIntakeReleaseReport.body.sourcePreparationEvidence.counts.preparedDrafts, 0);
   assert.equal(sourceIntakeReleaseReport.body.sourcePreparationEvidence.counts.candidateItems, 0);
@@ -18961,6 +18963,9 @@ test("admin source-intake aliases record Phase 1 sources, JSONL import, and extr
     "source_intake_recorded_but_source_preparation_not_started",
   );
   assert.equal(sourceWorkbenchReadiness.body.items[0].phaseGateReadiness.supportsSourceDerivedReleaseClaims, false);
+  assert.ok(sourceWorkbenchReadiness.body.items[0].readbackRoutes.includes("/api/v1/admin/sources/{id}"));
+  assert.ok(sourceWorkbenchReadiness.body.items[0].sourceIntakeRoutes.readbackRoutes.includes("/api/v1/admin/sources/{id}"));
+  assert.equal(sourceWorkbenchReadiness.body.items[0].sourceIntakeRouteCounts.byRoute["/api/v1/admin/sources/{id}"], 1);
 
   const workflowEvents = await auditStore.readWorkflowEvents();
   assert.equal(workflowEvents.some((event) => event.resourceKey === "candidateBatch"), false);
@@ -20252,6 +20257,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(sourceWorkbenchTemplate.body.counts.byRouteLane.source_intake, 4);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRouteLane.source_preparation, 4);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/sources/{id}/extract?dryRun=true"], 1);
+  assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/admin/sources/{id}"], 1);
   assert.equal(sourceWorkbenchTemplate.body.counts.byRoute["/api/v1/metaphilosophy/source-workbench-readiness"], 8);
   assert.deepEqual(sourceWorkbenchTemplate.body.sourceIntakeRouteCounts, report.body.sourceIntakeEvidence.routeCounts);
   assert.deepEqual(sourceWorkbenchTemplate.body.sourcePreparationRouteCounts, report.body.sourcePreparationEvidence.routeCounts);
@@ -20287,6 +20293,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(sourceCardTemplate.sourceWorkbenchRouteLane, "source_intake");
   assert.equal(sourceCardTemplate.requestBody.sourceCard.templateOnly, true);
   assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceVisibility, "admin_only_not_rater_visible");
+  assert.ok(sourceCardTemplate.readbackRoutes.includes("/api/v1/admin/sources/{id}"));
   assert.equal(sourceCardTemplate.templateReadbackRoute, "/api/v1/metaphilosophy/source-workbench-template?templateKind=source_card_write");
   assert.equal(sourceCardTemplate.readinessReadbackRoute, "/api/v1/metaphilosophy/source-workbench-readiness");
   const extractionTemplate = sourceWorkbenchTemplate.body.items.find((item) => item.templateKind === "extraction_jsonl_import");
@@ -20389,6 +20396,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(routeFilteredExtractionAliasTemplate.status, 200, JSON.stringify(routeFilteredExtractionAliasTemplate.body));
   assert.equal(routeFilteredExtractionAliasTemplate.body.count, 1);
   assert.equal(routeFilteredExtractionAliasTemplate.body.items[0].templateKind, "extraction_jsonl_import");
+
+  const routeFilteredSourceDetailTemplate = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/source-workbench-template?route=${encodeURIComponent("/api/v1/admin/sources/{id}")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(routeFilteredSourceDetailTemplate.status, 200, JSON.stringify(routeFilteredSourceDetailTemplate.body));
+  assert.equal(routeFilteredSourceDetailTemplate.body.count, 1);
+  assert.equal(routeFilteredSourceDetailTemplate.body.items[0].templateKind, "source_card_write");
 
   const routeFilteredGateDecisionTemplate = await invokeApi(context, {
     method: "GET",

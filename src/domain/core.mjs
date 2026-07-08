@@ -186,6 +186,7 @@ const SOURCE_INTAKE_JSONL_IMPORT_ROUTES = [
 const SOURCE_INTAKE_REVIEW_ROUTES = ["/api/v1/admin/extractions/{id}/review"];
 const SOURCE_INTAKE_READBACK_ROUTES = [
   "/api/v1/source-cards",
+  "/api/v1/admin/sources/{id}",
   "/api/v1/source-spans",
   "/api/v1/extraction-batches",
   "/api/v1/argument-extractions",

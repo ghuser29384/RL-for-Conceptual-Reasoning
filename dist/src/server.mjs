@@ -12547,6 +12547,7 @@ function metaphilosophySourceWorkbenchTemplateItems(report, readiness) {
       requiredRoles: sourceCardAdminWorkflowSpec.roles,
       requestBody: { sourceCard },
       readbackRoute: "/api/v1/source-cards",
+      readbackRoutes: ["/api/v1/admin/sources/{id}"],
       templateReadbackRoute: sourceWorkbenchTemplateRoute("source_card_write"),
       readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
       sourceReadinessStatus: readiness.status,
@@ -12785,7 +12786,13 @@ function metaphilosophySourceWorkbenchReadinessItem(report) {
     adminWriteRoutes: ["/api/v1/admin/sources", "/api/v1/admin/sources/{id}/spans"],
     jsonlImportRoutes: sourceIntakeJsonlImportRoutes,
     reviewRoutes: ["/api/v1/admin/extractions/{id}/review"],
-    readbackRoutes: ["/api/v1/source-cards", "/api/v1/source-spans", "/api/v1/extraction-batches", "/api/v1/argument-extractions"],
+    readbackRoutes: [
+      "/api/v1/source-cards",
+      "/api/v1/admin/sources/{id}",
+      "/api/v1/source-spans",
+      "/api/v1/extraction-batches",
+      "/api/v1/argument-extractions",
+    ],
   };
   const sourcePreparationRoutes = sourcePreparationEvidence.routes ?? {
     adminWriteRoutes: sourcePreparationAdminRoutes,
