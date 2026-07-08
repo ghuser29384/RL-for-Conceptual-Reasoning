@@ -7704,7 +7704,7 @@ export async function handleApiRequest(request, response, url, context) {
   if (request.method === "GET" && operatorEvidencePackageManifestMatch) {
     const itemId = operatorEvidencePackageManifestMatch[1] ? decodeURIComponent(operatorEvidencePackageManifestMatch[1]) : null;
     await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
-      operatorEvidencePackageManifestReadback(report, { itemId }),
+      operatorEvidencePackageManifestReadback(report, { itemId, searchParams: url.searchParams }),
     );
     return;
   }
@@ -20499,9 +20499,12 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
       executionSequence.push(operatorEvidencePackageManifestFallbackStep(runbookStep, executionSequence.length + 1));
     }
   }
+  const executionItems = executionSequence.map(operatorEvidencePackageManifestStepWithRoutes);
+  const filters = operatorEvidencePackageManifestFilters(options.searchParams);
+  const filteredItems = executionItems.filter((item) => operatorEvidencePackageManifestMatchesFilters(item, filters));
   const selectedItems = options.itemId
-    ? executionSequence.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
-    : executionSequence;
+    ? filteredItems.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
+    : filteredItems;
   if (options.itemId && selectedItems.length === 0) return null;
   const packageActionIds = uniqueValues(packageTemplate.items.map((item) => item.actionId));
   const payloadActionIds = uniqueValues(payloadTemplate.items.map((item) => item.actionId));
@@ -20555,8 +20558,9 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
       sourceActionGroupRoute: submitEvidenceActionGroupRoute,
       releaseReportRoute: "/api/release/report",
     },
+    filters,
     count: selectedItems.length,
-    totalCount: executionSequence.length,
+    totalCount: executionItems.length,
     counts: {
       readySubmitRunbookSteps: readySubmitSteps.length,
       blockedByTargetDataSteps: blockedByTargetDataSteps.length,
@@ -20569,11 +20573,24 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
       setupPayloadTemplateActions: setupPayloadActionIds.length,
       primaryPayloadTemplateActions: primaryPayloadActionIds.length,
       actionsWithSetupPayloadAndPackageJsonl: packageActionIds.filter((id) => setupPayloadActionIds.includes(id)).length,
-      executionSteps: executionSequence.length,
-      byManifestStepKind: countItemsBy(executionSequence, "manifestStepKind"),
-      byChecklistRow: countItemsBy(executionSequence, "checklistRowId"),
-      byArtifactKind: countItemsBy(executionSequence, "artifactKind"),
-      byRoute: countItemsBy(executionSequence, "route"),
+      executionSteps: executionItems.length,
+      byManifestStepKind: countItemsBy(executionItems, "manifestStepKind"),
+      byChecklistRow: countItemsBy(executionItems, "checklistRowId"),
+      byArtifactKind: countItemsBy(executionItems, "artifactKind"),
+      byRoute: countItemsBy(executionItems, "route"),
+      byAllRoute: countValues(executionItems.flatMap(operatorEvidencePackageManifestStepRoutes)),
+    },
+    filteredCounts: {
+      executionSteps: selectedItems.length,
+      packageJsonlSteps: selectedItems.filter((item) => item.manifestStepKind === "operator_evidence_jsonl_record").length,
+      setupPayloadSteps: selectedItems.filter((item) => item.manifestStepKind === "setup_payload_template").length,
+      singleRecordPayloadSteps: selectedItems.filter((item) => item.manifestStepKind === "single_record_payload_template").length,
+      templateUnavailableSteps: selectedItems.filter((item) => item.manifestStepKind === "template_unavailable").length,
+      byManifestStepKind: countItemsBy(selectedItems, "manifestStepKind"),
+      byChecklistRow: countItemsBy(selectedItems, "checklistRowId"),
+      byArtifactKind: countItemsBy(selectedItems, "artifactKind"),
+      byRoute: countItemsBy(selectedItems, "route"),
+      byAllRoute: countValues(selectedItems.flatMap(operatorEvidencePackageManifestStepRoutes)),
     },
     packageTemplateCounts: packageTemplate.counts,
     payloadTemplateCounts: payloadTemplate.counts,
@@ -20589,6 +20606,61 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
     ...(options.itemId ? { item: selectedItems[0] } : {}),
     items: selectedItems,
   };
+}
+
+function operatorEvidencePackageManifestFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    checklistRowId: value("checklistRowId"),
+    actionId: value("actionId"),
+    artifactKind: value("artifactKind"),
+    manifestStepKind: value("manifestStepKind") ?? value("stepKind"),
+    templateKind: value("templateKind"),
+    executionStatus: value("executionStatus"),
+    sourceEvidenceId: value("sourceEvidenceId") ?? value("evidenceId"),
+    resourceKey: value("resourceKey"),
+    route: value("route"),
+  };
+}
+
+function operatorEvidencePackageManifestMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "route") return operatorEvidencePackageManifestStepRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function operatorEvidencePackageManifestStepWithRoutes(item) {
+  const routes = operatorEvidencePackageManifestStepRoutes(item);
+  return {
+    ...item,
+    routes,
+    routeCount: routes.length,
+  };
+}
+
+function operatorEvidencePackageManifestStepRoutes(item) {
+  return uniqueValues([
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+    item?.packageManifestItemRoute,
+    item?.route,
+    item?.routeTemplate,
+    item?.packageImportRoute,
+    item?.packageDryRunImportRoute,
+    item?.packageValidateOnlyImportRoute,
+    item?.singleRecordDryRunRoute,
+    item?.singleRecordValidateOnlyRoute,
+    item?.templateReadbackRoute,
+    item?.runbookGroupRoute,
+    item?.operatorActionGroupRoute,
+    item?.runbookStepRoute,
+    item?.readbackRoute,
+    item?.verificationRoute,
+  ]);
 }
 
 function groupTemplateRowsByActionId(rows = []) {

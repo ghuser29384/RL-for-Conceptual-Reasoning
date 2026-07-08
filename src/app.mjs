@@ -8009,6 +8009,50 @@ function workflowReadbackPanel(collection) {
           </label>
         </div>`
       : "";
+  const operatorEvidencePackageManifestFilters =
+    collection.id === "operator-evidence-package-manifest"
+      ? `<div class="workflowReadbackControls">
+          <label>
+            <span>Checklist row</span>
+            <select id="workflowChecklistRowFilter">
+              ${operatorChecklistRowFilters
+                .map((item) => `<option ${item === state.workflowChecklistRowFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All checklist rows")}</option>`)
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Manifest step</span>
+            <select id="workflowTemplateKindFilter">
+              ${["", "setup_payload_template", "operator_evidence_jsonl_record", "single_record_payload_template", "template_unavailable"]
+                .map(
+                  (item) =>
+                    `<option ${item === state.workflowTemplateKindFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All manifest steps")}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Action</span>
+            <input id="workflowActionIdFilter" type="text" value="${escapeHtml(state.workflowActionIdFilter)}" placeholder="model_evaluation_reproducibility:submit:leaderboard_model_run_provenance" />
+          </label>
+          <label>
+            <span>Artifact kind</span>
+            <input id="workflowArtifactKindFilter" type="text" value="${escapeHtml(state.workflowArtifactKindFilter)}" placeholder="leaderboard_model_run_provenance" />
+          </label>
+          <label>
+            <span>Execution</span>
+            <select id="workflowExecutionStatusFilter">
+              ${operatorActionExecutionStatusFilters
+                .map((item) => `<option ${item === state.workflowExecutionStatusFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All execution states")}</option>`)
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>Route</span>
+            <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/operator-evidence/import-jsonl" />
+          </label>
+        </div>`
+      : "";
   const targetDataTemplateExpansionControls =
     collection.id === "target-data-jsonl-template"
       ? `<div class="workflowReadbackControls">
@@ -8726,6 +8770,7 @@ function workflowReadbackPanel(collection) {
       ${targetGapFilters}
       ${targetGapCollectionPlanFilters}
       ${targetDataCurrentPackageManifestFilters}
+      ${operatorEvidencePackageManifestFilters}
       ${targetDataTemplateExpansionControls}
       ${sourceWorkbenchTemplateFilters}
       ${metaphilosophyCollectionFilters}
@@ -11160,6 +11205,7 @@ function operatorEvidenceJsonlTemplatePreviewRow(item) {
 function operatorEvidencePackageManifestPreviewRow(item) {
   const requiredFields = Array.isArray(item.requiredFields) ? item.requiredFields : [];
   const blockedByTargetGapIds = Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [];
+  const routes = Array.isArray(item.routes) ? item.routes : [];
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -11190,6 +11236,7 @@ function operatorEvidencePackageManifestPreviewRow(item) {
         ["Runbook step", item.runbookStepRoute ?? "not available"],
         ["Readback", item.readbackRoute ?? "not available"],
         ["Verification", item.verificationRoute ?? "/api/release/report"],
+        ["Route coverage", routes.length ? `${routes.length} routes: ${workflowPreviewPathSummary(routes, "not linked", 5)}` : "not linked"],
         ["Required fields", requiredFields.length ? requiredFields.slice(0, 6).join(", ") : "id"],
         ...(blockedByTargetGapIds.length ? [["Blocked target gaps", blockedByTargetGapIds.map(humanize).join(", ")]] : []),
         ["Completion", item.completionEvidence ?? "Verify through /api/release/report."],
@@ -15349,10 +15396,13 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     const collection = currentWorkflowCollection();
     const targetCollectionFilterCollection =
       collection.id === "target-gap-collection-plan" || collection.id === "target-data-current-package-manifest";
+    const operatorEvidencePackageManifestCollection = collection.id === "operator-evidence-package-manifest";
     if (!isOperatorPlanCollection(collection)) {
-      if (collection.id !== "target-data-current-package-manifest") state.workflowActionIdFilter = "";
+      if (collection.id !== "target-data-current-package-manifest" && !operatorEvidencePackageManifestCollection) {
+        state.workflowActionIdFilter = "";
+      }
       state.workflowActionTypeFilter = "";
-      state.workflowChecklistRowFilter = "";
+      if (!operatorEvidencePackageManifestCollection) state.workflowChecklistRowFilter = "";
       state.workflowBlockedByTargetGapIdFilter = "";
       state.workflowTemplateCoverageStatusFilter = "";
       state.workflowPreflightCoverageStatusFilter = "";
@@ -15374,7 +15424,8 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
         collection.id !== "release-artifact-package-template" &&
         collection.id !== "public-dataset-release-package" &&
         collection.id !== "public-dataset-package-file-template" &&
-        collection.id !== "public-dataset-package-validation-template"
+        collection.id !== "public-dataset-package-validation-template" &&
+        !operatorEvidencePackageManifestCollection
       ) {
         state.workflowArtifactKindFilter = "";
       }
@@ -15441,6 +15492,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (
       !isTargetGapCollection(collection) &&
       collection.id !== "target-gap-collection-plan" &&
+      !operatorEvidencePackageManifestCollection &&
       collection.id !== "operator-action-items" &&
       collection.id !== "operator-action-payload-template" &&
       collection.id !== "operator-evidence-jsonl-template" &&
@@ -15461,6 +15513,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (
       collection.id !== "metaphilosophy-source-workbench-template" &&
       collection.id !== "release-version-manifest-template" &&
+      !operatorEvidencePackageManifestCollection &&
       collection.id !== "public-dataset-package-manifest" &&
       collection.id !== "public-dataset-release-package" &&
       collection.id !== "public-dataset-package-file-template" &&
@@ -17981,10 +18034,11 @@ function isTargetGapCollection(collection) {
 function isWorkflowRouteFilterCollection(collection) {
   return (
     collection.id === "rlhf93-completion-audit" ||
-    collection.id === "metaphilosophy-source-workbench-template" ||
-    collection.id === "target-gap-collection-plan" ||
-    collection.id === "target-data-current-package-manifest" ||
-    collection.id === "october-completion-checklist" ||
+	    collection.id === "metaphilosophy-source-workbench-template" ||
+	    collection.id === "target-gap-collection-plan" ||
+	    collection.id === "target-data-current-package-manifest" ||
+    collection.id === "operator-evidence-package-manifest" ||
+	    collection.id === "october-completion-checklist" ||
     collection.id === "october-completion-runbook" ||
     collection.id === "release-report-sections" ||
     collection.id === "release-artifact-package-template" ||
@@ -18087,6 +18141,14 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowTargetCollectionChecklistFilter) url.searchParams.set("checklistRowId", state.workflowTargetCollectionChecklistFilter);
     if (state.workflowActionIdFilter) url.searchParams.set("actionId", state.workflowActionIdFilter);
     if (state.workflowTargetPackageImportRouteFilter) url.searchParams.set("importRoute", state.workflowTargetPackageImportRouteFilter);
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (collection.id === "operator-evidence-package-manifest") {
+    if (state.workflowChecklistRowFilter) url.searchParams.set("checklistRowId", state.workflowChecklistRowFilter);
+    if (state.workflowTemplateKindFilter) url.searchParams.set("manifestStepKind", state.workflowTemplateKindFilter);
+    if (state.workflowActionIdFilter) url.searchParams.set("actionId", state.workflowActionIdFilter);
+    if (state.workflowArtifactKindFilter) url.searchParams.set("artifactKind", state.workflowArtifactKindFilter);
+    if (state.workflowExecutionStatusFilter) url.searchParams.set("executionStatus", state.workflowExecutionStatusFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if ((isOperatorPlanCollection(collection) || isTargetGapCollection(collection)) && state.workflowRouteFilter) {

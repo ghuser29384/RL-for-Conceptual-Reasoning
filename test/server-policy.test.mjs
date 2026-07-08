@@ -15164,10 +15164,17 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifest.body.counts.byManifestStepKind.operator_evidence_jsonl_record, 21);
   assert.equal(operatorEvidencePackageManifest.body.counts.byManifestStepKind.setup_payload_template, 7);
   assert.equal(operatorEvidencePackageManifest.body.counts.byManifestStepKind.single_record_payload_template, 7);
+  assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/operator-evidence/import-jsonl"], 21);
+  assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/operator-evidence/import-jsonl?dryRun=true"], 21);
+  assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/label-snapshots"], 1);
   assert.equal(operatorEvidencePackageManifest.body.counts.actionsWithSetupPayloadAndPackageJsonl, 6);
+  assert.ok(operatorEvidencePackageManifest.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
   assert.equal(operatorEvidencePackageManifest.body.items[0].manifestStepKind, "single_record_payload_template");
   assert.equal(operatorEvidencePackageManifest.body.items[0].artifactKind, "label_snapshot");
   assert.equal(operatorEvidencePackageManifest.body.items[0].singleRecordDryRunRoute, "/api/v1/label-snapshots?dryRun=true");
+  assert.ok(operatorEvidencePackageManifest.body.items[0].routes.includes("/api/v1/label-snapshots"));
+  assert.ok(operatorEvidencePackageManifest.body.items[0].routes.includes("/api/v1/label-snapshots?dryRun=true"));
+  assert.ok(operatorEvidencePackageManifest.body.items[0].routes.includes("/api/v1/label-snapshots?validateOnly=true"));
   assert.equal(operatorEvidencePackageManifest.body.items[0].runbookGroupRoute, operatorEvidencePackageManifest.body.sourceRunbookGroupRoute);
   assert.equal(operatorEvidencePackageManifest.body.items[0].operatorActionGroupRoute, operatorEvidencePackageManifest.body.sourceActionGroupRoute);
   assert.equal(operatorEvidencePackageManifest.body.items[0].templateReadbackRoute.includes("/api/v1/operator-action-items/payload-template/"), true);
@@ -15209,6 +15216,43 @@ test("operator action item queue is admin/auditor readback derived from the rele
     operatorEvidencePackageManifestById.body.item.packageManifestItemRoute,
     operatorEvidencePackageManifest.body.items[0].packageManifestItemRoute,
   );
+  assert.ok(operatorEvidencePackageManifestById.body.item.routes.includes(operatorEvidencePackageManifest.body.items[0].packageManifestItemRoute));
+  const operatorEvidencePackageManifestByChecklist = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/operator-evidence/package-manifest?checklistRowId=release_artifact_submission_package",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(operatorEvidencePackageManifestByChecklist.status, 200, JSON.stringify(operatorEvidencePackageManifestByChecklist.body));
+  assert.equal(operatorEvidencePackageManifestByChecklist.body.count, 6);
+  assert.equal(operatorEvidencePackageManifestByChecklist.body.filteredCounts.byChecklistRow.release_artifact_submission_package, 6);
+  assert.ok(operatorEvidencePackageManifestByChecklist.body.items.every((item) => item.checklistRowId === "release_artifact_submission_package"));
+  const operatorEvidencePackageManifestByArtifact = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/operator-evidence/package-manifest?artifactKind=label_snapshot",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(operatorEvidencePackageManifestByArtifact.status, 200, JSON.stringify(operatorEvidencePackageManifestByArtifact.body));
+  assert.equal(operatorEvidencePackageManifestByArtifact.body.count, 1);
+  assert.equal(operatorEvidencePackageManifestByArtifact.body.items[0].artifactKind, "label_snapshot");
+  assert.equal(operatorEvidencePackageManifestByArtifact.body.filteredCounts.singleRecordPayloadSteps, 1);
+  const operatorEvidencePackageManifestByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/operator-evidence/package-manifest?route=${encodeURIComponent("/api/v1/label-snapshots")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(operatorEvidencePackageManifestByRoute.status, 200, JSON.stringify(operatorEvidencePackageManifestByRoute.body));
+  assert.equal(operatorEvidencePackageManifestByRoute.body.count, 1);
+  assert.equal(operatorEvidencePackageManifestByRoute.body.filteredCounts.byAllRoute["/api/v1/label-snapshots"], 1);
+  assert.equal(operatorEvidencePackageManifestByRoute.body.items[0].route, "/api/v1/label-snapshots");
+  const operatorEvidencePackageManifestByStep = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/operator-evidence/package-manifest?manifestStepKind=operator_evidence_jsonl_record",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(operatorEvidencePackageManifestByStep.status, 200, JSON.stringify(operatorEvidencePackageManifestByStep.body));
+  assert.equal(operatorEvidencePackageManifestByStep.body.count, 21);
+  assert.equal(operatorEvidencePackageManifestByStep.body.filteredCounts.packageJsonlSteps, 21);
+  assert.ok(operatorEvidencePackageManifestByStep.body.items.every((item) => item.manifestStepKind === "operator_evidence_jsonl_record"));
   const missingOperatorEvidencePackageManifestById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/operator-evidence/package-manifest/not-present",
@@ -15430,6 +15474,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
       .slice(appSource.indexOf("function operatorEvidencePackageManifestPreviewRow"), appSource.indexOf("function operatorTemplateDependencyMetrics"))
       .includes('["Package manifest item", item.packageManifestItemRoute ?? "not available"]'),
   );
+  assert.ok(appSource.includes("operatorEvidencePackageManifestFilters"));
+  assert.ok(appSource.includes('collection.id === "operator-evidence-package-manifest"'));
+  assert.ok(appSource.includes('url.searchParams.set("manifestStepKind", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("artifactKind", state.workflowArtifactKindFilter)'));
+  assert.ok(appSource.includes('["Route coverage", routes.length ?'));
   assert.ok(appSource.includes("function operatorTemplateDependencyMetrics(item)"));
   assert.ok(appSource.includes('["Blocked target gaps", blockedByTargetGapIds.map(humanize).join(", ")]'));
   assert.ok(appSource.includes('["Related submit actions", relatedSubmitActionIds.length]'));
