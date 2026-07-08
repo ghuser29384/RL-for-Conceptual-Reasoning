@@ -180,6 +180,7 @@ import {
   REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
   REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
   REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+  METAPHILOSOPHY_DECISION_LOG_ENTRIES,
   METAPHILOSOPHY_RD_BACKLOG_ITEMS,
   METAPHILOSOPHY_TASK_TRACKS,
   scoreExplanationOverallProductDiagnostic,
@@ -4902,6 +4903,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/metaphilosophy/research-backlog-items"],
     ["GET", "/api/v1/metaphilosophy/research-backlog-items"],
     ["GET", "/api/v1/metaphilosophy/research-backlog-items/backlog-smoke"],
+    ["GET", "/api/v1/metaphilosophy/decision-log"],
+    ["GET", "/api/v1/metaphilosophy/decision-log/rlhf93-prune-historical-revision-log"],
     ["POST", "/api/v1/corpus-manifests"],
     ["GET", "/api/v1/corpus-manifests"],
     ["GET", "/api/v1/corpus-manifests/corpus-smoke"],
@@ -5550,6 +5553,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/metaphilosophy/research-backlog-items"',
     'resourceKey: "metaphilosophyResearchBacklogItem"',
     "R&D backlog rows that stay outside release gates",
+    'id: "metaphilosophy-decision-log"',
+    'endpoint: "/api/v1/metaphilosophy/decision-log"',
+    'resourceKey: "metaphilosophyDecisionLogEntry"',
+    "accepted, rejected, and pruned decision-log entries",
     'id: "target-gaps"',
     'endpoint: "/api/v1/target-gaps"',
     'resourceKey: "targetGap"',
@@ -13782,6 +13789,7 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("const sourcePreparationEvidence = report.sourcePreparationEvidence;"));
   assert.ok(appSource.includes("const taskTrackTaxonomy = report.taskTrackTaxonomy;"));
   assert.ok(appSource.includes("const researchBacklog = report.researchBacklog;"));
+  assert.ok(appSource.includes("const metaphilosophyDecisionLog = report.metaphilosophyDecisionLog;"));
   assert.ok(appSource.includes("const metaphilosophyDeliverableChecklist = report.metaphilosophyDeliverableChecklist;"));
   assert.ok(appSource.includes("const candidateGenerationIntakeChecklist = report.candidateGenerationIntakeChecklist"));
   assert.ok(appSource.includes("const labelAggregationReliabilityChecklist = report.labelAggregationReliabilityChecklist"));
@@ -13798,6 +13806,7 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("sourcePreparationEvidencePanel(sourcePreparationEvidence)"));
   assert.ok(appSource.includes("taskTrackTaxonomyPanel(taskTrackTaxonomy)"));
   assert.ok(appSource.includes("researchBacklogPanel(researchBacklog)"));
+  assert.ok(appSource.includes("metaphilosophyDecisionLogPanel(metaphilosophyDecisionLog)"));
   assert.ok(appSource.includes("metaphilosophyDeliverableChecklistPanel(metaphilosophyDeliverableChecklist)"));
   assert.ok(appSource.includes("function octoberCompletionChecklistPanel(octoberCompletionChecklist)"));
   assert.ok(appSource.includes("function operatorEvidenceSubmissionPlanPanel(operatorEvidenceSubmissionPlan)"));
@@ -13845,6 +13854,7 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("[\"Prepared-draft readiness\", item.requiredForPreparedDraftReadiness ? \"required\" : \"not required\"]"));
   assert.ok(appSource.includes("function taskTrackTaxonomyPanel(taskTrackTaxonomy)"));
   assert.ok(appSource.includes("function researchBacklogPanel(researchBacklog)"));
+  assert.ok(appSource.includes("function metaphilosophyDecisionLogPanel(metaphilosophyDecisionLog)"));
   assert.ok(appSource.includes("function metaphilosophyDeliverableChecklistPanel(metaphilosophyDeliverableChecklist)"));
   assert.ok(appSource.includes("October Completion Checklist"));
   assert.ok(appSource.includes("Operator Evidence Submission Plan"));
@@ -13969,6 +13979,7 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("/api/v1/metaphilosophy/architecture-layers"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/task-tracks"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/research-backlog-items"));
+  assert.ok(appSource.includes("/api/v1/metaphilosophy/decision-log"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/deliverable-checklist"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/source-workbench-readiness"));
   assert.ok(appSource.includes("/api/v1/metaphilosophy/source-workbench-template"));
@@ -13978,9 +13989,12 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("function metaphilosophyTaskTrackPreviewRow(item)"));
   assert.ok(appSource.includes("metaphilosophyResearchBacklogItemPreviewRow(item)"));
   assert.ok(appSource.includes("function metaphilosophyResearchBacklogItemPreviewRow(item)"));
+  assert.ok(appSource.includes("metaphilosophyDecisionLogEntryPreviewRow(item)"));
+  assert.ok(appSource.includes("function metaphilosophyDecisionLogEntryPreviewRow(item)"));
   assert.ok(appSource.includes('["Release claim roles", workflowUniqueHumanizedValues(items, "releaseClaimRole")]'));
   assert.ok(appSource.includes('["LMCA relationships", workflowUniqueHumanizedValues(items, "lmcaRelationship")]'));
   assert.ok(appSource.includes('["Release-gate states", workflowUniqueHumanizedValues(items, "releaseGateStatus")]'));
+  assert.ok(appSource.includes('["Decision-log status", humanize(result.releaseUseStatus ?? "not reported")]'));
   assert.ok(appSource.includes("function workflowPreviewArraySummary(values"));
   assert.ok(appSource.includes("function workflowPreviewReviewReasons(item)"));
   assert.ok(appSource.includes("metaphilosophyDeliverableChecklistPreviewRow(item)"));
@@ -14304,6 +14318,10 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("metaphilosophy_architecture_layers"));
   assert.ok(architectureDoc.includes("metaphilosophy_task_tracks"));
   assert.ok(architectureDoc.includes("metaphilosophy_research_backlog_items"));
+  assert.ok(architectureDoc.includes("Metaphilosophy_Decision_Log.md"));
+  assert.ok(architectureDoc.includes("metaphilosophyDecisionLog"));
+  assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/decision-log"));
+  assert.ok(architectureDoc.includes("does not create release gates, promote rejected or pruned ideas, create candidates, or mutate the main spec"));
   assert.ok(
     architectureDoc.includes(
       "do not promote backlog experiments, create benchmark tasks, create candidate items, bypass pilot evidence, or broaden release claims",
@@ -20468,6 +20486,12 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   });
   assert.equal(missingSourceWorkbenchReadinessAuth.status, 401);
 
+  const missingDecisionLogAuth = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/decision-log",
+  });
+  assert.equal(missingDecisionLogAuth.status, 401);
+
   const effectiveTaskTrackCollection = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/metaphilosophy/task-tracks",
@@ -20556,6 +20580,54 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(effectiveBacklogItem.body.id, "direct_pairwise_preference_labels");
   assert.equal(effectiveBacklogItem.body.readbackSource, "release_report_effective_metaphilosophy");
   assert.equal(effectiveBacklogItem.body.releaseUseStatus, "metaphilosophy_research_backlog_separated_from_release_gates");
+
+  const decisionLogCollection = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/decision-log",
+    headers: adminHeaders,
+  });
+  assert.equal(decisionLogCollection.status, 200, JSON.stringify(decisionLogCollection.body));
+  assert.equal(decisionLogCollection.body.resourceKey, "metaphilosophyDecisionLogEntry");
+  assert.equal(decisionLogCollection.body.releaseUseStatus, "metaphilosophy_decision_log_preserved");
+  assert.equal(decisionLogCollection.body.sourceFile, "Metaphilosophy_Decision_Log.md");
+  assert.equal(decisionLogCollection.body.count, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.equal(decisionLogCollection.body.totalCount, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.equal(decisionLogCollection.body.counts.byDecisionType.accepted_edit, 2);
+  assert.equal(decisionLogCollection.body.counts.byDecisionType.rejected_idea, 1);
+  assert.equal(decisionLogCollection.body.counts.byDecisionType.pruning_decision, 1);
+  assert.equal(decisionLogCollection.body.counts.closedRows, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.ok(decisionLogCollection.body.items.every((item) => item.status === "complete"));
+  assert.ok(decisionLogCollection.body.items.some((item) => item.id === "rlhf93-prune-historical-revision-log"));
+  assert.match(decisionLogCollection.body.policy.releaseGateBoundary, /do not waive release gates/);
+
+  const pruningDecisionLog = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/decision-log?decisionType=pruning_decision",
+    headers: adminHeaders,
+  });
+  assert.equal(pruningDecisionLog.status, 200, JSON.stringify(pruningDecisionLog.body));
+  assert.equal(pruningDecisionLog.body.count, 1);
+  assert.equal(pruningDecisionLog.body.items[0].id, "rlhf93-prune-historical-revision-log");
+  assert.equal(pruningDecisionLog.body.filteredCounts.byDecisionType.pruning_decision, 1);
+
+  const rlhf93DecisionLog = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/decision-log?sourceVersion=RLHF93",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93DecisionLog.status, 200, JSON.stringify(rlhf93DecisionLog.body));
+  assert.equal(rlhf93DecisionLog.body.count, 1);
+  assert.equal(rlhf93DecisionLog.body.items[0].sourceVersion, "RLHF93");
+
+  const decisionLogItem = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/decision-log/rlhf93-prune-historical-revision-log",
+    headers: adminHeaders,
+  });
+  assert.equal(decisionLogItem.status, 200, JSON.stringify(decisionLogItem.body));
+  assert.equal(decisionLogItem.body.count, 1);
+  assert.equal(decisionLogItem.body.item.id, "rlhf93-prune-historical-revision-log");
+  assert.equal(decisionLogItem.body.item.decisionStatus, "pruned");
 
   const effectiveArchitectureCollection = await invokeApi(context, {
     method: "GET",
@@ -20777,6 +20849,13 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   });
   assert.equal(raterSourceWorkbenchTemplate.status, 403);
 
+  const raterDecisionLog = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/decision-log",
+    headers: raterHeaders,
+  });
+  assert.equal(raterDecisionLog.status, 403);
+
   const backlogItem = {
     id: "direct_pairwise_preference_labels",
     title: "Direct human pairwise preference labels",
@@ -20849,10 +20928,14 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(report.body.researchBacklog.counts.pilotEvidenceBoundItems, 1);
   assert.equal(report.body.researchBacklog.counts.promotionGovernanceBoundItems, 1);
   assert.ok(report.body.researchBacklog.rows.some((row) => row.id === "direct_pairwise_preference_labels" && row.directRequirement === false));
+  assert.equal(report.body.metaphilosophyDecisionLog.releaseUseStatus, "metaphilosophy_decision_log_preserved");
+  assert.equal(report.body.metaphilosophyDecisionLog.counts.reviewRequiredEntries, 0);
+  assert.ok(report.body.metaphilosophyDecisionLog.entries.some((row) => row.id === "rlhf93-prune-historical-revision-log"));
   assert.equal(report.body.metaphilosophyDeliverableChecklist.releaseUseStatus, "metaphilosophy_deliverable_checklist_review_required");
   assert.ok(report.body.metaphilosophyDeliverableChecklist.reviewSections.some((section) => section.artifactId === "greenfield_task_track_taxonomy"));
   assert.ok(report.body.metaphilosophyDeliverableChecklist.rows.some((row) => row.id === "greenfield_architecture_frame" && row.status === "complete"));
   assert.ok(report.body.metaphilosophyDeliverableChecklist.rows.some((row) => row.id === "rd_backlog_experiments_separated" && row.status === "complete"));
+  assert.ok(report.body.metaphilosophyDeliverableChecklist.rows.some((row) => row.id === "decision_log_preserved" && row.status === "complete"));
   assert.equal(report.body.workflowMetaphilosophyArtifacts.greenfieldArchitectureLayers.length, 4);
   assert.ok(report.body.workflowMetaphilosophyArtifacts.greenfieldArchitectureLayers.some((row) => row.id === "research_spine"));
   assert.ok(report.body.workflowMetaphilosophyArtifacts.taskTracks.some((row) => row.id === "critique_revision"));
@@ -20867,16 +20950,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(deliverableChecklist.status, 200, JSON.stringify(deliverableChecklist.body));
   assert.equal(deliverableChecklist.body.resourceKey, "metaphilosophyDeliverableChecklistRow");
   assert.equal(deliverableChecklist.body.releaseUseStatus, "metaphilosophy_deliverable_checklist_review_required");
-  assert.equal(deliverableChecklist.body.count, 4);
-  assert.equal(deliverableChecklist.body.totalCount, 4);
+  assert.equal(deliverableChecklist.body.count, 5);
+  assert.equal(deliverableChecklist.body.totalCount, 5);
   assert.equal(deliverableChecklist.body.counts.openRows, 1);
-  assert.equal(deliverableChecklist.body.counts.closedRows, 3);
+  assert.equal(deliverableChecklist.body.counts.closedRows, 4);
   assert.equal(deliverableChecklist.body.filteredCounts.openRows, 1);
-  assert.equal(deliverableChecklist.body.filteredCounts.closedRows, 3);
+  assert.equal(deliverableChecklist.body.filteredCounts.closedRows, 4);
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.review_required, 1);
-  assert.equal(deliverableChecklist.body.filteredCounts.byStatus.complete, 2);
+  assert.equal(deliverableChecklist.body.filteredCounts.byStatus.complete, 3);
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.not_applicable_without_source_derived_items, 1);
   assert.ok(deliverableChecklist.body.items.some((row) => row.deliverableId === "greenfield_task_track_taxonomy" && row.status === "review_required"));
+  assert.ok(deliverableChecklist.body.items.some((row) => row.deliverableId === "decision_log_preserved" && row.status === "complete"));
   assert.match(deliverableChecklist.body.policy.scope, /does not submit source artifacts/);
 
   const filteredDeliverableChecklist = await invokeApi(context, {
@@ -20908,10 +20992,10 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
     headers: adminHeaders,
   });
   assert.equal(closedDeliverableChecklist.status, 200, JSON.stringify(closedDeliverableChecklist.body));
-  assert.equal(closedDeliverableChecklist.body.count, 3);
+  assert.equal(closedDeliverableChecklist.body.count, 4);
   assert.equal(closedDeliverableChecklist.body.filters.status, "closed");
   assert.equal(closedDeliverableChecklist.body.filteredCounts.openRows, 0);
-  assert.equal(closedDeliverableChecklist.body.filteredCounts.closedRows, 3);
+  assert.equal(closedDeliverableChecklist.body.filteredCounts.closedRows, 4);
   assert.ok(closedDeliverableChecklist.body.items.every((item) => item.status === "complete" || item.status.startsWith("not_applicable")));
 
   const exactStatusDeliverableChecklist = await invokeApi(context, {
@@ -20920,7 +21004,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
     headers: adminHeaders,
   });
   assert.equal(exactStatusDeliverableChecklist.status, 200, JSON.stringify(exactStatusDeliverableChecklist.body));
-  assert.equal(exactStatusDeliverableChecklist.body.count, 2);
+  assert.equal(exactStatusDeliverableChecklist.body.count, 3);
   assert.ok(exactStatusDeliverableChecklist.body.items.every((item) => item.status === "complete"));
 
   const deliverableChecklistItem = await invokeApi(context, {

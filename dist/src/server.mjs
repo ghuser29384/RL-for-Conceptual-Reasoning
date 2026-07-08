@@ -7928,6 +7928,15 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  const metaphilosophyDecisionLogMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/decision-log(?:\/([^/]+))?$/);
+  if (request.method === "GET" && metaphilosophyDecisionLogMatch) {
+    const itemId = metaphilosophyDecisionLogMatch[1] ? decodeURIComponent(metaphilosophyDecisionLogMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      metaphilosophyDecisionLogReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
   const metaphilosophySourceWorkbenchReadinessMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/source-workbench-readiness(?:\/([^/]+))?$/);
   if (request.method === "GET" && metaphilosophySourceWorkbenchReadinessMatch) {
     const itemId = metaphilosophySourceWorkbenchReadinessMatch[1] ? decodeURIComponent(metaphilosophySourceWorkbenchReadinessMatch[1]) : null;
@@ -12763,6 +12772,71 @@ function metaphilosophyDeliverableChecklistReadback(report, options = {}) {
   };
 }
 
+function metaphilosophyDecisionLogReadback(report, options = {}) {
+  const decisionLog = report.metaphilosophyDecisionLog ?? {};
+  const rows = Array.isArray(decisionLog.entries) ? decisionLog.entries : [];
+  const filters = metaphilosophyDecisionLogFilters(options.searchParams);
+  const filteredItems = rows
+    .map((row, index) => ({
+      ...row,
+      sequence: index + 1,
+      decisionLogEntryId: row.id,
+      sourceDecisionLogId: decisionLog.id ?? null,
+      releaseUseStatus: decisionLog.releaseUseStatus ?? "metaphilosophy_decision_log_missing",
+      reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+      sourceFile: row.sourceFile ?? row.preservedIn ?? decisionLog.sourceFile ?? "Metaphilosophy_Decision_Log.md",
+    }))
+    .filter((item) => metaphilosophyDecisionLogMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.decisionLogEntryId === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `metaphilosophy-decision-log-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: decisionLog.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: decisionLog.id ?? null,
+    sourceFile: decisionLog.sourceFile ?? "Metaphilosophy_Decision_Log.md",
+    releaseUseStatus: decisionLog.releaseUseStatus ?? "metaphilosophy_decision_log_missing",
+    resourceKey: "metaphilosophyDecisionLogEntry",
+    policy: {
+      scope:
+        "Read-only RLHF93 decision-log readback derived from /api/release/report and Metaphilosophy_Decision_Log.md; it preserves accepted, rejected, and pruned design decisions without creating workflow evidence.",
+      access: "Admin/auditor readback only because the log exposes governance rationale, credence, and historical pruning decisions.",
+      releaseGateBoundary:
+        "Decision-log entries are audit evidence only; they do not waive release gates, promote source-derived material, or create candidate, queue, label, benchmark, or training-export records.",
+    },
+    filters,
+    count: items.length,
+    totalCount: rows.length,
+    counts: {
+      ...(decisionLog.counts ?? {}),
+      rows: rows.length,
+      reviewSections: Array.isArray(decisionLog.reviewSections) ? decisionLog.reviewSections.length : 0,
+      openRows: rows.filter(metaphilosophyStatusIsOpen).length,
+      closedRows: rows.filter((item) => !metaphilosophyStatusIsOpen(item)).length,
+      byDecisionType: countItemsBy(rows, "decisionType"),
+      byDecisionStatus: countItemsBy(rows, "decisionStatus"),
+      bySourceVersion: countItemsBy(rows, "sourceVersion"),
+      byStatus: countItemsBy(rows, "status"),
+    },
+    filteredCounts: {
+      rows: items.length,
+      openRows: items.filter(metaphilosophyStatusIsOpen).length,
+      closedRows: items.filter((item) => !metaphilosophyStatusIsOpen(item)).length,
+      reviewRequired: items.filter((item) => item.status === "review_required").length,
+      complete: items.filter((item) => item.status === "complete").length,
+      byDecisionType: countItemsBy(items, "decisionType"),
+      byDecisionStatus: countItemsBy(items, "decisionStatus"),
+      bySourceVersion: countItemsBy(items, "sourceVersion"),
+      byReleaseGateImpact: countItemsBy(items, "releaseGateImpact"),
+      byStatus: countItemsBy(items, "status"),
+    },
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
 function metaphilosophySourceWorkbenchReadinessReadback(report, options = {}) {
   const item = metaphilosophySourceWorkbenchReadinessItem(report);
   const filters = metaphilosophySourceWorkbenchReadinessFilters(options.searchParams);
@@ -14131,6 +14205,22 @@ function metaphilosophyDeliverableChecklistFilters(searchParams) {
   };
 }
 
+function metaphilosophyDecisionLogFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    decisionLogEntryId: value("decisionLogEntryId") ?? value("entryId") ?? value("id"),
+    status: value("status"),
+    decisionType: value("decisionType") ?? value("type"),
+    decisionStatus: value("decisionStatus"),
+    sourceVersion: value("sourceVersion"),
+    releaseGateImpact: value("releaseGateImpact"),
+    sourceFile: value("sourceFile"),
+  };
+}
+
 function metaphilosophySourceWorkbenchReadinessFilters(searchParams) {
   const value = (key) => {
     const item = searchParams?.get?.(key);
@@ -14356,6 +14446,15 @@ function metaphilosophyDeliverableChecklistMatchesFilters(item, filters) {
     if (key === "deliverableId") return item.id === value || item.deliverableId === value;
     if (key === "status") return metaphilosophyMatchesStatus(item, value);
     if (key === "evidenceId") return Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function metaphilosophyDecisionLogMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "decisionLogEntryId") return item.id === value || item.decisionLogEntryId === value;
+    if (key === "status") return metaphilosophyMatchesStatus(item, value);
     return item?.[key] === value;
   });
 }
@@ -18762,6 +18861,8 @@ const workflowReleaseReportReadbackSelectors = {
     metaphilosophyEffectiveReadbackRows(report.taskTrackTaxonomy?.taskTrackRows ?? [], report.taskTrackTaxonomy),
   metaphilosophyResearchBacklogItem: (report) =>
     metaphilosophyEffectiveReadbackRows(report.researchBacklog?.rows ?? [], report.researchBacklog),
+  metaphilosophyDecisionLogEntry: (report) =>
+    metaphilosophyEffectiveReadbackRows(report.metaphilosophyDecisionLog?.entries ?? [], report.metaphilosophyDecisionLog),
   ratingWorkflowProfile: (report) => report.policyBundleEvidence?.ratingWorkflowProfileRows ?? [],
   scoreExplanationPolicy: (report) => [
     ...(report.policyBundleEvidence?.scoreExplanationPolicyRows ?? []),
@@ -18832,6 +18933,7 @@ const workflowReleaseReportCollectionFallbackResourceKeys = new Set([
   "metaphilosophyArchitectureLayer",
   "metaphilosophyTaskTrack",
   "metaphilosophyResearchBacklogItem",
+  "metaphilosophyDecisionLogEntry",
 ]);
 
 function metaphilosophyEffectiveReadbackRows(rows, section) {

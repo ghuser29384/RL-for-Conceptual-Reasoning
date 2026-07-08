@@ -1286,6 +1286,14 @@ const workflowEvidenceCollections = [
     summary: "Read-only R&D backlog rows that stay outside release gates until pilot evidence and governance promote them.",
   },
   {
+    id: "metaphilosophy-decision-log",
+    label: "Decision log",
+    endpoint: "/api/v1/metaphilosophy/decision-log",
+    resourceKey: "metaphilosophyDecisionLogEntry",
+    group: "Metaphilosophy",
+    summary: "Read-only RLHF93 accepted, rejected, and pruned decision-log entries with credence and rationale.",
+  },
+  {
     id: "metaphilosophy-source-workbench-readiness",
     label: "Source workbench readiness",
     endpoint: "/api/v1/metaphilosophy/source-workbench-readiness",
@@ -8431,6 +8439,16 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Release-gate states", workflowUniqueHumanizedValues(items, "releaseGateStatus")],
     ];
   }
+  if (collection.id === "metaphilosophy-decision-log") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    return [
+      ["Decision-log status", humanize(result.releaseUseStatus ?? "not reported")],
+      ["Decision entries", counts.rows ?? result.count ?? "not reported"],
+      ["Decision types", workflowCountMapSummary(counts.byDecisionType)],
+      ["Source versions", workflowCountMapSummary(counts.bySourceVersion)],
+      ["Review required", counts.reviewRequired ?? result.counts?.reviewRequiredEntries ?? "not reported"],
+    ];
+  }
   if (collection.id === "metaphilosophy-source-workbench-readiness") {
     const readiness = result.item ?? (Array.isArray(result.items) ? result.items[0] : null);
     const counts = readiness?.counts ?? {};
@@ -8695,6 +8713,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "metaphilosophy-research-backlog-items") {
     return `<div class="operatorActionPreview">${previewItems.map(metaphilosophyResearchBacklogItemPreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "metaphilosophy-decision-log") {
+    return `<div class="operatorActionPreview">${previewItems.map(metaphilosophyDecisionLogEntryPreviewRow).join("")}</div>`;
   }
   if (collection.id === "metaphilosophy-source-workbench-readiness") {
     return `<div class="operatorActionPreview">${previewItems.map(metaphilosophySourceWorkbenchReadinessPreviewRow).join("")}</div>`;
@@ -9368,6 +9389,29 @@ function metaphilosophyResearchBacklogItemPreviewRow(item) {
         ["Pilot evidence", item.pilotEvidenceRequirement ?? "not reported"],
         ["Promotion governance", item.promotionGovernance ?? "not reported"],
         ["Boundary", item.governanceBoundary ?? "not reported"],
+        ["Review reasons", workflowPreviewReviewReasons(item)],
+      ])}
+    </article>
+  `;
+}
+
+function metaphilosophyDecisionLogEntryPreviewRow(item) {
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.title ?? humanize(item.id ?? "Decision log entry"))}</strong>
+          <span>${escapeHtml(humanize(item.decisionType ?? "decision log"))}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.decisionStatus ?? item.status ?? "recorded"))}</span>
+      </div>
+      ${metricList([
+        ["Entry", item.id ?? "not reported"],
+        ["Source version", item.sourceVersion ?? "not reported"],
+        ["Credence", item.credence === undefined || item.credence === null ? "not reported" : String(item.credence)],
+        ["Disposition", humanize(item.currentSpecDisposition ?? "not reported")],
+        ["Release-gate impact", humanize(item.releaseGateImpact ?? "not reported")],
+        ["Preserved in", item.sourceFile ?? item.preservedIn ?? "not reported"],
         ["Review reasons", workflowPreviewReviewReasons(item)],
       ])}
     </article>
@@ -11179,6 +11223,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
   const sourcePreparationEvidence = report.sourcePreparationEvidence;
   const taskTrackTaxonomy = report.taskTrackTaxonomy;
   const researchBacklog = report.researchBacklog;
+  const metaphilosophyDecisionLog = report.metaphilosophyDecisionLog;
   const metaphilosophyDeliverableChecklist = report.metaphilosophyDeliverableChecklist;
   const octoberCompletionChecklist = report.octoberCompletionChecklist ?? {
     counts: {},
@@ -11543,6 +11588,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
       ${sourcePreparationEvidencePanel(sourcePreparationEvidence)}
       ${taskTrackTaxonomyPanel(taskTrackTaxonomy)}
       ${researchBacklogPanel(researchBacklog)}
+      ${metaphilosophyDecisionLogPanel(metaphilosophyDecisionLog)}
       ${metaphilosophyDeliverableChecklistPanel(metaphilosophyDeliverableChecklist)}
       <section class="panel">
         ${panelTitle("check", "Correctness Verification", "Structured VerificationRecords preserve correctness-check evidence without overwriting blind ratings.")}
@@ -12513,6 +12559,71 @@ function researchBacklogPanel(researchBacklog) {
             : `<article class="claimRow">
                 <header>${statusChip("pass")}<strong>No backlog review sections</strong></header>
                 <p>R&D ideas stay separated from release gates, hidden-benchmark claims, and training-export permissions.</p>
+              </article>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function metaphilosophyDecisionLogPanel(metaphilosophyDecisionLog) {
+  const decisionLog = metaphilosophyDecisionLog ?? {};
+  const counts = decisionLog.counts ?? {};
+  const policy = decisionLog.policy ?? {};
+  const entries = Array.isArray(decisionLog.entries) ? decisionLog.entries : [];
+  const reviewSections = Array.isArray(decisionLog.reviewSections) ? decisionLog.reviewSections : [];
+  return `
+    <section class="panel">
+      ${panelTitle("clipboard", "Metaphilosophy Decision Log", "RLHF93 preserves accepted, rejected, and pruned design decisions outside the main spec while keeping release gates separate.")}
+      <div class="metricCards benchmarkMetricCards">
+        ${metricCard("Decision entries", String(counts.decisionEntries ?? 0), `${counts.coveredDecisionTypes ?? 0}/${counts.requiredDecisionTypes ?? 3} required types`)}
+        ${metricCard("Accepted", String(counts.acceptedEntries ?? 0), "accepted edits")}
+        ${metricCard("Rejected", String(counts.rejectedEntries ?? 0), "rejected ideas")}
+        ${metricCard("Pruned", String(counts.prunedEntries ?? 0), "pruning decisions")}
+        ${metricCard("Review required", String(counts.reviewRequiredEntries ?? 0), humanize(decisionLog.releaseUseStatus ?? "missing"))}
+      </div>
+      <div class="metricTable">
+        <div><span>Source file</span><strong>${decisionLog.sourceFile ?? "Metaphilosophy_Decision_Log.md"}</strong></div>
+        <div><span>Main spec focus</span><strong>${policy.mainSpecFocusRule ?? "The main spec stays focused on current build and release requirements."}</strong></div>
+        <div><span>Auditability</span><strong>${policy.auditabilityRule ?? "The decision log preserves rationale and credence evidence."}</strong></div>
+        <div><span>Release-gate boundary</span><strong>${policy.releaseGateBoundary ?? "Decision-log entries are audit evidence only."}</strong></div>
+      </div>
+      <div class="failureList">
+        ${
+          entries.length
+            ? entries
+                .map(
+                  (row) => `
+                    <article class="claimRow">
+                      <header>${statusChip(row.status === "complete" ? "pass" : row.status)}<strong>${escapeHtml(row.title ?? row.id ?? "decision log entry")}</strong></header>
+                      ${metricList([
+                        ["Type", humanize(row.decisionType ?? "missing")],
+                        ["Decision status", humanize(row.decisionStatus ?? "missing")],
+                        ["Source version", row.sourceVersion ?? "missing"],
+                        ["Credence", row.credence === undefined || row.credence === null ? "missing" : String(row.credence)],
+                        ["Disposition", humanize(row.currentSpecDisposition ?? "missing")],
+                        ["Release-gate impact", humanize(row.releaseGateImpact ?? "missing")],
+                        ["Rationale", row.rationale ?? "missing"],
+                        ["Review", row.reviewReasons?.length ? row.reviewReasons.join(", ") : "none"],
+                      ])}
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<article class="claimRow">
+                <header>${statusChip("warn")}<strong>No decision-log entries</strong></header>
+                <p>The release report should preserve accepted edits, rejected ideas, pruning decisions, credences, and rationale after RLHF93 historical pruning.</p>
+              </article>`
+        }
+        ${
+          reviewSections.length
+            ? `<article class="claimRow">
+                <header>${statusChip("warn")}<strong>Decision-log review sections</strong></header>
+                ${metricList(reviewSections.slice(0, 8).map((row) => [row.artifactType, `${row.artifactId}: ${row.reason}`]))}
+              </article>`
+            : `<article class="claimRow">
+                <header>${statusChip("pass")}<strong>No decision-log review sections</strong></header>
+                <p>The RLHF93 decision-log split preserves decision auditability without changing release-gate, candidate, label, or queue behavior.</p>
               </article>`
         }
       </div>

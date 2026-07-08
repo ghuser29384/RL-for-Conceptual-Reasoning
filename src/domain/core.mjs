@@ -480,6 +480,65 @@ export const METAPHILOSOPHY_RD_BACKLOG_ITEMS = [
   },
 ];
 
+export const METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE = "Metaphilosophy_Decision_Log.md";
+
+export const METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES = ["accepted_edit", "rejected_idea", "pruning_decision"];
+
+export const METAPHILOSOPHY_DECISION_LOG_ENTRIES = [
+  {
+    id: "rlhf91-greenfield-task-track-separation",
+    title: "Greenfield task-track separation",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF91",
+    credence: 0.84,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF91 kept the existing Position, Critique, CandidateBatch, and CandidateCritique spine while adding a separate Metaphilosophy task-track taxonomy. This reduced path dependency without creating a parallel candidate or label architecture.",
+  },
+  {
+    id: "rlhf92-public-dataset-before-leaderboard",
+    title: "Public dataset artifact before leaderboard, API evaluator, or training export",
+    decisionType: "accepted_edit",
+    decisionStatus: "accepted",
+    sourceVersion: "RLHF92",
+    credence: 0.86,
+    currentSpecDisposition: "retained_in_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF92 treated the first serious public artifact as an expert-rated critique-ratings dataset. This kept the platform focused on validating label foundations before expanding into product-facing evaluation surfaces.",
+  },
+  {
+    id: "reject-direct-pairwise-preference-labels-as-release-gate",
+    title: "Do not make direct pairwise preference labels an immediate release gate",
+    decisionType: "rejected_idea",
+    decisionStatus: "rejected",
+    sourceVersion: "RLHF91",
+    credence: 0.72,
+    currentSpecDisposition: "kept_in_rd_backlog_only",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "Direct pairwise labels can be useful research, but they should remain an R&D backlog item until pilot evidence shows measurement validity or rater-reliability gains and a governed policy decision promotes them.",
+  },
+  {
+    id: "rlhf93-prune-historical-revision-log",
+    title: "Move detailed historical revision log out of the main spec",
+    decisionType: "pruning_decision",
+    decisionStatus: "pruned",
+    sourceVersion: "RLHF93",
+    credence: 0.91,
+    currentSpecDisposition: "moved_out_of_main_spec",
+    releaseGateImpact: "audit_only_no_release_gate",
+    preservedIn: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    rationale:
+      "RLHF93 pruned the main specification by moving detailed historical revision history into this decision log. The pruning keeps the main spec implementable while preserving auditability for accepted edits, rejected ideas, credences, and rationale.",
+  },
+];
+
 export const positions = [
   {
     id: "pos-ai-prior",
@@ -10543,11 +10602,120 @@ function metaphilosophyBacklogItemReviewReasons(item) {
   ].filter(Boolean);
 }
 
+export function buildMetaphilosophyDecisionLogReport(releaseId, options = {}) {
+  const submittedEntries =
+    Array.isArray(options.decisionLogEntries) && options.decisionLogEntries.length
+      ? options.decisionLogEntries
+      : Array.isArray(options.metaphilosophyDecisionLogEntries) && options.metaphilosophyDecisionLogEntries.length
+        ? options.metaphilosophyDecisionLogEntries
+        : METAPHILOSOPHY_DECISION_LOG_ENTRIES;
+  const entries = submittedEntries
+    .filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry, index) => {
+      const clone = structuredClone(entry);
+      const reviewReasons = metaphilosophyDecisionLogEntryReviewReasons(clone);
+      return {
+        ...clone,
+        artifactId: hasRequiredText(clone.id) ? clone.id : `metaphilosophy-decision-log-entry-${index + 1}`,
+        sourceFile: clone.preservedIn ?? METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+        status: reviewReasons.length ? "review_required" : "complete",
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const coveredDecisionTypes = uniqueStrings(
+    entries.filter((entry) => entry.reviewReasons.length === 0).map((entry) => entry.decisionType),
+  );
+  const missingDecisionTypes = METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.filter((decisionType) => !coveredDecisionTypes.includes(decisionType));
+  const reviewSections = [
+    ...entries.flatMap((entry) =>
+      entry.reviewReasons.map((reason) => ({ artifactType: "metaphilosophy_decision_log_entry", artifactId: entry.artifactId, reason })),
+    ),
+    ...missingDecisionTypes.map((decisionType) => ({
+      artifactType: "metaphilosophy_decision_log_entry",
+      artifactId: decisionType,
+      reason: "required_decision_type_missing",
+    })),
+  ];
+
+  return {
+    id: `metaphilosophy-decision-log-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    sourceFile: METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE,
+    policy: {
+      mainSpecFocusRule:
+        "RLHF93 keeps the main specification focused on current build, release, measurement, governance, and UX requirements.",
+      auditabilityRule:
+        "The decision log must preserve accepted edits, rejected ideas, pruning decisions, credences, and rationale after historical detail is pruned from the main spec.",
+      releaseGateBoundary:
+        "Decision-log preservation is audit evidence only; it does not waive release gates, promote source-derived material, or create candidate, queue, label, benchmark, or training-export records.",
+    },
+    requiredDecisionTypes: METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES,
+    coveredDecisionTypes,
+    missingDecisionTypes,
+    entries,
+    counts: {
+      decisionEntries: entries.length,
+      requiredDecisionTypes: METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.length,
+      coveredDecisionTypes: coveredDecisionTypes.length,
+      missingDecisionTypes: missingDecisionTypes.length,
+      acceptedEntries: entries.filter((entry) => entry.decisionType === "accepted_edit").length,
+      rejectedEntries: entries.filter((entry) => entry.decisionType === "rejected_idea").length,
+      prunedEntries: entries.filter((entry) => entry.decisionType === "pruning_decision").length,
+      reviewRequiredEntries: entries.filter((entry) => entry.reviewReasons.length > 0).length,
+    },
+    byDecisionType: countBy(entries, "decisionType"),
+    byDecisionStatus: countBy(entries, "decisionStatus"),
+    bySourceVersion: countBy(entries, "sourceVersion"),
+    reviewSections,
+    releaseUseStatus: reviewSections.length ? "metaphilosophy_decision_log_review_required" : "metaphilosophy_decision_log_preserved",
+  };
+}
+
+function metaphilosophyDecisionLogEntryReviewReasons(entry) {
+  const expectedStatusByType = {
+    accepted_edit: "accepted",
+    rejected_idea: "rejected",
+    pruning_decision: "pruned",
+  };
+  const credence = Number(entry.credence);
+  const expectedStatus = expectedStatusByType[entry.decisionType];
+  const normalizedGateImpact = String(entry.releaseGateImpact ?? "").toLowerCase();
+  return [
+    hasRequiredText(entry.id) ? null : "id",
+    hasRequiredText(entry.title) ? null : "title",
+    hasRequiredText(entry.decisionType) ? null : "decisionType",
+    METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.includes(entry.decisionType) ? null : "decisionType:unsupported",
+    hasRequiredText(entry.decisionStatus) ? null : "decisionStatus",
+    expectedStatus && entry.decisionStatus === expectedStatus ? null : "decisionStatus:must_match_decision_type",
+    hasRequiredText(entry.sourceVersion) ? null : "sourceVersion",
+    /^RLHF\d+$/.test(String(entry.sourceVersion ?? "")) ? null : "sourceVersion:must_be_rlhf_version",
+    Number.isFinite(credence) && credence >= 0 && credence <= 1 ? null : "credence:must_be_0_to_1",
+    hasRequiredText(entry.currentSpecDisposition) ? null : "currentSpecDisposition",
+    hasRequiredText(entry.releaseGateImpact) ? null : "releaseGateImpact",
+    normalizedGateImpact.includes("no_release_gate") || normalizedGateImpact.includes("audit_only")
+      ? null
+      : "releaseGateImpact:must_be_audit_only",
+    String(entry.preservedIn ?? "") === METAPHILOSOPHY_DECISION_LOG_SOURCE_FILE ? null : "preservedIn:must_point_to_decision_log",
+    hasRequiredText(entry.rationale) ? null : "rationale",
+  ].filter(Boolean);
+}
+
 export function buildMetaphilosophyDeliverableChecklistReport(
   releaseId,
-  { greenfieldArchitecture, sourceIntakeEvidence, sourcePreparationEvidence, taskTrackTaxonomy, researchBacklog, operationalControlEvidence } = {},
+  {
+    greenfieldArchitecture,
+    sourceIntakeEvidence,
+    sourcePreparationEvidence,
+    taskTrackTaxonomy,
+    researchBacklog,
+    metaphilosophyDecisionLog,
+    operationalControlEvidence,
+  } = {},
 ) {
   const sourceWorkbenchPhaseGate = metaphilosophySourceWorkbenchPhaseGate(operationalControlEvidence);
+  const decisionLogEvidence = metaphilosophyDecisionLog ?? buildMetaphilosophyDecisionLogReport(releaseId);
   const rows = [
     metaphilosophyChecklistRow({
       id: "greenfield_task_track_taxonomy",
@@ -10613,6 +10781,29 @@ export function buildMetaphilosophyDeliverableChecklistReport(
       ],
     }),
     metaphilosophyChecklistRow({
+      id: "decision_log_preserved",
+      deliverable:
+        "Metaphilosophy_Decision_Log.md preserves accepted/rejected/pruned design decisions and credences, so the main specification can remain focused on current build and release requirements.",
+      completionRule: "Required for RLHF93 and later specs so pruning does not erase decision rationale or credence evidence.",
+      evidenceIds: [decisionLogEvidence?.id].filter(Boolean),
+      sourceStatuses: [decisionLogEvidence?.releaseUseStatus].filter(Boolean),
+      status:
+        decisionLogEvidence?.releaseUseStatus === "metaphilosophy_decision_log_preserved" &&
+        (decisionLogEvidence?.counts?.missingDecisionTypes ?? 1) === 0 &&
+        (decisionLogEvidence?.counts?.reviewRequiredEntries ?? 1) === 0
+          ? "complete"
+          : "review_required",
+      reviewReasons: [
+        decisionLogEvidence?.releaseUseStatus === "metaphilosophy_decision_log_preserved"
+          ? null
+          : "metaphilosophyDecisionLog.releaseUseStatus",
+        (decisionLogEvidence?.counts?.missingDecisionTypes ?? 0)
+          ? `missingDecisionTypes:${decisionLogEvidence.missingDecisionTypes.join(",")}`
+          : null,
+        (decisionLogEvidence?.counts?.reviewRequiredEntries ?? 0) ? "metaphilosophyDecisionLog.reviewRequiredEntries" : null,
+      ],
+    }),
+    metaphilosophyChecklistRow({
       id: "greenfield_architecture_frame",
       deliverable:
         "Greenfield comparison and research-spine / operating-shell framing preserve the research spine, intake spine, evaluation spine, and operating shell without duplicating the existing candidate architecture.",
@@ -10647,6 +10838,8 @@ export function buildMetaphilosophyDeliverableChecklistReport(
         "The source workbench row is not applicable when no source-derived items are used. Source-intake import/review must remain admin-only and non-promotional; source-preparation may create PreparedDraft and CandidateItem artifacts only through the existing gates.",
       sourceWorkbenchPhaseGateRule:
         "Source-derived items require the implementation phase route lane to be enabled or staff_only; otherwise the source workbench is treated as disabled and cannot support source-derived release claims.",
+      decisionLogRule:
+        "RLHF93 historical pruning is complete only when the decision log preserves accepted edits, rejected ideas, pruning decisions, credences, and rationale without turning logged decisions into release gates.",
     },
     rows,
     reviewSections,
@@ -33515,6 +33708,9 @@ export function buildOctoberReleaseReport(
   const researchBacklog = buildMetaphilosophyResearchBacklogReport(releaseId, {
     researchBacklogItems: options.researchBacklogItems ?? options.metaphilosophyResearchBacklogItems ?? [],
   });
+  const metaphilosophyDecisionLog = buildMetaphilosophyDecisionLogReport(releaseId, {
+    decisionLogEntries: options.decisionLogEntries ?? options.metaphilosophyDecisionLogEntries ?? [],
+  });
   const operationalControlEvidence = buildOperationalControlEvidenceReport(releaseId, {
     policyActionKinds: options.policyActionKinds ?? [],
     policyDecisionRecords: options.policyDecisionRecords ?? [],
@@ -33536,6 +33732,7 @@ export function buildOctoberReleaseReport(
     sourcePreparationEvidence,
     taskTrackTaxonomy,
     researchBacklog,
+    metaphilosophyDecisionLog,
     operationalControlEvidence,
   });
   const rubricQaCoverage = buildRubricQaCoverageReport(releaseId);
@@ -34196,6 +34393,7 @@ export function buildOctoberReleaseReport(
     sourcePreparationEvidence,
     taskTrackTaxonomy,
     researchBacklog,
+    metaphilosophyDecisionLog,
     metaphilosophyDeliverableChecklist,
     rubricQaCoverage,
     sourceExampleAnchors,

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   ADJUDICATION_COCKPIT_SIGNOFF_POLICY_VERSION,
   BENCHMARK_REFRESH_POLICY_VERSION,
@@ -40,6 +41,7 @@ import {
   buildPositionIntakeReadinessReport,
   buildSourceIntakeEvidenceReport,
   buildSourcePreparationEvidenceReport,
+  buildMetaphilosophyDecisionLogReport,
   buildMetaphilosophyDeliverableChecklistReport,
   buildMetaphilosophyGreenfieldArchitectureReport,
   buildMetaphilosophyResearchBacklogReport,
@@ -113,7 +115,9 @@ import {
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
   METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS,
+  METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES,
   METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS,
+  METAPHILOSOPHY_DECISION_LOG_ENTRIES,
   METAPHILOSOPHY_TASK_TRACKS,
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
@@ -13896,17 +13900,65 @@ test("metaphilosophy task-track taxonomy and R&D backlog stay separated from rel
   assert.equal(releaseReport.researchBacklog.releaseUseStatus, "metaphilosophy_research_backlog_separated_from_release_gates");
 });
 
-test("metaphilosophy deliverable checklist binds RLHF91 additions to release evidence", () => {
+test("metaphilosophy decision log preserves RLHF93 accepted rejected and pruned decisions", () => {
+  const decisionLogFile = readFileSync("Metaphilosophy_Decision_Log.md", "utf8");
+  assert.match(decisionLogFile, /accepted_edit/);
+  assert.match(decisionLogFile, /rejected_idea/);
+  assert.match(decisionLogFile, /pruning_decision/);
+  assert.match(decisionLogFile, /credence/);
+  assert.match(decisionLogFile, /rlhf93-prune-historical-revision-log/);
+
+  const decisionLog = buildMetaphilosophyDecisionLogReport("release-test");
+  assert.equal(decisionLog.releaseUseStatus, "metaphilosophy_decision_log_preserved");
+  assert.deepEqual(decisionLog.missingDecisionTypes, []);
+  assert.equal(decisionLog.counts.requiredDecisionTypes, METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.length);
+  assert.equal(decisionLog.counts.coveredDecisionTypes, METAPHILOSOPHY_REQUIRED_DECISION_LOG_TYPES.length);
+  assert.equal(decisionLog.counts.reviewRequiredEntries, 0);
+  assert.equal(decisionLog.counts.acceptedEntries, 2);
+  assert.equal(decisionLog.counts.rejectedEntries, 1);
+  assert.equal(decisionLog.counts.prunedEntries, 1);
+  assert.equal(decisionLog.entries.length, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.ok(decisionLog.entries.every((entry) => entry.status === "complete"));
+  assert.ok(decisionLog.entries.some((entry) => entry.id === "rlhf93-prune-historical-revision-log" && entry.decisionStatus === "pruned"));
+  assert.match(decisionLog.policy.releaseGateBoundary, /does not waive release gates/);
+
+  const unsafeDecisionLog = buildMetaphilosophyDecisionLogReport("release-test", {
+    decisionLogEntries: [
+      {
+        id: "unsafe-decision-log-entry",
+        title: "Unsafe decision-log entry",
+        decisionType: "accepted_edit",
+        decisionStatus: "accepted",
+        sourceVersion: "RLHF93",
+        credence: 1.2,
+        currentSpecDisposition: "retained_in_main_spec",
+        releaseGateImpact: "creates_release_gate",
+        preservedIn: "Main spec",
+        rationale: "This intentionally violates the audit-only decision-log contract.",
+      },
+    ],
+  });
+  assert.equal(unsafeDecisionLog.releaseUseStatus, "metaphilosophy_decision_log_review_required");
+  assert.ok(unsafeDecisionLog.reviewSections.some((section) => section.reason === "credence:must_be_0_to_1"));
+  assert.ok(unsafeDecisionLog.reviewSections.some((section) => section.reason === "releaseGateImpact:must_be_audit_only"));
+  assert.ok(unsafeDecisionLog.reviewSections.some((section) => section.reason === "preservedIn:must_point_to_decision_log"));
+  assert.ok(unsafeDecisionLog.missingDecisionTypes.includes("rejected_idea"));
+  assert.ok(unsafeDecisionLog.missingDecisionTypes.includes("pruning_decision"));
+});
+
+test("metaphilosophy deliverable checklist binds RLHF91 and RLHF93 additions to release evidence", () => {
   const releaseReport = buildOctoberReleaseReport();
   const sourceWorkbenchRow = releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench");
+  const decisionLogRow = releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "decision_log_preserved");
 
   assert.equal(releaseReport.sourcePreparationEvidence.releaseUseStatus, "source_preparation_not_started");
   assert.equal(releaseReport.sourcePreparationEvidence.counts.preparedDrafts, 0);
   assert.equal(releaseReport.sourcePreparationEvidence.counts.candidateItems, 0);
   assert.equal(releaseReport.sourcePreparationEvidence.counts.promotionRecords, 0);
   assert.equal(Object.hasOwn(releaseReport, "workflowSourcePreparationArtifacts"), false);
+  assert.equal(releaseReport.metaphilosophyDecisionLog.releaseUseStatus, "metaphilosophy_decision_log_preserved");
   assert.equal(releaseReport.metaphilosophyDeliverableChecklist.releaseUseStatus, "metaphilosophy_deliverable_checklist_complete");
-  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.deliverables, 4);
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.deliverables, 5);
   assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.notApplicable, 1);
   assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.reviewRequired, 0);
   assert.match(
@@ -13917,6 +13969,9 @@ test("metaphilosophy deliverable checklist binds RLHF91 additions to release evi
   assert.equal(sourceWorkbenchRow.phaseGate.status, "workbench_route_lane_available");
   assert.ok(sourceWorkbenchRow.evidenceIds.includes(releaseReport.sourcePreparationEvidence.id));
   assert.ok(sourceWorkbenchRow.sourceStatuses.includes("source_preparation_not_started"));
+  assert.equal(decisionLogRow.status, "complete");
+  assert.ok(decisionLogRow.evidenceIds.includes(releaseReport.metaphilosophyDecisionLog.id));
+  assert.ok(decisionLogRow.sourceStatuses.includes("metaphilosophy_decision_log_preserved"));
 
   const sourceIntakeEvidence = buildSourceIntakeEvidenceReport("release-test", {
     sourceCards: [{ id: "source-card-incomplete" }],
