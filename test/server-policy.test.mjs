@@ -5836,6 +5836,10 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     "Package target-resource delta",
     "Current blocking phase",
     "First safe route",
+    "currentGroup?.firstPackageManifestRoute",
+    "currentGroup?.firstReviewEvidencePointersRoute",
+    "currentGroup?.firstReviewArtifactSummariesRoute",
+    "currentGroup?.firstReleaseReportSectionsRoute",
     "Workflow status",
     "Assignment workflow",
     "Discussion/adjudication",
@@ -9999,6 +10003,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "/api/v1/october-completion-runbook/october-completion-runbook%3Acollect%3Apositions%3Aprimary_data_import%3A%252Fapi%252Fv1%252Fintake%252Fpositions%252Fimport-jsonl",
   );
   assert.equal(fullRunbook.body.currentBlockingGroup.firstDryRunRoute, "/api/v1/intake/positions/import-jsonl?dryRun=true");
+  assert.equal(fullRunbook.body.currentBlockingGroup.firstPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
   assert.equal(
     fullRunbook.body.currentBlockingGroup.firstStarterTemplateReadbackRoute,
     "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining&maxExpandedRecords=25",
@@ -10009,6 +10014,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
     ),
   );
   assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes("/api/v1/target-gaps/import-jsonl-package"));
+  assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes("/api/v1/target-gaps/current-package-manifest"));
   assert.ok(fullRunbook.body.currentBlockingGroup.routes.includes(fullRunbook.body.currentBlockingGroup.firstStepRoute));
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.manifestKind, "current_blocking_target_data_package_manifest");
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.status, "ready_for_operator_replacement_and_validation");
@@ -10153,6 +10159,27 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(blockedTargetDataGroup.firstRoute, "/api/v1/target-gaps/collection-plan/validation_critiques");
   assert.ok(blockedTargetDataGroup.blockedTargetGapIds.includes("validation_critiques"));
   assert.ok(blockedTargetDataGroup.items.every((item) => item.executionStatus === "blocked_by_target_data"));
+  const submitOperatorEvidenceGroup = fullRunbook.body.nextUnblockerSequence.find(
+    (item) => item.executionStatus === "ready_to_submit_evidence",
+  );
+  assert.ok(submitOperatorEvidenceGroup);
+  assert.equal(submitOperatorEvidenceGroup.firstPackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
+  assert.ok(submitOperatorEvidenceGroup.routes.includes("/api/v1/operator-evidence/package-manifest"));
+  const reviewCurrentEvidenceGroup = fullRunbook.body.nextUnblockerSequence.find(
+    (item) => item.executionStatus === "ready_to_review_evidence",
+  );
+  assert.ok(reviewCurrentEvidenceGroup);
+  assert.equal(reviewCurrentEvidenceGroup.firstReleaseReportSectionsRoute, "/api/v1/release-report-sections?status=open");
+  assert.equal(reviewCurrentEvidenceGroup.firstReviewEvidencePointersRoute, "/api/v1/operator-review-evidence-pointers?status=open");
+  assert.equal(reviewCurrentEvidenceGroup.firstReviewArtifactSummariesRoute, "/api/v1/operator-review-artifact-summaries?status=open");
+  assert.ok(reviewCurrentEvidenceGroup.routes.includes("/api/v1/release-report-sections?status=open"));
+  assert.ok(reviewCurrentEvidenceGroup.routes.includes("/api/v1/operator-review-evidence-pointers?status=open"));
+  assert.ok(reviewCurrentEvidenceGroup.routes.includes("/api/v1/operator-review-artifact-summaries?status=open"));
+  assert.ok(
+    reviewCurrentEvidenceGroup.items.every(
+      (item) => item.firstReviewEvidencePointersRoute === "/api/v1/operator-review-evidence-pointers?status=open",
+    ),
+  );
   const releaseVerificationBlockerGroup = fullRunbook.body.nextUnblockerSequence.find(
     (item) => item.executionStatus === "blocked_by_open_release_work",
   );
@@ -14534,6 +14561,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifest.body.items[0].artifactKind, "label_snapshot");
   assert.equal(operatorEvidencePackageManifest.body.items[0].singleRecordDryRunRoute, "/api/v1/label-snapshots?dryRun=true");
   assert.equal(operatorEvidencePackageManifest.body.items[0].templateReadbackRoute.includes("/api/v1/operator-action-items/payload-template/"), true);
+  assert.equal(
+    operatorEvidencePackageManifest.body.items[0].packageManifestItemRoute,
+    `/api/v1/operator-evidence/package-manifest/${encodeURIComponent(operatorEvidencePackageManifest.body.items[0].id)}`,
+  );
   const predictionSetupManifestStep = operatorEvidencePackageManifest.body.items.find(
     (item) => item.actionId === "model_evaluation_submission_package:submit:model_evaluation_predictions" && item.manifestStepKind === "setup_payload_template",
   );
@@ -14564,6 +14595,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifestById.status, 200, JSON.stringify(operatorEvidencePackageManifestById.body));
   assert.equal(operatorEvidencePackageManifestById.body.count, 1);
   assert.equal(operatorEvidencePackageManifestById.body.item.id, operatorEvidencePackageManifest.body.items[0].id);
+  assert.equal(
+    operatorEvidencePackageManifestById.body.item.packageManifestItemRoute,
+    operatorEvidencePackageManifest.body.items[0].packageManifestItemRoute,
+  );
   const missingOperatorEvidencePackageManifestById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/operator-evidence/package-manifest/not-present",
@@ -14780,6 +14815,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes("function operatorActionPayloadTemplatePreviewRow(item)"));
   assert.ok(appSource.includes("operatorEvidencePackageManifestPreviewRow(item)"));
   assert.ok(appSource.includes("function operatorEvidencePackageManifestPreviewRow(item)"));
+  assert.ok(
+    appSource
+      .slice(appSource.indexOf("function operatorEvidencePackageManifestPreviewRow"), appSource.indexOf("function operatorTemplateDependencyMetrics"))
+      .includes('["Package manifest item", item.packageManifestItemRoute ?? "not available"]'),
+  );
   assert.ok(appSource.includes("function operatorTemplateDependencyMetrics(item)"));
   assert.ok(appSource.includes('["Blocked target gaps", blockedByTargetGapIds.map(humanize).join(", ")]'));
   assert.ok(appSource.includes('["Related submit actions", relatedSubmitActionIds.length]'));
@@ -15399,11 +15439,24 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("Release Completion Navigation"));
   assert.ok(appSource.includes("Current blocker runbook"));
   assert.ok(appSource.includes("Target-data starter template"));
+  assert.ok(appSource.includes("Target-data package manifest"));
   assert.ok(appSource.includes("Current package manifest"));
   assert.ok(appSource.includes("Current package validate-only"));
   assert.ok(appSource.includes("Current package starter"));
   assert.ok(appSource.includes("Current package records"));
   assert.ok(appSource.includes("Operator-evidence package"));
+  assert.ok(appSource.includes("Operator-evidence manifest"));
+  assert.ok(appSource.includes("Review evidence pointers"));
+  assert.ok(appSource.includes("Review artifact summaries"));
+  assert.ok(appSource.includes("Open release sections"));
+  assert.ok(appSource.includes("Package manifest"));
+  assert.ok(appSource.includes("Review pointers"));
+  assert.ok(appSource.includes("Review artifacts"));
+  assert.ok(appSource.includes("Release sections"));
+  assert.ok(appSource.includes("currentGroup?.firstPackageManifestRoute"));
+  assert.ok(appSource.includes("currentGroup?.firstReviewEvidencePointersRoute"));
+  assert.ok(appSource.includes("currentGroup?.firstReviewArtifactSummariesRoute"));
+  assert.ok(appSource.includes("currentGroup?.firstReleaseReportSectionsRoute"));
   assert.ok(appSource.includes("routes.currentBlockingRunbookRoute"));
   assert.ok(appSource.includes("function operatorEvidenceSubmissionPlanPanel(operatorEvidenceSubmissionPlan)"));
   assert.ok(appSource.includes("function releaseWorkflowEvidenceReadinessPanel({"));

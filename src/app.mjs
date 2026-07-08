@@ -8993,9 +8993,13 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
     [
       "First safe route",
       currentGroup?.firstDryRunRoute ??
-        currentGroup?.firstValidateOnlyRoute ??
-        currentGroup?.firstTemplateReadbackRoute ??
-        currentGroup?.firstRoute ??
+      currentGroup?.firstValidateOnlyRoute ??
+      currentGroup?.firstPackageManifestRoute ??
+      currentGroup?.firstTemplateReadbackRoute ??
+      currentGroup?.firstReviewEvidencePointersRoute ??
+      currentGroup?.firstReviewArtifactSummariesRoute ??
+      currentGroup?.firstReleaseReportSectionsRoute ??
+      currentGroup?.firstRoute ??
         "not available",
     ],
     ["Package manifest", packageManifest ? `${packageManifest.stepCount ?? 0} steps across ${packageManifest.targetGapCount ?? 0} gaps` : "not available"],
@@ -10977,6 +10981,7 @@ function operatorEvidencePackageManifestPreviewRow(item) {
         ["Single-record dry-run", item.singleRecordDryRunRoute ?? "not applicable"],
         ["Single-record validate-only", item.singleRecordValidateOnlyRoute ?? "not applicable"],
         ["Template", item.templateReadbackRoute ?? "not available"],
+        ["Package manifest item", item.packageManifestItemRoute ?? "not available"],
         ["Runbook step", item.runbookStepRoute ?? "not available"],
         ["Readback", item.readbackRoute ?? "not available"],
         ["Verification", item.verificationRoute ?? "/api/release/report"],
@@ -13609,7 +13614,11 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
   const firstSafeRoute =
     currentGroup?.firstDryRunRoute ??
     currentGroup?.firstValidateOnlyRoute ??
+    currentGroup?.firstPackageManifestRoute ??
     currentGroup?.firstTemplateRoute ??
+    currentGroup?.firstReviewEvidencePointersRoute ??
+    currentGroup?.firstReviewArtifactSummariesRoute ??
+    currentGroup?.firstReleaseReportSectionsRoute ??
     currentGroup?.firstReadbackRoute ??
     routes.currentBlockingRunbookRoute ??
     "not available";
@@ -13630,6 +13639,7 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
         ["First safe route", firstSafeRoute],
         ["Current blocker runbook", routes.currentBlockingRunbookRoute ?? routes.runbookRoute ?? "not available"],
         ["Target-data package", routes.targetDataPackageValidateOnlyRoute ?? routes.targetDataPackageDryRunRoute ?? routes.targetDataPackageImportRoute ?? "not available"],
+        ["Target-data package manifest", routes.targetDataCurrentPackageManifestRoute ?? "not available"],
         ["Target-data starter template", routes.targetDataStarterTemplateRoute ?? "not available"],
         ["Current package manifest", packageManifest ? `${packageManifest.stepCount ?? 0} steps across ${packageManifest.targetGapCount ?? 0} gaps` : "not available"],
         ["Current package validate-only", packageManifest?.packageValidateOnlyImportRoute ?? "not available"],
@@ -13638,7 +13648,11 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
         ["Current package records", packageManifest?.estimatedRecordsRequired ?? "not reported"],
         ["Current target-resource delta", packageManifest?.expectedResourceDelta ?? "not reported"],
         ["Operator-evidence package", routes.operatorEvidencePackageValidateOnlyRoute ?? routes.operatorEvidencePackageDryRunRoute ?? routes.operatorEvidencePackageImportRoute ?? "not available"],
+        ["Operator-evidence manifest", routes.operatorEvidencePackageManifestRoute ?? "not available"],
         ["Operator-evidence template", routes.operatorEvidenceTemplateRoute ?? "not available"],
+        ["Review evidence pointers", routes.operatorReviewEvidencePointersOpenRoute ?? "not available"],
+        ["Review artifact summaries", routes.operatorReviewArtifactSummariesOpenRoute ?? "not available"],
+        ["Open release sections", routes.releaseReportSectionsOpenRoute ?? "not available"],
         ["Completion rule", navigation.policy?.completionRule ?? "Release verification remains blocked until upstream work closes."],
       ])}
       <div class="failureList">
@@ -13657,6 +13671,10 @@ function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
                         ["Checklist rows", routeListSummary(Array.isArray(group.checklistRowIds) ? group.checklistRowIds.map(humanize) : [])],
                         ["Readback", group.firstReadbackRoute ?? "not available"],
                         ["Template", group.firstTemplateRoute ?? "not available"],
+                        ["Package manifest", group.firstPackageManifestRoute ?? "not available"],
+                        ["Review pointers", group.firstReviewEvidencePointersRoute ?? "not available"],
+                        ["Review artifacts", group.firstReviewArtifactSummariesRoute ?? "not available"],
+                        ["Release sections", group.firstReleaseReportSectionsRoute ?? "not available"],
                         ["Validate-only", group.firstValidateOnlyRoute ?? "not available"],
                       ])}
                     </article>

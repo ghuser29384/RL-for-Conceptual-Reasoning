@@ -28575,6 +28575,7 @@ function buildReleaseCompletionNavigationSummary(
           firstTemplateRoute:
             openTargetGapRows[0]?.starterExpandedTemplateReadbackRoute ??
             operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", { expand: "remaining", maxExpandedRecords: 25 }),
+          firstPackageManifestRoute: "/api/v1/target-gaps/current-package-manifest",
           firstImportRoute: TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE,
           firstDryRunRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
           firstValidateOnlyRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
@@ -28599,6 +28600,7 @@ function buildReleaseCompletionNavigationSummary(
           ),
           firstReadbackRoute: "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
           firstTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
+          firstPackageManifestRoute: "/api/v1/operator-evidence/package-manifest",
           firstImportRoute: OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE,
           firstDryRunRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
           firstValidateOnlyRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
@@ -28611,6 +28613,9 @@ function buildReleaseCompletionNavigationSummary(
             openActionItems.filter((item) => item.executionStatus === "ready_to_review_evidence").map((item) => item.checklistRowId),
           ),
           firstReadbackRoute: "/api/v1/operator-action-items?executionStatus=ready_to_review_evidence",
+          firstReleaseReportSectionsRoute: "/api/v1/release-report-sections?status=open",
+          firstReviewEvidencePointersRoute: "/api/v1/operator-review-evidence-pointers?status=open",
+          firstReviewArtifactSummariesRoute: "/api/v1/operator-review-artifact-summaries?status=open",
         })
       : null,
     openTargetGapRows.length || openChecklistRows.length || openActionItems.length
@@ -28659,6 +28664,7 @@ function buildReleaseCompletionNavigationSummary(
       targetDataPackageImportRoute: TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE,
       targetDataPackageDryRunRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
       targetDataPackageValidateOnlyRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
+      targetDataCurrentPackageManifestRoute: "/api/v1/target-gaps/current-package-manifest",
       targetDataStarterTemplateRoute: operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
         expand: "remaining",
         maxExpandedRecords: 25,
@@ -28668,7 +28674,11 @@ function buildReleaseCompletionNavigationSummary(
       operatorEvidencePackageImportRoute: OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE,
       operatorEvidencePackageDryRunRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
       operatorEvidencePackageValidateOnlyRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
+      operatorEvidencePackageManifestRoute: "/api/v1/operator-evidence/package-manifest",
       operatorEvidenceTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
+      releaseReportSectionsOpenRoute: "/api/v1/release-report-sections?status=open",
+      operatorReviewEvidencePointersOpenRoute: "/api/v1/operator-review-evidence-pointers?status=open",
+      operatorReviewArtifactSummariesOpenRoute: "/api/v1/operator-review-artifact-summaries?status=open",
     },
     counts: {
       targetGapRows: targetGapRows.length,
@@ -28705,6 +28715,10 @@ function releaseCompletionNavigationGroup(phase, executionStatus, operatorAction
     firstReadbackRoute: details.firstReadbackRoute ?? null,
     firstTargetGapRoute: details.firstTargetGapRoute ?? null,
     firstTemplateRoute: details.firstTemplateRoute ?? null,
+    firstPackageManifestRoute: details.firstPackageManifestRoute ?? null,
+    firstReleaseReportSectionsRoute: details.firstReleaseReportSectionsRoute ?? null,
+    firstReviewEvidencePointersRoute: details.firstReviewEvidencePointersRoute ?? null,
+    firstReviewArtifactSummariesRoute: details.firstReviewArtifactSummariesRoute ?? null,
     firstImportRoute: details.firstImportRoute ?? null,
     firstDryRunRoute: details.firstDryRunRoute ?? null,
     firstValidateOnlyRoute: details.firstValidateOnlyRoute ?? null,

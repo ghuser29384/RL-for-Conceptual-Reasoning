@@ -10140,7 +10140,9 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
       const groupItems = items.filter((item) => octoberCompletionRunbookExecutionStatus(item) === group.executionStatus);
       if (!groupItems.length) return null;
       const firstStep = groupItems[0];
-      const routes = uniqueValues(groupItems.flatMap(octoberCompletionRunbookRoutes));
+      const reviewRoutes = octoberCompletionRunbookReviewRoutesForGroup(group.executionStatus);
+      const firstPackageManifestRoute = octoberCompletionRunbookPackageManifestRouteForGroup(group.executionStatus);
+      const routes = uniqueValues([firstPackageManifestRoute, ...Object.values(reviewRoutes), ...groupItems.flatMap(octoberCompletionRunbookRoutes)]);
       const dryRunRoutes = uniqueValues(groupItems.map((item) => item.dryRunImportRoute));
       const validateOnlyRoutes = uniqueValues(groupItems.map((item) => item.validateOnlyImportRoute));
       const singleRecordDryRunRoutes = uniqueValues(groupItems.map((item) => item.singleRecordDryRunRoute));
@@ -10168,6 +10170,7 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
         firstValidateOnlyRoute: firstStep.validateOnlyImportRoute ?? null,
         firstSingleRecordDryRunRoute: firstStep.singleRecordDryRunRoute ?? null,
         firstSingleRecordValidateOnlyRoute: firstStep.singleRecordValidateOnlyRoute ?? null,
+        firstPackageManifestRoute,
         firstStarterTemplateReadbackRoute: firstStep.starterExpandedTemplateReadbackRoute ?? null,
         firstTemplateReadbackRoute:
           firstStep.templateReadbackRoute ??
@@ -10175,6 +10178,7 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
           firstStep.starterExpandedTemplateReadbackRoute ??
           firstStep.cappedExpandedTemplateReadbackRoute ??
           null,
+        ...reviewRoutes,
         firstVerificationRoute: firstStep.verificationRoute ?? firstStep.readbackRoute ?? null,
         targetGapIds: uniqueValues(groupItems.map((item) => item.targetGapId)),
         checklistRowIds: uniqueValues(groupItems.flatMap((item) => item.checklistRowIds ?? item.checklistRowId)),
@@ -10195,6 +10199,27 @@ function octoberCompletionRunbookNextUnblockerSequence(items) {
       };
     })
     .filter(Boolean);
+}
+
+function octoberCompletionRunbookPackageManifestRouteForGroup(executionStatus) {
+  if (executionStatus === "ready_to_collect_data") return "/api/v1/target-gaps/current-package-manifest";
+  if (executionStatus === "ready_to_submit_evidence") return "/api/v1/operator-evidence/package-manifest";
+  return null;
+}
+
+function octoberCompletionRunbookReviewRoutesForGroup(executionStatus) {
+  if (executionStatus !== "ready_to_review_evidence") {
+    return {
+      firstReleaseReportSectionsRoute: null,
+      firstReviewEvidencePointersRoute: null,
+      firstReviewArtifactSummariesRoute: null,
+    };
+  }
+  return {
+    firstReleaseReportSectionsRoute: "/api/v1/release-report-sections?status=open",
+    firstReviewEvidencePointersRoute: "/api/v1/operator-review-evidence-pointers?status=open",
+    firstReviewArtifactSummariesRoute: "/api/v1/operator-review-artifact-summaries?status=open",
+  };
 }
 
 function octoberCompletionRunbookUnblockerRoute(item) {
@@ -10230,6 +10255,7 @@ function octoberCompletionRunbookUnblockerRoute(item) {
 }
 
 function octoberCompletionRunbookUnblockerStepSummary(item) {
+  const reviewRoutes = octoberCompletionRunbookReviewRoutesForGroup(octoberCompletionRunbookExecutionStatus(item));
   return {
     id: item.id ?? null,
     sequence: item.sequence ?? null,
@@ -10259,6 +10285,7 @@ function octoberCompletionRunbookUnblockerStepSummary(item) {
     expandedTemplateReadbackRoute: item.expandedTemplateReadbackRoute ?? null,
     starterExpandedTemplateReadbackRoute: item.starterExpandedTemplateReadbackRoute ?? null,
     cappedExpandedTemplateReadbackRoute: item.cappedExpandedTemplateReadbackRoute ?? null,
+    ...reviewRoutes,
     verificationRoute: item.verificationRoute ?? item.readbackRoute ?? null,
     blockedByTargetGapIds: Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [],
     releaseVerificationBlockerSummary: item.releaseVerificationBlockerSummary ?? null,
@@ -19654,10 +19681,12 @@ function operatorEvidencePackageManifestStep(templateRow, runbookStep, manifestS
   const templateReadbackRoute = isPackageJsonl
     ? `/api/v1/operator-evidence/import-jsonl-template/${encodeURIComponent(templateRow.id)}`
     : `/api/v1/operator-action-items/payload-template/${encodeURIComponent(templateRow.id)}`;
+  const id = `operator-evidence-package-manifest:${sequence}:${templateRow.id}`;
   return {
-    id: `operator-evidence-package-manifest:${sequence}:${templateRow.id}`,
+    id,
     sequence,
     manifestStepKind,
+    packageManifestItemRoute: `/api/v1/operator-evidence/package-manifest/${encodeURIComponent(id)}`,
     actionId: templateRow.actionId ?? runbookStep.actionId ?? null,
     runbookStepId: runbookStep.id ?? null,
     checklistRowId: templateRow.checklistRowId ?? runbookStep.checklistRowId ?? null,
@@ -19691,10 +19720,12 @@ function operatorEvidencePackageManifestStep(templateRow, runbookStep, manifestS
 }
 
 function operatorEvidencePackageManifestFallbackStep(runbookStep, sequence) {
+  const id = `operator-evidence-package-manifest:${sequence}:missing-template:${runbookStep.id ?? sequence}`;
   return {
-    id: `operator-evidence-package-manifest:${sequence}:missing-template:${runbookStep.id ?? sequence}`,
+    id,
     sequence,
     manifestStepKind: "template_unavailable",
+    packageManifestItemRoute: `/api/v1/operator-evidence/package-manifest/${encodeURIComponent(id)}`,
     actionId: runbookStep.actionId ?? null,
     runbookStepId: runbookStep.id ?? null,
     checklistRowId: runbookStep.checklistRowId ?? null,

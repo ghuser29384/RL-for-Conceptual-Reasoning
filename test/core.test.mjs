@@ -14334,6 +14334,20 @@ test("October completion checklist records operator-evidence statuses when child
     releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstTemplateRoute,
     "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
   );
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstPackageManifestRoute,
+    "/api/v1/target-gaps/current-package-manifest",
+  );
+  const submitOperatorEvidenceGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
+    (item) => item.executionStatus === "ready_to_submit_evidence",
+  );
+  assert.equal(submitOperatorEvidenceGroup.firstPackageManifestRoute, "/api/v1/operator-evidence/package-manifest");
+  const reviewCurrentEvidenceGroup = releaseReport.releaseCompletionNavigation.nextUnblockerSequence.find(
+    (item) => item.executionStatus === "ready_to_review_evidence",
+  );
+  assert.equal(reviewCurrentEvidenceGroup.firstReleaseReportSectionsRoute, "/api/v1/release-report-sections?status=open");
+  assert.equal(reviewCurrentEvidenceGroup.firstReviewEvidencePointersRoute, "/api/v1/operator-review-evidence-pointers?status=open");
+  assert.equal(reviewCurrentEvidenceGroup.firstReviewArtifactSummariesRoute, "/api/v1/operator-review-artifact-summaries?status=open");
   assert.deepEqual(
     releaseReport.releaseCompletionNavigation.nextUnblockerSequence.map((item) => item.executionStatus),
     [
@@ -14365,6 +14379,23 @@ test("October completion checklist records operator-evidence statuses when child
     "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
   );
   assert.equal(releaseReport.releaseCompletionNavigation.routes.operatorEvidenceTemplateRoute, "/api/v1/operator-evidence/import-jsonl-template");
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.routes.targetDataCurrentPackageManifestRoute,
+    "/api/v1/target-gaps/current-package-manifest",
+  );
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.routes.operatorEvidencePackageManifestRoute,
+    "/api/v1/operator-evidence/package-manifest",
+  );
+  assert.equal(releaseReport.releaseCompletionNavigation.routes.releaseReportSectionsOpenRoute, "/api/v1/release-report-sections?status=open");
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.routes.operatorReviewEvidencePointersOpenRoute,
+    "/api/v1/operator-review-evidence-pointers?status=open",
+  );
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.routes.operatorReviewArtifactSummariesOpenRoute,
+    "/api/v1/operator-review-artifact-summaries?status=open",
+  );
   assert.equal(releaseReport.releaseCompletionNavigation.policy.sideEffects.includes("does not submit data"), true);
   const actionItemExecutionStatusCounts = releaseReport.operatorEvidenceSubmissionPlan.actionItems.reduce((counts, item) => {
     counts[item.executionStatus] = (counts[item.executionStatus] ?? 0) + 1;
