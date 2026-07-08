@@ -167,6 +167,7 @@ export const ARGUMENT_EXTRACTION_METHODS = [
   "manual_jsonl_import",
   "operator_entered_jsonl_import",
   "external_jsonl_import_no_platform_ai_execution",
+  "external_ai_assisted_jsonl_import_no_platform_ai_execution",
 ];
 export const ARGUMENT_EXTRACTION_ROLES = [
   "position_argument",
@@ -10169,6 +10170,7 @@ function argumentExtractionReviewReasons(extraction, context) {
       "argumentRole",
       "intendedConclusion",
       "argumentSummary",
+      "implicitAssumptions",
       "contextNeeded",
       "conceptualScopeNotes",
       "suitabilityNotes",
@@ -10181,6 +10183,7 @@ function argumentExtractionReviewReasons(extraction, context) {
     ]),
     sourceSpanIds.length ? null : "sourceSpanIds",
     Array.isArray(extraction.keyPremises) && extraction.keyPremises.length ? null : "keyPremises",
+    Array.isArray(extraction.implicitAssumptions) && extraction.implicitAssumptions.length ? null : "implicitAssumptions",
     ARGUMENT_EXTRACTION_ROLES.includes(extraction.argumentRole) ? null : "argumentRole",
     argumentExtractionHasPreparedText(extraction) ? null : "possiblePreparedText",
     argumentExtractionRequiresCritiqueTarget(extraction) && !hasRequiredText(extraction.critiqueTarget) ? "critiqueTarget" : null,
@@ -10190,6 +10193,7 @@ function argumentExtractionReviewReasons(extraction, context) {
     ARGUMENT_EXTRACTION_REVIEW_STATUSES.includes(extraction.reviewStatus) ? null : "reviewStatus",
     extraction.downstreamIntegrationStatus === SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS ? null : "downstreamIntegrationStatus",
     extraction.sourceVisibility === SOURCE_INTAKE_VISIBILITY ? null : "sourceVisibility",
+    ...argumentExtractionAiProvenanceReviewReasons(extraction),
     context.validSourceCardIds.has(extraction.sourceCardId) ? null : "sourceCardId:not_found",
     batch ? null : "extractionBatchId:not_found",
     !batch || batch.sourceCardId === extraction.sourceCardId ? null : "extractionBatchId:sourceCardId_mismatch",
@@ -10197,6 +10201,19 @@ function argumentExtractionReviewReasons(extraction, context) {
     mismatchedSpanIds.length ? `sourceSpanIds:sourceCardId_mismatch:${mismatchedSpanIds.join(",")}` : null,
     ...sourceIntakeFalseFlagReasons(extraction),
     ...sourceIntakeForbiddenDownstreamFieldReasons(extraction),
+  ].filter(Boolean);
+}
+
+function argumentExtractionAiProvenanceReviewReasons(extraction) {
+  if (extraction.extractionMethod !== "external_ai_assisted_jsonl_import_no_platform_ai_execution") return [];
+  const provenance = extraction.modelPromptProvenance;
+  if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) {
+    return ["modelPromptProvenance"];
+  }
+  return [
+    hasRequiredText(provenance.requestedModel) ? null : "modelPromptProvenance.requestedModel",
+    hasRequiredText(provenance.resolvedModelVersion) ? null : "modelPromptProvenance.resolvedModelVersion",
+    hasRequiredText(provenance.promptVersion) ? null : "modelPromptProvenance.promptVersion",
   ].filter(Boolean);
 }
 

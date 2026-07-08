@@ -1794,7 +1794,8 @@ create table if not exists argument_extractions (
     extraction_method in (
       'manual_jsonl_import',
       'operator_entered_jsonl_import',
-      'external_jsonl_import_no_platform_ai_execution'
+      'external_jsonl_import_no_platform_ai_execution',
+      'external_ai_assisted_jsonl_import_no_platform_ai_execution'
     )
   ),
   review_status text not null check (review_status in ('pending_admin_review', 'accepted_for_position_intake', 'accepted_for_critique_intake', 'accepted_for_source_preparation', 'needs_revision', 'rejected', 'deferred')),
@@ -2123,6 +2124,16 @@ alter table argument_extractions add column if not exists suitability_notes text
 alter table argument_extractions add column if not exists possible_prepared_position_text text;
 alter table argument_extractions add column if not exists possible_prepared_critique_text text;
 alter table argument_extractions add column if not exists model_prompt_provenance jsonb not null default '{}'::jsonb;
+alter table argument_extractions drop constraint if exists argument_extractions_extraction_method_check;
+alter table argument_extractions add constraint argument_extractions_extraction_method_check
+  check (
+    extraction_method in (
+      'manual_jsonl_import',
+      'operator_entered_jsonl_import',
+      'external_jsonl_import_no_platform_ai_execution',
+      'external_ai_assisted_jsonl_import_no_platform_ai_execution'
+    )
+  );
 alter table metaphilosophy_task_tracks add column if not exists architecture_layer_id text;
 alter table metaphilosophy_task_tracks add column if not exists release_claim_role text;
 alter table metaphilosophy_task_tracks add column if not exists boundary_rule text;

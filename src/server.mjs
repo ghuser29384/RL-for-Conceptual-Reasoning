@@ -2030,6 +2030,7 @@ const argumentExtractionValidationOptions = {
     "argumentRole",
     "intendedConclusion",
     "argumentSummary",
+    "implicitAssumptions",
     "contextNeeded",
     "conceptualScopeNotes",
     "suitabilityNotes",
@@ -2040,13 +2041,24 @@ const argumentExtractionValidationOptions = {
     "sourceVisibility",
     "importedAt",
   ],
-  requiredNonEmptyArrayFields: ["sourceSpanIds", "keyPremises"],
+  requiredNonEmptyArrayFields: ["sourceSpanIds", "keyPremises", "implicitAssumptions"],
   requiredAnyFields: [["possiblePreparedPositionText", "possiblePreparedCritiqueText", "extractedPositionText"]],
   allowedValues: {
     argumentRole: ARGUMENT_EXTRACTION_ROLES,
     extractionMethod: ARGUMENT_EXTRACTION_METHODS,
     reviewStatus: ARGUMENT_EXTRACTION_REVIEW_STATUSES,
   },
+  requiredWhen: [
+    {
+      field: "extractionMethod",
+      equals: "external_ai_assisted_jsonl_import_no_platform_ai_execution",
+      requiredFields: [
+        "modelPromptProvenance.requestedModel",
+        "modelPromptProvenance.resolvedModelVersion",
+        "modelPromptProvenance.promptVersion",
+      ],
+    },
+  ],
   requiredBooleanFields: ["createsPreparedDraft", "createsCandidateItem", "createsCandidateBatch", "liveQueueIntegration", "aiExtractionExecuted"],
   requiredExactFields: {
     sourceVisibility: SOURCE_INTAKE_VISIBILITY,

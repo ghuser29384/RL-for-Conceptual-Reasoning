@@ -13648,7 +13648,9 @@ test("production schema includes normalized Phase 1 source-intake tables with se
   }
   assert.ok(schema.includes("intended_conclusion text not null"));
   assert.ok(schema.includes("key_premises text[] not null"));
+  assert.ok(schema.includes("implicit_assumptions text[] not null"));
   assert.ok(schema.includes("possible_prepared_critique_text text"));
+  assert.ok(schema.includes("model_prompt_provenance jsonb not null default '{}'::jsonb"));
   assert.equal(schema.includes("'external_extraction_tool_import'"), false);
   assert.equal(schema.includes("'human_extractor'"), false);
   assert.ok(
@@ -22001,6 +22003,49 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.match(extractionSideEffectAttempt.body.detail, /liveQueueIntegration/);
   assert.match(extractionSideEffectAttempt.body.detail, /aiExtractionExecuted/);
   assert.equal((await auditStore.readWorkflowEvents()).length, eventCountBeforeSourceIntakeSideEffectAttempts);
+
+  const eventCountBeforeExternalAiProvenanceChecks = (await auditStore.readWorkflowEvents()).length;
+  const externalAiMissingProvenance = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/extraction-batches/import-jsonl?validateOnly=true",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      extractionBatch: { ...extractionBatch, id: "extraction-batch-external-ai-missing-provenance" },
+      jsonl: `${JSON.stringify({
+        ...argumentExtraction,
+        id: "argument-extraction-external-ai-missing-provenance",
+        extractionMethod: "external_ai_assisted_jsonl_import_no_platform_ai_execution",
+      })}\n`,
+    }),
+  });
+  assert.equal(externalAiMissingProvenance.status, 400);
+  assert.match(externalAiMissingProvenance.body.detail, /modelPromptProvenance\.requestedModel/);
+  assert.match(externalAiMissingProvenance.body.detail, /external_ai_assisted_jsonl_import_no_platform_ai_execution/);
+
+  const externalAiWithProvenanceDryRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/extraction-batches/import-jsonl?validateOnly=true",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      extractionBatch: { ...extractionBatch, id: "extraction-batch-external-ai-with-provenance" },
+      jsonl: `${JSON.stringify({
+        ...argumentExtraction,
+        id: "argument-extraction-external-ai-with-provenance",
+        extractionMethod: "external_ai_assisted_jsonl_import_no_platform_ai_execution",
+        modelPromptProvenance: {
+          requestedModel: "gpt-5-metaphilosophy-extractor",
+          resolvedModelVersion: "gpt-5-metaphilosophy-extractor-2026-09-15",
+          promptVersion: "source-extraction-prompt-v1",
+        },
+      })}\n`,
+    }),
+  });
+  assert.equal(externalAiWithProvenanceDryRun.status, 200);
+  assert.equal(externalAiWithProvenanceDryRun.body.dryRun, true);
+  assert.deepEqual(externalAiWithProvenanceDryRun.body.argumentExtractionIds, [
+    "argument-extraction-external-ai-with-provenance",
+  ]);
+  assert.equal((await auditStore.readWorkflowEvents()).length, eventCountBeforeExternalAiProvenanceChecks);
 
   const eventCountBeforeSourceIntakeDryRun = (await auditStore.readWorkflowEvents()).length;
   const jsonlImportDryRun = await invokeApi(context, {
