@@ -5572,6 +5572,8 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/metaphilosophy/rlhf93-completion-audit"',
     'resourceKey: "rlhf93CompletionAuditRequirement"',
     "RLHF93 requirement audit over existing release-report",
+    "Current unblocker",
+    "Unblocker package steps",
     'id: "target-gaps"',
     'endpoint: "/api/v1/target-gaps"',
     'resourceKey: "targetGap"',
@@ -16608,6 +16610,8 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/decision-log"));
   assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/rlhf93-completion-audit"));
   assert.ok(architectureDoc.includes("reports completion as unproven while target data"));
+  assert.ok(architectureDoc.includes("current release-completion unblocker"));
+  assert.ok(architectureDoc.includes("package dry-run/validate-only routes"));
   assert.ok(architectureDoc.includes("does not create release gates, promote rejected or pruned ideas, create candidates, or mutate the main spec"));
   assert.ok(
     architectureDoc.includes(
@@ -22955,6 +22959,13 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAudit.body.resourceKey, "rlhf93CompletionAuditRequirement");
   assert.equal(rlhf93CompletionAudit.body.releaseUseStatus, "rlhf93_completion_unproven");
   assert.equal(rlhf93CompletionAudit.body.currentStatus, "incomplete_against_october_target");
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.phase, "collect_data");
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.executionStatus, "ready_to_collect_data");
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.stepCount, 9);
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.expectedResourceDelta, 2034);
+  assert.ok(rlhf93CompletionAudit.body.currentUnblocker.routes.includes("/api/v1/target-gaps/import-jsonl-package?dryRun=true"));
+  assert.ok(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.operatorChecklist.length > 0);
+  assert.equal(rlhf93CompletionAudit.body.nextUnblockerSequence[0].phase, "collect_data");
   assert.ok(rlhf93CompletionAudit.body.counts.openRows > 0);
   assert.ok(rlhf93CompletionAudit.body.counts.closedRows > 0);
   assert.ok(rlhf93CompletionAudit.body.counts.byRequirementGroup.october_completion > 0);
@@ -22966,7 +22977,16 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
       (item) =>
         item.id === "release-current-status" &&
         item.completionState === "open" &&
-        item.reviewReasons.includes("targetGaps.remainingTotal:2034"),
+        item.reviewReasons.includes("targetGaps.remainingTotal:2034") &&
+        item.unblocker.phase === "collect_data" &&
+        item.unblocker.packageManifest.starterTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
+        item.id === "october-target_scale_and_data_collection" &&
+        item.unblocker.packageManifest.packageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
     ),
   );
   assert.ok(
@@ -23011,6 +23031,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditRouteFilter.body));
   assert.ok(rlhf93CompletionAuditRouteFilter.body.count >= 1);
   assert.ok(rlhf93CompletionAuditRouteFilter.body.items.some((item) => item.id === "public-dataset-public_first_ladder_gate"));
+
+  const rlhf93CompletionAuditUnblockerRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditUnblockerRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditUnblockerRouteFilter.body));
+  assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "release-current-status"));
+  assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "october-target_scale_and_data_collection"));
 
   const rlhf93CompletionAuditItem = await invokeApi(context, {
     method: "GET",

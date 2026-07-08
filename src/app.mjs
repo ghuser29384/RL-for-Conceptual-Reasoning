@@ -8782,13 +8782,17 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
   }
   if (collection.id === "rlhf93-completion-audit") {
     const counts = result.filteredCounts ?? result.counts ?? {};
+    const unblocker = result.currentUnblocker ?? {};
+    const packageManifest = unblocker.packageManifest ?? {};
     return [
       ["Audit status", humanize(result.releaseUseStatus ?? "not reported")],
       ["Current release status", humanize(result.currentStatus ?? "not reported")],
+      ["Current blocker", unblocker.phase ? `${humanize(unblocker.phase)} / ${humanize(unblocker.executionStatus ?? "not reported")}` : "not reported"],
       ["Open requirements", counts.openRows ?? "not reported"],
       ["Closed requirements", counts.closedRows ?? "not reported"],
       ["Requirement groups", workflowCountMapSummary(counts.byRequirementGroup)],
       ["Remaining target records", result.targetGapTotals?.remainingTotal ?? "not reported"],
+      ["Unblocker package steps", packageManifest.stepCount ?? "not reported"],
     ];
   }
   if (collection.id === "metaphilosophy-source-workbench-readiness") {
@@ -10363,6 +10367,9 @@ function rlhf93CompletionAuditPreviewRow(item) {
   const sourceStatuses =
     Array.isArray(item.sourceStatuses) && item.sourceStatuses.length ? item.sourceStatuses.map(humanize).join(", ") : "not reported";
   const routes = Array.isArray(item.routes) && item.routes.length ? item.routes : item.verificationRoutes ?? [];
+  const unblocker = item.unblocker ?? null;
+  const packageManifest = unblocker?.packageManifest ?? null;
+  const unblockerStatus = unblocker ? `${humanize(unblocker.phase ?? "blocked")} / ${humanize(unblocker.executionStatus ?? "not reported")}` : "not current blocker";
   return `
     <article class="operatorActionCard">
       <div class="operatorActionCardHeader">
@@ -10379,6 +10386,12 @@ function rlhf93CompletionAuditPreviewRow(item) {
         ["Evidence", evidenceIds],
         ["Source statuses", sourceStatuses],
         ["Review reasons", workflowPreviewReviewReasons(item)],
+        ["Current unblocker", unblockerStatus],
+        ["Starter template", packageManifest?.starterTemplateRoute ?? unblocker?.firstTemplateRoute ?? "not applicable"],
+        ["Package dry-run", packageManifest?.packageDryRunImportRoute ?? unblocker?.firstDryRunRoute ?? "not applicable"],
+        ["Package validate-only", packageManifest?.packageValidateOnlyImportRoute ?? unblocker?.firstValidateOnlyRoute ?? "not applicable"],
+        ["Expected target-resource delta", packageManifest?.expectedResourceDelta ?? "not applicable"],
+        ["Unblocker steps", packageManifest?.stepCount ?? unblocker?.stepCount ?? "not applicable"],
         ["Routes", workflowPreviewPathSummary(routes, "not linked", 5)],
       ])}
     </article>

@@ -16550,6 +16550,7 @@ function rlhf93CompletionAuditReadback(report, options = {}) {
   const counts = rlhf93CompletionAuditCounts(allItems);
   const filteredCounts = rlhf93CompletionAuditCounts(items);
   const releaseUseStatus = counts.openRows ? "rlhf93_completion_unproven" : "rlhf93_completion_verified";
+  const currentUnblocker = rlhf93CompletionAuditCurrentUnblocker(report);
   return {
     id: `rlhf93-completion-audit-${report.releaseId ?? releaseId}`,
     releaseId: report.releaseId ?? releaseId,
@@ -16570,6 +16571,8 @@ function rlhf93CompletionAuditReadback(report, options = {}) {
     currentStatus: report.currentStatus ?? "unknown",
     targetGapTotals: report.targetGaps?.totals ?? report.targetGaps?.counts ?? null,
     nextBlockingGroup: report.releaseCompletionNavigation?.currentBlockingGroup ?? null,
+    currentUnblocker,
+    nextUnblockerSequence: rlhf93CompletionAuditUnblockerSequence(report),
     count: items.length,
     totalCount: allItems.length,
     counts,
@@ -16582,6 +16585,7 @@ function rlhf93CompletionAuditReadback(report, options = {}) {
 function rlhf93CompletionAuditItems(report) {
   const generatedAt = report.generatedAt ?? new Date().toISOString();
   const releaseIdValue = report.releaseId ?? releaseId;
+  const currentUnblocker = rlhf93CompletionAuditCurrentUnblocker(report);
   const items = [
     rlhf93CompletionAuditDecoratedItem({
       id: "release-current-status",
@@ -16612,6 +16616,7 @@ function rlhf93CompletionAuditItems(report) {
             report.releaseCompletionNavigation.currentBlockingGroup.firstValidateOnlyRoute,
           ]
         : [],
+      unblocker: currentUnblocker,
       generatedAt,
     }),
   ];
@@ -16638,6 +16643,7 @@ function rlhf93CompletionAuditItems(report) {
           `/api/v1/operator-action-items?checklistRowId=${encodeURIComponent(sourceRowId)}`,
         ],
         remediationRoutes: rlhf93ChecklistRowRoutes(row),
+        unblocker: rlhf93CompletionAuditRowUnblocker(currentUnblocker, { ...row, checklistRowId: sourceRowId }),
         generatedAt,
       }),
     );
@@ -16698,6 +16704,7 @@ function rlhf93CompletionAuditItems(report) {
           row.downstreamLaunchRoute,
           ...(Array.isArray(row.remediationRoutes) ? row.remediationRoutes : []),
         ],
+        unblocker: rlhf93CompletionAuditRowUnblocker(currentUnblocker, row),
         generatedAt,
       }),
     );
@@ -16743,6 +16750,142 @@ function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, che
       generatedAt: report.generatedAt ?? new Date().toISOString(),
     });
   });
+}
+
+function rlhf93CompletionAuditCurrentUnblocker(report) {
+  const navigation = report.releaseCompletionNavigation ?? {};
+  const group = navigation.currentBlockingGroup ?? null;
+  if (!group) return null;
+  const manifest = navigation.currentBlockingPackageManifest ?? null;
+  const packageManifest = manifest
+    ? {
+        manifestKind: manifest.manifestKind ?? null,
+        status: manifest.status ?? null,
+        sourceCollectionPlanRoute: manifest.sourceCollectionPlanRoute ?? null,
+        sourceRunbookGroupRoute: manifest.sourceRunbookGroup?.runbookGroupRoute ?? group.runbookGroupRoute ?? null,
+        sourceActionGroupRoute: manifest.sourceRunbookGroup?.operatorActionGroupRoute ?? group.operatorActionGroupRoute ?? null,
+        packageImportRoute: manifest.packageImportRoute ?? group.firstImportRoute ?? null,
+        packageDryRunImportRoute: manifest.packageDryRunImportRoute ?? group.firstDryRunRoute ?? null,
+        packageValidateOnlyImportRoute: manifest.packageValidateOnlyImportRoute ?? group.firstValidateOnlyRoute ?? null,
+        starterTemplateRoute: manifest.templateStarter?.starterTemplateRoute ?? group.firstTemplateRoute ?? null,
+        fullTemplateRoute: manifest.templateStarter?.fullTemplateRoute ?? null,
+        packageRecordContract: manifest.packageRecordContract ?? null,
+        dryRunPolicy: manifest.dryRunPolicy ?? null,
+        verificationPolicy: manifest.verificationPolicy ?? null,
+        setupBeforePrimary: manifest.setupBeforePrimary === true,
+        targetGapCount: manifest.targetGapCount ?? null,
+        targetGapIds: Array.isArray(manifest.targetGapIds) ? manifest.targetGapIds : [],
+        stepCount: manifest.stepCount ?? null,
+        setupStepCount: manifest.setupStepCount ?? null,
+        primaryStepCount: manifest.primaryStepCount ?? null,
+        estimatedRecordsRequired: manifest.estimatedRecordsRequired ?? null,
+        expectedResourceDelta: manifest.expectedResourceDelta ?? null,
+        operatorChecklist: Array.isArray(manifest.operatorChecklist) ? manifest.operatorChecklist : [],
+        executionSequencePreview: Array.isArray(manifest.executionSequencePreview)
+          ? manifest.executionSequencePreview.map(rlhf93CompletionAuditPackageStepPreview)
+          : [],
+        omittedExecutionStepCount: manifest.omittedExecutionStepCount ?? 0,
+      }
+    : null;
+  return {
+    phase: group.phase ?? navigation.currentBlockingPhase ?? null,
+    executionStatus: group.executionStatus ?? navigation.currentBlockingExecutionStatus ?? null,
+    operatorAction: group.operatorAction ?? null,
+    runbookGroupRoute: group.runbookGroupRoute ?? null,
+    operatorActionGroupRoute: group.operatorActionGroupRoute ?? null,
+    stepCount: group.stepCount ?? null,
+    targetGapIds: Array.isArray(group.targetGapIds) ? group.targetGapIds : [],
+    checklistRowIds: Array.isArray(group.checklistRowIds) ? group.checklistRowIds : [],
+    targetGapRemainingTotal: group.targetGapRemainingTotal ?? report.targetGaps?.totals?.remainingTotal ?? null,
+    firstReadbackRoute: group.firstReadbackRoute ?? null,
+    firstTargetGapRoute: group.firstTargetGapRoute ?? null,
+    firstTemplateRoute: group.firstTemplateRoute ?? null,
+    firstPackageManifestRoute: group.firstPackageManifestRoute ?? null,
+    firstImportRoute: group.firstImportRoute ?? null,
+    firstDryRunRoute: group.firstDryRunRoute ?? null,
+    firstValidateOnlyRoute: group.firstValidateOnlyRoute ?? null,
+    routes: uniqueValues([
+      group.runbookGroupRoute,
+      group.operatorActionGroupRoute,
+      group.firstReadbackRoute,
+      group.firstTargetGapRoute,
+      group.firstTemplateRoute,
+      group.firstPackageManifestRoute,
+      group.firstImportRoute,
+      group.firstDryRunRoute,
+      group.firstValidateOnlyRoute,
+      packageManifest?.sourceCollectionPlanRoute,
+      packageManifest?.packageImportRoute,
+      packageManifest?.packageDryRunImportRoute,
+      packageManifest?.packageValidateOnlyImportRoute,
+      packageManifest?.starterTemplateRoute,
+      packageManifest?.fullTemplateRoute,
+    ]),
+    packageManifest,
+  };
+}
+
+function rlhf93CompletionAuditPackageStepPreview(step = {}) {
+  return {
+    sequence: step.sequence ?? null,
+    stepKind: step.stepKind ?? null,
+    targetGapId: step.targetGapId ?? null,
+    actionId: step.actionId ?? null,
+    checklistRowId: step.checklistRowId ?? null,
+    importRoute: step.importRoute ?? null,
+    dryRunImportRoute: step.dryRunImportRoute ?? null,
+    validateOnlyImportRoute: step.validateOnlyImportRoute ?? null,
+    templateReadbackRoute: step.templateReadbackRoute ?? null,
+    collectionPlanRoute: step.collectionPlanRoute ?? null,
+    verificationRoute: step.verificationRoute ?? null,
+    packageManifestItemRoute: step.packageManifestItemRoute ?? null,
+    estimatedRecordsRequired: step.estimatedRecordsRequired ?? null,
+    expectedResourceDelta: step.expectedResourceDelta ?? null,
+    closesTargetGapWhenValidated: step.closesTargetGapWhenValidated === true,
+    effect: step.effect ?? null,
+  };
+}
+
+function rlhf93CompletionAuditUnblockerSequence(report) {
+  const sequence = report.releaseCompletionNavigation?.nextUnblockerSequence;
+  if (!Array.isArray(sequence)) return [];
+  return sequence.map((group) => ({
+    sequence: group.sequence ?? null,
+    phase: group.phase ?? null,
+    executionStatus: group.executionStatus ?? null,
+    operatorAction: group.operatorAction ?? null,
+    runbookGroupRoute: group.runbookGroupRoute ?? null,
+    operatorActionGroupRoute: group.operatorActionGroupRoute ?? null,
+    stepCount: group.stepCount ?? null,
+    targetGapIds: Array.isArray(group.targetGapIds) ? group.targetGapIds : [],
+    checklistRowIds: Array.isArray(group.checklistRowIds) ? group.checklistRowIds : [],
+    targetGapRemainingTotal: group.targetGapRemainingTotal ?? null,
+    firstReadbackRoute: group.firstReadbackRoute ?? null,
+    firstTargetGapRoute: group.firstTargetGapRoute ?? null,
+    firstTemplateRoute: group.firstTemplateRoute ?? null,
+    firstPackageManifestRoute: group.firstPackageManifestRoute ?? null,
+    firstImportRoute: group.firstImportRoute ?? null,
+    firstDryRunRoute: group.firstDryRunRoute ?? null,
+    firstValidateOnlyRoute: group.firstValidateOnlyRoute ?? null,
+  }));
+}
+
+function rlhf93CompletionAuditRowUnblocker(currentUnblocker, row = {}) {
+  if (!currentUnblocker) return null;
+  const checklistRowIds = uniqueValues([
+    row.checklistRowId,
+    row.sourceChecklistId,
+    ...(Array.isArray(row.checklistRowIds) ? row.checklistRowIds : []),
+  ]);
+  const targetGapIds = uniqueValues([
+    row.targetGapId,
+    ...(Array.isArray(row.targetGapIds) ? row.targetGapIds : []),
+  ]);
+  const groupChecklistRows = Array.isArray(currentUnblocker.checklistRowIds) ? currentUnblocker.checklistRowIds : [];
+  const groupTargetGaps = Array.isArray(currentUnblocker.targetGapIds) ? currentUnblocker.targetGapIds : [];
+  if (checklistRowIds.some((item) => groupChecklistRows.includes(item))) return currentUnblocker;
+  if (targetGapIds.some((item) => groupTargetGaps.includes(item))) return currentUnblocker;
+  return null;
 }
 
 function rlhf93CompletionAuditDecoratedItem(item) {
@@ -16876,6 +17019,23 @@ function rlhf93CompletionAuditItemRoutes(item) {
     item?.collectionReadbackRoute,
     item?.readbackItemRoute,
     item?.releaseReportRoute,
+    ...(Array.isArray(item?.unblocker?.routes) ? item.unblocker.routes : []),
+    item?.unblocker?.packageManifest?.packageImportRoute,
+    item?.unblocker?.packageManifest?.packageDryRunImportRoute,
+    item?.unblocker?.packageManifest?.packageValidateOnlyImportRoute,
+    item?.unblocker?.packageManifest?.starterTemplateRoute,
+    item?.unblocker?.packageManifest?.fullTemplateRoute,
+    ...(Array.isArray(item?.unblocker?.packageManifest?.executionSequencePreview)
+      ? item.unblocker.packageManifest.executionSequencePreview.flatMap((step) => [
+          step.importRoute,
+          step.dryRunImportRoute,
+          step.validateOnlyImportRoute,
+          step.templateReadbackRoute,
+          step.collectionPlanRoute,
+          step.verificationRoute,
+          step.packageManifestItemRoute,
+        ])
+      : []),
     ...(Array.isArray(item?.evidenceRoutes) ? item.evidenceRoutes : []),
     ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
     ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
