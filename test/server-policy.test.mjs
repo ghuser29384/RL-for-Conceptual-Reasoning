@@ -12095,6 +12095,43 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(rawPackageReview.status, 400);
   assert.match(rawPackageReview.body.detail, /raw package content/);
 
+  const mismatchedPackageReviewHash = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      publicDatasetPackageReview: {
+        ...packageReviewPayload.publicDatasetPackageReview,
+        id: "dataset-v0-1-package-review-mismatched-hash",
+        packageManifestHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        packageManifest: {
+          ...packageReviewPayload.publicDatasetPackageReview.packageManifest,
+          packageManifestHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
+      },
+    }),
+  });
+  assert.equal(mismatchedPackageReviewHash.status, 400);
+  assert.match(mismatchedPackageReviewHash.body.detail, /packageManifestHash must equal sha256\(canonical packageManifest\)/);
+
+  const driftedInnerPackageReviewHash = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      publicDatasetPackageReview: {
+        ...packageReviewPayload.publicDatasetPackageReview,
+        id: "dataset-v0-1-package-review-inner-hash-drift",
+        packageManifest: {
+          ...packageReviewPayload.publicDatasetPackageReview.packageManifest,
+          packageManifestHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        },
+      },
+    }),
+  });
+  assert.equal(driftedInnerPackageReviewHash.status, 400);
+  assert.match(driftedInnerPackageReviewHash.body.detail, /packageManifestHash must match packageManifest\.packageManifestHash/);
+
   const packageReview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/public-dataset-package-reviews",

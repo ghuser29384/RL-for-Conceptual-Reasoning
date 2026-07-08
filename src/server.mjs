@@ -2151,9 +2151,19 @@ function validatePublicDatasetPackageReviewResource(resource) {
   if (rawContentPaths.length) {
     return invalid(`publicDatasetPackageReview cannot include raw package content fields: ${rawContentPaths.join(", ")}`);
   }
+  if (!String(resource.packageManifestHash ?? "").startsWith("sha256:")) {
+    return invalid("publicDatasetPackageReview.packageManifestHash must start with sha256:");
+  }
   const manifest = resource.packageManifest;
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
     return invalid("publicDatasetPackageReview.packageManifest must be an object");
+  }
+  const expectedManifestHash = publicDatasetPackageReviewExpectedManifestHash(resource);
+  if (resource.packageManifestHash !== expectedManifestHash) {
+    return invalid("publicDatasetPackageReview.packageManifestHash must equal sha256(canonical packageManifest)");
+  }
+  if (manifest.packageManifestHash && manifest.packageManifestHash !== expectedManifestHash) {
+    return invalid("publicDatasetPackageReview.packageManifest.packageManifestHash must match packageManifestHash");
   }
   const files = Array.isArray(manifest.files) ? manifest.files : [];
   const missingFileFields = [];
@@ -2197,6 +2207,59 @@ function validatePublicDatasetPackageReviewResource(resource) {
     return invalid("blocked_until_release_gates_close requires a release-gate-blocked package review status");
   }
   return { ok: true };
+}
+
+function publicDatasetPackageReviewExpectedManifestHash(resource) {
+  return `sha256:${sha256(canonicalJson(publicDatasetPackageReviewHashPayload(resource)))}`;
+}
+
+function publicDatasetPackageReviewHashPayload(resource) {
+  const manifest = resource.packageManifest ?? {};
+  return {
+    releaseId: manifest.releaseId ?? resource.releaseId ?? null,
+    artifactName: manifest.artifactName ?? resource.artifactName ?? publicDatasetArtifactName,
+    artifactKind: resource.artifactKind ?? "expert_rated_position_critique_dataset",
+    packageValidationStatus: resource.packageValidationStatus ?? null,
+    releasePackageStatus: resource.releasePackageStatus ?? null,
+    publicationGateStatus: resource.publicationGateStatus ?? null,
+    packageStepReadbackRoutes: Array.isArray(manifest.packageStepReadbackRoutes)
+      ? manifest.packageStepReadbackRoutes
+      : Array.isArray(resource.packageStepReadbackRoutes)
+        ? resource.packageStepReadbackRoutes
+        : [],
+    sourcePackageManifestRoutes: Array.isArray(manifest.sourcePackageManifestRoutes)
+      ? manifest.sourcePackageManifestRoutes
+      : Array.isArray(resource.sourcePackageManifestRoutes)
+        ? resource.sourcePackageManifestRoutes
+        : [],
+    sourceRunbookGroupRoutes: Array.isArray(manifest.sourceRunbookGroupRoutes)
+      ? manifest.sourceRunbookGroupRoutes
+      : Array.isArray(resource.sourceRunbookGroupRoutes)
+        ? resource.sourceRunbookGroupRoutes
+        : [],
+    sourceActionGroupRoutes: Array.isArray(manifest.sourceActionGroupRoutes)
+      ? manifest.sourceActionGroupRoutes
+      : Array.isArray(resource.sourceActionGroupRoutes)
+        ? resource.sourceActionGroupRoutes
+        : [],
+    files: (Array.isArray(manifest.files) ? manifest.files : []).map((file) => ({
+      expectedFilename: file.expectedFilename,
+      artifactKind: file.artifactKind,
+      fileFormat: file.fileFormat,
+      submittedContentHash: file.submittedContentHash,
+      validationStatus: file.validationStatus,
+      contentStatus: file.contentStatus,
+    })),
+    unexpectedFiles: Array.isArray(manifest.unexpectedFiles)
+      ? manifest.unexpectedFiles.map((file) => ({
+          sequence: file.sequence,
+          expectedFilename: file.expectedFilename,
+          submittedContentHash: file.submittedContentHash,
+          submittedHash: file.submittedHash,
+          contentProvided: file.contentProvided,
+        }))
+      : [],
+  };
 }
 
 function publicDatasetPackageReviewRawContentPaths(value, path = "") {
