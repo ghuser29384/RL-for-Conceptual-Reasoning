@@ -1168,6 +1168,14 @@ const workflowEvidenceCollections = [
     summary: "Read-only RLHF91 model-evaluation reproducibility and prompt/model-run provenance checklist rows.",
   },
   {
+    id: "model-run-provenance",
+    label: "Model run provenance",
+    endpoint: "/api/v1/model-run-provenance",
+    resourceKey: "modelRunProvenanceRow",
+    group: "Release",
+    summary: "Read-only model-run provenance drilldown over leaderboard and submitted model-evaluation artifact evidence.",
+  },
+  {
     id: "prompt-track-separation",
     label: "Prompt track separation",
     endpoint: "/api/v1/prompt-track-separation",
@@ -8029,7 +8037,7 @@ function workflowReadbackPanel(collection) {
         </div>`
       : "";
   const derivedChecklistFilters =
-    isDerivedChecklistCollection(collection)
+    isDerivedChecklistCollection(collection) || isModelRunProvenanceCollection(collection)
       ? `<div class="workflowReadbackControls">
           <label>
             <span>Evidence id</span>
@@ -8363,6 +8371,18 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Policy rows", workflowCountMapSummary(counts.byWorkflowPolicyId)],
     ];
   }
+  if (collection.id === "model-run-provenance") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    return [
+      ["Provenance status", humanize(result.releaseUseStatus ?? "not reported")],
+      ["Rows", `${counts.rows ?? result.count ?? 0} returned`],
+      ["Open rows", counts.openRows ?? "not reported"],
+      ["With inference config", counts.runsWithInferenceConfig ?? "not reported"],
+      ["With run environment", counts.runsWithEnvironment ?? "not reported"],
+      ["Review reasons", counts.reviewReasonCount ?? "not reported"],
+      ["Row kinds", workflowCountMapSummary(counts.byRowKind)],
+    ];
+  }
   if (collection.id === "target-data-jsonl-template") {
     const coverage = result.expansionCoverage ?? null;
     return [
@@ -8586,6 +8606,9 @@ function workflowCollectionPreview(collection, previewItems) {
   }
   if (collection.id === "workflow-gates") {
     return `<div class="operatorActionPreview">${previewItems.map(workflowGateDefinitionPreviewRow).join("")}</div>`;
+  }
+  if (collection.id === "model-run-provenance") {
+    return `<div class="operatorActionPreview">${previewItems.map(modelRunProvenancePreviewRow).join("")}</div>`;
   }
   if (collection.id === "target-gaps") {
     return `<div class="operatorActionPreview">${previewItems.map(targetGapPreviewRow).join("")}</div>`;
@@ -9377,6 +9400,44 @@ function metaphilosophySourceWorkbenchReadinessPreviewRow(item) {
         ["Review reasons", reviewReasons],
         ["Boundary", item.nonPromotionBoundary ?? "Source intake remains admin-only and non-promotional."],
         ["Completion", item.completionEvidence ?? "Verify through /api/release/report."],
+      ])}
+    </article>
+  `;
+}
+
+function modelRunProvenancePreviewRow(item) {
+  const reviewReasons =
+    Array.isArray(item.reviewReasons) && item.reviewReasons.length ? item.reviewReasons.slice(0, 5).join(", ") : "none";
+  const parserLinks =
+    Array.isArray(item.promptParserLinkReadbackRoutes) && item.promptParserLinkReadbackRoutes.length
+      ? item.promptParserLinkReadbackRoutes.slice(0, 4).join(", ")
+      : "not linked";
+  const route =
+    item.modelInferenceConfigReadbackRoute ??
+    item.modelRunEnvironmentReadbackRoute ??
+    item.evaluationRunReadbackRoute ??
+    item.readbackItemRoute ??
+    "not available";
+  return `
+    <article class="operatorActionCard">
+      <div class="operatorActionCardHeader">
+        <div>
+          <strong>${escapeHtml(item.evaluationRunId ?? item.id ?? "Model run provenance")}</strong>
+          <span>${escapeHtml(item.requestedModelAlias ?? humanize(item.rowKind ?? "model run"))}</span>
+        </div>
+        <span>${escapeHtml(humanize(item.status ?? item.releaseUseStatus ?? "reported"))}</span>
+      </div>
+      ${metricList([
+        ["Row kind", humanize(item.rowKind ?? "model run provenance")],
+        ["Resolved snapshot", item.resolvedModelSnapshot ?? item.modelSnapshot ?? "not submitted"],
+        ["Inference config", item.modelInferenceConfigId ?? "not submitted"],
+        ["Run environment", item.modelRunEnvironmentId ?? "not submitted"],
+        ["Provider endpoint", item.providerEndpoint ?? "not submitted"],
+        ["Reasoning budget", item.reasoningBudget ?? "not submitted"],
+        ["Policy", item.modelRunReproducibilityPolicyId ?? "seed/default"],
+        ["Review reasons", reviewReasons],
+        ["Primary route", route],
+        ["Parser/prompt links", parserLinks],
       ])}
     </article>
   `;
@@ -13968,7 +14029,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       state.workflowRaterProfileTopicFilter = "";
       state.workflowRaterProfileEvidenceStatusFilter = "";
     }
-    if (!isDerivedChecklistCollection(collection)) {
+    if (!isDerivedChecklistCollection(collection) && !isModelRunProvenanceCollection(collection)) {
       state.workflowDerivedChecklistEvidenceFilter = "";
       state.workflowDerivedChecklistStatusFilter = "";
       state.workflowDerivedChecklistSourceStatusFilter = "";
@@ -16383,10 +16444,15 @@ function isWorkflowRouteFilterCollection(collection) {
     collection.id === "score-explanation-audit" ||
     collection.id === "prompt-track-separation" ||
     collection.id === "critique-generation-evaluation" ||
+    isModelRunProvenanceCollection(collection) ||
     isDerivedChecklistCollection(collection) ||
     isOperatorPlanCollection(collection) ||
     isTargetGapCollection(collection)
   );
+}
+
+function isModelRunProvenanceCollection(collection) {
+  return collection.id === "model-run-provenance";
 }
 
 function isDerivedChecklistCollection(collection) {
@@ -16563,6 +16629,13 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowDerivedChecklistStatusFilter) url.searchParams.set("status", state.workflowDerivedChecklistStatusFilter);
     if (state.workflowDerivedChecklistSourceStatusFilter) url.searchParams.set("sourceStatus", state.workflowDerivedChecklistSourceStatusFilter);
     if (state.workflowDerivedChecklistReviewReasonFilter) url.searchParams.set("reviewReason", state.workflowDerivedChecklistReviewReasonFilter);
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
+  if (isModelRunProvenanceCollection(collection)) {
+    if (state.workflowDerivedChecklistEvidenceFilter) url.searchParams.set("id", state.workflowDerivedChecklistEvidenceFilter);
+    if (state.workflowDerivedChecklistStatusFilter) url.searchParams.set("status", state.workflowDerivedChecklistStatusFilter);
+    if (state.workflowDerivedChecklistReviewReasonFilter) url.searchParams.set("reviewReason", state.workflowDerivedChecklistReviewReasonFilter);
+    if (state.workflowPromptTrackRunFilter) url.searchParams.set("evaluationRunId", state.workflowPromptTrackRunFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if (collection.id === "october-completion-runbook") {

@@ -8028,6 +8028,15 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  const modelRunProvenanceMatch = url.pathname.match(/^\/api\/v1\/model-run-provenance(?:\/([^/]+))?$/);
+  if (request.method === "GET" && modelRunProvenanceMatch) {
+    const itemId = modelRunProvenanceMatch[1] ? decodeURIComponent(modelRunProvenanceMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      modelRunProvenanceReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
   const promptTrackSeparationMatch = url.pathname.match(/^\/api\/v1\/prompt-track-separation(?:\/([^/]+))?$/);
   if (request.method === "GET" && promptTrackSeparationMatch) {
     const itemId = promptTrackSeparationMatch[1] ? decodeURIComponent(promptTrackSeparationMatch[1]) : null;
@@ -11658,6 +11667,272 @@ function derivedChecklistItemRoutes(item) {
     item?.releaseReportRoute,
     ...(Array.isArray(item?.releaseReportSectionRoutes) ? item.releaseReportSectionRoutes : []),
   ]);
+}
+
+function modelRunProvenanceReadback(report, options = {}) {
+  const filters = modelRunProvenanceFilters(options.searchParams);
+  const allItems = modelRunProvenanceItems(report);
+  const filteredItems = allItems.filter((item) => modelRunProvenanceMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) =>
+          item.id === options.itemId ||
+          item.rowId === options.itemId ||
+          item.evaluationRunId === options.itemId ||
+          item.modelInferenceConfigId === options.itemId ||
+          item.modelRunEnvironmentId === options.itemId,
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const provenance = report.leaderboardReport?.modelRunProvenance ?? {};
+  const artifactEvidence = report.modelEvaluationArtifactEvidence?.modelRunProvenanceEvidence ?? {};
+  return {
+    id: `model-run-provenance-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.modelEvaluationReproducibilityChecklist?.id ?? report.leaderboardReport?.id ?? null,
+    releaseUseStatus: report.modelEvaluationReproducibilityChecklist?.releaseUseStatus ?? provenance.releaseUseStatus ?? "model_run_provenance_missing",
+    resourceKey: "modelRunProvenanceRow",
+    policy: {
+      scope:
+        "Read-only RLHF91 model-run provenance projection derived from existing leaderboard and model-evaluation artifact evidence; it does not create model runs, execute evaluations, append workflow evidence, or support release claims by itself.",
+      access:
+        "Admin/auditor readback only because rows expose model snapshots, provider endpoints, inference settings, run environments, parser links, and release-review blockers.",
+      nonMutationBoundary:
+        "Use the existing model-evaluation, model-inference-config, model-run-environment, prompt-template, parser-config, and leaderboard routes to submit evidence; this route only links and summarizes the current state.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: modelRunProvenanceCounts(allItems, provenance, artifactEvidence),
+    filteredCounts: modelRunProvenanceCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function modelRunProvenanceItems(report) {
+  const routeBase = "/api/v1/model-run-provenance";
+  const provenance = report.leaderboardReport?.modelRunProvenance ?? {};
+  const leaderboardId = report.leaderboardReport?.id ?? null;
+  const checklistId = report.modelEvaluationReproducibilityChecklist?.id ?? null;
+  const artifactEvidence = report.modelEvaluationArtifactEvidence?.modelRunProvenanceEvidence ?? {};
+  const artifactEvidenceId = report.modelEvaluationArtifactEvidence?.id ?? null;
+  const items = [];
+  for (const [index, row] of (Array.isArray(provenance.perModelRows) ? provenance.perModelRows : []).entries()) {
+    const evaluationRunId = row.evaluationRunId ?? `leaderboard-run-${index + 1}`;
+    const encodedRunId = encodeURIComponent(evaluationRunId);
+    const id = evaluationRunId;
+    const modelInferenceConfigId = row.modelInferenceConfigId ?? null;
+    const modelRunEnvironmentId = row.modelRunEnvironmentId ?? null;
+    const modelRunReproducibilityPolicyId = row.modelRunReproducibilityPolicyId ?? provenance.modelRunReproducibilityPolicyId ?? null;
+    const reviewReasons = Array.isArray(row.reviewReasons) ? row.reviewReasons : [];
+    items.push({
+      ...row,
+      id,
+      rowId: id,
+      sequence: items.length + 1,
+      rowKind: "leaderboard_model_run_provenance",
+      sourceEvidenceId: report.leaderboardReport?.id ?? null,
+      checklistId,
+      releaseUseStatus: provenance.releaseUseStatus ?? "leaderboard_model_run_provenance_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      commonSettingStatus: provenance.commonSettingStatus ?? null,
+      evaluationRunId,
+      requestedModelAlias: row.requestedModelAlias ?? null,
+      resolvedModelSnapshot: row.resolvedModelSnapshot ?? row.modelSnapshot ?? null,
+      modelInferenceConfigId,
+      modelRunEnvironmentId,
+      modelRunReproducibilityPolicyId,
+      modelRunReproducibilityPolicyReleaseUseStatus: provenance.modelRunReproducibilityPolicyReleaseUseStatus ?? null,
+      reviewReasons,
+      reviewReasonCount: reviewReasons.length,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodedRunId}`,
+      releaseReportRoute: "/api/release/report",
+      checklistReadbackRoute: "/api/v1/model-evaluation-reproducibility-checklist",
+      checklistItemReadbackRoute: "/api/v1/model-evaluation-reproducibility-checklist/leaderboard_model_run_provenance",
+      releaseReportSectionRoutes: [leaderboardId, checklistId].filter(Boolean).map((idValue) => `/api/v1/release-report-sections/${encodeURIComponent(idValue)}`),
+      evaluationRunReadbackRoute: `/api/v1/evaluations/${encodedRunId}`,
+      modelEvaluationPredictionsReadbackRoute: `/api/v1/evaluations/${encodedRunId}/predictions`,
+      leaderboardReadbackRoute: leaderboardId ? `/api/v1/leaderboards/${encodeURIComponent(leaderboardId)}` : "/api/v1/leaderboards",
+      modelInferenceConfigReadbackRoute: modelInferenceConfigId ? `/api/v1/model-inference-configs/${encodeURIComponent(modelInferenceConfigId)}` : null,
+      modelRunEnvironmentReadbackRoute: modelRunEnvironmentId ? `/api/v1/model-run-environments/${encodeURIComponent(modelRunEnvironmentId)}` : null,
+      modelRunReproducibilityPolicyReadbackRoute: modelRunReproducibilityPolicyId
+        ? `/api/v1/model-run-reproducibility-policies/${encodeURIComponent(modelRunReproducibilityPolicyId)}`
+        : "/api/v1/model-run-reproducibility-policies",
+      operatorActionRoute:
+        "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Aleaderboard_model_run_provenance",
+      operatorEvidenceTemplateReadbackRoute:
+        "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance",
+      promptParserLinkReadbackRoutes: modelRunParserExtractorReadbackRoutes(row.parserExtractorVersionLinks),
+    });
+  }
+
+  if (artifactEvidence && Object.keys(artifactEvidence).length) {
+    const id = artifactEvidence.submittedArtifactId ?? "submitted-model-run-provenance";
+    const evaluationRunId = artifactEvidence.evaluationRunId ?? null;
+    const encodedRunId = evaluationRunId ? encodeURIComponent(evaluationRunId) : null;
+    const modelInferenceConfigId = artifactEvidence.modelInferenceConfigId ?? null;
+    const modelRunEnvironmentId = artifactEvidence.modelRunEnvironmentId ?? null;
+    const modelRunReproducibilityPolicyId = artifactEvidence.modelRunReproducibilityPolicyId ?? null;
+    const reviewChecks = Array.isArray(artifactEvidence.reviewChecks) ? artifactEvidence.reviewChecks : [];
+    const reviewReasons = uniqueValues(reviewChecks.map((check) => check.field));
+    items.push({
+      ...artifactEvidence,
+      id,
+      rowId: id,
+      sequence: items.length + 1,
+      rowKind: "submitted_artifact_model_run_provenance",
+      sourceEvidenceId: artifactEvidenceId,
+      checklistId,
+      releaseUseStatus: report.modelEvaluationArtifactEvidence?.releaseUseStatus ?? "model_evaluation_artifact_evidence_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      evaluationRunId,
+      modelInferenceConfigId,
+      modelRunEnvironmentId,
+      modelRunReproducibilityPolicyId,
+      reviewReasons,
+      reviewReasonCount: reviewReasons.length,
+      reviewCheckCount: reviewChecks.length,
+      failedReviewCheckCount: reviewChecks.filter((check) => check.status && check.status !== "matched").length,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodeURIComponent(id)}`,
+      releaseReportRoute: "/api/release/report",
+      checklistReadbackRoute: "/api/v1/model-evaluation-reproducibility-checklist",
+      checklistItemReadbackRoute: "/api/v1/model-evaluation-reproducibility-checklist/submitted_run_inference_environment_provenance",
+      releaseReportSectionRoutes: [artifactEvidenceId, checklistId].filter(Boolean).map((idValue) => `/api/v1/release-report-sections/${encodeURIComponent(idValue)}`),
+      evaluationRunReadbackRoute: encodedRunId ? `/api/v1/evaluations/${encodedRunId}` : null,
+      modelEvaluationPredictionsReadbackRoute: encodedRunId ? `/api/v1/evaluations/${encodedRunId}/predictions` : null,
+      modelInferenceConfigReadbackRoute: modelInferenceConfigId ? `/api/v1/model-inference-configs/${encodeURIComponent(modelInferenceConfigId)}` : null,
+      modelRunEnvironmentReadbackRoute: modelRunEnvironmentId ? `/api/v1/model-run-environments/${encodeURIComponent(modelRunEnvironmentId)}` : null,
+      modelRunReproducibilityPolicyReadbackRoute: modelRunReproducibilityPolicyId
+        ? `/api/v1/model-run-reproducibility-policies/${encodeURIComponent(modelRunReproducibilityPolicyId)}`
+        : "/api/v1/model-run-reproducibility-policies",
+      operatorActionRoute:
+        "/api/v1/operator-action-items?relatedSubmitActionId=model_evaluation_reproducibility%3Asubmit%3Amodel_inference_config",
+      modelInferenceConfigSubmitActionRoute:
+        "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Amodel_inference_config",
+      modelRunEnvironmentSubmitActionRoute:
+        "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Amodel_run_environment",
+      promptParserLinkReadbackRoutes: modelRunParserExtractorReadbackRoutes(artifactEvidence.parserExtractorVersionLinks),
+    });
+  }
+  return items;
+}
+
+function modelRunParserExtractorReadbackRoutes(links) {
+  return uniqueValues((Array.isArray(links) ? links : []).flatMap((link) => {
+    const value = typeof link === "string" ? link : link?.id ?? link?.parserConfigId ?? link?.promptTemplateId ?? null;
+    if (!value) return [];
+    return [`/api/v1/parser-configs/${encodeURIComponent(value)}`, `/api/v1/prompt-templates/${encodeURIComponent(value)}`];
+  }));
+}
+
+function modelRunProvenanceFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    rowKind: value("rowKind") ?? value("kind"),
+    status: value("status"),
+    evaluationRunId: value("evaluationRunId") ?? value("runId"),
+    requestedModelAlias: value("requestedModelAlias"),
+    resolvedModelSnapshot: value("resolvedModelSnapshot"),
+    modelSnapshot: value("modelSnapshot"),
+    modelInferenceConfigId: value("modelInferenceConfigId"),
+    modelRunEnvironmentId: value("modelRunEnvironmentId"),
+    providerEndpoint: value("providerEndpoint"),
+    reviewReason: value("reviewReason"),
+    route: value("route"),
+  };
+}
+
+function modelRunProvenanceMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.rowId === value || item.evaluationRunId === value;
+    if (key === "status") return modelRunProvenanceMatchesStatus(item, value);
+    if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
+    if (key === "route") return modelRunProvenanceItemRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function modelRunProvenanceMatchesStatus(item, value) {
+  if (value === "open") return modelRunProvenanceItemIsOpen(item);
+  if (value === "closed") return !modelRunProvenanceItemIsOpen(item);
+  return [
+    item.status,
+    item.releaseUseStatus,
+    item.commonSettingStatus,
+    item.modelRunReproducibilityPolicyReleaseUseStatus,
+  ].includes(value);
+}
+
+function modelRunProvenanceItemIsOpen(item) {
+  if ((item.reviewReasonCount ?? 0) > 0) return true;
+  const values = [item.status, item.releaseUseStatus, item.commonSettingStatus].map((value) => String(value ?? ""));
+  return values.some(
+    (value) =>
+      value.includes("review") ||
+      value.includes("missing") ||
+      value.includes("no_submitted") ||
+      value.includes("blocked") ||
+      value.includes("failed"),
+  );
+}
+
+function modelRunProvenanceItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.checklistReadbackRoute,
+    item?.checklistItemReadbackRoute,
+    item?.evaluationRunReadbackRoute,
+    item?.modelEvaluationPredictionsReadbackRoute,
+    item?.leaderboardReadbackRoute,
+    item?.modelInferenceConfigReadbackRoute,
+    item?.modelRunEnvironmentReadbackRoute,
+    item?.modelRunReproducibilityPolicyReadbackRoute,
+    item?.operatorActionRoute,
+    item?.operatorEvidenceTemplateReadbackRoute,
+    item?.modelInferenceConfigSubmitActionRoute,
+    item?.modelRunEnvironmentSubmitActionRoute,
+    ...(Array.isArray(item?.releaseReportSectionRoutes) ? item.releaseReportSectionRoutes : []),
+    ...(Array.isArray(item?.promptParserLinkReadbackRoutes) ? item.promptParserLinkReadbackRoutes : []),
+  ]);
+}
+
+function modelRunProvenanceCounts(items, provenance = {}, artifactEvidence = {}) {
+  return {
+    submittedModelInferenceConfigCount: provenance.submittedModelInferenceConfigCount ?? undefined,
+    submittedModelRunEnvironmentCount: provenance.submittedModelRunEnvironmentCount ?? undefined,
+    availableModelInferenceConfigCount: provenance.availableModelInferenceConfigCount ?? undefined,
+    availableModelRunEnvironmentCount: provenance.availableModelRunEnvironmentCount ?? undefined,
+    rows: items.length,
+    openRows: items.filter(modelRunProvenanceItemIsOpen).length,
+    closedRows: items.filter((item) => !modelRunProvenanceItemIsOpen(item)).length,
+    leaderboardRows: items.filter((item) => item.rowKind === "leaderboard_model_run_provenance").length,
+    submittedArtifactRows: items.filter((item) => item.rowKind === "submitted_artifact_model_run_provenance").length,
+    runsWithInferenceConfig: items.filter((item) => item.modelInferenceConfigId).length,
+    runsWithEnvironment: items.filter((item) => item.modelRunEnvironmentId).length,
+    reviewReasonCount: sumNumericField(items, "reviewReasonCount"),
+    failedReviewCheckCount: sumNumericField(items, "failedReviewCheckCount"),
+    artifactReviewCheckCount: Array.isArray(artifactEvidence.reviewChecks) ? artifactEvidence.reviewChecks.length : undefined,
+    byRowKind: countItemsBy(items, "rowKind"),
+    byStatus: countItemsBy(items, "status"),
+    byReleaseUseStatus: countItemsBy(items, "releaseUseStatus"),
+    byEvaluationRunId: countItemsBy(items, "evaluationRunId"),
+    byRequestedModelAlias: countItemsBy(items, "requestedModelAlias"),
+    byResolvedModelSnapshot: countItemsBy(items, "resolvedModelSnapshot"),
+    byProviderEndpoint: countItemsBy(items, "providerEndpoint"),
+    byReviewReason: countExpandedValues(items, "reviewReasons"),
+    byRoute: countValues(items.flatMap(modelRunProvenanceItemRoutes)),
+  };
 }
 
 function scoreExplanationAuditReadback(report, options = {}) {

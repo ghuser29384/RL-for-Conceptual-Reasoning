@@ -3311,6 +3311,15 @@ test("RLHF91 documented v1 API endpoints have deployable Vercel wrappers", () =>
   assert.deepEqual(missing, []);
 });
 
+test("RLHF93 documented v1 API endpoints have deployable Vercel wrappers", () => {
+  const specSource = readFileSync("RLHF Conceptual Reasoning93.md", "utf8");
+  const documentedRoutes = documentedV1ApiRoutesFromSpec(specSource);
+  const missing = documentedRoutes.filter((route) => !apiRouteFileExists(route));
+
+  assert.ok(documentedRoutes.length >= 195);
+  assert.deepEqual(missing, []);
+});
+
 test("RLHF90 documented v1 API endpoints route through auth instead of falling through", async () => {
   const specSource = readFileSync("RLHF Conceptual Reasoning90.md", "utf8");
   const context = createApiContext({ sessionSecret: "unit-test-secret" });
@@ -3328,6 +3337,21 @@ test("RLHF90 documented v1 API endpoints route through auth instead of falling t
 
 test("RLHF91 documented v1 API endpoints route through auth instead of falling through", async () => {
   const specSource = readFileSync("RLHF Conceptual Reasoning91.md", "utf8");
+  const context = createApiContext({ sessionSecret: "unit-test-secret" });
+  const misses = [];
+
+  for (const endpoint of documentedV1ApiEndpointsFromSpec(specSource)) {
+    const method = documentedEndpointMethod(endpoint);
+    const url = concreteDocumentedEndpointUrl(endpoint.route);
+    const response = await invokeApi(context, { method, url });
+    if (response.status === 404) misses.push(`${method} ${endpoint.route}`);
+  }
+
+  assert.deepEqual(misses, []);
+});
+
+test("RLHF93 documented v1 API endpoints route through auth instead of falling through", async () => {
+  const specSource = readFileSync("RLHF Conceptual Reasoning93.md", "utf8");
   const context = createApiContext({ sessionSecret: "unit-test-secret" });
   const misses = [];
 
@@ -5481,6 +5505,12 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/model-evaluation-reproducibility-checklist"',
     'resourceKey: "modelEvaluationReproducibilityChecklistRow"',
     "Read-only RLHF91 model-evaluation reproducibility and prompt/model-run provenance checklist rows.",
+    'id: "model-run-provenance"',
+    'endpoint: "/api/v1/model-run-provenance"',
+    'resourceKey: "modelRunProvenanceRow"',
+    "Read-only model-run provenance drilldown over leaderboard and submitted model-evaluation artifact evidence.",
+    "function modelRunProvenancePreviewRow(item)",
+    "isModelRunProvenanceCollection(collection)",
     'id: "prompt-track-separation"',
     'endpoint: "/api/v1/prompt-track-separation"',
     'resourceKey: "promptTrackSeparationRow"',
@@ -5830,9 +5860,13 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     "derivedChecklistPreviewRow",
     "function derivedChecklistPreviewRow(item)",
     "isDerivedChecklistCollection(collection)",
+    "isModelRunProvenanceCollection(collection)",
     "workflowDerivedChecklistEvidenceFilter",
     "workflowDerivedChecklistSourceStatusFilter",
     "workflowDerivedChecklistReviewReasonFilter",
+    "if (isModelRunProvenanceCollection(collection))",
+    'url.searchParams.set("id", state.workflowDerivedChecklistEvidenceFilter)',
+    'url.searchParams.set("evaluationRunId", state.workflowPromptTrackRunFilter)',
     "item.releaseReportSectionRoutes",
     "item.targetGapCollectionPlanRoutes",
     "item.targetGapTemplateReadbackRoutes",
@@ -8220,6 +8254,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(deniedModelEvaluationReproChecklist.status, 403);
 
+  const deniedModelRunProvenance = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedModelRunProvenance.status, 403);
+
   const deniedScoreExplanationAudit = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/score-explanation-audit",
@@ -10477,6 +10518,103 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(modelEvaluationReproById.body.count, 1);
   assert.equal(modelEvaluationReproById.body.item.id, "prompt_parser_and_injection_controls");
   assert.ok(modelEvaluationReproById.body.item.releaseReportSectionRoutes.includes("/api/v1/release-report-sections/prompt-parser-provenance-october-2026-demo"));
+
+  const modelRunProvenance = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(modelRunProvenance.status, 200, JSON.stringify(modelRunProvenance.body));
+  assert.equal(modelRunProvenance.body.resourceKey, "modelRunProvenanceRow");
+  assert.equal(modelRunProvenance.body.count, 3);
+  assert.equal(modelRunProvenance.body.totalCount, 3);
+  assert.equal(modelRunProvenance.body.counts.leaderboardRows, 2);
+  assert.equal(modelRunProvenance.body.counts.submittedArtifactRows, 1);
+  assert.equal(modelRunProvenance.body.counts.openRows, 3);
+  assert.equal(modelRunProvenance.body.counts.runsWithInferenceConfig, 0);
+  assert.equal(modelRunProvenance.body.counts.runsWithEnvironment, 0);
+  assert.equal(modelRunProvenance.body.counts.byRowKind.leaderboard_model_run_provenance, 2);
+  assert.equal(modelRunProvenance.body.counts.byRowKind.submitted_artifact_model_run_provenance, 1);
+  assert.equal(modelRunProvenance.body.counts.byRoute["/api/v1/model-run-provenance"], 3);
+  assert.match(modelRunProvenance.body.policy.scope, /model-run provenance projection/);
+  assert.match(modelRunProvenance.body.policy.nonMutationBoundary, /existing model-evaluation/);
+  assert.ok(modelRunProvenance.body.items.some((item) => item.id === "eval-full-rubric-demo"));
+  assert.ok(modelRunProvenance.body.items.some((item) => item.id === "submitted-model-run-provenance"));
+
+  const modelRunProvenanceOpen = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance?status=open",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(modelRunProvenanceOpen.status, 200, JSON.stringify(modelRunProvenanceOpen.body));
+  assert.equal(modelRunProvenanceOpen.body.count, 3);
+  assert.equal(modelRunProvenanceOpen.body.filteredCounts.openRows, 3);
+
+  const modelRunProvenanceByRun = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance?evaluationRunId=eval-full-rubric-demo",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(modelRunProvenanceByRun.status, 200, JSON.stringify(modelRunProvenanceByRun.body));
+  assert.equal(modelRunProvenanceByRun.body.count, 1);
+  assert.equal(modelRunProvenanceByRun.body.items[0].evaluationRunId, "eval-full-rubric-demo");
+  assert.ok(modelRunProvenanceByRun.body.items[0].reviewReasons.includes("modelInferenceConfig"));
+  assert.ok(modelRunProvenanceByRun.body.items[0].reviewReasons.includes("modelRunEnvironment"));
+
+  const modelRunProvenanceByReviewReason = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance?reviewReason=modelInferenceConfig",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(modelRunProvenanceByReviewReason.status, 200, JSON.stringify(modelRunProvenanceByReviewReason.body));
+  assert.equal(modelRunProvenanceByReviewReason.body.count, 2);
+  assert.equal(modelRunProvenanceByReviewReason.body.filteredCounts.byReviewReason.modelInferenceConfig, 2);
+
+  const modelRunProvenanceByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/model-run-provenance?route=${encodeURIComponent("/api/v1/evaluations/eval-full-rubric-demo/predictions")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(modelRunProvenanceByRoute.status, 200, JSON.stringify(modelRunProvenanceByRoute.body));
+  assert.equal(modelRunProvenanceByRoute.body.count, 1);
+  assert.equal(modelRunProvenanceByRoute.body.filteredCounts.byRoute["/api/v1/evaluations/eval-full-rubric-demo/predictions"], 1);
+
+  const modelRunProvenanceById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance/eval-full-rubric-demo",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(modelRunProvenanceById.status, 200, JSON.stringify(modelRunProvenanceById.body));
+  assert.equal(modelRunProvenanceById.body.count, 1);
+  assert.equal(modelRunProvenanceById.body.item.id, "eval-full-rubric-demo");
+  assert.equal(modelRunProvenanceById.body.item.evaluationRunReadbackRoute, "/api/v1/evaluations/eval-full-rubric-demo");
+  assert.equal(modelRunProvenanceById.body.item.modelEvaluationPredictionsReadbackRoute, "/api/v1/evaluations/eval-full-rubric-demo/predictions");
+  assert.equal(
+    modelRunProvenanceById.body.item.checklistItemReadbackRoute,
+    "/api/v1/model-evaluation-reproducibility-checklist/leaderboard_model_run_provenance",
+  );
+
+  const submittedModelRunProvenance = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance/submitted-model-run-provenance",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(submittedModelRunProvenance.status, 200, JSON.stringify(submittedModelRunProvenance.body));
+  assert.equal(submittedModelRunProvenance.body.item.rowKind, "submitted_artifact_model_run_provenance");
+  assert.ok(submittedModelRunProvenance.body.item.failedReviewCheckCount > 0);
+  assert.ok(submittedModelRunProvenance.body.item.reviewReasons.includes("modelInferenceConfigId"));
+  assert.equal(
+    submittedModelRunProvenance.body.item.modelRunEnvironmentSubmitActionRoute,
+    "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Amodel_run_environment",
+  );
+
+  const missingModelRunProvenance = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/model-run-provenance/missing-run",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(missingModelRunProvenance.status, 404);
+  assert.equal(missingModelRunProvenance.body.error, "artifact_not_found");
 
   const scoreExplanationAudit = await invokeApi(context, {
     method: "GET",
