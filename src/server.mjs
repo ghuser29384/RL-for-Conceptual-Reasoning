@@ -7907,6 +7907,26 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  const publicDatasetPublicationGateMatch = url.pathname.match(/^\/api\/v1\/public-dataset-publication-gate(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetPublicationGateMatch) {
+    const itemId = publicDatasetPublicationGateMatch[1] ? decodeURIComponent(publicDatasetPublicationGateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetPublicationGateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  const publicDatasetPackageFileTemplateMatch = url.pathname.match(/^\/api\/v1\/public-dataset-package-files\/template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetPackageFileTemplateMatch) {
+    const itemId = publicDatasetPackageFileTemplateMatch[1] ? decodeURIComponent(publicDatasetPackageFileTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetPackageFileTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/public-dataset-package-files/validate") {
+    await publicDatasetPackageFileValidationEndpoint(request, response, context);
+    return;
+  }
   const publicDatasetDownstreamLaunchMatch = url.pathname.match(/^\/api\/v1\/public-dataset-downstream-launches(?:\/([^/]+))?$/);
   if (request.method === "GET" && publicDatasetDownstreamLaunchMatch) {
     const itemId = publicDatasetDownstreamLaunchMatch[1] ? decodeURIComponent(publicDatasetDownstreamLaunchMatch[1]) : null;
@@ -12991,6 +13011,931 @@ function publicDatasetDownstreamLaunchGuardCounts(items) {
     byBlockingReadinessRowId: countExpandedValues(items, "blockingReadinessRowIds"),
     byBlockingPackageStepId: countExpandedValues(items, "blockingPackageStepIds"),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+const publicDatasetPublicationGateDefinitions = [
+  {
+    id: "target-data-ready",
+    gateKind: "target_data_ready",
+    label: "Target data ready for public dataset packaging",
+    readinessRowIds: ["release_cleared_position_critique_pairs"],
+    packageStepIds: ["target-data-package"],
+    releasePackageArtifactIds: ["release-cleared-position-critique-pairs"],
+    downstreamLaunchIds: [],
+    summary:
+      "Blocks publication until release-cleared position-critique pairs satisfy the Dataset v0.1 target-scale package requirements.",
+  },
+  {
+    id: "release-artifacts-ready",
+    gateKind: "release_artifacts_ready",
+    label: "Release artifacts ready for public dataset packaging",
+    readinessRowIds: [
+      "seven_dimension_labels",
+      "confidence_and_triggered_explanations",
+      "item_text_version_hashes",
+      "rating_context_snapshot_manifest",
+      "label_snapshot",
+      "split_manifest",
+      "corpus_manifest",
+    ],
+    packageStepIds: ["release-artifact-package"],
+    releasePackageArtifactIds: ["expert-labels", "item-version-provenance", "label-snapshot", "split-manifest", "corpus-manifest"],
+    downstreamLaunchIds: [],
+    summary:
+      "Blocks publication until labels, item/version provenance, label snapshot, split manifest, and corpus manifest are submitted and review-cleared.",
+  },
+  {
+    id: "public-documents-ready",
+    gateKind: "public_documentation_ready",
+    label: "Public documentation ready",
+    readinessRowIds: ["dataset_card", "methodology_report"],
+    packageStepIds: ["public-documentation"],
+    releasePackageArtifactIds: ["dataset-card", "methodology-report"],
+    downstreamLaunchIds: [],
+    summary: "Blocks publication until the dataset card and methodology report are submitted as append-only public documentation evidence.",
+  },
+  {
+    id: "hidden-protected-exclusions-ready",
+    gateKind: "hidden_protected_exclusions_ready",
+    label: "Hidden and protected material excluded",
+    readinessRowIds: ["hidden_protected_exclusions"],
+    packageStepIds: ["hidden-protected-exclusions"],
+    releasePackageArtifactIds: ["hidden-protected-exclusions"],
+    downstreamLaunchIds: [],
+    summary:
+      "Checks that hidden benchmark rows, protected validation labels, source/provenance metadata, rater identities, and unreleased adjudication notes remain excluded.",
+  },
+  {
+    id: "release-version-freeze-ready",
+    gateKind: "release_version_freeze_ready",
+    label: "Release version and freeze ready",
+    readinessRowIds: ["release_version_freeze"],
+    packageStepIds: ["release-version-freeze"],
+    releasePackageArtifactIds: ["release-version-manifest"],
+    downstreamLaunchIds: [],
+    summary: "Blocks publication until ReleaseVersion and ReleaseFreeze evidence bind the package to frozen release-critical artifacts.",
+  },
+  {
+    id: "downstream-surfaces-held",
+    gateKind: "public_first_downstream_hold",
+    label: "Downstream public surfaces held",
+    readinessRowIds: ["public_first_ladder_gate"],
+    packageStepIds: ["public-first-ladder"],
+    releasePackageArtifactIds: ["public-first-boundary"],
+    downstreamLaunchIds: ["public-leaderboard", "api-evaluator", "public-training-export", "judge-model-launch"],
+    summary:
+      "Keeps leaderboard, API evaluator, public training export, and judge-model launch behind Dataset v0.1 readiness and governed review.",
+  },
+  {
+    id: "publication-action-boundary",
+    gateKind: "publication_action_boundary",
+    label: "Publication action boundary",
+    readinessRowIds: "all",
+    packageStepIds: "all",
+    releasePackageArtifactIds: "all",
+    downstreamLaunchIds: "all",
+    summary:
+      "Aggregates every Dataset v0.1 blocker and confirms this preflight does not expose a publish mutation or waive release governance.",
+  },
+];
+
+function publicDatasetPublicationGateReadback(report, options = {}) {
+  const allItems = publicDatasetPublicationGateItems(report);
+  const filters = publicDatasetPublicationGateFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => publicDatasetPublicationGateMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) =>
+          item.id === options.itemId ||
+          item.gateKind === options.itemId ||
+          item.readinessRowIds?.includes(options.itemId) ||
+          item.packageStepIds?.includes(options.itemId) ||
+          item.releasePackageArtifactIds?.includes(options.itemId) ||
+          item.downstreamLaunchIds?.includes(options.itemId),
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = publicDatasetPublicationGateCounts(allItems);
+  const currentBlockingGate = allItems.find(publicDatasetPublicationGateItemIsOpen) ?? null;
+  const packageManifest = publicDatasetPackageManifestReadback(report);
+  const releasePackage = publicDatasetReleasePackageReadback(report);
+  const downstreamLaunches = publicDatasetDownstreamLaunchGuardReadback(report);
+  return {
+    id: `public-dataset-publication-gate-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetPublicationGate",
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    packageStatus: packageManifest.packageStatus ?? "public_dataset_package_status_missing",
+    releasePackageStatus: releasePackage.releasePackageStatus ?? "public_dataset_release_package_status_missing",
+    launchGuardStatus: downstreamLaunches.launchGuardStatus ?? "downstream_launch_status_missing",
+    publicationGateStatus: currentBlockingGate ? "public_dataset_publication_blocked" : "public_dataset_publication_ready_for_governed_review",
+    publicationBlocked: Boolean(currentBlockingGate),
+    publicationActionAvailable: false,
+    currentBlockingGateId: currentBlockingGate?.id ?? null,
+    currentBlockingGate,
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 publication preflight derived from /api/release/report, public dataset readiness, the package manifest, the release-package artifact manifest, and downstream launch guards.",
+      access:
+        "Admin/auditor readback only because rows expose release-governance ids, target-scale blockers, protected-split exclusions, public documentation status, and downstream launch blockers.",
+      authority:
+        "This projection cannot publish a dataset, create package files, launch downstream public surfaces, submit artifacts, deprotect hidden/protected content, or waive readiness/package/release-governance gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      publicDatasetReadiness: "/api/v1/public-dataset-readiness",
+      publicDatasetPackageManifest: "/api/v1/public-dataset-package-manifest",
+      publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
+      publicDatasetDownstreamLaunches: "/api/v1/public-dataset-downstream-launches",
+      publicFirstGate: "/api/v1/public-dataset-readiness/public_first_ladder_gate",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts: publicDatasetPublicationGateCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetPublicationGateItems(report) {
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
+  const packageManifest = publicDatasetPackageManifestReadback(report);
+  const packageItems = Array.isArray(packageManifest.items) ? packageManifest.items : [];
+  const packageById = new Map(packageItems.map((item) => [item.id, item]));
+  const releasePackage = publicDatasetReleasePackageReadback(report);
+  const releasePackageItems = Array.isArray(releasePackage.items) ? releasePackage.items : [];
+  const releasePackageById = new Map(releasePackageItems.map((item) => [item.id, item]));
+  const downstreamLaunches = publicDatasetDownstreamLaunchGuardReadback(report);
+  const downstreamItems = Array.isArray(downstreamLaunches.items) ? downstreamLaunches.items : [];
+  const downstreamById = new Map(downstreamItems.map((item) => [item.id, item]));
+  return publicDatasetPublicationGateDefinitions.map((definition, index) => {
+    const readinessRows =
+      definition.readinessRowIds === "all" ? readinessItems : definition.readinessRowIds.map((rowId) => readinessById.get(rowId)).filter(Boolean);
+    const packageSteps =
+      definition.packageStepIds === "all" ? packageItems : definition.packageStepIds.map((stepId) => packageById.get(stepId)).filter(Boolean);
+    const releaseArtifacts =
+      definition.releasePackageArtifactIds === "all"
+        ? releasePackageItems
+        : definition.releasePackageArtifactIds.map((artifactId) => releasePackageById.get(artifactId)).filter(Boolean);
+    const downstreamRows =
+      definition.downstreamLaunchIds === "all"
+        ? downstreamItems
+        : definition.downstreamLaunchIds.map((launchId) => downstreamById.get(launchId)).filter(Boolean);
+    return publicDatasetPublicationGateItem({
+      definition,
+      sequence: index + 1,
+      report,
+      packageManifest,
+      releasePackage,
+      downstreamLaunches,
+      readinessRows,
+      packageSteps,
+      releaseArtifacts,
+      downstreamRows,
+    });
+  });
+}
+
+function publicDatasetPublicationGateItem({
+  definition,
+  sequence,
+  report,
+  packageManifest,
+  releasePackage,
+  downstreamLaunches,
+  readinessRows,
+  packageSteps,
+  releaseArtifacts,
+  downstreamRows,
+}) {
+  const blockingReadinessRows = readinessRows.filter(publicDatasetReadinessItemIsOpen);
+  const blockingPackageSteps = packageSteps.filter(publicDatasetPackageManifestItemIsOpen);
+  const blockingReleaseArtifacts = releaseArtifacts.filter(publicDatasetReleasePackageItemIsOpen);
+  const blockingDownstreamRows = downstreamRows.filter(publicDatasetDownstreamLaunchGuardItemIsOpen);
+  const status = publicDatasetPublicationGateStatus({
+    blockingReadinessRows,
+    blockingPackageSteps,
+    blockingReleaseArtifacts,
+    blockingDownstreamRows,
+  });
+  const readinessRowIds = readinessRows.map((row) => row.id).filter(Boolean);
+  const packageStepIds = packageSteps.map((step) => step.id).filter(Boolean);
+  const releasePackageArtifactIds = releaseArtifacts.map((artifact) => artifact.id).filter(Boolean);
+  const downstreamLaunchIds = downstreamRows.map((launch) => launch.id).filter(Boolean);
+  const readinessReviewReasons = uniqueValues(
+    readinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])),
+  );
+  const packageReviewReasons = uniqueValues(
+    packageSteps.flatMap((step) => (Array.isArray(step.readinessReviewReasons) ? step.readinessReviewReasons : [])),
+  );
+  const releasePackageReviewReasons = uniqueValues(
+    releaseArtifacts.flatMap((artifact) => (Array.isArray(artifact.readinessReviewReasons) ? artifact.readinessReviewReasons : [])),
+  );
+  const downstreamReviewReasons = uniqueValues(
+    downstreamRows.flatMap((launch) => [
+      ...(Array.isArray(launch.readinessReviewReasons) ? launch.readinessReviewReasons : []),
+      ...(Array.isArray(launch.publicFirstReviewReasons) ? launch.publicFirstReviewReasons : []),
+    ]),
+  );
+  const downstreamArtifacts = uniqueValues(downstreamRows.map((launch) => launch.downstreamArtifact).filter(Boolean));
+  const routes = uniqueValues([
+    "/api/v1/public-dataset-publication-gate",
+    `/api/v1/public-dataset-publication-gate/${encodeURIComponent(definition.id)}`,
+    "/api/release/report",
+    "/api/v1/public-dataset-readiness",
+    "/api/v1/public-dataset-package-manifest",
+    "/api/v1/public-dataset-release-package",
+    "/api/v1/public-dataset-downstream-launches",
+    ...readinessRows.flatMap(publicDatasetReadinessRoutes),
+    ...packageSteps.flatMap((step) => (Array.isArray(step.routes) ? step.routes : [])),
+    ...releaseArtifacts.flatMap((artifact) => (Array.isArray(artifact.routes) ? artifact.routes : [])),
+    ...downstreamRows.flatMap((launch) => (Array.isArray(launch.routes) ? launch.routes : [])),
+    ...downstreamRows.flatMap((launch) => (Array.isArray(launch.guardedRoutes) ? launch.guardedRoutes : [])),
+    ...downstreamRows.flatMap((launch) => (Array.isArray(launch.evidenceRoutes) ? launch.evidenceRoutes : [])),
+  ]);
+  return {
+    id: definition.id,
+    rowId: definition.id,
+    sequence,
+    gateKind: definition.gateKind,
+    label: definition.label,
+    status,
+    gateOpen: status !== "ready",
+    publicationBlocked: status !== "ready",
+    publicationActionAvailable: false,
+    summary: definition.summary,
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    packageStatus: packageManifest.packageStatus ?? "public_dataset_package_status_missing",
+    releasePackageStatus: releasePackage.releasePackageStatus ?? "public_dataset_release_package_status_missing",
+    launchGuardStatus: downstreamLaunches.launchGuardStatus ?? "downstream_launch_status_missing",
+    readinessRowIds,
+    packageStepIds,
+    releasePackageArtifactIds,
+    downstreamLaunchIds,
+    downstreamArtifacts,
+    blockingReadinessRowIds: blockingReadinessRows.map((row) => row.id).filter(Boolean),
+    blockingPackageStepIds: blockingPackageSteps.map((step) => step.id).filter(Boolean),
+    blockingReleasePackageArtifactIds: blockingReleaseArtifacts.map((artifact) => artifact.id).filter(Boolean),
+    blockingDownstreamLaunchIds: blockingDownstreamRows.map((launch) => launch.id).filter(Boolean),
+    readinessStatuses: readinessRows.map((row) => row.status).filter(Boolean),
+    packageStepStatuses: packageSteps.map((step) => step.status).filter(Boolean),
+    releasePackageArtifactStatuses: releaseArtifacts.map((artifact) => artifact.status).filter(Boolean),
+    downstreamLaunchStatuses: downstreamRows.map((launch) => launch.status).filter(Boolean),
+    readinessReviewReasons,
+    packageReviewReasons,
+    releasePackageReviewReasons,
+    downstreamReviewReasons,
+    reviewReasons: uniqueValues([
+      ...readinessReviewReasons,
+      ...packageReviewReasons,
+      ...releasePackageReviewReasons,
+      ...downstreamReviewReasons,
+    ]),
+    sourceEvidenceIds: uniqueValues([
+      ...readinessRows.flatMap((row) => (Array.isArray(row.sourceEvidenceIds) ? row.sourceEvidenceIds : [])),
+      ...releaseArtifacts.flatMap((artifact) => (Array.isArray(artifact.sourceEvidenceIds) ? artifact.sourceEvidenceIds : [])),
+      ...downstreamRows.flatMap((launch) => (Array.isArray(launch.sourceEvidenceIds) ? launch.sourceEvidenceIds : [])),
+    ]),
+    sourceStatuses: uniqueValues([
+      ...readinessRows.flatMap((row) => (Array.isArray(row.sourceStatuses) ? row.sourceStatuses : [])),
+      ...releaseArtifacts.flatMap((artifact) => (Array.isArray(artifact.sourceStatuses) ? artifact.sourceStatuses : [])),
+      ...downstreamRows.flatMap((launch) => (Array.isArray(launch.sourceStatuses) ? launch.sourceStatuses : [])),
+    ]),
+    targetGapIds: uniqueValues([
+      ...readinessRows.flatMap((row) => (Array.isArray(row.targetGapIds) ? row.targetGapIds : [])),
+      ...packageSteps.flatMap((step) => (Array.isArray(step.targetGapIds) ? step.targetGapIds : [])),
+      ...releaseArtifacts.flatMap((artifact) => (Array.isArray(artifact.targetGapIds) ? artifact.targetGapIds : [])),
+    ]),
+    counts: {
+      readinessRows: readinessRows.length,
+      openReadinessRows: blockingReadinessRows.length,
+      packageSteps: packageSteps.length,
+      openPackageSteps: blockingPackageSteps.length,
+      releasePackageArtifacts: releaseArtifacts.length,
+      openReleasePackageArtifacts: blockingReleaseArtifacts.length,
+      downstreamLaunches: downstreamRows.length,
+      blockedDownstreamLaunches: blockingDownstreamRows.length,
+    },
+    verificationRoutes: uniqueValues([
+      "/api/release/report",
+      "/api/v1/public-dataset-readiness",
+      "/api/v1/public-dataset-package-manifest",
+      "/api/v1/public-dataset-release-package",
+      "/api/v1/public-dataset-downstream-launches",
+    ]),
+    routes,
+  };
+}
+
+function publicDatasetPublicationGateStatus({
+  blockingReadinessRows,
+  blockingPackageSteps,
+  blockingReleaseArtifacts,
+  blockingDownstreamRows,
+}) {
+  const statuses = [
+    ...blockingReadinessRows.map((row) => row.status),
+    ...blockingPackageSteps.map((step) => step.status),
+    ...blockingReleaseArtifacts.map((artifact) => artifact.status),
+    ...blockingDownstreamRows.map((launch) => launch.status),
+  ].filter(Boolean);
+  if (statuses.length === 0) return "ready";
+  if (statuses.includes("blocked_by_target_scale")) return "blocked_by_target_scale";
+  if (statuses.includes("blocked_by_release_freeze")) return "blocked_by_release_freeze";
+  if (statuses.includes("documentation_not_submitted")) return "documentation_not_submitted";
+  if (statuses.some((status) => String(status).includes("downstream") || String(status).includes("launch"))) {
+    return "downstream_blocked_until_dataset_v0_1_ready";
+  }
+  if (statuses.some((status) => String(status).includes("review_required"))) return "review_required";
+  return statuses[0] ?? "publication_gate_blocked";
+}
+
+function publicDatasetPublicationGateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    gateKind: value("gateKind"),
+    status: value("status"),
+    readinessRowId: value("readinessRowId"),
+    packageStepId: value("packageStepId"),
+    releasePackageArtifactId: value("releasePackageArtifactId"),
+    downstreamArtifact: value("downstreamArtifact"),
+    route: value("route"),
+  };
+}
+
+function publicDatasetPublicationGateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.gateKind === value;
+    if (key === "status") return publicDatasetPublicationGateMatchesStatus(item, value);
+    if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
+    if (key === "packageStepId") return Array.isArray(item.packageStepIds) && item.packageStepIds.includes(value);
+    if (key === "releasePackageArtifactId") {
+      return Array.isArray(item.releasePackageArtifactIds) && item.releasePackageArtifactIds.includes(value);
+    }
+    if (key === "downstreamArtifact") return Array.isArray(item.downstreamArtifacts) && item.downstreamArtifacts.includes(value);
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetPublicationGateMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetPublicationGateItemIsOpen(item);
+  if (value === "closed") return !publicDatasetPublicationGateItemIsOpen(item);
+  return item.status === value;
+}
+
+function publicDatasetPublicationGateItemIsOpen(item) {
+  return item.status !== "ready";
+}
+
+function publicDatasetPublicationGateCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(publicDatasetPublicationGateItemIsOpen).length,
+    readyRows: items.filter((item) => item.status === "ready").length,
+    publicationActionAvailableRows: items.filter((item) => item.publicationActionAvailable === true).length,
+    byGateKind: countItemsBy(items, "gateKind"),
+    byStatus: countItemsBy(items, "status"),
+    byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
+    byPackageStepId: countExpandedValues(items, "packageStepIds"),
+    byReleasePackageArtifactId: countExpandedValues(items, "releasePackageArtifactIds"),
+    byDownstreamArtifact: countExpandedValues(items, "downstreamArtifacts"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+function publicDatasetPackageFileTemplateReadback(report, options = {}) {
+  const allItems = publicDatasetPackageFileTemplateItems(report);
+  const filters = publicDatasetPackageFileTemplateFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => publicDatasetPackageFileTemplateMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) =>
+          item.id === options.itemId ||
+          item.releasePackageArtifactId === options.itemId ||
+          item.artifactKind === options.itemId ||
+          item.expectedFilename === options.itemId,
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = publicDatasetPackageFileTemplateCounts(allItems);
+  const currentBlockingTemplate = allItems.find(publicDatasetPackageFileTemplateItemIsOpen) ?? null;
+  const releasePackage = publicDatasetReleasePackageReadback(report);
+  const publicationGate = publicDatasetPublicationGateReadback(report);
+  return {
+    id: `public-dataset-package-files-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetPackageFileTemplate",
+    templateOnly: true,
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    releasePackageStatus: releasePackage.releasePackageStatus ?? "public_dataset_release_package_status_missing",
+    publicationGateStatus: publicationGate.publicationGateStatus ?? "public_dataset_publication_gate_status_missing",
+    packageFileTemplateStatus: currentBlockingTemplate
+      ? "public_dataset_package_file_templates_blocked"
+      : "public_dataset_package_file_templates_ready_for_operator_replacement",
+    currentBlockingTemplateId: currentBlockingTemplate?.id ?? null,
+    currentBlockingTemplate,
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 package-file templates derived from the release-package artifact manifest and publication gate. They show the expected file bodies/operators must replace, but they are not dataset files.",
+      access:
+        "Admin/auditor readback only because package files link release ids, evidence routes, protected-exclusion checks, and downstream launch boundaries.",
+      templateOnly:
+        "Every row carries templateOnly=true and replacementRequired=true; unchanged templates are not production evidence and this endpoint has no write path.",
+      authority:
+        "This projection cannot create package files, publish a dataset, submit artifacts, launch downstream public surfaces, deprotect hidden/protected content, or waive release/package/publication gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      publicDatasetReadiness: "/api/v1/public-dataset-readiness",
+      publicDatasetPackageManifest: "/api/v1/public-dataset-package-manifest",
+      publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
+      publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts: publicDatasetPackageFileTemplateCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetPackageFileTemplateItems(report) {
+  const releasePackage = publicDatasetReleasePackageReadback(report);
+  const releaseArtifacts = Array.isArray(releasePackage.items) ? releasePackage.items : [];
+  const publicationGate = publicDatasetPublicationGateReadback(report);
+  return releaseArtifacts.map((artifact, index) =>
+    publicDatasetPackageFileTemplateItem({
+      artifact,
+      sequence: index + 1,
+      report,
+      releasePackage,
+      publicationGate,
+    }),
+  );
+}
+
+function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, releasePackage, publicationGate }) {
+  const status = publicDatasetPackageFileTemplateStatus(artifact, publicationGate);
+  const templateContent = publicDatasetPackageFileTemplateContent(artifact, report, publicationGate);
+  const routes = uniqueValues([
+    "/api/v1/public-dataset-package-files/template",
+    `/api/v1/public-dataset-package-files/template/${encodeURIComponent(artifact.id)}`,
+    "/api/v1/public-dataset-release-package",
+    `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`,
+    "/api/v1/public-dataset-publication-gate",
+    "/api/v1/public-dataset-package-manifest",
+    "/api/v1/public-dataset-readiness",
+    "/api/release/report",
+    ...(Array.isArray(artifact.routes) ? artifact.routes : []),
+  ]);
+  return {
+    id: artifact.id,
+    rowId: artifact.id,
+    sequence,
+    templateOnly: true,
+    replacementRequired: true,
+    releasePackageArtifactId: artifact.id,
+    artifactKind: artifact.artifactKind,
+    fileFormat: artifact.fileFormat,
+    expectedFilename: artifact.expectedFilename,
+    label: artifact.label,
+    status,
+    sourceArtifactStatus: artifact.status,
+    packageFileReady: false,
+    packageFilePublishable: false,
+    packageWriteActionAvailable: false,
+    summary: artifact.summary,
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    releasePackageStatus: releasePackage.releasePackageStatus ?? "public_dataset_release_package_status_missing",
+    publicationGateStatus: publicationGate.publicationGateStatus ?? "public_dataset_publication_gate_status_missing",
+    publicationBlocked: publicationGate.publicationBlocked !== false,
+    packageStepId: artifact.packageStepId,
+    readinessRowIds: Array.isArray(artifact.readinessRowIds) ? artifact.readinessRowIds : [],
+    sourceEvidenceIds: Array.isArray(artifact.sourceEvidenceIds) ? artifact.sourceEvidenceIds : [],
+    targetGapIds: Array.isArray(artifact.targetGapIds) ? artifact.targetGapIds : [],
+    requiredFields: Array.isArray(artifact.requiredFields) ? artifact.requiredFields : [],
+    templateContentKind: publicDatasetPackageFileTemplateContentKind(artifact.fileFormat),
+    templateContent,
+    templateContentHash: `sha256:${sha256(templateContent)}`,
+    validationNotes: [
+      "replace every template value with reviewed release evidence before packaging",
+      "keep hidden benchmark and protected validation content excluded",
+      "verify the publication gate before any public release or downstream launch",
+    ],
+    verificationRoutes: uniqueValues([
+      "/api/release/report",
+      "/api/v1/public-dataset-release-package",
+      `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`,
+      "/api/v1/public-dataset-publication-gate",
+      "/api/v1/public-dataset-package-files/template",
+    ]),
+    routes,
+  };
+}
+
+function publicDatasetPackageFileTemplateStatus(artifact, publicationGate) {
+  if (artifact.status !== "ready") return artifact.status ?? "source_artifact_not_ready";
+  if (publicationGate.publicationBlocked !== false) return "blocked_by_publication_gate";
+  return "ready_for_operator_replacement";
+}
+
+function publicDatasetPackageFileTemplateContentKind(fileFormat) {
+  if (fileFormat === "jsonl") return "jsonl";
+  if (fileFormat === "md") return "markdown";
+  return "json";
+}
+
+function publicDatasetPackageFileTemplateContent(artifact, report, publicationGate) {
+  const templateBase = {
+    templateOnly: true,
+    replacementRequired: true,
+    releaseId: report.releaseId ?? releaseId,
+    artifactId: artifact.id,
+    artifactKind: artifact.artifactKind,
+    expectedFilename: artifact.expectedFilename,
+    sourceArtifactStatus: artifact.status,
+    publicationGateStatus: publicationGate.publicationGateStatus ?? "public_dataset_publication_gate_status_missing",
+    verificationRoutes: ["/api/release/report", "/api/v1/public-dataset-release-package", "/api/v1/public-dataset-publication-gate"],
+  };
+  if (artifact.fileFormat === "jsonl") {
+    const requiredFieldTemplate = Object.fromEntries((artifact.requiredFields ?? []).map((field) => [field, `replace_with_real_${field}`]));
+    return `${canonicalJson({
+      ...templateBase,
+      rowType: artifact.id,
+      ...requiredFieldTemplate,
+    })}\n`;
+  }
+  if (artifact.fileFormat === "md") {
+    return [
+      `# TEMPLATE: ${artifact.label ?? artifact.id}`,
+      "",
+      `artifact_id: ${artifact.id}`,
+      `expected_filename: ${artifact.expectedFilename}`,
+      `release_id: ${report.releaseId ?? releaseId}`,
+      `source_artifact_status: ${artifact.status ?? "not_reported"}`,
+      `publication_gate_status: ${publicationGate.publicationGateStatus ?? "not_reported"}`,
+      "",
+      "Replace this template with reviewed public documentation before package assembly.",
+      "State hidden/protected exclusions and the no-leaderboard/no-API/no-training-export boundary.",
+      "",
+    ].join("\n");
+  }
+  return canonicalJson({
+    ...templateBase,
+    linkedReadinessRowIds: artifact.readinessRowIds ?? [],
+    requiredFields: artifact.requiredFields ?? [],
+    body: "replace_with_reviewed_release_artifact",
+  });
+}
+
+function publicDatasetPackageFileTemplateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    artifactKind: value("artifactKind"),
+    fileFormat: value("fileFormat"),
+    status: value("status"),
+    packageStepId: value("packageStepId"),
+    readinessRowId: value("readinessRowId"),
+    releasePackageArtifactId: value("releasePackageArtifactId"),
+    route: value("route"),
+  };
+}
+
+function publicDatasetPackageFileTemplateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.artifactKind === value || item.expectedFilename === value;
+    if (key === "status") return publicDatasetPackageFileTemplateMatchesStatus(item, value);
+    if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
+    if (key === "releasePackageArtifactId") return item.releasePackageArtifactId === value;
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetPackageFileTemplateMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetPackageFileTemplateItemIsOpen(item);
+  if (value === "closed") return !publicDatasetPackageFileTemplateItemIsOpen(item);
+  return item.status === value || item.sourceArtifactStatus === value;
+}
+
+function publicDatasetPackageFileTemplateItemIsOpen(item) {
+  return item.status !== "ready_for_operator_replacement";
+}
+
+function publicDatasetPackageFileTemplateCounts(items) {
+  return {
+    rows: items.length,
+    templateRows: items.length,
+    openRows: items.filter(publicDatasetPackageFileTemplateItemIsOpen).length,
+    readyRows: items.filter((item) => item.status === "ready_for_operator_replacement").length,
+    packageFilePublishableRows: items.filter((item) => item.packageFilePublishable === true).length,
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byFileFormat: countItemsBy(items, "fileFormat"),
+    byStatus: countItemsBy(items, "status"),
+    bySourceArtifactStatus: countItemsBy(items, "sourceArtifactStatus"),
+    byPackageStepId: countItemsBy(items, "packageStepId"),
+    byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+async function publicDatasetPackageFileValidationEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const roles = ["admin", "auditor"];
+  if (!roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: roles });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(request);
+  } catch (error) {
+    sendJson(response, 400, { error: "invalid_json_body", detail: error.message });
+    return;
+  }
+  const { report } = await buildCurrentReleaseArtifacts(context);
+  sendJson(response, 200, publicDatasetPackageFileValidationReadback(report, body, session.user));
+}
+
+function publicDatasetPackageFileValidationReadback(report, body = {}, actor = {}) {
+  const templateReadback = publicDatasetPackageFileTemplateReadback(report);
+  const expectedTemplates = Array.isArray(templateReadback.items) ? templateReadback.items : [];
+  const submittedFiles = publicDatasetPackageFileValidationInputFiles(body);
+  const submittedByFilename = new Map();
+  for (const file of submittedFiles) {
+    const rows = submittedByFilename.get(file.expectedFilename) ?? [];
+    rows.push(file);
+    submittedByFilename.set(file.expectedFilename, rows);
+  }
+  const expectedFilenames = new Set(expectedTemplates.map((item) => item.expectedFilename));
+  const unexpectedFiles = submittedFiles.filter((file) => !expectedFilenames.has(file.expectedFilename));
+  const items = expectedTemplates.map((template) => publicDatasetPackageFileValidationItem(template, submittedByFilename.get(template.expectedFilename) ?? []));
+  const counts = publicDatasetPackageFileValidationCounts(items, unexpectedFiles);
+  const packageValidationStatus =
+    counts.missingFiles > 0 || counts.duplicateFiles > 0 || counts.unexpectedFiles > 0 || counts.invalidContentFiles > 0
+      ? "public_dataset_package_files_invalid"
+      : counts.readyForReviewFiles === expectedTemplates.length
+        ? "public_dataset_package_files_ready_for_governed_review"
+        : "public_dataset_package_files_valid_but_release_blocked";
+  return {
+    id: `public-dataset-package-file-validation-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: new Date().toISOString(),
+    generatedBy: actor.id ?? null,
+    resourceKey: "publicDatasetPackageFileValidation",
+    validationOnly: true,
+    noSideEffects: true,
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    releasePackageStatus: templateReadback.releasePackageStatus ?? "public_dataset_release_package_status_missing",
+    publicationGateStatus: templateReadback.publicationGateStatus ?? "public_dataset_publication_gate_status_missing",
+    packageValidationStatus,
+    packageReadyForPublicationReview: packageValidationStatus === "public_dataset_package_files_ready_for_governed_review",
+    packageWriteActionAvailable: false,
+    policy: {
+      scope:
+        "Validation-only Dataset v0.1 package-file preflight. It checks submitted file names and bounded file content against the expected package-file templates before any package assembly or publication.",
+      access:
+        "Admin/auditor only because package files may contain release ids, public documentation, source evidence pointers, exclusion manifests, and release-governance metadata.",
+      authority:
+        "This validation does not create package files, append workflow evidence, publish a dataset, launch downstream surfaces, deprotect hidden/protected content, or waive release/package/publication gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      packageFileTemplates: "/api/v1/public-dataset-package-files/template",
+      publicDatasetReleasePackage: "/api/v1/public-dataset-release-package",
+      publicDatasetPublicationGate: "/api/v1/public-dataset-publication-gate",
+    },
+    counts,
+    unexpectedFiles,
+    items,
+  };
+}
+
+function publicDatasetPackageFileValidationInputFiles(body = {}) {
+  if (Array.isArray(body.files)) {
+    return body.files.map((file, index) => publicDatasetPackageFileValidationInputFile(file, index)).filter((file) => file.expectedFilename);
+  }
+  if (body.files && typeof body.files === "object") {
+    return Object.entries(body.files).map(([expectedFilename, content], index) =>
+      publicDatasetPackageFileValidationInputFile({ expectedFilename, content }, index),
+    );
+  }
+  if (Array.isArray(body.packageFiles)) {
+    return body.packageFiles.map((file, index) => publicDatasetPackageFileValidationInputFile(file, index)).filter((file) => file.expectedFilename);
+  }
+  return [];
+}
+
+function publicDatasetPackageFileValidationInputFile(file, index) {
+  const expectedFilename = String(file?.expectedFilename ?? file?.filename ?? file?.path ?? "").trim();
+  return {
+    sequence: index + 1,
+    expectedFilename,
+    content: file?.content,
+    submittedHash: file?.sha256 ?? file?.contentHash ?? null,
+  };
+}
+
+function publicDatasetPackageFileValidationItem(template, submittedRows) {
+  const base = {
+    id: template.id,
+    releasePackageArtifactId: template.releasePackageArtifactId,
+    artifactKind: template.artifactKind,
+    fileFormat: template.fileFormat,
+    expectedFilename: template.expectedFilename,
+    templateContentHash: template.templateContentHash,
+    sourceArtifactStatus: template.sourceArtifactStatus,
+    templateStatus: template.status,
+    readinessRowIds: template.readinessRowIds,
+    packageStepId: template.packageStepId,
+    requiredFields: template.requiredFields,
+    verificationRoutes: template.verificationRoutes,
+  };
+  if (submittedRows.length === 0) {
+    return {
+      ...base,
+      validationStatus: "missing_file",
+      contentStatus: "missing_file",
+      submittedContentHash: null,
+      packageFileReadyForReview: false,
+      reviewReasons: ["missing expected package file"],
+    };
+  }
+  if (submittedRows.length > 1) {
+    return {
+      ...base,
+      validationStatus: "duplicate_file",
+      contentStatus: "duplicate_file",
+      submittedContentHash: null,
+      packageFileReadyForReview: false,
+      reviewReasons: ["duplicate expected package filename"],
+    };
+  }
+  const submitted = submittedRows[0];
+  const content = submitted.content;
+  if (typeof content !== "string") {
+    return {
+      ...base,
+      validationStatus: "invalid_content_type",
+      contentStatus: "invalid_content_type",
+      submittedContentHash: submitted.submittedHash ?? null,
+      packageFileReadyForReview: false,
+      reviewReasons: ["file content must be supplied as a string"],
+    };
+  }
+  const submittedContentHash = `sha256:${sha256(content)}`;
+  const contentResult = publicDatasetPackageFileValidateContent(template, content, submittedContentHash);
+  const validationStatus = contentResult.ok
+    ? template.status === "ready_for_operator_replacement"
+      ? "ready_for_package_review"
+      : template.status
+    : contentResult.status;
+  return {
+    ...base,
+    validationStatus,
+    contentStatus: contentResult.status,
+    submittedContentHash,
+    submittedHashMatchesContent: !submitted.submittedHash || submitted.submittedHash === submittedContentHash,
+    parsedRecordCount: contentResult.parsedRecordCount,
+    packageFileReadyForReview: validationStatus === "ready_for_package_review",
+    reviewReasons: contentResult.reviewReasons,
+  };
+}
+
+function publicDatasetPackageFileValidateContent(template, content, submittedContentHash) {
+  if (!content.trim()) {
+    return { ok: false, status: "empty_file", reviewReasons: ["file content is empty"], parsedRecordCount: 0 };
+  }
+  if (submittedContentHash === template.templateContentHash) {
+    return { ok: false, status: "unchanged_template_file", reviewReasons: ["submitted content still matches template content hash"], parsedRecordCount: 0 };
+  }
+  if (template.fileFormat === "jsonl") return publicDatasetPackageFileValidateJsonl(template, content);
+  if (template.fileFormat === "json") return publicDatasetPackageFileValidateJson(template, content);
+  if (template.fileFormat === "md") return publicDatasetPackageFileValidateMarkdown(content);
+  return { ok: false, status: "unsupported_file_format", reviewReasons: [`unsupported file format ${template.fileFormat}`], parsedRecordCount: 0 };
+}
+
+function publicDatasetPackageFileValidateJsonl(template, content) {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return { ok: false, status: "empty_file", reviewReasons: ["JSONL file has no non-empty rows"], parsedRecordCount: 0 };
+  const records = [];
+  for (const [index, line] of lines.entries()) {
+    try {
+      records.push(JSON.parse(line));
+    } catch (error) {
+      return { ok: false, status: "invalid_jsonl", reviewReasons: [`line ${index + 1}: ${error.message}`], parsedRecordCount: records.length };
+    }
+  }
+  const templateRecord = records.find((record) => record?.templateOnly === true);
+  if (templateRecord) {
+    return { ok: false, status: "unchanged_template_record", reviewReasons: ["JSONL row still carries templateOnly=true"], parsedRecordCount: records.length };
+  }
+  const missingRequired = records.flatMap((record, index) =>
+    (template.requiredFields ?? []).filter((field) => !(field in Object(record))).map((field) => `line ${index + 1}:${field}`),
+  );
+  if (missingRequired.length) {
+    return {
+      ok: false,
+      status: "missing_required_fields",
+      reviewReasons: [`missing required fields: ${missingRequired.slice(0, 8).join(", ")}`],
+      parsedRecordCount: records.length,
+    };
+  }
+  const placeholders = records.flatMap((record, index) =>
+    Object.entries(record)
+      .filter(([, value]) => publicDatasetPackageFileValueIsPlaceholder(value))
+      .map(([field]) => `line ${index + 1}:${field}`),
+  );
+  if (placeholders.length) {
+    return {
+      ok: false,
+      status: "placeholder_values_present",
+      reviewReasons: [`placeholder values remain: ${placeholders.slice(0, 8).join(", ")}`],
+      parsedRecordCount: records.length,
+    };
+  }
+  return { ok: true, status: "content_structurally_valid", reviewReasons: [], parsedRecordCount: records.length };
+}
+
+function publicDatasetPackageFileValidateJson(template, content) {
+  let record;
+  try {
+    record = JSON.parse(content);
+  } catch (error) {
+    return { ok: false, status: "invalid_json", reviewReasons: [error.message], parsedRecordCount: 0 };
+  }
+  if (record?.templateOnly === true) {
+    return { ok: false, status: "unchanged_template_record", reviewReasons: ["JSON file still carries templateOnly=true"], parsedRecordCount: 1 };
+  }
+  const serialized = canonicalJson(record);
+  if (serialized.includes("replace_with_reviewed_release_artifact") || serialized.includes("replace_with_real_")) {
+    return { ok: false, status: "placeholder_values_present", reviewReasons: ["JSON file still carries template placeholder values"], parsedRecordCount: 1 };
+  }
+  return { ok: true, status: "content_structurally_valid", reviewReasons: [], parsedRecordCount: 1 };
+}
+
+function publicDatasetPackageFileValidateMarkdown(content) {
+  if (/^# TEMPLATE:/m.test(content) || /Replace this template/i.test(content) || /templateOnly/i.test(content)) {
+    return { ok: false, status: "unchanged_template_file", reviewReasons: ["Markdown file still contains template markers"], parsedRecordCount: 1 };
+  }
+  return { ok: true, status: "content_structurally_valid", reviewReasons: [], parsedRecordCount: 1 };
+}
+
+function publicDatasetPackageFileValueIsPlaceholder(value) {
+  if (typeof value !== "string") return false;
+  return value.startsWith("replace_with_real_") || value.startsWith("replace_with_reviewed") || value === "replace_me";
+}
+
+function publicDatasetPackageFileValidationCounts(items, unexpectedFiles) {
+  return {
+    expectedFiles: items.length,
+    submittedExpectedFiles: items.filter((item) => item.validationStatus !== "missing_file").length,
+    missingFiles: items.filter((item) => item.validationStatus === "missing_file").length,
+    duplicateFiles: items.filter((item) => item.validationStatus === "duplicate_file").length,
+    unexpectedFiles: unexpectedFiles.length,
+    unchangedTemplateFiles: items.filter((item) => ["unchanged_template_file", "unchanged_template_record"].includes(item.contentStatus)).length,
+    invalidContentFiles: items.filter((item) => !["content_structurally_valid", "missing_file", "duplicate_file"].includes(item.contentStatus)).length,
+    structurallyValidFiles: items.filter((item) => item.contentStatus === "content_structurally_valid").length,
+    readyForReviewFiles: items.filter((item) => item.validationStatus === "ready_for_package_review").length,
+    releaseBlockedFiles: items.filter(
+      (item) => item.contentStatus === "content_structurally_valid" && item.validationStatus !== "ready_for_package_review",
+    ).length,
+    byValidationStatus: countItemsBy(items, "validationStatus"),
+    byContentStatus: countItemsBy(items, "contentStatus"),
+    byFileFormat: countItemsBy(items, "fileFormat"),
+    byArtifactKind: countItemsBy(items, "artifactKind"),
   };
 }
 

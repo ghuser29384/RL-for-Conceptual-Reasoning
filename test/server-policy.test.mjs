@@ -8279,6 +8279,22 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingPublicDatasetReleasePackageAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-release-package" });
   assert.equal(missingPublicDatasetReleasePackageAuth.status, 401);
 
+  const missingPublicDatasetPackageFileTemplateAuth = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template",
+  });
+  assert.equal(missingPublicDatasetPackageFileTemplateAuth.status, 401);
+
+  const missingPublicDatasetPackageFileValidationAuth = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/validate",
+    body: JSON.stringify({ files: [] }),
+  });
+  assert.equal(missingPublicDatasetPackageFileValidationAuth.status, 401);
+
+  const missingPublicDatasetPublicationGateAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-publication-gate" });
+  assert.equal(missingPublicDatasetPublicationGateAuth.status, 401);
+
   const missingPublicDatasetDownstreamLaunchAuth = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/public-dataset-downstream-launches",
@@ -8452,6 +8468,28 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedPublicDatasetReleasePackage.status, 403);
+
+  const deniedPublicDatasetPackageFileTemplate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetPackageFileTemplate.status, 403);
+
+  const deniedPublicDatasetPackageFileValidation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/validate",
+    headers: { authorization: `Bearer ${raterToken}` },
+    body: JSON.stringify({ files: [] }),
+  });
+  assert.equal(deniedPublicDatasetPackageFileValidation.status, 403);
+
+  const deniedPublicDatasetPublicationGate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetPublicationGate.status, 403);
 
   const deniedPublicDatasetDownstreamLaunch = await invokeApi(context, {
     method: "GET",
@@ -10983,6 +11021,237 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReleasePackageMissing.status, 404);
   assert.equal(publicDatasetReleasePackageMissing.body.error, "artifact_not_found");
 
+  const publicDatasetPackageFileTemplates = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplates.status, 200, JSON.stringify(publicDatasetPackageFileTemplates.body));
+  assert.equal(publicDatasetPackageFileTemplates.body.resourceKey, "publicDatasetPackageFileTemplate");
+  assert.equal(publicDatasetPackageFileTemplates.body.templateOnly, true);
+  assert.equal(publicDatasetPackageFileTemplates.body.releasePackageStatus, "public_dataset_release_package_blocked");
+  assert.equal(publicDatasetPackageFileTemplates.body.publicationGateStatus, "public_dataset_publication_blocked");
+  assert.equal(publicDatasetPackageFileTemplates.body.packageFileTemplateStatus, "public_dataset_package_file_templates_blocked");
+  assert.equal(publicDatasetPackageFileTemplates.body.currentBlockingTemplateId, "release-cleared-position-critique-pairs");
+  assert.equal(publicDatasetPackageFileTemplates.body.count, 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.totalCount, 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.templateRows, 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.openRows, 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.readyRows, 0);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.packageFilePublishableRows, 0);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byFileFormat.jsonl, 3);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byFileFormat.json, 6);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byFileFormat.md, 2);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byStatus.blocked_by_publication_gate, 4);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byStatus.blocked_by_target_scale, 1);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byStatus.documentation_not_submitted, 2);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.bySourceArtifactStatus.ready, 4);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byPackageStepId["release-artifact-package"], 5);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-package-files/template"], 11);
+  assert.equal(publicDatasetPackageFileTemplates.body.counts.byRoute["/api/v1/public-dataset-publication-gate"], 11);
+  assert.match(publicDatasetPackageFileTemplates.body.policy.scope, /package-file templates/);
+  assert.match(publicDatasetPackageFileTemplates.body.policy.templateOnly, /templateOnly=true/);
+  assert.match(publicDatasetPackageFileTemplates.body.policy.authority, /cannot create package files/);
+  assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.publicDatasetReleasePackage, "/api/v1/public-dataset-release-package");
+  assert.equal(publicDatasetPackageFileTemplates.body.sourceRoutes.publicDatasetPublicationGate, "/api/v1/public-dataset-publication-gate");
+
+  const datasetRecordsTemplate = publicDatasetPackageFileTemplates.body.items.find((item) => item.id === "release-cleared-position-critique-pairs");
+  assert.equal(datasetRecordsTemplate.status, "blocked_by_target_scale");
+  assert.equal(datasetRecordsTemplate.templateOnly, true);
+  assert.equal(datasetRecordsTemplate.replacementRequired, true);
+  assert.equal(datasetRecordsTemplate.fileFormat, "jsonl");
+  assert.equal(datasetRecordsTemplate.templateContentKind, "jsonl");
+  assert.equal(datasetRecordsTemplate.packageFilePublishable, false);
+  assert.equal(datasetRecordsTemplate.packageWriteActionAvailable, false);
+  assert.match(datasetRecordsTemplate.templateContentHash, /^sha256:/);
+  assert.ok(datasetRecordsTemplate.requiredFields.includes("position_id"));
+  assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-release-package/release-cleared-position-critique-pairs"));
+  assert.ok(datasetRecordsTemplate.routes.includes("/api/v1/public-dataset-package-files/template/release-cleared-position-critique-pairs"));
+  const datasetRecordsTemplateLine = JSON.parse(datasetRecordsTemplate.templateContent.trim());
+  assert.equal(datasetRecordsTemplateLine.templateOnly, true);
+  assert.equal(datasetRecordsTemplateLine.position_id, "replace_with_real_position_id");
+  assert.equal(datasetRecordsTemplateLine.expectedFilename, "dataset-v0.1/release-cleared-position-critique-pairs.jsonl");
+
+  const expertLabelsTemplate = publicDatasetPackageFileTemplates.body.items.find((item) => item.id === "expert-labels");
+  assert.equal(expertLabelsTemplate.sourceArtifactStatus, "ready");
+  assert.equal(expertLabelsTemplate.status, "blocked_by_publication_gate");
+  assert.equal(expertLabelsTemplate.packageFileReady, false);
+
+  const datasetCardFileTemplate = publicDatasetPackageFileTemplates.body.items.find((item) => item.id === "dataset-card");
+  assert.equal(datasetCardFileTemplate.fileFormat, "md");
+  assert.equal(datasetCardFileTemplate.templateContentKind, "markdown");
+  assert.match(datasetCardFileTemplate.templateContent, /TEMPLATE: Dataset card/);
+  assert.match(datasetCardFileTemplate.templateContent, /no-leaderboard\/no-API\/no-training-export boundary/);
+
+  const publicDatasetPackageFileTemplatesJsonl = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template?fileFormat=jsonl",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplatesJsonl.status, 200, JSON.stringify(publicDatasetPackageFileTemplatesJsonl.body));
+  assert.equal(publicDatasetPackageFileTemplatesJsonl.body.count, 3);
+  assert.equal(publicDatasetPackageFileTemplatesJsonl.body.filteredCounts.byFileFormat.jsonl, 3);
+
+  const publicDatasetPackageFileTemplatesBlockedByGate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template?status=blocked_by_publication_gate",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplatesBlockedByGate.status, 200, JSON.stringify(publicDatasetPackageFileTemplatesBlockedByGate.body));
+  assert.equal(publicDatasetPackageFileTemplatesBlockedByGate.body.count, 4);
+  assert.equal(publicDatasetPackageFileTemplatesBlockedByGate.body.filteredCounts.bySourceArtifactStatus.ready, 4);
+
+  const publicDatasetPackageFileTemplatesByArtifact = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template?artifactKind=dataset_card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplatesByArtifact.status, 200, JSON.stringify(publicDatasetPackageFileTemplatesByArtifact.body));
+  assert.equal(publicDatasetPackageFileTemplatesByArtifact.body.count, 1);
+  assert.equal(publicDatasetPackageFileTemplatesByArtifact.body.items[0].id, "dataset-card");
+
+  const publicDatasetPackageFileTemplatesByReleaseArtifact = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template?releasePackageArtifactId=dataset-card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplatesByReleaseArtifact.status, 200, JSON.stringify(publicDatasetPackageFileTemplatesByReleaseArtifact.body));
+  assert.equal(publicDatasetPackageFileTemplatesByReleaseArtifact.body.count, 1);
+  assert.equal(publicDatasetPackageFileTemplatesByReleaseArtifact.body.items[0].expectedFilename, "dataset-v0.1/DATASET_CARD.md");
+
+  const publicDatasetPackageFileTemplatesByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-files/template?route=${encodeURIComponent("/api/v1/public-dataset-publication-gate")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplatesByRoute.status, 200, JSON.stringify(publicDatasetPackageFileTemplatesByRoute.body));
+  assert.equal(publicDatasetPackageFileTemplatesByRoute.body.count, 11);
+  assert.equal(publicDatasetPackageFileTemplatesByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-publication-gate"], 11);
+
+  const publicDatasetPackageFileTemplateById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template/dataset-card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplateById.status, 200, JSON.stringify(publicDatasetPackageFileTemplateById.body));
+  assert.equal(publicDatasetPackageFileTemplateById.body.count, 1);
+  assert.equal(publicDatasetPackageFileTemplateById.body.item.artifactKind, "dataset_card");
+  assert.equal(publicDatasetPackageFileTemplateById.body.item.expectedFilename, "dataset-v0.1/DATASET_CARD.md");
+
+  const publicDatasetPackageFileTemplateMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-files/template/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageFileTemplateMissing.status, 404);
+  assert.equal(publicDatasetPackageFileTemplateMissing.body.error, "artifact_not_found");
+
+  const unchangedPackageFileValidation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/validate",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      files: [
+        {
+          expectedFilename: datasetRecordsTemplate.expectedFilename,
+          content: datasetRecordsTemplate.templateContent,
+        },
+      ],
+    }),
+  });
+  assert.equal(unchangedPackageFileValidation.status, 200, JSON.stringify(unchangedPackageFileValidation.body));
+  assert.equal(unchangedPackageFileValidation.body.resourceKey, "publicDatasetPackageFileValidation");
+  assert.equal(unchangedPackageFileValidation.body.validationOnly, true);
+  assert.equal(unchangedPackageFileValidation.body.noSideEffects, true);
+  assert.equal(unchangedPackageFileValidation.body.packageValidationStatus, "public_dataset_package_files_invalid");
+  assert.equal(unchangedPackageFileValidation.body.packageWriteActionAvailable, false);
+  assert.equal(unchangedPackageFileValidation.body.counts.expectedFiles, 11);
+  assert.equal(unchangedPackageFileValidation.body.counts.submittedExpectedFiles, 1);
+  assert.equal(unchangedPackageFileValidation.body.counts.missingFiles, 10);
+  assert.equal(unchangedPackageFileValidation.body.counts.unchangedTemplateFiles, 1);
+  assert.equal(unchangedPackageFileValidation.body.counts.invalidContentFiles, 1);
+  assert.match(unchangedPackageFileValidation.body.policy.authority, /does not create package files/);
+  const unchangedDatasetRecordsValidation = unchangedPackageFileValidation.body.items.find(
+    (item) => item.id === "release-cleared-position-critique-pairs",
+  );
+  assert.equal(unchangedDatasetRecordsValidation.validationStatus, "unchanged_template_file");
+  assert.equal(unchangedDatasetRecordsValidation.contentStatus, "unchanged_template_file");
+  assert.equal(unchangedDatasetRecordsValidation.packageFileReadyForReview, false);
+
+  const packageValidationContentForTemplate = (item) => {
+    if (item.fileFormat === "jsonl") {
+      return `${JSON.stringify(
+        Object.fromEntries((item.requiredFields ?? []).map((field) => [field, `${field}-reviewed-value`])),
+      )}\n`;
+    }
+    if (item.fileFormat === "md") {
+      return [
+        `# ${item.label}`,
+        "",
+        "Reviewed public documentation for Dataset v0.1.",
+        "Hidden and protected exclusions are stated.",
+        "No leaderboard/API/training-export launch boundary is preserved.",
+        "",
+      ].join("\n");
+    }
+    return JSON.stringify({
+      id: `${item.id}-reviewed`,
+      releaseId: "october-2026-demo",
+      artifactKind: item.artifactKind,
+      expectedFilename: item.expectedFilename,
+      reviewedReleaseArtifact: true,
+      hiddenProtectedExclusionsApplied: true,
+    });
+  };
+  const structurallyValidBlockedPackageValidation = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-files/validate",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      files: publicDatasetPackageFileTemplates.body.items.map((item) => ({
+        expectedFilename: item.expectedFilename,
+        content: packageValidationContentForTemplate(item),
+      })),
+    }),
+  });
+  assert.equal(structurallyValidBlockedPackageValidation.status, 200, JSON.stringify(structurallyValidBlockedPackageValidation.body));
+  assert.equal(structurallyValidBlockedPackageValidation.body.resourceKey, "publicDatasetPackageFileValidation");
+  assert.equal(structurallyValidBlockedPackageValidation.body.validationOnly, true);
+  assert.equal(structurallyValidBlockedPackageValidation.body.noSideEffects, true);
+  assert.equal(structurallyValidBlockedPackageValidation.body.packageValidationStatus, "public_dataset_package_files_valid_but_release_blocked");
+  assert.equal(structurallyValidBlockedPackageValidation.body.packageReadyForPublicationReview, false);
+  assert.equal(structurallyValidBlockedPackageValidation.body.packageWriteActionAvailable, false);
+  assert.equal(structurallyValidBlockedPackageValidation.body.releasePackageStatus, "public_dataset_release_package_blocked");
+  assert.equal(structurallyValidBlockedPackageValidation.body.publicationGateStatus, "public_dataset_publication_blocked");
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.expectedFiles, 11);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.submittedExpectedFiles, 11);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.missingFiles, 0);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.duplicateFiles, 0);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.unexpectedFiles, 0);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.unchangedTemplateFiles, 0);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.invalidContentFiles, 0);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.structurallyValidFiles, 11);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.readyForReviewFiles, 0);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.releaseBlockedFiles, 11);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.byContentStatus.content_structurally_valid, 11);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.byValidationStatus.blocked_by_target_scale, 1);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.byValidationStatus.blocked_by_publication_gate, 4);
+  assert.equal(structurallyValidBlockedPackageValidation.body.counts.byValidationStatus.documentation_not_submitted, 2);
+  assert.equal(
+    structurallyValidBlockedPackageValidation.body.sourceRoutes.packageFileTemplates,
+    "/api/v1/public-dataset-package-files/template",
+  );
+  const validBlockedDatasetRecords = structurallyValidBlockedPackageValidation.body.items.find(
+    (item) => item.id === "release-cleared-position-critique-pairs",
+  );
+  assert.equal(validBlockedDatasetRecords.contentStatus, "content_structurally_valid");
+  assert.equal(validBlockedDatasetRecords.validationStatus, "blocked_by_target_scale");
+  assert.equal(validBlockedDatasetRecords.packageFileReadyForReview, false);
+  const validBlockedExpertLabels = structurallyValidBlockedPackageValidation.body.items.find((item) => item.id === "expert-labels");
+  assert.equal(validBlockedExpertLabels.contentStatus, "content_structurally_valid");
+  assert.equal(validBlockedExpertLabels.validationStatus, "blocked_by_publication_gate");
+  assert.equal(validBlockedExpertLabels.packageFileReadyForReview, false);
+
   const publicDatasetDownstreamLaunches = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/public-dataset-downstream-launches",
@@ -11086,6 +11355,136 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(publicDatasetDownstreamMissing.status, 404);
   assert.equal(publicDatasetDownstreamMissing.body.error, "artifact_not_found");
+
+  const publicDatasetPublicationGate = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGate.status, 200, JSON.stringify(publicDatasetPublicationGate.body));
+  assert.equal(publicDatasetPublicationGate.body.resourceKey, "publicDatasetPublicationGate");
+  assert.equal(publicDatasetPublicationGate.body.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.equal(publicDatasetPublicationGate.body.packageStatus, "public_dataset_package_blocked");
+  assert.equal(publicDatasetPublicationGate.body.releasePackageStatus, "public_dataset_release_package_blocked");
+  assert.equal(publicDatasetPublicationGate.body.launchGuardStatus, "downstream_launches_blocked_until_dataset_v0_1_ready");
+  assert.equal(publicDatasetPublicationGate.body.publicationGateStatus, "public_dataset_publication_blocked");
+  assert.equal(publicDatasetPublicationGate.body.publicationBlocked, true);
+  assert.equal(publicDatasetPublicationGate.body.publicationActionAvailable, false);
+  assert.equal(publicDatasetPublicationGate.body.currentBlockingGateId, "target-data-ready");
+  assert.equal(publicDatasetPublicationGate.body.count, 7);
+  assert.equal(publicDatasetPublicationGate.body.totalCount, 7);
+  assert.equal(publicDatasetPublicationGate.body.counts.openRows, 6);
+  assert.equal(publicDatasetPublicationGate.body.counts.readyRows, 1);
+  assert.equal(publicDatasetPublicationGate.body.counts.publicationActionAvailableRows, 0);
+  assert.equal(publicDatasetPublicationGate.body.counts.byGateKind.publication_action_boundary, 1);
+  assert.equal(publicDatasetPublicationGate.body.counts.byStatus.blocked_by_target_scale, 2);
+  assert.equal(publicDatasetPublicationGate.body.counts.byPackageStepId["target-data-package"], 2);
+  assert.equal(publicDatasetPublicationGate.body.counts.byReleasePackageArtifactId["release-cleared-position-critique-pairs"], 2);
+  assert.equal(publicDatasetPublicationGate.body.counts.byDownstreamArtifact.public_leaderboard, 2);
+  assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-publication-gate"], 7);
+  assert.match(publicDatasetPublicationGate.body.policy.scope, /publication preflight/);
+  assert.match(publicDatasetPublicationGate.body.policy.authority, /cannot publish a dataset/);
+  assert.equal(publicDatasetPublicationGate.body.sourceRoutes.publicDatasetReleasePackage, "/api/v1/public-dataset-release-package");
+  assert.equal(publicDatasetPublicationGate.body.sourceRoutes.publicDatasetDownstreamLaunches, "/api/v1/public-dataset-downstream-launches");
+
+  const targetDataPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "target-data-ready");
+  assert.equal(targetDataPublicationGate.status, "blocked_by_target_scale");
+  assert.equal(targetDataPublicationGate.gateKind, "target_data_ready");
+  assert.equal(targetDataPublicationGate.publicationBlocked, true);
+  assert.equal(targetDataPublicationGate.publicationActionAvailable, false);
+  assert.ok(targetDataPublicationGate.readinessRowIds.includes("release_cleared_position_critique_pairs"));
+  assert.ok(targetDataPublicationGate.packageStepIds.includes("target-data-package"));
+  assert.ok(targetDataPublicationGate.releasePackageArtifactIds.includes("release-cleared-position-critique-pairs"));
+  assert.ok(targetDataPublicationGate.blockingReadinessRowIds.includes("release_cleared_position_critique_pairs"));
+  assert.ok(targetDataPublicationGate.blockingPackageStepIds.includes("target-data-package"));
+  assert.ok(targetDataPublicationGate.blockingReleasePackageArtifactIds.includes("release-cleared-position-critique-pairs"));
+  assert.ok(targetDataPublicationGate.targetGapIds.includes("positions"));
+  assert.ok(targetDataPublicationGate.routes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+
+  const publicDocumentsPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "public-documents-ready");
+  assert.equal(publicDocumentsPublicationGate.status, "documentation_not_submitted");
+  assert.ok(publicDocumentsPublicationGate.releasePackageArtifactIds.includes("dataset-card"));
+  assert.ok(publicDocumentsPublicationGate.releasePackageArtifactIds.includes("methodology-report"));
+  assert.ok(publicDocumentsPublicationGate.routes.includes("/api/v1/public-dataset-documents/template"));
+
+  const hiddenExclusionsPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "hidden-protected-exclusions-ready");
+  assert.equal(hiddenExclusionsPublicationGate.status, "ready");
+  assert.equal(hiddenExclusionsPublicationGate.publicationBlocked, false);
+
+  const downstreamHoldPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "downstream-surfaces-held");
+  assert.equal(downstreamHoldPublicationGate.status, "downstream_blocked_until_dataset_v0_1_ready");
+  assert.ok(downstreamHoldPublicationGate.blockingDownstreamLaunchIds.includes("public-leaderboard"));
+  assert.ok(downstreamHoldPublicationGate.downstreamArtifacts.includes("public_leaderboard"));
+  assert.ok(downstreamHoldPublicationGate.reviewReasons.includes("publicFirstLadder:target_scale_incomplete"));
+
+  const publicationBoundaryGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "publication-action-boundary");
+  assert.equal(publicationBoundaryGate.status, "blocked_by_target_scale");
+  assert.equal(publicationBoundaryGate.publicationActionAvailable, false);
+  assert.ok(publicationBoundaryGate.blockingPackageStepIds.includes("target-data-package"));
+  assert.ok(publicationBoundaryGate.blockingReleasePackageArtifactIds.includes("release-cleared-position-critique-pairs"));
+  assert.ok(publicationBoundaryGate.blockingDownstreamLaunchIds.includes("public-leaderboard"));
+
+  const publicDatasetPublicationGateOpen = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate?status=open",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateOpen.status, 200, JSON.stringify(publicDatasetPublicationGateOpen.body));
+  assert.equal(publicDatasetPublicationGateOpen.body.count, 6);
+  assert.equal(publicDatasetPublicationGateOpen.body.filteredCounts.openRows, 6);
+
+  const publicDatasetPublicationGateByKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate?gateKind=public_documentation_ready",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByKind.status, 200, JSON.stringify(publicDatasetPublicationGateByKind.body));
+  assert.equal(publicDatasetPublicationGateByKind.body.count, 1);
+  assert.equal(publicDatasetPublicationGateByKind.body.items[0].id, "public-documents-ready");
+
+  const publicDatasetPublicationGateByArtifact = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate?releasePackageArtifactId=dataset-card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByArtifact.status, 200, JSON.stringify(publicDatasetPublicationGateByArtifact.body));
+  assert.equal(publicDatasetPublicationGateByArtifact.body.count, 2);
+  assert.equal(publicDatasetPublicationGateByArtifact.body.filteredCounts.byReleasePackageArtifactId["dataset-card"], 2);
+
+  const publicDatasetPublicationGateByDownstream = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate?downstreamArtifact=public_leaderboard",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByDownstream.status, 200, JSON.stringify(publicDatasetPublicationGateByDownstream.body));
+  assert.equal(publicDatasetPublicationGateByDownstream.body.count, 2);
+  assert.equal(publicDatasetPublicationGateByDownstream.body.filteredCounts.byDownstreamArtifact.public_leaderboard, 2);
+
+  const publicDatasetPublicationGateByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-publication-gate?route=${encodeURIComponent("/api/v1/public-dataset-documents/template")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByRoute.status, 200, JSON.stringify(publicDatasetPublicationGateByRoute.body));
+  assert.equal(publicDatasetPublicationGateByRoute.body.count, 2);
+  assert.equal(publicDatasetPublicationGateByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 2);
+
+  const publicDatasetPublicationGateById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate/public-documents-ready",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateById.status, 200, JSON.stringify(publicDatasetPublicationGateById.body));
+  assert.equal(publicDatasetPublicationGateById.body.count, 1);
+  assert.equal(publicDatasetPublicationGateById.body.item.gateKind, "public_documentation_ready");
+
+  const publicDatasetPublicationGateMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateMissing.status, 404);
+  assert.equal(publicDatasetPublicationGateMissing.body.error, "artifact_not_found");
 
   const candidateGenerationChecklist = await invokeApi(context, {
     method: "GET",
@@ -14633,6 +15032,18 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('url.searchParams.set("artifactKind", state.workflowArtifactKindFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("readinessRowId", state.workflowPublicDatasetGateKindFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("packageStepId", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('id: "public-dataset-package-file-template"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-files/template"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetPackageFileTemplate"'));
+  assert.ok(appSource.includes("function publicDatasetPackageFileTemplatePreviewRow(item)"));
+  assert.ok(appSource.includes('url.searchParams.set("fileFormat", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("releasePackageArtifactId", state.workflowArtifactIdFilter)'));
+  assert.ok(appSource.includes('id: "public-dataset-publication-gate"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-publication-gate"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetPublicationGate"'));
+  assert.ok(appSource.includes("function publicDatasetPublicationGatePreviewRow(item)"));
+  assert.ok(appSource.includes('url.searchParams.set("gateKind", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("releasePackageArtifactId", state.workflowArtifactIdFilter)'));
   assert.ok(appSource.includes('id: "public-dataset-downstream-launches"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-downstream-launches"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetDownstreamLaunchGuard"'));
@@ -15010,6 +15421,15 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-release-package"));
   assert.ok(architectureDoc.includes("publicDatasetReleasePackageArtifact"));
   assert.ok(architectureDoc.includes("release-cleared position-critique records, expert labels, item/version provenance"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/template"));
+  assert.ok(architectureDoc.includes("publicDatasetPackageFileTemplate"));
+  assert.ok(architectureDoc.includes("template content hashes, required field placeholders, replacement-required flags"));
+  assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-files/validate"));
+  assert.ok(architectureDoc.includes("publicDatasetPackageFileValidation"));
+  assert.ok(architectureDoc.includes("unchanged template hashes, `templateOnly` markers, JSONL/JSON/Markdown structure"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-publication-gate"));
+  assert.ok(architectureDoc.includes("publicDatasetPublicationGate"));
+  assert.ok(architectureDoc.includes("target-data, release-artifact, public-documentation, hidden/protected-exclusion"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-downstream-launches"));
   assert.ok(architectureDoc.includes("publicDatasetDownstreamLaunchGuard"));
   assert.ok(architectureDoc.includes("public leaderboard, API evaluator, public training export, and judge-model launch"));
