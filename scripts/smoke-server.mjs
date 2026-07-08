@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { scoreExplanationOverallProductDiagnostic } from "../src/domain/core.mjs";
 import { createLmcaServer } from "../src/server.mjs";
 
 main().catch((error) => {
@@ -39,6 +40,559 @@ async function main() {
       body: JSON.stringify({ userId: "demo-admin" }),
     });
     assert.equal(adminSession.status, 201);
+
+    const releaseReportSnapshot = await requestJson(`${baseUrl}/api/v1/release-reports`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(releaseReportSnapshot.status, 201);
+    assert.equal(releaseReportSnapshot.body.resourceKey, "releaseReport");
+
+    const releaseReportCollection = await requestJson(`${baseUrl}/api/v1/release-reports`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(releaseReportCollection.status, 200);
+    assert.equal(releaseReportCollection.body.resourceKey, "releaseReport");
+    assert.equal(releaseReportCollection.body.count, 1);
+    assert.equal(releaseReportCollection.body.items[0].id, releaseReportSnapshot.body.releaseReportId);
+
+    const operatorActionItems = await requestJson(`${baseUrl}/api/v1/operator-action-items`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(operatorActionItems.status, 200);
+    assert.equal(operatorActionItems.body.resourceKey, "operatorActionItem");
+    assert.equal(operatorActionItems.body.releaseUseStatus, "operator_evidence_submission_plan_open");
+    assert.equal(operatorActionItems.body.counts.collectDataActionItems, 11);
+    assert.equal(operatorActionItems.body.counts.submitArtifactActionItems, 29);
+    assert.equal(
+      operatorActionItems.body.items.find((item) => item.artifactKind === "artifact_probe")?.writeRoute,
+      "/api/v1/artifact-probes/run",
+    );
+    assert.equal(operatorActionItems.body.items[0].targetGapId, "positions");
+    assert.equal(operatorActionItems.body.items[0].targetGapReadbackItemRoute, "/api/v1/target-gaps/positions");
+    assert.equal(operatorActionItems.body.items[0].targetDataTemplateReadbackRoute, "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions");
+    assert.equal(
+      operatorActionItems.body.items[0].targetDataExpandedTemplateReadbackRoute,
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining",
+    );
+    assert.equal(
+      operatorActionItems.body.items[0].targetDataCappedExpandedTemplateReadbackRoute,
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining&maxExpandedRecords=100",
+    );
+    assert.deepEqual(operatorActionItems.body.items[0].templateReadbackRoutes, [
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions",
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining",
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining&maxExpandedRecords=100",
+    ]);
+    assert.equal(
+      operatorActionItems.body.items.find((item) => item.artifactKind === "label_snapshot").payloadTemplateReadbackRoute,
+      "/api/v1/operator-action-items/payload-template?checklistRowId=release_artifact_submission_package&actionType=submit_artifact&artifactKind=label_snapshot",
+    );
+    assert.deepEqual(
+      operatorActionItems.body.items.find((item) => item.actionType === "review_artifact" && item.artifactId === "leaderboard_model_run_provenance")
+        .relatedSubmitActionIds,
+      ["model_evaluation_reproducibility:submit:leaderboard_model_run_provenance"],
+    );
+    assert.equal(
+      operatorActionItems.body.items.find((item) => item.actionType === "review_artifact" && item.artifactId === "leaderboard_model_run_provenance")
+        .readbackItemRoute,
+      "/api/v1/release-report-sections/model-evaluation-reproducibility-checklist-october-2026-demo",
+    );
+    const exactLeaderboardSubmitAction = await requestJson(
+      `${baseUrl}/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Aleaderboard_model_run_provenance`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(exactLeaderboardSubmitAction.status, 200);
+    assert.equal(exactLeaderboardSubmitAction.body.count, 1);
+    assert.equal(exactLeaderboardSubmitAction.body.items[0].artifactKind, "leaderboard_model_run_provenance");
+    const leaderboardReviewSummary = await requestJson(
+      `${baseUrl}/api/v1/operator-review-artifact-summaries?artifactId=leaderboard_model_run_provenance`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(leaderboardReviewSummary.status, 200);
+    assert.deepEqual(leaderboardReviewSummary.body.items[0].relatedSubmitActionIds, [
+      "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+    ]);
+    const runEnvironmentReviewSummary = await requestJson(
+      `${baseUrl}/api/v1/operator-review-artifact-summaries?relatedArtifactKind=model_run_environment`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(runEnvironmentReviewSummary.status, 200);
+    assert.equal(runEnvironmentReviewSummary.body.count, 1);
+    assert.equal(runEnvironmentReviewSummary.body.items[0].artifactId, "submitted_run_inference_environment_provenance");
+
+    const raterOperatorActionItems = await requestJson(`${baseUrl}/api/v1/operator-action-items`, {
+      headers: { authorization: `Bearer ${graduateSession.body.token}` },
+    });
+    assert.equal(raterOperatorActionItems.status, 403);
+
+    const targetGaps = await requestJson(`${baseUrl}/api/v1/target-gaps`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(targetGaps.status, 200);
+    assert.equal(targetGaps.body.resourceKey, "targetGap");
+    assert.equal(targetGaps.body.count, 7);
+    assert.equal(targetGaps.body.filteredCounts.remainingTotal, 2034);
+    assert.equal(targetGaps.body.items.find((item) => item.id === "positions").remaining, 117);
+
+    const lmcaComparison = await requestJson(`${baseUrl}/api/v1/lmca-comparison?section=model_score_anchor`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(lmcaComparison.status, 200);
+    assert.equal(lmcaComparison.body.resourceKey, "lmcaComparisonRow");
+    assert.equal(lmcaComparison.body.count, 7);
+    assert.equal(lmcaComparison.body.filteredCounts.modelScoreAnchors, 7);
+
+    const octoberOperatingPlan = await requestJson(`${baseUrl}/api/v1/october-operating-plan?section=workstream&targetGapId=blind_initial_ratings`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(octoberOperatingPlan.status, 200);
+    assert.equal(octoberOperatingPlan.body.resourceKey, "octoberOperatingPlanRow");
+    assert.equal(octoberOperatingPlan.body.count, 5);
+    assert.equal(octoberOperatingPlan.body.filteredCounts.blockedWorkstreams, 5);
+
+    const octoberCompletionChecklist = await requestJson(
+      `${baseUrl}/api/v1/october-completion-checklist?status=data_collection_required`,
+      {
+        headers: { authorization: `Bearer ${adminSession.body.token}` },
+      },
+    );
+    assert.equal(octoberCompletionChecklist.status, 200);
+    assert.equal(octoberCompletionChecklist.body.resourceKey, "octoberCompletionChecklistRow");
+    assert.equal(octoberCompletionChecklist.body.count, 3);
+    assert.equal(octoberCompletionChecklist.body.filteredCounts.dataCollectionRequired, 3);
+    assert.equal(octoberCompletionChecklist.body.items[0].operatorActionRoute, "/api/v1/operator-action-items?checklistRowId=target_scale_and_data_collection");
+    assert.equal(octoberCompletionChecklist.body.items[0].nextOperatorActionSummary.targetGapId, "positions");
+    assert.equal(octoberCompletionChecklist.body.items[0].nextOperatorActionSummary.dryRunImportRoute, "/api/v1/intake/positions/import-jsonl?dryRun=true");
+    assert.ok(octoberCompletionChecklist.body.items[0].templateReadbackRoutes.includes("/api/v1/target-gaps/import-jsonl-template?targetGapId=positions"));
+
+    const blindRatingRunbook = await requestJson(`${baseUrl}/api/v1/october-completion-runbook?phase=collect_data&targetGapId=blind_initial_ratings`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(blindRatingRunbook.status, 200);
+    assert.equal(blindRatingRunbook.body.resourceKey, "octoberCompletionRunbookStep");
+    assert.deepEqual(
+      blindRatingRunbook.body.items.map((item) => item.stepKind),
+      ["setup_data_import", "setup_data_import", "primary_data_import"],
+    );
+    assert.equal(blindRatingRunbook.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
+    assert.equal(blindRatingRunbook.body.items[0].packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+    assert.equal(blindRatingRunbook.body.items[0].packageDryRunImportRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+    assert.equal(blindRatingRunbook.body.items[1].importRoute, "/api/v1/rating-context-snapshots/import-jsonl");
+    assert.equal(blindRatingRunbook.body.items[1].resourceKey, "ratingContextSnapshot");
+    assert.equal(blindRatingRunbook.body.items[2].importRoute, "/api/v1/ratings/import-jsonl");
+    assert.equal(blindRatingRunbook.body.items[2].packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+
+    const releaseArtifactRunbook = await requestJson(
+      `${baseUrl}/api/v1/october-completion-runbook?phase=submit_operator_evidence&checklistRowId=release_artifact_submission_package`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(releaseArtifactRunbook.status, 200);
+    const corpusManifestRunbookStep = releaseArtifactRunbook.body.items.find((item) => item.artifactKind === "corpus_manifest");
+    assert.ok(corpusManifestRunbookStep);
+    assert.equal(corpusManifestRunbookStep.importRoute, "/api/v1/operator-evidence/import-jsonl");
+    assert.equal(corpusManifestRunbookStep.packageImportRoute, "/api/v1/operator-evidence/import-jsonl");
+    assert.equal(corpusManifestRunbookStep.packageDryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
+
+    const releaseReportSections = await requestJson(
+      `${baseUrl}/api/v1/release-report-sections/model-evaluation-reproducibility-checklist-october-2026-demo`,
+      {
+        headers: { authorization: `Bearer ${adminSession.body.token}` },
+      },
+    );
+    assert.equal(releaseReportSections.status, 200);
+    assert.equal(releaseReportSections.body.resourceKey, "releaseReportSection");
+    assert.equal(releaseReportSections.body.count, 1);
+    assert.equal(releaseReportSections.body.item.sourceEvidenceId, "model-evaluation-reproducibility-checklist-october-2026-demo");
+    assert.ok(releaseReportSections.body.item.sectionKeys.includes("modelEvaluationReproducibilityChecklist"));
+
+    const blindRatingCollectionPlan = await requestJson(`${baseUrl}/api/v1/target-gaps/collection-plan?targetGapId=blind_initial_ratings`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(blindRatingCollectionPlan.status, 200);
+    assert.equal(blindRatingCollectionPlan.body.resourceKey, "targetGapCollectionPlan");
+    assert.equal(blindRatingCollectionPlan.body.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+    assert.equal(blindRatingCollectionPlan.body.count, 1);
+    assert.equal(blindRatingCollectionPlan.body.items[0].targetGapId, "blind_initial_ratings");
+    assert.equal(blindRatingCollectionPlan.body.items[0].packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+    assert.equal(blindRatingCollectionPlan.body.items[0].packageDryRunImportRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+    assert.deepEqual(
+      blindRatingCollectionPlan.body.items[0].importSequence.map((step) => step.stepKind),
+      ["setup_data_import", "setup_data_import", "primary_data_import"],
+    );
+    assert.equal(blindRatingCollectionPlan.body.items[0].setupBulkImportRoute, "/api/v1/assignments/import-jsonl");
+    assert.equal(blindRatingCollectionPlan.body.items[0].importSequence[1].importRoute, "/api/v1/rating-context-snapshots/import-jsonl");
+    assert.equal(blindRatingCollectionPlan.body.items[0].bulkImportRoute, "/api/v1/ratings/import-jsonl");
+
+    const targetDataTemplate = await requestJson(
+      `${baseUrl}/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&checklistRowId=target_scale_and_data_collection`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(targetDataTemplate.status, 200);
+    assert.equal(targetDataTemplate.body.resourceKey, "targetDataCollectionJsonlTemplate");
+    assert.equal(targetDataTemplate.body.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+    assert.equal(targetDataTemplate.body.packageDryRunImportRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+    assert.equal(targetDataTemplate.body.count, 1);
+    assert.equal(targetDataTemplate.body.items[0].targetGapId, "positions");
+    assert.equal(targetDataTemplate.body.items[0].importRoute, "/api/v1/intake/positions/import-jsonl");
+    assert.equal(targetDataTemplate.body.items[0].packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+    assert.equal(targetDataTemplate.body.items[0].record.templateOnly, true);
+    assert.equal(targetDataTemplate.body.items[0].record.position.templateOnly, true);
+    assert.equal(targetDataTemplate.body.items[0].importImpact.remaining, 117);
+
+    const expandedTargetDataTemplate = await requestJson(
+      `${baseUrl}/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&checklistRowId=target_scale_and_data_collection&expand=remaining&maxExpandedRecords=3`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(expandedTargetDataTemplate.status, 200);
+    assert.equal(expandedTargetDataTemplate.body.expansion.mode, "remaining");
+    assert.equal(expandedTargetDataTemplate.body.count, 3);
+    assert.equal(expandedTargetDataTemplate.body.items[0].expandedRecordCapApplied, true);
+    assert.equal(JSON.parse(expandedTargetDataTemplate.body.jsonl.split("\n")[2]).templateOnly, true);
+
+    const unchangedTargetTemplateImport = await requestJson(`${baseUrl}${targetDataTemplate.body.items[0].importRoute}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({ jsonl: JSON.stringify(targetDataTemplate.body.items[0].record) }),
+    });
+    assert.equal(unchangedTargetTemplateImport.status, 400);
+    assert.equal(unchangedTargetTemplateImport.body.error, "target_data_collection_template_record");
+
+    const unchangedTargetTemplatePackageImport = await requestJson(`${baseUrl}${targetDataTemplate.body.packageImportRoute}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({ jsonl: JSON.stringify(targetDataTemplate.body.items[0].record) }),
+    });
+    assert.equal(unchangedTargetTemplatePackageImport.status, 400);
+    assert.equal(unchangedTargetTemplatePackageImport.body.error, "target_data_collection_package_template_record");
+
+    const replacedPositionDryRun = await requestJson(`${baseUrl}${targetDataTemplate.body.items[0].importRoute}?dryRun=true`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({
+        jsonl: JSON.stringify({
+          targetGapId: "positions",
+          importKind: "primary_data_import",
+          importImpact: {
+            targetGapId: "positions",
+            importKind: "primary_data_import",
+            importRoute: "/api/v1/intake/positions/import-jsonl",
+          },
+          position: {
+            id: "pos-smoke-target-impact",
+            text: "A smoke-test replacement position validates target-gap impact readback before any live append.",
+            split: "public_train",
+            topicFamily: "miscellaneous_topics",
+            conceptualScope: "primarily_conceptual",
+            groundTruthAvailability: "no_realistically_accessible_ground_truth",
+            acceptedMethodologyStatus: "no_widely_accepted_resolution_methodology",
+            nonConceptualDependencyNotes: "No central empirical dependency.",
+            contextSufficiency: "sufficient",
+            assumedBackgroundPolicy: "Assume only the rater-visible release terms.",
+            pricedInContextNotes: "No hidden source context is priced in.",
+            intakeScreening: {
+              originalTextPreserved: true,
+              raterVisibleTextVersionId: "ptv-pos-smoke-target-impact-v1",
+              normalizationStatus: "not_needed",
+              expertNormalizationRequired: false,
+              adminOnlyAmbiguityNotes: [],
+              adminOnlyIntendedConclusionNotes: [],
+              notesVisibleToInitialRaters: false,
+              contextGapFlags: [],
+              ordinaryHeadlineEligibility: "eligible",
+            },
+            rightsStatus: "cleared_internal",
+          },
+        }),
+      }),
+    });
+    assert.equal(replacedPositionDryRun.status, 200);
+    assert.equal(replacedPositionDryRun.body.dryRun, true);
+    assert.equal(replacedPositionDryRun.body.noSideEffects, true);
+    assert.equal(replacedPositionDryRun.body.targetGapImpactSummary.releaseReportVerificationRoute, "/api/release/report");
+    assert.equal(replacedPositionDryRun.body.targetGapImpactSummary.scopedTargetGapCount, 1);
+    assert.equal(replacedPositionDryRun.body.targetGapImpactSummary.rows[0].targetGapId, "positions");
+    assert.equal(replacedPositionDryRun.body.targetGapImpactSummary.rows[0].expectedResourceDeltaFromPackageRecords, 1);
+    assert.equal(replacedPositionDryRun.body.validatedResources[0].route, "/api/v1/intake/positions/import-jsonl");
+    assert.equal(replacedPositionDryRun.body.validatedResources[0].targetGapId, "positions");
+
+    const operatorEvidenceTemplate = await requestJson(`${baseUrl}/api/v1/operator-evidence/import-jsonl-template?artifactKind=corpus_manifest`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(operatorEvidenceTemplate.status, 200);
+    assert.equal(operatorEvidenceTemplate.body.resourceKey, "operatorEvidencePackageJsonlTemplate");
+    assert.equal(operatorEvidenceTemplate.body.importRoute, "/api/v1/operator-evidence/import-jsonl");
+    assert.equal(operatorEvidenceTemplate.body.count, 1);
+    assert.equal(operatorEvidenceTemplate.body.items[0].artifactKind, "corpus_manifest");
+    assert.equal(operatorEvidenceTemplate.body.items[0].record.templateOnly, true);
+    assert.equal(operatorEvidenceTemplate.body.items[0].record.payload.corpusManifest.releaseId, "october-2026-demo");
+
+    const unchangedOperatorEvidenceImport = await requestJson(`${baseUrl}${operatorEvidenceTemplate.body.importRoute}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({ jsonl: JSON.stringify(operatorEvidenceTemplate.body.items[0].record) }),
+    });
+    assert.equal(unchangedOperatorEvidenceImport.status, 400);
+    assert.equal(unchangedOperatorEvidenceImport.body.error, "operator_evidence_package_template_record");
+
+    const payloadTemplate = await requestJson(`${baseUrl}/api/v1/operator-action-items/payload-template?artifactKind=label_snapshot`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(payloadTemplate.status, 200);
+    assert.equal(payloadTemplate.body.resourceKey, "operatorActionPayloadTemplate");
+    assert.equal(payloadTemplate.body.count, 1);
+    assert.equal(payloadTemplate.body.items[0].artifactKind, "label_snapshot");
+    assert.equal(payloadTemplate.body.items[0].policyGated, true);
+    assert.equal(payloadTemplate.body.items[0].policyActionKind, "label_snapshot_freeze");
+    assert.equal(payloadTemplate.body.items[0].requestBody.labelSnapshot.templateOnly, true);
+
+    const unchangedPayloadTemplateWrite = await requestJson(`${baseUrl}${payloadTemplate.body.items[0].route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify(payloadTemplate.body.items[0].requestBody),
+    });
+    assert.equal(unchangedPayloadTemplateWrite.status, 400);
+    assert.equal(unchangedPayloadTemplateWrite.body.error, "workflow_template_record");
+    assert.equal(unchangedPayloadTemplateWrite.body.resourceKey, "labelSnapshot");
+
+    const discussionSubmissionChecklist = await requestJson(
+      `${baseUrl}/api/v1/operator-submission-checklist?checklistRowId=discussion_and_adjudication_workflows&artifactKind=discussion`,
+      { headers: { authorization: `Bearer ${adminSession.body.token}` } },
+    );
+    assert.equal(discussionSubmissionChecklist.status, 200);
+    assert.equal(discussionSubmissionChecklist.body.count, 1);
+    assert.equal(
+      discussionSubmissionChecklist.body.items[0].payloadTemplateReadbackRoute,
+      "/api/v1/operator-action-items/payload-template?checklistRowId=discussion_and_adjudication_workflows&actionType=submit_artifact&artifactKind=discussion",
+    );
+    assert.deepEqual(discussionSubmissionChecklist.body.items[0].templateReadbackRoutes, [
+      discussionSubmissionChecklist.body.items[0].payloadTemplateReadbackRoute,
+    ]);
+
+    const sourceWorkbenchTemplate = await requestJson(`${baseUrl}/api/v1/metaphilosophy/source-workbench-template`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(sourceWorkbenchTemplate.status, 200);
+    assert.equal(sourceWorkbenchTemplate.body.resourceKey, "metaphilosophySourceWorkbenchTemplate");
+    assert.equal(sourceWorkbenchTemplate.body.count, 8);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.source_card_write, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.source_span_write, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.extraction_jsonl_import, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.argument_extraction_review, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.prepared_position_draft_create, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.prepared_critique_draft_create, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.prepared_draft_review, 1);
+    assert.equal(sourceWorkbenchTemplate.body.counts.byTemplateKind.prepared_draft_promote, 1);
+    assert.match(sourceWorkbenchTemplate.body.policy.templateOnly, /reject unchanged template records/);
+
+    const sourceCardTemplate = sourceWorkbenchTemplate.body.items.find((item) => item.templateKind === "source_card_write");
+    assert.ok(sourceCardTemplate);
+    assert.equal(sourceCardTemplate.route, "/api/v1/admin/sources");
+    assert.equal(sourceCardTemplate.requestBody.sourceCard.templateOnly, true);
+    assert.equal(sourceCardTemplate.requestBody.sourceCard.sourceVisibility, "admin_only_not_rater_visible");
+
+    const extractionTemplate = sourceWorkbenchTemplate.body.items.find((item) => item.templateKind === "extraction_jsonl_import");
+    assert.ok(extractionTemplate);
+    assert.equal(extractionTemplate.routeTemplate, "/api/v1/admin/sources/{id}/extract");
+    const preparedDraftPromoteTemplate = sourceWorkbenchTemplate.body.items.find((item) => item.templateKind === "prepared_draft_promote");
+    assert.ok(preparedDraftPromoteTemplate);
+    assert.equal(preparedDraftPromoteTemplate.routeTemplate, "/api/v1/admin/prepared-drafts/{id}/promote");
+    assert.equal(preparedDraftPromoteTemplate.requestBody.promotion.templateOnly, true);
+    assert.equal(extractionTemplate.dryRunImportRoute, "/api/v1/admin/sources/TODO_SOURCE_CARD_ID/extract?dryRun=true");
+    assert.equal(extractionTemplate.validateOnlyImportRoute, "/api/v1/admin/sources/TODO_SOURCE_CARD_ID/extract?validateOnly=true");
+    assert.equal(extractionTemplate.requestBody.templateOnly, true);
+    assert.equal(extractionTemplate.requestBody.extractionBatch.templateOnly, true);
+    assert.equal(JSON.parse(extractionTemplate.requestBody.jsonl.trim()).templateOnly, true);
+
+    const raterSourceWorkbenchTemplate = await requestJson(`${baseUrl}/api/v1/metaphilosophy/source-workbench-template`, {
+      headers: { authorization: `Bearer ${graduateSession.body.token}` },
+    });
+    assert.equal(raterSourceWorkbenchTemplate.status, 403);
+
+    const templateOnlySourceCard = await requestJson(`${baseUrl}${sourceCardTemplate.route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify(sourceCardTemplate.requestBody),
+    });
+    assert.equal(templateOnlySourceCard.status, 400);
+    assert.equal(templateOnlySourceCard.body.error, "workflow_template_record");
+
+    const templateOnlyExtractionImport = await requestJson(`${baseUrl}${extractionTemplate.dryRunImportRoute}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify(extractionTemplate.requestBody),
+    });
+    assert.equal(templateOnlyExtractionImport.status, 400);
+    assert.equal(templateOnlyExtractionImport.body.error, "source_intake_template_record");
+
+    const sourceCard = {
+      id: "source-card-smoke-server",
+      title: "Smoke source-to-position excerpt",
+      sourceAuthor: "Smoke seminar instructor",
+      sourceWork: "Smoke argument-quality reader",
+      sourcePublisherOrSite: "Internal smoke fixture",
+      publicationYear: "2026",
+      uploadedFileId: null,
+      sourceType: "coursework",
+      sourceLocator: "smoke-reader:argument-quality:section-1",
+      sourceProvenanceSummary: "Admin-created smoke source card for Phase 1 source intake.",
+      rightsStatus: "internal_review_allowed",
+      sourceLanguage: "en",
+      translationStatus: "original_language",
+      taskFormat: "mixed_position_and_critique_source",
+      adminNotes: "Smoke-test source metadata remains admin-only and hidden from ordinary raters.",
+      sourceAccessPolicy: "internal_review_allowed",
+      releasePolicy: "prepared_text_only_after_review",
+      sourceVisibility: "admin_only_not_rater_visible",
+      createdBy: "demo-admin",
+      createdAt: "2026-10-01T00:40:00.000Z",
+    };
+    const sourceCardResponse = await requestJson(`${baseUrl}/api/v1/source-cards`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({ sourceCard }),
+    });
+    assert.equal(sourceCardResponse.status, 201);
+
+    const sourceCardCollection = await requestJson(`${baseUrl}/api/v1/source-cards`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(sourceCardCollection.status, 200);
+    assert.equal(sourceCardCollection.body.resourceKey, "sourceCard");
+    assert.equal(sourceCardCollection.body.count, 1);
+    assert.equal(sourceCardCollection.body.items[0].id, sourceCard.id);
+
+    const sourceSpan = {
+      id: "source-span-smoke-server",
+      sourceCardId: sourceCard.id,
+      spanLocator: "chars:0-220",
+      boundedLocator: "smoke reader section 1, chars 0-220",
+      spanKind: "argumentative_claim",
+      textHash: "sha256:source-span-smoke-server",
+      adminExcerpt: "Smoke-test span text remains admin-only and is represented by a hash for raters.",
+      excerptStoragePolicy: "store_hash_and_admin_excerpt_only_not_rater_visible",
+      segmentationStatus: "manually_selected",
+      extractionStatus: "selected_for_extraction",
+      adminSelectionNotes: "Smoke-test selected span with source metadata hidden from raters.",
+      sourceVisibility: "admin_only_not_rater_visible",
+      createdBy: "demo-admin",
+      createdAt: "2026-10-01T00:41:00.000Z",
+    };
+    const sourceSpanResponse = await requestJson(`${baseUrl}/api/v1/source-spans`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({ sourceSpan }),
+    });
+    assert.equal(sourceSpanResponse.status, 201);
+
+    const extractionBatch = {
+      id: "extraction-batch-smoke-server",
+      sourceCardId: sourceCard.id,
+      importFormat: "jsonl",
+      importedBy: "demo-admin",
+      importedAt: "2026-10-01T00:42:00.000Z",
+      extractionCount: 1,
+      parserVersion: "source-intake-jsonl-v1",
+      importRoute: "admin_jsonl_extraction_import",
+      extractionExecutionMode: "manual_jsonl_import_no_platform_ai_execution",
+      downstreamIntegrationStatus: "not_integrated_phase_1",
+      createsPreparedDraft: false,
+      createsCandidateItem: false,
+      createsCandidateBatch: false,
+      liveQueueIntegration: false,
+      aiExtractionExecuted: false,
+    };
+    const argumentExtraction = {
+      id: "argument-extraction-smoke-server",
+      sourceSpanIds: [sourceSpan.id],
+      argumentRole: "mixed_position_and_critique",
+      intendedConclusion: "A good philosophical argument should make its inferential burden explicit.",
+      keyPremises: [
+        "Hidden burdens make arguments hard to assess.",
+        "Explicit burdens help reviewers separate position preparation from critique preparation.",
+      ],
+      argumentSummary: "The source span provides a possible prepared position and a possible critique of vague plausibility gestures.",
+      implicitAssumptions: ["Argument quality depends on inspectable inferential structure."],
+      critiqueTarget: "Critiques that sound plausible without identifying the burden they satisfy.",
+      contextNeeded: "Reviewer needs the local source context before any later preparation phase.",
+      conceptualScopeNotes: "Primarily conceptual methodology claim.",
+      suitabilityNotes: "Suitable for future manual source-to-position or source-to-critique preparation.",
+      possiblePreparedPositionText: "A good philosophical argument should make its inferential burden explicit.",
+      possiblePreparedCritiqueText: "A critique is weak if it sounds plausible but does not identify which inferential burden the position fails to meet.",
+      extractedPositionText: "A good philosophical argument should make its inferential burden explicit.",
+      extractionRationale: "The source span contains a candidate position about argument quality.",
+      extractionMethod: "manual_jsonl_import",
+    };
+    const extractionImport = await requestJson(`${baseUrl}/api/v1/extraction-batches/import-jsonl`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({ extractionBatch, jsonl: `${JSON.stringify(argumentExtraction)}\n` }),
+    });
+    assert.equal(extractionImport.status, 201);
+    assert.equal(extractionImport.body.importedExtractionCount, 1);
+    assert.equal(extractionImport.body.safety.createdPreparedDrafts, false);
+    assert.equal(extractionImport.body.safety.createdCandidateItems, false);
+    assert.equal(extractionImport.body.safety.createdCandidateBatches, false);
+    assert.equal(extractionImport.body.safety.liveQueueIntegrated, false);
+    assert.equal(extractionImport.body.safety.aiExtractionExecuted, false);
+
+    const argumentExtractionCollection = await requestJson(`${baseUrl}/api/v1/argument-extractions`, {
+      headers: { authorization: `Bearer ${adminSession.body.token}` },
+    });
+    assert.equal(argumentExtractionCollection.status, 200);
+    assert.equal(argumentExtractionCollection.body.resourceKey, "argumentExtraction");
+    assert.equal(argumentExtractionCollection.body.count, 1);
+    assert.equal(argumentExtractionCollection.body.items[0].id, argumentExtraction.id);
+
+    const extractionReview = await requestJson(`${baseUrl}/api/v1/argument-extractions/${argumentExtraction.id}/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({
+        argumentExtractionReview: {
+          reviewStatus: "accepted_for_position_intake",
+          reviewNotes: "Accepted in smoke test for future preparation; Phase 1 does not promote downstream artifacts.",
+          reviewedBy: "demo-admin",
+          reviewedAt: "2026-10-01T00:43:00.000Z",
+        },
+      }),
+    });
+    assert.equal(extractionReview.status, 201);
+    assert.equal(extractionReview.body.safety.createdPreparedDrafts, false);
+    assert.equal(extractionReview.body.safety.createdCandidateItems, false);
+    assert.equal(extractionReview.body.safety.createdCandidateBatches, false);
+
+    const extractionReviewSignal = await requestJson(`${baseUrl}/api/v1/admin/review-signals`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession.body.token}` },
+      body: JSON.stringify({
+        reviewSignal: {
+          id: "review-signal-smoke-server",
+          signalType: "context_sufficiency_reviewed",
+          source: "admin",
+          confidence: 0.9,
+          explanation: "Smoke reviewer recorded source-intake evidence without creating a gate decision or downstream artifact.",
+          affectedObjectType: "ArgumentExtraction",
+          affectedObjectId: argumentExtraction.id,
+          relatedGateIds: ["context_sufficiency_gate"],
+        },
+      }),
+    });
+    assert.equal(extractionReviewSignal.status, 201);
+    assert.equal(extractionReviewSignal.body.safety.createdGateDecision, false);
+    assert.equal(extractionReviewSignal.body.safety.createdPreparedDraft, false);
+    assert.equal(extractionReviewSignal.body.safety.createdCandidateItem, false);
+
+    const externalAssistanceDeclaration = await requestJson(`${baseUrl}/api/v1/external-assistance-declarations`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${graduateSession.body.token}` },
+      body: JSON.stringify({
+        externalAssistanceDeclaration: validExternalAssistanceDeclaration(
+          "external-assistance-declaration-rating-smoke-server",
+          "rating-smoke-server",
+        ),
+      }),
+    });
+    assert.equal(externalAssistanceDeclaration.status, 201);
 
     const created = await requestJson(`${baseUrl}/api/ratings/blind`, {
       method: "POST",
@@ -188,6 +742,23 @@ async function main() {
 
     const report = await requestJson(`${baseUrl}/api/release/report`);
     assert.equal(report.status, 200);
+    const releaseArtifactChecklistRow = report.body.octoberCompletionChecklist.rows.find(
+      (row) => row.id === "release_artifact_submission_package",
+    );
+    assert.ok(releaseArtifactChecklistRow);
+    assert.deepEqual(releaseArtifactChecklistRow.bulkImportRoutes, ["/api/v1/operator-evidence/import-jsonl"]);
+    assert.deepEqual(releaseArtifactChecklistRow.dryRunImportRoutes, ["/api/v1/operator-evidence/import-jsonl?dryRun=true"]);
+    assert.ok(
+      releaseArtifactChecklistRow.templateReadbackRoutes.includes(
+        "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=release_artifact_submission_package&artifactKind=corpus_manifest",
+      ),
+    );
+    const targetScaleChecklistRow = report.body.octoberCompletionChecklist.rows.find((row) => row.id === "target_scale_and_data_collection");
+    assert.ok(targetScaleChecklistRow.packageImportRoutes.includes("/api/v1/target-gaps/import-jsonl-package"));
+    assert.ok(targetScaleChecklistRow.setupBulkImportRoutes.includes("/api/v1/assignments/import-jsonl"));
+    const validationChecklistRow = report.body.octoberCompletionChecklist.rows.find((row) => row.id === "validation_hidden_benchmark_and_claims");
+    assert.deepEqual(validationChecklistRow.bulkImportRoutes, ["/api/v1/validation-tranche-evidence/import-jsonl"]);
+    assert.equal(validationChecklistRow.bulkImportRoutes.includes("/api/v1/operator-evidence/import-jsonl"), false);
     assert.equal(report.body.corpusManifest.counts.blindInitialRatings, 7);
     assert.equal(report.body.corpusManifest.adminTagRisk.tagCount, 3);
     assert.equal(report.body.corpusManifest.adminTagRisk.byConfounderRiskClass.known_rating_confounder, 1);
@@ -205,6 +776,10 @@ async function main() {
     assert.equal(report.body.labelSnapshotReliability.reliabilityWeightModel.fitDataProvenance.protectedRatingsUsedForFit, 0);
     assert.equal(report.body.labelSnapshotReliability.reliabilityWeightModel.effectiveContribution.maxSingleRaterContributionShare, 1);
     assert.equal(report.body.labelSnapshotReliability.reliabilityWeightModel.releaseUseStatus, "uniform_weights_frozen_with_sensitivity_report");
+    assert.equal(report.body.labelAggregationReliabilityChecklist.releaseUseStatus, "label_aggregation_reliability_requirements_evidenced");
+    assert.equal(report.body.labelAggregationReliabilityChecklist.counts.checklistRows, 9);
+    assert.equal(report.body.labelAggregationReliabilityChecklist.counts.reviewRequiredRows, 0);
+    assert.equal(report.body.labelAggregationReliabilityChecklist.counts.maxSingleRaterContributionShare, 1);
     assert.equal(report.body.promptArtifacts.length, 4);
     assert.equal(report.body.promptArtifacts.find((artifact) => artifact.id === "project-full-rubric-v1").renderedPromptChecksum, "sha256:project-full-rubric-v1:rendered");
     assert.equal(report.body.promptTrackSeparation.counts.promptTrackRows, 4);
@@ -294,6 +869,17 @@ async function main() {
     assert.equal(report.body.candidateIntakeQualityAudit.counts.unqualifiedScaleEligibleCritiques, 3);
     assert.equal(report.body.candidateIntakeQualityAudit.counts.duplicateGeneratedOutputs, 1);
     assert.equal(report.body.candidateIntakeQualityAudit.releaseUseStatus, "marginal_informativeness_audit_disclosed_low_redundancy_controls");
+    assert.equal(report.body.candidateGenerationIntakeChecklist.releaseUseStatus, "candidate_generation_intake_requirements_evidenced");
+    assert.equal(report.body.candidateGenerationIntakeChecklist.counts.checklistRows, 8);
+    assert.equal(report.body.candidateGenerationIntakeChecklist.counts.reviewRequiredRows, 0);
+    assert.equal(
+      report.body.candidateGenerationIntakeChecklist.rows.find((row) => row.id === "model_judges_not_gold_role_separation").status,
+      "complete",
+    );
+    assert.equal(report.body.targetGaps.rows.length, 7);
+    assert.equal(report.body.targetGaps.counts.targetRows, 7);
+    assert.equal(report.body.targetGaps.rows.find((row) => row.id === "positions").sourceEvidenceId, report.body.corpusManifest.id);
+    assert.equal(report.body.targetGaps.rows.find((row) => row.id === "gold_library_items").sourceEvidenceId, report.body.certification.id);
     assert.equal(report.body.raterCompositionConflicts.counts.includedRaterCount, 5);
     assert.equal(report.body.raterCompositionConflicts.counts.releaseCriticalItemCount, 3);
     assert.equal(report.body.raterCompositionConflicts.counts.conflictFlagCount, 0);
@@ -337,6 +923,19 @@ async function main() {
     assert.equal(report.body.pairedTargetLabelSnapshots.coverageOverlap.overlapItemCount, 2);
     assert.equal(report.body.pairedTargetLabelSnapshots.modelScoreDeltas[0].primaryRaterAnchor.coverage.nPairsScored, 1);
     assert.equal(report.body.pairedTargetLabelSnapshots.rankSensitivity.status, "no_point_estimate_order_change_on_overlap");
+    assert.equal(report.body.sourceIntakeEvidence.counts.sourceCards, 1);
+    assert.equal(report.body.sourceIntakeEvidence.counts.sourceSpans, 1);
+    assert.equal(report.body.sourceIntakeEvidence.counts.extractionBatches, 1);
+    assert.equal(report.body.sourceIntakeEvidence.counts.argumentExtractions, 1);
+    assert.equal(report.body.sourceIntakeEvidence.byArgumentRole.mixed_position_and_critique, 1);
+    assert.equal(report.body.sourceIntakeEvidence.releaseUseStatus, "phase1_source_intake_ready_for_future_source_preparation");
+    assert.equal(report.body.workflowSourceIntakeArtifacts.argumentExtractions[0].reviewStatus, "accepted_for_position_intake");
+    assert.equal(report.body.workflowSourceIntakeArtifacts.argumentExtractions[0].possiblePreparedCritiqueText, argumentExtraction.possiblePreparedCritiqueText);
+    assert.equal(report.body.sourcePreparationEvidence.releaseUseStatus, "source_preparation_not_started");
+    assert.equal(report.body.sourcePreparationEvidence.counts.preparedDrafts, 0);
+    assert.equal(report.body.sourcePreparationEvidence.counts.candidateItems, 0);
+    assert.equal(report.body.sourcePreparationEvidence.counts.promotionRecords, 0);
+    assert.equal(Object.hasOwn(report.body, "workflowSourcePreparationArtifacts"), false);
 
     const auditLog = await readFile(join(auditDir, "rating-events.jsonl"), "utf8");
     assert.equal(auditLog.trim().split("\n").length, 1);
@@ -344,7 +943,9 @@ async function main() {
     assert.equal(sourceStyleLog.trim().split("\n").length, 1);
     const benchmarkLog = await readFile(join(auditDir, "benchmark-exposure-events.jsonl"), "utf8");
     assert.equal(benchmarkLog.trim().split("\n").length, 4);
-    console.log("Server smoke passed: health, rating and source/style audit appends, certification workflow, benchmark access logging, hidden metadata rejection, admin audit readback, and dynamic report.");
+    console.log(
+      "Server smoke passed: health, operator unblocker readbacks/templates, source-workbench template readback, source-intake import/review boundaries, rating and source/style audit appends, certification workflow, benchmark access logging, hidden metadata rejection, admin audit readback, and dynamic report.",
+    );
   } finally {
     if (server.listening) {
       await new Promise((resolveClose, rejectClose) => server.close((error) => (error ? rejectClose(error) : resolveClose())));
@@ -442,7 +1043,21 @@ function validBlindRating(id) {
     scoreExplanation: "",
     scoreExplanationRequired: false,
     scoreExplanationTriggers: [],
+    scoreExplanationRequiredReasons: [],
+    scoreExplanationPromptShown: false,
     scoreExplanationPromptVisibility: "label_source_protected_status_blind",
+    scoreExplanationCompletionStatus: "ordinary_note_optional",
+    externalAssistanceDeclarationId: `external-assistance-declaration-${id}`,
+    externalAssistanceDeclarationStatus: "no_external_assistance_or_protected_text_event_attested",
+    overallVsCentralityStrengthDiagnostic: scoreExplanationOverallProductDiagnostic({
+      centrality: 0.7,
+      strength: 0.68,
+      correctness: 0.9,
+      clarity: 0.88,
+      dead_weight: 0.05,
+      single_issue: 0.92,
+      overall: 0.62,
+    }),
     scoreEntryExplicitnessStatus: "all_required_scores_explicit",
     scoreMissingFieldValidationStatus: "passed_no_missing_required_fields",
     provisionalDimensions: [],
@@ -453,6 +1068,21 @@ function validBlindRating(id) {
     interruptionCount: 0,
     submittedAt: "2026-06-11T14:00:00.000Z",
     lockedAt: "2026-06-11T14:00:00.000Z",
+  };
+}
+
+function validExternalAssistanceDeclaration(id, ratingId) {
+  return {
+    id,
+    assignmentId: "assign-ai-base-rate",
+    ratingId,
+    raterId: "demo-rater",
+    assistanceType: "none",
+    protectedTextEventFlag: false,
+    outsideSystemDescription: "",
+    contaminationRouting: "none_recorded",
+    accessibilityExceptionStatus: "not_applicable",
+    timestamp: "2026-06-11T13:59:30.000Z",
   };
 }
 

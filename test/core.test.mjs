@@ -7,11 +7,13 @@ import {
   adjudicationMemos,
   appendRatingRevision,
   RUBRIC_DIMENSIONS,
+  OCTOBER_TARGET_SCALE_INCOMPLETE_STATUS,
   buildAdjudicationMemoAuditReport,
   auditProvenanceRights,
   assignments,
   buildAdminTagBlindingReport,
   buildActiveLearningAudit,
+  buildCandidateGenerationIntakeChecklistReport,
   buildAuxiliaryWorkflowEvidenceReport,
   buildCandidateIntakeQualityAudit,
   buildCertificationAudit,
@@ -22,10 +24,12 @@ import {
   buildHiddenBenchmarkFreezeReport,
   buildHiddenBenchmarkInitialBlindingReport,
   buildItemTextViewParityReport,
+  buildLabelAggregationReliabilityChecklistReport,
   buildLabelChannelSeparationReport,
   buildLmcaSourceExampleAnchorReport,
   buildMetricFamilyEligibilityManifest,
   buildModelAssistedLabelOverlapReport,
+  buildModelEvaluationReproducibilityChecklistReport,
   buildModelFailureAudit,
   buildOctoberReleaseReport,
   buildOperationalControlEvidenceReport,
@@ -34,6 +38,12 @@ import {
   buildPairedTargetLabelSnapshotReport,
   buildPolicyBundleEvidenceReport,
   buildPositionIntakeReadinessReport,
+  buildSourceIntakeEvidenceReport,
+  buildSourcePreparationEvidenceReport,
+  buildMetaphilosophyDeliverableChecklistReport,
+  buildMetaphilosophyGreenfieldArchitectureReport,
+  buildMetaphilosophyResearchBacklogReport,
+  buildMetaphilosophyTaskTrackTaxonomyReport,
   buildPostDiscussionDisagreementReport,
   buildPostLockSourceStyleAuditReport,
   buildProtectedSplitIsolationReport,
@@ -69,6 +79,7 @@ import {
   buildValidationTrancheReport,
   buildWorkflowStateMachineEvidenceReport,
   buildValidationDesignReport,
+  CONSENSUS_TARGET_LABEL_VERSION,
   ACCESSIBILITY_TOOLING_POLICY_VERSION,
   CLIENT_SURFACE_INTEGRITY_POLICY_VERSION,
   CLOUD_SECURITY_BUDGET_POLICY_VERSION,
@@ -77,6 +88,9 @@ import {
   REQUIRED_ACCESSIBILITY_EVIDENCE_ARTIFACT_TYPES,
   REQUIRED_ACCESSIBILITY_TEST_TOOLCHAIN,
   REQUIRED_ACCESSIBILITY_WCAG_CONFORMANCE_TARGET,
+  SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+  SOURCE_INTAKE_VISIBILITY,
+  SOURCE_RECOGNITION_NONBLIND_FLAG,
   REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
   REQUIRED_CLOUD_SECURITY_APPROVAL_STATUSES,
   REQUIRED_CLOUD_SECURITY_BUDGET_CATEGORY_MINIMUM_USD,
@@ -98,6 +112,9 @@ import {
   REQUIRED_ADJUDICATION_COCKPIT_MANDATORY_VIEW_IDS,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_RULES,
   REQUIRED_ADJUDICATION_COCKPIT_SIGNOFF_THRESHOLDS,
+  METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS,
+  METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS,
+  METAPHILOSOPHY_TASK_TRACKS,
   ADJUDICATOR_PRE_READ_REQUIREDNESS_POLICY_VERSION,
   REQUIRED_ADJUDICATOR_PRE_READ_DECISION_STATUSES,
   REQUIRED_ADJUDICATOR_PRE_READ_RULES,
@@ -168,6 +185,11 @@ import {
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
+  RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION,
+  REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS,
+  REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS,
+  REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS,
+  REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS,
   REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
   RATER_DASHBOARD_POLICY_VERSION,
   REQUIRED_RATER_DASHBOARD_PROHIBITED_FIELDS,
@@ -247,6 +269,7 @@ import {
   weightedPairwiseErrorRateByPosition,
   weightedPairwiseLossForPosition,
 } from "../src/domain/core.mjs";
+import { requiredGateIdsForPolicy } from "../src/domain/contributions.mjs";
 
 const uxSimplificationSurfaces = [
   "rating",
@@ -275,6 +298,7 @@ const uxNoFeatureLossKeys = [
   "release_governance_action",
   "appendix_f_anchor_access",
   "pre_submit_lint",
+  "external_assistance",
   "autosave_resume",
 ];
 
@@ -295,12 +319,34 @@ const certificationRemediationRules = {
   rubricVersionMismatch: "recertification_or_grandfathering_review_required",
 };
 
+const certificationCadencePolicy = {
+  goldInjectionSchedule: {
+    hiddenGoldEveryNReleaseCriticalAssignments: 10,
+    minimumHiddenGoldItemsPerActiveRaterPerMonth: 3,
+    stratification: "topic_difficulty_lmca_dimension_and_low_clarity_branch",
+  },
+  recertificationSchedule: {
+    routineIntervalDays: 180,
+    inactivityIntervalDays: 90,
+    rubricVersionChange: "required_before_release_critical_use",
+    targetedRetrainingExit: "pass_targeted_pack_before_assignment_unlock",
+  },
+  thresholdLogic: {
+    rollingWindowGoldItemsMin: 20,
+    certificationPassRateMin: 0.85,
+    consecutiveGoldFailuresTriggerRestriction: 2,
+    meanAbsErrorMax: certificationThresholds.meanAbsErrorMax,
+    perDimensionCalibrationErrorMax: certificationThresholds.perDimensionCalibrationErrorMax,
+  },
+};
+
 function certificationThresholdPolicy(id = "certification-threshold-policy-release-test") {
   return {
     id,
     policyVersion: "certification-threshold-rlhf90-v1",
     thresholds: certificationThresholds,
     remediationRules: certificationRemediationRules,
+    cadencePolicy: certificationCadencePolicy,
     certificationStatusRule:
       "A rater is certified only when completion is met, the rubric is current, mean absolute error and every dimension stay within the frozen numeric thresholds, and no restriction flags remain.",
     retrainingRule:
@@ -587,6 +633,11 @@ const raterInstructionCompatibilityClasses = REQUIRED_RATER_INSTRUCTION_COMPATIB
 const raterInstructionCompatibilityThresholds = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS;
 const raterInstructionCompatibilityRules = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES;
 const raterInstructionSharedPolicyFields = REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS;
+const raterInstructionComprehensionAuditVersion = RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION;
+const raterInstructionComprehensionScreens = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS;
+const raterInstructionComprehensionMethods = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS;
+const raterInstructionComprehensionChecks = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS;
+const raterInstructionDisclosureDepths = REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS;
 
 function raterInstructionCompatibilityPolicy(id = "rater-instruction-compatibility-policy-submitted") {
   return {
@@ -601,6 +652,40 @@ function raterInstructionCompatibilityPolicy(id = "rater-instruction-compatibili
     sensitivitySnapshotPolicy: raterInstructionCompatibilityRules.sensitivitySnapshot,
     lmcaSourceBoundary:
       "Project default UI-render compatibility thresholds are frozen here; LMCA motivates stable score semantics and protected-split comparability but does not state these exact platform thresholds.",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function raterInstructionComprehensionAudit(
+  id = "rater-instruction-comprehension-audit-submitted",
+  raterInstructionRenderVersionId = "rater-instruction-render-submitted",
+  raterInstructionCompatibilityPolicyId = "rater-instruction-compatibility-policy-submitted",
+  rubricCopyTraceabilityMapId = "rubric-copy-traceability-map-submitted",
+) {
+  return {
+    id,
+    auditVersion: raterInstructionComprehensionAuditVersion,
+    raterInstructionRenderVersionId,
+    raterInstructionCompatibilityPolicyId,
+    rubricCopyTraceabilityMapId,
+    coveredScreenIds: raterInstructionComprehensionScreens,
+    comprehensionMethods: raterInstructionComprehensionMethods,
+    comprehensionCheckIds: raterInstructionComprehensionChecks,
+    glossaryTermIds: ["centrality", "strength", "dead_weight", "single_issue", "overall"],
+    disclosureDepths: raterInstructionDisclosureDepths,
+    comprehensionTestMethodology:
+      "Expert and pilot-rater comprehension checks verify the task boundary, rubric dimensions, confidence metadata, hidden metadata boundaries, and safe action paths.",
+    clauseTraceabilityReviewStatus: "passed",
+    screenCopyMappingReviewStatus: "passed",
+    comprehensionTestStatus: "passed",
+    semanticDriftBlocker: true,
+    noFeatureLossBlocker: true,
+    protectedLeakageReviewPassed: true,
+    excludedFromScoreComputation: true,
+    excludedFromIndependentBlindDenominator: true,
+    sourceBoundary:
+      "Project default screen-copy comprehension methodology is frozen here; LMCA motivates careful rubric interpretation but does not state exact volunteer-platform comprehension checks.",
+    reviewerId: "demo-instruction-reviewer",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -1004,7 +1089,17 @@ const rubricCopyTraceabilityClauses = [
 ];
 
 const uxScreenControlRequirements = {
-  rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
+  rating: [
+    "score_fields",
+    "safe_decline",
+    "source_recognition",
+    "item_issue_report",
+    "verification_control",
+    "appendix_f_anchor_access",
+    "pre_submit_lint",
+    "external_assistance",
+    "autosave_resume",
+  ],
   practice: ["score_fields", "item_issue_report", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
   calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
   consent: ["data_governance_withdrawal", "audit_provenance_capture"],
@@ -1334,6 +1429,7 @@ const policyActionKinds = [
   "discussion_open",
   "adjudication_finalize",
   "label_snapshot_freeze",
+  "release_report_materialize",
   "pairwise_snapshot_freeze",
   "evaluation_run",
   "hidden_benchmark_aggregate_report",
@@ -1344,7 +1440,16 @@ const policyActionKinds = [
   "governance_action",
   "manifest_activation",
 ];
-const phaseGateLaneKinds = ["route", "worker", "queue", "ui_panel", "export_path", "evaluation_lane", "hidden_benchmark_submission_lane", "governance_action"];
+const phaseGateLaneKinds = [
+  "route",
+  "worker",
+  "queue",
+  "ui_panel",
+  "export_path",
+  "evaluation_lane",
+  "hidden_benchmark_submission_lane",
+  "governance_action",
+];
 const queueFreshnessLanes = ["assignment", "draft", "discussion", "adjudication", "model_evaluation_job", "hidden_benchmark_submission", "export", "outbox", "delayed_report"];
 const queueRevalidationChecks = [
   "item_text",
@@ -2094,7 +2199,10 @@ function completeOperationalControlFixtures() {
         laneStates: phaseGateLaneKinds.map((laneKind) => ({
           laneKind,
           laneId: `lane-${laneKind}`,
-          phaseState: laneKind === "hidden_benchmark_submission_lane" ? "staff_only" : "enabled",
+          phaseState:
+            laneKind === "hidden_benchmark_submission_lane"
+              ? "staff_only"
+              : "enabled",
           failClosed: true,
           noSideEffectsWhenDisabled: true,
           labelsExposedWhenDisabled: false,
@@ -2210,7 +2318,7 @@ function completeParticipantSafeguardFixtures() {
         compensationEligibilityPolicy,
         payrollLegalImplementationPolicy,
         paymentDataSeparationPolicy,
-        speedEffortGuardrails: "private QA-safe effort bands only",
+        speedEffortGuardrails: "private QA-safe effort bands only; no public speed rewards",
         publicRecognitionPolicy: "participation acknowledgement without scores, speed, agreement, or benchmark ranking",
         privateProgressDashboardPolicy: "private non-gamified progress only",
         calibrationFeedbackUseLimits: "post-lock training-approved feedback only",
@@ -2221,12 +2329,19 @@ function completeParticipantSafeguardFixtures() {
     ],
     raterQualificationRecords: qualificationScopes.map((qualificationScope) => ({
       id: `rater-qualification-submitted-${qualificationScope}`,
-      raterId: `qualified-${qualificationScope}`,
+      raterId:
+        qualificationScope === "primary_rater_anchor"
+          ? "rater-a"
+          : qualificationScope === "hidden_benchmark_expert"
+            ? "expert-1"
+            : qualificationScope === "topic_specialist"
+              ? "expert-1"
+            : `qualified-${qualificationScope}`,
       qualificationScope,
       qualificationSource: qualificationScope === "primary_rater_anchor" ? "manual_expert_review" : "certification_pack",
       evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
       approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
-      topicFamilyScope: ["AI safety", "decision theory", "normative ethics"],
+      topicFamilyScope: qualificationScope === "topic_specialist" ? ["politics", "philosophy_of_mind"] : ["ai_safety", "decision_theory", "normative_ethics"],
       splitWorkflowEligibility: qualificationWorkflowEligibility,
       expiryReviewDate: "2027-01-31",
       approver: "release-admin",
@@ -2238,6 +2353,9 @@ function completeParticipantSafeguardFixtures() {
         positionId: "pos-ai-prior",
         critiqueId: "crit-ai-base-rate",
         artifactType: "machine_translation_residue",
+        sourceLanguage: "es",
+        translationStatus: "machine_translation_reviewed",
+        sourceAdaptationRoute: "VivesDebate_adapted",
         pinDownabilityImpact: "none",
         substantiveAmbiguityImpact: "none",
         correctnessImpact: "none",
@@ -2362,6 +2480,11 @@ function completeRatingExperienceFixtures() {
   };
   const confidenceScalePolicy = scoreConfidenceScalePolicy("score-confidence-scale-policy-submitted");
   const batchReviewRequirednessPolicy = samePositionBatchReviewRequirednessPolicy("same-position-batch-review-requiredness-policy-submitted");
+  const comprehensionAudit = raterInstructionComprehensionAudit(
+    "rater-instruction-comprehension-audit-submitted",
+    renderVersion.id,
+    compatibilityPolicy.id,
+  );
   return {
     taskOutputEligibilityPolicies: [
       {
@@ -2382,6 +2505,7 @@ function completeRatingExperienceFixtures() {
     draftStoragePolicies: [draftStoragePolicy],
     raterInstructionCompatibilityPolicies: [compatibilityPolicy],
     raterInstructionRenderVersions: [renderVersion],
+    raterInstructionComprehensionAudits: [comprehensionAudit],
     rubricLintConfigs: [rubricLintConfig],
     rubricLintEvents: [
       {
@@ -3545,6 +3669,24 @@ test("policy bundle evidence gates visibility, workflow profile, escalation, UI 
   assert.ok(unsupportedScoreExplanationVocabularyReport.reviewSections.some((section) => section.reason === "triggerList:unexpected:peer_disagreement"));
   assert.ok(unsupportedScoreExplanationVocabularyReport.reviewSections.some((section) => section.reason === "inconsistencyRules:unexpected:private_model_disagreement"));
 
+  const leakyScoreExplanationPromptReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
+    ...completePolicyBundleFixtures(),
+    scoreExplanationPolicies: [
+      {
+        ...completePolicyBundleFixtures().scoreExplanationPolicies[0],
+        protectedStatusBlindPromptCopy: "Explain because this is a hidden-benchmark item with model-judge disagreement.",
+        sentenceGuidance: "Write one or two sentences about the validation label context.",
+        qaRoutingPolicy: "route to QA with source, label, model, and protected-status context visible",
+      },
+    ],
+  });
+  assert.equal(leakyScoreExplanationPromptReport.releaseUseStatus, "policy_bundle_review_required");
+  assert.ok(
+    leakyScoreExplanationPromptReport.reviewSections.some((section) => section.reason === "protectedStatusBlindPromptCopy:blind_safe"),
+  );
+  assert.ok(leakyScoreExplanationPromptReport.reviewSections.some((section) => section.reason === "sentenceGuidance:blind_safe"));
+  assert.ok(leakyScoreExplanationPromptReport.reviewSections.some((section) => section.reason === "qaRoutingPolicy:blind_safe"));
+
   const missingEscalationTriggerReport = buildPolicyBundleEvidenceReport("october-2026-demo", {
     ...completePolicyBundleFixtures(),
     ratingEscalationPolicies: [
@@ -3854,12 +3996,25 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
   assert.deepEqual(report.volunteerIncentivePolicyRows.at(-1).compensationRateUsdByEligibleUnit, compensationRateUsdByEligibleUnit);
   assert.equal(report.volunteerIncentivePolicyRows.at(-1).monthlyCompensationCapUsd, 600);
   assert.equal(report.volunteerIncentivePolicyRows.at(-1).payrollLegalImplementationPolicy, payrollLegalImplementationPolicy);
+  assert.equal(report.volunteerIncentivePolicyRows.at(-1).speedEffortGuardrails, "private QA-safe effort bands only; no public speed rewards");
+  assert.equal(report.volunteerIncentivePolicyRows.at(-1).publicRecognitionPolicy, "participation acknowledgement without scores, speed, agreement, or benchmark ranking");
+  assert.equal(report.volunteerIncentivePolicyRows.at(-1).privateProgressDashboardPolicy, "private non-gamified progress only");
+  assert.equal(report.volunteerIncentivePolicyRows.at(-1).leaderboardBadgeRestrictions, "no peer, model, gold, hidden-benchmark, or speed leaderboards");
+  assert.deepEqual(report.volunteerIncentivePolicyRows.at(-1).forbiddenCompensationInputs, []);
   assert.equal(report.counts.passingQualificationScopeCount, qualificationScopes.length);
   assert.equal(report.counts.submittedLanguageArtifactAssessmentCount, 1);
+  assert.equal(report.languageArtifactAssessmentRows.at(-1).sourceAdaptationRoute, "VivesDebate_adapted");
+  assert.deepEqual(report.languageArtifactSummary.byArtifactType, { machine_translation_residue: 1 });
+  assert.deepEqual(report.languageArtifactSummary.bySourceLanguage, { es: 1 });
+  assert.deepEqual(report.languageArtifactSummary.byTranslationStatus, { machine_translation_reviewed: 1 });
+  assert.deepEqual(report.languageArtifactSummary.bySourceAdaptationRoute, { VivesDebate_adapted: 1 });
+  assert.deepEqual(report.languageArtifactSummary.byPinDownabilityImpact, { none: 1 });
+  assert.equal(report.languageArtifactSummary.automaticScorePenaltyAppliedCount, 0);
   assert.equal(report.counts.submittedSourceRecognitionEventCount, 1);
   assert.equal(report.counts.passingModelProviderRunClassCount, modelProviderRunClasses.length);
   assert.equal(report.modelProviderEndpointContractPolicyVersion, modelProviderEndpointContractPolicyVersion);
   assert.deepEqual(report.requiredModelProviderEndpointContractClauses, modelProviderEndpointContractClauses);
+  assert.equal(report.sourceRecognitionRows.at(-1).recognizedOrPriorExposureNonblindFlag, null);
   assert.equal(report.modelProviderDataHandlingPolicyRows.at(-1).policyVersion, modelProviderEndpointContractPolicyVersion);
   assert.deepEqual(report.modelProviderDataHandlingPolicyRows.at(-1).endpointContractClauses, modelProviderEndpointContractClauses);
   assert.equal(report.modelProviderDataHandlingPolicyRows.at(-1).endpointContractLanguageFrozen, true);
@@ -3896,6 +4051,31 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
     driftedCompensationReport.reviewSections.some(
       (section) => section.artifactType === "volunteer_incentive_policy" && section.reason === "monthlyCompensationCapUsd",
     ),
+  );
+
+  const weakIncentiveFixtures = completeParticipantSafeguardFixtures();
+  weakIncentiveFixtures.volunteerIncentivePolicies = [
+    {
+      ...weakIncentiveFixtures.volunteerIncentivePolicies[0],
+      id: "volunteer-incentive-weak-leaderboard-policy",
+      allowedCompensationCreditInputs: [
+        ...weakIncentiveFixtures.volunteerIncentivePolicies[0].allowedCompensationCreditInputs,
+        "model_agreement",
+      ],
+      speedEffortGuardrails: "QA effort bands",
+      publicRecognitionPolicy: "public acknowledgement with no ranking",
+      leaderboardBadgeRestrictions: "no leaderboard",
+    },
+  ];
+  const weakIncentiveReport = buildParticipantSafeguardEvidenceReport("october-2026-demo", weakIncentiveFixtures);
+  assert.equal(weakIncentiveReport.releaseUseStatus, "participant_safeguard_review_required");
+  assert.ok(
+    weakIncentiveReport.reviewSections.some(
+      (section) => section.artifactType === "volunteer_incentive_policy" && section.reason === "allowedCompensationCreditInputs:prohibited:model_agreement",
+    ),
+  );
+  assert.ok(
+    weakIncentiveReport.reviewSections.some((section) => section.artifactType === "volunteer_incentive_policy" && section.reason === "leaderboardBadgeRestrictions"),
   );
 
   const incompleteQualificationFixtures = completeParticipantSafeguardFixtures();
@@ -3938,6 +4118,26 @@ test("participant safeguard evidence gates qualification, incentives, recognitio
   );
 });
 
+test("continued source-recognition rows carry the RLHF91 nonblind protected-denominator flag", () => {
+  const fixtures = completeParticipantSafeguardFixtures();
+  fixtures.sourceRecognitionEvents = [
+    {
+      ...fixtures.sourceRecognitionEvents[0],
+      id: "source-recognition-continued-nonblind",
+      raterAction: "continue_nonblind",
+      independentBlindEligibilityEffect: "excluded_from_independent_protected_blind_denominator_after_source_recognition_review",
+      reviewerResolution: "expert_review_completed_label_excluded_from_independent_blind_denominator",
+    },
+  ];
+
+  const report = buildParticipantSafeguardEvidenceReport("october-2026-demo", fixtures);
+
+  assert.equal(report.releaseUseStatus, "submitted_participant_safeguard_evidence_complete");
+  assert.equal(report.sourceRecognitionRows.at(-1).recognizedOrPriorExposureNonblindFlag, SOURCE_RECOGNITION_NONBLIND_FLAG);
+  assert.equal(report.sourceRecognitionRows.at(-1).recognizedOrPriorExposureNonblindFlag, "recognized_or_prior_exposure_nonblind");
+  assert.deepEqual(report.reviewSections, []);
+});
+
 test("rating experience evidence gates score provenance, linting, issue triage, drafts, worksheets, and retention", () => {
   const report = buildRatingExperienceEvidenceReport("october-2026-demo", completeRatingExperienceFixtures());
 
@@ -3947,13 +4147,23 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.counts.submittedDraftStoragePolicyCount, 1);
   assert.equal(report.counts.submittedRaterInstructionCompatibilityPolicyCount, 1);
   assert.equal(report.counts.submittedRaterInstructionRenderVersionCount, 1);
+  assert.equal(report.counts.submittedRaterInstructionComprehensionAuditCount, 1);
   assert.equal(report.raterInstructionCompatibilityPolicyReleaseUseStatus, "submitted_rater_instruction_compatibility_policy_active");
   assert.equal(report.raterInstructionCompatibilityPolicyId, "rater-instruction-compatibility-policy-submitted");
   assert.deepEqual(report.requiredRaterInstructionCompatibilityClasses, raterInstructionCompatibilityClasses);
   assert.deepEqual(report.requiredRaterInstructionCompatibilityThresholds, raterInstructionCompatibilityThresholds);
   assert.deepEqual(report.requiredRaterInstructionCompatibilityRules, raterInstructionCompatibilityRules);
+  assert.equal(report.requiredRaterInstructionComprehensionAuditVersion, raterInstructionComprehensionAuditVersion);
+  assert.deepEqual(report.requiredRaterInstructionComprehensionScreens, raterInstructionComprehensionScreens);
+  assert.deepEqual(report.requiredRaterInstructionComprehensionMethods, raterInstructionComprehensionMethods);
+  assert.deepEqual(report.requiredRaterInstructionComprehensionChecks, raterInstructionComprehensionChecks);
+  assert.deepEqual(report.requiredRaterInstructionDisclosureDepths, raterInstructionDisclosureDepths);
   assert.equal(report.raterInstructionRenderVersionRows.at(-1).raterInstructionCompatibilityPolicyId, "rater-instruction-compatibility-policy-submitted");
   assert.equal(report.raterInstructionRenderVersionRows.at(-1).renderCompatibilityClass, "protected_release_critical_same_policy_family");
+  assert.equal(report.raterInstructionComprehensionAuditRows.at(-1).raterInstructionRenderVersionId, "rater-instruction-render-submitted");
+  assert.equal(report.raterInstructionComprehensionAuditRows.at(-1).raterInstructionCompatibilityPolicyId, "rater-instruction-compatibility-policy-submitted");
+  assert.equal(report.raterInstructionComprehensionAuditRows.at(-1).excludedFromScoreComputation, true);
+  assert.equal(report.raterInstructionComprehensionAuditRows.at(-1).excludedFromIndependentBlindDenominator, true);
   assert.equal(report.counts.submittedRubricLintConfigCount, 1);
   assert.equal(report.counts.submittedRubricLintEventCount, 1);
   assert.deepEqual(report.rubricLintConfigRows.at(-1).triggerThresholds, rubricLintTriggerThresholds);
@@ -3995,6 +4205,11 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.equal(report.ratingDraftSessionRows.at(-1).dependencyVersionSnapshot.draftStoragePolicyId, "draft-storage-policy-submitted");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).overrideExplanation, "Rater preserved the submitted correctness score after reviewing weighted claim evidence.");
   assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).createdBy, "demo-expert");
+  assert.deepEqual(report.correctnessClaimWeightWorksheetRows.at(-1).correctnessCredenceStatusRows.map((row) => [row.claimSpanId, row.status, row.correctnessCredence]), [
+    ["claim-span-1", "verified", 0.8],
+    ["claim-span-2", "unresolved", 0.5],
+  ]);
+  assert.equal(report.correctnessClaimWeightWorksheetRows.at(-1).computedAdvisoryAggregateCorrectnessEstimate, 0.71);
   assert.equal(report.scoreConfidenceScalePolicyRows.at(-1).scaleVersion, scoreConfidenceScaleVersion);
   assert.equal(report.scoreConfidenceAnnotationRows.at(-1).scoreConfidenceScalePolicyId, "score-confidence-scale-policy-submitted");
   assert.equal(report.raterScoreConfidenceRows.at(-1).entityType, "RaterScoreConfidence");
@@ -4034,6 +4249,42 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   );
   assert.equal(report.counts.passingProtectedArtifactTypeCount, protectedArtifactTypes.length);
   assert.deepEqual(report.reviewSections, []);
+
+  const malformedWorksheetFixtures = completeRatingExperienceFixtures();
+  malformedWorksheetFixtures.correctnessClaimWeightWorksheets = [
+    {
+      ...malformedWorksheetFixtures.correctnessClaimWeightWorksheets[0],
+      id: "correctness-claim-weight-worksheet-malformed",
+      claimSignificanceWeights: [0.8, 0.4],
+      correctnessCredencesStatuses: ["verified", "unresolved:0.5"],
+      unclearClaimExclusionFlags: [false],
+      advisoryAggregateCorrectnessEstimate: 0.2,
+    },
+  ];
+  const malformedWorksheetReport = buildRatingExperienceEvidenceReport("october-2026-demo", malformedWorksheetFixtures);
+  assert.equal(malformedWorksheetReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    malformedWorksheetReport.reviewSections.some(
+      (section) => section.artifactType === "correctness_claim_weight_worksheet" && section.reason === "claimSignificanceWeightsSum",
+    ),
+  );
+  assert.ok(
+    malformedWorksheetReport.reviewSections.some(
+      (section) => section.artifactType === "correctness_claim_weight_worksheet" && section.reason === "correctnessCredencesStatuses",
+    ),
+  );
+  assert.ok(
+    malformedWorksheetReport.reviewSections.some(
+      (section) => section.artifactType === "correctness_claim_weight_worksheet" && section.reason === "unclearClaimExclusionFlags",
+    ),
+  );
+  assert.ok(
+    malformedWorksheetReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "correctness_claim_weight_worksheet" &&
+        section.reason === "advisoryAggregateCorrectnessEstimate:weighted_claim_mismatch",
+    ),
+  );
 
   const driftedExternalAssistancePolicyReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
     ...completeRatingExperienceFixtures(),
@@ -4151,6 +4402,31 @@ test("rating experience evidence gates score provenance, linting, issue triage, 
   assert.ok(
     mismatchedRenderCompatibilityReport.reviewSections.some(
       (section) => section.artifactType === "rater_instruction_render_version" && section.reason === "raterInstructionCompatibilityPolicyId",
+    ),
+  );
+
+  const driftedComprehensionAuditReport = buildRatingExperienceEvidenceReport("october-2026-demo", {
+    ...completeRatingExperienceFixtures(),
+    raterInstructionComprehensionAudits: [
+      {
+        ...completeRatingExperienceFixtures().raterInstructionComprehensionAudits[0],
+        id: "rater-instruction-comprehension-audit-drifted",
+        comprehensionCheckIds: raterInstructionComprehensionChecks.filter((checkId) => checkId !== "safe_decline_and_item_issue_paths_found"),
+        excludedFromIndependentBlindDenominator: false,
+      },
+    ],
+  });
+  assert.equal(driftedComprehensionAuditReport.releaseUseStatus, "rating_experience_evidence_review_required");
+  assert.ok(
+    driftedComprehensionAuditReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "rater_instruction_comprehension_audit" &&
+        section.reason === "comprehensionCheckIds:safe_decline_and_item_issue_paths_found",
+    ),
+  );
+  assert.ok(
+    driftedComprehensionAuditReport.reviewSections.some(
+      (section) => section.artifactType === "rater_instruction_comprehension_audit" && section.reason === "excludedFromIndependentBlindDenominator",
     ),
   );
 
@@ -5573,6 +5849,28 @@ test("seed operational control evidence includes queue stale-by-delay scans for 
   assert.deepEqual(report.reviewSections, []);
 });
 
+test("operational control evidence accepts routine workflow policy side effects without requiring full package coverage", () => {
+  const completeFixtures = completeOperationalControlFixtures();
+  const sideEffectActionKinds = new Set(["discussion_open", "adjudication_finalize"]);
+  const report = buildOperationalControlEvidenceReport("october-2026-demo", {
+    policyDecisionRecords: completeFixtures.policyDecisionRecords.filter((decision) => sideEffectActionKinds.has(decision.actionKind)),
+    policyDecisionConsumptions: completeFixtures.policyDecisionConsumptions.filter((consumption) => sideEffectActionKinds.has(consumption.actionKind)),
+  });
+
+  assert.equal(report.releaseUseStatus, "seed_operational_control_evidence_complete");
+  assert.equal(report.counts.submittedPolicyDecisionCount, sideEffectActionKinds.size);
+  assert.equal(report.counts.submittedPolicyDecisionConsumptionCount, sideEffectActionKinds.size);
+  assert.equal(
+    report.policyActionConsumptionRows.some((row) => row.status === "policy_action_consumption_missing"),
+    true,
+  );
+  assert.equal(
+    report.reviewSections.some((section) => section.artifactType === "policy_action_consumption_gate"),
+    false,
+  );
+  assert.deepEqual(report.reviewSections, []);
+});
+
 test("operational control evidence rejects stale or wrong-scope policy decisions", () => {
   const unsafeFixtures = completeOperationalControlFixtures();
   unsafeFixtures.policyActionKinds = unsafeFixtures.policyActionKinds.map((actionKind, index) =>
@@ -6086,6 +6384,56 @@ test("UX simplification evidence gates submitted server-derived screen states wi
   assert.equal(report.screenStateRows.at(-1).outputSchemaVersion, "screen-state-output-lmca-v1");
   assert.equal(report.screenStateRows.at(-1).protectedGoldBenchmarkDisclosureState.benchmarkMembership, "not_disclosed");
   assert.equal(report.screenStateRows.filter((row) => row.payloadSourceLabel === "submitted_workflow_screen_state_payload").every((row) => row.forbiddenVisibleFields.length === 0), true);
+
+  const extraKeyReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads: [
+      { ...screenStatePayloads[0], id: "screen-state-extra-key", clientSideInferenceInputs: { completionState: "hidden_client_guess" } },
+      ...screenStatePayloads.slice(1),
+    ],
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
+  });
+  assert.equal(extraKeyReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    extraKeyReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "screen_state_payload" &&
+        section.artifactId === "screen-state-extra-key" &&
+        section.reason === "unexpectedTopLevelKeys:clientSideInferenceInputs",
+    ),
+  );
+
+  const nestedHiddenFieldReport = buildUXSimplificationEvidenceReport("october-2026-demo", {
+    uxSimplificationPolicies,
+    uxSimplificationReviews,
+    screenStatePayloads: [
+      {
+        ...screenStatePayloads[0],
+        id: "screen-state-nested-hidden-field",
+        policyVersionProvenance: {
+          ...screenStatePayloads[0].policyVersionProvenance,
+          modelJudgeScoreId: "model-judge-score-leak",
+        },
+      },
+      ...screenStatePayloads.slice(1),
+    ],
+    screenFeatureParityChecks,
+    simplifiedCopyPreviews: copyPreviews,
+    rubricCopyTraceabilityMaps: traceabilityMaps,
+  });
+  assert.equal(nestedHiddenFieldReport.releaseUseStatus, "ux_simplification_review_required");
+  assert.ok(
+    nestedHiddenFieldReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "screen_state_payload" &&
+        section.artifactId === "screen-state-nested-hidden-field" &&
+        section.reason === "forbiddenPayloadFields:policyVersionProvenance.modelJudgeScoreId",
+    ),
+  );
+
   assert.equal(report.screenFeatureParityCheckRows.find((row) => row.screenId === "adjudication").requiredControlResults.verification_control, "reachable");
   assert.equal(report.surfaceRows.find((row) => row.surface === "rater_data_governance").status, "ux_surface_simplification_gate_passed");
   assert.equal(
@@ -6882,7 +7230,10 @@ test("rubric issue flag report separates allocation ambiguity from product disag
   assert.equal(report.policy.requiredRaterFlags.includes("correctnessNotAssessableDueToClarity"), true);
   assert.equal(report.policy.requiredRaterFlags.includes("midRangeStrengthUncertainty"), true);
   assert.equal(report.policy.requiredRaterFlags.includes("vagueGoodObjectionGesture"), true);
+  assert.equal(report.policy.requiredRaterFlags.includes("languageTranslationArtifactConcern"), true);
+  assert.equal(report.flagCoverageRows.find((row) => row.flag === "languageTranslationArtifactConcern").issueType, "language_translation_artifact_fairness");
   assert.equal(report.counts.byFlag.contentFreePseudoSubstance, 1);
+  assert.equal(report.counts.byFlag.languageTranslationArtifactConcern, 0);
   assert.equal(report.obfuscationRows[0].noteStatus, "obfuscation_note_recorded");
   assert.equal(report.counts.byFlag.midRangeStrengthUncertainty, 1);
   assert.equal(report.counts.byFlag.backgroundKnowledgeDependence, 1);
@@ -7453,6 +7804,18 @@ test("release report derives adjudication finalization evidence from submitted w
   assert.equal(reviewRow.reviewReasons.includes("timestamp"), true);
 });
 
+test("release report builder materializes default label snapshot evidence", () => {
+  const report = buildOctoberReleaseReport();
+
+  assert.equal(report.releaseId, "october-2026-demo");
+  assert.equal(report.metricEligibility.labelSnapshotId, "snapshot-october-2026-demo");
+  assert.equal(report.metricEligibility.targetLabelVersion, "initial_mean");
+  assert.ok(report.metricEligibility.customLossEligibleItems.length > 0);
+  assert.equal(report.humanScoreDistribution.labelSnapshotId, "snapshot-october-2026-demo");
+  assert.equal(report.labelSnapshotReliability.labelSnapshotId, "snapshot-october-2026-demo");
+  assert.equal(report.trainingExport.labelSnapshotId, "snapshot-october-2026-demo");
+});
+
 test("same-position context report freezes sibling exposure and model-context parity", () => {
   const report = buildSamePositionContextReport("release-test", seedRatings, positions, critiques, ratingContextSnapshots, assignments);
   assert.equal(report.counts.totalRatings, seedRatings.length);
@@ -7632,6 +7995,22 @@ test("training export preserves uncertainty and excludes protected splits", () =
   );
   const trainingExport = buildTrainingExport("release-test", snapshot, positions, critiques, seedRatings, ratingContextSnapshots, {
     trainingExportUncertaintyPolicies: [trainingExportUncertaintyPolicy("training-export-uncertainty-policy-release-test-submitted")],
+    volunteerDataWithdrawalRequests: [
+      {
+        id: "withdrawal-training-export-rater-a",
+        raterId: "rater-a",
+        requestType: "future_training_export_exclusion",
+        affectedDataCategories: ["private_learning_dashboard", "future_training_export"],
+        actionTaken: "future_training_export_exclusion_recorded",
+        identifiableTelemetryRestricted: true,
+        publicAttributionRemoved: true,
+        privateLearningDashboardDeleted: true,
+        futureTrainingExportExcluded: true,
+        frozenSnapshotImpact: "already_frozen_deidentified_label_snapshots_preserved",
+        requesterNotificationStatus: "notified",
+        timestamp: "2026-10-01T00:03:00.000Z",
+      },
+    ],
   });
   assert.equal(trainingExport.protectedSplitPolicy.hiddenBenchmarkExcluded, true);
   assert.equal(trainingExport.protectedSplitPolicy.internalValidationExcluded, true);
@@ -7639,6 +8018,21 @@ test("training export preserves uncertainty and excludes protected splits", () =
   assert.equal(trainingExport.protectedSplitPolicy.positionClusterIsolationStatus, "pass");
   assert.equal(trainingExport.counts.pointwiseExamples, 2);
   assert.equal(trainingExport.counts.pairwisePreferenceExamples, 1);
+  assert.equal(trainingExport.counts.futureTrainingExportExcludedRaters, 1);
+  assert.equal(trainingExport.counts.futureTrainingExportExcludedIncludedRatings, 2);
+  assert.equal(trainingExport.counts.futureTrainingExportExcludedRationales, 2);
+  assert.deepEqual(trainingExport.futureTrainingExportExcludedRaterIds, ["rater-a"]);
+  assert.deepEqual(trainingExport.volunteerWithdrawalExclusionRequestIds, ["withdrawal-training-export-rater-a"]);
+  assert.equal(trainingExport.volunteerWithdrawalExclusionManifest.denominatorMutationAllowed, false);
+  assert.equal(trainingExport.volunteerWithdrawalExclusionManifest.frozenLabelSnapshotDisposition, "preserved_without_recomputation");
+  assert.equal(
+    trainingExport.volunteerWithdrawalExclusionManifest.status,
+    "future_training_export_withdrawal_exclusions_applied",
+  );
+  assert.deepEqual(trainingExport.volunteerWithdrawalExclusionManifest.affectedItemIds, [
+    "pos-ai-prior::crit-ai-base-rate",
+    "pos-ai-prior::crit-ai-generic",
+  ]);
   assert.equal(trainingExport.trainingExportUncertaintyPolicyEvidence.releaseUseStatus, "submitted_training_export_uncertainty_policy_active");
   assert.equal(trainingExport.trainingExportUncertaintyPolicyId, "training-export-uncertainty-policy-release-test-submitted");
   assert.deepEqual(trainingExport.uncertaintyThresholdsApplied, trainingExportUncertaintyThresholds);
@@ -7663,6 +8057,18 @@ test("training export preserves uncertainty and excludes protected splits", () =
   assert.equal(downweightedPointwise.critiqueId, "crit-ai-generic");
   assert.equal(downweightedPointwise.trainingWeight, 0.25);
   assert.deepEqual(downweightedPointwise.uncertaintyDownweightReasons, ["uncertainty_flagged_label", "thin_rater_coverage"]);
+  assert.equal(
+    trainingExport.pointwiseExamples.some((example) =>
+      (example.rationales ?? []).some((rationale) => rationale.ratingId === "rating-ai-base-rate-a" || rationale.ratingId === "rating-ai-generic-a")
+    ),
+    false,
+  );
+  assert.equal(
+    trainingExport.pointwiseExamples.some((example) =>
+      (example.rationales ?? []).some((rationale) => rationale.ratingId === "rating-ai-base-rate-b")
+    ),
+    true,
+  );
   assert.equal(trainingExport.ratingContextSnapshots[0].humanModelParityStatus, "matchable_target_only");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferredCritiqueId, "crit-ai-base-rate");
   assert.equal(trainingExport.pairwisePreferenceExamples[0].preferenceWeight, 0.46);
@@ -8221,6 +8627,106 @@ test("uncertainty-aware leaderboard accepts submitted paired rank evidence", () 
   assert.equal(report.submittedLeaderboardEvidence.completeLeaderboardCount, 1);
 });
 
+test("uncertainty-aware leaderboard accepts submitted same-tier no-superiority evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-leaderboard-submitted-tie-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildUncertaintyAwareLeaderboardReport("release-test", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
+    leaderboards: [
+      {
+        id: "leaderboard-submitted-tie-evidence",
+        releaseId: "release-test",
+        metricFamily: "weighted_pairwise",
+        targetLabelSnapshotId: snapshot.id,
+        targetLabelVersion: snapshot.targetLabelVersion,
+        evaluationRunIds: ["eval-full-rubric-demo", "eval-overall-demo"],
+        commonSubsetPolicy: "common_item_set_required",
+        commonMetricFamilyEligibilityPolicy: "shared_metric_config_and_pairwise_snapshot",
+        commonPromptPolicyRequirement: "same_prompt_source_scope_or_sensitivity_label",
+        commonReasoningModeRequirement: "same_reasoning_mode_or_sensitivity_label",
+        uncertaintyPolicy: {
+          intervalType: "paired_difference_interval",
+          nominalLevel: 0.95,
+          constructionMethod: "position_level_bootstrap",
+          resamplingUnit: "position",
+          resampleCountOrDegreesOfFreedom: 2000,
+          randomSeedOrArtifact: "leaderboard-seed-20261031-tie",
+        },
+        uncertaintySupportedRankTiers: [["eval-full-rubric-demo", "eval-overall-demo"]],
+        pairedDifferenceRows: [
+          {
+            comparison: "eval-full-rubric-demo_vs_eval-overall-demo",
+            evaluationRunIds: ["eval-full-rubric-demo", "eval-overall-demo"],
+            leftMinusRightPointEstimate: -0.01,
+            pairedDifferenceInterval: { lower: -0.04, upper: 0.02 },
+            intervalExcludesZero: false,
+            practicalDifferenceThreshold: 0.02,
+            practicalGapMet: false,
+            interpretation: "no_superiority_claim_supported",
+          },
+        ],
+        pointEstimateOnlyOrderingFlag: false,
+        superiorityClaimPolicy: "rank_claims_require_paired_intervals_and_practical_threshold",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T02:11:00.000Z",
+      },
+    ],
+  });
+  assert.equal(report.releaseUseStatus, "submitted_uncertainty_aware_leaderboard_complete");
+  assert.deepEqual(report.uncertaintySupportedRankTiers, [["eval-full-rubric-demo", "eval-overall-demo"]]);
+  assert.equal(report.submittedLeaderboardEvidence.activeLeaderboardId, "leaderboard-submitted-tie-evidence");
+  assert.deepEqual(report.submittedLeaderboardEvidence.rows[0].reviewReasons, []);
+
+  const contradictoryReport = buildUncertaintyAwareLeaderboardReport("release-test", snapshot, [fullRubricEvaluationRun, overallOnlyEvaluationRun], {
+    leaderboards: [
+      {
+        id: "leaderboard-submitted-contradictory-tie-evidence",
+        releaseId: "release-test",
+        metricFamily: "weighted_pairwise",
+        targetLabelSnapshotId: snapshot.id,
+        targetLabelVersion: snapshot.targetLabelVersion,
+        evaluationRunIds: ["eval-full-rubric-demo", "eval-overall-demo"],
+        commonSubsetPolicy: "common_item_set_required",
+        commonMetricFamilyEligibilityPolicy: "shared_metric_config_and_pairwise_snapshot",
+        commonPromptPolicyRequirement: "same_prompt_source_scope_or_sensitivity_label",
+        commonReasoningModeRequirement: "same_reasoning_mode_or_sensitivity_label",
+        uncertaintyPolicy: {
+          intervalType: "paired_difference_interval",
+          nominalLevel: 0.95,
+          constructionMethod: "position_level_bootstrap",
+          resamplingUnit: "position",
+          resampleCountOrDegreesOfFreedom: 2000,
+          randomSeedOrArtifact: "leaderboard-seed-20261031-contradictory",
+        },
+        uncertaintySupportedRankTiers: [["eval-full-rubric-demo", "eval-overall-demo"]],
+        pairedDifferenceRows: [
+          {
+            comparison: "eval-full-rubric-demo_vs_eval-overall-demo",
+            evaluationRunIds: ["eval-full-rubric-demo", "eval-overall-demo"],
+            leftMinusRightPointEstimate: -0.08,
+            pairedDifferenceInterval: { lower: -0.12, upper: -0.03 },
+            intervalExcludesZero: true,
+            practicalDifferenceThreshold: 0.02,
+            practicalGapMet: true,
+            interpretation: "rank_claim_supported",
+          },
+        ],
+        pointEstimateOnlyOrderingFlag: false,
+        superiorityClaimPolicy: "rank_claims_require_paired_intervals_and_practical_threshold",
+        createdBy: "demo-admin",
+        timestamp: "2026-10-01T02:12:00.000Z",
+      },
+    ],
+  });
+  assert.equal(contradictoryReport.releaseUseStatus, "submitted_uncertainty_aware_leaderboard_review_required");
+  assert.deepEqual(contradictoryReport.submittedLeaderboardEvidence.rows[0].reviewReasons, [
+    "eval-full-rubric-demo_vs_eval-overall-demo:uncertaintySupportedRankTiers",
+  ]);
+});
+
 test("metric directionality and pairwise config report declares target roles and tie handling", () => {
   const snapshot = createLabelSnapshot(
     "snapshot-metric-config-test",
@@ -8324,6 +8830,15 @@ test("paired target-label snapshot report freezes primary anchor selection and t
   assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.raterId, "rater-a");
   assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.selectionPolicy, "predeclared_max_blind_initial_coverage_tie_break_rater_id");
   assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.frozenBeforeModelEvaluation, true);
+  assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.qualificationRequired, true);
+  assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.primaryRaterAnchorQualificationStatus, "current_primary_rater_anchor_qualification");
+  assert.equal(
+    report.primaryRaterAnchorSnapshot.primaryRaterAnchor.primaryRaterAnchorQualificationRecordId,
+    "rater-qualification-release-test-primary_rater_anchor",
+  );
+  assert.equal(report.consensusSnapshot.targetLabelVersion, CONSENSUS_TARGET_LABEL_VERSION);
+  assert.equal(report.consensusSnapshot.targetLabelVersion, "adjudicated_or_final_average_consensus");
+  assert.equal(report.consensusSnapshot.sourceTargetLabelVersion, "initial_mean");
   assert.equal(report.coverageOverlap.primaryScoredItemCount, 2);
   assert.equal(report.coverageOverlap.consensusScoredItemCount, 5);
   assert.deepEqual(report.coverageOverlap.overlapItemIds, ["pos-ai-prior::crit-ai-base-rate", "pos-ai-prior::crit-ai-generic"]);
@@ -8332,7 +8847,48 @@ test("paired target-label snapshot report freezes primary anchor selection and t
   assert.equal(report.modelScoreDeltas[0].primaryRaterAnchor.coverage.nPairsScored, 1);
   assert.equal(report.modelScoreDeltas[0].consensus.coverage.nPairsScored, 1);
   assert.equal(report.rankSensitivity.status, "no_point_estimate_order_change_on_overlap");
+  assert.equal(report.claimPolicy.consensusTargetLabelVersion, CONSENSUS_TARGET_LABEL_VERSION);
   assert.equal(report.claimPolicy.consensusSnapshotUse, "higher_quality_volunteer_label_not_target_identical_to_lmca_table_5");
+});
+
+test("primary-rater anchor report refuses expired qualification evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-primary-qualification-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildPairedTargetLabelSnapshotReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    [fullRubricEvaluationRun, overallOnlyEvaluationRun],
+    {
+      raterQualificationRecords: [
+        {
+          id: "rater-qualification-expired-primary-anchor",
+          raterId: "rater-a",
+          qualificationScope: "primary_rater_anchor",
+          qualificationSource: "manual_expert_review",
+          evidenceArtifactReference: "qualification-evidence-primary-anchor-expired",
+          approvedRoles: ["expert"],
+          topicFamilyScope: ["AI safety"],
+          splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+          expiryReviewDate: "2000-01-31",
+          approver: "demo-admin",
+        },
+      ],
+    },
+  );
+  assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.qualificationRequired, true);
+  assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.raterId, null);
+  assert.equal(report.primaryRaterAnchorSnapshot.primaryRaterAnchor.policyStatus, "primary_rater_anchor_qualification_required");
+  assert.equal(report.primaryRaterAnchorSnapshot.denominatorCounts.totalRows, 0);
+  assert.equal(
+    report.primaryRaterAnchorSnapshot.primaryRaterAnchor.candidateRows.find((row) => row.raterId === "rater-a").primaryRaterAnchorQualificationStatus,
+    "primary_rater_anchor_qualification_missing",
+  );
 });
 
 test("submitted primary-rater anchor policies drive paired target-label policy evidence", () => {
@@ -8741,6 +9297,8 @@ test("submitted release versions and freezes become effective release manifest e
     gateProfileId: `gate-${releaseId}`,
     releaseConfigManifestId: `release-config-manifest-${releaseId}`,
     releaseConfigManifestHash: `sha256:release-config-manifest-${releaseId}`,
+    phaseGateBundleId: `implementation-phase-gate-bundle-${releaseId}`,
+    phaseGateBundleHash: `sha256:implementation-phase-gate-bundle-${releaseId}`,
     immutableOutputArtifactIds: [`public-export-manifest-${releaseId}`, `training-export-${releaseId}`],
     status: "method_preserving_demo_not_target_scale",
     releaseNotes: "Demo release remains target-scale incomplete.",
@@ -8772,11 +9330,33 @@ test("submitted release versions and freezes become effective release manifest e
   assert.equal(report.releaseVersionManifest.submittedReleaseVersionId, "release-version-submitted");
   assert.equal(report.releaseVersionManifest.submittedReleaseFreezeId, "release-freeze-submitted");
   assert.equal(report.releaseVersionManifest.linkedArtifactStatus, "release_manifest_links_current_artifacts");
+  assert.equal(report.releaseVersionManifest.effectiveArtifactIds.phaseGateBundleId, `implementation-phase-gate-bundle-${releaseId}`);
+  assert.equal(report.releaseVersionManifest.effectiveArtifactIds.phaseGateBundleHash, `sha256:implementation-phase-gate-bundle-${releaseId}`);
   assert.equal(report.releaseVersionManifest.freezeEvidence.freezeStatus, "candidate_freeze_recorded");
   assert.equal(report.releaseVersionManifest.currentStatus, "incomplete_against_october_target");
-  assert.equal(report.releaseVersionManifest.targetScaleStatus, "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings");
+  assert.equal(
+    report.releaseVersionManifest.submittedTargetScaleStatus,
+    "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings",
+  );
+  assert.equal(
+    report.releaseVersionManifest.freezeEvidence.submittedTargetScaleStatus,
+    "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings",
+  );
+  assert.equal(report.releaseVersionManifest.targetScaleStatus, OCTOBER_TARGET_SCALE_INCOMPLETE_STATUS);
+  assert.equal(report.releaseVersionManifest.freezeEvidence.targetScaleStatus, OCTOBER_TARGET_SCALE_INCOMPLETE_STATUS);
   assert.equal(report.releaseVersionManifest.releaseUseStatus, "submitted_release_manifest_recorded_but_target_scale_incomplete");
   assert.ok(report.releaseVersionManifest.linkedArtifactChecks.every((check) => check.status === "matches_current_artifact"));
+  assert.deepEqual(
+    report.releaseVersionManifest.linkedArtifactChecks.map((check) => check.artifact),
+    [
+      "corpus_manifest",
+      "label_snapshot",
+      "metric_config",
+      "release_gate_profile",
+      "implementation_phase_gate_bundle",
+      "implementation_phase_gate_bundle_hash",
+    ],
+  );
   assert.equal(report.releaseVersionManifest.releaseVersionContractViolations.length, 0);
   assert.ok(report.releaseVersionManifest.releaseVersionContractChecks.every((check) => check.status === "pass"));
 
@@ -8840,6 +9420,8 @@ test("certification audit enforces gold-pack isolation without treating model ju
   assert.ok(audit.packs.every((pack) => pack.clusterIsolationStatus === "pass"));
   assert.equal(audit.activeCertificationThresholdPolicyId, "certification-threshold-policy-october-2026-demo");
   assert.deepEqual(audit.requiredCertificationThresholds, certificationThresholds);
+  assert.deepEqual(audit.requiredCertificationCadencePolicy, certificationCadencePolicy);
+  assert.deepEqual(audit.activeCertificationThresholdPolicy.cadencePolicy, certificationCadencePolicy);
   assert.equal(audit.thresholdPolicyReleaseUseStatus, "seed_certification_threshold_policy_active");
   assert.equal(audit.certificationRecordEvidence.releaseUseStatus, "no_submitted_certification_records");
 });
@@ -8887,6 +9469,7 @@ test("submitted CertificationRecord artifacts become certification gatekeeping e
   assert.equal(report.certification.thresholdPolicyReleaseUseStatus, "submitted_certification_threshold_policy_active");
   assert.equal(report.certification.activeCertificationThresholdPolicyId, "certification-threshold-policy-release-test-submitted");
   assert.deepEqual(report.certification.certificationThresholdPolicyRows.at(-1).thresholds, certificationThresholds);
+  assert.deepEqual(report.certification.certificationThresholdPolicyRows.at(-1).cadencePolicy, certificationCadencePolicy);
   assert.equal(evidence.submittedRecordCount, 1);
   assert.equal(evidence.certifiedRecordCount, 1);
   assert.equal(evidence.reviewRows.length, 0);
@@ -8950,6 +9533,26 @@ test("certification threshold policy drift keeps certification records under rev
   assert.equal(report.certification.thresholdPolicyReviewRows[0].reviewReasons.includes("thresholds"), true);
   assert.equal(report.certification.certificationRecordEvidence.rows[0].thresholdPolicyStatus, "certification_threshold_policy_review_required");
   assert.equal(report.certification.certificationRecordEvidence.releaseUseStatus, "submitted_certification_records_require_review");
+});
+
+test("certification cadence policy drift keeps submitted threshold policies under review", () => {
+  const driftedPolicy = {
+    ...certificationThresholdPolicy("certification-threshold-policy-cadence-drifted"),
+    cadencePolicy: {
+      ...certificationCadencePolicy,
+      goldInjectionSchedule: {
+        ...certificationCadencePolicy.goldInjectionSchedule,
+        hiddenGoldEveryNReleaseCriticalAssignments: 25,
+      },
+    },
+  };
+  const audit = buildCertificationAudit(certificationPacks, goldLibraryItems, undefined, {
+    releaseId: "release-test",
+    certificationThresholdPolicies: [driftedPolicy],
+  });
+  assert.equal(audit.thresholdPolicyReleaseUseStatus, "submitted_certification_threshold_policy_review_required");
+  assert.equal(audit.activeCertificationThresholdPolicyId, "certification-threshold-policy-release-test");
+  assert.equal(audit.thresholdPolicyReviewRows[0].reviewReasons.includes("cadencePolicy"), true);
 });
 
 test("submitted gold items count toward release gold-library readiness", () => {
@@ -9747,6 +10350,79 @@ test("candidate intake quality audit prevents redundant critiques from inflating
   assert.equal(audit.releaseUseStatus, "marginal_informativeness_audit_disclosed_low_redundancy_controls");
 });
 
+test("candidate generation intake checklist binds RLHF91 requirements to existing candidate architecture", () => {
+  const report = buildOctoberReleaseReport();
+  const checklist = report.candidateGenerationIntakeChecklist;
+
+  assert.equal(checklist.releaseUseStatus, "candidate_generation_intake_requirements_evidenced");
+  assert.equal(checklist.counts.checklistRows, 8);
+  assert.equal(checklist.counts.reviewRequiredRows, 0);
+  assert.equal(checklist.counts.generatedOrIngestedCandidates, report.activeLearning.totals.generated + report.activeLearning.totals.ingested);
+  assert.equal(checklist.counts.generatedCritiqueOutputs, report.critiqueGenerationEvaluation.aggregateCounts.generatedOutputs);
+  assert.match(checklist.policy.scope, /CandidateBatch/);
+  assert.match(checklist.policy.scope, /CandidateCritique/);
+  assert.match(checklist.policy.duplicationBoundary, /CandidateBatchMembership/);
+  assert.match(checklist.policy.labelBoundary, /Model-judge/);
+  assert.deepEqual(
+    checklist.rows.map((row) => row.id),
+    [
+      "position_scope_context_screen",
+      "candidate_generation_denominator_audit",
+      "selection_targets_human_curation",
+      "model_judge_screening_admin_only",
+      "marginal_informativeness_redundancy_controls",
+      "critique_generation_evaluation_provenance",
+      "model_judges_not_gold_role_separation",
+      "source_topic_artifact_controls",
+    ],
+  );
+  assert.ok(
+    checklist.rows
+      .find((row) => row.id === "model_judges_not_gold_role_separation")
+      .sourceStatuses.includes(report.critiqueGenerationEvaluation.generatorEvaluatorOverlap.releaseUseStatus),
+  );
+  assert.ok(
+    checklist.rows
+      .find((row) => row.id === "source_topic_artifact_controls")
+      .evidenceIds.includes(report.hiddenBenchmarkFreeze.id),
+  );
+
+  const reviewChecklist = buildCandidateGenerationIntakeChecklistReport("release-review", {
+    positionIntakeReadiness: report.positionIntakeReadiness,
+    activeLearning: {
+      ...report.activeLearning,
+      blindingPass: false,
+      candidateWorkflowEvidence: {
+        ...report.activeLearning.candidateWorkflowEvidence,
+        hiddenMetadataViolationCount: 1,
+      },
+    },
+    candidateIntakeQualityAudit: report.candidateIntakeQualityAudit,
+    critiqueGenerationEvaluation: {
+      ...report.critiqueGenerationEvaluation,
+      generationVsJudgingSeparation: {
+        ...report.critiqueGenerationEvaluation.generationVsJudgingSeparation,
+        modelJudgeScoresAcceptedAsGoldLabels: true,
+      },
+    },
+    corpusManifest: report.corpusManifest,
+    hiddenBenchmarkFreeze: report.hiddenBenchmarkFreeze,
+  });
+  assert.equal(reviewChecklist.releaseUseStatus, "candidate_generation_intake_review_required");
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) => section.artifactId === "model_judge_screening_admin_only" && section.reason === "activeLearning.blindingPass",
+    ),
+  );
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) =>
+        section.artifactId === "model_judges_not_gold_role_separation" &&
+        section.reason === "generationVsJudgingSeparation.modelJudgeScoresAcceptedAsGoldLabels",
+    ),
+  );
+});
+
 test("critique-generation evaluation reports generation denominators separately from judging", () => {
   const snapshot = createLabelSnapshot(
     "snapshot-generation-test",
@@ -9779,6 +10455,61 @@ test("critique-generation evaluation reports generation denominators separately 
   assert.equal(report.runRows[0].qualityMetrics.passAtThresholdRate, 0);
   assert.equal(report.runRows[0].qualityMetrics.bestOfNByPosition[0].budgetNormalized, true);
   assert.equal(report.releaseUseStatus, "generation_evaluation_separate_with_blind_rating_coverage");
+});
+
+test("critique-generation evaluation preserves rated generated-submission status as promoted denominator evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-generation-rated-status-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+  );
+  const report = buildCritiqueGenerationEvaluationReport(
+    "release-test",
+    snapshot,
+    [
+      {
+        id: "generation-run-rated-status",
+        runSource: "submitted_workflow_critique_generation_run",
+        requestedModelAlias: "generator-model-rated",
+        resolvedModelSnapshot: "generator-model-rated-2026-10-01",
+        providerRoute: "internal_eval_gateway",
+        promptTemplateId: "candidate-gen-v3",
+        sourcePositionIds: ["pos-ai-prior"],
+        generationBudgetPerPosition: 1,
+        sampledOutputCount: 1,
+        modelJudgeScreening: {
+          scoresVisibleToInitialRaters: false,
+          diagnosticOnly: true,
+        },
+        metricDefinitions: {
+          headlineMetric: "blind_human_rated_promoted_outputs",
+          uncuratedRandomSampleMetric: "uncurated_random_sample_metric_over_all_generated_outputs",
+          bestOfNPolicy: "best_of_n_reported_against_declared_generation_budget",
+          topKPolicy: "top_k_and_curated_views_reported_separately_as_diagnostics",
+          passThresholdOverall: 0.6,
+        },
+        outputs: [
+          {
+            id: "generated-rated-status",
+            positionId: "pos-ai-prior",
+            status: "rated",
+            promotedCritiqueId: "crit-ai-base-rate",
+          },
+        ],
+      },
+    ],
+    seedRatings,
+    positions,
+    critiques,
+  );
+  const run = report.runRows.find((row) => row.id === "generation-run-rated-status");
+  assert.equal(run.outputStatusCounts.promoted_to_rating, 1);
+  assert.equal(run.counts.promotedToRating, 1);
+  assert.equal(run.counts.blindHumanRatedPromoted, 1);
+  assert.equal(run.blindRatingCoverage.promotedCoverageShare, 1);
+  assert.equal(report.aggregateCounts.promotedToRating, 1);
+  assert.equal(report.aggregateCounts.blindHumanRatedPromoted, 1);
 });
 
 test("critique-generation evaluation discloses generator evaluator overlap", () => {
@@ -9817,13 +10548,16 @@ test("metric-family eligibility keeps pairwise and pointwise denominators separa
     critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
   );
   const manifest = buildMetricFamilyEligibilityManifest("release-test", snapshot, positions, critiques);
-  assert.equal(manifest.pairwiseEligiblePairCount, 2);
-  assert.deepEqual(
-    manifest.pairwiseEligiblePositions.map((item) => item.positionId).sort(),
-    ["pos-ai-prior", "pos-voting"],
-  );
+  assert.equal(manifest.pairwiseEligibilityPolicy.minimumScoredCritiquesPerPosition, 3);
+  assert.equal(manifest.pairwiseEligibilityPolicy.minimumAdjudicatedOverallSpread, 0.2);
+  assert.equal(manifest.pairwiseEligiblePairCount, 0);
+  assert.deepEqual(manifest.pairwiseEligiblePositions, []);
   assert.ok(manifest.pointwiseOnlyItems.includes("pos-mind::crit-mind-zombie"));
-  assert.equal(manifest.metricFamilySpecificExclusions[0].reason, "fewer_than_two_labelled_critiques");
+  assert.equal(manifest.metricFamilySpecificExclusions[0].reason, "fewer_than_three_labelled_critiques");
+  assert.equal(
+    manifest.qualitySpreadRows.find((row) => row.positionId === "pos-ai-prior").status,
+    "pairwise_headline_ineligible",
+  );
 });
 
 test("hidden benchmark freeze report gates access, pointwise-only items, and artifact balance", () => {
@@ -9844,6 +10578,18 @@ test("hidden benchmark freeze report gates access, pointwise-only items, and art
   assert.ok(report.metricEligibility.pointwiseOnlyItems.includes("pos-mind::crit-mind-zombie"));
   assert.deepEqual(report.pairwiseComparisonSnapshot.excludedNoPairPositions, ["pos-mind"]);
   assert.equal(report.artifactBalance.counterbalanceStatus, "insufficient_seed_benchmark");
+  assert.deepEqual(report.artifactBalance.policy.matrixAxes, [
+    "position_source_category",
+    "critique_length_band",
+    "adjudicated_quality_band",
+  ]);
+  assert.equal(report.artifactBalance.policy.requiredSourceLengthQualityCellMin, 6);
+  assert.equal(report.artifactBalance.sourceLengthQualityCellCount, report.artifactBalance.sourceLengthQualityMatrix.length);
+  assert.ok(report.artifactBalance.sourceLengthQualityMatrix.every((row) => row.sourceCategory && row.lengthBand && row.adjudicatedQualityBand));
+  assert.deepEqual(report.hiddenBenchmarkGovernancePolicy.authorizedAccessRoles, ["admin", "expert"]);
+  assert.equal(report.hiddenBenchmarkGovernancePolicy.routineRefreshCadenceDays, 180);
+  assert.equal(report.hiddenBenchmarkGovernancePolicy.leakageIncidentRefreshCadenceDays, 30);
+  assert.equal(report.freezeChecks.find((check) => check.id === "governance_refresh_policy").status, "pass");
   assert.equal(report.artifactProbeDiagnostics.status, "not_run_documented");
   assert.equal(report.accessAudit.status, "pass");
   assert.equal(report.initialBlinding.releaseUseStatus, "hidden_benchmark_initial_rating_blinding_pass");
@@ -10051,6 +10797,10 @@ test("hidden benchmark freeze report applies submitted benchmark split members",
   assert.equal(report.submittedSplitMembership.appliedHiddenPositionCount, 1);
   assert.equal(report.submittedSplitMembership.contractViolationRows.length, 0);
   assert.equal(report.freezeChecks.find((check) => check.id === "submitted_split_membership_contract").status, "pass");
+  assert.equal(report.hiddenBenchmarkExpertQualification.status, "hidden_benchmark_expert_qualification_required");
+  assert.equal(report.hiddenBenchmarkExpertQualification.rows.find((row) => row.itemId === "pos-mind::crit-mind-zombie").qualifiedHiddenBenchmarkExpertCount, 1);
+  assert.equal(report.hiddenBenchmarkExpertQualification.counts.missingHiddenBenchmarkExpertQualificationItemCount, 2);
+  assert.equal(report.freezeChecks.find((check) => check.id === "hidden_benchmark_expert_qualification").status, "blocked");
   assert.deepEqual(report.restrictedItemRefs.hiddenPositionIds.sort(), ["pos-ai-prior", "pos-mind"]);
   assert.equal(report.hiddenCritiqueCount, 3);
   assert.equal(report.rightsStatus.status, "blocked");
@@ -10073,6 +10823,36 @@ test("hidden benchmark freeze report applies submitted benchmark split members",
   assert.ok(underdeclaredReport.submittedSplitMembership.contractViolationRows[0].contractViolations.includes("releaseId"));
   assert.ok(underdeclaredReport.submittedSplitMembership.contractViolationRows[0].contractViolations.includes("splitUnit"));
   assert.equal(underdeclaredReport.freezeChecks.find((check) => check.id === "submitted_split_membership_contract").status, "blocked");
+});
+
+test("hidden benchmark freeze blocks unqualified expert quota evidence", () => {
+  const snapshot = createLabelSnapshot(
+    "snapshot-hidden-expert-qualification-test",
+    "release-test",
+    seedRatings,
+    critiques.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    "benchmark_frozen",
+  );
+  const report = buildHiddenBenchmarkFreezeReport("release-test", snapshot, positions, critiques, undefined, seedBenchmarkExposureEvents, {
+    raterQualificationRecords: [
+      {
+        id: "rater-qualification-expired-hidden-benchmark-expert",
+        raterId: "expert-1",
+        qualificationScope: "hidden_benchmark_expert",
+        qualificationSource: "certification_pack",
+        evidenceArtifactReference: "qualification-evidence-hidden-expired",
+        approvedRoles: ["expert"],
+        topicFamilyScope: ["philosophy_of_mind"],
+        splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
+        expiryReviewDate: "2000-01-31",
+        approver: "demo-admin",
+      },
+    ],
+  });
+  assert.equal(report.hiddenBenchmarkExpertQualification.status, "hidden_benchmark_expert_qualification_required");
+  assert.equal(report.hiddenBenchmarkExpertQualification.counts.missingHiddenBenchmarkExpertQualificationItemCount, 1);
+  assert.equal(report.freezeChecks.find((check) => check.id === "hidden_benchmark_expert_qualification").status, "blocked");
+  assert.equal(report.freezeStatus, "blocked");
 });
 
 test("hidden benchmark initial blinding gate excludes source/tag-visible blind ratings unless exception is disclosed", () => {
@@ -10130,6 +10910,10 @@ test("validation design report refuses Appendix-C comparability when the current
   assert.equal(report.requiredScale.positionCount, 19);
   assert.equal(report.currentScale.critiqueCount, 2);
   assert.equal(report.comparabilityAxes.thinnerThanAppendixCLabelRequired, true);
+  assert.equal(report.releaseCycleValidationPolicy.cadence, "each_public_release_or_leaderboard_cycle");
+  assert.equal(report.releaseCycleValidationPolicy.carryForwardAllowedReleaseCycles, 0);
+  assert.deepEqual(report.releaseCycleValidationPolicy.requiredSubsets, ["random_sentinel", "hard_case_stress"]);
+  assert.equal(report.releaseCycleEvidenceStatus, "current_release_cycle_validation_floor_not_met");
   assert.equal(report.numericBaselineComparisonTable.gpt5ComparisonPoints.wholeRatingTestCustomLoss.mean, 0.169);
 });
 
@@ -10226,6 +11010,26 @@ test("validation tranche report accepts submitted Appendix-C-scale tranche evide
   assert.equal(report.submittedValidationTrancheEvidence.activeEvidenceId, "validation-tranche-evidence-test");
   assert.equal(report.submittedValidationTrancheEvidence.completeEvidenceCount, 1);
   assert.deepEqual(report.reviewSections, []);
+
+  const releaseReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    { validationTrancheEvidenceRecords: [evidence] },
+  );
+  assert.equal(releaseReport.validationDesign.status, "appendix_c_scale");
+  assert.equal(releaseReport.validationDesign.currentScale.submittedScaleEvidenceSource, "validation_tranche_evidence");
+  assert.equal(releaseReport.validationDesign.currentScale.critiqueCount, 52);
+  assert.equal(releaseReport.validationDesign.currentScale.positionCount, 19);
+  assert.equal(releaseReport.validationDesign.currentScale.fullCoverageRaterCount, 4);
+  assert.equal(releaseReport.targetGaps.validationCritiquesRemaining, 0);
+  assert.equal(releaseReport.targetGaps.validationPositionsRemaining, 0);
+  assert.equal(releaseReport.targetGaps.validationCoreAllItemsRatersRemaining, 0);
 });
 
 test("validation tranche report requires current complete tranche evidence", () => {
@@ -10323,6 +11127,8 @@ test("submitted human-ceiling runs can satisfy Appendix-C validation evidence", 
   };
   const validationDesign = buildValidationDesignReport(seedRatings, positions, critiques, { humanCeilingRuns: [submittedRun] });
   assert.equal(validationDesign.status, "appendix_c_scale");
+  assert.equal(validationDesign.releaseCycleEvidenceStatus, "current_release_cycle_validation_evidence_complete");
+  assert.equal(validationDesign.releaseCycleValidationPolicy.staleEvidenceAction, "rerun_or_rebaseline_before_appendix_c_or_leaderboard_claim");
   assert.equal(validationDesign.currentScale.computedFloorMet, false);
   assert.equal(validationDesign.submittedValidationEvidence.bestRunId, "human-ceiling-submitted-appendix-c");
   assert.equal(validationDesign.submittedValidationEvidence.status, "submitted_appendix_c_scale_evidence");
@@ -10417,11 +11223,172 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   assert.equal(report.targetGaps.validationCritiquesRemaining, 50);
   assert.equal(report.targetGaps.validationPositionsRemaining, 18);
   assert.equal(report.targetGaps.validationCoreAllItemsRatersRemaining, 3);
+  assert.equal(report.targetGaps.counts.targetRows, 7);
+  assert.equal(report.targetGaps.counts.remaining, 7);
+  assert.deepEqual(report.targetGaps.totals, { targetTotal: 2055, currentTotal: 21, remainingTotal: 2034 });
+  assert.equal(report.targetGaps.counts.targetTotal, 2055);
+  assert.equal(report.targetGaps.counts.currentTotal, 21);
+  assert.equal(report.targetGaps.counts.remainingTotal, 2034);
+  assert.equal(report.targetGaps.counts.readyTargetGaps, 7);
+  assert.deepEqual(report.targetGaps.counts.byExecutionStatus, { ready_to_collect_data: 7 });
+  assert.equal(report.targetGaps.counts.byPrimaryImportRoute["/api/v1/target-gaps/import-jsonl-package"], undefined);
+  assert.equal(report.targetGaps.counts.byPrimaryImportRoute["/api/v1/intake/positions/import-jsonl"], 1);
+  assert.equal(report.targetGaps.counts.bySetupImportRoute["/api/v1/assignments/import-jsonl"], 1);
+  assert.equal(report.targetGaps.counts.byRoute["/api/v1/target-gaps/import-jsonl-package"], 7);
+  assert.equal(report.targetGaps.counts.byRoute["/api/v1/target-gaps/import-jsonl-package?dryRun=true"], 7);
+  assert.equal(report.targetGaps.counts.byRoute["/api/v1/target-gaps/import-jsonl-package?validateOnly=true"], 7);
+  assert.equal(report.targetGaps.counts.byRoute["/api/v1/target-gaps/import-jsonl-template?targetGapId=positions"], 1);
+  assert.equal(report.octoberOperatingPlan.releaseTargetDate, "2026-10-31");
+  assert.equal(report.octoberOperatingPlan.scopeLabel, "compressed_quality_preserving_october_release_not_lmca_replication");
+  assert.deepEqual(report.octoberOperatingPlan.personWeekRange, { min: 132, max: 154 });
+  assert.deepEqual(report.octoberOperatingPlan.budgetEnvelopeUsd, { min: 600000, midpoint: 840000, max: 1000000 });
+  assert.equal(report.octoberOperatingPlan.counts.expertAdjudicatorRequiredCount, 4);
+  assert.equal(report.octoberOperatingPlan.counts.requiredWorkstreams, 8);
+  assert.equal(report.octoberOperatingPlan.targetGapSummary.openTargetRows, 7);
+  assert.equal(report.octoberOperatingPlan.releaseUseStatus, "october_operating_plan_target_scale_open");
+  assert.ok(
+    report.octoberOperatingPlan.workstreamRows.some(
+      (row) => row.workstream === "appendix_c_validation_and_human_ceiling" && row.blockingTargetGapIds.includes("validation_critiques"),
+    ),
+  );
+  const positionTargetGap = report.targetGaps.rows.find((row) => row.id === "positions");
+  const expectedPositionImportImpact = {
+    targetGapId: "positions",
+    current: 3,
+    target: 120,
+    remaining: 117,
+    status: "target_gap_remaining",
+    sourceEvidenceId: report.corpusManifest.id,
+    importKind: "primary_data_import",
+    importRoute: "/api/v1/intake/positions/import-jsonl",
+    completionEvidence: "corpus position count increases in /api/release/report targetGaps",
+    estimatedRecordsRequired: 117,
+    expectedResourceDelta: 117,
+    closesTargetGapWhenValidated: true,
+    effect: "validated_real_records_reduce_matching_target_gap",
+    verificationRoute: "/api/v1/target-gaps/positions",
+  };
+  assert.deepEqual(positionTargetGap, {
+    id: "positions",
+    label: "Positions",
+    target: 120,
+    current: 3,
+    remaining: 117,
+    sourceEvidenceId: report.corpusManifest.id,
+    status: "target_gap_remaining",
+    operatorActionIds: ["target_scale_and_data_collection:collect:positions"],
+    checklistRowIds: ["target_scale_and_data_collection"],
+    writeRoutes: ["/api/v1/intake/positions"],
+    bulkImportRoutes: ["/api/v1/intake/positions/import-jsonl"],
+    readbackRoutes: ["/api/v1/intake/positions"],
+    submissionReadbackRoutes: ["/api/v1/intake/positions"],
+    setupWriteRoutes: [],
+    setupBulkImportRoutes: [],
+    setupReadbackRoutes: [],
+    targetGapReadbackRoutes: ["/api/v1/target-gaps"],
+    targetGapReadbackItemRoutes: ["/api/v1/target-gaps/positions"],
+    workflowTemplateIds: ["position-intake"],
+    setupWorkflowTemplateIds: [],
+    bulkImportWorkflowTemplateIds: ["position-intake-jsonl-import"],
+    setupBulkImportWorkflowTemplateIds: [],
+    actorRoles: ["admin_or_operator"],
+    setupActorRoles: [],
+    completionEvidence: ["corpus position count increases in /api/release/report targetGaps"],
+    executionStatus: "ready_to_collect_data",
+    executionStatusReason:
+      "This target gap can accept real target data now; generated templates must be replaced and dry-run validated before append.",
+    collectionPlanRoute: "/api/v1/target-gaps/collection-plan/positions",
+    writeRoute: "/api/v1/intake/positions",
+    readbackRoute: "/api/v1/intake/positions",
+    submissionReadbackRoute: "/api/v1/intake/positions",
+    bulkImportRoute: "/api/v1/intake/positions/import-jsonl",
+    dryRunImportRoute: "/api/v1/intake/positions/import-jsonl?dryRun=true",
+    validateOnlyImportRoute: "/api/v1/intake/positions/import-jsonl?validateOnly=true",
+    packageImportRoute: "/api/v1/target-gaps/import-jsonl-package",
+    packageDryRunImportRoute: "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
+    packageValidateOnlyImportRoute: "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+    setupWriteRoute: null,
+    setupReadbackRoute: null,
+    setupBulkImportRoute: null,
+    setupDryRunImportRoute: null,
+    setupValidateOnlyImportRoute: null,
+    targetGapReadbackRoute: "/api/v1/target-gaps",
+    targetGapReadbackItemRoute: "/api/v1/target-gaps/positions",
+    workflowTemplateId: "position-intake",
+    bulkImportWorkflowTemplateId: "position-intake-jsonl-import",
+    setupWorkflowTemplateId: null,
+    setupBulkImportWorkflowTemplateId: null,
+    actorRole: "admin_or_operator",
+    setupActorRole: null,
+    templateReadbackRoute: "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions",
+    expandedTemplateReadbackRoute: "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining",
+    cappedExpandedTemplateReadbackRoute: "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining&maxExpandedRecords=100",
+    templateReadbackRoutes: [
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions",
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining",
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining&maxExpandedRecords=100",
+    ],
+    estimatedRecordsRequired: 117,
+    estimatedSetupRecordsRequired: 0,
+    expectedResourceDelta: 117,
+    setupExpectedResourceDelta: 0,
+    operatorActions: [
+      {
+        id: "target_scale_and_data_collection:collect:positions",
+        checklistRowId: "target_scale_and_data_collection",
+        label: "position intake rows",
+        importImpact: expectedPositionImportImpact,
+        setupImportImpact: null,
+        importImpacts: [expectedPositionImportImpact],
+        writeRoute: "/api/v1/intake/positions",
+        bulkImportRoute: "/api/v1/intake/positions/import-jsonl",
+        dryRunImportRoute: "/api/v1/intake/positions/import-jsonl?dryRun=true",
+        validateOnlyImportRoute: "/api/v1/intake/positions/import-jsonl?validateOnly=true",
+        setupBulkImportRoute: null,
+        setupBulkImportRoutes: [],
+        readbackRoute: "/api/v1/intake/positions",
+        submissionReadbackRoute: "/api/v1/intake/positions",
+        setupWriteRoute: null,
+        setupReadbackRoute: null,
+        packageImportRoute: "/api/v1/target-gaps/import-jsonl-package",
+        packageDryRunImportRoute: "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
+        packageValidateOnlyImportRoute: "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+        targetGapReadbackRoute: "/api/v1/target-gaps",
+        targetGapReadbackItemRoute: "/api/v1/target-gaps/positions",
+        verificationRoute: "/api/v1/target-gaps/positions",
+        workflowTemplateId: "position-intake",
+        setupWorkflowTemplateId: null,
+        bulkImportWorkflowTemplateId: "position-intake-jsonl-import",
+        setupBulkImportWorkflowTemplateId: null,
+        setupBulkImportWorkflowTemplateIds: [],
+        actorRole: "admin_or_operator",
+        setupActorRole: null,
+        completionEvidence: "corpus position count increases in /api/release/report targetGaps",
+      },
+    ],
+  });
+  assert.deepEqual(
+    report.targetGaps.rows.find((row) => row.id === "gold_library_items").checklistRowIds,
+    ["target_scale_and_data_collection", "rubric_practice_and_certification_pack"],
+  );
   assert.equal(report.corpusManifest.lmcaBaseline.corpusScale.ratedCritiques, 951);
   assert.equal(report.corpusManifest.counts.positionsWithAtLeastTwoCritiques, 2);
   assert.equal(report.corpusManifest.sourceDetailCoverage.status, "source_detail_metadata_declared");
   assert.equal(report.corpusManifest.sourceDetailRows.length, 3);
   assert.equal(report.corpusManifest.knownAdaptedSubsourceRows.find((row) => row.subsource === "VivesDebate").lmcaCount, 6);
+  assert.deepEqual(
+    report.lmcaComparison.raterContributionComparison
+      .filter((row) => row.sourceTable === "LMCA Table 1")
+      .map((row) => [row.rater, row.lmcaCount, row.countingRule]),
+    [
+      ["Emery Cooper", 946, "ratings_ignoring_revisions"],
+      ["Caspar Oesterheld", 211, "ratings_ignoring_revisions"],
+      ["Alexander Kastner", 130, "ratings_ignoring_revisions"],
+      ["Linh Chi Nguyen", 103, "ratings_ignoring_revisions"],
+      ["Lukas Gloor", 43, "ratings_ignoring_revisions"],
+      ["Lukas Finnveden", 25, "ratings_ignoring_revisions"],
+    ],
+  );
   assert.equal(report.itemTextViewParity.counts.frozenRatingTextVersionRows, 7);
   assert.equal(report.itemTextViewParity.counts.evaluationRowsWithViewParity, 8);
   assert.equal(report.itemTextViewParity.releaseUseStatus, "item_text_versions_frozen_with_human_model_view_parity");
@@ -10477,6 +11444,17 @@ test("release report includes corpus baselines and explicit anti-overclaim claim
   assert.equal(report.raterCompositionConflicts.counts.includedRaterCount, 4);
   assert.equal(report.raterCompositionConflicts.counts.releaseCriticalItemCount, 3);
   assert.equal(report.raterCompositionConflicts.counts.conflictFlagCount, 0);
+  assert.equal(report.raterCompositionConflicts.counts.topicExpertiseMissingItemCount, 1);
+  assert.deepEqual(report.raterCompositionConflicts.topicExpertiseMissingRows.map((row) => row.itemId), ["pos-voting::crit-voting-style"]);
+  assert.equal(report.raterCompositionConflicts.policy.requiredReleaseCriticalTierDiversityMin, 2);
+  assert.equal(report.raterCompositionConflicts.counts.raterTierDiversityMissingItemCount, 2);
+  assert.deepEqual(
+    report.raterCompositionConflicts.tierDiversityMissingRows.map((row) => [row.itemId, row.raterTierDiversity]),
+    [
+      ["pos-mind::crit-mind-zombie", ["expert"]],
+      ["pos-voting::crit-voting-style", ["undergraduate"]],
+    ],
+  );
   assert.equal(report.raterCompositionConflicts.counts.singleRaterDominatedReleaseCriticalItemCount, 2);
   assert.equal(report.raterCompositionConflicts.releaseUseStatus, "rater_composition_limitations_disclosed");
   assert.equal(report.rubricIssueFlags.counts.strengthCentralityAllocationAmbiguityCount, 1);
@@ -10738,6 +11716,9 @@ test("submitted critique-generation artifacts drive generation denominators and 
           headlineMetric: "blind_human_rated_promoted_outputs",
           commonGenerationBudgetPolicy: "budget_matched",
           filteringSelectionPolicy: "uncurated_random_sample_plus_best_of_n_diagnostic",
+          uncuratedRandomSampleMetric: "uncurated_random_sample_metric_over_all_generated_outputs",
+          bestOfNPolicy: "best_of_n_reported_against_declared_generation_budget",
+          topKPolicy: "top_k_and_curated_views_reported_separately_as_diagnostics",
           uncuratedRandomSampleMetrics: { ratedCount: 1, meanOverall: 0.61 },
           bestOfNMetrics: { n: 1, passAtThreshold: 1, threshold: 0.6 },
           counts: { generated: 1, refusal: 0, duplicate: 0, filtered: 0, promoted: 1, rated: 1 },
@@ -10760,6 +11741,10 @@ test("submitted critique-generation artifacts drive generation denominators and 
   assert.equal(submittedRun.generatedSubmissionContractViolationCount, 0);
   assert.equal(submittedRun.generatedPromotionContractViolationCount, 0);
   assert.equal(submittedRun.generationEvaluationReportContractViolationCount, 0);
+  assert.equal(submittedRun.metricDefinitions.uncuratedRandomSampleMetric, "uncurated_random_sample_metric_over_all_generated_outputs");
+  assert.equal(submittedRun.metricDefinitions.bestOfNPolicy, "best_of_n_reported_against_declared_generation_budget");
+  assert.equal(submittedRun.metricDefinitions.topKPolicy, "top_k_and_curated_views_reported_separately_as_diagnostics");
+  assert.equal(submittedRun.metricDefinitions.passThresholdOverall, 0.6);
   assert.equal(submittedRun.modelProviderPolicyBinding.generator.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-critique_generation");
   assert.equal(submittedRun.modelProviderPolicyBinding.modelJudge.modelProviderDataHandlingPolicyId, "model-provider-data-handling-submitted-model_judge");
   assert.equal(report.critiqueGenerationEvaluation.providerPolicyEvidence.releaseUseStatus, "critique_generation_provider_policies_approved");
@@ -10823,6 +11808,11 @@ test("submitted critique-generation artifacts drive generation denominators and 
   assert.ok(
     underdeclaredReport.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.reviewSections.some(
       (section) => section.artifactType === "generation_evaluation_report" && section.reason.includes("commonPositionSetPolicy"),
+    ),
+  );
+  assert.ok(
+    underdeclaredReport.critiqueGenerationEvaluation.submittedWorkflowContractEvidence.reviewSections.some(
+      (section) => section.artifactType === "generation_evaluation_report" && section.reason.includes("uncuratedRandomSampleMetric"),
     ),
   );
   assert.equal(
@@ -10913,6 +11903,111 @@ test("submitted rater-reliability weight models become label-snapshot provenance
   assert.equal(reviewReport.raterReliabilityWeightModelEvidence.releaseUseStatus, "active_submitted_weight_model_provenance_review_required");
 });
 
+test("label aggregation reliability checklist binds snapshots, weighting, disagreement, and overlap evidence", () => {
+  const report = buildOctoberReleaseReport();
+  const checklist = report.labelAggregationReliabilityChecklist;
+
+  assert.equal(checklist.releaseUseStatus, "label_aggregation_reliability_requirements_evidenced");
+  assert.equal(checklist.counts.checklistRows, 9);
+  assert.equal(checklist.counts.reviewRequiredRows, 0);
+  assert.equal(checklist.counts.includedRatingCount, report.labelSnapshotReliability.includedRatingProvenance.includedRatingCount);
+  assert.equal(checklist.counts.blindInitialRows, report.ratingRevisionAudit.counts.blindInitialRows);
+  assert.equal(
+    checklist.counts.maxSingleRaterContributionShare,
+    report.labelSnapshotReliability.reliabilityWeightModel.effectiveContribution.maxSingleRaterContributionShare,
+  );
+  assert.match(checklist.policy.scope, /LabelSnapshot/);
+  assert.match(checklist.policy.scope, /AdjudicationMemo/);
+  assert.match(checklist.policy.duplicationBoundary, /does not create a new label snapshot/);
+  assert.match(checklist.policy.releaseClaimBoundary, /single-rater dominance/);
+  assert.deepEqual(
+    checklist.rows.map((row) => row.id),
+    [
+      "immutable_label_snapshot_and_denominators",
+      "frozen_reliability_weight_model",
+      "protected_fit_exclusion",
+      "unweighted_median_sensitivity",
+      "rater_dominance_disclosed",
+      "disagreement_policy_and_post_discussion",
+      "adjudication_memos_and_minority_rationales",
+      "metric_directionality_and_low_clarity",
+      "model_assisted_overlap_disclosed",
+    ],
+  );
+  assert.ok(
+    checklist.rows
+      .find((row) => row.id === "disagreement_policy_and_post_discussion")
+      .sourceStatuses.includes(report.postDiscussionDisagreement.releaseUseStatus),
+  );
+  assert.ok(
+    checklist.rows
+      .find((row) => row.id === "model_assisted_overlap_disclosed")
+      .sourceStatuses.includes(report.modelAssistedLabelOverlap.releaseUseStatus),
+  );
+
+  const reviewChecklist = buildLabelAggregationReliabilityChecklistReport("release-review", {
+    labelSnapshotReliability: {
+      ...report.labelSnapshotReliability,
+      reliabilityWeightModel: {
+        ...report.labelSnapshotReliability.reliabilityWeightModel,
+        fitDataProvenance: {
+          ...report.labelSnapshotReliability.reliabilityWeightModel.fitDataProvenance,
+          protectedRatingsUsedForFit: 1,
+        },
+      },
+      aggregationSensitivity: {
+        ...report.labelSnapshotReliability.aggregationSensitivity,
+        medianSensitivityAvailable: false,
+      },
+    },
+    raterReliabilityWeightModelEvidence: {
+      ...report.raterReliabilityWeightModelEvidence,
+      releaseUseStatus: "active_submitted_weight_model_provenance_review_required",
+      reviewRows: [{ id: "weight-model-review-row" }],
+    },
+    ratingRevisionAudit: report.ratingRevisionAudit,
+    postDiscussionDisagreement: {
+      ...report.postDiscussionDisagreement,
+      counts: {
+        ...report.postDiscussionDisagreement.counts,
+        missingMemoHighSpreadItemCount: 1,
+      },
+    },
+    adjudicationMemoAudit: report.adjudicationMemoAudit,
+    disagreementThresholdPolicyEvidence: report.disagreementThresholdPolicyEvidence,
+    metricDirectionalityConfig: {
+      ...report.metricDirectionalityConfig,
+      releaseUseStatus: "metric_config_or_directionality_review_required",
+      counts: {
+        ...report.metricDirectionalityConfig.counts,
+        directionalityViolationCount: 1,
+      },
+    },
+    modelAssistedLabelOverlap: report.modelAssistedLabelOverlap,
+  });
+  assert.equal(reviewChecklist.releaseUseStatus, "label_aggregation_reliability_review_required");
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) => section.artifactId === "protected_fit_exclusion" && section.reason === "fitDataProvenance.protectedRatingsUsedForFit",
+    ),
+  );
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) => section.artifactId === "unweighted_median_sensitivity" && section.reason === "aggregationSensitivity.medianSensitivityAvailable",
+    ),
+  );
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) => section.artifactId === "disagreement_policy_and_post_discussion" && section.reason === "postDiscussionDisagreement.missingMemoHighSpreadItemCount",
+    ),
+  );
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) => section.artifactId === "metric_directionality_and_low_clarity" && section.reason === "metricDirectionalityConfig.releaseUseStatus",
+    ),
+  );
+});
+
 test("submitted label, corpus, training, and export manifests are checked against current release artifacts", () => {
   const releaseId = "release-artifact-evidence-test";
   const snapshot = createLabelSnapshot(
@@ -10959,6 +12054,8 @@ test("submitted label, corpus, training, and export manifests are checked agains
           sourceLabelSnapshotId: "label-snapshot-submitted",
           sourceSplits: ["public_train"],
           excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+          futureTrainingExportExcludedRaterIds: [],
+          volunteerWithdrawalExclusionRequestIds: [],
           targetLabelVersion: "initial_mean",
           targetFields: ["overall", "centrality_x_strength"],
           exportKind: "model_improvement_training_export",
@@ -11050,6 +12147,21 @@ test("submitted label, corpus, training, and export manifests are checked agains
               },
             ],
           },
+          volunteerWithdrawalExclusionManifest: {
+            id: `training-export-withdrawal-exclusions-${releaseId}`,
+            releaseId,
+            policy:
+              "future_training_export_exclusion_applies_to_new_training_exports_without_recomputing_already_frozen_deidentified_label_snapshots",
+            futureTrainingExportExcludedRaterIds: [],
+            withdrawalRequestIds: [],
+            rows: [],
+            affectedIncludedRatingCount: 0,
+            affectedRationaleCount: 0,
+            affectedItemIds: [],
+            frozenLabelSnapshotDisposition: "preserved_without_recomputation",
+            denominatorMutationAllowed: false,
+            status: "no_future_training_export_withdrawal_exclusions",
+          },
           positionBalancedWeightingPolicy: "average_or_sample_within_position_before_cross_position_training_weighting",
           positionBalancedWeighting: {
             policy: "average_or_sample_within_position_before_cross_position_training_weighting",
@@ -11074,10 +12186,37 @@ test("submitted label, corpus, training, and export manifests are checked agains
           rightsClearedOnly: true,
           counts: { positions: 1, critiques: 2 },
         },
+        {
+          id: "internal-export-submitted",
+          kind: "internal",
+          releaseId,
+          labelSnapshotId: "label-snapshot-submitted",
+          includedSplits: ["public_train", "public_dev", "internal_validation", "hidden_benchmark", "stress_test"],
+          excludedSplits: [],
+          hiddenBenchmarkExcluded: false,
+          rightsClearedOnly: false,
+          counts: { positions: 3, critiques: 5 },
+        },
+      ],
+      releaseReports: [
+        {
+          id: "release-report-snapshot-submitted",
+          releaseId,
+          reportId: `release-report-${releaseId}`,
+          reportCurrentStatus: "incomplete_against_october_target",
+          source: "server_generated_release_report_snapshot",
+          inputHash: "sha256:release-report-snapshot-submitted",
+          materializedAt: "2026-10-01T00:00:00.000Z",
+          materializedBy: "release-artifact-admin",
+        },
       ],
     },
   );
   assert.equal(report.releaseArtifactEvidence.releaseUseStatus, "submitted_release_artifacts_match_current_release");
+  assert.equal(
+    report.octoberCompletionChecklist.rows.find((row) => row.id === "release_artifact_submission_package").status,
+    "complete",
+  );
   assert.equal(report.releaseArtifactEvidence.labelSnapshotEvidence.status, "submitted_label_snapshot_matches_current_release_target");
   assert.equal(report.releaseArtifactEvidence.corpusManifestEvidence.status, "submitted_corpus_manifest_matches_current_release_counts");
   assert.equal(report.releaseArtifactEvidence.trainingExportEvidence.status, "submitted_training_export_preserves_current_release_policy");
@@ -11112,6 +12251,8 @@ test("submitted label, corpus, training, and export manifests are checked agains
     "matches",
   );
   assert.equal(report.releaseArtifactEvidence.exportManifestEvidence.status, "submitted_public_export_manifest_preserves_current_release_policy");
+  assert.equal(report.releaseArtifactEvidence.internalExportManifestEvidence.status, "submitted_internal_export_manifest_preserves_current_release_policy");
+  assert.equal(report.releaseArtifactEvidence.releaseReportSnapshotEvidence.status, "submitted_release_report_snapshot_matches_current_release");
   assert.deepEqual(report.releaseArtifactEvidence.reviewSections, []);
 
   const staleReport = buildOctoberReleaseReport(
@@ -11134,9 +12275,11 @@ test("submitted label, corpus, training, and export manifests are checked agains
   assert.deepEqual(staleReport.releaseArtifactEvidence.reviewSections, [
     "label_snapshot",
     "corpus_manifest",
-    "training_export",
-    "public_export_manifest",
-  ]);
+      "training_export",
+      "public_export_manifest",
+      "internal_export_manifest",
+      "release_report_snapshot",
+    ]);
   assert.equal(
     staleReport.releaseArtifactEvidence.labelSnapshotEvidence.reviewChecks.find((check) => check.field === "targetLabelVersion").status,
     "mismatch",
@@ -11341,6 +12484,10 @@ test("submitted model-evaluation artifacts are checked against current release e
     },
   );
   assert.equal(report.modelEvaluationArtifactEvidence.releaseUseStatus, "submitted_model_evaluation_artifacts_release_evidence_complete");
+  assert.equal(
+    report.octoberCompletionChecklist.rows.find((row) => row.id === "model_evaluation_submission_package").status,
+    "complete",
+  );
   assert.equal(report.modelEvaluationArtifactEvidence.modelImprovementPolicyId, "model-improvement-policy-release-artifact-submitted");
   assert.equal(report.modelEvaluationArtifactEvidence.modelImprovementPolicyReleaseUseStatus, "submitted_model_improvement_policy_active");
   assert.deepEqual(report.modelEvaluationArtifactEvidence.requiredModelImprovementMethods, modelImprovementMethods);
@@ -11580,6 +12727,104 @@ test("submitted model-evaluation artifacts are checked against current release e
   );
 });
 
+test("model evaluation reproducibility checklist binds RLHF91 model-run evidence without new architecture", () => {
+  const report = buildOctoberReleaseReport();
+  const checklist = report.modelEvaluationReproducibilityChecklist;
+
+  assert.equal(checklist.releaseUseStatus, "model_evaluation_reproducibility_review_required");
+  assert.equal(checklist.counts.checklistRows, 9);
+  assert.equal(checklist.counts.reviewRequiredRows, 3);
+  assert.match(checklist.policy.scope, /prompt\/parser/);
+  assert.match(checklist.policy.duplicationBoundary, /does not create a new model-evaluation table/);
+  assert.deepEqual(
+    checklist.rows.map((row) => row.id),
+    [
+      "submitted_evaluation_artifacts_bound_to_release",
+      "item_text_and_context_parity",
+      "prompt_parser_and_injection_controls",
+      "leaderboard_model_run_provenance",
+      "submitted_run_inference_environment_provenance",
+      "model_run_reproducibility_policy_active",
+      "metric_uncertainty_and_directionality",
+      "model_assisted_label_overlap_separation",
+      "failure_diagnostics_claim_gated",
+    ],
+  );
+  assert.equal(
+    checklist.rows.find((row) => row.id === "model_run_reproducibility_policy_active").status,
+    "complete",
+  );
+  assert.ok(
+    checklist.rows
+      .find((row) => row.id === "submitted_evaluation_artifacts_bound_to_release")
+      .reviewReasons.includes("modelEvaluationArtifactEvidence.releaseUseStatus"),
+  );
+  assert.ok(
+    checklist.rows
+      .find((row) => row.id === "leaderboard_model_run_provenance")
+      .reviewReasons.includes("leaderboardReport.modelRunProvenance.releaseUseStatus"),
+  );
+
+  const completeLeaderboardModelRunProvenance = {
+    ...report.leaderboardReport.modelRunProvenance,
+    releaseUseStatus: "common_model_run_provenance_declared",
+    commonSettingStatus: "common_inference_settings_declared",
+    reviewSections: [],
+    perModelRows: report.leaderboardReport.modelRunProvenance.perModelRows.map((row, index) => ({
+      ...row,
+      modelInferenceConfigId: `model-inference-config-${index}`,
+      modelRunEnvironmentId: `model-run-environment-${index}`,
+      reviewReasons: [],
+      status: "model_run_provenance_declared",
+    })),
+  };
+  const completeArtifactEvidence = {
+    ...report.modelEvaluationArtifactEvidence,
+    releaseUseStatus: "submitted_model_evaluation_artifacts_release_evidence_complete",
+    reviewSections: [],
+    evaluationRunEvidence: {
+      ...report.modelEvaluationArtifactEvidence.evaluationRunEvidence,
+      submittedArtifactId: "evaluation-run-submitted",
+      status: "submitted_evaluation_run_matches_current_target",
+    },
+    predictionEvidence: {
+      ...report.modelEvaluationArtifactEvidence.predictionEvidence,
+      status: "submitted_model_evaluation_predictions_preserve_text_context_parser_and_condition_provenance",
+      counts: {
+        ...report.modelEvaluationArtifactEvidence.predictionEvidence.counts,
+        predictionRows: 1,
+      },
+    },
+    modelRunProvenanceEvidence: {
+      ...report.modelEvaluationArtifactEvidence.modelRunProvenanceEvidence,
+      status: "submitted_model_run_provenance_preserves_inference_and_environment",
+      modelInferenceConfigId: "model-inference-config-submitted",
+      modelRunEnvironmentId: "model-run-environment-submitted",
+    },
+  };
+  const completeChecklist = buildModelEvaluationReproducibilityChecklistReport("release-complete", {
+    itemTextViewParity: report.itemTextViewParity,
+    samePositionContext: report.samePositionContext,
+    leaderboardReport: {
+      ...report.leaderboardReport,
+      modelRunProvenance: completeLeaderboardModelRunProvenance,
+    },
+    modelEvaluationArtifactEvidence: completeArtifactEvidence,
+    promptParserProvenance: report.promptParserProvenance,
+    promptTrackSeparation: report.promptTrackSeparation,
+    metricDirectionalityConfig: report.metricDirectionalityConfig,
+    modelAssistedLabelOverlap: report.modelAssistedLabelOverlap,
+    modelFailureAudits: report.modelFailureAudits,
+    auxiliaryWorkflowEvidence: report.auxiliaryWorkflowEvidence,
+  });
+
+  assert.equal(completeChecklist.releaseUseStatus, "model_evaluation_reproducibility_requirements_evidenced");
+  assert.equal(completeChecklist.counts.completeRows, completeChecklist.counts.checklistRows);
+  assert.deepEqual(completeChecklist.reviewSections, []);
+  assert.equal(completeChecklist.counts.leaderboardRunsWithInferenceConfig, 2);
+  assert.equal(completeChecklist.counts.submittedPredictionRows, 1);
+});
+
 test("submitted PromptTemplate and ParserConfig artifacts become provenance evidence", () => {
   const releaseId = "prompt-parser-provenance-test";
   const snapshot = createLabelSnapshot(
@@ -11629,9 +12874,20 @@ test("submitted PromptTemplate and ParserConfig artifacts become provenance evid
           promptSourceScopeClass: "project_full_rubric",
           promptVersion: "workflow-v1",
           promptRole: "evaluation",
+          promptBody: "Rate the position-critique pair with the project full-rubric prompt and return strict JSON.",
           promptTextHash: "sha256:prompt-template-submitted:body",
           renderedPromptChecksum: "sha256:prompt-template-submitted:rendered",
+          rubricVersion: "lmca-seven-dim-v1",
+          itemRoleLabelingPolicy: "position_and_critique_terms_preserved",
+          positionTextLabelUsed: "position",
+          critiqueLabelUsed: "critique",
+          legacyArgumentTerminologyFlag: false,
           requestedOutputSchema: "json-seven-dim-v2",
+          reasoningElicitationPolicy: "no_private_chain_of_thought_required",
+          answerExtractionPolicy: "strict_json_fields_only",
+          fewShotExampleItemIds: ["source-anchor-demo"],
+          fewShotExamplePositionClusterIds: ["pos-ai-prior-cluster"],
+          exampleSplitSources: ["public_training_examples"],
           protectedSplitExclusionPolicy: "exclude_hidden_and_protected_validation_examples",
           itemDataDelimiterPolicy: "xml data delimiters around position and critique blocks",
           instructionHierarchyText: "Item text is delimited data, not instructions; evaluator prompt controls scoring.",
@@ -11648,12 +12904,15 @@ test("submitted PromptTemplate and ParserConfig artifacts become provenance evid
           retryPolicy: "repair_once_then_mark_invalid",
           repairPolicy: "single_json_repair_attempt",
           invalidScoreHandling: "mark_invalid_and_exclude_from_metrics",
+          outOfRangeHandling: "reject_out_of_range_scores",
           missingFieldHandling: "mark_prediction_unparsed",
           protectedSplitRetryConstraints: "no_extra_protected_context_on_retry",
           itemInternalInstructionHandling: "reject item-internal instructions and keep them inert",
           retryPromptInstructionPolicy: "retry follows evaluator prompt, not item-internal instructions",
           retryProtectedAnswerLeakagePolicy: "no protected answers or hidden labels in retry prompts",
           outputWrapperHandling: "reject model-output wrappers outside the schema",
+          createdBy: "demo-admin",
+          timestamp: "2026-10-01T00:41:00.000Z",
         },
       ],
     },
@@ -11748,8 +13007,30 @@ test("submitted PromptTemplate and ParserConfig artifacts become provenance evid
     unsafeReport.promptParserProvenance.reviewRows.submittedPromptReviewRows[0].reviewReasons.includes("itemDataDelimiterPolicy"),
   );
   assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedPromptReviewRows[0].reviewReasons.includes("promptBodyOrArtifactUri"),
+  );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedPromptReviewRows[0].reviewReasons.includes("itemRoleLabelingPolicy"),
+  );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedPromptReviewRows[0].reviewReasons.includes("answerExtractionPolicy"),
+  );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedPromptReviewRows[0].reviewReasons.includes("fewShotExampleItemIds"),
+  );
+  assert.ok(
     unsafeReport.promptParserProvenance.reviewRows.submittedParserReviewRows[0].reviewReasons.includes("retryPromptInstructionPolicy"),
   );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedParserReviewRows[0].reviewReasons.includes("scoreFieldRequirements"),
+  );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedParserReviewRows[0].reviewReasons.includes("outOfRangeHandling"),
+  );
+  assert.ok(
+    unsafeReport.promptParserProvenance.reviewRows.submittedParserReviewRows[0].reviewReasons.includes("createdBy"),
+  );
+  assert.ok(unsafeReport.promptParserProvenance.reviewRows.submittedParserReviewRows[0].reviewReasons.includes("timestamp"));
 });
 
 test("submitted comparability claims annotate release claim tiers without bypassing computed guardrails", () => {
@@ -11866,6 +13147,18 @@ test("rubric QA coverage report freezes Appendix-F edge cases as public-only fix
   assert.equal(report.counts.coveredFamilyCount, 33);
   assert.equal(report.counts.fixtureCount, 15);
   assert.equal(report.counts.missingFamilyCount, 0);
+  assert.equal(report.counts.requiredExemplarTypeCount, 4);
+  assert.equal(report.counts.missingExemplarTypeCount, 0);
+  assert.deepEqual(report.requiredExemplarTypes, [
+    "worked_example",
+    "counterexample",
+    "adversarial_interpretation_guidance",
+    "priced_in_exemplar",
+  ]);
+  assert.deepEqual(report.missingExemplarTypes, []);
+  assert.equal(report.counts.requiredCurriculumModuleCount, 6);
+  assert.equal(report.counts.missingCurriculumModuleCount, 0);
+  assert.equal(report.curriculumRows.every((row) => row.status === "curriculum_module_frozen"), true);
   assert.equal(report.counts.protectedExposureViolationCount, 0);
   assert.equal(report.dimensionCoverage.centrality > 0, true);
   assert.equal(report.dimensionCoverage.dead_weight > 0, true);
@@ -11875,6 +13168,26 @@ test("rubric QA coverage report freezes Appendix-F edge cases as public-only fix
   assert.ok(report.coveredFamilies.includes("vague_good_objection_not_steelmanned"));
   assert.ok(report.coveredFamilies.includes("content_free_pseudo_substance_dead_weight"));
   assert.ok(report.coveredFamilies.includes("high_score_multi_interpretation_coverage"));
+  assert.ok(report.coveredExemplarTypes.includes("priced_in_exemplar"));
+  assert.ok(report.coveredExemplarTypes.includes("adversarial_interpretation_guidance"));
+});
+
+test("rubric QA coverage rejects fixture sets missing required exemplar types", () => {
+  const baseline = buildRubricQaCoverageReport("release-test");
+  const withoutPricedInExemplar = baseline.fixtureRows.map((row) => ({
+    id: row.fixtureId,
+    title: row.title,
+    invariant: row.invariant,
+    coveredFamilies: row.coveredFamilies,
+    targetDimensions: row.targetDimensions,
+    exemplarTypes: row.exemplarTypes.filter((type) => type !== "priced_in_exemplar"),
+    source: row.source,
+  }));
+  const report = buildRubricQaCoverageReport("release-test", withoutPricedInExemplar);
+  assert.equal(report.counts.missingFamilyCount, 0);
+  assert.equal(report.counts.missingExemplarTypeCount, 1);
+  assert.deepEqual(report.missingExemplarTypes, ["priced_in_exemplar"]);
+  assert.equal(report.releaseUseStatus, "rubric_qa_required_exemplar_types_missing");
 });
 
 test("position intake readiness preserves original text while keeping admin notes hidden from initial raters", () => {
@@ -11884,6 +13197,7 @@ test("position intake readiness preserves original text while keeping admin note
   assert.equal(report.counts.adminNotesHiddenCount, 3);
   assert.equal(report.counts.normalizationRequiredCount, 1);
   assert.equal(report.counts.contextGapFlaggedPositionCount, 1);
+  assert.equal(report.counts.incompleteScreeningCount, 0);
   assert.equal(report.counts.ordinaryHeadlineEligibleCount, 2);
   assert.equal(report.counts.hiddenBenchmarkContextBlockedCount, 0);
   assert.equal(report.releaseUseStatus, "position_intake_limitations_disclosed");
@@ -11894,6 +13208,2138 @@ test("position intake readiness preserves original text while keeping admin note
   const hidden = report.rows.find((row) => row.positionId === "pos-mind");
   assert.equal(hidden.hiddenBenchmarkEligible, true);
   assert.equal(hidden.canonicalHash, "sha256:ptv-mind-v1:canonical");
+  assert.equal(hidden.acceptedMethodologyStatus, "no_widely_accepted_resolution_methodology");
+
+  const unsafeReport = buildPositionIntakeReadinessReport("release-test", [
+    ...positions,
+    {
+      ...positions[0],
+      id: "pos-nonconceptual-unsafe",
+      clusterId: "cluster-nonconceptual-unsafe",
+      split: "hidden_benchmark",
+      conceptualScope: "primarily_non_conceptual",
+      groundTruthAvailability: "realistically_accessible_ground_truth",
+      acceptedMethodologyStatus: "accepted_methodology_available",
+      nonConceptualDependencyNotes: "The central target is mathematical rather than conceptual.",
+      contextSufficiency: "context_insufficient",
+      intakeScreening: {
+        ...positions[0].intakeScreening,
+        contextGapFlags: [],
+        ordinaryHeadlineEligibility: "eligible",
+      },
+    },
+  ]);
+  assert.equal(unsafeReport.releaseUseStatus, "position_intake_screening_review_required");
+  assert.equal(unsafeReport.counts.incompleteScreeningCount, 1);
+  assert.ok(
+    unsafeReport.reviewSections.some(
+      (section) => section.artifactId === "pos-nonconceptual-unsafe" && section.reason === "ordinaryHeadlineEligibility:nonconceptual",
+    ),
+  );
+  assert.ok(
+    unsafeReport.reviewSections.some((section) => section.artifactId === "pos-nonconceptual-unsafe" && section.reason === "contextGapFlags"),
+  );
+});
+
+test("source-intake evidence keeps Phase 1 extraction separate from candidate promotion", () => {
+  const emptyReport = buildSourceIntakeEvidenceReport("release-test");
+  assert.equal(emptyReport.releaseUseStatus, "phase1_source_intake_not_started");
+  assert.deepEqual(emptyReport.routes.adminWriteRoutes, ["/api/v1/admin/sources", "/api/v1/admin/sources/{id}/spans"]);
+  assert.deepEqual(
+    emptyReport.routes.jsonlImportRoutes.find((route) => route.route === "/api/v1/admin/sources/{id}/extract"),
+    {
+      route: "/api/v1/admin/sources/{id}/extract",
+      dryRunImportRoute: "/api/v1/admin/sources/{id}/extract?dryRun=true",
+      validateOnlyImportRoute: "/api/v1/admin/sources/{id}/extract?validateOnly=true",
+    },
+  );
+  assert.ok(emptyReport.routes.reviewRoutes.includes("/api/v1/admin/extractions/{id}/review"));
+  assert.ok(emptyReport.routes.templateReadbackRoutes.includes("/api/v1/metaphilosophy/source-workbench-template?templateKind=extraction_jsonl_import"));
+  assert.equal(emptyReport.routeCounts.byRoute["/api/v1/admin/sources"], 1);
+  assert.equal(emptyReport.routeCounts.byRoute["/api/v1/admin/sources/{id}/extract?dryRun=true"], 1);
+  assert.equal(emptyReport.routeCounts.byRoute["/api/v1/metaphilosophy/source-workbench-readiness"], 1);
+
+  const sourceCard = {
+    id: "source-card-metaphilosophy",
+    title: "Metaphilosophy seminar notes",
+    sourceAuthor: "Seminar instructor",
+    sourceWork: "Week 3 argument-quality notes",
+    sourcePublisherOrSite: "Internal seminar LMS",
+    publicationYear: "2026",
+    uploadedFileId: "upload-source-card-metaphilosophy",
+    sourceType: "coursework",
+    sourceLocator: "seminar-notes:week-3",
+    sourceProvenanceSummary: "Operator-created source card from a permitted coursework excerpt.",
+    rightsStatus: "internal_review_allowed",
+    sourceLanguage: "en",
+    translationStatus: "original_language",
+    taskFormat: "mixed_position_and_critique_source",
+    adminNotes: "Admin-only source metadata for future preparation; hidden from ordinary raters.",
+    sourceAccessPolicy: "internal_review_allowed",
+    releasePolicy: "prepared_text_only_after_review",
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    createdBy: "demo-admin",
+    createdAt: "2026-10-01T00:00:00.000Z",
+  };
+  const sourceSpan = {
+    id: "source-span-metaphilosophy-1",
+    sourceCardId: sourceCard.id,
+    spanLocator: "chars:10-180",
+    boundedLocator: "week 3 notes, paragraph 4, chars 10-180",
+    spanKind: "argumentative_claim",
+    textHash: "sha256:metaphilosophy-span-1",
+    adminExcerpt: "A good philosophical argument must expose which inferential burden it is actually carrying.",
+    excerptStoragePolicy: "store_hash_and_admin_excerpt_only_not_rater_visible",
+    segmentationStatus: "manually_selected",
+    extractionStatus: "selected_for_extraction",
+    adminSelectionNotes: "Manual selection of the argument-quality claim and nearby critique target.",
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    createdBy: "demo-admin",
+    createdAt: "2026-10-01T00:01:00.000Z",
+  };
+  const extractionBatch = {
+    id: "extraction-batch-metaphilosophy",
+    sourceCardId: sourceCard.id,
+    importFormat: "jsonl",
+    importedBy: "demo-admin",
+    importedAt: "2026-10-01T00:02:00.000Z",
+    extractionCount: 1,
+    parserVersion: "jsonl-source-intake-v1",
+    importRoute: "admin_jsonl_extraction_import",
+    extractionExecutionMode: "manual_jsonl_import_no_platform_ai_execution",
+    downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+    createsPreparedDraft: false,
+    createsCandidateItem: false,
+    createsCandidateBatch: false,
+    liveQueueIntegration: false,
+    aiExtractionExecuted: false,
+  };
+  const pendingExtraction = {
+    id: "argument-extraction-metaphilosophy",
+    extractionBatchId: extractionBatch.id,
+    sourceCardId: sourceCard.id,
+    sourceSpanIds: [sourceSpan.id],
+    argumentRole: "mixed_position_and_critique",
+    intendedConclusion: "A good philosophical argument must expose which inferential burden it is actually carrying.",
+    keyPremises: [
+      "Hidden inferential burdens make philosophical objections hard to evaluate.",
+      "Explicit burdens make a critique target inspectable.",
+    ],
+    argumentSummary: "The source span supplies both a candidate position about argument-quality criteria and a critique target for vague objections.",
+    implicitAssumptions: ["Argument quality can be assessed by checking whether the burden being carried is explicit."],
+    critiqueTarget: "Vague philosophical objections that sound plausible without identifying what inferential burden they satisfy.",
+    contextNeeded: "The surrounding source context should explain what counts as an inferential burden.",
+    conceptualScopeNotes: "Primarily conceptual methodology claim.",
+    suitabilityNotes: "Suitable for future source-to-position or source-to-critique preparation after blinding review.",
+    possiblePreparedPositionText: "A good philosophical argument must expose which inferential burden it is actually carrying.",
+    possiblePreparedCritiqueText: "This objection is weak if it sounds plausible but never identifies the inferential burden the position supposedly fails to meet.",
+    extractedPositionText: "A good philosophical argument must expose which inferential burden it is actually carrying.",
+    extractionRationale: "The span states a candidate position about argument-quality criteria.",
+    extractionMethod: "manual_jsonl_import",
+    reviewStatus: "pending_admin_review",
+    downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    importedAt: extractionBatch.importedAt,
+    createsPreparedDraft: false,
+    createsCandidateItem: false,
+    createsCandidateBatch: false,
+    liveQueueIntegration: false,
+    aiExtractionExecuted: false,
+  };
+
+  const pendingReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [sourceCard],
+    sourceSpans: [sourceSpan],
+    extractionBatches: [extractionBatch],
+    argumentExtractions: [pendingExtraction],
+  });
+  assert.equal(pendingReport.releaseUseStatus, "phase1_source_intake_pending_review");
+  assert.equal(pendingReport.counts.sourceCards, 1);
+  assert.equal(pendingReport.counts.argumentExtractions, 1);
+  assert.equal(pendingReport.counts.pendingReviewExtractions, 1);
+  assert.equal(pendingReport.byArgumentRole.mixed_position_and_critique, 1);
+  assert.equal(pendingReport.argumentExtractionRows[0].critiqueTarget, pendingExtraction.critiqueTarget);
+  assert.equal(pendingReport.argumentExtractionRows[0].possiblePreparedCritiqueText, pendingExtraction.possiblePreparedCritiqueText);
+  assert.equal(pendingReport.reviewSections.length, 0);
+
+  const incompleteSourceMetadataReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [{ ...sourceCard, id: "source-card-metadata-missing", sourceAuthor: "", sourcePublisherOrSite: "", taskFormat: "" }],
+    sourceSpans: [
+      {
+        ...sourceSpan,
+        id: "source-span-metadata-missing",
+        sourceCardId: "source-card-metadata-missing",
+        boundedLocator: "",
+        segmentationStatus: "",
+        extractionStatus: "",
+      },
+    ],
+  });
+  assert.equal(incompleteSourceMetadataReport.releaseUseStatus, "phase1_source_intake_review_required");
+  assert.ok(
+    incompleteSourceMetadataReport.reviewSections.some(
+      (section) => section.artifactType === "source_card" && section.artifactId === "source-card-metadata-missing" && section.reason === "sourceAuthor",
+    ),
+  );
+  assert.ok(
+    incompleteSourceMetadataReport.reviewSections.some(
+      (section) => section.artifactType === "source_card" && section.artifactId === "source-card-metadata-missing" && section.reason === "taskFormat",
+    ),
+  );
+  assert.ok(
+    incompleteSourceMetadataReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_card" &&
+        section.artifactId === "source-card-metadata-missing" &&
+        section.reason === "sourcePublisherOrSite",
+    ),
+  );
+  assert.ok(
+    incompleteSourceMetadataReport.reviewSections.some(
+      (section) => section.artifactType === "source_span" && section.artifactId === "source-span-metadata-missing" && section.reason === "boundedLocator",
+    ),
+  );
+  assert.ok(
+    incompleteSourceMetadataReport.reviewSections.some(
+      (section) => section.artifactType === "source_span" && section.artifactId === "source-span-metadata-missing" && section.reason === "segmentationStatus",
+    ),
+  );
+  assert.ok(
+    incompleteSourceMetadataReport.reviewSections.some(
+      (section) => section.artifactType === "source_span" && section.artifactId === "source-span-metadata-missing" && section.reason === "extractionStatus",
+    ),
+  );
+
+  const acceptedReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [sourceCard],
+    sourceSpans: [sourceSpan],
+    extractionBatches: [{ ...extractionBatch, extractionCount: 3 }],
+    argumentExtractions: [
+      { ...pendingExtraction, reviewStatus: "accepted_for_position_intake", reviewedBy: "demo-admin", reviewedAt: "2026-10-01T00:03:00.000Z" },
+      {
+        ...pendingExtraction,
+        id: "argument-extraction-accepted-critique",
+        argumentRole: "critique_argument",
+        possiblePreparedPositionText: undefined,
+        extractedPositionText: undefined,
+        reviewStatus: "accepted_for_critique_intake",
+        reviewedBy: "demo-admin",
+        reviewedAt: "2026-10-01T00:04:00.000Z",
+      },
+      {
+        ...pendingExtraction,
+        id: "argument-extraction-accepted-source-prep",
+        reviewStatus: "accepted_for_source_preparation",
+        reviewedBy: "demo-admin",
+        reviewedAt: "2026-10-01T00:05:00.000Z",
+      },
+    ],
+  });
+  assert.equal(acceptedReport.releaseUseStatus, "phase1_source_intake_ready_for_future_source_preparation");
+  assert.equal(acceptedReport.counts.acceptedForSourcePreparationExtractions, 3);
+  assert.equal(acceptedReport.counts.acceptedForPositionIntakeExtractions, 1);
+  assert.equal(acceptedReport.counts.acceptedForCritiqueIntakeExtractions, 1);
+  assert.equal(acceptedReport.counts.acceptedForGeneralSourcePreparationExtractions, 1);
+
+  const unsafeReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [sourceCard],
+    sourceSpans: [sourceSpan],
+    extractionBatches: [extractionBatch],
+    argumentExtractions: [{ ...pendingExtraction, id: "argument-extraction-unsafe", createsCandidateBatch: true }],
+  });
+  assert.equal(unsafeReport.releaseUseStatus, "phase1_source_intake_review_required");
+  assert.ok(
+    unsafeReport.reviewSections.some(
+      (section) => section.artifactType === "argument_extraction" && section.artifactId === "argument-extraction-unsafe" && section.reason === "createsCandidateBatch",
+    ),
+  );
+
+  const incompleteCritiqueReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [sourceCard],
+    sourceSpans: [sourceSpan],
+    extractionBatches: [extractionBatch],
+    argumentExtractions: [
+      {
+        ...pendingExtraction,
+        id: "argument-extraction-critique-target-missing",
+        argumentRole: "critique_argument",
+        possiblePreparedPositionText: undefined,
+        extractedPositionText: undefined,
+        critiqueTarget: "",
+      },
+    ],
+  });
+  assert.equal(incompleteCritiqueReport.releaseUseStatus, "phase1_source_intake_review_required");
+  assert.ok(
+    incompleteCritiqueReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "argument_extraction" &&
+        section.artifactId === "argument-extraction-critique-target-missing" &&
+        section.reason === "critiqueTarget",
+    ),
+  );
+
+  const downstreamFieldReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [{ ...sourceCard, id: "source-card-downstream-field", candidateBatchId: "candidate-batch-not-phase-1" }],
+  });
+  assert.equal(downstreamFieldReport.releaseUseStatus, "phase1_source_intake_review_required");
+  assert.ok(
+    downstreamFieldReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_card" &&
+        section.artifactId === "source-card-downstream-field" &&
+        section.reason === "forbidden_downstream_field:candidateBatchId",
+      ),
+  );
+
+  const pluralDownstreamFieldReport = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [{ ...sourceCard, id: "source-card-plural-downstream-field", preparedDrafts: [], candidateItems: [] }],
+  });
+  assert.equal(pluralDownstreamFieldReport.releaseUseStatus, "phase1_source_intake_review_required");
+  assert.ok(
+    pluralDownstreamFieldReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_card" &&
+        section.artifactId === "source-card-plural-downstream-field" &&
+        section.reason === "forbidden_downstream_field:preparedDrafts",
+    ),
+  );
+  assert.ok(
+    pluralDownstreamFieldReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_card" &&
+        section.artifactId === "source-card-plural-downstream-field" &&
+        section.reason === "forbidden_downstream_field:candidateItems",
+    ),
+  );
+});
+
+test("source-preparation evidence reports review signals without treating them as gate decisions", () => {
+  const acceptedExtraction = {
+    id: "argument-extraction-source-prep-evidence",
+    extractionBatchId: "extraction-batch-source-prep-evidence",
+    sourceCardId: "source-card-source-prep-evidence",
+    sourceSpanIds: ["source-span-source-prep-evidence"],
+    argumentRole: "position_argument",
+    intendedConclusion: "Good arguments state the inferential burden they carry.",
+    reviewStatus: "accepted_for_position_intake",
+  };
+  const preparedDraft = {
+    id: "prepared-draft-source-prep-evidence",
+    sourceArgumentExtractionId: acceptedExtraction.id,
+    sourceExtractionBatchId: acceptedExtraction.extractionBatchId,
+    sourceCardId: acceptedExtraction.sourceCardId,
+    sourceSpanIds: acceptedExtraction.sourceSpanIds,
+    draftType: "prepared_position_draft",
+    preparedText: "Good arguments state the inferential burden they carry.",
+    candidateRaterVisibleText: "Good arguments state the inferential burden they carry.",
+    blindingReviewStatus: "blinding_review_passed",
+    sourceLeakageReviewStatus: "source_leakage_review_passed",
+    gateReadinessStatus: "not_ready",
+    candidateItemReadiness: "not_ready",
+    preparedDraftStatus: "drafting",
+    createdBy: "demo-admin",
+    createdAt: "2026-10-01T00:05:00.000Z",
+    sourcePreparationPhase: "phase2_source_preparation",
+    sourcePreparationReviewStatus: "prepared_from_accepted_extraction",
+    visibilityClasses: {
+      preparedText: "reviewer_visible",
+      candidateRaterVisibleText: "reviewer_visible",
+      sourceArgumentExtractionId: "admin_only",
+    },
+  };
+  const goodSignal = {
+    id: "review-signal-source-prep-evidence",
+    signalType: "source_leakage_reviewed",
+    source: "admin",
+    confidence: 0.9,
+    explanation: "Prepared text removes source-identifying metadata.",
+    affectedObjectType: "PreparedDraft",
+    affectedObjectId: preparedDraft.id,
+    visibilityClass: "admin_only",
+    createdAt: "2026-10-01T00:06:00.000Z",
+  };
+  const badSignal = {
+    ...goodSignal,
+    id: "review-signal-source-prep-leaky",
+    affectedObjectType: "SourceSpan",
+    affectedObjectId: acceptedExtraction.sourceSpanIds[0],
+    visibilityClass: "rater_visible_after_promotion",
+  };
+
+  const goodReport = buildSourcePreparationEvidenceReport("release-test", {
+    argumentExtractions: [acceptedExtraction],
+    preparedDrafts: [preparedDraft],
+    reviewSignals: [goodSignal],
+  });
+  assert.equal(goodReport.counts.reviewSignals, 1);
+  assert.equal(goodReport.counts.gateDecisions, 0);
+  assert.deepEqual(goodReport.routes.adminWriteRoutes, [
+    "/api/v1/admin/extractions/{id}/create-prepared-position",
+    "/api/v1/admin/extractions/{id}/create-prepared-critique",
+    "/api/v1/admin/prepared-drafts/{id}/review",
+    "/api/v1/admin/prepared-drafts/{id}/promote",
+  ]);
+  assert.ok(goodReport.routes.readbackRoutes.includes("/api/v1/admin/gate-decisions"));
+  assert.ok(goodReport.routes.templateReadbackRoutes.includes("/api/v1/metaphilosophy/source-workbench-template?templateKind=prepared_draft_promote"));
+  assert.equal(goodReport.routeCounts.byRoute["/api/v1/admin/prepared-drafts/{id}/review"], 1);
+  assert.equal(goodReport.routeCounts.byRoute["/api/v1/admin/promotion-records"], 1);
+  assert.equal(goodReport.routeCounts.byRoute["/api/v1/metaphilosophy/source-workbench-template"], 1);
+  assert.equal(goodReport.workflowPolicy.policyId, "prepared_draft_readiness");
+  assert.deepEqual(goodReport.workflowPolicy.requiredGateIds, requiredGateIdsForPolicy("prepared_draft_readiness"));
+  assert.equal(goodReport.workflowPolicy.requiredGates.length, requiredGateIdsForPolicy("prepared_draft_readiness").length);
+  assert.ok(goodReport.workflowPolicy.requiredGates.some((gate) => gate.gateId === "source_leakage_gate" && gate.label === "Source leakage"));
+  assert.equal(goodReport.preparedDraftRows[0].requiredGateSummary.requiredGates.length, requiredGateIdsForPolicy("prepared_draft_readiness").length);
+  assert.equal(goodReport.reviewSignalRows[0].signalType, "source_leakage_reviewed");
+  assert.equal(goodReport.reviewSignalRows[0].reviewReasons.length, 0);
+  assert.equal(goodReport.releaseUseStatus, "source_preparation_prepared_drafts_recorded");
+
+  const validGateDecision = {
+    id: "gate-decision-source-prep-evidence",
+    gateId: "source_leakage_gate",
+    workflowPolicyId: "prepared_draft_readiness",
+    objectType: "PreparedDraft",
+    objectId: preparedDraft.id,
+    gateStatus: "passed",
+    decisionSource: "authorized_admin",
+    citedReviewSignalIds: [goodSignal.id],
+    decisionNote: "Source leakage gate passed after reviewing the prepared rater-visible text.",
+    waiverReason: null,
+    reviewerId: "demo-admin",
+    timestamp: "2026-10-01T00:07:00.000Z",
+    visibilityClass: "admin_only",
+  };
+  const gateDecisionReport = buildSourcePreparationEvidenceReport("release-test", {
+    argumentExtractions: [acceptedExtraction],
+    preparedDrafts: [preparedDraft],
+    reviewSignals: [goodSignal],
+    gateDecisions: [validGateDecision],
+  });
+  assert.equal(gateDecisionReport.counts.gateDecisions, 1);
+  assert.equal(gateDecisionReport.gateDecisionRows[0].reviewReasons.length, 0);
+  assert.equal(gateDecisionReport.releaseUseStatus, "source_preparation_prepared_drafts_recorded");
+
+  const malformedGateDecisionReport = buildSourcePreparationEvidenceReport("release-test", {
+    argumentExtractions: [acceptedExtraction],
+    preparedDrafts: [preparedDraft],
+    reviewSignals: [goodSignal],
+    gateDecisions: [
+      {
+        ...validGateDecision,
+        id: "gate-decision-source-prep-malformed",
+        gateId: "unknown_source_preparation_gate",
+        citedReviewSignalIds: ["review-signal-not-in-source-lineage"],
+        decisionNote: "",
+        visibilityClass: "user_visible",
+      },
+    ],
+  });
+  assert.equal(malformedGateDecisionReport.releaseUseStatus, "source_preparation_review_required");
+  assert.ok(
+    malformedGateDecisionReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_gate_decision" &&
+        section.artifactId === "gate-decision-source-prep-malformed" &&
+        section.reason === "gateId:not_required_for_policy",
+    ),
+  );
+  assert.ok(
+    malformedGateDecisionReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_gate_decision" &&
+        section.artifactId === "gate-decision-source-prep-malformed" &&
+        section.reason === "decisionNote",
+    ),
+  );
+  assert.ok(
+    malformedGateDecisionReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_gate_decision" &&
+        section.artifactId === "gate-decision-source-prep-malformed" &&
+        section.reason === "visibilityClass",
+    ),
+  );
+  assert.ok(
+    malformedGateDecisionReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_gate_decision" &&
+        section.artifactId === "gate-decision-source-prep-malformed" &&
+        section.reason === "citedReviewSignalIds:not_found:review-signal-not-in-source-lineage",
+    ),
+  );
+
+  const critiqueAcceptedExtraction = {
+    ...acceptedExtraction,
+    id: "argument-extraction-source-prep-critique-evidence",
+    argumentRole: "critique_argument",
+    reviewStatus: "accepted_for_critique_intake",
+  };
+  const critiquePreparedDraftReport = buildSourcePreparationEvidenceReport("release-test", {
+    argumentExtractions: [critiqueAcceptedExtraction],
+    preparedDrafts: [
+      {
+        ...preparedDraft,
+        id: "prepared-draft-source-prep-critique-evidence",
+        sourceArgumentExtractionId: critiqueAcceptedExtraction.id,
+        draftType: "prepared_critique_draft",
+        targetPositionId: "position-target",
+      },
+    ],
+  });
+  assert.equal(critiquePreparedDraftReport.releaseUseStatus, "source_preparation_prepared_drafts_recorded");
+  assert.equal(
+    critiquePreparedDraftReport.preparedDraftRows[0].reviewReasons.includes("sourceArgumentExtractionId:not_accepted"),
+    false,
+  );
+
+  const reviewRequiredReport = buildSourcePreparationEvidenceReport("release-test", {
+    argumentExtractions: [acceptedExtraction],
+    preparedDrafts: [preparedDraft],
+    reviewSignals: [goodSignal, badSignal],
+  });
+  assert.equal(reviewRequiredReport.counts.reviewSignals, 2);
+  assert.equal(reviewRequiredReport.releaseUseStatus, "source_preparation_review_required");
+  assert.ok(
+    reviewRequiredReport.reviewSections.some(
+      (section) =>
+        section.artifactType === "source_review_signal" &&
+        section.artifactId === "review-signal-source-prep-leaky" &&
+        section.reason === "visibilityClass",
+    ),
+  );
+});
+
+test("metaphilosophy greenfield architecture preserves spine and shell boundaries", () => {
+  const architecture = buildMetaphilosophyGreenfieldArchitectureReport("release-test");
+
+  assert.equal(architecture.releaseUseStatus, "metaphilosophy_greenfield_architecture_declared");
+  assert.equal(architecture.counts.validRequiredLayers, METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS.length);
+  assert.equal(architecture.missingRequiredLayerIds.length, 0);
+  assert.match(architecture.policy.preservationRule, /research spine/);
+  assert.match(architecture.policy.duplicationBoundary, /Position/);
+
+  for (const layerId of METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS) {
+    const row = architecture.layerRows.find((layer) => layer.id === layerId);
+    assert.ok(row, `${layerId} should be declared`);
+    assert.equal(row.reviewReasons.length, 0);
+    assert.ok(row.artifactFamilies.length > 0);
+    assert.match(row.boundaryRule, /./);
+    assert.match(row.releaseClaimRole, /./);
+  }
+
+  const incompleteArchitecture = buildMetaphilosophyGreenfieldArchitectureReport("release-test", {
+    greenfieldArchitectureLayers: [{ id: "research_spine", label: "Research spine" }],
+  });
+  assert.equal(incompleteArchitecture.releaseUseStatus, "metaphilosophy_greenfield_architecture_review_required");
+  assert.ok(incompleteArchitecture.missingRequiredLayerIds.includes("intake_spine"));
+  assert.ok(incompleteArchitecture.reviewSections.some((section) => section.artifactId === "research_spine" && section.reason === "role"));
+
+  const releaseReport = buildOctoberReleaseReport();
+  assert.equal(releaseReport.greenfieldArchitecture.releaseUseStatus, "metaphilosophy_greenfield_architecture_declared");
+});
+
+test("metaphilosophy task-track taxonomy and R&D backlog stay separated from release gates", () => {
+  const taxonomy = buildMetaphilosophyTaskTrackTaxonomyReport("release-test");
+
+  assert.equal(taxonomy.releaseUseStatus, "metaphilosophy_task_track_taxonomy_declared");
+  assert.equal(taxonomy.counts.validRequiredTracks, METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS.length);
+  assert.equal(taxonomy.missingRequiredTrackIds.length, 0);
+  for (const trackId of METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS) {
+    const row = taxonomy.taskTrackRows.find((track) => track.id === trackId);
+    assert.ok(row, `${trackId} should be declared`);
+    assert.equal(row.reviewReasons.length, 0);
+    assert.ok(row.modelInput.fields.length > 0);
+    assert.ok(row.modelOutput.fields.length > 0);
+    assert.ok(row.primaryMetricFamilies.length > 0);
+    assert.match(row.splitPolicy, /split/i);
+    assert.match(row.trainingExportPolicy, /export/i);
+  }
+  assert.equal(taxonomy.taskTrackRows.find((track) => track.id === "critique_rating").lmcaRelationship, "lmca_direct");
+  assert.equal(taxonomy.taskTrackRows.find((track) => track.id === "critique_revision").lmcaRelationship, "rd_backlog_extension");
+  assert.equal(taxonomy.taskTrackRows.find((track) => track.id === "position_revision_reply").lmcaRelationship, "rd_backlog_extension");
+  assert.match(taxonomy.policy.corpusProductionWorkflow, /SourceCard/);
+  assert.match(taxonomy.policy.benchmarkModelWorkflow, /model run/);
+
+  const incompleteTaxonomy = buildMetaphilosophyTaskTrackTaxonomyReport("release-test", {
+    taskTracks: [{ id: "critique_rating", label: "Critique rating" }],
+  });
+  assert.equal(incompleteTaxonomy.releaseUseStatus, "metaphilosophy_task_track_taxonomy_review_required");
+  assert.ok(incompleteTaxonomy.missingRequiredTrackIds.includes("critique_ranking"));
+  assert.ok(incompleteTaxonomy.reviewSections.some((section) => section.artifactId === "critique_rating" && section.reason === "modelInput.summary"));
+
+  const missingAdjudicationTrackTaxonomy = buildMetaphilosophyTaskTrackTaxonomyReport("release-test", {
+    taskTracks: METAPHILOSOPHY_TASK_TRACKS.filter((track) => track.id !== "adjudication_explanation"),
+  });
+  assert.equal(missingAdjudicationTrackTaxonomy.releaseUseStatus, "metaphilosophy_task_track_taxonomy_review_required");
+  assert.ok(missingAdjudicationTrackTaxonomy.missingRequiredTrackIds.includes("adjudication_explanation"));
+  assert.ok(
+    missingAdjudicationTrackTaxonomy.reviewSections.some(
+      (section) => section.artifactId === "adjudication_explanation" && section.reason === "required_track_missing",
+    ),
+  );
+
+  const unsafeTaskTrackTaxonomy = buildMetaphilosophyTaskTrackTaxonomyReport("release-test", {
+    taskTracks: METAPHILOSOPHY_TASK_TRACKS.map((track) =>
+      track.id === "critique_rating"
+        ? {
+            ...track,
+            lmcaRelationship: "single_good_at_philosophy_score",
+            blindToModelPolicy: "Models may inspect any useful label evidence.",
+            splitPolicy: "Use available items.",
+            trainingExportPolicy: "Training use can be decided later.",
+          }
+        : track,
+    ),
+  });
+  assert.equal(unsafeTaskTrackTaxonomy.releaseUseStatus, "metaphilosophy_task_track_taxonomy_review_required");
+  assert.ok(unsafeTaskTrackTaxonomy.missingRequiredTrackIds.includes("critique_rating"));
+  assert.ok(
+    unsafeTaskTrackTaxonomy.reviewSections.some(
+      (section) => section.artifactId === "critique_rating" && section.reason === "lmcaRelationship:unsupported",
+    ),
+  );
+  assert.ok(
+    unsafeTaskTrackTaxonomy.reviewSections.some(
+      (section) => section.artifactId === "critique_rating" && section.reason === "blindToModelPolicy:must_state_blinding",
+    ),
+  );
+  assert.ok(
+    unsafeTaskTrackTaxonomy.reviewSections.some(
+      (section) => section.artifactId === "critique_rating" && section.reason === "splitPolicy:must_state_split_policy",
+    ),
+  );
+  assert.ok(
+    unsafeTaskTrackTaxonomy.reviewSections.some(
+      (section) => section.artifactId === "critique_rating" && section.reason === "trainingExportPolicy:must_state_export_boundary",
+    ),
+  );
+
+  const backlog = buildMetaphilosophyResearchBacklogReport("release-test");
+  assert.equal(backlog.releaseUseStatus, "metaphilosophy_research_backlog_separated_from_release_gates");
+  assert.equal(backlog.counts.backlogItems, 8);
+  assert.equal(backlog.counts.nonBindingItems, 8);
+  assert.equal(backlog.counts.pilotEvidenceBoundItems, 8);
+  assert.equal(backlog.counts.promotionGovernanceBoundItems, 8);
+  assert.ok(backlog.rows.some((row) => row.id === "direct_pairwise_preference_labels"));
+  assert.ok(backlog.rows.some((row) => row.id === "critique_revision_benchmark"));
+  assert.ok(backlog.rows.some((row) => row.id === "rater_cognitive_load_ab_tests"));
+
+  const unsafeBacklog = buildMetaphilosophyResearchBacklogReport("release-test", {
+    backlogItems: [
+      {
+        id: "unsafe-live-requirement",
+        title: "Unsafe live requirement",
+        experimentType: "benchmark_extension_pilot",
+        releaseGateStatus: "release_gate_without_pilot_evidence",
+        directRequirement: true,
+        pilotEvidenceRequirement: "Pilot evidence must show measurement validity before promotion.",
+        promotionGovernance: "Promotion requires a governed policy decision before release-gate use.",
+        governanceBoundary: "Would make an experiment a release requirement.",
+      },
+    ],
+  });
+  assert.equal(unsafeBacklog.releaseUseStatus, "metaphilosophy_research_backlog_review_required");
+  assert.ok(unsafeBacklog.reviewSections.some((section) => section.reason === "releaseGateStatus:must_not_be_release_gate"));
+  assert.ok(unsafeBacklog.reviewSections.some((section) => section.reason === "directRequirement:must_be_false"));
+
+  const pilotEvidenceGapBacklog = buildMetaphilosophyResearchBacklogReport("release-test", {
+    backlogItems: [
+      {
+        id: "pilot-gap",
+        title: "Pilot gap",
+        experimentType: "benchmark_extension_pilot",
+        releaseGateStatus: "not_release_gate_pending_pilot_evidence",
+        directRequirement: false,
+        pilotEvidenceRequirement: "Pilot evidence will be collected later.",
+        promotionGovernance: "Promotion requires a governed policy decision before release-gate use.",
+        governanceBoundary: "Pilot evidence remains required before any release gate.",
+      },
+    ],
+  });
+  assert.equal(pilotEvidenceGapBacklog.releaseUseStatus, "metaphilosophy_research_backlog_review_required");
+  assert.ok(pilotEvidenceGapBacklog.reviewSections.some((section) => section.reason === "pilotEvidenceRequirement:evidence_goal"));
+
+  const releaseReport = buildOctoberReleaseReport();
+  assert.equal(releaseReport.taskTrackTaxonomy.releaseUseStatus, "metaphilosophy_task_track_taxonomy_declared");
+  assert.equal(releaseReport.researchBacklog.releaseUseStatus, "metaphilosophy_research_backlog_separated_from_release_gates");
+});
+
+test("metaphilosophy deliverable checklist binds RLHF91 additions to release evidence", () => {
+  const releaseReport = buildOctoberReleaseReport();
+  const sourceWorkbenchRow = releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench");
+
+  assert.equal(releaseReport.sourcePreparationEvidence.releaseUseStatus, "source_preparation_not_started");
+  assert.equal(releaseReport.sourcePreparationEvidence.counts.preparedDrafts, 0);
+  assert.equal(releaseReport.sourcePreparationEvidence.counts.candidateItems, 0);
+  assert.equal(releaseReport.sourcePreparationEvidence.counts.promotionRecords, 0);
+  assert.equal(Object.hasOwn(releaseReport, "workflowSourcePreparationArtifacts"), false);
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.releaseUseStatus, "metaphilosophy_deliverable_checklist_complete");
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.deliverables, 4);
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.notApplicable, 1);
+  assert.equal(releaseReport.metaphilosophyDeliverableChecklist.counts.reviewRequired, 0);
+  assert.match(
+    releaseReport.metaphilosophyDeliverableChecklist.rows.find((row) => row.id === "greenfield_task_track_taxonomy").deliverable,
+    /adjudication explanation/,
+  );
+  assert.equal(sourceWorkbenchRow.status, "not_applicable_without_source_derived_items");
+  assert.equal(sourceWorkbenchRow.phaseGate.status, "workbench_route_lane_available");
+  assert.ok(sourceWorkbenchRow.evidenceIds.includes(releaseReport.sourcePreparationEvidence.id));
+  assert.ok(sourceWorkbenchRow.sourceStatuses.includes("source_preparation_not_started"));
+
+  const sourceIntakeEvidence = buildSourceIntakeEvidenceReport("release-test", {
+    sourceCards: [{ id: "source-card-incomplete" }],
+  });
+  const reviewChecklist = buildMetaphilosophyDeliverableChecklistReport("release-test", {
+    greenfieldArchitecture: buildMetaphilosophyGreenfieldArchitectureReport("release-test"),
+    sourceIntakeEvidence,
+    taskTrackTaxonomy: buildMetaphilosophyTaskTrackTaxonomyReport("release-test"),
+    researchBacklog: buildMetaphilosophyResearchBacklogReport("release-test"),
+  });
+
+  assert.equal(reviewChecklist.releaseUseStatus, "metaphilosophy_deliverable_checklist_review_required");
+  assert.equal(reviewChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench").status, "review_required");
+  assert.ok(
+    reviewChecklist.reviewSections.some(
+      (section) => section.artifactId === "admin_source_extraction_workbench" && section.reason === "sourceIntakeEvidence.review_required",
+    ),
+  );
+
+  const availableRouteOperationalControl = buildOperationalControlEvidenceReport("release-test");
+  for (const sourceIntakeEvidenceRow of [
+    {
+      id: "source-intake-raw-only",
+      releaseUseStatus: "phase1_source_intake_sources_recorded_extraction_not_started",
+      counts: { sourceCards: 1, sourceSpans: 0, extractionBatches: 0, argumentExtractions: 0 },
+    },
+    {
+      id: "source-intake-pending-review",
+      releaseUseStatus: "phase1_source_intake_pending_review",
+      counts: { sourceCards: 1, sourceSpans: 1, extractionBatches: 1, argumentExtractions: 1 },
+    },
+    {
+      id: "source-intake-rejected-only",
+      releaseUseStatus: "phase1_source_intake_reviewed_no_accepted_extractions",
+      counts: { sourceCards: 1, sourceSpans: 1, extractionBatches: 1, argumentExtractions: 1 },
+    },
+  ]) {
+    const notReadyChecklist = buildMetaphilosophyDeliverableChecklistReport("release-test", {
+      greenfieldArchitecture: buildMetaphilosophyGreenfieldArchitectureReport("release-test"),
+      sourceIntakeEvidence: sourceIntakeEvidenceRow,
+      sourcePreparationEvidence: {
+        id: "source-preparation-not-started",
+        releaseUseStatus: "source_preparation_not_started",
+        counts: { preparedDrafts: 0, candidateItems: 0, promotionRecords: 0 },
+      },
+      taskTrackTaxonomy: buildMetaphilosophyTaskTrackTaxonomyReport("release-test"),
+      researchBacklog: buildMetaphilosophyResearchBacklogReport("release-test"),
+      operationalControlEvidence: availableRouteOperationalControl,
+    });
+    const notReadyWorkbenchRow = notReadyChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench");
+    assert.equal(notReadyWorkbenchRow.status, "review_required");
+    assert.ok(notReadyWorkbenchRow.reviewReasons.includes("sourceIntakeEvidence:not_ready_for_source_preparation"));
+  }
+
+  const readyChecklist = buildMetaphilosophyDeliverableChecklistReport("release-test", {
+    greenfieldArchitecture: buildMetaphilosophyGreenfieldArchitectureReport("release-test"),
+    sourceIntakeEvidence: {
+      id: "source-intake-ready",
+      releaseUseStatus: "phase1_source_intake_ready_for_future_source_preparation",
+      counts: { sourceCards: 1, sourceSpans: 1, extractionBatches: 1, argumentExtractions: 1, acceptedForSourcePreparationExtractions: 1 },
+    },
+    sourcePreparationEvidence: {
+      id: "source-preparation-not-started",
+      releaseUseStatus: "source_preparation_not_started",
+      counts: { preparedDrafts: 0, candidateItems: 0, promotionRecords: 0 },
+    },
+    taskTrackTaxonomy: buildMetaphilosophyTaskTrackTaxonomyReport("release-test"),
+    researchBacklog: buildMetaphilosophyResearchBacklogReport("release-test"),
+    operationalControlEvidence: availableRouteOperationalControl,
+  });
+  assert.equal(readyChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench").status, "complete");
+
+  const disabledRouteOperationalControl = buildOperationalControlEvidenceReport("release-test", {
+    implementationPhaseGateBundles: [
+      {
+        id: "implementation-phase-source-workbench-disabled",
+        releaseId: "release-test",
+        manifestId: "release-config-manifest-source-workbench-disabled",
+        version: "implementation-phase-source-workbench-disabled-v1",
+        laneStates: phaseGateLaneKinds.map((laneKind) => ({
+          laneKind,
+          laneId: `${laneKind}-source-workbench-disabled`,
+          phaseState: laneKind === "route" ? "blocked" : "enabled",
+          failClosed: true,
+          noSideEffectsWhenDisabled: true,
+          labelsExposedWhenDisabled: false,
+          supportsReleaseClaimsWhenDisabled: false,
+          allowedActionKinds: [],
+          notes: "Source workbench route lane disabled safely for implementation phase testing.",
+        })),
+        futurePhaseDefault: "blocked",
+        broadeningRequiresManifestActivation: true,
+        frozenAt: "2026-10-01T00:00:00.000Z",
+      },
+    ],
+  });
+  const disabledRouteChecklist = buildMetaphilosophyDeliverableChecklistReport("release-test", {
+    greenfieldArchitecture: buildMetaphilosophyGreenfieldArchitectureReport("release-test"),
+    sourceIntakeEvidence: {
+      id: "source-intake-ready",
+      releaseUseStatus: "phase1_source_intake_ready_for_future_source_preparation",
+      counts: { sourceCards: 1, sourceSpans: 1, extractionBatches: 1, argumentExtractions: 1 },
+    },
+    taskTrackTaxonomy: buildMetaphilosophyTaskTrackTaxonomyReport("release-test"),
+    researchBacklog: buildMetaphilosophyResearchBacklogReport("release-test"),
+    operationalControlEvidence: disabledRouteOperationalControl,
+  });
+  const disabledRouteWorkbenchRow = disabledRouteChecklist.rows.find((row) => row.id === "admin_source_extraction_workbench");
+  assert.equal(disabledRouteWorkbenchRow.status, "review_required");
+  assert.equal(disabledRouteWorkbenchRow.phaseGate.phaseState, "blocked");
+  assert.equal(disabledRouteWorkbenchRow.phaseGate.status, "workbench_route_lane_safely_disabled");
+  assert.ok(
+    disabledRouteChecklist.reviewSections.some(
+      (section) =>
+        section.artifactId === "admin_source_extraction_workbench" &&
+        section.reason === "sourceWorkbenchPhaseGate:workbench_route_lane_safely_disabled",
+    ),
+  );
+});
+
+test("October completion checklist carries source-preparation review status", () => {
+  const acceptedExtraction = {
+    id: "argument-extraction-october-checklist",
+    extractionBatchId: "extraction-batch-october-checklist",
+    sourceCardId: "source-card-october-checklist",
+    sourceSpanIds: ["source-span-october-checklist"],
+    argumentRole: "position_argument",
+    intendedConclusion: "Arguments should make their inferential burden explicit.",
+    reviewStatus: "accepted_for_position_intake",
+  };
+  const preparedDraft = {
+    id: "prepared-draft-october-checklist",
+    sourceArgumentExtractionId: acceptedExtraction.id,
+    sourceExtractionBatchId: acceptedExtraction.extractionBatchId,
+    sourceCardId: acceptedExtraction.sourceCardId,
+    sourceSpanIds: acceptedExtraction.sourceSpanIds,
+    draftType: "prepared_position_draft",
+    preparedText: "Arguments should make their inferential burden explicit.",
+    candidateRaterVisibleText: "Arguments should make their inferential burden explicit.",
+    blindingReviewStatus: "blinding_review_passed",
+    sourceLeakageReviewStatus: "source_leakage_review_passed",
+    gateReadinessStatus: "not_ready",
+    candidateItemReadiness: "not_ready",
+    preparedDraftStatus: "drafting",
+    createdBy: "demo-admin",
+    createdAt: "2026-10-01T00:05:00.000Z",
+    sourcePreparationPhase: "phase2_source_preparation",
+    sourcePreparationReviewStatus: "prepared_from_accepted_extraction",
+    visibilityClasses: {
+      preparedText: "reviewer_visible",
+      candidateRaterVisibleText: "reviewer_visible",
+      sourceArgumentExtractionId: "admin_only",
+    },
+  };
+  const reviewRequiredSignal = {
+    id: "review-signal-october-checklist",
+    signalType: "source_leakage_reviewed",
+    source: "admin",
+    confidence: 0.9,
+    explanation: "Intentionally malformed visibility to prove the umbrella checklist carries source-preparation review state.",
+    affectedObjectType: "PreparedDraft",
+    affectedObjectId: preparedDraft.id,
+    visibilityClass: "rater_visible_after_promotion",
+    createdAt: "2026-10-01T00:06:00.000Z",
+  };
+
+  const releaseReport = buildOctoberReleaseReport(
+    "october-checklist-source-preparation",
+    null,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      argumentExtractions: [acceptedExtraction],
+      preparedDrafts: [preparedDraft],
+      reviewSignals: [reviewRequiredSignal],
+    },
+  );
+  const sourceWorkbenchRow = releaseReport.octoberCompletionChecklist.rows.find((row) => row.id === "source_intake_and_metaphilosophy");
+
+  assert.equal(releaseReport.sourcePreparationEvidence.releaseUseStatus, "source_preparation_review_required");
+  assert.equal(sourceWorkbenchRow.status, "review_required");
+  assert.ok(sourceWorkbenchRow.evidenceIds.includes(releaseReport.sourcePreparationEvidence.id));
+  assert.ok(sourceWorkbenchRow.sourceStatuses.includes("review_required"));
+  assert.equal(sourceWorkbenchRow.sourceWorkbenchApplicability.status, "review_required");
+  assert.ok(sourceWorkbenchRow.sourceWorkbenchApplicability.sourceEvidenceStatuses.includes("source_preparation_review_required"));
+  assert.ok(sourceWorkbenchRow.reviewReasons.includes("sourcePreparationEvidence.review_required"));
+  assert.equal(releaseReport.workflowSourcePreparationArtifacts.reviewSignals.length, 1);
+  assert.equal(releaseReport.workflowSourcePreparationArtifacts.reviewSignals[0].id, reviewRequiredSignal.id);
+});
+
+test("October completion checklist records operator-evidence statuses when child reports have no review sections", () => {
+  const releaseReport = buildOctoberReleaseReport();
+  const rowById = Object.fromEntries(releaseReport.octoberCompletionChecklist.rows.map((row) => [row.id, row]));
+  const planById = Object.fromEntries(releaseReport.operatorEvidenceSubmissionPlan.rows.map((row) => [row.checklistRowId, row]));
+
+  assert.equal(rowById.source_intake_and_metaphilosophy.status, "complete");
+  assert.deepEqual(rowById.source_intake_and_metaphilosophy.sourceStatuses, [
+    "metaphilosophy_deliverable_checklist_complete",
+    "not_applicable_without_source_derived_items",
+    "workbench_route_lane_available",
+  ]);
+  assert.equal(rowById.source_intake_and_metaphilosophy.sourceWorkbenchApplicability.status, "not_applicable_without_source_derived_items");
+  assert.deepEqual(rowById.source_intake_and_metaphilosophy.sourceWorkbenchApplicability.sourceEvidenceStatuses, [
+    "phase1_source_intake_not_started",
+    "source_preparation_not_started",
+  ]);
+  assert.equal(rowById.release_artifact_submission_package.status, "operator_evidence_required");
+  assert.deepEqual(rowById.release_artifact_submission_package.reviewReasons, [
+    "releaseArtifactEvidence:computed_release_artifacts_no_submitted_manifests",
+  ]);
+  assert.ok(planById.release_artifact_submission_package.readbackRoutes.includes("/api/v1/release-report-sections"));
+  assert.deepEqual(rowById.release_artifact_submission_package.bulkImportRoutes, ["/api/v1/operator-evidence/import-jsonl"]);
+  assert.deepEqual(rowById.release_artifact_submission_package.dryRunImportRoutes, [
+    "/api/v1/operator-evidence/import-jsonl?dryRun=true",
+  ]);
+  assert.deepEqual(rowById.release_artifact_submission_package.validateOnlyImportRoutes, [
+    "/api/v1/operator-evidence/import-jsonl?validateOnly=true",
+  ]);
+  assert.deepEqual(
+    rowById.release_artifact_submission_package.relatedSubmitActionIds,
+    planById.release_artifact_submission_package.actionItems.map((item) => item.id),
+  );
+  assert.ok(
+    rowById.release_artifact_submission_package.templateReadbackRoutes.includes(
+      "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=release_artifact_submission_package&artifactKind=corpus_manifest",
+    ),
+  );
+  assert.equal(rowById.model_evaluation_submission_package.status, "operator_evidence_required");
+  assert.deepEqual(rowById.model_evaluation_submission_package.reviewReasons, [
+    "modelEvaluationArtifactEvidence:computed_model_evaluation_artifacts_no_submitted_runs",
+  ]);
+  assert.ok(planById.model_evaluation_submission_package.readbackRoutes.includes("/api/v1/release-report-sections"));
+  assert.equal(rowById.discussion_and_adjudication_workflows.status, "operator_evidence_required");
+  assert.deepEqual(rowById.discussion_and_adjudication_workflows.reviewReasons, [
+    "discussionAdjudicationWorkflowEvidence:discussion_adjudication_workflow_not_submitted",
+  ]);
+  assert.ok(planById.discussion_and_adjudication_workflows.readbackRoutes.includes("/api/v1/release-report-sections"));
+  assert.equal(rowById.validation_hidden_benchmark_and_claims.status, "data_collection_required");
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/release-report-sections"));
+  assert.deepEqual(rowById.validation_hidden_benchmark_and_claims.bulkImportRoutes, ["/api/v1/validation-tranche-evidence/import-jsonl"]);
+  assert.deepEqual(rowById.validation_hidden_benchmark_and_claims.bulkImportWorkflowTemplateIds, [
+    "validation-tranche-evidence-jsonl-import",
+  ]);
+  assert.deepEqual(rowById.validation_hidden_benchmark_and_claims.dryRunImportRoutes, [
+    "/api/v1/validation-tranche-evidence/import-jsonl?dryRun=true",
+  ]);
+  assert.deepEqual(rowById.validation_hidden_benchmark_and_claims.validateOnlyImportRoutes, [
+    "/api/v1/validation-tranche-evidence/import-jsonl?validateOnly=true",
+  ]);
+  assert.equal(rowById.validation_hidden_benchmark_and_claims.bulkImportRoutes.includes("/api/v1/operator-evidence/import-jsonl"), false);
+  assert.ok(rowById.target_scale_and_data_collection.bulkImportRoutes.includes("/api/v1/ratings/import-jsonl"));
+  assert.ok(rowById.target_scale_and_data_collection.setupBulkImportRoutes.includes("/api/v1/assignments/import-jsonl"));
+  assert.ok(rowById.target_scale_and_data_collection.packageImportRoutes.includes("/api/v1/target-gaps/import-jsonl-package"));
+  assert.ok(rowById.target_scale_and_data_collection.packageDryRunImportRoutes.includes("/api/v1/target-gaps/import-jsonl-package?dryRun=true"));
+  assert.ok(
+    rowById.target_scale_and_data_collection.templateReadbackRoutes.includes(
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=blind_initial_ratings&expand=remaining",
+    ),
+  );
+  assert.deepEqual(
+    rowById.target_scale_and_data_collection.relatedCollectDataActionIds,
+    planById.target_scale_and_data_collection.actionItems.map((item) => item.id),
+  );
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.releaseUseStatus, "operator_evidence_submission_plan_open");
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.openRows, 7);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.submitOperatorEvidence, 4);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.collectDataBeforeSubmission, 3);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.linkedEvidenceIds, 11);
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewEvidencePointers > 0);
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewArtifactSummaries > 0);
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.submissionChecklistItems > 0);
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.submissionChecklistOpenItems > 0);
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.reviewEvidencePointers.length,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.reviewEvidencePointers,
+  );
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.reviewArtifactSummaries.length,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.reviewArtifactSummaries,
+  );
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.submissionChecklist.length,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.submissionChecklistItems,
+  );
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.submissionChecklist.filter((item) => item.submissionStatus !== "submitted_complete").length,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.submissionChecklistOpenItems,
+  );
+  assert.ok(
+    releaseReport.operatorEvidenceSubmissionPlan.submissionChecklist.every(
+      (item) => item.checklistRowId && item.checklistStatus && item.actionStatus && item.deliverableGroup,
+    ),
+  );
+  assert.deepEqual(
+    releaseReport.operatorEvidenceSubmissionPlan.rows
+      .filter((row) => row.bulkImportRoutes?.length && !row.bulkImportWorkflowTemplateIds?.length)
+      .map((row) => row.checklistRowId),
+    [],
+  );
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.submissionChecklist.every((item) => item.sourceEvidenceId));
+  const bulkImportableSubmissionChecklistItems = releaseReport.operatorEvidenceSubmissionPlan.submissionChecklist.filter((item) => item.bulkImportRoute);
+  assert.ok(bulkImportableSubmissionChecklistItems.length > 0);
+  assert.deepEqual(
+    bulkImportableSubmissionChecklistItems
+      .filter((item) => !item.dryRunImportRoute || !item.validateOnlyImportRoute)
+      .map((item) => item.id),
+    [],
+  );
+  assert.deepEqual(
+    bulkImportableSubmissionChecklistItems
+      .filter((item) => !(item.templateReadbackRoutes?.length || item.operatorEvidenceTemplateReadbackRoute))
+      .map((item) => item.id),
+    [],
+  );
+  assert.ok(
+    releaseReport.operatorEvidenceSubmissionPlan.reviewEvidencePointers.every(
+      (pointer) => pointer.checklistRowId && pointer.checklistStatus && pointer.actionStatus && pointer.deliverableGroup,
+    ),
+  );
+  assert.ok(
+    releaseReport.operatorEvidenceSubmissionPlan.reviewArtifactSummaries.every(
+      (summary) => summary.checklistRowId && summary.checklistStatus && summary.actionStatus && summary.deliverableGroup,
+    ),
+  );
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.blockingTargetGapRows, 11);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.actionItems, 48);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.collectDataActionItems, 11);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.submitArtifactActionItems, 30);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewArtifactActionItems, 3);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.reviewReportSectionActionItems, 4);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageAvailableActionItems, 14);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageMissingActionItems, 0);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.counts.governanceCoverageNotRequiredActionItems, 34);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems.length, 48);
+  assert.equal(
+    new Set(releaseReport.operatorEvidenceSubmissionPlan.actionItems.map((item) => item.id)).size,
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.length,
+  );
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.actionItems.every((item) => item.sourceEvidenceId));
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.actionItems.every((item) => item.executionStatus && item.executionStatusReason));
+  assert.ok(
+    releaseReport.octoberCompletionChecklist.rows
+      .flatMap((row) => row.operatorActionSummaries ?? [])
+      .every((summary) => summary.executionStatus && summary.executionStatusReason),
+  );
+  const actionItemExecutionStatusCounts = releaseReport.operatorEvidenceSubmissionPlan.actionItems.reduce((counts, item) => {
+    counts[item.executionStatus] = (counts[item.executionStatus] ?? 0) + 1;
+    return counts;
+  }, {});
+  assert.deepEqual(releaseReport.operatorEvidenceSubmissionPlan.counts.byExecutionStatus, actionItemExecutionStatusCounts);
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.counts.readyActionItems,
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.filter((item) => item.executionStatus.startsWith("ready_to_")).length,
+  );
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.counts.blockedByTargetDataActionItems,
+    actionItemExecutionStatusCounts.blocked_by_target_data ?? 0,
+  );
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.byExecutionStatus.ready_to_collect_data > 0);
+  assert.ok(releaseReport.operatorEvidenceSubmissionPlan.counts.byExecutionStatus.blocked_by_target_data > 0);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].globalSequence, 1);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].rowSequence, 1);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].checklistRowId, "target_scale_and_data_collection");
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].executionStatus, "ready_to_collect_data");
+  assert.match(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].executionStatusReason, /real target data/);
+  assert.equal(rowById.target_scale_and_data_collection.nextOperatorActionSummary.executionStatus, "ready_to_collect_data");
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].deliverableGroup, rowById.target_scale_and_data_collection.deliverableGroup);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].governanceCoverageStatus, "governance_coverage_not_required");
+  assert.deepEqual(releaseReport.operatorEvidenceSubmissionPlan.actionItems[0].governanceCoverageKinds, []);
+  assert.equal(releaseReport.operatorEvidenceSubmissionPlan.actionItems.at(-1).globalSequence, 48);
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.filter((item) => item.actionType === "submit_artifact").length,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.submitArtifactActionItems,
+  );
+  assert.deepEqual(
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems
+      .filter((item) => item.checklistRowId === "validation_hidden_benchmark_and_claims" && item.actionType === "review_report_section")
+      .map((item) => item.reason),
+    [
+      "hiddenBenchmarkFreeze.metric_family_eligibility:pointwise_only",
+      "hiddenBenchmarkFreeze.pairwise_margin_distribution:pointwise_only",
+      "hiddenBenchmarkFreeze.artifact_balance:insufficient_seed_benchmark",
+      "releaseClaimWarnings:release_claims_limited_by_errata_or_schedule",
+    ],
+  );
+  assert.deepEqual(
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems
+      .filter((item) => item.checklistRowId === "validation_hidden_benchmark_and_claims" && item.actionType === "review_report_section")
+      .map((item) => item.readbackItemRoute),
+    [
+      `/api/v1/benchmark-freeze-reports/${releaseReport.hiddenBenchmarkFreeze.id}`,
+      `/api/v1/benchmark-freeze-reports/${releaseReport.hiddenBenchmarkFreeze.id}`,
+      `/api/v1/benchmark-freeze-reports/${releaseReport.hiddenBenchmarkFreeze.id}`,
+      `/api/v1/release-report-sections/${releaseReport.releaseClaimWarnings.id}`,
+    ],
+  );
+  assert.equal(
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.filter((item) => item.actionType === "review_report_section").length,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.reviewReportSectionActionItems,
+  );
+  assert.ok(
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.some(
+      (item) =>
+        item.actionType === "submit_artifact" &&
+        item.artifactKind === "benchmark_freeze_report" &&
+        item.writeRoute === "/api/v1/benchmark/candidates/freeze" &&
+        item.readbackRoute === "/api/v1/benchmark-freeze-reports",
+    ),
+  );
+  const governanceLabelSnapshotAction = releaseReport.operatorEvidenceSubmissionPlan.actionItems.find(
+    (item) => item.actionType === "submit_artifact" && item.artifactKind === "label_snapshot",
+  );
+  assert.equal(governanceLabelSnapshotAction.governanceCoverageStatus, "governance_coverage_available");
+  assert.deepEqual(governanceLabelSnapshotAction.governanceCoverageKinds, ["policy_action_kind", "phase_gate_lane"]);
+  assert.equal(governanceLabelSnapshotAction.policyActionKind, "label_snapshot_freeze");
+  assert.equal(governanceLabelSnapshotAction.phaseGateLaneKind, "route");
+  const governanceEvaluationPredictionAction = releaseReport.operatorEvidenceSubmissionPlan.actionItems.find(
+    (item) => item.actionType === "submit_artifact" && item.artifactKind === "model_evaluation_predictions",
+  );
+  assert.equal(governanceEvaluationPredictionAction.governanceCoverageStatus, "governance_coverage_available");
+  assert.equal(governanceEvaluationPredictionAction.setupPolicyActionKind, "evaluation_run");
+  assert.equal(governanceEvaluationPredictionAction.setupPhaseGateLaneKind, "evaluation_lane");
+  const governanceBenchmarkFreezeAction = releaseReport.operatorEvidenceSubmissionPlan.actionItems.find(
+    (item) => item.actionType === "submit_artifact" && item.artifactKind === "benchmark_freeze_report",
+  );
+  assert.equal(governanceBenchmarkFreezeAction.governanceCoverageStatus, "governance_coverage_available");
+  assert.deepEqual(governanceBenchmarkFreezeAction.governanceCoverageKinds, [
+    "server_materialized_snapshot",
+    "benchmark_exposure_audit",
+  ]);
+  assert.equal(governanceBenchmarkFreezeAction.policyActionKind, null);
+  const artifactProbeAction = releaseReport.operatorEvidenceSubmissionPlan.actionItems.find(
+    (item) => item.actionType === "submit_artifact" && item.artifactKind === "artifact_probe",
+  );
+  assert.equal(artifactProbeAction.writeRoute, "/api/v1/artifact-probes/run");
+  assert.equal(artifactProbeAction.readbackRoute, "/api/v1/artifact-probes");
+  assert.equal(artifactProbeAction.workflowTemplateId, "artifact-probe");
+  assert.equal(artifactProbeAction.bulkImportRoute, null);
+  assert.equal(artifactProbeAction.preconditionStatus, "data_collection_required_before_action");
+  assert.equal(artifactProbeAction.governanceCoverageStatus, "governance_coverage_not_required");
+  assert.deepEqual(artifactProbeAction.governanceCoverageKinds, []);
+  assert.equal(artifactProbeAction.reason, "hiddenBenchmarkFreeze.artifact_probe_diagnostics:not_run_documented");
+  assert.deepEqual(artifactProbeAction.templateReadbackRoutes, [
+    "/api/v1/operator-action-items/payload-template?checklistRowId=validation_hidden_benchmark_and_claims&actionType=submit_artifact&artifactKind=artifact_probe",
+  ]);
+  const benchmarkFreezeChecklistItem = planById.validation_hidden_benchmark_and_claims.submissionChecklist.find(
+    (item) => item.artifactKind === "benchmark_freeze_report",
+  );
+  assert.ok(benchmarkFreezeChecklistItem);
+  assert.equal(benchmarkFreezeChecklistItem.submissionStatus, "not_submitted");
+  assert.equal(benchmarkFreezeChecklistItem.writeRoute, "/api/v1/benchmark/candidates/freeze");
+  assert.equal(benchmarkFreezeChecklistItem.readbackRoute, "/api/v1/benchmark-freeze-reports");
+  assert.equal(benchmarkFreezeChecklistItem.workflowTemplateId, "benchmark-freeze-report");
+  assert.equal(benchmarkFreezeChecklistItem.sourceEvidenceId, releaseReport.hiddenBenchmarkFreeze.id);
+  assert.deepEqual(benchmarkFreezeChecklistItem.blockingFields, ["hiddenBenchmarkFreeze:not_ready_for_release_freeze"]);
+  assert.ok(planById.release_artifact_submission_package.writeRoutes.includes("/api/v1/release-reports"));
+  assert.ok(planById.release_artifact_submission_package.writeRoutes.includes("/api/v1/exports/internal"));
+  assert.ok(planById.release_artifact_submission_package.readbackRoutes.includes("/api/v1/release-reports"));
+  assert.ok(planById.release_artifact_submission_package.workflowTemplateIds.includes("internal-export-manifest"));
+  assert.deepEqual(planById.release_artifact_submission_package.bulkImportRoutes, ["/api/v1/operator-evidence/import-jsonl"]);
+  assert.deepEqual(planById.release_artifact_submission_package.bulkImportWorkflowTemplateIds, ["operator-evidence-package-jsonl-import"]);
+  assert.deepEqual(planById.release_artifact_submission_package.evidenceIds, [releaseReport.releaseArtifactEvidence.id]);
+  assert.equal(planById.release_artifact_submission_package.blockingTargetGaps.length, 0);
+  assert.equal(planById.release_artifact_submission_package.submissionChecklist.length, 6);
+  assert.deepEqual(
+    planById.release_artifact_submission_package.submissionChecklist.map((item) => item.artifactKind),
+    [
+      "label_snapshot",
+      "corpus_manifest",
+      "training_export",
+      "public_export_manifest",
+      "internal_export_manifest",
+      "release_report_snapshot",
+    ],
+  );
+  assert.equal(
+    planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "public_export_manifest").readbackRoute,
+    "/api/v1/export-manifests",
+  );
+  assert.equal(
+    planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "release_report_snapshot").readbackRoute,
+    "/api/v1/release-reports",
+  );
+  assert.equal(
+    planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "label_snapshot").submissionStatus,
+    "not_submitted",
+  );
+  assert.equal(
+    planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "label_snapshot").sourceEvidenceId,
+    releaseReport.releaseArtifactEvidence.id,
+  );
+  const corpusManifestChecklistItem = planById.release_artifact_submission_package.submissionChecklist.find(
+    (item) => item.artifactKind === "corpus_manifest",
+  );
+  assert.equal(corpusManifestChecklistItem.bulkImportRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.equal(corpusManifestChecklistItem.bulkImportWorkflowTemplateId, "operator-evidence-package-jsonl-import");
+  assert.equal(corpusManifestChecklistItem.dryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
+  assert.equal(corpusManifestChecklistItem.validateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(
+    corpusManifestChecklistItem.operatorEvidenceTemplateReadbackRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=release_artifact_submission_package&artifactKind=corpus_manifest",
+  );
+  assert.deepEqual(corpusManifestChecklistItem.templateReadbackRoutes, [corpusManifestChecklistItem.operatorEvidenceTemplateReadbackRoute]);
+  assert.equal(planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "label_snapshot").bulkImportRoute, null);
+  assert.equal(planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "release_report_snapshot").bulkImportRoute, null);
+  assert.deepEqual(
+    planById.release_artifact_submission_package.actionItems.map((item) => [item.actionType, item.artifactKind, item.writeRoute]),
+    [
+      ["submit_artifact", "label_snapshot", "/api/v1/label-snapshots"],
+      ["submit_artifact", "corpus_manifest", "/api/v1/corpus-manifests"],
+      ["submit_artifact", "training_export", "/api/v1/training-exports"],
+      ["submit_artifact", "public_export_manifest", "/api/v1/exports/public"],
+      ["submit_artifact", "internal_export_manifest", "/api/v1/exports/internal"],
+      ["submit_artifact", "release_report_snapshot", "/api/v1/release-reports"],
+    ],
+  );
+  const labelSnapshotAction = planById.release_artifact_submission_package.actionItems.find((item) => item.artifactKind === "label_snapshot");
+  assert.equal(
+    labelSnapshotAction.payloadTemplateReadbackRoute,
+    "/api/v1/operator-action-items/payload-template?checklistRowId=release_artifact_submission_package&actionType=submit_artifact&artifactKind=label_snapshot",
+  );
+  assert.deepEqual(labelSnapshotAction.templateReadbackRoutes, [labelSnapshotAction.payloadTemplateReadbackRoute]);
+  const corpusManifestAction = planById.release_artifact_submission_package.actionItems.find((item) => item.artifactKind === "corpus_manifest");
+  assert.equal(
+    corpusManifestAction.operatorEvidenceTemplateReadbackRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=release_artifact_submission_package&artifactKind=corpus_manifest",
+  );
+  assert.equal(corpusManifestAction.dryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
+  assert.equal(corpusManifestAction.validateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.deepEqual(corpusManifestAction.templateReadbackRoutes, [corpusManifestAction.operatorEvidenceTemplateReadbackRoute]);
+  assert.ok(
+    planById.release_artifact_submission_package.submissionChecklist.find((item) => item.artifactKind === "training_export").blockingFieldCount > 0,
+  );
+  assert.deepEqual(planById.release_artifact_submission_package.reviewEvidencePointers[0], {
+    checklistRowId: "release_artifact_submission_package",
+    sourceEvidenceId: releaseReport.releaseArtifactEvidence.id,
+    artifactType: "checklist_review_reason",
+    artifactId: "release_artifact_submission_package",
+    reason: "releaseArtifactEvidence:computed_release_artifacts_no_submitted_manifests",
+    readbackRoute: "/api/v1/release-report-sections",
+    readbackItemRoute: `/api/v1/release-report-sections/${releaseReport.releaseArtifactEvidence.id}`,
+    readbackScope: "release_report_section",
+  });
+  assert.deepEqual(
+    [
+      planById.model_evaluation_submission_package.reviewEvidencePointers[0],
+      planById.discussion_and_adjudication_workflows.reviewEvidencePointers[0],
+    ].map((pointer) => ({
+      checklistRowId: pointer.checklistRowId,
+      readbackRoute: pointer.readbackRoute,
+      readbackItemRoute: pointer.readbackItemRoute,
+      readbackScope: pointer.readbackScope,
+    })),
+    [
+      {
+        checklistRowId: "model_evaluation_submission_package",
+        readbackRoute: "/api/v1/release-report-sections",
+        readbackItemRoute: `/api/v1/release-report-sections/${releaseReport.modelEvaluationArtifactEvidence.id}`,
+        readbackScope: "release_report_section",
+      },
+      {
+        checklistRowId: "discussion_and_adjudication_workflows",
+        readbackRoute: "/api/v1/release-report-sections",
+        readbackItemRoute: `/api/v1/release-report-sections/${releaseReport.discussionAdjudicationWorkflowEvidence.id}`,
+        readbackScope: "release_report_section",
+      },
+    ],
+  );
+  assert.deepEqual(planById.target_scale_and_data_collection.evidenceIds, [releaseReport.targetGaps.id]);
+  assert.deepEqual(planById.target_scale_and_data_collection.blockingTargetGaps.map((gap) => gap.id), [
+    "positions",
+    "critiques",
+    "blind_initial_ratings",
+    "gold_library_items",
+    "validation_critiques",
+    "validation_positions",
+    "validation_core_all_items_raters",
+  ]);
+  assert.equal(planById.target_scale_and_data_collection.blockingTargetGaps[0].sourceEvidenceId, releaseReport.corpusManifest.id);
+  assert.deepEqual(planById.target_scale_and_data_collection.bulkImportRoutes, [
+    "/api/v1/intake/positions/import-jsonl",
+    "/api/v1/intake/critiques/import-jsonl",
+    "/api/v1/ratings/import-jsonl",
+    "/api/v1/gold-items/import-jsonl",
+    "/api/v1/validation-tranche-evidence/import-jsonl",
+  ]);
+  assert.deepEqual(planById.target_scale_and_data_collection.bulkImportWorkflowTemplateIds, [
+    "position-intake-jsonl-import",
+    "critique-intake-jsonl-import",
+    "rating-jsonl-import",
+    "gold-item-jsonl-import",
+    "validation-tranche-evidence-jsonl-import",
+  ]);
+  assert.deepEqual(planById.target_scale_and_data_collection.setupBulkImportRoutes, [
+    "/api/v1/assignments/import-jsonl",
+    "/api/v1/rating-context-snapshots/import-jsonl",
+  ]);
+  assert.deepEqual(planById.target_scale_and_data_collection.setupBulkImportWorkflowTemplateIds, [
+    "assignment-jsonl-import",
+    "rating-context-snapshot-jsonl-import",
+  ]);
+  assert.ok(planById.target_scale_and_data_collection.dryRunImportRoutes.includes("/api/v1/ratings/import-jsonl?dryRun=true"));
+  assert.ok(planById.target_scale_and_data_collection.validateOnlyImportRoutes.includes("/api/v1/ratings/import-jsonl?validateOnly=true"));
+  assert.ok(
+    planById.target_scale_and_data_collection.templateReadbackRoutes.includes(
+      "/api/v1/target-gaps/import-jsonl-template?targetGapId=blind_initial_ratings",
+    ),
+  );
+  assert.deepEqual(planById.validation_hidden_benchmark_and_claims.bulkImportRoutes, ["/api/v1/validation-tranche-evidence/import-jsonl"]);
+  assert.deepEqual(planById.validation_hidden_benchmark_and_claims.bulkImportWorkflowTemplateIds, [
+    "validation-tranche-evidence-jsonl-import",
+  ]);
+  assert.equal(planById.validation_hidden_benchmark_and_claims.bulkImportRoutes.includes("/api/v1/operator-evidence/import-jsonl"), false);
+  const targetScaleGapById = Object.fromEntries(planById.target_scale_and_data_collection.blockingTargetGaps.map((gap) => [gap.id, gap]));
+  assert.equal(targetScaleGapById.positions.writeRoute, "/api/v1/intake/positions");
+  assert.equal(targetScaleGapById.positions.readbackRoute, "/api/v1/intake/positions");
+  assert.equal(targetScaleGapById.positions.submissionReadbackRoute, "/api/v1/intake/positions");
+  assert.equal(targetScaleGapById.positions.targetGapReadbackRoute, "/api/v1/target-gaps");
+  assert.equal(targetScaleGapById.positions.targetGapReadbackItemRoute, "/api/v1/target-gaps/positions");
+  assert.equal(targetScaleGapById.positions.workflowTemplateId, "position-intake");
+  assert.deepEqual(
+    {
+      targetGapId: targetScaleGapById.positions.primaryImportImpact.targetGapId,
+      current: targetScaleGapById.positions.primaryImportImpact.current,
+      target: targetScaleGapById.positions.primaryImportImpact.target,
+      remaining: targetScaleGapById.positions.primaryImportImpact.remaining,
+      estimatedRecordsRequired: targetScaleGapById.positions.primaryImportImpact.estimatedRecordsRequired,
+      expectedResourceDelta: targetScaleGapById.positions.primaryImportImpact.expectedResourceDelta,
+      closesTargetGapWhenValidated: targetScaleGapById.positions.primaryImportImpact.closesTargetGapWhenValidated,
+      effect: targetScaleGapById.positions.primaryImportImpact.effect,
+      verificationRoute: targetScaleGapById.positions.primaryImportImpact.verificationRoute,
+    },
+    {
+      targetGapId: "positions",
+      current: 3,
+      target: 120,
+      remaining: 117,
+      estimatedRecordsRequired: 117,
+      expectedResourceDelta: 117,
+      closesTargetGapWhenValidated: true,
+      effect: "validated_real_records_reduce_matching_target_gap",
+      verificationRoute: "/api/v1/target-gaps/positions",
+    },
+  );
+  assert.equal(targetScaleGapById.blind_initial_ratings.writeRoute, "/api/v1/ratings");
+  assert.equal(targetScaleGapById.blind_initial_ratings.bulkImportRoute, "/api/v1/ratings/import-jsonl");
+  assert.equal(targetScaleGapById.blind_initial_ratings.bulkImportWorkflowTemplateId, "rating-jsonl-import");
+  assert.equal(targetScaleGapById.blind_initial_ratings.readbackRoute, "/api/v1/ratings");
+  assert.equal(targetScaleGapById.blind_initial_ratings.submissionReadbackRoute, "/api/v1/ratings");
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupWriteRoute, "/api/v1/assignments");
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupReadbackRoute, "/api/v1/assignments");
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupBulkImportRoute, "/api/v1/assignments/import-jsonl");
+  assert.equal(targetScaleGapById.blind_initial_ratings.targetGapReadbackItemRoute, "/api/v1/target-gaps/blind_initial_ratings");
+  assert.equal(targetScaleGapById.blind_initial_ratings.workflowTemplateId, "assignment-record");
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupWorkflowTemplateId, "assignment-record");
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupBulkImportWorkflowTemplateId, "assignment-jsonl-import");
+  assert.equal(targetScaleGapById.blind_initial_ratings.actorRole, "assigned_rater");
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupActorRole, "admin_or_operator");
+  assert.equal(targetScaleGapById.blind_initial_ratings.primaryImportImpact.estimatedRecordsRequired, 1434);
+  assert.equal(targetScaleGapById.blind_initial_ratings.primaryImportImpact.expectedResourceDelta, 1434);
+  assert.equal(targetScaleGapById.blind_initial_ratings.primaryImportImpact.closesTargetGapWhenValidated, true);
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.estimatedRecordsRequired, 1);
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.expectedResourceDelta, 0);
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.closesTargetGapWhenValidated, false);
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.effect, "setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap");
+  assert.equal(targetScaleGapById.validation_core_all_items_raters.writeRoute, "/api/v1/validation-tranche-evidence");
+  assert.equal(targetScaleGapById.validation_core_all_items_raters.workflowTemplateId, "validation-tranche-evidence");
+  assert.equal(targetScaleGapById.validation_core_all_items_raters.primaryImportImpact.estimatedRecordsRequired, 1);
+  assert.equal(targetScaleGapById.validation_core_all_items_raters.primaryImportImpact.expectedResourceDelta, 3);
+  assert.equal(
+    targetScaleGapById.validation_core_all_items_raters.primaryImportImpact.effect,
+    "one_review_complete_validation_tranche_evidence_record_can_close_validation_gap",
+  );
+  assert.deepEqual(
+    planById.target_scale_and_data_collection.actionItems.map((item) => [item.actionType, item.targetGapId, item.writeRoute, item.readbackRoute]),
+    [
+      ["collect_data", "positions", "/api/v1/intake/positions", "/api/v1/intake/positions"],
+      ["collect_data", "critiques", "/api/v1/intake/critiques", "/api/v1/intake/critiques"],
+      ["collect_data", "blind_initial_ratings", "/api/v1/ratings", "/api/v1/ratings"],
+      ["collect_data", "gold_library_items", "/api/v1/gold-items", "/api/v1/gold-items"],
+      ["collect_data", "validation_critiques", "/api/v1/validation-tranche-evidence", "/api/v1/validation-tranche-evidence"],
+      ["collect_data", "validation_positions", "/api/v1/validation-tranche-evidence", "/api/v1/validation-tranche-evidence"],
+      ["collect_data", "validation_core_all_items_raters", "/api/v1/validation-tranche-evidence", "/api/v1/validation-tranche-evidence"],
+    ],
+  );
+  assert.deepEqual(
+    planById.target_scale_and_data_collection.actionItems.map((item) => [
+      item.targetGapId,
+      item.submissionReadbackRoute,
+      item.setupWriteRoute ?? null,
+      item.setupBulkImportRoute ?? null,
+      item.bulkImportRoute ?? null,
+      item.targetGapReadbackRoute,
+      item.targetGapReadbackItemRoute,
+    ]),
+    [
+      ["positions", "/api/v1/intake/positions", null, null, "/api/v1/intake/positions/import-jsonl", "/api/v1/target-gaps", "/api/v1/target-gaps/positions"],
+      ["critiques", "/api/v1/intake/critiques", null, null, "/api/v1/intake/critiques/import-jsonl", "/api/v1/target-gaps", "/api/v1/target-gaps/critiques"],
+      [
+        "blind_initial_ratings",
+        "/api/v1/ratings",
+        "/api/v1/assignments",
+        "/api/v1/assignments/import-jsonl",
+        "/api/v1/ratings/import-jsonl",
+        "/api/v1/target-gaps",
+        "/api/v1/target-gaps/blind_initial_ratings",
+      ],
+      ["gold_library_items", "/api/v1/gold-items", null, null, "/api/v1/gold-items/import-jsonl", "/api/v1/target-gaps", "/api/v1/target-gaps/gold_library_items"],
+      [
+        "validation_critiques",
+        "/api/v1/validation-tranche-evidence",
+        null,
+        null,
+        "/api/v1/validation-tranche-evidence/import-jsonl",
+        "/api/v1/target-gaps",
+        "/api/v1/target-gaps/validation_critiques",
+      ],
+      [
+        "validation_positions",
+        "/api/v1/validation-tranche-evidence",
+        null,
+        null,
+        "/api/v1/validation-tranche-evidence/import-jsonl",
+        "/api/v1/target-gaps",
+        "/api/v1/target-gaps/validation_positions",
+      ],
+      [
+        "validation_core_all_items_raters",
+        "/api/v1/validation-tranche-evidence",
+        null,
+        null,
+        "/api/v1/validation-tranche-evidence/import-jsonl",
+        "/api/v1/target-gaps",
+        "/api/v1/target-gaps/validation_core_all_items_raters",
+      ],
+    ],
+  );
+  const positionCollectAction = planById.target_scale_and_data_collection.actionItems.find((item) => item.targetGapId === "positions");
+  assert.equal(positionCollectAction.targetDataTemplateReadbackRoute, "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions");
+  assert.equal(positionCollectAction.dryRunImportRoute, "/api/v1/intake/positions/import-jsonl?dryRun=true");
+  assert.equal(positionCollectAction.validateOnlyImportRoute, "/api/v1/intake/positions/import-jsonl?validateOnly=true");
+  assert.equal(positionCollectAction.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+  assert.equal(positionCollectAction.packageDryRunImportRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+  assert.equal(positionCollectAction.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(positionCollectAction.verificationRoute, "/api/v1/target-gaps/positions");
+  assert.equal(
+    positionCollectAction.targetDataExpandedTemplateReadbackRoute,
+    "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining",
+  );
+  assert.equal(
+    positionCollectAction.targetDataCappedExpandedTemplateReadbackRoute,
+    "/api/v1/target-gaps/import-jsonl-template?targetGapId=positions&expand=remaining&maxExpandedRecords=100",
+  );
+  assert.deepEqual(positionCollectAction.templateReadbackRoutes, [
+    positionCollectAction.targetDataTemplateReadbackRoute,
+    positionCollectAction.targetDataExpandedTemplateReadbackRoute,
+    positionCollectAction.targetDataCappedExpandedTemplateReadbackRoute,
+  ]);
+  const blindInitialRatingCollectAction = planById.target_scale_and_data_collection.actionItems.find((item) => item.targetGapId === "blind_initial_ratings");
+  assert.equal(
+    blindInitialRatingCollectAction.targetDataTemplateReadbackRoute,
+    "/api/v1/target-gaps/import-jsonl-template?targetGapId=blind_initial_ratings",
+  );
+  assert.equal(blindInitialRatingCollectAction.dryRunImportRoute, "/api/v1/ratings/import-jsonl?dryRun=true");
+  assert.equal(blindInitialRatingCollectAction.validateOnlyImportRoute, "/api/v1/ratings/import-jsonl?validateOnly=true");
+  assert.equal(blindInitialRatingCollectAction.setupDryRunImportRoute, "/api/v1/assignments/import-jsonl?dryRun=true");
+  assert.equal(blindInitialRatingCollectAction.setupValidateOnlyImportRoute, "/api/v1/assignments/import-jsonl?validateOnly=true");
+  assert.equal(blindInitialRatingCollectAction.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+  assert.equal(blindInitialRatingCollectAction.packageDryRunImportRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+  assert.equal(blindInitialRatingCollectAction.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(blindInitialRatingCollectAction.verificationRoute, "/api/v1/target-gaps/blind_initial_ratings");
+  assert.equal(
+    blindInitialRatingCollectAction.targetDataExpandedTemplateReadbackRoute,
+    "/api/v1/target-gaps/import-jsonl-template?targetGapId=blind_initial_ratings&expand=remaining",
+  );
+  assert.equal(
+    blindInitialRatingCollectAction.targetDataCappedExpandedTemplateReadbackRoute,
+    "/api/v1/target-gaps/import-jsonl-template?targetGapId=blind_initial_ratings&expand=remaining&maxExpandedRecords=100",
+  );
+  assert.deepEqual(blindInitialRatingCollectAction.templateReadbackRoutes, [
+    blindInitialRatingCollectAction.targetDataTemplateReadbackRoute,
+    blindInitialRatingCollectAction.targetDataExpandedTemplateReadbackRoute,
+    blindInitialRatingCollectAction.targetDataCappedExpandedTemplateReadbackRoute,
+  ]);
+  assert.equal(
+    planById.target_scale_and_data_collection.actionItems.find((item) => item.targetGapId === "positions").importImpact.estimatedRecordsRequired,
+    117,
+  );
+  assert.equal(
+    planById.target_scale_and_data_collection.actionItems.find((item) => item.targetGapId === "blind_initial_ratings").setupImportImpact.expectedResourceDelta,
+    0,
+  );
+  assert.equal(
+    planById.target_scale_and_data_collection.actionItems.find((item) => item.targetGapId === "validation_critiques").importImpact.estimatedRecordsRequired,
+    1,
+  );
+  assert.deepEqual(
+    planById.target_scale_and_data_collection.reviewEvidencePointers
+      .filter((pointer) => pointer.targetGapId)
+      .map((pointer) => [pointer.targetGapId, pointer.readbackRoute, pointer.readbackItemRoute, pointer.submissionReadbackRoute]),
+    [
+      ["positions", "/api/v1/target-gaps", "/api/v1/target-gaps/positions", "/api/v1/intake/positions"],
+      ["critiques", "/api/v1/target-gaps", "/api/v1/target-gaps/critiques", "/api/v1/intake/critiques"],
+      ["blind_initial_ratings", "/api/v1/target-gaps", "/api/v1/target-gaps/blind_initial_ratings", "/api/v1/ratings"],
+      ["gold_library_items", "/api/v1/target-gaps", "/api/v1/target-gaps/gold_library_items", "/api/v1/gold-items"],
+      ["validation_critiques", "/api/v1/target-gaps", "/api/v1/target-gaps/validation_critiques", "/api/v1/validation-tranche-evidence"],
+      ["validation_positions", "/api/v1/target-gaps", "/api/v1/target-gaps/validation_positions", "/api/v1/validation-tranche-evidence"],
+      [
+        "validation_core_all_items_raters",
+        "/api/v1/target-gaps",
+        "/api/v1/target-gaps/validation_core_all_items_raters",
+        "/api/v1/validation-tranche-evidence",
+      ],
+    ],
+  );
+  assert.ok(planById.target_scale_and_data_collection.writeRoutes.includes("/api/v1/validation-tranche-evidence"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/intake/positions"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/intake/critiques"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/assignments"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/ratings"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/rating-context-snapshots"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/gold-items"));
+  assert.ok(planById.target_scale_and_data_collection.readbackRoutes.includes("/api/v1/validation-tranche-evidence"));
+  assert.deepEqual(planById.target_scale_and_data_collection.setupBulkImportRoutes, [
+    "/api/v1/assignments/import-jsonl",
+    "/api/v1/rating-context-snapshots/import-jsonl",
+  ]);
+  assert.deepEqual(planById.target_scale_and_data_collection.workflowTemplateIds, [
+    "position-intake",
+    "critique-intake",
+    "assignment-record",
+    "rating-context-snapshot",
+    "gold-item",
+    "validation-tranche-evidence",
+  ]);
+  assert.deepEqual(planById.target_scale_and_data_collection.setupBulkImportWorkflowTemplateIds, [
+    "assignment-jsonl-import",
+    "rating-context-snapshot-jsonl-import",
+  ]);
+  assert.ok(
+    planById.target_scale_and_data_collection.notes.some((note) =>
+      note.includes("assignment and rating-context-snapshot setup imports"),
+    ),
+  );
+  assert.ok(planById.target_scale_and_data_collection.notes.some((note) => note.includes("completed blind ratings remain assigned-rater submissions")));
+  assert.ok(planById.model_evaluation_submission_package.readbackRoutes.includes("/api/v1/model-improvement-policies"));
+  assert.ok(planById.model_evaluation_submission_package.readbackRoutes.includes("/api/v1/model-improvement-runs"));
+  assert.ok(planById.model_evaluation_submission_package.readbackRoutes.includes("/api/v1/model-provider-data-handling-policies"));
+  assert.deepEqual(planById.model_evaluation_submission_package.bulkImportRoutes, ["/api/v1/operator-evidence/import-jsonl"]);
+  assert.deepEqual(planById.model_evaluation_submission_package.bulkImportWorkflowTemplateIds, ["operator-evidence-package-jsonl-import"]);
+  assert.equal(planById.model_evaluation_submission_package.submissionChecklist.length, 9);
+  assert.equal(
+    planById.model_evaluation_submission_package.submissionChecklist.find((item) => item.artifactKind === "leaderboard").readbackRoute,
+    "/api/v1/leaderboards",
+  );
+  assert.equal(
+    planById.model_evaluation_submission_package.actionItems.find((item) => item.artifactKind === "evaluation_run").sourceEvidenceId,
+    releaseReport.modelEvaluationArtifactEvidence.id,
+  );
+  assert.equal(
+    planById.model_evaluation_submission_package.submissionChecklist.find((item) => item.artifactKind === "model_inference_config").readbackRoute,
+    "/api/v1/model-inference-configs",
+  );
+  assert.equal(
+    planById.model_evaluation_submission_package.submissionChecklist.find((item) => item.artifactKind === "model_run_environment").readbackRoute,
+    "/api/v1/model-run-environments",
+  );
+  assert.equal(
+    planById.model_evaluation_submission_package.actionItems.find((item) => item.artifactKind === "model_inference_config").writeRoute,
+    "/api/v1/model-inference-configs",
+  );
+  assert.equal(
+    planById.model_evaluation_submission_package.actionItems.find((item) => item.artifactKind === "model_inference_config").bulkImportRoute,
+    "/api/v1/operator-evidence/import-jsonl",
+  );
+  assert.equal(planById.model_evaluation_submission_package.actionItems.find((item) => item.artifactKind === "evaluation_run").bulkImportRoute, null);
+  assert.equal(
+    planById.model_evaluation_submission_package.actionItems.find((item) => item.artifactKind === "model_run_environment").workflowTemplateId,
+    "model-run-environment",
+  );
+  assert.deepEqual(
+    planById.model_evaluation_submission_package.actionItems
+      .filter((item) => item.writeRoute.includes("{id}"))
+      .map((item) => [item.artifactKind, item.setupWriteRoute, item.setupReadbackRoute, item.setupWorkflowTemplateId, item.setupActorRole]),
+    [
+      ["model_evaluation_predictions", "/api/v1/evaluations/run", "/api/v1/evaluations", "evaluation-run", "admin_or_operator"],
+      ["calibration_run", "/api/v1/evaluations/run", "/api/v1/evaluations", "evaluation-run", "admin_or_operator"],
+      ["model_failure_audit", "/api/v1/evaluations/run", "/api/v1/evaluations", "evaluation-run", "admin_or_operator"],
+    ],
+  );
+  assert.deepEqual(planById.model_evaluation_submission_package.workflowTemplateIds, [
+    "model-improvement-policy",
+    "model-improvement-run",
+    "evaluation-run",
+    "model-inference-config",
+    "model-run-environment",
+    "model-evaluation-prediction",
+    "calibration-run",
+    "leaderboard",
+    "failure-audit",
+    "model-provider-data-handling-policy",
+  ]);
+  assert.ok(planById.model_evaluation_reproducibility.writeRoutes.includes("/api/v1/model-inference-configs"));
+  assert.ok(planById.model_evaluation_reproducibility.readbackRoutes.includes("/api/v1/evaluations"));
+  assert.ok(planById.model_evaluation_reproducibility.readbackRoutes.includes("/api/v1/leaderboards"));
+  assert.ok(planById.model_evaluation_reproducibility.readbackRoutes.includes("/api/v1/model-run-environments"));
+  assert.ok(planById.model_evaluation_reproducibility.readbackRoutes.includes("/api/v1/prompt-templates"));
+  assert.ok(planById.model_evaluation_reproducibility.readbackRoutes.includes("/api/v1/parser-configs"));
+  assert.ok(planById.model_evaluation_reproducibility.readbackRoutes.includes("/api/v1/release-report-sections"));
+  assert.ok(
+    planById.model_evaluation_reproducibility.submissionChecklist.some(
+      (item) =>
+        item.artifactKind === "leaderboard_model_run_provenance" &&
+        item.submissionStatus === "review_required" &&
+        item.blockingFieldCount > 0,
+    ),
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.actionItems.find(
+      (item) => item.artifactKind === "submitted_evaluation_artifacts_bound_to_release",
+    ).workflowTemplateId,
+    "evaluation-run",
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.actionItems.find(
+      (item) => item.artifactKind === "submitted_evaluation_artifacts_bound_to_release",
+    ).readbackRoute,
+    "/api/v1/evaluations",
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.actionItems.find((item) => item.artifactKind === "leaderboard_model_run_provenance")
+      .workflowTemplateId,
+    "leaderboard",
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.actionItems.find((item) => item.artifactKind === "leaderboard_model_run_provenance")
+      .readbackRoute,
+    "/api/v1/leaderboards",
+  );
+  assert.deepEqual(
+    planById.model_evaluation_reproducibility.actionItems
+      .filter((item) => item.actionType === "submit_artifact")
+      .filter((item) => item.readbackRoute === "/api/release/report")
+      .map((item) => item.id),
+    [],
+  );
+  const leaderboardReviewAction = planById.model_evaluation_reproducibility.actionItems.find(
+    (item) => item.actionType === "review_artifact" && item.artifactId === "leaderboard_model_run_provenance",
+  );
+  assert.equal(leaderboardReviewAction.readbackRoute, "/api/v1/release-report-sections");
+  assert.equal(
+    leaderboardReviewAction.readbackItemRoute,
+    "/api/v1/release-report-sections/model-evaluation-reproducibility-checklist-october-2026-demo",
+  );
+  assert.deepEqual(leaderboardReviewAction.relatedSubmitActionIds, [
+    "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+  ]);
+  assert.equal(leaderboardReviewAction.relatedSubmitActions[0].artifactKind, "leaderboard_model_run_provenance");
+  assert.equal(leaderboardReviewAction.relatedSubmitActions[0].bulkImportRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.deepEqual(leaderboardReviewAction.relatedSubmitActions[0].templateReadbackRoutes, [
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance",
+  ]);
+  assert.match(leaderboardReviewAction.resolutionEvidence, /Submit or repair the related action/);
+  const leaderboardReviewPointer = planById.model_evaluation_reproducibility.reviewEvidencePointers.find(
+    (pointer) => pointer.reason === "leaderboardReport.modelRunProvenance.releaseUseStatus",
+  );
+  assert.equal(leaderboardReviewPointer.readbackRoute, "/api/v1/release-report-sections");
+  assert.equal(leaderboardReviewPointer.readbackScope, "release_report_section");
+  assert.deepEqual(leaderboardReviewPointer.relatedSubmitActionIds, [
+    "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+  ]);
+  const leaderboardReviewSummary = planById.model_evaluation_reproducibility.reviewArtifactSummaries.find(
+    (summary) => summary.artifactId === "leaderboard_model_run_provenance",
+  );
+  assert.deepEqual(leaderboardReviewSummary.relatedSubmitActionIds, [
+    "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance",
+  ]);
+  const runEnvironmentReviewAction = planById.model_evaluation_reproducibility.actionItems.find(
+    (item) => item.actionType === "review_artifact" && item.artifactId === "submitted_run_inference_environment_provenance",
+  );
+  assert.deepEqual(runEnvironmentReviewAction.relatedSubmitActionIds, [
+    "model_evaluation_reproducibility:submit:model_inference_config",
+    "model_evaluation_reproducibility:submit:model_run_environment",
+  ]);
+  assert.equal(
+    planById.model_evaluation_reproducibility.actionItems.find((item) => item.artifactKind === "model_inference_config").writeRoute,
+    "/api/v1/model-inference-configs",
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.actionItems.find((item) => item.artifactKind === "model_run_environment").workflowTemplateId,
+    "model-run-environment",
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.submissionChecklist.find((item) => item.artifactKind === "model_inference_config").readbackRoute,
+    "/api/v1/model-inference-configs",
+  );
+  assert.equal(
+    planById.model_evaluation_reproducibility.submissionChecklist.find((item) => item.artifactKind === "model_run_environment").readbackRoute,
+    "/api/v1/model-run-environments",
+  );
+  assert.ok(
+    planById.model_evaluation_reproducibility.submissionChecklist.some(
+      (item) => item.artifactKind === "metric_uncertainty_and_directionality" && item.submissionStatus === "submitted_complete",
+    ),
+  );
+  assert.ok(
+    planById.model_evaluation_reproducibility.reviewEvidencePointers.some(
+      (pointer) =>
+        pointer.artifactType === "model_evaluation_reproducibility_checklist" &&
+        pointer.artifactId === "submitted_evaluation_artifacts_bound_to_release" &&
+        pointer.readbackRoute === "/api/v1/release-report-sections" &&
+        pointer.readbackItemRoute === "/api/v1/release-report-sections/model-evaluation-reproducibility-checklist-october-2026-demo",
+    ),
+  );
+  assert.deepEqual(planById.model_evaluation_reproducibility.workflowTemplateIds, [
+    "model-run-reproducibility-policy",
+    "model-inference-config",
+    "model-run-environment",
+    "prompt-template",
+    "parser-config",
+  ]);
+  assert.ok(planById.discussion_and_adjudication_workflows.readbackRoutes.includes("/api/v1/discussion-comments"));
+  assert.deepEqual(planById.discussion_and_adjudication_workflows.workflowTemplateIds, [
+    "discussion",
+    "discussion-thread",
+    "discussion-comment",
+    "discussion-revision-proposal",
+    "post-lock-discussion-session",
+    "adjudication",
+    "adjudication-review-session",
+    "adjudication-memo",
+    "adjudication-finalization",
+  ]);
+  assert.deepEqual(
+    planById.discussion_and_adjudication_workflows.submissionChecklist.map((item) => [
+      item.artifactKind,
+      item.submissionStatus,
+      item.readbackRoute,
+      item.blockingFields,
+      item.sourceEvidenceId,
+    ]),
+    [
+      ["discussion", "not_submitted", "/api/v1/discussions", ["submittedArtifactId"], releaseReport.discussionAdjudicationWorkflowEvidence.id],
+      ["discussion_thread", "not_submitted", "/api/v1/discussion-threads", ["submittedArtifactId"], releaseReport.discussionAdjudicationWorkflowEvidence.id],
+      ["discussion_comment", "not_submitted", "/api/v1/discussion-comments", ["submittedArtifactId"], releaseReport.discussionAdjudicationWorkflowEvidence.id],
+      [
+        "discussion_revision_proposal",
+        "not_submitted",
+        "/api/v1/discussion-revision-proposals",
+        ["submittedArtifactId"],
+        releaseReport.discussionAdjudicationWorkflowEvidence.id,
+      ],
+      [
+        "post_lock_discussion_session",
+        "not_submitted",
+        "/api/v1/post-lock-discussion-sessions",
+        ["submittedArtifactId"],
+        releaseReport.discussionAdjudicationWorkflowEvidence.id,
+      ],
+      ["adjudication", "not_submitted", "/api/v1/adjudications", ["submittedArtifactId"], releaseReport.discussionAdjudicationWorkflowEvidence.id],
+      [
+        "adjudication_review_session",
+        "not_submitted",
+        "/api/v1/adjudication-review-sessions",
+        ["submittedArtifactId"],
+        releaseReport.discussionAdjudicationWorkflowEvidence.id,
+      ],
+      ["adjudication_memo", "not_submitted", "/api/v1/adjudication-memos", ["submittedArtifactId"], releaseReport.discussionAdjudicationWorkflowEvidence.id],
+      [
+        "adjudication_finalization",
+        "not_submitted",
+        "/api/v1/adjudication-finalizations",
+        ["submittedArtifactId"],
+        releaseReport.discussionAdjudicationWorkflowEvidence.id,
+      ],
+    ],
+  );
+  const discussionSubmissionChecklistItems = planById.discussion_and_adjudication_workflows.submissionChecklist;
+  const discussionSubmission = discussionSubmissionChecklistItems.find((item) => item.artifactKind === "discussion");
+  assert.equal(
+    discussionSubmission.payloadTemplateReadbackRoute,
+    "/api/v1/operator-action-items/payload-template?checklistRowId=discussion_and_adjudication_workflows&actionType=submit_artifact&artifactKind=discussion",
+  );
+  assert.deepEqual(discussionSubmission.templateReadbackRoutes, [discussionSubmission.payloadTemplateReadbackRoute]);
+  const discussionThreadSubmission = discussionSubmissionChecklistItems.find((item) => item.artifactKind === "discussion_thread");
+  assert.equal(
+    discussionThreadSubmission.operatorEvidenceTemplateReadbackRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=discussion_and_adjudication_workflows&artifactKind=discussion_thread",
+  );
+  assert.equal(discussionThreadSubmission.payloadTemplateReadbackRoute, undefined);
+  const discussionCommentSubmission = discussionSubmissionChecklistItems.find((item) => item.artifactKind === "discussion_comment");
+  assert.ok(
+    discussionCommentSubmission.templateReadbackRoutes.includes(
+      "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=discussion_and_adjudication_workflows&artifactKind=discussion_comment",
+    ),
+  );
+  assert.ok(
+    discussionCommentSubmission.templateReadbackRoutes.includes(
+      "/api/v1/operator-action-items/payload-template?checklistRowId=discussion_and_adjudication_workflows&actionType=submit_artifact&artifactKind=discussion_comment",
+    ),
+  );
+  const finalizationSubmission = discussionSubmissionChecklistItems.find((item) => item.artifactKind === "adjudication_finalization");
+  assert.equal(
+    finalizationSubmission.payloadTemplateReadbackRoute,
+    "/api/v1/operator-action-items/payload-template?checklistRowId=discussion_and_adjudication_workflows&actionType=submit_artifact&artifactKind=adjudication_finalization",
+  );
+  assert.deepEqual(
+    planById.discussion_and_adjudication_workflows.actionItems.map((item) => [
+      item.actionType,
+      item.artifactKind,
+      item.writeRoute,
+      item.workflowTemplateId,
+    ]),
+    [
+      ["submit_artifact", "discussion", "/api/v1/discussions", "discussion"],
+      ["submit_artifact", "discussion_thread", "/api/v1/discussion-threads", "discussion-thread"],
+      ["submit_artifact", "discussion_comment", "/api/v1/discussions/{id}/comments", "discussion-comment"],
+      ["submit_artifact", "discussion_revision_proposal", "/api/v1/discussions/{id}/revision-proposals", "discussion-revision-proposal"],
+      ["submit_artifact", "post_lock_discussion_session", "/api/v1/discussions/{id}/post-lock-sessions", "post-lock-discussion-session"],
+      ["submit_artifact", "adjudication", "/api/v1/adjudications", "adjudication"],
+      ["submit_artifact", "adjudication_review_session", "/api/v1/adjudication-review-sessions", "adjudication-review-session"],
+      ["submit_artifact", "adjudication_memo", "/api/v1/adjudication-memos", "adjudication-memo"],
+      ["submit_artifact", "adjudication_finalization", "/api/v1/adjudications/{id}/finalize", "adjudication-finalization"],
+    ],
+  );
+  assert.deepEqual(
+    planById.discussion_and_adjudication_workflows.actionItems
+      .filter((item) => item.writeRoute.includes("{id}"))
+      .map((item) => [item.artifactKind, item.setupWriteRoute, item.setupReadbackRoute, item.setupWorkflowTemplateId, item.setupActorRole]),
+    [
+      ["discussion_comment", "/api/v1/discussions", "/api/v1/discussions", "discussion", "admin_or_operator"],
+      ["discussion_revision_proposal", "/api/v1/discussions", "/api/v1/discussions", "discussion", "admin_or_operator"],
+      ["post_lock_discussion_session", "/api/v1/discussions", "/api/v1/discussions", "discussion", "admin_or_operator"],
+      ["adjudication_finalization", "/api/v1/adjudications", "/api/v1/adjudications", "adjudication", "admin_or_operator"],
+    ],
+  );
+  assert.equal(planById.discussion_and_adjudication_workflows.actionItems.find((item) => item.artifactKind === "discussion").bulkImportRoute, null);
+  assert.equal(
+    planById.discussion_and_adjudication_workflows.actionItems.find((item) => item.artifactKind === "discussion").bulkImportWorkflowTemplateId,
+    null,
+  );
+  assert.equal(
+    planById.discussion_and_adjudication_workflows.actionItems.find((item) => item.artifactKind === "discussion_comment").bulkImportRoute,
+    "/api/v1/operator-evidence/import-jsonl",
+  );
+  assert.equal(
+    planById.discussion_and_adjudication_workflows.actionItems.find((item) => item.artifactKind === "discussion_comment")
+      .bulkImportWorkflowTemplateId,
+    "operator-evidence-package-jsonl-import",
+  );
+  assert.equal(
+    planById.discussion_and_adjudication_workflows.actionItems.find((item) => item.artifactKind === "adjudication_finalization").bulkImportRoute,
+    null,
+  );
+  assert.equal(
+    planById.discussion_and_adjudication_workflows.actionItems.find((item) => item.artifactKind === "adjudication_finalization")
+      .bulkImportWorkflowTemplateId,
+    null,
+  );
+  assert.ok(planById.rubric_practice_and_certification_pack.readbackRoutes.includes("/api/v1/gold-items"));
+  assert.ok(planById.rubric_practice_and_certification_pack.readbackRoutes.includes("/api/v1/certification-records"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.requiredSubmissions.includes("human-ceiling run"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.requiredSubmissions.includes("authorized artifact probe diagnostics"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.writeRoutes.includes("/api/v1/human-ceiling-runs"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.writeRoutes.includes("/api/v1/artifact-probes/run"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/benchmark-split-members"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/artifact-probes"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/benchmark-freeze-reports"));
+  assert.equal(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/benchmark/freeze-report"), false);
+  assert.ok(
+    planById.validation_hidden_benchmark_and_claims.reviewEvidencePointers.some(
+      (pointer) =>
+        pointer.reason === "hiddenBenchmarkFreeze:not_ready_for_release_freeze" &&
+        pointer.readbackRoute === "/api/v1/benchmark-freeze-reports" &&
+        pointer.readbackScope === "workflow_collection",
+    ),
+  );
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/human-ceiling-runs"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/benchmark-submissions"));
+  assert.ok(planById.validation_hidden_benchmark_and_claims.readbackRoutes.includes("/api/v1/comparability-claims"));
+  assert.deepEqual(planById.validation_hidden_benchmark_and_claims.workflowTemplateIds, [
+    "validation-tranche-evidence",
+    "benchmark-split-member",
+    "artifact-probe",
+    "benchmark-freeze-report",
+    "benchmark-refresh-policy",
+    "human-ceiling-run",
+    "benchmark-submission-policy",
+    "benchmark-submission",
+    "comparability-tier-policy",
+    "comparability-claim",
+    "release-erratum-disclosure-policy",
+    "release-erratum",
+  ]);
+  assert.deepEqual(planById.validation_hidden_benchmark_and_claims.evidenceIds, [
+    releaseReport.validationDesign.id,
+    releaseReport.hiddenBenchmarkFreeze.id,
+    releaseReport.releaseClaimWarnings.id,
+  ]);
+  assert.deepEqual(planById.rubric_practice_and_certification_pack.blockingTargetGaps.map((gap) => gap.id), ["gold_library_items"]);
+  assert.deepEqual(planById.validation_hidden_benchmark_and_claims.blockingTargetGaps.map((gap) => gap.id), [
+    "validation_critiques",
+    "validation_positions",
+    "validation_core_all_items_raters",
+  ]);
+  assert.ok(planById.validation_hidden_benchmark_and_claims.workflowTemplateIds.includes("human-ceiling-run"));
+  assert.equal(planById.rubric_practice_and_certification_pack.blockingTargetGaps[0].writeRoute, "/api/v1/gold-items");
+  assert.equal(planById.rubric_practice_and_certification_pack.blockingTargetGaps[0].workflowTemplateId, "gold-item");
+  assert.equal(planById.validation_hidden_benchmark_and_claims.blockingTargetGaps[0].readbackRoute, "/api/v1/validation-tranche-evidence");
+  assert.deepEqual(
+    planById.validation_hidden_benchmark_and_claims.actionItems
+      .filter((item) => item.actionType !== "review_report_section")
+      .map((item) => [
+        item.actionType,
+        item.targetGapId ?? item.artifactKind,
+        item.writeRoute,
+        item.readbackRoute,
+        item.workflowTemplateId,
+      ]),
+    [
+      [
+        "collect_data",
+        "validation_critiques",
+        "/api/v1/validation-tranche-evidence",
+        "/api/v1/validation-tranche-evidence",
+        "validation-tranche-evidence",
+      ],
+      [
+        "collect_data",
+        "validation_positions",
+        "/api/v1/validation-tranche-evidence",
+        "/api/v1/validation-tranche-evidence",
+        "validation-tranche-evidence",
+      ],
+      [
+        "collect_data",
+        "validation_core_all_items_raters",
+        "/api/v1/validation-tranche-evidence",
+        "/api/v1/validation-tranche-evidence",
+        "validation-tranche-evidence",
+      ],
+      [
+        "submit_artifact",
+        "benchmark_freeze_report",
+        "/api/v1/benchmark/candidates/freeze",
+        "/api/v1/benchmark-freeze-reports",
+        "benchmark-freeze-report",
+      ],
+      [
+        "submit_artifact",
+        "artifact_probe",
+        "/api/v1/artifact-probes/run",
+        "/api/v1/artifact-probes",
+        "artifact-probe",
+      ],
+    ],
+  );
+  const benchmarkFreezeAction = planById.validation_hidden_benchmark_and_claims.actionItems.find(
+    (item) => item.actionType === "submit_artifact" && item.artifactKind === "benchmark_freeze_report",
+  );
+  assert.equal(benchmarkFreezeAction.preconditionStatus, "data_collection_required_before_action");
+  assert.deepEqual(benchmarkFreezeAction.blockedByTargetGapIds, [
+    "validation_critiques",
+    "validation_positions",
+    "validation_core_all_items_raters",
+  ]);
+  assert.equal(benchmarkFreezeAction.blockingTargetGapSummaries.length, 3);
+  assert.equal(benchmarkFreezeAction.blockingTargetGapSummaries[0].importImpact.estimatedRecordsRequired, 1);
+  assert.match(benchmarkFreezeAction.dataDependencyCompletionEvidence, /Resolve the listed target gaps/);
+  const benchmarkFreezeReviewAction = planById.validation_hidden_benchmark_and_claims.actionItems.find(
+    (item) => item.actionType === "review_report_section" && item.reason === "hiddenBenchmarkFreeze.artifact_balance:insufficient_seed_benchmark",
+  );
+  assert.deepEqual(benchmarkFreezeReviewAction.relatedSubmitActionIds, [
+    "validation_hidden_benchmark_and_claims:submit:benchmark_freeze_report:hiddenBenchmarkFreeze_not_ready_for_release_freeze",
+  ]);
+  assert.equal(benchmarkFreezeReviewAction.relatedSubmitActions[0].writeRoute, "/api/v1/benchmark/candidates/freeze");
+  assert.deepEqual(benchmarkFreezeReviewAction.relatedSubmitActions[0].templateReadbackRoutes, [
+    "/api/v1/operator-action-items/payload-template?checklistRowId=validation_hidden_benchmark_and_claims&actionType=submit_artifact&artifactKind=benchmark_freeze_report",
+  ]);
+  const benchmarkFreezeReviewPointer = planById.validation_hidden_benchmark_and_claims.reviewEvidencePointers.find(
+    (pointer) => pointer.reason === "hiddenBenchmarkFreeze:not_ready_for_release_freeze",
+  );
+  assert.deepEqual(benchmarkFreezeReviewPointer.relatedSubmitActionIds, [
+    "validation_hidden_benchmark_and_claims:submit:benchmark_freeze_report:hiddenBenchmarkFreeze_not_ready_for_release_freeze",
+  ]);
+  const artifactProbeReviewPointer = planById.validation_hidden_benchmark_and_claims.reviewEvidencePointers.find(
+    (pointer) => pointer.reason === "hiddenBenchmarkFreeze.artifact_probe_diagnostics:not_run_documented",
+  );
+  assert.deepEqual(artifactProbeReviewPointer.relatedSubmitActionIds, [
+    "validation_hidden_benchmark_and_claims:submit:artifact_probe:hiddenBenchmarkFreeze.artifact_probe_diagnostics_not_run_documented",
+  ]);
+  assert.equal(artifactProbeReviewPointer.relatedSubmitActions[0].writeRoute, "/api/v1/artifact-probes/run");
+  assert.deepEqual(
+    planById.validation_hidden_benchmark_and_claims.actionItems
+      .filter((item) => item.actionType === "review_report_section")
+      .map((item) => [item.reason, item.readbackRoute]),
+    [
+      ["hiddenBenchmarkFreeze.metric_family_eligibility:pointwise_only", "/api/v1/benchmark-freeze-reports"],
+      ["hiddenBenchmarkFreeze.pairwise_margin_distribution:pointwise_only", "/api/v1/benchmark-freeze-reports"],
+      ["hiddenBenchmarkFreeze.artifact_balance:insufficient_seed_benchmark", "/api/v1/benchmark-freeze-reports"],
+      ["releaseClaimWarnings:release_claims_limited_by_errata_or_schedule", "/api/v1/release-report-sections"],
+    ],
+  );
+  const releaseClaimWarningReviewAction = planById.validation_hidden_benchmark_and_claims.actionItems.find(
+    (item) => item.actionType === "review_report_section" && item.reason === "releaseClaimWarnings:release_claims_limited_by_errata_or_schedule",
+  );
+  assert.equal(
+    releaseClaimWarningReviewAction.readbackItemRoute,
+    `/api/v1/release-report-sections/${releaseReport.releaseClaimWarnings.id}`,
+  );
+  assert.equal(releaseClaimWarningReviewAction.preconditionStatus, "data_collection_required_before_action");
+  assert.deepEqual(releaseClaimWarningReviewAction.blockedByTargetGapIds, [
+    "validation_critiques",
+    "validation_positions",
+    "validation_core_all_items_raters",
+  ]);
+  assert.ok(
+    planById.validation_hidden_benchmark_and_claims.actionItems
+      .filter((item) => item.actionType === "review_report_section")
+      .every((item) => item.preconditionStatus === "data_collection_required_before_action"),
+  );
+  assert.ok(planById.target_scale_and_data_collection.notes[0].includes("data-collection work"));
+});
+
+test("operator plan maps interaction/practice review rows to existing readback routes", () => {
+  const completeOptions = completeInteractionWorkflowFixtures();
+  const releaseReport = buildOctoberReleaseReport(
+    "interaction-practice-plan-review",
+    null,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      ...completeOptions,
+      raterLearningPlans: [
+        {
+          ...completeOptions.raterLearningPlans[0],
+          raterDashboardPolicyId: "rater-dashboard-policy-old",
+        },
+      ],
+    },
+  );
+  const interactionRow = releaseReport.octoberCompletionChecklist.rows.find((row) => row.id === "interaction_and_practice_workflows");
+  const interactionPlan = releaseReport.operatorEvidenceSubmissionPlan.rows.find(
+    (row) => row.checklistRowId === "interaction_and_practice_workflows",
+  );
+
+  assert.equal(interactionRow.status, "review_required");
+  assert.ok(interactionRow.reviewReasons.length > 0);
+  assert.ok(interactionPlan.requiredSubmissions.includes("rater dashboard policy, rater learning plans, and calibration feedback"));
+  assert.ok(interactionPlan.writeRoutes.includes("/api/v1/screens/{id}/feature-parity-check"));
+  assert.ok(interactionPlan.readbackRoutes.includes("/api/v1/rater-learning-plans"));
+  assert.ok(interactionPlan.readbackRoutes.includes("/api/v1/adjudication-review-sessions"));
+  assert.ok(interactionPlan.readbackRoutes.includes("/api/v1/screen-feature-parity-checks"));
+  assert.ok(interactionPlan.readbackRoutes.includes("/api/v1/simplified-copy-previews"));
+  assert.ok(
+    interactionPlan.reviewEvidencePointers.some(
+      (pointer) =>
+        pointer.artifactType === "rater_learning_plan" &&
+        pointer.artifactId === completeOptions.raterLearningPlans[0].id &&
+        pointer.reason === "raterDashboardPolicyId" &&
+        pointer.readbackRoute === "/api/v1/rater-learning-plans" &&
+        pointer.readbackItemRoute === `/api/v1/rater-learning-plans/${completeOptions.raterLearningPlans[0].id}`,
+    ),
+  );
+  assert.deepEqual(interactionPlan.reviewArtifactSummaries, [
+    {
+      artifactType: "rater_learning_plan",
+      artifactId: completeOptions.raterLearningPlans[0].id,
+      sourceEvidenceId: releaseReport.interactionWorkflowEvidence.id,
+      readbackRoute: "/api/v1/rater-learning-plans",
+      readbackItemRoute: `/api/v1/rater-learning-plans/${completeOptions.raterLearningPlans[0].id}`,
+      reasonCount: 1,
+      reasons: ["raterDashboardPolicyId"],
+      reasonsTruncated: false,
+    },
+  ]);
+  assert.deepEqual(interactionPlan.actionItems, [
+    {
+      id: `interaction_and_practice_workflows:review:rater_learning_plan:${completeOptions.raterLearningPlans[0].id}`,
+      checklistRowId: "interaction_and_practice_workflows",
+      actionType: "review_artifact",
+      label: `rater_learning_plan:${completeOptions.raterLearningPlans[0].id}`,
+      status: "review_required",
+      artifactType: "rater_learning_plan",
+      artifactId: completeOptions.raterLearningPlans[0].id,
+      sourceEvidenceId: releaseReport.interactionWorkflowEvidence.id,
+      reasonCount: 1,
+      reasons: ["raterDashboardPolicyId"],
+      reasonsTruncated: false,
+      readbackRoute: "/api/v1/rater-learning-plans",
+      readbackItemRoute: `/api/v1/rater-learning-plans/${completeOptions.raterLearningPlans[0].id}`,
+      actorRole: "admin_or_operator",
+      completionEvidence: "reviewArtifactSummaries no longer includes this artifact in /api/release/report",
+      executionStatus: "ready_to_review_evidence",
+      executionStatusReason: "This action is a readback/review step; inspect the linked artifact or report section before replacing evidence.",
+      templateCoverageStatus: "template_coverage_not_required",
+      templateCoverageRoutes: [],
+      templateCoverageKinds: [],
+      preflightCoverageStatus: "preflight_coverage_not_required",
+      preflightCoverageRoutes: [],
+      preflightCoverageKinds: [],
+      preflightCoveragePolicy: "Review-only actions do not require append preflight coverage.",
+      governanceCoverageStatus: "governance_coverage_not_required",
+      governanceCoverageKinds: [],
+      governanceCoverageRoutes: [],
+      governanceCoveragePolicy: "Review-only actions do not append evidence and do not require policy-action or phase-lane coverage.",
+      policyGated: false,
+      policyActionKind: null,
+      phaseGateLaneKind: null,
+      setupPolicyGated: false,
+      setupPolicyActionKind: null,
+      setupPhaseGateLaneKind: null,
+      sequence: 1,
+    },
+  ]);
+  assert.ok(interactionPlan.workflowTemplateIds.includes("rater-dashboard-policy"));
+  assert.ok(interactionPlan.notes.some((note) => note.includes("Assignment self-screen")));
+});
+
+test("release-report checklist evidence ids resolve to report sections", () => {
+  const releaseReport = buildOctoberReleaseReport();
+  const reportIds = new Set();
+  const evidenceReferences = [];
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value.id === "string") reportIds.add(value.id);
+    if (Array.isArray(value.evidenceIds)) evidenceReferences.push(...value.evidenceIds);
+    Object.values(value).forEach(visit);
+  };
+  visit(releaseReport);
+
+  assert.equal(releaseReport.targetGaps.id, "target-gaps-october-2026-demo");
+  assert.equal(releaseReport.targetGaps.releaseUseStatus, releaseReport.currentStatus);
+  assert.equal(releaseReport.targetGaps.rows.length, 7);
+  assert.equal(releaseReport.targetGaps.rows.every((row) => reportIds.has(row.sourceEvidenceId)), true);
+  assert.equal(
+    releaseReport.octoberCompletionChecklist.rows.find((row) => row.id === "target_scale_and_data_collection").evidenceIds[0],
+    releaseReport.targetGaps.id,
+  );
+  assert.deepEqual(
+    evidenceReferences.filter((id) => !reportIds.has(id)),
+    [],
+  );
 });
 
 test("item text view parity report binds ratings and model predictions to frozen hashes", () => {
@@ -12054,8 +15500,19 @@ test("rater composition conflict report exposes release-critical dominance and c
   assert.equal(report.counts.includedRaterCount, 4);
   assert.equal(report.counts.releaseCriticalItemCount, 3);
   assert.equal(report.counts.conflictFlagCount, 0);
-  assert.equal(report.counts.topicExpertiseMissingItemCount, 0);
+  assert.equal(report.counts.topicExpertiseMissingItemCount, 1);
+  assert.equal(report.counts.raterTierDiversityMissingItemCount, 2);
+  assert.equal(report.counts.currentTopicSpecialistQualificationCount, 1);
   assert.equal(report.counts.singleRaterDominatedReleaseCriticalItemCount, 2);
+  assert.deepEqual(report.topicExpertiseMissingRows.map((row) => row.itemId), ["pos-voting::crit-voting-style"]);
+  assert.equal(report.policy.requiredReleaseCriticalTierDiversityMin, 2);
+  assert.deepEqual(
+    report.tierDiversityMissingRows.map((row) => [row.itemId, row.raterTierDiversity, row.requiredRaterTierDiversityMin]),
+    [
+      ["pos-mind::crit-mind-zombie", ["expert"], 2],
+      ["pos-voting::crit-voting-style", ["undergraduate"], 2],
+    ],
+  );
   assert.deepEqual(report.releaseCriticalRaterTierDistribution, { undergraduate: 1, expert: 1 });
   assert.deepEqual(
     report.singleRaterDominatedReleaseCriticalRows.map((row) => row.itemId).sort(),
@@ -12407,6 +15864,10 @@ test("release report links submitted discussion threads through adjudication fin
     completeOptions,
   );
   assert.equal(report.discussionAdjudicationWorkflowEvidence.releaseUseStatus, "submitted_discussion_adjudication_workflow_complete");
+  assert.equal(
+    report.octoberCompletionChecklist.rows.find((row) => row.id === "discussion_and_adjudication_workflows").status,
+    "complete",
+  );
   assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionThreadCount, 1);
   assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.completeDiscussionThreadCount, 1);
   assert.equal(report.discussionAdjudicationWorkflowEvidence.counts.submittedDiscussionCommentCount, 1);
@@ -12467,6 +15928,101 @@ test("release report links submitted discussion threads through adjudication fin
     ),
   );
 
+  const malformedAdjudicationArtifactReport = buildOctoberReleaseReport(
+    "release-test",
+    snapshot,
+    seedRatings,
+    positions,
+    critiques,
+    seedCertificationAttempts,
+    seedBenchmarkExposureEvents,
+    postLockSourceStyleAudits,
+    {
+      ...completeOptions,
+      adjudicationReviewSessions: [
+        {
+          ...completeOptions.adjudicationReviewSessions[0],
+          id: "adjudication-review-malformed",
+          rationaleSpanOverlayRefs: [],
+          revisionTimelineRefs: [],
+          targetMapIds: [],
+          minorityRationaleFields: [],
+          adjudicatorIds: [],
+          finalizationStatus: "",
+        },
+      ],
+      adjudicationMemos: [
+        {
+          ...completeOptions.adjudicationMemos[0],
+          id: "adjudication-memo-malformed",
+          plausibleInterpretationsConsidered: [],
+          disagreementTaxonomyCodes: [],
+          adjudicatorIds: [],
+          timestamp: "",
+        },
+      ],
+      adjudicationFinalizations: [
+        {
+          ...completeOptions.adjudicationFinalizations[0],
+          id: "adjudication-finalization-malformed",
+          finalizationStatus: "memo_draft",
+          finalizedBy: "",
+          timestamp: "",
+        },
+      ],
+    },
+  );
+  assert.equal(
+    malformedAdjudicationArtifactReport.discussionAdjudicationWorkflowEvidence.releaseUseStatus,
+    "discussion_adjudication_workflow_review_required",
+  );
+  assert.ok(
+    malformedAdjudicationArtifactReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactType === "adjudication_review_session" && section.reason === "rationaleSpanOverlayRefs",
+    ),
+  );
+  assert.ok(
+    malformedAdjudicationArtifactReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactType === "adjudication_memo" && section.reason === "plausibleInterpretationsConsidered",
+    ),
+  );
+  assert.ok(
+    malformedAdjudicationArtifactReport.discussionAdjudicationWorkflowEvidence.reviewSections.some(
+      (section) => section.artifactType === "adjudication_finalization" && section.reason === "finalizationStatus",
+    ),
+  );
+  const malformedAdjudicationPlan = malformedAdjudicationArtifactReport.operatorEvidenceSubmissionPlan.rows.find(
+    (row) => row.checklistRowId === "discussion_and_adjudication_workflows",
+  );
+  assert.ok(
+    malformedAdjudicationPlan.reviewEvidencePointers.some(
+      (pointer) =>
+        pointer.artifactType === "adjudication_finalization" &&
+        pointer.artifactId === "adjudication-finalization-malformed" &&
+        pointer.reason === "finalizationStatus" &&
+        pointer.readbackRoute === "/api/v1/adjudication-finalizations" &&
+        pointer.readbackItemRoute === "/api/v1/adjudication-finalizations/adjudication-finalization-malformed",
+    ),
+  );
+  assert.ok(
+    malformedAdjudicationPlan.reviewArtifactSummaries.some(
+      (summary) =>
+        summary.artifactType === "adjudication_finalization" &&
+        summary.artifactId === "adjudication-finalization-malformed" &&
+        summary.readbackItemRoute === "/api/v1/adjudication-finalizations/adjudication-finalization-malformed" &&
+        summary.reasonCount === 3 &&
+        summary.reasons.includes("finalizationStatus"),
+    ),
+  );
+  assert.ok(
+    malformedAdjudicationPlan.reviewArtifactSummaries.some(
+      (summary) =>
+        summary.artifactType === "adjudication_review_session" &&
+        summary.artifactId === "adjudication-review-malformed" &&
+        summary.reasonCount > 1,
+    ),
+  );
+
   const incompleteReport = buildOctoberReleaseReport(
     "release-test",
     snapshot,
@@ -12505,11 +16061,59 @@ test("LMCA comparison report separates scale, source, rater, target, and anchor 
   const metricEligibility = buildMetricFamilyEligibilityManifest("release-test", snapshot, positions, critiques);
   const validationDesign = buildValidationDesignReport(seedRatings, positions, critiques);
   const comparison = buildLmcaComparisonReport({ releaseId: "release-test", corpusManifest, metricEligibility, validationDesign, labelSnapshot: snapshot });
+  assert.deepEqual(
+    Object.fromEntries(comparison.sourceScaleComparison.map((row) => [row.metric, row.lmcaValue])),
+    {
+      rated_critiques: 951,
+      ratings_ignoring_revisions: 1458,
+      model_written_critiques: 478,
+      positions_with_at_least_one_critique: 442,
+      positions_with_at_least_two_critiques: 279,
+    },
+  );
   assert.equal(comparison.sourceScaleComparison.find((row) => row.metric === "rated_critiques").releaseValue, 5);
   assert.equal(comparison.sourceScaleComparison.find((row) => row.metric === "rated_critiques").lmcaValue, 951);
+  assert.deepEqual(
+    Object.fromEntries(comparison.positionSourceComparison.map((row) => [row.sourceCategory, row.lmcaCount])),
+    {
+      hand_written: 27,
+      book_adapted: 168,
+      coursework_derived: 41,
+      magazine_blog_forum_derived: 108,
+      primarily_model_written: 68,
+      other_dataset_adapted: 28,
+    },
+  );
+  assert.deepEqual(comparison.knownOtherDatasetSubsources, { DebateBench: 18, VivesDebate: 6 });
   assert.equal(comparison.positionSourceComparison.find((row) => row.sourceCategory === "magazine_blog_forum_derived").status, "missing_from_seed");
+  assert.deepEqual(
+    comparison.topicFamilyComparison.map((row) => row.topicFamily),
+    ["ai_safety", "decision_theory", "normative_ethics", "philosophy_of_mind", "politics", "miscellaneous"],
+  );
   assert.equal(comparison.topicFamilyComparison.find((row) => row.topicFamily === "decision_theory").status, "missing_from_seed");
   assert.equal(comparison.raterCompositionComparison.status, "seed_rater_composition_not_comparable");
+  assert.deepEqual(
+    comparison.raterContributionComparison
+      .filter((row) => row.sourceTable === "LMCA Table 1")
+      .map((row) => [row.rater, row.lmcaCount, row.countingRule]),
+    [
+      ["Emery Cooper", 946, "ratings_ignoring_revisions"],
+      ["Caspar Oesterheld", 211, "ratings_ignoring_revisions"],
+      ["Alexander Kastner", 130, "ratings_ignoring_revisions"],
+      ["Linh Chi Nguyen", 103, "ratings_ignoring_revisions"],
+      ["Lukas Gloor", 43, "ratings_ignoring_revisions"],
+      ["Lukas Finnveden", 25, "ratings_ignoring_revisions"],
+    ],
+  );
+  assert.deepEqual(comparison.raterCompositionComparison.comparisonTable, comparison.raterContributionComparison);
+  assert.deepEqual(
+    Object.fromEntries(comparison.modelDenominatorComparison.map((row) => [row.metric, row.lmcaValue])),
+    {
+      weighted_pairwise_positions: 255,
+      weighted_pairwise_critique_pairs: 856,
+      custom_metric_dialogues: 933,
+    },
+  );
   assert.equal(comparison.modelDenominatorComparison.find((row) => row.metric === "custom_metric_dialogues").lmcaValue, 933);
   assert.equal(comparison.modelScoreAnchorComparison.anchorCount, 7);
   assert.equal(comparison.modelScoreAnchorComparison.lowerIsBetter, true);

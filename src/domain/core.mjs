@@ -1,3 +1,13 @@
+import {
+  GATE_DECISION_STATUSES,
+  REVIEW_SIGNAL_RATER_HIDDEN_VISIBILITY_CLASSES,
+  REVIEW_SIGNAL_SOURCES,
+  WORKFLOW_GATES,
+  WORKFLOW_POLICIES,
+  gatesSatisfiedForPolicy,
+  requiredGateIdsForPolicy,
+} from "./contributions.mjs";
+
 export const RUBRIC_DIMENSIONS = [
   "centrality",
   "strength",
@@ -23,6 +33,442 @@ function version(id, text) {
   };
 }
 
+export const REQUIRED_POSITION_CONCEPTUAL_SCOPE_STATUSES = [
+  "primarily_conceptual",
+  "mixed_conceptual_non_conceptual",
+  "primarily_non_conceptual",
+  "scope_unclear",
+];
+
+export const REQUIRED_POSITION_GROUND_TRUTH_AVAILABILITY_STATUSES = [
+  "no_realistically_accessible_ground_truth",
+  "verifiable_subclaims_present",
+  "realistically_accessible_ground_truth",
+  "ground_truth_unclear",
+];
+
+export const REQUIRED_POSITION_ACCEPTED_METHODOLOGY_STATUSES = [
+  "no_widely_accepted_resolution_methodology",
+  "mixed_methodology_governed_subclaims",
+  "accepted_methodology_available",
+  "methodology_unclear",
+];
+
+export const REQUIRED_POSITION_CONTEXT_SUFFICIENCY_STATUSES = [
+  "sufficient",
+  "needs_normalization",
+  "context_insufficient",
+  "needs_review",
+];
+
+export const REQUIRED_POSITION_INTAKE_NORMALIZATION_STATUSES = [
+  "not_needed",
+  "expert_normalization_required",
+  "expert_normalized",
+  "rights_review_normalized",
+  "operator_intake_pending_review",
+];
+
+export const REQUIRED_POSITION_HEADLINE_ELIGIBILITY_STATUSES = [
+  "eligible",
+  "internal_validation_only_until_normalized",
+  "expert_normalization_required",
+  "declared_comparison_or_stress_test",
+  "excluded_nonconceptual_scope",
+  "review_required",
+];
+
+export const SOURCE_INTAKE_PHASE = "phase1_source_intake_only";
+export const SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS = "not_integrated_phase_1";
+export const SOURCE_INTAKE_VISIBILITY = "admin_only_not_rater_visible";
+export const SOURCE_CARD_TYPES = ["book", "article", "paper", "blog_forum_magazine", "dataset", "coursework", "other"];
+export const SOURCE_SPAN_KINDS = ["argumentative_claim", "argument_context", "objection_target", "definition", "example", "other"];
+export const SOURCE_CARD_TASK_FORMATS = ["position_source", "critique_source", "mixed_position_and_critique_source", "background_context_source"];
+export const SOURCE_CARD_TRANSLATION_STATUSES = ["original_language", "human_translated", "machine_translated", "mixed_or_unknown"];
+export const SOURCE_CARD_ACCESS_POLICIES = [
+  "admin_review_only",
+  "internal_review_allowed",
+  "rights_cleared_for_preparation",
+  "metadata_only_until_rights_review",
+];
+export const SOURCE_CARD_RELEASE_POLICIES = [
+  "not_releasable_raw_source",
+  "prepared_text_only_after_review",
+  "metadata_only_public_reference",
+  "rights_cleared_excerpt_after_review",
+];
+export const SOURCE_SPAN_SEGMENTATION_STATUSES = ["manually_selected", "imported_locator", "needs_respan", "superseded"];
+export const SOURCE_SPAN_EXTRACTION_STATUSES = [
+  "not_extracted",
+  "selected_for_extraction",
+  "extraction_imported",
+  "reviewed",
+  "superseded",
+];
+export const SOURCE_INTAKE_FORBIDDEN_DOWNSTREAM_FIELDS = [
+  "preparedDraft",
+  "preparedDrafts",
+  "preparedDraftId",
+  "preparedDraftIds",
+  "reviewSignal",
+  "reviewSignals",
+  "reviewSignalId",
+  "reviewSignalIds",
+  "workflowGate",
+  "workflowGates",
+  "workflowGateId",
+  "workflowGateIds",
+  "workflowPolicy",
+  "workflowPolicies",
+  "workflowPolicyId",
+  "workflowPolicyIds",
+  "gateDecision",
+  "gateDecisions",
+  "gateDecisionId",
+  "gateDecisionIds",
+  "candidateItem",
+  "candidateItems",
+  "candidateItemId",
+  "candidateItemIds",
+  "candidateBatch",
+  "candidateBatches",
+  "candidateBatchId",
+  "candidateBatchIds",
+  "candidateBatchMembership",
+  "candidateBatchMemberships",
+  "candidateBatchMembershipId",
+  "candidateBatchMembershipIds",
+  "promotionRecord",
+  "promotionRecords",
+  "promotionRecordId",
+  "promotionRecordIds",
+  "queueItem",
+  "queueItems",
+  "queueItemId",
+  "queueItemIds",
+  "liveQueueItem",
+  "liveQueueItems",
+  "liveQueueItemId",
+  "liveQueueItemIds",
+];
+export const ARGUMENT_EXTRACTION_ACCEPTED_REVIEW_STATUSES = [
+  "accepted_for_position_intake",
+  "accepted_for_critique_intake",
+  "accepted_for_source_preparation",
+];
+export const ARGUMENT_EXTRACTION_REVIEW_STATUSES = [
+  "pending_admin_review",
+  ...ARGUMENT_EXTRACTION_ACCEPTED_REVIEW_STATUSES,
+  "needs_revision",
+  "rejected",
+  "deferred",
+];
+export const ARGUMENT_EXTRACTION_METHODS = [
+  "manual_jsonl_import",
+  "operator_entered_jsonl_import",
+  "external_jsonl_import_no_platform_ai_execution",
+];
+export const ARGUMENT_EXTRACTION_ROLES = [
+  "position_argument",
+  "critique_argument",
+  "mixed_position_and_critique",
+];
+
+const SOURCE_INTAKE_ADMIN_WRITE_ROUTES = [
+  "/api/v1/admin/sources",
+  "/api/v1/admin/sources/{id}/spans",
+];
+const SOURCE_INTAKE_JSONL_IMPORT_ROUTES = [
+  "/api/v1/extraction-batches/import-jsonl",
+  "/api/v1/admin/extractions/import-jsonl",
+  "/api/v1/admin/sources/{id}/extract",
+];
+const SOURCE_INTAKE_REVIEW_ROUTES = ["/api/v1/admin/extractions/{id}/review"];
+const SOURCE_INTAKE_READBACK_ROUTES = [
+  "/api/v1/source-cards",
+  "/api/v1/source-spans",
+  "/api/v1/extraction-batches",
+  "/api/v1/argument-extractions",
+  "/api/v1/admin/extractions/{id}",
+];
+const SOURCE_PREPARATION_ADMIN_WRITE_ROUTES = [
+  "/api/v1/admin/extractions/{id}/create-prepared-position",
+  "/api/v1/admin/extractions/{id}/create-prepared-critique",
+  "/api/v1/admin/prepared-drafts/{id}/review",
+  "/api/v1/admin/prepared-drafts/{id}/promote",
+];
+const SOURCE_PREPARATION_READBACK_ROUTES = [
+  "/api/v1/admin/prepared-drafts",
+  "/api/v1/admin/review-signals",
+  "/api/v1/admin/gate-decisions",
+  "/api/v1/admin/candidate-items",
+  "/api/v1/admin/promotion-records",
+];
+const SOURCE_WORKBENCH_READBACK_ROUTES = [
+  "/api/v1/metaphilosophy/source-workbench-readiness",
+  "/api/v1/metaphilosophy/source-workbench-template",
+];
+
+export const METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS = [
+  "research_spine",
+  "intake_spine",
+  "evaluation_spine",
+  "operating_shell",
+];
+
+export const METAPHILOSOPHY_GREENFIELD_ARCHITECTURE_LAYERS = [
+  {
+    id: "research_spine",
+    label: "Research spine",
+    role: "Minimum artifact chain needed to measure philosophical critique quality.",
+    artifactFamilies: [
+      "frozen_position_text",
+      "critique_text",
+      "blind_human_expert_labels",
+      "label_snapshots",
+      "split_manifests",
+      "scoring_code",
+      "model_outputs",
+      "release_reports",
+    ],
+    boundaryRule:
+      "LMCA-direct release claims are grounded here; operating-shell safeguards may protect these artifacts but must not redefine the measured label target.",
+    releaseClaimRole: "claim_foundation",
+  },
+  {
+    id: "intake_spine",
+    label: "Intake spine",
+    role: "Minimum path for creating high-quality candidate positions and critiques.",
+    artifactFamilies: [
+      "source_cards",
+      "source_spans",
+      "argument_extractions",
+      "position_intake_readiness",
+      "candidate_critique_generation_or_ingestion",
+      "review_before_live_use",
+    ],
+    boundaryRule:
+      "Source-derived or generated material cannot reach raters, candidates, batches, or queues until human review and existing candidate governance approve it.",
+    releaseClaimRole: "corpus_production_control",
+  },
+  {
+    id: "evaluation_spine",
+    label: "Evaluation spine",
+    role: "Minimum path for measuring AI systems on declared philosophical tasks.",
+    artifactFamilies: [
+      "task_tracks",
+      "fixed_prompt_input_contracts",
+      "model_output_schemas",
+      "parser_configs",
+      "metric_configs",
+      "target_label_snapshots",
+      "hidden_split_access_policy",
+    ],
+    boundaryRule:
+      "Each evaluation claim must bind a task track, prompt/input contract, parser, metric, target snapshot, and split-access policy before leaderboard use.",
+    releaseClaimRole: "model_measurement_control",
+  },
+  {
+    id: "operating_shell",
+    label: "Operating shell",
+    role: "Safeguards that protect the spines at volunteer-platform scale.",
+    artifactFamilies: [
+      "visibility_policy",
+      "source_blinding",
+      "conflict_exposure_rules",
+      "implementation_phase_gates",
+      "audit_logs",
+      "ux_simplification",
+      "rater_governance",
+      "release_governance",
+    ],
+    boundaryRule:
+      "A shell feature belongs in release-critical scope only when it protects the research spine, improves rater reliability, improves release reproducibility, or enables a declared evaluation/training use.",
+    releaseClaimRole: "safeguard_boundary",
+  },
+];
+
+export const METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS = [
+  "critique_rating",
+  "critique_ranking",
+  "critique_generation",
+  "critique_revision",
+  "position_revision_reply",
+  "adjudication_explanation",
+];
+
+export const METAPHILOSOPHY_TASK_TRACK_LMCA_RELATIONSHIPS = [
+  "lmca_direct",
+  "lmca_direct_metric_view",
+  "project_extension",
+  "rd_backlog_extension",
+  "project_governance_extension",
+];
+
+export const METAPHILOSOPHY_TASK_TRACKS = [
+  {
+    id: "critique_rating",
+    label: "Critique rating",
+    lmcaRelationship: "lmca_direct",
+    modelInput: { summary: "One position plus one candidate critique", fields: ["position_text", "critique_text", "rubric_instructions"] },
+    modelOutput: { summary: "Seven-dimensional LMCA score vector", fields: RUBRIC_DIMENSIONS },
+    humanExpertTarget: "Frozen blind human expert rating or adjudicated target score vector",
+    primaryMetricFamilies: ["custom_weighted_loss", "overall_only_baseline", "pairwise_from_scores"],
+    labelTiming: "Blind initial rating before discussion; post-discussion revisions are preserved separately.",
+    blindToModelPolicy: "Human labels are collected blind to model predictions before predictions are shown to raters.",
+    splitPolicy: "Split by position cluster so related critiques do not cross hidden/dev/train boundaries.",
+    trainingExportPolicy: "Eligible only after release gates, source-blinding checks, and training-export policy approval.",
+  },
+  {
+    id: "critique_ranking",
+    label: "Critique ranking",
+    lmcaRelationship: "lmca_direct_metric_view",
+    modelInput: { summary: "One position plus two or more critiques", fields: ["position_text", "critique_texts", "ranking_instruction"] },
+    modelOutput: { summary: "Ordered critique preference or pairwise preference", fields: ["preferred_critique_id", "ranking", "tie_or_abstain"] },
+    humanExpertTarget: "Human pairwise or ranking target derived from blind score comparisons or explicit expert ranking labels.",
+    primaryMetricFamilies: ["pairwise_preference_accuracy", "rank_correlation", "tie_calibrated_loss"],
+    labelTiming: "Ranking labels or derived comparisons freeze after blind human evidence is locked.",
+    blindToModelPolicy: "Ranking targets remain hidden from model runs and public feedback until release.",
+    splitPolicy: "Use the same position-cluster split as critique rating to prevent sibling leakage.",
+    trainingExportPolicy: "Export only ranking labels that are approved for training use and separated from hidden benchmark items.",
+  },
+  {
+    id: "critique_generation",
+    label: "Critique generation",
+    lmcaRelationship: "project_extension",
+    modelInput: { summary: "A position with optional blind-safe context", fields: ["position_text", "allowed_context", "generation_instruction"] },
+    modelOutput: { summary: "A candidate critique draft", fields: ["generated_critique_text", "generation_metadata"] },
+    humanExpertTarget: "Expert review of generated critiques using the normal candidate-review workflow before any live rating use.",
+    primaryMetricFamilies: ["candidate_acceptance_rate", "post_review_rating_distribution", "source_leakage_rejection_rate"],
+    labelTiming: "Generated text is evaluated only after candidate intake and source-blinding review.",
+    blindToModelPolicy: "Generation outputs cannot see hidden labels, rater notes, or protected benchmark targets.",
+    splitPolicy: "Generated critiques inherit the source position split and cannot enter hidden evaluation without promotion gates.",
+    trainingExportPolicy: "Generated drafts are exportable only as candidate artifacts after promotion and explicit training permission.",
+  },
+  {
+    id: "critique_revision",
+    label: "Critique revision",
+    lmcaRelationship: "rd_backlog_extension",
+    modelInput: { summary: "A position, critique draft, and blind-safe revision instruction", fields: ["position_text", "critique_draft", "revision_goal"] },
+    modelOutput: { summary: "A revised critique draft", fields: ["revised_critique_text", "change_summary"] },
+    humanExpertTarget: "Pilot-only expert assessment of whether revisions improve centrality, strength, correctness, and clarity.",
+    primaryMetricFamilies: ["revision_win_rate", "dimension_delta_after_review", "reviewer_acceptance_rate"],
+    labelTiming: "Revision experiments must be labeled after initial rating lock and cannot rewrite original ratings.",
+    blindToModelPolicy: "Revision models cannot see hidden labels, adjudication outcomes, or non-public source metadata.",
+    splitPolicy: "Keep original and revised variants in the same split family; do not let variants cross hidden/dev/train boundaries.",
+    trainingExportPolicy: "Not a default training export; requires a pilot policy and separate export approval.",
+  },
+  {
+    id: "position_revision_reply",
+    label: "Position revision / reply-to-critique",
+    lmcaRelationship: "rd_backlog_extension",
+    modelInput: { summary: "A position plus critique or reviewer prompt", fields: ["position_text", "critique_or_prompt", "reply_or_revision_instruction"] },
+    modelOutput: { summary: "A revised position or reply", fields: ["revised_position_text", "reply_text", "change_summary"] },
+    humanExpertTarget: "Pilot-only expert judgment of whether the revision/reply preserves the target while addressing critique pressure.",
+    primaryMetricFamilies: ["revision_helpfulness_rate", "target_preservation_rate", "expert_acceptance_rate"],
+    labelTiming: "Position/reply labels are separate from LMCA critique-rating labels and must not alter frozen targets.",
+    blindToModelPolicy: "Models cannot use hidden benchmark labels, adjudication memos, or raw source metadata.",
+    splitPolicy: "Use position-family split isolation so revised and unrevised versions remain together.",
+    trainingExportPolicy: "Not a default training export; requires explicit experiment approval and candidate promotion.",
+  },
+  {
+    id: "adjudication_explanation",
+    label: "Adjudication explanation",
+    lmcaRelationship: "project_governance_extension",
+    modelInput: { summary: "A disagreement case with blind-safe rating evidence", fields: ["position_text", "critique_text", "rating_disagreement_summary"] },
+    modelOutput: { summary: "A proposed adjudication explanation", fields: ["adjudication_summary", "dimension_level_rationale"] },
+    humanExpertTarget: "Adjudicator-authored or adjudicator-approved explanation after disagreement review.",
+    primaryMetricFamilies: ["explanation_acceptance_rate", "rubric_clause_alignment", "adjudicator_edit_distance"],
+    labelTiming: "Adjudication explanations are created after blind initial ratings and discussion evidence are locked.",
+    blindToModelPolicy: "Models cannot see protected hidden labels or unredacted rater identities.",
+    splitPolicy: "Adjudication cases inherit their underlying position-cluster split and protected-artifact controls.",
+    trainingExportPolicy: "Export only if adjudication policy marks explanation data as training eligible.",
+  },
+];
+
+export const METAPHILOSOPHY_RD_BACKLOG_ITEMS = [
+  {
+    id: "direct_pairwise_preference_labels",
+    title: "Direct human pairwise preference labels",
+    experimentType: "label_design_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show improved measurement validity or rater reliability before this can affect release gates.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Must not replace score-derived LMCA targets until pilot reliability is reviewed.",
+  },
+  {
+    id: "ai_suggested_target_maps_after_lock",
+    title: "AI-suggested target maps after initial human lock",
+    experimentType: "post_lock_assistance_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show improved rater reliability or model-evaluation usefulness after initial lock without steering scores.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "May be shown only after initial human labels are locked and source-blinding controls pass.",
+  },
+  {
+    id: "critique_revision_benchmark",
+    title: "Critique-revision benchmark",
+    experimentType: "benchmark_extension_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show model-evaluation usefulness and measurement validity for revised-critique before/after scoring.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Must stay separate from critique-rating release claims until task-specific labels and metrics exist.",
+  },
+  {
+    id: "position_revision_reply_benchmark",
+    title: "Position-revision / reply benchmark",
+    experimentType: "benchmark_extension_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show model-evaluation usefulness and measurement validity under a new position-revision rubric.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Must not rewrite source positions or frozen ratings without candidate-review and split governance.",
+  },
+  {
+    id: "cross_tradition_multilingual_coverage",
+    title: "Cross-tradition and multilingual philosophy coverage",
+    experimentType: "coverage_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show measurement validity and rater reliability after translation and source-recognition risk review.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Requires translation-artifact and rater-qualification evidence before release claims expand.",
+  },
+  {
+    id: "expert_only_vs_expert_supervised_volunteer",
+    title: "Expert-only versus expert-supervised volunteer comparison",
+    experimentType: "measurement_design_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show rater reliability and measurement validity differences across expert and supervised volunteer groups.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Must compare measurement quality without changing current rater-qualification gates.",
+  },
+  {
+    id: "dynamic_active_learning_corpus_construction",
+    title: "Dynamic active-learning corpus construction",
+    experimentType: "corpus_construction_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show model-evaluation usefulness without biasing fixed-split controls or hidden benchmark clusters.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Cannot feed live queues or hidden splits without candidate intake and exposure governance.",
+  },
+  {
+    id: "rater_cognitive_load_ab_tests",
+    title: "Rater cognitive-load A/B tests",
+    experimentType: "ux_measurement_pilot",
+    releaseGateStatus: "not_release_gate_without_pilot_evidence",
+    directRequirement: false,
+    pilotEvidenceRequirement: "Pilot evidence must show rater reliability or measurement validity improvement on non-protected items before protected use.",
+    promotionGovernance: "Promotion requires a later governed policy decision before any release-gate, hidden-benchmark, or training-export use.",
+    governanceBoundary: "Must preserve rubric semantics, accessibility evidence, and protected split UI-variant controls.",
+  },
+];
+
 export const positions = [
   {
     id: "pos-ai-prior",
@@ -38,6 +484,7 @@ export const positions = [
     llmAssistance: "none",
     conceptualScope: "primarily_conceptual",
     groundTruthAvailability: "no_realistically_accessible_ground_truth",
+    acceptedMethodologyStatus: "no_widely_accepted_resolution_methodology",
     nonConceptualDependencyNotes: "No checkable empirical subclaim is central to the target.",
     contextSufficiency: "sufficient",
     assumedBackgroundPolicy: "Ordinary familiarity with forecasting arguments is enough.",
@@ -82,6 +529,7 @@ export const positions = [
     llmAssistance: "edited",
     conceptualScope: "mixed_conceptual_non_conceptual",
     groundTruthAvailability: "verifiable_subclaims_present",
+    acceptedMethodologyStatus: "mixed_methodology_governed_subclaims",
     nonConceptualDependencyNotes: "Empirical claims about voter behavior must be separated from the conceptual incentive argument.",
     contextSufficiency: "needs_normalization",
     assumedBackgroundPolicy: "Assume standard single-winner election terminology only.",
@@ -126,6 +574,7 @@ export const positions = [
     llmAssistance: "none",
     conceptualScope: "primarily_conceptual",
     groundTruthAvailability: "no_realistically_accessible_ground_truth",
+    acceptedMethodologyStatus: "no_widely_accepted_resolution_methodology",
     nonConceptualDependencyNotes: "Neuroscience facts are background only; the target is a conceptual identity claim.",
     contextSufficiency: "sufficient",
     assumedBackgroundPolicy: "Assume only the position's own characterization of functional role.",
@@ -431,6 +880,23 @@ export const ratingContextSnapshots = [
   },
 ];
 
+export function scoreExplanationOverallProductDiagnostic(scores = {}, threshold = 0.25) {
+  const overallScore = Number.isFinite(scores?.overall) ? round(scores.overall) : null;
+  const centrality = Number.isFinite(scores?.centrality) ? scores.centrality : null;
+  const strength = Number.isFinite(scores?.strength) ? scores.strength : null;
+  const centralityStrengthProduct = centrality !== null && strength !== null ? round(centrality * strength) : null;
+  const absoluteGap = overallScore !== null && centralityStrengthProduct !== null ? round(Math.abs(overallScore - centralityStrengthProduct)) : null;
+  const triggerFired = absoluteGap !== null && absoluteGap >= threshold;
+  return {
+    overallScore,
+    centralityStrengthProduct,
+    absoluteGap,
+    threshold,
+    triggerFired,
+    status: absoluteGap === null ? "not_computable_missing_subscore" : triggerFired ? "overall_product_gap_triggered" : "within_threshold",
+  };
+}
+
 const baseRating = {
   rubricVersion: "lmca-app-f-2026-10",
   scoreInputPolicyId: "score-input-policy-october-2026-demo",
@@ -441,7 +907,10 @@ const baseRating = {
   scoreExplanation: "",
   scoreExplanationRequired: false,
   scoreExplanationTriggers: [],
+  scoreExplanationRequiredReasons: [],
+  scoreExplanationPromptShown: false,
   scoreExplanationPromptVisibility: "label_source_protected_status_blind",
+  scoreExplanationCompletionStatus: "ordinary_note_optional",
   submittedAt: now,
   lockedAt: now,
   activeSeconds: 760,
@@ -450,7 +919,16 @@ const baseRating = {
 };
 
 function rating(input) {
-  return { ...baseRating, ...input };
+  const record = { ...baseRating, ...input };
+  return {
+    ...record,
+    scoreExplanationRequiredReasons: input.scoreExplanationRequiredReasons ?? record.scoreExplanationTriggers ?? [],
+    scoreExplanationPromptShown: input.scoreExplanationPromptShown ?? record.scoreExplanationRequired === true,
+    scoreExplanationCompletionStatus:
+      input.scoreExplanationCompletionStatus ?? (record.scoreExplanationRequired ? "triggered_explanation_complete" : "ordinary_note_optional"),
+    overallVsCentralityStrengthDiagnostic:
+      record.overallVsCentralityStrengthDiagnostic ?? scoreExplanationOverallProductDiagnostic(record.scores),
+  };
 }
 
 export const seedRatings = [
@@ -1436,6 +1914,44 @@ export const RUBRIC_QA_REQUIRED_FAMILIES = [
   "verbosity_dead_weight_distinction",
 ];
 
+const REQUIRED_RUBRIC_QA_EXEMPLAR_TYPES = [
+  "worked_example",
+  "counterexample",
+  "adversarial_interpretation_guidance",
+  "priced_in_exemplar",
+];
+
+const REQUIRED_RUBRIC_CERTIFICATION_CURRICULUM_MODULES = [
+  {
+    id: "interpretation_target_discipline",
+    requiredFamilies: ["somewhat_literal_reading", "equal_plausibility_ambiguity", "favorable_but_nonexclusive_ambiguity"],
+  },
+  {
+    id: "vague_and_imprecise_critique_handling",
+    requiredFamilies: ["vague_good_objection_not_steelmanned", "clearly_unsatisfactory_imprecision", "clarity_after_effort_pin_downability"],
+  },
+  {
+    id: "priced_in_and_background_cases",
+    requiredFamilies: ["priced_in_awareness", "background_knowledge_dependence", "clarity_vs_topic_expertise"],
+  },
+  {
+    id: "adversarial_ambiguity_and_multi_interpretation",
+    requiredFamilies: ["equal_plausibility_ambiguity", "high_score_multi_interpretation_coverage"],
+  },
+  {
+    id: "dead_weight_and_pseudo_substance",
+    requiredFamilies: ["content_free_pseudo_substance_dead_weight", "dead_weight_litmus", "verbosity_dead_weight_distinction"],
+  },
+  {
+    id: "strength_centrality_and_correctness_calibration",
+    requiredFamilies: [
+      "fractional_centrality_strength_scale",
+      "strength_assessed_against_centrality_generating_targets",
+      "correctness_significance_weighting",
+    ],
+  },
+];
+
 export const rubricQaFixtures = [
   {
     id: "fixture-source-anchor-public",
@@ -1443,6 +1959,7 @@ export const rubricQaFixtures = [
     invariant: "LMCA public examples are calibration and prompt-regression fixtures, not protected benchmark rows.",
     coveredFamilies: ["source_example_anchor_cases", "argument_quality_not_persuasion_or_agreement"],
     targetDimensions: ["overall", "centrality", "strength"],
+    exemplarTypes: ["worked_example"],
     source: "lmca_public_example_anchor_suite",
   },
   {
@@ -1451,6 +1968,7 @@ export const rubricQaFixtures = [
     invariant: "Do not import unstated goals, intended conclusions, or background views into the position.",
     coveredFamilies: ["somewhat_literal_reading", "priced_in_awareness"],
     targetDimensions: ["centrality", "strength", "overall"],
+    exemplarTypes: ["counterexample", "priced_in_exemplar"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1459,6 +1977,7 @@ export const rubricQaFixtures = [
     invariant: "`X may not be true`, `X is unsupported`, and `X is false` can attack the same central claim.",
     coveredFamilies: ["hedged_vs_categorical_centrality_target_invariance", "combined_centrality"],
     targetDimensions: ["centrality"],
+    exemplarTypes: ["worked_example"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1467,6 +1986,7 @@ export const rubricQaFixtures = [
     invariant: "Centrality and strength calibrate 0, 0.5, and 1 as approximate weakening/refutation magnitudes, not vague ordinal categories.",
     coveredFamilies: ["fractional_centrality_strength_scale", "strength_assessed_against_centrality_generating_targets"],
     targetDimensions: ["centrality", "strength"],
+    exemplarTypes: ["worked_example"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1475,6 +1995,7 @@ export const rubricQaFixtures = [
     invariant: "`centrality * strength` tracks overall weakening; failed extra attacks are handled through correctness, single_issue, dead_weight, or overall where warranted.",
     coveredFamilies: ["failed_added_attack_product_invariance", "asserted_confidence_strength_separation"],
     targetDimensions: ["centrality", "strength", "correctness", "single_issue", "dead_weight"],
+    exemplarTypes: ["counterexample"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1483,6 +2004,7 @@ export const rubricQaFixtures = [
     invariant: "A critique that only gestures toward a good objection receives low strength until it spells out the object-level reason.",
     coveredFamilies: ["vague_good_objection_not_steelmanned", "simple_disagreement_low_strength"],
     targetDimensions: ["strength", "clarity", "overall"],
+    exemplarTypes: ["counterexample"],
     source: "appendix_d_f_operational_pack",
   },
   {
@@ -1491,6 +2013,7 @@ export const rubricQaFixtures = [
     invariant: "Clearly bad imprecision, content-free pseudo-substance, and fluent masked fallacies are separate low-quality cases.",
     coveredFamilies: ["clearly_unsatisfactory_imprecision", "content_free_pseudo_substance_dead_weight", "obfuscated_surface_fluency", "dead_weight_litmus"],
     targetDimensions: ["clarity", "dead_weight", "overall"],
+    exemplarTypes: ["counterexample"],
     source: "appendix_d_f_operational_pack",
   },
   {
@@ -1499,6 +2022,7 @@ export const rubricQaFixtures = [
     invariant: "Rater unfamiliarity routes to topic-fit review; it should not automatically lower clarity or correctness.",
     coveredFamilies: ["background_knowledge_dependence", "clarity_vs_topic_expertise", "rater_familiarity_non_penalization"],
     targetDimensions: ["clarity", "correctness"],
+    exemplarTypes: ["counterexample"],
     source: "appendix_d_f_operational_pack",
   },
   {
@@ -1507,6 +2031,7 @@ export const rubricQaFixtures = [
     invariant: "Subjective or intuition-pump premises preserve credence-sensitive minority rationales rather than pretending binary verification.",
     coveredFamilies: ["contentious_bottom_line_dependence", "subjective_intuition_pump_correctness", "mid_range_strength_uncertainty"],
     targetDimensions: ["strength", "correctness", "overall"],
+    exemplarTypes: ["adversarial_interpretation_guidance"],
     source: "appendix_c_d_f_operational_pack",
   },
   {
@@ -1515,6 +2040,7 @@ export const rubricQaFixtures = [
     invariant: "Correct claims with low strength and strong critiques with imperfect correctness are calibrated separately by claim significance.",
     coveredFamilies: ["correctness_significance_weighting", "low_strength_but_correct", "perfect_strength_imperfect_correctness"],
     targetDimensions: ["correctness", "strength", "overall"],
+    exemplarTypes: ["worked_example"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1523,6 +2049,7 @@ export const rubricQaFixtures = [
     invariant: "Clarity measures pin-downability after appropriate effort, not immediate ease or familiarity with the topic.",
     coveredFamilies: ["clarity_after_effort_pin_downability", "rater_familiarity_non_penalization"],
     targetDimensions: ["clarity"],
+    exemplarTypes: ["worked_example"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1531,6 +2058,7 @@ export const rubricQaFixtures = [
     invariant: "A tone or style complaint without object-level argumentative content should not be rewarded as strength.",
     coveredFamilies: ["tone_only_comments", "dead_weight_litmus"],
     targetDimensions: ["strength", "dead_weight", "overall"],
+    exemplarTypes: ["counterexample"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1539,6 +2067,7 @@ export const rubricQaFixtures = [
     invariant: "Brief independent side issues get in-between single_issue scores; multiple claims can still be one issue when jointly needed.",
     coveredFamilies: ["in_between_single_issue_side_issue", "necessary_multi_claim_single_issue"],
     targetDimensions: ["single_issue", "overall"],
+    exemplarTypes: ["worked_example"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1547,6 +2076,7 @@ export const rubricQaFixtures = [
     invariant: "Equally plausible interpretations need multi-interpretation coverage; favorable but nonexclusive readings receive in-between scores weighted toward the adverse reading.",
     coveredFamilies: ["equal_plausibility_ambiguity", "favorable_but_nonexclusive_ambiguity", "high_score_multi_interpretation_coverage"],
     targetDimensions: ["centrality", "strength", "overall"],
+    exemplarTypes: ["adversarial_interpretation_guidance", "counterexample"],
     source: "appendix_f_operational_pack",
   },
   {
@@ -1555,6 +2085,7 @@ export const rubricQaFixtures = [
     invariant: "Verbose explanation can be useful if it identifies a concrete flaw; empty verbosity is dead weight.",
     coveredFamilies: ["verbosity_dead_weight_distinction", "content_free_pseudo_substance_dead_weight"],
     targetDimensions: ["dead_weight", "clarity"],
+    exemplarTypes: ["counterexample"],
     source: "appendix_f_operational_pack",
   },
 ];
@@ -1659,6 +2190,9 @@ export const OCTOBER_RELEASE_TARGETS = {
   personWeeksRange: [132, 154],
   budgetRangeUsd: [600000, 1000000],
 };
+
+export const OCTOBER_TARGET_SCALE_INCOMPLETE_STATUS =
+  "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings_60_gold_items_appendix_c_validation";
 
 export const VALIDATION_TRANCHE_TYPES = ["random_sentinel", "hard_case_stress"];
 export const VALIDATION_TRANCHE_REQUIRED_COMPARISONS = [
@@ -2936,6 +3470,16 @@ export function validateTriggeredScoreExplanation(text) {
   return { ok: true };
 }
 
+export function scoreExplanationCompletionStatusForRating({ explanationRequired = false, scoreExplanationRequired = false, scoreExplanation = "" } = {}) {
+  if (!explanationRequired) {
+    const explanationText = typeof scoreExplanation === "string" ? scoreExplanation.trim() : "";
+    return explanationText || scoreExplanationRequired === true ? "ordinary_explanation_not_allowed" : "ordinary_note_optional";
+  }
+  return scoreExplanationRequired === true && validateTriggeredScoreExplanation(scoreExplanation).ok
+    ? "triggered_explanation_complete"
+    : "triggered_explanation_review_required";
+}
+
 export function ratingObfuscationNoteForRating(rating = {}) {
   const value = rating.obfuscationNote ?? rating.obfuscation_note ?? "";
   return typeof value === "string" ? value.trim() : value;
@@ -3010,7 +3554,11 @@ export function buildScoreExplanationAuditReport(releaseId, ratings = seedRating
       ordinaryRowsWithGeneralNotes: rows.filter((row) => !row.explanationRequired && row.generalRatingNotePresent).length,
       ordinaryRowsWithDisallowedScoreExplanation: rows.filter((row) => row.reviewReasons.includes("scoreExplanation:ordinary_not_allowed")).length,
       triggerMismatchRows: rows.filter((row) => row.missingExpectedTriggers.length || row.unexpectedSubmittedTriggers.length).length,
+      requiredReasonMismatchRows: rows.filter((row) => row.reviewReasons.some((reason) => reason.startsWith("scoreExplanationRequiredReasons"))).length,
       promptVisibilityViolationRows: rows.filter((row) => row.reviewReasons.includes("scoreExplanationPromptVisibility")).length,
+      promptShownMismatchRows: rows.filter((row) => row.reviewReasons.some((reason) => reason.startsWith("scoreExplanationPromptShown"))).length,
+      completionStatusMismatchRows: rows.filter((row) => row.reviewReasons.some((reason) => reason.startsWith("scoreExplanationCompletionStatus"))).length,
+      productDiagnosticMismatchRows: rows.filter((row) => row.reviewReasons.some((reason) => reason.startsWith("overallVsCentralityStrengthDiagnostic"))).length,
       submittedScoreExplanationPolicyCount: submittedPolicyRows.length,
       policyBoundRows: rows.filter((row) => row.policyBindingStatus === "score_explanation_policy_bound").length,
       policyBindingReviewRows: rows.filter((row) => row.policyBindingStatus !== "score_explanation_policy_bound").length,
@@ -3034,9 +3582,22 @@ function normalizeScoreExplanationAuditRow(rating, assignment, scoreExplanationP
   });
   const missingExpectedTriggers = expectedTriggers.filter((trigger) => !submittedTriggers.includes(trigger));
   const unexpectedSubmittedTriggers = submittedTriggers.filter((trigger) => !expectedTriggers.includes(trigger));
+  const submittedRequiredReasons = normalizeStringArray(rating.scoreExplanationRequiredReasons);
+  const missingRequiredReasons = expectedTriggers.filter((trigger) => !submittedRequiredReasons.includes(trigger));
+  const unexpectedRequiredReasons = submittedRequiredReasons.filter((trigger) => !expectedTriggers.includes(trigger));
   const explanationRequired = expectedTriggers.length > 0;
   const explanationText = typeof rating.scoreExplanation === "string" ? rating.scoreExplanation.trim() : "";
   const triggeredExplanationValidation = explanationRequired ? validateTriggeredScoreExplanation(explanationText) : { ok: true };
+  const expectedCompletionStatus = scoreExplanationCompletionStatusForRating({
+    explanationRequired,
+    scoreExplanationRequired: rating.scoreExplanationRequired === true,
+    scoreExplanation: rating.scoreExplanation,
+  });
+  const expectedOverallProductDiagnostic = scoreExplanationOverallProductDiagnostic(rating.scores ?? {});
+  const productDiagnosticMatches = scoreExplanationDiagnosticMatches(
+    rating.overallVsCentralityStrengthDiagnostic,
+    expectedOverallProductDiagnostic,
+  );
   const confidenceJudgmentPresent = SCORE_CONFIDENCE_LEVELS.includes(rating.scoreConfidenceJudgment);
   const scoreExplanationPolicyId = rating.scoreExplanationPolicyId ?? null;
   const scoreExplanationPolicy = scoreExplanationPolicyId ? scoreExplanationPolicyById.get(scoreExplanationPolicyId) : null;
@@ -3054,9 +3615,19 @@ function normalizeScoreExplanationAuditRow(rating, assignment, scoreExplanationP
     confidenceJudgmentPresent ? null : "scoreConfidenceJudgment",
     missingExpectedTriggers.length ? `scoreExplanationTriggers:missing:${missingExpectedTriggers.join(",")}` : null,
     unexpectedSubmittedTriggers.length ? `scoreExplanationTriggers:unexpected:${unexpectedSubmittedTriggers.join(",")}` : null,
+    Array.isArray(rating.scoreExplanationRequiredReasons) ? null : "scoreExplanationRequiredReasons",
+    missingRequiredReasons.length ? `scoreExplanationRequiredReasons:missing:${missingRequiredReasons.join(",")}` : null,
+    unexpectedRequiredReasons.length ? `scoreExplanationRequiredReasons:unexpected:${unexpectedRequiredReasons.join(",")}` : null,
     explanationRequired && rating.scoreExplanationRequired !== true ? "scoreExplanationRequired" : null,
+    typeof rating.scoreExplanationPromptShown === "boolean" ? null : "scoreExplanationPromptShown",
+    rating.scoreExplanationPromptShown === explanationRequired ? null : `scoreExplanationPromptShown:${explanationRequired}`,
     explanationRequired && rating.scoreExplanationPromptVisibility !== "label_source_protected_status_blind" ? "scoreExplanationPromptVisibility" : null,
     explanationRequired && !triggeredExplanationValidation.ok ? `scoreExplanation:${triggeredExplanationValidation.detail}` : null,
+    rating.scoreExplanationCompletionStatus ? null : "scoreExplanationCompletionStatus",
+    rating.scoreExplanationCompletionStatus && rating.scoreExplanationCompletionStatus !== expectedCompletionStatus
+      ? `scoreExplanationCompletionStatus:${expectedCompletionStatus}`
+      : null,
+    productDiagnosticMatches ? null : "overallVsCentralityStrengthDiagnostic",
     !explanationRequired && rating.scoreExplanationRequired === true ? "scoreExplanationRequired:ordinary_not_allowed" : null,
     !explanationRequired && explanationText ? "scoreExplanation:ordinary_not_allowed" : null,
   ].filter(Boolean);
@@ -3082,16 +3653,36 @@ function normalizeScoreExplanationAuditRow(rating, assignment, scoreExplanationP
     confidenceJudgmentPresent,
     expectedTriggers,
     submittedTriggers,
+    submittedRequiredReasons,
     missingExpectedTriggers,
     unexpectedSubmittedTriggers,
+    missingRequiredReasons,
+    unexpectedRequiredReasons,
     explanationRequired,
     scoreExplanationRequired: rating.scoreExplanationRequired === true,
+    scoreExplanationPromptShown: rating.scoreExplanationPromptShown ?? null,
     scoreExplanationPresent: Boolean(explanationText),
     generalRatingNotePresent: typeof rating.generalRatingNote === "string" && Boolean(rating.generalRatingNote.trim()),
     promptVisibility: rating.scoreExplanationPromptVisibility ?? null,
+    submittedCompletionStatus: rating.scoreExplanationCompletionStatus ?? null,
+    expectedCompletionStatus,
+    submittedOverallProductDiagnostic: rating.overallVsCentralityStrengthDiagnostic ?? null,
+    expectedOverallProductDiagnostic,
     explanationStatus,
     reviewReasons,
   };
+}
+
+function scoreExplanationDiagnosticMatches(submitted, expected) {
+  if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) return false;
+  return (
+    submitted.overallScore === expected.overallScore &&
+    submitted.centralityStrengthProduct === expected.centralityStrengthProduct &&
+    submitted.absoluteGap === expected.absoluteGap &&
+    submitted.threshold === expected.threshold &&
+    submitted.triggerFired === expected.triggerFired &&
+    submitted.status === expected.status
+  );
 }
 
 export const RATER_ISSUE_FLAG_DEFINITIONS = [
@@ -3148,6 +3739,15 @@ export const RATER_ISSUE_FLAG_DEFINITIONS = [
     taxonomyCodes: ["clarity_after_effort", "low_clarity_handling"],
     policy:
       "Record when the critique remains hard to pin down after effort, separately from rater topic expertise or mere unfamiliarity.",
+  },
+  {
+    key: "languageTranslationArtifactConcern",
+    label: "Language/translation artifact",
+    detail: "Flag non-native, dialect, translation, typo, OCR, or formatting residue without auto-penalizing scores.",
+    issueType: "language_translation_artifact_fairness",
+    taxonomyCodes: ["clarity_after_effort", "low_clarity_handling"],
+    policy:
+      "Language, dialect, translation, typo, OCR, or formatting artifacts are recorded separately from genuine low clarity or low argumentative quality and never create an automatic LMCA score penalty.",
   },
   {
     key: "targetUnclear",
@@ -3806,6 +4406,10 @@ export function selectPrimaryRaterAnchor(
   const policy = options.primaryRaterAnchorPolicy ?? null;
   const allowedKinds = options.allowedKinds ?? policy?.allowedKinds ?? ["blind_initial"];
   const eligibleItemIds = new Set(pairs.map(({ positionId, critiqueId }) => makeItemId(positionId, critiqueId)));
+  const qualificationRows = (options.raterQualificationRecords ?? [])
+    .map((record) => normalizeRaterQualificationRecord(record, "primary_rater_anchor_selection_qualification_record"))
+    .filter(Boolean);
+  const qualificationRequired = options.requirePrimaryRaterAnchorQualification === true || qualificationRows.length > 0;
   const coverageByRater = {};
   ratings
     .filter((rating) => allowedKinds.includes(rating.kind) && eligibleItemIds.has(makeItemId(rating.positionId, rating.critiqueId)))
@@ -3820,16 +4424,56 @@ export function selectPrimaryRaterAnchor(
       coverageItemCount: row.itemIds.size,
       coverageShare: round(row.itemIds.size / Math.max(1, eligibleItemIds.size)),
       raterTiers: [...row.tiers].sort(),
+      primaryRaterAnchorQualificationRecordId:
+        qualificationRows.find((record) =>
+          raterQualificationRecordIsCurrent(record, {
+            qualificationScope: "primary_rater_anchor",
+            approvedRole: "expert",
+            requiredEligibility: "release_critical",
+            now: options.now,
+          }) && record.raterId === row.raterId,
+        )?.id ?? null,
+    }))
+    .map((row) => ({
+      ...row,
+      primaryRaterAnchorQualificationStatus: !qualificationRequired
+        ? "qualification_not_enforced_no_records"
+        : row.primaryRaterAnchorQualificationRecordId
+          ? "current_primary_rater_anchor_qualification"
+          : "primary_rater_anchor_qualification_missing",
     }))
     .sort((left, right) => right.coverageItemCount - left.coverageItemCount || left.raterId.localeCompare(right.raterId));
+  const selectableRows = qualificationRequired
+    ? rows.filter((row) => row.primaryRaterAnchorQualificationRecordId)
+    : rows;
   const selected =
     policy?.fixedRaterId
-      ? rows.find((row) => row.raterId === policy.fixedRaterId) ?? { raterId: policy.fixedRaterId, coverageItemCount: 0, coverageShare: 0, raterTiers: [] }
-      : rows[0] ?? { raterId: null, coverageItemCount: 0, coverageShare: 0, raterTiers: [] };
+      ? selectableRows.find((row) => row.raterId === policy.fixedRaterId) ?? {
+          raterId: null,
+          requestedRaterId: policy.fixedRaterId,
+          coverageItemCount: 0,
+          coverageShare: 0,
+          raterTiers: [],
+          primaryRaterAnchorQualificationRecordId: null,
+          primaryRaterAnchorQualificationStatus: qualificationRequired
+            ? "primary_rater_anchor_qualification_required"
+            : "primary_rater_anchor_policy_fixed_rater_not_found",
+        }
+      : selectableRows[0] ?? {
+          raterId: null,
+          coverageItemCount: 0,
+          coverageShare: 0,
+          raterTiers: [],
+          primaryRaterAnchorQualificationRecordId: null,
+          primaryRaterAnchorQualificationStatus: qualificationRequired
+            ? "primary_rater_anchor_qualification_required"
+            : "no_primary_rater_anchor_candidate",
+        };
   const coverageThreshold = policy?.coverageThreshold ?? options.coverageThreshold ?? 0;
   return {
     ...selected,
     candidateRows: rows,
+    qualificationRequired,
     selectionPolicy: policy?.selectionRule ?? "predeclared_max_blind_initial_coverage_tie_break_rater_id",
     selectionPolicyId: policy?.id ?? null,
     selectionPolicySource: policy?.policySource ?? "default_project_anchor_policy",
@@ -3842,8 +4486,12 @@ export function selectPrimaryRaterAnchor(
       policy?.prohibitedPostHocCriteria ?? ["agreement_with_model_outputs", "desired_leaderboard_effect", "post_hoc_target_label_switching"],
     missingProhibitedPostHocCriteria: policy?.missingProhibitedPostHocCriteria ?? [],
     policyStatus:
-      policy?.policyStatus ??
-      (selected.coverageShare >= coverageThreshold ? "default_primary_rater_anchor_policy_applied" : "primary_rater_anchor_coverage_threshold_unmet"),
+      (!selected.raterId && qualificationRequired
+        ? "primary_rater_anchor_qualification_required"
+        : policy?.policyStatus ??
+          (selected.coverageShare >= coverageThreshold
+            ? "default_primary_rater_anchor_policy_applied"
+            : "primary_rater_anchor_coverage_threshold_unmet")),
   };
 }
 
@@ -4303,10 +4951,26 @@ export function buildTrainingExport(
   const includedCritiques = critiqueList.filter((critique) => includedPositionIds.has(critique.positionId));
   const includedCritiqueIds = new Set(includedCritiques.map((critique) => critique.id));
   const includedRatings = ratings.filter((rating) => includedPositionIds.has(rating.positionId) && includedCritiqueIds.has(rating.critiqueId));
+  const volunteerWithdrawalExclusionManifest = buildTrainingExportWithdrawalExclusionManifest(
+    releaseId,
+    options.volunteerDataWithdrawalRequests ?? [],
+    includedRatings,
+  );
+  const futureTrainingExportExcludedRaterIds = volunteerWithdrawalExclusionManifest.futureTrainingExportExcludedRaterIds;
+  const trainingExportExcludedRaterIdSet = new Set(futureTrainingExportExcludedRaterIds);
   const pointwiseExamples = applyTrainingExportUncertaintyPointwiseWeights(
     applyPositionBalancedPointwiseWeights(
       includedCritiques
-        .map((critique) => buildPointwiseTrainingExample(critique, positionList, labelSnapshot, includedRatings, contextSnapshots))
+        .map((critique) =>
+          buildPointwiseTrainingExample(
+            critique,
+            positionList,
+            labelSnapshot,
+            includedRatings,
+            contextSnapshots,
+            trainingExportExcludedRaterIdSet,
+          )
+        )
         .filter(Boolean),
     ),
     activeUncertaintyPolicy,
@@ -4419,9 +5083,15 @@ export function buildTrainingExport(
       includedRatings: includedRatings.length,
       includedPositions: includedPositions.length,
       excludedProtectedPositions: excludedPositions.length,
+      futureTrainingExportExcludedRaters: futureTrainingExportExcludedRaterIds.length,
+      futureTrainingExportExcludedIncludedRatings: volunteerWithdrawalExclusionManifest.affectedIncludedRatingCount,
+      futureTrainingExportExcludedRationales: volunteerWithdrawalExclusionManifest.affectedRationaleCount,
       uncertaintyDownweightedPointwiseExamples: pointwiseExamples.filter((example) => example.uncertaintyWeight < uncertaintyThresholdsApplied.standardWeight).length,
       uncertaintyDownweightedPairwisePreferences: pairwisePreferenceExamples.filter((example) => example.uncertaintyWeight < uncertaintyThresholdsApplied.standardWeight).length,
     },
+    futureTrainingExportExcludedRaterIds,
+    volunteerWithdrawalExclusionRequestIds: volunteerWithdrawalExclusionManifest.withdrawalRequestIds,
+    volunteerWithdrawalExclusionManifest,
     trainingExportUncertaintyPolicyEvidence: uncertaintyPolicyEvidence,
     trainingExportUncertaintyPolicyId: activeUncertaintyPolicy.id,
     trainingExportUncertaintyPolicyReleaseUseStatus: uncertaintyPolicyEvidence.releaseUseStatus,
@@ -4446,7 +5116,48 @@ export function buildTrainingExport(
       "Hidden benchmark and protected validation splits are excluded from model-improvement artifacts.",
       "LMCA evaluation metrics remain frozen report metrics, not optimized training losses.",
       "Label uncertainty, rater coverage, spread, and context-snapshot provenance are preserved for downstream exclusion or downweighting.",
+      "Future training-export withdrawal exclusions remove direct per-rater export rows such as rationales without recomputing frozen de-identified label denominators.",
     ],
+  };
+}
+
+function buildTrainingExportWithdrawalExclusionManifest(releaseId, volunteerDataWithdrawalRequests = [], includedRatings = []) {
+  const completeRows = volunteerDataWithdrawalRequests
+    .map((request) => normalizeVolunteerDataWithdrawalRequest(request, "submitted_workflow_volunteer_data_withdrawal_request"))
+    .filter(
+      (row) =>
+        row &&
+        row.reviewReasons.length === 0 &&
+        row.futureTrainingExportExcluded === true &&
+        ["future_training_export_exclusion", "account_deactivation"].includes(row.requestType),
+    );
+  const futureTrainingExportExcludedRaterIds = uniqueStrings(completeRows.map((row) => row.raterId).filter(Boolean)).sort();
+  const excludedRaterIdSet = new Set(futureTrainingExportExcludedRaterIds);
+  const affectedIncludedRatings = includedRatings.filter((rating) => excludedRaterIdSet.has(rating.raterId));
+  return {
+    id: `training-export-withdrawal-exclusions-${releaseId}`,
+    releaseId,
+    policy:
+      "future_training_export_exclusion_applies_to_new_training_exports_without_recomputing_already_frozen_deidentified_label_snapshots",
+    futureTrainingExportExcludedRaterIds,
+    withdrawalRequestIds: uniqueStrings(completeRows.map((row) => row.id).filter(Boolean)).sort(),
+    rows: completeRows.map((row) => ({
+      withdrawalRequestId: row.id,
+      raterId: row.raterId,
+      requestType: row.requestType,
+      affectedDataCategories: row.affectedDataCategories,
+      actionTaken: row.actionTaken,
+      frozenSnapshotImpact: row.frozenSnapshotImpact,
+      timestamp: row.timestamp,
+    })),
+    affectedIncludedRatingCount: affectedIncludedRatings.length,
+    affectedRationaleCount: affectedIncludedRatings.filter((rating) => rating.rationale).length,
+    affectedItemIds: uniqueStrings(affectedIncludedRatings.map((rating) => makeItemId(rating.positionId, rating.critiqueId))).sort(),
+    frozenLabelSnapshotDisposition: "preserved_without_recomputation",
+    denominatorMutationAllowed: false,
+    status: futureTrainingExportExcludedRaterIds.length
+      ? "future_training_export_withdrawal_exclusions_applied"
+      : "no_future_training_export_withdrawal_exclusions",
   };
 }
 
@@ -5038,6 +5749,11 @@ function buildDiscussionAdjudicationWorkflowEvidenceReport(releaseId, options = 
     ...revisionProposalRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "discussion_revision_proposal", artifactId: row.id, reason }))),
     ...postLockSessionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "post_lock_discussion_session", artifactId: row.id, reason }))),
     ...adjudicationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication", artifactId: row.id, reason }))),
+    ...adjudicationReviewSessionRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "adjudication_review_session", artifactId: row.id, reason })),
+    ),
+    ...memoRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication_memo", artifactId: row.id, reason }))),
+    ...finalizationRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "adjudication_finalization", artifactId: row.id, reason }))),
     ...coverageRows.flatMap((row) =>
       row.reviewReasons.map((reason) => ({ artifactType: "discussion_adjudication_thread_coverage", artifactId: row.discussionThreadId, reason })),
     ),
@@ -5673,6 +6389,26 @@ const REQUIRED_CERTIFICATION_REMEDIATION_RULES = {
   hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
   rubricVersionMismatch: "recertification_or_grandfathering_review_required",
 };
+const REQUIRED_CERTIFICATION_CADENCE_POLICY = {
+  goldInjectionSchedule: {
+    hiddenGoldEveryNReleaseCriticalAssignments: 10,
+    minimumHiddenGoldItemsPerActiveRaterPerMonth: 3,
+    stratification: "topic_difficulty_lmca_dimension_and_low_clarity_branch",
+  },
+  recertificationSchedule: {
+    routineIntervalDays: 180,
+    inactivityIntervalDays: 90,
+    rubricVersionChange: "required_before_release_critical_use",
+    targetedRetrainingExit: "pass_targeted_pack_before_assignment_unlock",
+  },
+  thresholdLogic: {
+    rollingWindowGoldItemsMin: 20,
+    certificationPassRateMin: 0.85,
+    consecutiveGoldFailuresTriggerRestriction: 2,
+    meanAbsErrorMax: REQUIRED_CERTIFICATION_THRESHOLDS.meanAbsErrorMax,
+    perDimensionCalibrationErrorMax: REQUIRED_CERTIFICATION_THRESHOLDS.perDimensionCalibrationErrorMax,
+  },
+};
 
 function defaultCertificationThresholdPolicy(releaseId) {
   return {
@@ -5680,6 +6416,7 @@ function defaultCertificationThresholdPolicy(releaseId) {
     policyVersion: CERTIFICATION_THRESHOLD_POLICY_VERSION,
     thresholds: REQUIRED_CERTIFICATION_THRESHOLDS,
     remediationRules: REQUIRED_CERTIFICATION_REMEDIATION_RULES,
+    cadencePolicy: REQUIRED_CERTIFICATION_CADENCE_POLICY,
     certificationStatusRule:
       "A rater is certified only when completion is met, the rubric is current, mean absolute error and every dimension stay within the frozen numeric thresholds, and no restriction flags remain.",
     retrainingRule:
@@ -5705,8 +6442,13 @@ function normalizeCertificationThresholdPolicy(policy, rowSource) {
     policy.remediationRules && typeof policy.remediationRules === "object" && !Array.isArray(policy.remediationRules)
       ? policy.remediationRules
       : {};
+  const cadencePolicy =
+    policy.cadencePolicy && typeof policy.cadencePolicy === "object" && !Array.isArray(policy.cadencePolicy)
+      ? policy.cadencePolicy
+      : {};
   const missingThresholdKeys = Object.keys(REQUIRED_CERTIFICATION_THRESHOLDS).filter((key) => !Object.hasOwn(thresholds, key));
   const missingRuleKeys = Object.keys(REQUIRED_CERTIFICATION_REMEDIATION_RULES).filter((key) => !Object.hasOwn(remediationRules, key));
+  const missingCadenceKeys = Object.keys(REQUIRED_CERTIFICATION_CADENCE_POLICY).filter((key) => !Object.hasOwn(cadencePolicy, key));
   const reviewReasons = [
     (policy.policyVersion ?? policy.version) === CERTIFICATION_THRESHOLD_POLICY_VERSION
       ? null
@@ -5715,6 +6457,8 @@ function normalizeCertificationThresholdPolicy(policy, rowSource) {
     stableJsonKey(thresholds) === stableJsonKey(REQUIRED_CERTIFICATION_THRESHOLDS) ? null : "thresholds",
     missingRuleKeys.length ? `remediationRules:${missingRuleKeys.join(",")}` : null,
     stableJsonKey(remediationRules) === stableJsonKey(REQUIRED_CERTIFICATION_REMEDIATION_RULES) ? null : "remediationRules",
+    missingCadenceKeys.length ? `cadencePolicy:${missingCadenceKeys.join(",")}` : null,
+    stableJsonKey(cadencePolicy) === stableJsonKey(REQUIRED_CERTIFICATION_CADENCE_POLICY) ? null : "cadencePolicy",
     policyMentions(policy.certificationStatusRule, ["mean absolute error", "certified"]) ? null : "certificationStatusRule",
     policyMentions(policy.retrainingRule, ["dimension", "retraining"]) ? null : "retrainingRule",
     policyMentions(policy.restrictionRule, ["restriction"]) ? null : "restrictionRule",
@@ -5727,6 +6471,7 @@ function normalizeCertificationThresholdPolicy(policy, rowSource) {
     policyVersion: policy.policyVersion ?? policy.version ?? null,
     thresholds,
     remediationRules,
+    cadencePolicy,
     certificationStatusRule: policy.certificationStatusRule ?? null,
     retrainingRule: policy.retrainingRule ?? null,
     restrictionRule: policy.restrictionRule ?? null,
@@ -5774,6 +6519,7 @@ export function buildCertificationAudit(packs = certificationPacks, items = gold
     activeCertificationThresholdPolicyId: activeThresholdPolicy?.id ?? null,
     requiredCertificationThresholds: REQUIRED_CERTIFICATION_THRESHOLDS,
     requiredCertificationRemediationRules: REQUIRED_CERTIFICATION_REMEDIATION_RULES,
+    requiredCertificationCadencePolicy: REQUIRED_CERTIFICATION_CADENCE_POLICY,
     thresholdPolicyReviewRows,
     thresholdPolicyReleaseUseStatus: !submittedThresholdPolicyRows.length
       ? "seed_certification_threshold_policy_active"
@@ -7790,6 +8536,843 @@ export function buildCandidateIntakeQualityAudit(
   };
 }
 
+export function buildCandidateGenerationIntakeChecklistReport(
+  releaseId,
+  {
+    positionIntakeReadiness,
+    activeLearning,
+    candidateIntakeQualityAudit,
+    critiqueGenerationEvaluation,
+    corpusManifest,
+    hiddenBenchmarkFreeze,
+  } = {},
+) {
+  const activeTotals = activeLearning?.totals ?? {};
+  const qualityCounts = candidateIntakeQualityAudit?.counts ?? {};
+  const generationCounts = critiqueGenerationEvaluation?.aggregateCounts ?? {};
+  const generationSeparation = critiqueGenerationEvaluation?.generationVsJudgingSeparation ?? {};
+  const hiddenArtifactBalance = hiddenBenchmarkFreeze?.artifactBalance ?? {};
+  const hiddenCounterbalanceStatus = hiddenArtifactBalance.counterbalanceStatus ?? "not_evaluated";
+
+  const rows = [
+    candidateGenerationChecklistRow({
+      id: "position_scope_context_screen",
+      label: "Position scope and context screen",
+      evidenceIds: [positionIntakeReadiness?.id].filter(Boolean),
+      sourceStatuses: [positionIntakeReadiness?.releaseUseStatus].filter(Boolean),
+      complete:
+        hasRequiredValue(positionIntakeReadiness?.releaseUseStatus) &&
+        positionIntakeReadiness.releaseUseStatus !== "position_intake_screening_review_required" &&
+        (positionIntakeReadiness.counts?.incompleteScreeningCount ?? 0) === 0,
+      reviewReasons: [
+        !positionIntakeReadiness ? "positionIntakeReadiness:missing" : null,
+        positionIntakeReadiness?.releaseUseStatus === "position_intake_screening_review_required"
+          ? "positionIntakeReadiness.review_required"
+          : null,
+        (positionIntakeReadiness?.counts?.incompleteScreeningCount ?? 0) > 0
+          ? "positionIntakeReadiness.incompleteScreeningCount"
+          : null,
+      ],
+      requirement:
+        "Conceptual-scope, ground-truth, position-clarity, and context-sufficiency screens run before candidate critique generation or assignment.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "candidate_generation_denominator_audit",
+      label: "Candidate generation denominator audit",
+      evidenceIds: [activeLearning?.id].filter(Boolean),
+      sourceStatuses: [activeLearning?.releaseUseStatus, activeLearning?.activeLearningSelectionPolicyReleaseUseStatus].filter(Boolean),
+      complete:
+        activeLearning?.releaseUseStatus === "active_learning_selection_denominators_audited" &&
+        (activeTotals.generated ?? 0) + (activeTotals.ingested ?? 0) > 0 &&
+        (activeLearning?.candidateWorkflowContractViolationCount ?? 0) === 0 &&
+        (activeLearning?.submittedSelectionAuditContractViolationCount ?? 0) === 0,
+      reviewReasons: [
+        !activeLearning ? "activeLearning:missing" : null,
+        activeLearning?.releaseUseStatus !== "active_learning_selection_denominators_audited"
+          ? "activeLearning.releaseUseStatus"
+          : null,
+        (activeTotals.generated ?? 0) + (activeTotals.ingested ?? 0) <= 0 ? "activeLearning.generated_or_ingested" : null,
+        (activeLearning?.candidateWorkflowContractViolationCount ?? 0) > 0
+          ? "activeLearning.candidateWorkflowContractViolationCount"
+          : null,
+        (activeLearning?.submittedSelectionAuditContractViolationCount ?? 0) > 0
+          ? "activeLearning.submittedSelectionAuditContractViolationCount"
+          : null,
+      ],
+      requirement:
+        "CandidateBatch and ActiveLearningSelectionAudit evidence records generated/ingested, judged, selected, rejected, and promoted denominators.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "selection_targets_human_curation",
+      label: "Selection targets and human curation",
+      evidenceIds: [activeLearning?.id].filter(Boolean),
+      sourceStatuses: [activeLearning?.releaseUseStatus].filter(Boolean),
+      complete:
+        (activeTotals.disagreementSelected ?? 0) > 0 &&
+        (activeTotals.highRated ?? 0) > 0 &&
+        (activeTotals.suspectedJudgeFalsePositive ?? 0) > 0 &&
+        (activeTotals.handSelected ?? 0) > 0 &&
+        (activeTotals.promoted ?? 0) > 0,
+      reviewReasons: [
+        (activeTotals.disagreementSelected ?? 0) <= 0 ? "activeLearning.disagreementSelected" : null,
+        (activeTotals.highRated ?? 0) <= 0 ? "activeLearning.highRated" : null,
+        (activeTotals.suspectedJudgeFalsePositive ?? 0) <= 0 ? "activeLearning.suspectedJudgeFalsePositive" : null,
+        (activeTotals.handSelected ?? 0) <= 0 ? "activeLearning.handSelected" : null,
+        (activeTotals.promoted ?? 0) <= 0 ? "activeLearning.promoted" : null,
+      ],
+      requirement:
+        "Selection includes judge disagreement, high-rated candidates, suspected false positives, and trained human curation before rating intake.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "model_judge_screening_admin_only",
+      label: "Model-judge screening stays admin-only",
+      evidenceIds: [activeLearning?.id].filter(Boolean),
+      sourceStatuses: [activeLearning?.releaseUseStatus].filter(Boolean),
+      complete:
+        (activeTotals.judged ?? 0) > 0 &&
+        activeLearning?.blindingPass === true &&
+        (activeLearning?.candidateWorkflowEvidence?.hiddenMetadataViolationCount ?? 0) === 0,
+      reviewReasons: [
+        (activeTotals.judged ?? 0) <= 0 ? "activeLearning.judged" : null,
+        activeLearning?.blindingPass === true ? null : "activeLearning.blindingPass",
+        (activeLearning?.candidateWorkflowEvidence?.hiddenMetadataViolationCount ?? 0) > 0
+          ? "activeLearning.hiddenMetadataViolationCount"
+          : null,
+      ],
+      requirement:
+        "Model-judge scores, selection reasons, and active-learning flags remain hidden from ordinary and validation raters before initial lock.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "marginal_informativeness_redundancy_controls",
+      label: "Marginal informativeness and redundancy controls",
+      evidenceIds: [candidateIntakeQualityAudit?.id].filter(Boolean),
+      sourceStatuses: [candidateIntakeQualityAudit?.releaseUseStatus].filter(Boolean),
+      complete:
+        candidateIntakeQualityAudit?.releaseUseStatus === "marginal_informativeness_audit_pass" ||
+        candidateIntakeQualityAudit?.releaseUseStatus === "marginal_informativeness_audit_disclosed_low_redundancy_controls",
+      reviewReasons: [
+        !candidateIntakeQualityAudit ? "candidateIntakeQualityAudit:missing" : null,
+        candidateIntakeQualityAudit?.releaseUseStatus &&
+        ![
+          "marginal_informativeness_audit_pass",
+          "marginal_informativeness_audit_disclosed_low_redundancy_controls",
+        ].includes(candidateIntakeQualityAudit.releaseUseStatus)
+          ? "candidateIntakeQualityAudit.releaseUseStatus"
+          : null,
+      ],
+      requirement:
+        "Accepted critique counts disclose low-information, artifact-control, near-duplicate, and low-marginal-information rows separately.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "critique_generation_evaluation_provenance",
+      label: "Critique-generation evaluation provenance",
+      evidenceIds: [critiqueGenerationEvaluation?.id].filter(Boolean),
+      sourceStatuses: [
+        critiqueGenerationEvaluation?.releaseUseStatus,
+        critiqueGenerationEvaluation?.providerPolicyEvidence?.releaseUseStatus,
+        critiqueGenerationEvaluation?.submittedWorkflowContractEvidence?.releaseUseStatus,
+      ].filter(Boolean),
+      complete:
+        critiqueGenerationEvaluation?.releaseUseStatus === "generation_evaluation_separate_with_blind_rating_coverage" &&
+        (generationCounts.generatedOutputs ?? 0) > 0 &&
+        (generationCounts.promotedToRating ?? 0) === (generationCounts.blindHumanRatedPromoted ?? -1) &&
+        critiqueGenerationEvaluation?.providerPolicyEvidence?.releaseUseStatus === "critique_generation_provider_policies_approved" &&
+        critiqueGenerationEvaluation?.submittedWorkflowContractEvidence?.releaseUseStatus === "critique_generation_workflow_contract_complete",
+      reviewReasons: [
+        !critiqueGenerationEvaluation ? "critiqueGenerationEvaluation:missing" : null,
+        critiqueGenerationEvaluation?.releaseUseStatus !== "generation_evaluation_separate_with_blind_rating_coverage"
+          ? "critiqueGenerationEvaluation.releaseUseStatus"
+          : null,
+        (generationCounts.generatedOutputs ?? 0) <= 0 ? "critiqueGenerationEvaluation.generatedOutputs" : null,
+        (generationCounts.promotedToRating ?? 0) !== (generationCounts.blindHumanRatedPromoted ?? -1)
+          ? "critiqueGenerationEvaluation.blindHumanRatedPromoted"
+          : null,
+        critiqueGenerationEvaluation?.providerPolicyEvidence?.releaseUseStatus !== "critique_generation_provider_policies_approved"
+          ? "critiqueGenerationEvaluation.providerPolicyEvidence"
+          : null,
+        critiqueGenerationEvaluation?.submittedWorkflowContractEvidence?.releaseUseStatus !== "critique_generation_workflow_contract_complete"
+          ? "critiqueGenerationEvaluation.submittedWorkflowContractEvidence"
+          : null,
+      ],
+      requirement:
+        "GeneratedCritiqueSubmission and generation reports preserve generator provenance, uncurated denominators, provider policy bindings, and blind human rating coverage.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "model_judges_not_gold_role_separation",
+      label: "Model judges are not gold labels",
+      evidenceIds: [critiqueGenerationEvaluation?.id].filter(Boolean),
+      sourceStatuses: [
+        critiqueGenerationEvaluation?.releaseUseStatus,
+        critiqueGenerationEvaluation?.generatorEvaluatorOverlap?.releaseUseStatus,
+      ].filter(Boolean),
+      complete:
+        generationSeparation.generatedCritiquesRequireBlindHumanRatingBeforeQualityClaim === true &&
+        generationSeparation.modelJudgeScoresDiagnosticOnly === true &&
+        generationSeparation.modelJudgeScoresAcceptedAsGoldLabels === false &&
+        generationSeparation.modelJudgeScoresVisibleToInitialRaters === false &&
+        hasRequiredValue(critiqueGenerationEvaluation?.generatorEvaluatorOverlap?.releaseUseStatus),
+      reviewReasons: [
+        generationSeparation.generatedCritiquesRequireBlindHumanRatingBeforeQualityClaim === true
+          ? null
+          : "generationVsJudgingSeparation.generatedCritiquesRequireBlindHumanRatingBeforeQualityClaim",
+        generationSeparation.modelJudgeScoresDiagnosticOnly === true
+          ? null
+          : "generationVsJudgingSeparation.modelJudgeScoresDiagnosticOnly",
+        generationSeparation.modelJudgeScoresAcceptedAsGoldLabels === false
+          ? null
+          : "generationVsJudgingSeparation.modelJudgeScoresAcceptedAsGoldLabels",
+        generationSeparation.modelJudgeScoresVisibleToInitialRaters === false
+          ? null
+          : "generationVsJudgingSeparation.modelJudgeScoresVisibleToInitialRaters",
+        hasRequiredValue(critiqueGenerationEvaluation?.generatorEvaluatorOverlap?.releaseUseStatus)
+          ? null
+          : "generatorEvaluatorOverlap.releaseUseStatus",
+      ],
+      requirement:
+        "Model judges remain diagnostic discovery tools; gold, benchmark, and evaluation labels require human rating or adjudication, with generator/judge overlap disclosed.",
+    }),
+    candidateGenerationChecklistRow({
+      id: "source_topic_artifact_controls",
+      label: "Source, topic, and artifact controls",
+      evidenceIds: [corpusManifest?.id, hiddenBenchmarkFreeze?.id].filter(Boolean),
+      sourceStatuses: [hiddenCounterbalanceStatus, hiddenBenchmarkFreeze?.freezeStatus].filter(Boolean),
+      complete:
+        hasRequiredValue(corpusManifest?.sourceDetailCoverage?.status ?? corpusManifest?.sourceDetailCoverage) &&
+        Object.keys(corpusManifest?.positionSourceCategory ?? {}).length > 0 &&
+        Object.keys(corpusManifest?.critiqueSourceType ?? {}).length > 0 &&
+        hasRequiredValue(hiddenCounterbalanceStatus) &&
+        hiddenCounterbalanceStatus !== "quality_source_style_confound_review_required",
+      reviewReasons: [
+        !corpusManifest ? "corpusManifest:missing" : null,
+        Object.keys(corpusManifest?.positionSourceCategory ?? {}).length === 0 ? "corpusManifest.positionSourceCategory" : null,
+        Object.keys(corpusManifest?.critiqueSourceType ?? {}).length === 0 ? "corpusManifest.critiqueSourceType" : null,
+        !hasRequiredValue(hiddenCounterbalanceStatus) ? "hiddenBenchmarkFreeze.artifactBalance.counterbalanceStatus" : null,
+        hiddenCounterbalanceStatus === "quality_source_style_confound_review_required"
+          ? "hiddenBenchmarkFreeze.artifactBalance.quality_source_style_confound_review_required"
+          : null,
+      ],
+      requirement:
+        "Corpus and hidden-benchmark manifests expose source, topic, authorship, length/style, expected-quality, and source-quality counterbalancing controls.",
+    }),
+  ];
+
+  return {
+    id: `candidate-generation-intake-checklist-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      scope:
+        "RLHF91 candidate generation and active-learning intake evidence checklist over existing Position, Critique, CandidateBatch, CandidateCritique, GeneratedCritiqueSubmission, and ModelJudgeScore surfaces.",
+      duplicationBoundary:
+        "This checklist does not create CandidateItem, CandidateBatchMembership, live queue, gold label, benchmark label, or alternate candidate architecture.",
+      labelBoundary:
+        "Model-judge and generator signals are discovery and diagnostic metadata only; blind human ratings or adjudications remain the label source.",
+    },
+    counts: {
+      checklistRows: rows.length,
+      completeRows: rows.filter((row) => row.status === "complete").length,
+      reviewRequiredRows: rows.filter((row) => row.status === "review_required").length,
+      generatedOrIngestedCandidates: (activeTotals.generated ?? 0) + (activeTotals.ingested ?? 0),
+      judgedCandidates: activeTotals.judged ?? 0,
+      promotedCandidates: activeTotals.promoted ?? 0,
+      lowInformationOrArtifactControlCritiques: qualityCounts.lowInformationOrArtifactControlCritiques ?? 0,
+      duplicateGeneratedOutputs: qualityCounts.duplicateGeneratedOutputs ?? 0,
+      generatedCritiqueOutputs: generationCounts.generatedOutputs ?? 0,
+      blindHumanRatedPromotedOutputs: generationCounts.blindHumanRatedPromoted ?? 0,
+    },
+    rows,
+    reviewSections: rows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({
+        artifactType: "candidate_generation_intake_checklist",
+        artifactId: row.id,
+        reason,
+      })),
+    ),
+    releaseUseStatus: rows.every((row) => row.status === "complete")
+      ? "candidate_generation_intake_requirements_evidenced"
+      : "candidate_generation_intake_review_required",
+  };
+}
+
+function candidateGenerationChecklistRow({ id, label, requirement, evidenceIds = [], sourceStatuses = [], complete, reviewReasons = [] }) {
+  const filteredReasons = reviewReasons.filter(Boolean);
+  return {
+    id,
+    label,
+    requirement,
+    evidenceIds,
+    sourceStatuses,
+    status: complete && filteredReasons.length === 0 ? "complete" : "review_required",
+    reviewReasons: filteredReasons,
+  };
+}
+
+export function buildLabelAggregationReliabilityChecklistReport(
+  releaseId,
+  {
+    labelSnapshotReliability,
+    raterReliabilityWeightModelEvidence,
+    ratingRevisionAudit,
+    postDiscussionDisagreement,
+    adjudicationMemoAudit,
+    disagreementThresholdPolicyEvidence,
+    metricDirectionalityConfig,
+    modelAssistedLabelOverlap,
+  } = {},
+) {
+  const reliability = labelSnapshotReliability ?? {};
+  const weightModel = reliability.reliabilityWeightModel ?? {};
+  const fitData = weightModel.fitDataProvenance ?? {};
+  const effectiveContribution = weightModel.effectiveContribution ?? {};
+  const aggregationSensitivity = reliability.aggregationSensitivity ?? weightModel.sensitivitySummary ?? {};
+  const includedRatingProvenance = reliability.includedRatingProvenance ?? weightModel.includedRatingProvenance ?? {};
+  const raterWeightEvidence = raterReliabilityWeightModelEvidence ?? reliability.raterReliabilityWeightModelEvidence ?? {};
+  const revisionCounts = ratingRevisionAudit?.counts ?? {};
+  const disagreementCounts = postDiscussionDisagreement?.counts ?? {};
+  const adjudicationCounts = adjudicationMemoAudit?.counts ?? {};
+  const metricCounts = metricDirectionalityConfig?.counts ?? {};
+
+  const submittedWeightModelStatusOk = [
+    "default_uniform_weight_model_used_no_submitted_model",
+    "active_submitted_weight_model_provenance_complete",
+  ].includes(raterWeightEvidence.releaseUseStatus);
+  const disagreementPolicyStatusOk = [
+    "seed_disagreement_threshold_policy_active",
+    "submitted_disagreement_threshold_policy_active",
+  ].includes(disagreementThresholdPolicyEvidence?.releaseUseStatus);
+  const adjudicationStatusOk = ["adjudication_limitations_preserved", "adjudication_memos_complete"].includes(
+    adjudicationMemoAudit?.releaseUseStatus,
+  );
+  const modelAssistedStatusOk =
+    hasRequiredValue(modelAssistedLabelOverlap?.releaseUseStatus) &&
+    !String(modelAssistedLabelOverlap.releaseUseStatus).includes("review_required");
+
+  const rows = [
+    labelAggregationChecklistRow({
+      id: "immutable_label_snapshot_and_denominators",
+      label: "Immutable label snapshot and denominator separation",
+      evidenceIds: [reliability.labelSnapshotId, ratingRevisionAudit?.id].filter(Boolean),
+      sourceStatuses: [ratingRevisionAudit?.releaseUseStatus].filter(Boolean),
+      complete:
+        hasRequiredValue(reliability.labelSnapshotId) &&
+        ratingRevisionAudit?.releaseUseStatus === "revision_and_check_denominators_separated" &&
+        (includedRatingProvenance.includedRatingCount ?? 0) > 0 &&
+        (revisionCounts.blindInitialRows ?? 0) > 0,
+      reviewReasons: [
+        !hasRequiredValue(reliability.labelSnapshotId) ? "labelSnapshotReliability.labelSnapshotId" : null,
+        ratingRevisionAudit?.releaseUseStatus !== "revision_and_check_denominators_separated"
+          ? "ratingRevisionAudit.releaseUseStatus"
+          : null,
+        (includedRatingProvenance.includedRatingCount ?? 0) <= 0 ? "labelSnapshotReliability.includedRatingCount" : null,
+        (revisionCounts.blindInitialRows ?? 0) <= 0 ? "ratingRevisionAudit.blindInitialRows" : null,
+      ],
+      requirement:
+        "Released labels come from immutable LabelSnapshot evidence, while blind initials, revisions, checks, model-assisted checks, and adjudication rows remain separately counted.",
+    }),
+    labelAggregationChecklistRow({
+      id: "frozen_reliability_weight_model",
+      label: "Frozen reliability-weight model provenance",
+      evidenceIds: [weightModel.id, raterWeightEvidence.id].filter(Boolean),
+      sourceStatuses: [weightModel.releaseUseStatus, raterWeightEvidence.releaseUseStatus].filter(Boolean),
+      complete:
+        weightModel.frozenBeforeAggregation === true &&
+        hasRequiredValue(weightModel.reliabilityWeightModelId) &&
+        weightModel.releaseUseStatus === "uniform_weights_frozen_with_sensitivity_report" &&
+        submittedWeightModelStatusOk &&
+        (raterWeightEvidence.reviewRows?.length ?? 0) === 0,
+      reviewReasons: [
+        weightModel.frozenBeforeAggregation === true ? null : "reliabilityWeightModel.frozenBeforeAggregation",
+        hasRequiredValue(weightModel.reliabilityWeightModelId) ? null : "reliabilityWeightModel.reliabilityWeightModelId",
+        weightModel.releaseUseStatus !== "uniform_weights_frozen_with_sensitivity_report"
+          ? "reliabilityWeightModel.releaseUseStatus"
+          : null,
+        submittedWeightModelStatusOk ? null : "raterReliabilityWeightModelEvidence.releaseUseStatus",
+        (raterWeightEvidence.reviewRows?.length ?? 0) > 0 ? "raterReliabilityWeightModelEvidence.reviewRows" : null,
+      ],
+      requirement:
+        "Any rater-reliability weight model used for release labels is frozen before aggregation, versioned, and matched to submitted provenance when such workflow records exist.",
+    }),
+    labelAggregationChecklistRow({
+      id: "protected_fit_exclusion",
+      label: "Protected fit-data exclusion",
+      evidenceIds: [weightModel.id, raterWeightEvidence.id].filter(Boolean),
+      sourceStatuses: [raterWeightEvidence.releaseUseStatus].filter(Boolean),
+      complete:
+        fitData.protectedRatingsUsedForFit === 0 &&
+        (fitData.protectedExcludedSplits ?? []).includes("hidden_benchmark") &&
+        (fitData.protectedExcludedSplits ?? []).includes("internal_validation") &&
+        submittedWeightModelStatusOk,
+      reviewReasons: [
+        fitData.protectedRatingsUsedForFit === 0 ? null : "fitDataProvenance.protectedRatingsUsedForFit",
+        (fitData.protectedExcludedSplits ?? []).includes("hidden_benchmark") ? null : "fitDataProvenance.hiddenBenchmarkExcluded",
+        (fitData.protectedExcludedSplits ?? []).includes("internal_validation") ? null : "fitDataProvenance.internalValidationExcluded",
+        submittedWeightModelStatusOk ? null : "raterReliabilityWeightModelEvidence.releaseUseStatus",
+      ],
+      requirement:
+        "Reliability weights are not fit or tuned on hidden benchmark or protected-validation rows; submitted weight-model evidence must preserve that exclusion.",
+    }),
+    labelAggregationChecklistRow({
+      id: "unweighted_median_sensitivity",
+      label: "Unweighted and median sensitivity",
+      evidenceIds: [weightModel.id].filter(Boolean),
+      sourceStatuses: [weightModel.releaseUseStatus].filter(Boolean),
+      complete:
+        aggregationSensitivity.unweightedMeanMatchesHeadline === true &&
+        aggregationSensitivity.medianSensitivityAvailable === true &&
+        Object.keys(aggregationSensitivity.meanAbsMeanMedianDeltaByDimension ?? {}).length > 0,
+      reviewReasons: [
+        aggregationSensitivity.unweightedMeanMatchesHeadline === true ? null : "aggregationSensitivity.unweightedMeanMatchesHeadline",
+        aggregationSensitivity.medianSensitivityAvailable === true ? null : "aggregationSensitivity.medianSensitivityAvailable",
+        Object.keys(aggregationSensitivity.meanAbsMeanMedianDeltaByDimension ?? {}).length > 0
+          ? null
+          : "aggregationSensitivity.meanAbsMeanMedianDeltaByDimension",
+      ],
+      requirement:
+        "Release-critical snapshots disclose unweighted headline behavior plus median sensitivity rather than hiding aggregation choice behind opaque weighting.",
+    }),
+    labelAggregationChecklistRow({
+      id: "rater_dominance_disclosed",
+      label: "Rater dominance disclosed",
+      evidenceIds: [weightModel.id].filter(Boolean),
+      sourceStatuses: [effectiveContribution.dominanceReviewStatus].filter(Boolean),
+      complete:
+        Number.isFinite(effectiveContribution.maxSingleRaterContributionShare) &&
+        (effectiveContribution.itemRows?.length ?? 0) > 0 &&
+        hasRequiredValue(effectiveContribution.dominanceReviewStatus) &&
+        Array.isArray(effectiveContribution.independentExpertReviewRequiredItemIds),
+      reviewReasons: [
+        Number.isFinite(effectiveContribution.maxSingleRaterContributionShare)
+          ? null
+          : "effectiveContribution.maxSingleRaterContributionShare",
+        (effectiveContribution.itemRows?.length ?? 0) > 0 ? null : "effectiveContribution.itemRows",
+        hasRequiredValue(effectiveContribution.dominanceReviewStatus) ? null : "effectiveContribution.dominanceReviewStatus",
+        Array.isArray(effectiveContribution.independentExpertReviewRequiredItemIds)
+          ? null
+          : "effectiveContribution.independentExpertReviewRequiredItemIds",
+      ],
+      requirement:
+        "Label snapshots report largest single-rater contribution share and identify rows that need independent expert review before strong claims.",
+    }),
+    labelAggregationChecklistRow({
+      id: "disagreement_policy_and_post_discussion",
+      label: "Disagreement thresholds and post-discussion residuals",
+      evidenceIds: [disagreementThresholdPolicyEvidence?.id, postDiscussionDisagreement?.id].filter(Boolean),
+      sourceStatuses: [
+        disagreementThresholdPolicyEvidence?.releaseUseStatus,
+        postDiscussionDisagreement?.releaseUseStatus,
+      ].filter(Boolean),
+      complete:
+        disagreementPolicyStatusOk &&
+        hasRequiredValue(postDiscussionDisagreement?.releaseUseStatus) &&
+        !String(postDiscussionDisagreement?.releaseUseStatus ?? "").includes("review_required") &&
+        (disagreementCounts.missingMemoHighSpreadItemCount ?? 0) === 0,
+      reviewReasons: [
+        disagreementPolicyStatusOk ? null : "disagreementThresholdPolicyEvidence.releaseUseStatus",
+        hasRequiredValue(postDiscussionDisagreement?.releaseUseStatus) ? null : "postDiscussionDisagreement.releaseUseStatus",
+        String(postDiscussionDisagreement?.releaseUseStatus ?? "").includes("review_required")
+          ? "postDiscussionDisagreement.review_required"
+          : null,
+        (disagreementCounts.missingMemoHighSpreadItemCount ?? 0) > 0
+          ? "postDiscussionDisagreement.missingMemoHighSpreadItemCount"
+          : null,
+      ],
+      requirement:
+        "Residual high-spread release-critical items are classified under frozen disagreement thresholds and are not forced into silent consensus.",
+    }),
+    labelAggregationChecklistRow({
+      id: "adjudication_memos_and_minority_rationales",
+      label: "Adjudication memos and minority rationales",
+      evidenceIds: [adjudicationMemoAudit?.id].filter(Boolean),
+      sourceStatuses: [adjudicationMemoAudit?.releaseUseStatus].filter(Boolean),
+      complete:
+        adjudicationStatusOk &&
+        (adjudicationCounts.memoCount ?? 0) > 0 &&
+        (adjudicationCounts.incompleteReleaseCriticalAmbiguityMemoCount ?? 0) === 0,
+      reviewReasons: [
+        adjudicationStatusOk ? null : "adjudicationMemoAudit.releaseUseStatus",
+        (adjudicationCounts.memoCount ?? 0) > 0 ? null : "adjudicationMemoAudit.memoCount",
+        (adjudicationCounts.incompleteReleaseCriticalAmbiguityMemoCount ?? 0) > 0
+          ? "adjudicationMemoAudit.incompleteReleaseCriticalAmbiguityMemoCount"
+          : null,
+      ],
+      requirement:
+        "Release-critical adjudication records preserve ambiguity decisions, bottom-line dependence, imprecision flags, obfuscation risks, and minority rationales.",
+    }),
+    labelAggregationChecklistRow({
+      id: "metric_directionality_and_low_clarity",
+      label: "Metric directionality and low-clarity policy",
+      evidenceIds: [metricDirectionalityConfig?.id].filter(Boolean),
+      sourceStatuses: [metricDirectionalityConfig?.releaseUseStatus].filter(Boolean),
+      complete:
+        metricDirectionalityConfig?.releaseUseStatus === "metric_config_and_directionality_declared" &&
+        hasRequiredValue(metricDirectionalityConfig?.effectiveMetricConfig?.lowClarityPolicy) &&
+        (metricCounts.directionalityRows ?? 0) > 0 &&
+        (metricCounts.configViolationCount ?? 0) === 0 &&
+        (metricCounts.directionalityViolationCount ?? 0) === 0,
+      reviewReasons: [
+        metricDirectionalityConfig?.releaseUseStatus !== "metric_config_and_directionality_declared"
+          ? "metricDirectionalityConfig.releaseUseStatus"
+          : null,
+        hasRequiredValue(metricDirectionalityConfig?.effectiveMetricConfig?.lowClarityPolicy)
+          ? null
+          : "metricDirectionalityConfig.lowClarityPolicy",
+        (metricCounts.directionalityRows ?? 0) > 0 ? null : "metricDirectionalityConfig.directionalityRows",
+        (metricCounts.configViolationCount ?? 0) > 0 ? "metricDirectionalityConfig.configViolationCount" : null,
+        (metricCounts.directionalityViolationCount ?? 0) > 0 ? "metricDirectionalityConfig.directionalityViolationCount" : null,
+      ],
+      requirement:
+        "Custom-loss and pairwise reports declare target-vs-prediction directionality, tie policies, and low-clarity branch behavior before leaderboard or ceiling claims.",
+    }),
+    labelAggregationChecklistRow({
+      id: "model_assisted_overlap_disclosed",
+      label: "Model-assisted overlap disclosed",
+      evidenceIds: [modelAssistedLabelOverlap?.id].filter(Boolean),
+      sourceStatuses: [modelAssistedLabelOverlap?.releaseUseStatus].filter(Boolean),
+      complete:
+        modelAssistedStatusOk &&
+        hasRequiredValue(modelAssistedLabelOverlap?.humanOnlyPreAssistanceTarget?.status ?? modelAssistedLabelOverlap?.releaseUseStatus),
+      reviewReasons: [
+        modelAssistedLabelOverlap ? null : "modelAssistedLabelOverlap:missing",
+        modelAssistedStatusOk ? null : "modelAssistedLabelOverlap.releaseUseStatus",
+        hasRequiredValue(modelAssistedLabelOverlap?.humanOnlyPreAssistanceTarget?.status ?? modelAssistedLabelOverlap?.releaseUseStatus)
+          ? null
+          : "modelAssistedLabelOverlap.humanOnlyPreAssistanceTarget",
+      ],
+      requirement:
+        "Model-assisted checks and evaluator-family overlap are disclosed, and clean model comparisons require a human-only or pre-assistance target when overlap is sensitive.",
+    }),
+  ];
+
+  return {
+    id: `label-aggregation-reliability-checklist-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      scope:
+        "RLHF91 label aggregation and reliability checklist over existing LabelSnapshot, Rating, RevisionRecord, AdjudicationMemo, disagreement-policy, metric-config, and model-assisted-overlap evidence.",
+      duplicationBoundary:
+        "This checklist does not create a new label snapshot, rating table, rater-weighting algorithm, adjudication object, or candidate architecture; it only binds existing release-report evidence.",
+      releaseClaimBoundary:
+        "Limitations such as thin final-rater overlap, single-rater dominance, and model-assisted overlap remain disclosed rather than converted into stronger consensus or clean-baseline claims.",
+    },
+    counts: {
+      checklistRows: rows.length,
+      completeRows: rows.filter((row) => row.status === "complete").length,
+      reviewRequiredRows: rows.filter((row) => row.status === "review_required").length,
+      includedRatingCount: includedRatingProvenance.includedRatingCount ?? 0,
+      blindInitialRows: revisionCounts.blindInitialRows ?? 0,
+      revisionRows: revisionCounts.revisionRows ?? 0,
+      checkRows:
+        (revisionCounts.selfCheckRows ?? 0) +
+        (revisionCounts.expertCheckRows ?? 0) +
+        (revisionCounts.modelAssistedCheckRows ?? 0),
+      maxSingleRaterContributionShare: effectiveContribution.maxSingleRaterContributionShare ?? null,
+      singleRaterDominatedItems: effectiveContribution.singleRaterDominatedItemIds?.length ?? 0,
+      highSpreadItems: disagreementCounts.highSpreadItemCount ?? 0,
+      missingMemoHighSpreadItems: disagreementCounts.missingMemoHighSpreadItemCount ?? 0,
+      adjudicationMemos: adjudicationCounts.memoCount ?? 0,
+      modelAssistedRatingCheckRows: modelAssistedLabelOverlap?.counts?.submittedModelAssistedRatingCheckRows ?? 0,
+    },
+    rows,
+    reviewSections: rows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({
+        artifactType: "label_aggregation_reliability_checklist",
+        artifactId: row.id,
+        reason,
+      })),
+    ),
+    releaseUseStatus: rows.every((row) => row.status === "complete")
+      ? "label_aggregation_reliability_requirements_evidenced"
+      : "label_aggregation_reliability_review_required",
+  };
+}
+
+function labelAggregationChecklistRow({ id, label, requirement, evidenceIds = [], sourceStatuses = [], complete, reviewReasons = [] }) {
+  const filteredReasons = reviewReasons.filter(Boolean);
+  return {
+    id,
+    label,
+    requirement,
+    evidenceIds,
+    sourceStatuses,
+    status: complete && filteredReasons.length === 0 ? "complete" : "review_required",
+    reviewReasons: filteredReasons,
+  };
+}
+
+export function buildModelEvaluationReproducibilityChecklistReport(
+  releaseId,
+  {
+    itemTextViewParity,
+    samePositionContext,
+    leaderboardReport,
+    modelEvaluationArtifactEvidence,
+    promptParserProvenance,
+    promptTrackSeparation,
+    metricDirectionalityConfig,
+    modelAssistedLabelOverlap,
+    modelFailureAudits = [],
+    auxiliaryWorkflowEvidence,
+  } = {},
+) {
+  const leaderboard = leaderboardReport ?? {};
+  const modelRunProvenance = leaderboard.modelRunProvenance ?? {};
+  const parserPromptIntegrity = leaderboard.parserPromptIntegrity ?? {};
+  const modelRunPolicyEvidence =
+    auxiliaryWorkflowEvidence?.modelRunReproducibilityPolicyEvidence ??
+    modelRunProvenance.modelRunReproducibilityPolicyEvidence ??
+    null;
+  const artifactEvidence = modelEvaluationArtifactEvidence ?? {};
+  const predictionCounts = artifactEvidence.predictionEvidence?.counts ?? {};
+  const uncertaintyPolicy = leaderboard.uncertaintyPolicy ?? {};
+  const modelAssistedStatusOk =
+    hasRequiredValue(modelAssistedLabelOverlap?.releaseUseStatus) &&
+    !String(modelAssistedLabelOverlap.releaseUseStatus).includes("review_required");
+  const failureAudits = Array.isArray(modelFailureAudits) ? modelFailureAudits : [];
+  const failureDiagnosticsOk =
+    failureAudits.length > 0 &&
+    failureAudits.every(
+      (audit) =>
+        audit?.diagnosticOnly === true &&
+        audit?.cannotReplaceAggregateMetrics === true &&
+        hasRequiredValue(audit?.claimGatedDiagnostics?.releaseUseStatus) &&
+        !String(audit.claimGatedDiagnostics.releaseUseStatus).includes("review_required"),
+    );
+  const modelRunPolicyStatusOk = [
+    "seed_model_run_reproducibility_policy_active",
+    "submitted_model_run_reproducibility_policy_active",
+  ].includes(modelRunPolicyEvidence?.releaseUseStatus);
+  const leaderboardModelRunStatusOk = [
+    "common_model_run_provenance_declared",
+    "mixed_model_run_provenance_sensitivity_declared",
+  ].includes(modelRunProvenance.releaseUseStatus);
+  const promptParserStatusOk = ["seed_prompt_parser_provenance_complete", "submitted_prompt_parser_provenance_complete"].includes(
+    promptParserProvenance?.releaseUseStatus,
+  );
+  const promptTrackStatusOk = promptTrackSeparation?.releaseUseStatus === "appendix_g_baseline_separated_from_project_prompt_tracks";
+  const parserPromptStatusOk =
+    hasRequiredValue(parserPromptIntegrity.releaseUseStatus) &&
+    !String(parserPromptIntegrity.releaseUseStatus).includes("review_required");
+  const leaderboardStatusOk =
+    hasRequiredValue(leaderboard.releaseUseStatus) && !String(leaderboard.releaseUseStatus).includes("review_required");
+
+  const rows = [
+    modelEvaluationChecklistRow({
+      id: "submitted_evaluation_artifacts_bound_to_release",
+      label: "Submitted evaluation artifacts bound to release",
+      evidenceIds: [artifactEvidence.id].filter(Boolean),
+      sourceStatuses: [artifactEvidence.releaseUseStatus].filter(Boolean),
+      complete: artifactEvidence.releaseUseStatus === "submitted_model_evaluation_artifacts_release_evidence_complete",
+      reviewReasons: [
+        !artifactEvidence.id ? "modelEvaluationArtifactEvidence:missing" : null,
+        artifactEvidence.releaseUseStatus !== "submitted_model_evaluation_artifacts_release_evidence_complete"
+          ? "modelEvaluationArtifactEvidence.releaseUseStatus"
+          : null,
+        (artifactEvidence.reviewSections?.length ?? 0) > 0 ? "modelEvaluationArtifactEvidence.reviewSections" : null,
+      ],
+      requirement:
+        "Submitted evaluation runs, predictions, calibration, leaderboards, failure audits, provider policies, and run provenance match the current release target.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "item_text_and_context_parity",
+      label: "Item text and rating-context parity",
+      evidenceIds: [itemTextViewParity?.id, samePositionContext?.id].filter(Boolean),
+      sourceStatuses: [itemTextViewParity?.releaseUseStatus, samePositionContext?.releaseUseStatus].filter(Boolean),
+      complete:
+        itemTextViewParity?.releaseUseStatus === "item_text_versions_frozen_with_human_model_view_parity" &&
+        samePositionContext?.releaseUseStatus === "same_position_context_parity_preserved",
+      reviewReasons: [
+        itemTextViewParity?.releaseUseStatus !== "item_text_versions_frozen_with_human_model_view_parity"
+          ? "itemTextViewParity.releaseUseStatus"
+          : null,
+        samePositionContext?.releaseUseStatus !== "same_position_context_parity_preserved"
+          ? "samePositionContext.releaseUseStatus"
+          : null,
+      ],
+      requirement:
+        "Human ratings and model predictions bind to frozen item-text hashes and same-position context snapshots before clean model-comparison claims.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "prompt_parser_and_injection_controls",
+      label: "Prompt, parser, and prompt-injection controls",
+      evidenceIds: [promptParserProvenance?.id, promptTrackSeparation?.id, leaderboard.id].filter(Boolean),
+      sourceStatuses: [
+        promptParserProvenance?.releaseUseStatus,
+        promptTrackSeparation?.releaseUseStatus,
+        parserPromptIntegrity.releaseUseStatus,
+      ].filter(Boolean),
+      complete: promptParserStatusOk && promptTrackStatusOk && parserPromptStatusOk,
+      reviewReasons: [
+        promptParserStatusOk ? null : "promptParserProvenance.releaseUseStatus",
+        promptTrackStatusOk ? null : "promptTrackSeparation.releaseUseStatus",
+        parserPromptStatusOk ? null : "leaderboardReport.parserPromptIntegrity.releaseUseStatus",
+        (parserPromptIntegrity.reviewSections?.length ?? 0) > 0 ? "leaderboardReport.parserPromptIntegrity.reviewSections" : null,
+      ],
+      requirement:
+        "Prompt templates, parser configs, Appendix-G-vs-project prompt tracks, schema retry behavior, and item-text-as-data controls are versioned and comparable.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "leaderboard_model_run_provenance",
+      label: "Leaderboard model-run provenance",
+      evidenceIds: [leaderboard.id, ...modelRunProvenance.perModelRows?.map((row) => row.modelInferenceConfigId).filter(Boolean) ?? []].filter(Boolean),
+      sourceStatuses: [modelRunProvenance.releaseUseStatus, modelRunProvenance.commonSettingStatus].filter(Boolean),
+      complete:
+        leaderboardModelRunStatusOk &&
+        (modelRunProvenance.perModelRows?.length ?? 0) > 0 &&
+        (modelRunProvenance.reviewSections?.length ?? 0) === 0,
+      reviewReasons: [
+        leaderboardModelRunStatusOk ? null : "leaderboardReport.modelRunProvenance.releaseUseStatus",
+        (modelRunProvenance.perModelRows?.length ?? 0) > 0 ? null : "leaderboardReport.modelRunProvenance.perModelRows",
+        (modelRunProvenance.reviewSections?.length ?? 0) > 0 ? "leaderboardReport.modelRunProvenance.reviewSections" : null,
+      ],
+      requirement:
+        "Every leaderboard evaluation run has resolved model snapshot, inference config, deterministic settings, environment metadata, and parser/extractor version links.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "submitted_run_inference_environment_provenance",
+      label: "Submitted run inference and environment provenance",
+      evidenceIds: [
+        artifactEvidence.modelRunProvenanceEvidence?.modelInferenceConfigId,
+        artifactEvidence.modelRunProvenanceEvidence?.modelRunEnvironmentId,
+      ].filter(Boolean),
+      sourceStatuses: [
+        artifactEvidence.modelRunProvenanceEvidence?.status,
+        artifactEvidence.modelRunProvenanceEvidence?.modelRunReproducibilityPolicyReleaseUseStatus,
+      ].filter(Boolean),
+      complete: artifactEvidence.modelRunProvenanceEvidence?.status === "submitted_model_run_provenance_preserves_inference_and_environment",
+      reviewReasons: [
+        artifactEvidence.modelRunProvenanceEvidence?.status !== "submitted_model_run_provenance_preserves_inference_and_environment"
+          ? "modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.status"
+          : null,
+      ],
+      requirement:
+        "Submitted model-evaluation artifacts preserve model inference config and model-run environment evidence for their evaluated run.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "model_run_reproducibility_policy_active",
+      label: "Model-run reproducibility policy active",
+      evidenceIds: [modelRunPolicyEvidence?.id, modelRunPolicyEvidence?.activePolicyId].filter(Boolean),
+      sourceStatuses: [modelRunPolicyEvidence?.releaseUseStatus].filter(Boolean),
+      complete: modelRunPolicyStatusOk && (modelRunPolicyEvidence?.reviewRows?.length ?? 0) === 0,
+      reviewReasons: [
+        modelRunPolicyStatusOk ? null : "modelRunReproducibilityPolicyEvidence.releaseUseStatus",
+        (modelRunPolicyEvidence?.reviewRows?.length ?? 0) > 0 ? "modelRunReproducibilityPolicyEvidence.reviewRows" : null,
+      ],
+      requirement:
+        "A frozen reproducibility policy declares required inference-config fields, run-environment fields, parser/prompt linkage, and clean-comparison boundaries.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "metric_uncertainty_and_directionality",
+      label: "Metric uncertainty and directionality",
+      evidenceIds: [metricDirectionalityConfig?.id, leaderboard.id].filter(Boolean),
+      sourceStatuses: [metricDirectionalityConfig?.releaseUseStatus, leaderboard.releaseUseStatus].filter(Boolean),
+      complete:
+        metricDirectionalityConfig?.releaseUseStatus === "metric_config_and_directionality_declared" &&
+        leaderboardStatusOk &&
+        hasRequiredValue(uncertaintyPolicy.intervalType) &&
+        hasRequiredValue(uncertaintyPolicy.nominalLevel) &&
+        hasRequiredValue(uncertaintyPolicy.constructionMethod) &&
+        hasRequiredValue(uncertaintyPolicy.resamplingUnit),
+      reviewReasons: [
+        metricDirectionalityConfig?.releaseUseStatus !== "metric_config_and_directionality_declared"
+          ? "metricDirectionalityConfig.releaseUseStatus"
+          : null,
+        leaderboardStatusOk ? null : "leaderboardReport.releaseUseStatus",
+        hasRequiredValue(uncertaintyPolicy.intervalType) ? null : "leaderboardReport.uncertaintyPolicy.intervalType",
+        hasRequiredValue(uncertaintyPolicy.nominalLevel) ? null : "leaderboardReport.uncertaintyPolicy.nominalLevel",
+        hasRequiredValue(uncertaintyPolicy.constructionMethod) ? null : "leaderboardReport.uncertaintyPolicy.constructionMethod",
+        hasRequiredValue(uncertaintyPolicy.resamplingUnit) ? null : "leaderboardReport.uncertaintyPolicy.resamplingUnit",
+      ],
+      requirement:
+        "Leaderboards and custom losses declare target/prediction directionality, tie policies, uncertainty interval provenance, and common-subset ranking limits.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "model_assisted_label_overlap_separation",
+      label: "Model-assisted label overlap separation",
+      evidenceIds: [modelAssistedLabelOverlap?.id].filter(Boolean),
+      sourceStatuses: [modelAssistedLabelOverlap?.releaseUseStatus].filter(Boolean),
+      complete:
+        modelAssistedStatusOk &&
+        hasRequiredValue(modelAssistedLabelOverlap?.humanOnlyPreAssistanceTarget?.status ?? modelAssistedLabelOverlap?.releaseUseStatus),
+      reviewReasons: [
+        modelAssistedLabelOverlap ? null : "modelAssistedLabelOverlap:missing",
+        modelAssistedStatusOk ? null : "modelAssistedLabelOverlap.releaseUseStatus",
+        hasRequiredValue(modelAssistedLabelOverlap?.humanOnlyPreAssistanceTarget?.status ?? modelAssistedLabelOverlap?.releaseUseStatus)
+          ? null
+          : "modelAssistedLabelOverlap.humanOnlyPreAssistanceTarget",
+      ],
+      requirement:
+        "Clean model-evaluation claims use human-only or overlap-free targets, while model-assisted checking and provider-family overlap remain disclosed.",
+    }),
+    modelEvaluationChecklistRow({
+      id: "failure_diagnostics_claim_gated",
+      label: "Failure diagnostics are claim-gated",
+      evidenceIds: failureAudits.map((audit) => audit.id).filter(Boolean),
+      sourceStatuses: failureAudits.map((audit) => audit.claimGatedDiagnostics?.releaseUseStatus).filter(Boolean),
+      complete: failureDiagnosticsOk,
+      reviewReasons: [
+        failureAudits.length > 0 ? null : "modelFailureAudits:missing",
+        failureDiagnosticsOk ? null : "modelFailureAudits.claimGatedDiagnostics",
+      ],
+      requirement:
+        "Failure audits remain diagnostic-only, cannot replace aggregate metrics, and require claim-gated robustness diagnostics before stronger model-improvement claims.",
+    }),
+  ];
+
+  return {
+    id: `model-evaluation-reproducibility-checklist-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      scope:
+        "RLHF91 model-evaluation reproducibility checklist over existing item-text parity, prompt/parser, leaderboard, model-run provenance, metric, provider, overlap, and failure-audit evidence.",
+      duplicationBoundary:
+        "This checklist does not create a new model-evaluation table, queue path, candidate artifact, source-preparation bridge, or model run; it only binds existing release-report evidence.",
+      releaseClaimBoundary:
+        "Incomplete submitted artifacts, missing leaderboard model-run provenance, prompt/parser review, or protected-data/provider gaps keep release claims review-required or sensitivity-labeled.",
+    },
+    counts: {
+      checklistRows: rows.length,
+      completeRows: rows.filter((row) => row.status === "complete").length,
+      reviewRequiredRows: rows.filter((row) => row.status === "review_required").length,
+      submittedEvaluationRunCount: artifactEvidence.evaluationRunEvidence?.submittedArtifactId ? 1 : 0,
+      submittedPredictionRows: predictionCounts.predictionRows ?? 0,
+      leaderboardEvaluationRunCount: modelRunProvenance.perModelRows?.length ?? leaderboard.rows?.length ?? 0,
+      leaderboardRunsWithInferenceConfig: modelRunProvenance.perModelRows?.filter((row) => hasRequiredValue(row.modelInferenceConfigId)).length ?? 0,
+      leaderboardRunsWithEnvironment: modelRunProvenance.perModelRows?.filter((row) => hasRequiredValue(row.modelRunEnvironmentId)).length ?? 0,
+      modelRunProvenanceReviewSections: modelRunProvenance.reviewSections?.length ?? 0,
+      promptParserReviewRows:
+        (promptParserProvenance?.reviewRows?.submittedPromptReviewRows?.length ?? 0) +
+        (promptParserProvenance?.reviewRows?.submittedParserReviewRows?.length ?? 0),
+      failureAuditCount: failureAudits.length,
+    },
+    rows,
+    reviewSections: rows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({
+        artifactType: "model_evaluation_reproducibility_checklist",
+        artifactId: row.id,
+        reason,
+      })),
+    ),
+    releaseUseStatus: rows.every((row) => row.status === "complete")
+      ? "model_evaluation_reproducibility_requirements_evidenced"
+      : "model_evaluation_reproducibility_review_required",
+  };
+}
+
+function modelEvaluationChecklistRow({ id, label, requirement, evidenceIds = [], sourceStatuses = [], complete, reviewReasons = [] }) {
+  const filteredReasons = reviewReasons.filter(Boolean);
+  return {
+    id,
+    label,
+    requirement,
+    evidenceIds,
+    sourceStatuses,
+    status: complete && filteredReasons.length === 0 ? "complete" : "review_required",
+    reviewReasons: filteredReasons,
+  };
+}
+
 export function buildHiddenBenchmarkInitialBlindingReport(
   releaseId,
   labelSnapshot,
@@ -7877,6 +9460,12 @@ export function buildPositionIntakeReadinessReport(releaseId, positionList = pos
         position.contextSufficiency === "sufficient" ||
         ["normalized", "rights_review_normalized", "expert_normalized"].includes(screening.normalizationStatus);
       const ordinaryHeadlineEligible = conceptuallyAdmissible && contextSufficientOrNormalized && screening.ordinaryHeadlineEligibility === "eligible";
+      const reviewReasons = positionIntakeReviewReasons(position, screening, {
+        latestVersion,
+        originalTextPreserved,
+        conceptuallyAdmissible,
+        contextSufficientOrNormalized,
+      });
       return {
         positionId: position.id,
         clusterId: position.clusterId,
@@ -7884,6 +9473,7 @@ export function buildPositionIntakeReadinessReport(releaseId, positionList = pos
         topicFamily: position.topicFamily,
         conceptualScope: position.conceptualScope,
         groundTruthAvailability: position.groundTruthAvailability,
+        acceptedMethodologyStatus: position.acceptedMethodologyStatus,
         nonConceptualDependencyNotes: position.nonConceptualDependencyNotes,
         contextSufficiency: position.contextSufficiency,
         assumedBackgroundPolicy: position.assumedBackgroundPolicy,
@@ -7899,8 +9489,10 @@ export function buildPositionIntakeReadinessReport(releaseId, positionList = pos
         contextGapFlags: screening.contextGapFlags ?? [],
         ordinaryHeadlineEligibility: screening.ordinaryHeadlineEligibility ?? "missing",
         ordinaryHeadlineEligible,
+        reviewReasons,
         hiddenBenchmarkEligible:
           position.split === "hidden_benchmark" &&
+          reviewReasons.length === 0 &&
           ordinaryHeadlineEligible &&
           screening.notesVisibleToInitialRaters === false,
       };
@@ -7909,7 +9501,11 @@ export function buildPositionIntakeReadinessReport(releaseId, positionList = pos
   const normalizationRequiredRows = rows.filter((row) => row.expertNormalizationRequired || row.contextSufficiency === "needs_normalization");
   const contextGapRows = rows.filter((row) => row.contextGapFlags.length > 0);
   const nonHeadlineRows = rows.filter((row) => !row.ordinaryHeadlineEligible);
+  const incompleteScreeningRows = rows.filter((row) => row.reviewReasons.length > 0);
   const hiddenBenchmarkContextBlockedRows = rows.filter((row) => row.split === "hidden_benchmark" && !row.hiddenBenchmarkEligible);
+  const reviewSections = rows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "position_intake_screening", artifactId: row.positionId, reason })),
+  );
   return {
     id: `position-intake-readiness-${releaseId}`,
     releaseId,
@@ -7928,6 +9524,7 @@ export function buildPositionIntakeReadinessReport(releaseId, positionList = pos
       adminNotesHiddenCount: rows.filter((row) => row.adminNotesHiddenFromInitialRaters).length,
       normalizationRequiredCount: normalizationRequiredRows.length,
       contextGapFlaggedPositionCount: contextGapRows.length,
+      incompleteScreeningCount: incompleteScreeningRows.length,
       ordinaryHeadlineEligibleCount: rows.filter((row) => row.ordinaryHeadlineEligible).length,
       nonHeadlinePositionCount: nonHeadlineRows.length,
       hiddenBenchmarkContextBlockedCount: hiddenBenchmarkContextBlockedRows.length,
@@ -7939,14 +9536,1168 @@ export function buildPositionIntakeReadinessReport(releaseId, positionList = pos
     normalizationRequiredRows,
     contextGapRows,
     nonHeadlineRows,
+    incompleteScreeningRows,
     hiddenBenchmarkContextBlockedRows,
+    reviewSections,
     releaseUseStatus:
-      hiddenBenchmarkContextBlockedRows.length > 0
+      incompleteScreeningRows.length > 0
+        ? "position_intake_screening_review_required"
+        : hiddenBenchmarkContextBlockedRows.length > 0
         ? "position_intake_blocks_hidden_benchmark_claims"
         : normalizationRequiredRows.length || contextGapRows.length || nonHeadlineRows.length
           ? "position_intake_limitations_disclosed"
           : "position_intake_ready",
   };
+}
+
+function positionIntakeReviewReasons(position, screening, evidence) {
+  const reasons = [
+    REQUIRED_POSITION_CONCEPTUAL_SCOPE_STATUSES.includes(position.conceptualScope) ? null : "conceptualScope",
+    REQUIRED_POSITION_GROUND_TRUTH_AVAILABILITY_STATUSES.includes(position.groundTruthAvailability) ? null : "groundTruthAvailability",
+    REQUIRED_POSITION_ACCEPTED_METHODOLOGY_STATUSES.includes(position.acceptedMethodologyStatus) ? null : "acceptedMethodologyStatus",
+    REQUIRED_POSITION_CONTEXT_SUFFICIENCY_STATUSES.includes(position.contextSufficiency) ? null : "contextSufficiency",
+    hasRequiredText(position.nonConceptualDependencyNotes) ? null : "nonConceptualDependencyNotes",
+    hasRequiredText(position.assumedBackgroundPolicy) ? null : "assumedBackgroundPolicy",
+    hasRequiredText(position.pricedInContextNotes) ? null : "pricedInContextNotes",
+    evidence.originalTextPreserved ? null : "originalTextPreserved",
+    evidence.latestVersion?.canonicalHash ? null : "canonicalHash",
+    hasRequiredText(screening.raterVisibleTextVersionId) ? null : "raterVisibleTextVersionId",
+    REQUIRED_POSITION_INTAKE_NORMALIZATION_STATUSES.includes(screening.normalizationStatus) ? null : "normalizationStatus",
+    screening.notesVisibleToInitialRaters === false ? null : "notesVisibleToInitialRaters",
+    REQUIRED_POSITION_HEADLINE_ELIGIBILITY_STATUSES.includes(screening.ordinaryHeadlineEligibility) ? null : "ordinaryHeadlineEligibility",
+  ].filter(Boolean);
+  if (position.conceptualScope === "mixed_conceptual_non_conceptual") {
+    if (!String(position.nonConceptualDependencyNotes ?? "").toLowerCase().includes("separat")) {
+      reasons.push("nonConceptualDependencyNotes:separation");
+    }
+  }
+  if (position.conceptualScope === "primarily_non_conceptual" && !policyMentionsAny(screening.ordinaryHeadlineEligibility, ["excluded", "stress", "comparison"])) {
+    reasons.push("ordinaryHeadlineEligibility:nonconceptual");
+  }
+  if (["context_insufficient", "needs_normalization"].includes(position.contextSufficiency) && !evidence.contextSufficientOrNormalized) {
+    if (!Array.isArray(screening.contextGapFlags) || screening.contextGapFlags.length === 0) {
+      reasons.push("contextGapFlags");
+    }
+    if (!policyMentionsAny(screening.ordinaryHeadlineEligibility, ["normalization", "validation", "stress", "comparison", "excluded"])) {
+      reasons.push("ordinaryHeadlineEligibility:context");
+    }
+  }
+  return reasons;
+}
+
+function sourceIntakeRouteSummary() {
+  const jsonlImportRoutes = SOURCE_INTAKE_JSONL_IMPORT_ROUTES.map((route) => ({
+    route,
+    dryRunImportRoute: operatorImportRouteWithQueryFlag(route, "dryRun", "true"),
+    validateOnlyImportRoute: operatorImportRouteWithQueryFlag(route, "validateOnly", "true"),
+  }));
+  return {
+    adminWriteRoutes: SOURCE_INTAKE_ADMIN_WRITE_ROUTES,
+    jsonlImportRoutes,
+    reviewRoutes: SOURCE_INTAKE_REVIEW_ROUTES,
+    readbackRoutes: SOURCE_INTAKE_READBACK_ROUTES,
+    templateReadbackRoutes: sourceWorkbenchTemplateRoutes([
+      "source_card_write",
+      "source_span_write",
+      "extraction_jsonl_import",
+      "argument_extraction_review",
+    ]),
+    workflowTemplateIds: [
+      "source-workbench-template:source-card",
+      "source-workbench-template:source-span",
+      "source-workbench-template:extraction-jsonl",
+      "source-workbench-template:extraction-review",
+    ],
+  };
+}
+
+function sourcePreparationRouteSummary() {
+  return {
+    adminWriteRoutes: SOURCE_PREPARATION_ADMIN_WRITE_ROUTES,
+    readbackRoutes: SOURCE_PREPARATION_READBACK_ROUTES,
+    templateReadbackRoutes: sourceWorkbenchTemplateRoutes([
+      "prepared_position_draft_create",
+      "prepared_critique_draft_create",
+      "prepared_draft_review",
+      "prepared_draft_promote",
+    ]),
+    workflowTemplateIds: [
+      "source-workbench-template:prepared-position",
+      "source-workbench-template:prepared-critique",
+      "source-workbench-template:prepared-draft-review",
+      "source-workbench-template:prepared-draft-promote",
+    ],
+  };
+}
+
+function sourceWorkbenchTemplateRoutes(templateKinds) {
+  return [
+    "/api/v1/metaphilosophy/source-workbench-template",
+    ...templateKinds.map((templateKind) => operatorTemplateReadbackRoute("/api/v1/metaphilosophy/source-workbench-template", { templateKind })),
+  ];
+}
+
+function sourceWorkbenchRouteCounts(routeSummary) {
+  const routes = [
+    ...flattenRouteValues(Object.values(routeSummary)),
+    ...(routeSummary.jsonlImportRoutes ?? []).flatMap((item) => [item.route, item.dryRunImportRoute, item.validateOnlyImportRoute]),
+    ...SOURCE_WORKBENCH_READBACK_ROUTES,
+  ];
+  const byRoute = {};
+  for (const route of uniqueStrings(routes)) byRoute[route] = (byRoute[route] ?? 0) + 1;
+  return {
+    adminWriteRoutes: routeSummary.adminWriteRoutes?.length ?? 0,
+    jsonlImportRoutes: routeSummary.jsonlImportRoutes?.length ?? 0,
+    reviewRoutes: routeSummary.reviewRoutes?.length ?? 0,
+    readbackRoutes: routeSummary.readbackRoutes?.length ?? 0,
+    templateReadbackRoutes: routeSummary.templateReadbackRoutes?.length ?? 0,
+    byRoute,
+  };
+}
+
+function flattenRouteValues(values) {
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) return flattenRouteValues(value);
+    if (value && typeof value === "object") return flattenRouteValues(Object.values(value));
+    return typeof value === "string" && value.startsWith("/api/") ? [value] : [];
+  });
+}
+
+export function buildSourceIntakeEvidenceReport(releaseId, options = {}) {
+  const sourceCards = latestSourceIntakeRows(options.sourceCards ?? []);
+  const sourceCardRows = sourceCards
+    .map((card, index) => {
+      const reviewReasons = sourceCardReviewReasons(card);
+      return {
+        ...card,
+        artifactId: hasRequiredText(card.id) ? card.id : `source-card-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const validSourceCardIds = new Set(sourceCardRows.filter((row) => row.reviewReasons.length === 0).map((row) => row.id));
+
+  const sourceSpans = latestSourceIntakeRows(options.sourceSpans ?? []);
+  const sourceSpanRows = sourceSpans
+    .map((span, index) => {
+      const reviewReasons = sourceSpanReviewReasons(span, validSourceCardIds);
+      return {
+        ...span,
+        artifactId: hasRequiredText(span.id) ? span.id : `source-span-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const validSourceSpanById = new Map(sourceSpanRows.filter((row) => row.reviewReasons.length === 0).map((row) => [row.id, row]));
+
+  const extractionBatches = latestSourceIntakeRows(options.extractionBatches ?? []);
+  const extractionBatchRows = extractionBatches
+    .map((batch, index) => {
+      const reviewReasons = extractionBatchReviewReasons(batch, validSourceCardIds);
+      return {
+        ...batch,
+        artifactId: hasRequiredText(batch.id) ? batch.id : `extraction-batch-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const validExtractionBatchById = new Map(extractionBatchRows.filter((row) => row.reviewReasons.length === 0).map((row) => [row.id, row]));
+
+  const argumentExtractions = latestSourceIntakeRows(options.argumentExtractions ?? []);
+  const extractionsByBatchId = countBy(argumentExtractions, "extractionBatchId");
+  const argumentExtractionRows = argumentExtractions
+    .map((extraction, index) => {
+      const reviewReasons = argumentExtractionReviewReasons(extraction, {
+        validSourceCardIds,
+        validSourceSpanById,
+        validExtractionBatchById,
+      });
+      return {
+        ...extraction,
+        artifactId: hasRequiredText(extraction.id) ? extraction.id : `argument-extraction-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+
+  for (const batchRow of extractionBatchRows) {
+    const observedCount = extractionsByBatchId[batchRow.id] ?? 0;
+    if (Number.isFinite(batchRow.extractionCount) && batchRow.extractionCount !== observedCount) {
+      batchRow.reviewReasons = [...batchRow.reviewReasons, "extractionCount:jsonl_line_count_mismatch"];
+    }
+  }
+
+  const reviewSections = [
+    ...sourceIntakeReviewSections("source_card", sourceCardRows),
+    ...sourceIntakeReviewSections("source_span", sourceSpanRows),
+    ...sourceIntakeReviewSections("extraction_batch", extractionBatchRows),
+    ...sourceIntakeReviewSections("argument_extraction", argumentExtractionRows),
+  ];
+  const pendingExtractionRows = argumentExtractionRows.filter((row) => row.reviewStatus === "pending_admin_review");
+  const acceptedExtractionRows = argumentExtractionRows.filter((row) => ARGUMENT_EXTRACTION_ACCEPTED_REVIEW_STATUSES.includes(row.reviewStatus));
+  const nonAcceptedReviewedExtractionRows = argumentExtractionRows.filter((row) =>
+    ["needs_revision", "rejected", "deferred"].includes(row.reviewStatus),
+  );
+  const totalArtifacts = sourceCardRows.length + sourceSpanRows.length + extractionBatchRows.length + argumentExtractionRows.length;
+  const releaseUseStatus = sourceIntakeReleaseUseStatus({
+    totalArtifacts,
+    reviewSections,
+    pendingExtractionRows,
+    argumentExtractionRows,
+    acceptedExtractionRows,
+  });
+  const routes = sourceIntakeRouteSummary();
+
+  return {
+    id: `source-intake-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    phase: SOURCE_INTAKE_PHASE,
+    policy: {
+      scope:
+        "Phase 1 stores admin-only source cards, selected spans, JSONL extraction batches, and manually reviewed argument extractions.",
+      raterVisibilityRule:
+        "Source cards, raw source spans, and extraction provenance remain admin-only and are not rater-visible before any later preparation workflow.",
+      downstreamBoundary:
+        "Phase 1 does not create PreparedDraft, ReviewSignal, WorkflowGate, WorkflowPolicy, GateDecision, CandidateItem, CandidateBatch, PromotionRecord, candidate membership, AI extraction, or live queue artifacts.",
+      importRule:
+        "JSONL import records externally prepared argument extractions only; the platform does not execute AI extraction in this phase.",
+    },
+    counts: {
+      sourceCards: sourceCardRows.length,
+      sourceSpans: sourceSpanRows.length,
+      extractionBatches: extractionBatchRows.length,
+      argumentExtractions: argumentExtractionRows.length,
+      pendingReviewExtractions: pendingExtractionRows.length,
+      acceptedForSourcePreparationExtractions: acceptedExtractionRows.length,
+      acceptedForPositionIntakeExtractions: argumentExtractionRows.filter((row) => row.reviewStatus === "accepted_for_position_intake").length,
+      acceptedForCritiqueIntakeExtractions: argumentExtractionRows.filter((row) => row.reviewStatus === "accepted_for_critique_intake").length,
+      acceptedForGeneralSourcePreparationExtractions: argumentExtractionRows.filter((row) => row.reviewStatus === "accepted_for_source_preparation").length,
+      nonAcceptedReviewedExtractions: nonAcceptedReviewedExtractionRows.length,
+      reviewRequiredArtifacts: new Set(reviewSections.map((section) => `${section.artifactType}:${section.artifactId}`)).size,
+    },
+    bySourceType: countBy(sourceCardRows, "sourceType"),
+    bySpanKind: countBy(sourceSpanRows, "spanKind"),
+    byArgumentRole: countBy(argumentExtractionRows, "argumentRole"),
+    byExtractionReviewStatus: countBy(argumentExtractionRows, "reviewStatus"),
+    routes,
+    routeCounts: sourceWorkbenchRouteCounts(routes),
+    sourceCardRows,
+    sourceSpanRows,
+    extractionBatchRows,
+    argumentExtractionRows,
+    pendingExtractionRows,
+    acceptedExtractionRows,
+    nonAcceptedReviewedExtractionRows,
+    reviewSections,
+    releaseUseStatus,
+  };
+}
+
+export function buildSourcePreparationEvidenceReport(releaseId, options = {}) {
+  const routes = sourcePreparationRouteSummary();
+  const workflowPolicy = sourcePreparationWorkflowPolicyDefinition();
+  const argumentExtractions = latestSourceIntakeRows(options.argumentExtractions ?? []);
+  const extractionById = new Map(argumentExtractions.filter((row) => hasRequiredText(row.id)).map((row) => [row.id, row]));
+  const sourcePreparedDraftRows = latestSourceIntakeRows(options.preparedDrafts ?? [])
+    .filter((draft) => hasRequiredText(draft.sourceArgumentExtractionId))
+    .map((draft, index) => {
+      const extraction = extractionById.get(draft.sourceArgumentExtractionId);
+      const gateSummary = gatesSatisfiedForPolicy("prepared_draft_readiness", draft.id, options.gateDecisions ?? []);
+      const reviewReasons = sourcePreparedDraftReviewReasons(draft, extraction);
+      return {
+        ...draft,
+        artifactId: hasRequiredText(draft.id) ? draft.id : `source-prepared-draft-${index + 1}`,
+        sourceExtractionReviewStatus: extraction?.reviewStatus ?? null,
+        requiredGateSummary: {
+          policyId: workflowPolicy.policyId,
+          status: gateSummary.ok ? "satisfied" : "blocked_or_pending",
+          requiredGateIds: workflowPolicy.requiredGateIds,
+          requiredGates: workflowPolicy.requiredGates,
+          missingGateIds: gateSummary.missingGateIds,
+          blockingGateIds: gateSummary.blockingGateIds,
+        },
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+
+  const sourcePreparedDraftIds = new Set(sourcePreparedDraftRows.map((draft) => draft.id).filter(Boolean));
+  const sourceCandidateItemRows = latestSourceIntakeRows(options.candidateItems ?? [])
+    .filter((item) => item.sourceArgumentExtractionId || sourcePreparedDraftIds.has(item.sourcePreparedDraftId))
+    .map((item, index) => ({
+      ...item,
+      artifactId: hasRequiredText(item.id) ? item.id : `source-candidate-item-${index + 1}`,
+      reviewReasons: sourceCandidateItemReviewReasons(item, sourcePreparedDraftIds),
+    }))
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const sourcePromotionRecordRows = latestSourceIntakeRows(options.promotionRecords ?? [])
+    .filter((record) => record.auditTrail?.argumentExtractionId || sourcePreparedDraftIds.has(record.sourcePreparedDraftId))
+    .map((record, index) => ({
+      ...record,
+      artifactId: hasRequiredText(record.id) ? record.id : `source-promotion-record-${index + 1}`,
+      reviewReasons: sourcePromotionRecordReviewReasons(record, sourcePreparedDraftIds),
+    }))
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const sourceCandidateItemIds = new Set(sourceCandidateItemRows.map((item) => item.id).filter(Boolean));
+  const sourceArgumentExtractionIds = new Set(sourcePreparedDraftRows.map((draft) => draft.sourceArgumentExtractionId).filter(Boolean));
+  const sourceExtractionBatchIds = new Set(sourcePreparedDraftRows.map((draft) => draft.sourceExtractionBatchId).filter(Boolean));
+  const sourceCardIds = new Set(sourcePreparedDraftRows.map((draft) => draft.sourceCardId).filter(Boolean));
+  const sourceSpanIds = new Set(sourcePreparedDraftRows.flatMap((draft) => (Array.isArray(draft.sourceSpanIds) ? draft.sourceSpanIds : [])).filter(Boolean));
+  const sourceReviewSignalRows = latestSourceIntakeRows(options.reviewSignals ?? [])
+    .filter((signal) =>
+      sourcePreparationReviewSignalTargetsSourceLineage(signal, {
+        sourcePreparedDraftIds,
+        sourceCandidateItemIds,
+        sourceArgumentExtractionIds,
+        sourceExtractionBatchIds,
+        sourceCardIds,
+        sourceSpanIds,
+      }),
+    )
+    .map((signal, index) => ({
+      ...signal,
+      artifactId: hasRequiredText(signal.id) ? signal.id : `source-review-signal-${index + 1}`,
+      reviewReasons: sourceReviewSignalReviewReasons(signal),
+    }))
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const sourceGateDecisionRows = latestSourceIntakeRows(options.gateDecisions ?? [])
+    .filter((decision) => decision.workflowPolicyId === "prepared_draft_readiness" && sourcePreparedDraftIds.has(decision.objectId))
+    .map((decision, index) => ({
+      ...decision,
+      artifactId: hasRequiredText(decision.id) ? decision.id : `source-gate-decision-${index + 1}`,
+      reviewReasons: sourceGateDecisionReviewReasons(decision, sourcePreparedDraftIds, new Set(sourceReviewSignalRows.map((signal) => signal.id).filter(Boolean))),
+    }))
+    .sort((left, right) => String(left.id ?? "").localeCompare(String(right.id ?? "")));
+
+  const reviewSections = [
+    ...sourcePreparationReviewSections("source_prepared_draft", sourcePreparedDraftRows),
+    ...sourcePreparationReviewSections("source_review_signal", sourceReviewSignalRows),
+    ...sourcePreparationReviewSections("source_gate_decision", sourceGateDecisionRows),
+    ...sourcePreparationReviewSections("source_candidate_item", sourceCandidateItemRows),
+    ...sourcePreparationReviewSections("source_promotion_record", sourcePromotionRecordRows),
+  ];
+
+  return {
+    id: `source-preparation-evidence-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    phase: "phase2_source_preparation",
+    policy: {
+      scope:
+        "Source preparation creates reviewer-visible PreparedDraft records from accepted ArgumentExtraction records, then reuses the existing PreparedDraft review gates and CandidateItem promotion layer.",
+      intakeBoundary:
+        "JSONL import and extraction review remain Phase 1 source-intake actions and do not create prepared drafts or candidate artifacts by themselves.",
+      promotionBoundary:
+        "PreparedDraft promotion creates CandidateItem and PromotionRecord artifacts only; it does not create live Position, live Critique, CandidateBatch, candidate-batch membership, AI extraction jobs, or live queue work.",
+      raterVisibilityRule:
+        "SourceCard, SourceSpan, extraction provenance, source locator, raw source text, review signals, and gate decisions remain admin-only before any later rater-visible workflow.",
+    },
+    workflowPolicy,
+    counts: {
+      preparedDrafts: sourcePreparedDraftRows.length,
+      candidateItems: sourceCandidateItemRows.length,
+      promotionRecords: sourcePromotionRecordRows.length,
+      reviewSignals: sourceReviewSignalRows.length,
+      gateDecisions: sourceGateDecisionRows.length,
+      reviewRequiredArtifacts: new Set(reviewSections.map((section) => `${section.artifactType}:${section.artifactId}`)).size,
+    },
+    byDraftType: countBy(sourcePreparedDraftRows, "draftType"),
+    byPreparedDraftStatus: countBy(sourcePreparedDraftRows, "preparedDraftStatus"),
+    byCandidateItemType: countBy(sourceCandidateItemRows, "itemType"),
+    routes,
+    routeCounts: sourceWorkbenchRouteCounts(routes),
+    preparedDraftRows: sourcePreparedDraftRows,
+    reviewSignalRows: sourceReviewSignalRows,
+    candidateItemRows: sourceCandidateItemRows,
+    promotionRecordRows: sourcePromotionRecordRows,
+    gateDecisionRows: sourceGateDecisionRows,
+    reviewSections,
+    releaseUseStatus: sourcePreparationReleaseUseStatus({
+      sourcePreparedDraftRows,
+      sourceCandidateItemRows,
+      sourcePromotionRecordRows,
+      reviewSections,
+    }),
+  };
+}
+
+function sourcePreparationWorkflowPolicyDefinition() {
+  const workflowPolicy = WORKFLOW_POLICIES.prepared_draft_readiness ?? {};
+  const requiredGateIds = requiredGateIdsForPolicy("prepared_draft_readiness");
+  const requiredGates = requiredGateIds.map((gateId) => WORKFLOW_GATES[gateId]).filter(Boolean);
+  return {
+    policyId: "prepared_draft_readiness",
+    appliesTo: Array.isArray(workflowPolicy.appliesTo) ? workflowPolicy.appliesTo : [],
+    requiredGateIds,
+    requiredGates,
+  };
+}
+
+function latestSourceIntakeRows(rows) {
+  const keyedRows = new Map();
+  const unkeyedRows = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const clone = structuredClone(row);
+    if (hasRequiredText(clone.id)) keyedRows.set(clone.id, clone);
+    else unkeyedRows.push(clone);
+  }
+  return [...unkeyedRows, ...keyedRows.values()];
+}
+
+function sourcePreparedDraftReviewReasons(draft, extraction) {
+  return [
+    ...missingSourceIntakeFields(draft, [
+      "id",
+      "sourceArgumentExtractionId",
+      "draftType",
+      "preparedText",
+      "candidateRaterVisibleText",
+      "blindingReviewStatus",
+      "sourceLeakageReviewStatus",
+      "gateReadinessStatus",
+      "candidateItemReadiness",
+      "preparedDraftStatus",
+      "createdBy",
+      "createdAt",
+    ]),
+    ["prepared_position_draft", "prepared_critique_draft"].includes(draft.draftType) ? null : "draftType",
+    extraction ? null : "sourceArgumentExtractionId:not_found",
+    ARGUMENT_EXTRACTION_ACCEPTED_REVIEW_STATUSES.includes(extraction?.reviewStatus) ? null : "sourceArgumentExtractionId:not_accepted",
+    hasRequiredText(draft.preparedText) ? null : "preparedText",
+    hasRequiredText(draft.candidateRaterVisibleText) ? null : "candidateRaterVisibleText",
+    draft.sourcePreparationPhase === "phase2_source_preparation" ? null : "sourcePreparationPhase",
+    draft.sourcePreparationReviewStatus === "prepared_from_accepted_extraction" ? null : "sourcePreparationReviewStatus",
+    draft.visibilityClasses?.preparedText === "reviewer_visible" ? null : "visibilityClasses.preparedText",
+    draft.visibilityClasses?.candidateRaterVisibleText === "reviewer_visible" ? null : "visibilityClasses.candidateRaterVisibleText",
+    draft.visibilityClasses?.sourceArgumentExtractionId === "admin_only" ? null : "visibilityClasses.sourceArgumentExtractionId",
+    draft.draftType !== "prepared_critique_draft" ||
+    hasRequiredText(draft.targetPreparedDraftId) ||
+    hasRequiredText(draft.targetCandidateItemId) ||
+    hasRequiredText(draft.targetPositionId)
+      ? null
+      : "critiqueTargetLink",
+  ].filter(Boolean);
+}
+
+function sourceCandidateItemReviewReasons(item, sourcePreparedDraftIds) {
+  return [
+    ...missingSourceIntakeFields(item, [
+      "id",
+      "itemType",
+      "sourcePreparedDraftId",
+      "sourceArgumentExtractionId",
+      "candidateItemStatus",
+      "downstreamPromotionStatus",
+      "createdAt",
+    ]),
+    ["candidate_position", "candidate_critique"].includes(item.itemType) ? null : "itemType",
+    sourcePreparedDraftIds.has(item.sourcePreparedDraftId) ? null : "sourcePreparedDraftId:not_source_prepared_draft",
+    hasRequiredText(item.candidateRaterVisibleText) ? null : "candidateRaterVisibleText",
+    item.downstreamPromotionStatus === "not_promoted_to_live" ? null : "downstreamPromotionStatus",
+    item.visibilityClasses?.candidateRaterVisibleText === "rater_visible_after_promotion" ? null : "visibilityClasses.candidateRaterVisibleText",
+    item.visibilityClasses?.sourceArgumentExtractionId === "admin_only" ? null : "visibilityClasses.sourceArgumentExtractionId",
+  ].filter(Boolean);
+}
+
+function sourcePromotionRecordReviewReasons(record, sourcePreparedDraftIds) {
+  return [
+    ...missingSourceIntakeFields(record, ["id", "sourcePreparedDraftId", "targetCandidateItemId", "targetType", "promotedBy", "promotedAt"]),
+    sourcePreparedDraftIds.has(record.sourcePreparedDraftId) ? null : "sourcePreparedDraftId:not_source_prepared_draft",
+    record.createdLiveRecord === false ? null : "createdLiveRecord",
+    record.createdCandidateBatch === false ? null : "createdCandidateBatch",
+    record.auditTrail?.sourceType === "argument_extraction" ? null : "auditTrail.sourceType",
+  ].filter(Boolean);
+}
+
+function sourcePreparationReviewSignalTargetsSourceLineage(signal, lineage) {
+  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return false;
+  if (signal.affectedObjectType === "PreparedDraft") return lineage.sourcePreparedDraftIds.has(signal.affectedObjectId);
+  if (signal.affectedObjectType === "CandidateItem") return lineage.sourceCandidateItemIds.has(signal.affectedObjectId);
+  if (signal.affectedObjectType === "ArgumentExtraction") return lineage.sourceArgumentExtractionIds.has(signal.affectedObjectId);
+  if (signal.affectedObjectType === "ExtractionBatch") return lineage.sourceExtractionBatchIds.has(signal.affectedObjectId);
+  if (signal.affectedObjectType === "SourceCard") return lineage.sourceCardIds.has(signal.affectedObjectId);
+  if (signal.affectedObjectType === "SourceSpan") return lineage.sourceSpanIds.has(signal.affectedObjectId);
+  return false;
+}
+
+function sourceReviewSignalReviewReasons(signal) {
+  return [
+    ...missingSourceIntakeFields(signal, ["id", "signalType", "source", "explanation", "affectedObjectType", "affectedObjectId", "visibilityClass", "createdAt"]),
+    REVIEW_SIGNAL_SOURCES.includes(signal.source) ? null : "source",
+    REVIEW_SIGNAL_RATER_HIDDEN_VISIBILITY_CLASSES.includes(signal.visibilityClass) ? null : "visibilityClass",
+    signal.confidence === null ||
+    signal.confidence === undefined ||
+    (Number.isFinite(Number(signal.confidence)) && Number(signal.confidence) >= 0 && Number(signal.confidence) <= 1)
+      ? null
+      : "confidence",
+  ].filter(Boolean);
+}
+
+function sourceGateDecisionReviewReasons(decision, sourcePreparedDraftIds, sourceReviewSignalIds) {
+  const citedReviewSignalIds = Array.isArray(decision.citedReviewSignalIds) ? decision.citedReviewSignalIds : [];
+  const requiredGateIds = requiredGateIdsForPolicy("prepared_draft_readiness");
+  return [
+    ...missingSourceIntakeFields(decision, ["id", "gateId", "workflowPolicyId", "objectType", "objectId", "gateStatus", "decisionSource", "decisionNote", "reviewerId", "timestamp", "visibilityClass"]),
+    decision.workflowPolicyId === "prepared_draft_readiness" ? null : "workflowPolicyId",
+    requiredGateIds.includes(decision.gateId) ? null : "gateId:not_required_for_policy",
+    decision.objectType === "PreparedDraft" ? null : "objectType",
+    sourcePreparedDraftIds.has(decision.objectId) ? null : "objectId:not_source_prepared_draft",
+    GATE_DECISION_STATUSES.includes(decision.gateStatus) ? null : "gateStatus",
+    decision.gateStatus !== "waived_with_reason" || hasRequiredText(decision.waiverReason) ? null : "waiverReason",
+    decision.decisionSource !== "automated_prescreen" ? null : "decisionSource",
+    hasRequiredText(decision.decisionNote) ? null : "decisionNote",
+    REVIEW_SIGNAL_RATER_HIDDEN_VISIBILITY_CLASSES.includes(decision.visibilityClass) ? null : "visibilityClass",
+    citedReviewSignalIds.length ? null : "citedReviewSignalIds",
+    ...citedReviewSignalIds
+      .filter((signalId) => !sourceReviewSignalIds.has(signalId))
+      .map((signalId) => `citedReviewSignalIds:not_found:${signalId}`),
+  ].filter(Boolean);
+}
+
+function sourcePreparationReviewSections(artifactType, rows) {
+  return rows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType, artifactId: row.artifactId, reason })));
+}
+
+function sourcePreparationReleaseUseStatus({ sourcePreparedDraftRows, sourceCandidateItemRows, sourcePromotionRecordRows, reviewSections }) {
+  if (sourcePreparedDraftRows.length === 0 && sourceCandidateItemRows.length === 0 && sourcePromotionRecordRows.length === 0) return "source_preparation_not_started";
+  if (reviewSections.length > 0) return "source_preparation_review_required";
+  if (sourcePromotionRecordRows.length > 0) return "source_preparation_candidate_layer_ready_no_live_records";
+  return "source_preparation_prepared_drafts_recorded";
+}
+
+function sourceCardReviewReasons(card) {
+  return [
+    ...missingSourceIntakeFields(card, [
+      "id",
+      "title",
+      "sourceAuthor",
+      "sourceWork",
+      "sourcePublisherOrSite",
+      "publicationYear",
+      "sourceType",
+      "sourceLocator",
+      "sourceProvenanceSummary",
+      "rightsStatus",
+      "sourceLanguage",
+      "translationStatus",
+      "taskFormat",
+      "adminNotes",
+      "sourceAccessPolicy",
+      "releasePolicy",
+      "sourceVisibility",
+      "createdBy",
+      "createdAt",
+    ]),
+    SOURCE_CARD_TYPES.includes(card.sourceType) ? null : "sourceType",
+    SOURCE_CARD_TRANSLATION_STATUSES.includes(card.translationStatus) ? null : "translationStatus",
+    SOURCE_CARD_TASK_FORMATS.includes(card.taskFormat) ? null : "taskFormat",
+    SOURCE_CARD_ACCESS_POLICIES.includes(card.sourceAccessPolicy) ? null : "sourceAccessPolicy",
+    SOURCE_CARD_RELEASE_POLICIES.includes(card.releasePolicy) ? null : "releasePolicy",
+    card.sourceVisibility === SOURCE_INTAKE_VISIBILITY ? null : "sourceVisibility",
+    ...sourceIntakeForbiddenDownstreamFieldReasons(card),
+  ].filter(Boolean);
+}
+
+function sourceSpanReviewReasons(span, validSourceCardIds) {
+  return [
+    ...missingSourceIntakeFields(span, [
+      "id",
+      "sourceCardId",
+      "spanLocator",
+      "boundedLocator",
+      "spanKind",
+      "textHash",
+      "excerptStoragePolicy",
+      "segmentationStatus",
+      "extractionStatus",
+      "adminSelectionNotes",
+      "sourceVisibility",
+      "createdBy",
+      "createdAt",
+    ]),
+    SOURCE_SPAN_KINDS.includes(span.spanKind) ? null : "spanKind",
+    SOURCE_SPAN_SEGMENTATION_STATUSES.includes(span.segmentationStatus) ? null : "segmentationStatus",
+    SOURCE_SPAN_EXTRACTION_STATUSES.includes(span.extractionStatus) ? null : "extractionStatus",
+    String(span.textHash ?? "").startsWith("sha256:") ? null : "textHash",
+    span.sourceVisibility === SOURCE_INTAKE_VISIBILITY ? null : "sourceVisibility",
+    validSourceCardIds.has(span.sourceCardId) ? null : "sourceCardId:not_found",
+    ...sourceIntakeForbiddenDownstreamFieldReasons(span),
+  ].filter(Boolean);
+}
+
+function extractionBatchReviewReasons(batch, validSourceCardIds) {
+  return [
+    ...missingSourceIntakeFields(batch, [
+      "id",
+      "sourceCardId",
+      "importFormat",
+      "importedBy",
+      "importedAt",
+      "extractionCount",
+      "parserVersion",
+      "importRoute",
+      "extractionExecutionMode",
+      "downstreamIntegrationStatus",
+    ]),
+    batch.importFormat === "jsonl" ? null : "importFormat",
+    validSourceCardIds.has(batch.sourceCardId) ? null : "sourceCardId:not_found",
+    Number.isInteger(batch.extractionCount) && batch.extractionCount >= 0 ? null : "extractionCount",
+    batch.downstreamIntegrationStatus === SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS ? null : "downstreamIntegrationStatus",
+    sourceIntakeNoPlatformAiExecution(batch.extractionExecutionMode) ? null : "extractionExecutionMode",
+    ...sourceIntakeFalseFlagReasons(batch),
+    ...sourceIntakeForbiddenDownstreamFieldReasons(batch),
+  ].filter(Boolean);
+}
+
+function argumentExtractionReviewReasons(extraction, context) {
+  const sourceSpanIds = Array.isArray(extraction.sourceSpanIds) ? extraction.sourceSpanIds : [];
+  const batch = context.validExtractionBatchById.get(extraction.extractionBatchId);
+  const missingSpanIds = sourceSpanIds.filter((spanId) => !context.validSourceSpanById.has(spanId));
+  const mismatchedSpanIds = sourceSpanIds.filter((spanId) => {
+    const span = context.validSourceSpanById.get(spanId);
+    return span && span.sourceCardId !== extraction.sourceCardId;
+  });
+  return [
+    ...missingSourceIntakeFields(extraction, [
+      "id",
+      "extractionBatchId",
+      "sourceCardId",
+      "sourceSpanIds",
+      "argumentRole",
+      "intendedConclusion",
+      "argumentSummary",
+      "contextNeeded",
+      "conceptualScopeNotes",
+      "suitabilityNotes",
+      "extractionRationale",
+      "extractionMethod",
+      "reviewStatus",
+      "downstreamIntegrationStatus",
+      "sourceVisibility",
+      "importedAt",
+    ]),
+    sourceSpanIds.length ? null : "sourceSpanIds",
+    Array.isArray(extraction.keyPremises) && extraction.keyPremises.length ? null : "keyPremises",
+    ARGUMENT_EXTRACTION_ROLES.includes(extraction.argumentRole) ? null : "argumentRole",
+    argumentExtractionHasPreparedText(extraction) ? null : "possiblePreparedText",
+    argumentExtractionRequiresCritiqueTarget(extraction) && !hasRequiredText(extraction.critiqueTarget) ? "critiqueTarget" : null,
+    argumentExtractionRequiresPositionText(extraction) && !argumentExtractionHasPositionText(extraction) ? "possiblePreparedPositionText" : null,
+    argumentExtractionRequiresCritiqueText(extraction) && !argumentExtractionHasCritiqueText(extraction) ? "possiblePreparedCritiqueText" : null,
+    ARGUMENT_EXTRACTION_METHODS.includes(extraction.extractionMethod) ? null : "extractionMethod",
+    ARGUMENT_EXTRACTION_REVIEW_STATUSES.includes(extraction.reviewStatus) ? null : "reviewStatus",
+    extraction.downstreamIntegrationStatus === SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS ? null : "downstreamIntegrationStatus",
+    extraction.sourceVisibility === SOURCE_INTAKE_VISIBILITY ? null : "sourceVisibility",
+    context.validSourceCardIds.has(extraction.sourceCardId) ? null : "sourceCardId:not_found",
+    batch ? null : "extractionBatchId:not_found",
+    !batch || batch.sourceCardId === extraction.sourceCardId ? null : "extractionBatchId:sourceCardId_mismatch",
+    missingSpanIds.length ? `sourceSpanIds:not_found:${missingSpanIds.join(",")}` : null,
+    mismatchedSpanIds.length ? `sourceSpanIds:sourceCardId_mismatch:${mismatchedSpanIds.join(",")}` : null,
+    ...sourceIntakeFalseFlagReasons(extraction),
+    ...sourceIntakeForbiddenDownstreamFieldReasons(extraction),
+  ].filter(Boolean);
+}
+
+function argumentExtractionHasPreparedText(extraction) {
+  return argumentExtractionHasPositionText(extraction) || argumentExtractionHasCritiqueText(extraction);
+}
+
+function argumentExtractionHasPositionText(extraction) {
+  return hasRequiredText(extraction.possiblePreparedPositionText) || hasRequiredText(extraction.extractedPositionText);
+}
+
+function argumentExtractionHasCritiqueText(extraction) {
+  return hasRequiredText(extraction.possiblePreparedCritiqueText);
+}
+
+function argumentExtractionRequiresCritiqueTarget(extraction) {
+  return ["critique_argument", "mixed_position_and_critique"].includes(extraction.argumentRole) || argumentExtractionHasCritiqueText(extraction);
+}
+
+function argumentExtractionRequiresPositionText(extraction) {
+  return ["position_argument", "mixed_position_and_critique"].includes(extraction.argumentRole);
+}
+
+function argumentExtractionRequiresCritiqueText(extraction) {
+  return ["critique_argument", "mixed_position_and_critique"].includes(extraction.argumentRole);
+}
+
+function missingSourceIntakeFields(resource, fieldPaths) {
+  return fieldPaths.filter((fieldPath) => {
+    const value = sourceIntakeFieldValue(resource, fieldPath);
+    if (Array.isArray(value)) return value.length === 0;
+    return value === undefined || value === null || value === "";
+  });
+}
+
+function sourceIntakeFieldValue(resource, fieldPath) {
+  return String(fieldPath)
+    .split(".")
+    .reduce((current, segment) => (current && typeof current === "object" ? current[segment] : undefined), resource);
+}
+
+function sourceIntakeFalseFlagReasons(resource) {
+  const flags = ["createsPreparedDraft", "createsCandidateItem", "createsCandidateBatch", "liveQueueIntegration", "aiExtractionExecuted"];
+  return flags.map((field) => (resource[field] === false ? null : field)).filter(Boolean);
+}
+
+function sourceIntakeForbiddenDownstreamFieldReasons(resource) {
+  return sourceIntakeForbiddenDownstreamFieldPaths(resource).map((fieldPath) => `forbidden_downstream_field:${fieldPath}`);
+}
+
+function sourceIntakeForbiddenDownstreamFieldPaths(resource, path = "") {
+  if (!resource || typeof resource !== "object") return [];
+  if (Array.isArray(resource)) {
+    return resource.flatMap((item, index) => sourceIntakeForbiddenDownstreamFieldPaths(item, `${path}[${index}]`));
+  }
+  return Object.entries(resource).flatMap(([key, value]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const ownReason = SOURCE_INTAKE_FORBIDDEN_DOWNSTREAM_FIELDS.includes(key) ? [fieldPath] : [];
+    return ownReason.concat(sourceIntakeForbiddenDownstreamFieldPaths(value, fieldPath));
+  });
+}
+
+function sourceIntakeNoPlatformAiExecution(value) {
+  const normalized = String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return normalized.includes("no_platform_ai") || normalized.includes("no_ai_extraction");
+}
+
+function sourceIntakeReviewSections(artifactType, rows) {
+  return rows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType, artifactId: row.artifactId, reason })));
+}
+
+function sourceIntakeReleaseUseStatus({ totalArtifacts, reviewSections, pendingExtractionRows, argumentExtractionRows, acceptedExtractionRows }) {
+  if (totalArtifacts === 0) return "phase1_source_intake_not_started";
+  if (reviewSections.length > 0) return "phase1_source_intake_review_required";
+  if (pendingExtractionRows.length > 0) return "phase1_source_intake_pending_review";
+  if (argumentExtractionRows.length === 0) return "phase1_source_intake_sources_recorded_extraction_not_started";
+  if (acceptedExtractionRows.length === 0) return "phase1_source_intake_reviewed_no_accepted_extractions";
+  return "phase1_source_intake_ready_for_future_source_preparation";
+}
+
+export function buildMetaphilosophyGreenfieldArchitectureReport(releaseId, options = {}) {
+  const submittedLayers =
+    Array.isArray(options.architectureLayers) && options.architectureLayers.length
+      ? options.architectureLayers
+      : Array.isArray(options.greenfieldArchitectureLayers) && options.greenfieldArchitectureLayers.length
+        ? options.greenfieldArchitectureLayers
+        : METAPHILOSOPHY_GREENFIELD_ARCHITECTURE_LAYERS;
+  const layerRows = submittedLayers
+    .filter((layer) => layer && typeof layer === "object" && !Array.isArray(layer))
+    .map((layer, index) => {
+      const clone = structuredClone(layer);
+      const reviewReasons = metaphilosophyArchitectureLayerReviewReasons(clone);
+      return {
+        ...clone,
+        artifactId: hasRequiredText(clone.id) ? clone.id : `metaphilosophy-architecture-layer-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const validLayerIds = new Set(layerRows.filter((row) => row.reviewReasons.length === 0).map((row) => row.id));
+  const missingRequiredLayerIds = METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS.filter((layerId) => !validLayerIds.has(layerId));
+  const reviewSections = [
+    ...layerRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "metaphilosophy_architecture_layer", artifactId: row.artifactId, reason }))),
+    ...missingRequiredLayerIds.map((layerId) => ({ artifactType: "metaphilosophy_architecture_layer", artifactId: layerId, reason: "required_layer_missing" })),
+  ];
+
+  return {
+    id: `metaphilosophy-greenfield-architecture-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      preservationRule:
+        "The platform must preserve the distinction between research spine, intake spine, evaluation spine, and operating shell so safeguards do not redefine LMCA labels or merge experimental tasks into release claims.",
+      operatingShellRule:
+        "A feature belongs in the operating shell only if it protects the research spine, improves rater reliability, improves release reproducibility, or enables a declared evaluation or training use.",
+      duplicationBoundary:
+        "Greenfield architecture framing must reuse existing Position, Critique, CandidateBatch, CandidateCritique, release-report, and policy-gate surfaces instead of creating parallel candidate or label systems.",
+    },
+    requiredLayerIds: METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS,
+    missingRequiredLayerIds,
+    layerRows,
+    counts: {
+      layers: layerRows.length,
+      requiredLayers: METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS.length,
+      validRequiredLayers: METAPHILOSOPHY_REQUIRED_ARCHITECTURE_LAYER_IDS.length - missingRequiredLayerIds.length,
+      reviewRequiredLayers: new Set(reviewSections.map((section) => section.artifactId)).size,
+    },
+    byReleaseClaimRole: countBy(layerRows, "releaseClaimRole"),
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "metaphilosophy_greenfield_architecture_review_required"
+      : "metaphilosophy_greenfield_architecture_declared",
+  };
+}
+
+function metaphilosophyArchitectureLayerReviewReasons(layer) {
+  return [
+    hasRequiredText(layer.id) ? null : "id",
+    hasRequiredText(layer.label) ? null : "label",
+    hasRequiredText(layer.role) ? null : "role",
+    Array.isArray(layer.artifactFamilies) && layer.artifactFamilies.length ? null : "artifactFamilies",
+    hasRequiredText(layer.boundaryRule) ? null : "boundaryRule",
+    hasRequiredText(layer.releaseClaimRole) ? null : "releaseClaimRole",
+  ].filter(Boolean);
+}
+
+export function buildMetaphilosophyTaskTrackTaxonomyReport(releaseId, options = {}) {
+  const submittedTracks = Array.isArray(options.taskTracks) && options.taskTracks.length ? options.taskTracks : METAPHILOSOPHY_TASK_TRACKS;
+  const taskTrackRows = submittedTracks
+    .filter((track) => track && typeof track === "object" && !Array.isArray(track))
+    .map((track, index) => {
+      const clone = structuredClone(track);
+      const reviewReasons = metaphilosophyTaskTrackReviewReasons(clone);
+      return {
+        ...clone,
+        artifactId: hasRequiredText(clone.id) ? clone.id : `metaphilosophy-task-track-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const validTrackIds = new Set(taskTrackRows.filter((row) => row.reviewReasons.length === 0).map((row) => row.id));
+  const missingRequiredTrackIds = METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS.filter((trackId) => !validTrackIds.has(trackId));
+  const reviewSections = [
+    ...taskTrackRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "metaphilosophy_task_track", artifactId: row.artifactId, reason }))),
+    ...missingRequiredTrackIds.map((trackId) => ({ artifactType: "metaphilosophy_task_track", artifactId: trackId, reason: "required_track_missing" })),
+  ];
+
+  return {
+    id: `metaphilosophy-task-track-taxonomy-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      corpusProductionWorkflow:
+        "SourceCard, SourceSpan, and ArgumentExtraction are corpus-production intake artifacts; later PreparedDraft and candidate promotion remain behind manual review gates.",
+      benchmarkModelWorkflow:
+        "Task-track definition, split freeze, model run, parser, metric calculation, leaderboard/report, and training export are benchmark/model workflow artifacts.",
+      separationRule:
+        "Critique rating, critique ranking, critique generation, critique revision, position/reply revision, and adjudication explanation must be declared as separate tracks before release claims expand beyond critique rating.",
+      sourceIntakeBoundary:
+        "Source-derived material cannot enter benchmark/model workflows until human review and normal candidate intake governance approve it.",
+    },
+    requiredTrackIds: METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS,
+    missingRequiredTrackIds,
+    taskTrackRows,
+    byLmcaRelationship: countBy(taskTrackRows, "lmcaRelationship"),
+    counts: {
+      taskTracks: taskTrackRows.length,
+      requiredTracks: METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS.length,
+      validRequiredTracks: METAPHILOSOPHY_REQUIRED_TASK_TRACK_IDS.length - missingRequiredTrackIds.length,
+      reviewRequiredTracks: new Set(reviewSections.map((section) => section.artifactId)).size,
+    },
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "metaphilosophy_task_track_taxonomy_review_required"
+      : "metaphilosophy_task_track_taxonomy_declared",
+  };
+}
+
+function metaphilosophyTaskTrackReviewReasons(track) {
+  return [
+    hasRequiredText(track.id) ? null : "id",
+    hasRequiredText(track.label) ? null : "label",
+    hasRequiredText(track.lmcaRelationship) ? null : "lmcaRelationship",
+    METAPHILOSOPHY_TASK_TRACK_LMCA_RELATIONSHIPS.includes(track.lmcaRelationship) ? null : "lmcaRelationship:unsupported",
+    hasRequiredText(track.modelInput?.summary) ? null : "modelInput.summary",
+    Array.isArray(track.modelInput?.fields) && track.modelInput.fields.length ? null : "modelInput.fields",
+    hasRequiredText(track.modelOutput?.summary) ? null : "modelOutput.summary",
+    Array.isArray(track.modelOutput?.fields) && track.modelOutput.fields.length ? null : "modelOutput.fields",
+    hasRequiredText(track.humanExpertTarget) ? null : "humanExpertTarget",
+    Array.isArray(track.primaryMetricFamilies) && track.primaryMetricFamilies.length ? null : "primaryMetricFamilies",
+    hasRequiredText(track.labelTiming) ? null : "labelTiming",
+    hasRequiredText(track.blindToModelPolicy) ? null : "blindToModelPolicy",
+    policyMentionsAny(track.blindToModelPolicy, ["blind", "hidden", "cannot see", "cannot use"])
+      ? null
+      : "blindToModelPolicy:must_state_blinding",
+    hasRequiredText(track.splitPolicy) ? null : "splitPolicy",
+    policyMentions(track.splitPolicy, ["split"]) ? null : "splitPolicy:must_state_split_policy",
+    hasRequiredText(track.trainingExportPolicy) ? null : "trainingExportPolicy",
+    policyMentions(track.trainingExportPolicy, ["export"]) ? null : "trainingExportPolicy:must_state_export_boundary",
+  ].filter(Boolean);
+}
+
+export function buildMetaphilosophyResearchBacklogReport(releaseId, options = {}) {
+  const submittedItems =
+    Array.isArray(options.backlogItems) && options.backlogItems.length
+      ? options.backlogItems
+      : Array.isArray(options.researchBacklogItems) && options.researchBacklogItems.length
+        ? options.researchBacklogItems
+        : METAPHILOSOPHY_RD_BACKLOG_ITEMS;
+  const rows = submittedItems
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .map((item, index) => {
+      const clone = structuredClone(item);
+      const reviewReasons = metaphilosophyBacklogItemReviewReasons(clone);
+      return {
+        ...clone,
+        artifactId: hasRequiredText(clone.id) ? clone.id : `metaphilosophy-rd-backlog-${index + 1}`,
+        reviewReasons,
+      };
+    })
+    .sort((left, right) => left.artifactId.localeCompare(right.artifactId));
+  const reviewSections = rows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "metaphilosophy_rd_backlog_item", artifactId: row.artifactId, reason })),
+  );
+
+  return {
+    id: `metaphilosophy-research-backlog-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      backlogBoundary:
+        "R&D ideas are non-binding experiments; they do not become release requirements, hidden-benchmark claims, or training-export permissions without pilot evidence and a later governed policy decision.",
+      releaseGateRule:
+        "Speculative tracks remain outside release gates until task-specific labels, metrics, blinding rules, and split policies are approved.",
+      pilotEvidenceRule:
+        "Each backlog row must state whether the pilot is meant to improve measurement validity, rater reliability, or model-evaluation usefulness before any governed promotion.",
+      promotionGovernanceRule:
+        "Backlog rows cannot become release gates through report text alone; they need a later governed policy decision before release-gate, hidden-benchmark, or training-export use.",
+    },
+    rows,
+    counts: {
+      backlogItems: rows.length,
+      nonBindingItems: rows.filter((row) => row.directRequirement === false).length,
+      pilotEvidenceBoundItems: rows.filter((row) => !row.reviewReasons.some((reason) => reason.startsWith("pilotEvidenceRequirement"))).length,
+      promotionGovernanceBoundItems: rows.filter((row) => !row.reviewReasons.some((reason) => reason.startsWith("promotionGovernance"))).length,
+      reviewRequiredItems: new Set(reviewSections.map((section) => section.artifactId)).size,
+    },
+    byExperimentType: countBy(rows, "experimentType"),
+    reviewSections,
+    releaseUseStatus: reviewSections.length
+      ? "metaphilosophy_research_backlog_review_required"
+      : "metaphilosophy_research_backlog_separated_from_release_gates",
+  };
+}
+
+function metaphilosophyBacklogItemReviewReasons(item) {
+  const normalizedGateStatus = String(item.releaseGateStatus ?? "").toLowerCase();
+  return [
+    hasRequiredText(item.id) ? null : "id",
+    hasRequiredText(item.title) ? null : "title",
+    hasRequiredText(item.experimentType) ? null : "experimentType",
+    hasRequiredText(item.releaseGateStatus) ? null : "releaseGateStatus",
+    normalizedGateStatus.includes("not_release_gate") ? null : "releaseGateStatus:must_not_be_release_gate",
+    item.directRequirement === false ? null : "directRequirement:must_be_false",
+    hasRequiredText(item.pilotEvidenceRequirement) ? null : "pilotEvidenceRequirement",
+    policyMentionsAny(item.pilotEvidenceRequirement, ["measurement validity", "rater reliability", "model-evaluation usefulness"])
+      ? null
+      : "pilotEvidenceRequirement:evidence_goal",
+    hasRequiredText(item.promotionGovernance) ? null : "promotionGovernance",
+    policyMentions(item.promotionGovernance, ["governed", "policy", "decision", "release", "gate"])
+      ? null
+      : "promotionGovernance:governed_policy_decision",
+    hasRequiredText(item.governanceBoundary) ? null : "governanceBoundary",
+  ].filter(Boolean);
+}
+
+export function buildMetaphilosophyDeliverableChecklistReport(
+  releaseId,
+  { greenfieldArchitecture, sourceIntakeEvidence, sourcePreparationEvidence, taskTrackTaxonomy, researchBacklog, operationalControlEvidence } = {},
+) {
+  const sourceWorkbenchPhaseGate = metaphilosophySourceWorkbenchPhaseGate(operationalControlEvidence);
+  const rows = [
+    metaphilosophyChecklistRow({
+      id: "greenfield_task_track_taxonomy",
+      deliverable:
+        "Greenfield task-track taxonomy declares critique rating, critique ranking, critique generation, critique revision, position/reply revision, and adjudication explanation as separate tracks with separate inputs, outputs, metrics, and split policies.",
+      completionRule: "Required before any release claims more than critique-rating coverage.",
+      evidenceIds: [taskTrackTaxonomy?.id].filter(Boolean),
+      sourceStatuses: [taskTrackTaxonomy?.releaseUseStatus].filter(Boolean),
+      status:
+        taskTrackTaxonomy?.releaseUseStatus === "metaphilosophy_task_track_taxonomy_declared" &&
+        (taskTrackTaxonomy?.missingRequiredTrackIds?.length ?? 1) === 0
+          ? "complete"
+          : "review_required",
+      reviewReasons: [
+        taskTrackTaxonomy?.releaseUseStatus === "metaphilosophy_task_track_taxonomy_declared" ? null : "taskTrackTaxonomy.releaseUseStatus",
+        (taskTrackTaxonomy?.missingRequiredTrackIds?.length ?? 0)
+          ? `missingRequiredTrackIds:${taskTrackTaxonomy.missingRequiredTrackIds.join(",")}`
+          : null,
+      ],
+    }),
+    metaphilosophyChecklistRow({
+      id: "admin_source_extraction_workbench",
+      deliverable:
+        "Admin-only source-to-position/source-to-critique workbench records source cards, source spans, JSONL extraction batches, manual extraction review, and source-derived PreparedDraft promotion through existing candidate gates.",
+      completionRule: "Required when source-derived items are used in the release.",
+      evidenceIds: [sourceIntakeEvidence?.id, sourcePreparationEvidence?.id].filter(Boolean),
+      sourceStatuses: [
+        sourceIntakeEvidence?.releaseUseStatus,
+        sourcePreparationEvidence?.releaseUseStatus,
+        sourceWorkbenchPhaseGate.status,
+      ].filter(Boolean),
+      phaseGate: sourceWorkbenchPhaseGate,
+      status: metaphilosophySourceWorkbenchChecklistStatus(sourceIntakeEvidence, sourcePreparationEvidence, sourceWorkbenchPhaseGate),
+      reviewReasons: [
+        sourceIntakeEvidence?.releaseUseStatus === "phase1_source_intake_review_required" ? "sourceIntakeEvidence.review_required" : null,
+        metaphilosophySourceIntakeNotReadyForSourcePreparation(sourceIntakeEvidence)
+          ? "sourceIntakeEvidence:not_ready_for_source_preparation"
+          : null,
+        sourcePreparationEvidence?.releaseUseStatus === "source_preparation_review_required" ? "sourcePreparationEvidence.review_required" : null,
+        metaphilosophySourceWorkbenchUsesSourceDerivedItems(sourceIntakeEvidence, sourcePreparationEvidence) &&
+        sourceWorkbenchPhaseGate.status !== "workbench_route_lane_available"
+          ? `sourceWorkbenchPhaseGate:${sourceWorkbenchPhaseGate.status}`
+          : null,
+      ],
+    }),
+    metaphilosophyChecklistRow({
+      id: "rd_backlog_experiments_separated",
+      deliverable:
+        "R&D Backlog / Experiments section is maintained separately from release gates so speculative ideas do not become requirements without pilot evidence.",
+      completionRule: "Required for every RLHF91 release report.",
+      evidenceIds: [researchBacklog?.id].filter(Boolean),
+      sourceStatuses: [researchBacklog?.releaseUseStatus].filter(Boolean),
+      status:
+        researchBacklog?.releaseUseStatus === "metaphilosophy_research_backlog_separated_from_release_gates" &&
+        (researchBacklog?.counts?.reviewRequiredItems ?? 1) === 0
+          ? "complete"
+          : "review_required",
+      reviewReasons: [
+        researchBacklog?.releaseUseStatus === "metaphilosophy_research_backlog_separated_from_release_gates"
+          ? null
+          : "researchBacklog.releaseUseStatus",
+        (researchBacklog?.counts?.reviewRequiredItems ?? 0) ? "researchBacklog.reviewRequiredItems" : null,
+      ],
+    }),
+    metaphilosophyChecklistRow({
+      id: "greenfield_architecture_frame",
+      deliverable:
+        "Greenfield comparison and research-spine / operating-shell framing preserve the research spine, intake spine, evaluation spine, and operating shell without duplicating the existing candidate architecture.",
+      completionRule: "Required before using RLHF91 greenfield architecture claims in release review.",
+      evidenceIds: [greenfieldArchitecture?.id].filter(Boolean),
+      sourceStatuses: [greenfieldArchitecture?.releaseUseStatus].filter(Boolean),
+      status: greenfieldArchitecture?.releaseUseStatus === "metaphilosophy_greenfield_architecture_declared" ? "complete" : "review_required",
+      reviewReasons: [
+        greenfieldArchitecture?.releaseUseStatus === "metaphilosophy_greenfield_architecture_declared"
+          ? null
+          : "greenfieldArchitecture.releaseUseStatus",
+        (greenfieldArchitecture?.missingRequiredLayerIds?.length ?? 0)
+          ? `missingRequiredLayerIds:${greenfieldArchitecture.missingRequiredLayerIds.join(",")}`
+          : null,
+      ],
+    }),
+  ];
+  const reviewSections = rows.flatMap((row) =>
+    row.reviewReasons.map((reason) => ({ artifactType: "metaphilosophy_deliverable", artifactId: row.id, reason })),
+  );
+
+  return {
+    id: `metaphilosophy-deliverable-checklist-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      checklistScope:
+        "This checklist binds RLHF91's new Metaphilosophy deliverables to existing release-report evidence; it does not create a parallel candidate, label, or queue architecture.",
+      completionRule:
+        "Rows may support release claims only when the referenced evidence sections are complete or explicitly not applicable under the source-derived-item rule.",
+      sourceDerivedItemRule:
+        "The source workbench row is not applicable when no source-derived items are used. Source-intake import/review must remain admin-only and non-promotional; source-preparation may create PreparedDraft and CandidateItem artifacts only through the existing gates.",
+      sourceWorkbenchPhaseGateRule:
+        "Source-derived items require the implementation phase route lane to be enabled or staff_only; otherwise the source workbench is treated as disabled and cannot support source-derived release claims.",
+    },
+    rows,
+    reviewSections,
+    counts: {
+      deliverables: rows.length,
+      complete: rows.filter((row) => row.status === "complete").length,
+      notApplicable: rows.filter((row) => row.status === "not_applicable_without_source_derived_items").length,
+      reviewRequired: rows.filter((row) => row.status === "review_required").length,
+    },
+    releaseUseStatus: reviewSections.length ? "metaphilosophy_deliverable_checklist_review_required" : "metaphilosophy_deliverable_checklist_complete",
+  };
+}
+
+function metaphilosophyChecklistRow({ id, deliverable, completionRule, evidenceIds, sourceStatuses, phaseGate, status, reviewReasons }) {
+  return {
+    id,
+    deliverable,
+    completionRule,
+    evidenceIds,
+    sourceStatuses,
+    ...(phaseGate ? { phaseGate } : {}),
+    status,
+    reviewReasons: reviewReasons.filter(Boolean),
+  };
+}
+
+function metaphilosophySourceWorkbenchUsesSourceDerivedItems(sourceIntakeEvidence, sourcePreparationEvidence) {
+  const sourcePreparationCount =
+    (sourcePreparationEvidence?.counts?.preparedDrafts ?? 0) +
+    (sourcePreparationEvidence?.counts?.candidateItems ?? 0) +
+    (sourcePreparationEvidence?.counts?.promotionRecords ?? 0);
+  return metaphilosophySourceIntakeArtifactCount(sourceIntakeEvidence) > 0 || sourcePreparationCount > 0;
+}
+
+function metaphilosophySourceIntakeArtifactCount(sourceIntakeEvidence) {
+  return (
+    (sourceIntakeEvidence?.counts?.sourceCards ?? 0) +
+    (sourceIntakeEvidence?.counts?.sourceSpans ?? 0) +
+    (sourceIntakeEvidence?.counts?.extractionBatches ?? 0) +
+    (sourceIntakeEvidence?.counts?.argumentExtractions ?? 0)
+  );
+}
+
+function metaphilosophySourceIntakeNotReadyForSourcePreparation(sourceIntakeEvidence) {
+  if (metaphilosophySourceIntakeArtifactCount(sourceIntakeEvidence) === 0) {
+    return false;
+  }
+  if (sourceIntakeEvidence?.releaseUseStatus === "phase1_source_intake_review_required") {
+    return false;
+  }
+  return sourceIntakeEvidence?.releaseUseStatus !== "phase1_source_intake_ready_for_future_source_preparation";
+}
+
+function metaphilosophySourceWorkbenchChecklistStatus(sourceIntakeEvidence, sourcePreparationEvidence, sourceWorkbenchPhaseGate) {
+  if (!metaphilosophySourceWorkbenchUsesSourceDerivedItems(sourceIntakeEvidence, sourcePreparationEvidence)) {
+    return "not_applicable_without_source_derived_items";
+  }
+  if (sourceIntakeEvidence?.releaseUseStatus === "phase1_source_intake_review_required") {
+    return "review_required";
+  }
+  if (metaphilosophySourceIntakeNotReadyForSourcePreparation(sourceIntakeEvidence)) {
+    return "review_required";
+  }
+  if (sourcePreparationEvidence?.releaseUseStatus === "source_preparation_review_required") {
+    return "review_required";
+  }
+  if (sourceWorkbenchPhaseGate?.status !== "workbench_route_lane_available") {
+    return "review_required";
+  }
+  return "complete";
+}
+
+function metaphilosophySourceWorkbenchPhaseGate(operationalControlEvidence) {
+  const routeLane =
+    (operationalControlEvidence?.phaseLaneRows ?? []).find((row) => row.laneKind === "route") ??
+    null;
+  if (!routeLane) {
+    return {
+      laneKind: "route",
+      phaseState: null,
+      bundleId: null,
+      operationalControlEvidenceId: operationalControlEvidence?.id ?? null,
+      status: operationalControlEvidence ? "workbench_route_lane_missing" : "workbench_route_lane_evidence_missing",
+    };
+  }
+  const laneComplete = routeLane.status === "implementation_phase_lane_complete";
+  const laneAvailable = laneComplete && ["enabled", "staff_only"].includes(routeLane.phaseState);
+  return {
+    laneKind: "route",
+    phaseState: routeLane.phaseState ?? null,
+    bundleId: routeLane.bundleId ?? null,
+    operationalControlEvidenceId: operationalControlEvidence?.id ?? null,
+    status: laneAvailable
+      ? "workbench_route_lane_available"
+      : laneComplete
+        ? "workbench_route_lane_safely_disabled"
+        : "workbench_route_lane_review_required",
+  };
+}
+
+function hasRequiredText(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export function buildItemTextViewParityReport(
@@ -8061,6 +10812,7 @@ export function buildRubricQaCoverageReport(
       coveredFamilies: fixture.coveredFamilies ?? [],
       coveredFamilyCount: (fixture.coveredFamilies ?? []).length,
       targetDimensions: fixture.targetDimensions ?? [],
+      exemplarTypes: fixture.exemplarTypes ?? [],
       source: fixture.source,
       rubricVersion: fixture.rubricVersion ?? "lmca-app-f-2026-10",
       exposurePolicy: fixture.exposurePolicy ?? "public_training_qa_only",
@@ -8070,10 +10822,26 @@ export function buildRubricQaCoverageReport(
     .sort((left, right) => left.fixtureId.localeCompare(right.fixtureId));
   const coveredFamilies = uniqueStrings(fixtureRows.flatMap((row) => row.coveredFamilies)).sort();
   const missingFamilies = requiredFamilies.filter((family) => !coveredFamilies.includes(family)).sort();
+  const coveredExemplarTypes = uniqueStrings(fixtureRows.flatMap((row) => row.exemplarTypes)).sort();
+  const missingExemplarTypes = REQUIRED_RUBRIC_QA_EXEMPLAR_TYPES.filter((type) => !coveredExemplarTypes.includes(type));
   const protectedExposureRows = fixtureRows.filter((row) => row.protectedEvaluationEligible || row.exposurePolicy !== "public_training_qa_only");
   const dimensionCoverage = Object.fromEntries(
     RUBRIC_DIMENSIONS.map((dimension) => [dimension, fixtureRows.filter((row) => row.targetDimensions.includes(dimension)).length]),
   );
+  const curriculumRows = REQUIRED_RUBRIC_CERTIFICATION_CURRICULUM_MODULES.map((module) => {
+    const missingModuleFamilies = module.requiredFamilies.filter((family) => !coveredFamilies.includes(family));
+    const fixtureIds = fixtureRows
+      .filter((row) => row.coveredFamilies.some((family) => module.requiredFamilies.includes(family)))
+      .map((row) => row.fixtureId);
+    return {
+      moduleId: module.id,
+      requiredFamilies: module.requiredFamilies,
+      fixtureIds,
+      missingFamilies: missingModuleFamilies,
+      status: missingModuleFamilies.length ? "curriculum_module_missing_fixture_family" : "curriculum_module_frozen",
+    };
+  });
+  const missingCurriculumRows = curriculumRows.filter((row) => row.status !== "curriculum_module_frozen");
   return {
     id: `rubric-qa-coverage-${releaseId}`,
     releaseId,
@@ -8085,19 +10853,34 @@ export function buildRubricQaCoverageReport(
         "Rubric QA fixtures are public training and certification exposure; they are excluded from protected validation, hidden benchmark, label snapshots, and clean model-score claims.",
       coverageRule:
         "Each RLHF77 Appendix-F edge-case family must have at least one versioned fixture before claiming the rubric pack is frozen for release.",
+      exemplarRule:
+        "The frozen pack must include worked examples, counterexamples, adversarial-interpretation guidance, and priced-in exemplars.",
+      certificationCurriculumRule:
+        "Certification and recertification training must map interpretation, vague-critique, priced-in, ambiguity, dead-weight, and strength-centrality modules to frozen public fixtures.",
     },
     counts: {
       requiredFamilyCount: requiredFamilies.length,
       coveredFamilyCount: coveredFamilies.length,
       missingFamilyCount: missingFamilies.length,
+      requiredExemplarTypeCount: REQUIRED_RUBRIC_QA_EXEMPLAR_TYPES.length,
+      coveredExemplarTypeCount: coveredExemplarTypes.length,
+      missingExemplarTypeCount: missingExemplarTypes.length,
+      requiredCurriculumModuleCount: REQUIRED_RUBRIC_CERTIFICATION_CURRICULUM_MODULES.length,
+      coveredCurriculumModuleCount: curriculumRows.length - missingCurriculumRows.length,
+      missingCurriculumModuleCount: missingCurriculumRows.length,
       fixtureCount: fixtureRows.length,
       protectedExposureViolationCount: protectedExposureRows.length,
     },
     requiredFamilies,
     coveredFamilies,
     missingFamilies,
+    requiredExemplarTypes: REQUIRED_RUBRIC_QA_EXEMPLAR_TYPES,
+    coveredExemplarTypes,
+    missingExemplarTypes,
     fixtureRows,
     dimensionCoverage,
+    curriculumRows,
+    missingCurriculumRows,
     familyCoverageRows: requiredFamilies
       .map((family) => ({
         family,
@@ -8109,9 +10892,13 @@ export function buildRubricQaCoverageReport(
     releaseUseStatus:
       missingFamilies.length > 0
         ? "rubric_qa_required_families_missing"
-        : protectedExposureRows.length > 0
-          ? "rubric_qa_protected_exposure_review_required"
-          : "rubric_qa_pack_frozen_public_only",
+        : missingExemplarTypes.length > 0
+          ? "rubric_qa_required_exemplar_types_missing"
+          : missingCurriculumRows.length > 0
+            ? "rubric_certification_curriculum_modules_missing"
+            : protectedExposureRows.length > 0
+              ? "rubric_qa_protected_exposure_review_required"
+              : "rubric_qa_pack_frozen_public_only",
   };
 }
 
@@ -8292,8 +11079,23 @@ export function buildRaterCompositionConflictReport(
   const positionById = new Map(positionList.map((position) => [position.id, position]));
   const critiqueById = new Map((options.critiqueList ?? critiques).map((critique) => [critique.id, critique]));
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const topicSpecialistQualificationSource =
+    Array.isArray(options.raterQualificationRecords) && options.raterQualificationRecords.length
+      ? options.raterQualificationRecords
+      : defaultRaterQualificationRecords(releaseId);
+  const topicSpecialistQualificationRows = topicSpecialistQualificationSource
+    .map((record) => normalizeRaterQualificationRecord(record, "rater_composition_topic_specialist_qualification_record"))
+    .filter((record) =>
+      raterQualificationRecordIsCurrent(record, {
+        qualificationScope: "topic_specialist",
+        approvedRole: "expert",
+        requiredEligibility: "release_critical",
+      }),
+    );
+  const topicSpecialistQualificationByRater = new Map(topicSpecialistQualificationRows.map((record) => [record.raterId, record]));
   const includedRatings = ratings.filter((rating) => snapshotItemIds.has(makeItemId(rating.positionId, rating.critiqueId)));
   const releaseCriticalRatings = includedRatings.filter((rating) => isReleaseCriticalSplit(positionById.get(rating.positionId)?.split));
+  const requiredReleaseCriticalTierDiversityMin = Math.max(1, Number(options.requiredReleaseCriticalTierDiversityMin ?? 2));
   const raterRows = Object.values(
     includedRatings.reduce((acc, rating) => {
       const position = positionById.get(rating.positionId);
@@ -8321,7 +11123,11 @@ export function buildRaterCompositionConflictReport(
         row.releaseCriticalItemIds.add(itemId);
         if (position?.topicFamily) row.releaseCriticalTopicFamiliesRated.add(position.topicFamily);
       }
-      if (position?.topicFamily && (profile.topicExpertise ?? []).includes(position.topicFamily)) {
+      if (
+        position?.topicFamily &&
+        (profile.topicExpertise ?? []).includes(position.topicFamily) &&
+        raterHasTopicSpecialistQualificationForFamily(topicSpecialistQualificationByRater.get(rating.raterId), position.topicFamily)
+      ) {
         row.topicExpertiseMatchedItemIds.add(itemId);
       }
       return acc;
@@ -8350,9 +11156,16 @@ export function buildRaterCompositionConflictReport(
       const critique = critiqueById.get(critiqueId);
       const itemRatings = includedRatings.filter((rating) => rating.positionId === positionId && rating.critiqueId === critiqueId);
       const itemRaterIds = uniqueStrings(itemRatings.map((rating) => rating.raterId)).sort();
+      const itemRaterTierDiversity = uniqueStrings(
+        itemRatings.map((rating) => profileById.get(rating.raterId)?.tier ?? rating.raterTier).filter(Boolean),
+      ).sort();
       const expertRaterIds = uniqueStrings(itemRatings.filter((rating) => ["graduate", "phd", "expert", "admin"].includes(rating.raterTier)).map((rating) => rating.raterId)).sort();
-      const topicExpertRaterIds = itemRaterIds.filter((raterId) => (profileById.get(raterId)?.topicExpertise ?? []).includes(position?.topicFamily));
+      const profileTopicExpertRaterIds = itemRaterIds.filter((raterId) => (profileById.get(raterId)?.topicExpertise ?? []).includes(position?.topicFamily));
+      const topicExpertRaterIds = profileTopicExpertRaterIds.filter((raterId) =>
+        raterHasTopicSpecialistQualificationForFamily(topicSpecialistQualificationByRater.get(raterId), position?.topicFamily),
+      );
       const releaseCritical = isReleaseCriticalSplit(position?.split);
+      const tierDiversityTargetMet = !releaseCritical || itemRaterTierDiversity.length >= requiredReleaseCriticalTierDiversityMin;
       return {
         itemId,
         split: position?.split ?? "unknown",
@@ -8360,8 +11173,16 @@ export function buildRaterCompositionConflictReport(
         releaseCritical,
         raterIds: itemRaterIds,
         raterCount: itemRaterIds.length,
+        raterTierDiversity: itemRaterTierDiversity,
+        raterTierDiversityCount: itemRaterTierDiversity.length,
+        requiredRaterTierDiversityMin: releaseCritical ? requiredReleaseCriticalTierDiversityMin : 0,
+        tierDiversityTargetMet,
         expertRaterIds,
+        profileTopicExpertRaterIds,
         topicExpertRaterIds,
+        topicSpecialistQualificationRecordIds: uniqueStrings(
+          topicExpertRaterIds.map((raterId) => topicSpecialistQualificationByRater.get(raterId)?.id).filter(Boolean),
+        ),
         topicExpertCoverage: topicExpertRaterIds.length > 0,
         largestSingleRaterContributionShare: label.largestSingleRaterContributionShare,
         singleRaterDominated: label.largestSingleRaterContributionShare > 0.5,
@@ -8374,6 +11195,7 @@ export function buildRaterCompositionConflictReport(
   const releaseCriticalItemRows = itemRows.filter((row) => row.releaseCritical);
   const singleRaterDominatedReleaseCriticalRows = releaseCriticalItemRows.filter((row) => row.singleRaterDominated);
   const topicExpertiseMissingRows = releaseCriticalItemRows.filter((row) => !row.topicExpertCoverage);
+  const tierDiversityMissingRows = releaseCriticalItemRows.filter((row) => !row.tierDiversityTargetMet);
   return {
     id: `rater-composition-conflicts-${releaseId}-${labelSnapshot.id}`,
     releaseId,
@@ -8385,7 +11207,10 @@ export function buildRaterCompositionConflictReport(
       conflictRule:
         "Ratings are flagged when a rater authored, selected, adapted, or previously discussed the item unless an admin exception is explicitly recorded.",
       topicExpertiseRule:
-        "Release-critical items disclose whether at least one included rater has topic expertise for the position family.",
+        "Release-critical items disclose whether at least one included rater has profile topic expertise and current topic_specialist qualification for the position family.",
+      raterTierDiversityRule:
+        "Release-critical items require at least two distinct rater tiers where feasible; thinner tier mixes are disclosed before headline use rather than hidden inside aggregate rater counts.",
+      requiredReleaseCriticalTierDiversityMin,
       dominanceRule:
         "Protected validation and hidden-benchmark items with a single-rater majority are disclosed and require independent expert-review before strong headline claims.",
     },
@@ -8396,6 +11221,8 @@ export function buildRaterCompositionConflictReport(
       releaseCriticalItemCount: releaseCriticalItemRows.length,
       conflictFlagCount: conflictRows.length,
       topicExpertiseMissingItemCount: topicExpertiseMissingRows.length,
+      raterTierDiversityMissingItemCount: tierDiversityMissingRows.length,
+      currentTopicSpecialistQualificationCount: topicSpecialistQualificationRows.length,
       singleRaterDominatedReleaseCriticalItemCount: singleRaterDominatedReleaseCriticalRows.length,
     },
     raterTierDistribution: countBy(raterRows, "tier"),
@@ -8406,12 +11233,14 @@ export function buildRaterCompositionConflictReport(
     raterRows,
     itemRows,
     conflictRows,
+    topicSpecialistQualificationRows,
     topicExpertiseMissingRows,
+    tierDiversityMissingRows,
     singleRaterDominatedReleaseCriticalRows,
     releaseUseStatus:
       conflictRows.length > 0
         ? "rater_conflict_review_required"
-        : singleRaterDominatedReleaseCriticalRows.length > 0 || topicExpertiseMissingRows.length > 0
+        : singleRaterDominatedReleaseCriticalRows.length > 0 || topicExpertiseMissingRows.length > 0 || tierDiversityMissingRows.length > 0
           ? "rater_composition_limitations_disclosed"
           : "rater_composition_conflict_pass",
   };
@@ -8691,7 +11520,7 @@ export function buildCritiqueGenerationEvaluationReport(
         outputId: output.id,
         positionId: output.positionId,
         positionSplit: position?.split ?? "unknown",
-        status: output.status,
+        status: normalizeGenerationOutputStatus(output.status),
         promotedCritiqueId: output.promotedCritiqueId ?? null,
         itemId,
         duplicateOfOutputId: output.duplicateOfOutputId ?? null,
@@ -8999,6 +11828,11 @@ const REQUIRED_GENERATION_EVALUATION_REPORT_FIELDS = [
   "commonPositionSetPolicy",
   "commonGenerationBudgetPolicy",
   "filteringSelectionPolicy",
+  "headlineMetric",
+  "uncuratedRandomSampleMetric",
+  "bestOfNPolicy",
+  "topKPolicy",
+  "passThresholdOverall",
   "uncuratedRandomSampleMetrics",
   "bestOfNMetrics",
   "counts",
@@ -9342,11 +12176,43 @@ function submittedGenerationEvaluationReportContractChecks(report, generationRun
       status: Number.isFinite(Number(report?.[objectField]?.[nestedField])) ? "pass" : "invalid_number",
     })),
   );
-  return [...fieldChecks, linkedRunCheck, ...objectChecks, ...metricFieldChecks];
+  const definitionChecks = [
+    {
+      field: "uncuratedRandomSampleMetric",
+      expected: "mentions uncurated or random sample",
+      observed: report?.uncuratedRandomSampleMetric ?? null,
+      status: policyMentionsAny(report?.uncuratedRandomSampleMetric, ["uncurated", "random", "all generated"]) ? "pass" : "missing_metric_definition",
+    },
+    {
+      field: "bestOfNPolicy",
+      expected: "mentions best-of-N and generation budget",
+      observed: report?.bestOfNPolicy ?? null,
+      status: policyMentions(report?.bestOfNPolicy, ["best", "n"]) && policyMentionsAny(report?.bestOfNPolicy, ["budget", "generated", "requested"])
+        ? "pass"
+        : "missing_metric_definition",
+    },
+    {
+      field: "topKPolicy",
+      expected: "mentions top-k or curated view separated from default metric",
+      observed: report?.topKPolicy ?? null,
+      status:
+        policyMentionsAny(report?.topKPolicy, ["top", "curated"]) && policyMentionsAny(report?.topKPolicy, ["separate", "diagnostic", "non-headline"])
+          ? "pass"
+          : "missing_metric_definition",
+    },
+  ];
+  const passThresholdCheck = {
+    field: "passThresholdOverall",
+    expected: "finite_number",
+    observed: report?.passThresholdOverall ?? null,
+    status: Number.isFinite(Number(report?.passThresholdOverall)) ? "pass" : "invalid_number",
+  };
+  return [...fieldChecks, linkedRunCheck, ...objectChecks, ...metricFieldChecks, ...definitionChecks, passThresholdCheck];
 }
 
 function normalizeGenerationOutputStatus(status) {
   if (["promoted_to_rating", "empty_or_refusal", "duplicate_filtered", "filtered_before_rating", "human_rejected"].includes(status)) return status;
+  if (status === "promoted" || status === "rated") return "promoted_to_rating";
   if (status === "empty" || status === "refusal") return "empty_or_refusal";
   if (status === "duplicate" || status === "near_duplicate") return "duplicate_filtered";
   if (status === "filtered" || status === "rejected_before_rating") return "filtered_before_rating";
@@ -9420,6 +12286,15 @@ export function buildHiddenBenchmarkFreezeReport(
   exposureEvents = seedBenchmarkExposureEvents,
   options = {},
 ) {
+  const hiddenBenchmarkGovernancePolicy = {
+    membershipFreezeRule: "hidden_benchmark_membership_frozen_before_scoring_and_redacted_from_ordinary_raters",
+    authorizedAccessRoles: ["admin", "expert"],
+    exposureLoggingRule: "all_membership_view_export_probe_and_refresh_actions_emit_exposure_log_rows",
+    routineRefreshCadenceDays: 180,
+    leakageIncidentRefreshCadenceDays: 30,
+    saturationTriggeredRefresh: "defer_to_active_benchmark_refresh_policy",
+    leakResponseActions: ["quarantine_exposed_items", "reassign_or_replace_items", "record_public_or_internal_erratum", "rerun_freeze_report"],
+  };
   const ratings = options.ratings ?? seedRatings;
   const submittedSplitMembership = buildSubmittedBenchmarkSplitMembership(positionList, options.benchmarkSplitMembers ?? []);
   const benchmarkPositionList = submittedSplitMembership.effectivePositionList;
@@ -9464,6 +12339,13 @@ export function buildHiddenBenchmarkFreezeReport(
     labelSnapshot,
   });
   const initialBlinding = buildHiddenBenchmarkInitialBlindingReport(releaseId, labelSnapshot, ratings, benchmarkPositionList);
+  const hiddenBenchmarkExpertQualification = buildHiddenBenchmarkExpertQualificationReport(
+    hiddenItemIds,
+    ratings,
+    Array.isArray(options.raterQualificationRecords) && options.raterQualificationRecords.length
+      ? options.raterQualificationRecords
+      : defaultRaterQualificationRecords(releaseId),
+  );
   const freezeChecks = [
     freezeCheck("rights", rightsStatus.status, "Hidden-benchmark positions have restricted benchmark release scopes and adapted-source provenance."),
     freezeCheck(
@@ -9509,9 +12391,19 @@ export function buildHiddenBenchmarkFreezeReport(
       "Hidden benchmark status and membership are restricted to authorized roles, with accesses logged before and after freeze.",
     ),
     freezeCheck(
+      "governance_refresh_policy",
+      "pass",
+      `Hidden benchmark refresh cadence is frozen at ${hiddenBenchmarkGovernancePolicy.routineRefreshCadenceDays} routine days and ${hiddenBenchmarkGovernancePolicy.leakageIncidentRefreshCadenceDays} days after leakage incidents.`,
+    ),
+    freezeCheck(
       "initial_rating_blinding",
       initialBlinding.releaseUseStatus === "hidden_benchmark_initial_blinding_violation" ? "blocked" : "pass",
       `${initialBlinding.counts.sourceTagVisibleInitialRows} source/tag-visible hidden-benchmark initial rows; ${initialBlinding.counts.excludedFromBlindAggregationRows} excluded and ${initialBlinding.counts.adjudicatedExceptionRows} disclosed exceptions.`,
+    ),
+    freezeCheck(
+      "hidden_benchmark_expert_qualification",
+      hiddenBenchmarkExpertQualification.status === "pass" ? "pass" : "blocked",
+      `${hiddenBenchmarkExpertQualification.counts.qualifiedHiddenBenchmarkItemCount}/${hiddenBenchmarkExpertQualification.counts.hiddenBenchmarkItemCount} hidden-benchmark items have current hidden_benchmark_expert qualification evidence.`,
     ),
     freezeCheck(
       "submitted_split_membership_contract",
@@ -9534,6 +12426,7 @@ export function buildHiddenBenchmarkFreezeReport(
       ? { hiddenPositionIds, hiddenCritiqueIds, hiddenItemIds }
       : { hiddenPositionIds: [], hiddenCritiqueIds: [], hiddenItemIds: [], redaction: "membership_ids_restricted_to_admin_endpoint" },
     rightsStatus,
+    hiddenBenchmarkGovernancePolicy,
     clusterIsolation: {
       status: overlappingSplitClusters.length ? "blocked" : "pass",
       hiddenClusterIds: options.includeRestrictedIds ? [...hiddenClusters] : [],
@@ -9546,7 +12439,64 @@ export function buildHiddenBenchmarkFreezeReport(
     artifactProbeDiagnostics,
     accessAudit,
     initialBlinding,
+    hiddenBenchmarkExpertQualification,
     freezeChecks,
+  };
+}
+
+function buildHiddenBenchmarkExpertQualificationReport(hiddenItemIds, ratings, raterQualificationRecords = []) {
+  const qualificationRows = (raterQualificationRecords ?? [])
+    .map((record) => normalizeRaterQualificationRecord(record, "hidden_benchmark_expert_qualification_record"))
+    .filter(Boolean);
+  const currentHiddenBenchmarkExpertRecordByRater = new Map(
+    qualificationRows
+      .filter((record) =>
+        raterQualificationRecordIsCurrent(record, {
+          qualificationScope: "hidden_benchmark_expert",
+          approvedRole: "expert",
+          requiredEligibility: "hidden_benchmark",
+        }),
+      )
+      .map((record) => [record.raterId, record]),
+  );
+  const rows = hiddenItemIds.map((itemId) => {
+    const itemRatings = ratings.filter((rating) => makeItemId(rating.positionId, rating.critiqueId) === itemId);
+    const qualifiedRows = itemRatings
+      .map((rating) => ({
+        ratingId: rating.id,
+        raterId: rating.raterId,
+        raterTier: rating.raterTier,
+        ratingKind: rating.kind,
+        raterQualificationRecordId: currentHiddenBenchmarkExpertRecordByRater.get(rating.raterId)?.id ?? null,
+      }))
+      .filter((row) => row.raterQualificationRecordId);
+    const expertTierUnqualifiedRows = itemRatings
+      .filter((rating) => rating.raterTier === "expert" && !currentHiddenBenchmarkExpertRecordByRater.has(rating.raterId))
+      .map((rating) => ({ ratingId: rating.id, raterId: rating.raterId, raterTier: rating.raterTier, ratingKind: rating.kind }));
+    return {
+      itemId,
+      ratingCount: itemRatings.length,
+      qualifiedHiddenBenchmarkExpertRaterIds: uniqueStrings(qualifiedRows.map((row) => row.raterId)),
+      qualifiedHiddenBenchmarkExpertCount: uniqueStrings(qualifiedRows.map((row) => row.raterId)).length,
+      qualifiedRows,
+      expertTierUnqualifiedRows,
+      status: qualifiedRows.length ? "hidden_benchmark_expert_qualified" : "hidden_benchmark_expert_qualification_missing",
+    };
+  });
+  const missingRows = rows.filter((row) => row.status !== "hidden_benchmark_expert_qualified");
+  return {
+    requiredQualificationScope: "hidden_benchmark_expert",
+    requiredApprovedRole: "expert",
+    requiredSplitWorkflowEligibility: "hidden_benchmark",
+    rows,
+    missingRows,
+    counts: {
+      hiddenBenchmarkItemCount: rows.length,
+      qualifiedHiddenBenchmarkItemCount: rows.filter((row) => row.status === "hidden_benchmark_expert_qualified").length,
+      missingHiddenBenchmarkExpertQualificationItemCount: missingRows.length,
+      currentHiddenBenchmarkExpertRaterCount: currentHiddenBenchmarkExpertRecordByRater.size,
+    },
+    status: missingRows.length ? "hidden_benchmark_expert_qualification_required" : "pass",
   };
 }
 
@@ -9650,11 +12600,19 @@ function parsePositionIdFromItemId(itemId) {
   return itemId.split("::")[0];
 }
 
+const BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY = {
+  minimumScoredCritiquesPerPosition: 3,
+  minimumNonTiedPairCount: 1,
+  minimumAdjudicatedOverallSpread: 0.2,
+  pointwiseOnlyFallback: "custom_weighted_loss_items_remain_pointwise_only_when_pairwise_policy_is_not_met",
+};
+
 export function buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, positionList = positions, critiqueList = critiques, tieTolerance = 0) {
   const pairwiseEligiblePositions = [];
   const pointwiseOnlyItems = [];
   const customLossEligibleItems = [];
   const metricFamilySpecificExclusions = [];
+  const qualitySpreadRows = [];
 
   positionList.forEach((position) => {
     const positionCritiques = critiqueList.filter((critique) => critique.positionId === position.id);
@@ -9673,12 +12631,36 @@ export function buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, p
         if (!isTie(a.overall - b.overall, tieTolerance)) nonTiedPairCount += 1;
       });
     });
+    const scoredOveralls = scoredCritiques.map((item) => item.overall).filter(isValidScore);
+    const adjudicatedOverallSpread = scoredOveralls.length ? round(Math.max(...scoredOveralls) - Math.min(...scoredOveralls)) : null;
+    const reviewReasons = [
+      scoredCritiques.length >= BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY.minimumScoredCritiquesPerPosition
+        ? null
+        : "fewer_than_three_labelled_critiques",
+      nonTiedPairCount >= BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY.minimumNonTiedPairCount ? null : "no_non_tied_human_pairs",
+      adjudicatedOverallSpread !== null &&
+      adjudicatedOverallSpread >= BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY.minimumAdjudicatedOverallSpread
+        ? null
+        : "adjudicated_quality_spread_below_threshold",
+    ].filter(Boolean);
+    qualitySpreadRows.push({
+      positionId: position.id,
+      scoredCritiqueCount: scoredCritiques.length,
+      nonTiedPairCount,
+      adjudicatedOverallSpread,
+      minimumAdjudicatedOverallSpread: BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY.minimumAdjudicatedOverallSpread,
+      status: reviewReasons.length ? "pairwise_headline_ineligible" : "pairwise_headline_eligible",
+      reviewReasons,
+    });
 
-    if (scoredCritiques.length >= 2 && nonTiedPairCount > 0) {
+    if (!reviewReasons.length) {
       pairwiseEligiblePositions.push({
         positionId: position.id,
         critiqueIds: scoredCritiques.map((item) => item.critique.id),
+        scoredCritiqueCount: scoredCritiques.length,
         nonTiedPairCount,
+        adjudicatedOverallSpread,
+        minimumAdjudicatedOverallSpread: BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY.minimumAdjudicatedOverallSpread,
       });
       return;
     }
@@ -9688,9 +12670,12 @@ export function buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, p
     });
     metricFamilySpecificExclusions.push({
       positionId: position.id,
-      reason: scoredCritiques.length < 2 ? "fewer_than_two_labelled_critiques" : "no_non_tied_human_pairs",
+      reason: reviewReasons[0],
+      reviewReasons,
       scoredCritiqueCount: scoredCritiques.length,
       nonTiedPairCount,
+      adjudicatedOverallSpread,
+      minimumAdjudicatedOverallSpread: BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY.minimumAdjudicatedOverallSpread,
     });
   });
 
@@ -9699,13 +12684,16 @@ export function buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, p
     releaseId,
     labelSnapshotId: labelSnapshot.id,
     targetLabelVersion: labelSnapshot.targetLabelVersion,
+    pairwiseEligibilityPolicy: BENCHMARK_PAIRWISE_ELIGIBILITY_POLICY,
     pairwiseEligiblePositions,
     pairwiseEligiblePairCount: pairwiseEligiblePositions.reduce((sum, item) => sum + item.nonTiedPairCount, 0),
+    pairwiseSpreadEligiblePositionCount: qualitySpreadRows.filter((row) => row.status === "pairwise_headline_eligible").length,
     customLossEligibleItems,
     pointwiseOnlyItems,
     metricFamilySpecificExclusions,
+    qualitySpreadRows,
     notes: [
-      "Pairwise headline subsets require same-position non-tied critique pairs.",
+      "Pairwise headline subsets require at least three scored same-position critiques, a non-tied pair, and the frozen adjudicated-spread threshold.",
       "Custom weighted loss remains pointwise and may include pointwise-only items.",
     ],
   };
@@ -11744,6 +14732,8 @@ function normalizeModelTiePolicy(policy) {
   return policy ?? "score_model_tied_predictions_as_half_error";
 }
 
+export const CONSENSUS_TARGET_LABEL_VERSION = "adjudicated_or_final_average_consensus";
+
 export function buildPairedTargetLabelSnapshotReport(
   releaseId,
   consensusSnapshot,
@@ -11754,11 +14744,17 @@ export function buildPairedTargetLabelSnapshotReport(
 ) {
   const primaryRaterAnchorPolicy =
     options.primaryRaterAnchorPolicy ?? buildEffectivePrimaryRaterAnchorPolicy(releaseId, options.primaryRaterAnchorPolicies ?? []);
+  const primaryRaterAnchorQualificationRecords =
+    Array.isArray(options.raterQualificationRecords) && options.raterQualificationRecords.length
+      ? options.raterQualificationRecords
+      : defaultRaterQualificationRecords(releaseId);
   const primarySnapshot =
     options.primarySnapshot ??
     createPrimaryRaterAnchorSnapshot(`snapshot-${releaseId}-primary-rater-anchor`, releaseId, ratings, pairs, {
       ...(options.primaryAnchorOptions ?? {}),
       primaryRaterAnchorPolicy,
+      raterQualificationRecords: primaryRaterAnchorQualificationRecords,
+      requirePrimaryRaterAnchorQualification: true,
     });
   const primaryItemIds = scoredItemIds(primarySnapshot);
   const consensusItemIds = scoredItemIds(consensusSnapshot);
@@ -11798,7 +14794,8 @@ export function buildPairedTargetLabelSnapshotReport(
     primaryRaterAnchorSnapshot: primarySnapshot,
     consensusSnapshot: {
       id: consensusSnapshot.id,
-      targetLabelVersion: consensusSnapshot.targetLabelVersion,
+      targetLabelVersion: CONSENSUS_TARGET_LABEL_VERSION,
+      sourceTargetLabelVersion: consensusSnapshot.targetLabelVersion,
       status: consensusSnapshot.status,
       reliabilityWeightModelId: consensusSnapshot.reliabilityWeightModelId,
       denominatorCounts: consensusSnapshot.denominatorCounts,
@@ -11832,6 +14829,7 @@ export function buildPairedTargetLabelSnapshotReport(
     },
     claimPolicy: {
       lmcaTable5TargetIdenticalOnlyWithPrimaryAnchor: true,
+      consensusTargetLabelVersion: CONSENSUS_TARGET_LABEL_VERSION,
       consensusSnapshotUse: "higher_quality_volunteer_label_not_target_identical_to_lmca_table_5",
       postHocAnchorSwitchingAllowed: false,
     },
@@ -12529,6 +15527,15 @@ export function buildValidationTrancheReport(
   };
 }
 
+const RELEASE_CYCLE_VALIDATION_POLICY = {
+  cadence: "each_public_release_or_leaderboard_cycle",
+  carryForwardAllowedReleaseCycles: 0,
+  requiredSubsets: ["random_sentinel", "hard_case_stress"],
+  requiredComparisons: ["initial_vs_final", "human_only_self_checked_vs_final", "model_assisted_checked_vs_final", "incremental_post_model_assistance_delta"],
+  requiredCeilingEvidence: ["human_ceiling_estimate", "per_dimension_rater_calibration", "individual_rater_dominance", "expert_vs_model_agreement"],
+  staleEvidenceAction: "rerun_or_rebaseline_before_appendix_c_or_leaderboard_claim",
+};
+
 export function buildValidationDesignReport(ratings = seedRatings, positionList = positions, critiqueList = critiques, options = {}) {
   const validationPositionIds = new Set(positionList.filter((position) => position.split === "internal_validation").map((position) => position.id));
   const validationCritiqueIds = critiqueList.filter((critique) => validationPositionIds.has(critique.positionId)).map((critique) => critique.id);
@@ -12548,26 +15555,49 @@ export function buildValidationDesignReport(ratings = seedRatings, positionList 
     validationPositionIds.size >= OCTOBER_RELEASE_TARGETS.validationPositions &&
     fullCoverageRaters.length >= OCTOBER_RELEASE_TARGETS.coreAllItemsRaters;
   const submittedValidationEvidence = buildSubmittedValidationEvidence(options.humanCeilingRuns ?? []);
-  const submittedFloorMet = submittedValidationEvidence.status === "submitted_appendix_c_scale_evidence";
+  const submittedScaleEvidence = buildSubmittedValidationScaleEvidence(
+    submittedValidationEvidence,
+    options.submittedValidationTrancheEvidence,
+  );
+  const activeSubmittedScaleEvidence = submittedScaleEvidence.activeEvidence;
+  const currentScale = {
+    critiqueCount: Math.max(validationCritiqueIds.length, activeSubmittedScaleEvidence?.validationCritiqueCount ?? 0),
+    positionCount: Math.max(validationPositionIds.size, activeSubmittedScaleEvidence?.validationPositionCount ?? 0),
+    fullCoverageRaterCount: Math.max(fullCoverageRaters.length, activeSubmittedScaleEvidence?.coreAllItemsRaterCount ?? 0),
+    fullCoverageRaters,
+    computedCritiqueCount: validationCritiqueIds.length,
+    computedPositionCount: validationPositionIds.size,
+    computedFullCoverageRaterCount: fullCoverageRaters.length,
+    computedFloorMet: floorMet,
+    submittedScaleEvidenceStatus: activeSubmittedScaleEvidence
+      ? "submitted_appendix_c_scale_evidence_applied"
+      : "no_submitted_appendix_c_scale_evidence_applied",
+    submittedScaleEvidenceSource: activeSubmittedScaleEvidence?.source ?? null,
+    submittedScaleEvidenceId: activeSubmittedScaleEvidence?.id ?? null,
+    sourceEvidenceId: activeSubmittedScaleEvidence?.id ?? "appendix-c-validation-design-report",
+  };
+  const submittedFloorMet = Boolean(activeSubmittedScaleEvidence);
   const status = floorMet || submittedFloorMet ? "appendix_c_scale" : "thinner_than_appendix_c";
+  const releaseCycleEvidenceStatus =
+    status === "appendix_c_scale"
+      ? "current_release_cycle_validation_evidence_complete"
+      : "current_release_cycle_validation_floor_not_met";
 
   return {
     id: "appendix-c-validation-design-report",
     status,
+    releaseCycleValidationPolicy: RELEASE_CYCLE_VALIDATION_POLICY,
+    releaseCycleEvidenceStatus,
     requiredScale: {
       critiqueCount: OCTOBER_RELEASE_TARGETS.validationCritiques,
       positionCount: OCTOBER_RELEASE_TARGETS.validationPositions,
       coreAllItemsRaters: OCTOBER_RELEASE_TARGETS.coreAllItemsRaters,
       discussionHours: "7-8",
     },
-    currentScale: {
-      critiqueCount: validationCritiqueIds.length,
-      positionCount: validationPositionIds.size,
-      fullCoverageRaterCount: fullCoverageRaters.length,
-      fullCoverageRaters,
-      computedFloorMet: floorMet,
-    },
+    currentScale,
     submittedValidationEvidence,
+    submittedValidationTrancheEvidence: options.submittedValidationTrancheEvidence ?? null,
+    submittedScaleEvidence,
     comparabilityAxes: {
       blindInitialRatings: ratings.some((rating) => rating.kind === "blind_initial" && validationItemIds.has(makeItemId(rating.positionId, rating.critiqueId))),
       fullVsPartialRaterCoverageReported: true,
@@ -12578,6 +15608,45 @@ export function buildValidationDesignReport(ratings = seedRatings, positionList 
       thinnerThanAppendixCLabelRequired: status !== "appendix_c_scale",
     },
     numericBaselineComparisonTable: LMCA_BASELINES.appendixCNumericBaselines,
+  };
+}
+
+function buildSubmittedValidationScaleEvidence(submittedValidationEvidence, submittedValidationTrancheEvidence) {
+  const humanCeilingRows = (submittedValidationEvidence?.rows ?? [])
+    .filter((row) => row?.status === "appendix_c_scale_evidence")
+    .map((row) => ({
+      id: row.id,
+      source: "human_ceiling_run",
+      validationCritiqueCount: numericEvidenceValue(row.validationCritiqueCount),
+      validationPositionCount: numericEvidenceValue(row.validationPositionCount),
+      coreAllItemsRaterCount: numericEvidenceValue(row.coreAllItemsRaterCount),
+      status: row.status,
+    }));
+  const activeValidationTrancheRow =
+    (submittedValidationTrancheEvidence?.rows ?? []).find(
+      (row) => row?.id === submittedValidationTrancheEvidence?.activeEvidenceId && row?.status === "validation_tranche_evidence_complete",
+    ) ??
+    (submittedValidationTrancheEvidence?.rows ?? []).find((row) => row?.status === "validation_tranche_evidence_complete") ??
+    null;
+  const validationTrancheRows = activeValidationTrancheRow
+    ? [
+        {
+          id: activeValidationTrancheRow.id,
+          source: "validation_tranche_evidence",
+          validationCritiqueCount: numericEvidenceValue(activeValidationTrancheRow.validationCritiqueCount),
+          validationPositionCount: numericEvidenceValue(activeValidationTrancheRow.validationPositionCount),
+          coreAllItemsRaterCount: numericEvidenceValue(activeValidationTrancheRow.coreAllItemsRaterCount),
+          status: activeValidationTrancheRow.status,
+        },
+      ]
+    : [];
+  const rows = [...validationTrancheRows, ...humanCeilingRows];
+  return {
+    rows,
+    activeEvidence: rows[0] ?? null,
+    activeEvidenceId: rows[0]?.id ?? null,
+    activeEvidenceSource: rows[0]?.source ?? null,
+    status: rows.length ? "submitted_appendix_c_scale_evidence_available" : "no_submitted_appendix_c_scale_evidence",
   };
 }
 
@@ -12785,6 +15854,8 @@ const REQUIRED_RELEASE_VERSION_FIELDS = [
   "gateProfileId",
   "releaseConfigManifestId",
   "releaseConfigManifestHash",
+  "phaseGateBundleId",
+  "phaseGateBundleHash",
   "status",
   "releaseNotes",
   "frozenAt",
@@ -12792,13 +15863,17 @@ const REQUIRED_RELEASE_VERSION_FIELDS = [
 
 export function buildEffectiveReleaseVersionManifest(
   releaseId,
-  { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps },
+  { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps, operationalControlEvidence },
   submittedReleaseVersions = [],
   submittedReleaseFreezes = [],
 ) {
   const submittedReleaseVersion = latestSubmittedReleaseArtifact(submittedReleaseVersions, releaseId);
   const submittedReleaseFreeze = latestSubmittedReleaseArtifact(submittedReleaseFreezes, releaseId);
   const effectiveMetricConfig = metricDirectionalityConfig.effectiveMetricConfig;
+  const activePhaseGateBundle =
+    (operationalControlEvidence?.implementationPhaseGateBundleRows ?? [])
+      .filter((row) => row.status === "implementation_phase_gate_complete")
+      .at(-1) ?? null;
   const linkChecks = [
     releaseManifestLinkCheck(
       "corpus_manifest",
@@ -12823,6 +15898,16 @@ export function buildEffectiveReleaseVersionManifest(
         submittedReleaseFreeze?.releaseGateProfileId ??
         submittedReleaseFreeze?.gateProfileId,
     ),
+    releaseManifestLinkCheck(
+      "implementation_phase_gate_bundle",
+      activePhaseGateBundle?.id ?? null,
+      submittedReleaseVersion?.phaseGateBundleId ?? submittedReleaseFreeze?.phaseGateBundleId,
+    ),
+    releaseManifestLinkCheck(
+      "implementation_phase_gate_bundle_hash",
+      activePhaseGateBundle?.phaseGateBundleHash ?? null,
+      submittedReleaseVersion?.phaseGateBundleHash ?? submittedReleaseFreeze?.phaseGateBundleHash,
+    ),
   ];
   const mismatchedLinkChecks = linkChecks.filter((check) => check.status === "mismatch");
   const missingLinkChecks = linkChecks.filter((check) => check.status === "missing_submitted_artifact_link");
@@ -12834,10 +15919,8 @@ export function buildEffectiveReleaseVersionManifest(
         ? "release_manifest_link_review_required"
         : "release_manifest_links_current_artifacts"
       : "computed_manifest_pending_submitted_release_version";
-  const targetScaleStatus =
-    currentStatus === "target_scale_met"
-      ? "target_scale_met"
-      : submittedReleaseFreeze?.targetScaleStatus ?? submittedReleaseVersion?.targetScaleStatus ?? "not_target_scale_current_report";
+  const submittedTargetScaleStatus = submittedReleaseFreeze?.targetScaleStatus ?? submittedReleaseVersion?.targetScaleStatus ?? null;
+  const targetScaleStatus = releaseTargetScaleStatus(currentStatus);
   return {
     id: submittedReleaseVersion?.id ?? `release-version-manifest-${releaseId}`,
     releaseId,
@@ -12845,14 +15928,18 @@ export function buildEffectiveReleaseVersionManifest(
     manifestSource: submittedReleaseVersion ? "submitted_workflow_release_version" : "computed_working_release_manifest",
     submittedReleaseVersionId: submittedReleaseVersion?.id ?? null,
     submittedReleaseFreezeId: submittedReleaseFreeze?.id ?? null,
+    submittedTargetScaleStatus,
     releaseNotes: submittedReleaseVersion?.releaseNotes ?? submittedReleaseVersion?.notes ?? null,
     frozenAt: submittedReleaseVersion?.frozenAt ?? submittedReleaseFreeze?.frozenAt ?? null,
     frozenBy: submittedReleaseFreeze?.frozenBy ?? null,
     freezeEvidence: {
       freezeStatus: submittedReleaseFreeze?.freezeStatus ?? "not_frozen",
       targetScaleStatus,
+      submittedTargetScaleStatus,
       frozenAt: submittedReleaseFreeze?.frozenAt ?? null,
       releaseGateProfileId: submittedReleaseFreeze?.releaseGateProfileId ?? submittedReleaseFreeze?.gateProfileId ?? null,
+      phaseGateBundleId: submittedReleaseFreeze?.phaseGateBundleId ?? null,
+      phaseGateBundleHash: submittedReleaseFreeze?.phaseGateBundleHash ?? null,
       corpusManifestId: submittedReleaseFreeze?.corpusManifestId ?? null,
       labelSnapshotId: submittedReleaseFreeze?.labelSnapshotId ?? null,
     },
@@ -12869,6 +15956,8 @@ export function buildEffectiveReleaseVersionManifest(
       labelSnapshotId: labelSnapshot.id,
       metricConfigId: effectiveMetricConfig.id,
       releaseGateProfileId: releaseGateProfile.id,
+      phaseGateBundleId: activePhaseGateBundle?.id ?? null,
+      phaseGateBundleHash: activePhaseGateBundle?.phaseGateBundleHash ?? null,
     },
     submittedStatus: submittedReleaseVersion?.status ?? null,
     targetScaleStatus,
@@ -12883,6 +15972,11 @@ export function buildEffectiveReleaseVersionManifest(
               ? "submitted_release_manifest_recorded_but_target_scale_incomplete"
               : "submitted_release_manifest_current_and_target_scale_met",
   };
+}
+
+function releaseTargetScaleStatus(currentStatus) {
+  if (currentStatus === "target_scale_met") return "target_scale_met";
+  return OCTOBER_TARGET_SCALE_INCOMPLETE_STATUS;
 }
 
 function submittedReleaseVersionContractChecks(submitted) {
@@ -12908,7 +16002,15 @@ function submittedReleaseVersionContractChecks(submitted) {
       ? "pass"
       : "invalid_hash_prefix",
   };
-  return [...requiredFieldChecks, immutableOutputCheck, manifestHashCheck];
+  const phaseGateBundleHashCheck = {
+    field: "phaseGateBundleHash",
+    expected: "sha256:*",
+    observed: submitted?.phaseGateBundleHash ?? null,
+    status: typeof submitted?.phaseGateBundleHash === "string" && submitted.phaseGateBundleHash.startsWith("sha256:")
+      ? "pass"
+      : "invalid_hash_prefix",
+  };
+  return [...requiredFieldChecks, immutableOutputCheck, manifestHashCheck, phaseGateBundleHashCheck];
 }
 
 function latestSubmittedReleaseArtifact(records = [], releaseId) {
@@ -12926,8 +16028,8 @@ function releaseManifestLinkCheck(artifact, expectedId, submittedId) {
 
 export function buildSubmittedReleaseArtifactEvidence(
   releaseId,
-  { labelSnapshot, corpusManifest, trainingExport, publicExportManifest },
-  { labelSnapshots = [], corpusManifests = [], trainingExports = [], exportManifests = [] } = {},
+  { labelSnapshot, corpusManifest, trainingExport, publicExportManifest, internalExportManifest, releaseReportSnapshot },
+  { labelSnapshots = [], corpusManifests = [], trainingExports = [], exportManifests = [], releaseReports = [] } = {},
 ) {
   const labelSnapshotEvidence = submittedLabelSnapshotEvidence(releaseId, labelSnapshot, trainingExport, latestSubmittedReleaseArtifact(labelSnapshots, releaseId));
   const corpusManifestEvidence = submittedCorpusManifestEvidence(releaseId, corpusManifest, latestSubmittedReleaseArtifact(corpusManifests, releaseId));
@@ -12943,8 +16045,29 @@ export function buildSubmittedReleaseArtifactEvidence(
     labelSnapshotEvidence,
     latestSubmittedExportManifest(exportManifests, releaseId, publicExportManifest.kind),
   );
-  const sections = [labelSnapshotEvidence, corpusManifestEvidence, trainingExportEvidence, exportManifestEvidence];
-  const reviewSections = sections.filter((section) => section.status.endsWith("_review_required"));
+  const internalExportManifestEvidence = submittedExportManifestEvidence(
+    releaseId,
+    internalExportManifest,
+    labelSnapshotEvidence,
+    latestSubmittedExportManifest(exportManifests, releaseId, internalExportManifest.kind),
+  );
+  const releaseReportSnapshotEvidence = submittedReleaseReportSnapshotEvidence(
+    releaseId,
+    releaseReportSnapshot,
+    latestSubmittedReleaseArtifact(releaseReports, releaseId),
+  );
+  const sections = [
+    labelSnapshotEvidence,
+    corpusManifestEvidence,
+    trainingExportEvidence,
+    exportManifestEvidence,
+    internalExportManifestEvidence,
+    releaseReportSnapshotEvidence,
+  ];
+  const submittedSectionCount = sections.filter((section) => section.submittedArtifactId).length;
+  const reviewSections = sections.filter(
+    (section) => section.status.endsWith("_review_required") || (submittedSectionCount > 0 && section.status === "no_submitted_artifact"),
+  );
   return {
     id: `submitted-release-artifact-evidence-${releaseId}`,
     releaseId,
@@ -12957,16 +16080,20 @@ export function buildSubmittedReleaseArtifactEvidence(
       trainingExportRule:
         "Submitted TrainingExport artifacts must point to the active or submitted label snapshot, preserve protected-split exclusions, and bind the active uncertainty/downweighting policy.",
       exportManifestRule:
-        "Submitted public ExportManifest artifacts must preserve public split scope, rights-only policy, hidden-benchmark exclusion, and label-snapshot linkage.",
+        "Submitted public and internal ExportManifest artifacts must preserve their split scope, rights policy, hidden-benchmark exposure policy, and label-snapshot linkage.",
+      releaseReportSnapshotRule:
+        "Submitted ReleaseReport snapshots must be server-materialized from the current release report and bind the report id, release status, hash, actor, and timestamp before they count as release evidence.",
     },
     labelSnapshotEvidence,
     corpusManifestEvidence,
     trainingExportEvidence,
     exportManifestEvidence,
+    internalExportManifestEvidence,
+    releaseReportSnapshotEvidence,
     reviewSections: reviewSections.map((section) => section.artifactKind),
     releaseUseStatus: reviewSections.length
       ? "submitted_release_artifacts_review_required"
-      : sections.some((section) => section.submittedArtifactId)
+      : submittedSectionCount === sections.length
         ? "submitted_release_artifacts_match_current_release"
         : "computed_release_artifacts_no_submitted_manifests",
   };
@@ -13490,6 +16617,16 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
     requiredSetMembershipCheck("sourceLabelSnapshotId", allowedLabelSnapshotIds, sourceLabelSnapshotId),
     requiredArrayIncludesCheck("sourceSplits", trainingExport.protectedSplitPolicy.includedSplits, sourceSplits),
     requiredArrayIncludesCheck("excludedProtectedSplits", ["internal_validation", "hidden_benchmark"], excludedProtectedSplits),
+    requiredArrayIncludesCheck(
+      "futureTrainingExportExcludedRaterIds",
+      trainingExport.futureTrainingExportExcludedRaterIds,
+      submitted?.futureTrainingExportExcludedRaterIds ?? [],
+    ),
+    requiredArrayIncludesCheck(
+      "volunteerWithdrawalExclusionRequestIds",
+      trainingExport.volunteerWithdrawalExclusionRequestIds,
+      submitted?.volunteerWithdrawalExclusionRequestIds ?? [],
+    ),
     requiredManifestCheck("targetLabelVersion", trainingExport.targetLabelVersion, submitted?.targetLabelVersion),
     requiredNonEmptyCheck("targetFields", submitted?.targetFields),
     requiredNonEmptyCheck("promptTrackExposurePolicy", submitted?.promptTrackExposurePolicy ?? submitted?.promptTrackExposure),
@@ -13530,6 +16667,11 @@ function submittedTrainingExportEvidence(releaseId, trainingExport, labelSnapsho
       "labelMetadataManifest",
       trainingExportLabelMetadataManifest(trainingExport),
       submitted?.labelMetadataManifest,
+    ),
+    requiredStructuredManifestCheck(
+      "volunteerWithdrawalExclusionManifest",
+      trainingExport.volunteerWithdrawalExclusionManifest,
+      submitted?.volunteerWithdrawalExclusionManifest,
     ),
     requiredManifestCheck("positionBalancedWeightingPolicy", trainingExport.positionBalancedWeighting.policy, submittedWeightingPolicy),
     requiredManifestCheck("positionBalancedWeighting.status", trainingExport.positionBalancedWeighting.status, submittedWeighting.status),
@@ -13608,20 +16750,46 @@ function trainingExportLabelMetadataManifest(trainingExport) {
   return { rows };
 }
 
-function submittedExportManifestEvidence(releaseId, publicExportManifest, labelSnapshotEvidence, submitted) {
-  const allowedLabelSnapshotIds = uniqueStrings([publicExportManifest.labelSnapshotId, labelSnapshotEvidence.submittedArtifactId].filter(Boolean));
+function submittedExportManifestEvidence(releaseId, exportManifest, labelSnapshotEvidence, submitted) {
+  const allowedLabelSnapshotIds = uniqueStrings([exportManifest.labelSnapshotId, labelSnapshotEvidence.submittedArtifactId].filter(Boolean));
+  const exportKind = exportManifest.kind ?? "public";
   const checks = [
     requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
-    optionalManifestCheck("kind", publicExportManifest.kind, submitted?.kind),
+    optionalManifestCheck("kind", exportKind, submitted?.kind),
     optionalSetMembershipCheck("labelSnapshotId", allowedLabelSnapshotIds, submitted?.labelSnapshotId),
-    requiredArrayIncludesCheck("includedSplits", publicExportManifest.includedSplits, submitted?.includedSplits ?? []),
-    requiredArrayIncludesCheck("excludedSplits", publicExportManifest.excludedSplits, submitted?.excludedSplits ?? []),
-    requiredManifestCheck("hiddenBenchmarkExcluded", true, submitted?.hiddenBenchmarkExcluded),
-    requiredManifestCheck("rightsClearedOnly", true, submitted?.rightsClearedOnly),
-    optionalManifestCheck("positionCount", publicExportManifest.counts.positions, submitted?.counts?.positions ?? submitted?.positionCount),
-    optionalManifestCheck("critiqueCount", publicExportManifest.counts.critiques, submitted?.counts?.critiques ?? submitted?.critiqueCount),
+    requiredArrayIncludesCheck("includedSplits", exportManifest.includedSplits, submitted?.includedSplits ?? []),
+    requiredArrayIncludesCheck("excludedSplits", exportManifest.excludedSplits, submitted?.excludedSplits ?? []),
+    requiredManifestCheck("hiddenBenchmarkExcluded", exportManifest.hiddenBenchmarkExcluded, submitted?.hiddenBenchmarkExcluded),
+    requiredManifestCheck("rightsClearedOnly", exportManifest.rightsClearedOnly, submitted?.rightsClearedOnly),
+    optionalManifestCheck("positionCount", exportManifest.counts.positions, submitted?.counts?.positions ?? submitted?.positionCount),
+    optionalManifestCheck("critiqueCount", exportManifest.counts.critiques, submitted?.counts?.critiques ?? submitted?.critiqueCount),
   ];
-  return releaseArtifactEvidenceRow("public_export_manifest", submitted, checks, "submitted_public_export_manifest_preserves_current_release_policy");
+  return releaseArtifactEvidenceRow(
+    `${exportKind}_export_manifest`,
+    submitted,
+    checks,
+    `submitted_${exportKind}_export_manifest_preserves_current_release_policy`,
+  );
+}
+
+function submittedReleaseReportSnapshotEvidence(releaseId, releaseReportSnapshot, submitted) {
+  const reportId = submitted?.reportId ?? submitted?.report?.id;
+  const reportCurrentStatus = submitted?.reportCurrentStatus ?? submitted?.report?.currentStatus;
+  const checks = [
+    requiredManifestCheck("releaseId", releaseId, submitted?.releaseId),
+    requiredManifestCheck("reportId", releaseReportSnapshot.id, reportId),
+    requiredManifestCheck("reportCurrentStatus", releaseReportSnapshot.currentStatus, reportCurrentStatus),
+    requiredManifestCheck("source", "server_generated_release_report_snapshot", submitted?.source),
+    requiredHashPrefixCheck("inputHash", submitted?.inputHash),
+    requiredNonEmptyCheck("materializedAt", submitted?.materializedAt),
+    requiredNonEmptyCheck("materializedBy", submitted?.materializedBy),
+  ];
+  return releaseArtifactEvidenceRow(
+    "release_report_snapshot",
+    submitted,
+    checks,
+    "submitted_release_report_snapshot_matches_current_release",
+  );
 }
 
 function releaseArtifactEvidenceRow(artifactKind, submitted, checks, passStatus) {
@@ -13629,7 +16797,7 @@ function releaseArtifactEvidenceRow(artifactKind, submitted, checks, passStatus)
   return {
     artifactKind,
     submittedArtifactId: submitted?.id ?? null,
-    submittedAt: submitted?.createdAt ?? submitted?.timestamp ?? null,
+    submittedAt: submitted?.createdAt ?? submitted?.timestamp ?? submitted?.materializedAt ?? null,
     checks,
     reviewChecks,
     status: !submitted ? "no_submitted_artifact" : reviewChecks.length ? `${artifactKind}_review_required` : passStatus,
@@ -13660,6 +16828,18 @@ function optionalManifestCheck(field, expected, submitted) {
 function requiredNonEmptyCheck(field, submitted) {
   const ok = Array.isArray(submitted) ? submitted.length > 0 : submitted !== undefined && submitted !== null && submitted !== "";
   return { field, expected: "non_empty", submitted: submitted ?? null, status: ok ? "matches" : "missing_required_field" };
+}
+
+function requiredHashPrefixCheck(field, submitted) {
+  if (submitted === undefined || submitted === null || submitted === "") {
+    return { field, expected: "sha256:*", submitted: submitted ?? null, status: "missing_required_field" };
+  }
+  return {
+    field,
+    expected: "sha256:*",
+    submitted,
+    status: typeof submitted === "string" && submitted.startsWith("sha256:") ? "matches" : "invalid_hash_prefix",
+  };
 }
 
 function requiredSetMembershipCheck(field, expectedAnyOf, submitted) {
@@ -13755,6 +16935,26 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
   const releaseLargestRaterShare = largestShare(corpusManifest.raterDistributionIgnoringRevisions);
   const lmcaLargestRaterShare = largestShare(LMCA_BASELINES.raterDistributionIgnoringRevisions);
   const modelScoreAnchorComparison = buildLmcaModelScoreAnchorComparison();
+  const lmcaRaterCounts = LMCA_BASELINES.raterDistributionIgnoringRevisions;
+  const releaseRaterCounts = corpusManifest.raterDistributionIgnoringRevisions ?? {};
+  const lmcaRaterNames = Object.keys(lmcaRaterCounts);
+  const releaseOnlyRaterNames = Object.keys(releaseRaterCounts)
+    .filter((rater) => !Object.hasOwn(lmcaRaterCounts, rater))
+    .sort((a, b) => a.localeCompare(b));
+  const raterContributionComparison = [...lmcaRaterNames, ...releaseOnlyRaterNames].map((rater) => {
+    const releaseCount = releaseRaterCounts[rater] ?? 0;
+    const lmcaCount = lmcaRaterCounts[rater] ?? 0;
+    return {
+      sourceTable: lmcaCount ? "LMCA Table 1" : "release_only",
+      countingRule: "ratings_ignoring_revisions",
+      rater,
+      releaseCount,
+      lmcaCount,
+      releaseShare: share(releaseCount, releaseRaterTotal),
+      lmcaShare: share(lmcaCount, lmcaRaterTotal),
+      status: lmcaCount ? (releaseCount > 0 ? "lmca_table_1_rater_present_in_release" : "lmca_table_1_rater_not_in_release") : "release_only_rater_not_in_lmca_table_1",
+    };
+  });
   return {
     id: `lmca-comparison-${releaseId}`,
     releaseId,
@@ -13790,6 +16990,7 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
     raterCompositionComparison: {
       releaseDistributionIgnoringRevisions: corpusManifest.raterDistributionIgnoringRevisions,
       lmcaDistributionIgnoringRevisions: LMCA_BASELINES.raterDistributionIgnoringRevisions,
+      comparisonTable: raterContributionComparison,
       releaseTotal: releaseRaterTotal,
       lmcaTotal: lmcaRaterTotal,
       releaseLargestRaterShare,
@@ -13797,6 +16998,7 @@ export function buildLmcaComparisonReport({ releaseId, corpusManifest, metricEli
       status: releaseRaterTotal >= LMCA_BASELINES.corpusScale.ratingsIgnoringRevisions && releaseLargestRaterShare <= lmcaLargestRaterShare ? "rater_composition_comparable" : "seed_rater_composition_not_comparable",
       note: "Rater-composition claims compare independent rows ignoring revisions; revisions, checks, and adjudication labels are tracked separately.",
     },
+    raterContributionComparison,
     modelDenominatorComparison: [
       comparisonRow("weighted_pairwise_positions", metricEligibility.pairwiseEligiblePositions.length, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwisePositions),
       comparisonRow("weighted_pairwise_critique_pairs", metricEligibility.pairwiseEligiblePairCount, LMCA_BASELINES.modelEvaluationDenominators.weightedPairwiseCritiquePairs),
@@ -14485,9 +17687,9 @@ export function buildPromptParserProvenanceReport(
     generatedAt: new Date().toISOString(),
     policy: {
       promptTemplateRule:
-        "Submitted PromptTemplate records must preserve prompt family/track, source-scope class, rendered checksum or hash, output schema, role, and protected-split example exclusion before they count as active prompt provenance.",
+        "Submitted PromptTemplate records must preserve prompt family/track, source-scope class, full prompt body or immutable artifact URI, rendered checksum, rubric version, output schema, item-role terminology, reasoning and answer policies, example provenance, role, and protected-split example exclusion before they count as active prompt provenance.",
       parserConfigRule:
-        "Submitted ParserConfig records must preserve accepted schema, parser version or implementation id, retry/repair policy, invalid-score and missing-field handling, and protected-split retry constraints before they count as active parser provenance.",
+        "Submitted ParserConfig records must preserve accepted schema, parser version or implementation id, score-field requirements, retry/repair policy, invalid-score, out-of-range, and missing-field handling, protected-split retry constraints, creator, and timestamp before they count as active parser provenance.",
       referenceRule:
         "Evaluation, prediction, generation, and model-judge rows must reference either a built-in immutable prompt/parser artifact or a submitted workflow record.",
     },
@@ -14565,13 +17767,33 @@ function normalizeSubmittedPromptTemplate(template) {
   if (!id) return null;
   const protectedSplitExclusionPolicy = template.protectedSplitExclusionPolicy ?? template.protectedPromptExampleCheck?.status ?? null;
   const toolAvailabilityPolicy = template.toolAvailabilityPolicy ?? null;
+  const promptBodyOrArtifactUri =
+    template.fullPromptBody ??
+    template.promptBody ??
+    template.promptArtifactUri ??
+    template.promptArtifactURI ??
+    template.promptArtifact?.uri ??
+    template.immutablePromptArtifactUri ??
+    null;
   const reviewReasons = [
     requiredPromptFieldReason("promptFamily", template.promptFamily),
     requiredPromptFieldReason("promptTrack", template.promptTrack ?? template.promptSourceScopeClass),
     requiredPromptFieldReason("promptSourceScopeClass", template.promptSourceScopeClass ?? template.promptScope),
-    requiredPromptFieldReason("renderedPromptChecksum", template.renderedPromptChecksum ?? template.promptTextHash ?? template.bodyHash),
+    requiredPromptFieldReason("promptBodyOrArtifactUri", promptBodyOrArtifactUri),
+    requiredPromptFieldReason("renderedPromptChecksum", template.renderedPromptChecksum),
+    requiredPromptFieldReason("promptTextHash", template.promptTextHash ?? template.bodyHash),
+    requiredPromptFieldReason("rubricVersion", template.rubricVersion ?? template.rubric_version),
     requiredPromptFieldReason("promptRole", template.promptRole ?? template.role),
+    requiredPromptFieldReason("itemRoleLabelingPolicy", template.itemRoleLabelingPolicy),
+    requiredPromptFieldReason("positionTextLabelUsed", template.positionTextLabelUsed),
+    requiredPromptFieldReason("critiqueLabelUsed", template.critiqueLabelUsed),
+    requiredPromptFieldReason("legacyArgumentTerminologyFlag", template.legacyArgumentTerminologyFlag),
     requiredPromptFieldReason("requestedOutputSchema", template.requestedOutputSchema ?? template.outputFormatPolicy ?? template.acceptedSchema),
+    requiredPromptFieldReason("reasoningElicitationPolicy", template.reasoningElicitationPolicy),
+    requiredPromptFieldReason("answerExtractionPolicy", template.answerExtractionPolicy),
+    requiredPromptFieldReason("fewShotExampleItemIds", template.fewShotExampleItemIds),
+    requiredPromptFieldReason("fewShotExamplePositionClusterIds", template.fewShotExamplePositionClusterIds),
+    requiredPromptFieldReason("exampleSplitSources", template.exampleSplitSources),
     protectedSplitExclusionPolicy &&
     (String(protectedSplitExclusionPolicy).includes("hidden") || String(protectedSplitExclusionPolicy).includes("protected"))
       ? null
@@ -14588,10 +17810,23 @@ function normalizeSubmittedPromptTemplate(template) {
     promptTrack: template.promptTrack ?? null,
     promptSourceScopeClass: template.promptSourceScopeClass ?? template.promptScope ?? null,
     promptVersion: template.promptVersion ?? template.version ?? null,
+    promptBody: template.fullPromptBody ?? template.promptBody ?? null,
+    promptArtifactUri:
+      template.promptArtifactUri ?? template.promptArtifactURI ?? template.promptArtifact?.uri ?? template.immutablePromptArtifactUri ?? null,
     renderedPromptChecksum: template.renderedPromptChecksum ?? null,
     promptTextHash: template.promptTextHash ?? template.bodyHash ?? null,
+    rubricVersion: template.rubricVersion ?? template.rubric_version ?? null,
     promptRole: template.promptRole ?? template.role ?? null,
+    itemRoleLabelingPolicy: template.itemRoleLabelingPolicy ?? null,
+    positionTextLabelUsed: template.positionTextLabelUsed ?? null,
+    critiqueLabelUsed: template.critiqueLabelUsed ?? null,
+    legacyArgumentTerminologyFlag: template.legacyArgumentTerminologyFlag ?? null,
     requestedOutputSchema: template.requestedOutputSchema ?? template.outputFormatPolicy ?? template.acceptedSchema ?? null,
+    reasoningElicitationPolicy: template.reasoningElicitationPolicy ?? null,
+    answerExtractionPolicy: template.answerExtractionPolicy ?? null,
+    fewShotExampleItemIds: template.fewShotExampleItemIds ?? [],
+    fewShotExamplePositionClusterIds: template.fewShotExamplePositionClusterIds ?? [],
+    exampleSplitSources: template.exampleSplitSources ?? [],
     protectedSplitExclusionPolicy,
     itemDataDelimiterPolicy: template.itemDataDelimiterPolicy ?? null,
     instructionHierarchyText: template.instructionHierarchyText ?? null,
@@ -14605,14 +17840,22 @@ function normalizeSubmittedPromptTemplate(template) {
 function normalizeSubmittedParserConfig(config) {
   const id = config?.id ?? config?.parserConfigId ?? config?.parser_config_id;
   if (!id) return null;
+  const scoreFieldRequirements = config.scoreFieldRequirements ?? config.score_field_requirements;
+  const outOfRangeHandling = config.outOfRangeHandling ?? config.out_of_range_handling;
+  const createdBy = config.createdBy ?? config.created_by;
+  const timestamp = config.timestamp ?? config.createdAt ?? config.created_at;
   const reviewReasons = [
     requiredPromptFieldReason("acceptedSchema", config.acceptedSchema),
     requiredPromptFieldReason("parserVersion", config.parserVersion ?? config.parserImplementationId),
+    requiredPromptFieldReason("scoreFieldRequirements", scoreFieldRequirements),
     requiredPromptFieldReason("retryPolicy", config.retryPolicy),
     requiredPromptFieldReason("repairPolicy", config.repairPolicy),
     requiredPromptFieldReason("invalidScoreHandling", config.invalidScoreHandling),
+    requiredPromptFieldReason("outOfRangeHandling", outOfRangeHandling),
     requiredPromptFieldReason("missingFieldHandling", config.missingFieldHandling),
     requiredPromptFieldReason("protectedSplitRetryConstraints", config.protectedSplitRetryConstraints),
+    requiredPromptFieldReason("createdBy", createdBy),
+    requiredPromptFieldReason("timestamp", timestamp),
     policyMentions(config.itemInternalInstructionHandling, ["reject", "item"]) ? null : "itemInternalInstructionHandling",
     policyMentions(config.retryPromptInstructionPolicy, ["not", "item"]) ? null : "retryPromptInstructionPolicy",
     policyMentions(config.retryProtectedAnswerLeakagePolicy, ["no", "protected"]) ? null : "retryProtectedAnswerLeakagePolicy",
@@ -14624,17 +17867,19 @@ function normalizeSubmittedParserConfig(config) {
     configSource: "submitted_workflow_parser_config",
     acceptedSchema: config.acceptedSchema ?? null,
     parserVersion: config.parserVersion ?? config.parserImplementationId ?? null,
-    scoreFieldRequirements: config.scoreFieldRequirements ?? [],
+    scoreFieldRequirements: scoreFieldRequirements ?? [],
     retryPolicy: config.retryPolicy ?? null,
     repairPolicy: config.repairPolicy ?? null,
     invalidScoreHandling: config.invalidScoreHandling ?? null,
-    outOfRangeHandling: config.outOfRangeHandling ?? null,
+    outOfRangeHandling: outOfRangeHandling ?? null,
     missingFieldHandling: config.missingFieldHandling ?? null,
     protectedSplitRetryConstraints: config.protectedSplitRetryConstraints ?? null,
     itemInternalInstructionHandling: config.itemInternalInstructionHandling ?? null,
     retryPromptInstructionPolicy: config.retryPromptInstructionPolicy ?? null,
     retryProtectedAnswerLeakagePolicy: config.retryProtectedAnswerLeakagePolicy ?? null,
     outputWrapperHandling: config.outputWrapperHandling ?? null,
+    createdBy: createdBy ?? null,
+    timestamp: timestamp ?? null,
     reviewReasons,
     status: reviewReasons.length ? "submitted_parser_config_review_required" : "submitted_parser_config_complete",
   };
@@ -14732,7 +17977,17 @@ const UX_HIDDEN_FIELD_CLASSES = [
 ];
 
 const UX_SCREEN_CONTROL_REQUIREMENTS = {
-  rating: ["score_fields", "safe_decline", "source_recognition", "item_issue_report", "verification_control", "appendix_f_anchor_access", "pre_submit_lint", "autosave_resume"],
+  rating: [
+    "score_fields",
+    "safe_decline",
+    "source_recognition",
+    "item_issue_report",
+    "verification_control",
+    "appendix_f_anchor_access",
+    "pre_submit_lint",
+    "external_assistance",
+    "autosave_resume",
+  ],
   practice: ["score_fields", "item_issue_report", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
   calibration: ["score_fields", "appendix_f_anchor_access", "post_lock_feedback", "audit_provenance_capture"],
   consent: ["data_governance_withdrawal", "audit_provenance_capture"],
@@ -14777,6 +18032,56 @@ const UX_FORBIDDEN_VISIBLE_FIELD_FRAGMENTS = [
   "hiddenbenchmark",
   "protectedsplit",
   "raterperformance",
+];
+const SCREEN_STATE_PAYLOAD_ALLOWED_TOP_LEVEL_FIELDS = [
+  "id",
+  "screenStateId",
+  "surface",
+  "screenSurface",
+  "role",
+  "actorRole",
+  "payloadSource",
+  "schemaVersion",
+  "outputSchemaVersion",
+  "policyId",
+  "policyVersionProvenance",
+  "taskStatement",
+  "primaryNextAction",
+  "submissionConsequenceSummary",
+  "progressiveDisclosureState",
+  "createdAt",
+  "visibleFieldAllowlist",
+  "enabledActionAllowlist",
+  "requiredControlKeys",
+  "applicableControlKeys",
+  "optionalPanelKeys",
+  "requiredOptionalControlMap",
+  "protectedGoldBenchmarkDisclosureState",
+  "hiddenFieldClasses",
+  "rejectedUnknownKeys",
+  "extraKeyRejection",
+  "sanitized",
+];
+const SCREEN_STATE_PAYLOAD_ALLOWED_PROTECTED_DISCLOSURE_KEYS = new Set([
+  "protectedGoldBenchmarkDisclosureState.benchmarkMembership",
+  "protectedGoldBenchmarkDisclosureState.goldAnswer",
+  "protectedGoldBenchmarkDisclosureState.protectedSplitStatus",
+]);
+const SCREEN_STATE_FORBIDDEN_PAYLOAD_KEY_FRAGMENTS = [
+  ...UX_FORBIDDEN_VISIBLE_FIELD_FRAGMENTS,
+  "goldanswer",
+  "goldlabel",
+  "peerlabel",
+  "peerscore",
+  "modeljudge",
+  "activelearning",
+  "raterperformance",
+  "hiddenposition",
+  "hiddencritique",
+  "hiddenitem",
+  "rawpositiontext",
+  "rawcritiquetext",
+  "sourcetext",
 ];
 
 function defaultUXSimplificationPolicy(releaseId) {
@@ -15231,6 +18536,8 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
     "rubricLintConfigId",
   ];
   const missingPolicyVersionProvenanceFields = requiredPolicyProvenanceFields.filter((field) => !policyVersionProvenance[field]);
+  const unexpectedTopLevelKeys = screenStateUnexpectedTopLevelKeys(payload);
+  const forbiddenPayloadFieldPaths = screenStateForbiddenPayloadFieldPaths(payload);
   const reviewReasons = [
     UX_SIMPLIFICATION_SURFACES.includes(surface) ? null : "surface",
     requiredPromptFieldReason("role", payload.role ?? payload.actorRole),
@@ -15255,6 +18562,8 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
     missingControls.length ? `enabledActionAllowlist:${missingControls.join(",")}` : null,
     missingHiddenFieldClasses.length ? `hiddenFieldClasses:${missingHiddenFieldClasses.join(",")}` : null,
     forbiddenVisibleFields.length ? `visibleFieldAllowlist_hidden:${forbiddenVisibleFields.join(",")}` : null,
+    unexpectedTopLevelKeys.length ? `unexpectedTopLevelKeys:${unexpectedTopLevelKeys.join(",")}` : null,
+    forbiddenPayloadFieldPaths.length ? `forbiddenPayloadFields:${forbiddenPayloadFieldPaths.join(",")}` : null,
     payload.rejectedUnknownKeys === true || payload.extraKeyRejection === true ? null : "rejectedUnknownKeys",
     payload.sanitized === true ? null : "sanitized",
     ...missingPolicyVersionProvenanceFields.map((field) => `policyVersionProvenance.${field}`),
@@ -15289,6 +18598,8 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
     missingHiddenFieldClasses,
     missingPolicyVersionProvenanceFields,
     forbiddenVisibleFields,
+    unexpectedTopLevelKeys,
+    forbiddenPayloadFieldPaths,
     rejectedUnknownKeys: payload.rejectedUnknownKeys === true || payload.extraKeyRejection === true,
     sanitized: payload.sanitized === true,
     reviewReasons,
@@ -15298,6 +18609,34 @@ function normalizeScreenStatePayload(payload, payloadSourceLabel) {
         ? "submitted_screen_state_payload_sanitized"
         : "seed_screen_state_payload_sanitized",
   };
+}
+
+function screenStateUnexpectedTopLevelKeys(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  return Object.keys(payload).filter((key) => !SCREEN_STATE_PAYLOAD_ALLOWED_TOP_LEVEL_FIELDS.includes(key));
+}
+
+function screenStateForbiddenPayloadFieldPaths(value, path = "") {
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => screenStateForbiddenPayloadFieldPaths(item, `${path}[${index}]`));
+  }
+  return Object.entries(value).flatMap(([key, child]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const normalizedKey = normalizeFieldFragment(key);
+    const ownReason =
+      SCREEN_STATE_PAYLOAD_ALLOWED_PROTECTED_DISCLOSURE_KEYS.has(fieldPath) ||
+      key === "hiddenFieldClasses"
+        ? []
+        : SCREEN_STATE_FORBIDDEN_PAYLOAD_KEY_FRAGMENTS.some((fragment) => normalizedKey.includes(fragment))
+          ? [fieldPath]
+          : [];
+    return ownReason.concat(screenStateForbiddenPayloadFieldPaths(child, fieldPath));
+  });
+}
+
+function normalizeFieldFragment(value) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function normalizeUXScreenFeatureParityCheck(check, activePolicyId, rowSource) {
@@ -16666,9 +20005,9 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
     policy.highStakesWorkflowTrigger === true ? null : "highStakesWorkflowTrigger",
     policy.postDiscussionRevisionTrigger === true ? null : "postDiscussionRevisionTrigger",
     policy.exposureFamiliarityConflictUncertaintyTrigger === true ? null : "exposureFamiliarityConflictUncertaintyTrigger",
-    policyMentions(policy.protectedStatusBlindPromptCopy, ["workflow", "policy"]) ? null : "protectedStatusBlindPromptCopy",
-    policyMentions(policy.sentenceGuidance, ["one"]) && policyMentions(policy.sentenceGuidance, ["two"]) ? null : "sentenceGuidance",
-    policyMentions(policy.qaRoutingPolicy, ["qa", "route"]) ? null : "qaRoutingPolicy",
+    scoreExplanationProtectedPromptReason(policy.protectedStatusBlindPromptCopy),
+    scoreExplanationSentenceGuidanceReason(policy.sentenceGuidance),
+    scoreExplanationQaRoutingPolicyReason(policy.qaRoutingPolicy),
     requiredPromptFieldReason("protectedSplitCompatibilityClass", policy.protectedSplitCompatibilityClass),
     policy.protectedSplitCompatible === true ? null : "protectedSplitCompatible",
     requiredPromptFieldReason("createdBy", policy.createdBy ?? policy.created_by),
@@ -16702,6 +20041,68 @@ function normalizeScoreExplanationPolicy(policy, rowSource) {
     reviewReasons,
     status: reviewReasons.length ? "score_explanation_policy_review_required" : "score_explanation_policy_complete",
   };
+}
+
+const SCORE_EXPLANATION_RATER_COPY_FORBIDDEN_CONTEXT_FRAGMENTS = [
+  "source",
+  "provenance",
+  "label",
+  "peer",
+  "model",
+  "gold",
+  "hidden",
+  "benchmark",
+  "validation",
+  "protected",
+  "split",
+  "membership",
+  "status",
+];
+
+const SCORE_EXPLANATION_QA_NONDISCLOSURE_FRAGMENTS = ["without", "nondisclosure", "blind", "redact", "hide", "withhold"];
+const SCORE_EXPLANATION_QA_DISCLOSURE_PATTERNS = [
+  /\bwith\b/i,
+  /\bshow\b/i,
+  /\bshare\b/i,
+  /\breveal\b/i,
+  /\bexpose\b/i,
+  /\bdisplay\b/i,
+  /\bdisclose\b/i,
+  /\binclude\b/i,
+  /\bvisible\b/i,
+];
+
+function scoreExplanationProtectedPromptReason(value) {
+  if (scoreExplanationRaterCopyHasForbiddenContext(value)) return "protectedStatusBlindPromptCopy:blind_safe";
+  if (!policyMentions(value, ["workflow", "policy"])) return "protectedStatusBlindPromptCopy";
+  return null;
+}
+
+function scoreExplanationSentenceGuidanceReason(value) {
+  if (!(policyMentions(value, ["one"]) && policyMentions(value, ["two"]))) return "sentenceGuidance";
+  return scoreExplanationRaterCopyHasForbiddenContext(value) ? "sentenceGuidance:blind_safe" : null;
+}
+
+function scoreExplanationQaRoutingPolicyReason(value) {
+  if (!policyMentions(value, ["qa", "route"])) return "qaRoutingPolicy";
+  if (scoreExplanationQaRoutingHasPositiveDisclosure(value)) return "qaRoutingPolicy:blind_safe";
+  return scoreExplanationQaRoutingUsesNonDisclosure(value) ? null : "qaRoutingPolicy:non_disclosure";
+}
+
+function scoreExplanationRaterCopyHasForbiddenContext(value) {
+  const normalized = normalizeFieldFragment(value);
+  return SCORE_EXPLANATION_RATER_COPY_FORBIDDEN_CONTEXT_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
+function scoreExplanationQaRoutingUsesNonDisclosure(value) {
+  const normalized = normalizeFieldFragment(value);
+  return SCORE_EXPLANATION_QA_NONDISCLOSURE_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
+function scoreExplanationQaRoutingHasPositiveDisclosure(value) {
+  const text = String(value ?? "");
+  if (!scoreExplanationRaterCopyHasForbiddenContext(text)) return false;
+  return SCORE_EXPLANATION_QA_DISCLOSURE_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function normalizeRatingEscalationPolicy(policy, rowSource) {
@@ -17561,6 +20962,7 @@ function governedBundleFamilyEvidenceRow(bundleFamily, rows, verificationRows) {
 }
 
 const REQUIRED_QUALIFICATION_SCOPES = ["expert_rating", "adjudicator", "topic_specialist", "hidden_benchmark_expert", "primary_rater_anchor"];
+const REQUIRED_QUALIFICATION_SOURCES = ["credential", "certification_pack", "prior_rating_reliability", "manual_expert_review", "approved_exception"];
 const REQUIRED_QUALIFICATION_WORKFLOW_ELIGIBILITY = ["release_critical", "validation", "hidden_benchmark"];
 
 const PROHIBITED_INCENTIVE_SIGNALS = [
@@ -17602,6 +21004,14 @@ const LANGUAGE_ARTIFACT_TYPES = [
   "OCR_or_formatting_noise",
   "awkward_but_determinate",
 ];
+const LANGUAGE_ARTIFACT_IMPACT_STATUSES = ["none", "possible", "material", "uncertain"];
+const LANGUAGE_ARTIFACT_IMPACT_FIELDS = [
+  "pinDownabilityImpact",
+  "substantiveAmbiguityImpact",
+  "correctnessImpact",
+  "deadWeightImpact",
+  "overallQualityImpact",
+];
 
 const MODEL_PROVIDER_PROTECTED_RUN_CLASSES = ["model_evaluation", "model_judge", "critique_generation", "model_assisted_check"];
 export const MODEL_PROVIDER_ENDPOINT_CONTRACT_POLICY_VERSION = "model-provider-endpoint-contract-rlhf90-v1";
@@ -17630,6 +21040,7 @@ const SOURCE_RECOGNITION_TYPES = [
 const SOURCE_RECOGNITION_BLIND_EFFECT_FRAGMENTS = ["excluded", "blocked", "nonblind", "non_blind", "non_independent", "paused", "reassign", "review"];
 const BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS = ["count_as_independent", "count as independent", "counts_as_independent", "counts as independent", "fresh blind", "fresh_blind"];
 const SOURCE_RECOGNITION_FORBIDDEN_BLIND_EFFECT_FRAGMENTS = BLIND_DENOMINATOR_COUNTING_FORBIDDEN_FRAGMENTS;
+export const SOURCE_RECOGNITION_NONBLIND_FLAG = "recognized_or_prior_exposure_nonblind";
 
 function defaultVolunteerIncentivePolicy(releaseId) {
   return {
@@ -17657,12 +21068,22 @@ function defaultVolunteerIncentivePolicy(releaseId) {
 function defaultRaterQualificationRecords(releaseId) {
   return REQUIRED_QUALIFICATION_SCOPES.map((qualificationScope) => ({
     id: `rater-qualification-${releaseId}-${qualificationScope}`,
-    raterId: `qualified-${qualificationScope}`,
+    raterId:
+      qualificationScope === "primary_rater_anchor"
+        ? "rater-a"
+        : qualificationScope === "hidden_benchmark_expert"
+          ? "expert-1"
+          : qualificationScope === "topic_specialist"
+            ? "expert-1"
+          : `qualified-${qualificationScope}`,
     qualificationScope,
     qualificationSource: qualificationScope === "primary_rater_anchor" ? "manual_expert_review" : "certification_pack",
     evidenceArtifactReference: `qualification-evidence-${qualificationScope}`,
     approvedRoles: qualificationScope === "adjudicator" ? ["expert", "adjudicator"] : ["expert"],
-    topicFamilyScope: ["AI safety", "decision theory", "normative ethics", "philosophy of mind", "politics", "miscellaneous"],
+    topicFamilyScope:
+      qualificationScope === "topic_specialist"
+        ? ["politics", "philosophy_of_mind"]
+        : ["ai_safety", "decision_theory", "normative_ethics", "philosophy_of_mind", "politics", "miscellaneous"],
     splitWorkflowEligibility: ["release_critical", "validation", "hidden_benchmark"],
     expiryReviewDate: "2027-01-31",
     approver: "seed-qualification-reviewer",
@@ -17744,6 +21165,7 @@ export function buildParticipantSafeguardEvidenceReport(releaseId, options = {})
     .map((assessment) => normalizeLanguageArtifactAssessment(assessment, "submitted_workflow_language_artifact_assessment"))
     .filter(Boolean);
   const seedLanguageRows = [normalizeLanguageArtifactAssessment(defaultLanguageArtifactAssessment(releaseId), "seed_language_artifact_assessment")];
+  const languageRowsForGate = submittedLanguageRows.length ? submittedLanguageRows : seedLanguageRows;
   const submittedSourceRecognitionRows = (options.sourceRecognitionEvents ?? [])
     .map((event) => normalizeSourceRecognitionEvent(event, "submitted_workflow_source_recognition_event"))
     .filter(Boolean);
@@ -17771,7 +21193,7 @@ export function buildParticipantSafeguardEvidenceReport(releaseId, options = {})
       artifactId: row.qualificationScope,
       reason: row.status,
     })),
-    (submittedLanguageRows.length ? submittedLanguageRows : seedLanguageRows).some((row) => row.reviewReasons.length === 0)
+    languageRowsForGate.some((row) => row.reviewReasons.length === 0)
       ? null
       : { artifactType: "language_artifact_assessment", artifactId: "language_artifact_assessment", reason: "missing_complete_language_artifact_path" },
     (submittedSourceRecognitionRows.length ? submittedSourceRecognitionRows : seedSourceRecognitionRows).some((row) => row.reviewReasons.length === 0)
@@ -17807,6 +21229,18 @@ export function buildParticipantSafeguardEvidenceReport(releaseId, options = {})
     volunteerIncentivePolicyRows: [...seedIncentiveRows, ...submittedIncentiveRows],
     raterQualificationRows: [...seedQualificationRows, ...submittedQualificationRows],
     languageArtifactAssessmentRows: [...seedLanguageRows, ...submittedLanguageRows],
+    languageArtifactSummary: {
+      byArtifactType: countBy(languageRowsForGate, "artifactType"),
+      bySourceLanguage: countBy(languageRowsForGate, "sourceLanguage"),
+      byTranslationStatus: countBy(languageRowsForGate, "translationStatus"),
+      bySourceAdaptationRoute: countBy(languageRowsForGate, "sourceAdaptationRoute"),
+      byPinDownabilityImpact: countBy(languageRowsForGate, "pinDownabilityImpact"),
+      bySubstantiveAmbiguityImpact: countBy(languageRowsForGate, "substantiveAmbiguityImpact"),
+      byCorrectnessImpact: countBy(languageRowsForGate, "correctnessImpact"),
+      byDeadWeightImpact: countBy(languageRowsForGate, "deadWeightImpact"),
+      byOverallQualityImpact: countBy(languageRowsForGate, "overallQualityImpact"),
+      automaticScorePenaltyAppliedCount: languageRowsForGate.filter((row) => row.automaticScorePenaltyApplied).length,
+    },
     sourceRecognitionRows: [...seedSourceRecognitionRows, ...submittedSourceRecognitionRows],
     modelProviderDataHandlingPolicyRows: [...seedModelProviderRows, ...submittedModelProviderRows],
     qualificationScopeRows,
@@ -17833,8 +21267,10 @@ export function buildParticipantSafeguardEvidenceReport(releaseId, options = {})
 function normalizeVolunteerIncentivePolicy(policy, rowSource) {
   const id = policy?.id ?? policy?.volunteerIncentivePolicyId;
   if (!id) return null;
+  const allowedCompensationCreditInputs = normalizeStringArray(policy.allowedCompensationCreditInputs);
   const prohibitedSignals = normalizeStringArray(policy.prohibitedIncentiveSignals);
   const missingSignals = PROHIBITED_INCENTIVE_SIGNALS.filter((signal) => !prohibitedSignals.includes(signal));
+  const forbiddenCompensationInputs = allowedCompensationCreditInputs.filter((input) => PROHIBITED_INCENTIVE_SIGNALS.includes(input));
   const compensationRateUsdByEligibleUnit =
     policy.compensationRateUsdByEligibleUnit &&
     typeof policy.compensationRateUsdByEligibleUnit === "object" &&
@@ -17844,7 +21280,8 @@ function normalizeVolunteerIncentivePolicy(policy, rowSource) {
   const missingRateKeys = Object.keys(REQUIRED_COMPENSATION_RATE_USD_BY_ELIGIBLE_UNIT).filter((key) => !Object.hasOwn(compensationRateUsdByEligibleUnit, key));
   const reviewReasons = [
     (policy.policyVersion ?? policy.version) === VOLUNTEER_INCENTIVE_POLICY_VERSION ? null : `policyVersion:${VOLUNTEER_INCENTIVE_POLICY_VERSION}`,
-    normalizeStringArray(policy.allowedCompensationCreditInputs).length ? null : "allowedCompensationCreditInputs",
+    allowedCompensationCreditInputs.length ? null : "allowedCompensationCreditInputs",
+    forbiddenCompensationInputs.length ? `allowedCompensationCreditInputs:prohibited:${forbiddenCompensationInputs.join(",")}` : null,
     missingSignals.length ? `prohibitedIncentiveSignals:${missingSignals.join(",")}` : null,
     policy.compensationCurrency === REQUIRED_COMPENSATION_CURRENCY ? null : "compensationCurrency",
     missingRateKeys.length ? `compensationRateUsdByEligibleUnit:${missingRateKeys.join(",")}` : null,
@@ -17855,22 +21292,29 @@ function normalizeVolunteerIncentivePolicy(policy, rowSource) {
     policy.compensationEligibilityPolicy === REQUIRED_COMPENSATION_ELIGIBILITY_POLICY ? null : "compensationEligibilityPolicy",
     policy.payrollLegalImplementationPolicy === REQUIRED_PAYROLL_LEGAL_IMPLEMENTATION_POLICY ? null : "payrollLegalImplementationPolicy",
     policy.paymentDataSeparationPolicy === REQUIRED_PAYMENT_DATA_SEPARATION_POLICY ? null : "paymentDataSeparationPolicy",
-    policyMentions(policy.speedEffortGuardrails, ["qa"]) ? null : "speedEffortGuardrails",
-    policyMentions(policy.publicRecognitionPolicy, ["without"]) || policyMentions(policy.publicRecognitionPolicy, ["no"]) ? null : "publicRecognitionPolicy",
+    policyMentions(policy.speedEffortGuardrails, ["qa", "speed", "private"]) ? null : "speedEffortGuardrails",
+    (policyMentions(policy.publicRecognitionPolicy, ["without"]) || policyMentions(policy.publicRecognitionPolicy, ["no"])) &&
+    policyMentions(policy.publicRecognitionPolicy, ["score", "agreement", "speed", "benchmark"])
+      ? null
+      : "publicRecognitionPolicy",
     policyMentions(policy.privateProgressDashboardPolicy, ["private"]) && policyMentions(policy.privateProgressDashboardPolicy, ["non-gamified"])
       ? null
       : "privateProgressDashboardPolicy",
+    policyMentions(policy.calibrationFeedbackUseLimits, ["post-lock", "training-approved", "feedback"]) ? null : "calibrationFeedbackUseLimits",
     policyMentions(policy.hiddenBenchmarkGoldPerformanceExclusionPolicy, ["hidden"]) && policyMentions(policy.hiddenBenchmarkGoldPerformanceExclusionPolicy, ["never"])
       ? null
       : "hiddenBenchmarkGoldPerformanceExclusionPolicy",
-    policyMentions(policy.leaderboardBadgeRestrictions, ["no"]) ? null : "leaderboardBadgeRestrictions",
+    (policyMentions(policy.leaderboardBadgeRestrictions, ["no"]) || policyMentions(policy.leaderboardBadgeRestrictions, ["prohibit"])) &&
+    policyMentions(policy.leaderboardBadgeRestrictions, ["peer", "model", "gold", "hidden", "speed"])
+      ? null
+      : "leaderboardBadgeRestrictions",
     requiredPromptFieldReason("frozenAt", policy.frozenAt),
   ].filter(Boolean);
   return {
     id,
     rowSource,
     policyVersion: policy.policyVersion ?? policy.version ?? null,
-    allowedCompensationCreditInputs: normalizeStringArray(policy.allowedCompensationCreditInputs),
+    allowedCompensationCreditInputs,
     prohibitedIncentiveSignals: prohibitedSignals,
     compensationCurrency: policy.compensationCurrency ?? null,
     compensationRateUsdByEligibleUnit,
@@ -17878,7 +21322,15 @@ function normalizeVolunteerIncentivePolicy(policy, rowSource) {
     compensationEligibilityPolicy: policy.compensationEligibilityPolicy ?? null,
     payrollLegalImplementationPolicy: policy.payrollLegalImplementationPolicy ?? null,
     paymentDataSeparationPolicy: policy.paymentDataSeparationPolicy ?? null,
+    speedEffortGuardrails: policy.speedEffortGuardrails ?? null,
+    publicRecognitionPolicy: policy.publicRecognitionPolicy ?? null,
+    privateProgressDashboardPolicy: policy.privateProgressDashboardPolicy ?? null,
+    calibrationFeedbackUseLimits: policy.calibrationFeedbackUseLimits ?? null,
+    hiddenBenchmarkGoldPerformanceExclusionPolicy: policy.hiddenBenchmarkGoldPerformanceExclusionPolicy ?? null,
+    leaderboardBadgeRestrictions: policy.leaderboardBadgeRestrictions ?? null,
+    frozenAt: policy.frozenAt ?? null,
     missingSignals,
+    forbiddenCompensationInputs,
     reviewReasons,
     status: reviewReasons.length ? "volunteer_incentive_policy_review_required" : "volunteer_incentive_policy_complete",
   };
@@ -17894,9 +21346,7 @@ function normalizeRaterQualificationRecord(record, rowSource) {
   const reviewReasons = [
     requiredPromptFieldReason("raterId", record.raterId),
     REQUIRED_QUALIFICATION_SCOPES.includes(qualificationScope) ? null : "qualificationScope",
-    ["credential", "certification_pack", "prior_rating_reliability", "manual_expert_review", "approved_exception"].includes(qualificationSource)
-      ? null
-      : "qualificationSource",
+    REQUIRED_QUALIFICATION_SOURCES.includes(qualificationSource) ? null : "qualificationSource",
     requiredPromptFieldReason("evidenceArtifactReference", record.evidenceArtifactReference ?? record.evidenceArtifactId),
     normalizeStringArray(record.approvedRoles).length ? null : "approvedRoles",
     normalizeStringArray(record.topicFamilyScope).length ? null : "topicFamilyScope",
@@ -17922,18 +21372,55 @@ function normalizeRaterQualificationRecord(record, rowSource) {
   };
 }
 
+export function raterQualificationRecordIsCurrent(
+  record,
+  { qualificationScope = null, approvedRole = "expert", requiredEligibility = "release_critical", now = Date.now() } = {},
+) {
+  if (!record || typeof record !== "object") return false;
+  const reviewReasons = Array.isArray(record.reviewReasons) ? record.reviewReasons : [];
+  const recordScope = record.qualificationScope ?? record.scope ?? null;
+  const approvedRoles = normalizeStringArray(record.approvedRoles);
+  const splitWorkflowEligibility = normalizeStringArray(record.splitWorkflowEligibility);
+  const expiryTime = Date.parse(record.expiryReviewDate ?? "");
+  return (
+    reviewReasons.length === 0 &&
+    (!qualificationScope || recordScope === qualificationScope) &&
+    REQUIRED_QUALIFICATION_SOURCES.includes(record.qualificationSource) &&
+    approvedRoles.includes(approvedRole) &&
+    splitWorkflowEligibility.includes(requiredEligibility) &&
+    Number.isFinite(expiryTime) &&
+    expiryTime >= now
+  );
+}
+
+function raterHasTopicSpecialistQualificationForFamily(record, topicFamily) {
+  if (!record || !topicFamily) return false;
+  const normalizedFamily = normalizeTopicFamilyToken(topicFamily);
+  const topicFamilyScope = normalizeStringArray(record.topicFamilyScope).map(normalizeTopicFamilyToken);
+  return topicFamilyScope.includes("all_topic_families") || topicFamilyScope.includes(normalizedFamily);
+}
+
+function normalizeTopicFamilyToken(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function normalizeLanguageArtifactAssessment(assessment, rowSource) {
   const id = assessment?.id ?? assessment?.languageArtifactAssessmentId;
   if (!id) return null;
   const artifactType = assessment.artifactType ?? null;
+  const impactReviewReasons = LANGUAGE_ARTIFACT_IMPACT_FIELDS.map((field) => {
+    const value = assessment[field];
+    if (value === undefined || value === null || value === "") return field;
+    return LANGUAGE_ARTIFACT_IMPACT_STATUSES.includes(value) ? null : `${field}:unsupported`;
+  });
   const reviewReasons = [
     assessment.positionId || assessment.critiqueId || assessment.assignmentId || assessment.ratingId || assessment.adjudicationId ? null : "itemReference",
     LANGUAGE_ARTIFACT_TYPES.includes(artifactType) ? null : "artifactType",
-    requiredPromptFieldReason("pinDownabilityImpact", assessment.pinDownabilityImpact),
-    requiredPromptFieldReason("substantiveAmbiguityImpact", assessment.substantiveAmbiguityImpact),
-    requiredPromptFieldReason("correctnessImpact", assessment.correctnessImpact),
-    requiredPromptFieldReason("deadWeightImpact", assessment.deadWeightImpact),
-    requiredPromptFieldReason("overallQualityImpact", assessment.overallQualityImpact),
+    ...impactReviewReasons,
     assessment.automaticScorePenaltyApplied === false ? null : "automaticScorePenaltyApplied",
     requiredPromptFieldReason("reviewerRole", assessment.reviewerRole),
     requiredPromptFieldReason("visibilityState", assessment.visibilityState),
@@ -17947,6 +21434,12 @@ function normalizeLanguageArtifactAssessment(assessment, rowSource) {
     artifactType,
     sourceLanguage: assessment.sourceLanguage ?? null,
     translationStatus: assessment.translationStatus ?? null,
+    sourceAdaptationRoute: assessment.sourceAdaptationRoute ?? assessment.adaptationRoute ?? assessment.sourceRoute ?? null,
+    pinDownabilityImpact: assessment.pinDownabilityImpact ?? null,
+    substantiveAmbiguityImpact: assessment.substantiveAmbiguityImpact ?? null,
+    correctnessImpact: assessment.correctnessImpact ?? null,
+    deadWeightImpact: assessment.deadWeightImpact ?? null,
+    overallQualityImpact: assessment.overallQualityImpact ?? null,
     automaticScorePenaltyApplied: assessment.automaticScorePenaltyApplied === true,
     reviewerRole: assessment.reviewerRole ?? null,
     visibilityState: assessment.visibilityState ?? null,
@@ -17959,6 +21452,7 @@ function normalizeSourceRecognitionEvent(event, rowSource) {
   const id = event?.id ?? event?.sourceRecognitionEventId;
   if (!id) return null;
   const recognitionType = event.recognitionType ?? null;
+  const continuedAfterRecognition = event.raterAction === "continue_nonblind";
   const reviewReasons = [
     requiredPromptFieldReason("assignmentId", event.assignmentId),
     requiredPromptFieldReason("raterId", event.raterId),
@@ -17981,6 +21475,7 @@ function normalizeSourceRecognitionEvent(event, rowSource) {
     raterId: event.raterId ?? null,
     recognitionType,
     raterAction: event.raterAction ?? null,
+    recognizedOrPriorExposureNonblindFlag: continuedAfterRecognition ? SOURCE_RECOGNITION_NONBLIND_FLAG : null,
     independentBlindEligibilityEffect: event.independentBlindEligibilityEffect ?? null,
     protectedStatusHiddenFromRater: event.protectedStatusHiddenFromRater === true,
     reviewerResolution: event.reviewerResolution ?? null,
@@ -18458,6 +21953,26 @@ export const REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS = [
   "workflowProfileId",
   "uxSimplificationPolicyId",
 ];
+export const RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION = "rater-instruction-comprehension-rlhf91-v1";
+export const REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS = RUBRIC_COPY_TRACEABILITY_RELEASE_CRITICAL_SCREENS;
+export const REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS = [
+  "expert_clause_mapping_review",
+  "task_comprehension_check",
+  "plain_language_screen_walkthrough",
+];
+export const REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS = [
+  "critique_not_position_boundary_understood",
+  "seven_lmca_dimensions_identified",
+  "confidence_not_extra_score_dimension",
+  "source_peer_model_gold_hidden_boundary_understood",
+  "safe_decline_and_item_issue_paths_found",
+  "appendix_f_anchor_access_found",
+];
+export const REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS = [
+  "task_first_summary",
+  "one_click_appendix_f_anchor",
+  "progressive_disclosure_for_advanced_controls",
+];
 
 function defaultRaterInstructionCompatibilityPolicy(releaseId) {
   return {
@@ -18498,6 +22013,39 @@ function defaultRaterInstructionRenderVersion(releaseId, scoreInputPolicyId, rat
     compatibilityEvidenceStatus: "compatible_review_passed",
     protectedSplitEligibilityPolicy: "compatible_with_protected_splits_when_policy_family_matches_or_quarantined_sensitivity_snapshot_required",
     sensitivitySnapshotPolicy: "incompatible_or_mixed_render_versions_require_quarantined_sensitivity_snapshot",
+    frozenAt: "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function defaultRaterInstructionComprehensionAudit(
+  releaseId,
+  raterInstructionRenderVersionId = `rater-instruction-render-${releaseId}`,
+  raterInstructionCompatibilityPolicyId = `rater-instruction-compatibility-policy-${releaseId}`,
+) {
+  return {
+    id: `rater-instruction-comprehension-audit-${releaseId}`,
+    auditVersion: RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION,
+    raterInstructionRenderVersionId,
+    raterInstructionCompatibilityPolicyId,
+    rubricCopyTraceabilityMapId: `rubric-copy-traceability-map-${releaseId}`,
+    coveredScreenIds: REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS,
+    comprehensionMethods: REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS,
+    comprehensionCheckIds: REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS,
+    glossaryTermIds: ["centrality", "strength", "dead_weight", "single_issue", "overall"],
+    disclosureDepths: REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS,
+    comprehensionTestMethodology:
+      "Expert and pilot-rater comprehension checks verify the task, critique-not-position boundary, rubric dimensions, confidence metadata, hidden metadata boundary, and safe action paths.",
+    clauseTraceabilityReviewStatus: "passed",
+    screenCopyMappingReviewStatus: "passed",
+    comprehensionTestStatus: "passed",
+    semanticDriftBlocker: true,
+    noFeatureLossBlocker: true,
+    protectedLeakageReviewPassed: true,
+    excludedFromScoreComputation: true,
+    excludedFromIndependentBlindDenominator: true,
+    sourceBoundary:
+      "Project default screen-copy comprehension methodology is frozen here; LMCA motivates careful rubric interpretation but does not state exact volunteer-platform comprehension checks.",
+    reviewerId: "seed-rater-instruction-reviewer",
     frozenAt: "2026-10-01T00:00:00.000Z",
   };
 }
@@ -18650,6 +22198,8 @@ function defaultCorrectnessClaimWeightWorksheet(releaseId) {
     timestamp: "2026-10-01T00:00:00.000Z",
   };
 }
+
+const CORRECTNESS_CLAIM_WEIGHT_STATUSES = ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"];
 
 function defaultProtectedArtifactRetentionRecords(releaseId) {
   return REQUIRED_PROTECTED_ARTIFACT_TYPES.map((artifactType) => ({
@@ -19011,6 +22561,24 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ),
   ];
   const activeRender = submittedRenderRows.find((row) => row.reviewReasons.length === 0) ?? seedRenderRows[0];
+  const submittedComprehensionAuditRows = (options.raterInstructionComprehensionAudits ?? [])
+    .map((audit) =>
+      normalizeRaterInstructionComprehensionAudit(
+        audit,
+        activeRender.id,
+        activeCompatibilityPolicy.id,
+        "submitted_workflow_rater_instruction_comprehension_audit",
+      ),
+    )
+    .filter(Boolean);
+  const seedComprehensionAuditRows = [
+    normalizeRaterInstructionComprehensionAudit(
+      defaultRaterInstructionComprehensionAudit(releaseId, seedRenderRows[0].id, seedCompatibilityPolicyRows[0].id),
+      seedRenderRows[0].id,
+      seedCompatibilityPolicyRows[0].id,
+      "seed_rater_instruction_comprehension_audit",
+    ),
+  ];
   const submittedLintConfigRows = (options.rubricLintConfigs ?? [])
     .map((config) => normalizeRubricLintConfig(config, "submitted_workflow_rubric_lint_config"))
     .filter(Boolean);
@@ -19136,6 +22704,10 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     ["draft_storage_policy", submittedDraftStorageRows.length ? submittedDraftStorageRows : seedDraftStorageRows],
     ["rater_instruction_compatibility_policy", submittedCompatibilityPolicyRows.length ? submittedCompatibilityPolicyRows : seedCompatibilityPolicyRows],
     ["rater_instruction_render_version", submittedRenderRows.length ? submittedRenderRows : seedRenderRows],
+    [
+      "rater_instruction_comprehension_audit",
+      submittedComprehensionAuditRows.length ? submittedComprehensionAuditRows : seedComprehensionAuditRows,
+    ],
     ["rubric_lint_config", submittedLintConfigRows.length ? submittedLintConfigRows : seedLintConfigRows],
     ["rubric_lint_event", submittedLintEventRows.length ? submittedLintEventRows : seedLintEventRows],
     ["item_issue_quarantine_policy", submittedItemIssueQuarantinePolicyRows.length ? submittedItemIssueQuarantinePolicyRows : seedItemIssueQuarantinePolicyRows],
@@ -19174,6 +22746,9 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       row.reviewReasons.map((reason) => ({ artifactType: "rater_instruction_compatibility_policy", artifactId: row.id, reason })),
     ),
     ...submittedRenderRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rater_instruction_render_version", artifactId: row.id, reason }))),
+    ...submittedComprehensionAuditRows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "rater_instruction_comprehension_audit", artifactId: row.id, reason })),
+    ),
     ...submittedLintConfigRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_config", artifactId: row.id, reason }))),
     ...submittedLintEventRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "rubric_lint_event", artifactId: row.id, reason }))),
     ...submittedItemIssueQuarantinePolicyRows.flatMap((row) =>
@@ -19217,6 +22792,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     submittedDraftStorageRows.length > 0 &&
     submittedCompatibilityPolicyRows.length > 0 &&
     submittedRenderRows.length > 0 &&
+    submittedComprehensionAuditRows.length > 0 &&
     submittedLintConfigRows.length > 0 &&
     submittedLintEventRows.length > 0 &&
     submittedItemIssueQuarantinePolicyRows.length > 0 &&
@@ -19260,6 +22836,11 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     requiredRaterInstructionCompatibilityThresholds: REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
     requiredRaterInstructionCompatibilityRules: REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
     requiredRaterInstructionSharedPolicyFields: REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
+    requiredRaterInstructionComprehensionAuditVersion: RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION,
+    requiredRaterInstructionComprehensionScreens: REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS,
+    requiredRaterInstructionComprehensionMethods: REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS,
+    requiredRaterInstructionComprehensionChecks: REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS,
+    requiredRaterInstructionDisclosureDepths: REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS,
     scoreConfidenceScalePolicyId: activeConfidenceScalePolicy.id,
     scoreConfidenceScalePolicyReleaseUseStatus: submittedActiveConfidenceScalePolicy
       ? "submitted_score_confidence_scale_policy_active"
@@ -19303,6 +22884,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
     draftStoragePolicyRows: [...seedDraftStorageRows, ...submittedDraftStorageRows],
     raterInstructionCompatibilityPolicyRows: [...seedCompatibilityPolicyRows, ...submittedCompatibilityPolicyRows],
     raterInstructionRenderVersionRows: [...seedRenderRows, ...submittedRenderRows],
+    raterInstructionComprehensionAuditRows: [...seedComprehensionAuditRows, ...submittedComprehensionAuditRows],
     rubricLintConfigRows: [...seedLintConfigRows, ...submittedLintConfigRows],
     rubricLintEventRows: [...seedLintEventRows, ...submittedLintEventRows],
     itemIssueQuarantinePolicyRows: [...seedItemIssueQuarantinePolicyRows, ...submittedItemIssueQuarantinePolicyRows],
@@ -19327,6 +22909,7 @@ export function buildRatingExperienceEvidenceReport(releaseId, options = {}) {
       submittedDraftStoragePolicyCount: submittedDraftStorageRows.length,
       submittedRaterInstructionCompatibilityPolicyCount: submittedCompatibilityPolicyRows.length,
       submittedRaterInstructionRenderVersionCount: submittedRenderRows.length,
+      submittedRaterInstructionComprehensionAuditCount: submittedComprehensionAuditRows.length,
       submittedRubricLintConfigCount: submittedLintConfigRows.length,
       submittedRubricLintEventCount: submittedLintEventRows.length,
       submittedItemIssueQuarantinePolicyCount: submittedItemIssueQuarantinePolicyRows.length,
@@ -19572,6 +23155,76 @@ function normalizeRaterInstructionRenderVersion(version, activeScoreInputPolicyI
     sensitivitySnapshotPolicy: version.sensitivitySnapshotPolicy ?? null,
     reviewReasons,
     status: reviewReasons.length ? "rater_instruction_render_review_required" : "rater_instruction_render_complete",
+  };
+}
+
+function normalizeRaterInstructionComprehensionAudit(audit, activeRenderVersionId, activeCompatibilityPolicyId, rowSource) {
+  const id = audit?.id ?? audit?.raterInstructionComprehensionAuditId;
+  if (!id) return null;
+  const coveredScreenIds = normalizeStringArray(audit.coveredScreenIds ?? audit.screenIds);
+  const comprehensionMethods = normalizeStringArray(audit.comprehensionMethods ?? audit.testMethods);
+  const comprehensionCheckIds = normalizeStringArray(audit.comprehensionCheckIds ?? audit.checkIds);
+  const glossaryTermIds = normalizeStringArray(audit.glossaryTermIds ?? audit.glossaryTerms);
+  const disclosureDepths = normalizeStringArray(audit.disclosureDepths ?? audit.disclosureDepthPolicy);
+  const missingScreens = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS.filter((screenId) => !coveredScreenIds.includes(screenId));
+  const missingMethods = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS.filter((method) => !comprehensionMethods.includes(method));
+  const missingChecks = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS.filter((checkId) => !comprehensionCheckIds.includes(checkId));
+  const missingDisclosureDepths = REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS.filter((depth) => !disclosureDepths.includes(depth));
+  const missingGlossaryTerms = ["centrality", "strength", "dead_weight", "single_issue"].filter((term) => !glossaryTermIds.includes(term));
+  const reviewReasons = [
+    (audit.auditVersion ?? audit.version) === RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION
+      ? null
+      : `auditVersion:${RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION}`,
+    audit.raterInstructionRenderVersionId === activeRenderVersionId ? null : "raterInstructionRenderVersionId",
+    audit.raterInstructionCompatibilityPolicyId === activeCompatibilityPolicyId ? null : "raterInstructionCompatibilityPolicyId",
+    requiredPromptFieldReason("rubricCopyTraceabilityMapId", audit.rubricCopyTraceabilityMapId),
+    missingScreens.length ? `coveredScreenIds:${missingScreens.join(",")}` : null,
+    missingMethods.length ? `comprehensionMethods:${missingMethods.join(",")}` : null,
+    missingChecks.length ? `comprehensionCheckIds:${missingChecks.join(",")}` : null,
+    missingGlossaryTerms.length ? `glossaryTermIds:${missingGlossaryTerms.join(",")}` : null,
+    missingDisclosureDepths.length ? `disclosureDepths:${missingDisclosureDepths.join(",")}` : null,
+    policyMentions(audit.comprehensionTestMethodology, ["comprehension", "task", "rubric"]) ? null : "comprehensionTestMethodology",
+    audit.clauseTraceabilityReviewStatus === "passed" ? null : "clauseTraceabilityReviewStatus",
+    audit.screenCopyMappingReviewStatus === "passed" ? null : "screenCopyMappingReviewStatus",
+    audit.comprehensionTestStatus === "passed" ? null : "comprehensionTestStatus",
+    audit.semanticDriftBlocker === true ? null : "semanticDriftBlocker",
+    audit.noFeatureLossBlocker === true ? null : "noFeatureLossBlocker",
+    audit.protectedLeakageReviewPassed === true ? null : "protectedLeakageReviewPassed",
+    audit.excludedFromScoreComputation === true ? null : "excludedFromScoreComputation",
+    audit.excludedFromIndependentBlindDenominator === true ? null : "excludedFromIndependentBlindDenominator",
+    policyMentions(audit.sourceBoundary, ["project", "lmca"]) ? null : "sourceBoundary",
+    requiredPromptFieldReason("reviewerId", audit.reviewerId),
+    requiredPromptFieldReason("frozenAt", audit.frozenAt),
+  ].filter(Boolean);
+  return {
+    id,
+    rowSource,
+    auditVersion: audit.auditVersion ?? audit.version ?? null,
+    raterInstructionRenderVersionId: audit.raterInstructionRenderVersionId ?? null,
+    raterInstructionCompatibilityPolicyId: audit.raterInstructionCompatibilityPolicyId ?? null,
+    rubricCopyTraceabilityMapId: audit.rubricCopyTraceabilityMapId ?? null,
+    coveredScreenIds,
+    comprehensionMethods,
+    comprehensionCheckIds,
+    glossaryTermIds,
+    disclosureDepths,
+    missingScreens,
+    missingMethods,
+    missingChecks,
+    missingGlossaryTerms,
+    missingDisclosureDepths,
+    clauseTraceabilityReviewStatus: audit.clauseTraceabilityReviewStatus ?? null,
+    screenCopyMappingReviewStatus: audit.screenCopyMappingReviewStatus ?? null,
+    comprehensionTestStatus: audit.comprehensionTestStatus ?? null,
+    semanticDriftBlocker: audit.semanticDriftBlocker === true,
+    noFeatureLossBlocker: audit.noFeatureLossBlocker === true,
+    protectedLeakageReviewPassed: audit.protectedLeakageReviewPassed === true,
+    excludedFromScoreComputation: audit.excludedFromScoreComputation === true,
+    excludedFromIndependentBlindDenominator: audit.excludedFromIndependentBlindDenominator === true,
+    reviewerId: audit.reviewerId ?? null,
+    frozenAt: audit.frozenAt ?? null,
+    reviewReasons,
+    status: reviewReasons.length ? "rater_instruction_comprehension_audit_review_required" : "rater_instruction_comprehension_audit_complete",
   };
 }
 
@@ -19865,15 +23518,33 @@ function normalizeCorrectnessClaimWeightWorksheet(worksheet, rowSource) {
   const claimSpanIds = normalizeStringArray(worksheet.claimSpanIds);
   const weights = Array.isArray(worksheet.claimSignificanceWeights) ? worksheet.claimSignificanceWeights : [];
   const statuses = normalizeStringArray(worksheet.correctnessCredencesStatuses);
+  const parsedStatuses = statuses.map(parseCorrectnessClaimWeightStatus);
+  const unclearFlags = Array.isArray(worksheet.unclearClaimExclusionFlags) ? worksheet.unclearClaimExclusionFlags : [];
   const weightSum = weights.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
+  const computedAdvisoryAggregateCorrectnessEstimate =
+    claimSpanIds.length &&
+    weights.length === claimSpanIds.length &&
+    parsedStatuses.every(Boolean) &&
+    unclearFlags.length === claimSpanIds.length &&
+    unclearFlags.every((value) => typeof value === "boolean")
+      ? computeCorrectnessWorksheetAggregate(weights, parsedStatuses, unclearFlags)
+      : null;
   const reviewReasons = [
     worksheet.ratingId || worksheet.adjudicationId || worksheet.verificationWorkspaceId ? null : "workflowReference",
     claimSpanIds.length ? null : "claimSpanIds",
-    weights.length === claimSpanIds.length && weights.every((value) => Number.isFinite(value) && value >= 0) ? null : "claimSignificanceWeights",
+    weights.length === claimSpanIds.length && weights.every((value) => Number.isFinite(value) && value >= 0 && value <= 1) ? null : "claimSignificanceWeights",
     Math.abs(weightSum - 1) <= 0.001 ? null : "claimSignificanceWeightsSum",
-    statuses.length === claimSpanIds.length ? null : "correctnessCredencesStatuses",
-    Array.isArray(worksheet.unclearClaimExclusionFlags) ? null : "unclearClaimExclusionFlags",
-    Number.isFinite(worksheet.advisoryAggregateCorrectnessEstimate) ? null : "advisoryAggregateCorrectnessEstimate",
+    statuses.length === claimSpanIds.length && parsedStatuses.every(Boolean) ? null : "correctnessCredencesStatuses",
+    unclearFlags.length === claimSpanIds.length && unclearFlags.every((value) => typeof value === "boolean") ? null : "unclearClaimExclusionFlags",
+    Number.isFinite(worksheet.advisoryAggregateCorrectnessEstimate) &&
+    worksheet.advisoryAggregateCorrectnessEstimate >= 0 &&
+    worksheet.advisoryAggregateCorrectnessEstimate <= 1
+      ? null
+      : "advisoryAggregateCorrectnessEstimate",
+    computedAdvisoryAggregateCorrectnessEstimate !== null &&
+    Math.abs(worksheet.advisoryAggregateCorrectnessEstimate - computedAdvisoryAggregateCorrectnessEstimate) <= 0.001
+      ? null
+      : "advisoryAggregateCorrectnessEstimate:weighted_claim_mismatch",
     worksheet.submittedScoreOverrideFlag === true ? requiredPromptFieldReason("overrideExplanation", worksheet.overrideExplanation) : null,
     requiredPromptFieldReason("exposureBlindingState", worksheet.exposureBlindingState),
     requiredPromptFieldReason("createdBy", worksheet.createdBy),
@@ -19887,8 +23558,14 @@ function normalizeCorrectnessClaimWeightWorksheet(worksheet, rowSource) {
     claimSpanIds,
     claimSignificanceWeights: weights,
     correctnessCredencesStatuses: statuses,
-    unclearClaimExclusionFlags: Array.isArray(worksheet.unclearClaimExclusionFlags) ? worksheet.unclearClaimExclusionFlags : [],
+    correctnessCredenceStatusRows: parsedStatuses.map((entry, index) => ({
+      claimSpanId: claimSpanIds[index] ?? null,
+      status: entry?.status ?? null,
+      correctnessCredence: entry?.correctnessCredence ?? null,
+    })),
+    unclearClaimExclusionFlags: unclearFlags,
     advisoryAggregateCorrectnessEstimate: worksheet.advisoryAggregateCorrectnessEstimate ?? null,
+    computedAdvisoryAggregateCorrectnessEstimate,
     submittedScoreOverrideFlag: worksheet.submittedScoreOverrideFlag === true,
     overrideExplanation: worksheet.overrideExplanation ?? null,
     exposureBlindingState: worksheet.exposureBlindingState ?? null,
@@ -19897,6 +23574,31 @@ function normalizeCorrectnessClaimWeightWorksheet(worksheet, rowSource) {
     reviewReasons,
     status: reviewReasons.length ? "correctness_claim_weight_worksheet_review_required" : "correctness_claim_weight_worksheet_complete",
   };
+}
+
+function parseCorrectnessClaimWeightStatus(value) {
+  const text = String(value ?? "").trim();
+  const match = text.match(/^([a-z_]+):([01](?:\.\d+)?|0?\.\d+)$/);
+  if (!match) return null;
+  const status = match[1];
+  const correctnessCredence = Number(match[2]);
+  if (!CORRECTNESS_CLAIM_WEIGHT_STATUSES.includes(status)) return null;
+  if (!Number.isFinite(correctnessCredence) || correctnessCredence < 0 || correctnessCredence > 1) return null;
+  return { status, correctnessCredence };
+}
+
+function computeCorrectnessWorksheetAggregate(weights, parsedStatuses, unclearFlags) {
+  let numerator = 0;
+  let denominator = 0;
+  for (const [index, weight] of weights.entries()) {
+    const parsed = parsedStatuses[index];
+    const excluded = unclearFlags[index] === true || parsed?.status === "excluded_due_to_unclear_text";
+    if (excluded) continue;
+    numerator += weight * parsed.correctnessCredence;
+    denominator += weight;
+  }
+  if (denominator <= 0) return 0.5;
+  return round(numerator / denominator);
 }
 
 function normalizeProtectedArtifactRetentionRecord(record, rowSource) {
@@ -23211,6 +26913,2884 @@ function scheduleCompletionClaimStatus(row) {
   return "completion_claim_blocked_until_complete_or_rebaselined";
 }
 
+function buildOctoberCompletionChecklistReport(releaseId, evidence) {
+  const metaphilosophySourceWorkbenchRow =
+    (evidence.metaphilosophyDeliverableChecklist?.rows ?? []).find((row) => row.id === "admin_source_extraction_workbench") ?? null;
+  const validationTargetGapsRemain = [
+    evidence.targetGaps?.validationCritiquesRemaining,
+    evidence.targetGaps?.validationPositionsRemaining,
+    evidence.targetGaps?.validationCoreAllItemsRatersRemaining,
+  ].some((remaining) => Number(remaining) > 0);
+  const rows = [
+    octoberChecklistRow({
+      id: "target_scale_and_data_collection",
+      deliverableGroup: "October target scale and data collection",
+      sourceStatuses: [evidence.targetGaps?.releaseUseStatus ?? evidence.currentStatus],
+      status: evidence.currentStatus === "target_scale_met" ? "complete" : "data_collection_required",
+      evidenceIds: [evidence.targetGaps?.id ?? "targetGaps"],
+      reviewReasons: Object.entries(evidence.targetGaps ?? {})
+        .filter(([, value]) => typeof value === "number" && value > 0)
+        .map(([key, value]) => `${key}:${value}`),
+    }),
+    octoberChecklistRow({
+      id: "release_artifact_submission_package",
+      deliverableGroup: "Submitted release artifacts and export manifests",
+      sourceStatuses: [evidence.releaseArtifactEvidence?.releaseUseStatus],
+      evidenceIds: [evidence.releaseArtifactEvidence?.id].filter(Boolean),
+      status:
+        evidence.releaseArtifactEvidence?.releaseUseStatus === "submitted_release_artifacts_match_current_release"
+          ? "complete"
+          : "operator_evidence_required",
+      reviewReasons:
+        evidence.releaseArtifactEvidence?.releaseUseStatus === "submitted_release_artifacts_match_current_release"
+          ? []
+          : checklistEvidenceReviewReasons("releaseArtifactEvidence", evidence.releaseArtifactEvidence),
+    }),
+    octoberChecklistRow({
+      id: "model_evaluation_submission_package",
+      deliverableGroup: "Submitted model-evaluation, model-improvement, leaderboard, and provenance artifacts",
+      sourceStatuses: [evidence.modelEvaluationArtifactEvidence?.releaseUseStatus],
+      evidenceIds: [evidence.modelEvaluationArtifactEvidence?.id].filter(Boolean),
+      status:
+        evidence.modelEvaluationArtifactEvidence?.releaseUseStatus === "submitted_model_evaluation_artifacts_release_evidence_complete"
+          ? "complete"
+          : "operator_evidence_required",
+      reviewReasons:
+        evidence.modelEvaluationArtifactEvidence?.releaseUseStatus === "submitted_model_evaluation_artifacts_release_evidence_complete"
+          ? []
+          : checklistEvidenceReviewReasons("modelEvaluationArtifactEvidence", evidence.modelEvaluationArtifactEvidence),
+    }),
+    octoberChecklistRow({
+      id: "model_evaluation_reproducibility",
+      deliverableGroup: "Model-evaluation reproducibility checklist",
+      sourceStatuses: [evidence.modelEvaluationReproducibilityChecklist?.releaseUseStatus],
+      evidenceIds: [evidence.modelEvaluationReproducibilityChecklist?.id].filter(Boolean),
+      status:
+        evidence.modelEvaluationReproducibilityChecklist?.releaseUseStatus === "model_evaluation_reproducibility_requirements_evidenced"
+          ? "complete"
+          : "operator_evidence_required",
+      reviewReasons:
+        evidence.modelEvaluationReproducibilityChecklist?.releaseUseStatus === "model_evaluation_reproducibility_requirements_evidenced"
+          ? []
+          : checklistEvidenceReviewReasons("modelEvaluationReproducibilityChecklist", evidence.modelEvaluationReproducibilityChecklist),
+    }),
+    evidenceChecklistRow("policy_accessibility_and_assignment_gates", "Visibility, workflow, assist, UI experiment, and accessibility gates", evidence.policyBundleEvidence),
+    evidenceChecklistRow("participant_safeguards", "Rater qualification, incentives, language artifacts, source recognition, and model-provider safeguards", evidence.participantSafeguardEvidence),
+    evidenceChecklistRow("rating_experience_controls", "Score-input, draft, lint, issue, confidence, rationale, and protected-artifact retention controls", evidence.ratingExperienceEvidence),
+    evidenceChecklistRow("auxiliary_release_workflows", "Blinding, partial-task, exposure, queue, conflict, errata, and schedule workflows", evidence.auxiliaryWorkflowEvidence),
+    evidenceChecklistRow("interaction_and_practice_workflows", "Practice, session pacing, self-screening, target maps, verification workspaces, benchmark submission, and UI parity workflows", evidence.interactionWorkflowEvidence),
+    octoberChecklistRow({
+      id: "discussion_and_adjudication_workflows",
+      deliverableGroup: "Post-lock discussion, adjudication cockpit, memo, and finalization workflows",
+      sourceStatuses: [evidence.discussionAdjudicationWorkflowEvidence?.releaseUseStatus],
+      evidenceIds: [evidence.discussionAdjudicationWorkflowEvidence?.id].filter(Boolean),
+      status:
+        evidence.discussionAdjudicationWorkflowEvidence?.releaseUseStatus === "submitted_discussion_adjudication_workflow_complete"
+          ? "complete"
+          : evidence.discussionAdjudicationWorkflowEvidence?.releaseUseStatus === "discussion_adjudication_workflow_not_submitted"
+            ? "operator_evidence_required"
+            : "review_required",
+      reviewReasons:
+        evidence.discussionAdjudicationWorkflowEvidence?.releaseUseStatus === "submitted_discussion_adjudication_workflow_complete"
+          ? []
+          : checklistEvidenceReviewReasons("discussionAdjudicationWorkflowEvidence", evidence.discussionAdjudicationWorkflowEvidence),
+    }),
+    evidenceChecklistRow("workflow_state_machines", "Append-only lifecycle state machines and backend guard checks", evidence.workflowStateMachineEvidence),
+    evidenceChecklistRow("rater_data_governance", "Rater data-governance, consent, restriction, withdrawal, and deactivation workflows", evidence.raterDataGovernance),
+    evidenceChecklistRow("release_config_manifest_controls", "Release config manifest, canonicalization, governed bundle, and hash-verification controls", evidence.releaseConfigManifestEvidence),
+    evidenceChecklistRow("operational_controls", "Policy decisions, phase gates, queue freshness, client-surface integrity, cloud/security budget, and WORM audit controls", evidence.operationalControlEvidence),
+    octoberChecklistRow({
+      id: "source_intake_and_metaphilosophy",
+      deliverableGroup: "Metaphilosophy task tracks, source-intake workbench, and R&D backlog separation",
+      sourceStatuses: [
+        evidence.metaphilosophyDeliverableChecklist?.releaseUseStatus,
+        metaphilosophySourceWorkbenchRow?.status,
+        metaphilosophySourceWorkbenchRow?.phaseGate?.status,
+      ].filter(Boolean),
+      evidenceIds: [
+        evidence.sourceIntakeEvidence?.id,
+        evidence.sourcePreparationEvidence?.id,
+        evidence.metaphilosophyDeliverableChecklist?.id,
+      ].filter(Boolean),
+      sourceWorkbenchApplicability: metaphilosophySourceWorkbenchRow
+        ? {
+            status: metaphilosophySourceWorkbenchRow.status,
+            completionRule: metaphilosophySourceWorkbenchRow.completionRule,
+            phaseGate: metaphilosophySourceWorkbenchRow.phaseGate ?? null,
+            sourceEvidenceStatuses: [
+              evidence.sourceIntakeEvidence?.releaseUseStatus,
+              evidence.sourcePreparationEvidence?.releaseUseStatus,
+            ].filter(Boolean),
+          }
+        : null,
+      status:
+        evidence.metaphilosophyDeliverableChecklist?.releaseUseStatus === "metaphilosophy_deliverable_checklist_complete" &&
+        !["source_preparation_review_required"].includes(evidence.sourcePreparationEvidence?.releaseUseStatus) &&
+        !["phase1_source_intake_review_required"].includes(evidence.sourceIntakeEvidence?.releaseUseStatus)
+          ? "complete"
+          : "review_required",
+      reviewReasons: [
+        ...(evidence.metaphilosophyDeliverableChecklist?.reviewSections?.map((section) => `metaphilosophyDeliverableChecklist:${section.artifactId}`) ?? []),
+        evidence.sourceIntakeEvidence?.releaseUseStatus === "phase1_source_intake_review_required" ? "sourceIntakeEvidence.review_required" : null,
+        evidence.sourcePreparationEvidence?.releaseUseStatus === "source_preparation_review_required"
+          ? "sourcePreparationEvidence.review_required"
+          : null,
+        metaphilosophySourceWorkbenchRow?.reviewReasons?.length
+          ? `sourceWorkbench:${metaphilosophySourceWorkbenchRow.reviewReasons.join(",")}`
+          : null,
+      ].filter(Boolean),
+    }),
+    evidenceChecklistRow("candidate_generation_and_active_learning", "Candidate generation, active-learning, model-judge, and marginal-informativeness controls", evidence.candidateGenerationIntakeChecklist),
+    evidenceChecklistRow("label_aggregation_and_reliability", "Label snapshots, reliability weighting, denominator separation, adjudication, and model-assisted overlap controls", evidence.labelAggregationReliabilityChecklist),
+    octoberChecklistRow({
+      id: "rubric_practice_and_certification_pack",
+      deliverableGroup: "Rubric QA pack, public source-example anchors, certification workflow, and gold-library readiness",
+      sourceStatuses: [
+        evidence.rubricQaCoverage?.releaseUseStatus,
+        evidence.sourceExampleAnchors?.releaseUseStatus,
+        evidence.certification?.thresholdPolicyReleaseUseStatus,
+        evidence.certification?.goldLibraryStatus,
+      ].filter(Boolean),
+      evidenceIds: [evidence.rubricQaCoverage?.id, evidence.sourceExampleAnchors?.id, evidence.certification?.id].filter(Boolean),
+      status:
+        evidence.rubricQaCoverage?.releaseUseStatus === "rubric_qa_pack_frozen_public_only" &&
+        evidence.sourceExampleAnchors?.releaseUseStatus === "source_anchor_suite_public_training_only" &&
+        evidence.certification?.goldLibraryStatus !== "incomplete"
+          ? "complete"
+          : evidence.certification?.goldLibraryStatus === "incomplete"
+            ? "data_collection_required"
+            : "review_required",
+      reviewReasons: [
+        evidence.rubricQaCoverage?.releaseUseStatus === "rubric_qa_pack_frozen_public_only" ? null : "rubricQaCoverage",
+        evidence.sourceExampleAnchors?.releaseUseStatus === "source_anchor_suite_public_training_only" ? null : "sourceExampleAnchors",
+        evidence.certification?.goldLibraryStatus === "incomplete"
+          ? `goldItemsRemaining:${evidence.targetGaps?.goldItemsRemaining ?? "unknown"}`
+          : null,
+      ].filter(Boolean),
+    }),
+    octoberChecklistRow({
+      id: "validation_hidden_benchmark_and_claims",
+      deliverableGroup: "Appendix-C validation, hidden benchmark freeze, protected split, comparability, and release-claim warnings",
+      sourceStatuses: [
+        evidence.validationDesign?.status,
+        evidence.hiddenBenchmarkFreeze?.freezeStatus,
+        evidence.releaseClaimWarnings?.releaseUseStatus,
+      ].filter(Boolean),
+      evidenceIds: [evidence.validationDesign?.id, evidence.hiddenBenchmarkFreeze?.id, evidence.releaseClaimWarnings?.id].filter(Boolean),
+      status:
+        evidence.validationDesign?.status === "appendix_c_scale" &&
+        evidence.hiddenBenchmarkFreeze?.freezeStatus === "frozen" &&
+        evidence.releaseClaimWarnings?.releaseUseStatus === "release_claim_warnings_clear"
+          ? "complete"
+          : validationTargetGapsRemain
+            ? "data_collection_required"
+          : "operator_evidence_required",
+      reviewReasons: [
+        evidence.validationDesign?.status === "appendix_c_scale" ? null : `validationDesign:${evidence.validationDesign?.status}`,
+        evidence.hiddenBenchmarkFreeze?.freezeStatus === "frozen" ? null : `hiddenBenchmarkFreeze:${evidence.hiddenBenchmarkFreeze?.freezeStatus}`,
+        ...hiddenBenchmarkFreezeReviewReasons(evidence.hiddenBenchmarkFreeze),
+        evidence.releaseClaimWarnings?.releaseUseStatus === "release_claim_warnings_clear"
+          ? null
+          : `releaseClaimWarnings:${evidence.releaseClaimWarnings?.releaseUseStatus}`,
+      ].filter(Boolean),
+    }),
+  ];
+  const counts = countBy(rows, "status");
+  return {
+    id: `october-completion-checklist-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      checklistScope:
+        "This checklist binds RLHF91's October deliverables to existing evidence reports. It does not replace the underlying gates or make data-collection claims pass from seed fixtures.",
+      statusSemantics:
+        "complete means the referenced evidence supports the deliverable; operator_evidence_required means the route/report exists but submitted production artifacts are still required; data_collection_required means release-scale corpus, rating, gold, or validation data is still short of target.",
+    },
+    rows,
+    reviewSections: rows.flatMap((row) =>
+      row.reviewReasons.map((reason) => ({ artifactType: "october_completion_deliverable", artifactId: row.id, reason })),
+    ),
+    counts: {
+      deliverableGroups: rows.length,
+      complete: counts.complete ?? 0,
+      operatorEvidenceRequired: counts.operator_evidence_required ?? 0,
+      dataCollectionRequired: counts.data_collection_required ?? 0,
+      reviewRequired: counts.review_required ?? 0,
+    },
+    releaseUseStatus:
+      rows.every((row) => row.status === "complete")
+        ? "october_completion_checklist_complete"
+        : "october_completion_checklist_open_items",
+  };
+}
+
+function hiddenBenchmarkFreezeReviewReasons(hiddenBenchmarkFreeze) {
+  if (!hiddenBenchmarkFreeze || hiddenBenchmarkFreeze.freezeStatus === "frozen") return [];
+  return (hiddenBenchmarkFreeze.freezeChecks ?? [])
+    .filter((check) => check?.status && check.status !== "pass")
+    .map((check) => `hiddenBenchmarkFreeze.${check.id}:${check.status}`);
+}
+
+function buildOperatorEvidenceSubmissionPlan(releaseId, octoberCompletionChecklist, targetGaps = null, evidenceByChecklistRow = {}) {
+  const checklistRows = Array.isArray(octoberCompletionChecklist?.rows) ? octoberCompletionChecklist.rows : [];
+  const openRows = checklistRows.filter((row) => row.status !== "complete");
+  const rows = openRows.map((row) => {
+    const action = operatorSubmissionActionForChecklistRow(row.id);
+    const blockingTargetGaps = operatorBlockingTargetGapsForChecklistRow(row.id, targetGaps);
+    const evidence = evidenceByChecklistRow[row.id];
+    const reviewEvidencePointers = operatorReviewEvidencePointersForChecklistRow(row, action, evidence);
+    const reviewArtifactSummaries = operatorReviewArtifactSummaries(reviewEvidencePointers);
+    const submissionChecklist = operatorSubmissionChecklistForChecklistRow(row.id, action, evidence, row).map((item) => {
+      const itemWithSource = {
+        ...item,
+        sourceEvidenceId: item.sourceEvidenceId ?? operatorSourceEvidenceIdForSubmitArtifact(row, item.artifactKind),
+      };
+      return {
+        ...itemWithSource,
+        ...operatorSubmissionChecklistReadbackFields(row.id, itemWithSource),
+      };
+    });
+    const basePlanRow = {
+      checklistRowId: row.id,
+      deliverableGroup: row.deliverableGroup,
+      status: row.status,
+      evidenceIds: row.evidenceIds ?? [],
+      sourceStatuses: row.sourceStatuses ?? [],
+      reviewReasons: row.reviewReasons ?? [],
+      reviewEvidencePointers,
+      reviewArtifactSummaries,
+      submissionChecklist,
+      blockingTargetGaps,
+      actionStatus:
+        row.status === "data_collection_required"
+          ? "collect_data_before_submission"
+          : row.status === "operator_evidence_required"
+            ? "submit_operator_evidence"
+            : "review_current_evidence",
+      requiredSubmissions: action.requiredSubmissions,
+      writeRoutes: action.writeRoutes,
+      bulkImportRoutes: action.bulkImportRoutes ?? [],
+      bulkImportWorkflowTemplateIds: action.bulkImportWorkflowTemplateIds ?? [],
+      setupBulkImportRoutes: action.setupBulkImportRoutes ?? [],
+      setupBulkImportWorkflowTemplateIds: action.setupBulkImportWorkflowTemplateIds ?? [],
+      readbackRoutes: action.readbackRoutes,
+      workflowTemplateIds: action.workflowTemplateIds,
+      notes: action.notes,
+    };
+    const actionItems = operatorActionItemsForPlanRow(basePlanRow).map(operatorActionItemWithExecutionStatus);
+    const actionRouteFields = operatorPlanRowActionRouteFields(basePlanRow, actionItems);
+    const reviewEvidencePointersWithResolution = reviewEvidencePointers.map((pointer) => ({
+      ...pointer,
+      ...operatorReviewResolutionFields(pointer, actionItems, { collectionItem: true }),
+    }));
+    const reviewArtifactSummariesWithResolution = reviewArtifactSummaries.map((summary) => ({
+      ...summary,
+      ...operatorReviewResolutionFields(summary, actionItems, { collectionItem: true }),
+    }));
+    const actionDerivedSubmissionChecklist = operatorSubmissionChecklistItemsForSubmitActions(row.id, actionItems, submissionChecklist);
+    const planRow = {
+      ...basePlanRow,
+      ...actionRouteFields,
+      reviewEvidencePointers: reviewEvidencePointersWithResolution,
+      reviewArtifactSummaries: reviewArtifactSummariesWithResolution,
+      submissionChecklist: [...submissionChecklist, ...actionDerivedSubmissionChecklist],
+    };
+    return {
+      ...planRow,
+      actionItems,
+    };
+  });
+  const counts = countBy(rows, "actionStatus");
+  const actionItems = operatorActionItemQueue(rows).map(operatorActionItemWithExecutionStatus);
+  const actionItemCounts = countBy(actionItems, "actionType");
+  const actionItemExecutionStatusCounts = countBy(actionItems, "executionStatus");
+  const templateCoverageCounts = countBy(actionItems, "templateCoverageStatus");
+  const preflightCoverageCounts = countBy(actionItems, "preflightCoverageStatus");
+  const governanceCoverageCounts = countBy(actionItems, "governanceCoverageStatus");
+  const submissionChecklist = rows.flatMap((row) =>
+    row.submissionChecklist.map((item) => ({
+      ...item,
+      checklistRowId: row.checklistRowId,
+      checklistStatus: row.status,
+      actionStatus: row.actionStatus,
+      deliverableGroup: row.deliverableGroup,
+    })),
+  );
+  const reviewEvidencePointers = rows.flatMap((row) =>
+    row.reviewEvidencePointers.map((pointer) => ({
+      ...pointer,
+      checklistStatus: row.status,
+      actionStatus: row.actionStatus,
+      deliverableGroup: row.deliverableGroup,
+    })),
+  );
+  const reviewArtifactSummaries = rows.flatMap((row) =>
+    row.reviewArtifactSummaries.map((summary) => ({
+      ...summary,
+      checklistRowId: row.checklistRowId,
+      checklistStatus: row.status,
+      actionStatus: row.actionStatus,
+      deliverableGroup: row.deliverableGroup,
+    })),
+  );
+  return {
+    id: `operator-evidence-submission-plan-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    policy: {
+      scope:
+        "Derived from octoberCompletionChecklist rows and existing workflow routes. It does not create evidence, waive gates, or convert computed seed artifacts into submitted artifacts.",
+      operatorUse:
+        "Use writeRoutes or workflowTemplateIds to submit real artifacts, then use readbackRoutes and /api/release/report to verify the rows changed status.",
+    },
+    actionItems,
+    submissionChecklist,
+    reviewEvidencePointers,
+    reviewArtifactSummaries,
+    rows,
+    counts: {
+      openRows: rows.length,
+      submitOperatorEvidence: counts.submit_operator_evidence ?? 0,
+      collectDataBeforeSubmission: counts.collect_data_before_submission ?? 0,
+      reviewCurrentEvidence: counts.review_current_evidence ?? 0,
+      linkedEvidenceIds: rows.reduce((sum, row) => sum + row.evidenceIds.length, 0),
+      reviewEvidencePointers: reviewEvidencePointers.length,
+      reviewArtifactSummaries: reviewArtifactSummaries.length,
+      submissionChecklistItems: submissionChecklist.length,
+      submissionChecklistOpenItems: rows.reduce(
+        (sum, row) => sum + row.submissionChecklist.filter((item) => item.submissionStatus !== "submitted_complete").length,
+        0,
+      ),
+      blockingTargetGapRows: rows.reduce((sum, row) => sum + row.blockingTargetGaps.length, 0),
+      actionItems: actionItems.length,
+      collectDataActionItems: actionItemCounts.collect_data ?? 0,
+      submitArtifactActionItems: actionItemCounts.submit_artifact ?? 0,
+      reviewArtifactActionItems: actionItemCounts.review_artifact ?? 0,
+      reviewReportSectionActionItems: actionItemCounts.review_report_section ?? 0,
+      readyActionItems: actionItems.filter((item) => operatorActionExecutionStatus(item).startsWith("ready_to_")).length,
+      blockedByTargetDataActionItems: actionItemExecutionStatusCounts.blocked_by_target_data ?? 0,
+      templateCoverageAvailableActionItems: templateCoverageCounts.template_coverage_available ?? 0,
+      templateCoverageMissingActionItems: templateCoverageCounts.template_coverage_missing ?? 0,
+      templateCoverageNotRequiredActionItems: templateCoverageCounts.template_coverage_not_required ?? 0,
+      preflightCoverageAvailableActionItems: preflightCoverageCounts.preflight_coverage_available ?? 0,
+      preflightCoverageMissingActionItems: preflightCoverageCounts.preflight_coverage_missing ?? 0,
+      preflightCoverageNotRequiredActionItems: preflightCoverageCounts.preflight_coverage_not_required ?? 0,
+      governanceCoverageAvailableActionItems: governanceCoverageCounts.governance_coverage_available ?? 0,
+      governanceCoverageMissingActionItems: governanceCoverageCounts.governance_coverage_missing ?? 0,
+      governanceCoverageNotRequiredActionItems: governanceCoverageCounts.governance_coverage_not_required ?? 0,
+      byExecutionStatus: actionItemExecutionStatusCounts,
+    },
+    releaseUseStatus: rows.length ? "operator_evidence_submission_plan_open" : "operator_evidence_submission_plan_clear",
+  };
+}
+
+function buildOctoberCompletionChecklistWithOperatorRoutes(octoberCompletionChecklist, operatorEvidenceSubmissionPlan) {
+  const planRowsById = new Map((operatorEvidenceSubmissionPlan?.rows ?? []).map((row) => [row.checklistRowId, row]));
+  return {
+    ...octoberCompletionChecklist,
+    rows: (octoberCompletionChecklist?.rows ?? []).map((row) => {
+      const planRow = planRowsById.get(row.id);
+      if (!planRow) return row;
+      const actionItems = Array.isArray(planRow.actionItems) ? planRow.actionItems : [];
+      const operatorActionSummaries = actionItems.map(octoberCompletionChecklistActionSummary);
+      const targetGapIds = uniqueStrings([
+        ...(Array.isArray(planRow.blockingTargetGaps) ? planRow.blockingTargetGaps.map((gap) => gap.id) : []),
+        ...actionItems.map((item) => item.targetGapId),
+      ]);
+      const routeFields = {
+        operatorActionIds: uniqueStrings(actionItems.map((item) => item.id)),
+        operatorActionTypes: uniqueStrings(actionItems.map((item) => item.actionType)),
+        operatorActionSummaries,
+        nextOperatorActionSummary: operatorActionSummaries[0] ?? null,
+        relatedCollectDataActionIds: uniqueStrings(actionItems.filter((item) => item.actionType === "collect_data").map((item) => item.id)),
+        relatedSubmitActionIds: uniqueStrings(actionItems.filter((item) => item.actionType === "submit_artifact").map((item) => item.id)),
+        relatedReviewActionIds: uniqueStrings(
+          actionItems.filter((item) => ["review_artifact", "review_report_section"].includes(item.actionType)).map((item) => item.id),
+        ),
+        operatorActionCount: actionItems.length,
+        openOperatorActionCount: actionItems.filter((item) => item.actionStatus !== "complete" && item.status !== "complete").length,
+        submissionChecklistCount: Array.isArray(planRow.submissionChecklist) ? planRow.submissionChecklist.length : 0,
+        reviewEvidencePointerCount: Array.isArray(planRow.reviewEvidencePointers) ? planRow.reviewEvidencePointers.length : 0,
+        reviewArtifactSummaryCount: Array.isArray(planRow.reviewArtifactSummaries) ? planRow.reviewArtifactSummaries.length : 0,
+        targetGapIds,
+        targetGapRoutes: targetGapIds.map((targetGapId) => `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}`),
+        writeRoutes: uniqueStrings([...(planRow.writeRoutes ?? []), ...actionItems.map((item) => item.writeRoute)]),
+        readbackRoutes: uniqueStrings([...(planRow.readbackRoutes ?? []), ...actionItems.map((item) => item.readbackRoute)]),
+        readbackItemRoutes: uniqueStrings(actionItems.map((item) => item.readbackItemRoute)),
+        bulkImportRoutes: uniqueStrings([...(planRow.bulkImportRoutes ?? []), ...actionItems.map((item) => item.bulkImportRoute)]),
+        setupBulkImportRoutes: uniqueStrings([
+          ...(planRow.setupBulkImportRoutes ?? []),
+          ...actionItems.flatMap((item) => [
+            item.setupBulkImportRoute,
+            ...(Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+          ]),
+        ]),
+        dryRunImportRoutes: uniqueStrings([...(planRow.dryRunImportRoutes ?? []), ...actionItems.map((item) => item.dryRunImportRoute)]),
+        validateOnlyImportRoutes: uniqueStrings([...(planRow.validateOnlyImportRoutes ?? []), ...actionItems.map((item) => item.validateOnlyImportRoute)]),
+        singleRecordDryRunRoutes: uniqueStrings([
+          ...(planRow.singleRecordDryRunRoutes ?? []),
+          ...actionItems.map((item) => item.singleRecordDryRunRoute),
+        ]),
+        singleRecordValidateOnlyRoutes: uniqueStrings([
+          ...(planRow.singleRecordValidateOnlyRoutes ?? []),
+          ...actionItems.map((item) => item.singleRecordValidateOnlyRoute),
+        ]),
+        setupDryRunImportRoutes: uniqueStrings([
+          ...(planRow.setupDryRunImportRoutes ?? []),
+          ...actionItems.map((item) => item.setupDryRunImportRoute),
+        ]),
+        setupValidateOnlyImportRoutes: uniqueStrings([
+          ...(planRow.setupValidateOnlyImportRoutes ?? []),
+          ...actionItems.map((item) => item.setupValidateOnlyImportRoute),
+        ]),
+        setupSingleRecordDryRunRoutes: uniqueStrings([
+          ...(planRow.setupSingleRecordDryRunRoutes ?? []),
+          ...actionItems.map((item) => item.setupSingleRecordDryRunRoute),
+        ]),
+        setupSingleRecordValidateOnlyRoutes: uniqueStrings([
+          ...(planRow.setupSingleRecordValidateOnlyRoutes ?? []),
+          ...actionItems.map((item) => item.setupSingleRecordValidateOnlyRoute),
+        ]),
+        packageImportRoutes: uniqueStrings(actionItems.map((item) => item.packageImportRoute)),
+        packageDryRunImportRoutes: uniqueStrings(actionItems.map((item) => item.packageDryRunImportRoute)),
+        packageValidateOnlyImportRoutes: uniqueStrings(actionItems.map((item) => item.packageValidateOnlyImportRoute)),
+        verificationRoutes: uniqueStrings(actionItems.map((item) => item.verificationRoute)),
+        targetGapReadbackItemRoutes: uniqueStrings(actionItems.map((item) => item.targetGapReadbackItemRoute)),
+        workflowTemplateIds: uniqueStrings([...(planRow.workflowTemplateIds ?? []), ...actionItems.map((item) => item.workflowTemplateId)]),
+        bulkImportWorkflowTemplateIds: uniqueStrings([
+          ...(planRow.bulkImportWorkflowTemplateIds ?? []),
+          ...actionItems.map((item) => item.bulkImportWorkflowTemplateId),
+        ]),
+        setupWorkflowTemplateIds: uniqueStrings(actionItems.map((item) => item.setupWorkflowTemplateId)),
+        setupBulkImportWorkflowTemplateIds: uniqueStrings([
+          ...(planRow.setupBulkImportWorkflowTemplateIds ?? []),
+          ...actionItems.flatMap((item) => [
+            item.setupBulkImportWorkflowTemplateId,
+            ...(Array.isArray(item.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : []),
+          ]),
+        ]),
+        templateReadbackRoutes: uniqueStrings([
+          ...(planRow.templateReadbackRoutes ?? []),
+          ...actionItems.flatMap((item) => item.templateReadbackRoutes ?? []),
+        ]),
+        templateCoverageStatuses: uniqueStrings(actionItems.map((item) => item.templateCoverageStatus)),
+        templateCoverageKinds: uniqueStrings(actionItems.flatMap((item) => item.templateCoverageKinds ?? [])),
+        templateCoverageRoutes: uniqueStrings(actionItems.flatMap((item) => item.templateCoverageRoutes ?? [])),
+        preflightCoverageStatuses: uniqueStrings(actionItems.map((item) => item.preflightCoverageStatus)),
+        preflightCoverageKinds: uniqueStrings(actionItems.flatMap((item) => item.preflightCoverageKinds ?? [])),
+        preflightCoverageRoutes: uniqueStrings(actionItems.flatMap((item) => item.preflightCoverageRoutes ?? [])),
+        operatorActionRoute: `/api/v1/operator-action-items?checklistRowId=${encodeURIComponent(row.id)}`,
+        submissionChecklistRoute: `/api/v1/operator-submission-checklist?checklistRowId=${encodeURIComponent(row.id)}`,
+        reviewEvidencePointersRoute: `/api/v1/operator-review-evidence-pointers?checklistRowId=${encodeURIComponent(row.id)}`,
+        reviewArtifactSummariesRoute: `/api/v1/operator-review-artifact-summaries?checklistRowId=${encodeURIComponent(row.id)}`,
+      };
+      return {
+        ...row,
+        ...Object.fromEntries(
+          Object.entries(routeFields).filter(([, value]) => !Array.isArray(value) || value.length > 0),
+        ),
+      };
+    }),
+  };
+}
+
+function octoberCompletionChecklistActionSummary(action) {
+  const bulkImportRoute = action.bulkImportRoute ?? null;
+  const setupBulkImportRoute = action.setupBulkImportRoute ?? null;
+  return {
+    id: action.id ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    executionStatus: action.executionStatus ?? null,
+    executionStatusReason: action.executionStatusReason ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    targetGapId: action.targetGapId ?? null,
+    artifactKind: action.artifactKind ?? null,
+    artifactType: action.artifactType ?? null,
+    artifactId: action.artifactId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    preconditionStatus: action.preconditionStatus ?? null,
+    writeRoute: action.writeRoute ?? null,
+    setupWriteRoute: action.setupWriteRoute ?? null,
+    bulkImportRoute,
+    setupBulkImportRoute,
+    packageImportRoute: action.packageImportRoute ?? null,
+    dryRunImportRoute: operatorImportRouteWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+    setupDryRunImportRoute: operatorImportRouteWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
+    packageDryRunImportRoute: action.packageDryRunImportRoute ?? operatorImportRouteWithQueryFlag(action.packageImportRoute, "dryRun", "true"),
+    validateOnlyImportRoute: operatorImportRouteWithQueryFlag(bulkImportRoute, "validateOnly", "true"),
+    setupValidateOnlyImportRoute: operatorImportRouteWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+    packageValidateOnlyImportRoute:
+      action.packageValidateOnlyImportRoute ?? operatorImportRouteWithQueryFlag(action.packageImportRoute, "validateOnly", "true"),
+    singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
+    setupSingleRecordDryRunRoute: action.setupSingleRecordDryRunRoute ?? null,
+    setupSingleRecordValidateOnlyRoute: action.setupSingleRecordValidateOnlyRoute ?? null,
+    readbackRoute: action.readbackRoute ?? null,
+    readbackItemRoute: action.readbackItemRoute ?? null,
+    submissionReadbackRoute: action.submissionReadbackRoute ?? null,
+    setupReadbackRoute: action.setupReadbackRoute ?? null,
+    targetGapReadbackItemRoute: action.targetGapReadbackItemRoute ?? null,
+    workflowTemplateId: action.workflowTemplateId ?? null,
+    bulkImportWorkflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+    setupWorkflowTemplateId: action.setupWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateId: action.setupBulkImportWorkflowTemplateId ?? null,
+    templateReadbackRoutes: Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes : [],
+    templateCoverageStatus: action.templateCoverageStatus ?? "template_coverage_not_required",
+    templateCoverageKinds: Array.isArray(action.templateCoverageKinds) ? action.templateCoverageKinds : [],
+    templateCoverageRoutes: Array.isArray(action.templateCoverageRoutes)
+      ? action.templateCoverageRoutes
+      : Array.isArray(action.templateReadbackRoutes)
+        ? action.templateReadbackRoutes
+        : [],
+    preflightCoverageStatus: action.preflightCoverageStatus ?? "preflight_coverage_not_required",
+    preflightCoverageKinds: Array.isArray(action.preflightCoverageKinds) ? action.preflightCoverageKinds : [],
+    preflightCoverageRoutes: Array.isArray(action.preflightCoverageRoutes) ? action.preflightCoverageRoutes : [],
+    preflightCoveragePolicy: action.preflightCoveragePolicy ?? null,
+    targetDataTemplateReadbackRoute: action.targetDataTemplateReadbackRoute ?? null,
+    expandedTemplateReadbackRoute: action.expandedTemplateReadbackRoute ?? action.targetDataExpandedTemplateReadbackRoute ?? null,
+    cappedExpandedTemplateReadbackRoute:
+      action.cappedExpandedTemplateReadbackRoute ?? action.targetDataCappedExpandedTemplateReadbackRoute ?? null,
+    relatedSubmitActionIds: Array.isArray(action.relatedSubmitActionIds) ? action.relatedSubmitActionIds : [],
+    completionEvidence: action.completionEvidence ?? null,
+    estimatedRecordsRequired: action.importImpact?.estimatedRecordsRequired ?? null,
+    expectedResourceDelta: action.importImpact?.expectedResourceDelta ?? null,
+    closesTargetGapWhenValidated: action.importImpact?.closesTargetGapWhenValidated ?? null,
+    setupEstimatedRecordsRequired: action.setupImportImpact?.estimatedRecordsRequired ?? null,
+    setupExpectedResourceDelta: action.setupImportImpact?.expectedResourceDelta ?? null,
+    setupClosesTargetGapWhenValidated: action.setupImportImpact?.closesTargetGapWhenValidated ?? null,
+  };
+}
+
+function operatorSubmissionChecklistItemsForSubmitActions(checklistRowId, actionItems = [], existingItems = []) {
+  const existingKeys = new Set(existingItems.map((item) => `${item.artifactKind ?? ""}:${item.submittedArtifactId ?? ""}:${item.reason ?? ""}`));
+  return actionItems
+    .filter((item) => item.actionType === "submit_artifact")
+    .filter((item) => !existingKeys.has(`${item.artifactKind ?? ""}:${item.submittedArtifactId ?? ""}:${item.reason ?? ""}`))
+    .map((item) => ({
+      id: `${checklistRowId}:${item.artifactKind ?? "artifact"}:${operatorActionIdSegment(item.reason ?? item.id)}`,
+      artifactKind: item.artifactKind ?? "artifact",
+      status: item.status ?? "review_required",
+      submissionStatus: item.submittedArtifactId ? "submitted_review_required" : "not_submitted",
+      submittedArtifactId: item.submittedArtifactId ?? null,
+      submittedAt: item.submittedAt ?? null,
+      writeRoute: item.writeRoute ?? null,
+      readbackRoute: item.readbackRoute ?? null,
+      ...(item.readbackItemRoute ? { readbackItemRoute: item.readbackItemRoute } : {}),
+      workflowTemplateId: item.workflowTemplateId ?? null,
+      bulkImportRoute: item.bulkImportRoute ?? null,
+      dryRunImportRoute: item.dryRunImportRoute ?? null,
+      validateOnlyImportRoute: item.validateOnlyImportRoute ?? null,
+      singleRecordDryRunRoute: item.singleRecordDryRunRoute ?? null,
+      singleRecordValidateOnlyRoute: item.singleRecordValidateOnlyRoute ?? null,
+      setupSingleRecordDryRunRoute: item.setupSingleRecordDryRunRoute ?? null,
+      setupSingleRecordValidateOnlyRoute: item.setupSingleRecordValidateOnlyRoute ?? null,
+      ...(item.operatorEvidenceTemplateReadbackRoute
+        ? { operatorEvidenceTemplateReadbackRoute: item.operatorEvidenceTemplateReadbackRoute }
+        : {}),
+      ...(item.payloadTemplateReadbackRoute ? { payloadTemplateReadbackRoute: item.payloadTemplateReadbackRoute } : {}),
+      ...(item.templateReadbackRoutes?.length ? { templateReadbackRoutes: item.templateReadbackRoutes } : {}),
+      templateCoverageStatus: item.templateCoverageStatus ?? "template_coverage_not_required",
+      templateCoverageRoutes: item.templateCoverageRoutes ?? item.templateReadbackRoutes ?? [],
+      templateCoverageKinds: item.templateCoverageKinds ?? [],
+      preflightCoverageStatus: item.preflightCoverageStatus ?? "preflight_coverage_not_required",
+      preflightCoverageRoutes: item.preflightCoverageRoutes ?? [],
+      preflightCoverageKinds: item.preflightCoverageKinds ?? [],
+      preflightCoveragePolicy: item.preflightCoveragePolicy ?? null,
+      bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateId ?? null,
+      actorRole: item.actorRole ?? null,
+      sourceEvidenceId: item.sourceEvidenceId ?? null,
+      reason: item.reason ?? null,
+      completionEvidence: item.completionEvidence ?? null,
+      blockingFieldCount: item.blockingFieldCount ?? 0,
+      blockingFields: item.blockingFields ?? [],
+      blockingFieldsTruncated: item.blockingFieldsTruncated === true,
+      checkStatusCounts: { action_required: 1 },
+    }));
+}
+
+function operatorPlanRowActionRouteFields(row, actionItems = []) {
+  const actionBulkImportRoutes = uniqueStrings(actionItems.map((item) => item.bulkImportRoute));
+  const actionSetupBulkImportRoutes = uniqueStrings(
+    actionItems.flatMap((item) => [item.setupBulkImportRoute, ...(Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : [])]),
+  );
+  const actionBulkImportWorkflowTemplateIds = uniqueStrings(actionItems.map((item) => item.bulkImportWorkflowTemplateId));
+  const actionSetupBulkImportWorkflowTemplateIds = uniqueStrings(
+    actionItems.flatMap((item) => [
+      item.setupBulkImportWorkflowTemplateId,
+      ...(Array.isArray(item.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : []),
+    ]),
+  );
+  const bulkImportRoutes = actionBulkImportRoutes.length ? actionBulkImportRoutes : uniqueStrings(row.bulkImportRoutes ?? []);
+  const setupBulkImportRoutes = actionSetupBulkImportRoutes.length ? actionSetupBulkImportRoutes : uniqueStrings(row.setupBulkImportRoutes ?? []);
+  const bulkImportWorkflowTemplateIds = actionBulkImportWorkflowTemplateIds.length
+    ? actionBulkImportWorkflowTemplateIds
+    : uniqueStrings(row.bulkImportWorkflowTemplateIds ?? []);
+  const setupBulkImportWorkflowTemplateIds = actionSetupBulkImportWorkflowTemplateIds.length
+    ? actionSetupBulkImportWorkflowTemplateIds
+    : uniqueStrings(row.setupBulkImportWorkflowTemplateIds ?? []);
+  const dryRunImportRoutes = uniqueStrings(actionItems.map((item) => item.dryRunImportRoute));
+  const validateOnlyImportRoutes = uniqueStrings(actionItems.map((item) => item.validateOnlyImportRoute));
+  const setupDryRunImportRoutes = uniqueStrings(actionItems.map((item) => item.setupDryRunImportRoute));
+  const setupValidateOnlyImportRoutes = uniqueStrings(actionItems.map((item) => item.setupValidateOnlyImportRoute));
+  const singleRecordDryRunRoutes = uniqueStrings(actionItems.map((item) => item.singleRecordDryRunRoute));
+  const singleRecordValidateOnlyRoutes = uniqueStrings(actionItems.map((item) => item.singleRecordValidateOnlyRoute));
+  const setupSingleRecordDryRunRoutes = uniqueStrings(actionItems.map((item) => item.setupSingleRecordDryRunRoute));
+  const setupSingleRecordValidateOnlyRoutes = uniqueStrings(actionItems.map((item) => item.setupSingleRecordValidateOnlyRoute));
+  const templateReadbackRoutes = uniqueStrings(actionItems.flatMap((item) => item.templateReadbackRoutes ?? []));
+  return {
+    bulkImportRoutes,
+    setupBulkImportRoutes,
+    bulkImportWorkflowTemplateIds,
+    setupBulkImportWorkflowTemplateIds,
+    ...(dryRunImportRoutes.length ? { dryRunImportRoutes } : {}),
+    ...(validateOnlyImportRoutes.length ? { validateOnlyImportRoutes } : {}),
+    ...(setupDryRunImportRoutes.length ? { setupDryRunImportRoutes } : {}),
+    ...(setupValidateOnlyImportRoutes.length ? { setupValidateOnlyImportRoutes } : {}),
+    ...(singleRecordDryRunRoutes.length ? { singleRecordDryRunRoutes } : {}),
+    ...(singleRecordValidateOnlyRoutes.length ? { singleRecordValidateOnlyRoutes } : {}),
+    ...(setupSingleRecordDryRunRoutes.length ? { setupSingleRecordDryRunRoutes } : {}),
+    ...(setupSingleRecordValidateOnlyRoutes.length ? { setupSingleRecordValidateOnlyRoutes } : {}),
+    ...(templateReadbackRoutes.length ? { templateReadbackRoutes } : {}),
+  };
+}
+
+function operatorSubmissionChecklistReadbackFields(checklistRowId, item) {
+  return operatorActionTemplateReadbackFields({
+    actionType: "submit_artifact",
+    checklistRowId,
+    artifactKind: item.artifactKind,
+    bulkImportRoute: item.bulkImportRoute,
+    setupWriteRoute: item.setupWriteRoute,
+    setupBulkImportRoute: item.setupBulkImportRoute,
+    writeRoute: item.writeRoute,
+    readbackRoute: item.readbackRoute,
+  });
+}
+
+function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissionPlan) {
+  const actionItems = Array.isArray(operatorEvidenceSubmissionPlan?.actionItems)
+    ? operatorEvidenceSubmissionPlan.actionItems
+    : (Array.isArray(operatorEvidenceSubmissionPlan?.rows) ? operatorEvidenceSubmissionPlan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const rows = (Array.isArray(targetGaps?.rows) ? targetGaps.rows : []).map((row) => {
+    const matchingActions = actionItems.filter((item) => item?.actionType === "collect_data" && item?.targetGapId === row.id);
+    const primaryAction = matchingActions.find((item) => item.importImpact) ?? matchingActions[0] ?? {};
+    const setupAction = matchingActions.find((item) => item.setupImportImpact) ?? primaryAction;
+    const primaryImportImpact = primaryAction.importImpact ?? null;
+    const setupImportImpact = setupAction.setupImportImpact ?? null;
+    const bulkImportRoute = primaryAction.bulkImportRoute ?? null;
+    const setupBulkImportRoute = setupAction.setupBulkImportRoute ?? null;
+    const setupBulkImportRoutes = uniqueStrings([
+      setupBulkImportRoute,
+      ...matchingActions.flatMap((item) => (Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : [])),
+    ]);
+    const setupBulkImportWorkflowTemplateIds = uniqueStrings([
+      setupAction.setupBulkImportWorkflowTemplateId,
+      ...matchingActions.flatMap((item) =>
+        Array.isArray(item.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : [],
+      ),
+    ]);
+    const targetDataTemplateReadbackRoute =
+      row.id && (bulkImportRoute || setupBulkImportRoute)
+        ? operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", { targetGapId: row.id })
+        : null;
+    const targetDataExpandedTemplateReadbackRoute = targetDataTemplateReadbackRoute
+      ? operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
+          targetGapId: row.id,
+          expand: "remaining",
+        })
+      : null;
+    const targetDataCappedExpandedTemplateReadbackRoute = targetDataTemplateReadbackRoute
+      ? operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
+          targetGapId: row.id,
+          expand: "remaining",
+          maxExpandedRecords: 100,
+        })
+      : null;
+    const executionStatus = Number(row.remaining) > 0 ? "ready_to_collect_data" : "closed";
+    return {
+      ...row,
+      operatorActionIds: matchingActions.map((item) => item.id).filter(Boolean),
+      checklistRowIds: uniqueStrings(matchingActions.map((item) => item.checklistRowId)),
+      writeRoutes: uniqueStrings(matchingActions.map((item) => item.writeRoute)),
+      readbackRoutes: uniqueStrings(matchingActions.map((item) => item.readbackRoute)),
+      submissionReadbackRoutes: uniqueStrings(matchingActions.map((item) => item.submissionReadbackRoute ?? item.readbackRoute)),
+      setupWriteRoutes: uniqueStrings(matchingActions.map((item) => item.setupWriteRoute)),
+      bulkImportRoutes: uniqueStrings(matchingActions.map((item) => item.bulkImportRoute)),
+      setupBulkImportRoutes,
+      setupReadbackRoutes: uniqueStrings(matchingActions.map((item) => item.setupReadbackRoute)),
+      targetGapReadbackRoutes: uniqueStrings(matchingActions.map((item) => item.targetGapReadbackRoute)),
+      targetGapReadbackItemRoutes: uniqueStrings(matchingActions.map((item) => item.targetGapReadbackItemRoute)),
+      workflowTemplateIds: uniqueStrings(matchingActions.map((item) => item.workflowTemplateId)),
+      setupWorkflowTemplateIds: uniqueStrings(matchingActions.map((item) => item.setupWorkflowTemplateId)),
+      bulkImportWorkflowTemplateIds: uniqueStrings(matchingActions.map((item) => item.bulkImportWorkflowTemplateId)),
+      setupBulkImportWorkflowTemplateIds,
+      actorRoles: uniqueStrings(matchingActions.map((item) => item.actorRole)),
+      setupActorRoles: uniqueStrings(matchingActions.map((item) => item.setupActorRole)),
+      completionEvidence: uniqueStrings(matchingActions.map((item) => item.completionEvidence)),
+      executionStatus,
+      executionStatusReason:
+        executionStatus === "ready_to_collect_data"
+          ? "This target gap can accept real target data now; generated templates must be replaced and dry-run validated before append."
+          : "The release report no longer shows remaining records for this target gap.",
+      collectionPlanRoute: `/api/v1/target-gaps/collection-plan/${encodeURIComponent(row.id)}`,
+      writeRoute: primaryAction.writeRoute ?? null,
+      readbackRoute: primaryAction.readbackRoute ?? null,
+      submissionReadbackRoute: primaryAction.submissionReadbackRoute ?? primaryAction.readbackRoute ?? null,
+      bulkImportRoute,
+      dryRunImportRoute: operatorImportRouteWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+      validateOnlyImportRoute: operatorImportRouteWithQueryFlag(bulkImportRoute, "validateOnly", "true"),
+      packageImportRoute: bulkImportRoute || setupBulkImportRoutes.length ? TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE : null,
+      packageDryRunImportRoute:
+        bulkImportRoute || setupBulkImportRoutes.length
+          ? operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "dryRun", "true")
+          : null,
+      packageValidateOnlyImportRoute:
+        bulkImportRoute || setupBulkImportRoutes.length
+          ? operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true")
+          : null,
+      setupWriteRoute: setupAction.setupWriteRoute ?? null,
+      setupReadbackRoute: setupAction.setupReadbackRoute ?? null,
+      setupBulkImportRoute,
+      setupDryRunImportRoute: operatorImportRouteWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
+      setupValidateOnlyImportRoute: operatorImportRouteWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+      targetGapReadbackRoute: primaryAction.targetGapReadbackRoute ?? "/api/v1/target-gaps",
+      targetGapReadbackItemRoute: primaryAction.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(row.id)}`,
+      workflowTemplateId: primaryAction.workflowTemplateId ?? null,
+      bulkImportWorkflowTemplateId: primaryAction.bulkImportWorkflowTemplateId ?? null,
+      setupWorkflowTemplateId: setupAction.setupWorkflowTemplateId ?? null,
+      setupBulkImportWorkflowTemplateId: setupAction.setupBulkImportWorkflowTemplateId ?? null,
+      actorRole: primaryAction.actorRole ?? null,
+      setupActorRole: setupAction.setupActorRole ?? null,
+      templateReadbackRoute: targetDataTemplateReadbackRoute,
+      expandedTemplateReadbackRoute: targetDataExpandedTemplateReadbackRoute,
+      cappedExpandedTemplateReadbackRoute: targetDataCappedExpandedTemplateReadbackRoute,
+      templateReadbackRoutes: uniqueStrings([
+        targetDataTemplateReadbackRoute,
+        targetDataExpandedTemplateReadbackRoute,
+        targetDataCappedExpandedTemplateReadbackRoute,
+      ]),
+      estimatedRecordsRequired: primaryImportImpact?.estimatedRecordsRequired ?? null,
+      estimatedSetupRecordsRequired: setupImportImpact?.estimatedRecordsRequired ?? 0,
+      expectedResourceDelta: primaryImportImpact?.expectedResourceDelta ?? null,
+      setupExpectedResourceDelta: setupImportImpact?.expectedResourceDelta ?? 0,
+      operatorActions: matchingActions.map((item) => ({
+        id: item.id,
+        checklistRowId: item.checklistRowId,
+        label: item.label,
+        importImpact: item.importImpact ?? null,
+        setupImportImpact: item.setupImportImpact ?? null,
+        importImpacts: [item.importImpact, item.setupImportImpact].filter(Boolean),
+        writeRoute: item.writeRoute,
+        readbackRoute: item.readbackRoute,
+        submissionReadbackRoute: item.submissionReadbackRoute ?? item.readbackRoute,
+        setupWriteRoute: item.setupWriteRoute ?? null,
+        bulkImportRoute: item.bulkImportRoute ?? null,
+        setupBulkImportRoute: item.setupBulkImportRoute ?? null,
+        setupBulkImportRoutes: item.setupBulkImportRoutes ?? uniqueStrings([item.setupBulkImportRoute]),
+        setupReadbackRoute: item.setupReadbackRoute ?? null,
+        ...(item.dryRunImportRoute ? { dryRunImportRoute: item.dryRunImportRoute } : {}),
+        ...(item.validateOnlyImportRoute ? { validateOnlyImportRoute: item.validateOnlyImportRoute } : {}),
+        ...(item.setupDryRunImportRoute ? { setupDryRunImportRoute: item.setupDryRunImportRoute } : {}),
+        ...(item.setupValidateOnlyImportRoute ? { setupValidateOnlyImportRoute: item.setupValidateOnlyImportRoute } : {}),
+        ...(item.packageImportRoute ? { packageImportRoute: item.packageImportRoute } : {}),
+        ...(item.packageDryRunImportRoute ? { packageDryRunImportRoute: item.packageDryRunImportRoute } : {}),
+        ...(item.packageValidateOnlyImportRoute ? { packageValidateOnlyImportRoute: item.packageValidateOnlyImportRoute } : {}),
+        targetGapReadbackRoute: item.targetGapReadbackRoute ?? null,
+        targetGapReadbackItemRoute: item.targetGapReadbackItemRoute ?? null,
+        ...(item.verificationRoute || item.importImpact?.verificationRoute || item.targetGapReadbackItemRoute
+          ? { verificationRoute: item.verificationRoute ?? item.importImpact?.verificationRoute ?? item.targetGapReadbackItemRoute }
+          : {}),
+        workflowTemplateId: item.workflowTemplateId ?? null,
+        setupWorkflowTemplateId: item.setupWorkflowTemplateId ?? null,
+        bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateId ?? null,
+        setupBulkImportWorkflowTemplateId: item.setupBulkImportWorkflowTemplateId ?? null,
+        setupBulkImportWorkflowTemplateIds:
+          item.setupBulkImportWorkflowTemplateIds ?? uniqueStrings([item.setupBulkImportWorkflowTemplateId]),
+        actorRole: item.actorRole ?? null,
+        setupActorRole: item.setupActorRole ?? null,
+        completionEvidence: item.completionEvidence ?? null,
+      })),
+    };
+  });
+  const enrichedCounts = {
+    ...(targetGaps?.counts ?? {}),
+    byExecutionStatus: countBy(rows, "executionStatus"),
+    readyTargetGaps: rows.filter((row) => row.executionStatus === "ready_to_collect_data").length,
+    byPrimaryImportRoute: countBy(rows, "bulkImportRoute"),
+    bySetupImportRoute: countBy(rows, "setupBulkImportRoute"),
+    byRoute: targetGapRouteCounts(rows),
+  };
+  return {
+    ...targetGaps,
+    rows,
+    counts: enrichedCounts,
+  };
+}
+
+const OPERATOR_REVIEW_READBACK_ROUTE_BY_ARTIFACT_TYPE = {
+  label_snapshot: "/api/v1/label-snapshots",
+  corpus_manifest: "/api/v1/corpus-manifests",
+  training_export: "/api/v1/training-exports",
+  export_manifest: "/api/v1/export-manifests",
+  public_export_manifest: "/api/v1/export-manifests",
+  internal_export_manifest: "/api/v1/export-manifests",
+  release_report: "/api/v1/release-reports",
+  release_report_snapshot: "/api/v1/release-reports",
+  model_improvement_policy: "/api/v1/model-improvement-policies",
+  model_improvement_run: "/api/v1/model-improvement-runs",
+  evaluation_run: "/api/v1/evaluations",
+  model_evaluation_predictions: "/api/v1/model-evaluation-predictions",
+  calibration_run: "/api/v1/calibration-runs",
+  leaderboard: "/api/v1/leaderboards",
+  artifact_probe: "/api/v1/artifact-probes",
+  model_failure_audit: "/api/v1/model-failure-audits",
+  model_run_provenance: "/api/release/report",
+  model_inference_config: "/api/v1/model-inference-configs",
+  model_run_environment: "/api/v1/model-run-environments",
+  model_provider_data_handling_policy: "/api/v1/model-provider-data-handling-policies",
+  model_evaluation_reproducibility_checklist: "/api/v1/release-report-sections",
+  rater_learning_plan: "/api/v1/rater-learning-plans",
+  interpretation_target_map: "/api/v1/interpretation-target-maps",
+  verification_workspace_session: "/api/v1/verification-workspace-sessions",
+  adjudicator_pre_read: "/api/v1/adjudicator-pre-reads",
+  adjudication_review_session: "/api/v1/adjudication-review-sessions",
+  discussion: "/api/v1/discussions",
+  discussion_thread: "/api/v1/discussion-threads",
+  discussion_comment: "/api/v1/discussion-comments",
+  discussion_revision_proposal: "/api/v1/discussion-revision-proposals",
+  post_lock_discussion_session: "/api/v1/post-lock-discussion-sessions",
+  adjudication: "/api/v1/adjudications",
+  adjudication_memo: "/api/v1/adjudication-memos",
+  adjudication_finalization: "/api/v1/adjudication-finalizations",
+  screen_feature_parity_check: "/api/v1/screen-feature-parity-checks",
+  simplified_copy_preview: "/api/v1/simplified-copy-previews",
+};
+
+function operatorReviewEvidencePointersForChecklistRow(row, action, evidence) {
+  const reviewReasons = row.reviewReasons ?? [];
+  const sourceEvidenceId = evidence?.id ?? row.evidenceIds?.[0] ?? null;
+  const sections = Array.isArray(evidence?.reviewSections) ? evidence.reviewSections : [];
+  const sourceSections = sections.length
+    ? sections
+    : reviewReasons.map((reason) => ({
+        artifactType: "checklist_review_reason",
+        artifactId: row.id,
+        reason,
+        sourceEvidenceId: operatorSourceEvidenceIdForChecklistReason(row, reason, evidence),
+      }));
+  return sourceSections
+    .map((section) => operatorReviewEvidencePointer(row.id, section, action, section.sourceEvidenceId ?? sourceEvidenceId))
+    .filter(Boolean);
+}
+
+function operatorSourceEvidenceIdForChecklistReason(row, reason, evidence) {
+  if (evidence?.id) return evidence.id;
+  const evidenceIds = Array.isArray(row?.evidenceIds) ? row.evidenceIds : [];
+  const normalizedReason = String(reason ?? "");
+  if (row?.id === "validation_hidden_benchmark_and_claims") {
+    if (normalizedReason.startsWith("validationDesign:")) return evidenceIds[0] ?? null;
+    if (normalizedReason.startsWith("hiddenBenchmarkFreeze:") || normalizedReason.startsWith("hiddenBenchmarkFreeze.")) return evidenceIds[1] ?? evidenceIds[0] ?? null;
+    if (normalizedReason.startsWith("releaseClaimWarnings:")) return evidenceIds[2] ?? evidenceIds[0] ?? null;
+  }
+  if (row?.id === "rubric_practice_and_certification_pack" && normalizedReason.startsWith("goldItemsRemaining:")) {
+    return evidenceIds[2] ?? evidenceIds[0] ?? null;
+  }
+  return evidenceIds[0] ?? null;
+}
+
+function operatorSourceEvidenceIdForSubmitArtifact(row, artifactKind) {
+  const evidenceIds = Array.isArray(row?.evidenceIds) ? row.evidenceIds : [];
+  if (row?.checklistRowId === "validation_hidden_benchmark_and_claims" || row?.id === "validation_hidden_benchmark_and_claims") {
+    if (artifactKind === "benchmark_freeze_report") return evidenceIds[1] ?? evidenceIds[0] ?? null;
+  }
+  if (row?.checklistRowId === "rubric_practice_and_certification_pack" || row?.id === "rubric_practice_and_certification_pack") {
+    if (artifactKind === "gold_item") return evidenceIds[2] ?? evidenceIds[0] ?? null;
+  }
+  return evidenceIds[0] ?? null;
+}
+
+function operatorSubmissionChecklistForChecklistRow(checklistRowId, action, evidence, checklistRow = {}) {
+  if (!evidence || typeof evidence !== "object") return [];
+  const artifactSections = operatorEvidenceArtifactSections(evidence);
+  if (artifactSections.length) {
+    return artifactSections.flatMap((section) => operatorSubmissionChecklistItemsForSection(checklistRowId, section, action));
+  }
+  if (Array.isArray(evidence.rows)) {
+    return evidence.rows.flatMap((row) => operatorChecklistRowSubmissionItems(checklistRowId, row, action));
+  }
+  if (checklistRow.status === "operator_evidence_required" && action.workflowTemplateIds?.length) {
+    return operatorPlannedSubmissionChecklistItems(checklistRowId, action, checklistRow);
+  }
+  return [];
+}
+
+function operatorEvidenceArtifactSections(evidence) {
+  return Object.values(evidence).filter(
+    (value) => value && typeof value === "object" && !Array.isArray(value) && typeof value.artifactKind === "string",
+  );
+}
+
+const OPERATOR_MODEL_INFERENCE_CONFIG_PROVENANCE_FIELDS = new Set([
+  "modelInferenceConfigId",
+  "modelInferenceConfig.evaluationRunId",
+  "modelSnapshot",
+  "providerEndpoint",
+  "decodingParameterCount",
+  "reasoningBudget",
+  "toolAvailabilityCount",
+  "messageStackTemplate",
+  "retryPolicy",
+  "seedDeterminismArtifact",
+  "modelInferenceConfigReviewReasonCount",
+]);
+
+const OPERATOR_MODEL_RUN_ENVIRONMENT_PROVENANCE_FIELDS = new Set([
+  "modelRunEnvironmentId",
+  "modelRunEnvironment.evaluationRunId",
+  "runtimeOrchestratorVersion",
+  "apiRouteDeploymentId",
+  "libraryVersionCount",
+  "rateLimitRetryMetadata",
+  "parserExtractorVersionLinkCount",
+  "modelRunEnvironmentReviewReasonCount",
+]);
+
+function operatorSubmissionChecklistItemsForSection(checklistRowId, section, action) {
+  if (section.artifactKind === "model_run_provenance") {
+    return operatorModelRunProvenanceChecklistItems(checklistRowId, section, action);
+  }
+  return [operatorSubmissionChecklistItem(checklistRowId, section, action)];
+}
+
+function operatorModelRunProvenanceChecklistItems(checklistRowId, section, action) {
+  const checks = Array.isArray(section.reviewChecks) ? section.reviewChecks : Array.isArray(section.checks) ? section.checks : [];
+  return [
+    operatorCompoundSubmissionChecklistItem(checklistRowId, section, action, {
+      artifactKind: "model_inference_config",
+      submittedArtifactId: section.modelInferenceConfigId,
+      checks: checks.filter((check) => OPERATOR_MODEL_INFERENCE_CONFIG_PROVENANCE_FIELDS.has(check.field)),
+      submittedStatus: "submitted_model_inference_config_preserves_run_provenance",
+      reviewStatus: "model_inference_config_review_required",
+    }),
+    operatorCompoundSubmissionChecklistItem(checklistRowId, section, action, {
+      artifactKind: "model_run_environment",
+      submittedArtifactId: section.modelRunEnvironmentId,
+      checks: checks.filter((check) => OPERATOR_MODEL_RUN_ENVIRONMENT_PROVENANCE_FIELDS.has(check.field)),
+      submittedStatus: "submitted_model_run_environment_preserves_runtime_provenance",
+      reviewStatus: "model_run_environment_review_required",
+    }),
+  ];
+}
+
+function operatorCompoundSubmissionChecklistItem(
+  checklistRowId,
+  section,
+  action,
+  { artifactKind, submittedArtifactId, checks, submittedStatus, reviewStatus },
+) {
+  const checkSummary = operatorSubmissionCheckSummary({ reviewChecks: checks });
+  const status = !submittedArtifactId ? "no_submitted_artifact" : checkSummary.blockingFieldCount ? reviewStatus : submittedStatus;
+  const readbackRoute = operatorReviewReadbackRoute(artifactKind, action.readbackRoutes, checklistRowId, status);
+  const readbackItemRoute = submittedArtifactId ? operatorReviewReadbackItemRoute(artifactKind, submittedArtifactId, readbackRoute) : null;
+  return {
+    id: `${checklistRowId}:${artifactKind}`,
+    artifactKind,
+    sourceArtifactKind: section.artifactKind,
+    status,
+    submissionStatus: !submittedArtifactId ? "not_submitted" : checkSummary.blockingFieldCount ? "submitted_review_required" : "submitted_complete",
+    submittedArtifactId: submittedArtifactId ?? null,
+    submittedAt: section.submittedAt ?? null,
+    writeRoute: operatorSubmissionWriteRoute(artifactKind, action.writeRoutes),
+    readbackRoute,
+    ...(readbackItemRoute ? { readbackItemRoute } : {}),
+    ...operatorSubmissionSetupFields(artifactKind),
+    bulkImportRoute: operatorSubmissionBulkImportRoute(artifactKind, action.bulkImportRoutes ?? []),
+    bulkImportWorkflowTemplateId: operatorSubmissionBulkImportWorkflowTemplateId(artifactKind, action.bulkImportRoutes ?? []),
+    ...checkSummary,
+  };
+}
+
+function operatorSubmissionChecklistItem(checklistRowId, section, action) {
+  const readbackRoute = operatorReviewReadbackRoute(section.artifactKind, action.readbackRoutes, checklistRowId, section.status);
+  const readbackItemRoute = section.submittedArtifactId
+    ? operatorReviewReadbackItemRoute(section.artifactKind, section.submittedArtifactId, readbackRoute)
+    : null;
+  const checkSummary = operatorSubmissionCheckSummary(section);
+  return {
+    id: `${checklistRowId}:${section.artifactKind}`,
+    artifactKind: section.artifactKind,
+    status: section.status ?? "unknown",
+    submissionStatus: operatorSubmissionStatusForEvidenceSection(section, checkSummary),
+    submittedArtifactId: section.submittedArtifactId ?? null,
+    submittedAt: section.submittedAt ?? null,
+    writeRoute: operatorSubmissionWriteRoute(section.artifactKind, action.writeRoutes),
+    readbackRoute,
+    ...(readbackItemRoute ? { readbackItemRoute } : {}),
+    ...operatorSubmissionSetupFields(section.artifactKind),
+    bulkImportRoute: operatorSubmissionBulkImportRoute(section.artifactKind, action.bulkImportRoutes ?? []),
+    bulkImportWorkflowTemplateId: operatorSubmissionBulkImportWorkflowTemplateId(section.artifactKind, action.bulkImportRoutes ?? []),
+    ...checkSummary,
+  };
+}
+
+function operatorChecklistRowSubmissionItems(checklistRowId, row, action = {}) {
+  if (checklistRowId === "model_evaluation_reproducibility" && row.id === "submitted_evaluation_artifacts_bound_to_release") {
+    return [operatorChecklistRowSubmissionItem(checklistRowId, { ...row, readbackRoute: "/api/v1/evaluations" }, action)];
+  }
+  if (checklistRowId === "model_evaluation_reproducibility" && row.id === "leaderboard_model_run_provenance") {
+    return [operatorChecklistRowSubmissionItem(checklistRowId, { ...row, readbackRoute: "/api/v1/leaderboards" }, action)];
+  }
+  if (checklistRowId === "model_evaluation_reproducibility" && row.id === "submitted_run_inference_environment_provenance") {
+    return [
+      operatorChecklistRowSubmissionItem(checklistRowId, {
+        ...row,
+        id: "model_inference_config",
+        readbackRoute: "/api/v1/model-inference-configs",
+        reviewReasons: ["modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelInferenceConfigId", ...normalizeStringArray(row.reviewReasons)],
+      }, action),
+      operatorChecklistRowSubmissionItem(checklistRowId, {
+        ...row,
+        id: "model_run_environment",
+        readbackRoute: "/api/v1/model-run-environments",
+        reviewReasons: ["modelEvaluationArtifactEvidence.modelRunProvenanceEvidence.modelRunEnvironmentId", ...normalizeStringArray(row.reviewReasons)],
+      }, action),
+    ];
+  }
+  return [operatorChecklistRowSubmissionItem(checklistRowId, row, action)];
+}
+
+function operatorChecklistRowSubmissionItem(checklistRowId, row, action = {}) {
+  const blockingReasons = normalizeStringArray(row.reviewReasons);
+  const artifactKind = row.id ?? "checklist_row";
+  return {
+    id: `${checklistRowId}:${artifactKind}`,
+    artifactKind,
+    status: row.status ?? "unknown",
+    submissionStatus: row.status === "complete" ? "submitted_complete" : "review_required",
+    submittedArtifactId: null,
+    submittedAt: null,
+    writeRoute: operatorSubmissionWriteRoute(artifactKind, action.writeRoutes),
+    readbackRoute: row.readbackRoute ?? "/api/release/report",
+    ...operatorSubmissionSetupFields(artifactKind),
+    bulkImportRoute: operatorSubmissionBulkImportRoute(artifactKind, action.bulkImportRoutes ?? []),
+    bulkImportWorkflowTemplateId: operatorSubmissionBulkImportWorkflowTemplateId(artifactKind, action.bulkImportRoutes ?? []),
+    blockingFieldCount: blockingReasons.length,
+    blockingFields: blockingReasons.slice(0, 12),
+    blockingFieldsTruncated: blockingReasons.length > 12,
+    checkStatusCounts: countBy(blockingReasons.map((reason) => ({ status: reason ? "review_required" : "unknown" })), "status"),
+  };
+}
+
+function operatorPlannedSubmissionChecklistItems(checklistRowId, action, checklistRow = {}) {
+  return action.workflowTemplateIds.map((templateId) => {
+    const artifactKind = operatorArtifactKindForWorkflowTemplate(templateId);
+    const readbackRoute = operatorReviewReadbackRoute(artifactKind, action.readbackRoutes, checklistRowId, "not_submitted");
+    const bulkImportRoute = operatorSubmissionBulkImportRoute(artifactKind, action.bulkImportRoutes ?? []);
+    return {
+      id: `${checklistRowId}:${artifactKind}`,
+      artifactKind,
+      status: "no_submitted_artifact",
+      submissionStatus: "not_submitted",
+      submittedArtifactId: null,
+      submittedAt: null,
+      writeRoute: operatorSubmissionWriteRoute(artifactKind, action.writeRoutes),
+      readbackRoute,
+      sourceEvidenceId: operatorSourceEvidenceIdForSubmitArtifact(checklistRow, artifactKind),
+      ...operatorSubmissionSetupFields(artifactKind),
+      bulkImportRoute,
+      bulkImportWorkflowTemplateId: operatorSubmissionBulkImportWorkflowTemplateId(artifactKind, action.bulkImportRoutes ?? []),
+      blockingFieldCount: 1,
+      blockingFields: ["submittedArtifactId"],
+      blockingFieldsTruncated: false,
+      checkStatusCounts: { missing: 1 },
+    };
+  });
+}
+
+function operatorSubmissionCheckSummary(section) {
+  const checks = Array.isArray(section.reviewChecks) ? section.reviewChecks : Array.isArray(section.checks) ? section.checks : [];
+  const blockingChecks = checks.filter((check) => !["matches", "not_submitted_optional"].includes(check.status));
+  return {
+    blockingFieldCount: blockingChecks.length,
+    blockingFields: blockingChecks.map((check) => check.field).filter(Boolean).slice(0, 12),
+    blockingFieldsTruncated: blockingChecks.length > 12,
+    checkStatusCounts: countBy(checks, "status"),
+  };
+}
+
+function operatorSubmissionStatusForEvidenceSection(section, checkSummary) {
+  if (!section.submittedArtifactId) return "not_submitted";
+  if (section.status?.includes("review_required") || checkSummary.blockingFieldCount > 0) return "submitted_review_required";
+  return "submitted_complete";
+}
+
+function operatorActionItemsForPlanRow(row) {
+  const targetGapItems = row.blockingTargetGaps.map((gap) => ({
+    id: `${row.checklistRowId}:collect:${gap.id}`,
+    checklistRowId: row.checklistRowId,
+    actionType: "collect_data",
+    label: gap.requiredSubmission,
+    status: gap.status,
+    targetGapId: gap.id,
+    target: gap.target,
+    current: gap.current,
+    remaining: gap.remaining,
+    sourceEvidenceId: gap.sourceEvidenceId ?? null,
+    importImpact: gap.primaryImportImpact ?? null,
+    setupImportImpact: gap.setupImportImpact ?? null,
+    importImpacts: gap.importImpacts ?? [],
+    writeRoute: gap.writeRoute,
+    readbackRoute: gap.readbackRoute,
+    submissionReadbackRoute: gap.submissionReadbackRoute ?? gap.readbackRoute,
+    setupWriteRoute: gap.setupWriteRoute ?? null,
+    setupReadbackRoute: gap.setupReadbackRoute ?? null,
+    setupBulkImportRoute: gap.setupBulkImportRoute ?? null,
+    setupBulkImportRoutes: gap.setupBulkImportRoutes ?? uniqueStrings([gap.setupBulkImportRoute]),
+    targetGapReadbackRoute: gap.targetGapReadbackRoute,
+    targetGapReadbackItemRoute: gap.targetGapReadbackItemRoute,
+    workflowTemplateId: gap.workflowTemplateId,
+    bulkImportWorkflowTemplateId: gap.bulkImportWorkflowTemplateId ?? null,
+    setupWorkflowTemplateId: gap.setupWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateId: gap.setupBulkImportWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateIds: gap.setupBulkImportWorkflowTemplateIds ?? uniqueStrings([gap.setupBulkImportWorkflowTemplateId]),
+    actorRole: gap.actorRole,
+    setupActorRole: gap.setupActorRole ?? null,
+    completionEvidence: gap.completionEvidence,
+    bulkImportRoute: gap.bulkImportRoute ?? null,
+  }));
+  const submissionItems = row.submissionChecklist
+    .filter((item) => item.submissionStatus !== "submitted_complete")
+    .map((item) => ({
+      id: `${row.checklistRowId}:submit:${item.artifactKind}`,
+      checklistRowId: row.checklistRowId,
+      actionType: "submit_artifact",
+      label: item.artifactKind,
+      status: item.submissionStatus,
+      artifactKind: item.artifactKind,
+      submittedArtifactId: item.submittedArtifactId,
+      blockingFieldCount: item.blockingFieldCount ?? 0,
+      blockingFields: item.blockingFields ?? [],
+      blockingFieldsTruncated: item.blockingFieldsTruncated === true,
+      sourceEvidenceId: item.sourceEvidenceId ?? operatorSourceEvidenceIdForSubmitArtifact(row, item.artifactKind),
+      writeRoute: operatorSubmissionWriteRoute(item.artifactKind, row.writeRoutes),
+      readbackRoute: item.readbackRoute,
+      ...(item.readbackItemRoute ? { readbackItemRoute: item.readbackItemRoute } : {}),
+      ...operatorSubmissionSetupFields(item.artifactKind),
+      workflowTemplateId: operatorSubmissionWorkflowTemplateId(item.artifactKind, row.workflowTemplateIds),
+      bulkImportRoute: operatorSubmissionBulkImportRoute(item.artifactKind, row.bulkImportRoutes ?? []),
+      bulkImportWorkflowTemplateId: operatorSubmissionBulkImportWorkflowTemplateId(item.artifactKind, row.bulkImportRoutes ?? []),
+      actorRole: "admin_or_operator",
+      completionEvidence: `${item.artifactKind} submissionStatus becomes submitted_complete in /api/release/report`,
+    }));
+  const reviewSummaryKeys = new Set(row.reviewArtifactSummaries.map((item) => `${item.artifactType}:${item.artifactId}`));
+  const reviewArtifactItems = row.reviewArtifactSummaries.map((item) => ({
+    id: `${row.checklistRowId}:review:${item.artifactType}:${item.artifactId}`,
+    checklistRowId: row.checklistRowId,
+    actionType: "review_artifact",
+    label: `${item.artifactType}:${item.artifactId}`,
+    status: "review_required",
+    artifactType: item.artifactType,
+    artifactId: item.artifactId,
+    sourceEvidenceId: item.sourceEvidenceId ?? null,
+    reasonCount: item.reasonCount ?? 0,
+    reasons: item.reasons ?? [],
+    reasonsTruncated: item.reasonsTruncated === true,
+    readbackRoute: item.readbackRoute,
+    ...(item.readbackItemRoute ? { readbackItemRoute: item.readbackItemRoute } : {}),
+    actorRole: "admin_or_operator",
+    completionEvidence: "reviewArtifactSummaries no longer includes this artifact in /api/release/report",
+  }));
+  const reportSectionItems = row.reviewEvidencePointers
+    .filter((pointer) => !reviewSummaryKeys.has(`${pointer.artifactType}:${pointer.artifactId}`))
+    .filter((pointer) => !operatorReviewPointerCoveredByPrimaryAction(row, pointer))
+    .flatMap((pointer) => operatorActionItemsForReviewPointer(row, pointer));
+  const baseItems = [...targetGapItems, ...submissionItems, ...reviewArtifactItems, ...reportSectionItems];
+  return baseItems.map((item, index) => ({
+    ...item,
+    ...operatorActionDataDependency(row, item),
+    ...operatorActionTemplateReadbackFields(item),
+    ...operatorActionGovernanceCoverageFields(item),
+    ...operatorReviewResolutionFields(item, baseItems),
+    sequence: index + 1,
+  }));
+}
+
+function operatorActionDataDependency(row, item) {
+  const blockingGaps = Array.isArray(row.blockingTargetGaps) ? row.blockingTargetGaps : [];
+  if (item.actionType === "collect_data" || !blockingGaps.length) return {};
+  return {
+    preconditionStatus: "data_collection_required_before_action",
+    blockedByTargetGapIds: blockingGaps.map((gap) => gap.id),
+    blockingTargetGapSummaries: blockingGaps.map((gap) => ({
+      targetGapId: gap.id,
+      label: gap.label,
+      current: gap.current,
+      target: gap.target,
+      remaining: gap.remaining,
+      status: gap.status,
+      importImpact: gap.primaryImportImpact ?? null,
+      setupImportImpact: gap.setupImportImpact ?? null,
+      verificationRoute: gap.targetGapReadbackItemRoute ?? gap.targetGapReadbackRoute ?? "/api/release/report",
+    })),
+    dataDependencyCompletionEvidence:
+      "Resolve the listed target gaps through real submitted data before treating this review/submission action as release-closing evidence.",
+  };
+}
+
+function operatorActionTemplateReadbackFields(item) {
+  const setupBulkImportRoutes = uniqueStrings([
+    item.setupBulkImportRoute,
+    ...(Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+  ]);
+  const targetDataPackageImportRoute =
+    item.actionType === "collect_data" && item.targetGapId && (item.bulkImportRoute || setupBulkImportRoutes.length)
+      ? TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE
+      : null;
+  const dryRunImportRoute = operatorImportRouteWithQueryFlag(item.bulkImportRoute, "dryRun", "true");
+  const setupDryRunImportRoute = operatorImportRouteWithQueryFlag(item.setupBulkImportRoute, "dryRun", "true");
+  const setupDryRunImportRoutes = uniqueStrings(setupBulkImportRoutes.map((route) => operatorImportRouteWithQueryFlag(route, "dryRun", "true")));
+  const validateOnlyImportRoute = operatorImportRouteWithQueryFlag(item.bulkImportRoute, "validateOnly", "true");
+  const setupValidateOnlyImportRoute = operatorImportRouteWithQueryFlag(item.setupBulkImportRoute, "validateOnly", "true");
+  const setupValidateOnlyImportRoutes = uniqueStrings(
+    setupBulkImportRoutes.map((route) => operatorImportRouteWithQueryFlag(route, "validateOnly", "true")),
+  );
+  const packageDryRunImportRoute = operatorImportRouteWithQueryFlag(targetDataPackageImportRoute, "dryRun", "true");
+  const packageValidateOnlyImportRoute = operatorImportRouteWithQueryFlag(targetDataPackageImportRoute, "validateOnly", "true");
+  const singleRecordDryRunRoute = operatorActionHasPrimaryPayloadTemplate(item)
+    ? operatorSingleRecordPreflightRoute(item.writeRoute, "dryRun", "true")
+    : null;
+  const singleRecordValidateOnlyRoute = operatorActionHasPrimaryPayloadTemplate(item)
+    ? operatorSingleRecordPreflightRoute(item.writeRoute, "validateOnly", "true")
+    : null;
+  const setupSingleRecordDryRunRoute = operatorActionHasSetupPayloadTemplate(item)
+    ? operatorSingleRecordPreflightRoute(item.setupWriteRoute, "dryRun", "true")
+    : null;
+  const setupSingleRecordValidateOnlyRoute = operatorActionHasSetupPayloadTemplate(item)
+    ? operatorSingleRecordPreflightRoute(item.setupWriteRoute, "validateOnly", "true")
+    : null;
+  const verificationRoute =
+    item.actionType === "collect_data" ? (item.importImpact?.verificationRoute ?? item.targetGapReadbackItemRoute ?? null) : null;
+  const targetDataTemplateReadbackRoute =
+    item.actionType === "collect_data" && item.targetGapId && (item.bulkImportRoute || item.setupBulkImportRoute)
+      ? operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", { targetGapId: item.targetGapId })
+      : null;
+  const targetDataExpandedTemplateReadbackRoute = targetDataTemplateReadbackRoute
+    ? operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
+        targetGapId: item.targetGapId,
+        expand: "remaining",
+      })
+    : null;
+  const targetDataCappedExpandedTemplateReadbackRoute = targetDataTemplateReadbackRoute
+    ? operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
+        targetGapId: item.targetGapId,
+        expand: "remaining",
+        maxExpandedRecords: 100,
+      })
+    : null;
+  const operatorEvidenceTemplateReadbackRoute =
+    item.bulkImportRoute === OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE && item.artifactKind
+      ? operatorTemplateReadbackRoute("/api/v1/operator-evidence/import-jsonl-template", {
+          checklistRowId: item.checklistRowId,
+          artifactKind: item.artifactKind,
+        })
+      : null;
+  const payloadTemplateReadbackRoute = operatorActionHasPayloadTemplate(item)
+    ? operatorTemplateReadbackRoute("/api/v1/operator-action-items/payload-template", operatorActionTemplateFilterParams(item))
+    : null;
+  const templateReadbackRoutes = uniqueStrings([
+    targetDataTemplateReadbackRoute,
+    targetDataExpandedTemplateReadbackRoute,
+    targetDataCappedExpandedTemplateReadbackRoute,
+    operatorEvidenceTemplateReadbackRoute,
+    payloadTemplateReadbackRoute,
+  ]);
+  const templateCoverageFields = operatorActionTemplateCoverageFields(item, templateReadbackRoutes);
+  const hasPreflightRoute =
+    dryRunImportRoute ||
+    setupDryRunImportRoute ||
+    setupDryRunImportRoutes.length ||
+    validateOnlyImportRoute ||
+    setupValidateOnlyImportRoute ||
+    setupValidateOnlyImportRoutes.length ||
+    targetDataPackageImportRoute ||
+    packageDryRunImportRoute ||
+    packageValidateOnlyImportRoute ||
+    singleRecordDryRunRoute ||
+    singleRecordValidateOnlyRoute ||
+    setupSingleRecordDryRunRoute ||
+    setupSingleRecordValidateOnlyRoute;
+  const preflightCoverageFields = operatorActionPreflightCoverageFields(item, {
+    dryRunImportRoute,
+    setupDryRunImportRoute,
+    setupDryRunImportRoutes,
+    validateOnlyImportRoute,
+    setupValidateOnlyImportRoute,
+    setupValidateOnlyImportRoutes,
+    packageDryRunImportRoute,
+    packageValidateOnlyImportRoute,
+    singleRecordDryRunRoute,
+    singleRecordValidateOnlyRoute,
+    setupSingleRecordDryRunRoute,
+    setupSingleRecordValidateOnlyRoute,
+    payloadTemplateReadbackRoute,
+  });
+  if (!templateReadbackRoutes.length && !hasPreflightRoute && !verificationRoute) {
+    return {
+      ...templateCoverageFields,
+      ...preflightCoverageFields,
+    };
+  }
+  return {
+    ...templateCoverageFields,
+    ...preflightCoverageFields,
+    ...(templateReadbackRoutes.length ? { templateReadbackRoutes } : {}),
+    ...(dryRunImportRoute ? { dryRunImportRoute } : {}),
+    ...(setupDryRunImportRoute ? { setupDryRunImportRoute } : {}),
+    ...(setupDryRunImportRoutes.length ? { setupDryRunImportRoutes } : {}),
+    ...(validateOnlyImportRoute ? { validateOnlyImportRoute } : {}),
+    ...(setupValidateOnlyImportRoute ? { setupValidateOnlyImportRoute } : {}),
+    ...(setupValidateOnlyImportRoutes.length ? { setupValidateOnlyImportRoutes } : {}),
+    ...(targetDataPackageImportRoute ? { packageImportRoute: targetDataPackageImportRoute } : {}),
+    ...(packageDryRunImportRoute ? { packageDryRunImportRoute } : {}),
+    ...(packageValidateOnlyImportRoute ? { packageValidateOnlyImportRoute } : {}),
+    ...(singleRecordDryRunRoute ? { singleRecordDryRunRoute } : {}),
+    ...(singleRecordValidateOnlyRoute ? { singleRecordValidateOnlyRoute } : {}),
+    ...(setupSingleRecordDryRunRoute ? { setupSingleRecordDryRunRoute } : {}),
+    ...(setupSingleRecordValidateOnlyRoute ? { setupSingleRecordValidateOnlyRoute } : {}),
+    ...(verificationRoute ? { verificationRoute } : {}),
+    ...(targetDataTemplateReadbackRoute ? { targetDataTemplateReadbackRoute } : {}),
+    ...(targetDataExpandedTemplateReadbackRoute
+      ? {
+          targetDataExpandedTemplateReadbackRoute,
+          expandedTemplateReadbackRoute: targetDataExpandedTemplateReadbackRoute,
+        }
+      : {}),
+    ...(targetDataCappedExpandedTemplateReadbackRoute
+      ? {
+          targetDataCappedExpandedTemplateReadbackRoute,
+          cappedExpandedTemplateReadbackRoute: targetDataCappedExpandedTemplateReadbackRoute,
+        }
+      : {}),
+    ...(operatorEvidenceTemplateReadbackRoute ? { operatorEvidenceTemplateReadbackRoute } : {}),
+    ...(payloadTemplateReadbackRoute ? { payloadTemplateReadbackRoute } : {}),
+  };
+}
+
+function operatorActionPreflightCoverageFields(item, routes = {}) {
+  const importPreflightRoutes = uniqueStrings([
+    routes.dryRunImportRoute,
+    routes.setupDryRunImportRoute,
+    ...(Array.isArray(routes.setupDryRunImportRoutes) ? routes.setupDryRunImportRoutes : []),
+    routes.validateOnlyImportRoute,
+    routes.setupValidateOnlyImportRoute,
+    ...(Array.isArray(routes.setupValidateOnlyImportRoutes) ? routes.setupValidateOnlyImportRoutes : []),
+    routes.packageDryRunImportRoute,
+    routes.packageValidateOnlyImportRoute,
+  ]);
+  const singleRecordPreflightRoutes = uniqueStrings([
+    routes.singleRecordDryRunRoute,
+    routes.singleRecordValidateOnlyRoute,
+    routes.setupSingleRecordDryRunRoute,
+    routes.setupSingleRecordValidateOnlyRoute,
+  ]);
+  const hasPayloadTemplateRejection = Boolean(routes.payloadTemplateReadbackRoute);
+  const preflightCoverageKinds = uniqueStrings([
+    routes.dryRunImportRoute ? "dry_run_import" : null,
+    routes.setupDryRunImportRoute || routes.setupDryRunImportRoutes?.length ? "setup_dry_run_import" : null,
+    routes.validateOnlyImportRoute ? "validate_only_import" : null,
+    routes.setupValidateOnlyImportRoute || routes.setupValidateOnlyImportRoutes?.length ? "setup_validate_only_import" : null,
+    routes.packageDryRunImportRoute ? "package_dry_run_import" : null,
+    routes.packageValidateOnlyImportRoute ? "package_validate_only_import" : null,
+    routes.singleRecordDryRunRoute ? "single_record_dry_run" : null,
+    routes.singleRecordValidateOnlyRoute ? "single_record_validate_only" : null,
+    routes.setupSingleRecordDryRunRoute ? "setup_single_record_dry_run" : null,
+    routes.setupSingleRecordValidateOnlyRoute ? "setup_single_record_validate_only" : null,
+    hasPayloadTemplateRejection ? "unchanged_payload_template_rejection" : null,
+  ]);
+  const preflightCoverageRoutes = uniqueStrings([
+    ...importPreflightRoutes,
+    ...singleRecordPreflightRoutes,
+    hasPayloadTemplateRejection ? routes.payloadTemplateReadbackRoute : null,
+  ]);
+  const preflightRequired = item.actionType === "collect_data" || item.actionType === "submit_artifact";
+  return {
+    preflightCoverageStatus: preflightCoverageRoutes.length
+      ? "preflight_coverage_available"
+      : preflightRequired
+        ? "preflight_coverage_missing"
+        : "preflight_coverage_not_required",
+    preflightCoverageRoutes,
+    preflightCoverageKinds,
+    preflightCoveragePolicy: preflightCoveragePolicyForKinds(preflightCoverageKinds, preflightRequired),
+  };
+}
+
+function operatorSingleRecordPreflightRoute(route, key, value) {
+  if (!route) return null;
+  return operatorImportRouteWithQueryFlag(route, key, value);
+}
+
+function operatorActionGovernanceCoverageFields(item) {
+  const artifactKind = item?.artifactKind ?? null;
+  const primaryGovernance = OPERATOR_ACTION_PRIMARY_GOVERNANCE_BY_ARTIFACT_KIND[artifactKind] ?? null;
+  const setupGovernance = OPERATOR_ACTION_SETUP_GOVERNANCE_BY_ARTIFACT_KIND[artifactKind] ?? null;
+  const extraGovernance = OPERATOR_ACTION_EXTRA_GOVERNANCE_BY_ARTIFACT_KIND[artifactKind] ?? null;
+  const governanceCoverageKinds = uniqueStrings([
+    primaryGovernance?.policyActionKind ? "policy_action_kind" : null,
+    primaryGovernance?.phaseGateLaneKind ? "phase_gate_lane" : null,
+    setupGovernance?.policyActionKind ? "setup_policy_action_kind" : null,
+    setupGovernance?.phaseGateLaneKind ? "setup_phase_gate_lane" : null,
+    ...(extraGovernance?.governanceCoverageKinds ?? []),
+  ]);
+  const governanceCoverageRoutes = governanceCoverageKinds.length
+    ? uniqueStrings([
+        primaryGovernance?.route ?? item?.writeRoute,
+        setupGovernance?.route ?? item?.setupWriteRoute,
+        ...(extraGovernance?.governanceCoverageRoutes ?? []),
+      ])
+    : [];
+  const governanceCoverageStatus = governanceCoverageKinds.length
+    ? "governance_coverage_available"
+    : "governance_coverage_not_required";
+  return {
+    governanceCoverageStatus,
+    governanceCoverageKinds,
+    governanceCoverageRoutes,
+    governanceCoveragePolicy: operatorActionGovernanceCoveragePolicy({
+      item,
+      primaryGovernance,
+      setupGovernance,
+      extraGovernance,
+      governanceCoverageStatus,
+    }),
+    policyGated: Boolean(primaryGovernance?.policyActionKind),
+    policyActionKind: primaryGovernance?.policyActionKind ?? null,
+    phaseGateLaneKind: primaryGovernance?.phaseGateLaneKind ?? null,
+    setupPolicyGated: Boolean(setupGovernance?.policyActionKind),
+    setupPolicyActionKind: setupGovernance?.policyActionKind ?? null,
+    setupPhaseGateLaneKind: setupGovernance?.phaseGateLaneKind ?? null,
+  };
+}
+
+function operatorActionGovernanceCoveragePolicy({
+  item,
+  primaryGovernance,
+  setupGovernance,
+  extraGovernance,
+  governanceCoverageStatus,
+}) {
+  if (extraGovernance?.governanceCoveragePolicy) return extraGovernance.governanceCoveragePolicy;
+  if (primaryGovernance?.policyActionKind && setupGovernance?.policyActionKind) {
+    return "The primary and setup write routes are covered by existing policy-action and phase-lane checks before workflow evidence append.";
+  }
+  if (primaryGovernance?.policyActionKind) {
+    return "The primary write route is covered by an existing policy-action and phase-lane check before workflow evidence append.";
+  }
+  if (setupGovernance?.policyActionKind) {
+    return "The setup write route is covered by an existing policy-action and phase-lane check before dependent workflow evidence append.";
+  }
+  if (governanceCoverageStatus === "governance_coverage_available") {
+    return "The action advertises existing governance readback or materialization safeguards for the current write route.";
+  }
+  if (item?.actionType === "review_artifact" || item?.actionType === "review_report_section") {
+    return "Review-only actions do not append evidence and do not require policy-action or phase-lane coverage.";
+  }
+  return "The current route is import-backed, readback-only, or not policy-action gated; use the advertised template and preflight coverage before append where applicable.";
+}
+
+function preflightCoveragePolicyForKinds(preflightCoverageKinds = [], preflightRequired = false) {
+  const supportsDryRunOrValidateOnly = [
+    "dry_run_import",
+    "validate_only_import",
+    "setup_dry_run_import",
+    "setup_validate_only_import",
+    "package_dry_run_import",
+    "package_validate_only_import",
+    "single_record_dry_run",
+    "single_record_validate_only",
+    "setup_single_record_dry_run",
+    "setup_single_record_validate_only",
+  ].some((kind) => preflightCoverageKinds.includes(kind));
+  if (supportsDryRunOrValidateOnly) {
+    return "Use dryRun=true or validateOnly=true before append; generated templates must be replaced with real data.";
+  }
+  if (preflightCoverageKinds.includes("unchanged_payload_template_rejection")) {
+    return "Generated payload templates are rejected unchanged by write routes before workflow side effects; replace templateOnly values before append.";
+  }
+  return preflightRequired
+    ? "No explicit preflight route or unchanged-template rejection coverage is advertised for this action."
+    : "Review-only actions do not require append preflight coverage.";
+}
+
+function operatorActionTemplateCoverageFields(item, templateReadbackRoutes = []) {
+  const templateCoverageRoutes = uniqueStrings(templateReadbackRoutes);
+  const templateCoverageKinds = operatorActionTemplateCoverageKinds(templateCoverageRoutes);
+  const templateRequired = item.actionType === "collect_data" || item.actionType === "submit_artifact";
+  return {
+    templateCoverageStatus: templateCoverageRoutes.length
+      ? "template_coverage_available"
+      : templateRequired
+        ? "template_coverage_missing"
+        : "template_coverage_not_required",
+    templateCoverageRoutes,
+    templateCoverageKinds,
+  };
+}
+
+function operatorActionTemplateCoverageKinds(templateReadbackRoutes = []) {
+  return uniqueStrings(
+    templateReadbackRoutes.flatMap((route) => {
+      const pathname = String(route).split("?")[0];
+      if (pathname === "/api/v1/target-gaps/import-jsonl-template") return ["target_data_jsonl_template"];
+      if (pathname === "/api/v1/operator-evidence/import-jsonl-template") return ["operator_evidence_jsonl_template"];
+      if (pathname === "/api/v1/operator-action-items/payload-template") return ["operator_action_payload_template"];
+      return [];
+    }),
+  );
+}
+
+function operatorActionHasPayloadTemplate(item) {
+  return operatorActionHasPrimaryPayloadTemplate(item) || operatorActionHasSetupPayloadTemplate(item);
+}
+
+function operatorActionHasPrimaryPayloadTemplate(item) {
+  if (item.actionType === "review_artifact" || item.actionType === "review_report_section") return false;
+  return Boolean(item.writeRoute && !item.bulkImportRoute);
+}
+
+function operatorActionHasSetupPayloadTemplate(item) {
+  if (item.actionType === "review_artifact" || item.actionType === "review_report_section") return false;
+  return Boolean(item.setupWriteRoute && !item.setupBulkImportRoute);
+}
+
+function operatorActionTemplateFilterParams(item) {
+  return {
+    checklistRowId: item.checklistRowId,
+    actionType: item.actionType,
+    ...(item.targetGapId ? { targetGapId: item.targetGapId } : {}),
+    ...(item.artifactKind ? { artifactKind: item.artifactKind } : {}),
+    ...(item.artifactType ? { artifactType: item.artifactType } : {}),
+    ...(item.artifactId ? { artifactId: item.artifactId } : {}),
+  };
+}
+
+function operatorTemplateReadbackRoute(pathname, params) {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim())
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+  return query.length ? `${pathname}?${query.join("&")}` : pathname;
+}
+
+function operatorImportRouteWithQueryFlag(route, key, value) {
+  if (!route) return null;
+  const [pathname, query = ""] = String(route).split("?");
+  const params = new URLSearchParams(query);
+  params.set(key, value);
+  const serialized = params.toString();
+  return serialized ? `${pathname}?${serialized}` : pathname;
+}
+
+function operatorReviewResolutionFields(item, baseItems, options = {}) {
+  const isReviewAction = item.actionType === "review_artifact" || item.actionType === "review_report_section";
+  if (!isReviewAction && options.collectionItem !== true) return {};
+  const relatedArtifactKinds = operatorReviewRelatedArtifactKinds(item);
+  if (!relatedArtifactKinds.length) return {};
+  const relatedSubmitActions = baseItems
+    .filter((candidate) => candidate.actionType === "submit_artifact" && relatedArtifactKinds.includes(candidate.artifactKind))
+    .map(operatorRelatedSubmitActionSummary);
+  if (!relatedSubmitActions.length) return {};
+  return {
+    relatedSubmitActionIds: relatedSubmitActions.map((action) => action.actionId),
+    relatedSubmitActions,
+    resolutionEvidence: "Submit or repair the related action, then verify this review item disappears from /api/release/report.",
+  };
+}
+
+function operatorReviewRelatedArtifactKinds(item) {
+  const reasons = [item.reason, ...(Array.isArray(item.reasons) ? item.reasons : [])].filter(Boolean).map(String);
+  const explicitKinds = {
+    leaderboard_model_run_provenance: ["leaderboard_model_run_provenance"],
+    submitted_evaluation_artifacts_bound_to_release: ["submitted_evaluation_artifacts_bound_to_release"],
+    submitted_run_inference_environment_provenance: ["model_inference_config", "model_run_environment"],
+  }[item.artifactId] ?? [];
+  const reasonKinds = reasons.flatMap((reason) => {
+    if (reason.startsWith("hiddenBenchmarkFreeze.artifact_probe_diagnostics:")) return ["artifact_probe"];
+    if (reason.startsWith("hiddenBenchmarkFreeze.") || reason.startsWith("hiddenBenchmarkFreeze:")) return ["benchmark_freeze_report"];
+    if (reason.includes("modelRunProvenanceEvidence.modelInferenceConfigId")) return ["model_inference_config"];
+    if (reason.includes("modelRunProvenanceEvidence.modelRunEnvironmentId")) return ["model_run_environment"];
+    if (reason.startsWith("leaderboardReport.modelRunProvenance")) return ["leaderboard_model_run_provenance"];
+    if (reason.includes("modelEvaluationArtifactEvidence.releaseUseStatus")) return ["submitted_evaluation_artifacts_bound_to_release"];
+    return [];
+  });
+  return uniqueStrings([...explicitKinds, ...reasonKinds]);
+}
+
+function operatorRelatedSubmitActionSummary(item) {
+  const templateReadbackFields = operatorActionTemplateReadbackFields(item);
+  return {
+    actionId: item.id,
+    artifactKind: item.artifactKind,
+    status: item.status ?? null,
+    writeRoute: item.writeRoute ?? null,
+    readbackRoute: item.readbackRoute ?? null,
+    ...(item.readbackItemRoute ? { readbackItemRoute: item.readbackItemRoute } : {}),
+    bulkImportRoute: item.bulkImportRoute ?? null,
+    dryRunImportRoute: templateReadbackFields.dryRunImportRoute ?? null,
+    validateOnlyImportRoute: templateReadbackFields.validateOnlyImportRoute ?? null,
+    singleRecordDryRunRoute: templateReadbackFields.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: templateReadbackFields.singleRecordValidateOnlyRoute ?? null,
+    setupSingleRecordDryRunRoute: templateReadbackFields.setupSingleRecordDryRunRoute ?? null,
+    setupSingleRecordValidateOnlyRoute: templateReadbackFields.setupSingleRecordValidateOnlyRoute ?? null,
+    workflowTemplateId: item.workflowTemplateId ?? null,
+    bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateId ?? null,
+    templateReadbackRoutes: templateReadbackFields.templateReadbackRoutes ?? [],
+    templateCoverageStatus: templateReadbackFields.templateCoverageStatus ?? "template_coverage_not_required",
+    templateCoverageRoutes: templateReadbackFields.templateCoverageRoutes ?? templateReadbackFields.templateReadbackRoutes ?? [],
+    templateCoverageKinds: templateReadbackFields.templateCoverageKinds ?? [],
+    preflightCoverageStatus: templateReadbackFields.preflightCoverageStatus ?? "preflight_coverage_not_required",
+    preflightCoverageRoutes: templateReadbackFields.preflightCoverageRoutes ?? [],
+    preflightCoverageKinds: templateReadbackFields.preflightCoverageKinds ?? [],
+    preflightCoveragePolicy: templateReadbackFields.preflightCoveragePolicy ?? null,
+    ...operatorActionGovernanceCoverageFields(item),
+    completionEvidence: item.completionEvidence ?? null,
+  };
+}
+
+function operatorActionItemsForReviewPointer(row, pointer) {
+  const reasonSubmissionItems = operatorReviewPointerSubmissionItems(row, pointer);
+  if (reasonSubmissionItems) return reasonSubmissionItems;
+  return [operatorReviewReportSectionActionItem(row, pointer)];
+}
+
+function operatorReviewPointerSubmissionItems(row, pointer) {
+  const reason = String(pointer.reason ?? "");
+  if (row.checklistRowId !== "validation_hidden_benchmark_and_claims") return null;
+  if (reason.startsWith("hiddenBenchmarkFreeze.artifact_probe_diagnostics:")) {
+    return [
+      operatorReviewReasonSubmissionAction(row, pointer, {
+        artifactKind: "artifact_probe",
+        readbackRoute: "/api/v1/artifact-probes",
+        completionEvidence: "hiddenBenchmarkFreeze.artifactProbeDiagnostics.status becomes pass in /api/release/report",
+      }),
+    ];
+  }
+  if (reason.startsWith("hiddenBenchmarkFreeze:")) {
+    return [
+      operatorReviewReasonSubmissionAction(row, pointer, {
+        artifactKind: "benchmark_freeze_report",
+        readbackRoute: "/api/v1/benchmark-freeze-reports",
+        completionEvidence: "hiddenBenchmarkFreeze.freezeStatus becomes frozen in /api/release/report",
+      }),
+    ];
+  }
+  return null;
+}
+
+function operatorReviewReasonSubmissionAction(row, pointer, { artifactKind, readbackRoute, completionEvidence }) {
+  return {
+    id: `${row.checklistRowId}:submit:${artifactKind}:${operatorActionIdSegment(pointer.reason)}`,
+    checklistRowId: row.checklistRowId,
+    actionType: "submit_artifact",
+    label: artifactKind,
+    status: "review_required",
+    artifactKind,
+    submittedArtifactId: null,
+    blockingFieldCount: 1,
+    blockingFields: [pointer.reason].filter(Boolean),
+    blockingFieldsTruncated: false,
+    writeRoute: operatorSubmissionWriteRoute(artifactKind, row.writeRoutes),
+    readbackRoute,
+    ...operatorSubmissionSetupFields(artifactKind),
+    workflowTemplateId: operatorSubmissionWorkflowTemplateId(artifactKind, row.workflowTemplateIds),
+    bulkImportRoute: operatorSubmissionBulkImportRoute(artifactKind, row.bulkImportRoutes ?? []),
+    bulkImportWorkflowTemplateId: operatorSubmissionBulkImportWorkflowTemplateId(artifactKind, row.bulkImportRoutes ?? []),
+    actorRole: "admin_or_operator",
+    sourceEvidenceId: pointer.sourceEvidenceId ?? null,
+    reason: pointer.reason,
+    completionEvidence,
+  };
+}
+
+function operatorReviewReportSectionActionItem(row, pointer) {
+  return {
+    id: [
+      row.checklistRowId,
+      "review-section",
+      pointer.sourceEvidenceId ?? "release-report",
+      pointer.artifactType,
+      pointer.artifactId,
+      pointer.reason,
+      pointer.readbackItemRoute ?? pointer.readbackRoute ?? "/api/release/report",
+    ]
+      .map(operatorActionIdSegment)
+      .join(":"),
+    checklistRowId: row.checklistRowId,
+    actionType: "review_report_section",
+    label: pointer.reason,
+    status: "review_required",
+    artifactType: pointer.artifactType,
+    artifactId: pointer.artifactId,
+    sourceEvidenceId: pointer.sourceEvidenceId ?? null,
+    reason: pointer.reason,
+    readbackRoute: pointer.readbackRoute,
+    ...(pointer.readbackItemRoute ? { readbackItemRoute: pointer.readbackItemRoute } : {}),
+    actorRole: "admin_or_operator",
+    completionEvidence: "the checklist review reason disappears from /api/release/report",
+  };
+}
+
+function operatorActionIdSegment(value) {
+  return String(value ?? "missing")
+    .trim()
+    .replace(/[^A-Za-z0-9_.-]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "missing";
+}
+
+function operatorActionItemQueue(rows = []) {
+  return rows
+    .flatMap((row) =>
+      row.actionItems.map((item) => ({
+        ...item,
+        rowSequence: item.sequence,
+        checklistStatus: row.status,
+        actionStatus: row.actionStatus,
+        deliverableGroup: row.deliverableGroup,
+      })),
+    )
+    .map((item, index) => ({
+      ...item,
+      globalSequence: index + 1,
+    }));
+}
+
+function operatorActionItemWithExecutionStatus(item) {
+  const executionStatus = operatorActionExecutionStatus(item);
+  return {
+    ...item,
+    executionStatus,
+    executionStatusReason: item?.executionStatusReason ?? operatorActionExecutionStatusReason(item, executionStatus),
+  };
+}
+
+function operatorActionExecutionStatus(item) {
+  if (!operatorActionItemIsOpen(item)) return "closed";
+  if (
+    item?.preconditionStatus === "data_collection_required_before_action" ||
+    (Array.isArray(item?.blockedByTargetGapIds) && item.blockedByTargetGapIds.length > 0)
+  ) {
+    return "blocked_by_target_data";
+  }
+  if (item?.actionType === "collect_data") return "ready_to_collect_data";
+  if (item?.actionType === "submit_artifact") return "ready_to_submit_evidence";
+  if (item?.actionType === "review_artifact" || item?.actionType === "review_report_section") return "ready_to_review_evidence";
+  return "ready_to_execute";
+}
+
+function operatorActionItemIsOpen(item) {
+  const status = item?.status ?? item?.actionStatus ?? "open";
+  return !["complete", "completed", "closed", "target_gap_met", "not_applicable"].includes(status);
+}
+
+function operatorActionExecutionStatusReason(item, executionStatus = operatorActionExecutionStatus(item)) {
+  if (executionStatus === "closed") return "The release report no longer treats this action as open.";
+  if (executionStatus === "blocked_by_target_data") {
+    const targetGaps = Array.isArray(item?.blockedByTargetGapIds) && item.blockedByTargetGapIds.length
+      ? item.blockedByTargetGapIds.map(readableOperatorActionLabel).join(", ")
+      : "target data";
+    return `Collect ${targetGaps} before this action can close release evidence.`;
+  }
+  if (executionStatus === "ready_to_collect_data") {
+    return "This action can accept real target data now; validate or dry-run templates before append.";
+  }
+  if (executionStatus === "ready_to_submit_evidence") {
+    return "This action can accept real operator evidence now; generated templates must be replaced first.";
+  }
+  if (executionStatus === "ready_to_review_evidence") {
+    return "This action is a readback/review step; inspect the linked artifact or report section before replacing evidence.";
+  }
+  return "This action has no data precondition in the current release report.";
+}
+
+function readableOperatorActionLabel(value) {
+  return String(value ?? "target data")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "target data";
+}
+
+const OPERATOR_SUBMISSION_WRITE_ROUTE_BY_ARTIFACT_KIND = {
+  label_snapshot: "/api/v1/label-snapshots",
+  corpus_manifest: "/api/v1/corpus-manifests",
+  training_export: "/api/v1/training-exports",
+  public_export_manifest: "/api/v1/exports/public",
+  internal_export_manifest: "/api/v1/exports/internal",
+  release_report_snapshot: "/api/v1/release-reports",
+  model_improvement_policy: "/api/v1/model-improvement-policies",
+  model_improvement_run: "/api/v1/model-improvement-runs",
+  evaluation_run: "/api/v1/evaluations/run",
+  model_evaluation_predictions: "/api/v1/evaluations/{id}/predictions",
+  calibration_run: "/api/v1/evaluations/{id}/calibrate",
+  leaderboard: "/api/v1/leaderboards",
+  artifact_probe: "/api/v1/artifact-probes/run",
+  benchmark_freeze_report: "/api/v1/benchmark/candidates/freeze",
+  model_failure_audit: "/api/v1/evaluations/{id}/failure-audits",
+  model_run_provenance: "/api/v1/evaluations/run",
+  model_inference_config: "/api/v1/model-inference-configs",
+  model_run_environment: "/api/v1/model-run-environments",
+  model_provider_data_handling_policy: "/api/v1/model-provider-data-handling-policies",
+  submitted_evaluation_artifacts_bound_to_release: "/api/v1/evaluations/run",
+  prompt_parser_and_injection_controls: "/api/v1/prompt-templates",
+  leaderboard_model_run_provenance: "/api/v1/leaderboards",
+  submitted_run_inference_environment_provenance: "/api/v1/model-run-environments",
+  model_run_reproducibility_policy_active: "/api/v1/model-run-reproducibility-policies",
+  failure_diagnostics_claim_gated: "/api/v1/evaluations/{id}/failure-audits",
+  discussion: "/api/v1/discussions",
+  discussion_thread: "/api/v1/discussion-threads",
+  discussion_comment: "/api/v1/discussions/{id}/comments",
+  discussion_revision_proposal: "/api/v1/discussions/{id}/revision-proposals",
+  post_lock_discussion_session: "/api/v1/discussions/{id}/post-lock-sessions",
+  adjudication: "/api/v1/adjudications",
+  adjudication_review_session: "/api/v1/adjudication-review-sessions",
+  adjudication_memo: "/api/v1/adjudication-memos",
+  adjudication_finalization: "/api/v1/adjudications/{id}/finalize",
+};
+
+const OPERATOR_SUBMISSION_WORKFLOW_TEMPLATE_BY_ARTIFACT_KIND = {
+  label_snapshot: "label-snapshot",
+  corpus_manifest: "corpus-manifest",
+  training_export: "training-export-artifact",
+  public_export_manifest: "export-manifest",
+  internal_export_manifest: "internal-export-manifest",
+  release_report_snapshot: "release-report-snapshot",
+  model_improvement_policy: "model-improvement-policy",
+  model_improvement_run: "model-improvement-run",
+  evaluation_run: "evaluation-run",
+  model_evaluation_predictions: "model-evaluation-prediction",
+  calibration_run: "calibration-run",
+  leaderboard: "leaderboard",
+  artifact_probe: "artifact-probe",
+  benchmark_freeze_report: "benchmark-freeze-report",
+  model_failure_audit: "failure-audit",
+  model_run_provenance: "evaluation-run",
+  model_inference_config: "model-inference-config",
+  model_run_environment: "model-run-environment",
+  model_provider_data_handling_policy: "model-provider-data-handling-policy",
+  submitted_evaluation_artifacts_bound_to_release: "evaluation-run",
+  leaderboard_model_run_provenance: "leaderboard",
+  prompt_parser_and_injection_controls: "prompt-template",
+  submitted_run_inference_environment_provenance: "model-run-environment",
+  model_run_reproducibility_policy_active: "model-run-reproducibility-policy",
+  failure_diagnostics_claim_gated: "failure-audit",
+  discussion: "discussion",
+  discussion_thread: "discussion-thread",
+  discussion_comment: "discussion-comment",
+  discussion_revision_proposal: "discussion-revision-proposal",
+  post_lock_discussion_session: "post-lock-discussion-session",
+  adjudication: "adjudication",
+  adjudication_review_session: "adjudication-review-session",
+  adjudication_memo: "adjudication-memo",
+  adjudication_finalization: "adjudication-finalization",
+};
+
+const OPERATOR_SUBMISSION_SETUP_BY_ARTIFACT_KIND = {
+  model_evaluation_predictions: {
+    writeRoute: "/api/v1/evaluations/run",
+    readbackRoute: "/api/v1/evaluations",
+    workflowTemplateId: "evaluation-run",
+  },
+  calibration_run: {
+    writeRoute: "/api/v1/evaluations/run",
+    readbackRoute: "/api/v1/evaluations",
+    workflowTemplateId: "evaluation-run",
+  },
+  model_failure_audit: {
+    writeRoute: "/api/v1/evaluations/run",
+    readbackRoute: "/api/v1/evaluations",
+    workflowTemplateId: "evaluation-run",
+  },
+  failure_diagnostics_claim_gated: {
+    writeRoute: "/api/v1/evaluations/run",
+    readbackRoute: "/api/v1/evaluations",
+    workflowTemplateId: "evaluation-run",
+  },
+  discussion_comment: {
+    writeRoute: "/api/v1/discussions",
+    readbackRoute: "/api/v1/discussions",
+    workflowTemplateId: "discussion",
+  },
+  discussion_revision_proposal: {
+    writeRoute: "/api/v1/discussions",
+    readbackRoute: "/api/v1/discussions",
+    workflowTemplateId: "discussion",
+  },
+  post_lock_discussion_session: {
+    writeRoute: "/api/v1/discussions",
+    readbackRoute: "/api/v1/discussions",
+    workflowTemplateId: "discussion",
+  },
+  adjudication_finalization: {
+    writeRoute: "/api/v1/adjudications",
+    readbackRoute: "/api/v1/adjudications",
+    workflowTemplateId: "adjudication",
+  },
+};
+
+const OPERATOR_ACTION_PRIMARY_GOVERNANCE_BY_ARTIFACT_KIND = {
+  label_snapshot: {
+    route: "/api/v1/label-snapshots",
+    policyActionKind: "label_snapshot_freeze",
+    phaseGateLaneKind: "route",
+  },
+  training_export: {
+    route: "/api/v1/training-exports",
+    policyActionKind: "training_export",
+    phaseGateLaneKind: "export_path",
+  },
+  release_report_snapshot: {
+    route: "/api/v1/release-reports",
+    policyActionKind: "release_report_materialize",
+    phaseGateLaneKind: "route",
+  },
+  evaluation_run: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  model_run_provenance: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  submitted_evaluation_artifacts_bound_to_release: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  discussion: {
+    route: "/api/v1/discussions",
+    policyActionKind: "discussion_open",
+    phaseGateLaneKind: "route",
+  },
+  adjudication_finalization: {
+    route: "/api/v1/adjudications/{id}/finalize",
+    policyActionKind: "adjudication_finalize",
+    phaseGateLaneKind: "route",
+  },
+};
+
+const OPERATOR_ACTION_SETUP_GOVERNANCE_BY_ARTIFACT_KIND = {
+  model_evaluation_predictions: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  calibration_run: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  model_failure_audit: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  failure_diagnostics_claim_gated: {
+    route: "/api/v1/evaluations/run",
+    policyActionKind: "evaluation_run",
+    phaseGateLaneKind: "evaluation_lane",
+  },
+  discussion_comment: {
+    route: "/api/v1/discussions",
+    policyActionKind: "discussion_open",
+    phaseGateLaneKind: "route",
+  },
+  discussion_revision_proposal: {
+    route: "/api/v1/discussions",
+    policyActionKind: "discussion_open",
+    phaseGateLaneKind: "route",
+  },
+  post_lock_discussion_session: {
+    route: "/api/v1/discussions",
+    policyActionKind: "discussion_open",
+    phaseGateLaneKind: "route",
+  },
+};
+
+const OPERATOR_ACTION_EXTRA_GOVERNANCE_BY_ARTIFACT_KIND = {
+  release_report_snapshot: {
+    governanceCoverageKinds: ["server_materialized_snapshot"],
+  },
+  benchmark_freeze_report: {
+    governanceCoverageKinds: ["server_materialized_snapshot", "benchmark_exposure_audit"],
+    governanceCoverageRoutes: ["/api/v1/benchmark/candidates/freeze", "/api/benchmark/exposures"],
+    governanceCoveragePolicy:
+      "The hidden-benchmark freeze snapshot route is admin-only, materializes the computed freeze report, records benchmark exposure, and rejects unchanged generated templates; it does not close the release gate by itself.",
+  },
+};
+
+const OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE = "/api/v1/operator-evidence/import-jsonl";
+const TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE = "/api/v1/target-gaps/import-jsonl-package";
+const RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE = "/api/v1/rating-context-snapshots/import-jsonl";
+const RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_TEMPLATE_ID = "rating-context-snapshot-jsonl-import";
+const OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID = "operator-evidence-package-jsonl-import";
+const OPERATOR_EVIDENCE_PACKAGE_IMPORT_UNSUPPORTED_ARTIFACT_KINDS = new Set([
+  "label_snapshot",
+  "training_export",
+  "release_report_snapshot",
+  "evaluation_run",
+  "model_run_provenance",
+  "submitted_evaluation_artifacts_bound_to_release",
+  "discussion",
+  "adjudication_finalization",
+  "benchmark_freeze_report",
+  "artifact_probe",
+]);
+
+function operatorArtifactKindForWorkflowTemplate(templateId) {
+  return String(templateId ?? "workflow-artifact").replace(/-/g, "_");
+}
+
+function operatorSubmissionWriteRoute(artifactKind, writeRoutes = []) {
+  const configuredRoute = OPERATOR_SUBMISSION_WRITE_ROUTE_BY_ARTIFACT_KIND[artifactKind];
+  if (configuredRoute) return configuredRoute;
+  return writeRoutes.find((route) => !route.includes("{")) ?? writeRoutes[0] ?? "/api/release/report";
+}
+
+function operatorSubmissionWorkflowTemplateId(artifactKind, workflowTemplateIds = []) {
+  const configuredTemplate = OPERATOR_SUBMISSION_WORKFLOW_TEMPLATE_BY_ARTIFACT_KIND[artifactKind];
+  if (configuredTemplate && workflowTemplateIds.includes(configuredTemplate)) return configuredTemplate;
+  if (configuredTemplate) return configuredTemplate;
+  return workflowTemplateIds[0] ?? null;
+}
+
+function operatorSubmissionBulkImportRoute(artifactKind, bulkImportRoutes = []) {
+  if (!bulkImportRoutes.includes(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE)) return null;
+  if (OPERATOR_EVIDENCE_PACKAGE_IMPORT_UNSUPPORTED_ARTIFACT_KINDS.has(artifactKind)) return null;
+  return OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE;
+}
+
+function operatorSubmissionBulkImportWorkflowTemplateId(artifactKind, bulkImportRoutes = []) {
+  return operatorSubmissionBulkImportRoute(artifactKind, bulkImportRoutes) ? OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID : null;
+}
+
+function operatorSubmissionSetupFields(artifactKind) {
+  const setup = OPERATOR_SUBMISSION_SETUP_BY_ARTIFACT_KIND[artifactKind];
+  if (!setup) return {};
+  return {
+    setupWriteRoute: setup.writeRoute,
+    setupReadbackRoute: setup.readbackRoute,
+    setupWorkflowTemplateId: setup.workflowTemplateId,
+    setupActorRole: setup.actorRole ?? "admin_or_operator",
+  };
+}
+
+function operatorReviewPointerCoveredByPrimaryAction(row, pointer) {
+  if (!pointer || pointer.artifactType !== "checklist_review_reason") return false;
+  if (row.submissionChecklist.some((item) => item.submissionStatus !== "submitted_complete")) return true;
+  return operatorReviewReasonCoveredByTargetGap(row.checklistRowId, pointer.reason);
+}
+
+function operatorReviewReasonCoveredByTargetGap(checklistRowId, reason) {
+  const normalizedReason = String(reason ?? "");
+  const rules = [
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^(positionsRemaining|critiquesRemaining|blindInitialRatingsRemaining|goldItemsRemaining|validation[A-Za-z]+Remaining):/ },
+    { checklistRowId: "rubric_practice_and_certification_pack", pattern: /^goldItemsRemaining:/ },
+    { checklistRowId: "validation_hidden_benchmark_and_claims", pattern: /^validationDesign:/ },
+  ];
+  return rules.some((rule) => rule.checklistRowId === checklistRowId && rule.pattern.test(normalizedReason));
+}
+
+function operatorReviewEvidencePointer(checklistRowId, section, action, sourceEvidenceId) {
+  const normalized = normalizeOperatorReviewSection(checklistRowId, section);
+  if (!normalized) return null;
+  const targetGapId = operatorTargetGapIdForChecklistReviewReason(checklistRowId, normalized.reason);
+  const submissionReadbackRoute = targetGapId
+    ? operatorReviewReadbackRoute(normalized.artifactType, action.readbackRoutes, checklistRowId, normalized.reason)
+    : null;
+  const readbackRoute = targetGapId
+    ? "/api/v1/target-gaps"
+    : operatorReviewReadbackRoute(normalized.artifactType, action.readbackRoutes, checklistRowId, normalized.reason);
+  const hasReviewArtifactId =
+    normalized.artifactIdIsExplicit && normalized.artifactId !== normalized.artifactType && !String(normalized.reason).startsWith("missing_");
+  const explicitReadbackItemRoute = hasReviewArtifactId
+    ? operatorReviewReadbackItemRoute(normalized.artifactType, normalized.artifactId, readbackRoute)
+    : null;
+  const readbackItemRoute = targetGapId
+    ? `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}`
+    : explicitReadbackItemRoute ?? operatorReviewSourceEvidenceItemRoute(sourceEvidenceId, readbackRoute);
+  return {
+    checklistRowId,
+    sourceEvidenceId,
+    artifactType: normalized.artifactType,
+    artifactId: normalized.artifactId,
+    reason: normalized.reason,
+    ...(targetGapId ? { targetGapId, submissionReadbackRoute } : {}),
+    readbackRoute,
+    ...(readbackItemRoute ? { readbackItemRoute } : {}),
+    readbackScope: targetGapId ? "target_gap" : operatorReviewReadbackScope(readbackRoute),
+  };
+}
+
+function operatorReviewArtifactSummaries(reviewEvidencePointers = []) {
+  const grouped = new Map();
+  for (const pointer of reviewEvidencePointers) {
+    if (!pointer || pointer.artifactType === "checklist_review_reason") continue;
+    const artifactId = pointer.artifactId ?? pointer.artifactType;
+    const key = `${pointer.artifactType}:${artifactId}`;
+    const current =
+      grouped.get(key) ??
+      {
+        artifactType: pointer.artifactType,
+        artifactId,
+        sourceEvidenceId: pointer.sourceEvidenceId ?? null,
+        readbackRoute: pointer.readbackRoute ?? "/api/release/report",
+        ...(pointer.readbackItemRoute ? { readbackItemRoute: pointer.readbackItemRoute } : {}),
+        reasonCount: 0,
+        reasons: [],
+        reasonsTruncated: false,
+      };
+    current.reasonCount += 1;
+    if (current.reasons.length < 12) current.reasons.push(pointer.reason ?? "review_required");
+    current.reasonsTruncated = current.reasonCount > current.reasons.length;
+    grouped.set(key, current);
+  }
+  return [...grouped.values()].sort((a, b) => a.artifactType.localeCompare(b.artifactType) || a.artifactId.localeCompare(b.artifactId));
+}
+
+function normalizeOperatorReviewSection(checklistRowId, section) {
+  if (typeof section === "string") {
+    const artifactType = OPERATOR_REVIEW_READBACK_ROUTE_BY_ARTIFACT_TYPE[section]
+      ? section
+      : `${checklistRowId}_review_section`;
+    return {
+      artifactType,
+      artifactId: section,
+      artifactIdIsExplicit: false,
+      reason: section,
+    };
+  }
+  if (!section || typeof section !== "object" || Array.isArray(section)) return null;
+  const artifactType = section.artifactType ?? `${checklistRowId}_review_section`;
+  const explicitArtifactId = section.artifactId ?? section.id ?? null;
+  return {
+    artifactType,
+    artifactId: explicitArtifactId ?? section.reason ?? artifactType,
+    artifactIdIsExplicit: explicitArtifactId !== null && explicitArtifactId !== undefined && String(explicitArtifactId).length > 0,
+    reason: section.reason ?? section.artifactId ?? artifactType,
+  };
+}
+
+function operatorReviewReadbackRoute(artifactType, readbackRoutes = [], checklistRowId = null, reason = "") {
+  if (artifactType === "checklist_review_reason") {
+    return operatorChecklistReviewReasonRoute(checklistRowId, reason, readbackRoutes);
+  }
+  const configuredRoute = OPERATOR_REVIEW_READBACK_ROUTE_BY_ARTIFACT_TYPE[artifactType];
+  if (configuredRoute && readbackRoutes.includes(configuredRoute)) return configuredRoute;
+  if (configuredRoute === "/api/release/report") return configuredRoute;
+  return readbackRoutes.find((route) => route !== "/api/release/report" && !route.includes("{")) ?? "/api/release/report";
+}
+
+function operatorReviewReadbackItemRoute(artifactType, artifactId, readbackRoute) {
+  if (!artifactId || artifactType === "checklist_review_reason") return null;
+  if (!readbackRoute || readbackRoute === "/api/release/report") return null;
+  if (readbackRoute === "/api/v1/release-report-sections") return null;
+  if (readbackRoute.includes("{")) return null;
+  return `${readbackRoute.replace(/\/$/, "")}/${encodeURIComponent(artifactId)}`;
+}
+
+function operatorReviewSourceEvidenceItemRoute(sourceEvidenceId, readbackRoute) {
+  if (!sourceEvidenceId || !readbackRoute) return null;
+  if (readbackRoute === "/api/release/report") {
+    return `/api/v1/release-report-sections/${encodeURIComponent(sourceEvidenceId)}`;
+  }
+  if (readbackRoute.includes("{")) return null;
+  return `${readbackRoute.replace(/\/$/, "")}/${encodeURIComponent(sourceEvidenceId)}`;
+}
+
+const OPERATOR_CHECKLIST_REASON_READBACK_RULES = [
+  { checklistRowId: "release_artifact_submission_package", pattern: /^releaseArtifactEvidence:/, route: "/api/v1/release-report-sections" },
+  { checklistRowId: "model_evaluation_submission_package", pattern: /^modelEvaluationArtifactEvidence:/, route: "/api/v1/release-report-sections" },
+  { checklistRowId: "discussion_and_adjudication_workflows", pattern: /^discussionAdjudicationWorkflowEvidence:/, route: "/api/v1/release-report-sections" },
+  { checklistRowId: "target_scale_and_data_collection", pattern: /^positionsRemaining:/, route: "/api/v1/intake/positions" },
+  { checklistRowId: "target_scale_and_data_collection", pattern: /^critiquesRemaining:/, route: "/api/v1/intake/critiques" },
+  { checklistRowId: "target_scale_and_data_collection", pattern: /^blindInitialRatingsRemaining:/, route: "/api/v1/ratings" },
+  { checklistRowId: "target_scale_and_data_collection", pattern: /^goldItemsRemaining:/, route: "/api/v1/gold-items" },
+  { checklistRowId: "target_scale_and_data_collection", pattern: /^validation/, route: "/api/v1/validation-tranche-evidence" },
+  { checklistRowId: "rubric_practice_and_certification_pack", pattern: /^goldItemsRemaining:/, route: "/api/v1/gold-items" },
+  { checklistRowId: "validation_hidden_benchmark_and_claims", pattern: /^validationDesign:/, route: "/api/v1/validation-tranche-evidence" },
+  { checklistRowId: "validation_hidden_benchmark_and_claims", pattern: /^hiddenBenchmarkFreeze:/, route: "/api/v1/benchmark-freeze-reports" },
+  { checklistRowId: "validation_hidden_benchmark_and_claims", pattern: /^hiddenBenchmarkFreeze\./, route: "/api/v1/benchmark-freeze-reports" },
+  { checklistRowId: "validation_hidden_benchmark_and_claims", pattern: /^releaseClaimWarnings:/, route: "/api/v1/release-report-sections" },
+];
+
+function operatorChecklistReviewReasonRoute(checklistRowId, reason, readbackRoutes = []) {
+  const route = OPERATOR_CHECKLIST_REASON_READBACK_RULES.find(
+    (rule) => rule.checklistRowId === checklistRowId && rule.pattern.test(reason),
+  )?.route;
+  if (route && readbackRoutes.includes(route)) return route;
+  return readbackRoutes.includes("/api/release/report") ? "/api/release/report" : readbackRoutes.find((item) => !item.includes("{")) ?? "/api/release/report";
+}
+
+function operatorTargetGapIdForChecklistReviewReason(checklistRowId, reason) {
+  const normalizedReason = String(reason ?? "");
+  const rules = [
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^positionsRemaining:/, targetGapId: "positions" },
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^critiquesRemaining:/, targetGapId: "critiques" },
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^blindInitialRatingsRemaining:/, targetGapId: "blind_initial_ratings" },
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^goldItemsRemaining:/, targetGapId: "gold_library_items" },
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^validationCritiquesRemaining:/, targetGapId: "validation_critiques" },
+    { checklistRowId: "target_scale_and_data_collection", pattern: /^validationPositionsRemaining:/, targetGapId: "validation_positions" },
+    {
+      checklistRowId: "target_scale_and_data_collection",
+      pattern: /^validationCoreAllItemsRatersRemaining:/,
+      targetGapId: "validation_core_all_items_raters",
+    },
+    { checklistRowId: "rubric_practice_and_certification_pack", pattern: /^goldItemsRemaining:/, targetGapId: "gold_library_items" },
+  ];
+  return rules.find((rule) => rule.checklistRowId === checklistRowId && rule.pattern.test(normalizedReason))?.targetGapId ?? null;
+}
+
+function operatorReviewReadbackScope(route) {
+  if (route === "/api/release/report" || route === "/api/v1/release-report-sections") return "release_report_section";
+  return "workflow_collection";
+}
+
+function operatorBlockingTargetGapsForChecklistRow(rowId, targetGaps) {
+  const rows = Array.isArray(targetGaps?.rows) ? targetGaps.rows : [];
+  const targetGapIdsByChecklistRow = {
+    target_scale_and_data_collection: rows.map((row) => row.id),
+    rubric_practice_and_certification_pack: ["gold_library_items"],
+    validation_hidden_benchmark_and_claims: ["validation_critiques", "validation_positions", "validation_core_all_items_raters"],
+  };
+  const targetGapIds = new Set(targetGapIdsByChecklistRow[rowId] ?? []);
+  return rows
+    .filter((row) => targetGapIds.has(row.id) && Number(row.remaining) > 0)
+    .map((row) => {
+      const action = operatorTargetGapAction(row.id);
+      const targetGapReadbackRoute = "/api/v1/target-gaps";
+      const targetGapReadbackItemRoute = `/api/v1/target-gaps/${encodeURIComponent(row.id)}`;
+      const importImpacts = operatorTargetGapImportImpacts({ ...row, ...action, targetGapReadbackItemRoute });
+      return {
+        id: row.id,
+        label: row.label,
+        target: row.target,
+        current: row.current,
+        remaining: row.remaining,
+        status: row.status,
+        sourceEvidenceId: row.sourceEvidenceId,
+        ...action,
+        importImpacts,
+        primaryImportImpact: importImpacts.find((impact) => impact.importKind === "primary_data_import") ?? null,
+        setupImportImpact: importImpacts.find((impact) => impact.importKind === "setup_data_import") ?? null,
+        submissionReadbackRoute: action.readbackRoute,
+        targetGapReadbackRoute,
+        targetGapReadbackItemRoute,
+      };
+    });
+}
+
+function operatorTargetGapImportImpacts(gap) {
+  return [
+    gap.bulkImportRoute
+      ? operatorTargetGapImportImpact(gap, {
+          importKind: "primary_data_import",
+          importRoute: gap.bulkImportRoute,
+        })
+      : null,
+    ...operatorTargetGapSetupImportRouteInfos(gap).map((routeInfo) => operatorTargetGapImportImpact(gap, routeInfo)),
+  ].filter(Boolean);
+}
+
+function operatorTargetGapSetupImportRouteInfos(gap) {
+  const setupRoutes = uniqueStrings([gap.setupBulkImportRoute, ...(Array.isArray(gap.setupBulkImportRoutes) ? gap.setupBulkImportRoutes : [])]);
+  const setupTemplateIds = Array.isArray(gap.setupBulkImportWorkflowTemplateIds) ? gap.setupBulkImportWorkflowTemplateIds : [];
+  return setupRoutes.map((importRoute, index) => ({
+    importKind: "setup_data_import",
+    importRoute,
+    workflowTemplateId:
+      importRoute === gap.setupBulkImportRoute
+        ? gap.setupBulkImportWorkflowTemplateId ?? setupTemplateIds[index] ?? null
+        : setupTemplateIds[index] ?? operatorTargetGapDefaultSetupBulkImportTemplateId(importRoute),
+  }));
+}
+
+function operatorTargetGapDefaultSetupBulkImportTemplateId(importRoute) {
+  if (importRoute === RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE) return RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_TEMPLATE_ID;
+  if (importRoute === "/api/v1/assignments/import-jsonl") return "assignment-jsonl-import";
+  return null;
+}
+
+function operatorTargetGapImportImpact(gap, routeInfo) {
+  const remaining = Number(gap.remaining);
+  const current = Number(gap.current);
+  const target = Number(gap.target);
+  const safeRemaining = Number.isFinite(remaining) && remaining > 0 ? remaining : 0;
+  const isSetupImport = routeInfo.importKind === "setup_data_import";
+  const isRatingContextSnapshotSetup = routeInfo.importRoute === RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE;
+  const isValidationEvidence = routeInfo.importRoute === "/api/v1/validation-tranche-evidence/import-jsonl";
+  const estimatedRecordsRequired = isRatingContextSnapshotSetup
+    ? safeRemaining
+    : isSetupImport || isValidationEvidence
+      ? (safeRemaining > 0 ? 1 : 0)
+      : safeRemaining;
+  return {
+    targetGapId: gap.id ?? gap.targetGapId ?? null,
+    current: Number.isFinite(current) ? current : null,
+    target: Number.isFinite(target) ? target : null,
+    remaining: safeRemaining,
+    status: gap.status ?? null,
+    sourceEvidenceId: gap.sourceEvidenceId ?? null,
+    importKind: routeInfo.importKind,
+    importRoute: routeInfo.importRoute,
+    completionEvidence: gap.completionEvidence ?? null,
+    estimatedRecordsRequired,
+    expectedResourceDelta: isSetupImport ? 0 : safeRemaining,
+    closesTargetGapWhenValidated: !isSetupImport,
+    effect:
+      safeRemaining === 0
+        ? "target_gap_already_met"
+        : isRatingContextSnapshotSetup
+          ? "rating_context_snapshot_setup_records_enable_self_contained_blind_rating_imports_but_do_not_close_target_gap"
+          : isSetupImport
+          ? "setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap"
+          : isValidationEvidence
+            ? "one_review_complete_validation_tranche_evidence_record_can_close_validation_gap"
+            : "validated_real_records_reduce_matching_target_gap",
+    verificationRoute: gap.targetGapReadbackItemRoute ?? "/api/release/report",
+  };
+}
+
+function operatorTargetGapAction(gapId) {
+  const actions = {
+    positions: {
+      requiredSubmission: "position intake rows",
+      writeRoute: "/api/v1/intake/positions",
+      bulkImportRoute: "/api/v1/intake/positions/import-jsonl",
+      readbackRoute: "/api/v1/intake/positions",
+      workflowTemplateId: "position-intake",
+      bulkImportWorkflowTemplateId: "position-intake-jsonl-import",
+      actorRole: "admin_or_operator",
+      completionEvidence: "corpus position count increases in /api/release/report targetGaps",
+    },
+    critiques: {
+      requiredSubmission: "critique intake rows",
+      writeRoute: "/api/v1/intake/critiques",
+      bulkImportRoute: "/api/v1/intake/critiques/import-jsonl",
+      readbackRoute: "/api/v1/intake/critiques",
+      workflowTemplateId: "critique-intake",
+      bulkImportWorkflowTemplateId: "critique-intake-jsonl-import",
+      actorRole: "admin_or_operator",
+      completionEvidence: "corpus critique count increases in /api/release/report targetGaps",
+    },
+    blind_initial_ratings: {
+      requiredSubmission: "blind initial ratings",
+      writeRoute: "/api/v1/ratings",
+      bulkImportRoute: "/api/v1/ratings/import-jsonl",
+      readbackRoute: "/api/v1/ratings",
+      setupWriteRoute: "/api/v1/assignments",
+      setupReadbackRoute: "/api/v1/assignments",
+      setupBulkImportRoute: "/api/v1/assignments/import-jsonl",
+      setupBulkImportRoutes: ["/api/v1/assignments/import-jsonl", RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE],
+      setupWorkflowTemplateId: "assignment-record",
+      setupBulkImportWorkflowTemplateId: "assignment-jsonl-import",
+      setupBulkImportWorkflowTemplateIds: ["assignment-jsonl-import", RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_TEMPLATE_ID],
+      bulkImportWorkflowTemplateId: "rating-jsonl-import",
+      setupActorRole: "admin_or_operator",
+      workflowTemplateId: "assignment-record",
+      actorRole: "assigned_rater",
+      completionEvidence:
+        "admin-created assignment rows plus assigned-rater /api/v1/ratings or /api/v1/ratings/import-jsonl submissions increase blind initial rating count in /api/release/report targetGaps",
+    },
+    gold_library_items: {
+      requiredSubmission: "gold items",
+      writeRoute: "/api/v1/gold-items",
+      bulkImportRoute: "/api/v1/gold-items/import-jsonl",
+      readbackRoute: "/api/v1/gold-items",
+      workflowTemplateId: "gold-item",
+      bulkImportWorkflowTemplateId: "gold-item-jsonl-import",
+      actorRole: "admin_or_operator",
+      completionEvidence: "certification gold-library count increases in /api/release/report targetGaps",
+    },
+    validation_critiques: {
+      requiredSubmission: "Appendix-C validation critique coverage",
+      writeRoute: "/api/v1/validation-tranche-evidence",
+      bulkImportRoute: "/api/v1/validation-tranche-evidence/import-jsonl",
+      readbackRoute: "/api/v1/validation-tranche-evidence",
+      workflowTemplateId: "validation-tranche-evidence",
+      bulkImportWorkflowTemplateId: "validation-tranche-evidence-jsonl-import",
+      actorRole: "admin_or_operator",
+      completionEvidence: "validationDesign reaches appendix_c_scale in /api/release/report",
+    },
+    validation_positions: {
+      requiredSubmission: "Appendix-C validation position coverage",
+      writeRoute: "/api/v1/validation-tranche-evidence",
+      bulkImportRoute: "/api/v1/validation-tranche-evidence/import-jsonl",
+      readbackRoute: "/api/v1/validation-tranche-evidence",
+      workflowTemplateId: "validation-tranche-evidence",
+      bulkImportWorkflowTemplateId: "validation-tranche-evidence-jsonl-import",
+      actorRole: "admin_or_operator",
+      completionEvidence: "validationDesign reaches appendix_c_scale in /api/release/report",
+    },
+    validation_core_all_items_raters: {
+      requiredSubmission: "Appendix-C core all-items rater coverage",
+      writeRoute: "/api/v1/validation-tranche-evidence",
+      bulkImportRoute: "/api/v1/validation-tranche-evidence/import-jsonl",
+      readbackRoute: "/api/v1/validation-tranche-evidence",
+      workflowTemplateId: "validation-tranche-evidence",
+      bulkImportWorkflowTemplateId: "validation-tranche-evidence-jsonl-import",
+      actorRole: "admin_or_operator",
+      completionEvidence: "validationDesign reaches appendix_c_scale in /api/release/report",
+    },
+  };
+  return actions[gapId] ?? {
+    requiredSubmission: "operator evidence",
+    writeRoute: "/api/release/report",
+    readbackRoute: "/api/release/report",
+    workflowTemplateId: null,
+    actorRole: "admin_or_operator",
+    completionEvidence: "target gap row changes status in /api/release/report",
+  };
+}
+
+function operatorSubmissionActionForChecklistRow(rowId) {
+  const actions = {
+    target_scale_and_data_collection: {
+      requiredSubmissions: [
+        "position intake rows",
+        "critique intake rows",
+        "blind initial ratings",
+        "gold items",
+        "Appendix-C-scale validation rows",
+      ],
+      writeRoutes: [
+        "/api/v1/intake/positions",
+        "/api/v1/intake/positions/import-jsonl",
+        "/api/v1/intake/critiques",
+        "/api/v1/intake/critiques/import-jsonl",
+        "/api/v1/assignments",
+        "/api/v1/assignments/import-jsonl",
+        "/api/v1/rating-context-snapshots",
+        RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE,
+        "/api/v1/ratings",
+        "/api/v1/gold-items",
+        "/api/v1/gold-items/import-jsonl",
+        "/api/v1/validation-tranche-evidence",
+        "/api/v1/validation-tranche-evidence/import-jsonl",
+      ],
+      bulkImportRoutes: [
+        "/api/v1/intake/positions/import-jsonl",
+        "/api/v1/intake/critiques/import-jsonl",
+        "/api/v1/gold-items/import-jsonl",
+        "/api/v1/validation-tranche-evidence/import-jsonl",
+      ],
+      setupBulkImportRoutes: ["/api/v1/assignments/import-jsonl", RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE],
+      readbackRoutes: [
+        "/api/release/report",
+        "/api/v1/intake/positions",
+        "/api/v1/intake/critiques",
+        "/api/v1/assignments",
+        "/api/v1/ratings",
+        "/api/v1/rating-context-snapshots",
+        "/api/v1/gold-items",
+        "/api/v1/validation-tranche-evidence",
+      ],
+      workflowTemplateIds: [
+        "position-intake",
+        "critique-intake",
+        "assignment-record",
+        "rating-context-snapshot",
+        "gold-item",
+        "validation-tranche-evidence",
+      ],
+      setupBulkImportWorkflowTemplateIds: ["assignment-jsonl-import", RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_TEMPLATE_ID],
+      notes: [
+        "This row is data-collection work; do not close it with seed fixtures or computed reports.",
+        "Validation and gold shortfalls require real item/rating coverage before release claims.",
+        "Use assignment and rating-context-snapshot setup imports to create assigned-rater work with auditable rater-visible context; completed blind ratings remain assigned-rater submissions through /api/v1/ratings.",
+      ],
+    },
+    release_artifact_submission_package: {
+      requiredSubmissions: [
+        "label snapshot",
+        "corpus manifest",
+        "training export",
+        "public export manifest",
+        "internal export manifest",
+        "release report snapshot",
+      ],
+      writeRoutes: [
+        "/api/v1/label-snapshots",
+        "/api/v1/corpus-manifests",
+        "/api/v1/training-exports",
+        "/api/v1/exports/public",
+        "/api/v1/exports/internal",
+        "/api/v1/release-reports",
+      ],
+      readbackRoutes: [
+        "/api/v1/label-snapshots",
+        "/api/v1/corpus-manifests",
+        "/api/v1/training-exports",
+        "/api/v1/export-manifests",
+        "/api/v1/release-reports",
+        "/api/v1/release-report-sections",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: [
+        "label-snapshot",
+        "corpus-manifest",
+        "training-export-artifact",
+        "export-manifest",
+        "internal-export-manifest",
+        "release-report-snapshot",
+      ],
+      bulkImportRoutes: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE],
+      bulkImportWorkflowTemplateIds: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID],
+      notes: ["Submitted artifacts must match the current release report; computed default artifacts are not sufficient."],
+    },
+    model_evaluation_submission_package: {
+      requiredSubmissions: [
+        "model improvement policy",
+        "model improvement run",
+        "evaluation run",
+        "model inference config",
+        "model run environment",
+        "model predictions",
+        "calibration run",
+        "leaderboard",
+        "failure audit",
+        "model-provider data handling policy",
+      ],
+      writeRoutes: [
+        "/api/v1/model-improvement-policies",
+        "/api/v1/model-improvement-runs",
+        "/api/v1/evaluations/run",
+        "/api/v1/model-inference-configs",
+        "/api/v1/model-run-environments",
+        "/api/v1/evaluations/{id}/predictions",
+        "/api/v1/evaluations/{id}/calibrate",
+        "/api/v1/leaderboards",
+        "/api/v1/evaluations/{id}/failure-audits",
+        "/api/v1/model-provider-data-handling-policies",
+      ],
+      readbackRoutes: [
+        "/api/v1/model-improvement-policies",
+        "/api/v1/model-improvement-runs",
+        "/api/v1/evaluations",
+        "/api/v1/model-inference-configs",
+        "/api/v1/model-run-environments",
+        "/api/v1/model-evaluation-predictions",
+        "/api/v1/calibration-runs",
+        "/api/v1/leaderboards",
+        "/api/v1/model-failure-audits",
+        "/api/v1/model-provider-data-handling-policies",
+        "/api/v1/release-report-sections",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: [
+        "model-improvement-policy",
+        "model-improvement-run",
+        "evaluation-run",
+        "model-inference-config",
+        "model-run-environment",
+        "model-evaluation-prediction",
+        "calibration-run",
+        "leaderboard",
+        "failure-audit",
+        "model-provider-data-handling-policy",
+      ],
+      bulkImportRoutes: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE],
+      bulkImportWorkflowTemplateIds: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID],
+      notes: ["Evaluation rows must be submitted and bound to the current target label snapshot and metric family."],
+    },
+    model_evaluation_reproducibility: {
+      requiredSubmissions: ["model-run reproducibility policy", "model inference config", "model run environment", "prompt/parser provenance"],
+      writeRoutes: [
+        "/api/v1/model-run-reproducibility-policies",
+        "/api/v1/model-inference-configs",
+        "/api/v1/model-run-environments",
+        "/api/v1/prompt-templates",
+        "/api/v1/parser-configs",
+      ],
+      readbackRoutes: [
+        "/api/v1/evaluations",
+        "/api/v1/leaderboards",
+        "/api/v1/model-run-reproducibility-policies",
+        "/api/v1/model-inference-configs",
+        "/api/v1/model-run-environments",
+        "/api/v1/prompt-templates",
+        "/api/v1/parser-configs",
+        "/api/v1/release-report-sections",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: ["model-run-reproducibility-policy", "model-inference-config", "model-run-environment", "prompt-template", "parser-config"],
+      bulkImportRoutes: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE],
+      bulkImportWorkflowTemplateIds: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID],
+      notes: ["Leaderboard rows cannot support clean claims until each submitted run has config and environment provenance."],
+    },
+    discussion_and_adjudication_workflows: {
+      requiredSubmissions: [
+        "discussion",
+        "discussion thread",
+        "object-level comment",
+        "revision proposal",
+        "post-lock session",
+        "adjudication",
+        "adjudication review session",
+        "adjudication memo",
+        "adjudication finalization",
+      ],
+      writeRoutes: [
+        "/api/v1/discussions",
+        "/api/v1/discussion-threads",
+        "/api/v1/discussions/{id}/comments",
+        "/api/v1/discussions/{id}/revision-proposals",
+        "/api/v1/discussions/{id}/post-lock-sessions",
+        "/api/v1/adjudications",
+        "/api/v1/adjudication-review-sessions",
+        "/api/v1/adjudication-memos",
+        "/api/v1/adjudications/{id}/finalize",
+      ],
+      readbackRoutes: [
+        "/api/v1/discussions",
+        "/api/v1/discussion-threads",
+        "/api/v1/discussion-comments",
+        "/api/v1/discussion-revision-proposals",
+        "/api/v1/post-lock-discussion-sessions",
+        "/api/v1/adjudications",
+        "/api/v1/adjudication-review-sessions",
+        "/api/v1/adjudication-memos",
+        "/api/v1/adjudication-finalizations",
+        "/api/v1/release-report-sections",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: [
+        "discussion",
+        "discussion-thread",
+        "discussion-comment",
+        "discussion-revision-proposal",
+        "post-lock-discussion-session",
+        "adjudication",
+        "adjudication-review-session",
+        "adjudication-memo",
+        "adjudication-finalization",
+      ],
+      bulkImportRoutes: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE],
+      bulkImportWorkflowTemplateIds: [OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID],
+      notes: ["Post-lock discussion evidence must preserve original ratings and object-level disagreement records."],
+    },
+    interaction_and_practice_workflows: {
+      requiredSubmissions: [
+        "practice sandbox policy and public practice-session evidence",
+        "rater dashboard policy, rater learning plans, and calibration feedback",
+        "session pacing policy and rater-session safety evidence",
+        "interpretation target maps and verification workspace sessions",
+        "adjudicator pre-read and cockpit-review evidence",
+        "benchmark submission policy and aggregate-only submission records",
+        "screen parity checks and simplified-copy previews",
+      ],
+      writeRoutes: [
+        "/api/v1/practice-sandbox-policies",
+        "/api/v1/practice-sessions",
+        "/api/v1/rater-dashboard-policies",
+        "/api/v1/rater-learning-plans",
+        "/api/v1/session-pacing-policies",
+        "/api/v1/rater-sessions",
+        "/api/v1/interpretation-target-map-requiredness-policies",
+        "/api/v1/interpretation-target-maps",
+        "/api/v1/verification-claim-granularity-policies",
+        "/api/v1/verification-workspace-sessions",
+        "/api/v1/adjudicator-pre-read-requiredness-policies",
+        "/api/v1/adjudicator-pre-reads",
+        "/api/v1/adjudication-cockpit-signoff-policies",
+        "/api/v1/adjudication-review-sessions",
+        "/api/v1/calibration-feedback-events",
+        "/api/v1/benchmark-submission-policies",
+        "/api/v1/benchmark-submissions",
+        "/api/v1/screens/{id}/feature-parity-check",
+        "/api/v1/screens/{id}/simplified-copy-preview",
+        "/api/v1/governance-approvals",
+        "/api/v1/protected-artifacts/{id}/revalidate",
+      ],
+      readbackRoutes: [
+        "/api/v1/practice-sandbox-policies",
+        "/api/v1/practice-sessions",
+        "/api/v1/rater-dashboard-policies",
+        "/api/v1/rater-learning-plans",
+        "/api/v1/session-pacing-policies",
+        "/api/v1/rater-sessions",
+        "/api/v1/interpretation-target-map-requiredness-policies",
+        "/api/v1/interpretation-target-maps",
+        "/api/v1/verification-claim-granularity-policies",
+        "/api/v1/verification-workspace-sessions",
+        "/api/v1/adjudicator-pre-read-requiredness-policies",
+        "/api/v1/adjudicator-pre-reads",
+        "/api/v1/adjudication-cockpit-signoff-policies",
+        "/api/v1/adjudication-review-sessions",
+        "/api/v1/calibration-feedback-events",
+        "/api/v1/benchmark-submission-policies",
+        "/api/v1/benchmark-submissions",
+        "/api/v1/screen-feature-parity-checks",
+        "/api/v1/simplified-copy-previews",
+        "/api/v1/governance-approvals",
+        "/api/v1/protected-artifact-revalidations",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: [
+        "rater-dashboard-policy",
+        "interpretation-target-map-requiredness-policy",
+        "verification-claim-granularity-policy",
+        "adjudicator-pre-read-requiredness-policy",
+        "adjudication-cockpit-signoff-policy",
+        "adjudication-review-session",
+        "benchmark-submission-policy",
+        "benchmark-submission",
+      ],
+      notes: [
+        "This row is review-required when submitted interaction artifacts drift from their active policies; use readbackRoutes to inspect submitted rows before replacing or accepting them.",
+        "Assignment self-screen, decline, and deferral evidence remains summarized through /api/release/report because those are assignment-scoped rater events, not broad operator collections.",
+      ],
+    },
+    rubric_practice_and_certification_pack: {
+      requiredSubmissions: ["gold items", "certification threshold policy", "certification records"],
+      writeRoutes: ["/api/v1/gold-items", "/api/v1/gold-items/import-jsonl", "/api/v1/certification-threshold-policies", "/api/v1/certification-records"],
+      bulkImportRoutes: ["/api/v1/gold-items/import-jsonl"],
+      readbackRoutes: ["/api/v1/gold-items", "/api/v1/certification-threshold-policies", "/api/v1/certification-records", "/api/release/report"],
+      workflowTemplateIds: ["gold-item", "certification-threshold-policy", "certification-record"],
+      notes: ["The gold library shortfall is data collection, not a missing computed artifact."],
+    },
+    validation_hidden_benchmark_and_claims: {
+      requiredSubmissions: [
+        "validation tranche evidence",
+        "benchmark split membership",
+        "hidden benchmark freeze evidence",
+        "authorized artifact probe diagnostics",
+        "benchmark refresh policy",
+        "human-ceiling run",
+        "benchmark submission policy",
+        "aggregate benchmark submission",
+        "comparability tier policy",
+        "comparability claims",
+        "release erratum disclosure policy",
+        "release-claim warning/errata evidence",
+      ],
+      writeRoutes: [
+        "/api/v1/validation-tranche-evidence",
+        "/api/v1/validation-tranche-evidence/import-jsonl",
+        "/api/v1/benchmark-split-members",
+        "/api/v1/artifact-probes/run",
+        "/api/v1/benchmark/candidates/freeze",
+        "/api/v1/benchmark-refresh-policies",
+        "/api/v1/human-ceiling-runs",
+        "/api/v1/benchmark-submission-policies",
+        "/api/v1/benchmark-submissions",
+        "/api/v1/comparability-tier-policies",
+        "/api/v1/comparability-claims",
+        "/api/v1/release-erratum-disclosure-policies",
+        "/api/v1/release-errata",
+      ],
+      readbackRoutes: [
+        "/api/v1/validation-tranche-evidence",
+        "/api/v1/benchmark-split-members",
+        "/api/v1/artifact-probes",
+        "/api/v1/benchmark-freeze-reports",
+        "/api/v1/benchmark-refresh-policies",
+        "/api/v1/human-ceiling-runs",
+        "/api/v1/benchmark-submission-policies",
+        "/api/v1/benchmark-submissions",
+        "/api/v1/comparability-tier-policies",
+        "/api/v1/comparability-claims",
+        "/api/v1/release-erratum-disclosure-policies",
+        "/api/v1/release-errata",
+        "/api/v1/release-report-sections",
+        "/api/release/report",
+      ],
+      workflowTemplateIds: [
+        "validation-tranche-evidence",
+        "benchmark-split-member",
+        "artifact-probe",
+        "benchmark-freeze-report",
+        "benchmark-refresh-policy",
+        "human-ceiling-run",
+        "benchmark-submission-policy",
+        "benchmark-submission",
+        "comparability-tier-policy",
+        "comparability-claim",
+        "release-erratum-disclosure-policy",
+        "release-erratum",
+      ],
+      bulkImportRoutes: ["/api/v1/validation-tranche-evidence/import-jsonl", OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE],
+      bulkImportWorkflowTemplateIds: ["validation-tranche-evidence-jsonl-import", OPERATOR_EVIDENCE_PACKAGE_IMPORT_TEMPLATE_ID],
+      notes: ["Appendix-C validation and hidden-benchmark freeze claims stay blocked until real validation scale and protected-split evidence exist."],
+    },
+  };
+  return (
+    actions[rowId] ?? {
+      requiredSubmissions: [],
+      writeRoutes: [],
+      readbackRoutes: ["/api/release/report"],
+      workflowTemplateIds: [],
+      notes: ["Review the linked checklist row and underlying evidence report before claiming completion."],
+    }
+  );
+}
+
+function evidenceChecklistRow(id, deliverableGroup, evidence) {
+  const sourceStatus = evidence?.releaseUseStatus ?? evidence?.status ?? null;
+  return octoberChecklistRow({
+    id,
+    deliverableGroup,
+    sourceStatuses: [sourceStatus].filter(Boolean),
+    evidenceIds: [evidence?.id].filter(Boolean),
+    status: evidenceReleaseStatusComplete(sourceStatus) ? "complete" : "review_required",
+    reviewReasons: evidenceReleaseStatusComplete(sourceStatus)
+      ? []
+      : checklistEvidenceReviewReasons(id, evidence),
+  });
+}
+
+function checklistEvidenceReviewReasons(prefix, evidence) {
+  const sections = Array.isArray(evidence?.reviewSections) ? evidence.reviewSections : [];
+  if (sections.length) {
+    return sections.map((section) => `${prefix}:${checklistReviewSectionLabel(section)}`);
+  }
+  const status = evidence?.releaseUseStatus ?? evidence?.status ?? null;
+  return [`${prefix}:${status ?? "missing_evidence"}`];
+}
+
+function checklistReviewSectionLabel(section) {
+  if (typeof section === "string") return section;
+  if (!section || typeof section !== "object" || Array.isArray(section)) return String(section ?? "missing_review_section");
+  return section.artifactId ?? section.reason ?? section.artifactType ?? "review_section";
+}
+
+function octoberChecklistRow({
+  id,
+  deliverableGroup,
+  evidenceIds = [],
+  sourceStatuses = [],
+  sourceWorkbenchApplicability = null,
+  status,
+  reviewReasons = [],
+}) {
+  return {
+    id,
+    deliverableGroup,
+    evidenceIds,
+    sourceStatuses,
+    ...(sourceWorkbenchApplicability ? { sourceWorkbenchApplicability } : {}),
+    status,
+    reviewReasons: uniqueStrings(reviewReasons.filter(Boolean)),
+  };
+}
+
+function evidenceReleaseStatusComplete(status) {
+  const normalized = String(status ?? "").toLowerCase();
+  if (!normalized) return false;
+  if (/(review|required|missing|incomplete|blocked|failed|unsafe|stale|not_submitted|not_ready)/.test(normalized)) return false;
+  return /(complete|pass|passed|ready|evidenced|frozen|active|public_training_only|requirements_evidenced)/.test(normalized);
+}
+
 function partialTaskOutputTypeEvidenceRow(taskType, rows) {
   const latestRow = rows.find((row) => row.taskType === taskType && row.reviewReasons.length === 0) ?? null;
   return {
@@ -24647,6 +31227,7 @@ const REQUIRED_POLICY_ACTION_KINDS = [
   "discussion_open",
   "adjudication_finalize",
   "label_snapshot_freeze",
+  "release_report_materialize",
   "pairwise_snapshot_freeze",
   "evaluation_run",
   "hidden_benchmark_aggregate_report",
@@ -24875,11 +31456,16 @@ function defaultImplementationPhaseGateBundle(releaseId) {
     laneStates: REQUIRED_PHASE_GATE_LANE_KINDS.map((laneKind) => ({
       laneKind,
       laneId: `${laneKind}-${releaseId}`,
-      phaseState: laneKind === "hidden_benchmark_submission_lane" ? "staff_only" : "enabled",
+      phaseState:
+        laneKind === "hidden_benchmark_submission_lane"
+          ? "staff_only"
+          : "enabled",
       failClosed: true,
       noSideEffectsWhenDisabled: true,
       labelsExposedWhenDisabled: false,
       supportsReleaseClaimsWhenDisabled: false,
+      allowedActionKinds: [],
+      notes: "Default phase-gate seed lane.",
     })),
     futurePhaseDefault: "blocked",
     broadeningRequiresManifestActivation: true,
@@ -25100,7 +31686,6 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const submittedConsumptionRows = (options.policyDecisionConsumptions ?? [])
     .map((record) => normalizePolicyDecisionConsumption(record, decisionRowsForGate, "submitted_workflow_policy_decision_consumption"))
     .filter(Boolean);
-  const submittedPolicyEvidencePresent = submittedActionRows.length > 0 || submittedDecisionRows.length > 0 || submittedConsumptionRows.length > 0;
   const submittedPhaseRows = (options.implementationPhaseGateBundles ?? [])
     .map((bundle) => normalizeImplementationPhaseGateBundle(bundle, "submitted_workflow_implementation_phase_gate_bundle"))
     .filter(Boolean);
@@ -25182,6 +31767,18 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
   const seedAuditVerificationRows = [
     normalizeSensitiveAuditChainVerification(defaultSensitiveAuditChainVerification(releaseId, seedAuditRows), seedAuditRows, "seed_sensitive_audit_chain_verification"),
   ];
+  const submittedOperationalControlPackagePresent =
+    submittedActionRows.length > 0 ||
+    submittedPhaseRows.length > 0 ||
+    submittedQueueRows.length > 0 ||
+    submittedScanRows.length > 0 ||
+    submittedClientPolicyRows.length > 0 ||
+    submittedClientCheckRows.length > 0 ||
+    submittedCloudSecurityBudgetPolicyRows.length > 0 ||
+    submittedExternalWormAuditLogPolicyRows.length > 0 ||
+    submittedAuditGovernanceRows.length > 0 ||
+    submittedAuditRows.length > 0 ||
+    submittedAuditVerificationRows.length > 0;
   const actionKindRows = REQUIRED_POLICY_ACTION_KINDS.map((actionKind) =>
     policyActionKindEvidenceRow(actionKind, actionRowsForGate, decisionRowsForGate, submittedConsumptionRows),
   );
@@ -25197,7 +31794,7 @@ export function buildOperationalControlEvidenceReport(releaseId, options = {}) {
     ...submittedActionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_action_kind", artifactId: row.id, reason }))),
     ...submittedDecisionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_decision", artifactId: row.id, reason }))),
     ...submittedConsumptionRows.flatMap((row) => row.reviewReasons.map((reason) => ({ artifactType: "policy_decision_consumption", artifactId: row.id, reason }))),
-    ...(submittedPolicyEvidencePresent
+    ...(submittedOperationalControlPackagePresent
       ? policyActionConsumptionRows.filter((row) => row.status !== "policy_action_consumption_covered").map((row) => ({
           artifactType: "policy_action_consumption_gate",
           artifactId: row.actionKind,
@@ -25506,6 +32103,8 @@ function normalizeImplementationPhaseGateBundle(bundle, rowSource) {
     releaseId: bundle.releaseId ?? null,
     manifestId: bundle.manifestId ?? null,
     version: bundle.version ?? null,
+    phaseGateBundleHash:
+      bundle.phaseGateBundleHash ?? bundle.canonicalBundleHash ?? bundle.bundleHash ?? `sha256:${id}`,
     laneStates,
     missingLaneKinds,
     unsafeDisabledLanes,
@@ -26062,9 +32661,195 @@ function auditChainKindEvidenceRow(eventKind, eventRows) {
   };
 }
 
+function targetGapRow(id, label, target, current, remaining, sourceEvidenceId) {
+  return {
+    id,
+    label,
+    target,
+    current,
+    remaining,
+    sourceEvidenceId,
+    status: remaining > 0 ? "target_gap_remaining" : "target_gap_met",
+  };
+}
+
+function targetGapTotals(rows) {
+  const sum = (fieldName) =>
+    rows.reduce((total, row) => {
+      const value = Number(row?.[fieldName]);
+      return total + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  return {
+    targetTotal: sum("target"),
+    currentTotal: sum("current"),
+    remainingTotal: sum("remaining"),
+  };
+}
+
+function targetGapRouteCounts(rows) {
+  return rows.reduce((counts, row) => {
+    for (const route of targetGapRouteList(row)) {
+      counts[route] = (counts[route] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+}
+
+function targetGapRouteList(row) {
+  return uniqueStrings([
+    row?.writeRoute,
+    row?.bulkImportRoute,
+    row?.dryRunImportRoute,
+    row?.validateOnlyImportRoute,
+    row?.packageImportRoute,
+    row?.packageDryRunImportRoute,
+    row?.packageValidateOnlyImportRoute,
+    row?.setupWriteRoute,
+    row?.setupBulkImportRoute,
+    row?.setupDryRunImportRoute,
+    row?.setupValidateOnlyImportRoute,
+    row?.readbackRoute,
+    row?.submissionReadbackRoute,
+    row?.setupReadbackRoute,
+    row?.targetGapReadbackRoute,
+    row?.targetGapReadbackItemRoute,
+    row?.collectionPlanRoute,
+    row?.templateReadbackRoute,
+    row?.expandedTemplateReadbackRoute,
+    row?.cappedExpandedTemplateReadbackRoute,
+    ...(Array.isArray(row?.writeRoutes) ? row.writeRoutes : []),
+    ...(Array.isArray(row?.bulkImportRoutes) ? row.bulkImportRoutes : []),
+    ...(Array.isArray(row?.setupBulkImportRoutes) ? row.setupBulkImportRoutes : []),
+    ...(Array.isArray(row?.readbackRoutes) ? row.readbackRoutes : []),
+    ...(Array.isArray(row?.submissionReadbackRoutes) ? row.submissionReadbackRoutes : []),
+    ...(Array.isArray(row?.targetGapReadbackRoutes) ? row.targetGapReadbackRoutes : []),
+    ...(Array.isArray(row?.targetGapReadbackItemRoutes) ? row.targetGapReadbackItemRoutes : []),
+    ...(Array.isArray(row?.operatorActions) ? row.operatorActions.flatMap(targetGapOperatorActionRouteList) : []),
+  ]);
+}
+
+function targetGapOperatorActionRouteList(action) {
+  return [
+    action?.writeRoute,
+    action?.readbackRoute,
+    action?.readbackItemRoute,
+    action?.submissionReadbackRoute,
+    action?.setupWriteRoute,
+    action?.setupReadbackRoute,
+    action?.bulkImportRoute,
+    action?.setupBulkImportRoute,
+    action?.dryRunImportRoute,
+    action?.validateOnlyImportRoute,
+    action?.setupDryRunImportRoute,
+    action?.setupValidateOnlyImportRoute,
+    action?.packageImportRoute,
+    action?.packageDryRunImportRoute,
+    action?.packageValidateOnlyImportRoute,
+    action?.verificationRoute,
+    action?.targetGapReadbackRoute,
+    action?.targetGapReadbackItemRoute,
+    ...(Array.isArray(action?.templateReadbackRoutes) ? action.templateReadbackRoutes : []),
+  ];
+}
+
+const OCTOBER_OPERATING_PLAN_POLICY = {
+  planDate: "2026-06-25",
+  releaseTargetDate: "2026-10-31",
+  scopeLabel: "compressed_quality_preserving_october_release_not_lmca_replication",
+  personWeekRange: { min: 132, max: 154 },
+  budgetEnvelopeUsd: { min: 600000, midpoint: 840000, max: 1000000 },
+  requiredStaffing: [
+    { role: "research_lead", requiredCount: 1 },
+    { role: "annotation_lead", requiredCount: 1 },
+    { role: "expert_adjudicator", requiredCount: 4 },
+    { role: "full_stack_engineer", requiredCount: 1 },
+    { role: "data_evaluation_engineer", requiredCount: 1 },
+    { role: "operations_governance_lead", requiredCount: 1 },
+    { role: "graduate_fellow", requiredCount: 4 },
+    { role: "undergraduate_rater", requiredCountMin: 12, requiredCountMax: 16 },
+  ],
+  workstreams: [
+    "rubric_pack_and_public_practice",
+    "blind_rating_platform_and_revision_locking",
+    "certification_gold_library_and_rater_tiers",
+    "corpus_collection_and_blind_initial_ratings",
+    "expert_adjudication_and_discussion_memos",
+    "appendix_c_validation_and_human_ceiling",
+    "hidden_benchmark_freeze_and_artifact_defense",
+    "lmca_metric_evaluation_and_release_reporting",
+  ],
+};
+
+export function buildOctoberOperatingPlanReport(releaseId, targetGaps, auxiliaryWorkflowEvidence = null) {
+  const targetRows = targetGaps?.rows ?? [];
+  const openTargetRows = targetRows.filter((row) => row.remaining > 0);
+  const scheduleRows = auxiliaryWorkflowEvidence?.scheduleStatusRows ?? [];
+  const activeScheduleRow = scheduleRows.find((row) => row.reviewReasons?.length === 0) ?? scheduleRows[0] ?? null;
+  const scheduleStatus = activeScheduleRow?.status ?? "seed_schedule_not_submitted";
+  const completionClaimAllowed = activeScheduleRow?.supportsCompletionClaim === true && openTargetRows.length === 0;
+  const staffingRows = OCTOBER_OPERATING_PLAN_POLICY.requiredStaffing.map((row) => ({
+    ...row,
+    status: row.role === "expert_adjudicator" && row.requiredCount < 4 ? "staffing_policy_review_required" : "required_role_declared",
+  }));
+  const workstreamRows = OCTOBER_OPERATING_PLAN_POLICY.workstreams.map((workstream) => {
+    const blockingTargetGapIds = operatingPlanBlockingTargetGapIds(workstream, openTargetRows);
+    return {
+      workstream,
+      blockingTargetGapIds,
+      status: blockingTargetGapIds.length ? "blocked_by_target_gap" : "target_scale_evidence_available",
+    };
+  });
+  return {
+    id: `october-operating-plan-${releaseId}`,
+    releaseId,
+    policy: OCTOBER_OPERATING_PLAN_POLICY,
+    releaseTargetDate: OCTOBER_OPERATING_PLAN_POLICY.releaseTargetDate,
+    scopeLabel: OCTOBER_OPERATING_PLAN_POLICY.scopeLabel,
+    personWeekRange: OCTOBER_OPERATING_PLAN_POLICY.personWeekRange,
+    budgetEnvelopeUsd: OCTOBER_OPERATING_PLAN_POLICY.budgetEnvelopeUsd,
+    staffingRows,
+    workstreamRows,
+    scheduleStatus,
+    scheduleStatusSnapshotId: activeScheduleRow?.id ?? null,
+    completionClaimAllowed,
+    targetGapSummary: {
+      targetRows: targetRows.length,
+      openTargetRows: openTargetRows.length,
+      openTargetGapIds: openTargetRows.map((row) => row.id),
+    },
+    counts: {
+      requiredStaffingRoles: staffingRows.length,
+      expertAdjudicatorRequiredCount: staffingRows.find((row) => row.role === "expert_adjudicator")?.requiredCount ?? 0,
+      requiredWorkstreams: workstreamRows.length,
+      blockedWorkstreams: workstreamRows.filter((row) => row.status === "blocked_by_target_gap").length,
+      openTargetRows: openTargetRows.length,
+    },
+    releaseUseStatus: openTargetRows.length
+      ? "october_operating_plan_target_scale_open"
+      : completionClaimAllowed
+        ? "october_operating_plan_target_scale_and_schedule_complete"
+        : "october_operating_plan_schedule_completion_claim_blocked",
+  };
+}
+
+function operatingPlanBlockingTargetGapIds(workstream, openTargetRows) {
+  const ids = new Set(openTargetRows.map((row) => row.id));
+  const map = {
+    rubric_pack_and_public_practice: ["gold_library_items"],
+    blind_rating_platform_and_revision_locking: ["blind_initial_ratings"],
+    certification_gold_library_and_rater_tiers: ["gold_library_items"],
+    corpus_collection_and_blind_initial_ratings: ["positions", "critiques", "blind_initial_ratings"],
+    expert_adjudication_and_discussion_memos: ["blind_initial_ratings", "validation_core_all_items_raters"],
+    appendix_c_validation_and_human_ceiling: ["validation_critiques", "validation_positions", "validation_core_all_items_raters"],
+    hidden_benchmark_freeze_and_artifact_defense: ["positions", "critiques", "blind_initial_ratings"],
+    lmca_metric_evaluation_and_release_reporting: ["positions", "critiques", "blind_initial_ratings", "validation_critiques"],
+  };
+  return (map[workstream] ?? []).filter((id) => ids.has(id));
+}
+
 export function buildOctoberReleaseReport(
-  releaseId,
-  labelSnapshot,
+  releaseId = "october-2026-demo",
+  labelSnapshot = null,
   ratings = seedRatings,
   positionList = positions,
   critiqueList = critiques,
@@ -26073,6 +32858,14 @@ export function buildOctoberReleaseReport(
   sourceStyleAudits = postLockSourceStyleAudits,
   options = {},
 ) {
+  labelSnapshot ??= createLabelSnapshot(
+    `snapshot-${releaseId}`,
+    releaseId,
+    ratings,
+    critiqueList.map((critique) => ({ positionId: critique.positionId, critiqueId: critique.id })),
+    "initial_only",
+    positionList,
+  );
   const submittedTextArtifacts = applySubmittedItemTextVersions(positionList, critiqueList, options.itemTextVersions ?? []);
   const effectiveAdjudicationMemos = buildEffectiveAdjudicationMemos(options.adjudicationMemos ?? []);
   const effectiveVerificationRecords = buildEffectiveVerificationRecords(options.verificationRecords ?? []);
@@ -26083,14 +32876,63 @@ export function buildOctoberReleaseReport(
   const releaseGateEvaluation = evaluateReleaseGateProfile(releaseGateProfile);
   const adminTagBlinding = buildAdminTagBlindingReport(releaseId, positionList);
   const positionIntakeReadiness = buildPositionIntakeReadinessReport(releaseId, positionList);
+  const greenfieldArchitecture = buildMetaphilosophyGreenfieldArchitectureReport(releaseId, {
+    greenfieldArchitectureLayers: options.greenfieldArchitectureLayers ?? options.metaphilosophyArchitectureLayers ?? [],
+  });
+  const sourceIntakeEvidence = buildSourceIntakeEvidenceReport(releaseId, {
+    sourceCards: options.sourceCards ?? [],
+    sourceSpans: options.sourceSpans ?? [],
+    extractionBatches: options.extractionBatches ?? [],
+    argumentExtractions: options.argumentExtractions ?? [],
+  });
+  const sourcePreparationEvidence = buildSourcePreparationEvidenceReport(releaseId, {
+    argumentExtractions: options.argumentExtractions ?? [],
+    preparedDrafts: options.preparedDrafts ?? [],
+    reviewSignals: options.reviewSignals ?? [],
+    gateDecisions: options.gateDecisions ?? [],
+    candidateItems: options.candidateItems ?? [],
+    promotionRecords: options.promotionRecords ?? [],
+  });
+  const taskTrackTaxonomy = buildMetaphilosophyTaskTrackTaxonomyReport(releaseId, {
+    taskTracks: options.taskTracks ?? options.metaphilosophyTaskTracks ?? [],
+  });
+  const researchBacklog = buildMetaphilosophyResearchBacklogReport(releaseId, {
+    researchBacklogItems: options.researchBacklogItems ?? options.metaphilosophyResearchBacklogItems ?? [],
+  });
+  const operationalControlEvidence = buildOperationalControlEvidenceReport(releaseId, {
+    policyActionKinds: options.policyActionKinds ?? [],
+    policyDecisionRecords: options.policyDecisionRecords ?? [],
+    policyDecisionConsumptions: options.policyDecisionConsumptions ?? [],
+    governanceApprovalRecords: options.governanceApprovalRecords ?? [],
+    implementationPhaseGateBundles: options.implementationPhaseGateBundles ?? [],
+    queueFreshnessPolicies: options.queueFreshnessPolicies ?? [],
+    queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
+    clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
+    clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
+    cloudSecurityBudgetPolicies: options.cloudSecurityBudgetPolicies ?? [],
+    externalWormAuditLogPolicies: options.externalWormAuditLogPolicies ?? [],
+    sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
+    sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
+  });
+  const metaphilosophyDeliverableChecklist = buildMetaphilosophyDeliverableChecklistReport(releaseId, {
+    greenfieldArchitecture,
+    sourceIntakeEvidence,
+    sourcePreparationEvidence,
+    taskTrackTaxonomy,
+    researchBacklog,
+    operationalControlEvidence,
+  });
   const rubricQaCoverage = buildRubricQaCoverageReport(releaseId);
   const sourceExampleAnchors = buildLmcaSourceExampleAnchorReport(releaseId, lmcaSourceExampleAnchors, {
     sourceAnchorExamples: options.sourceAnchorExamples ?? [],
   });
   const metricEligibility = buildMetricFamilyEligibilityManifest(releaseId, labelSnapshot, positionList, critiqueList);
-  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList, { humanCeilingRuns: options.humanCeilingRuns ?? [] });
   const validationTrancheReport = buildValidationTrancheReport(releaseId, labelSnapshot, ratings, positionList, critiqueList, effectiveAdjudicationMemos, {
     validationTrancheEvidenceRecords: options.validationTrancheEvidenceRecords ?? options.validationTrancheEvidence ?? [],
+  });
+  const validationDesign = buildValidationDesignReport(ratings, positionList, critiqueList, {
+    humanCeilingRuns: options.humanCeilingRuns ?? [],
+    submittedValidationTrancheEvidence: validationTrancheReport.submittedValidationTrancheEvidence,
   });
   const humanScoreDistribution = buildHumanScoreDistributionReport(releaseId, labelSnapshot, positionList, critiqueList);
   const ratingRevisionAudit = buildRatingRevisionAuditReport(releaseId, ratings, positionList, {
@@ -26207,7 +33049,10 @@ export function buildOctoberReleaseReport(
     ratings,
     evaluationPairs,
     [fullRubricEvaluationRun, overallOnlyEvaluationRun],
-    { primaryRaterAnchorPolicies: options.primaryRaterAnchorPolicies ?? [] },
+    {
+      primaryRaterAnchorPolicies: options.primaryRaterAnchorPolicies ?? [],
+      raterQualificationRecords: options.raterQualificationRecords ?? [],
+    },
   );
   const modelFailureAudits = [
     buildModelFailureAudit(releaseId, labelSnapshot, fullRubricEvaluationRun, positionList, critiqueList, {
@@ -26266,6 +33111,7 @@ export function buildOctoberReleaseReport(
   const effectiveRaterProfiles = buildEffectiveRaterProfiles(options.raters ?? []);
   const raterCompositionConflicts = buildRaterCompositionConflictReport(releaseId, labelSnapshot, ratings, positionList, effectiveRaterProfiles, {
     critiqueList,
+    raterQualificationRecords: options.raterQualificationRecords ?? [],
   });
   const raterProfileEvidence = buildRaterProfileEvidenceReport(releaseId, labelSnapshot, ratings, effectiveRaterProfiles, {
     positionList,
@@ -26286,7 +33132,12 @@ export function buildOctoberReleaseReport(
     critiqueList,
     releaseRightsRecords,
     effectiveBenchmarkExposureEvents,
-    { ratings, benchmarkSplitMembers: options.benchmarkSplitMembers ?? [], artifactProbeRuns: options.artifactProbeRuns ?? [] },
+    {
+      ratings,
+      benchmarkSplitMembers: options.benchmarkSplitMembers ?? [],
+      artifactProbeRuns: options.artifactProbeRuns ?? [],
+      raterQualificationRecords: options.raterQualificationRecords ?? [],
+    },
   );
   const critiqueGenerationEvaluation = buildCritiqueGenerationEvaluationReport(
     releaseId,
@@ -26301,6 +33152,14 @@ export function buildOctoberReleaseReport(
       evaluationRuns: [...evaluationRuns, ...(options.evaluationRuns ?? [])],
     },
   );
+  const candidateGenerationIntakeChecklist = buildCandidateGenerationIntakeChecklistReport(releaseId, {
+    positionIntakeReadiness,
+    activeLearning,
+    candidateIntakeQualityAudit,
+    critiqueGenerationEvaluation,
+    corpusManifest,
+    hiddenBenchmarkFreeze,
+  });
   const trainingExport = buildTrainingExport(
     releaseId,
     labelSnapshot,
@@ -26311,9 +33170,11 @@ export function buildOctoberReleaseReport(
     {
       pairwiseComparisonSnapshots: options.pairwiseComparisonSnapshots ?? [],
       trainingExportUncertaintyPolicies: options.trainingExportUncertaintyPolicies ?? [],
+      volunteerDataWithdrawalRequests: options.volunteerDataWithdrawalRequests ?? [],
     },
   );
   const publicExportManifest = createExportManifest("public", releaseId, positionList, critiqueList, labelSnapshot);
+  const internalExportManifest = createExportManifest("internal", releaseId, positionList, critiqueList, labelSnapshot);
   const labelChannelSeparation = buildLabelChannelSeparationReport(releaseId, labelSnapshot, trainingExport, certification, rubricQaCoverage);
   const comparabilityTierPolicyEvidence = buildComparabilityTierPolicyEvidenceReport(releaseId, options.comparabilityTierPolicies ?? []);
   const comparabilityClaims = buildComparabilityClaimMatrix({
@@ -26327,7 +33188,7 @@ export function buildOctoberReleaseReport(
   });
   const lmcaComparison = buildLmcaComparisonReport({ releaseId, corpusManifest, metricEligibility, validationDesign, labelSnapshot });
   const appendixCScaleMet = validationDesign.status === "appendix_c_scale";
-  const targetGaps = {
+  const targetGapValues = {
     positionsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.positions - corpusManifest.counts.positions),
     critiquesRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.critiques - corpusManifest.counts.critiques),
     blindInitialRatingsRemaining: Math.max(0, OCTOBER_RELEASE_TARGETS.blindInitialRatings - corpusManifest.counts.blindInitialRatings),
@@ -26338,10 +33199,71 @@ export function buildOctoberReleaseReport(
       ? 0
       : Math.max(0, OCTOBER_RELEASE_TARGETS.coreAllItemsRaters - validationDesign.currentScale.fullCoverageRaterCount),
   };
-  const currentStatus = Object.values(targetGaps).some((value) => value > 0) ? "incomplete_against_october_target" : "target_scale_met";
+  const validationScaleSourceEvidenceId = validationDesign.currentScale.sourceEvidenceId ?? validationDesign.id;
+  const currentStatus = Object.values(targetGapValues).some((value) => value > 0) ? "incomplete_against_october_target" : "target_scale_met";
+  const targetGapRows = [
+    targetGapRow("positions", "Positions", OCTOBER_RELEASE_TARGETS.positions, corpusManifest.counts.positions, targetGapValues.positionsRemaining, corpusManifest.id),
+    targetGapRow("critiques", "Critiques", OCTOBER_RELEASE_TARGETS.critiques, corpusManifest.counts.critiques, targetGapValues.critiquesRemaining, corpusManifest.id),
+    targetGapRow(
+      "blind_initial_ratings",
+      "Blind initial ratings",
+      OCTOBER_RELEASE_TARGETS.blindInitialRatings,
+      corpusManifest.counts.blindInitialRatings,
+      targetGapValues.blindInitialRatingsRemaining,
+      corpusManifest.id,
+    ),
+    targetGapRow(
+      "gold_library_items",
+      "Gold library items",
+      OCTOBER_RELEASE_TARGETS.goldLibraryItems,
+      certification.loadedGoldLibraryItems,
+      targetGapValues.goldItemsRemaining,
+      certification.id,
+    ),
+    targetGapRow(
+      "validation_critiques",
+      "Validation critiques",
+      OCTOBER_RELEASE_TARGETS.validationCritiques,
+      validationDesign.currentScale.critiqueCount,
+      targetGapValues.validationCritiquesRemaining,
+      validationScaleSourceEvidenceId,
+    ),
+    targetGapRow(
+      "validation_positions",
+      "Validation positions",
+      OCTOBER_RELEASE_TARGETS.validationPositions,
+      validationDesign.currentScale.positionCount,
+      targetGapValues.validationPositionsRemaining,
+      validationScaleSourceEvidenceId,
+    ),
+    targetGapRow(
+      "validation_core_all_items_raters",
+      "Core validation all-items raters",
+      OCTOBER_RELEASE_TARGETS.coreAllItemsRaters,
+      validationDesign.currentScale.fullCoverageRaterCount,
+      targetGapValues.validationCoreAllItemsRatersRemaining,
+      validationScaleSourceEvidenceId,
+    ),
+  ];
+  const targetGapCounts = countBy(targetGapRows, "status");
+  const targetGapTotalCounts = targetGapTotals(targetGapRows);
+  const targetGaps = {
+    id: `target-gaps-${releaseId}`,
+    releaseId,
+    releaseUseStatus: currentStatus,
+    rows: targetGapRows,
+    counts: {
+      targetRows: targetGapRows.length,
+      met: targetGapCounts.target_gap_met ?? 0,
+      remaining: targetGapCounts.target_gap_remaining ?? 0,
+      ...targetGapTotalCounts,
+    },
+    totals: targetGapTotalCounts,
+    ...targetGapValues,
+  };
   const releaseVersionManifest = buildEffectiveReleaseVersionManifest(
     releaseId,
-    { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps },
+    { corpusManifest, labelSnapshot, metricDirectionalityConfig, releaseGateProfile, currentStatus, targetGaps, operationalControlEvidence },
     options.releaseVersions ?? [],
     options.releaseFreezes ?? [],
   );
@@ -26350,14 +33272,38 @@ export function buildOctoberReleaseReport(
     labelSnapshot,
     options.raterReliabilityWeightModels ?? [],
   );
+  const labelSnapshotReliability = {
+    labelSnapshotId: labelSnapshot.id,
+    targetLabelVersion: labelSnapshot.targetLabelVersion,
+    reliabilityWeightModel: labelSnapshot.reliabilityWeightModel,
+    raterReliabilityWeightModelEvidence,
+    aggregationSensitivity: labelSnapshot.aggregationSensitivity,
+    includedRatingProvenance: labelSnapshot.includedRatingProvenance,
+  };
+  const labelAggregationReliabilityChecklist = buildLabelAggregationReliabilityChecklistReport(releaseId, {
+    labelSnapshotReliability,
+    raterReliabilityWeightModelEvidence,
+    ratingRevisionAudit,
+    postDiscussionDisagreement,
+    adjudicationMemoAudit,
+    disagreementThresholdPolicyEvidence,
+    metricDirectionalityConfig,
+    modelAssistedLabelOverlap,
+  });
+  const releaseReportSnapshot = {
+    id: `release-report-${releaseId}`,
+    releaseId,
+    currentStatus,
+  };
   const releaseArtifactEvidence = buildSubmittedReleaseArtifactEvidence(
     releaseId,
-    { labelSnapshot, corpusManifest, trainingExport, publicExportManifest },
+    { labelSnapshot, corpusManifest, trainingExport, publicExportManifest, internalExportManifest, releaseReportSnapshot },
     {
       labelSnapshots: options.labelSnapshots ?? [],
       corpusManifests: options.corpusManifests ?? [],
       trainingExports: options.trainingExports ?? [],
       exportManifests: options.exportManifests ?? [],
+      releaseReports: options.releaseReports ?? [],
     },
   );
   const modelEvaluationArtifactEvidence = buildSubmittedModelEvaluationArtifactEvidence(
@@ -26416,6 +33362,7 @@ export function buildOctoberReleaseReport(
     draftStoragePolicies: options.draftStoragePolicies ?? [],
     raterInstructionCompatibilityPolicies: options.raterInstructionCompatibilityPolicies ?? [],
     raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
+    raterInstructionComprehensionAudits: options.raterInstructionComprehensionAudits ?? [],
     rubricLintConfigs: options.rubricLintConfigs ?? [],
     rubricLintEvents: options.rubricLintEvents ?? [],
     itemIssueQuarantinePolicies: options.itemIssueQuarantinePolicies ?? [],
@@ -26473,7 +33420,20 @@ export function buildOctoberReleaseReport(
     scheduleRebaselinePolicies: options.scheduleRebaselinePolicies ?? [],
     scheduleStatusSnapshots: options.scheduleStatusSnapshots ?? [],
   });
+  const modelEvaluationReproducibilityChecklist = buildModelEvaluationReproducibilityChecklistReport(releaseId, {
+    itemTextViewParity,
+    samePositionContext,
+    leaderboardReport,
+    modelEvaluationArtifactEvidence,
+    promptParserProvenance,
+    promptTrackSeparation,
+    metricDirectionalityConfig,
+    modelAssistedLabelOverlap,
+    modelFailureAudits,
+    auxiliaryWorkflowEvidence,
+  });
   const releaseClaimWarnings = buildReleaseClaimWarningReport(releaseId, currentStatus, auxiliaryWorkflowEvidence);
+  const octoberOperatingPlan = buildOctoberOperatingPlanReport(releaseId, targetGaps, auxiliaryWorkflowEvidence);
   const interactionWorkflowEvidence = buildInteractionWorkflowEvidenceReport(releaseId, {
     publicExamplePracticeSessions: options.publicExamplePracticeSessions ?? [],
     practiceSandboxPolicies: options.practiceSandboxPolicies ?? [],
@@ -26518,34 +33478,70 @@ export function buildOctoberReleaseReport(
 	    governedBundleRecords: options.governedBundleRecords ?? [],
 	    governedBundleVerifications: options.governedBundleVerifications ?? [],
 	    releaseConfigManifests: options.releaseConfigManifests ?? [],
-	    releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
-	  });
-  const operationalControlEvidence = buildOperationalControlEvidenceReport(releaseId, {
-    policyActionKinds: options.policyActionKinds ?? [],
-    policyDecisionRecords: options.policyDecisionRecords ?? [],
-    policyDecisionConsumptions: options.policyDecisionConsumptions ?? [],
-    governanceApprovalRecords: options.governanceApprovalRecords ?? [],
-    implementationPhaseGateBundles: options.implementationPhaseGateBundles ?? [],
-    queueFreshnessPolicies: options.queueFreshnessPolicies ?? [],
-    queueStaleByDelayScans: options.queueStaleByDelayScans ?? [],
-    clientSurfaceIntegrityPolicies: options.clientSurfaceIntegrityPolicies ?? [],
-    clientSurfaceIntegrityChecks: options.clientSurfaceIntegrityChecks ?? [],
-    cloudSecurityBudgetPolicies: options.cloudSecurityBudgetPolicies ?? [],
-    externalWormAuditLogPolicies: options.externalWormAuditLogPolicies ?? [],
-    sensitiveAuditChainEvents: options.sensitiveAuditChainEvents ?? [],
-    sensitiveAuditChainVerifications: options.sensitiveAuditChainVerifications ?? [],
+      releaseConfigManifestVerifications: options.releaseConfigManifestVerifications ?? [],
+    });
+  const octoberCompletionChecklist = buildOctoberCompletionChecklistReport(releaseId, {
+    currentStatus,
+    targetGaps,
+    releaseArtifactEvidence,
+    modelEvaluationArtifactEvidence,
+    modelEvaluationReproducibilityChecklist,
+    policyBundleEvidence,
+    participantSafeguardEvidence,
+    ratingExperienceEvidence,
+    auxiliaryWorkflowEvidence,
+    interactionWorkflowEvidence,
+    discussionAdjudicationWorkflowEvidence,
+    workflowStateMachineEvidence,
+    raterDataGovernance,
+    releaseConfigManifestEvidence,
+    operationalControlEvidence,
+    sourceIntakeEvidence,
+    sourcePreparationEvidence,
+    metaphilosophyDeliverableChecklist,
+    candidateGenerationIntakeChecklist,
+    labelAggregationReliabilityChecklist,
+    rubricQaCoverage,
+    sourceExampleAnchors,
+    certification,
+    validationDesign,
+    hiddenBenchmarkFreeze,
+    releaseClaimWarnings,
   });
+  const operatorEvidenceSubmissionPlan = buildOperatorEvidenceSubmissionPlan(releaseId, octoberCompletionChecklist, targetGaps, {
+    release_artifact_submission_package: releaseArtifactEvidence,
+    model_evaluation_submission_package: modelEvaluationArtifactEvidence,
+    model_evaluation_reproducibility: modelEvaluationReproducibilityChecklist,
+    interaction_and_practice_workflows: interactionWorkflowEvidence,
+    discussion_and_adjudication_workflows: discussionAdjudicationWorkflowEvidence,
+    source_intake_and_metaphilosophy: metaphilosophyDeliverableChecklist,
+    candidate_generation_and_active_learning: candidateGenerationIntakeChecklist,
+    label_aggregation_and_reliability: labelAggregationReliabilityChecklist,
+    workflow_state_machines: workflowStateMachineEvidence,
+    rater_data_governance: raterDataGovernance,
+    release_config_manifest_controls: releaseConfigManifestEvidence,
+    operational_controls: operationalControlEvidence,
+  });
+  const octoberCompletionChecklistWithOperatorRoutes = buildOctoberCompletionChecklistWithOperatorRoutes(
+    octoberCompletionChecklist,
+    operatorEvidenceSubmissionPlan,
+  );
+  const targetGapsWithOperatorActions = buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissionPlan);
   return {
     id: `release-report-${releaseId}`,
     releaseId,
     generatedAt: new Date().toISOString(),
     octoberTargets: OCTOBER_RELEASE_TARGETS,
     currentStatus,
-    targetGaps,
+    targetGaps: targetGapsWithOperatorActions,
+    octoberOperatingPlan,
     releaseVersionManifest,
     releaseArtifactEvidence,
     modelEvaluationArtifactEvidence,
+    modelEvaluationReproducibilityChecklist,
     releaseClaimWarnings,
+    octoberCompletionChecklist: octoberCompletionChecklistWithOperatorRoutes,
+    operatorEvidenceSubmissionPlan,
     uxSimplification,
     workflowStateMachineEvidence,
     raterDataGovernance,
@@ -26566,6 +33562,12 @@ export function buildOctoberReleaseReport(
     disagreementThresholdPolicyEvidence,
     adminTagBlinding,
     positionIntakeReadiness,
+    greenfieldArchitecture,
+    sourceIntakeEvidence,
+    sourcePreparationEvidence,
+    taskTrackTaxonomy,
+    researchBacklog,
+    metaphilosophyDeliverableChecklist,
     rubricQaCoverage,
     sourceExampleAnchors,
     certification,
@@ -26577,6 +33579,7 @@ export function buildOctoberReleaseReport(
     provenanceRights: { public: publicRights, hidden_benchmark: hiddenBenchmarkRights },
     activeLearning,
     candidateIntakeQualityAudit,
+    candidateGenerationIntakeChecklist,
     raterCompositionConflicts,
     raterProfileEvidence,
     hiddenBenchmarkFreeze,
@@ -26585,14 +33588,8 @@ export function buildOctoberReleaseReport(
     labelChannelSeparation,
     humanScoreDistribution,
     raterReliabilityWeightModelEvidence,
-    labelSnapshotReliability: {
-      labelSnapshotId: labelSnapshot.id,
-      targetLabelVersion: labelSnapshot.targetLabelVersion,
-      reliabilityWeightModel: labelSnapshot.reliabilityWeightModel,
-      raterReliabilityWeightModelEvidence,
-      aggregationSensitivity: labelSnapshot.aggregationSensitivity,
-      includedRatingProvenance: labelSnapshot.includedRatingProvenance,
-    },
+    labelSnapshotReliability,
+    labelAggregationReliabilityChecklist,
     ratingRevisionAudit,
     ratingEffortQuality,
     rubricIssueFlags,
@@ -26656,6 +33653,32 @@ export function buildOctoberReleaseReport(
       generatedCritiqueSubmissions: options.generatedCritiqueSubmissions ?? [],
       modelEvaluationPredictions: options.modelEvaluationPredictions ?? [],
     },
+    workflowSourceIntakeArtifacts: {
+      sourceCards: options.sourceCards ?? [],
+      sourceSpans: options.sourceSpans ?? [],
+      extractionBatches: options.extractionBatches ?? [],
+      argumentExtractions: options.argumentExtractions ?? [],
+    },
+    ...(sourcePreparationEvidence.counts.preparedDrafts ||
+    sourcePreparationEvidence.counts.reviewSignals ||
+    sourcePreparationEvidence.counts.gateDecisions ||
+    sourcePreparationEvidence.counts.candidateItems ||
+    sourcePreparationEvidence.counts.promotionRecords
+      ? {
+          workflowSourcePreparationArtifacts: {
+            preparedDrafts: options.preparedDrafts ?? [],
+            reviewSignals: options.reviewSignals ?? [],
+            gateDecisions: options.gateDecisions ?? [],
+            candidateItems: options.candidateItems ?? [],
+            promotionRecords: options.promotionRecords ?? [],
+          },
+        }
+      : {}),
+    workflowMetaphilosophyArtifacts: {
+      taskTracks: options.taskTracks ?? options.metaphilosophyTaskTracks ?? [],
+      researchBacklogItems: options.researchBacklogItems ?? options.metaphilosophyResearchBacklogItems ?? [],
+      greenfieldArchitectureLayers: options.greenfieldArchitectureLayers ?? options.metaphilosophyArchitectureLayers ?? [],
+    },
     workflowModelEvaluationArtifacts: {
       critiqueGenerationRuns: options.critiqueGenerationRuns ?? [],
       generationEvaluationReports: options.generationEvaluationReports ?? [],
@@ -26674,10 +33697,16 @@ export function buildOctoberReleaseReport(
       validationTrancheEvidenceRecords: options.validationTrancheEvidenceRecords ?? options.validationTrancheEvidence ?? [],
       leaderboards: options.leaderboards ?? [],
       modelFailureAudits: options.modelFailureAudits ?? [],
+      modelInferenceConfigs: options.modelInferenceConfigs ?? [],
+      modelRunEnvironments: options.modelRunEnvironments ?? [],
+      modelRunReproducibilityPolicies: options.modelRunReproducibilityPolicies ?? [],
+      modelProviderDataHandlingPolicies: options.modelProviderDataHandlingPolicies ?? [],
       trainingExportUncertaintyPolicies: options.trainingExportUncertaintyPolicies ?? [],
     },
     workflowReleaseArtifacts: {
       labelSnapshots: options.labelSnapshots ?? [],
+      releaseReports: options.releaseReports ?? [],
+      benchmarkFreezeReports: options.benchmarkFreezeReports ?? [],
       corpusManifests: options.corpusManifests ?? [],
       trainingExports: options.trainingExports ?? [],
       exportManifests: options.exportManifests ?? [],
@@ -26730,6 +33759,7 @@ export function buildOctoberReleaseReport(
       draftStoragePolicies: options.draftStoragePolicies ?? [],
       raterInstructionCompatibilityPolicies: options.raterInstructionCompatibilityPolicies ?? [],
       raterInstructionRenderVersions: options.raterInstructionRenderVersions ?? [],
+      raterInstructionComprehensionAudits: options.raterInstructionComprehensionAudits ?? [],
       rubricLintConfigs: options.rubricLintConfigs ?? [],
       rubricLintEvents: options.rubricLintEvents ?? [],
       itemIssueQuarantinePolicies: options.itemIssueQuarantinePolicies ?? [],
@@ -27659,6 +34689,18 @@ function normalizeSubmittedLeaderboardReport(leaderboard, context) {
   if (!id) return null;
   const evaluationRunIds = normalizeStringArray(leaderboard.evaluationRunIds ?? leaderboard.runIds);
   const rankTiers = Array.isArray(leaderboard.uncertaintySupportedRankTiers) ? leaderboard.uncertaintySupportedRankTiers : [];
+  const rankTierRows = rankTiers.map((tier, index) => ({
+    index,
+    runIds: normalizeSubmittedRankTierRunIds(tier),
+  }));
+  const rankTierRunEntries = rankTierRows.flatMap((tier) => tier.runIds.map((runId) => [runId, tier.index]));
+  const rankTierRunCounts = rankTierRunEntries.reduce((counts, [runId]) => {
+    counts.set(runId, (counts.get(runId) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const rankTierIndexByRunId = new Map(rankTierRunEntries);
+  const missingRankTierRunIds = evaluationRunIds.filter((runId) => !rankTierIndexByRunId.has(runId));
+  const duplicateRankTierRunIds = [...rankTierRunCounts.entries()].filter(([, count]) => count > 1).map(([runId]) => runId);
   const pairedDifferenceRows = Array.isArray(leaderboard.pairedDifferenceRows ?? leaderboard.pairedComparisonRows)
     ? leaderboard.pairedDifferenceRows ?? leaderboard.pairedComparisonRows
     : [];
@@ -27668,16 +34710,29 @@ function normalizeSubmittedLeaderboardReport(leaderboard, context) {
   const invalidPairedRows = pairedDifferenceRows.flatMap((row) => {
     const key = row?.comparison ?? `${row?.leftRunId ?? "unknown"}_vs_${row?.rightRunId ?? "unknown"}`;
     const rowRunIds = normalizeStringArray(row?.evaluationRunIds);
+    const pairRunIds = rowRunIds.length === 2 ? rowRunIds : normalizeStringArray([row?.leftRunId, row?.rightRunId]);
     const lower = row?.pairedDifferenceInterval?.lower ?? row?.interval?.lower;
     const upper = row?.pairedDifferenceInterval?.upper ?? row?.interval?.upper;
+    const intervalExcludesZero = row?.intervalExcludesZero === true;
+    const practicalGapMet = row?.practicalGapMet === true;
+    const sameSubmittedRankTier =
+      pairRunIds.length === 2 &&
+      rankTierIndexByRunId.has(pairRunIds[0]) &&
+      rankTierIndexByRunId.get(pairRunIds[0]) === rankTierIndexByRunId.get(pairRunIds[1]);
+    const supportedRankClaim = row?.interpretation === "rank_claim_supported";
+    const sameTierNoSuperiority =
+      sameSubmittedRankTier &&
+      ["no_superiority_claim_supported", "unresolved_within_uncertainty", "same_tier_within_uncertainty"].includes(row?.interpretation) &&
+      (!intervalExcludesZero || !practicalGapMet);
     return [
       rowRunIds.length === 2 || (row?.leftRunId && row?.rightRunId) ? null : `${key}:evaluationRunIds`,
       Number.isFinite(row?.leftMinusRightPointEstimate ?? row?.pointEstimateDifference) ? null : `${key}:pointEstimateDifference`,
       Number.isFinite(lower) && Number.isFinite(upper) ? null : `${key}:pairedDifferenceInterval`,
-      row?.intervalExcludesZero === true ? null : `${key}:intervalExcludesZero`,
+      supportedRankClaim || sameTierNoSuperiority || intervalExcludesZero ? null : `${key}:intervalExcludesZero`,
       Number.isFinite(row?.practicalDifferenceThreshold) && row.practicalDifferenceThreshold > 0 ? null : `${key}:practicalDifferenceThreshold`,
-      row?.practicalGapMet === true ? null : `${key}:practicalGapMet`,
-      row?.interpretation === "rank_claim_supported" ? null : `${key}:interpretation`,
+      supportedRankClaim || sameTierNoSuperiority || practicalGapMet ? null : `${key}:practicalGapMet`,
+      supportedRankClaim && sameSubmittedRankTier ? `${key}:uncertaintySupportedRankTiers` : null,
+      supportedRankClaim || sameTierNoSuperiority ? null : `${key}:interpretation`,
     ].filter(Boolean);
   });
   const reviewReasons = [
@@ -27704,6 +34759,8 @@ function normalizeSubmittedLeaderboardReport(leaderboard, context) {
       : "uncertaintyPolicy.resampleCountOrDegreesOfFreedom",
     requiredPromptFieldReason("uncertaintyPolicy.randomSeedOrArtifact", uncertaintyPolicy.randomSeedOrArtifact ?? uncertaintyPolicy.randomSeed),
     rankTiers.length ? null : "uncertaintySupportedRankTiers",
+    ...missingRankTierRunIds.map((runId) => `uncertaintySupportedRankTiers:${runId}:missing`),
+    ...duplicateRankTierRunIds.map((runId) => `uncertaintySupportedRankTiers:${runId}:duplicate`),
     leaderboard.pointEstimateOnlyOrderingFlag === false ? null : "pointEstimateOnlyOrderingFlag",
     missingPairedRows ? "pairedDifferenceRows" : null,
     ...invalidPairedRows,
@@ -27735,6 +34792,12 @@ function normalizeSubmittedLeaderboardReport(leaderboard, context) {
       ? "submitted_uncertainty_aware_leaderboard_review_required"
       : "submitted_uncertainty_aware_leaderboard_complete",
   };
+}
+
+function normalizeSubmittedRankTierRunIds(tier) {
+  if (Array.isArray(tier)) return normalizeStringArray(tier);
+  if (tier && typeof tier === "object") return normalizeStringArray(tier.runIds ?? tier.evaluationRunIds);
+  return [];
 }
 
 function summarizePromptComparability(runs) {
@@ -27797,10 +34860,25 @@ function buildHiddenArtifactBalance(hiddenPositions, hiddenCritiques, labelSnaps
     };
   });
   const distinctStyleQualityCells = new Set(critiqueRows.map((row) => `${row.styleBand}:${row.adjudicatedQualityBand}`));
+  const sourceLengthQualityRows = sourceLengthQualityMatrixRows(critiqueRows);
+  const sourceLengthQualityCellCount = sourceLengthQualityRows.length;
+  const requiredSourceLengthQualityCellMin = 6;
   const counterbalanceStatus =
-    hiddenPositions.length >= 6 && hiddenCritiques.length >= 12 && distinctStyleQualityCells.size >= 4 ? "pass" : "insufficient_seed_benchmark";
+    hiddenPositions.length >= 6 &&
+    hiddenCritiques.length >= 12 &&
+    distinctStyleQualityCells.size >= 4 &&
+    sourceLengthQualityCellCount >= requiredSourceLengthQualityCellMin
+      ? "pass"
+      : "insufficient_seed_benchmark";
   return {
     counterbalanceStatus,
+    policy: {
+      matrixAxes: ["position_source_category", "critique_length_band", "adjudicated_quality_band"],
+      requiredHiddenPositionMin: 6,
+      requiredHiddenCritiqueMin: 12,
+      requiredStyleQualityCellMin: 4,
+      requiredSourceLengthQualityCellMin,
+    },
     positionSourceCategory: countBy(hiddenPositions, "sourceCategory"),
     positionAuthorshipRoute: countBy(hiddenPositions, "authorshipRoute"),
     sourceLanguage: countBy(hiddenPositions, "sourceLanguage"),
@@ -27812,12 +34890,37 @@ function buildHiddenArtifactBalance(hiddenPositions, hiddenCritiques, labelSnaps
     critiqueLengthBand: countBy(hiddenCritiques, "lengthBand"),
     critiqueStyleBand: countBy(hiddenCritiques, "styleBand"),
     sourceStyleQualityCells: countBy(critiqueRows, "adjudicatedQualityBand"),
+    sourceLengthQualityCellCount,
+    sourceLengthQualityMatrix: sourceLengthQualityRows,
     counterbalanceRows: critiqueRows,
     confoundDisclosure:
       counterbalanceStatus === "pass"
         ? "No single source/style route determines the hidden quality band in this report."
         : "Seed hidden benchmark has too few hidden items to rule out source/style/quality confounds for ordinary headline claims.",
   };
+}
+
+function sourceLengthQualityMatrixRows(rows) {
+  const matrix = new Map();
+  rows.forEach((row) => {
+    const key = [row.sourceCategory, row.lengthBand, row.adjudicatedQualityBand].join("::");
+    const current = matrix.get(key) ?? {
+      sourceCategory: row.sourceCategory,
+      lengthBand: row.lengthBand,
+      adjudicatedQualityBand: row.adjudicatedQualityBand,
+      count: 0,
+      positionIds: [],
+    };
+    current.count += 1;
+    current.positionIds = uniqueStrings([...current.positionIds, row.positionId]);
+    matrix.set(key, current);
+  });
+  return [...matrix.values()].sort(
+    (left, right) =>
+      String(left.sourceCategory).localeCompare(String(right.sourceCategory)) ||
+      String(left.lengthBand).localeCompare(String(right.lengthBand)) ||
+      String(left.adjudicatedQualityBand).localeCompare(String(right.adjudicatedQualityBand)),
+  );
 }
 
 function qualityBand(score) {
@@ -28250,13 +35353,14 @@ function applyTrainingExportUncertaintyPointwiseWeights(examples, policy) {
   });
 }
 
-function buildPointwiseTrainingExample(critique, positionList, labelSnapshot, ratings, contextSnapshots) {
+function buildPointwiseTrainingExample(critique, positionList, labelSnapshot, ratings, contextSnapshots, trainingExportExcludedRaterIds = new Set()) {
   const position = positionList.find((item) => item.id === critique.positionId);
   if (!position) return null;
   const itemId = makeItemId(position.id, critique.id);
   const label = labelSnapshot.itemLabels[itemId];
   if (!label || !isCustomLossEligibleLabel(label.weightedMeanScores)) return null;
   const itemRatings = ratings.filter((rating) => rating.positionId === position.id && rating.critiqueId === critique.id);
+  const exportableItemRatings = itemRatings.filter((rating) => !trainingExportExcludedRaterIds.has(rating.raterId));
   const contextSnapshotId = itemRatings.find((rating) => rating.ratingContextSnapshotId)?.ratingContextSnapshotId ?? null;
   const contextSnapshot = contextSnapshots.find((snapshot) => snapshot.id === contextSnapshotId) ?? null;
   const positionVersion = latestText(position);
@@ -28292,7 +35396,7 @@ function buildPointwiseTrainingExample(critique, positionList, labelSnapshot, ra
     groundTruthAvailability: position.groundTruthAvailability,
     nonConceptualDependencyNotes: position.nonConceptualDependencyNotes,
     promptTrackExposure: "project_full_rubric_training",
-    rationales: itemRatings
+    rationales: exportableItemRatings
       .filter((rating) => rating.rationale)
       .map((rating) => ({
         ratingId: rating.id,

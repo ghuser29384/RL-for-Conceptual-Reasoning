@@ -7,7 +7,10 @@ import {
   CONTRIBUTION_PART_SCHEMAS,
   CONTRIBUTION_TEMPLATES,
   createContributionSubmissionResources,
+  createGateDecisionResource,
+  createPreparedDraftFromArgumentExtraction,
   createPreparedDraftFromPart,
+  createReviewSignalResource,
   promotePreparedDraftToCandidateItem,
   requiredGateIdsForPolicy,
 } from "../src/domain/contributions.mjs";
@@ -147,6 +150,23 @@ test("prepared-draft promotion is blocked until raw and prepared gates pass and 
   assert.equal(blockedDraft.error, "raw_intake_gates_not_satisfied");
 
   const rawGateDecisions = passingGateDecisions("raw_intake_acceptance", part.id);
+  const readyDraftAtCreation = createPreparedDraftFromPart(
+    part,
+    {
+      id: "prepared-position-ready-at-creation",
+      preparedText: "Prepared blind-safe argument text.",
+      preparedDraftStatus: "ready_for_candidate_item_creation",
+      blindingReviewStatus: "blinding_review_passed",
+      sourceLeakageReviewStatus: "source_leakage_review_passed",
+      gateReadinessStatus: "ready_for_candidate_item_creation",
+    },
+    rawGateDecisions,
+    { id: "admin-1", role: "admin" },
+    { idFactory },
+  );
+  assert.equal(readyDraftAtCreation.ok, false);
+  assert.equal(readyDraftAtCreation.error, "prepared_draft_review_route_required");
+
   const preparedDraft = createPreparedDraftFromPart(
     part,
     { id: "prepared-position-1", preparedText: "Prepared blind-safe argument text." },
@@ -155,6 +175,11 @@ test("prepared-draft promotion is blocked until raw and prepared gates pass and 
     { idFactory, now: "2026-06-26T12:05:00.000Z" },
   );
   assert.equal(preparedDraft.ok, true);
+  assert.equal(preparedDraft.resource.candidateRaterVisibleText, "Prepared blind-safe argument text.");
+  assert.equal(preparedDraft.resource.blindingReviewStatus, "pending_blinding_review");
+  assert.equal(preparedDraft.resource.sourceLeakageReviewStatus, "pending_source_leakage_review");
+  assert.equal(preparedDraft.resource.gateReadinessStatus, "not_ready");
+  assert.equal(preparedDraft.resource.createdBy, "admin-1");
 
   const rawPromotion = promotePreparedDraftToCandidateItem(part, {}, rawGateDecisions, { id: "admin-1", role: "admin" }, { idFactory });
   assert.equal(rawPromotion.ok, false);
@@ -168,12 +193,31 @@ test("prepared-draft promotion is blocked until raw and prepared gates pass and 
     { idFactory },
   );
   assert.equal(blockedPromotion.ok, false);
-  assert.equal(blockedPromotion.error, "prepared_draft_gates_not_satisfied");
+  assert.equal(blockedPromotion.error, "prepared_draft_not_ready_for_promotion");
+
+  const reviewedPreparedDraft = {
+    ...preparedDraft.resource,
+    preparedDraftStatus: "ready_for_candidate_item_creation",
+    blindingReviewStatus: "blinding_review_passed",
+    sourceLeakageReviewStatus: "source_leakage_review_passed",
+    gateReadinessStatus: "ready_for_candidate_item_creation",
+    candidateItemReadiness: "ready_for_candidate_item_creation",
+  };
+
+  const blockedGatePromotion = promotePreparedDraftToCandidateItem(
+    reviewedPreparedDraft,
+    {},
+    rawGateDecisions,
+    { id: "admin-1", role: "admin" },
+    { idFactory },
+  );
+  assert.equal(blockedGatePromotion.ok, false);
+  assert.equal(blockedGatePromotion.error, "prepared_draft_gates_not_satisfied");
 
   const promotion = promotePreparedDraftToCandidateItem(
-    preparedDraft.resource,
+    reviewedPreparedDraft,
     {},
-    [...rawGateDecisions, ...passingGateDecisions("prepared_draft_readiness", preparedDraft.resource.id)],
+    [...rawGateDecisions, ...passingGateDecisions("prepared_draft_readiness", reviewedPreparedDraft.id)],
     { id: "admin-1", role: "admin" },
     { idFactory, now: "2026-06-26T12:10:00.000Z" },
   );
@@ -182,6 +226,108 @@ test("prepared-draft promotion is blocked until raw and prepared gates pass and 
   assert.equal(promotion.candidateItem.downstreamPromotionStatus, "not_promoted_to_live");
   assert.equal(promotion.promotionRecord.createdCandidateBatch, false);
   assert.equal(promotion.promotionRecord.createdLiveRecord, false);
+});
+
+test("source-derived critique extractions can be accepted without being mislabeled as position intake", () => {
+  const critiqueExtraction = {
+    id: "argument-extraction-critique-only",
+    sourceCardId: "source-card-critique-only",
+    sourceSpanIds: ["source-span-critique-only"],
+    extractionBatchId: "extraction-batch-critique-only",
+    argumentRole: "critique_argument",
+    reviewStatus: "accepted_for_critique_intake",
+    possiblePreparedCritiqueText: "This objection fails because it never identifies the inferential burden the position allegedly misses.",
+    critiqueTarget: "A position about explicit inferential burdens.",
+  };
+  const preparedCritique = createPreparedDraftFromArgumentExtraction(
+    critiqueExtraction,
+    {
+      id: "prepared-critique-from-critique-extraction",
+      draftType: "prepared_critique_draft",
+      targetPositionId: "position-target",
+    },
+    { id: "admin-1", role: "admin" },
+  );
+  assert.equal(preparedCritique.ok, true);
+  assert.equal(preparedCritique.resource.draftType, "prepared_critique_draft");
+  assert.equal(preparedCritique.resource.sourceArgumentExtractionId, critiqueExtraction.id);
+  assert.equal(preparedCritique.resource.targetPositionId, "position-target");
+  assert.equal(preparedCritique.resource.candidateRaterVisibleText, critiqueExtraction.possiblePreparedCritiqueText);
+
+  const readySourceDraftAtCreation = createPreparedDraftFromArgumentExtraction(
+    critiqueExtraction,
+    {
+      id: "prepared-critique-ready-at-creation",
+      draftType: "prepared_critique_draft",
+      targetPositionId: "position-target",
+      preparedDraftStatus: "ready_for_candidate_item_creation",
+      blindingReviewStatus: "blinding_review_passed",
+      sourceLeakageReviewStatus: "source_leakage_review_passed",
+      gateReadinessStatus: "ready_for_candidate_item_creation",
+    },
+    { id: "admin-1", role: "admin" },
+  );
+  assert.equal(readySourceDraftAtCreation.ok, false);
+  assert.equal(readySourceDraftAtCreation.error, "prepared_draft_review_route_required");
+
+  const blockedPendingExtraction = createPreparedDraftFromArgumentExtraction(
+    { ...critiqueExtraction, id: "argument-extraction-pending", reviewStatus: "pending_admin_review" },
+    {
+      id: "prepared-critique-from-pending-extraction",
+      draftType: "prepared_critique_draft",
+      targetPositionId: "position-target",
+    },
+    { id: "admin-1", role: "admin" },
+  );
+  assert.equal(blockedPendingExtraction.ok, false);
+  assert.equal(blockedPendingExtraction.error, "argument_extraction_not_accepted");
+});
+
+test("review signals are evidentiary and cannot replace prepared-draft gate decisions", () => {
+  const signal = createReviewSignalResource(
+    {
+      id: "review-signal-evidence-only",
+      signalType: "context_insufficiency",
+      source: "automated_prescreen",
+      confidence: 0.82,
+      explanation: "The extracted argument appears to need surrounding source context before rater-visible preparation.",
+      affectedObjectType: "PreparedDraft",
+      affectedObjectId: "prepared-draft-evidence-only",
+      relatedGateIds: ["context_sufficiency_gate"],
+    },
+    { id: "admin-1", role: "admin" },
+  );
+  assert.equal(signal.ok, true);
+  assert.equal(signal.resource.visibilityClass, "admin_only");
+
+  const raterVisibleSignal = createReviewSignalResource(
+    {
+      signalType: "source_leakage",
+      source: "admin",
+      explanation: "This should stay out of ordinary rater views.",
+      affectedObjectType: "PreparedDraft",
+      affectedObjectId: "prepared-draft-evidence-only",
+      visibilityClass: "rater_visible_after_promotion",
+    },
+    { id: "admin-1", role: "admin" },
+  );
+  assert.equal(raterVisibleSignal.ok, false);
+  assert.equal(raterVisibleSignal.error, "invalid_review_signal_visibility");
+
+  const automatedGate = createGateDecisionResource(
+    {
+      gateId: "context_sufficiency_gate",
+      workflowPolicyId: "prepared_draft_readiness",
+      objectType: "PreparedDraft",
+      objectId: "prepared-draft-evidence-only",
+      gateStatus: "passed",
+      decisionSource: "automated_prescreen",
+      citedReviewSignalIds: [signal.resource.id],
+    },
+    { id: "admin-1", role: "admin" },
+  );
+  assert.equal(automatedGate.ok, false);
+  assert.equal(automatedGate.error, "automated_prescreen_cannot_decide_gate");
 });
 
 test("contribution API persists submissions separately and hides review controls from the user dashboard", async () => {
@@ -317,7 +463,33 @@ test("contribution API blocks prepared-draft promotion until gate decisions pass
     body: JSON.stringify({ promotion: {} }),
   });
   assert.equal(blockedPromotion.status, 400);
-  assert.equal(blockedPromotion.body.error, "prepared_draft_gates_not_satisfied");
+  assert.equal(blockedPromotion.body.error, "prepared_draft_not_ready_for_promotion");
+
+  const reviewedDraft = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/admin/prepared-drafts/prepared-api-1/review",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      preparedDraftReview: {
+        preparedDraftStatus: "ready_for_candidate_item_creation",
+        preparedText: "Prepared text.",
+        candidateRaterVisibleText: "Prepared text.",
+        blindingReviewStatus: "blinding_review_passed",
+        sourceLeakageReviewStatus: "source_leakage_review_passed",
+        gateReadinessStatus: "ready_for_candidate_item_creation",
+      },
+    }),
+  });
+  assert.equal(reviewedDraft.status, 201);
+
+  const blockedGatePromotion = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/admin/prepared-drafts/prepared-api-1/promote",
+    headers: adminHeaders,
+    body: JSON.stringify({ promotion: {} }),
+  });
+  assert.equal(blockedGatePromotion.status, 400);
+  assert.equal(blockedGatePromotion.body.error, "prepared_draft_gates_not_satisfied");
 
   for (const decision of passingGateDecisions("prepared_draft_readiness", "prepared-api-1")) {
     const response = await invokeApi(context, {

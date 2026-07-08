@@ -38,6 +38,7 @@ import {
   RATING_ESCALATION_PRODUCT_SPREAD_THRESHOLD,
   RATING_ESCALATION_TRIGGER_RULES,
   RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_POLICY_VERSION,
+  RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION,
   RATER_INSTRUCTION_COMPATIBILITY_POLICY_VERSION,
   SAME_POSITION_BATCH_REVIEW_REQUIREDNESS_POLICY_VERSION,
   SCORE_CONFIDENCE_SCALE_POLICY_VERSION,
@@ -46,6 +47,10 @@ import {
   REQUIRED_RATIONALE_EVIDENCE_SPAN_MANDATORY_TRIGGER_CLASSES,
   REQUIRED_RATIONALE_EVIDENCE_SPAN_REQUIREDNESS_THRESHOLDS,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_CLASSES,
+  REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS,
+  REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS,
+  REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS,
+  REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES,
   REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS,
   REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS,
@@ -157,6 +162,26 @@ import {
   REQUIRED_PARTIAL_TASK_ELIGIBLE_USES,
   REQUIRED_PARTIAL_TASK_PROMOTION_CRITERIA,
   REQUIRED_PARTIAL_TASK_PROMOTION_REVIEW_STATUSES,
+  REQUIRED_POSITION_ACCEPTED_METHODOLOGY_STATUSES,
+  REQUIRED_POSITION_CONCEPTUAL_SCOPE_STATUSES,
+  REQUIRED_POSITION_CONTEXT_SUFFICIENCY_STATUSES,
+  REQUIRED_POSITION_GROUND_TRUTH_AVAILABILITY_STATUSES,
+  REQUIRED_POSITION_HEADLINE_ELIGIBILITY_STATUSES,
+  REQUIRED_POSITION_INTAKE_NORMALIZATION_STATUSES,
+  ARGUMENT_EXTRACTION_METHODS,
+  ARGUMENT_EXTRACTION_REVIEW_STATUSES,
+  ARGUMENT_EXTRACTION_ROLES,
+  SOURCE_CARD_ACCESS_POLICIES,
+  SOURCE_CARD_RELEASE_POLICIES,
+  SOURCE_CARD_TASK_FORMATS,
+  SOURCE_CARD_TRANSLATION_STATUSES,
+  SOURCE_CARD_TYPES,
+  SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+  SOURCE_INTAKE_FORBIDDEN_DOWNSTREAM_FIELDS,
+  SOURCE_INTAKE_VISIBILITY,
+  SOURCE_SPAN_EXTRACTION_STATUSES,
+  SOURCE_SPAN_SEGMENTATION_STATUSES,
+  SOURCE_SPAN_KINDS,
   REQUIRED_RATER_UX_ACCEPTANCE_CHECKS,
   REQUIRED_TRAINING_EXPORT_DOWNWEIGHT_RULES,
   REQUIRED_TRAINING_EXPORT_UNCERTAINTY_THRESHOLDS,
@@ -165,6 +190,7 @@ import {
   REQUIRED_UI_VARIANT_SENSITIVITY_MDE_OVERALL,
   REQUIRED_UI_VARIANT_SENSITIVITY_MIN_CELL_COUNT,
   REQUIRED_UI_VARIANT_SENSITIVITY_MINIMUM_POWER,
+  METAPHILOSOPHY_TASK_TRACK_LMCA_RELATIONSHIPS,
   RUBRIC_DIMENSIONS,
   SANITY_BASELINE_TYPES,
   SCORE_CONFIDENCE_LEVELS,
@@ -199,7 +225,9 @@ import {
   promptArtifacts,
   ratingContextSnapshots,
   ratingObfuscationNoteForRating,
+  raterQualificationRecordIsCurrent,
   scoreCertificationAttempt,
+  scoreExplanationOverallProductDiagnostic,
   scoreExplanationTriggersForRating,
   validateRatingObfuscationNote,
   validateTriggeredScoreExplanation,
@@ -219,11 +247,14 @@ import {
   CONTRIBUTION_PART_SCHEMAS,
   CONTRIBUTION_TEMPLATES,
   ORIGIN_CHOICES,
+  PREPARED_DRAFT_STATUSES,
   WORKFLOW_GATES,
   WORKFLOW_POLICIES,
   createContributionSubmissionResources,
   createGateDecisionResource,
+  createPreparedDraftFromArgumentExtraction,
   createPreparedDraftFromPart,
+  createReviewSignalResource,
   eligibleContributionPositions,
   gatesSatisfiedForPolicy,
   promotePreparedDraftToCandidateItem,
@@ -234,6 +265,14 @@ import { createExternalJwtAuthConfig, verifyExternalJwtToken } from "./auth/exte
 import { createLocalAuditStore } from "./storage/local-audit-store.mjs";
 
 const releaseId = "october-2026-demo";
+const clientSurfaceCspHeader = clientSurfaceCspHeaderValue(REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
+const clientSurfaceSecurityHeaders = {
+  "content-security-policy": clientSurfaceCspHeader,
+  "referrer-policy": REQUIRED_CLIENT_SURFACE_REFERRER_POLICY,
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=()",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+};
 export const demoUsers = [
   { id: "demo-rater", displayName: "Demo Graduate Rater", role: "graduate", allowedAssignmentIds: ["assign-ai-base-rate", "assign-voting-bullet"] },
   { id: "demo-expert", displayName: "Demo Expert Adjudicator", role: "expert", allowedAssignmentIds: ["assign-ai-base-rate", "assign-voting-bullet", "assign-mind-zombie"] },
@@ -617,6 +656,7 @@ const correctnessVerificationStatuses = [
 ];
 const verificationWorkspaceClaimTypes = ["logical", "mathematical", "empirical", "subjective_or_intuition_pump", "unclear_claim"];
 const verificationWorkspaceClaimStatuses = ["verified", "unresolved", "not_practicable", "excluded_due_to_unclear_text"];
+const correctnessClaimWeightStatuses = verificationWorkspaceClaimStatuses;
 const verificationEvidenceSourceExposureStatuses = ["source_blind", "post_lock_source_visible", "source_identifiable", "not_applicable"];
 const verificationEvidenceProtectedContentStatuses = ["none", "protected_content_absent", "protected_content_redacted", "protected_content_present_authorized"];
 const verificationEvidenceModelAssistanceStatuses = ["none", "model_assisted_retrieval", "model_generated_summary", "model_suggested_source"];
@@ -867,6 +907,18 @@ const screenStatePayloadRequiredFields = [
   "rejectedUnknownKeys",
   "sanitized",
 ];
+const screenStatePayloadAllowedTopLevelFields = new Set([
+  ...screenStatePayloadRequiredFields,
+  "policyId",
+  "policyVersionProvenance",
+  "visibleFieldAllowlist",
+  "enabledActionAllowlist",
+  "requiredControlKeys",
+  "optionalPanelKeys",
+  "requiredOptionalControlMap",
+  "protectedGoldBenchmarkDisclosureState",
+  "hiddenFieldClasses",
+]);
 const uxNoFeatureLossKeys = [
   "score_fields",
   "safe_decline",
@@ -927,6 +979,27 @@ const uxForbiddenVisibleFieldFragments = [
   "protectedsplit",
   "raterperformance",
 ];
+const screenStatePayloadAllowedProtectedDisclosureKeys = new Set([
+  "protectedGoldBenchmarkDisclosureState.benchmarkMembership",
+  "protectedGoldBenchmarkDisclosureState.goldAnswer",
+  "protectedGoldBenchmarkDisclosureState.protectedSplitStatus",
+]);
+const screenStateForbiddenPayloadKeyFragments = [
+  ...uxForbiddenVisibleFieldFragments,
+  "goldanswer",
+  "goldlabel",
+  "peerlabel",
+  "peerscore",
+  "modeljudge",
+  "activelearning",
+  "raterperformance",
+  "hiddenposition",
+  "hiddencritique",
+  "hiddenitem",
+  "rawpositiontext",
+  "rawcritiquetext",
+  "sourcetext",
+];
 const simplifiedCopyRequiredGlossaryTerms = ["centrality", "strength"];
 const simplifiedCopyProtectedSplitVariantDispositions = ["frozen_compatible", "quarantined_sensitivity_snapshot"];
 const rubricCopyTraceabilityReleaseCriticalScreens = ["rating", "practice", "calibration", "adjudication", "release_review"];
@@ -953,6 +1026,11 @@ const raterInstructionCompatibilityClasses = REQUIRED_RATER_INSTRUCTION_COMPATIB
 const raterInstructionCompatibilityThresholds = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_THRESHOLDS;
 const raterInstructionCompatibilityRules = REQUIRED_RATER_INSTRUCTION_COMPATIBILITY_RULES;
 const raterInstructionSharedPolicyFields = REQUIRED_RATER_INSTRUCTION_SHARED_POLICY_FIELDS;
+const raterInstructionComprehensionAuditVersion = RATER_INSTRUCTION_COMPREHENSION_AUDIT_VERSION;
+const raterInstructionComprehensionScreens = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_SCREENS;
+const raterInstructionComprehensionMethods = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_METHODS;
+const raterInstructionComprehensionChecks = REQUIRED_RATER_INSTRUCTION_COMPREHENSION_CHECKS;
+const raterInstructionDisclosureDepths = REQUIRED_RATER_INSTRUCTION_DISCLOSURE_DEPTHS;
 const scoreConfidenceScalePolicyVersion = SCORE_CONFIDENCE_SCALE_POLICY_VERSION;
 const scoreConfidenceScaleVersion = REQUIRED_SCORE_CONFIDENCE_SCALE_VERSION;
 const scoreConfidenceBands = REQUIRED_SCORE_CONFIDENCE_BANDS;
@@ -997,6 +1075,26 @@ const certificationRemediationRules = {
   duplicateInconsistencyAboveMax: "duplicate_consistency_review_required_before_tier_unlock",
   hardAmbiguityReviewFailure: "hard_ambiguity_review_required_before_tier_unlock",
   rubricVersionMismatch: "recertification_or_grandfathering_review_required",
+};
+const certificationCadencePolicy = {
+  goldInjectionSchedule: {
+    hiddenGoldEveryNReleaseCriticalAssignments: 10,
+    minimumHiddenGoldItemsPerActiveRaterPerMonth: 3,
+    stratification: "topic_difficulty_lmca_dimension_and_low_clarity_branch",
+  },
+  recertificationSchedule: {
+    routineIntervalDays: 180,
+    inactivityIntervalDays: 90,
+    rubricVersionChange: "required_before_release_critical_use",
+    targetedRetrainingExit: "pass_targeted_pack_before_assignment_unlock",
+  },
+  thresholdLogic: {
+    rollingWindowGoldItemsMin: 20,
+    certificationPassRateMin: 0.85,
+    consecutiveGoldFailuresTriggerRestriction: 2,
+    meanAbsErrorMax: certificationThresholds.meanAbsErrorMax,
+    perDimensionCalibrationErrorMax: certificationThresholds.perDimensionCalibrationErrorMax,
+  },
 };
 const disagreementThresholdPolicyVersion = DISAGREEMENT_THRESHOLD_POLICY_VERSION;
 const disagreementThresholds = REQUIRED_DISAGREEMENT_THRESHOLDS;
@@ -1418,6 +1516,15 @@ const languageArtifactTypes = [
   "OCR_or_formatting_noise",
   "awkward_but_determinate",
 ];
+const languageArtifactImpactValues = ["none", "possible", "material", "uncertain"];
+const languageArtifactImpactFields = [
+  "pinDownabilityImpact",
+  "substantiveAmbiguityImpact",
+  "correctnessImpact",
+  "deadWeightImpact",
+  "overallQualityImpact",
+];
+const blindRatingLanguageArtifactForbiddenRouteFields = ["sourceLanguage", "translationStatus", "sourceAdaptationRoute", "adaptationRoute", "sourceRoute"];
 const sourceRecognitionTypes = [
   "source_recognized",
   "author_or_style_recognized",
@@ -1441,6 +1548,7 @@ const policyActionKinds = [
   "discussion_open",
   "adjudication_finalize",
   "label_snapshot_freeze",
+  "release_report_materialize",
   "pairwise_snapshot_freeze",
   "evaluation_run",
   "hidden_benchmark_aggregate_report",
@@ -1498,6 +1606,7 @@ const phaseGateUiPanelResourceKeys = new Set([
   "rubricCopyTraceabilityMap",
   "raterInstructionCompatibilityPolicy",
   "raterInstructionRenderVersion",
+  "raterInstructionComprehensionAudit",
   "rubricLintConfig",
   "rubricLintEvent",
 ]);
@@ -1518,6 +1627,9 @@ const phaseGateEvaluationResourceKeys = new Set([
   "modelRunReproducibilityPolicy",
   "modelInferenceConfig",
   "modelRunEnvironment",
+  "metaphilosophyArchitectureLayer",
+  "metaphilosophyTaskTrack",
+  "metaphilosophyResearchBacklogItem",
 ]);
 const phaseGateWorkerResourceKeys = new Set([
   "candidateBatch",
@@ -1798,10 +1910,356 @@ const workflowStateMachineRules = {
   ],
 };
 
+const sourceCardWorkflowSpec = workflowWriteSpec(/^\/api\/v1\/source-cards$/, "source_card_submitted", "sourceCard", adminRoles, {
+  allowHiddenMetadata: true,
+  requiredFields: [
+    "id",
+    "title",
+    "sourceAuthor",
+    "sourceWork",
+    "sourcePublisherOrSite",
+    "publicationYear",
+    "sourceType",
+    "sourceLocator",
+    "sourceProvenanceSummary",
+    "rightsStatus",
+    "sourceLanguage",
+    "translationStatus",
+    "taskFormat",
+    "adminNotes",
+    "sourceAccessPolicy",
+    "releasePolicy",
+    "sourceVisibility",
+    "createdBy",
+    "createdAt",
+  ],
+  allowedValues: {
+    sourceType: SOURCE_CARD_TYPES,
+    translationStatus: SOURCE_CARD_TRANSLATION_STATUSES,
+    taskFormat: SOURCE_CARD_TASK_FORMATS,
+    sourceAccessPolicy: SOURCE_CARD_ACCESS_POLICIES,
+    releasePolicy: SOURCE_CARD_RELEASE_POLICIES,
+  },
+  requiredExactFields: { sourceVisibility: SOURCE_INTAKE_VISIBILITY },
+  customValidator: validateSourceIntakePhase1Boundary,
+});
+
+const sourceSpanWorkflowSpec = workflowWriteSpec(/^\/api\/v1\/source-spans$/, "source_span_submitted", "sourceSpan", adminRoles, {
+  allowHiddenMetadata: true,
+  requiredFields: [
+    "id",
+    "sourceCardId",
+    "spanLocator",
+    "boundedLocator",
+    "spanKind",
+    "textHash",
+    "excerptStoragePolicy",
+    "segmentationStatus",
+    "extractionStatus",
+    "adminSelectionNotes",
+    "sourceVisibility",
+    "createdBy",
+    "createdAt",
+  ],
+  allowedValues: {
+    spanKind: SOURCE_SPAN_KINDS,
+    segmentationStatus: SOURCE_SPAN_SEGMENTATION_STATUSES,
+    extractionStatus: SOURCE_SPAN_EXTRACTION_STATUSES,
+  },
+  requiredStringPrefixes: { textHash: "sha256:" },
+  requiredExactFields: { sourceVisibility: SOURCE_INTAKE_VISIBILITY },
+  customValidator: validateSourceIntakePhase1Boundary,
+});
+
+const sourceCardAdminWorkflowSpec = {
+  ...sourceCardWorkflowSpec,
+  pattern: /^\/api\/v1\/admin\/sources$/,
+  route: "/api/v1/admin/sources",
+};
+
+const sourceSpanAdminWorkflowSpec = {
+  ...sourceSpanWorkflowSpec,
+  pattern: /^\/api\/v1\/admin\/sources\/(?<id>[^/]+)\/spans$/,
+  route: "/api/v1/admin/sources/{id}/spans",
+  pathParamField: "sourceCardId",
+};
+
+const extractionBatchJsonlImportSpec = workflowWriteSpec(
+  /^\/api\/v1\/extraction-batches\/import-jsonl$/,
+  "extraction_batch_jsonl_imported",
+  "extractionBatch",
+  adminRoles,
+  {
+    allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "sourceCardId",
+      "importFormat",
+      "importedBy",
+      "importedAt",
+      "extractionCount",
+      "parserVersion",
+      "importRoute",
+      "extractionExecutionMode",
+      "downstreamIntegrationStatus",
+    ],
+    requiredFiniteNumberFields: ["extractionCount"],
+    requiredBooleanFields: ["createsPreparedDraft", "createsCandidateItem", "createsCandidateBatch", "liveQueueIntegration", "aiExtractionExecuted"],
+    requiredStringIncludesAny: { extractionExecutionMode: ["no_platform_ai", "no platform ai", "no_ai_extraction"] },
+    requiredExactFields: {
+      importFormat: "jsonl",
+      downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+      createsPreparedDraft: false,
+      createsCandidateItem: false,
+      createsCandidateBatch: false,
+      liveQueueIntegration: false,
+      aiExtractionExecuted: false,
+    },
+    customValidator: validateSourceIntakePhase1Boundary,
+  },
+);
+
+const argumentExtractionValidationOptions = {
+  allowHiddenMetadata: true,
+  requiredFields: [
+    "id",
+    "extractionBatchId",
+    "sourceCardId",
+    "sourceSpanIds",
+    "argumentRole",
+    "intendedConclusion",
+    "argumentSummary",
+    "contextNeeded",
+    "conceptualScopeNotes",
+    "suitabilityNotes",
+    "extractionRationale",
+    "extractionMethod",
+    "reviewStatus",
+    "downstreamIntegrationStatus",
+    "sourceVisibility",
+    "importedAt",
+  ],
+  requiredNonEmptyArrayFields: ["sourceSpanIds", "keyPremises"],
+  requiredAnyFields: [["possiblePreparedPositionText", "possiblePreparedCritiqueText", "extractedPositionText"]],
+  allowedValues: {
+    argumentRole: ARGUMENT_EXTRACTION_ROLES,
+    extractionMethod: ARGUMENT_EXTRACTION_METHODS,
+    reviewStatus: ARGUMENT_EXTRACTION_REVIEW_STATUSES,
+  },
+  requiredBooleanFields: ["createsPreparedDraft", "createsCandidateItem", "createsCandidateBatch", "liveQueueIntegration", "aiExtractionExecuted"],
+  requiredExactFields: {
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+    createsPreparedDraft: false,
+    createsCandidateItem: false,
+    createsCandidateBatch: false,
+    liveQueueIntegration: false,
+    aiExtractionExecuted: false,
+  },
+  customValidator: validateSourceIntakePhase1Boundary,
+};
+
+const argumentExtractionWorkflowSpec = {
+  eventType: "argument_extraction_imported",
+  resourceKey: "argumentExtraction",
+  route: "/api/v1/extraction-batches/import-jsonl",
+  roles: adminRoles,
+  ...argumentExtractionValidationOptions,
+};
+
+const argumentExtractionReviewSpec = workflowWriteSpec(
+  /^\/api\/v1\/argument-extractions\/(?<id>[^/]+)\/review$/,
+  "argument_extraction_review_submitted",
+  "argumentExtraction",
+  adminRoles,
+  { ...argumentExtractionValidationOptions, pathParamField: "id" },
+);
+
+function validateSourceIntakePhase1Boundary(resource) {
+  const forbiddenFieldPaths = sourceIntakeForbiddenDownstreamFieldPaths(resource);
+  if (forbiddenFieldPaths.length) {
+    return invalid(`source-intake Phase 1 cannot include downstream artifact fields: ${forbiddenFieldPaths.join(", ")}`);
+  }
+  if (Array.isArray(resource.sourceSpanIds)) {
+    const hasPositionText = hasWorkflowField(resource, "possiblePreparedPositionText") || hasWorkflowField(resource, "extractedPositionText");
+    const hasCritiqueText = hasWorkflowField(resource, "possiblePreparedCritiqueText");
+    if (["critique_argument", "mixed_position_and_critique"].includes(resource.argumentRole) && !hasWorkflowField(resource, "critiqueTarget")) {
+      return invalid("argumentExtraction.critiqueTarget is required for critique-oriented source extractions");
+    }
+    if (["position_argument", "mixed_position_and_critique"].includes(resource.argumentRole) && !hasPositionText) {
+      return invalid("argumentExtraction.possiblePreparedPositionText is required for position-oriented source extractions");
+    }
+    if (["critique_argument", "mixed_position_and_critique"].includes(resource.argumentRole) && !hasCritiqueText) {
+      return invalid("argumentExtraction.possiblePreparedCritiqueText is required for critique-oriented source extractions");
+    }
+  }
+  return { ok: true };
+}
+
+const scoreExplanationRaterCopyForbiddenContextFragments = [
+  "source",
+  "provenance",
+  "label",
+  "peer",
+  "model",
+  "gold",
+  "hidden",
+  "benchmark",
+  "validation",
+  "protected",
+  "split",
+  "membership",
+  "status",
+];
+const scoreExplanationQaNonDisclosureFragments = ["without", "nondisclosure", "blind", "redact", "hide", "withhold"];
+const scoreExplanationQaDisclosurePatterns = [
+  /\bwith\b/i,
+  /\bshow\b/i,
+  /\bshare\b/i,
+  /\breveal\b/i,
+  /\bexpose\b/i,
+  /\bdisplay\b/i,
+  /\bdisclose\b/i,
+  /\binclude\b/i,
+  /\bvisible\b/i,
+];
+
+function validateScoreExplanationPolicyBoundary(resource) {
+  const failures = [];
+  if (scoreExplanationRaterCopyHasForbiddenContext(resource.protectedStatusBlindPromptCopy)) {
+    failures.push("protectedStatusBlindPromptCopy:blind_safe");
+  }
+  if (scoreExplanationRaterCopyHasForbiddenContext(resource.sentenceGuidance)) {
+    failures.push("sentenceGuidance:blind_safe");
+  }
+  if (scoreExplanationQaRoutingHasPositiveDisclosure(resource.qaRoutingPolicy)) {
+    failures.push("qaRoutingPolicy:blind_safe");
+  } else if (!scoreExplanationQaRoutingUsesNonDisclosure(resource.qaRoutingPolicy)) {
+    failures.push("qaRoutingPolicy:non_disclosure");
+  }
+  if (failures.length) {
+    return invalid(`scoreExplanationPolicy must use label/source/model/protected-status blind copy: ${failures.join(", ")}`);
+  }
+  return { ok: true };
+}
+
+function scoreExplanationRaterCopyHasForbiddenContext(value) {
+  const normalized = normalizeFieldFragment(value);
+  return scoreExplanationRaterCopyForbiddenContextFragments.some((fragment) => normalized.includes(fragment));
+}
+
+function scoreExplanationQaRoutingUsesNonDisclosure(value) {
+  const normalized = normalizeFieldFragment(value);
+  return scoreExplanationQaNonDisclosureFragments.some((fragment) => normalized.includes(fragment));
+}
+
+function scoreExplanationQaRoutingHasPositiveDisclosure(value) {
+  const text = String(value ?? "");
+  if (!scoreExplanationRaterCopyHasForbiddenContext(text)) return false;
+  return scoreExplanationQaDisclosurePatterns.some((pattern) => pattern.test(text));
+}
+
+function validateScreenStatePayloadBoundary(resource) {
+  const unexpectedKeys = Object.keys(resource).filter((key) => !screenStatePayloadAllowedTopLevelFields.has(key));
+  if (unexpectedKeys.length) {
+    return invalid(`screenStatePayload rejected unknown keys: ${unexpectedKeys.join(", ")}`);
+  }
+  const forbiddenHiddenKeys = findHiddenKeys(resource).concat(findRawBenchmarkContentKeys(resource));
+  const forbiddenFragmentKeys = screenStateForbiddenPayloadFieldPaths(resource);
+  const forbiddenKeys = [...new Set([...forbiddenHiddenKeys, ...forbiddenFragmentKeys])];
+  if (forbiddenKeys.length) {
+    return invalid(`screenStatePayload cannot include hidden, protected, or raw fields: ${forbiddenKeys.join(", ")}`);
+  }
+  return { ok: true };
+}
+
+function screenStateForbiddenPayloadFieldPaths(value, path = "") {
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => screenStateForbiddenPayloadFieldPaths(item, `${path}[${index}]`));
+  }
+  return Object.entries(value).flatMap(([key, child]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const normalizedKey = normalizeFieldFragment(key);
+    const ownReason =
+      screenStatePayloadAllowedProtectedDisclosureKeys.has(fieldPath) ||
+      key === "hiddenFieldClasses"
+        ? []
+        : screenStateForbiddenPayloadKeyFragments.some((fragment) => normalizedKey.includes(fragment))
+          ? [fieldPath]
+          : [];
+    return ownReason.concat(screenStateForbiddenPayloadFieldPaths(child, fieldPath));
+  });
+}
+
+function sourceIntakeForbiddenDownstreamFieldPaths(resource, path = "") {
+  if (!resource || typeof resource !== "object") return [];
+  if (Array.isArray(resource)) {
+    return resource.flatMap((item, index) => sourceIntakeForbiddenDownstreamFieldPaths(item, `${path}[${index}]`));
+  }
+  return Object.entries(resource).flatMap(([key, value]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    const ownReason = SOURCE_INTAKE_FORBIDDEN_DOWNSTREAM_FIELDS.includes(key) ? [fieldPath] : [];
+    return ownReason.concat(sourceIntakeForbiddenDownstreamFieldPaths(value, fieldPath));
+  });
+}
+
 const workflowWriteEndpoints = [
+  sourceCardWorkflowSpec,
+  sourceCardAdminWorkflowSpec,
+  sourceSpanWorkflowSpec,
+  sourceSpanAdminWorkflowSpec,
   workflowWriteSpec(/^\/api\/v1\/intake\/positions$/, "position_intake_submitted", "position", adminRoles, {
     allowHiddenMetadata: true,
+    requiredFields: [
+      "id",
+      "split",
+      "topicFamily",
+      "conceptualScope",
+      "groundTruthAvailability",
+      "acceptedMethodologyStatus",
+      "nonConceptualDependencyNotes",
+      "contextSufficiency",
+      "assumedBackgroundPolicy",
+      "pricedInContextNotes",
+    ],
     requiredAnyFields: [["text", "textVersions"]],
+    requiredNestedFields: [
+      "intakeScreening.raterVisibleTextVersionId",
+      "intakeScreening.normalizationStatus",
+      "intakeScreening.ordinaryHeadlineEligibility",
+    ],
+    requiredBooleanFields: ["intakeScreening.originalTextPreserved", "intakeScreening.expertNormalizationRequired", "intakeScreening.notesVisibleToInitialRaters"],
+    requiredExactFields: {
+      "intakeScreening.originalTextPreserved": true,
+      "intakeScreening.notesVisibleToInitialRaters": false,
+    },
+    allowedValues: {
+      conceptualScope: REQUIRED_POSITION_CONCEPTUAL_SCOPE_STATUSES,
+      groundTruthAvailability: REQUIRED_POSITION_GROUND_TRUTH_AVAILABILITY_STATUSES,
+      acceptedMethodologyStatus: REQUIRED_POSITION_ACCEPTED_METHODOLOGY_STATUSES,
+      contextSufficiency: REQUIRED_POSITION_CONTEXT_SUFFICIENCY_STATUSES,
+      "intakeScreening.normalizationStatus": REQUIRED_POSITION_INTAKE_NORMALIZATION_STATUSES,
+      "intakeScreening.ordinaryHeadlineEligibility": REQUIRED_POSITION_HEADLINE_ELIGIBILITY_STATUSES,
+    },
+    requiredWhen: [
+      {
+        field: "conceptualScope",
+        equals: "primarily_non_conceptual",
+        requiredStringIncludesAny: {
+          "intakeScreening.ordinaryHeadlineEligibility": ["excluded", "stress", "comparison"],
+        },
+      },
+      {
+        field: "contextSufficiency",
+        values: ["context_insufficient", "needs_normalization"],
+        requiredNonEmptyArrayFields: ["intakeScreening.contextGapFlags"],
+        requiredStringIncludesAny: {
+          "intakeScreening.ordinaryHeadlineEligibility": ["normalization", "validation", "stress", "comparison", "excluded"],
+        },
+      },
+    ],
+    requiredQualificationScope: "expert_rating",
   }),
   workflowWriteSpec(/^\/api\/v1\/intake\/critiques$/, "critique_intake_submitted", "critique", adminRoles, {
     allowHiddenMetadata: true,
@@ -1813,6 +2271,69 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "rightsClearancePolicyId", "reviewerId", "rightsStatus", "releaseScope"],
     requiredAnyFields: [["positionId", "itemId", "artifactId"]],
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/metaphilosophy\/architecture-layers$/,
+    "metaphilosophy_architecture_layer_submitted",
+    "metaphilosophyArchitectureLayer",
+    adminRoles,
+    {
+      requiredFields: ["id", "label", "role", "boundaryRule", "releaseClaimRole"],
+      requiredNonEmptyArrayFields: ["artifactFamilies"],
+      allowedValues: {
+        id: ["research_spine", "intake_spine", "evaluation_spine", "operating_shell"],
+        releaseClaimRole: ["claim_foundation", "corpus_production_control", "model_measurement_control", "safeguard_boundary"],
+      },
+      requiredStringIncludesAny: {
+        boundaryRule: ["claim", "candidate", "evaluation", "safeguard", "release", "rater", "label"],
+      },
+    },
+  ),
+  workflowWriteSpec(/^\/api\/v1\/metaphilosophy\/task-tracks$/, "metaphilosophy_task_track_submitted", "metaphilosophyTaskTrack", adminRoles, {
+    requiredFields: [
+      "id",
+      "label",
+      "lmcaRelationship",
+      "humanExpertTarget",
+      "labelTiming",
+      "blindToModelPolicy",
+      "splitPolicy",
+      "trainingExportPolicy",
+    ],
+    requiredNestedFields: ["modelInput.summary", "modelOutput.summary"],
+    requiredNonEmptyArrayFields: ["modelInput.fields", "modelOutput.fields", "primaryMetricFamilies"],
+    allowedValues: {
+      lmcaRelationship: METAPHILOSOPHY_TASK_TRACK_LMCA_RELATIONSHIPS,
+    },
+    requiredStringIncludes: {
+      splitPolicy: ["split"],
+      trainingExportPolicy: ["export"],
+    },
+    requiredStringIncludesAny: {
+      blindToModelPolicy: ["blind", "hidden", "cannot see", "cannot use"],
+    },
+  }),
+  workflowWriteSpec(
+    /^\/api\/v1\/metaphilosophy\/research-backlog-items$/,
+    "metaphilosophy_research_backlog_item_submitted",
+    "metaphilosophyResearchBacklogItem",
+    adminRoles,
+    {
+      requiredFields: ["id", "title", "experimentType", "releaseGateStatus", "pilotEvidenceRequirement", "promotionGovernance", "governanceBoundary"],
+      requiredBooleanFields: ["directRequirement"],
+      requiredExactFields: { directRequirement: false },
+      requiredStringIncludes: {
+        releaseGateStatus: ["not_release_gate"],
+        promotionGovernance: ["governed", "policy", "decision", "release", "gate"],
+        governanceBoundary: ["pilot"],
+      },
+      requiredStringIncludesAny: {
+        pilotEvidenceRequirement: ["measurement validity", "rater reliability", "model-evaluation usefulness"],
+      },
+      forbiddenStringFragments: {
+        releaseGateStatus: ["release_gate_without_pilot"],
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/rights-clearance-policies$/, "rights_clearance_policy_submitted", "rightsClearancePolicy", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -1859,20 +2380,23 @@ const workflowWriteEndpoints = [
       "policyVersion",
       "thresholds",
       "remediationRules",
+      "cadencePolicy",
       "certificationStatusRule",
       "retrainingRule",
       "restrictionRule",
       "recertificationRule",
       "frozenAt",
     ],
-    requiredObjectFields: ["thresholds", "remediationRules"],
+    requiredObjectFields: ["thresholds", "remediationRules", "cadencePolicy"],
     requiredObjectKeys: {
       thresholds: Object.keys(certificationThresholds),
       remediationRules: Object.keys(certificationRemediationRules),
+      cadencePolicy: Object.keys(certificationCadencePolicy),
     },
     requiredStructuredFields: {
       thresholds: certificationThresholds,
       remediationRules: certificationRemediationRules,
+      cadencePolicy: certificationCadencePolicy,
     },
     requiredStringIncludes: {
       certificationStatusRule: ["mean absolute error", "certified"],
@@ -2452,12 +2976,14 @@ const workflowWriteEndpoints = [
       "gateProfileId",
       "releaseConfigManifestId",
       "releaseConfigManifestHash",
+      "phaseGateBundleId",
+      "phaseGateBundleHash",
       "status",
       "releaseNotes",
       "frozenAt",
     ],
     requiredNonEmptyArrayFields: ["immutableOutputArtifactIds"],
-    requiredStringPrefixes: { releaseConfigManifestHash: "sha256:" },
+    requiredStringPrefixes: { releaseConfigManifestHash: "sha256:", phaseGateBundleHash: "sha256:" },
   }),
   workflowWriteSpec(/^\/api\/v1\/release-gate-profiles$/, "release_gate_profile_submitted", "releaseGateProfile", adminRoles, {
     allowHiddenMetadata: true,
@@ -2875,6 +3401,11 @@ const workflowWriteEndpoints = [
       "commonPositionSetPolicy",
       "commonGenerationBudgetPolicy",
       "filteringSelectionPolicy",
+      "headlineMetric",
+      "uncuratedRandomSampleMetric",
+      "bestOfNPolicy",
+      "topKPolicy",
+      "passThresholdOverall",
       "uncuratedRandomSampleMetrics",
       "bestOfNMetrics",
       "counts",
@@ -2894,6 +3425,7 @@ const workflowWriteEndpoints = [
       "bestOfNMetrics.n",
       "bestOfNMetrics.passAtThreshold",
       "bestOfNMetrics.threshold",
+      "passThresholdOverall",
       "counts.generated",
       "counts.refusal",
       "counts.duplicate",
@@ -2901,6 +3433,14 @@ const workflowWriteEndpoints = [
       "counts.promoted",
       "counts.rated",
     ],
+    requiredStringIncludesAny: {
+      uncuratedRandomSampleMetric: ["uncurated", "random", "all generated"],
+      topKPolicy: ["top", "curated"],
+    },
+    requiredStringIncludes: {
+      bestOfNPolicy: ["best", "n", "budget"],
+      topKPolicy: ["separat"],
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/ratings\/(?<id>[^/]+)\/check$/, "rating_check_submitted", "ratingCheck", ratingWorkflowRoles, {
     pathParamField: "ratingId",
@@ -2910,6 +3450,10 @@ const workflowWriteEndpoints = [
     requireActorField: "raterId",
     rejectHiddenMetadata: true,
     rejectRawBenchmarkContent: true,
+    requiredQualificationScopeByFieldValue: {
+      field: "checkKind",
+      values: { expert_check: "expert_rating" },
+    },
   }),
   workflowWriteSpec(/^\/api\/v1\/assignments\/(?<id>[^/]+)\/flag$/, "assignment_flag_submitted", "assignmentFlag", ratingWorkflowRoles, {
     pathParamField: "assignmentId",
@@ -3061,6 +3605,7 @@ const workflowWriteEndpoints = [
     requiredFields: ["id", "discussionThreadId", "decisionStatus"],
     requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
     requiredNonEmptyArrayFields: ["adjudicatorIds"],
+    requiredQualificationScope: "adjudicator",
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)\/finalize$/, "adjudication_finalized", "adjudicationFinalization", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -3069,6 +3614,7 @@ const workflowWriteEndpoints = [
     allowedValues: { finalizationStatus: ["finalized_for_release_candidate"] },
     policyActionKind: "adjudication_finalize",
     phaseGateLaneKind: "route",
+    requiredQualificationScope: "adjudicator",
   }),
   workflowWriteSpec(/^\/api\/v1\/adjudication-memos$/, "adjudication_memo_submitted", "adjudicationMemo", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -3076,6 +3622,7 @@ const workflowWriteEndpoints = [
     requiredAnyFieldSets: [[["itemId"], ["positionId", "critiqueId"], ["itemKeys"]]],
     requiredNonEmptyArrayFields: ["plausibleInterpretationsConsidered", "disagreementTaxonomyCodes", "adjudicatorIds"],
     requiredFiniteNumberFields: ["maxFinalRaterSpread"],
+    requiredQualificationScope: "adjudicator",
   }),
   workflowWriteSpec(
     /^\/api\/v1\/adjudicator-pre-read-requiredness-policies$/,
@@ -3128,6 +3675,7 @@ const workflowWriteEndpoints = [
       majorityDirectionHiddenBeforePreRead: true,
       modelOutputHiddenBeforePreRead: true,
     },
+    requiredQualificationScope: "adjudicator",
   }),
   workflowWriteSpec(
     /^\/api\/v1\/adjudication-cockpit-signoff-policies$/,
@@ -3176,6 +3724,7 @@ const workflowWriteEndpoints = [
       originalRatingPreservationCheck: ["original", "preserved"],
       memoSignoffGateStatus: ["mandatory", "reviewed", "memo"],
     },
+    requiredQualificationScope: "adjudicator",
   }),
   workflowWriteSpec(/^\/api\/v1\/verification-records$/, "verification_record_submitted", "verificationRecord", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -3185,6 +3734,7 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["verificationMaterials"],
     requiredFiniteNumberFields: ["confidence"],
     allowedValues: { verificationStatus: correctnessVerificationStatuses },
+    requiredQualificationScope: "expert_rating",
   }),
   workflowWriteSpec(/^\/api\/v1\/verification-evidence-artifacts$/, "verification_evidence_artifact_submitted", "verificationEvidenceArtifact", expertWorkflowRoles, {
     allowHiddenMetadata: true,
@@ -3310,6 +3860,7 @@ const workflowWriteEndpoints = [
       requirednessTriggerClass: REQUIRED_INTERPRETATION_TARGET_MAP_TRIGGER_CLASSES,
       requirednessDecisionStatus: interpretationTargetMapRequirednessDecisionStatuses,
     },
+    requiredQualificationScope: "expert_rating",
   }),
   workflowWriteSpec(
     /^\/api\/v1\/verification-claim-granularity-policies$/,
@@ -3400,6 +3951,10 @@ const workflowWriteEndpoints = [
     requiredFields: ratingCheckRecordRequiredFields,
     requiredNonEmptyArrayFields: ["auxiliaryMaterialSeen"],
     allowedValues: { checkType: ratingCheckTypes, modelExposureTiming: ratingCheckModelExposureTimings },
+    requiredQualificationScopeByFieldValue: {
+      field: "checkType",
+      values: { expert_check: "expert_rating" },
+    },
     requiredWhen: [
       {
         field: "checkType",
@@ -3981,6 +4536,7 @@ const workflowWriteEndpoints = [
       rejectedUnknownKeys: true,
       sanitized: true,
     },
+    customValidator: validateScreenStatePayloadBoundary,
   }),
   workflowWriteSpec(/^\/api\/v1\/visibility-policies$/, "visibility_policy_submitted", "visibilityPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -4092,6 +4648,7 @@ const workflowWriteEndpoints = [
     requiredStringIncludesAny: {
       qaRoutingPolicy: ["qa"],
     },
+    customValidator: validateScoreExplanationPolicyBoundary,
   }),
   workflowWriteSpec(/^\/api\/v1\/rating-escalation-policies$/, "rating_escalation_policy_submitted", "ratingEscalationPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -4294,9 +4851,12 @@ const workflowWriteEndpoints = [
     requiredNonEmptyArrayFields: ["allowedCompensationCreditInputs", "prohibitedIncentiveSignals"],
     requiredArrayIncludes: { prohibitedIncentiveSignals },
     requiredStringIncludes: {
-      speedEffortGuardrails: ["qa"],
+      speedEffortGuardrails: ["qa", "speed", "private"],
+      publicRecognitionPolicy: ["score", "agreement", "speed", "benchmark"],
       privateProgressDashboardPolicy: ["private", "non-gamified"],
+      calibrationFeedbackUseLimits: ["post-lock", "training-approved", "feedback"],
       hiddenBenchmarkGoldPerformanceExclusionPolicy: ["hidden", "never"],
+      leaderboardBadgeRestrictions: ["peer", "model", "gold", "hidden", "speed"],
     },
     requiredStringIncludesAny: {
       publicRecognitionPolicy: ["without", "no"],
@@ -4352,7 +4912,14 @@ const workflowWriteEndpoints = [
       "timestamp",
     ],
     requiredAnyFields: [["positionId", "critiqueId", "assignmentId", "ratingId", "adjudicationId"]],
-    allowedValues: { artifactType: languageArtifactTypes },
+    allowedValues: {
+      artifactType: languageArtifactTypes,
+      pinDownabilityImpact: languageArtifactImpactValues,
+      substantiveAmbiguityImpact: languageArtifactImpactValues,
+      correctnessImpact: languageArtifactImpactValues,
+      deadWeightImpact: languageArtifactImpactValues,
+      overallQualityImpact: languageArtifactImpactValues,
+    },
     requiredExactFields: { automaticScorePenaltyApplied: false },
   }),
   workflowWriteSpec(/^\/api\/v1\/source-recognition-events$/, "source_recognition_event_submitted", "sourceRecognitionEvent", ratingWorkflowRoles, {
@@ -4545,6 +5112,52 @@ const workflowWriteEndpoints = [
       compatibilityEvidenceStatus: "compatible_review_passed",
     },
   }),
+  workflowWriteSpec(
+    /^\/api\/v1\/rater-instruction-comprehension-audits$/,
+    "rater_instruction_comprehension_audit_submitted",
+    "raterInstructionComprehensionAudit",
+    adminRoles,
+    {
+      allowHiddenMetadata: true,
+      requiredFields: [
+        "id",
+        "auditVersion",
+        "raterInstructionRenderVersionId",
+        "raterInstructionCompatibilityPolicyId",
+        "rubricCopyTraceabilityMapId",
+        "comprehensionTestMethodology",
+        "clauseTraceabilityReviewStatus",
+        "screenCopyMappingReviewStatus",
+        "comprehensionTestStatus",
+        "sourceBoundary",
+        "reviewerId",
+        "frozenAt",
+      ],
+      requiredNonEmptyArrayFields: ["coveredScreenIds", "comprehensionMethods", "comprehensionCheckIds", "glossaryTermIds", "disclosureDepths"],
+      requiredArrayIncludes: {
+        coveredScreenIds: raterInstructionComprehensionScreens,
+        comprehensionMethods: raterInstructionComprehensionMethods,
+        comprehensionCheckIds: raterInstructionComprehensionChecks,
+        glossaryTermIds: ["centrality", "strength", "dead_weight", "single_issue"],
+        disclosureDepths: raterInstructionDisclosureDepths,
+      },
+      requiredStringIncludes: {
+        comprehensionTestMethodology: ["comprehension", "task", "rubric"],
+        sourceBoundary: ["Project", "LMCA"],
+      },
+      requiredExactFields: {
+        auditVersion: raterInstructionComprehensionAuditVersion,
+        clauseTraceabilityReviewStatus: "passed",
+        screenCopyMappingReviewStatus: "passed",
+        comprehensionTestStatus: "passed",
+        semanticDriftBlocker: true,
+        noFeatureLossBlocker: true,
+        protectedLeakageReviewPassed: true,
+        excludedFromScoreComputation: true,
+        excludedFromIndependentBlindDenominator: true,
+      },
+    },
+  ),
   workflowWriteSpec(/^\/api\/v1\/rubric-lint-configs$/, "rubric_lint_config_submitted", "rubricLintConfig", adminRoles, {
     allowHiddenMetadata: true,
     requiredFields: [
@@ -4890,7 +5503,10 @@ const workflowWriteEndpoints = [
     requiredFields: correctnessClaimWeightWorksheetRequiredFields,
     requiredAnyFields: [["ratingId", "adjudicationId", "verificationWorkspaceId"]],
     requiredNonEmptyArrayFields: ["claimSpanIds", "claimSignificanceWeights", "correctnessCredencesStatuses", "unclearClaimExclusionFlags"],
+    requiredFiniteNumberFields: ["advisoryAggregateCorrectnessEstimate"],
+    requiredBooleanFields: ["submittedScoreOverrideFlag"],
     requiredWhen: [{ field: "submittedScoreOverrideFlag", equals: true, requiredFields: ["overrideExplanation"] }],
+    customValidator: validateCorrectnessClaimWeightWorksheetResource,
   }),
   workflowWriteSpec(
     /^\/api\/v1\/external-assistance-contamination-policies$/,
@@ -5842,6 +6458,7 @@ const workflowWriteEndpoints = [
   }),
   workflowWriteSpec(/^\/api\/v1\/releases\/(?<id>[^/]+)\/freeze-config-manifest$/, "release_config_manifest_frozen", "releaseConfigManifest", adminRoles, {
     allowHiddenMetadata: true,
+    allowDuplicateResourceId: true,
     pathParamField: "releaseId",
     policyActionKind: "manifest_activation",
     phaseGateLaneKind: "governance_action",
@@ -6158,6 +6775,17 @@ const workflowWriteEndpoints = [
 ];
 
 const workflowReadEndpoints = [
+  workflowReadSpec(/^\/api\/v1\/source-cards\/(?<id>[^/]+)$/, "sourceCard", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/admin\/sources\/(?<id>[^/]+)$/, "sourceCard", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/source-spans\/(?<id>[^/]+)$/, "sourceSpan", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/extraction-batches\/(?<id>[^/]+)$/, "extractionBatch", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/argument-extractions\/(?<id>[^/]+)$/, "argumentExtraction", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/admin\/extractions\/(?<id>[^/]+)$/, "argumentExtraction", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/intake\/positions\/(?<id>[^/]+)$/, "position", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/intake\/critiques\/(?<id>[^/]+)$/, "critique", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/metaphilosophy\/architecture-layers\/(?<id>[^/]+)$/, "metaphilosophyArchitectureLayer", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/metaphilosophy\/task-tracks\/(?<id>[^/]+)$/, "metaphilosophyTaskTrack", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/metaphilosophy\/research-backlog-items\/(?<id>[^/]+)$/, "metaphilosophyResearchBacklogItem", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/certification-threshold-policies\/(?<id>[^/]+)$/, "certificationThresholdPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/certification-records\/(?<id>[^/]+)$/, "certificationRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/exposure-logs\/(?<id>[^/]+)$/, "exposureLog", adminAuditRoles),
@@ -6179,6 +6807,7 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/gold-items\/(?<id>[^/]+)$/, "goldItem", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/source-anchor-examples\/(?<id>[^/]+)$/, "sourceAnchorExample", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/benchmark-split-members\/(?<id>[^/]+)$/, "benchmarkSplitMember", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/benchmark-freeze-reports\/(?<id>[^/]+)$/, "benchmarkFreezeReport", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rights-clearance-policies\/(?<id>[^/]+)$/, "rightsClearancePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rights-records\/(?<id>[^/]+)$/, "rightsRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-versions\/(?<id>[^/]+)$/, "releaseVersion", adminAuditRoles),
@@ -6199,7 +6828,12 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/model-evaluation-predictions\/(?<id>[^/]+)$/, "modelEvaluationPrediction", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/discussions\/(?<id>[^/]+)$/, "discussion", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/discussion-threads\/(?<id>[^/]+)$/, "discussionThread", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/discussion-comments\/(?<id>[^/]+)$/, "discussionComment", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/discussion-revision-proposals\/(?<id>[^/]+)$/, "discussionRevisionProposal", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/post-lock-discussion-sessions\/(?<id>[^/]+)$/, "postLockDiscussionSession", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudications\/(?<id>[^/]+)$/, "adjudication", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudication-memos\/(?<id>[^/]+)$/, "adjudicationMemo", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/adjudication-finalizations\/(?<id>[^/]+)$/, "adjudicationFinalization", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-records\/(?<id>[^/]+)$/, "verificationRecord", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/verification-evidence-artifacts\/(?<id>[^/]+)$/, "verificationEvidenceArtifact", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/adjudicator-pre-read-requiredness-policies\/(?<id>[^/]+)$/, "adjudicatorPreReadRequirednessPolicy", adminAuditRoles),
@@ -6245,10 +6879,12 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/draft-storage-policies\/(?<id>[^/]+)$/, "draftStoragePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-instruction-compatibility-policies\/(?<id>[^/]+)$/, "raterInstructionCompatibilityPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rater-instruction-render-versions\/(?<id>[^/]+)$/, "raterInstructionRenderVersion", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/rater-instruction-comprehension-audits\/(?<id>[^/]+)$/, "raterInstructionComprehensionAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-configs\/(?<id>[^/]+)$/, "rubricLintConfig", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/rubric-lint-events\/(?<id>[^/]+)$/, "rubricLintEvent", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/item-issue-quarantine-policies\/(?<id>[^/]+)$/, "itemIssueQuarantinePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/item-issues\/(?<id>[^/]+)$/, "itemIssueReport", expertAuditWorkflowRoles),
+  workflowReadSpec(/^\/api\/v1\/item-issue-actions\/(?<id>[^/]+)$/, "itemIssueAction", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/rating-draft-sessions\/(?<id>[^/]+)$/, "ratingDraftSession", expertAuditWorkflowRoles),
   workflowReadSpec(/^\/api\/v1\/score-confidence-scale-policies\/(?<id>[^/]+)$/, "scoreConfidenceScalePolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/score-confidence-annotations\/(?<id>[^/]+)$/, "scoreConfidenceAnnotation", expertAuditWorkflowRoles),
@@ -6302,7 +6938,11 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/rubric-copy-traceability-maps\/(?<id>[^/]+)$/, "rubricCopyTraceabilityMap", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles\/(?<id>[^/]+)$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/governed-bundles\/(?<id>[^/]+)$/, "governedBundleRecord", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/governed-bundle-verifications\/(?<id>[^/]+)$/, "governedBundleVerification", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/release-config-manifests\/(?<id>[^/]+)$/, "releaseConfigManifest", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/release-config-manifest-verifications\/(?<id>[^/]+)$/, "releaseConfigManifestVerification", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/export-manifests\/(?<id>[^/]+)$/, "exportManifest", adminAuditRoles),
+  workflowReadSpec(/^\/api\/v1\/model-failure-audits\/(?<id>[^/]+)$/, "modelFailureAudit", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/policy-action-kinds\/(?<id>[^/]+)$/, "policyActionKind", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/policy-decisions\/(?<id>[^/]+)$/, "policyDecisionRecord", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/implementation-phase-gate-bundles\/(?<id>[^/]+)$/, "implementationPhaseGateBundle", adminAuditRoles),
@@ -6311,6 +6951,133 @@ const workflowReadEndpoints = [
   workflowReadSpec(/^\/api\/v1\/cloud-security-budget-policies\/(?<id>[^/]+)$/, "cloudSecurityBudgetPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/external-worm-audit-log-policies\/(?<id>[^/]+)$/, "externalWormAuditLogPolicy", adminAuditRoles),
   workflowReadSpec(/^\/api\/v1\/sensitive-audit-chain\/events\/(?<id>[^/]+)$/, "sensitiveAuditChainEvent", adminAuditRoles),
+];
+
+const workflowCollectionReadEndpoints = [
+  workflowCollectionReadSpec(/^\/api\/v1\/source-cards$/, "sourceCard", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/admin\/sources$/, "sourceCard", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/source-spans$/, "sourceSpan", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/extraction-batches$/, "extractionBatch", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/argument-extractions$/, "argumentExtraction", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/admin\/extractions$/, "argumentExtraction", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/intake\/positions$/, "position", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/intake\/critiques$/, "critique", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/certification-threshold-policies$/, "certificationThresholdPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/certification-records$/, "certificationRecord", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/gold-items$/, "goldItem", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/benchmark-split-members$/, "benchmarkSplitMember", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/benchmark-freeze-reports$/, "benchmarkFreezeReport", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/metaphilosophy\/architecture-layers$/, "metaphilosophyArchitectureLayer", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/metaphilosophy\/task-tracks$/, "metaphilosophyTaskTrack", adminAuditRoles),
+  workflowCollectionReadSpec(
+    /^\/api\/v1\/metaphilosophy\/research-backlog-items$/,
+    "metaphilosophyResearchBacklogItem",
+    adminAuditRoles,
+  ),
+  workflowCollectionReadSpec(/^\/api\/v1\/assignments$/, "assignment", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/session-pacing-policies$/, "sessionPacingPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rater-sessions$/, "raterSession", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/practice-sessions$/, "publicExamplePracticeSession", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/practice-sandbox-policies$/, "practiceSandboxPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rater-dashboard-policies$/, "raterDashboardPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rater-learning-plans$/, "raterLearningPlan", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/source-anchor-examples$/, "sourceAnchorExample", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/source-recognition-events$/, "sourceRecognitionEvent", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/discussions$/, "discussion", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/discussion-threads$/, "discussionThread", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/discussion-comments$/, "discussionComment", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/discussion-revision-proposals$/, "discussionRevisionProposal", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/post-lock-discussion-sessions$/, "postLockDiscussionSession", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudications$/, "adjudication", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudication-finalizations$/, "adjudicationFinalization", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudication-memos$/, "adjudicationMemo", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudication-review-sessions$/, "adjudicationReviewSession", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/verification-records$/, "verificationRecord", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/verification-evidence-artifacts$/, "verificationEvidenceArtifact", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudicator-pre-read-requiredness-policies$/, "adjudicatorPreReadRequirednessPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudicator-pre-reads$/, "adjudicatorPreRead", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudication-cockpit-signoff-policies$/, "adjudicationCockpitSignoffPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/interpretation-target-map-requiredness-policies$/, "interpretationTargetMapRequirednessPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretationTargetMap", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/verification-claim-granularity-policies$/, "verificationClaimGranularityPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/verification-workspace-sessions$/, "verificationWorkspaceSession", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/calibration-feedback-events$/, "calibrationFeedbackEvent", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/label-snapshots$/, "labelSnapshot", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-reports$/, "releaseReport", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/corpus-manifests$/, "corpusManifest", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/export-manifests$/, "exportManifest", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/training-exports$/, "trainingExport", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-versions$/, "releaseVersion", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-gate-profiles$/, "releaseGateProfile", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/governed-bundle-canonicalization-profiles$/, "governedBundleCanonicalizationProfile", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/governed-bundles$/, "governedBundleRecord", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/governed-bundle-verifications$/, "governedBundleVerification", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-config-manifests$/, "releaseConfigManifest", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-config-manifest-verifications$/, "releaseConfigManifestVerification", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rating-context-snapshots$/, "ratingContextSnapshot", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/pairwise-comparison-snapshots$/, "pairwiseComparisonSnapshot", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-improvement-policies$/, "modelImprovementPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-improvement-runs$/, "modelImprovementRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/evaluations$/, "evaluationRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-evaluation-predictions$/, "modelEvaluationPrediction", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/calibration-runs$/, "calibrationRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-failure-audits$/, "modelFailureAudit", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-run-reproducibility-policies$/, "modelRunReproducibilityPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-inference-configs$/, "modelInferenceConfig", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-run-environments$/, "modelRunEnvironment", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/model-provider-data-handling-policies$/, "modelProviderDataHandlingPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/leaderboards$/, "leaderboard", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/prompt-templates$/, "promptTemplate", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/parser-configs$/, "parserConfig", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/ux-simplification-policies$/, "uxSimplificationPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/ux-simplification-reviews$/, "uxSimplificationReview", adminAuditRoles),
+  workflowCollectionReadSpec(
+    /^\/api\/v1\/rater-instruction-compatibility-policies$/,
+    "raterInstructionCompatibilityPolicy",
+    adminAuditRoles,
+  ),
+  workflowCollectionReadSpec(/^\/api\/v1\/rater-instruction-render-versions$/, "raterInstructionRenderVersion", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rater-instruction-comprehension-audits$/, "raterInstructionComprehensionAudit", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/item-issue-quarantine-policies$/, "itemIssueQuarantinePolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/item-issues$/, "itemIssueReport", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/item-issue-actions$/, "itemIssueAction", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(
+    /^\/api\/v1\/external-assistance-contamination-policies$/,
+    "externalAssistanceContaminationPolicy",
+    adminAuditRoles,
+  ),
+  workflowCollectionReadSpec(/^\/api\/v1\/external-assistance-declarations$/, "externalAssistanceDeclaration", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/spot-check-sampling-policies$/, "spotCheckSamplingPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/spot-checks$/, "spotCheckQaItem", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/adjudication-triage-items$/, "adjudicationTriageQueueItem", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(
+    /^\/api\/v1\/diagnostic-deferral-visibility-policies$/,
+    "diagnosticDeferralVisibilityPolicy",
+    adminAuditRoles,
+  ),
+  workflowCollectionReadSpec(/^\/api\/v1\/diagnostic-deferrals$/, "diagnosticDeferralRecord", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/metric-configs$/, "metricConfig", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/derived-utility-formulas$/, "derivedUtilityFormula", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/artifact-probes$/, "artifactProbeRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/sycophancy-probes$/, "sycophancyProbeRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/obfuscation-stress-runs$/, "obfuscationStressRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/sanity-baselines$/, "sanityBaselineRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/human-ceiling-runs$/, "humanCeilingRun", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/benchmark-refresh-policies$/, "benchmarkRefreshPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/validation-tranche-evidence$/, "validationTrancheEvidence", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rights-clearance-policies$/, "rightsClearancePolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rights-records$/, "rightsRecord", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/comparability-tier-policies$/, "comparabilityTierPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/comparability-claims$/, "comparabilityClaim", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-erratum-disclosure-policies$/, "releaseErratumDisclosurePolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/release-errata$/, "releaseErratum", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/benchmark-submission-policies$/, "benchmarkSubmissionPolicy", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/benchmark-submissions$/, "benchmarkSubmission", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/governance-approvals$/, "governanceApprovalRecord", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/protected-artifact-revalidations$/, "protectedArtifactRevalidation", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/screen-feature-parity-checks$/, "screenFeatureParityCheck", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/simplified-copy-previews$/, "simplifiedCopyPreview", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/rubric-copy-traceability-maps$/, "rubricCopyTraceabilityMap", adminAuditRoles),
 ];
 
 const mimeTypes = {
@@ -6472,6 +7239,22 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  const v1RatingsReadbackMatch = url.pathname.match(/^\/api\/v1\/ratings(?:\/([^/]+))?$/);
+  if (request.method === "GET" && v1RatingsReadbackMatch) {
+    await ratingsReadbackEndpoint(request, response, context, {
+      ratingId: v1RatingsReadbackMatch[1] ? decodeURIComponent(v1RatingsReadbackMatch[1]) : null,
+      searchParams: url.searchParams,
+    });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/v1/ratings/import-jsonl") {
+    await recordRatingJsonlImportEndpoint(request, response, context, "blind_initial_submitted", {
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/api/v1/ratings") {
     await recordRatingEndpoint(request, response, context, "blind_initial_submitted");
     return;
@@ -6527,6 +7310,15 @@ export async function handleApiRequest(request, response, url, context) {
   const v1LabelSnapshotMatch = url.pathname.match(/^\/api\/v1\/label-snapshots\/([^/]+)$/);
   if (request.method === "GET" && v1LabelSnapshotMatch) {
     await labelSnapshotEndpoint(request, response, context, decodeURIComponent(v1LabelSnapshotMatch[1]));
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/release-reports") {
+    await releaseReportSnapshotEndpoint(request, response, context);
+    return;
+  }
+  const v1ReleaseReportMatch = url.pathname.match(/^\/api\/v1\/release-reports\/([^/]+)$/);
+  if (request.method === "GET" && v1ReleaseReportMatch) {
+    await releaseReportSnapshotEndpoint(request, response, context, decodeURIComponent(v1ReleaseReportMatch[1]));
     return;
   }
   if (request.method === "POST" && url.pathname === "/api/v1/corpus-manifests") {
@@ -6654,7 +7446,115 @@ export async function handleApiRequest(request, response, url, context) {
     await sensitiveAuditChainVerifyEndpoint(request, response, context);
     return;
   }
-
+  if (request.method === "POST" && url.pathname === "/api/v1/extraction-batches/import-jsonl") {
+    await sourceIntakeJsonlImportEndpoint(request, response, context, {
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/admin/extractions/import-jsonl") {
+    await sourceIntakeJsonlImportEndpoint(request, response, context, {
+      route: "/api/v1/admin/extractions/import-jsonl",
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+  const v1TargetScaleBulkImportRoute = targetScaleBulkJsonlImportRoute(url.pathname);
+  if (request.method === "POST" && v1TargetScaleBulkImportRoute) {
+    await workflowBulkJsonlImportEndpoint(request, response, context, v1TargetScaleBulkImportRoute, {
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === targetDataCollectionPackageImportRoute) {
+    await targetDataCollectionPackageJsonlImportEndpoint(request, response, context, {
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/operator-evidence/import-jsonl") {
+    await operatorEvidencePackageJsonlImportEndpoint(request, response, context, {
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+  const operatorEvidenceTemplateMatch = url.pathname.match(/^\/api\/v1\/operator-evidence\/import-jsonl-template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && operatorEvidenceTemplateMatch) {
+    const itemId = operatorEvidenceTemplateMatch[1] ? decodeURIComponent(operatorEvidenceTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      operatorEvidencePackageJsonlTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  const operatorActionPayloadTemplateMatch = url.pathname.match(/^\/api\/v1\/operator-action-items\/payload-template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && operatorActionPayloadTemplateMatch) {
+    const itemId = operatorActionPayloadTemplateMatch[1] ? decodeURIComponent(operatorActionPayloadTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      operatorActionPayloadTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  const targetGapJsonlTemplateMatch = url.pathname.match(/^\/api\/v1\/target-gaps\/import-jsonl-template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && targetGapJsonlTemplateMatch) {
+    const itemId = targetGapJsonlTemplateMatch[1] ? decodeURIComponent(targetGapJsonlTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      targetDataCollectionJsonlTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  const targetGapCollectionPlanMatch = url.pathname.match(/^\/api\/v1\/target-gaps\/collection-plan(?:\/([^/]+))?$/);
+  if (request.method === "GET" && targetGapCollectionPlanMatch) {
+    const itemId = targetGapCollectionPlanMatch[1] ? decodeURIComponent(targetGapCollectionPlanMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      targetGapCollectionPlanReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  const v1AdminSourceExtractMatch = url.pathname.match(/^\/api\/v1\/admin\/sources\/([^/]+)\/extract$/);
+  if (request.method === "POST" && v1AdminSourceExtractMatch) {
+    await sourceIntakeJsonlImportEndpoint(request, response, context, {
+      route: "/api/v1/admin/sources/{id}/extract",
+      sourceCardId: decodeURIComponent(v1AdminSourceExtractMatch[1]),
+      dryRun: jsonlImportDryRunRequested(url.searchParams),
+    });
+    return;
+  }
+  const v1ArgumentExtractionReviewMatch = url.pathname.match(/^\/api\/v1\/argument-extractions\/([^/]+)\/review$/);
+  if (request.method === "POST" && v1ArgumentExtractionReviewMatch) {
+    await argumentExtractionReviewEndpoint(request, response, context, decodeURIComponent(v1ArgumentExtractionReviewMatch[1]));
+    return;
+  }
+  const v1AdminArgumentExtractionReviewMatch = url.pathname.match(/^\/api\/v1\/admin\/extractions\/([^/]+)\/review$/);
+  if (request.method === "POST" && v1AdminArgumentExtractionReviewMatch) {
+    await argumentExtractionReviewEndpoint(request, response, context, decodeURIComponent(v1AdminArgumentExtractionReviewMatch[1]), {
+      route: "/api/v1/admin/extractions/{id}/review",
+    });
+    return;
+  }
+  const v1AdminExtractionPreparedPositionMatch = url.pathname.match(/^\/api\/v1\/admin\/extractions\/([^/]+)\/create-prepared-position$/);
+  if (request.method === "POST" && v1AdminExtractionPreparedPositionMatch) {
+    await sourceExtractionPreparedDraftEndpoint(
+      request,
+      response,
+      context,
+      decodeURIComponent(v1AdminExtractionPreparedPositionMatch[1]),
+      "prepared_position_draft",
+      "/api/v1/admin/extractions/{id}/create-prepared-position",
+    );
+    return;
+  }
+  const v1AdminExtractionPreparedCritiqueMatch = url.pathname.match(/^\/api\/v1\/admin\/extractions\/([^/]+)\/create-prepared-critique$/);
+  if (request.method === "POST" && v1AdminExtractionPreparedCritiqueMatch) {
+    await sourceExtractionPreparedDraftEndpoint(
+      request,
+      response,
+      context,
+      decodeURIComponent(v1AdminExtractionPreparedCritiqueMatch[1]),
+      "prepared_critique_draft",
+      "/api/v1/admin/extractions/{id}/create-prepared-critique",
+    );
+    return;
+  }
   const v1WorkflowStateMatch = url.pathname.match(/^\/api\/v1\/state\/([^/]+)\/([^/]+)$/);
   if (request.method === "GET" && v1WorkflowStateMatch) {
     await workflowStateEndpoint(request, response, context, decodeURIComponent(v1WorkflowStateMatch[1]), decodeURIComponent(v1WorkflowStateMatch[2]));
@@ -6710,6 +7610,11 @@ export async function handleApiRequest(request, response, url, context) {
   const v1AssignmentTrainingExposureMatch = url.pathname.match(/^\/api\/v1\/assignments\/([^/]+)\/training-exposure-snapshot$/);
   if (request.method === "GET" && v1AssignmentTrainingExposureMatch) {
     await assignmentTrainingExposureSnapshotEndpoint(request, response, context, decodeURIComponent(v1AssignmentTrainingExposureMatch[1]));
+    return;
+  }
+  const v1AssignmentDraftMatch = url.pathname.match(/^\/api\/v1\/assignments\/([^/]+)\/draft$/);
+  if ((request.method === "GET" || request.method === "POST") && v1AssignmentDraftMatch) {
+    await assignmentDraftSessionEndpoint(request, response, context, decodeURIComponent(v1AssignmentDraftMatch[1]), url);
     return;
   }
   const v1AssignmentDraftStoragePolicyMatch = url.pathname.match(/^\/api\/v1\/assignments\/([^/]+)\/draft-storage-policy$/);
@@ -6821,8 +7726,35 @@ export async function handleApiRequest(request, response, url, context) {
     await adminContributionQueueEndpoint(request, response, context, "candidate-batches");
     return;
   }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/review-signals") {
+    await adminContributionQueueEndpoint(request, response, context, "review-signals");
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/gate-decisions") {
+    await adminContributionQueueEndpoint(request, response, context, "gate-decisions");
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/candidate-items") {
+    await adminContributionQueueEndpoint(request, response, context, "candidate-items");
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/v1/admin/promotion-records") {
+    await adminContributionQueueEndpoint(request, response, context, "promotion-records");
+    return;
+  }
+  const adminContributionQueueItemMatch = url.pathname.match(
+    /^\/api\/v1\/admin\/(review-signals|gate-decisions|candidate-items|promotion-records)\/([^/]+)$/,
+  );
+  if (request.method === "GET" && adminContributionQueueItemMatch) {
+    await adminContributionQueueItemEndpoint(request, response, context, adminContributionQueueItemMatch[1], decodeURIComponent(adminContributionQueueItemMatch[2]));
+    return;
+  }
   if (request.method === "POST" && url.pathname === "/api/v1/admin/gate-decisions") {
     await contributionGateDecisionEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/admin/review-signals") {
+    await contributionReviewSignalEndpoint(request, response, context);
     return;
   }
   const contributionPreparedDraftMatch = url.pathname.match(/^\/api\/v1\/admin\/user-submissions\/([^/]+)\/prepared-drafts$/);
@@ -6830,15 +7762,36 @@ export async function handleApiRequest(request, response, url, context) {
     await contributionPreparedDraftEndpoint(request, response, context, decodeURIComponent(contributionPreparedDraftMatch[1]));
     return;
   }
+  const contributionPreparedDraftReviewMatch = url.pathname.match(/^\/api\/v1\/admin\/prepared-drafts\/([^/]+)\/review$/);
+  if (request.method === "POST" && contributionPreparedDraftReviewMatch) {
+    await contributionPreparedDraftReviewEndpoint(request, response, context, decodeURIComponent(contributionPreparedDraftReviewMatch[1]));
+    return;
+  }
+  const contributionPreparedDraftByIdMatch = url.pathname.match(/^\/api\/v1\/admin\/prepared-drafts\/([^/]+)$/);
+  if (request.method === "GET" && contributionPreparedDraftByIdMatch) {
+    await contributionPreparedDraftByIdEndpoint(request, response, context, decodeURIComponent(contributionPreparedDraftByIdMatch[1]));
+    return;
+  }
   const contributionPromoteMatch = url.pathname.match(/^\/api\/v1\/admin\/prepared-drafts\/([^/]+)\/promote$/);
   if (request.method === "POST" && contributionPromoteMatch) {
     await contributionPreparedDraftPromotionEndpoint(request, response, context, decodeURIComponent(contributionPromoteMatch[1]));
+    return;
+  }
+  const v1AdminArgumentExtractionReadMatch = url.pathname.match(/^\/api\/v1\/admin\/extractions\/([^/]+)$/);
+  if (request.method === "GET" && v1AdminArgumentExtractionReadMatch) {
+    await adminArgumentExtractionReadbackEndpoint(request, response, context, decodeURIComponent(v1AdminArgumentExtractionReadMatch[1]));
     return;
   }
 
   const workflowWriteMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowWriteEndpoints);
   if (workflowWriteMatch) {
     await workflowWriteEndpoint(request, response, context, workflowWriteMatch);
+    return;
+  }
+
+  const workflowCollectionReadMatch = matchWorkflowEndpoint(request.method, url.pathname, workflowCollectionReadEndpoints);
+  if (workflowCollectionReadMatch) {
+    await workflowCollectionReadEndpoint(request, response, context, workflowCollectionReadMatch);
     return;
   }
 
@@ -6867,6 +7820,226 @@ export async function handleApiRequest(request, response, url, context) {
   if (request.method === "GET" && url.pathname === "/api/release/report") {
     const { report } = await buildCurrentReleaseArtifacts(context);
     sendJson(response, 200, report);
+    return;
+  }
+
+  const metaphilosophyDeliverableChecklistMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/deliverable-checklist(?:\/([^/]+))?$/);
+  if (request.method === "GET" && metaphilosophyDeliverableChecklistMatch) {
+    const itemId = metaphilosophyDeliverableChecklistMatch[1] ? decodeURIComponent(metaphilosophyDeliverableChecklistMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      metaphilosophyDeliverableChecklistReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const metaphilosophySourceWorkbenchReadinessMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/source-workbench-readiness(?:\/([^/]+))?$/);
+  if (request.method === "GET" && metaphilosophySourceWorkbenchReadinessMatch) {
+    const itemId = metaphilosophySourceWorkbenchReadinessMatch[1] ? decodeURIComponent(metaphilosophySourceWorkbenchReadinessMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      metaphilosophySourceWorkbenchReadinessReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const metaphilosophySourceWorkbenchTemplateMatch = url.pathname.match(/^\/api\/v1\/metaphilosophy\/source-workbench-template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && metaphilosophySourceWorkbenchTemplateMatch) {
+    const itemId = metaphilosophySourceWorkbenchTemplateMatch[1] ? decodeURIComponent(metaphilosophySourceWorkbenchTemplateMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      metaphilosophySourceWorkbenchTemplateReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const lmcaComparisonMatch = url.pathname.match(/^\/api\/v1\/lmca-comparison(?:\/([^/]+))?$/);
+  if (request.method === "GET" && lmcaComparisonMatch) {
+    const itemId = lmcaComparisonMatch[1] ? decodeURIComponent(lmcaComparisonMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      lmcaComparisonReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const octoberOperatingPlanMatch = url.pathname.match(/^\/api\/v1\/october-operating-plan(?:\/([^/]+))?$/);
+  if (request.method === "GET" && octoberOperatingPlanMatch) {
+    const itemId = octoberOperatingPlanMatch[1] ? decodeURIComponent(octoberOperatingPlanMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      octoberOperatingPlanReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const octoberCompletionChecklistMatch = url.pathname.match(/^\/api\/v1\/october-completion-checklist(?:\/([^/]+))?$/);
+  if (request.method === "GET" && octoberCompletionChecklistMatch) {
+    const itemId = octoberCompletionChecklistMatch[1] ? decodeURIComponent(octoberCompletionChecklistMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      octoberCompletionChecklistReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const octoberCompletionRunbookMatch = url.pathname.match(/^\/api\/v1\/october-completion-runbook(?:\/([^/]+))?$/);
+  if (request.method === "GET" && octoberCompletionRunbookMatch) {
+    const itemId = octoberCompletionRunbookMatch[1] ? decodeURIComponent(octoberCompletionRunbookMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      octoberCompletionRunbookReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const releaseWorkflowReadinessMatch = url.pathname.match(/^\/api\/v1\/release-workflow-readiness(?:\/([^/]+))?$/);
+  if (request.method === "GET" && releaseWorkflowReadinessMatch) {
+    const itemId = releaseWorkflowReadinessMatch[1] ? decodeURIComponent(releaseWorkflowReadinessMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      releaseWorkflowReadinessReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const releaseVersionManifestMatch = url.pathname.match(/^\/api\/v1\/release-version-manifest(?:\/([^/]+))?$/);
+  if (request.method === "GET" && releaseVersionManifestMatch) {
+    const itemId = releaseVersionManifestMatch[1] ? decodeURIComponent(releaseVersionManifestMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      releaseVersionManifestReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const raterProfileEvidenceMatch = url.pathname.match(/^\/api\/v1\/rater-profile-evidence(?:\/([^/]+))?$/);
+  if (request.method === "GET" && raterProfileEvidenceMatch) {
+    const itemId = raterProfileEvidenceMatch[1] ? decodeURIComponent(raterProfileEvidenceMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      raterProfileEvidenceReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const releaseReportSectionsMatch = url.pathname.match(/^\/api\/v1\/release-report-sections(?:\/([^/]+))?$/);
+  if (request.method === "GET" && releaseReportSectionsMatch) {
+    const itemId = releaseReportSectionsMatch[1] ? decodeURIComponent(releaseReportSectionsMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      releaseReportSectionsReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const candidateGenerationChecklistMatch = url.pathname.match(/^\/api\/v1\/candidate-generation-intake-checklist(?:\/([^/]+))?$/);
+  if (request.method === "GET" && candidateGenerationChecklistMatch) {
+    const itemId = candidateGenerationChecklistMatch[1] ? decodeURIComponent(candidateGenerationChecklistMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      derivedChecklistReadback(report, {
+        itemId,
+        searchParams: url.searchParams,
+        sectionKey: "candidateGenerationIntakeChecklist",
+        idPrefix: "candidate-generation-intake-checklist",
+        resourceKey: "candidateGenerationIntakeChecklistRow",
+        routeBase: "/api/v1/candidate-generation-intake-checklist",
+        policy: {
+          scope:
+            "Read-only RLHF91 candidate-generation and active-learning checklist derived from /api/release/report; it does not create CandidateItem, CandidateBatchMembership, live queue, gold label, benchmark label, or alternate candidate architecture.",
+          access:
+            "Admin/auditor readback only because rows expose active-learning denominators, model-judge diagnostics, generation provenance, and hidden benchmark artifact-balance evidence.",
+        },
+      }),
+    );
+    return;
+  }
+
+  const labelAggregationChecklistMatch = url.pathname.match(/^\/api\/v1\/label-aggregation-reliability-checklist(?:\/([^/]+))?$/);
+  if (request.method === "GET" && labelAggregationChecklistMatch) {
+    const itemId = labelAggregationChecklistMatch[1] ? decodeURIComponent(labelAggregationChecklistMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      derivedChecklistReadback(report, {
+        itemId,
+        searchParams: url.searchParams,
+        sectionKey: "labelAggregationReliabilityChecklist",
+        idPrefix: "label-aggregation-reliability-checklist",
+        resourceKey: "labelAggregationReliabilityChecklistRow",
+        routeBase: "/api/v1/label-aggregation-reliability-checklist",
+        policy: {
+          scope:
+            "Read-only RLHF91 label aggregation and reliability checklist derived from /api/release/report; it does not create labels, ratings, adjudications, weighting algorithms, candidate records, or release claims.",
+          access:
+            "Admin/auditor readback only because rows expose label-snapshot provenance, rater contribution diagnostics, adjudication evidence, and model-assisted overlap controls.",
+        },
+      }),
+    );
+    return;
+  }
+
+  const modelEvaluationReproChecklistMatch = url.pathname.match(/^\/api\/v1\/model-evaluation-reproducibility-checklist(?:\/([^/]+))?$/);
+  if (request.method === "GET" && modelEvaluationReproChecklistMatch) {
+    const itemId = modelEvaluationReproChecklistMatch[1] ? decodeURIComponent(modelEvaluationReproChecklistMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      derivedChecklistReadback(report, {
+        itemId,
+        searchParams: url.searchParams,
+        sectionKey: "modelEvaluationReproducibilityChecklist",
+        idPrefix: "model-evaluation-reproducibility-checklist",
+        resourceKey: "modelEvaluationReproducibilityChecklistRow",
+        routeBase: "/api/v1/model-evaluation-reproducibility-checklist",
+        policy: {
+          scope:
+            "Read-only RLHF91 model-evaluation reproducibility checklist derived from /api/release/report; it does not create model-evaluation tables, run queues, candidate artifacts, source-preparation bridges, model runs, or release claims.",
+          access:
+            "Admin/auditor readback only because rows expose prompt/parser provenance, model-run environment evidence, leaderboard reproducibility, overlap controls, and failure diagnostics.",
+        },
+      }),
+    );
+    return;
+  }
+
+  const promptTrackSeparationMatch = url.pathname.match(/^\/api\/v1\/prompt-track-separation(?:\/([^/]+))?$/);
+  if (request.method === "GET" && promptTrackSeparationMatch) {
+    const itemId = promptTrackSeparationMatch[1] ? decodeURIComponent(promptTrackSeparationMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      promptTrackSeparationReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const critiqueGenerationEvaluationMatch = url.pathname.match(/^\/api\/v1\/critique-generation-evaluation(?:\/([^/]+))?$/);
+  if (request.method === "GET" && critiqueGenerationEvaluationMatch) {
+    const itemId = critiqueGenerationEvaluationMatch[1] ? decodeURIComponent(critiqueGenerationEvaluationMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      critiqueGenerationEvaluationReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const scoreExplanationAuditMatch = url.pathname.match(/^\/api\/v1\/score-explanation-audit(?:\/([^/]+))?$/);
+  if (request.method === "GET" && scoreExplanationAuditMatch) {
+    const itemId = scoreExplanationAuditMatch[1] ? decodeURIComponent(scoreExplanationAuditMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      scoreExplanationAuditReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const targetGapsMatch = url.pathname.match(/^\/api\/v1\/target-gaps(?:\/([^/]+))?$/);
+  if (request.method === "GET" && targetGapsMatch) {
+    const itemId = targetGapsMatch[1] ? decodeURIComponent(targetGapsMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      targetGapsReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+
+  const operatorActionItemsMatch = url.pathname.match(/^\/api\/v1\/operator-action-items(?:\/([^/]+))?$/);
+  if (request.method === "GET" && operatorActionItemsMatch) {
+    const itemId = operatorActionItemsMatch[1] ? decodeURIComponent(operatorActionItemsMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      operatorActionItemsReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
+  const operatorPlanCollectionMatch = url.pathname.match(
+    /^\/api\/v1\/(operator-submission-checklist|operator-review-evidence-pointers|operator-review-artifact-summaries)(?:\/([^/]+))?$/,
+  );
+  if (request.method === "GET" && operatorPlanCollectionMatch) {
+    const itemId = operatorPlanCollectionMatch[2] ? decodeURIComponent(operatorPlanCollectionMatch[2]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      operatorPlanCollectionReadback(report, operatorPlanCollectionMatch[1], { itemId, searchParams: url.searchParams }),
+    );
     return;
   }
 
@@ -7018,6 +8191,96 @@ async function labelSnapshotEndpoint(request, response, context, requestedId = n
   });
 }
 
+const releaseReportSnapshotSpec = {
+  eventType: "release_report_snapshot_materialized",
+  resourceKey: "releaseReport",
+  roles: adminRoles,
+  route: "/api/v1/release-reports",
+  policyActionKind: "release_report_materialize",
+  phaseGateLaneKind: "route",
+};
+
+async function releaseReportSnapshotEndpoint(request, response, context, requestedId = null) {
+  if (request.method === "POST") {
+    const session = await authenticateRequest(request, context.auth);
+    if (!session.ok) {
+      sendJson(response, 401, { error: session.error });
+      return;
+    }
+    if (!adminRoles.includes(session.user.role)) {
+      sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminRoles });
+      return;
+    }
+    const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, releaseReportSnapshotSpec);
+    if (!phaseGate.ok) {
+      sendWorkflowPhaseGateFailure(response, phaseGate);
+      return;
+    }
+    const body = await readJsonBody(request);
+    if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(body.releaseReport) || isTemplateOnlyRecord(body.resource)) {
+      sendJson(response, 400, {
+        error: "release_report_template_record",
+        detail: "generated release report templates must be replaced with a deliberate materialization request before append",
+        resourceKey: "releaseReport",
+      });
+      return;
+    }
+    const { report } = await buildCurrentReleaseArtifacts(context);
+    const inputHash = `sha256:${sha256(canonicalJson(report))}`;
+    const releaseReportId =
+      body.releaseReport?.id ?? body.resource?.id ?? body.id ?? `${report.id}-${String(inputHash).replace(/^sha256:/, "").slice(0, 12)}`;
+    const materializedReport = {
+      id: releaseReportId,
+      releaseId: report.releaseId,
+      inputHash,
+      generatedAt: report.generatedAt,
+      materializedAt: new Date().toISOString(),
+      materializedBy: session.user.id,
+      source: "server_generated_release_report_snapshot",
+      report,
+    };
+    const policyGate = await appendWorkflowPolicyDecisionGate(context, request, session.user, materializedReport, releaseReportSnapshotSpec, {});
+    if (!policyGate.ok) {
+      sendJson(response, policyGate.statusCode ?? 409, { error: policyGate.error, detail: policyGate.detail, ...(policyGate.extra ?? {}) });
+      return;
+    }
+    const gatedMaterializedReport = {
+      ...materializedReport,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+    };
+    const event = createWorkflowAuditEvent(releaseReportSnapshotSpec.eventType, session.user, "releaseReport", gatedMaterializedReport, request, {
+      route: releaseReportSnapshotSpec.route,
+      requiredRoles: releaseReportSnapshotSpec.roles,
+    });
+    await context.auditStore.appendWorkflowEvent(event);
+    sendJson(response, 201, {
+      ok: true,
+      eventId: event.id,
+      eventType: event.type,
+      resourceKey: "releaseReport",
+      resourceId: gatedMaterializedReport.id,
+      releaseReportId: gatedMaterializedReport.id,
+      releaseId: gatedMaterializedReport.releaseId,
+      inputHash,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyActionKind: policyGate.actionKind,
+      payloadHash: event.payloadHash,
+      accessAudit: event.accessAudit,
+    });
+    return;
+  }
+  await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], async (report) => {
+    if (!requestedId) return report;
+    if (artifactIdMatches(report, requestedId)) return report;
+    const stored = await workflowResourceById(context, "releaseReport", requestedId);
+    return stored?.report ?? stored;
+  });
+}
+
 async function corpusManifestEndpoint(request, response, context, requestedId = null) {
   if (request.method === "POST") {
     const persisted = await maybePersistSubmittedWorkflowArtifact(request, response, context, {
@@ -7094,6 +8357,7 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
         "itemTextVersionHashManifest",
         "ratingContextSnapshotManifest",
         "labelMetadataManifest",
+        "volunteerWithdrawalExclusionManifest",
       ],
       requiredObjectKeys: {
         positionBalancedWeighting: ["policy", "status", "pointwiseRowsByPosition", "pairwiseRowsByPosition", "pointwiseWeightSumByPosition"],
@@ -7102,6 +8366,14 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
         itemTextVersionHashManifest: ["itemTextVersionIds", "rows"],
         ratingContextSnapshotManifest: ["snapshotIds", "rows"],
         labelMetadataManifest: ["rows"],
+        volunteerWithdrawalExclusionManifest: [
+          "futureTrainingExportExcludedRaterIds",
+          "withdrawalRequestIds",
+          "rows",
+          "frozenLabelSnapshotDisposition",
+          "denominatorMutationAllowed",
+          "status",
+        ],
       },
       requiredStructuredFields: {
         uncertaintyThresholdsApplied: trainingExportUncertaintyThresholds,
@@ -7123,6 +8395,11 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
         modelPredictionIndifferencePolicy: ["indifference", "tie"],
         promptExampleContaminationCheck: ["protected", "hidden"],
       },
+      validationContext: async ({ context }) => {
+        const { report } = await buildCurrentReleaseArtifacts(context);
+        return { expectedTrainingExport: report.trainingExport };
+      },
+      customValidator: validateTrainingExportWithdrawalExclusionPayload,
     });
     if (persisted) return;
   }
@@ -7131,6 +8408,95 @@ async function trainingExportV1Endpoint(request, response, context, requestedId 
     if (artifactIdMatches(report.trainingExport, requestedId)) return report.trainingExport;
     return workflowResourceById(context, "trainingExport", requestedId);
   });
+}
+
+const operatorEvidencePackageImportSpecialWriteSpecs = [
+  workflowWriteSpec(/^\/api\/v1\/label-snapshots$/, "label_snapshot_submitted", "labelSnapshot", adminRoles, {
+    route: "/api/v1/label-snapshots",
+    policyActionKind: "label_snapshot_freeze",
+    phaseGateLaneKind: "route",
+  }),
+  workflowWriteSpec(/^\/api\/v1\/corpus-manifests$/, "corpus_manifest_submitted", "corpusManifest", adminRoles, {
+    route: "/api/v1/corpus-manifests",
+    allowHiddenMetadata: true,
+  }),
+  workflowWriteSpec(/^\/api\/v1\/exports\/public$/, "export_manifest_submitted", "exportManifest", adminRoles, {
+    route: "/api/v1/exports/public",
+    allowHiddenMetadata: true,
+    normalize: (resource) => ({ ...resource, kind: resource.kind ?? "public" }),
+  }),
+  workflowWriteSpec(/^\/api\/v1\/exports\/internal$/, "export_manifest_submitted", "exportManifest", adminRoles, {
+    route: "/api/v1/exports/internal",
+    allowHiddenMetadata: true,
+    normalize: (resource) => ({ ...resource, kind: resource.kind ?? "internal" }),
+  }),
+  workflowWriteSpec(/^\/api\/v1\/training-exports$/, "training_export_submitted", "trainingExport", adminRoles, {
+    route: "/api/v1/training-exports",
+    policyActionKind: "training_export",
+    phaseGateLaneKind: "export_path",
+  }),
+  {
+    ...releaseReportSnapshotSpec,
+    method: "POST",
+    pattern: /^\/api\/v1\/release-reports$/,
+    packageImportUnsupportedReason: "release report snapshots are server-materialized from the current release report",
+  },
+  workflowWriteSpec(/^\/api\/v1\/benchmark\/candidates\/freeze$/, "hidden_benchmark_freeze_report_materialized", "benchmarkFreezeReport", adminRoles, {
+    route: "/api/v1/benchmark/candidates/freeze",
+    packageImportUnsupportedReason: "hidden benchmark freeze reports are server-materialized and log benchmark access",
+  }),
+];
+
+function validateTrainingExportWithdrawalExclusionPayload(resource, _actor, _params, validationContext = {}) {
+  const expectedTrainingExport = validationContext.expectedTrainingExport;
+  if (!expectedTrainingExport) return { ok: true };
+  const expectedManifest = expectedTrainingExport.volunteerWithdrawalExclusionManifest ?? null;
+  if (canonicalJson(resource.volunteerWithdrawalExclusionManifest) !== canonicalJson(expectedManifest)) {
+    return invalid("volunteerWithdrawalExclusionManifest must match the current future training-export withdrawal exclusions");
+  }
+  const expectedRaterIds = expectedTrainingExport.futureTrainingExportExcludedRaterIds ?? [];
+  const expectedRequestIds = expectedTrainingExport.volunteerWithdrawalExclusionRequestIds ?? [];
+  const submittedRaterIds = normalizeWorkflowStringArray(resource.futureTrainingExportExcludedRaterIds);
+  const submittedRequestIds = normalizeWorkflowStringArray(resource.volunteerWithdrawalExclusionRequestIds);
+  const missingRaterIds = expectedRaterIds.filter((raterId) => !submittedRaterIds.includes(raterId));
+  if (missingRaterIds.length) {
+    return invalid(`futureTrainingExportExcludedRaterIds missing withdrawn raters: ${missingRaterIds.join(", ")}`);
+  }
+  const missingRequestIds = expectedRequestIds.filter((requestId) => !submittedRequestIds.includes(requestId));
+  if (missingRequestIds.length) {
+    return invalid(`volunteerWithdrawalExclusionRequestIds missing withdrawal requests: ${missingRequestIds.join(", ")}`);
+  }
+  const includedRaterIds = normalizeWorkflowStringArray(
+    resource.includedRaterIds ?? resource.includedRaters ?? resource.trainingIncludedRaterIds ?? resource.raterIdsIncluded,
+  );
+  const inclusionConflicts = includedRaterIds.filter((raterId) => expectedRaterIds.includes(raterId));
+  if (inclusionConflicts.length) {
+    return invalid(`includedRaterIds contains future-training-export withdrawn raters: ${inclusionConflicts.join(", ")}`);
+  }
+  return { ok: true };
+}
+
+function normalizeWorkflowStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim());
+}
+
+async function validateWorkflowDuplicateResource(context, spec, resource) {
+  return validateWorkflowDuplicateResourceFromEvents(await readPersistedWorkflowEvents(context.auditStore), spec, resource);
+}
+
+function validateWorkflowDuplicateResourceFromEvents(workflowEvents, spec, resource) {
+  if (spec?.allowDuplicateResourceId === true) return { ok: true };
+  if (spec?.pathParamField === "id") return { ok: true };
+  if (!resource?.id || !spec?.resourceKey) return { ok: true };
+  const existingResources = latestWorkflowResources(workflowEvents, spec.resourceKey);
+  if (!existingResources.some((item) => item.id === resource.id)) return { ok: true };
+  return {
+    ok: false,
+    statusCode: 409,
+    error: "workflow_duplicate_resource",
+    detail: `${spec.resourceKey}.id ${resource.id} already exists; append-only workflow submissions require a new id`,
+  };
 }
 
 async function maybePersistSubmittedWorkflowArtifact(request, response, context, spec) {
@@ -7149,15 +8515,60 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
     return true;
   }
   const body = await readJsonBody(request);
+  const dryRun = workflowSingleRecordDryRunRequested(request, body);
   const candidate = body[spec.resourceKey] ?? body.resource;
   if (!candidate) return false;
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(candidate)) {
+    sendJson(response, 400, {
+      error: "workflow_template_record",
+      detail: `generated template records must be replaced with real ${spec.resourceKey} data before append`,
+      resourceKey: spec.resourceKey,
+    });
+    return true;
+  }
+  const validationContext = typeof spec.validationContext === "function"
+    ? await spec.validationContext({ context, session, request, candidate })
+    : {};
   const normalizedCandidate = spec.normalize ? spec.normalize(candidate) : candidate;
-  const validation = validateWorkflowPayload(normalizedCandidate, session.user, spec, {});
+  const validation = validateWorkflowPayload(normalizedCandidate, session.user, spec, {}, validationContext);
   if (!validation.ok) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
     return true;
   }
   let resource = validation.resource;
+  const duplicateResource = await validateWorkflowDuplicateResource(context, spec, resource);
+  if (!duplicateResource.ok) {
+    sendJson(response, duplicateResource.statusCode ?? 409, {
+      error: duplicateResource.error,
+      detail: duplicateResource.detail,
+      resourceKey: spec.resourceKey,
+      resourceId: resource.id,
+      route: spec.route,
+    });
+    return true;
+  }
+  const qualificationGate = await validateWorkflowQualificationGate(context, session.user, resource, spec);
+  if (!qualificationGate.ok) {
+    sendJson(response, qualificationGate.statusCode ?? 403, {
+      error: qualificationGate.error,
+      detail: qualificationGate.detail,
+      ...(qualificationGate.extra ?? {}),
+    });
+    return true;
+  }
+  if (dryRun) {
+    const bindingValidation = await validateWorkflowResourceBindings(context, resource, spec);
+    if (!bindingValidation.ok) {
+      sendJson(response, bindingValidation.statusCode ?? 409, {
+        error: bindingValidation.error ?? "workflow_resource_binding_failed",
+        detail: bindingValidation.detail,
+        ...(bindingValidation.extra ?? {}),
+      });
+      return true;
+    }
+    sendJson(response, 200, workflowSingleRecordDryRunResponse(spec, resource));
+    return true;
+  }
   let policyGate = null;
   if (spec.policyActionKind) {
     policyGate = await appendWorkflowPolicyDecisionGate(context, request, session.user, resource, spec, {});
@@ -7206,11 +8617,7331 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
   return true;
 }
 
+function workflowSingleRecordDryRunRequested(request, body = null) {
+  const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
+  return jsonlImportDryRunRequested(url.searchParams, body);
+}
+
+function workflowSingleRecordDryRunResponse(spec, resource, params = {}) {
+  const route = workflowSpecResponseRoute(spec);
+  return {
+    ok: true,
+    dryRun: true,
+    noSideEffects: true,
+    eventType: spec.eventType,
+    resourceKey: spec.resourceKey,
+    resourceId: resource.id ?? null,
+    sourceWriteRoute: route,
+    route,
+    params,
+    policyActionKind: spec.policyActionKind ?? null,
+    phaseGateLaneKind: workflowSpecPhaseGateLaneKind(spec),
+    policyGateDryRun: spec.policyActionKind ? "not_minted_or_consumed" : "not_required",
+    validationPolicy:
+      "dry_run_validates_role_phase_gate_payload_duplicate_qualification_and_bindings_without_appending_workflow_events",
+  };
+}
+
+function workflowSpecResponseRoute(spec) {
+  return String(spec?.route ?? "")
+    .replace(/\$\/$/, "")
+    .replace(/\(\?<([^>]+)>\[\^\/\]\+\)/g, "{$1}");
+}
+
 async function reportArtifactEndpoint(request, response, context, roles, selector) {
   await protectedJsonEndpoint(request, response, context, roles, async () => {
     const artifacts = await buildCurrentReleaseArtifacts(context);
     return selector(artifacts.report, artifacts);
   });
+}
+
+async function ratingsReadbackEndpoint(request, response, context, options = {}) {
+  await protectedJsonEndpoint(request, response, context, ["admin", "auditor"], async () =>
+    ratingsReadback(await readPersistedRatings(context.auditStore), options),
+  );
+}
+
+function ratingsReadback(persistedRatings = [], options = {}) {
+  const allRatings = [
+    ...seedRatings.map((rating) => ({ ...rating, rowSource: "seed" })),
+    ...persistedRatings.map((rating) => ({ ...rating, rowSource: "submitted_rating_event" })),
+  ];
+  const filters = ratingReadbackFilters(options.searchParams);
+  const filteredRatings = allRatings.filter((rating) => ratingMatchesReadbackFilters(rating, filters));
+  const items = options.ratingId ? filteredRatings.filter((rating) => rating.id === options.ratingId) : filteredRatings;
+  if (options.ratingId && items.length === 0) return null;
+  return {
+    id: `ratings-${releaseId}`,
+    releaseId,
+    resourceKey: "rating",
+    generatedAt: new Date().toISOString(),
+    policy: {
+      scope:
+        "Read-only admin/auditor collection of seed and submitted rating events for target-gap verification; it does not create ratings, expose raw item/source text, or waive blind-rating gates.",
+      access: "Admin/auditor only because rating rows contain protected label evidence and rater-identifiable workflow metadata.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allRatings.length,
+    counts: {
+      seedRatingCount: allRatings.filter((rating) => rating.rowSource === "seed").length,
+      submittedRatingCount: allRatings.filter((rating) => rating.rowSource === "submitted_rating_event").length,
+      blindInitialRatingCount: allRatings.filter((rating) => rating.kind === "blind_initial").length,
+      filteredBlindInitialRatingCount: items.filter((rating) => rating.kind === "blind_initial").length,
+      byKind: countItemsBy(items, "kind"),
+      byRowSource: countItemsBy(items, "rowSource"),
+      byAssignmentId: countItemsBy(items, "assignmentId"),
+      byRatingContextSnapshotId: countItemsBy(items, "ratingContextSnapshotId"),
+    },
+    ...(options.ratingId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function ratingReadbackFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    kind: value("kind"),
+    rowSource: value("rowSource"),
+    assignmentId: value("assignmentId"),
+    raterId: value("raterId"),
+    positionId: value("positionId"),
+    critiqueId: value("critiqueId"),
+    ratingContextSnapshotId: value("ratingContextSnapshotId"),
+  };
+}
+
+function ratingMatchesReadbackFilters(rating, filters) {
+  return Object.entries(filters).every(([key, value]) => !value || rating?.[key] === value);
+}
+
+function targetGapsReadback(report, options = {}) {
+  const targetGaps = report.targetGaps ?? {};
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const allItems = targetGapItems(Array.isArray(targetGaps.rows) ? targetGaps.rows : [], actionItems);
+  const filters = targetGapFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => targetGapMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `target-gaps-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: targetGaps.id ?? null,
+    releaseUseStatus: targetGaps.releaseUseStatus ?? report.currentStatus ?? "target_gaps_missing",
+    sourcePlanId: plan.id ?? null,
+    resourceKey: "targetGap",
+    policy: {
+      scope:
+        "Read-only target-gap collection derived from /api/release/report targetGaps; it does not submit positions, critiques, ratings, gold items, validation rows, waive gates, or create production evidence.",
+      access: "Admin/auditor readback only because target gaps expose release planning counts and operator collection priorities.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: targetGaps.counts ?? {},
+    filteredCounts: targetGapFilteredCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function targetGapCollectionPlanReadback(report, options = {}) {
+  const targetGaps = report.targetGaps ?? {};
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapRows = targetGapItems(Array.isArray(targetGaps.rows) ? targetGaps.rows : [], actionItems);
+  const allItems = targetGapRows.map((row, index) => targetGapCollectionPlanItem(row, index));
+  const filters = targetGapCollectionPlanFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => targetGapCollectionPlanMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId || item.targetGapId === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `target-gap-collection-plan-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: targetGaps.id ?? null,
+    sourcePlanId: plan.id ?? null,
+    releaseUseStatus: targetGaps.releaseUseStatus ?? report.currentStatus ?? "target_gaps_missing",
+    resourceKey: "targetGapCollectionPlan",
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    policy: {
+      scope:
+        "Read-only grouped target-gap collection plan derived from /api/release/report targetGaps and operatorEvidenceSubmissionPlan; it de-duplicates shared collect-data actions but does not submit data, waive gates, or create production evidence.",
+      access: "Admin/auditor readback only because collection priorities expose release target counts and operator routes.",
+      duplicateHandling:
+        "When the same target gap blocks multiple checklist rows, submit real data once through the target data route, then verify all dependent checklist rows through /api/release/report.",
+      packageImport:
+        "A replaced JSONL file may be submitted to the target-data package import route when it spans multiple target gaps; every line must still name the concrete importRoute and dry-run validation should be used before append.",
+      expandedTemplates:
+        "Each plan row names both the single-row template and an expand=remaining template readback. The capped expanded route is for safe preview; all generated rows remain templateOnly and must be replaced with real data before import.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: targetGapCollectionPlanCounts(allItems),
+    filteredCounts: targetGapCollectionPlanCounts(items),
+    targetDataPackagePlan: targetGapCollectionPackagePlan(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function lmcaComparisonReadback(report, options = {}) {
+  const comparison = report.lmcaComparison ?? {};
+  const allItems = lmcaComparisonItems(comparison);
+  const filters = lmcaComparisonFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => lmcaComparisonItemMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `lmca-comparison-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: comparison.id ?? null,
+    releaseUseStatus: comparison.overclaimGuardrail ?? report.currentStatus ?? "lmca_comparison_missing",
+    resourceKey: "lmcaComparisonRow",
+    policy: {
+      scope:
+        "Read-only LMCA baseline and comparability rows derived from /api/release/report lmcaComparison; it does not submit data, change target labels, waive gates, or create direct LMCA-replication claims.",
+      access: "Admin/auditor readback only because comparison rows expose release-scope, rater-composition, validation, and model-score claim boundaries.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: lmcaComparisonCounts(allItems),
+    filteredCounts: lmcaComparisonCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function lmcaComparisonFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    section: value("section"),
+    status: value("status"),
+    metric: value("metric"),
+    sourceCategory: value("sourceCategory"),
+    topicFamily: value("topicFamily"),
+    rater: value("rater"),
+    sourceTable: value("sourceTable"),
+    table: value("table"),
+    model: value("model"),
+    route: value("route"),
+  };
+}
+
+function lmcaComparisonItemMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "route") return lmcaComparisonItemRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function lmcaComparisonItemRoutes(item) {
+  return uniqueValues([item?.readbackItemRoute]);
+}
+
+function lmcaComparisonCounts(items) {
+  return {
+    rows: items.length,
+    bySection: countItemsBy(items, "section"),
+    byStatus: countItemsBy(items, "status"),
+    byMetric: countItemsBy(items, "metric"),
+    byTable: countItemsBy(items, "table"),
+    missingFromSeed: items.filter((item) => item.status === "missing_from_seed").length,
+    belowLmcaBaseline: items.filter((item) => item.status === "compressed_seed_below_lmca_baseline").length,
+    modelScoreAnchors: items.filter((item) => item.section === "model_score_anchor").length,
+    byRoute: countValues(items.flatMap(lmcaComparisonItemRoutes)),
+  };
+}
+
+function lmcaComparisonItems(comparison) {
+  const rows = [];
+  const pushRows = (section, items, mapItem) => {
+    if (!Array.isArray(items)) return;
+    items.forEach((item, index) => rows.push(mapItem(item, index)));
+  };
+  pushRows("source_scale", comparison.sourceScaleComparison, (item, index) => ({
+    id: `lmca-comparison:source-scale:${item.metric ?? index + 1}`,
+    section: "source_scale",
+    label: humanizeServerLabel(item.metric ?? "source scale"),
+    ...item,
+  }));
+  pushRows("position_source", comparison.positionSourceComparison, (item, index) => ({
+    id: `lmca-comparison:position-source:${item.sourceCategory ?? index + 1}`,
+    section: "position_source",
+    label: humanizeServerLabel(item.sourceCategory ?? "position source"),
+    ...item,
+  }));
+  pushRows("topic_family", comparison.topicFamilyComparison, (item, index) => ({
+    id: `lmca-comparison:topic-family:${item.topicFamily ?? index + 1}`,
+    section: "topic_family",
+    label: humanizeServerLabel(item.topicFamily ?? "topic family"),
+    ...item,
+  }));
+  pushRows("rater_contribution", comparison.raterContributionComparison, (item, index) => ({
+    id: `lmca-comparison:rater-contribution:${item.rater ?? index + 1}`,
+    section: "rater_contribution",
+    label: item.rater ?? "Rater contribution",
+    ...item,
+  }));
+  pushRows("model_denominator", comparison.modelDenominatorComparison, (item, index) => ({
+    id: `lmca-comparison:model-denominator:${item.metric ?? index + 1}`,
+    section: "model_denominator",
+    label: humanizeServerLabel(item.metric ?? "model denominator"),
+    ...item,
+  }));
+  pushRows("target_label", comparison.targetLabelComparison?.rows, (item, index) => ({
+    id: `lmca-comparison:target-label:${item.comparison ?? index + 1}`,
+    section: "target_label",
+    label: humanizeServerLabel(item.comparison ?? "target label"),
+    status: comparison.targetLabelComparison?.status ?? null,
+    currentTargetLabelVersion: comparison.targetLabelComparison?.currentTargetLabelVersion ?? null,
+    requiredForTable5StyleTarget: comparison.targetLabelComparison?.requiredForTable5StyleTarget ?? null,
+    ...item,
+  }));
+  const anchorStatus = comparison.modelScoreAnchorComparison?.status ?? null;
+  pushRows("model_score_anchor", comparison.modelScoreAnchorComparison?.weightedPairwiseTable5, (item, index) => ({
+    id: `lmca-comparison:model-score-anchor:weighted-pairwise:${item.model ?? index + 1}`,
+    section: "model_score_anchor",
+    label: item.model ?? "Weighted pairwise anchor",
+    status: anchorStatus,
+    ...item,
+  }));
+  pushRows("model_score_anchor", comparison.modelScoreAnchorComparison?.customMetricTable7, (item, index) => ({
+    id: `lmca-comparison:model-score-anchor:custom-metric:${item.model ?? index + 1}`,
+    section: "model_score_anchor",
+    label: item.model ?? "Custom metric anchor",
+    status: anchorStatus,
+    ...item,
+  }));
+  const validation = comparison.validationHumanCeilingComparison;
+  if (validation) {
+    rows.push({
+      id: "lmca-comparison:validation-human-ceiling:summary",
+      section: "validation_human_ceiling",
+      label: "Validation and human ceiling",
+      status: validation.status ?? null,
+      currentValidationStatus: validation.currentValidationStatus ?? null,
+      appendixCScaleMet: validation.appendixCScaleMet === true,
+      numericBaselines: validation.numericBaselines ?? null,
+    });
+  }
+  return rows.map((item) => ({
+    ...item,
+    readbackItemRoute: `/api/v1/lmca-comparison/${encodeURIComponent(item.id)}`,
+  }));
+}
+
+function humanizeServerLabel(value) {
+  return String(value ?? "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function octoberOperatingPlanReadback(report, options = {}) {
+  const plan = report.octoberOperatingPlan ?? {};
+  const allItems = octoberOperatingPlanItems(plan);
+  const filters = octoberOperatingPlanFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => octoberOperatingPlanItemMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `october-operating-plan-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: plan.id ?? null,
+    releaseUseStatus: plan.releaseUseStatus ?? report.currentStatus ?? "october_operating_plan_missing",
+    resourceKey: "octoberOperatingPlanRow",
+    policy: {
+      scope:
+        "Read-only October operating-plan rows derived from /api/release/report octoberOperatingPlan; it does not assign staff, submit data, change scope, waive gates, or create a completion claim.",
+      access: "Admin/auditor readback only because operating-plan rows expose staffing, budget, schedule, and blocked workstream planning assumptions.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: plan.counts ?? {},
+    filteredCounts: octoberOperatingPlanCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function octoberOperatingPlanFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    section: value("section"),
+    status: value("status"),
+    role: value("role"),
+    workstream: value("workstream"),
+    targetGapId: value("targetGapId"),
+    route: value("route"),
+  };
+}
+
+function octoberOperatingPlanItemMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "status") return octoberOperatingPlanItemMatchesStatus(item, value);
+    if (key === "targetGapId") return Array.isArray(item.blockingTargetGapIds) && item.blockingTargetGapIds.includes(value);
+    if (key === "route") return octoberOperatingPlanItemRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function octoberOperatingPlanItemMatchesStatus(item, value) {
+  if (value === "open") return octoberOperatingPlanItemIsOpen(item);
+  if (value === "closed") return !octoberOperatingPlanItemIsOpen(item);
+  return item?.status === value;
+}
+
+function octoberOperatingPlanItemIsOpen(item) {
+  const status = String(item?.status ?? "").trim();
+  if (!status || ["complete", "completed", "closed", "required_role_declared"].includes(status)) return false;
+  return status.includes("open") || status.includes("blocked") || status.includes("required");
+}
+
+function octoberOperatingPlanItemRoutes(item) {
+  return uniqueValues([item?.readbackItemRoute]);
+}
+
+function octoberOperatingPlanCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(octoberOperatingPlanItemIsOpen).length,
+    closedRows: items.filter((item) => !octoberOperatingPlanItemIsOpen(item)).length,
+    bySection: countItemsBy(items, "section"),
+    byStatus: countItemsBy(items, "status"),
+    byRole: countItemsBy(items, "role"),
+    byWorkstream: countItemsBy(items, "workstream"),
+    byBlockingTargetGap: countValues(items.flatMap((item) => (Array.isArray(item.blockingTargetGapIds) ? item.blockingTargetGapIds : []))),
+    byRoute: countValues(items.flatMap(octoberOperatingPlanItemRoutes)),
+    blockedWorkstreams: items.filter((item) => item.section === "workstream" && item.status === "blocked_by_target_gap").length,
+    staffingRows: items.filter((item) => item.section === "staffing").length,
+  };
+}
+
+function octoberOperatingPlanItems(plan) {
+  const items = [];
+  items.push({
+    id: `october-operating-plan:${plan.releaseId ?? releaseId}:summary`,
+    section: "summary",
+    label: "October operating plan",
+    status: plan.releaseUseStatus ?? "october_operating_plan_missing",
+    releaseTargetDate: plan.releaseTargetDate ?? plan.policy?.releaseTargetDate ?? null,
+    scopeLabel: plan.scopeLabel ?? plan.policy?.scopeLabel ?? null,
+    personWeekMin: plan.personWeekRange?.min ?? null,
+    personWeekMax: plan.personWeekRange?.max ?? null,
+    budgetMinUsd: plan.budgetEnvelopeUsd?.min ?? null,
+    budgetMidpointUsd: plan.budgetEnvelopeUsd?.midpoint ?? null,
+    budgetMaxUsd: plan.budgetEnvelopeUsd?.max ?? null,
+    scheduleStatus: plan.scheduleStatus ?? null,
+    completionClaimAllowed: plan.completionClaimAllowed === true,
+    openTargetRows: plan.targetGapSummary?.openTargetRows ?? null,
+    openTargetGapIds: plan.targetGapSummary?.openTargetGapIds ?? [],
+  });
+  (Array.isArray(plan.staffingRows) ? plan.staffingRows : []).forEach((row, index) => {
+    items.push({
+      id: `october-operating-plan:staffing:${row.role ?? index + 1}`,
+      section: "staffing",
+      label: humanizeServerLabel(row.role ?? "staffing"),
+      ...row,
+    });
+  });
+  (Array.isArray(plan.workstreamRows) ? plan.workstreamRows : []).forEach((row, index) => {
+    items.push({
+      id: `october-operating-plan:workstream:${row.workstream ?? index + 1}`,
+      section: "workstream",
+      label: humanizeServerLabel(row.workstream ?? "workstream"),
+      ...row,
+    });
+  });
+  return items.map((item) => ({
+    ...item,
+    readbackItemRoute: `/api/v1/october-operating-plan/${encodeURIComponent(item.id)}`,
+  }));
+}
+
+function octoberCompletionChecklistReadback(report, options = {}) {
+  const checklist = report.octoberCompletionChecklist ?? {};
+  const allItems = octoberCompletionChecklistItems(report);
+  const filters = octoberCompletionChecklistFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => octoberCompletionChecklistItemMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.checklistRowId === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `october-completion-checklist-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: checklist.id ?? null,
+    releaseUseStatus: checklist.releaseUseStatus ?? report.currentStatus ?? "october_completion_checklist_missing",
+    resourceKey: "octoberCompletionChecklistRow",
+    policy: {
+      scope:
+        "Read-only umbrella October completion checklist rows derived from /api/release/report octoberCompletionChecklist; it does not submit artifacts, collect data, waive gates, or create a completion claim.",
+      access: "Admin/auditor readback only because checklist rows expose open release blockers, evidence ids, and operator remediation routes.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: checklist.counts ?? octoberCompletionChecklistCounts(allItems),
+    filteredCounts: octoberCompletionChecklistCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function octoberCompletionChecklistFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    checklistRowId: value("checklistRowId") ?? value("rowId"),
+    status: value("status"),
+    sourceStatus: value("sourceStatus"),
+    evidenceId: value("evidenceId"),
+    sourceEvidenceId: value("sourceEvidenceId"),
+    route: value("route"),
+    actionId: value("actionId") ?? value("operatorActionId"),
+    actionType: value("actionType") ?? value("operatorActionType"),
+    targetGapId: value("targetGapId"),
+    hasOpenOperatorActions: value("hasOpenOperatorActions") ?? value("openOperatorActions"),
+  };
+}
+
+function octoberCompletionChecklistItemMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "checklistRowId") return item.checklistRowId === value;
+    if (key === "status") return octoberCompletionChecklistItemMatchesStatus(item, value);
+    if (key === "sourceStatus") return Array.isArray(item.sourceStatuses) && item.sourceStatuses.includes(value);
+    if (key === "evidenceId") return Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value);
+    if (key === "sourceEvidenceId") return Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value);
+    if (key === "route") return octoberCompletionChecklistItemRoutes(item).includes(value);
+    if (key === "actionId") return Array.isArray(item.operatorActionIds) && item.operatorActionIds.includes(value);
+    if (key === "actionType") return Array.isArray(item.operatorActionTypes) && item.operatorActionTypes.includes(value);
+    if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
+    if (key === "hasOpenOperatorActions") return booleanFilterMatches(value, Number(item.openOperatorActionCount ?? 0) > 0);
+    return item?.[key] === value;
+  });
+}
+
+function octoberCompletionChecklistItemIsOpen(item) {
+  const status = String(item?.status ?? "open");
+  return !["complete", "completed", "closed", "not_applicable"].includes(status) && !status.startsWith("not_applicable");
+}
+
+function octoberCompletionChecklistItemMatchesStatus(item, value) {
+  if (value === "open") return octoberCompletionChecklistItemIsOpen(item);
+  if (value === "closed") return !octoberCompletionChecklistItemIsOpen(item);
+  if (value === "data_collection_required") return item?.status === value;
+  if (value === "operator_evidence_required") return item?.status === value;
+  if (value === "review_required") return item?.status === value;
+  if (value === "complete") return item?.status === value;
+  return item?.status === value;
+}
+
+function booleanFilterMatches(filterValue, actualValue) {
+  const normalized = String(filterValue ?? "").trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) return Boolean(actualValue);
+  if (["false", "0", "no"].includes(normalized)) return !actualValue;
+  return String(Boolean(actualValue)) === normalized;
+}
+
+function octoberCompletionChecklistItemRoutes(item) {
+  return uniqueValues([
+    ...(Array.isArray(item?.writeRoutes) ? item.writeRoutes : []),
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.readbackItemRoutes) ? item.readbackItemRoutes : []),
+    ...(Array.isArray(item?.targetGapReadbackItemRoutes) ? item.targetGapReadbackItemRoutes : []),
+    ...(Array.isArray(item?.bulkImportRoutes) ? item.bulkImportRoutes : []),
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+    ...(Array.isArray(item?.dryRunImportRoutes) ? item.dryRunImportRoutes : []),
+    ...(Array.isArray(item?.validateOnlyImportRoutes) ? item.validateOnlyImportRoutes : []),
+    ...(Array.isArray(item?.singleRecordDryRunRoutes) ? item.singleRecordDryRunRoutes : []),
+    ...(Array.isArray(item?.singleRecordValidateOnlyRoutes) ? item.singleRecordValidateOnlyRoutes : []),
+    ...(Array.isArray(item?.setupSingleRecordDryRunRoutes) ? item.setupSingleRecordDryRunRoutes : []),
+    ...(Array.isArray(item?.setupSingleRecordValidateOnlyRoutes) ? item.setupSingleRecordValidateOnlyRoutes : []),
+    ...(Array.isArray(item?.packageImportRoutes) ? item.packageImportRoutes : []),
+    ...(Array.isArray(item?.packageDryRunImportRoutes) ? item.packageDryRunImportRoutes : []),
+    ...(Array.isArray(item?.packageValidateOnlyImportRoutes) ? item.packageValidateOnlyImportRoutes : []),
+    ...(Array.isArray(item?.templateReadbackRoutes) ? item.templateReadbackRoutes : []),
+    ...(Array.isArray(item?.targetGapRoutes) ? item.targetGapRoutes : []),
+    item?.operatorActionRoute,
+    item?.submissionChecklistRoute,
+    item?.reviewEvidencePointersRoute,
+    item?.reviewArtifactSummariesRoute,
+  ]);
+}
+
+function octoberCompletionChecklistCounts(items) {
+  return {
+    rows: items.length,
+    complete: items.filter((item) => item.status === "complete").length,
+    operatorEvidenceRequired: items.filter((item) => item.status === "operator_evidence_required").length,
+    dataCollectionRequired: items.filter((item) => item.status === "data_collection_required").length,
+    reviewRequired: items.filter((item) => item.status === "review_required").length,
+    withOperatorActions: items.filter((item) => item.operatorActionCount > 0).length,
+    openOperatorActions: sumNumericField(items, "openOperatorActionCount"),
+    reviewReasons: sumNumericField(items, "reviewReasonCount"),
+    evidenceLinks: sumNumericField(items, "evidenceCount"),
+    withOpenOperatorActions: items.filter((item) => Number(item.openOperatorActionCount ?? 0) > 0).length,
+    byStatus: countItemsBy(items, "status"),
+    byChecklistRow: countItemsBy(items, "checklistRowId"),
+    bySourceStatus: countExpandedValues(items, "sourceStatuses"),
+    byEvidenceId: countExpandedValues(items, "evidenceIds"),
+    byOperatorActionId: countExpandedValues(items, "operatorActionIds"),
+    byOperatorActionType: countExpandedValues(items, "operatorActionTypes"),
+    byTargetGapId: countExpandedValues(items, "targetGapIds"),
+    byRoute: countValues(items.flatMap(octoberCompletionChecklistItemRoutes)),
+  };
+}
+
+function octoberCompletionChecklistItems(report) {
+  const checklist = report.octoberCompletionChecklist ?? {};
+  const rows = Array.isArray(checklist.rows) ? checklist.rows : [];
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const submissionChecklist = operatorPlanCollectionItems(plan, "submissionChecklist");
+  const reviewEvidencePointers = operatorPlanCollectionItems(plan, "reviewEvidencePointers");
+  const reviewArtifactSummaries = operatorPlanCollectionItems(plan, "reviewArtifactSummaries");
+  return rows.map((row, index) => {
+    const checklistRowId = row.id ?? `checklist-row-${index + 1}`;
+    const rowActions = actionItems.filter((item) => item.checklistRowId === checklistRowId);
+    const rowSubmissions = submissionChecklist.filter((item) => item.checklistRowId === checklistRowId);
+    const rowReviewPointers = reviewEvidencePointers.filter((item) => item.checklistRowId === checklistRowId);
+    const rowReviewSummaries = reviewArtifactSummaries.filter((item) => item.checklistRowId === checklistRowId);
+    const evidenceIds = Array.isArray(row.evidenceIds) ? row.evidenceIds : [];
+    const reviewReasons = Array.isArray(row.reviewReasons) ? row.reviewReasons : [];
+    const operatorActionSummaries = rowActions.map(octoberCompletionChecklistActionSummary);
+    const targetGapIds = [
+      ...new Set([
+        ...(Array.isArray(row.blockingTargetGaps) ? row.blockingTargetGaps.map((gap) => gap.id) : []),
+        ...rowActions.map((item) => item.targetGapId).filter(Boolean),
+      ]),
+    ];
+    return {
+      ...row,
+      id: `october-completion-checklist:${checklistRowId}`,
+      sequence: index + 1,
+      checklistRowId,
+      sourceChecklistId: checklist.id ?? null,
+      deliverableGroup: row.deliverableGroup ?? humanizeServerLabel(checklistRowId),
+      evidenceIds,
+      evidenceCount: evidenceIds.length,
+      sourceStatuses: Array.isArray(row.sourceStatuses) ? row.sourceStatuses : [],
+      reviewReasons,
+      reviewReasonCount: reviewReasons.length,
+      operatorActionIds: rowActions.map((item) => item.id).filter(Boolean),
+      operatorActionTypes: uniqueValues(rowActions.map((item) => item.actionType)),
+      operatorActionCount: rowActions.length,
+      openOperatorActionCount: rowActions.filter((item) => item.actionStatus !== "complete" && item.status !== "complete").length,
+      operatorActionSummaries,
+      nextOperatorActionSummary: operatorActionSummaries[0] ?? null,
+      writeRoutes: uniqueValues(rowActions.map((item) => item.writeRoute)),
+      bulkImportRoutes: uniqueValues(rowActions.map((item) => item.bulkImportRoute)),
+      setupBulkImportRoutes: uniqueValues(
+        rowActions.flatMap((item) => [item.setupBulkImportRoute, ...(Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : [])]),
+      ),
+      readbackRoutes: uniqueValues(rowActions.map((item) => item.readbackRoute)),
+      readbackItemRoutes: uniqueValues(rowActions.map((item) => item.readbackItemRoute)),
+      targetGapReadbackItemRoutes: uniqueValues(rowActions.map((item) => item.targetGapReadbackItemRoute)),
+      templateReadbackRoutes: uniqueValues(rowActions.flatMap((item) => (Array.isArray(item.templateReadbackRoutes) ? item.templateReadbackRoutes : []))),
+      dryRunImportRoutes: uniqueValues(
+        rowActions.flatMap((item) => [
+          routeWithQueryFlag(item.bulkImportRoute, "dryRun", "true"),
+          routeWithQueryFlag(item.setupBulkImportRoute, "dryRun", "true"),
+          ...(Array.isArray(item.setupBulkImportRoutes)
+            ? item.setupBulkImportRoutes.map((route) => routeWithQueryFlag(route, "dryRun", "true"))
+            : []),
+        ]),
+      ),
+      validateOnlyImportRoutes: uniqueValues(
+        rowActions.flatMap((item) => [
+          routeWithQueryFlag(item.bulkImportRoute, "validateOnly", "true"),
+          routeWithQueryFlag(item.setupBulkImportRoute, "validateOnly", "true"),
+          ...(Array.isArray(item.setupBulkImportRoutes)
+            ? item.setupBulkImportRoutes.map((route) => routeWithQueryFlag(route, "validateOnly", "true"))
+            : []),
+        ]),
+      ),
+      singleRecordDryRunRoutes: uniqueValues(rowActions.map((item) => item.singleRecordDryRunRoute)),
+      singleRecordValidateOnlyRoutes: uniqueValues(rowActions.map((item) => item.singleRecordValidateOnlyRoute)),
+      setupSingleRecordDryRunRoutes: uniqueValues(rowActions.map((item) => item.setupSingleRecordDryRunRoute)),
+      setupSingleRecordValidateOnlyRoutes: uniqueValues(rowActions.map((item) => item.setupSingleRecordValidateOnlyRoute)),
+      workflowTemplateIds: uniqueValues(rowActions.map((item) => item.workflowTemplateId)),
+      bulkImportWorkflowTemplateIds: uniqueValues(rowActions.map((item) => item.bulkImportWorkflowTemplateId)),
+      setupWorkflowTemplateIds: uniqueValues(rowActions.map((item) => item.setupWorkflowTemplateId)),
+      setupBulkImportWorkflowTemplateIds: uniqueValues(
+        rowActions.flatMap((item) => [
+          item.setupBulkImportWorkflowTemplateId,
+          ...(Array.isArray(item.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : []),
+        ]),
+      ),
+      submissionChecklistCount: rowSubmissions.length,
+      reviewEvidencePointerCount: rowReviewPointers.length,
+      reviewArtifactSummaryCount: rowReviewSummaries.length,
+      targetGapIds,
+      operatorActionRoute: `/api/v1/operator-action-items?checklistRowId=${encodeURIComponent(checklistRowId)}`,
+      submissionChecklistRoute: `/api/v1/operator-submission-checklist?checklistRowId=${encodeURIComponent(checklistRowId)}`,
+      reviewEvidencePointersRoute: `/api/v1/operator-review-evidence-pointers?checklistRowId=${encodeURIComponent(checklistRowId)}`,
+      reviewArtifactSummariesRoute: `/api/v1/operator-review-artifact-summaries?checklistRowId=${encodeURIComponent(checklistRowId)}`,
+      targetGapRoutes: targetGapIds.map((targetGapId) => `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}`),
+    };
+  });
+}
+
+function octoberCompletionChecklistActionSummary(action) {
+  const bulkImportRoute = action.bulkImportRoute ?? null;
+  const setupBulkImportRoute = action.setupBulkImportRoute ?? null;
+  return {
+    id: action.id ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    targetGapId: action.targetGapId ?? null,
+    artifactKind: action.artifactKind ?? null,
+    artifactType: action.artifactType ?? null,
+    artifactId: action.artifactId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    preconditionStatus: action.preconditionStatus ?? null,
+    writeRoute: action.writeRoute ?? null,
+    setupWriteRoute: action.setupWriteRoute ?? null,
+    bulkImportRoute,
+    setupBulkImportRoute,
+    packageImportRoute: action.packageImportRoute ?? null,
+    dryRunImportRoute: routeWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+    setupDryRunImportRoute: routeWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
+    packageDryRunImportRoute: action.packageDryRunImportRoute ?? routeWithQueryFlag(action.packageImportRoute, "dryRun", "true"),
+    validateOnlyImportRoute: routeWithQueryFlag(bulkImportRoute, "validateOnly", "true"),
+    setupValidateOnlyImportRoute: routeWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+    packageValidateOnlyImportRoute: action.packageValidateOnlyImportRoute ?? routeWithQueryFlag(action.packageImportRoute, "validateOnly", "true"),
+    singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
+    setupSingleRecordDryRunRoute: action.setupSingleRecordDryRunRoute ?? null,
+    setupSingleRecordValidateOnlyRoute: action.setupSingleRecordValidateOnlyRoute ?? null,
+    readbackRoute: action.readbackRoute ?? null,
+    readbackItemRoute: action.readbackItemRoute ?? null,
+    submissionReadbackRoute: action.submissionReadbackRoute ?? null,
+    setupReadbackRoute: action.setupReadbackRoute ?? null,
+    targetGapReadbackItemRoute: action.targetGapReadbackItemRoute ?? null,
+    workflowTemplateId: action.workflowTemplateId ?? null,
+    bulkImportWorkflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+    setupWorkflowTemplateId: action.setupWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateId: action.setupBulkImportWorkflowTemplateId ?? null,
+    templateReadbackRoutes: Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes : [],
+    targetDataTemplateReadbackRoute: action.targetDataTemplateReadbackRoute ?? null,
+    expandedTemplateReadbackRoute: action.expandedTemplateReadbackRoute ?? action.targetDataExpandedTemplateReadbackRoute ?? null,
+    starterExpandedTemplateReadbackRoute: targetGapCollectionStarterExpandedTemplateRoute(
+      action.expandedTemplateReadbackRoute ?? action.targetDataExpandedTemplateReadbackRoute ?? null,
+    ),
+    cappedExpandedTemplateReadbackRoute:
+      action.cappedExpandedTemplateReadbackRoute ?? action.targetDataCappedExpandedTemplateReadbackRoute ?? null,
+    relatedSubmitActionIds: Array.isArray(action.relatedSubmitActionIds) ? action.relatedSubmitActionIds : [],
+    completionEvidence: action.completionEvidence ?? null,
+    estimatedRecordsRequired: action.importImpact?.estimatedRecordsRequired ?? null,
+    expectedResourceDelta: action.importImpact?.expectedResourceDelta ?? null,
+    closesTargetGapWhenValidated: action.importImpact?.closesTargetGapWhenValidated ?? null,
+    setupEstimatedRecordsRequired: action.setupImportImpact?.estimatedRecordsRequired ?? null,
+    setupExpectedResourceDelta: action.setupImportImpact?.expectedResourceDelta ?? null,
+    setupClosesTargetGapWhenValidated: action.setupImportImpact?.closesTargetGapWhenValidated ?? null,
+  };
+}
+
+function octoberCompletionRunbookReadback(report, options = {}) {
+  const allItems = octoberCompletionRunbookItems(report);
+  const filters = octoberCompletionRunbookFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => octoberCompletionRunbookMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const nextUnblockerSequence = octoberCompletionRunbookNextUnblockerSequence(allItems);
+  const currentBlockingGroup = nextUnblockerSequence[0] ?? null;
+  const currentBlockingPackageManifest = octoberCompletionRunbookCurrentBlockingPackageManifest(report, currentBlockingGroup);
+  return {
+    id: `october-completion-runbook-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    sourceEvidenceId: report.octoberCompletionChecklist?.id ?? null,
+    releaseUseStatus: plan.releaseUseStatus ?? report.currentStatus ?? "october_completion_runbook_missing",
+    resourceKey: "octoberCompletionRunbookStep",
+    policy: {
+      scope:
+        "Read-only sequenced runbook derived from /api/release/report target gaps, October checklist, and operatorEvidenceSubmissionPlan; it does not submit data, append operator evidence, waive gates, or create completion claims.",
+      access: "Admin/auditor readback only because the runbook exposes operator routes, target counts, and release-evidence blockers.",
+      ordering:
+        "Collect real target data first, then submit operator evidence, review bounded evidence/readback rows, and verify /api/release/report plus the October completion checklist.",
+      expandedTemplates:
+        "Collect-data steps expose one-row, expand=remaining, and capped expanded template readbacks. These routes only generate templateOnly placeholders and do not create evidence.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: octoberCompletionRunbookCounts(allItems),
+    filteredCounts: octoberCompletionRunbookCounts(items),
+    phaseSummaries: octoberCompletionRunbookPhaseSummaries(items),
+    currentBlockingPhase: currentBlockingGroup?.phase ?? null,
+    currentBlockingExecutionStatus: currentBlockingGroup?.executionStatus ?? null,
+    currentBlockingGroup,
+    currentBlockingPackageManifest,
+    nextUnblockerSequence,
+    releaseCompletionBlockerSummary: octoberCompletionRunbookReleaseCompletionBlockerSummary(allItems),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function octoberCompletionRunbookFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    phase: value("phase"),
+    checklistRowId: value("checklistRowId"),
+    checklistStatus: value("checklistStatus"),
+    actionType: value("actionType"),
+    actionStatus: value("actionStatus"),
+    executionStatus: value("executionStatus") ?? value("readiness"),
+    preconditionStatus: value("preconditionStatus"),
+    status: value("status"),
+    targetGapId: value("targetGapId"),
+    artifactKind: value("artifactKind"),
+    artifactType: value("artifactType"),
+    sourceEvidenceId: value("sourceEvidenceId") ?? value("evidenceId"),
+    route: value("route"),
+  };
+}
+
+function octoberCompletionRunbookMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "checklistRowId") {
+      return item.checklistRowId === value || (Array.isArray(item.checklistRowIds) && item.checklistRowIds.includes(value));
+    }
+    if (key === "status") return octoberCompletionRunbookMatchesStatus(item, value);
+    if (key === "actionStatus") return octoberCompletionRunbookMatchesActionStatus(item, value);
+    if (key === "executionStatus") return octoberCompletionRunbookExecutionStatus(item) === value;
+    if (key === "route") return octoberCompletionRunbookRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function octoberCompletionRunbookRoutes(item) {
+  return uniqueValues([
+    item.runbookStepRoute,
+    item.route,
+    item.writeRoute,
+    item.setupWriteRoute,
+    item.importRoute,
+    item.dryRunImportRoute,
+    item.validateOnlyImportRoute,
+    item.singleRecordDryRunRoute,
+    item.singleRecordValidateOnlyRoute,
+    item.setupSingleRecordDryRunRoute,
+    item.setupSingleRecordValidateOnlyRoute,
+    item.packageImportRoute,
+    item.packageDryRunImportRoute,
+    item.packageValidateOnlyImportRoute,
+    item.readbackRoute,
+    item.readbackItemRoute,
+    item.submissionReadbackRoute,
+    item.setupReadbackRoute,
+    item.verificationRoute,
+    ...(Array.isArray(item?.releaseVerificationBlockerRoutes) ? item.releaseVerificationBlockerRoutes : []),
+    item.templateReadbackRoute,
+    item.expandedTemplateReadbackRoute,
+    item.starterExpandedTemplateReadbackRoute,
+    item.cappedExpandedTemplateReadbackRoute,
+    ...(Array.isArray(item?.blockedTargetGapReadbackRoutes) ? item.blockedTargetGapReadbackRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapReadbackItemRoutes) ? item.blockedTargetGapReadbackItemRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapCollectionPlanRoutes) ? item.blockedTargetGapCollectionPlanRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapTemplateReadbackRoutes) ? item.blockedTargetGapTemplateReadbackRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapImportRoutes) ? item.blockedTargetGapImportRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapDryRunImportRoutes) ? item.blockedTargetGapDryRunImportRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapValidateOnlyImportRoutes) ? item.blockedTargetGapValidateOnlyImportRoutes : []),
+  ]);
+}
+
+function octoberCompletionRunbookStepIsOpen(item) {
+  const status = item?.status ?? item?.checklistStatus ?? item?.actionStatus ?? "open";
+  return !["complete", "completed", "closed", "not_applicable"].includes(status);
+}
+
+function octoberCompletionRunbookMatchesStatus(item, value) {
+  if (value === "open") return octoberCompletionRunbookStepIsOpen(item);
+  if (value === "closed") return !octoberCompletionRunbookStepIsOpen(item);
+  if (value === "data_dependency_blocked") return item?.preconditionStatus === "data_collection_required_before_action";
+  if (value === "data_collection_required_before_action") return item?.preconditionStatus === value;
+  if (value === "open_release_work_before_verification") return item?.preconditionStatus === value;
+  if (isDerivedExecutionStatusFilter(value)) return octoberCompletionRunbookExecutionStatus(item) === value;
+  return item?.status === value || item?.checklistStatus === value;
+}
+
+function octoberCompletionRunbookMatchesActionStatus(item, value) {
+  if (value === "open") return octoberCompletionRunbookStepIsOpen(item);
+  if (value === "closed") return !octoberCompletionRunbookStepIsOpen(item);
+  return item?.actionStatus === value;
+}
+
+function octoberCompletionRunbookCounts(items) {
+  const executionStatusCounts = countValues(items.map((item) => octoberCompletionRunbookExecutionStatus(item)));
+  const estimatedRecordsRequired = sumNumericField(items, "estimatedRecordsRequired");
+  const estimatedSetupRecordsRequired = sumNumericField(items, "setupEstimatedRecordsRequired");
+  const estimatedPrimaryRecordsRequired = items.reduce(
+    (sum, item) =>
+      item?.stepKind === "setup_data_import"
+        ? sum
+        : sum + (Number.isFinite(Number(item?.estimatedRecordsRequired)) ? Number(item.estimatedRecordsRequired) : 0),
+    0,
+  );
+  const expectedResourceDelta = sumNumericField(items, "expectedResourceDelta");
+  const expectedSetupResourceDelta = sumNumericField(items, "setupExpectedResourceDelta");
+  return {
+    steps: items.length,
+    collectDataSteps: items.filter((item) => item.phase === "collect_data").length,
+    submitEvidenceSteps: items.filter((item) => item.phase === "submit_operator_evidence").length,
+    reviewSteps: items.filter((item) => item.phase === "review_current_evidence").length,
+    verificationSteps: items.filter((item) => item.phase === "verify_release_completion").length,
+    dryRunCapableSteps: items.filter((item) => item.dryRunImportRoute).length,
+    targetDataPackageCapableSteps: items.filter((item) => item.packageImportRoute === targetDataCollectionPackageImportRoute).length,
+    operatorEvidencePackageCapableSteps: items.filter((item) => item.packageImportRoute === operatorEvidencePackageImportRoute).length,
+    expandedTemplateCapableSteps: items.filter((item) => item.expandedTemplateReadbackRoute).length,
+    starterTemplateCapableSteps: items.filter((item) => item.starterExpandedTemplateReadbackRoute).length,
+    packageImportSteps: items.filter((item) => item.importRoute === operatorEvidencePackageImportRoute).length,
+    dataDependencyBlockedSteps: items.filter((item) => item.preconditionStatus === "data_collection_required_before_action").length,
+    blockedByTargetDataSteps: executionStatusCounts.blocked_by_target_data ?? 0,
+    blockedReleaseVerificationSteps: executionStatusCounts.blocked_by_open_release_work ?? 0,
+    readySteps: items.filter((item) => octoberCompletionRunbookExecutionStatus(item).startsWith("ready_to_")).length,
+    openSteps: items.filter((item) => octoberCompletionRunbookStepIsOpen(item)).length,
+    expectedRecordsRequired: estimatedRecordsRequired,
+    estimatedPrimaryRecordsRequired,
+    expectedSetupRecordsRequired: estimatedSetupRecordsRequired,
+    expectedResourceDelta,
+    expectedSetupResourceDelta,
+    targetResourceDeltaBeyondPrimaryRecords: Math.max(0, expectedResourceDelta - estimatedPrimaryRecordsRequired),
+    byPhase: countItemsBy(items, "phase"),
+    byStatus: countItemsBy(items, "status"),
+    byActionStatus: countItemsBy(items, "actionStatus"),
+    byExecutionStatus: executionStatusCounts,
+    byPreconditionStatus: countItemsBy(items, "preconditionStatus"),
+    byChecklistStatus: countItemsBy(items, "checklistStatus"),
+    byChecklistRow: countExpandedValues(items, "checklistRowIds"),
+    byActionType: countItemsBy(items, "actionType"),
+    byTargetGap: countItemsBy(items, "targetGapId"),
+    byBlockedTargetGapId: countValues(items.flatMap((item) => (Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : []))),
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byArtifactType: countItemsBy(items, "artifactType"),
+    byRoute: countValues(items.flatMap(octoberCompletionRunbookRoutes)),
+  };
+}
+
+function octoberCompletionRunbookStepWithExecutionStatus(item) {
+  const executionStatus = octoberCompletionRunbookExecutionStatus(item);
+  return {
+    ...item,
+    runbookStepRoute: `/api/v1/october-completion-runbook/${encodeURIComponent(item.id ?? item.sequence ?? "step")}`,
+    executionStatus,
+    executionStatusReason:
+      item?.executionStatusReason ?? octoberCompletionRunbookExecutionStatusReason(item, executionStatus),
+  };
+}
+
+function octoberCompletionRunbookExecutionStatus(item) {
+  if (!octoberCompletionRunbookStepIsOpen(item)) return "closed";
+  if (item?.actionType === "verify_release_completion" || item?.phase === "verify_release_completion") {
+    if (item?.preconditionStatus === "open_release_work_before_verification") return "blocked_by_open_release_work";
+    return "ready_to_verify_release";
+  }
+  return operatorActionExecutionStatus(item);
+}
+
+function octoberCompletionRunbookExecutionStatusReason(item, executionStatus = octoberCompletionRunbookExecutionStatus(item)) {
+  if (executionStatus === "ready_to_verify_release") {
+    return "Use the linked readback route after target data and operator evidence are submitted; this step verifies release state only.";
+  }
+  if (executionStatus === "blocked_by_open_release_work") {
+    return "Release verification is blocked until target gaps, operator evidence, review blockers, and the October completion checklist are closed.";
+  }
+  return operatorActionExecutionStatusReason(item, executionStatus);
+}
+
+function octoberCompletionRunbookPhaseSummaries(items) {
+  return [1, 2, 3, 4]
+    .map((phaseSequence) => {
+      const phaseItems = items.filter((item) => item.phaseSequence === phaseSequence);
+      if (!phaseItems.length) return null;
+      return {
+        phaseSequence,
+        phase: phaseItems[0].phase,
+        stepCount: phaseItems.length,
+        checklistRowIds: uniqueValues(phaseItems.flatMap((item) => item.checklistRowIds ?? item.checklistRowId)),
+        targetGapIds: uniqueValues(phaseItems.map((item) => item.targetGapId)),
+        blockedTargetGapIds: uniqueValues(
+          phaseItems.flatMap((item) => (Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [])),
+        ),
+        actionTypes: uniqueValues(phaseItems.map((item) => item.actionType)),
+        routes: uniqueValues(phaseItems.map((item) => item.route)),
+        blockedTargetGapRoutes: uniqueValues(
+          phaseItems.flatMap((item) => (Array.isArray(item.blockedTargetGapReadbackItemRoutes) ? item.blockedTargetGapReadbackItemRoutes : [])),
+        ),
+        blockedTargetGapCollectionPlanRoutes: uniqueValues(
+          phaseItems.flatMap((item) =>
+            Array.isArray(item.blockedTargetGapCollectionPlanRoutes) ? item.blockedTargetGapCollectionPlanRoutes : [],
+          ),
+        ),
+        templateRoutes: uniqueValues(phaseItems.map((item) => item.templateReadbackRoute)),
+        expandedTemplateRoutes: uniqueValues(phaseItems.map((item) => item.expandedTemplateReadbackRoute)),
+        starterExpandedTemplateRoutes: uniqueValues(phaseItems.map((item) => item.starterExpandedTemplateReadbackRoute)),
+        cappedExpandedTemplateRoutes: uniqueValues(phaseItems.map((item) => item.cappedExpandedTemplateReadbackRoute)),
+        dryRunRoutes: uniqueValues(phaseItems.map((item) => item.dryRunImportRoute)),
+        singleRecordDryRunRoutes: uniqueValues(phaseItems.map((item) => item.singleRecordDryRunRoute)),
+        singleRecordValidateOnlyRoutes: uniqueValues(phaseItems.map((item) => item.singleRecordValidateOnlyRoute)),
+        packageRoutes: uniqueValues(phaseItems.map((item) => item.packageImportRoute)),
+        releaseVerificationBlockerRoutes: uniqueValues(
+          phaseItems.flatMap((item) => (Array.isArray(item.releaseVerificationBlockerRoutes) ? item.releaseVerificationBlockerRoutes : [])),
+        ),
+      };
+    })
+    .filter(Boolean);
+}
+
+const octoberCompletionRunbookUnblockerOrder = [
+  {
+    phase: "collect_data",
+    phaseSequence: 1,
+    executionStatus: "ready_to_collect_data",
+    operatorAction: "collect_real_target_data",
+  },
+  {
+    phase: "resolve_data_blockers",
+    phaseSequence: 1.5,
+    executionStatus: "blocked_by_target_data",
+    operatorAction: "collect_blocking_target_data_before_evidence_review",
+  },
+  {
+    phase: "submit_operator_evidence",
+    phaseSequence: 2,
+    executionStatus: "ready_to_submit_evidence",
+    operatorAction: "submit_real_operator_evidence",
+  },
+  {
+    phase: "review_current_evidence",
+    phaseSequence: 3,
+    executionStatus: "ready_to_review_evidence",
+    operatorAction: "review_or_replace_current_evidence",
+  },
+  {
+    phase: "verify_release_completion",
+    phaseSequence: 4,
+    executionStatus: "blocked_by_open_release_work",
+    operatorAction: "close_open_release_work_before_verification",
+  },
+  {
+    phase: "verify_release_completion",
+    phaseSequence: 4,
+    executionStatus: "ready_to_verify_release",
+    operatorAction: "verify_release_completion",
+  },
+];
+
+function octoberCompletionRunbookNextUnblockerSequence(items) {
+  return octoberCompletionRunbookUnblockerOrder
+    .map((group, index) => {
+      const groupItems = items.filter((item) => octoberCompletionRunbookExecutionStatus(item) === group.executionStatus);
+      if (!groupItems.length) return null;
+      const firstStep = groupItems[0];
+      const routes = uniqueValues(groupItems.flatMap(octoberCompletionRunbookRoutes));
+      const dryRunRoutes = uniqueValues(groupItems.map((item) => item.dryRunImportRoute));
+      const validateOnlyRoutes = uniqueValues(groupItems.map((item) => item.validateOnlyImportRoute));
+      const singleRecordDryRunRoutes = uniqueValues(groupItems.map((item) => item.singleRecordDryRunRoute));
+      const singleRecordValidateOnlyRoutes = uniqueValues(groupItems.map((item) => item.singleRecordValidateOnlyRoute));
+      const templateRoutes = uniqueValues(
+        groupItems.flatMap((item) => [
+          item.templateReadbackRoute,
+          item.expandedTemplateReadbackRoute,
+          item.starterExpandedTemplateReadbackRoute,
+          item.cappedExpandedTemplateReadbackRoute,
+        ]),
+      );
+      return {
+        sequence: index + 1,
+        phase: group.phase,
+        phaseSequence: group.phaseSequence,
+        executionStatus: group.executionStatus,
+        operatorAction: group.operatorAction,
+        stepCount: groupItems.length,
+        firstStepId: firstStep.id ?? null,
+        firstStepRoute: firstStep.runbookStepRoute ?? null,
+        firstStepLabel: firstStep.label ?? humanizeServerLabel(firstStep.stepKind ?? firstStep.actionType ?? group.phase),
+        firstRoute: octoberCompletionRunbookUnblockerRoute(firstStep),
+        firstDryRunRoute: firstStep.dryRunImportRoute ?? null,
+        firstValidateOnlyRoute: firstStep.validateOnlyImportRoute ?? null,
+        firstSingleRecordDryRunRoute: firstStep.singleRecordDryRunRoute ?? null,
+        firstSingleRecordValidateOnlyRoute: firstStep.singleRecordValidateOnlyRoute ?? null,
+        firstStarterTemplateReadbackRoute: firstStep.starterExpandedTemplateReadbackRoute ?? null,
+        firstTemplateReadbackRoute:
+          firstStep.templateReadbackRoute ??
+          firstStep.expandedTemplateReadbackRoute ??
+          firstStep.starterExpandedTemplateReadbackRoute ??
+          firstStep.cappedExpandedTemplateReadbackRoute ??
+          null,
+        firstVerificationRoute: firstStep.verificationRoute ?? firstStep.readbackRoute ?? null,
+        targetGapIds: uniqueValues(groupItems.map((item) => item.targetGapId)),
+        checklistRowIds: uniqueValues(groupItems.flatMap((item) => item.checklistRowIds ?? item.checklistRowId)),
+        blockedTargetGapIds: uniqueValues(
+          groupItems.flatMap((item) => (Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [])),
+        ),
+        sourceEvidenceIds: uniqueValues(groupItems.map((item) => item.sourceEvidenceId)),
+        routeCount: routes.length,
+        routes: routes.slice(0, 12),
+        omittedRouteCount: Math.max(0, routes.length - 12),
+        dryRunRoutes: dryRunRoutes.slice(0, 8),
+        validateOnlyRoutes: validateOnlyRoutes.slice(0, 8),
+        singleRecordDryRunRoutes: singleRecordDryRunRoutes.slice(0, 8),
+        singleRecordValidateOnlyRoutes: singleRecordValidateOnlyRoutes.slice(0, 8),
+        templateReadbackRoutes: templateRoutes.slice(0, 8),
+        items: groupItems.slice(0, 5).map(octoberCompletionRunbookUnblockerStepSummary),
+        omittedItemCount: Math.max(0, groupItems.length - 5),
+      };
+    })
+    .filter(Boolean);
+}
+
+function octoberCompletionRunbookUnblockerRoute(item) {
+  if (octoberCompletionRunbookExecutionStatus(item) === "blocked_by_target_data") {
+    return (
+      (Array.isArray(item.blockedTargetGapCollectionPlanRoutes) ? item.blockedTargetGapCollectionPlanRoutes[0] : null) ??
+      (Array.isArray(item.blockedTargetGapDryRunImportRoutes) ? item.blockedTargetGapDryRunImportRoutes[0] : null) ??
+      (Array.isArray(item.blockedTargetGapImportRoutes) ? item.blockedTargetGapImportRoutes[0] : null) ??
+      item.route ??
+      item.readbackItemRoute ??
+      item.readbackRoute ??
+      null
+    );
+  }
+  if (octoberCompletionRunbookExecutionStatus(item) === "blocked_by_open_release_work") {
+    return (
+      (Array.isArray(item.releaseVerificationBlockerRoutes) ? item.releaseVerificationBlockerRoutes[0] : null) ??
+      item.route ??
+      item.readbackRoute ??
+      item.verificationRoute ??
+      null
+    );
+  }
+  return (
+    item.importRoute ??
+    item.writeRoute ??
+    item.route ??
+    item.readbackItemRoute ??
+    item.readbackRoute ??
+    item.verificationRoute ??
+    null
+  );
+}
+
+function octoberCompletionRunbookUnblockerStepSummary(item) {
+  return {
+    id: item.id ?? null,
+    sequence: item.sequence ?? null,
+    runbookStepRoute: item.runbookStepRoute ?? null,
+    phase: item.phase ?? null,
+    stepKind: item.stepKind ?? null,
+    label: item.label ?? null,
+    actionId: item.actionId ?? null,
+    actionType: item.actionType ?? null,
+    executionStatus: item.executionStatus ?? octoberCompletionRunbookExecutionStatus(item),
+    executionStatusReason: item.executionStatusReason ?? octoberCompletionRunbookExecutionStatusReason(item),
+    preconditionStatus: item.preconditionStatus ?? null,
+    checklistRowId: item.checklistRowId ?? null,
+    checklistRowIds: Array.isArray(item.checklistRowIds) ? item.checklistRowIds : [],
+    targetGapId: item.targetGapId ?? null,
+    artifactKind: item.artifactKind ?? null,
+    route: octoberCompletionRunbookUnblockerRoute(item),
+    importRoute: item.importRoute ?? null,
+    dryRunImportRoute: item.dryRunImportRoute ?? null,
+    validateOnlyImportRoute: item.validateOnlyImportRoute ?? null,
+    singleRecordDryRunRoute: item.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: item.singleRecordValidateOnlyRoute ?? null,
+    setupSingleRecordDryRunRoute: item.setupSingleRecordDryRunRoute ?? null,
+    setupSingleRecordValidateOnlyRoute: item.setupSingleRecordValidateOnlyRoute ?? null,
+    packageImportRoute: item.packageImportRoute ?? null,
+    templateReadbackRoute: item.templateReadbackRoute ?? null,
+    expandedTemplateReadbackRoute: item.expandedTemplateReadbackRoute ?? null,
+    starterExpandedTemplateReadbackRoute: item.starterExpandedTemplateReadbackRoute ?? null,
+    cappedExpandedTemplateReadbackRoute: item.cappedExpandedTemplateReadbackRoute ?? null,
+    verificationRoute: item.verificationRoute ?? item.readbackRoute ?? null,
+    blockedByTargetGapIds: Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : [],
+    releaseVerificationBlockerSummary: item.releaseVerificationBlockerSummary ?? null,
+  };
+}
+
+function octoberCompletionRunbookReleaseCompletionBlockerSummary(items) {
+  const verificationStep = items.find(
+    (item) =>
+      item.phase === "verify_release_completion" &&
+      item.preconditionStatus === "open_release_work_before_verification" &&
+      item.releaseVerificationBlockerSummary,
+  );
+  if (!verificationStep) return null;
+  return {
+    ...verificationStep.releaseVerificationBlockerSummary,
+    targetGapTotals: verificationStep.targetGapTotals ?? null,
+    openTargetGapIds: Array.isArray(verificationStep.openTargetGapIds) ? verificationStep.openTargetGapIds : [],
+    openChecklistRowIds: Array.isArray(verificationStep.openChecklistRowIds) ? verificationStep.openChecklistRowIds : [],
+    routes: Array.isArray(verificationStep.releaseVerificationBlockerRoutes) ? verificationStep.releaseVerificationBlockerRoutes : [],
+  };
+}
+
+function octoberCompletionRunbookCurrentBlockingPackageManifest(report, currentBlockingGroup) {
+  if (!currentBlockingGroup || currentBlockingGroup.phase !== "collect_data") return null;
+  const packagePlan = targetGapCollectionPlanReadback(report).targetDataPackagePlan;
+  if (!packagePlan || !Number(packagePlan.stepCount ?? 0)) return null;
+  const executionSequence = Array.isArray(packagePlan.executionSequence) ? packagePlan.executionSequence : [];
+  return {
+    manifestKind: "current_blocking_target_data_package_manifest",
+    status: "ready_for_operator_replacement_and_validation",
+    sourceRunbookGroup: {
+      phase: currentBlockingGroup.phase,
+      executionStatus: currentBlockingGroup.executionStatus,
+      stepCount: currentBlockingGroup.stepCount,
+      firstStepId: currentBlockingGroup.firstStepId,
+      firstStepRoute: currentBlockingGroup.firstStepRoute,
+    },
+    sourceCollectionPlanRoute: "/api/v1/target-gaps/collection-plan?executionStatus=ready_to_collect_data",
+    packageImportRoute: packagePlan.packageImportRoute,
+    packageDryRunImportRoute: packagePlan.packageDryRunImportRoute,
+    packageValidateOnlyImportRoute: packagePlan.packageValidateOnlyImportRoute,
+    packageRecordContract: packagePlan.packageRecordContract,
+    dryRunPolicy: packagePlan.dryRunPolicy,
+    verificationPolicy: packagePlan.verificationPolicy,
+    setupBeforePrimary: packagePlan.setupBeforePrimary === true,
+    targetGapCount: packagePlan.targetGapCount ?? 0,
+    targetGapIds: Array.isArray(packagePlan.targetGapIds) ? packagePlan.targetGapIds : [],
+    stepCount: packagePlan.stepCount ?? executionSequence.length,
+    setupStepCount: packagePlan.setupStepCount ?? 0,
+    primaryStepCount: packagePlan.primaryStepCount ?? 0,
+    estimatedRecordsRequired: packagePlan.estimatedRecordsRequired ?? 0,
+    estimatedPrimaryRecordsRequired: packagePlan.estimatedPrimaryRecordsRequired ?? 0,
+    estimatedSetupRecordsRequired: packagePlan.estimatedSetupRecordsRequired ?? 0,
+    expectedResourceDelta: packagePlan.expectedResourceDelta ?? 0,
+    expectedPrimaryResourceDelta: packagePlan.expectedPrimaryResourceDelta ?? 0,
+    expectedSetupResourceDelta: packagePlan.expectedSetupResourceDelta ?? 0,
+    targetResourceDeltaBeyondPrimaryRecords: packagePlan.targetResourceDeltaBeyondPrimaryRecords ?? 0,
+    importRoutes: Array.isArray(packagePlan.importRoutes) ? packagePlan.importRoutes : [],
+    dryRunRoutes: Array.isArray(packagePlan.dryRunRoutes) ? packagePlan.dryRunRoutes : [],
+    validateOnlyRoutes: Array.isArray(packagePlan.validateOnlyRoutes) ? packagePlan.validateOnlyRoutes : [],
+    templateStarter: packagePlan.templateStarter ?? null,
+    templateReadbackRoutes: Array.isArray(packagePlan.templateReadbackRoutes) ? packagePlan.templateReadbackRoutes : [],
+    expandedTemplateReadbackRoutes: Array.isArray(packagePlan.expandedTemplateReadbackRoutes)
+      ? packagePlan.expandedTemplateReadbackRoutes
+      : [],
+    starterExpandedTemplateReadbackRoutes: Array.isArray(packagePlan.starterExpandedTemplateReadbackRoutes)
+      ? packagePlan.starterExpandedTemplateReadbackRoutes
+      : [],
+    cappedExpandedTemplateReadbackRoutes: Array.isArray(packagePlan.cappedExpandedTemplateReadbackRoutes)
+      ? packagePlan.cappedExpandedTemplateReadbackRoutes
+      : [],
+    collectionPlanRoutes: Array.isArray(packagePlan.collectionPlanRoutes) ? packagePlan.collectionPlanRoutes : [],
+    verificationRoutes: Array.isArray(packagePlan.verificationRoutes) ? packagePlan.verificationRoutes : [],
+    executionSequencePreview: executionSequence.slice(0, 12),
+    omittedExecutionStepCount: Math.max(0, executionSequence.length - 12),
+    operatorChecklist: [
+      "Load the starter template route first for a bounded package preview, then request expanded templates deliberately.",
+      "Replace every templateOnly placeholder with real target data while preserving each concrete importRoute.",
+      "POST the replaced package to packageDryRunImportRoute or packageValidateOnlyImportRoute before appending.",
+      "Append through packageImportRoute only after validation succeeds.",
+      "Verify changed remaining counts through the listed target-gap readbacks and /api/release/report.",
+    ],
+  };
+}
+
+function octoberCompletionVerificationBlockerContext(report, runbookItemsBeforeVerification, actionItems) {
+  const targetGapRows = Array.isArray(report?.targetGaps?.rows) ? report.targetGaps.rows : [];
+  const checklistRows = Array.isArray(report?.octoberCompletionChecklist?.rows) ? report.octoberCompletionChecklist.rows : [];
+  const openTargetGapIds = targetGapRows
+    .filter((row) => Number(row?.remaining ?? 0) > 0 || row?.status === "target_gap_remaining")
+    .map((row) => row.id ?? row.targetGapId)
+    .filter(Boolean);
+  const openChecklistRows = checklistRows.filter((row) => !["complete", "completed", "closed", "not_applicable"].includes(row?.status));
+  const openOperatorActions = (Array.isArray(actionItems) ? actionItems : []).filter((item) => operatorActionExecutionStatus(item) !== "closed");
+  const openRunbookItems = (Array.isArray(runbookItemsBeforeVerification) ? runbookItemsBeforeVerification : []).filter(octoberCompletionRunbookStepIsOpen);
+  const targetGapTotals = report?.targetGaps?.totals ?? {
+    targetTotal: sumNumericField(targetGapRows, "target"),
+    currentTotal: sumNumericField(targetGapRows, "current"),
+    remainingTotal: sumNumericField(targetGapRows, "remaining"),
+  };
+  const summary = {
+    releaseStatus: report?.currentStatus ?? report?.status ?? null,
+    targetGapRemainingTotal: Number(targetGapTotals.remainingTotal ?? 0),
+    openTargetGapCount: openTargetGapIds.length,
+    openChecklistRowCount: openChecklistRows.length,
+    openOperatorActionCount: openOperatorActions.length,
+    openRunbookStepCountBeforeVerification: openRunbookItems.length,
+    openChecklistStatuses: countItemsBy(openChecklistRows, "status"),
+  };
+  const isBlocked =
+    summary.releaseStatus !== "complete" &&
+    (summary.targetGapRemainingTotal > 0 ||
+      summary.openTargetGapCount > 0 ||
+      summary.openChecklistRowCount > 0 ||
+      summary.openOperatorActionCount > 0 ||
+      summary.openRunbookStepCountBeforeVerification > 0);
+  return {
+    isBlocked,
+    summary,
+    targetGapTotals,
+    openTargetGapIds: uniqueValues(openTargetGapIds),
+    openChecklistRowIds: uniqueValues(openChecklistRows.map((row) => row.id ?? row.checklistRowId)),
+    routes: uniqueValues([
+      "/api/v1/target-gaps",
+      "/api/v1/target-gaps/collection-plan",
+      "/api/v1/operator-action-items",
+      "/api/v1/operator-submission-checklist",
+      "/api/v1/operator-review-evidence-pointers",
+      "/api/v1/operator-review-artifact-summaries",
+      "/api/v1/october-completion-checklist",
+      "/api/v1/release-report-sections",
+      "/api/release/report",
+    ]),
+  };
+}
+
+function octoberCompletionRunbookItems(report) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapById = targetGapReadbackItemsById(report, actionItems);
+  const enrichedActionItems = actionItems.map((item) => operatorItemWithBlockedTargetGapContext(item, targetGapById));
+  const checklistStatusByRowId = new Map(
+    (report.octoberCompletionChecklist?.rows ?? []).map((row) => [row.id ?? row.checklistRowId, row.status ?? null]),
+  );
+  const items = [];
+  const pushStep = (step) => {
+    items.push({ sequence: items.length + 1, ...step });
+  };
+
+  for (const targetGapPlan of targetGapCollectionPlanReadback(report).items ?? []) {
+    for (const step of targetGapPlan.importSequence ?? []) {
+      const route = step.importRoute ?? step.writeRoute ?? step.verificationRoute ?? targetGapPlan.targetGapReadbackItemRoute ?? null;
+      pushStep({
+        id: `october-completion-runbook:collect:${targetGapPlan.targetGapId}:${step.stepKind}:${encodeURIComponent(route ?? step.sequence ?? "step")}`,
+        phase: "collect_data",
+        phaseSequence: 1,
+        stepKind: step.stepKind,
+        label: `${humanizeServerLabel(targetGapPlan.targetGapId)} ${humanizeServerLabel(step.stepKind)}`,
+        actionId: step.actionId ?? targetGapPlan.primaryActionId ?? null,
+        actionType: "collect_data",
+        checklistRowId: step.checklistRowId ?? targetGapPlan.primaryChecklistRowId ?? null,
+        checklistRowIds: targetGapPlan.checklistRowIds ?? [],
+        targetGapId: targetGapPlan.targetGapId,
+        resourceKey: step.resourceKey ?? null,
+        sourceEvidenceId: targetGapPlan.sourceEvidenceId ?? null,
+        status: targetGapPlan.status ?? null,
+        checklistStatus:
+          checklistStatusByRowId.get(step.checklistRowId ?? targetGapPlan.primaryChecklistRowId) ??
+          checklistStatusByRowId.get((targetGapPlan.checklistRowIds ?? [])[0]) ??
+          null,
+        actionStatus: targetGapPlan.actionStatus ?? null,
+        preconditionStatus: targetGapPlan.preconditionStatus ?? null,
+        method: step.importRoute ? "POST" : "GET",
+        route,
+        importRoute: step.importRoute ?? null,
+        dryRunImportRoute: step.dryRunImportRoute ?? null,
+        validateOnlyImportRoute: step.validateOnlyImportRoute ?? null,
+        packageImportRoute: step.packageImportRoute ?? targetGapPlan.packageImportRoute ?? null,
+        packageDryRunImportRoute: step.packageDryRunImportRoute ?? targetGapPlan.packageDryRunImportRoute ?? null,
+        packageValidateOnlyImportRoute: step.packageValidateOnlyImportRoute ?? targetGapPlan.packageValidateOnlyImportRoute ?? null,
+        writeRoute: step.writeRoute ?? null,
+        readbackRoute: step.readbackRoute ?? null,
+        verificationRoute: step.verificationRoute ?? targetGapPlan.targetGapReadbackItemRoute ?? null,
+        templateReadbackRoute: step.templateReadbackRoute ?? targetGapPlan.templateReadbackRoute ?? null,
+        expandedTemplateReadbackRoute: step.expandedTemplateReadbackRoute ?? targetGapPlan.expandedTemplateReadbackRoute ?? null,
+        starterExpandedTemplateReadbackRoute:
+          step.starterExpandedTemplateReadbackRoute ?? targetGapPlan.starterExpandedTemplateReadbackRoute ?? null,
+        cappedExpandedTemplateReadbackRoute:
+          step.cappedExpandedTemplateReadbackRoute ?? targetGapPlan.cappedExpandedTemplateReadbackRoute ?? null,
+        workflowTemplateId: step.workflowTemplateId ?? null,
+        actorRole: step.actorRole ?? null,
+        estimatedRecordsRequired: step.estimatedRecordsRequired ?? null,
+        expectedResourceDelta: step.expectedResourceDelta ?? null,
+        targetResourceDeltaBeyondEstimatedRecords: Math.max(
+          0,
+          (Number.isFinite(Number(step.expectedResourceDelta)) ? Number(step.expectedResourceDelta) : 0) -
+            (Number.isFinite(Number(step.estimatedRecordsRequired)) ? Number(step.estimatedRecordsRequired) : 0),
+        ),
+        closesTargetGapWhenValidated: step.closesTargetGapWhenValidated ?? null,
+        setupEstimatedRecordsRequired: step.stepKind === "setup_data_import" ? step.estimatedRecordsRequired ?? null : null,
+        setupExpectedResourceDelta: step.stepKind === "setup_data_import" ? step.expectedResourceDelta ?? null : null,
+        completionEvidence: step.completionEvidence ?? targetGapPlan.completionEvidence ?? null,
+        releaseReadinessEffect: targetGapPlan.releaseReadinessEffect ?? null,
+        duplicateActionHandling: targetGapPlan.duplicateActionHandling ?? null,
+      });
+    }
+  }
+
+  for (const action of enrichedActionItems.filter((item) => item.actionType !== "collect_data")) {
+    const phase = action.actionType === "submit_artifact" ? "submit_operator_evidence" : "review_current_evidence";
+    const phaseSequence = phase === "submit_operator_evidence" ? 2 : 3;
+    const importRoute = action.bulkImportRoute ?? null;
+    const packageImportRoute = importRoute === operatorEvidencePackageImportRoute ? operatorEvidencePackageImportRoute : null;
+    const route = importRoute ?? action.writeRoute ?? action.readbackItemRoute ?? action.targetGapReadbackItemRoute ?? action.readbackRoute ?? null;
+    pushStep({
+      id: `october-completion-runbook:${phase}:${action.id ?? items.length + 1}`,
+      phase,
+      phaseSequence,
+      stepKind: importRoute ? "package_jsonl_import" : action.writeRoute ? "single_record_submission" : action.actionType,
+      label: action.label ?? humanizeServerLabel(action.artifactKind ?? action.artifactType ?? action.actionType),
+      actionId: action.id ?? null,
+      actionType: action.actionType ?? null,
+      status: action.status ?? action.actionStatus ?? null,
+      actionStatus: action.actionStatus ?? action.status ?? null,
+      checklistRowId: action.checklistRowId ?? null,
+      checklistRowIds: action.checklistRowId ? [action.checklistRowId] : [],
+      checklistStatus: checklistStatusByRowId.get(action.checklistRowId) ?? null,
+      targetGapId: action.targetGapId ?? null,
+      artifactKind: action.artifactKind ?? null,
+      artifactType: action.artifactType ?? null,
+      artifactId: action.artifactId ?? null,
+      sourceEvidenceId: action.sourceEvidenceId ?? null,
+      preconditionStatus: action.preconditionStatus ?? null,
+      blockedByTargetGapIds: Array.isArray(action.blockedByTargetGapIds) ? action.blockedByTargetGapIds : [],
+      blockingTargetGapSummaries: Array.isArray(action.blockingTargetGapSummaries) ? action.blockingTargetGapSummaries : [],
+      blockedTargetGapReadbackRoutes: Array.isArray(action.blockedTargetGapReadbackRoutes) ? action.blockedTargetGapReadbackRoutes : [],
+      blockedTargetGapReadbackItemRoutes: Array.isArray(action.blockedTargetGapReadbackItemRoutes)
+        ? action.blockedTargetGapReadbackItemRoutes
+        : [],
+      blockedTargetGapCollectionPlanRoutes: Array.isArray(action.blockedTargetGapCollectionPlanRoutes)
+        ? action.blockedTargetGapCollectionPlanRoutes
+        : [],
+      blockedTargetGapTemplateReadbackRoutes: Array.isArray(action.blockedTargetGapTemplateReadbackRoutes)
+        ? action.blockedTargetGapTemplateReadbackRoutes
+        : [],
+      blockedTargetGapImportRoutes: Array.isArray(action.blockedTargetGapImportRoutes) ? action.blockedTargetGapImportRoutes : [],
+      blockedTargetGapDryRunImportRoutes: Array.isArray(action.blockedTargetGapDryRunImportRoutes)
+        ? action.blockedTargetGapDryRunImportRoutes
+        : [],
+      blockedTargetGapValidateOnlyImportRoutes: Array.isArray(action.blockedTargetGapValidateOnlyImportRoutes)
+        ? action.blockedTargetGapValidateOnlyImportRoutes
+        : [],
+      method: action.writeRoute || importRoute ? "POST" : "GET",
+      route,
+      importRoute,
+      dryRunImportRoute: routeWithQueryFlag(importRoute, "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag(importRoute, "validateOnly", "true"),
+      singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
+      singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
+      setupSingleRecordDryRunRoute: action.setupSingleRecordDryRunRoute ?? null,
+      setupSingleRecordValidateOnlyRoute: action.setupSingleRecordValidateOnlyRoute ?? null,
+      packageImportRoute,
+      packageDryRunImportRoute: routeWithQueryFlag(packageImportRoute, "dryRun", "true"),
+      packageValidateOnlyImportRoute: routeWithQueryFlag(packageImportRoute, "validateOnly", "true"),
+      writeRoute: action.writeRoute ?? null,
+      setupWriteRoute: action.setupWriteRoute ?? null,
+      readbackRoute: action.readbackRoute ?? null,
+      readbackItemRoute: action.readbackItemRoute ?? null,
+      submissionReadbackRoute: action.submissionReadbackRoute ?? null,
+      setupReadbackRoute: action.setupReadbackRoute ?? null,
+      verificationRoute: action.readbackItemRoute ?? action.targetGapReadbackItemRoute ?? action.readbackRoute ?? "/api/release/report",
+      templateReadbackRoute: (Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes[0] : null) ?? null,
+      workflowTemplateId: action.bulkImportWorkflowTemplateId ?? action.workflowTemplateId ?? null,
+      setupWorkflowTemplateId: action.setupWorkflowTemplateId ?? null,
+      actorRole: action.actorRole ?? null,
+      relatedSubmitActionIds: Array.isArray(action.relatedSubmitActionIds) ? action.relatedSubmitActionIds : [],
+      completionEvidence: action.completionEvidence ?? null,
+    });
+  }
+
+  const verificationBlockerContext = octoberCompletionVerificationBlockerContext(report, items, enrichedActionItems);
+  const verificationSteps = [
+    {
+      stepKind: "verify_target_gaps",
+      route: "/api/v1/target-gaps",
+      completionEvidence: "All target-gap rows must show remaining=0 or no target_gap_remaining status.",
+    },
+    {
+      stepKind: "verify_completion_checklist",
+      route: "/api/v1/october-completion-checklist",
+      completionEvidence: "All October completion checklist rows must have status=complete.",
+    },
+    {
+      stepKind: "verify_release_sections",
+      route: "/api/v1/release-report-sections",
+      completionEvidence: "No release-report section row should retain review-required evidence blockers.",
+    },
+    {
+      stepKind: "verify_release_report",
+      route: "/api/release/report",
+      completionEvidence: "The authoritative release report must no longer be incomplete_against_october_target.",
+    },
+  ];
+  for (const step of verificationSteps) {
+    pushStep({
+      id: `october-completion-runbook:verify:${step.stepKind}`,
+      phase: "verify_release_completion",
+      phaseSequence: 4,
+      stepKind: step.stepKind,
+      label: humanizeServerLabel(step.stepKind),
+      actionType: "verify_release_completion",
+      status: report.currentStatus === "complete" ? "complete" : "verification_pending",
+      checklistStatus: report.currentStatus ?? null,
+      checklistRowIds: [],
+      ...(verificationBlockerContext.isBlocked
+        ? {
+            preconditionStatus: "open_release_work_before_verification",
+            openReleaseWorkBeforeVerification: true,
+            releaseVerificationBlockerSummary: verificationBlockerContext.summary,
+            releaseVerificationBlockerRoutes: verificationBlockerContext.routes,
+            openChecklistRowIds: verificationBlockerContext.openChecklistRowIds,
+            openTargetGapIds: verificationBlockerContext.openTargetGapIds,
+            targetGapTotals: verificationBlockerContext.targetGapTotals,
+          }
+        : {}),
+      method: "GET",
+      route: step.route,
+      readbackRoute: step.route,
+      verificationRoute: step.route,
+      completionEvidence: step.completionEvidence,
+    });
+  }
+
+  return items.map(octoberCompletionRunbookStepWithExecutionStatus);
+}
+
+function releaseWorkflowReadinessReadback(report, options = {}) {
+  const allItems = releaseWorkflowReadinessItems(report);
+  const filters = releaseWorkflowReadinessFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => releaseWorkflowReadinessMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `release-workflow-readiness-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    releaseUseStatus: releaseWorkflowReadinessOverallStatus(allItems),
+    resourceKey: "releaseWorkflowReadinessRow",
+    policy: {
+      scope:
+        "Read-only release workflow readiness rows derived from /api/release/report assignment, discussion/adjudication, adjudication-finalization, and release-claim warning evidence; it does not submit workflow artifacts, finalize adjudications, clear warnings, waive gates, or create completion claims.",
+      access: "Admin/auditor readback only because workflow readiness exposes operator evidence counts, review rows, warning rows, and release-claim blockers.",
+      noSideEffects:
+        "Use the listed readback routes to inspect submitted workflow resources and /api/release/report as the authoritative release-status surface.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: releaseWorkflowReadinessCounts(allItems),
+    filteredCounts: releaseWorkflowReadinessCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function releaseWorkflowReadinessFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    surface: value("surface"),
+    status: value("status"),
+    releaseUseStatus: value("releaseUseStatus"),
+    sourceEvidenceId: value("sourceEvidenceId") ?? value("evidenceId"),
+    route: value("route"),
+  };
+}
+
+function releaseWorkflowReadinessMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "status") return releaseWorkflowReadinessMatchesStatus(item, value);
+    if (key === "sourceEvidenceId") return item.sourceEvidenceId === value;
+    if (key === "route") return releaseWorkflowReadinessRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function releaseWorkflowReadinessMatchesStatus(item, value) {
+  if (value === "open") return releaseWorkflowReadinessItemIsOpen(item);
+  if (value === "closed") return !releaseWorkflowReadinessItemIsOpen(item);
+  return item?.status === value;
+}
+
+function releaseWorkflowReadinessItemIsOpen(item) {
+  return item?.status !== "complete";
+}
+
+function releaseWorkflowReadinessRoutes(item) {
+  return uniqueValues([
+    item?.readbackItemRoute,
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.writeRoutes) ? item.writeRoutes : []),
+    ...(Array.isArray(item?.bulkImportRoutes) ? item.bulkImportRoutes : []),
+    ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
+    item?.authoritativeStatusRoute,
+  ]);
+}
+
+function releaseWorkflowReadinessCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(releaseWorkflowReadinessItemIsOpen).length,
+    closedRows: items.filter((item) => !releaseWorkflowReadinessItemIsOpen(item)).length,
+    complete: items.filter((item) => item.status === "complete").length,
+    reviewRequired: items.filter((item) => item.status === "review_required").length,
+    notSubmitted: items.filter((item) => item.status === "not_submitted").length,
+    warning: items.filter((item) => item.status === "warning").length,
+    reviewRows: sumNumericField(items, "reviewRowCount"),
+    warningRows: sumNumericField(items, "warningRowCount"),
+    previewRows: sumNumericField(items, "previewRowCount"),
+    withRemediationPlan: items.filter((item) => item.remediationPlan && item.remediationPlan.status !== "no_remediation_required").length,
+    remediationDetails: items.reduce((sum, item) => sum + Number(item.remediationPlan?.detailCount ?? 0), 0),
+    bySurface: countItemsBy(items, "surface"),
+    byStatus: countItemsBy(items, "status"),
+    byReleaseUseStatus: countItemsBy(items, "releaseUseStatus"),
+    byRoute: countValues(items.flatMap(releaseWorkflowReadinessRoutes)),
+    byRemediationRoute: countValues(
+      items.flatMap((item) => (Array.isArray(item.remediationRoutes) ? item.remediationRoutes : [])),
+    ),
+  };
+}
+
+function releaseWorkflowReadinessOverallStatus(items) {
+  if (items.some((item) => item.status === "review_required" || item.status === "warning")) return "release_workflow_readiness_review_required";
+  if (items.some((item) => item.status === "not_submitted")) return "release_workflow_readiness_not_submitted";
+  if (items.length && items.every((item) => item.status === "complete")) return "release_workflow_readiness_complete";
+  return "release_workflow_readiness_unknown";
+}
+
+function releaseWorkflowReadinessItems(report) {
+  const assignment = report.assignmentWorkflowEvidence ?? {};
+  const discussion = report.discussionAdjudicationWorkflowEvidence ?? {};
+  const finalization = report.adjudicationFinalizationEvidence ?? {};
+  const warnings = report.releaseClaimWarnings ?? {};
+  const assignmentRows = releaseWorkflowReadinessRows(assignment.rows);
+  const assignmentReviewRows = releaseWorkflowRowsWithReviewReasons(assignment.reviewRows ?? assignmentRows);
+  const discussionCoverageRows = releaseWorkflowReadinessRows(discussion.coverageRows);
+  const discussionReviewRows = [
+    ...releaseWorkflowReadinessRows(discussion.reviewSections),
+    ...releaseWorkflowRowsWithReviewReasons(discussionCoverageRows),
+  ];
+  const finalizationRows = releaseWorkflowReadinessRows(finalization.rows);
+  const finalizationReviewRows = releaseWorkflowRowsWithReviewReasons(finalization.reviewRows ?? finalizationRows);
+  const apiWarningRows = releaseWorkflowReadinessRows(warnings.apiDownloadWarningRows).map((row) => ({
+    ...row,
+    warningType: "api_download_warning",
+  }));
+  const scheduleWarningRows = releaseWorkflowReadinessRows(warnings.scheduleCompletionClaimRows)
+    .filter((row) => row.supportsCompletionClaim === false || row.completionClaimStatus)
+    .map((row) => ({
+      ...row,
+      warningType: "schedule_completion_claim_warning",
+    }));
+  return [
+    releaseWorkflowReadinessItem({
+      id: "assignment-workflow-evidence",
+      surface: "assignment_workflow",
+      label: "Assignment workflow evidence",
+      evidence: assignment,
+      rows: assignmentRows,
+      reviewRows: assignmentReviewRows,
+      readbackRoutes: ["/api/release/report", "/api/v1/assignments", "/api/v1/rater-sessions", "/api/v1/rating-context-snapshots"],
+      writeRoutes: ["/api/v1/assignments", "/api/v1/rater-sessions", "/api/v1/rating-context-snapshots"],
+      bulkImportRoutes: ["/api/v1/assignments/import-jsonl"],
+      completionEvidence:
+        "Submitted assignments must link rater sessions and rating-context snapshots with blinding, order, pacing, and conflict checks complete.",
+      countFields: [
+        "submittedAssignmentCount",
+        "completeAssignmentCount",
+        "reviewRequiredAssignmentCount",
+        "linkedRaterSessionCount",
+        "linkedRatingContextSnapshotCount",
+        "counterbalancedOrRandomizedOrderCount",
+      ],
+    }),
+    releaseWorkflowReadinessItem({
+      id: "discussion-adjudication-workflow-evidence",
+      surface: "discussion_adjudication_workflow",
+      label: "Discussion and adjudication workflow evidence",
+      evidence: discussion,
+      rows: [...discussionCoverageRows, ...releaseWorkflowReadinessRows(discussion.postLockDiscussionSessionRows)],
+      reviewRows: discussionReviewRows,
+      readbackRoutes: [
+        "/api/release/report",
+        "/api/v1/discussions",
+        "/api/v1/discussion-threads",
+        "/api/v1/discussion-comments",
+        "/api/v1/discussion-revision-proposals",
+        "/api/v1/post-lock-discussion-sessions",
+        "/api/v1/adjudications",
+        "/api/v1/adjudication-review-sessions",
+        "/api/v1/adjudication-memos",
+        "/api/v1/adjudication-finalizations",
+      ],
+      writeRoutes: [
+        "/api/v1/discussions",
+        "/api/v1/discussion-comments",
+        "/api/v1/discussion-revision-proposals",
+        "/api/v1/post-lock-discussion-sessions",
+        "/api/v1/adjudications",
+        "/api/v1/adjudication-review-sessions",
+        "/api/v1/adjudication-memos",
+        "/api/v1/adjudication-finalizations",
+      ],
+      completionEvidence:
+        "Post-lock discussion threads need object-level comments, revision proposals, adjudication memos, finalization links, and identity-staging evidence before supporting release claims.",
+      countFields: [
+        "submittedDiscussionThreadCount",
+        "completeDiscussionThreadCount",
+        "submittedDiscussionCommentCount",
+        "submittedDiscussionRevisionProposalCount",
+        "submittedAdjudicationMemoCount",
+      ],
+    }),
+    releaseWorkflowReadinessItem({
+      id: "adjudication-finalization-evidence",
+      surface: "adjudication_finalization",
+      label: "Adjudication finalization evidence",
+      evidence: finalization,
+      rows: finalizationRows,
+      reviewRows: finalizationReviewRows,
+      readbackRoutes: ["/api/release/report", "/api/v1/adjudication-finalizations", "/api/v1/adjudication-memos"],
+      writeRoutes: ["/api/v1/adjudication-finalizations", "/api/v1/adjudication-memos"],
+      completionEvidence:
+        "Finalizations must be release-candidate finalizations tied to matching adjudication memos and finalized by authorized memo adjudicators.",
+      countFields: ["submittedFinalizationCount", "completeFinalizationCount", "reviewRequiredCount", "matchedMemoCount", "finalizedForReleaseCandidateCount"],
+    }),
+    releaseWorkflowReadinessItem({
+      id: "release-claim-warnings",
+      surface: "release_claim_warnings",
+      label: "Release claim warnings",
+      evidence: warnings,
+      rows: [...apiWarningRows, ...scheduleWarningRows],
+      reviewRows: [...apiWarningRows, ...scheduleWarningRows],
+      readbackRoutes: ["/api/release/report", "/api/v1/release-errata", "/api/v1/release-erratum-disclosure-policies", "/api/v1/release-versions"],
+      writeRoutes: ["/api/v1/release-errata", "/api/v1/release-erratum-disclosure-policies", "/api/v1/release-versions"],
+      completionEvidence:
+        "Release claims remain limited until errata disclosure warnings are clear and schedule completion claims are either supported by complete evidence or rebaselined.",
+      countFields: ["errataWarningCount", "blockedScheduleCompletionClaimCount"],
+      forceStatus: (warnings.releaseUseStatus ?? "").includes("clear") ? null : "warning",
+    }),
+  ];
+}
+
+function releaseWorkflowReadinessItem({
+  id,
+  surface,
+  label,
+  evidence,
+  rows,
+  reviewRows,
+  readbackRoutes,
+  writeRoutes = [],
+  bulkImportRoutes = [],
+  completionEvidence,
+  countFields = [],
+  forceStatus = null,
+}) {
+  const counts = evidence?.counts && typeof evidence.counts === "object" && !Array.isArray(evidence.counts) ? evidence.counts : {};
+  const safeRows = releaseWorkflowReadinessRows(rows);
+  const safeReviewRows = releaseWorkflowReadinessRows(reviewRows);
+  const previewRows = (safeReviewRows.length ? safeReviewRows : safeRows).slice(0, 8);
+  const status = forceStatus ?? releaseWorkflowReadinessStatus(evidence?.releaseUseStatus);
+  const reviewReasons = releaseWorkflowReadinessReviewReasons(safeReviewRows);
+  const readbackItemRoute = `/api/v1/release-workflow-readiness/${encodeURIComponent(id)}`;
+  const reviewReasonDetails = releaseWorkflowReadinessReviewReasonDetails({
+    surface,
+    reviewRows: safeReviewRows,
+    previewRows,
+    reviewReasons,
+  });
+  const remediationPlan = releaseWorkflowReadinessRemediationPlan({
+    id,
+    surface,
+    status,
+    readbackItemRoute,
+    reviewReasons,
+    reviewReasonDetails,
+    readbackRoutes,
+    writeRoutes,
+    bulkImportRoutes,
+  });
+  return {
+    id,
+    readbackItemRoute,
+    surface,
+    label,
+    sourceEvidenceId: evidence?.id ?? null,
+    releaseUseStatus: evidence?.releaseUseStatus ?? `${surface}_not_reported`,
+    status,
+    counts,
+    countSummary: Object.fromEntries(countFields.map((field) => [field, counts[field] ?? 0])),
+    rowCount: safeRows.length,
+    reviewRowCount: safeReviewRows.length,
+    warningRowCount: surface === "release_claim_warnings" ? safeReviewRows.length : 0,
+    previewRowCount: previewRows.length,
+    previewRows,
+    reviewReasons,
+    reviewReasonDetails,
+    remediationPlan,
+    remediationRoutes: remediationPlan.requiredEvidenceRoutes,
+    readbackRoutes,
+    writeRoutes,
+    bulkImportRoutes,
+    authoritativeStatusRoute: "/api/release/report",
+    completionEvidence,
+  };
+}
+
+function releaseWorkflowReadinessStatus(releaseUseStatus) {
+  const status = String(releaseUseStatus ?? "");
+  if (!status || status.endsWith("_not_reported")) return "not_submitted";
+  if (status.includes("complete") || status.includes("clear")) return "complete";
+  if (status.includes("not_submitted") || status.includes("no_submitted") || status.includes("not_started")) return "not_submitted";
+  if (status.includes("warning") || status.includes("limited")) return "warning";
+  if (status.includes("review_required") || status.includes("required")) return "review_required";
+  return "review";
+}
+
+function releaseWorkflowReadinessRows(rows) {
+  return Array.isArray(rows) ? rows.filter((row) => row && typeof row === "object" && !Array.isArray(row)) : [];
+}
+
+function releaseWorkflowRowsWithReviewReasons(rows) {
+  return releaseWorkflowReadinessRows(rows).filter((row) => Array.isArray(row.reviewReasons) && row.reviewReasons.length);
+}
+
+function releaseWorkflowReadinessReviewReasons(rows) {
+  return uniqueValues(
+    releaseWorkflowReadinessRows(rows).flatMap((row) => [
+      ...(Array.isArray(row.reviewReasons) ? row.reviewReasons : []),
+      row.reason,
+      row.claimWarningStatus,
+      row.completionClaimStatus,
+    ]),
+  );
+}
+
+function releaseWorkflowReadinessReviewReasonDetails({ surface, reviewRows, previewRows, reviewReasons }) {
+  const rows = releaseWorkflowReadinessRows(reviewRows).length
+    ? releaseWorkflowReadinessRows(reviewRows)
+    : releaseWorkflowReadinessRows(previewRows);
+  return reviewReasons.map((reason) => releaseWorkflowReadinessReviewReasonDetail(reason, rows, surface));
+}
+
+function releaseWorkflowReadinessReviewReasonDetail(reason, rows, surface) {
+  const matchingRows = releaseWorkflowReadinessRows(rows).filter((row) => releaseWorkflowReadinessRowHasReason(row, reason));
+  const reasonRows = matchingRows.length ? matchingRows : releaseWorkflowReadinessRows(rows);
+  const row = reasonRows[0] ?? {};
+  const [reasonKey, reasonStatus = null] = String(reason).split(":");
+  const sourceRowIds = uniqueValues(reasonRows.map(releaseWorkflowReadinessRowStableId));
+  const base = {
+    reason,
+    reasonKey,
+    reasonStatus,
+    surface,
+    sourceRowIds,
+    rowCount: reasonRows.length,
+  };
+
+  if (reasonKey === "raterSessionId") {
+    return releaseWorkflowReadinessDetailForMissingBinding(base, row, {
+      affectedField: "raterSessionId",
+      readbackRoute: "/api/v1/rater-sessions",
+      writeRoute: "/api/v1/rater-sessions",
+      remediation:
+        "Submit or link the assignment's rater session so assignment workflow evidence can prove session pacing, identity, and workflow completion.",
+    });
+  }
+  if (reasonKey === "workflowProfileId") {
+    return releaseWorkflowReadinessDetailForMissingBinding(base, row, {
+      affectedField: "workflowProfileId",
+      readbackRoute: "/api/v1/rating-workflow-profiles",
+      writeRoute: "/api/v1/rating-workflow-profiles",
+      remediation:
+        "Submit or select the active rating workflow profile referenced by the assignment before treating assignment workflow evidence as complete.",
+    });
+  }
+  if (reasonKey === "scoreInputPolicyId") {
+    return releaseWorkflowReadinessDetailForMissingBinding(base, row, {
+      affectedField: "scoreInputPolicyId",
+      readbackRoute: "/api/v1/score-input-policies",
+      writeRoute: "/api/v1/score-input-policies",
+      remediation:
+        "Submit or select the score-input policy referenced by the assignment so score-entry constraints are auditable.",
+    });
+  }
+  if (reasonKey === "ratingContextSnapshotId") {
+    return releaseWorkflowReadinessDetailForMissingBinding(base, row, {
+      affectedField: "ratingContextSnapshotId",
+      readbackRoute: "/api/v1/rating-context-snapshots",
+      writeRoute: "/api/v1/rating-context-snapshots",
+      remediation:
+        "Submit or link the assignment's rating-context snapshot so rater-visible context and source-blinding state are auditable.",
+    });
+  }
+  if (reasonKey === "matching_adjudication_memo") {
+    return releaseWorkflowReadinessDetailForMissingBinding(base, row, {
+      affectedField: "memoId",
+      readbackRoute: "/api/v1/adjudication-memos",
+      writeRoute: "/api/v1/adjudication-memos",
+      relatedRoutes: ["/api/v1/adjudication-finalizations"],
+      remediation:
+        "Submit or correct the matching adjudication memo before the finalization can count as a release-candidate finalization.",
+    });
+  }
+  if (reasonKey === "completion_claim_blocked_until_complete_or_rebaselined") {
+    const affectedField = row.scheduleStatusSnapshotId ? "scheduleStatusSnapshotId" : "releaseUseStatus";
+    return releaseWorkflowReadinessDetailForMissingBinding(base, row, {
+      affectedField,
+      readbackRoute: "/api/v1/release-versions",
+      writeRoute: "/api/v1/release-versions",
+      readbackItemRoute: null,
+      relatedRoutes: ["/api/release/report", "/api/v1/release-errata", "/api/v1/release-erratum-disclosure-policies"],
+      remediation:
+        "Verify complete release evidence through /api/release/report or submit a rebaselined release version/erratum before making a schedule completion claim.",
+    });
+  }
+
+  const affectedField = Object.prototype.hasOwnProperty.call(row, reasonKey) ? reasonKey : null;
+  const affectedId = affectedField ? row[affectedField] : null;
+  return {
+    ...base,
+    affectedField,
+    affectedId: affectedId ?? null,
+    readbackRoute: "/api/release/report",
+    writeRoute: null,
+    readbackItemRoute: null,
+    requiredEvidenceRoutes: ["/api/release/report"],
+    remediation:
+      "Review the bounded warning/review row in /api/release/report, then use the surface write/readback routes listed on this readiness item.",
+  };
+}
+
+function releaseWorkflowReadinessDetailForMissingBinding(base, row, options) {
+  const affectedId = row?.[options.affectedField] ?? null;
+  const readbackItemRoute =
+    Object.prototype.hasOwnProperty.call(options, "readbackItemRoute")
+      ? options.readbackItemRoute
+      : affectedId
+        ? `${options.readbackRoute}/${encodeURIComponent(affectedId)}`
+        : null;
+  return {
+    ...base,
+    affectedField: options.affectedField,
+    affectedId,
+    readbackRoute: options.readbackRoute,
+    writeRoute: options.writeRoute,
+    readbackItemRoute,
+    requiredEvidenceRoutes: uniqueValues([
+      options.readbackRoute,
+      options.writeRoute,
+      readbackItemRoute,
+      ...(Array.isArray(options.relatedRoutes) ? options.relatedRoutes : []),
+      "/api/release/report",
+    ]),
+    remediation: options.remediation,
+  };
+}
+
+function releaseWorkflowReadinessRowHasReason(row, reason) {
+  if (!row || typeof row !== "object") return false;
+  return [
+    ...(Array.isArray(row.reviewReasons) ? row.reviewReasons : []),
+    row.reason,
+    row.claimWarningStatus,
+    row.completionClaimStatus,
+  ].includes(reason);
+}
+
+function releaseWorkflowReadinessRowStableId(row) {
+  if (!row || typeof row !== "object") return null;
+  return (
+    row.assignmentId ??
+    row.raterSessionId ??
+    row.discussionThreadId ??
+    row.adjudicationFinalizationId ??
+    row.adjudicationId ??
+    row.memoId ??
+    row.erratumId ??
+    row.scheduleStatusSnapshotId ??
+    row.id ??
+    null
+  );
+}
+
+function releaseWorkflowReadinessRemediationPlan({
+  id,
+  surface,
+  status,
+  readbackItemRoute,
+  reviewReasons,
+  reviewReasonDetails,
+  readbackRoutes,
+  writeRoutes,
+  bulkImportRoutes,
+}) {
+  const detailRoutes = releaseWorkflowReadinessRows(reviewReasonDetails).flatMap((detail) => detail.requiredEvidenceRoutes ?? []);
+  const fallbackRoutes =
+    status === "complete"
+      ? []
+      : uniqueValues([...(readbackRoutes ?? []), ...(writeRoutes ?? []), ...(bulkImportRoutes ?? []), "/api/release/report"]);
+  const requiredEvidenceRoutes = uniqueValues(detailRoutes.length ? detailRoutes : fallbackRoutes);
+  return {
+    planKind: "release_workflow_readiness_remediation",
+    readinessItemId: id,
+    surface,
+    status: releaseWorkflowReadinessRemediationStatus(status),
+    sourceReadinessItemRoute: readbackItemRoute,
+    authoritativeStatusRoute: "/api/release/report",
+    reviewReasonCount: reviewReasons.length,
+    detailCount: reviewReasonDetails.length,
+    requiredEvidenceRoutes,
+    dryRunPolicy:
+      "This plan is a read-only pointer map. Use existing dry-run/validate-only import modes where offered; this endpoint never submits workflow evidence or changes release status.",
+    nextVerificationRoute: "/api/release/report",
+    details: reviewReasonDetails,
+  };
+}
+
+function releaseWorkflowReadinessRemediationStatus(status) {
+  if (status === "complete") return "no_remediation_required";
+  if (status === "warning") return "warning_review_required";
+  if (status === "not_submitted") return "evidence_submission_required";
+  return "review_required";
+}
+
+function releaseReportSectionsReadback(report, options = {}) {
+  const allItems = releaseReportSectionItems(report);
+  const filters = releaseReportSectionFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => releaseReportSectionMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.sourceEvidenceId === options.itemId || item.id === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `release-report-sections-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    releaseUseStatus: report.currentStatus ?? "release_report_missing",
+    resourceKey: "releaseReportSection",
+    policy: {
+      scope:
+        "Read-only bounded release-report section rows derived from /api/release/report evidence ids and operator review pointers; it does not submit artifacts, collect data, waive gates, or create completion claims.",
+      access: "Admin/auditor readback only because release-report sections expose open evidence blockers and remediation routes.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: releaseReportSectionCounts(allItems),
+    filteredCounts: releaseReportSectionCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function releaseReportSectionFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    sourceEvidenceId: value("sourceEvidenceId") ?? value("evidenceId"),
+    checklistRowId: value("checklistRowId"),
+    status: value("status"),
+    targetGapId: value("targetGapId") ?? value("blockedByTargetGapId"),
+    sectionKey: value("sectionKey"),
+    artifactType: value("artifactType"),
+    artifactId: value("artifactId"),
+    route: value("route"),
+  };
+}
+
+function releaseReportSectionMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "status") return releaseReportSectionMatchesStatus(item, value);
+    if (key === "checklistRowId") return Array.isArray(item.checklistRowIds) && item.checklistRowIds.includes(value);
+    if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
+    if (key === "sectionKey") return Array.isArray(item.sectionKeys) && item.sectionKeys.includes(value);
+    if (key === "artifactType") return Array.isArray(item.artifactTypes) && item.artifactTypes.includes(value);
+    if (key === "artifactId") return Array.isArray(item.artifactIds) && item.artifactIds.includes(value);
+    if (key === "route") return releaseReportSectionRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function releaseReportSectionMatchesStatus(item, value) {
+  if (value === "open") return releaseReportSectionItemIsOpen(item);
+  if (value === "closed") return !releaseReportSectionItemIsOpen(item);
+  return item?.status === value;
+}
+
+function releaseReportSectionItemIsOpen(item) {
+  if (
+    Number(item?.operatorActionCount ?? 0) > 0 ||
+    Number(item?.reviewPointerCount ?? 0) > 0 ||
+    Number(item?.reviewArtifactSummaryCount ?? 0) > 0 ||
+    Number(item?.reviewReasonCount ?? 0) > 0
+  ) {
+    return true;
+  }
+  if (Array.isArray(item?.checklistStatuses) && item.checklistStatuses.length) {
+    return item.checklistStatuses.some((status) => octoberCompletionChecklistItemIsOpen({ status }));
+  }
+  return releaseReportSectionStatusLooksOpen(item?.status);
+}
+
+function releaseReportSectionStatusLooksOpen(value) {
+  const status = String(value ?? "").trim();
+  if (!status || status === "reported") return false;
+  if (
+    ["complete", "completed", "closed", "not_applicable"].includes(status) ||
+    status.startsWith("not_applicable") ||
+    status.endsWith("_complete") ||
+    status.endsWith("_evidenced") ||
+    status.endsWith("_public_only")
+  ) {
+    return false;
+  }
+  return [
+    "data_collection_required",
+    "operator_evidence_required",
+    "review_required",
+  ].includes(status) ||
+    status.includes("incomplete") ||
+    status.includes("not_submitted") ||
+    status.includes("not_started") ||
+    status.includes("not_ready") ||
+    status.includes("review_required") ||
+    status.includes("no_submitted") ||
+    status.includes("limited_by") ||
+    status.includes("thinner_than");
+}
+
+function releaseReportSectionRoutes(item) {
+  return uniqueValues([
+    item?.readbackItemRoute,
+    item?.operatorActionRoute,
+    item?.reviewEvidencePointersRoute,
+    item?.reviewArtifactSummariesRoute,
+    item?.checklistRoute,
+    ...(Array.isArray(item?.targetGapReadbackRoutes) ? item.targetGapReadbackRoutes : []),
+    ...(Array.isArray(item?.targetGapReadbackItemRoutes) ? item.targetGapReadbackItemRoutes : []),
+    ...(Array.isArray(item?.targetGapCollectionPlanRoutes) ? item.targetGapCollectionPlanRoutes : []),
+    ...(Array.isArray(item?.targetGapTemplateReadbackRoutes) ? item.targetGapTemplateReadbackRoutes : []),
+  ]);
+}
+
+function releaseReportSectionCounts(items) {
+  return {
+    sections: items.length,
+    openSections: items.filter(releaseReportSectionItemIsOpen).length,
+    closedSections: items.filter((item) => !releaseReportSectionItemIsOpen(item)).length,
+    foundSections: items.filter((item) => item.sectionFound).length,
+    withReviewPointers: items.filter((item) => item.reviewPointerCount > 0).length,
+    reviewPointers: sumNumericField(items, "reviewPointerCount"),
+    reviewArtifacts: sumNumericField(items, "reviewArtifactSummaryCount"),
+    operatorActions: sumNumericField(items, "operatorActionCount"),
+    byStatus: countItemsBy(items, "status"),
+    byChecklistRow: countExpandedValues(items, "checklistRowIds"),
+    byTargetGapId: countExpandedValues(items, "targetGapIds"),
+    bySectionKey: countExpandedValues(items, "sectionKeys"),
+    byArtifactType: countExpandedValues(items, "artifactTypes"),
+    byRoute: countValues(items.flatMap(releaseReportSectionRoutes)),
+  };
+}
+
+function releaseReportSectionItems(report) {
+  const checklistRows = Array.isArray(report.octoberCompletionChecklist?.rows) ? report.octoberCompletionChecklist.rows : [];
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapById = targetGapReadbackItemsById(report, actionItems);
+  const reviewPointers = operatorPlanCollectionItems(plan, "reviewEvidencePointers");
+  const reviewSummaries = operatorPlanCollectionItems(plan, "reviewArtifactSummaries");
+  const sourceEvidenceIds = uniqueValues([
+    ...checklistRows.flatMap((row) => (Array.isArray(row.evidenceIds) ? row.evidenceIds : [])),
+    ...reviewPointers.map((item) => item.sourceEvidenceId),
+    ...reviewSummaries.map((item) => item.sourceEvidenceId),
+    ...actionItems.map((item) => item.sourceEvidenceId),
+  ]);
+  return sourceEvidenceIds.map((sourceEvidenceId) => {
+    const linkedChecklistRows = checklistRows.filter((row) => Array.isArray(row.evidenceIds) && row.evidenceIds.includes(sourceEvidenceId));
+    const linkedPointers = reviewPointers.filter((item) => item.sourceEvidenceId === sourceEvidenceId);
+    const linkedSummaries = reviewSummaries.filter((item) => item.sourceEvidenceId === sourceEvidenceId);
+    const linkedActions = actionItems.filter((item) => item.sourceEvidenceId === sourceEvidenceId);
+    const sectionMatches = releaseReportSectionMatchesById(report, sourceEvidenceId);
+    const sectionKeys = uniqueValues(sectionMatches.map((item) => item.sectionKey));
+    const artifactTypes = uniqueValues([...linkedPointers.map((item) => item.artifactType), ...linkedSummaries.map((item) => item.artifactType)]);
+    const artifactIds = uniqueValues([...linkedPointers.map((item) => item.artifactId), ...linkedSummaries.map((item) => item.artifactId)]);
+    const targetGapIds = releaseReportSectionTargetGapIds(linkedChecklistRows, linkedActions, linkedPointers, linkedSummaries);
+    const targetGapRouteContext = targetGapRouteContextForIds(targetGapIds, targetGapById);
+    const reviewReasons = uniqueValues([
+      ...linkedPointers.map((item) => item.reason),
+      ...linkedSummaries.flatMap((item) => (Array.isArray(item.reasons) ? item.reasons : [])),
+      ...(!linkedPointers.length ? linkedChecklistRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])) : []),
+    ]);
+    const primarySection = sectionMatches[0]?.summary ?? {};
+    return {
+      id: `release-report-section:${sourceEvidenceId}`,
+      sourceEvidenceId,
+      status: primarySection.releaseUseStatus ?? primarySection.status ?? linkedChecklistRows[0]?.status ?? "reported",
+      sectionFound: sectionMatches.length > 0,
+      sectionKeys,
+      sectionPaths: sectionMatches.map((item) => item.path),
+      sectionSummaries: sectionMatches.map((item) => item.summary),
+      checklistRowIds: uniqueValues(linkedChecklistRows.map((row) => row.id)),
+      checklistStatuses: uniqueValues(linkedChecklistRows.map((row) => row.status)),
+      deliverableGroups: uniqueValues(linkedChecklistRows.map((row) => row.deliverableGroup)),
+      artifactTypes,
+      artifactIds,
+      targetGapIds,
+      targetGapReadbackRoutes: targetGapRouteContext.targetGapReadbackRoutes,
+      targetGapReadbackItemRoutes: targetGapRouteContext.targetGapReadbackItemRoutes,
+      targetGapCollectionPlanRoutes: targetGapRouteContext.targetGapCollectionPlanRoutes,
+      targetGapSubmissionReadbackRoutes: targetGapRouteContext.targetGapSubmissionReadbackRoutes,
+      targetGapTemplateReadbackRoutes: targetGapRouteContext.targetGapTemplateReadbackRoutes,
+      targetGapImportRoutes: targetGapRouteContext.targetGapImportRoutes,
+      targetGapDryRunImportRoutes: targetGapRouteContext.targetGapDryRunImportRoutes,
+      targetGapValidateOnlyImportRoutes: targetGapRouteContext.targetGapValidateOnlyImportRoutes,
+      reviewReasons,
+      reviewReasonCount: reviewReasons.length,
+      reviewPointerCount: linkedPointers.length,
+      reviewArtifactSummaryCount: linkedSummaries.length,
+      operatorActionCount: linkedActions.length,
+      operatorActionIds: uniqueValues(linkedActions.map((item) => item.id)),
+      relatedSubmitActionIds: uniqueValues([
+        ...linkedPointers.flatMap(operatorPlanCollectionRelatedSubmitActionIds),
+        ...linkedSummaries.flatMap(operatorPlanCollectionRelatedSubmitActionIds),
+      ]),
+      readbackItemRoute: `/api/v1/release-report-sections/${encodeURIComponent(sourceEvidenceId)}`,
+      operatorActionRoute: `/api/v1/operator-action-items?sourceEvidenceId=${encodeURIComponent(sourceEvidenceId)}`,
+      reviewEvidencePointersRoute: `/api/v1/operator-review-evidence-pointers?sourceEvidenceId=${encodeURIComponent(sourceEvidenceId)}`,
+      reviewArtifactSummariesRoute: `/api/v1/operator-review-artifact-summaries?sourceEvidenceId=${encodeURIComponent(sourceEvidenceId)}`,
+      checklistRoute: linkedChecklistRows.length
+        ? `/api/v1/october-completion-checklist?evidenceId=${encodeURIComponent(sourceEvidenceId)}`
+        : null,
+    };
+  });
+}
+
+function releaseReportSectionTargetGapIds(checklistRows, actions, reviewPointers, reviewSummaries) {
+  return uniqueValues([
+    ...checklistRows.flatMap((row) => [
+      ...(Array.isArray(row.blockingTargetGaps) ? row.blockingTargetGaps.map((gap) => gap.id ?? gap.targetGapId) : []),
+      ...(Array.isArray(row.targetGapIds) ? row.targetGapIds : []),
+    ]),
+    ...actions.flatMap(targetGapIdsFromOperatorItem),
+    ...reviewPointers.flatMap(targetGapIdsFromOperatorItem),
+    ...reviewSummaries.flatMap(targetGapIdsFromOperatorItem),
+  ]);
+}
+
+function targetGapIdsFromOperatorItem(item) {
+  return uniqueValues([
+    item?.targetGapId,
+    ...(Array.isArray(item?.targetGapIds) ? item.targetGapIds : []),
+    ...(Array.isArray(item?.blockedByTargetGapIds) ? item.blockedByTargetGapIds : []),
+    ...(Array.isArray(item?.blockingTargetGapSummaries)
+      ? item.blockingTargetGapSummaries.map((summary) => summary?.targetGapId ?? summary?.id)
+      : []),
+  ]);
+}
+
+function targetGapReadbackItemsById(report, actionItems = null) {
+  const rows = Array.isArray(report?.targetGaps?.rows) ? report.targetGaps.rows : [];
+  const plan = report?.operatorEvidenceSubmissionPlan ?? {};
+  const actions = actionItems ?? (Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []));
+  return new Map(targetGapItems(rows, actions).map((item) => [item.targetGapId ?? item.id, item]));
+}
+
+function targetGapRouteContextForIds(targetGapIds, targetGapById) {
+  const gaps = uniqueValues(targetGapIds).map((targetGapId) => targetGapById.get(targetGapId)).filter(Boolean);
+  return {
+    targetGapReadbackRoutes: uniqueValues(gaps.map((gap) => gap.targetGapReadbackRoute ?? "/api/v1/target-gaps")),
+    targetGapReadbackItemRoutes: uniqueValues(
+      gaps.map((gap) => gap.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(gap.targetGapId ?? gap.id)}`),
+    ),
+    targetGapCollectionPlanRoutes: uniqueValues(
+      gaps.map((gap) => gap.collectionPlanRoute ?? `/api/v1/target-gaps/collection-plan/${encodeURIComponent(gap.targetGapId ?? gap.id)}`),
+    ),
+    targetGapSubmissionReadbackRoutes: uniqueValues(gaps.map((gap) => gap.submissionReadbackRoute ?? gap.readbackRoute)),
+    targetGapTemplateReadbackRoutes: uniqueValues(
+      gaps.flatMap((gap) => [
+        gap.templateReadbackRoute,
+        gap.expandedTemplateReadbackRoute,
+        gap.cappedExpandedTemplateReadbackRoute,
+        ...(Array.isArray(gap.templateReadbackRoutes) ? gap.templateReadbackRoutes : []),
+      ]),
+    ),
+    targetGapImportRoutes: uniqueValues(gaps.map((gap) => gap.bulkImportRoute)),
+    targetGapDryRunImportRoutes: uniqueValues(gaps.map((gap) => gap.dryRunImportRoute)),
+    targetGapValidateOnlyImportRoutes: uniqueValues(gaps.map((gap) => gap.validateOnlyImportRoute)),
+  };
+}
+
+function targetGapBlockingSummariesForIds(targetGapIds, targetGapById, existingSummaries = []) {
+  const existingById = new Map(
+    (Array.isArray(existingSummaries) ? existingSummaries : [])
+      .map((summary) => [summary?.targetGapId ?? summary?.id, summary])
+      .filter(([targetGapId]) => targetGapId),
+  );
+  return uniqueValues(targetGapIds).map((targetGapId) => {
+    const gap = targetGapById.get(targetGapId);
+    const existing = existingById.get(targetGapId) ?? {};
+    return {
+      ...existing,
+      targetGapId,
+      id: existing.id ?? gap?.id ?? targetGapId,
+      label: existing.label ?? gap?.label ?? humanizeServerLabel(targetGapId),
+      status: existing.status ?? gap?.status ?? null,
+      target: existing.target ?? gap?.target ?? null,
+      current: existing.current ?? gap?.current ?? null,
+      remaining: existing.remaining ?? gap?.remaining ?? null,
+      sourceEvidenceId: existing.sourceEvidenceId ?? gap?.sourceEvidenceId ?? null,
+      writeRoute: existing.writeRoute ?? gap?.writeRoute ?? null,
+      bulkImportRoute: existing.bulkImportRoute ?? gap?.bulkImportRoute ?? null,
+      submissionReadbackRoute: existing.submissionReadbackRoute ?? gap?.submissionReadbackRoute ?? null,
+      targetGapReadbackRoute: existing.targetGapReadbackRoute ?? gap?.targetGapReadbackRoute ?? "/api/v1/target-gaps",
+      targetGapReadbackItemRoute:
+        existing.targetGapReadbackItemRoute ?? gap?.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}`,
+      collectionPlanRoute:
+        existing.collectionPlanRoute ?? gap?.collectionPlanRoute ?? `/api/v1/target-gaps/collection-plan/${encodeURIComponent(targetGapId)}`,
+      templateReadbackRoute: existing.templateReadbackRoute ?? gap?.templateReadbackRoute ?? targetGapCollectionPlanTemplateRoute(targetGapId),
+      expandedTemplateReadbackRoute:
+        existing.expandedTemplateReadbackRoute ?? gap?.expandedTemplateReadbackRoute ?? targetGapCollectionPlanTemplateRoute(targetGapId, { expand: "remaining" }),
+      cappedExpandedTemplateReadbackRoute:
+        existing.cappedExpandedTemplateReadbackRoute ??
+        gap?.cappedExpandedTemplateReadbackRoute ??
+        targetGapCollectionPlanTemplateRoute(targetGapId, { expand: "remaining", maxExpandedRecords: 100 }),
+    };
+  });
+}
+
+function operatorItemWithBlockedTargetGapContext(item, targetGapById, extraTargetGapIds = []) {
+  const blockedByTargetGapIds = uniqueValues([
+    ...(Array.isArray(item?.blockedByTargetGapIds) ? item.blockedByTargetGapIds : []),
+    ...extraTargetGapIds,
+  ]);
+  if (!blockedByTargetGapIds.length) return item;
+  const routeContext = targetGapRouteContextForIds(blockedByTargetGapIds, targetGapById);
+  const blockingTargetGapSummaries = targetGapBlockingSummariesForIds(
+    blockedByTargetGapIds,
+    targetGapById,
+    item?.blockingTargetGapSummaries,
+  );
+  return {
+    ...item,
+    blockedByTargetGapIds,
+    blockingTargetGapSummaries,
+    blockedTargetGapReadbackRoutes: routeContext.targetGapReadbackRoutes,
+    blockedTargetGapReadbackItemRoutes: routeContext.targetGapReadbackItemRoutes,
+    blockedTargetGapCollectionPlanRoutes: routeContext.targetGapCollectionPlanRoutes,
+    blockedTargetGapSubmissionReadbackRoutes: routeContext.targetGapSubmissionReadbackRoutes,
+    blockedTargetGapTemplateReadbackRoutes: routeContext.targetGapTemplateReadbackRoutes,
+    blockedTargetGapImportRoutes: routeContext.targetGapImportRoutes,
+    blockedTargetGapDryRunImportRoutes: routeContext.targetGapDryRunImportRoutes,
+    blockedTargetGapValidateOnlyImportRoutes: routeContext.targetGapValidateOnlyImportRoutes,
+  };
+}
+
+function releaseReportSectionMatchesById(report, sourceEvidenceId) {
+  const matches = [];
+  const visit = (value, path = []) => {
+    if (!value || typeof value !== "object") return;
+    if (value.id === sourceEvidenceId) {
+      matches.push({
+        path: path.join(".") || "<root>",
+        sectionKey: path[0] ?? "<root>",
+        summary: releaseReportSectionSummary(value, path),
+      });
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, [...path, String(index)]));
+      return;
+    }
+    for (const [key, item] of Object.entries(value)) {
+      visit(item, [...path, key]);
+    }
+  };
+  visit(report);
+  return matches;
+}
+
+function releaseReportSectionSummary(section, path) {
+  const reviewSections = Array.isArray(section.reviewSections) ? section.reviewSections : [];
+  const rows = Array.isArray(section.rows) ? section.rows : [];
+  return {
+    sectionKey: path[0] ?? "<root>",
+    path: path.join(".") || "<root>",
+    id: section.id ?? null,
+    releaseUseStatus: section.releaseUseStatus ?? section.currentStatus ?? null,
+    status: section.status ?? null,
+    reviewSectionCount: reviewSections.length,
+    reviewReasons: uniqueValues([
+      ...reviewSections.map((item) => item.reason ?? item.artifactId ?? item.artifactType),
+      ...(Array.isArray(section.reviewReasons) ? section.reviewReasons : []),
+    ]),
+    rowCount: rows.length,
+    counts: section.counts && typeof section.counts === "object" && !Array.isArray(section.counts) ? section.counts : null,
+    keys: Object.keys(section).slice(0, 20),
+  };
+}
+
+function releaseVersionManifestReadback(report, options = {}) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const filters = releaseVersionManifestFilters(options.searchParams);
+  const allItems = releaseVersionManifestItems(report, manifest);
+  const filteredItems = allItems.filter((item) => releaseVersionManifestMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.artifact === options.itemId || item.expectedId === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: manifest.id ?? `release-version-manifest-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: manifest.id ?? null,
+    releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+    currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+    targetScaleStatus: manifest.targetScaleStatus ?? null,
+    linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+    resourceKey: "releaseVersionManifestCheck",
+    policy: {
+      scope:
+        "Read-only RLHF91 release-version manifest projection derived from /api/release/report; it exposes computed freeze, target-scale, artifact-link, and contract checks without creating release versions, release freezes, policy decisions, artifacts, target data, or release claims.",
+      access:
+        "Admin/auditor readback only because manifest checks expose release-governance ids, target-scale blockers, phase-gate bundle bindings, and artifact-link status.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    submittedReleaseVersionId: manifest.submittedReleaseVersionId ?? null,
+    submittedReleaseFreezeId: manifest.submittedReleaseFreezeId ?? null,
+    freezeEvidence: manifest.freezeEvidence ?? null,
+    effectiveArtifactIds: manifest.effectiveArtifactIds ?? {},
+    counts: releaseVersionManifestCounts(allItems),
+    filteredCounts: releaseVersionManifestCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function releaseVersionManifestItems(report, manifest) {
+  const routeBase = "/api/v1/release-version-manifest";
+  const targetGapRows = Array.isArray(manifest.targetGaps?.rows) ? manifest.targetGaps.rows : [];
+  const targetGapIds = targetGapRows.map((row) => row.id).filter(Boolean);
+  const targetGapReadbackItemRoutes = targetGapIds.map((id) => `/api/v1/target-gaps/${encodeURIComponent(id)}`);
+  const submittedReleaseVersionReadbackRoute = manifest.submittedReleaseVersionId
+    ? `/api/v1/release-versions/${encodeURIComponent(manifest.submittedReleaseVersionId)}`
+    : null;
+  const items = [
+    {
+      id: "release-version-manifest",
+      rowId: "release-version-manifest",
+      sequence: 1,
+      checkKind: "manifest_summary",
+      artifact: "release_version_manifest",
+      expectedId: manifest.id ?? null,
+      submittedId: manifest.submittedReleaseVersionId ?? null,
+      status: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.targetScaleStatus ?? null,
+      linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/release-version-manifest`,
+      releaseReportRoute: "/api/release/report",
+      releaseVersionsReadbackRoute: "/api/v1/release-versions",
+      submittedReleaseVersionReadbackRoute,
+      targetGapsReadbackRoute: "/api/v1/target-gaps",
+      targetGapReadbackItemRoutes,
+      targetGapIds,
+    },
+    {
+      id: "release-freeze",
+      rowId: "release-freeze",
+      sequence: 2,
+      checkKind: "freeze_evidence",
+      artifact: "release_freeze",
+      expectedId: manifest.submittedReleaseVersionId ?? manifest.id ?? null,
+      submittedId: manifest.submittedReleaseFreezeId ?? null,
+      status: manifest.freezeEvidence?.freezeStatus ?? "freeze_status_missing",
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.freezeEvidence?.targetScaleStatus ?? manifest.targetScaleStatus ?? null,
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      freezeEvidence: manifest.freezeEvidence ?? null,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/release-freeze`,
+      releaseReportRoute: "/api/release/report",
+      releaseVersionsReadbackRoute: "/api/v1/release-versions",
+      submittedReleaseVersionReadbackRoute,
+      releaseFreezeWriteRoute: "/api/v1/releases/freeze",
+      targetGapsReadbackRoute: "/api/v1/target-gaps",
+      targetGapReadbackItemRoutes,
+      targetGapIds,
+    },
+    {
+      id: "target-scale",
+      rowId: "target-scale",
+      sequence: 3,
+      checkKind: "target_scale",
+      artifact: "target_scale",
+      expectedId: manifest.targetGaps?.id ?? "target-gaps",
+      submittedId: null,
+      status: manifest.targetScaleStatus ?? manifest.currentStatus ?? report.currentStatus ?? "target_scale_status_missing",
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.targetScaleStatus ?? null,
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      targetGaps: manifest.targetGaps ?? null,
+      targetGapIds,
+      targetGapReadbackItemRoutes,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/target-scale`,
+      releaseReportRoute: "/api/release/report",
+      targetGapsReadbackRoute: "/api/v1/target-gaps",
+      targetGapCollectionPlanRoute: "/api/v1/target-gaps/collection-plan",
+    },
+  ];
+  const linkedChecks = Array.isArray(manifest.linkedArtifactChecks) ? manifest.linkedArtifactChecks : [];
+  linkedChecks.forEach((check, index) => {
+    const id = `linked-${check.artifact ?? index + 1}`;
+    const expectedArtifactReadbackRoute = releaseVersionManifestArtifactReadbackRoute(check.artifact, check.expectedId, manifest);
+    const submittedArtifactReadbackRoute = releaseVersionManifestArtifactReadbackRoute(check.artifact, check.submittedId, manifest);
+    items.push({
+      ...check,
+      id,
+      rowId: id,
+      sequence: items.length + 1,
+      checkKind: "linked_artifact",
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.targetScaleStatus ?? null,
+      linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodeURIComponent(id)}`,
+      releaseReportRoute: "/api/release/report",
+      releaseVersionsReadbackRoute: "/api/v1/release-versions",
+      expectedArtifactReadbackRoute,
+      submittedArtifactReadbackRoute,
+    });
+  });
+  const contractRows = [
+    ...(Array.isArray(manifest.releaseVersionContractChecks) ? manifest.releaseVersionContractChecks : []),
+    ...(Array.isArray(manifest.releaseVersionContractViolations) ? manifest.releaseVersionContractViolations : []),
+  ];
+  contractRows.forEach((check, index) => {
+    const label = check.id ?? check.field ?? check.requirement ?? `contract-${index + 1}`;
+    const id = `contract-${String(label).replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
+    items.push({
+      ...check,
+      id,
+      rowId: id,
+      sequence: items.length + 1,
+      checkKind: "release_version_contract",
+      artifact: check.artifact ?? "release_version",
+      expectedId: check.expectedId ?? manifest.submittedReleaseVersionId ?? manifest.id ?? null,
+      submittedId: check.submittedId ?? manifest.submittedReleaseVersionId ?? null,
+      status: check.status ?? "contract_check_reported",
+      releaseUseStatus: manifest.releaseUseStatus ?? "release_version_manifest_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      currentStatus: manifest.currentStatus ?? report.currentStatus ?? null,
+      targetScaleStatus: manifest.targetScaleStatus ?? null,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodeURIComponent(id)}`,
+      releaseReportRoute: "/api/release/report",
+      releaseVersionsReadbackRoute: "/api/v1/release-versions",
+      submittedReleaseVersionReadbackRoute,
+    });
+  });
+  return items;
+}
+
+function releaseVersionManifestArtifactReadbackRoute(artifact, id, manifest = {}) {
+  if (!id) return null;
+  const encoded = encodeURIComponent(id);
+  if (artifact === "corpus_manifest") return `/api/v1/corpus-manifests/${encoded}`;
+  if (artifact === "label_snapshot") return `/api/v1/label-snapshots/${encoded}`;
+  if (artifact === "metric_config") return `/api/v1/metric-configs/${encoded}`;
+  if (artifact === "release_gate_profile") return `/api/v1/release-gate-profiles/${encoded}`;
+  if (artifact === "implementation_phase_gate_bundle") return `/api/v1/implementation-phase-gate-bundles/${encoded}`;
+  if (artifact === "implementation_phase_gate_bundle_hash") {
+    const bundleId = manifest.effectiveArtifactIds?.phaseGateBundleId ?? manifest.freezeEvidence?.phaseGateBundleId;
+    return bundleId ? `/api/v1/implementation-phase-gate-bundles/${encodeURIComponent(bundleId)}` : null;
+  }
+  if (artifact === "release_version") return `/api/v1/release-versions/${encoded}`;
+  return null;
+}
+
+function releaseVersionManifestFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    checkKind: value("checkKind"),
+    artifact: value("artifact") ?? value("artifactKind"),
+    status: value("status"),
+    expectedId: value("expectedId"),
+    submittedId: value("submittedId"),
+    targetGapId: value("targetGapId"),
+    route: value("route"),
+  };
+}
+
+function releaseVersionManifestMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.artifact === value || item.expectedId === value;
+    if (key === "status") return releaseVersionManifestMatchesStatus(item, value);
+    if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
+    if (key === "route") return releaseVersionManifestItemRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function releaseVersionManifestMatchesStatus(item, value) {
+  if (value === "open") return releaseVersionManifestItemIsOpen(item);
+  if (value === "closed") return !releaseVersionManifestItemIsOpen(item);
+  return [item.status, item.currentStatus, item.targetScaleStatus, item.linkedArtifactStatus, item.releaseUseStatus].includes(value);
+}
+
+function releaseVersionManifestItemIsOpen(item) {
+  const values = [item.status, item.currentStatus, item.targetScaleStatus, item.linkedArtifactStatus, item.releaseUseStatus].map((value) =>
+    String(value ?? ""),
+  );
+  return values.some(
+    (value) =>
+      value.includes("missing") ||
+      value.includes("mismatch") ||
+      value.includes("incomplete") ||
+      value.includes("not_frozen") ||
+      value.includes("not_target_scale") ||
+      value.includes("pending") ||
+      value.includes("working") ||
+      value.includes("violation") ||
+      value.includes("review"),
+  );
+}
+
+function releaseVersionManifestItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.releaseVersionsReadbackRoute,
+    item?.submittedReleaseVersionReadbackRoute,
+    item?.releaseFreezeWriteRoute,
+    item?.targetGapsReadbackRoute,
+    item?.targetGapCollectionPlanRoute,
+    item?.expectedArtifactReadbackRoute,
+    item?.submittedArtifactReadbackRoute,
+    ...(Array.isArray(item?.targetGapReadbackItemRoutes) ? item.targetGapReadbackItemRoutes : []),
+  ]);
+}
+
+function releaseVersionManifestCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(releaseVersionManifestItemIsOpen).length,
+    closedRows: items.filter((item) => !releaseVersionManifestItemIsOpen(item)).length,
+    linkedArtifactRows: items.filter((item) => item.checkKind === "linked_artifact").length,
+    missingLinkRows: items.filter((item) => item.status === "missing_submitted_artifact_link").length,
+    mismatchedLinkRows: items.filter((item) => String(item.status ?? "").includes("mismatch")).length,
+    contractRows: items.filter((item) => item.checkKind === "release_version_contract").length,
+    targetScaleRows: items.filter((item) => item.checkKind === "target_scale").length,
+    freezeRows: items.filter((item) => item.checkKind === "freeze_evidence").length,
+    byCheckKind: countItemsBy(items, "checkKind"),
+    byArtifact: countItemsBy(items, "artifact"),
+    byStatus: countItemsBy(items, "status"),
+    byRoute: countValues(items.flatMap(releaseVersionManifestItemRoutes)),
+    byTargetGapId: countExpandedValues(items, "targetGapIds"),
+  };
+}
+
+function raterProfileEvidenceReadback(report, options = {}) {
+  const evidence = report.raterProfileEvidence ?? {};
+  const rows = Array.isArray(evidence.rows) ? evidence.rows : [];
+  const filters = raterProfileEvidenceFilters(options.searchParams);
+  const allItems = rows.map((row, index) => raterProfileEvidenceItem(row, index, { evidence, report }));
+  const filteredItems = allItems.filter((item) => raterProfileEvidenceMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.raterId === options.itemId || item.rowId === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: evidence.id ?? `rater-profile-evidence-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: evidence.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: evidence.id ?? null,
+    labelSnapshotId: evidence.labelSnapshotId ?? null,
+    releaseUseStatus: evidence.releaseUseStatus ?? "rater_profile_evidence_missing",
+    resourceKey: "raterProfileEvidenceRow",
+    policy: {
+      ...(evidence.policy ?? {}),
+      scope:
+        "Read-only RLHF91 rater-profile evidence projection derived from /api/release/report; it exposes release-used rater profile, role-evidence, data-consent, and reliability-model coverage without creating rater profiles, qualification records, certification records, data consent, withdrawal records, reliability models, ratings, labels, or release claims.",
+      access:
+        "Admin/auditor readback only because rows expose rater profile provenance, release-critical rating counts, topic expertise gaps, consent status, and reliability-model evidence.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: raterProfileEvidenceCounts(allItems, evidence),
+    filteredCounts: raterProfileEvidenceCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function raterProfileEvidenceItem(row, index, { evidence, report }) {
+  const raterId = row.raterId ?? row.id ?? `rater-profile-row-${index + 1}`;
+  const encodedRaterId = encodeURIComponent(raterId);
+  const routeBase = "/api/v1/rater-profile-evidence";
+  const labelSnapshotId = row.labelSnapshotId ?? evidence.labelSnapshotId ?? null;
+  const topicExpertise = Array.isArray(row.topicExpertise) ? row.topicExpertise : [];
+  const topicFamiliesRated = Array.isArray(row.topicFamiliesRated) ? row.topicFamiliesRated : [];
+  const releaseCriticalTopicFamilies = Array.isArray(row.releaseCriticalTopicFamilies) ? row.releaseCriticalTopicFamilies : [];
+  const topicExpertiseMissingFamilies = Array.isArray(row.topicExpertiseMissingFamilies) ? row.topicExpertiseMissingFamilies : [];
+  const certificationRecordIds = uniqueValues([
+    ...(Array.isArray(row.certificationRecordIds) ? row.certificationRecordIds : []),
+    ...(Array.isArray(row.completeCertificationRecordIds) ? row.completeCertificationRecordIds : []),
+  ]);
+  const topicFamilies = uniqueValues([
+    ...topicExpertise,
+    ...topicFamiliesRated,
+    ...releaseCriticalTopicFamilies,
+    ...topicExpertiseMissingFamilies,
+  ]);
+  return {
+    ...row,
+    id: raterId,
+    rowId: raterId,
+    raterId,
+    sequence: index + 1,
+    raterProfileEvidenceId: evidence.id ?? null,
+    sourceEvidenceId: evidence.id ?? null,
+    labelSnapshotId,
+    releaseUseStatus: evidence.releaseUseStatus ?? "rater_profile_evidence_missing",
+    releaseReportStatus: report.currentStatus ?? null,
+    readbackItemRoute: `${routeBase}/${encodedRaterId}`,
+    collectionReadbackRoute: routeBase,
+    releaseReportRoute: "/api/release/report",
+    labelSnapshotReadbackRoute: labelSnapshotId ? `/api/v1/label-snapshots/${encodeURIComponent(labelSnapshotId)}` : null,
+    ratingRowsReadbackRoute: `/api/v1/ratings?raterId=${encodedRaterId}`,
+    activeReliabilityWeightModelReadbackRoute: row.activeReliabilityWeightModelId
+      ? `/api/v1/rater-reliability-weight-models/${encodeURIComponent(row.activeReliabilityWeightModelId)}`
+      : null,
+    certificationRecordReadbackRoutes: certificationRecordIds.map((id) => `/api/v1/certification-records/${encodeURIComponent(id)}`),
+    topicExpertise,
+    topicFamiliesRated,
+    releaseCriticalTopicFamilies,
+    topicExpertiseMissingFamilies,
+    topicFamilies,
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+  };
+}
+
+function raterProfileEvidenceFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    raterId: value("raterId") ?? value("id"),
+    tier: value("tier"),
+    profileSource: value("profileSource"),
+    certificationStatus: value("certificationStatus"),
+    status: value("status"),
+    roleEvidenceStatus: value("roleEvidenceStatus"),
+    dataConsentStatus: value("dataConsentStatus"),
+    reliabilityModelStatus: value("reliabilityModelStatus"),
+    releaseUsed: value("releaseUsed"),
+    topicFamily: value("topicFamily"),
+    route: value("route"),
+  };
+}
+
+function raterProfileEvidenceMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "raterId") return item.raterId === value || item.id === value || item.rowId === value;
+    if (key === "status") return raterProfileEvidenceMatchesStatus(item, value);
+    if (key === "releaseUsed") return String(item.releaseUsed === true) === value;
+    if (key === "topicFamily") return Array.isArray(item.topicFamilies) && item.topicFamilies.includes(value);
+    if (key === "route") return raterProfileEvidenceItemRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function raterProfileEvidenceMatchesStatus(item, value) {
+  if (value === "open") return raterProfileEvidenceItemIsOpen(item);
+  if (value === "closed") return !raterProfileEvidenceItemIsOpen(item);
+  return [
+    item.status,
+    item.roleEvidenceStatus,
+    item.dataConsentStatus,
+    item.reliabilityModelStatus,
+    item.releaseUseStatus,
+  ].includes(value);
+}
+
+function raterProfileEvidenceItemIsOpen(item) {
+  if ((item.reviewReasonCount ?? 0) > 0) return true;
+  const values = [item.status, item.roleEvidenceStatus, item.dataConsentStatus, item.reliabilityModelStatus].map((value) =>
+    String(value ?? ""),
+  );
+  return values.some(
+    (value) =>
+      value.includes("missing") ||
+      value.includes("review") ||
+      value.includes("blocked") ||
+      value.includes("violation") ||
+      value.includes("expired") ||
+      value.includes("incomplete"),
+  );
+}
+
+function raterProfileEvidenceItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.labelSnapshotReadbackRoute,
+    item?.ratingRowsReadbackRoute,
+    item?.activeReliabilityWeightModelReadbackRoute,
+    ...(Array.isArray(item?.certificationRecordReadbackRoutes) ? item.certificationRecordReadbackRoutes : []),
+  ]);
+}
+
+function raterProfileEvidenceCounts(items, evidence = {}) {
+  return {
+    ...(evidence.counts ?? {}),
+    rows: items.length,
+    openRows: items.filter(raterProfileEvidenceItemIsOpen).length,
+    closedRows: items.filter((item) => !raterProfileEvidenceItemIsOpen(item)).length,
+    releaseUsedRows: items.filter((item) => item.releaseUsed === true).length,
+    releaseCriticalRows: items.filter((item) => Number(item.releaseCriticalRatingCount ?? 0) > 0).length,
+    reviewReasonCount: sumNumericField(items, "reviewReasonCount"),
+    byTier: countItemsBy(items, "tier"),
+    byStatus: countItemsBy(items, "status"),
+    byProfileSource: countItemsBy(items, "profileSource"),
+    byCertificationStatus: countItemsBy(items, "certificationStatus"),
+    byRoleEvidenceStatus: countItemsBy(items, "roleEvidenceStatus"),
+    byDataConsentStatus: countItemsBy(items, "dataConsentStatus"),
+    byReliabilityModelStatus: countItemsBy(items, "reliabilityModelStatus"),
+    byTopicFamily: countExpandedValues(items, "topicFamilies"),
+    byRoute: countValues(items.flatMap(raterProfileEvidenceItemRoutes)),
+  };
+}
+
+function derivedChecklistReadback(
+  report,
+  {
+    itemId = null,
+    searchParams,
+    sectionKey,
+    idPrefix,
+    resourceKey,
+    routeBase,
+    policy,
+  },
+) {
+  const checklist = report?.[sectionKey] ?? {};
+  const rows = Array.isArray(checklist.rows) ? checklist.rows : [];
+  const filters = derivedChecklistFilters(searchParams);
+  const allItems = rows.map((row, index) =>
+    derivedChecklistItem(row, index, {
+      checklist,
+      report,
+      sectionKey,
+      routeBase,
+    }),
+  );
+  const filteredItems = allItems.filter((item) => derivedChecklistMatchesFilters(item, filters));
+  const items = itemId ? filteredItems.filter((item) => item.id === itemId || item.rowId === itemId) : filteredItems;
+  if (itemId && items.length === 0) return null;
+  return {
+    id: `${idPrefix}-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: checklist.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: checklist.id ?? null,
+    releaseUseStatus: checklist.releaseUseStatus ?? `${sectionKey}_missing`,
+    resourceKey,
+    policy,
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: {
+      ...(checklist.counts ?? {}),
+      rows: allItems.length,
+      reviewSections: Array.isArray(checklist.reviewSections) ? checklist.reviewSections.length : 0,
+      openRows: allItems.filter(derivedChecklistItemIsOpen).length,
+      closedRows: allItems.filter((item) => !derivedChecklistItemIsOpen(item)).length,
+      reviewReasonCount: sumNumericField(allItems, "reviewReasonCount"),
+      evidenceIdCount: sumNumericField(allItems, "evidenceIdCount"),
+      sourceStatusCount: sumNumericField(allItems, "sourceStatusCount"),
+      byStatus: countItemsBy(allItems, "status"),
+      byEvidenceId: countExpandedValues(allItems, "evidenceIds"),
+      bySourceStatus: countExpandedValues(allItems, "sourceStatuses"),
+      byRoute: countValues(allItems.flatMap(derivedChecklistItemRoutes)),
+    },
+    filteredCounts: {
+      rows: items.length,
+      openRows: items.filter(derivedChecklistItemIsOpen).length,
+      closedRows: items.filter((item) => !derivedChecklistItemIsOpen(item)).length,
+      reviewRequired: items.filter((item) => item.status === "review_required").length,
+      complete: items.filter((item) => item.status === "complete").length,
+      reviewReasonCount: sumNumericField(items, "reviewReasonCount"),
+      evidenceIdCount: sumNumericField(items, "evidenceIdCount"),
+      byStatus: countItemsBy(items, "status"),
+      byEvidenceId: countExpandedValues(items, "evidenceIds"),
+      bySourceStatus: countExpandedValues(items, "sourceStatuses"),
+      byRoute: countValues(items.flatMap(derivedChecklistItemRoutes)),
+    },
+    ...(itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function derivedChecklistItem(row, index, { checklist, report, sectionKey, routeBase }) {
+  const rowId = row.id ?? `${sectionKey}-${index + 1}`;
+  const evidenceIds = Array.isArray(row.evidenceIds) ? row.evidenceIds : [];
+  const sourceStatuses = Array.isArray(row.sourceStatuses) ? row.sourceStatuses : [];
+  const releaseReportSectionRoutes = evidenceIds.map((evidenceId) => `/api/v1/release-report-sections/${encodeURIComponent(evidenceId)}`);
+  return {
+    ...row,
+    id: rowId,
+    rowId,
+    sequence: index + 1,
+    checklistId: checklist.id ?? null,
+    sourceChecklistId: checklist.id ?? null,
+    releaseUseStatus: checklist.releaseUseStatus ?? `${sectionKey}_missing`,
+    releaseReportStatus: report.currentStatus ?? null,
+    readbackItemRoute: `${routeBase}/${encodeURIComponent(rowId)}`,
+    collectionReadbackRoute: routeBase,
+    releaseReportRoute: "/api/release/report",
+    releaseReportSectionRoutes,
+    evidenceIds,
+    sourceStatuses,
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+    evidenceIdCount: evidenceIds.length,
+    sourceStatusCount: sourceStatuses.length,
+  };
+}
+
+function derivedChecklistFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    status: value("status"),
+    evidenceId: value("evidenceId") ?? value("sourceEvidenceId"),
+    sourceStatus: value("sourceStatus"),
+    reviewReason: value("reviewReason"),
+    route: value("route"),
+  };
+}
+
+function derivedChecklistMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "status") return derivedChecklistMatchesStatus(item, value);
+    if (key === "evidenceId") return Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value);
+    if (key === "sourceStatus") return Array.isArray(item.sourceStatuses) && item.sourceStatuses.includes(value);
+    if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
+    if (key === "route") return derivedChecklistItemRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function derivedChecklistMatchesStatus(item, value) {
+  if (value === "open") return derivedChecklistItemIsOpen(item);
+  if (value === "closed") return !derivedChecklistItemIsOpen(item);
+  return item.status === value;
+}
+
+function derivedChecklistItemIsOpen(item) {
+  const status = String(item?.status ?? "");
+  return status !== "complete" && !status.startsWith("not_applicable");
+}
+
+function derivedChecklistItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    ...(Array.isArray(item?.releaseReportSectionRoutes) ? item.releaseReportSectionRoutes : []),
+  ]);
+}
+
+function scoreExplanationAuditReadback(report, options = {}) {
+  const audit = report.scoreExplanationAudit ?? {};
+  const rows = Array.isArray(audit.rows) ? audit.rows : [];
+  const filters = scoreExplanationAuditFilters(options.searchParams);
+  const allItems = rows.map((row, index) => scoreExplanationAuditItem(row, index, { audit, report }));
+  const filteredItems = allItems.filter((item) => scoreExplanationAuditMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId || item.ratingId === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: audit.id ?? `score-explanation-audit-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: audit.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: audit.id ?? null,
+    releaseUseStatus: audit.releaseUseStatus ?? "score_explanation_audit_missing",
+    resourceKey: "scoreExplanationAuditRow",
+    policy: {
+      ...(audit.policy ?? {}),
+      scope:
+        "Read-only trigger-required score explanation audit derived from /api/release/report; it does not create ratings, score explanations, policy decisions, labels, or release claims.",
+      access:
+        "Admin/auditor readback only because rows expose rating-level confidence, trigger, and explanation-compliance diagnostics.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: scoreExplanationAuditCounts(allItems, audit),
+    filteredCounts: scoreExplanationAuditCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function scoreExplanationAuditItem(row, index, { audit, report }) {
+  const ratingId = row.ratingId ?? `score-explanation-row-${index + 1}`;
+  const expectedTriggers = Array.isArray(row.expectedTriggers) ? row.expectedTriggers : [];
+  const submittedTriggers = Array.isArray(row.submittedTriggers) ? row.submittedTriggers : [];
+  const missingExpectedTriggers = Array.isArray(row.missingExpectedTriggers) ? row.missingExpectedTriggers : [];
+  const unexpectedSubmittedTriggers = Array.isArray(row.unexpectedSubmittedTriggers) ? row.unexpectedSubmittedTriggers : [];
+  const submittedRequiredReasons = Array.isArray(row.submittedRequiredReasons) ? row.submittedRequiredReasons : [];
+  const missingRequiredReasons = Array.isArray(row.missingRequiredReasons) ? row.missingRequiredReasons : [];
+  const unexpectedRequiredReasons = Array.isArray(row.unexpectedRequiredReasons) ? row.unexpectedRequiredReasons : [];
+  const triggers = uniqueValues([
+    ...expectedTriggers,
+    ...submittedTriggers,
+    ...missingExpectedTriggers,
+    ...unexpectedSubmittedTriggers,
+    ...submittedRequiredReasons,
+    ...missingRequiredReasons,
+    ...unexpectedRequiredReasons,
+  ]);
+  const routeBase = "/api/v1/score-explanation-audit";
+  return {
+    ...row,
+    id: ratingId,
+    rowId: ratingId,
+    sequence: index + 1,
+    scoreExplanationAuditId: audit.id ?? null,
+    releaseUseStatus: audit.releaseUseStatus ?? "score_explanation_audit_missing",
+    releaseReportStatus: report.currentStatus ?? null,
+    readbackItemRoute: `${routeBase}/${encodeURIComponent(ratingId)}`,
+    collectionReadbackRoute: routeBase,
+    releaseReportRoute: "/api/release/report",
+    ratingReadbackRoute: row.ratingId ? `/api/v1/ratings/${encodeURIComponent(row.ratingId)}` : null,
+    assignmentReadbackRoute: row.assignmentId ? `/api/v1/assignments/${encodeURIComponent(row.assignmentId)}` : null,
+    expectedTriggers,
+    submittedTriggers,
+    submittedRequiredReasons,
+    missingExpectedTriggers,
+    unexpectedSubmittedTriggers,
+    missingRequiredReasons,
+    unexpectedRequiredReasons,
+    triggers,
+    triggerCount: triggers.length,
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+  };
+}
+
+function scoreExplanationAuditFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    ratingId: value("ratingId") ?? value("id"),
+    assignmentId: value("assignmentId"),
+    itemId: value("itemId"),
+    raterId: value("raterId"),
+    kind: value("kind"),
+    queueType: value("queueType"),
+    trigger: value("trigger"),
+    required: value("required") ?? value("scoreExplanationRequired"),
+    status: value("status") ?? value("explanationStatus"),
+    policyBindingStatus: value("policyBindingStatus"),
+    route: value("route"),
+  };
+}
+
+function scoreExplanationAuditMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "trigger") return Array.isArray(item.triggers) && item.triggers.includes(value);
+    if (key === "required") return String(item.scoreExplanationRequired ?? item.explanationRequired) === value;
+    if (key === "status") return scoreExplanationAuditMatchesStatus(item, value);
+    if (key === "route") return scoreExplanationAuditItemRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function scoreExplanationAuditMatchesStatus(item, value) {
+  if (value === "open") return scoreExplanationAuditItemIsOpen(item);
+  if (value === "closed") return !scoreExplanationAuditItemIsOpen(item);
+  return [item.explanationStatus, item.submittedCompletionStatus, item.expectedCompletionStatus, item.policyBindingStatus, item.releaseUseStatus].includes(value);
+}
+
+function scoreExplanationAuditItemIsOpen(item) {
+  if ((item.reviewReasonCount ?? 0) > 0) return true;
+  const statusValues = [item.explanationStatus, item.submittedCompletionStatus, item.policyBindingStatus].map((value) => String(value ?? ""));
+  return statusValues.some((value) => value.includes("missing") || value.includes("violation") || value.includes("mismatch") || value.includes("review"));
+}
+
+function scoreExplanationAuditItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.ratingReadbackRoute,
+    item?.assignmentReadbackRoute,
+  ]);
+}
+
+function scoreExplanationAuditCounts(items, audit = {}) {
+  return {
+    ...(audit.counts ?? {}),
+    rows: items.length,
+    openRows: items.filter(scoreExplanationAuditItemIsOpen).length,
+    closedRows: items.filter((item) => !scoreExplanationAuditItemIsOpen(item)).length,
+    triggerRequiredRows: items.filter((item) => item.scoreExplanationRequired === true || item.explanationRequired === true).length,
+    ordinaryRows: items.filter((item) => item.scoreExplanationRequired !== true && item.explanationRequired !== true).length,
+    triggerCount: sumNumericField(items, "triggerCount"),
+    reviewReasonCount: sumNumericField(items, "reviewReasonCount"),
+    byExplanationStatus: countItemsBy(items, "explanationStatus"),
+    byCompletionStatus: countItemsBy(items, "submittedCompletionStatus"),
+    byPolicyBindingStatus: countItemsBy(items, "policyBindingStatus"),
+    byKind: countItemsBy(items, "kind"),
+    byQueueType: countItemsBy(items, "queueType"),
+    byExpectedTrigger: countExpandedValues(items, "expectedTriggers"),
+    bySubmittedTrigger: countExpandedValues(items, "submittedTriggers"),
+    byRequiredReason: countExpandedValues(items, "submittedRequiredReasons"),
+    byRoute: countValues(items.flatMap(scoreExplanationAuditItemRoutes)),
+  };
+}
+
+function promptTrackSeparationReadback(report, options = {}) {
+  const promptTrack = report.promptTrackSeparation ?? {};
+  const rows = Array.isArray(promptTrack.rows) ? promptTrack.rows : [];
+  const filters = promptTrackSeparationFilters(options.searchParams);
+  const allItems = rows.map((row, index) => promptTrackSeparationItem(row, index, { promptTrack, report }));
+  const filteredItems = allItems.filter((item) => promptTrackSeparationMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.runId === options.itemId || item.promptArtifactId === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: promptTrack.id ?? `prompt-track-separation-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: promptTrack.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: promptTrack.id ?? null,
+    releaseUseStatus: promptTrack.releaseUseStatus ?? "prompt_track_separation_missing",
+    resourceKey: "promptTrackSeparationRow",
+    policy: {
+      ...(promptTrack.policy ?? {}),
+      scope:
+        "Read-only RLHF91 prompt-track separation readback derived from /api/release/report; it separates Appendix-G exact baseline, project full-rubric, generation, and model-judge tracks without creating prompt templates, parser configs, model runs, candidate artifacts, labels, or release claims.",
+      access:
+        "Admin/auditor readback only because rows expose prompt artifact ids, rendered prompt checksums, model snapshots, protected-example exclusion checks, and source-comparability status.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: promptTrackSeparationCounts(allItems, promptTrack),
+    filteredCounts: promptTrackSeparationCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function promptTrackSeparationItem(row, index, { promptTrack, report }) {
+  const rowId = row.runId ?? row.promptArtifactId ?? `prompt-track-row-${index + 1}`;
+  const routeBase = "/api/v1/prompt-track-separation";
+  const promptExampleProvenance = Array.isArray(row.promptExampleProvenance) ? row.promptExampleProvenance : [];
+  const exampleItemIds = Array.isArray(row.exampleItemIds) ? row.exampleItemIds : [];
+  const examplePositionClusterIds = Array.isArray(row.examplePositionClusterIds) ? row.examplePositionClusterIds : [];
+  const exampleSplits = Array.isArray(row.exampleSplits) ? row.exampleSplits : [];
+  const sourcePositionIds = Array.isArray(row.sourcePositionIds) ? row.sourcePositionIds : [];
+  const encodedRunId = row.runId ? encodeURIComponent(row.runId) : null;
+  const promptTemplateReadbackRoute = row.promptArtifactId ? `/api/v1/prompt-templates/${encodeURIComponent(row.promptArtifactId)}` : null;
+  const evaluationRunReadbackRoute = row.trackKind === "model_evaluation" && encodedRunId ? `/api/v1/evaluations/${encodedRunId}` : null;
+  const evaluationPredictionsReadbackRoute =
+    row.trackKind === "model_evaluation" && encodedRunId ? `/api/v1/evaluations/${encodedRunId}/predictions` : null;
+  const critiqueGenerationRunReadbackRoute =
+    row.trackKind === "critique_generation" && encodedRunId ? `/api/v1/critique-generation-runs/${encodedRunId}` : null;
+  const parentGenerationRunReadbackRoute = row.parentGenerationRunId
+    ? `/api/v1/critique-generation-runs/${encodeURIComponent(row.parentGenerationRunId)}`
+    : null;
+  return {
+    ...row,
+    id: rowId,
+    rowId,
+    sequence: index + 1,
+    promptTrackSeparationId: promptTrack.id ?? null,
+    sourceEvidenceId: promptTrack.id ?? null,
+    releaseUseStatus: promptTrack.releaseUseStatus ?? "prompt_track_separation_missing",
+    releaseReportStatus: report.currentStatus ?? null,
+    readbackItemRoute: `${routeBase}/${encodeURIComponent(rowId)}`,
+    collectionReadbackRoute: routeBase,
+    releaseReportRoute: "/api/release/report",
+    promptTemplateReadbackRoute,
+    evaluationRunReadbackRoute,
+    evaluationPredictionsReadbackRoute,
+    critiqueGenerationRunReadbackRoute,
+    parentGenerationRunReadbackRoute,
+    promptExampleProvenance,
+    promptExampleCount: row.promptExampleCount ?? promptExampleProvenance.length,
+    exampleItemIds,
+    examplePositionClusterIds,
+    exampleSplits,
+    sourcePositionIds,
+    sourcePositionCount: sourcePositionIds.length,
+    protectedExampleReviewRequired: row.hiddenBenchmarkExamplesExcluded !== true || row.protectedValidationExamplesExcluded !== true,
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+  };
+}
+
+function promptTrackSeparationFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    runId: value("runId"),
+    trackKind: value("trackKind"),
+    promptFamily: value("promptFamily"),
+    promptScope: value("promptScope"),
+    promptArtifactId: value("promptArtifactId"),
+    requestedModelAlias: value("requestedModelAlias"),
+    resolvedModelSnapshot: value("resolvedModelSnapshot"),
+    status: value("status") ?? value("promptPolicyComparabilityStatus") ?? value("comparabilityStatus"),
+    sourceComparable: value("sourceComparable"),
+    protectedExampleStatus: value("protectedExampleStatus") ?? value("protectedPromptExampleStatus"),
+    hasPromptExamples: value("hasPromptExamples"),
+    route: value("route"),
+  };
+}
+
+function promptTrackSeparationMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.runId === value || item.promptArtifactId === value;
+    if (key === "status") return promptTrackSeparationMatchesStatus(item, value);
+    if (key === "sourceComparable") return String(item.sourceComparable === true) === value;
+    if (key === "protectedExampleStatus") return item.protectedPromptExampleStatus === value || item.promptExampleStatus === value;
+    if (key === "hasPromptExamples") return String((item.promptExampleCount ?? 0) > 0) === value;
+    if (key === "route") return promptTrackSeparationItemRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function promptTrackSeparationMatchesStatus(item, value) {
+  if (value === "open") return promptTrackSeparationItemIsOpen(item);
+  if (value === "closed") return !promptTrackSeparationItemIsOpen(item);
+  return [
+    item.promptPolicyComparabilityStatus,
+    item.promptScope,
+    item.promptFamily,
+    item.promptExampleStatus,
+    item.protectedPromptExampleStatus,
+    item.releaseUseStatus,
+  ].includes(value);
+}
+
+function promptTrackSeparationItemIsOpen(item) {
+  if ((item.reviewReasonCount ?? 0) > 0) return true;
+  if (item.protectedExampleReviewRequired) return true;
+  const values = [item.promptPolicyComparabilityStatus, item.promptExampleStatus, item.protectedPromptExampleStatus].map((value) =>
+    String(value ?? ""),
+  );
+  return values.some((value) => value.includes("missing") || value.includes("violation") || value.includes("review_required"));
+}
+
+function promptTrackSeparationItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.promptTemplateReadbackRoute,
+    item?.evaluationRunReadbackRoute,
+    item?.evaluationPredictionsReadbackRoute,
+    item?.critiqueGenerationRunReadbackRoute,
+    item?.parentGenerationRunReadbackRoute,
+  ]);
+}
+
+function promptTrackSeparationCounts(items, promptTrack = {}) {
+  return {
+    ...(promptTrack.counts ?? {}),
+    rows: items.length,
+    openRows: items.filter(promptTrackSeparationItemIsOpen).length,
+    closedRows: items.filter((item) => !promptTrackSeparationItemIsOpen(item)).length,
+    sourceComparableRows: items.filter((item) => item.sourceComparable === true).length,
+    projectExtensionRows: items.filter((item) => item.sourceComparable !== true).length,
+    appendixGExactRows: items.filter((item) => item.promptScope === "appendix_g_overall_only_exact").length,
+    promptExampleRows: items.filter((item) => (item.promptExampleCount ?? 0) > 0).length,
+    protectedExampleReviewRows: items.filter((item) => item.protectedExampleReviewRequired).length,
+    byTrackKind: countItemsBy(items, "trackKind"),
+    byPromptFamily: countItemsBy(items, "promptFamily"),
+    byPromptScope: countItemsBy(items, "promptScope"),
+    byPromptPolicyComparabilityStatus: countItemsBy(items, "promptPolicyComparabilityStatus"),
+    byPromptExampleStatus: countItemsBy(items, "promptExampleStatus"),
+    byProtectedPromptExampleStatus: countItemsBy(items, "protectedPromptExampleStatus"),
+    byRoute: countValues(items.flatMap(promptTrackSeparationItemRoutes)),
+  };
+}
+
+function critiqueGenerationEvaluationReadback(report, options = {}) {
+  const evaluation = report.critiqueGenerationEvaluation ?? {};
+  const filters = critiqueGenerationEvaluationFilters(options.searchParams);
+  const allItems = critiqueGenerationEvaluationItems(report, evaluation);
+  const filteredItems = allItems.filter((item) => critiqueGenerationEvaluationMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) =>
+          item.id === options.itemId ||
+          item.outputId === options.itemId ||
+          item.promotedCritiqueId === options.itemId,
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: evaluation.id ?? `critique-generation-evaluation-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: evaluation.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: evaluation.id ?? null,
+    targetLabelSnapshotId: evaluation.targetLabelSnapshotId ?? null,
+    targetLabelVersion: evaluation.targetLabelVersion ?? null,
+    reportScope: evaluation.reportScope ?? "critique_generation_not_critique_rating_or_model_judging",
+    releaseUseStatus: evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+    resourceKey: "critiqueGenerationEvaluationRow",
+    policy: {
+      ...(evaluation.generationVsJudgingSeparation ?? {}),
+      ...(evaluation.generatorEvaluatorOverlap?.policy ?? {}),
+      scope:
+        "Read-only RLHF91 critique-generation evaluation projection derived from /api/release/report; it exposes generation-run accounting, generated-output denominator status, model-judge diagnostic-only handling, blind-human-rated promotion coverage, provider-policy checks, and generator/evaluator overlap without creating generation runs, generated critiques, candidate items, candidate batches, model-judge labels, ratings, live queue work, or release claims.",
+      access:
+        "Admin/auditor readback only because rows expose generation provenance, model snapshots, model-judge diagnostics, source-position split policy, and candidate-output accounting.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    aggregateCounts: evaluation.aggregateCounts ?? {},
+    generationVsJudgingSeparation: evaluation.generationVsJudgingSeparation ?? {},
+    counts: critiqueGenerationEvaluationCounts(allItems, evaluation),
+    filteredCounts: critiqueGenerationEvaluationCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function critiqueGenerationEvaluationItems(report, evaluation) {
+  const routeBase = "/api/v1/critique-generation-evaluation";
+  const runRows = Array.isArray(evaluation.runRows) ? evaluation.runRows : [];
+  const items = [
+    {
+      id: "critique-generation-evaluation",
+      rowId: "critique-generation-evaluation",
+      sequence: 1,
+      checkKind: "evaluation_summary",
+      status: evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+      releaseUseStatus: evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      targetLabelSnapshotId: evaluation.targetLabelSnapshotId ?? null,
+      targetLabelVersion: evaluation.targetLabelVersion ?? null,
+      reportScope: evaluation.reportScope ?? null,
+      aggregateCounts: evaluation.aggregateCounts ?? {},
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/critique-generation-evaluation`,
+      releaseReportRoute: "/api/release/report",
+      candidateGenerationChecklistRoute: "/api/v1/candidate-generation-intake-checklist",
+      promptTrackSeparationRoute: "/api/v1/prompt-track-separation",
+    },
+  ];
+  runRows.forEach((run, runIndex) => {
+    const runId = run.id ?? run.generationRunId ?? `generation-run-${runIndex + 1}`;
+    const sourcePositionIds = Array.isArray(run.sourcePositionIds) ? run.sourcePositionIds : [];
+    const runRoute = `${routeBase}/${encodeURIComponent(runId)}`;
+    items.push({
+      ...run,
+      id: runId,
+      rowId: runId,
+      sequence: items.length + 1,
+      checkKind: "generation_run",
+      generationRunId: runId,
+      status: run.generationRunContractStatus ?? "generation_run_accounting_reported",
+      releaseUseStatus: evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      sourcePositionIds,
+      promptTemplateReadbackRoute: run.promptTemplateId ? `/api/v1/prompt-templates/${encodeURIComponent(run.promptTemplateId)}` : null,
+      parserConfigReadbackRoute: run.modelJudgeScreening?.parserConfigId
+        ? `/api/v1/parser-configs/${encodeURIComponent(run.modelJudgeScreening.parserConfigId)}`
+        : null,
+      promptTrackSeparationReadbackRoute: run.promptTemplateId
+        ? `/api/v1/prompt-track-separation?promptArtifactId=${encodeURIComponent(run.promptTemplateId)}`
+        : null,
+      workflowGenerationRunReadbackRoute: `/api/v1/critique-generation-runs/${encodeURIComponent(runId)}`,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: runRoute,
+      releaseReportRoute: "/api/release/report",
+    });
+    const outputRows = Array.isArray(run.outputRows) ? run.outputRows : [];
+    outputRows.forEach((output, outputIndex) => {
+      const outputId = output.outputId ?? `${runId}-output-${outputIndex + 1}`;
+      items.push({
+        ...output,
+        id: outputId,
+        rowId: outputId,
+        sequence: items.length + 1,
+        checkKind: "generated_output",
+        generationRunId: runId,
+        generationRunReadbackRoute: runRoute,
+        status: output.status ?? "generated_output_reported",
+        releaseUseStatus: evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+        releaseReportStatus: report.currentStatus ?? null,
+        modelJudgeDiagnosticOnly: output.modelJudgeDiagnosticOnly === true,
+        blindHumanRated: output.blindHumanRated === true,
+        adjudicated: output.adjudicated === true,
+        candidateCritiqueReadbackRoute: output.promotedCritiqueId ? `/api/v1/candidate-critiques/${encodeURIComponent(output.promotedCritiqueId)}` : null,
+        ratingReadbackRoute: output.itemId ? `/api/v1/ratings?itemId=${encodeURIComponent(output.itemId)}` : null,
+        collectionReadbackRoute: routeBase,
+        readbackItemRoute: `${routeBase}/${encodeURIComponent(outputId)}`,
+        releaseReportRoute: "/api/release/report",
+      });
+    });
+  });
+  const providerRows = Array.isArray(evaluation.providerPolicyEvidence?.runRows) ? evaluation.providerPolicyEvidence.runRows : [];
+  providerRows.forEach((row, index) => {
+    const generationRunId = row.generationRunId ?? `provider-policy-${index + 1}`;
+    const id = `provider-policy-${generationRunId}`;
+    items.push({
+      ...row,
+      id,
+      rowId: id,
+      sequence: items.length + 1,
+      checkKind: "provider_policy",
+      generationRunId,
+      status: row.status ?? evaluation.providerPolicyEvidence?.releaseUseStatus ?? "provider_policy_reported",
+      releaseUseStatus: evaluation.providerPolicyEvidence?.releaseUseStatus ?? evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodeURIComponent(id)}`,
+      generationRunReadbackRoute: `${routeBase}/${encodeURIComponent(generationRunId)}`,
+      releaseReportRoute: "/api/release/report",
+    });
+  });
+  const overlapRows = Array.isArray(evaluation.generatorEvaluatorOverlap?.rows) ? evaluation.generatorEvaluatorOverlap.rows : [];
+  overlapRows.forEach((row, index) => {
+    const generationRunId = row.generationRunId ?? `overlap-${index + 1}`;
+    const id = `overlap-${generationRunId}`;
+    items.push({
+      ...row,
+      id,
+      rowId: id,
+      sequence: items.length + 1,
+      checkKind: "generator_evaluator_overlap",
+      generationRunId,
+      status: row.status ?? evaluation.generatorEvaluatorOverlap?.releaseUseStatus ?? "generator_overlap_reported",
+      releaseUseStatus: evaluation.generatorEvaluatorOverlap?.releaseUseStatus ?? evaluation.releaseUseStatus ?? "critique_generation_evaluation_missing",
+      releaseReportStatus: report.currentStatus ?? null,
+      evaluatorOverlapCount: row.evaluatorOverlapCount ?? 0,
+      collectionReadbackRoute: routeBase,
+      readbackItemRoute: `${routeBase}/${encodeURIComponent(id)}`,
+      generationRunReadbackRoute: `${routeBase}/${encodeURIComponent(generationRunId)}`,
+      releaseReportRoute: "/api/release/report",
+    });
+  });
+  return items;
+}
+
+function critiqueGenerationEvaluationFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    checkKind: value("checkKind"),
+    generationRunId: value("generationRunId") ?? value("runId"),
+    outputId: value("outputId"),
+    positionId: value("positionId"),
+    promptFamily: value("promptFamily"),
+    promptTemplateId: value("promptTemplateId") ?? value("promptArtifactId"),
+    status: value("status"),
+    sourcePositionId: value("sourcePositionId"),
+    blindHumanRated: value("blindHumanRated"),
+    modelJudgeDiagnosticOnly: value("modelJudgeDiagnosticOnly"),
+    route: value("route"),
+  };
+}
+
+function critiqueGenerationEvaluationMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.generationRunId === value || item.outputId === value || item.promotedCritiqueId === value;
+    if (key === "status") return critiqueGenerationEvaluationMatchesStatus(item, value);
+    if (key === "sourcePositionId") return Array.isArray(item.sourcePositionIds) ? item.sourcePositionIds.includes(value) : item.positionId === value;
+    if (key === "blindHumanRated") return String(item.blindHumanRated === true) === value;
+    if (key === "modelJudgeDiagnosticOnly") return String(item.modelJudgeDiagnosticOnly === true || item.modelJudgeScreening?.diagnosticOnly === true) === value;
+    if (key === "route") return critiqueGenerationEvaluationItemRoutes(item).includes(value);
+    return String(item?.[key] ?? "") === value;
+  });
+}
+
+function critiqueGenerationEvaluationMatchesStatus(item, value) {
+  if (value === "open") return critiqueGenerationEvaluationItemIsOpen(item);
+  if (value === "closed") return !critiqueGenerationEvaluationItemIsOpen(item);
+  return [item.status, item.generationRunContractStatus, item.releaseUseStatus, item.releaseReportStatus].includes(value);
+}
+
+function critiqueGenerationEvaluationItemIsOpen(item) {
+  if ((item.reviewReasonCount ?? 0) > 0) return true;
+  const values = [item.status, item.generationRunContractStatus, item.releaseUseStatus].map((value) => String(value ?? ""));
+  return values.some(
+    (value) =>
+      value.includes("missing") ||
+      value.includes("violation") ||
+      value.includes("review") ||
+      value.includes("failed") ||
+      value.includes("blocked"),
+  );
+}
+
+function critiqueGenerationEvaluationItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.candidateGenerationChecklistRoute,
+    item?.promptTrackSeparationRoute,
+    item?.promptTemplateReadbackRoute,
+    item?.parserConfigReadbackRoute,
+    item?.promptTrackSeparationReadbackRoute,
+    item?.workflowGenerationRunReadbackRoute,
+    item?.generationRunReadbackRoute,
+    item?.candidateCritiqueReadbackRoute,
+    item?.ratingReadbackRoute,
+  ]);
+}
+
+function critiqueGenerationEvaluationCounts(items, evaluation = {}) {
+  const outputItems = items.filter((item) => item.checkKind === "generated_output");
+  return {
+    ...(evaluation.aggregateCounts ?? {}),
+    rows: items.length,
+    openRows: items.filter(critiqueGenerationEvaluationItemIsOpen).length,
+    closedRows: items.filter((item) => !critiqueGenerationEvaluationItemIsOpen(item)).length,
+    summaryRows: items.filter((item) => item.checkKind === "evaluation_summary").length,
+    generationRunRows: items.filter((item) => item.checkKind === "generation_run").length,
+    generatedOutputRows: outputItems.length,
+    providerPolicyRows: items.filter((item) => item.checkKind === "provider_policy").length,
+    overlapRows: items.filter((item) => item.checkKind === "generator_evaluator_overlap").length,
+    promotedOutputRows: outputItems.filter((item) => item.status === "promoted_to_rating").length,
+    blindHumanRatedPromotedRows: outputItems.filter((item) => item.status === "promoted_to_rating" && item.blindHumanRated === true).length,
+    modelJudgeDiagnosticRows: outputItems.filter((item) => item.modelJudgeDiagnosticOnly === true).length,
+    byCheckKind: countItemsBy(items, "checkKind"),
+    byStatus: countItemsBy(items, "status"),
+    byGenerationRunId: countItemsBy(items, "generationRunId"),
+    byPositionId: countItemsBy(outputItems, "positionId"),
+    byPromptFamily: countItemsBy(items, "promptFamily"),
+    byRoute: countValues(items.flatMap(critiqueGenerationEvaluationItemRoutes)),
+  };
+}
+
+function metaphilosophyDeliverableChecklistReadback(report, options = {}) {
+  const checklist = report.metaphilosophyDeliverableChecklist ?? {};
+  const rows = Array.isArray(checklist.rows) ? checklist.rows : [];
+  const filters = metaphilosophyDeliverableChecklistFilters(options.searchParams);
+  const filteredItems = rows
+    .map((row, index) => ({
+      ...row,
+      sequence: index + 1,
+      deliverableId: row.id,
+      sourceChecklistId: checklist.id ?? null,
+      releaseUseStatus: checklist.releaseUseStatus ?? "metaphilosophy_deliverable_checklist_missing",
+      reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+      evidenceIdCount: Array.isArray(row.evidenceIds) ? row.evidenceIds.length : 0,
+    }))
+    .filter((item) => metaphilosophyDeliverableChecklistMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId || item.deliverableId === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `metaphilosophy-deliverable-checklist-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: checklist.generatedAt ?? report.generatedAt,
+    sourceEvidenceId: checklist.id ?? null,
+    releaseUseStatus: checklist.releaseUseStatus ?? "metaphilosophy_deliverable_checklist_missing",
+    resourceKey: "metaphilosophyDeliverableChecklistRow",
+    policy: {
+      scope:
+        "Read-only RLHF91 Metaphilosophy deliverable checklist derived from /api/release/report; it does not submit source artifacts, promote candidates, broaden task tracks, waive gates, or create production evidence.",
+      access: "Admin/auditor readback only because checklist rows expose release-governance evidence and source-workbench readiness.",
+    },
+    filters,
+    count: items.length,
+    totalCount: rows.length,
+    counts: {
+      ...(checklist.counts ?? {}),
+      rows: rows.length,
+      reviewSections: Array.isArray(checklist.reviewSections) ? checklist.reviewSections.length : 0,
+      openRows: rows.filter(metaphilosophyStatusIsOpen).length,
+      closedRows: rows.filter((item) => !metaphilosophyStatusIsOpen(item)).length,
+      byStatus: countItemsBy(rows, "status"),
+    },
+    filteredCounts: {
+      rows: items.length,
+      openRows: items.filter(metaphilosophyStatusIsOpen).length,
+      closedRows: items.filter((item) => !metaphilosophyStatusIsOpen(item)).length,
+      reviewRequired: items.filter((item) => item.status === "review_required").length,
+      complete: items.filter((item) => item.status === "complete").length,
+      notApplicable: items.filter((item) => String(item.status ?? "").startsWith("not_applicable")).length,
+      byStatus: countItemsBy(items, "status"),
+      byEvidenceId: countExpandedValues(items, "evidenceIds"),
+    },
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function metaphilosophySourceWorkbenchReadinessReadback(report, options = {}) {
+  const item = metaphilosophySourceWorkbenchReadinessItem(report);
+  const filters = metaphilosophySourceWorkbenchReadinessFilters(options.searchParams);
+  const items = (!options.itemId || item.id === options.itemId) && metaphilosophySourceWorkbenchReadinessMatchesFilters(item, filters) ? [item] : [];
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `metaphilosophy-source-workbench-readiness-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: item.deliverableChecklistId ?? null,
+    releaseUseStatus: item.releaseUseStatus,
+    resourceKey: "metaphilosophySourceWorkbenchReadiness",
+    policy: {
+      scope:
+        "Read-only RLHF91 source-workbench readiness projection derived from /api/release/report; it reports source-intake, source-preparation, and phase-gate status without creating prepared drafts, candidates, live queue work, or source-derived release claims.",
+      access: "Admin/auditor readback only because source-workbench readiness exposes admin-only provenance and implementation-gate status.",
+      nonPromotionBoundary:
+        "Phase 1 source cards, spans, extraction batches, and argument extractions remain non-promotional. Source preparation can only proceed through accepted extractions and the existing PreparedDraft review/promotion gates.",
+    },
+    filters,
+    count: items.length,
+    totalCount: 1,
+    counts: {
+      readinessRows: 1,
+      returnedRows: items.length,
+      usesSourceDerivedItems: item.usesSourceDerivedItems ? 1 : 0,
+      sourceIntakeArtifacts: item.sourceIntakeArtifactCount,
+      sourcePreparationArtifacts: item.sourcePreparationArtifactCount,
+      reviewReasonCount: item.reviewReasonCount,
+      openRows: metaphilosophyStatusIsOpen(item) ? 1 : 0,
+      closedRows: metaphilosophyStatusIsOpen(item) ? 0 : 1,
+      filteredOpenRows: items.filter(metaphilosophyStatusIsOpen).length,
+      filteredClosedRows: items.filter((row) => !metaphilosophyStatusIsOpen(row)).length,
+      byStatus: countItemsBy([item], "status"),
+      filteredByStatus: countItemsBy(items, "status"),
+    },
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function metaphilosophySourceWorkbenchTemplateReadback(report, options = {}) {
+  const readiness = metaphilosophySourceWorkbenchReadinessItem(report);
+  const filters = metaphilosophySourceWorkbenchTemplateFilters(options.searchParams);
+  const allItems = metaphilosophySourceWorkbenchTemplateItems(report, readiness);
+  const filteredItems = allItems.filter((item) => metaphilosophySourceWorkbenchTemplateMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const routeCoverage = sourceWorkbenchTemplateRouteCoverage(items, readiness);
+  return {
+    id: `metaphilosophy-source-workbench-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceReadinessId: readiness.id,
+    sourceEvidenceId: readiness.deliverableChecklistId ?? null,
+    releaseUseStatus: readiness.releaseUseStatus,
+    resourceKey: "metaphilosophySourceWorkbenchTemplate",
+    policy: {
+      scope:
+        "Read-only SourceCard, SourceSpan, ExtractionBatch JSONL, ArgumentExtraction review, PreparedDraft creation/review, and candidate-layer promotion skeletons for the RLHF91 source workbench; it does not submit source artifacts, prepare drafts, promote candidates, run AI extraction, or create release evidence.",
+      access: "Admin/auditor only because source-workbench templates expose admin-only source provenance and route-lane metadata.",
+      templateOnly:
+        "Generated records include templateOnly=true and TODO placeholders; source-intake and source-preparation write/import routes reject unchanged template records or unresolved TODO parent ids until operators replace them with real reviewed source material.",
+      dryRunValidation:
+        readiness.sourceIntakeValidationPlan?.validationPolicy ??
+        "Use dryRun=true or validateOnly=true before appending source-intake JSONL.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: {
+      templateRecords: items.length,
+      byTemplateKind: countItemsBy(items, "templateKind"),
+      byRoute: countValues(items.flatMap(sourceWorkbenchTemplateItemRoutes)),
+      byRouteLane: countItemsBy(items, "sourceWorkbenchRouteLane"),
+      byResourceKey: countItemsBy(items, "resourceKey"),
+      routeCoverage,
+    },
+    sourceIntakeRouteCounts: readiness.sourceIntakeRouteCounts ?? null,
+    sourcePreparationRouteCounts: readiness.sourcePreparationRouteCounts ?? null,
+    routeCoverage,
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function sourceWorkbenchTemplateRouteCoverage(items, readiness) {
+  const itemRoutes = uniqueValues(items.flatMap(sourceWorkbenchTemplateItemRoutes));
+  const sourceIntakeRoutes = Object.keys(readiness.sourceIntakeRouteCounts?.byRoute ?? {});
+  const sourcePreparationRoutes = Object.keys(readiness.sourcePreparationRouteCounts?.byRoute ?? {});
+  const coveredSourceIntakeRoutes = itemRoutes.filter((route) => sourceIntakeRoutes.includes(route));
+  const coveredSourcePreparationRoutes = itemRoutes.filter((route) => sourcePreparationRoutes.includes(route));
+  return {
+    templateRoutesReturned: itemRoutes.length,
+    sourceIntakeReadinessRoutes: sourceIntakeRoutes.length,
+    sourcePreparationReadinessRoutes: sourcePreparationRoutes.length,
+    coveredSourceIntakeReadinessRoutes: coveredSourceIntakeRoutes.length,
+    coveredSourcePreparationReadinessRoutes: coveredSourcePreparationRoutes.length,
+    uncoveredSourceIntakeReadinessRoutes: sourceIntakeRoutes.filter((route) => !itemRoutes.includes(route)),
+    uncoveredSourcePreparationReadinessRoutes: sourcePreparationRoutes.filter((route) => !itemRoutes.includes(route)),
+  };
+}
+
+function sourceWorkbenchTemplateRoute(templateKind) {
+  const url = new URL("/api/v1/metaphilosophy/source-workbench-template", "http://localhost");
+  if (templateKind) url.searchParams.set("templateKind", templateKind);
+  return `${url.pathname}${url.search}`;
+}
+
+function sourceWorkbenchTemplateItemRoutes(item) {
+  return uniqueValues([
+    item?.route,
+    item?.routeTemplate,
+    ...(Array.isArray(item?.routeAliases) ? item.routeAliases : []),
+    item?.importRoute,
+    item?.importRouteTemplate,
+    ...(Array.isArray(item?.importRouteAliases) ? item.importRouteAliases : []),
+    item?.dryRunImportRoute,
+    item?.dryRunImportRouteTemplate,
+    ...(Array.isArray(item?.dryRunImportRouteAliases) ? item.dryRunImportRouteAliases : []),
+    item?.validateOnlyImportRoute,
+    item?.validateOnlyImportRouteTemplate,
+    ...(Array.isArray(item?.validateOnlyImportRouteAliases) ? item.validateOnlyImportRouteAliases : []),
+    item?.readbackRoute,
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    item?.templateReadbackRoute,
+    item?.templateCollectionRoute,
+    item?.readinessReadbackRoute,
+  ]);
+}
+
+function metaphilosophySourceWorkbenchTemplateItems(report, readiness) {
+  const generatedAt = report.generatedAt ?? new Date().toISOString();
+  const sourceCardId = "TODO_SOURCE_CARD_ID";
+  const sourceSpanId = "TODO_SOURCE_SPAN_ID";
+  const extractionBatchId = "TODO_EXTRACTION_BATCH_ID";
+  const argumentExtractionId = "TODO_ARGUMENT_EXTRACTION_ID";
+  const preparedDraftId = "TODO_PREPARED_DRAFT_ID";
+  const candidateItemId = "TODO_CANDIDATE_ITEM_ID";
+  const sourceCard = {
+    templateOnly: true,
+    id: sourceCardId,
+    title: "TODO_SOURCE_TITLE",
+    sourceAuthor: "TODO_SOURCE_AUTHOR",
+    sourceWork: "TODO_SOURCE_WORK",
+    sourcePublisherOrSite: "TODO_SOURCE_PUBLISHER_OR_SITE",
+    publicationYear: "TODO_PUBLICATION_YEAR",
+    uploadedFileId: null,
+    sourceType: "coursework",
+    sourceLocator: "TODO_SOURCE_LOCATOR",
+    sourceProvenanceSummary: "TODO_SOURCE_PROVENANCE_SUMMARY",
+    rightsStatus: "internal_review_allowed",
+    sourceLanguage: "en",
+    translationStatus: "original_language",
+    taskFormat: "mixed_position_and_critique_source",
+    adminNotes: "TODO_ADMIN_ONLY_SOURCE_NOTES",
+    sourceAccessPolicy: "internal_review_allowed",
+    releasePolicy: "prepared_text_only_after_review",
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    createdBy: "TODO_OPERATOR_ID",
+    createdAt: "TODO_ISO_TIMESTAMP",
+  };
+  const sourceSpan = {
+    templateOnly: true,
+    id: sourceSpanId,
+    sourceCardId,
+    spanLocator: "TODO_SPAN_LOCATOR",
+    boundedLocator: "TODO_BOUNDED_LOCATOR",
+    spanKind: "argumentative_claim",
+    textHash: "sha256:TODO_SOURCE_SPAN_TEXT_HASH",
+    adminExcerpt: "TODO_OPTIONAL_ADMIN_ONLY_EXCERPT",
+    excerptStoragePolicy: "store_hash_and_admin_excerpt_only_not_rater_visible",
+    segmentationStatus: "manually_selected",
+    extractionStatus: "selected_for_extraction",
+    adminSelectionNotes: "TODO_ADMIN_SELECTION_NOTES",
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    createdBy: "TODO_OPERATOR_ID",
+    createdAt: "TODO_ISO_TIMESTAMP",
+  };
+  const extractionBatch = {
+    templateOnly: true,
+    id: extractionBatchId,
+    sourceCardId,
+    importFormat: "jsonl",
+    importedBy: "TODO_OPERATOR_ID",
+    importedAt: "TODO_ISO_TIMESTAMP",
+    extractionCount: 1,
+    parserVersion: "source-intake-jsonl-v1",
+    importRoute: "admin_source_extract_jsonl_import",
+    extractionExecutionMode: "manual_jsonl_import_no_platform_ai_execution",
+    downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+    createsPreparedDraft: false,
+    createsCandidateItem: false,
+    createsCandidateBatch: false,
+    liveQueueIntegration: false,
+    aiExtractionExecuted: false,
+  };
+  const argumentExtraction = {
+    templateOnly: true,
+    id: argumentExtractionId,
+    sourceSpanIds: [sourceSpanId],
+    argumentRole: "mixed_position_and_critique",
+    intendedConclusion: "TODO_INTENDED_CONCLUSION",
+    keyPremises: ["TODO_KEY_PREMISE"],
+    argumentSummary: "TODO_ARGUMENT_SUMMARY",
+    implicitAssumptions: ["TODO_IMPLICIT_ASSUMPTION"],
+    critiqueTarget: "TODO_CRITIQUE_TARGET",
+    contextNeeded: "TODO_CONTEXT_NEEDED_FOR_REVIEW",
+    conceptualScopeNotes: "TODO_CONCEPTUAL_SCOPE_NOTES",
+    suitabilityNotes: "TODO_SUITABILITY_NOTES",
+    possiblePreparedPositionText: "TODO_POSSIBLE_PREPARED_POSITION_TEXT",
+    possiblePreparedCritiqueText: "TODO_POSSIBLE_PREPARED_CRITIQUE_TEXT",
+    extractedPositionText: "TODO_OPTIONAL_EXTRACTED_POSITION_TEXT",
+    extractionRationale: "TODO_EXTRACTION_RATIONALE",
+    extractionMethod: "manual_jsonl_import",
+  };
+  const extractionJsonlRecord = {
+    templateOnly: true,
+    argumentExtraction,
+  };
+  const extractionJsonl = `${JSON.stringify(extractionJsonlRecord)}\n`;
+  const extractionImportRoute = `/api/v1/admin/sources/${sourceCardId}/extract`;
+  const preparedPositionDraft = {
+    templateOnly: true,
+    id: preparedDraftId,
+    preparedText: "TODO_REVIEWER_PREPARED_POSITION_TEXT",
+    candidateRaterVisibleText: "TODO_BLIND_SAFE_RATER_VISIBLE_POSITION_TEXT",
+    reviewNotes: "TODO_PREPARATION_NOTES",
+  };
+  const preparedCritiqueDraft = {
+    templateOnly: true,
+    id: preparedDraftId,
+    targetPositionId: "TODO_TARGET_POSITION_ID",
+    preparedText: "TODO_REVIEWER_PREPARED_CRITIQUE_TEXT",
+    candidateRaterVisibleText: "TODO_BLIND_SAFE_RATER_VISIBLE_CRITIQUE_TEXT",
+    reviewNotes: "TODO_PREPARATION_NOTES",
+  };
+  const preparedDraftReview = {
+    templateOnly: true,
+    preparedDraftStatus: "ready_for_candidate_item_creation",
+    preparedText: "TODO_FINAL_REVIEWED_PREPARED_TEXT",
+    candidateRaterVisibleText: "TODO_FINAL_BLIND_SAFE_RATER_VISIBLE_TEXT",
+    blindingReviewStatus: "blinding_review_passed",
+    sourceLeakageReviewStatus: "source_leakage_review_passed",
+    gateReadinessStatus: "ready_for_candidate_item_creation",
+    reviewNotes: "TODO_REVIEW_NOTES_AFTER_BLINDING_SOURCE_LEAKAGE_CONTEXT_AND_TARGET_CHECKS",
+    reviewSignals: [
+      {
+        templateOnly: true,
+        id: "TODO_REVIEW_SIGNAL_ID",
+        signalType: "source_leakage_reviewed",
+        source: "human_reviewer",
+        confidence: 0.95,
+        explanation: "TODO_BLIND_SAFE_REVIEW_SIGNAL_EXPLANATION",
+        affectedObjectType: "PreparedDraft",
+        affectedObjectId: preparedDraftId,
+        relatedGateIds: ["source_leakage_gate"],
+      },
+    ],
+    gateDecisions: requiredGateIdsForPolicy("prepared_draft_readiness").map((gateId) => ({
+      templateOnly: true,
+      id: `TODO_GATE_DECISION_${gateId}`,
+      gateId,
+      gateStatus: "passed",
+      citedReviewSignalIds: ["TODO_REVIEW_SIGNAL_ID"],
+      decisionNote: "TODO_GATE_DECISION_NOTE",
+    })),
+  };
+  const preparedDraftPromotion = {
+    templateOnly: true,
+    candidateItem: {
+      id: candidateItemId,
+      candidateRaterVisibleText: "TODO_FINAL_BLIND_SAFE_RATER_VISIBLE_TEXT",
+    },
+    promotionRecord: {
+      id: "TODO_PROMOTION_RECORD_ID",
+      promotionNotes: "TODO_PROMOTION_NOTES_NO_LIVE_QUEUE_OR_BATCH_CREATION",
+    },
+  };
+  return [
+    {
+      id: "source-workbench-template:source-card",
+      templateKind: "source_card_write",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_intake",
+      method: "POST",
+      route: "/api/v1/admin/sources",
+      resourceKey: "sourceCard",
+      requiredRoles: sourceCardAdminWorkflowSpec.roles,
+      requestBody: { sourceCard },
+      readbackRoute: "/api/v1/source-cards",
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("source_card_write"),
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:source-span",
+      templateKind: "source_span_write",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_intake",
+      method: "POST",
+      route: `/api/v1/admin/sources/${sourceCardId}/spans`,
+      routeTemplate: "/api/v1/admin/sources/{id}/spans",
+      resourceKey: "sourceSpan",
+      requiredRoles: sourceSpanAdminWorkflowSpec.roles,
+      requestBody: { sourceSpan },
+      readbackRoute: "/api/v1/source-spans",
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("source_span_write"),
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:extraction-jsonl",
+      templateKind: "extraction_jsonl_import",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_intake",
+      method: "POST",
+      route: extractionImportRoute,
+      routeTemplate: "/api/v1/admin/sources/{id}/extract",
+      importRoute: extractionImportRoute,
+      importRouteTemplate: "/api/v1/admin/sources/{id}/extract",
+      importRouteAliases: ["/api/v1/extraction-batches/import-jsonl", "/api/v1/admin/extractions/import-jsonl"],
+      dryRunImportRoute: routeWithQueryFlag(extractionImportRoute, "dryRun", "true"),
+      dryRunImportRouteTemplate: "/api/v1/admin/sources/{id}/extract?dryRun=true",
+      dryRunImportRouteAliases: [
+        "/api/v1/extraction-batches/import-jsonl?dryRun=true",
+        "/api/v1/admin/extractions/import-jsonl?dryRun=true",
+      ],
+      validateOnlyImportRoute: routeWithQueryFlag(extractionImportRoute, "validateOnly", "true"),
+      validateOnlyImportRouteTemplate: "/api/v1/admin/sources/{id}/extract?validateOnly=true",
+      validateOnlyImportRouteAliases: [
+        "/api/v1/extraction-batches/import-jsonl?validateOnly=true",
+        "/api/v1/admin/extractions/import-jsonl?validateOnly=true",
+      ],
+      resourceKey: "extractionBatch",
+      requiredRoles: extractionBatchJsonlImportSpec.roles,
+      requestBody: {
+        templateOnly: true,
+        extractionBatch,
+        jsonl: extractionJsonl,
+      },
+      jsonl: extractionJsonl,
+      readbackRoute: "/api/v1/argument-extractions",
+      readbackRoutes: ["/api/v1/extraction-batches"],
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("extraction_jsonl_import"),
+      templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:extraction-review",
+      templateKind: "argument_extraction_review",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_intake",
+      method: "POST",
+      route: `/api/v1/admin/extractions/${argumentExtractionId}/review`,
+      routeTemplate: "/api/v1/admin/extractions/{id}/review",
+      routeAliases: ["/api/v1/admin/extractions/{id}"],
+      resourceKey: "argumentExtraction",
+      requiredRoles: argumentExtractionReviewSpec.roles,
+      requestBody: {
+        templateOnly: true,
+        argumentExtractionReview: {
+          templateOnly: true,
+          reviewStatus: "accepted_for_source_preparation",
+          reviewNotes: "TODO_MANUAL_REVIEW_NOTES_NO_PREPARED_DRAFT_CREATED",
+          reviewedBy: "TODO_OPERATOR_ID",
+          reviewedAt: "TODO_ISO_TIMESTAMP",
+        },
+      },
+      readbackRoute: "/api/v1/argument-extractions",
+      readbackRoutes: ["/api/v1/admin/extractions/{id}"],
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("argument_extraction_review"),
+      templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:prepared-position",
+      templateKind: "prepared_position_draft_create",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_preparation",
+      method: "POST",
+      route: `/api/v1/admin/extractions/${argumentExtractionId}/create-prepared-position`,
+      routeTemplate: "/api/v1/admin/extractions/{id}/create-prepared-position",
+      resourceKey: "preparedDraft",
+      requiredRoles: contributionAdminRoles,
+      requestBody: {
+        templateOnly: true,
+        preparedDraft: preparedPositionDraft,
+      },
+      readbackRoute: "/api/v1/admin/prepared-drafts",
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("prepared_position_draft_create"),
+      templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:prepared-critique",
+      templateKind: "prepared_critique_draft_create",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_preparation",
+      method: "POST",
+      route: `/api/v1/admin/extractions/${argumentExtractionId}/create-prepared-critique`,
+      routeTemplate: "/api/v1/admin/extractions/{id}/create-prepared-critique",
+      resourceKey: "preparedDraft",
+      requiredRoles: contributionAdminRoles,
+      requestBody: {
+        templateOnly: true,
+        preparedDraft: preparedCritiqueDraft,
+      },
+      readbackRoute: "/api/v1/admin/prepared-drafts",
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("prepared_critique_draft_create"),
+      templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:prepared-draft-review",
+      templateKind: "prepared_draft_review",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_preparation",
+      method: "POST",
+      route: `/api/v1/admin/prepared-drafts/${preparedDraftId}/review`,
+      routeTemplate: "/api/v1/admin/prepared-drafts/{id}/review",
+      resourceKey: "preparedDraft",
+      requiredRoles: contributionAdminRoles,
+      requestBody: {
+        templateOnly: true,
+        preparedDraftReview,
+      },
+      readbackRoute: "/api/v1/admin/prepared-drafts",
+      readbackRoutes: ["/api/v1/admin/review-signals", "/api/v1/admin/gate-decisions"],
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("prepared_draft_review"),
+      templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+    {
+      id: "source-workbench-template:prepared-draft-promote",
+      templateKind: "prepared_draft_promote",
+      templateOnly: true,
+      sourceWorkbenchRouteLane: "source_preparation",
+      method: "POST",
+      route: `/api/v1/admin/prepared-drafts/${preparedDraftId}/promote`,
+      routeTemplate: "/api/v1/admin/prepared-drafts/{id}/promote",
+      resourceKey: "promotionRecord",
+      requiredRoles: contributionAdminRoles,
+      requestBody: {
+        templateOnly: true,
+        promotion: preparedDraftPromotion,
+      },
+      readbackRoute: "/api/v1/admin/promotion-records",
+      readbackRoutes: ["/api/v1/admin/candidate-items"],
+      templateReadbackRoute: sourceWorkbenchTemplateRoute("prepared_draft_promote"),
+      templateCollectionRoute: "/api/v1/metaphilosophy/source-workbench-template",
+      readinessReadbackRoute: "/api/v1/metaphilosophy/source-workbench-readiness",
+      sourceReadinessStatus: readiness.status,
+      generatedAt,
+    },
+  ];
+}
+
+function metaphilosophySourceWorkbenchReadinessItem(report) {
+  const checklist = report.metaphilosophyDeliverableChecklist ?? {};
+  const row =
+    (Array.isArray(checklist.rows) ? checklist.rows : []).find((item) => item.id === "admin_source_extraction_workbench") ?? {};
+  const sourceIntakeEvidence = report.sourceIntakeEvidence ?? {};
+  const sourcePreparationEvidence = report.sourcePreparationEvidence ?? {};
+  const sourceIntakeCounts = sourceIntakeEvidence.counts ?? {};
+  const sourcePreparationCounts = sourcePreparationEvidence.counts ?? {};
+  const sourceIntakeArtifactCount =
+    Number(sourceIntakeCounts.sourceCards ?? 0) +
+    Number(sourceIntakeCounts.sourceSpans ?? 0) +
+    Number(sourceIntakeCounts.extractionBatches ?? 0) +
+    Number(sourceIntakeCounts.argumentExtractions ?? 0);
+  const sourcePreparationArtifactCount =
+    Number(sourcePreparationCounts.preparedDrafts ?? 0) +
+    Number(sourcePreparationCounts.reviewSignals ?? 0) +
+    Number(sourcePreparationCounts.gateDecisions ?? 0) +
+    Number(sourcePreparationCounts.candidateItems ?? 0) +
+    Number(sourcePreparationCounts.promotionRecords ?? 0);
+  const sourceEvidenceStatuses = row.sourceStatuses ?? [
+    sourceIntakeEvidence.releaseUseStatus,
+    sourcePreparationEvidence.releaseUseStatus,
+  ].filter(Boolean);
+  const sourceIntakeJsonlImportRoutes = [
+    {
+      route: "/api/v1/extraction-batches/import-jsonl",
+      dryRunImportRoute: routeWithQueryFlag("/api/v1/extraction-batches/import-jsonl", "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag("/api/v1/extraction-batches/import-jsonl", "validateOnly", "true"),
+      routeUse: "canonical_extraction_batch_import",
+    },
+    {
+      route: "/api/v1/admin/extractions/import-jsonl",
+      dryRunImportRoute: routeWithQueryFlag("/api/v1/admin/extractions/import-jsonl", "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag("/api/v1/admin/extractions/import-jsonl", "validateOnly", "true"),
+      routeUse: "admin_extraction_import_alias",
+    },
+    {
+      route: "/api/v1/admin/sources/{id}/extract",
+      dryRunImportRoute: routeWithQueryFlag("/api/v1/admin/sources/{id}/extract", "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag("/api/v1/admin/sources/{id}/extract", "validateOnly", "true"),
+      routeUse: "source_card_scoped_admin_import",
+    },
+  ];
+  const sourceIntakeAdminRoutes = [
+    "/api/v1/admin/sources",
+    "/api/v1/admin/sources/{id}/spans",
+    "/api/v1/admin/sources/{id}/extract",
+    "/api/v1/admin/extractions/{id}/review",
+  ];
+  const sourcePreparationAdminRoutes = [
+    "/api/v1/admin/extractions/{id}/create-prepared-position",
+    "/api/v1/admin/extractions/{id}/create-prepared-critique",
+    "/api/v1/admin/prepared-drafts/{id}/review",
+    "/api/v1/admin/prepared-drafts/{id}/promote",
+  ];
+  const sourceIntakeRoutes = sourceIntakeEvidence.routes ?? {
+    adminWriteRoutes: ["/api/v1/admin/sources", "/api/v1/admin/sources/{id}/spans"],
+    jsonlImportRoutes: sourceIntakeJsonlImportRoutes,
+    reviewRoutes: ["/api/v1/admin/extractions/{id}/review"],
+    readbackRoutes: ["/api/v1/source-cards", "/api/v1/source-spans", "/api/v1/extraction-batches", "/api/v1/argument-extractions"],
+  };
+  const sourcePreparationRoutes = sourcePreparationEvidence.routes ?? {
+    adminWriteRoutes: sourcePreparationAdminRoutes,
+    readbackRoutes: [
+      "/api/v1/admin/prepared-drafts",
+      "/api/v1/admin/review-signals",
+      "/api/v1/admin/gate-decisions",
+      "/api/v1/admin/candidate-items",
+      "/api/v1/admin/promotion-records",
+    ],
+  };
+  const readinessSourceIntakeAdminRoutes = uniqueValues([
+    ...(sourceIntakeRoutes.adminWriteRoutes ?? []),
+    ...(sourceIntakeRoutes.jsonlImportRoutes ?? []).map((item) => item.route),
+    ...(sourceIntakeRoutes.reviewRoutes ?? []),
+  ]);
+  const readinessSourcePreparationAdminRoutes = uniqueValues(sourcePreparationRoutes.adminWriteRoutes ?? sourcePreparationAdminRoutes);
+  const readinessReadbackRoutes = uniqueValues([
+    "/api/release/report",
+    ...(sourceIntakeRoutes.readbackRoutes ?? []),
+    ...(sourcePreparationRoutes.readbackRoutes ?? []),
+    "/api/v1/admin/prepared-drafts",
+    "/api/v1/admin/review-signals",
+    "/api/v1/admin/gate-decisions",
+    "/api/v1/admin/candidate-items",
+    "/api/v1/admin/promotion-records",
+  ]);
+  const phaseGate = row.phaseGate ?? null;
+  const acceptedExtractionCounts = {
+    acceptedForSourcePreparationExtractions: sourceIntakeCounts.acceptedForSourcePreparationExtractions ?? 0,
+    acceptedForPositionIntakeExtractions: sourceIntakeCounts.acceptedForPositionIntakeExtractions ?? 0,
+    acceptedForCritiqueIntakeExtractions: sourceIntakeCounts.acceptedForCritiqueIntakeExtractions ?? 0,
+  };
+  const sourceIntakeArtifactCounts = {
+    sourceCards: sourceIntakeCounts.sourceCards ?? 0,
+    sourceSpans: sourceIntakeCounts.sourceSpans ?? 0,
+    extractionBatches: sourceIntakeCounts.extractionBatches ?? 0,
+    argumentExtractions: sourceIntakeCounts.argumentExtractions ?? 0,
+  };
+  const sourcePreparationArtifactCounts = {
+    preparedDrafts: sourcePreparationCounts.preparedDrafts ?? 0,
+    reviewSignals: sourcePreparationCounts.reviewSignals ?? 0,
+    gateDecisions: sourcePreparationCounts.gateDecisions ?? 0,
+    candidateItems: sourcePreparationCounts.candidateItems ?? 0,
+    promotionRecords: sourcePreparationCounts.promotionRecords ?? 0,
+  };
+  const sourceWorkbenchCounts = {
+    sourceIntakeArtifacts: sourceIntakeArtifactCount,
+    sourcePreparationArtifacts: sourcePreparationArtifactCount,
+    totalSourceWorkbenchArtifacts: sourceIntakeArtifactCount + sourcePreparationArtifactCount,
+    reviewReasons: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+    adminRoutes: uniqueValues([...readinessSourceIntakeAdminRoutes, ...readinessSourcePreparationAdminRoutes]).length,
+    readbackRoutes: readinessReadbackRoutes.length,
+    sourceIntakeAdminRoutes: readinessSourceIntakeAdminRoutes.length,
+    sourcePreparationAdminRoutes: readinessSourcePreparationAdminRoutes.length,
+    sourceIntakeJsonlImportRoutes: (sourceIntakeRoutes.jsonlImportRoutes ?? sourceIntakeJsonlImportRoutes).length,
+    ...acceptedExtractionCounts,
+    ...sourceIntakeArtifactCounts,
+    ...sourcePreparationArtifactCounts,
+  };
+  const usesSourceDerivedItems = sourceWorkbenchCounts.totalSourceWorkbenchArtifacts > 0;
+  const phaseGateStatus = phaseGate?.status ?? "workbench_route_lane_unknown";
+  const sourceWorkbenchRouteLaneAvailable = phaseGateStatus === "workbench_route_lane_available";
+  const sourceWorkbenchDisabledByPhaseGate = phaseGateStatus === "workbench_route_lane_safely_disabled";
+  const sourcePreparationReadyForReleaseClaims =
+    sourcePreparationEvidence.releaseUseStatus === "source_preparation_candidate_layer_ready_no_live_records";
+  const sourceDerivedReleaseClaimSupportStatus = usesSourceDerivedItems
+    ? !sourceWorkbenchRouteLaneAvailable
+      ? "blocked_by_source_workbench_phase_gate"
+      : !sourcePreparationReadyForReleaseClaims
+        ? sourcePreparationArtifactCount > 0
+          ? "blocked_by_source_preparation_not_candidate_ready"
+          : "source_intake_recorded_but_source_preparation_not_started"
+        : row.status === "review_required"
+          ? "blocked_by_source_workbench_review"
+          : "source_derived_release_claims_supported"
+    : sourceWorkbenchDisabledByPhaseGate
+      ? "not_applicable_phase_gate_safely_disabled_without_source_derived_items"
+      : "not_applicable_without_source_derived_items";
+  const supportsSourceDerivedReleaseClaims =
+    usesSourceDerivedItems &&
+    sourceWorkbenchRouteLaneAvailable &&
+    sourcePreparationReadyForReleaseClaims &&
+    row.status !== "review_required";
+  const disabledLaneBehavior = sourceWorkbenchRouteLaneAvailable
+    ? "source_preparation_routes_available_for_admin_auditor_workflows"
+    : "source_derived_items_cannot_support_release_claims_while_route_lane_is_unavailable";
+  return {
+    id: "source-workbench-readiness",
+    deliverableId: row.id ?? "admin_source_extraction_workbench",
+    deliverableChecklistId: checklist.id ?? null,
+    status: row.status ?? "unknown",
+    releaseUseStatus: checklist.releaseUseStatus ?? "metaphilosophy_deliverable_checklist_missing",
+    deliverable: row.deliverable ?? null,
+    sourceIntakeStatus: sourceIntakeEvidence.releaseUseStatus ?? "source_intake_missing",
+    sourcePreparationStatus: sourcePreparationEvidence.releaseUseStatus ?? "source_preparation_missing",
+    sourceEvidenceStatuses,
+    usesSourceDerivedItems,
+    sourceDerivedReleaseClaimSupportStatus,
+    sourcePreparationReadyForReleaseClaims,
+    sourceWorkbenchRouteLaneAvailable,
+    sourceWorkbenchDisabledByPhaseGate,
+    sourceWorkbenchApplicability: row.sourceWorkbenchApplicability ?? null,
+    phaseGate,
+    phaseGateReadiness: {
+      laneKind: phaseGate?.laneKind ?? "route",
+      phaseState: phaseGate?.phaseState ?? null,
+      bundleId: phaseGate?.bundleId ?? null,
+      operationalControlEvidenceId: phaseGate?.operationalControlEvidenceId ?? null,
+      status: phaseGateStatus,
+      routeLaneAvailable: sourceWorkbenchRouteLaneAvailable,
+      sourcePreparationReadyForReleaseClaims,
+      sourceWorkbenchDisabledByPhaseGate,
+      sourceDerivedReleaseClaimSupportStatus,
+      supportsSourceDerivedReleaseClaims,
+      disabledLaneBehavior,
+    },
+    phaseGateStatus: phaseGate?.status ?? null,
+    phaseGateState: phaseGate?.phaseState ?? null,
+    sourceWorkbenchPhaseGateStatus: phaseGate?.status ?? null,
+    sourceWorkbenchPhaseGateState: phaseGate?.phaseState ?? null,
+    evidenceIds: row.evidenceIds ?? [],
+    reviewReasons: row.reviewReasons ?? [],
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+    sourceIntakeArtifactCount,
+    sourcePreparationArtifactCount,
+    counts: sourceWorkbenchCounts,
+    sourceIntakeCounts,
+    sourcePreparationCounts,
+    acceptedExtractionCounts,
+    readbackRoutes: readinessReadbackRoutes,
+    adminRoutes: uniqueValues([...readinessSourceIntakeAdminRoutes, ...readinessSourcePreparationAdminRoutes]),
+    sourceIntakeAdminRoutes: readinessSourceIntakeAdminRoutes,
+    sourcePreparationAdminRoutes: readinessSourcePreparationAdminRoutes,
+    sourceIntakeRoutes,
+    sourceIntakeRouteCounts: sourceIntakeEvidence.routeCounts ?? null,
+    sourcePreparationRoutes,
+    sourcePreparationRouteCounts: sourcePreparationEvidence.routeCounts ?? null,
+    sourceIntakeJsonlImportRoutes: sourceIntakeRoutes.jsonlImportRoutes ?? sourceIntakeJsonlImportRoutes,
+    sourceIntakeValidationPlan: {
+      workflowTemplateId: "extraction-batch-jsonl-import",
+      validationPolicy:
+        "Use dryRun=true or validateOnly=true before append. Dry-runs validate source-card/span bindings, extraction-batch metadata, duplicate argument-extraction ids, review-field bypass attempts, and no-promotion/no-AI flags without appending Phase 1 events.",
+      unchangedTemplatePolicy:
+        "Source-intake workbench template ids are examples only; operators must replace source-card, source-span, extraction-batch, and argument-extraction ids with real reviewed source material before append.",
+      steps: [
+        {
+          stepKind: "create_source_card",
+          route: "/api/v1/admin/sources",
+          evidence: "SourceCard is admin-only and does not create rater-visible source provenance.",
+        },
+        {
+          stepKind: "create_source_span",
+          route: "/api/v1/admin/sources/{id}/spans",
+          evidence: "SourceSpan is bounded to a SourceCard and keeps raw excerpts admin-only.",
+        },
+        {
+          stepKind: "dry_run_extraction_import",
+          routes: sourceIntakeJsonlImportRoutes.map((item) => item.dryRunImportRoute),
+          evidence: "Dry-run must validate JSONL and bindings with no workflow-event append.",
+        },
+        {
+          stepKind: "append_extraction_import",
+          routes: sourceIntakeJsonlImportRoutes.map((item) => item.route),
+          evidence: "Append creates ExtractionBatch and ArgumentExtraction workflow evidence only.",
+        },
+        {
+          stepKind: "review_argument_extraction",
+          route: "/api/v1/admin/extractions/{id}/review",
+          evidence: "Manual review may accept or reject extraction; review does not create PreparedDraft or CandidateItem.",
+        },
+      ],
+    },
+    sourcePreparationValidationPlan: {
+      workflowTemplateId: "source-preparation-review-and-promotion",
+      validationPolicy:
+        "Create PreparedDraft records only from manually accepted ArgumentExtraction records. PreparedDraft review may add ReviewSignal evidence and GateDecision rows, but promotion is blocked until the prepared_draft_readiness gates pass, are not applicable, or are waived with reason.",
+      requiredGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
+      workflowPolicy: sourcePreparationEvidence.workflowPolicy ?? {
+        policyId: "prepared_draft_readiness",
+        appliesTo: WORKFLOW_POLICIES.prepared_draft_readiness.appliesTo,
+        requiredGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
+        requiredGates: requiredGateIdsForPolicy("prepared_draft_readiness").map((gateId) => WORKFLOW_GATES[gateId]).filter(Boolean),
+      },
+      unchangedTemplatePolicy:
+        "Source-preparation route templates are operator guidance only; they must be bound to real accepted extractions and reviewed prepared drafts before append.",
+      steps: [
+        {
+          stepKind: "create_prepared_position",
+          route: "/api/v1/admin/extractions/{id}/create-prepared-position",
+          evidence: "Creates a PreparedDraft for rater-visible position text from an accepted extraction only.",
+        },
+        {
+          stepKind: "create_prepared_critique",
+          route: "/api/v1/admin/extractions/{id}/create-prepared-critique",
+          evidence: "Creates a PreparedDraft for rater-visible critique text from an accepted extraction and target position link only.",
+        },
+        {
+          stepKind: "review_prepared_draft",
+          route: "/api/v1/admin/prepared-drafts/{id}/review",
+          evidence: "Reviewer edits prepared text, records ReviewSignal evidence, and records GateDecision rows without creating candidate or live records.",
+        },
+        {
+          stepKind: "promote_prepared_draft_to_candidate_layer",
+          route: "/api/v1/admin/prepared-drafts/{id}/promote",
+          evidence: "Promotion creates CandidateItem and PromotionRecord artifacts only after prepared-draft gates pass.",
+        },
+      ],
+    },
+    completionEvidence:
+      row.status === "not_applicable_without_source_derived_items"
+        ? "No source-derived items are used, so source intake and source preparation are not release-closing requirements."
+        : "Source-derived items require Phase 1 intake readiness, source-preparation review completion, and an available route phase gate before they can support release claims.",
+    nonPromotionBoundary:
+      "Source-intake import and extraction review do not create PreparedDraft, CandidateItem, PromotionRecord, AI extraction, candidate-batch membership, live queue work, or live Position/Critique records.",
+  };
+}
+
+function targetGapCollectionPlanItem(item, index) {
+  const operatorActions = Array.isArray(item.operatorActions) ? item.operatorActions : [];
+  const primaryAction = operatorActions.find((action) => action.importImpact) ?? operatorActions[0] ?? {};
+  const setupAction = operatorActions.find((action) => action.setupImportImpact) ?? primaryAction;
+  const primaryImportImpact = primaryAction.importImpact ?? null;
+  const setupImportImpact = setupAction.setupImportImpact ?? null;
+  const dependentActionIds = item.operatorActionIds ?? operatorActions.map((action) => action.id).filter(Boolean);
+  const checklistRowIds = item.checklistRowIds ?? uniqueValues(operatorActions.map((action) => action.checklistRowId));
+  const duplicateActionCount = Math.max(0, dependentActionIds.length - 1);
+  const bulkImportRoute = item.bulkImportRoutes?.[0] ?? primaryAction.bulkImportRoute ?? null;
+  const setupBulkImportRoute = item.setupBulkImportRoutes?.[0] ?? setupAction.setupBulkImportRoute ?? null;
+  const setupRouteInfos = targetGapCollectionPlanSetupRouteInfos({
+    item,
+    setupAction,
+    primaryAction,
+    setupBulkImportRoute,
+  });
+  const estimatedSetupRecordsRequired = targetGapCollectionPlanImpactSum(setupRouteInfos, "estimatedRecordsRequired");
+  const setupExpectedResourceDelta = targetGapCollectionPlanImpactSum(setupRouteInfos, "expectedResourceDelta");
+  const templateReadbackRoute = targetGapCollectionPlanTemplateRoute(item.id);
+  const expandedTemplateReadbackRoute = targetGapCollectionPlanTemplateRoute(item.id, { expand: "remaining" });
+  const cappedExpandedTemplateReadbackRoute = targetGapCollectionPlanTemplateRoute(item.id, {
+    expand: "remaining",
+    maxExpandedRecords: 100,
+  });
+  const starterExpandedTemplateReadbackRoute = targetGapCollectionStarterExpandedTemplateRoute(expandedTemplateReadbackRoute);
+  const executionStatus = item.executionStatus ?? (Number(item.remaining) > 0 ? "ready_to_collect_data" : "closed");
+  const executionStatusReason =
+    item.executionStatusReason ??
+    (executionStatus === "ready_to_collect_data"
+      ? "This target gap can accept real target data now; generated templates must be replaced and dry-run validated before append."
+      : "The release report no longer shows remaining records for this target gap.");
+  return {
+    id: item.id,
+    targetGapId: item.id,
+    sequence: index + 1,
+    label: item.label,
+    target: item.target,
+    current: item.current,
+    remaining: item.remaining,
+    status: item.status,
+    executionStatus,
+    executionStatusReason,
+    sourceEvidenceId: item.sourceEvidenceId,
+    actionStatus: Number(item.remaining) > 0 ? "collect_data_before_release_completion" : "target_gap_met",
+    preconditionStatus: Number(item.remaining) > 0 ? "data_collection_required_before_release_claim" : "target_gap_met",
+    dependentActionIds,
+    dependentActionCount: dependentActionIds.length,
+    duplicateActionCount,
+    duplicatedBecause: duplicateActionCount ? "shared_target_gap_across_checklist_rows" : null,
+    checklistRowIds,
+    primaryActionId: primaryAction.id ?? null,
+    primaryChecklistRowId: primaryAction.checklistRowId ?? checklistRowIds[0] ?? null,
+    writeRoute: item.writeRoutes?.[0] ?? primaryAction.writeRoute ?? null,
+    bulkImportRoute,
+    dryRunImportRoute: routeWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+    validateOnlyImportRoute: routeWithQueryFlag(bulkImportRoute, "validateOnly", "true"),
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    setupWriteRoute: item.setupWriteRoutes?.[0] ?? setupAction.setupWriteRoute ?? null,
+    setupBulkImportRoute,
+    setupDryRunImportRoute: routeWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
+    setupValidateOnlyImportRoute: routeWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+    readbackRoute: item.readbackRoutes?.[0] ?? primaryAction.readbackRoute ?? null,
+    submissionReadbackRoute: item.submissionReadbackRoutes?.[0] ?? primaryAction.submissionReadbackRoute ?? primaryAction.readbackRoute ?? null,
+    setupReadbackRoute: item.setupReadbackRoutes?.[0] ?? setupAction.setupReadbackRoute ?? null,
+    targetGapReadbackRoute: item.targetGapReadbackRoutes?.[0] ?? primaryAction.targetGapReadbackRoute ?? "/api/v1/target-gaps",
+    targetGapReadbackItemRoute:
+      item.targetGapReadbackItemRoutes?.[0] ?? primaryAction.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(item.id)}`,
+    workflowTemplateId: item.workflowTemplateIds?.[0] ?? primaryAction.workflowTemplateId ?? null,
+    bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateIds?.[0] ?? primaryAction.bulkImportWorkflowTemplateId ?? null,
+    setupWorkflowTemplateId: item.setupWorkflowTemplateIds?.[0] ?? setupAction.setupWorkflowTemplateId ?? null,
+    setupBulkImportWorkflowTemplateId: item.setupBulkImportWorkflowTemplateIds?.[0] ?? setupAction.setupBulkImportWorkflowTemplateId ?? null,
+    actorRole: item.actorRoles?.[0] ?? primaryAction.actorRole ?? null,
+    setupActorRole: item.setupActorRoles?.[0] ?? setupAction.setupActorRole ?? null,
+    importImpact: primaryImportImpact,
+    setupImportImpact,
+    templateReadbackRoute,
+    expandedTemplateReadbackRoute,
+    starterExpandedTemplateReadbackRoute,
+    cappedExpandedTemplateReadbackRoute,
+    unchangedTemplatePolicy:
+      "Generated target-data template records are templateOnly=true and TODO-filled; import routes reject unchanged template rows until operators replace them with real data.",
+    templateExpansionPolicy:
+      "Use expand=remaining when generating placeholder rows for the estimated remaining count; use maxExpandedRecords for bounded previews. Expanded templates still do not create evidence until every placeholder is replaced and the JSONL passes dry-run validation.",
+    dryRunValidationPolicy:
+      "Use dryRun=true or validateOnly=true before append. Dry-runs validate all lines, duplicate ids, assignment authorization, qualification, and import-specific binding rules without appending workflow or rating events.",
+    packageImportPolicy:
+      "Use the target-data package route when one replaced JSONL file contains setup and primary rows or spans multiple target gaps; package dry-runs reject the whole package before append if any line fails.",
+    estimatedRecordsRequired: primaryImportImpact?.estimatedRecordsRequired ?? null,
+    estimatedSetupRecordsRequired,
+    expectedResourceDelta: primaryImportImpact?.expectedResourceDelta ?? null,
+    setupExpectedResourceDelta,
+    targetResourceDeltaBeyondEstimatedRecords: Math.max(
+      0,
+      (Number.isFinite(Number(primaryImportImpact?.expectedResourceDelta)) ? Number(primaryImportImpact.expectedResourceDelta) : 0) -
+        (Number.isFinite(Number(primaryImportImpact?.estimatedRecordsRequired)) ? Number(primaryImportImpact.estimatedRecordsRequired) : 0),
+    ),
+    importSequence: targetGapCollectionPlanSequence({
+      item,
+      primaryAction,
+      setupAction,
+      primaryImportImpact,
+      setupImportImpact,
+      bulkImportRoute,
+      setupBulkImportRoute,
+      setupRouteInfos,
+      templateReadbackRoute,
+      expandedTemplateReadbackRoute,
+      starterExpandedTemplateReadbackRoute,
+      cappedExpandedTemplateReadbackRoute,
+    }),
+    collectionChecklist: targetGapCollectionChecklist({
+      item,
+      bulkImportRoute,
+      setupBulkImportRoute,
+      setupRouteInfos,
+      templateReadbackRoute,
+      expandedTemplateReadbackRoute,
+      cappedExpandedTemplateReadbackRoute,
+    }),
+    completionEvidence: item.completionEvidence ?? uniqueValues(operatorActions.map((action) => action.completionEvidence)),
+    releaseReadinessEffect:
+      Number(item.remaining) > 0 ? "blocks_release_completion_until_real_data_submitted" : "target_gap_no_longer_blocks_release_completion",
+    duplicateActionHandling: duplicateActionCount
+      ? "Submit once through the target data route; the shared target-gap count will clear the dependent checklist rows after /api/release/report recomputes."
+      : "Single checklist row depends on this target gap.",
+    operatorActions,
+  };
+}
+
+function targetGapCollectionPlanSetupRouteInfos({ item, setupAction, primaryAction, setupBulkImportRoute }) {
+  const setupRoutes = uniqueValues([
+    setupBulkImportRoute,
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+    ...(Array.isArray(setupAction?.setupBulkImportRoutes) ? setupAction.setupBulkImportRoutes : []),
+  ]);
+  const setupTemplateIds = uniqueValues([
+    setupAction?.setupBulkImportWorkflowTemplateId,
+    ...(Array.isArray(item?.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : []),
+    ...(Array.isArray(setupAction?.setupBulkImportWorkflowTemplateIds) ? setupAction.setupBulkImportWorkflowTemplateIds : []),
+  ]);
+  const actionForImpact = {
+    ...(primaryAction ?? {}),
+    ...(setupAction ?? {}),
+    targetGapId: item?.id ?? item?.targetGapId ?? setupAction?.targetGapId ?? primaryAction?.targetGapId ?? null,
+    target: item?.target ?? setupAction?.target ?? primaryAction?.target ?? null,
+    current: item?.current ?? setupAction?.current ?? primaryAction?.current ?? null,
+    remaining: item?.remaining ?? setupAction?.remaining ?? primaryAction?.remaining ?? null,
+    status: item?.status ?? setupAction?.status ?? primaryAction?.status ?? null,
+    sourceEvidenceId: item?.sourceEvidenceId ?? setupAction?.sourceEvidenceId ?? primaryAction?.sourceEvidenceId ?? null,
+    completionEvidence: setupAction?.completionEvidence ?? primaryAction?.completionEvidence ?? null,
+    targetGapReadbackItemRoute:
+      item?.targetGapReadbackItemRoute ?? setupAction?.targetGapReadbackItemRoute ?? primaryAction?.targetGapReadbackItemRoute ?? null,
+  };
+  return setupRoutes.map((importRoute, index) => {
+    const routeInfo = {
+      importKind: "setup_data_import",
+      importRoute,
+      workflowTemplateId:
+        importRoute === setupAction?.setupBulkImportRoute
+          ? setupAction?.setupBulkImportWorkflowTemplateId ?? setupTemplateIds[index] ?? null
+          : setupTemplateIds[index] ?? targetDataCollectionDefaultSetupWorkflowTemplateId(importRoute),
+      ...targetDataCollectionSetupRouteDefaults(importRoute),
+    };
+    const declaredImpact = [
+      ...(Array.isArray(setupAction?.importImpacts) ? setupAction.importImpacts : []),
+      ...(Array.isArray(item?.operatorActions) ? item.operatorActions.flatMap((action) => action.importImpacts ?? []) : []),
+    ].find((impact) => impact?.importRoute === importRoute && impact?.importKind === "setup_data_import");
+    return {
+      ...routeInfo,
+      importImpact: declaredImpact ?? targetDataCollectionImportImpact(actionForImpact, routeInfo),
+    };
+  });
+}
+
+function targetDataCollectionSetupRouteDefaults(importRoute) {
+  if (importRoute === ratingContextSnapshotBulkJsonlImportRoute) {
+    return {
+      resourceKey: "ratingContextSnapshot",
+      writeRoute: "/api/v1/rating-context-snapshots",
+      readbackRoute: "/api/v1/rating-context-snapshots",
+    };
+  }
+  if (importRoute === "/api/v1/assignments/import-jsonl") {
+    return {
+      resourceKey: "assignment",
+      writeRoute: "/api/v1/assignments",
+      readbackRoute: "/api/v1/assignments",
+    };
+  }
+  return { resourceKey: null, writeRoute: null, readbackRoute: null };
+}
+
+function targetGapCollectionPlanImpactSum(routeInfos, fieldName) {
+  return (Array.isArray(routeInfos) ? routeInfos : []).reduce(
+    (sum, routeInfo) =>
+      sum + (Number.isFinite(Number(routeInfo?.importImpact?.[fieldName])) ? Number(routeInfo.importImpact[fieldName]) : 0),
+    0,
+  );
+}
+
+function targetGapCollectionPlanSequence({
+  item,
+  primaryAction,
+  setupAction,
+  primaryImportImpact,
+  setupImportImpact,
+  bulkImportRoute,
+  setupBulkImportRoute,
+  setupRouteInfos = null,
+  templateReadbackRoute,
+  expandedTemplateReadbackRoute,
+  starterExpandedTemplateReadbackRoute,
+  cappedExpandedTemplateReadbackRoute,
+}) {
+  const steps = [];
+  const setupRoutes =
+    setupRouteInfos ??
+    targetGapCollectionPlanSetupRouteInfos({
+      item,
+      setupAction,
+      primaryAction,
+      setupBulkImportRoute,
+    });
+  for (const routeInfo of setupRoutes) {
+    const currentSetupImportImpact = routeInfo.importImpact ?? setupImportImpact;
+    steps.push({
+      sequence: steps.length + 1,
+      stepKind: "setup_data_import",
+      importKind: "setup_data_import",
+      resourceKey: routeInfo.resourceKey ?? null,
+      targetGapId: item.id,
+      actionId: setupAction.id ?? primaryAction.id ?? null,
+      checklistRowId: setupAction.checklistRowId ?? primaryAction.checklistRowId ?? null,
+      importRoute: routeInfo.importRoute,
+      dryRunImportRoute: routeWithQueryFlag(routeInfo.importRoute, "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag(routeInfo.importRoute, "validateOnly", "true"),
+      packageImportRoute: targetDataCollectionPackageImportRoute,
+      packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+      packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+      templateReadbackRoute,
+      expandedTemplateReadbackRoute,
+      starterExpandedTemplateReadbackRoute,
+      cappedExpandedTemplateReadbackRoute,
+      writeRoute: routeInfo.writeRoute ?? setupAction.setupWriteRoute ?? null,
+      readbackRoute: routeInfo.readbackRoute ?? setupAction.setupReadbackRoute ?? null,
+      workflowTemplateId: routeInfo.workflowTemplateId ?? setupAction.setupBulkImportWorkflowTemplateId ?? setupAction.setupWorkflowTemplateId ?? null,
+      actorRole: setupAction.setupActorRole ?? null,
+      estimatedRecordsRequired: currentSetupImportImpact?.estimatedRecordsRequired ?? null,
+      expectedResourceDelta: currentSetupImportImpact?.expectedResourceDelta ?? null,
+      targetResourceDeltaBeyondEstimatedRecords: Math.max(
+        0,
+        (Number.isFinite(Number(currentSetupImportImpact?.expectedResourceDelta)) ? Number(currentSetupImportImpact.expectedResourceDelta) : 0) -
+          (Number.isFinite(Number(currentSetupImportImpact?.estimatedRecordsRequired)) ? Number(currentSetupImportImpact.estimatedRecordsRequired) : 0),
+      ),
+      closesTargetGapWhenValidated: currentSetupImportImpact?.closesTargetGapWhenValidated === true,
+      effect: currentSetupImportImpact?.effect ?? null,
+      verificationRoute: currentSetupImportImpact?.verificationRoute ?? setupAction.targetGapReadbackItemRoute ?? null,
+      completionEvidence: currentSetupImportImpact?.completionEvidence ?? setupAction.completionEvidence ?? null,
+    });
+  }
+  if (primaryImportImpact || bulkImportRoute || primaryAction.writeRoute) {
+    steps.push({
+      sequence: steps.length + 1,
+      stepKind: bulkImportRoute ? "primary_data_import" : "single_record_submission",
+      targetGapId: item.id,
+      actionId: primaryAction.id ?? null,
+      checklistRowId: primaryAction.checklistRowId ?? null,
+      importRoute: bulkImportRoute,
+      dryRunImportRoute: routeWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag(bulkImportRoute, "validateOnly", "true"),
+      packageImportRoute: targetDataCollectionPackageImportRoute,
+      packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+      packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+      templateReadbackRoute,
+      expandedTemplateReadbackRoute,
+      starterExpandedTemplateReadbackRoute,
+      cappedExpandedTemplateReadbackRoute,
+      writeRoute: primaryAction.writeRoute ?? item.writeRoutes?.[0] ?? null,
+      readbackRoute: primaryAction.submissionReadbackRoute ?? primaryAction.readbackRoute ?? item.readbackRoutes?.[0] ?? null,
+      workflowTemplateId: primaryAction.bulkImportWorkflowTemplateId ?? primaryAction.workflowTemplateId ?? null,
+      actorRole: primaryAction.actorRole ?? null,
+      estimatedRecordsRequired: primaryImportImpact?.estimatedRecordsRequired ?? null,
+      expectedResourceDelta: primaryImportImpact?.expectedResourceDelta ?? null,
+      targetResourceDeltaBeyondEstimatedRecords: Math.max(
+        0,
+        (Number.isFinite(Number(primaryImportImpact?.expectedResourceDelta)) ? Number(primaryImportImpact.expectedResourceDelta) : 0) -
+          (Number.isFinite(Number(primaryImportImpact?.estimatedRecordsRequired)) ? Number(primaryImportImpact.estimatedRecordsRequired) : 0),
+      ),
+      closesTargetGapWhenValidated: primaryImportImpact?.closesTargetGapWhenValidated === true,
+      effect: primaryImportImpact?.effect ?? null,
+      verificationRoute: primaryImportImpact?.verificationRoute ?? primaryAction.targetGapReadbackItemRoute ?? null,
+      completionEvidence: primaryImportImpact?.completionEvidence ?? primaryAction.completionEvidence ?? null,
+    });
+  }
+  return steps;
+}
+
+function targetGapCollectionPlanTemplateRoute(targetGapId, options = {}) {
+  const params = new URLSearchParams();
+  params.set("targetGapId", targetGapId ?? "");
+  if (options.expand) params.set("expand", options.expand);
+  if (Number.isInteger(options.maxExpandedRecords) && options.maxExpandedRecords > 0) {
+    params.set("maxExpandedRecords", String(options.maxExpandedRecords));
+  }
+  return `/api/v1/target-gaps/import-jsonl-template?${params.toString()}`;
+}
+
+function targetGapCollectionPackageTemplateRoute(options = {}) {
+  const params = new URLSearchParams();
+  if (options.expand) params.set("expand", options.expand);
+  if (Number.isInteger(options.maxExpandedRecords) && options.maxExpandedRecords > 0) {
+    params.set("maxExpandedRecords", String(options.maxExpandedRecords));
+  }
+  const query = params.toString();
+  return `/api/v1/target-gaps/import-jsonl-template${query ? `?${query}` : ""}`;
+}
+
+function targetGapCollectionStarterExpandedTemplateRoute(route) {
+  return route ? routeWithQueryFlag(route, "maxExpandedRecords", String(targetDataPackageStarterRecordCap)) : null;
+}
+
+function routeWithQueryFlag(route, key, value) {
+  if (!route) return null;
+  const separator = String(route).includes("?") ? "&" : "?";
+  return `${route}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+}
+
+function targetGapCollectionChecklist({
+  item,
+  bulkImportRoute,
+  setupBulkImportRoute,
+  setupRouteInfos = null,
+  templateReadbackRoute,
+  expandedTemplateReadbackRoute,
+  cappedExpandedTemplateReadbackRoute,
+}) {
+  const setupRoutes = setupRouteInfos ?? (setupBulkImportRoute ? [{ importRoute: setupBulkImportRoute }] : []);
+  const setupTemplateSteps = setupRoutes.map((routeInfo) => ({
+    stepKind: "load_setup_template",
+    importRoute: routeInfo.importRoute ?? null,
+    route: templateReadbackRoute,
+    expandedRoute: expandedTemplateReadbackRoute,
+    cappedExpandedRoute: cappedExpandedTemplateReadbackRoute,
+    status: "required_before_rating_completion",
+    evidence: `${humanizeServerLabel(routeInfo.resourceKey ?? "setup")} setup template contains setup_data_import rows for this target gap`,
+  }));
+  const setupDryRunSteps = setupRoutes.map((routeInfo) => ({
+    stepKind: "dry_run_setup_import",
+    importRoute: routeInfo.importRoute ?? null,
+    route: routeWithQueryFlag(routeInfo.importRoute, "dryRun", "true"),
+    status: "recommended_before_append",
+    evidence: `${humanizeServerLabel(routeInfo.resourceKey ?? "setup")} setup import validates without closing the target gap`,
+  }));
+  const setupAppendSteps = setupRoutes.map((routeInfo) => ({
+    stepKind: "append_setup_import",
+    importRoute: routeInfo.importRoute ?? null,
+    route: routeInfo.importRoute ?? null,
+    status: "required_before_rating_completion",
+    evidence: `${humanizeServerLabel(routeInfo.resourceKey ?? "setup")} setup rows prepare assigned-rating completion but do not reduce the target-gap remaining count`,
+  }));
+  const steps = [
+    ...setupTemplateSteps,
+    {
+      stepKind: "load_primary_template",
+      route: templateReadbackRoute,
+      expandedRoute: expandedTemplateReadbackRoute,
+      cappedExpandedRoute: cappedExpandedTemplateReadbackRoute,
+      status: "required",
+      evidence: "template rows provide the expected JSONL shape and target-gap import impact",
+    },
+    ...setupDryRunSteps,
+    bulkImportRoute
+      ? {
+          stepKind: "dry_run_primary_import",
+          route: routeWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+          status: "recommended_before_append",
+          evidence: "primary import validates without appending data or satisfying release evidence",
+        }
+      : null,
+    ...setupAppendSteps,
+    bulkImportRoute
+      ? {
+          stepKind: "append_primary_import",
+          route: bulkImportRoute,
+          status: "required",
+          evidence: "validated real records can reduce the target-gap remaining count after release-report recomputation",
+        }
+      : null,
+    {
+      stepKind: "verify_target_gap",
+      route: `/api/v1/target-gaps/${encodeURIComponent(item.id ?? item.targetGapId ?? "target")}`,
+      status: "required_after_append",
+      evidence: "direct target-gap readback plus /api/release/report must show the remaining count changed",
+    },
+  ].filter(Boolean);
+  return steps.map((step, index) => ({ sequence: index + 1, targetGapId: item.id ?? item.targetGapId ?? null, ...step }));
+}
+
+function targetGapItems(rows, actionItems = []) {
+  return rows.map((row) => {
+    const matchingActions = actionItems.filter((item) => item?.actionType === "collect_data" && item?.targetGapId === row.id);
+    const operatorActions = matchingActions.map((item) => ({
+      id: item.id,
+      checklistRowId: item.checklistRowId,
+      label: item.label,
+      importImpact: item.importImpact ?? null,
+      setupImportImpact: item.setupImportImpact ?? null,
+      importImpacts: [item.importImpact, item.setupImportImpact].filter(Boolean),
+      writeRoute: item.writeRoute,
+      bulkImportRoute: item.bulkImportRoute ?? null,
+      setupBulkImportRoute: item.setupBulkImportRoute ?? null,
+      readbackRoute: item.readbackRoute,
+      submissionReadbackRoute: item.submissionReadbackRoute ?? item.readbackRoute,
+      setupWriteRoute: item.setupWriteRoute ?? null,
+      setupReadbackRoute: item.setupReadbackRoute ?? null,
+      targetGapReadbackRoute: item.targetGapReadbackRoute ?? null,
+      targetGapReadbackItemRoute: item.targetGapReadbackItemRoute ?? null,
+      setupBulkImportRoutes: item.setupBulkImportRoutes ?? uniqueValues([item.setupBulkImportRoute]),
+      workflowTemplateId: item.workflowTemplateId ?? null,
+      setupWorkflowTemplateId: item.setupWorkflowTemplateId ?? null,
+      bulkImportWorkflowTemplateId: item.bulkImportWorkflowTemplateId ?? null,
+      setupBulkImportWorkflowTemplateId: item.setupBulkImportWorkflowTemplateId ?? null,
+      setupBulkImportWorkflowTemplateIds: item.setupBulkImportWorkflowTemplateIds ?? uniqueValues([item.setupBulkImportWorkflowTemplateId]),
+      actorRole: item.actorRole ?? null,
+      setupActorRole: item.setupActorRole ?? null,
+      completionEvidence: item.completionEvidence ?? null,
+    }));
+    const primaryAction = matchingActions.find((item) => item.importImpact) ?? matchingActions[0] ?? {};
+    const setupAction = matchingActions.find((item) => item.setupImportImpact) ?? primaryAction;
+    const bulkImportRoute = primaryAction.bulkImportRoute ?? null;
+    const setupBulkImportRoute = setupAction.setupBulkImportRoute ?? null;
+    const setupBulkImportRoutes = uniqueValues([
+      setupBulkImportRoute,
+      ...matchingActions.flatMap((item) => (Array.isArray(item.setupBulkImportRoutes) ? item.setupBulkImportRoutes : [])),
+    ]);
+    const setupBulkImportWorkflowTemplateIds = uniqueValues([
+      setupAction.setupBulkImportWorkflowTemplateId,
+      ...matchingActions.flatMap((item) =>
+        Array.isArray(item.setupBulkImportWorkflowTemplateIds) ? item.setupBulkImportWorkflowTemplateIds : [],
+      ),
+    ]);
+    const executionStatus = Number(row.remaining) > 0 ? "ready_to_collect_data" : "closed";
+    return {
+      ...row,
+      targetGapId: row.id,
+      operatorActionIds: matchingActions.map((item) => item.id).filter(Boolean),
+      checklistRowIds: uniqueValues(matchingActions.map((item) => item.checklistRowId)),
+      writeRoutes: uniqueValues(matchingActions.map((item) => item.writeRoute)),
+      bulkImportRoutes: uniqueValues(matchingActions.map((item) => item.bulkImportRoute)),
+      setupBulkImportRoutes,
+      readbackRoutes: uniqueValues(matchingActions.map((item) => item.readbackRoute)),
+      submissionReadbackRoutes: uniqueValues(matchingActions.map((item) => item.submissionReadbackRoute ?? item.readbackRoute)),
+      setupWriteRoutes: uniqueValues(matchingActions.map((item) => item.setupWriteRoute)),
+      setupReadbackRoutes: uniqueValues(matchingActions.map((item) => item.setupReadbackRoute)),
+      targetGapReadbackRoutes: uniqueValues(matchingActions.map((item) => item.targetGapReadbackRoute)),
+      targetGapReadbackItemRoutes: uniqueValues(matchingActions.map((item) => item.targetGapReadbackItemRoute)),
+      workflowTemplateIds: uniqueValues(matchingActions.map((item) => item.workflowTemplateId)),
+      setupWorkflowTemplateIds: uniqueValues(matchingActions.map((item) => item.setupWorkflowTemplateId)),
+      bulkImportWorkflowTemplateIds: uniqueValues(matchingActions.map((item) => item.bulkImportWorkflowTemplateId)),
+      setupBulkImportWorkflowTemplateIds,
+      actorRoles: uniqueValues(matchingActions.map((item) => item.actorRole)),
+      setupActorRoles: uniqueValues(matchingActions.map((item) => item.setupActorRole)),
+      completionEvidence: uniqueValues(matchingActions.map((item) => item.completionEvidence)),
+      executionStatus,
+      executionStatusReason:
+        executionStatus === "ready_to_collect_data"
+          ? "This target gap can accept real target data now; generated templates must be replaced and dry-run validated before append."
+          : "The release report no longer shows remaining records for this target gap.",
+      collectionPlanRoute: `/api/v1/target-gaps/collection-plan/${encodeURIComponent(row.id)}`,
+      writeRoute: primaryAction.writeRoute ?? null,
+      bulkImportRoute,
+      dryRunImportRoute: routeWithQueryFlag(bulkImportRoute, "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag(bulkImportRoute, "validateOnly", "true"),
+      packageImportRoute: targetDataCollectionPackageImportRoute,
+      packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+      packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+      setupWriteRoute: setupAction.setupWriteRoute ?? null,
+      setupBulkImportRoute,
+      setupDryRunImportRoute: routeWithQueryFlag(setupBulkImportRoute, "dryRun", "true"),
+      setupValidateOnlyImportRoute: routeWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
+      readbackRoute: primaryAction.readbackRoute ?? null,
+      submissionReadbackRoute: primaryAction.submissionReadbackRoute ?? primaryAction.readbackRoute ?? null,
+      setupReadbackRoute: setupAction.setupReadbackRoute ?? null,
+      targetGapReadbackRoute: primaryAction.targetGapReadbackRoute ?? "/api/v1/target-gaps",
+      targetGapReadbackItemRoute: primaryAction.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(row.id)}`,
+      workflowTemplateId: primaryAction.workflowTemplateId ?? null,
+      bulkImportWorkflowTemplateId: primaryAction.bulkImportWorkflowTemplateId ?? null,
+      setupWorkflowTemplateId: setupAction.setupWorkflowTemplateId ?? null,
+      setupBulkImportWorkflowTemplateId: setupAction.setupBulkImportWorkflowTemplateId ?? null,
+      actorRole: primaryAction.actorRole ?? null,
+      setupActorRole: setupAction.setupActorRole ?? null,
+      templateReadbackRoute: targetGapCollectionPlanTemplateRoute(row.id),
+      expandedTemplateReadbackRoute: targetGapCollectionPlanTemplateRoute(row.id, { expand: "remaining" }),
+      cappedExpandedTemplateReadbackRoute: targetGapCollectionPlanTemplateRoute(row.id, {
+        expand: "remaining",
+        maxExpandedRecords: 100,
+      }),
+      estimatedRecordsRequired: primaryAction.importImpact?.estimatedRecordsRequired ?? null,
+      estimatedSetupRecordsRequired: setupAction.setupImportImpact?.estimatedRecordsRequired ?? 0,
+      expectedResourceDelta: primaryAction.importImpact?.expectedResourceDelta ?? null,
+      setupExpectedResourceDelta: setupAction.setupImportImpact?.expectedResourceDelta ?? 0,
+      operatorActions,
+    };
+  });
+}
+
+function targetGapFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    targetGapId: value("targetGapId") ?? value("id"),
+    status: value("status"),
+    executionStatus: value("executionStatus") ?? value("readiness"),
+    sourceEvidenceId: value("sourceEvidenceId"),
+    checklistRowId: value("checklistRowId"),
+    writeRoute: value("writeRoute"),
+    bulkImportRoute: value("bulkImportRoute"),
+    setupBulkImportRoute: value("setupBulkImportRoute"),
+    readbackRoute: value("readbackRoute"),
+    route: value("route"),
+  };
+}
+
+function targetGapCollectionPlanFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    targetGapId: value("targetGapId") ?? value("id"),
+    status: value("status"),
+    executionStatus: value("executionStatus") ?? value("readiness"),
+    sourceEvidenceId: value("sourceEvidenceId"),
+    checklistRowId: value("checklistRowId"),
+    actionId: value("actionId") ?? value("operatorActionId"),
+    importKind: value("importKind") ?? value("stepKind"),
+    hasSetupImport: value("hasSetupImport") ?? value("setupImportRequired"),
+    hasDuplicateActions: value("hasDuplicateActions") ?? value("duplicateActions"),
+    writeRoute: value("writeRoute"),
+    bulkImportRoute: value("bulkImportRoute"),
+    setupBulkImportRoute: value("setupBulkImportRoute"),
+    readbackRoute: value("readbackRoute"),
+    route: value("route"),
+  };
+}
+
+function metaphilosophyDeliverableChecklistFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    deliverableId: value("deliverableId") ?? value("id"),
+    status: value("status"),
+    evidenceId: value("evidenceId"),
+  };
+}
+
+function metaphilosophySourceWorkbenchReadinessFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    status: value("status"),
+    sourceIntakeStatus: value("sourceIntakeStatus"),
+    sourcePreparationStatus: value("sourcePreparationStatus"),
+    phaseGateStatus: value("phaseGateStatus"),
+    usesSourceDerivedItems: value("usesSourceDerivedItems"),
+  };
+}
+
+function metaphilosophySourceWorkbenchTemplateFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    templateKind: value("templateKind"),
+    resourceKey: value("resourceKey"),
+    sourceWorkbenchRouteLane: value("sourceWorkbenchRouteLane") ?? value("routeLane"),
+    route: value("route"),
+  };
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter((value) => value !== null && value !== undefined && String(value).trim()).map((value) => String(value)))];
+}
+
+function isDerivedExecutionStatusFilter(value) {
+  return [
+    "ready_to_collect_data",
+    "ready_to_submit_evidence",
+    "ready_to_review_evidence",
+    "ready_to_verify_release",
+    "ready_to_execute",
+    "blocked_by_target_data",
+    "blocked_by_open_release_work",
+    "closed",
+  ].includes(value);
+}
+
+function targetGapMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "targetGapId") return item?.id === value;
+    if (key === "status") return targetGapMatchesStatus(item, value);
+    if (key === "checklistRowId") return Array.isArray(item?.checklistRowIds) && item.checklistRowIds.includes(value);
+    if (key === "writeRoute") return item?.writeRoute === value || item?.writeRoutes?.includes(value);
+    if (key === "bulkImportRoute") return item?.bulkImportRoute === value || item?.bulkImportRoutes?.includes(value);
+    if (key === "setupBulkImportRoute") return item?.setupBulkImportRoute === value || item?.setupBulkImportRoutes?.includes(value);
+    if (key === "readbackRoute") {
+      return (
+        item?.readbackRoute === value ||
+        item?.submissionReadbackRoute === value ||
+        item?.targetGapReadbackRoute === value ||
+        item?.targetGapReadbackItemRoute === value ||
+        item?.readbackRoutes?.includes(value) ||
+        item?.submissionReadbackRoutes?.includes(value) ||
+        item?.targetGapReadbackRoutes?.includes(value) ||
+        item?.targetGapReadbackItemRoutes?.includes(value)
+      );
+    }
+    if (key === "route") return targetGapRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function targetGapMatchesStatus(item, value) {
+  if (value === "open") return targetGapItemIsOpen(item);
+  if (value === "closed") return !targetGapItemIsOpen(item);
+  return item?.status === value;
+}
+
+function targetGapItemIsOpen(item) {
+  if (item?.status) return !["target_gap_complete", "complete", "closed"].includes(item.status);
+  if (item?.executionStatus) return item.executionStatus !== "closed";
+  return Number(item?.remaining ?? 0) > 0;
+}
+
+function targetGapRoutes(item) {
+  return uniqueValues([
+    item?.writeRoute,
+    item?.bulkImportRoute,
+    item?.dryRunImportRoute,
+    item?.validateOnlyImportRoute,
+    item?.singleRecordDryRunRoute,
+    item?.singleRecordValidateOnlyRoute,
+    item?.setupSingleRecordDryRunRoute,
+    item?.setupSingleRecordValidateOnlyRoute,
+    item?.packageImportRoute,
+    item?.packageDryRunImportRoute,
+    item?.packageValidateOnlyImportRoute,
+    item?.setupWriteRoute,
+    item?.setupBulkImportRoute,
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+    item?.setupDryRunImportRoute,
+    item?.setupValidateOnlyImportRoute,
+    item?.readbackRoute,
+    item?.submissionReadbackRoute,
+    item?.setupReadbackRoute,
+    item?.targetGapReadbackRoute,
+    item?.targetGapReadbackItemRoute,
+    item?.collectionPlanRoute,
+    item?.templateReadbackRoute,
+    item?.expandedTemplateReadbackRoute,
+    item?.cappedExpandedTemplateReadbackRoute,
+    ...(Array.isArray(item?.writeRoutes) ? item.writeRoutes : []),
+    ...(Array.isArray(item?.bulkImportRoutes) ? item.bulkImportRoutes : []),
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.submissionReadbackRoutes) ? item.submissionReadbackRoutes : []),
+    ...(Array.isArray(item?.targetGapReadbackRoutes) ? item.targetGapReadbackRoutes : []),
+    ...(Array.isArray(item?.targetGapReadbackItemRoutes) ? item.targetGapReadbackItemRoutes : []),
+    ...(Array.isArray(item?.operatorActions) ? item.operatorActions.flatMap(operatorActionItemRoutes) : []),
+  ]);
+}
+
+function targetGapCollectionPlanMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "targetGapId") return item?.targetGapId === value || item?.id === value;
+    if (key === "status") return targetGapMatchesStatus(item, value);
+    if (key === "checklistRowId") return Array.isArray(item?.checklistRowIds) && item.checklistRowIds.includes(value);
+    if (key === "actionId") {
+      return (
+        item?.primaryActionId === value ||
+        (Array.isArray(item?.dependentActionIds) && item.dependentActionIds.includes(value)) ||
+        (Array.isArray(item?.importSequence) && item.importSequence.some((step) => step.actionId === value))
+      );
+    }
+    if (key === "importKind") {
+      return Array.isArray(item?.importSequence) && item.importSequence.some((step) => step.stepKind === value || step.importKind === value);
+    }
+    if (key === "hasSetupImport") {
+      return booleanFilterMatches(
+        value,
+        Boolean(item?.setupBulkImportRoute) || Number(item?.estimatedSetupRecordsRequired ?? 0) > 0 || targetGapPlanHasStep(item, "setup_data_import"),
+      );
+    }
+    if (key === "hasDuplicateActions") return booleanFilterMatches(value, Number(item?.duplicateActionCount ?? 0) > 0);
+    if (key === "writeRoute") return item?.writeRoute === value || item?.operatorActions?.some((action) => action.writeRoute === value);
+    if (key === "bulkImportRoute") return item?.bulkImportRoute === value || item?.operatorActions?.some((action) => action.bulkImportRoute === value);
+    if (key === "setupBulkImportRoute") {
+      return (
+        item?.setupBulkImportRoute === value ||
+        item?.setupBulkImportRoutes?.includes(value) ||
+        item?.importSequence?.some((step) => step.importRoute === value && (step.importKind === "setup_data_import" || step.stepKind === "setup_data_import")) ||
+        item?.operatorActions?.some(
+          (action) => action.setupBulkImportRoute === value || (Array.isArray(action.setupBulkImportRoutes) && action.setupBulkImportRoutes.includes(value)),
+        )
+      );
+    }
+    if (key === "readbackRoute") {
+      return (
+        item?.readbackRoute === value ||
+        item?.submissionReadbackRoute === value ||
+        item?.targetGapReadbackRoute === value ||
+        item?.targetGapReadbackItemRoute === value ||
+        item?.operatorActions?.some((action) => action.readbackRoute === value || action.submissionReadbackRoute === value)
+      );
+    }
+    if (key === "route") return targetGapCollectionPlanRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function targetGapPlanHasStep(item, stepKind) {
+  return Array.isArray(item?.importSequence) && item.importSequence.some((step) => step.stepKind === stepKind || step.importKind === stepKind);
+}
+
+function targetGapCollectionPlanRoutes(item) {
+  return uniqueValues([
+    item?.writeRoute,
+    item?.bulkImportRoute,
+    item?.dryRunImportRoute,
+    item?.validateOnlyImportRoute,
+    item?.singleRecordDryRunRoute,
+    item?.singleRecordValidateOnlyRoute,
+    item?.setupSingleRecordDryRunRoute,
+    item?.setupSingleRecordValidateOnlyRoute,
+    item?.packageImportRoute,
+    item?.packageDryRunImportRoute,
+    item?.packageValidateOnlyImportRoute,
+    item?.setupWriteRoute,
+    item?.setupBulkImportRoute,
+    item?.setupDryRunImportRoute,
+    item?.setupValidateOnlyImportRoute,
+    item?.readbackRoute,
+    item?.submissionReadbackRoute,
+    item?.setupReadbackRoute,
+    item?.targetGapReadbackRoute,
+    item?.targetGapReadbackItemRoute,
+    item?.templateReadbackRoute,
+    item?.expandedTemplateReadbackRoute,
+    item?.starterExpandedTemplateReadbackRoute,
+    item?.cappedExpandedTemplateReadbackRoute,
+    ...(Array.isArray(item?.importSequence) ? item.importSequence.flatMap((step) => [step.importRoute, step.dryRunImportRoute, step.validateOnlyImportRoute]) : []),
+    ...(Array.isArray(item?.operatorActions) ? item.operatorActions.flatMap(operatorActionItemRoutes) : []),
+  ]);
+}
+
+function metaphilosophyDeliverableChecklistMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "deliverableId") return item.id === value || item.deliverableId === value;
+    if (key === "status") return metaphilosophyMatchesStatus(item, value);
+    if (key === "evidenceId") return Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function metaphilosophySourceWorkbenchReadinessMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "status") return metaphilosophyMatchesStatus(item, value);
+    if (key === "usesSourceDerivedItems") return String(item.usesSourceDerivedItems) === value;
+    return item?.[key] === value;
+  });
+}
+
+function metaphilosophyMatchesStatus(item, value) {
+  if (value === "open") return metaphilosophyStatusIsOpen(item);
+  if (value === "closed") return !metaphilosophyStatusIsOpen(item);
+  return item?.status === value;
+}
+
+function metaphilosophyStatusIsOpen(item) {
+  const status = String(item?.status ?? "").trim();
+  if (!status) return false;
+  if (["complete", "completed", "closed"].includes(status) || status.startsWith("not_applicable")) return false;
+  return true;
+}
+
+function metaphilosophySourceWorkbenchTemplateMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "route") return sourceWorkbenchTemplateItemRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function targetGapFilteredCounts(items) {
+  return {
+    targetRows: items.length,
+    openRows: items.filter(targetGapItemIsOpen).length,
+    closedRows: items.filter((item) => !targetGapItemIsOpen(item)).length,
+    byStatus: countItemsBy(items, "status"),
+    byExecutionStatus: countItemsBy(items, "executionStatus"),
+    readyTargetGaps: items.filter((item) => item.executionStatus === "ready_to_collect_data").length,
+    byChecklistRow: countExpandedValues(items, "checklistRowIds"),
+    byPrimaryImportRoute: countItemsBy(items, "bulkImportRoute"),
+    bySetupImportRoute: countItemsBy(items, "setupBulkImportRoute"),
+    byRoute: countValues(items.flatMap(targetGapRoutes)),
+    targetTotal: sumNumericField(items, "target"),
+    currentTotal: sumNumericField(items, "current"),
+    remainingTotal: sumNumericField(items, "remaining"),
+  };
+}
+
+function targetGapCollectionPlanCounts(items) {
+  const estimatedPrimaryRecordsRequired = sumNumericField(items, "estimatedRecordsRequired");
+  const estimatedSetupRecordsRequired = sumNumericField(items, "estimatedSetupRecordsRequired");
+  const expectedResourceDelta = sumNumericField(items, "expectedResourceDelta");
+  const expectedSetupResourceDelta = sumNumericField(items, "setupExpectedResourceDelta");
+  return {
+    targetRows: items.length,
+    uniqueTargetGaps: new Set(items.map((item) => item.targetGapId).filter(Boolean)).size,
+    openRows: items.filter(targetGapItemIsOpen).length,
+    closedRows: items.filter((item) => !targetGapItemIsOpen(item)).length,
+    dependentCollectActions: items.reduce((sum, item) => sum + (Number(item.dependentActionCount) || 0), 0),
+    duplicateCollectActions: items.reduce((sum, item) => sum + (Number(item.duplicateActionCount) || 0), 0),
+    importSequenceSteps: items.reduce((sum, item) => sum + (Array.isArray(item.importSequence) ? item.importSequence.length : 0), 0),
+    estimatedPrimaryRecordsRequired,
+    estimatedSetupRecordsRequired,
+    expectedResourceDelta,
+    expectedSetupResourceDelta,
+    targetResourceDeltaBeyondPrimaryRecords: Math.max(0, expectedResourceDelta - estimatedPrimaryRecordsRequired),
+    targetTotal: sumNumericField(items, "target"),
+    currentTotal: sumNumericField(items, "current"),
+    remainingTotal: sumNumericField(items, "remaining"),
+    byStatus: countItemsBy(items, "status"),
+    byExecutionStatus: countItemsBy(items, "executionStatus"),
+    byChecklistRow: countExpandedValues(items, "checklistRowIds"),
+    byActionId: countExpandedValues(items, "dependentActionIds"),
+    byImportSequenceStepKind: countValues(items.flatMap((item) => (Array.isArray(item.importSequence) ? item.importSequence.map((step) => step.stepKind) : []))),
+    byPrimaryImportRoute: countItemsBy(items, "bulkImportRoute"),
+    bySetupImportRoute: countItemsBy(items, "setupBulkImportRoute"),
+    byRoute: countValues(items.flatMap(targetGapCollectionPlanRoutes)),
+    withSetupImport: items.filter((item) => Boolean(item.setupBulkImportRoute) || Number(item.estimatedSetupRecordsRequired ?? 0) > 0 || targetGapPlanHasStep(item, "setup_data_import")).length,
+    withDuplicateActions: items.filter((item) => Number(item.duplicateActionCount ?? 0) > 0).length,
+  };
+}
+
+function targetGapCollectionPackagePlan(items) {
+  const sequenceItems = items.flatMap((item) =>
+    (Array.isArray(item.importSequence) ? item.importSequence : []).map((step) => ({
+      ...step,
+      targetGapId: step.targetGapId ?? item.targetGapId ?? item.id ?? null,
+      targetGapLabel: item.label ?? null,
+      collectionPlanRoute: `/api/v1/target-gaps/collection-plan/${encodeURIComponent(item.targetGapId ?? item.id ?? "target")}`,
+      targetGapReadbackItemRoute: item.targetGapReadbackItemRoute ?? `/api/v1/target-gaps/${encodeURIComponent(item.targetGapId ?? item.id ?? "target")}`,
+    })),
+  );
+  const stepOrder = { setup_data_import: 1, primary_data_import: 2, single_record_submission: 3 };
+  const executionSequence = sequenceItems
+    .slice()
+    .sort((left, right) => {
+      const leftOrder = stepOrder[left.stepKind] ?? 99;
+      const rightOrder = stepOrder[right.stepKind] ?? 99;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return String(left.targetGapId ?? "").localeCompare(String(right.targetGapId ?? ""));
+    })
+    .map((step, index) => ({
+      sequence: index + 1,
+      stepKind: step.stepKind,
+      targetGapId: step.targetGapId,
+      targetGapLabel: step.targetGapLabel,
+      actionId: step.actionId ?? null,
+      checklistRowId: step.checklistRowId ?? null,
+      importRoute: step.importRoute ?? null,
+      dryRunImportRoute: step.dryRunImportRoute ?? null,
+      validateOnlyImportRoute: step.validateOnlyImportRoute ?? null,
+      packageImportRoute: step.packageImportRoute ?? targetDataCollectionPackageImportRoute,
+      packageDryRunImportRoute: step.packageDryRunImportRoute ?? routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+      packageValidateOnlyImportRoute:
+        step.packageValidateOnlyImportRoute ?? routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+      templateReadbackRoute: step.templateReadbackRoute ?? null,
+      expandedTemplateReadbackRoute: step.expandedTemplateReadbackRoute ?? null,
+      starterExpandedTemplateReadbackRoute: step.starterExpandedTemplateReadbackRoute ?? null,
+      cappedExpandedTemplateReadbackRoute: step.cappedExpandedTemplateReadbackRoute ?? null,
+      collectionPlanRoute: step.collectionPlanRoute,
+      targetGapReadbackItemRoute: step.targetGapReadbackItemRoute,
+      estimatedRecordsRequired: step.estimatedRecordsRequired ?? null,
+      expectedResourceDelta: step.expectedResourceDelta ?? null,
+      targetResourceDeltaBeyondEstimatedRecords: step.targetResourceDeltaBeyondEstimatedRecords ?? 0,
+      closesTargetGapWhenValidated: step.closesTargetGapWhenValidated === true,
+      effect: step.effect ?? null,
+      verificationRoute: step.verificationRoute ?? step.targetGapReadbackItemRoute ?? null,
+      completionEvidence: step.completionEvidence ?? null,
+    }));
+  const setupSteps = executionSequence.filter((step) => step.stepKind === "setup_data_import");
+  const primarySteps = executionSequence.filter((step) => step.stepKind !== "setup_data_import");
+  const estimatedPrimaryRecordsRequired = sumNumericField(primarySteps, "estimatedRecordsRequired");
+  const estimatedSetupRecordsRequired = sumNumericField(setupSteps, "estimatedRecordsRequired");
+  const expectedPrimaryResourceDelta = sumNumericField(primarySteps, "expectedResourceDelta");
+  const expectedSetupResourceDelta = sumNumericField(setupSteps, "expectedResourceDelta");
+  const templateStarter = targetGapCollectionPackageTemplateStarter(executionSequence, {
+    estimatedRecordsRequired: estimatedPrimaryRecordsRequired + estimatedSetupRecordsRequired,
+    expectedResourceDelta: expectedPrimaryResourceDelta + expectedSetupResourceDelta,
+  });
+  return {
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    packageRecordContract:
+      "Each replaced JSONL line must name its concrete importRoute; generated templateOnly rows are rejected until operators replace placeholders with real target data.",
+    dryRunPolicy:
+      "Use the package dry-run or validate-only route first. The package importer validates every line and rejects the whole package before append if any line fails.",
+    verificationPolicy:
+      "Package import impact is advisory; /api/release/report and the listed target-gap readbacks remain the authoritative evidence that remaining counts changed.",
+    setupBeforePrimary: setupSteps.length > 0,
+    targetGapCount: uniqueValues(executionSequence.map((step) => step.targetGapId)).length,
+    targetGapIds: uniqueValues(executionSequence.map((step) => step.targetGapId)),
+    stepCount: executionSequence.length,
+    setupStepCount: setupSteps.length,
+    primaryStepCount: primarySteps.length,
+    estimatedRecordsRequired: estimatedPrimaryRecordsRequired + estimatedSetupRecordsRequired,
+    estimatedPrimaryRecordsRequired,
+    estimatedSetupRecordsRequired,
+    expectedResourceDelta: expectedPrimaryResourceDelta + expectedSetupResourceDelta,
+    expectedPrimaryResourceDelta,
+    expectedSetupResourceDelta,
+    targetResourceDeltaBeyondPrimaryRecords: Math.max(0, expectedPrimaryResourceDelta - estimatedPrimaryRecordsRequired),
+    importRoutes: uniqueValues(executionSequence.map((step) => step.importRoute)),
+    dryRunRoutes: uniqueValues(executionSequence.map((step) => step.dryRunImportRoute)),
+    validateOnlyRoutes: uniqueValues(executionSequence.map((step) => step.validateOnlyImportRoute)),
+    templateStarter,
+    templateReadbackRoutes: uniqueValues(executionSequence.map((step) => step.templateReadbackRoute)),
+    expandedTemplateReadbackRoutes: uniqueValues(executionSequence.map((step) => step.expandedTemplateReadbackRoute)),
+    starterExpandedTemplateReadbackRoutes: uniqueValues(executionSequence.map((step) => step.starterExpandedTemplateReadbackRoute)),
+    cappedExpandedTemplateReadbackRoutes: uniqueValues(executionSequence.map((step) => step.cappedExpandedTemplateReadbackRoute)),
+    collectionPlanRoutes: uniqueValues(executionSequence.map((step) => step.collectionPlanRoute)),
+    verificationRoutes: uniqueValues(executionSequence.flatMap((step) => [step.verificationRoute, step.targetGapReadbackItemRoute])),
+    executionSequence,
+  };
+}
+
+function targetGapCollectionPackageTemplateStarter(executionSequence, totals = {}) {
+  const stepTemplateRoutes = executionSequence.map((step) => ({
+    sequence: step.sequence,
+    stepKind: step.stepKind,
+    targetGapId: step.targetGapId,
+    targetGapLabel: step.targetGapLabel,
+    importRoute: step.importRoute ?? null,
+    dryRunImportRoute: step.dryRunImportRoute ?? null,
+    validateOnlyImportRoute: step.validateOnlyImportRoute ?? null,
+    templateReadbackRoute: step.templateReadbackRoute ?? null,
+    expandedTemplateReadbackRoute: step.expandedTemplateReadbackRoute ?? null,
+    starterExpandedTemplateReadbackRoute: step.starterExpandedTemplateReadbackRoute ?? null,
+    cappedExpandedTemplateReadbackRoute: step.cappedExpandedTemplateReadbackRoute ?? null,
+    collectionPlanRoute: step.collectionPlanRoute ?? null,
+    verificationRoute: step.verificationRoute ?? step.targetGapReadbackItemRoute ?? null,
+    estimatedRecordsRequired: step.estimatedRecordsRequired ?? null,
+    expectedResourceDelta: step.expectedResourceDelta ?? null,
+  }));
+  return {
+    templateKind: "target_data_package_starter",
+    recommendedStarterRecordCap: targetDataPackageStarterRecordCap,
+    recommendedStarterRecordCapScope: "per_template_expansion_group",
+    starterTemplateRoute: targetGapCollectionPackageTemplateRoute({
+      expand: "remaining",
+      maxExpandedRecords: targetDataPackageStarterRecordCap,
+    }),
+    fullTemplateRoute: targetGapCollectionPackageTemplateRoute({ expand: "remaining" }),
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    stepCount: executionSequence.length,
+    targetGapCount: uniqueValues(executionSequence.map((step) => step.targetGapId)).length,
+    targetGapIds: uniqueValues(executionSequence.map((step) => step.targetGapId)),
+    estimatedRecordsRequired: totals.estimatedRecordsRequired ?? sumNumericField(executionSequence, "estimatedRecordsRequired"),
+    expectedResourceDelta: totals.expectedResourceDelta ?? sumNumericField(executionSequence, "expectedResourceDelta"),
+    starterPolicy:
+      "The starter route is a capped templateOnly preview for constructing a package; maxExpandedRecords applies per template expansion group, it is not enough to close all target gaps, and unchanged records are rejected by import routes.",
+    templateRecordContract:
+      "Every replaced JSONL line must preserve the concrete importRoute from its template row, remove templateOnly placeholders, and supply real target data before package validation.",
+    verificationPolicy:
+      "After import, verify completion only through the listed target-gap readbacks and /api/release/report; this starter does not create release evidence.",
+    stepTemplateRoutes,
+  };
+}
+
+function sumNumericField(items, fieldName) {
+  return items.reduce((sum, item) => sum + (Number.isFinite(Number(item?.[fieldName])) ? Number(item[fieldName]) : 0), 0);
+}
+
+function operatorActionItemsReadback(report, options = {}) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const rawActionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapById = targetGapReadbackItemsById(report, rawActionItems);
+  const allItems = rawActionItems.map((item) => operatorActionItemWithExecutionStatus(operatorItemWithBlockedTargetGapContext(item, targetGapById)));
+  const filters = operatorActionItemFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => operatorActionItemMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `operator-action-items-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    releaseUseStatus: plan.releaseUseStatus ?? "operator_evidence_submission_plan_missing",
+    resourceKey: "operatorActionItem",
+    policy: {
+      scope:
+        "Read-only flattened operator queue derived from /api/release/report operatorEvidenceSubmissionPlan; it does not submit artifacts, waive gates, or create production evidence.",
+      access: "Admin/auditor readback only because action items expose operator routes and review targets.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: plan.counts ?? {},
+    filteredCounts: operatorActionItemFilteredCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function operatorActionItemFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    actionId: value("actionId") ?? value("id"),
+    actionType: value("actionType"),
+    checklistRowId: value("checklistRowId"),
+    actionStatus: value("actionStatus"),
+    executionStatus: value("executionStatus") ?? value("readiness"),
+    preconditionStatus: value("preconditionStatus"),
+    status: value("status"),
+    targetGapId: value("targetGapId"),
+    blockedByTargetGapId: value("blockedByTargetGapId"),
+    artifactKind: value("artifactKind"),
+    artifactType: value("artifactType"),
+    artifactId: value("artifactId"),
+    sourceEvidenceId: value("sourceEvidenceId"),
+    relatedSubmitActionId: value("relatedSubmitActionId"),
+    relatedArtifactKind: value("relatedArtifactKind"),
+    route: value("route"),
+    readbackRoute: value("readbackRoute"),
+    setupWriteRoute: value("setupWriteRoute"),
+    bulkImportRoute: value("bulkImportRoute"),
+    setupBulkImportRoute: value("setupBulkImportRoute"),
+    packageImportRoute: value("packageImportRoute"),
+    dryRunImportRoute: value("dryRunImportRoute"),
+    validateOnlyImportRoute: value("validateOnlyImportRoute"),
+    singleRecordDryRunRoute: value("singleRecordDryRunRoute"),
+    singleRecordValidateOnlyRoute: value("singleRecordValidateOnlyRoute"),
+    setupSingleRecordDryRunRoute: value("setupSingleRecordDryRunRoute"),
+    setupSingleRecordValidateOnlyRoute: value("setupSingleRecordValidateOnlyRoute"),
+    packageDryRunImportRoute: value("packageDryRunImportRoute"),
+    packageValidateOnlyImportRoute: value("packageValidateOnlyImportRoute"),
+    templateCoverageStatus: value("templateCoverageStatus"),
+    templateCoverageKind: value("templateCoverageKind"),
+    preflightCoverageStatus: value("preflightCoverageStatus"),
+    preflightCoverageKind: value("preflightCoverageKind"),
+    governanceCoverageStatus: value("governanceCoverageStatus"),
+    governanceCoverageKind: value("governanceCoverageKind"),
+    policyActionKind: value("policyActionKind"),
+    phaseGateLaneKind: value("phaseGateLaneKind"),
+    setupPolicyActionKind: value("setupPolicyActionKind"),
+    setupPhaseGateLaneKind: value("setupPhaseGateLaneKind"),
+  };
+}
+
+function operatorActionItemMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "actionId") return item?.id === value;
+    if (key === "route") return operatorActionItemRoutes(item).includes(value);
+    if (key === "status") return operatorActionItemMatchesStatus(item, value);
+    if (key === "actionStatus") return operatorActionItemMatchesActionStatus(item, value);
+    if (key === "executionStatus") return operatorActionExecutionStatus(item) === value;
+    if (key === "blockedByTargetGapId") return operatorActionItemBlockedByTargetGapIds(item).includes(value);
+    if (key === "relatedSubmitActionId") return operatorActionItemRelatedSubmitActionIds(item).includes(value);
+    if (key === "relatedArtifactKind") return operatorActionItemRelatedArtifactKinds(item).includes(value);
+    if (key === "templateCoverageKind") return operatorActionItemTemplateCoverageKinds(item).includes(value);
+    if (key === "preflightCoverageKind") return operatorActionItemPreflightCoverageKinds(item).includes(value);
+    if (key === "governanceCoverageKind") return operatorActionItemGovernanceCoverageKinds(item).includes(value);
+    if (key === "setupBulkImportRoute") {
+      return item?.setupBulkImportRoute === value || (Array.isArray(item?.setupBulkImportRoutes) && item.setupBulkImportRoutes.includes(value));
+    }
+    return item?.[key] === value;
+  });
+}
+
+function operatorActionItemIsOpen(item) {
+  const status = item?.status ?? item?.actionStatus ?? "open";
+  return !["complete", "completed", "closed", "target_gap_met", "not_applicable"].includes(status);
+}
+
+function operatorActionItemMatchesStatus(item, value) {
+  if (value === "open") return operatorActionItemIsOpen(item);
+  if (value === "closed") return !operatorActionItemIsOpen(item);
+  if (value === "data_dependency_blocked") return item?.preconditionStatus === "data_collection_required_before_action";
+  if (value === "data_collection_required_before_action") return item?.preconditionStatus === value;
+  if (isDerivedExecutionStatusFilter(value)) return operatorActionExecutionStatus(item) === value;
+  return item?.status === value;
+}
+
+function operatorActionItemMatchesActionStatus(item, value) {
+  if (value === "open") return operatorActionItemIsOpen(item);
+  if (value === "closed") return !operatorActionItemIsOpen(item);
+  return item?.actionStatus === value;
+}
+
+function operatorActionItemRoutes(item) {
+  return uniqueValues([
+    item?.writeRoute,
+    item?.readbackRoute,
+    item?.readbackItemRoute,
+    item?.submissionReadbackRoute,
+    item?.setupWriteRoute,
+    item?.setupReadbackRoute,
+    item?.bulkImportRoute,
+    item?.setupBulkImportRoute,
+    ...(Array.isArray(item?.setupBulkImportRoutes) ? item.setupBulkImportRoutes : []),
+    item?.dryRunImportRoute,
+    item?.validateOnlyImportRoute,
+    item?.setupDryRunImportRoute,
+    item?.setupValidateOnlyImportRoute,
+    ...(Array.isArray(item?.setupDryRunImportRoutes) ? item.setupDryRunImportRoutes : []),
+    ...(Array.isArray(item?.setupValidateOnlyImportRoutes) ? item.setupValidateOnlyImportRoutes : []),
+    item?.singleRecordDryRunRoute,
+    item?.singleRecordValidateOnlyRoute,
+    item?.setupSingleRecordDryRunRoute,
+    item?.setupSingleRecordValidateOnlyRoute,
+    item?.packageImportRoute,
+    item?.packageDryRunImportRoute,
+    item?.packageValidateOnlyImportRoute,
+    item?.verificationRoute,
+    item?.targetGapReadbackRoute,
+    item?.targetGapReadbackItemRoute,
+    ...(Array.isArray(item?.blockedTargetGapReadbackRoutes) ? item.blockedTargetGapReadbackRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapReadbackItemRoutes) ? item.blockedTargetGapReadbackItemRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapCollectionPlanRoutes) ? item.blockedTargetGapCollectionPlanRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapTemplateReadbackRoutes) ? item.blockedTargetGapTemplateReadbackRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapImportRoutes) ? item.blockedTargetGapImportRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapDryRunImportRoutes) ? item.blockedTargetGapDryRunImportRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapValidateOnlyImportRoutes) ? item.blockedTargetGapValidateOnlyImportRoutes : []),
+    ...(Array.isArray(item?.templateReadbackRoutes) ? item.templateReadbackRoutes : []),
+    ...(Array.isArray(item?.templateCoverageRoutes) ? item.templateCoverageRoutes : []),
+    ...(Array.isArray(item?.preflightCoverageRoutes) ? item.preflightCoverageRoutes : []),
+    ...(Array.isArray(item?.governanceCoverageRoutes) ? item.governanceCoverageRoutes : []),
+  ]);
+}
+
+function operatorActionItemBlockedByTargetGapIds(item) {
+  return uniqueValues(Array.isArray(item?.blockedByTargetGapIds) ? item.blockedByTargetGapIds : []);
+}
+
+function operatorActionItemRelatedSubmitActionIds(item) {
+  return uniqueValues([
+    ...(Array.isArray(item?.relatedSubmitActionIds) ? item.relatedSubmitActionIds : []),
+    ...operatorActionItemRelatedSubmitActions(item).map((action) => action.actionId),
+  ]);
+}
+
+function operatorActionItemRelatedArtifactKinds(item) {
+  return uniqueValues(operatorActionItemRelatedSubmitActions(item).map((action) => action.artifactKind));
+}
+
+function operatorActionItemTemplateCoverageKinds(item) {
+  return uniqueValues(Array.isArray(item?.templateCoverageKinds) ? item.templateCoverageKinds : []);
+}
+
+function operatorActionItemPreflightCoverageKinds(item) {
+  return uniqueValues(Array.isArray(item?.preflightCoverageKinds) ? item.preflightCoverageKinds : []);
+}
+
+function operatorActionItemGovernanceCoverageKinds(item) {
+  return uniqueValues(Array.isArray(item?.governanceCoverageKinds) ? item.governanceCoverageKinds : []);
+}
+
+function operatorActionItemRelatedSubmitActions(item) {
+  return Array.isArray(item?.relatedSubmitActions) ? item.relatedSubmitActions : [];
+}
+
+function operatorActionItemWithExecutionStatus(item) {
+  const executionStatus = operatorActionExecutionStatus(item);
+  return {
+    ...item,
+    executionStatus,
+    executionStatusReason: item?.executionStatusReason ?? operatorActionExecutionStatusReason(item, executionStatus),
+  };
+}
+
+function operatorActionExecutionStatus(item) {
+  if (!operatorActionItemIsOpen(item)) return "closed";
+  if (
+    item?.preconditionStatus === "data_collection_required_before_action" ||
+    (Array.isArray(item?.blockedByTargetGapIds) && item.blockedByTargetGapIds.length > 0)
+  ) {
+    return "blocked_by_target_data";
+  }
+  if (item?.actionType === "collect_data") return "ready_to_collect_data";
+  if (item?.actionType === "submit_artifact") return "ready_to_submit_evidence";
+  if (item?.actionType === "review_artifact" || item?.actionType === "review_report_section") return "ready_to_review_evidence";
+  return "ready_to_execute";
+}
+
+function operatorActionExecutionStatusReason(item, executionStatus = operatorActionExecutionStatus(item)) {
+  if (executionStatus === "closed") return "The release report no longer treats this action as open.";
+  if (executionStatus === "blocked_by_target_data") {
+    const targetGaps = Array.isArray(item?.blockedByTargetGapIds) && item.blockedByTargetGapIds.length
+      ? item.blockedByTargetGapIds.map(humanizeServerLabel).join(", ")
+      : "target data";
+    return `Collect ${targetGaps} before this action can close release evidence.`;
+  }
+  if (executionStatus === "ready_to_collect_data") {
+    return "This action can accept real target data now; validate or dry-run templates before append.";
+  }
+  if (executionStatus === "ready_to_submit_evidence") {
+    return "This action can accept real operator evidence now; generated templates must be replaced first.";
+  }
+  if (executionStatus === "ready_to_review_evidence") {
+    return "This action is a readback/review step; inspect the linked artifact or report section before replacing evidence.";
+  }
+  return "This action has no data precondition in the current release report.";
+}
+
+function operatorActionItemFilteredCounts(items) {
+  const actionTypeCounts = items.reduce((counts, item) => {
+    const key = item?.actionType ?? "unknown";
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+  const executionStatusCounts = countValues(items.map((item) => operatorActionExecutionStatus(item)));
+  return {
+    actionItems: items.length,
+    collectDataActionItems: actionTypeCounts.collect_data ?? 0,
+    submitArtifactActionItems: actionTypeCounts.submit_artifact ?? 0,
+    reviewArtifactActionItems: actionTypeCounts.review_artifact ?? 0,
+    reviewReportSectionActionItems: actionTypeCounts.review_report_section ?? 0,
+    dataDependencyBlockedActionItems: items.filter((item) => item.preconditionStatus === "data_collection_required_before_action").length,
+    readyActionItems: items.filter((item) => operatorActionExecutionStatus(item).startsWith("ready_to_")).length,
+    blockedByTargetDataActionItems: executionStatusCounts.blocked_by_target_data ?? 0,
+    byActionId: countItemsBy(items, "id"),
+    byChecklistRow: countItemsBy(items, "checklistRowId"),
+    byTargetGap: countItemsBy(items, "targetGapId"),
+    byBlockedTargetGapId: countValues(items.flatMap(operatorActionItemBlockedByTargetGapIds)),
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byArtifactType: countItemsBy(items, "artifactType"),
+    byArtifactId: countItemsBy(items, "artifactId"),
+    bySourceEvidenceId: countItemsBy(items, "sourceEvidenceId"),
+    byRelatedSubmitActionId: countValues(items.flatMap(operatorActionItemRelatedSubmitActionIds)),
+    byRelatedArtifactKind: countValues(items.flatMap(operatorActionItemRelatedArtifactKinds)),
+    byStatus: countItemsBy(items, "status"),
+    byActionStatus: countItemsBy(items, "actionStatus"),
+    byExecutionStatus: executionStatusCounts,
+    byTemplateCoverageStatus: countItemsBy(items, "templateCoverageStatus"),
+    byTemplateCoverageKind: countExpandedValues(items, "templateCoverageKinds"),
+    byTemplateCoverageRoute: countExpandedValues(items, "templateCoverageRoutes"),
+    byPreflightCoverageStatus: countItemsBy(items, "preflightCoverageStatus"),
+    byPreflightCoverageKind: countExpandedValues(items, "preflightCoverageKinds"),
+    byPreflightCoverageRoute: countExpandedValues(items, "preflightCoverageRoutes"),
+    byGovernanceCoverageStatus: countItemsBy(items, "governanceCoverageStatus"),
+    byGovernanceCoverageKind: countExpandedValues(items, "governanceCoverageKinds"),
+    byGovernanceCoverageRoute: countExpandedValues(items, "governanceCoverageRoutes"),
+    byPolicyActionKind: countItemsBy(items, "policyActionKind"),
+    byPhaseGateLaneKind: countItemsBy(items, "phaseGateLaneKind"),
+    bySetupPolicyActionKind: countItemsBy(items, "setupPolicyActionKind"),
+    bySetupPhaseGateLaneKind: countItemsBy(items, "setupPhaseGateLaneKind"),
+    openActionItems: items.filter((item) => operatorActionItemIsOpen(item)).length,
+    byPreconditionStatus: countItemsBy(items, "preconditionStatus"),
+    byReadbackRoute: countItemsBy(items, "readbackRoute"),
+    bySetupWriteRoute: countItemsBy(items, "setupWriteRoute"),
+    byBulkImportRoute: countItemsBy(items, "bulkImportRoute"),
+    bySetupBulkImportRoute: countItemsBy(items, "setupBulkImportRoute"),
+    byPackageImportRoute: countItemsBy(items, "packageImportRoute"),
+    byRoute: countValues(items.flatMap(operatorActionItemRoutes)),
+  };
+}
+
+const operatorPlanCollectionSpecs = {
+  "operator-submission-checklist": {
+    planKey: "submissionChecklist",
+    resourceKey: "operatorSubmissionChecklistItem",
+    label: "operator submission checklist",
+  },
+  "operator-review-evidence-pointers": {
+    planKey: "reviewEvidencePointers",
+    resourceKey: "operatorReviewEvidencePointer",
+    label: "operator review evidence pointers",
+  },
+  "operator-review-artifact-summaries": {
+    planKey: "reviewArtifactSummaries",
+    resourceKey: "operatorReviewArtifactSummary",
+    label: "operator review artifact summaries",
+  },
+};
+
+function operatorPlanCollectionReadback(report, collectionId, options = {}) {
+  const spec = operatorPlanCollectionSpecs[collectionId];
+  if (!spec) return null;
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapById = targetGapReadbackItemsById(report, actionItems);
+  const allItems = operatorPlanCollectionItems(plan, spec.planKey, { actionItems, targetGapById });
+  const filters = operatorPlanCollectionFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => operatorPlanCollectionItemMatchesFilters(item, filters));
+  const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId) : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  return {
+    id: `${collectionId}-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    releaseUseStatus: plan.releaseUseStatus ?? "operator_evidence_submission_plan_missing",
+    resourceKey: spec.resourceKey,
+    policy: {
+      scope: `Read-only ${spec.label} derived from /api/release/report operatorEvidenceSubmissionPlan; it does not submit artifacts, waive gates, or create production evidence.`,
+      access: "Admin/auditor readback only because operator plan rows expose submission routes and review targets.",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts: plan.counts ?? {},
+    filteredCounts: operatorPlanCollectionFilteredCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function operatorPlanCollectionItems(plan, planKey, context = {}) {
+  const collectionId = operatorPlanCollectionIdForPlanKey(planKey);
+  const rawItems = Array.isArray(plan?.[planKey])
+    ? plan[planKey]
+    : (Array.isArray(plan?.rows) ? plan.rows : []).flatMap((row) =>
+        (Array.isArray(row?.[planKey]) ? row[planKey] : []).map((item) => ({
+      ...item,
+      checklistRowId: item.checklistRowId ?? row.checklistRowId,
+      checklistStatus: item.checklistStatus ?? row.status,
+      actionStatus: item.actionStatus ?? row.actionStatus,
+      deliverableGroup: item.deliverableGroup ?? row.deliverableGroup,
+    })),
+      );
+  return rawItems.map((item) => operatorPlanCollectionDecoratedItem(collectionId, planKey, item, context));
+}
+
+function operatorPlanCollectionIdForPlanKey(planKey) {
+  return (
+    Object.entries(operatorPlanCollectionSpecs).find(([, spec]) => spec.planKey === planKey)?.[0] ??
+    "operator-plan-collection"
+  );
+}
+
+function operatorPlanCollectionDecoratedItem(collectionId, planKey, item, context = {}) {
+  const id = item.id ?? operatorPlanCollectionSyntheticItemId(planKey, item);
+  const itemRoute = `/${["api", "v1", collectionId, encodeURIComponent(id)].join("/")}`;
+  const relatedBlockingActions = operatorPlanCollectionRelatedBlockingActions(item, context.actionItems);
+  const blockedByTargetGapIds = uniqueValues([
+    ...(Array.isArray(item?.blockedByTargetGapIds) ? item.blockedByTargetGapIds : []),
+    ...relatedBlockingActions.flatMap((action) => (Array.isArray(action.blockedByTargetGapIds) ? action.blockedByTargetGapIds : [])),
+  ]);
+  const decorated = {
+    ...item,
+    id,
+    operatorPlanItemRoute: itemRoute,
+  };
+  return operatorItemWithBlockedTargetGapContext(decorated, context.targetGapById ?? new Map(), blockedByTargetGapIds);
+}
+
+function operatorPlanCollectionRelatedBlockingActions(item, actionItems = []) {
+  if (!Array.isArray(actionItems) || !actionItems.length) return [];
+  return actionItems.filter((action) => {
+    if (!Array.isArray(action?.blockedByTargetGapIds) || !action.blockedByTargetGapIds.length) return false;
+    if (item?.sourceEvidenceId && action.sourceEvidenceId !== item.sourceEvidenceId) return false;
+    if (item?.checklistRowId && action.checklistRowId !== item.checklistRowId) return false;
+    if (item?.reason && action.reason) return item.reason === action.reason;
+    return true;
+  });
+}
+
+function operatorPlanCollectionSyntheticItemId(planKey, item) {
+  const parts = [
+    item.checklistRowId,
+    item.artifactKind,
+    item.artifactType,
+    item.artifactId,
+    item.targetGapId,
+    item.reason,
+    item.sourceEvidenceId,
+  ]
+    .map(operatorPlanCollectionIdSegment)
+    .filter((value) => value && value !== "missing");
+  return `${operatorPlanCollectionIdSegment(planKey)}:${parts.length ? parts.join(":") : "item"}`;
+}
+
+function operatorPlanCollectionIdSegment(value) {
+  return (
+    String(value ?? "missing")
+      .trim()
+      .replace(/[^A-Za-z0-9_.-]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "missing"
+  );
+}
+
+function operatorPlanCollectionFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    checklistRowId: value("checklistRowId"),
+    actionStatus: value("actionStatus"),
+    status: value("status"),
+    submissionStatus: value("submissionStatus"),
+    artifactKind: value("artifactKind"),
+    artifactType: value("artifactType"),
+    artifactId: value("artifactId"),
+    sourceEvidenceId: value("sourceEvidenceId"),
+    readbackRoute: value("readbackRoute"),
+    relatedSubmitActionId: value("relatedSubmitActionId"),
+    relatedArtifactKind: value("relatedArtifactKind"),
+    route: value("route"),
+    bulkImportRoute: value("bulkImportRoute"),
+    packageImportRoute: value("packageImportRoute"),
+  };
+}
+
+function operatorPlanCollectionItemMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "status") return operatorPlanCollectionItemMatchesStatus(item, value);
+    if (key === "relatedSubmitActionId") return operatorPlanCollectionRelatedSubmitActionIds(item).includes(value);
+    if (key === "relatedArtifactKind") return operatorPlanCollectionRelatedArtifactKinds(item).includes(value);
+    if (key === "route") return operatorPlanCollectionRoutes(item).includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function operatorPlanCollectionItemIsOpen(item) {
+  const primaryStatus = item?.status ?? item?.submissionStatus ?? item?.actionStatus ?? item?.checklistStatus ?? "open";
+  return !operatorPlanCollectionStatusIsClosed(primaryStatus);
+}
+
+function operatorPlanCollectionStatusIsClosed(value) {
+  const status = String(value ?? "").trim();
+  return (
+    ["complete", "completed", "closed", "submitted_complete", "target_gap_met", "not_applicable"].includes(status) ||
+    status.startsWith("not_applicable")
+  );
+}
+
+function operatorPlanCollectionItemMatchesStatus(item, value) {
+  if (value === "open") return operatorPlanCollectionItemIsOpen(item);
+  if (value === "closed") return !operatorPlanCollectionItemIsOpen(item);
+  return [item?.status, item?.submissionStatus, item?.actionStatus, item?.checklistStatus].includes(value);
+}
+
+function operatorPlanCollectionRoutes(item) {
+  return uniqueValues([
+    item?.writeRoute,
+    item?.readbackRoute,
+    item?.readbackItemRoute,
+    item?.submissionReadbackRoute,
+    item?.targetGapReadbackRoute,
+    item?.targetGapReadbackItemRoute,
+    item?.bulkImportRoute,
+    item?.dryRunImportRoute,
+    item?.validateOnlyImportRoute,
+    item?.singleRecordDryRunRoute,
+    item?.singleRecordValidateOnlyRoute,
+    item?.setupSingleRecordDryRunRoute,
+    item?.setupSingleRecordValidateOnlyRoute,
+    item?.packageImportRoute,
+    item?.packageDryRunImportRoute,
+    item?.packageValidateOnlyImportRoute,
+    item?.operatorPlanItemRoute,
+    ...(Array.isArray(item?.blockedTargetGapReadbackRoutes) ? item.blockedTargetGapReadbackRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapReadbackItemRoutes) ? item.blockedTargetGapReadbackItemRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapCollectionPlanRoutes) ? item.blockedTargetGapCollectionPlanRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapTemplateReadbackRoutes) ? item.blockedTargetGapTemplateReadbackRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapImportRoutes) ? item.blockedTargetGapImportRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapDryRunImportRoutes) ? item.blockedTargetGapDryRunImportRoutes : []),
+    ...(Array.isArray(item?.blockedTargetGapValidateOnlyImportRoutes) ? item.blockedTargetGapValidateOnlyImportRoutes : []),
+    ...(Array.isArray(item?.templateReadbackRoutes) ? item.templateReadbackRoutes : []),
+    ...operatorPlanCollectionRelatedSubmitActions(item).flatMap(operatorActionItemRoutes),
+  ]);
+}
+
+function operatorPlanCollectionFilteredCounts(items) {
+  return {
+    items: items.length,
+    openItems: items.filter(operatorPlanCollectionItemIsOpen).length,
+    closedItems: items.filter((item) => !operatorPlanCollectionItemIsOpen(item)).length,
+    withRelatedSubmitActions: items.filter((item) => operatorPlanCollectionRelatedSubmitActionIds(item).length > 0).length,
+    byChecklistRow: countItemsBy(items, "checklistRowId"),
+    byActionStatus: countItemsBy(items, "actionStatus"),
+    byStatus: countItemsBy(items, "status"),
+    bySubmissionStatus: countItemsBy(items, "submissionStatus"),
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byArtifactType: countItemsBy(items, "artifactType"),
+    byArtifactId: countItemsBy(items, "artifactId"),
+    byItemId: countItemsBy(items, "id"),
+    bySourceEvidenceId: countItemsBy(items, "sourceEvidenceId"),
+    byBlockedTargetGapId: countValues(items.flatMap((item) => (Array.isArray(item.blockedByTargetGapIds) ? item.blockedByTargetGapIds : []))),
+    byRelatedSubmitActionId: countValues(items.flatMap(operatorPlanCollectionRelatedSubmitActionIds)),
+    byRelatedArtifactKind: countValues(items.flatMap(operatorPlanCollectionRelatedArtifactKinds)),
+    byRoute: countValues(items.flatMap(operatorPlanCollectionRoutes)),
+  };
+}
+
+function operatorPlanCollectionRelatedSubmitActionIds(item) {
+  return [
+    ...(Array.isArray(item?.relatedSubmitActionIds) ? item.relatedSubmitActionIds : []),
+    ...operatorPlanCollectionRelatedSubmitActions(item).map((action) => action.actionId),
+  ]
+    .filter((value) => typeof value === "string" && value.trim())
+    .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function operatorPlanCollectionRelatedArtifactKinds(item) {
+  return operatorPlanCollectionRelatedSubmitActions(item)
+    .map((action) => action.artifactKind)
+    .filter((value) => typeof value === "string" && value.trim())
+    .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function operatorPlanCollectionRelatedSubmitActions(item) {
+  return Array.isArray(item?.relatedSubmitActions) ? item.relatedSubmitActions : [];
+}
+
+function countValues(values) {
+  return values.reduce((counts, value) => {
+    if (typeof value !== "string" || !value.trim()) return counts;
+    counts[value] = (counts[value] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+const operatorEvidencePackageImportRoute = "/api/v1/operator-evidence/import-jsonl";
+const targetDataCollectionPackageImportRoute = "/api/v1/target-gaps/import-jsonl-package";
+const targetDataPackageStarterRecordCap = 25;
+const ratingBulkJsonlImportRoute = "/api/v1/ratings/import-jsonl";
+const ratingContextSnapshotBulkJsonlImportRoute = "/api/v1/rating-context-snapshots/import-jsonl";
+const ratingContextSnapshotBulkWorkflowTemplateId = "rating-context-snapshot-jsonl-import";
+
+function targetDataCollectionJsonlTemplateReadback(report, options = {}) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const allItems = (Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? [])).map(
+      operatorActionItemWithExecutionStatus,
+    );
+  const filters = operatorActionItemFilters(options.searchParams);
+  const expansion = targetDataCollectionJsonlTemplateExpansion(options.searchParams);
+  const filteredActions = allItems.filter((item) => operatorActionItemMatchesFilters(item, filters));
+  const items = [];
+  const skippedItems = [];
+  const dedupeExpandedPrimaryImports = targetDataCollectionShouldDedupeExpandedPrimaryImports(filters, expansion);
+  const expandedPrimaryImportActionsByKey = new Map();
+  for (const action of filteredActions) {
+    const duplicatePrimaryImport = dedupeExpandedPrimaryImports
+      ? targetDataCollectionDuplicateExpandedPrimaryImport(action, expandedPrimaryImportActionsByKey)
+      : null;
+    const rows = targetDataCollectionJsonlTemplateRows(action, report, items.length, expansion);
+    let skippedDuplicatePrimaryRecordCount = 0;
+    for (const row of rows) {
+      if (
+        duplicatePrimaryImport &&
+        row.ok &&
+        row.item?.importKind === "primary_data_import" &&
+        row.item?.importRoute === action.bulkImportRoute
+      ) {
+        skippedDuplicatePrimaryRecordCount += 1;
+        continue;
+      }
+      if (row.ok) {
+        items.push(row.item);
+      } else {
+        skippedItems.push(row.item);
+      }
+    }
+    if (duplicatePrimaryImport && skippedDuplicatePrimaryRecordCount > 0) {
+      skippedItems.push(
+        targetDataCollectionDuplicateExpandedPrimaryImportSkip(action, {
+          ...duplicatePrimaryImport,
+          skippedRecordCount: skippedDuplicatePrimaryRecordCount,
+        }),
+      );
+    }
+  }
+  const orderedItems = targetDataCollectionJsonlTemplatePackageOrder(items);
+  const selectedItems = options.itemId ? orderedItems.filter((item) => item.id === options.itemId) : orderedItems;
+  if (options.itemId && selectedItems.length === 0) return null;
+  const expansionCoverage = targetDataCollectionJsonlTemplateExpansionCoverage(selectedItems, expansion);
+  return {
+    id: `target-data-jsonl-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    resourceKey: "targetDataCollectionJsonlTemplate",
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    policy: {
+      scope:
+        "Read-only JSONL skeleton for open collect_data operator actions that already expose a bulk import route; operators may submit replaced records individually or as one mixed package, but this readback does not submit data, waive gates, or satisfy target gaps.",
+      access: "Admin/auditor only because target data templates expose operator routes and release target counts.",
+      templateOnly:
+        "Generated records include templateOnly=true and TODO placeholders; per-route and package bulk import routes reject unchanged template records until operators replace them with real data.",
+      packageImport:
+        "POST replaced JSONL records to the package import route when one file spans multiple target-data import routes; every line must still name its concrete importRoute and the whole package is rejected before append if any line fails.",
+      expansion:
+        "By default the endpoint emits one skeleton line per matching import action. Use expand=remaining to emit the estimated number of required placeholder lines for the filtered target gap; shared primary imports are de-duplicated unless the request is scoped to a specific actionId or checklistRowId. Unchanged expanded templates are still rejected by import routes.",
+      packageOrder:
+        "Rows are ordered for package execution: setup imports such as assignment allocation appear before primary corpus/rating/gold/validation imports, with expanded rows kept in sequence.",
+    },
+    filters,
+    expansion,
+    expansionCoverage,
+    count: selectedItems.length,
+    totalCount: allItems.length,
+    filteredActionCount: filteredActions.length,
+    skippedCount: skippedItems.length,
+    counts: {
+      templateRecords: selectedItems.length,
+      skippedActions: skippedItems.length,
+      byChecklistRow: countItemsBy(selectedItems, "checklistRowId"),
+      byTargetGap: countItemsBy(selectedItems, "targetGapId"),
+      byResourceKey: countItemsBy(selectedItems, "resourceKey"),
+      byImportRoute: countItemsBy(selectedItems, "importRoute"),
+      byImportKind: countItemsBy(selectedItems, "importKind"),
+      byExecutionStatus: countItemsBy(selectedItems, "executionStatus"),
+      bySkipReason: countItemsBy(skippedItems, "skipReason"),
+    },
+    ...(options.itemId ? { item: selectedItems[0] } : {}),
+    jsonl: selectedItems.map((item) => JSON.stringify(item.record)).join("\n"),
+    items: selectedItems,
+    skippedItems,
+  };
+}
+
+function targetDataCollectionJsonlTemplatePackageOrder(items) {
+  const stepOrder = { setup_data_import: 1, primary_data_import: 2, single_record_submission: 3 };
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const leftOrder = stepOrder[left.item?.importKind] ?? 99;
+      const rightOrder = stepOrder[right.item?.importKind] ?? 99;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      const targetGapCompare = String(left.item?.targetGapId ?? "").localeCompare(String(right.item?.targetGapId ?? ""));
+      if (targetGapCompare !== 0) return targetGapCompare;
+      const actionCompare = String(left.item?.actionId ?? "").localeCompare(String(right.item?.actionId ?? ""));
+      if (actionCompare !== 0) return actionCompare;
+      const leftExpandedIndex = Number(left.item?.expandedRecordIndex ?? 1);
+      const rightExpandedIndex = Number(right.item?.expandedRecordIndex ?? 1);
+      if (leftExpandedIndex !== rightExpandedIndex) return leftExpandedIndex - rightExpandedIndex;
+      return left.index - right.index;
+    })
+    .map(({ item }) => item);
+}
+
+function targetDataCollectionJsonlTemplateExpansionCoverage(items, expansion) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = [
+      item?.targetGapId ?? "unscoped",
+      item?.importKind ?? "unknown",
+      item?.importRoute ?? "unknown",
+    ].join("|");
+    const group = groups.get(key) ?? {
+      targetGapId: item?.targetGapId ?? null,
+      importKind: item?.importKind ?? null,
+      importRoute: item?.importRoute ?? null,
+      resourceKeys: [],
+      checklistRowIds: [],
+      actionIds: [],
+      verificationRoutes: [],
+      emittedTemplateRecordCount: 0,
+      estimatedRecordsRequired: null,
+      expectedResourceDeltaWhenFullyReplaced: null,
+      expandedRecordCapApplied: false,
+      closesTargetGapWhenValidated: false,
+    };
+    group.emittedTemplateRecordCount += 1;
+    group.resourceKeys = uniqueValues([...group.resourceKeys, item?.resourceKey]);
+    group.checklistRowIds = uniqueValues([...group.checklistRowIds, item?.checklistRowId]);
+    group.actionIds = uniqueValues([...group.actionIds, item?.actionId]);
+    group.verificationRoutes = uniqueValues([...group.verificationRoutes, item?.importImpact?.verificationRoute]);
+    group.expandedRecordCapApplied = group.expandedRecordCapApplied || item?.expandedRecordCapApplied === true;
+    group.closesTargetGapWhenValidated =
+      group.closesTargetGapWhenValidated || item?.importImpact?.closesTargetGapWhenValidated === true;
+    const estimatedRecordsRequired = Number(item?.importImpact?.estimatedRecordsRequired);
+    if (Number.isFinite(estimatedRecordsRequired)) {
+      group.estimatedRecordsRequired = Math.max(group.estimatedRecordsRequired ?? 0, estimatedRecordsRequired);
+    }
+    const expectedResourceDelta = Number(item?.importImpact?.expectedResourceDelta);
+    if (Number.isFinite(expectedResourceDelta)) {
+      group.expectedResourceDeltaWhenFullyReplaced = Math.max(group.expectedResourceDeltaWhenFullyReplaced ?? 0, expectedResourceDelta);
+    }
+    groups.set(key, group);
+  }
+  const rows = [...groups.values()]
+    .map((group) => {
+      const remainingTemplateRecordCount = Number.isFinite(Number(group.estimatedRecordsRequired))
+        ? Math.max(0, Number(group.estimatedRecordsRequired) - group.emittedTemplateRecordCount)
+        : null;
+      const coverageStatus = expansion?.mode !== "remaining"
+        ? "single_template_preview"
+        : remainingTemplateRecordCount > 0
+          ? "capped_template_preview"
+          : "estimated_required_template_emitted";
+      return {
+        ...group,
+        remainingTemplateRecordCount,
+        coverageStatus,
+        fullEstimatedTemplateEmitted: coverageStatus === "estimated_required_template_emitted",
+      };
+    })
+    .sort((left, right) => {
+      const stepOrder = { setup_data_import: 1, primary_data_import: 2, single_record_submission: 3 };
+      const leftOrder = stepOrder[left.importKind] ?? 99;
+      const rightOrder = stepOrder[right.importKind] ?? 99;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return String(left.targetGapId ?? "").localeCompare(String(right.targetGapId ?? ""));
+    });
+  const knownEstimatedRecords = rows.map((row) => row.estimatedRecordsRequired).filter((value) => value !== null);
+  const knownRemainingRecords = rows.map((row) => row.remainingTemplateRecordCount).filter((value) => value !== null);
+  const knownExpectedDeltas = rows.map((row) => row.expectedResourceDeltaWhenFullyReplaced).filter((value) => value !== null);
+  return {
+    mode: expansion?.mode ?? "single",
+    requestedMode: expansion?.requestedMode ?? "single",
+    maxExpandedRecords: expansion?.maxExpandedRecords ?? null,
+    groupCount: rows.length,
+    emittedTemplateRecordCount: sumNumericField(rows, "emittedTemplateRecordCount"),
+    estimatedRecordsRequired: knownEstimatedRecords.length ? knownEstimatedRecords.reduce((sum, value) => sum + value, 0) : null,
+    remainingTemplateRecordCount: knownRemainingRecords.length ? knownRemainingRecords.reduce((sum, value) => sum + value, 0) : null,
+    expectedResourceDeltaWhenFullyReplaced: knownExpectedDeltas.length ? knownExpectedDeltas.reduce((sum, value) => sum + value, 0) : null,
+    expandedRecordCapApplied: rows.some((row) => row.expandedRecordCapApplied),
+    fullEstimatedTemplateEmitted: rows.length > 0 && rows.every((row) => row.fullEstimatedTemplateEmitted),
+    byCoverageStatus: countItemsBy(rows, "coverageStatus"),
+    rows,
+  };
+}
+
+function targetDataCollectionShouldDedupeExpandedPrimaryImports(filters, expansion) {
+  return expansion?.mode === "remaining" && !filters?.actionId && !filters?.checklistRowId;
+}
+
+function targetDataCollectionDuplicateExpandedPrimaryImport(action, primaryImportActionsByKey) {
+  const duplicateKey = targetDataCollectionExpandedPrimaryImportKey(action);
+  if (!duplicateKey) return null;
+  const retained = primaryImportActionsByKey.get(duplicateKey);
+  const actionRef = {
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    targetGapId: action.targetGapId ?? null,
+    executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+    importRoute: action.bulkImportRoute ?? null,
+    workflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+  };
+  if (retained) {
+    return {
+      duplicateKey,
+      retainedActionId: retained.actionId,
+      retainedChecklistRowId: retained.checklistRowId,
+    };
+  }
+  primaryImportActionsByKey.set(duplicateKey, actionRef);
+  return null;
+}
+
+function targetDataCollectionExpandedPrimaryImportKey(action) {
+  if (action?.actionType !== "collect_data") return null;
+  if (!action?.targetGapId || !action?.bulkImportRoute) return null;
+  return [
+    action.targetGapId,
+    action.bulkImportRoute,
+    action.bulkImportWorkflowTemplateId ?? "primary_data_import",
+  ].join("|");
+}
+
+function targetDataCollectionDuplicateExpandedPrimaryImportSkip(action, duplicate) {
+  return {
+    id: `target-data-jsonl-template-skip:duplicate-shared-target-gap-import:${action.id ?? action.checklistRowId ?? action.targetGapId ?? "action"}`,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+    executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+    targetGapId: action.targetGapId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    workflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+    importKind: "primary_data_import",
+    importRoute: action.bulkImportRoute ?? null,
+    skipReason: "duplicate_shared_target_gap_import",
+    duplicateKey: duplicate.duplicateKey,
+    retainedActionId: duplicate.retainedActionId ?? null,
+    retainedChecklistRowId: duplicate.retainedChecklistRowId ?? null,
+    skippedRecordCount: duplicate.skippedRecordCount ?? 0,
+    duplicateHandling:
+      "Expanded primary import template already represents this shared target gap; submit the real records once unless you explicitly filter by actionId or checklistRowId.",
+  };
+}
+
+function targetDataCollectionJsonlTemplateExpansion(searchParams) {
+  const expandValue = String(searchParams?.get?.("expand") ?? "").trim().toLowerCase();
+  const maxRecordsValue = Number(searchParams?.get?.("maxExpandedRecords") ?? 5000);
+  const maxExpandedRecords = Number.isInteger(maxRecordsValue) && maxRecordsValue > 0 ? Math.min(maxRecordsValue, 10000) : 5000;
+  const mode = ["remaining", "required", "estimated"].includes(expandValue) ? "remaining" : "single";
+  return {
+    mode,
+    requestedMode: expandValue || "single",
+    maxExpandedRecords,
+    expandsToEstimatedRequiredRecords: mode === "remaining",
+  };
+}
+
+function targetDataCollectionJsonlTemplateRows(action, report, startingIndex, expansion = targetDataCollectionJsonlTemplateExpansion(null)) {
+  const base = {
+    id: `target-data-jsonl-template:${action.id ?? "action"}`,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+    executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+    targetGapId: action.targetGapId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    workflowTemplateId: action.workflowTemplateId ?? null,
+    readbackRoute: action.readbackRoute ?? action.submissionReadbackRoute ?? null,
+    completionEvidence: action.completionEvidence ?? null,
+  };
+  if (action.actionType !== "collect_data") {
+    return [
+      {
+        ok: false,
+        item: {
+          ...base,
+          skipReason: "not_data_collection_action",
+          importRoute: null,
+        },
+      },
+    ];
+  }
+  const routes = [
+    ...targetDataCollectionActionSetupImportRouteInfos(action),
+    action.bulkImportRoute
+      ? {
+          importKind: "primary_data_import",
+          importRoute: action.bulkImportRoute,
+          workflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+        }
+      : null,
+  ].filter(Boolean);
+  if (!routes.length) {
+    return [
+      {
+        ok: false,
+        item: {
+          ...base,
+          skipReason: "no_bulk_import_route",
+          importRoute: null,
+        },
+      },
+    ];
+  }
+  const rows = [];
+  let nextIndex = startingIndex;
+  for (const routeInfo of routes) {
+    const importImpact = targetDataCollectionImportImpact(action, routeInfo);
+    const expandedRecordCount = targetDataCollectionExpandedRecordCount(importImpact, expansion);
+    const estimatedRequired = Number(importImpact.estimatedRecordsRequired);
+    for (let expandedRecordIndex = 1; expandedRecordIndex <= expandedRecordCount; expandedRecordIndex += 1) {
+      rows.push(
+        targetDataCollectionJsonlTemplateRow(
+          action,
+          {
+            ...routeInfo,
+            importImpact,
+            expansionMode: expansion.mode,
+            expandedRecordIndex,
+            expandedRecordCount,
+            expandedRecordCapApplied:
+              expansion.mode === "remaining" && Number.isFinite(estimatedRequired) && estimatedRequired > expansion.maxExpandedRecords,
+          },
+          report,
+          nextIndex,
+        ),
+      );
+      nextIndex += 1;
+    }
+  }
+  return rows;
+}
+
+function targetDataCollectionActionSetupImportRouteInfos(action) {
+  const setupRoutes = uniqueValues([
+    action.setupBulkImportRoute,
+    ...(Array.isArray(action.setupBulkImportRoutes) ? action.setupBulkImportRoutes : []),
+  ]);
+  const setupWorkflowTemplateIds = Array.isArray(action.setupBulkImportWorkflowTemplateIds) ? action.setupBulkImportWorkflowTemplateIds : [];
+  return setupRoutes.map((importRoute, index) => ({
+    importKind: "setup_data_import",
+    importRoute,
+    workflowTemplateId:
+      importRoute === action.setupBulkImportRoute
+        ? action.setupBulkImportWorkflowTemplateId ?? setupWorkflowTemplateIds[index] ?? null
+        : setupWorkflowTemplateIds[index] ?? targetDataCollectionDefaultSetupWorkflowTemplateId(importRoute),
+  }));
+}
+
+function targetDataCollectionDefaultSetupWorkflowTemplateId(importRoute) {
+  if (importRoute === ratingContextSnapshotBulkJsonlImportRoute) return ratingContextSnapshotBulkWorkflowTemplateId;
+  if (importRoute === "/api/v1/assignments/import-jsonl") return "assignment-jsonl-import";
+  return null;
+}
+
+function targetDataCollectionExpandedRecordCount(importImpact, expansion) {
+  if (expansion?.mode !== "remaining") return 1;
+  const estimatedRequired = Number(importImpact?.estimatedRecordsRequired);
+  if (!Number.isFinite(estimatedRequired) || estimatedRequired <= 0) return 1;
+  return Math.max(1, Math.min(estimatedRequired, expansion.maxExpandedRecords ?? 5000));
+}
+
+function targetDataCollectionJsonlTemplateRow(action, routeInfo, report, index) {
+  const importImpact = routeInfo.importImpact ?? targetDataCollectionImportImpact(action, routeInfo);
+  const expandedRecordIndex = routeInfo.expandedRecordIndex ?? 1;
+  const expandedRecordCount = routeInfo.expandedRecordCount ?? 1;
+  const expandedSuffix = expandedRecordCount > 1 ? `:${expandedRecordIndex}` : "";
+  const base = {
+    id: `target-data-jsonl-template:${routeInfo.importKind}:${action.id ?? index + 1}${expandedSuffix}`,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+    executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+    targetGapId: action.targetGapId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    workflowTemplateId: routeInfo.workflowTemplateId,
+    importKind: routeInfo.importKind,
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    importRoute: routeInfo.importRoute,
+    importImpact,
+    templateExpansionMode: routeInfo.expansionMode ?? "single",
+    expandedRecordIndex,
+    expandedRecordCount,
+    expandedRecordCapApplied: Boolean(routeInfo.expandedRecordCapApplied),
+    readbackRoute: action.readbackRoute ?? action.submissionReadbackRoute ?? null,
+    completionEvidence: action.completionEvidence ?? null,
+  };
+  if (routeInfo.importRoute === ratingBulkJsonlImportRoute) {
+    return targetDataCollectionRatingJsonlTemplateRow(action, routeInfo, report, index, base);
+  }
+  if (routeInfo.importRoute === ratingContextSnapshotBulkJsonlImportRoute) {
+    return targetDataCollectionRatingContextSnapshotJsonlTemplateRow(action, routeInfo, report, index, base);
+  }
+  const route = targetScaleBulkJsonlImportRoute(routeInfo.importRoute);
+  if (!route) {
+    return {
+      ok: false,
+      item: {
+        ...base,
+        skipReason: "unsupported_bulk_import_route",
+      },
+    };
+  }
+  const matchedWriteRoute = matchWorkflowEndpoint("POST", route.writeRoute, workflowWriteEndpoints);
+  const spec = matchedWriteRoute?.spec;
+  if (!spec) {
+    return {
+      ok: false,
+      item: {
+        ...base,
+        skipReason: "write_spec_missing",
+        sourceWriteRoute: route.writeRoute,
+      },
+    };
+  }
+  if (spec.policyActionKind) {
+    return {
+      ok: false,
+      item: {
+        ...base,
+        skipReason: "policy_gated_resource_requires_single_route",
+        sourceWriteRoute: route.writeRoute,
+        resourceKey: spec.resourceKey,
+      },
+    };
+  }
+  const isValidationTrancheEvidence = spec.resourceKey === "validationTrancheEvidence";
+  const resource = isValidationTrancheEvidence
+    ? validationTrancheEvidenceJsonlTemplateResource(index, report)
+    : operatorEvidencePackageTemplateResource(spec, action, index, report);
+  const record = {
+    templateOnly: true,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    targetGapId: action.targetGapId ?? null,
+    importKind: routeInfo.importKind,
+    importImpact,
+    templateExpansionMode: routeInfo.expansionMode ?? "single",
+    expandedRecordIndex,
+    expandedRecordCount,
+    expandedRecordCapApplied: Boolean(routeInfo.expandedRecordCapApplied),
+    importRoute: route.route,
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    sourceWriteRoute: route.writeRoute,
+    [spec.resourceKey]: resource,
+  };
+  return {
+    ok: true,
+    item: {
+      ...base,
+      sourceWriteRoute: route.writeRoute,
+      resourceKey: spec.resourceKey,
+      requiredFields: isValidationTrancheEvidence
+        ? validationTrancheEvidenceJsonlTemplateRequiredFields(spec)
+        : operatorEvidencePackageTemplateRequiredFields(spec),
+      templateOnly: true,
+      importImpact,
+      record,
+    },
+  };
+}
+
+function targetDataCollectionImportImpact(action, routeInfo) {
+  const remaining = Number(action.remaining);
+  const current = Number(action.current);
+  const target = Number(action.target);
+  const safeRemaining = Number.isFinite(remaining) && remaining > 0 ? remaining : 0;
+  const isSetupImport = routeInfo.importKind === "setup_data_import";
+  const isRatingContextSnapshotSetup = routeInfo.importRoute === ratingContextSnapshotBulkJsonlImportRoute;
+  const isValidationEvidence = routeInfo.importRoute === "/api/v1/validation-tranche-evidence/import-jsonl";
+  const estimatedRecordsRequired = isRatingContextSnapshotSetup
+    ? safeRemaining
+    : isSetupImport || isValidationEvidence
+      ? (safeRemaining > 0 ? 1 : 0)
+      : safeRemaining;
+  return {
+    targetGapId: action.targetGapId ?? null,
+    current: Number.isFinite(current) ? current : null,
+    target: Number.isFinite(target) ? target : null,
+    remaining: safeRemaining,
+    status: action.status ?? action.actionStatus ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    importKind: routeInfo.importKind,
+    importRoute: routeInfo.importRoute,
+    completionEvidence: action.completionEvidence ?? null,
+    estimatedRecordsRequired,
+    expectedResourceDelta: isSetupImport ? 0 : safeRemaining,
+    closesTargetGapWhenValidated: !isSetupImport,
+    effect:
+      safeRemaining === 0
+        ? "target_gap_already_met"
+        : isRatingContextSnapshotSetup
+          ? "rating_context_snapshot_setup_records_enable_self_contained_blind_rating_imports_but_do_not_close_target_gap"
+          : isSetupImport
+          ? "setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap"
+          : isValidationEvidence
+            ? "one_review_complete_validation_tranche_evidence_record_can_close_validation_gap"
+            : "validated_real_records_reduce_matching_target_gap",
+    verificationRoute: action.targetGapReadbackItemRoute ?? action.targetGapReadbackRoute ?? "/api/release/report",
+  };
+}
+
+function validationTrancheEvidenceJsonlTemplateResource(index, report) {
+  const suffix = index + 1;
+  const validationTrancheReport = report.validationTrancheReport ?? {};
+  const requiredComparisons = validationTrancheReport.policy?.requiredComparisonRows ?? VALIDATION_TRANCHE_REQUIRED_COMPARISONS;
+  return {
+    templateOnly: true,
+    id: `TODO_validationTrancheEvidence_id_${suffix}`,
+    releaseId: report.releaseId ?? releaseId,
+    targetLabelSnapshotId: validationTrancheReport.targetLabelSnapshotId ?? "TODO_TARGET_LABEL_SNAPSHOT_ID",
+    targetLabelVersion: validationTrancheReport.targetLabelVersion ?? "TODO_TARGET_LABEL_VERSION",
+    validationDesignStatus: "appendix_c_scale",
+    appendixCComparabilityStatus: "appendix_c_scale",
+    validationCritiqueCount: 52,
+    validationPositionCount: 19,
+    coreAllItemsRaterCount: 4,
+    partialRaterCoverageSummary: "TODO_describe four core all-items raters plus documented partial prefixes",
+    discussionSessionHourAccounting: "TODO_describe discussion hours and written follow-up accounting",
+    trancheRows: VALIDATION_TRANCHE_TYPES.map((tranche) => ({
+      tranche,
+      itemIds: [`TODO_${tranche.toUpperCase()}_ITEM_ID`],
+      positionCount: tranche === "random_sentinel" ? 19 : "TODO_HARD_CASE_POSITION_COUNT",
+      critiqueCount: tranche === "random_sentinel" ? 52 : "TODO_HARD_CASE_CRITIQUE_COUNT",
+      membershipBlindingStatus:
+        tranche === "random_sentinel"
+          ? "membership_hidden_until_initial_lock_where_feasible"
+          : "hard_case_status_admin_only_until_initial_lock",
+      humanCeilingEstimateStatus: "reported_with_uncertainty",
+      perDimensionCalibrationStatus: "reported",
+      individualRaterDominanceStatus: "largest_share_below_policy_threshold",
+      expertVsModelAgreementStatus: "reported",
+      saturationRiskStatus:
+        tranche === "random_sentinel"
+          ? "not_saturated"
+          : "reported_separately_not_headline_random_sentinel",
+    })),
+    comparisonRows: VALIDATION_TRANCHE_TYPES.flatMap((tranche) =>
+      requiredComparisons.map((comparison) => ({
+        tranche,
+        comparison,
+        rowCount: tranche === "random_sentinel" ? 52 : "TODO_HARD_CASE_ROW_COUNT",
+        comparisonStatus: "reported_with_uncertainty",
+        uncertaintyMethod: "bootstrap",
+        intervalType: "confidence_interval",
+        intervalLevel: 0.95,
+        intervalConstructionMethod: "position_level_resampling",
+        resamplingUnit: "position",
+        resampleCount: 2000,
+        randomSeed: "TODO_VALIDATION_TRANCHE_RANDOM_SEED",
+      })),
+    ),
+    reviewerId: "TODO_OPERATOR_ID",
+    reviewerRole: "admin",
+    createdAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function validationTrancheEvidenceJsonlTemplateRequiredFields(spec) {
+  return [
+    ...operatorEvidencePackageTemplateRequiredFields(spec),
+    "trancheRows[].itemIds",
+    "trancheRows[].membershipBlindingStatus",
+    "trancheRows[].humanCeilingEstimateStatus",
+    "trancheRows[].perDimensionCalibrationStatus",
+    "trancheRows[].individualRaterDominanceStatus",
+    "trancheRows[].expertVsModelAgreementStatus",
+    "trancheRows[].saturationRiskStatus",
+    "comparisonRows[].comparisonStatus",
+    "comparisonRows[].uncertaintyMethod",
+    "comparisonRows[].intervalType",
+    "comparisonRows[].intervalLevel",
+    "comparisonRows[].intervalConstructionMethod",
+    "comparisonRows[].resamplingUnit",
+    "comparisonRows[].resampleCount",
+    "comparisonRows[].randomSeed",
+  ];
+}
+
+const ratingContextSnapshotJsonlTemplateRequiredFields = [
+  "id",
+  "positionId",
+  "targetCritiqueId",
+  "contextPolicy",
+  "laterSiblingAbsent",
+  "assignmentSource",
+  "modelVisibleContextHash",
+  "siblingCritiqueIdsShown",
+  "siblingItemTextVersionIds",
+  "siblingOrder",
+  "createdBy",
+  "createdAt",
+];
+
+function targetDataCollectionRatingContextSnapshotJsonlTemplateRow(action, routeInfo, report, index, base) {
+  const resource = ratingContextSnapshotJsonlTemplateResource(index, report);
+  const importImpact = base.importImpact ?? targetDataCollectionImportImpact(action, routeInfo);
+  const record = {
+    templateOnly: true,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    targetGapId: action.targetGapId ?? null,
+    importKind: routeInfo.importKind,
+    importImpact,
+    templateExpansionMode: base.templateExpansionMode ?? "single",
+    expandedRecordIndex: base.expandedRecordIndex ?? 1,
+    expandedRecordCount: base.expandedRecordCount ?? 1,
+    expandedRecordCapApplied: Boolean(base.expandedRecordCapApplied),
+    importRoute: ratingContextSnapshotBulkJsonlImportRoute,
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    sourceWriteRoute: "/api/v1/rating-context-snapshots",
+    ratingContextSnapshot: resource,
+  };
+  return {
+    ok: true,
+    item: {
+      ...base,
+      sourceWriteRoute: "/api/v1/rating-context-snapshots",
+      resourceKey: "ratingContextSnapshot",
+      requiredFields: ratingContextSnapshotJsonlTemplateRequiredFields,
+      templateOnly: true,
+      importImpact,
+      record,
+    },
+  };
+}
+
+function ratingContextSnapshotJsonlTemplateResource(index, report) {
+  const suffix = index + 1;
+  return {
+    templateOnly: true,
+    id: `TODO_ratingContextSnapshot_id_${suffix}`,
+    positionId: "TODO_POSITION_ID",
+    targetCritiqueId: "TODO_CRITIQUE_ID",
+    contextPolicy: "target_only",
+    laterSiblingAbsent: true,
+    laterSiblingCritiqueIdsAbsentAtSubmission: [],
+    assignmentSource: "target_data_collection",
+    modelVisibleContextHash: "sha256:TODO_MODEL_VISIBLE_CONTEXT_HASH",
+    siblingCritiqueIdsShown: ["TODO_CRITIQUE_ID"],
+    siblingItemTextVersionIds: ["TODO_CRITIQUE_TEXT_VERSION_ID"],
+    siblingOrder: ["TODO_CRITIQUE_ID"],
+    visibleCritiqueIds: ["TODO_CRITIQUE_ID"],
+    orderIndexByCritiqueId: { TODO_CRITIQUE_ID: 0 },
+    orderPolicy: "single_target_no_sibling_context",
+    siblingExposurePattern: "none",
+    humanModelParityStatus: "matchable_target_only",
+    releaseId: report.releaseId ?? releaseId,
+    createdBy: "TODO_OPERATOR_ID",
+    createdAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+const ratingJsonlTemplateRequiredFields = [
+  "id",
+  "assignmentId",
+  "positionId",
+  "critiqueId",
+  "raterId",
+  "kind",
+  "rubricVersion",
+  "scoreInputPolicyId",
+  "positionTextVersionId",
+  "critiqueTextVersionId",
+  "ratingContextSnapshotId",
+  "scores",
+  "rawScores",
+  "scoreQuantizationPolicy",
+  "scoreConfidenceJudgment",
+  "scoreExplanationPolicyId",
+  "scoreExplanationTriggers",
+  "scoreExplanationRequiredReasons",
+  "scoreExplanationPromptShown",
+  "scoreExplanationCompletionStatus",
+  "overallVsCentralityStrengthDiagnostic",
+  "externalAssistanceDeclarationId",
+  "scoreEntryExplicitnessStatus",
+  "scoreMissingFieldValidationStatus",
+  "activeSeconds",
+  "idleGapSeconds",
+  "interruptionCount",
+  "submittedAt",
+  "lockedAt",
+];
+
+function targetDataCollectionRatingJsonlTemplateRow(action, routeInfo, report, index, base) {
+  const resource = ratingJsonlTemplateResource(index, report);
+  const importImpact = base.importImpact ?? targetDataCollectionImportImpact(action, routeInfo);
+  const record = {
+    templateOnly: true,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    targetGapId: action.targetGapId ?? null,
+    importKind: routeInfo.importKind,
+    importImpact,
+    templateExpansionMode: base.templateExpansionMode ?? "single",
+    expandedRecordIndex: base.expandedRecordIndex ?? 1,
+    expandedRecordCount: base.expandedRecordCount ?? 1,
+    expandedRecordCapApplied: Boolean(base.expandedRecordCapApplied),
+    importRoute: ratingBulkJsonlImportRoute,
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    sourceWriteRoute: "/api/v1/ratings",
+    rating: resource,
+  };
+  return {
+    ok: true,
+    item: {
+      ...base,
+      sourceWriteRoute: "/api/v1/ratings",
+      resourceKey: "rating",
+      requiredFields: ratingJsonlTemplateRequiredFields,
+      templateOnly: true,
+      importImpact,
+      record,
+    },
+  };
+}
+
+function ratingJsonlTemplateResource(index, report) {
+  const suffix = index + 1;
+  return {
+    templateOnly: true,
+    id: `TODO_rating_id_${suffix}`,
+    assignmentId: "TODO_ASSIGNMENT_ID",
+    positionId: "TODO_POSITION_ID",
+    critiqueId: "TODO_CRITIQUE_ID",
+    raterId: "TODO_ASSIGNED_RATER_ID",
+    kind: "blind_initial",
+    rubricVersion: "lmca-app-f-2026-10",
+    scoreInputPolicyId: "TODO_SCORE_INPUT_POLICY_ID",
+    workflowProfileId: "TODO_RATING_WORKFLOW_PROFILE_ID",
+    scoreExplanationPolicyId: `score-explanation-policy-${report.releaseId ?? releaseId}`,
+    positionTextVersionId: "TODO_POSITION_TEXT_VERSION_ID",
+    critiqueTextVersionId: "TODO_CRITIQUE_TEXT_VERSION_ID",
+    ratingContextSnapshotId: "TODO_RATING_CONTEXT_SNAPSHOT_ID",
+    scores: {
+      centrality: "TODO_NUMBER_0_TO_1",
+      strength: "TODO_NUMBER_0_TO_1",
+      correctness: "TODO_NUMBER_0_TO_1",
+      clarity: "TODO_NUMBER_0_TO_1",
+      dead_weight: "TODO_NUMBER_0_TO_1",
+      single_issue: "TODO_NUMBER_0_TO_1",
+      overall: "TODO_NUMBER_0_TO_1",
+    },
+    rawScores: {
+      centrality: "TODO_NUMBER_0_TO_1",
+      strength: "TODO_NUMBER_0_TO_1",
+      correctness: "TODO_NUMBER_0_TO_1",
+      clarity: "TODO_NUMBER_0_TO_1",
+      dead_weight: "TODO_NUMBER_0_TO_1",
+      single_issue: "TODO_NUMBER_0_TO_1",
+      overall: "TODO_NUMBER_0_TO_1",
+    },
+    scoreQuantizationPolicy: "raw_0_1_scores_stored_to_0.001_display_precision",
+    scoreConfidenceJudgment: "TODO_low_medium_or_high",
+    generalRatingNote: "",
+    scoreExplanation: "",
+    scoreExplanationRequired: false,
+    scoreExplanationTriggers: [],
+    scoreExplanationRequiredReasons: [],
+    scoreExplanationPromptShown: false,
+    scoreExplanationPromptVisibility: "label_source_protected_status_blind",
+    scoreExplanationCompletionStatus: "ordinary_note_optional",
+    overallVsCentralityStrengthDiagnostic: {
+      overallScore: "TODO_MATCH_OVERALL_SCORE",
+      centralityStrengthProduct: "TODO_SERVER_POLICY_PRODUCT",
+      absoluteGap: "TODO_ABSOLUTE_GAP",
+      threshold: "TODO_ACTIVE_THRESHOLD",
+      triggerFired: false,
+      status: "ordinary_note_optional",
+    },
+    externalAssistanceDeclarationId: "TODO_EXTERNAL_ASSISTANCE_DECLARATION_ID",
+    externalAssistanceDeclarationStatus: "TODO_LOCK_TIME_ATTESTATION",
+    scoreEntryExplicitnessStatus: "all_required_scores_explicit",
+    scoreMissingFieldValidationStatus: "passed_no_missing_required_fields",
+    provisionalDimensions: [],
+    flags: {},
+    activeSeconds: "TODO_POSITIVE_NUMBER",
+    idleGapSeconds: 0,
+    interruptionCount: 0,
+    submittedAt: "TODO_ISO_TIMESTAMP",
+    lockedAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function operatorEvidencePackageJsonlTemplateReadback(report, options = {}) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const rawActionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapById = targetGapReadbackItemsById(report, rawActionItems);
+  const allItems = rawActionItems.map((item) =>
+    operatorActionItemWithExecutionStatus(operatorItemWithBlockedTargetGapContext(item, targetGapById)),
+  );
+  const filters = operatorActionItemFilters(options.searchParams);
+  const filteredActions = allItems.filter((item) => operatorActionItemMatchesFilters(item, filters));
+  const items = [];
+  const skippedItems = [];
+  for (const [index, action] of filteredActions.entries()) {
+    const templateRow = operatorEvidencePackageJsonlTemplateRow(action, index, report);
+    if (templateRow.ok) {
+      items.push(templateRow.item);
+    } else {
+      skippedItems.push(templateRow.item);
+    }
+  }
+  const selectedItems = options.itemId ? items.filter((item) => item.id === options.itemId) : items;
+  if (options.itemId && selectedItems.length === 0) return null;
+  return {
+    id: `operator-evidence-jsonl-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    resourceKey: "operatorEvidencePackageJsonlTemplate",
+    importRoute: operatorEvidencePackageImportRoute,
+    dryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
+    validateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+    policy: {
+      scope:
+        "Read-only JSONL skeleton derived from open operator actions; it does not submit artifacts, waive gates, or create production evidence.",
+      access: "Admin/auditor only because package templates expose operator routes and release-evidence targets.",
+      templateOnly:
+        "Generated records include templateOnly=true and TODO placeholders; the import route rejects unchanged template records until operators replace them with real artifact data.",
+      dryRunValidation:
+        "Use dryRun=true or validateOnly=true to validate route support, roles, phase gates, payload schema, duplicate ids, qualification gates, and resource bindings without appending workflow events.",
+    },
+    filters,
+    count: selectedItems.length,
+    totalCount: allItems.length,
+    filteredActionCount: filteredActions.length,
+    skippedCount: skippedItems.length,
+    counts: {
+      templateRecords: selectedItems.length,
+      skippedActions: skippedItems.length,
+      byChecklistRow: countItemsBy(selectedItems, "checklistRowId"),
+      byArtifactKind: countItemsBy(selectedItems, "artifactKind"),
+      byRoute: countItemsBy(selectedItems, "route"),
+      byExecutionStatus: countItemsBy(selectedItems, "executionStatus"),
+      bySkipReason: countItemsBy(skippedItems, "skipReason"),
+    },
+    ...(options.itemId ? { item: selectedItems[0] } : {}),
+    jsonl: selectedItems.map((item) => JSON.stringify(item.record)).join("\n"),
+    items: selectedItems,
+    skippedItems,
+  };
+}
+
+function operatorActionPayloadTemplateReadback(report, options = {}) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const rawActionItems = Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const targetGapById = targetGapReadbackItemsById(report, rawActionItems);
+  const allItems = rawActionItems.map((item) =>
+    operatorActionItemWithExecutionStatus(operatorItemWithBlockedTargetGapContext(item, targetGapById)),
+  );
+  const filters = operatorActionItemFilters(options.searchParams);
+  const filteredActions = allItems.filter((item) => operatorActionItemMatchesFilters(item, filters));
+  const items = [];
+  const skippedItems = [];
+  for (const action of filteredActions) {
+    const rows = operatorActionPayloadTemplateRows(action, items.length, report);
+    for (const row of rows) {
+      if (row.ok) {
+        items.push(row.item);
+      } else {
+        skippedItems.push(row.item);
+      }
+    }
+  }
+  const selectedItems = options.itemId ? items.filter((item) => item.id === options.itemId) : items;
+  if (options.itemId && selectedItems.length === 0) return null;
+  return {
+    id: `operator-action-payload-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    resourceKey: "operatorActionPayloadTemplate",
+    policy: {
+      scope:
+        "Read-only request-body skeletons for open operator actions that require single-route or setup writes; it does not submit artifacts, waive gates, or create production evidence.",
+      access: "Admin/auditor only because payload templates expose operator routes, governance-gated actions, and release-evidence targets.",
+      templateOnly:
+        "Generated payloads include templateOnly=true and TODO placeholders; operators must replace them with real artifact data and submit through the named POST route.",
+      coverage:
+        "Primary actions already covered by target-data or operator-evidence JSONL templates are skipped here to avoid duplicating the bulk-import workflow.",
+    },
+    filters,
+    count: selectedItems.length,
+    totalCount: allItems.length,
+    filteredActionCount: filteredActions.length,
+    skippedCount: skippedItems.length,
+    counts: {
+      templateRecords: selectedItems.length,
+      skippedActions: skippedItems.length,
+      byChecklistRow: countItemsBy(selectedItems, "checklistRowId"),
+      byArtifactKind: countItemsBy(selectedItems, "artifactKind"),
+      byRoute: countItemsBy(selectedItems, "route"),
+      byTemplateKind: countItemsBy(selectedItems, "templateKind"),
+      byExecutionStatus: countItemsBy(selectedItems, "executionStatus"),
+      bySkipReason: countItemsBy(skippedItems, "skipReason"),
+    },
+    ...(options.itemId ? { item: selectedItems[0] } : {}),
+    items: selectedItems,
+    skippedItems,
+  };
+}
+
+function operatorActionPayloadTemplateRows(action, startingIndex, report) {
+  const descriptors = [];
+  if (operatorActionPayloadTemplateShouldEmitSetup(action)) {
+    descriptors.push({
+      templateKind: "setup_write_payload",
+      route: action.setupWriteRoute,
+      routeSource: "setupWriteRoute",
+      workflowTemplateId: action.setupWorkflowTemplateId ?? null,
+    });
+  }
+  if (operatorActionPayloadTemplateShouldEmitPrimary(action)) {
+    descriptors.push({
+      templateKind: "primary_write_payload",
+      route: action.writeRoute,
+      routeSource: "writeRoute",
+      workflowTemplateId: action.workflowTemplateId ?? null,
+    });
+  }
+  if (!descriptors.length) {
+    return [
+      {
+        ok: false,
+        item: operatorActionPayloadTemplateSkippedItem(action, operatorActionPayloadTemplateSkipReason(action)),
+      },
+    ];
+  }
+  return descriptors.map((descriptor, index) =>
+    operatorActionPayloadTemplateRow(action, descriptor, report, startingIndex + index),
+  );
+}
+
+function operatorActionPayloadTemplateShouldEmitSetup(action) {
+  return Boolean(action.setupWriteRoute && !action.setupBulkImportRoute);
+}
+
+function operatorActionPayloadTemplateShouldEmitPrimary(action) {
+  if (!action.writeRoute) return false;
+  if (action.actionType === "review_artifact" || action.actionType === "review_report_section") return false;
+  return !action.bulkImportRoute;
+}
+
+function operatorActionPayloadTemplateSkipReason(action) {
+  if (!action.writeRoute && !action.setupWriteRoute) return "no_write_route";
+  if (action.setupBulkImportRoute && action.bulkImportRoute) return "covered_by_bulk_import_template";
+  if (action.bulkImportRoute === operatorEvidencePackageImportRoute) return "covered_by_operator_evidence_jsonl_template";
+  if (action.bulkImportRoute) return "covered_by_target_data_jsonl_template";
+  if (action.setupBulkImportRoute) return "covered_by_setup_bulk_import_template";
+  return "no_payload_template_route";
+}
+
+function operatorActionPayloadTemplateSkippedItem(action, skipReason, extra = {}) {
+  return {
+    id: `operator-action-payload-template:skipped:${action.id ?? "action"}`,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+    executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+    artifactKind: action.artifactKind ?? null,
+    artifactType: action.artifactType ?? null,
+    artifactId: action.artifactId ?? null,
+    reason: action.reason ?? null,
+    targetGapId: action.targetGapId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    workflowTemplateId: action.workflowTemplateId ?? null,
+    route: action.writeRoute ?? null,
+    setupWriteRoute: action.setupWriteRoute ?? null,
+    bulkImportRoute: action.bulkImportRoute ?? null,
+    setupBulkImportRoute: action.setupBulkImportRoute ?? null,
+    readbackRoute: action.readbackRoute ?? action.submissionReadbackRoute ?? null,
+    completionEvidence: action.completionEvidence ?? null,
+    ...operatorTemplateActionContextFields(action),
+    skipReason,
+    ...extra,
+  };
+}
+
+function operatorTemplateActionContextFields(action) {
+  const blockedByTargetGapIds = Array.isArray(action?.blockedByTargetGapIds) ? action.blockedByTargetGapIds : [];
+  const blockingTargetGapSummaries = Array.isArray(action?.blockingTargetGapSummaries) ? action.blockingTargetGapSummaries : [];
+  const blockedTargetGapReadbackRoutes = Array.isArray(action?.blockedTargetGapReadbackRoutes) ? action.blockedTargetGapReadbackRoutes : [];
+  const blockedTargetGapReadbackItemRoutes = Array.isArray(action?.blockedTargetGapReadbackItemRoutes)
+    ? action.blockedTargetGapReadbackItemRoutes
+    : [];
+  const blockedTargetGapCollectionPlanRoutes = Array.isArray(action?.blockedTargetGapCollectionPlanRoutes)
+    ? action.blockedTargetGapCollectionPlanRoutes
+    : [];
+  const blockedTargetGapTemplateReadbackRoutes = Array.isArray(action?.blockedTargetGapTemplateReadbackRoutes)
+    ? action.blockedTargetGapTemplateReadbackRoutes
+    : [];
+  const blockedTargetGapImportRoutes = Array.isArray(action?.blockedTargetGapImportRoutes) ? action.blockedTargetGapImportRoutes : [];
+  const blockedTargetGapDryRunImportRoutes = Array.isArray(action?.blockedTargetGapDryRunImportRoutes)
+    ? action.blockedTargetGapDryRunImportRoutes
+    : [];
+  const blockedTargetGapValidateOnlyImportRoutes = Array.isArray(action?.blockedTargetGapValidateOnlyImportRoutes)
+    ? action.blockedTargetGapValidateOnlyImportRoutes
+    : [];
+  const blockedTargetGapSubmissionReadbackRoutes = Array.isArray(action?.blockedTargetGapSubmissionReadbackRoutes)
+    ? action.blockedTargetGapSubmissionReadbackRoutes
+    : [];
+  const relatedSubmitActionIds = Array.isArray(action?.relatedSubmitActionIds) ? action.relatedSubmitActionIds : [];
+  const relatedSubmitActions = Array.isArray(action?.relatedSubmitActions) ? action.relatedSubmitActions : [];
+  return {
+    ...(action?.preconditionStatus ? { preconditionStatus: action.preconditionStatus } : {}),
+    ...(blockedByTargetGapIds.length ? { blockedByTargetGapIds } : {}),
+    ...(blockingTargetGapSummaries.length ? { blockingTargetGapSummaries } : {}),
+    ...(blockedTargetGapReadbackRoutes.length ? { blockedTargetGapReadbackRoutes } : {}),
+    ...(blockedTargetGapReadbackItemRoutes.length ? { blockedTargetGapReadbackItemRoutes } : {}),
+    ...(blockedTargetGapCollectionPlanRoutes.length ? { blockedTargetGapCollectionPlanRoutes } : {}),
+    ...(blockedTargetGapTemplateReadbackRoutes.length ? { blockedTargetGapTemplateReadbackRoutes } : {}),
+    ...(blockedTargetGapImportRoutes.length ? { blockedTargetGapImportRoutes } : {}),
+    ...(blockedTargetGapDryRunImportRoutes.length ? { blockedTargetGapDryRunImportRoutes } : {}),
+    ...(blockedTargetGapValidateOnlyImportRoutes.length ? { blockedTargetGapValidateOnlyImportRoutes } : {}),
+    ...(blockedTargetGapSubmissionReadbackRoutes.length ? { blockedTargetGapSubmissionReadbackRoutes } : {}),
+    ...(action?.dataDependencyCompletionEvidence ? { dataDependencyCompletionEvidence: action.dataDependencyCompletionEvidence } : {}),
+    ...(relatedSubmitActionIds.length ? { relatedSubmitActionIds } : {}),
+    ...(relatedSubmitActions.length ? { relatedSubmitActions } : {}),
+    ...(action?.resolutionEvidence ? { resolutionEvidence: action.resolutionEvidence } : {}),
+  };
+}
+
+function operatorActionPayloadTemplateRow(action, descriptor, report, index) {
+  const concreteRoute = concreteOperatorEvidenceTemplateRoute(descriptor.route);
+  const match = operatorEvidencePackageWriteMatch(concreteRoute);
+  if (!match?.spec) {
+    return {
+      ok: false,
+      item: operatorActionPayloadTemplateSkippedItem(action, "unsupported_write_route", {
+        route: concreteRoute,
+        routeTemplate: concreteRoute !== descriptor.route ? descriptor.route : null,
+        templateKind: descriptor.templateKind,
+      }),
+    };
+  }
+  const spec = operatorActionPayloadTemplateSpec(match.spec, concreteRoute);
+  const resource = operatorEvidencePackageTemplateResource(spec, action, index, report, match.params);
+  const requestBody = {
+    [spec.resourceKey]: resource,
+  };
+  return {
+    ok: true,
+    item: {
+      id: `operator-action-payload-template:${descriptor.templateKind}:${action.id ?? index + 1}`,
+      actionId: action.id ?? null,
+      checklistRowId: action.checklistRowId ?? null,
+      actionType: action.actionType ?? null,
+      actionStatus: action.actionStatus ?? action.status ?? null,
+      executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+      executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+      artifactKind: action.artifactKind ?? null,
+      artifactType: action.artifactType ?? null,
+      artifactId: action.artifactId ?? null,
+      reason: action.reason ?? null,
+      targetGapId: action.targetGapId ?? null,
+      sourceEvidenceId: action.sourceEvidenceId ?? null,
+      workflowTemplateId: descriptor.workflowTemplateId,
+      templateKind: descriptor.templateKind,
+      templateOnly: true,
+      method: "POST",
+      route: concreteRoute,
+      routeTemplate: concreteRoute !== descriptor.route ? descriptor.route : null,
+      routeSource: descriptor.routeSource,
+      setupWriteRoute: action.setupWriteRoute ?? null,
+      setupReadbackRoute: action.setupReadbackRoute ?? null,
+      readbackRoute: action.readbackRoute ?? action.submissionReadbackRoute ?? null,
+      completionEvidence: action.completionEvidence ?? null,
+      ...operatorTemplateActionContextFields(action),
+      resourceKey: spec.resourceKey,
+      requiredRoles: spec.roles ?? [],
+      policyGated: Boolean(spec.policyActionKind),
+      policyActionKind: spec.policyActionKind ?? null,
+      phaseGateLaneKind: spec.phaseGateLaneKind ?? null,
+      requiredFields: operatorEvidencePackageTemplateRequiredFields(spec),
+      serverMaterialized: Boolean(spec.serverMaterialized),
+      requestBody,
+    },
+  };
+}
+
+function operatorActionPayloadTemplateSpec(spec, route) {
+  if (route === "/api/v1/label-snapshots") {
+    return {
+      ...spec,
+      requiredFields: ["id", "releaseId", "targetLabelVersion"],
+    };
+  }
+  if (route === "/api/v1/training-exports") {
+    return {
+      ...spec,
+      requiredFields: [
+        "id",
+        "releaseId",
+        "exportKind",
+        "sourceLabelSnapshotId",
+        "targetLabelVersion",
+        "promptTrackExposurePolicy",
+        "pairwiseComparisonSnapshotId",
+        "pairwiseComparisonSnapshotStatus",
+        "positionBalancedWeightingPolicy",
+        "trainingExportUncertaintyPolicyId",
+        "trainingExportUncertaintyPolicyReleaseUseStatus",
+        "labelUncertaintyDownweightingPolicy",
+        "labelUncertaintyDownweightingPolicyId",
+        "pairwiseMarginThresholdPolicy",
+        "lowMarginHandlingPolicy",
+        "humanTargetTiePolicy",
+        "modelPredictionIndifferencePolicy",
+        "lowClarityPolicy",
+        "rationaleInclusionPolicy",
+        "promptExampleContaminationCheck",
+        "releaseRightsEligibilitySummary",
+        "createdBy",
+        "timestamp",
+      ],
+      requiredNonEmptyArrayFields: ["sourceSplits", "excludedProtectedSplits", "targetFields"],
+      requiredObjectFields: [
+        "positionBalancedWeighting",
+        "uncertaintyThresholdsApplied",
+        "labelUncertaintyDownweightingRules",
+        "itemTextVersionHashManifest",
+        "ratingContextSnapshotManifest",
+        "labelMetadataManifest",
+        "volunteerWithdrawalExclusionManifest",
+      ],
+      requiredArrayIncludes: {
+        excludedProtectedSplits: ["internal_validation", "hidden_benchmark"],
+      },
+      requiredStringIncludes: {
+        labelUncertaintyDownweightingPolicy: ["uncertainty"],
+        pairwiseMarginThresholdPolicy: ["margin"],
+        lowMarginHandlingPolicy: ["low", "margin"],
+        humanTargetTiePolicy: ["tie"],
+        lowClarityPolicy: ["clarity"],
+        rationaleInclusionPolicy: ["rationale"],
+        releaseRightsEligibilitySummary: ["rights"],
+      },
+      requiredStringIncludesAny: {
+        modelPredictionIndifferencePolicy: ["indifference", "tie"],
+        promptExampleContaminationCheck: ["protected", "hidden"],
+      },
+    };
+  }
+  if (route === "/api/v1/release-reports") {
+    return {
+      ...spec,
+      requiredFields: ["id"],
+      serverMaterialized: true,
+    };
+  }
+  if (route === "/api/v1/benchmark/candidates/freeze") {
+    return {
+      ...spec,
+      requiredFields: ["id"],
+      serverMaterialized: true,
+    };
+  }
+  return spec;
+}
+
+function operatorEvidencePackageJsonlTemplateRow(action, index, report) {
+  const base = {
+    id: `operator-evidence-jsonl-template:${action.id ?? index + 1}`,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    actionType: action.actionType ?? null,
+    actionStatus: action.actionStatus ?? action.status ?? null,
+    executionStatus: action.executionStatus ?? operatorActionExecutionStatus(action),
+    executionStatusReason: action.executionStatusReason ?? operatorActionExecutionStatusReason(action),
+    artifactKind: action.artifactKind ?? null,
+    reason: action.reason ?? null,
+    targetGapId: action.targetGapId ?? null,
+    sourceEvidenceId: action.sourceEvidenceId ?? null,
+    workflowTemplateId: action.workflowTemplateId ?? null,
+    bulkImportWorkflowTemplateId: action.bulkImportWorkflowTemplateId ?? null,
+    readbackRoute: action.readbackRoute ?? action.submissionReadbackRoute ?? null,
+    completionEvidence: action.completionEvidence ?? null,
+    ...operatorTemplateActionContextFields(action),
+  };
+  if (action.bulkImportRoute !== operatorEvidencePackageImportRoute || !action.writeRoute) {
+    return {
+      ok: false,
+      item: {
+        ...base,
+        skipReason: "not_operator_evidence_package_importable",
+        route: action.writeRoute ?? null,
+      },
+    };
+  }
+  const concreteRoute = concreteOperatorEvidenceTemplateRoute(action.writeRoute);
+  const match = operatorEvidencePackageWriteMatch(concreteRoute);
+  if (!match?.spec) {
+    return {
+      ok: false,
+      item: {
+        ...base,
+        skipReason: "unsupported_write_route",
+        route: concreteRoute,
+      },
+    };
+  }
+  const { spec, params } = match;
+  if (spec.packageImportUnsupportedReason || spec.policyActionKind) {
+    return {
+      ok: false,
+      item: {
+        ...base,
+        skipReason: spec.policyActionKind ? "policy_gated_resource_requires_single_route" : "package_import_unsupported",
+        route: concreteRoute,
+        resourceKey: spec.resourceKey,
+      },
+    };
+  }
+  const resource = operatorEvidencePackageTemplateResource(spec, action, index, report, params);
+  const record = {
+    templateOnly: true,
+    actionId: action.id ?? null,
+    checklistRowId: action.checklistRowId ?? null,
+    artifactKind: action.artifactKind ?? null,
+    route: concreteRoute,
+    ...(concreteRoute !== action.writeRoute ? { routeTemplate: action.writeRoute } : {}),
+    payload: {
+      [spec.resourceKey]: resource,
+    },
+    actionContext: operatorTemplateActionContextFields(action),
+  };
+  return {
+    ok: true,
+    item: {
+      ...base,
+      route: concreteRoute,
+      routeTemplate: concreteRoute !== action.writeRoute ? action.writeRoute : null,
+      importRoute: operatorEvidencePackageImportRoute,
+      dryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
+      validateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+      resourceKey: spec.resourceKey,
+      requiredFields: operatorEvidencePackageTemplateRequiredFields(spec),
+      templateOnly: true,
+      record,
+    },
+  };
+}
+
+function concreteOperatorEvidenceTemplateRoute(route) {
+  return String(route ?? "").replace(/\{([^}]+)\}/g, (_match, key) => operatorEvidenceTemplatePathPlaceholder(key));
+}
+
+function operatorEvidenceTemplatePathPlaceholder(key) {
+  const normalized = String(key ?? "id").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
+  return `TODO_${normalized || "ID"}`;
+}
+
+function operatorEvidencePackageTemplateResource(spec, action, index, report, params = {}) {
+  const resource = { templateOnly: true };
+  const setIfMissing = (fieldPath, value) => {
+    if (workflowFieldValue(resource, fieldPath) === undefined) setWorkflowFieldValue(resource, fieldPath, value);
+  };
+  setIfMissing("id", `TODO_${spec.resourceKey}_id_${index + 1}`);
+  for (const field of spec.requiredFields ?? ["id"]) {
+    setIfMissing(field, operatorEvidencePackageTemplateValue(field, report));
+  }
+  for (const field of spec.requiredNestedFields ?? []) {
+    setIfMissing(field, operatorEvidencePackageTemplateValue(field, report));
+  }
+  if (spec.pathParamField) {
+    setWorkflowFieldValue(resource, spec.pathParamField, params.id ?? operatorEvidenceTemplatePathPlaceholder(spec.pathParamField));
+  }
+  for (const field of spec.requiredNonEmptyArrayFields ?? []) setIfMissing(field, ["TODO_REPLACE"]);
+  for (const field of spec.requiredEmptyArrayFields ?? []) setIfMissing(field, []);
+  for (const field of spec.requiredObjectFields ?? []) setIfMissing(field, { TODO_KEY: "TODO_VALUE" });
+  for (const field of spec.requiredBooleanFields ?? []) setIfMissing(field, "TODO_BOOLEAN");
+  for (const field of spec.requiredFiniteNumberFields ?? []) setIfMissing(field, "TODO_NUMBER");
+  for (const field of spec.requiredPositiveIntegerFields ?? []) setIfMissing(field, "TODO_POSITIVE_INTEGER");
+  for (const rule of spec.requiredNumberRanges ?? []) setIfMissing(rule.field, `TODO_NUMBER_${rule.min ?? "MIN"}_${rule.max ?? "MAX"}`);
+  for (const fieldSet of spec.requiredAnyFields ?? []) setIfMissing(fieldSet[0], operatorEvidencePackageTemplateValue(fieldSet[0], report));
+  for (const fieldSets of spec.requiredAnyFieldSets ?? []) {
+    for (const field of fieldSets[0] ?? []) setIfMissing(field, operatorEvidencePackageTemplateValue(field, report));
+  }
+  for (const [field, requiredValues] of Object.entries(spec.requiredArrayIncludes ?? {})) {
+    setIfMissing(field, [...requiredValues]);
+  }
+  for (const [field, requiredKeys] of Object.entries(spec.requiredObjectKeys ?? {})) {
+    setIfMissing(field, Object.fromEntries(requiredKeys.map((key) => [key, "TODO_VALUE"])));
+  }
+  for (const [field, requiredPrefix] of Object.entries(spec.requiredStringPrefixes ?? {})) {
+    setIfMissing(field, `${requiredPrefix}TODO_REPLACE`);
+  }
+  for (const [field, requiredFragments] of Object.entries(spec.requiredStringIncludes ?? {})) {
+    setIfMissing(field, `TODO_REPLACE: ${requiredFragments.join(" ")}`);
+  }
+  for (const [field, allowedFragments] of Object.entries(spec.requiredStringIncludesAny ?? {})) {
+    setIfMissing(field, `TODO_REPLACE_ONE_OF: ${allowedFragments.join(" ")}`);
+  }
+  for (const [field, expected] of Object.entries(spec.requiredExactFields ?? {})) {
+    setWorkflowFieldValue(resource, field, expected);
+  }
+  for (const [field, expected] of Object.entries(spec.requiredStructuredFields ?? {})) {
+    setWorkflowFieldValue(resource, field, structuredClone(expected));
+  }
+  if (action.artifactKind) setIfMissing("artifactKind", action.artifactKind);
+  if (report.releaseId) setIfMissing("releaseId", report.releaseId);
+  setIfMissing("createdBy", "TODO_OPERATOR_ID");
+  setIfMissing("createdAt", "TODO_ISO_TIMESTAMP");
+  return resource;
+}
+
+function operatorEvidencePackageTemplateRequiredFields(spec) {
+  return [
+    ...new Set([
+      ...(spec.requiredFields ?? ["id"]),
+      ...(spec.requiredNestedFields ?? []),
+      ...(spec.requiredNonEmptyArrayFields ?? []),
+      ...(spec.requiredObjectFields ?? []),
+      ...(spec.requiredBooleanFields ?? []),
+      ...(spec.requiredFiniteNumberFields ?? []),
+      ...(spec.requiredPositiveIntegerFields ?? []),
+      ...(spec.requiredNumberRanges ?? []).map((rule) => rule.field),
+      ...Object.keys(spec.requiredArrayIncludes ?? {}),
+      ...Object.keys(spec.requiredObjectKeys ?? {}),
+      ...Object.keys(spec.requiredStringPrefixes ?? {}),
+      ...Object.keys(spec.requiredStringIncludes ?? {}),
+      ...Object.keys(spec.requiredStringIncludesAny ?? {}),
+      ...Object.keys(spec.requiredExactFields ?? {}),
+      ...Object.keys(spec.requiredStructuredFields ?? {}),
+    ]),
+  ];
+}
+
+function operatorEvidencePackageTemplateValue(fieldPath, report) {
+  if (fieldPath === "releaseId") return report.releaseId ?? releaseId;
+  if (fieldPath === "createdBy" || fieldPath === "created_by") return "TODO_OPERATOR_ID";
+  if (String(fieldPath).toLowerCase().endsWith("at")) return "TODO_ISO_TIMESTAMP";
+  if (String(fieldPath).toLowerCase().includes("count")) return "TODO_NUMBER";
+  return `TODO_REPLACE_${String(fieldPath).replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}`;
+}
+
+function countItemsBy(items, fieldName) {
+  return items.reduce((counts, item) => {
+    const key = item?.[fieldName] ?? "unknown";
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function countExpandedValues(items, fieldName) {
+  return items.reduce((counts, item) => {
+    const values = Array.isArray(item?.[fieldName]) ? item[fieldName] : [item?.[fieldName] ?? "unknown"];
+    const normalizedValues = values.length ? values : ["unknown"];
+    for (const value of normalizedValues) {
+      const key = value === null || value === undefined || !String(value).trim() ? "unknown" : value;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
 }
 
 async function protectedJsonEndpoint(request, response, context, roles, buildPayload) {
@@ -7231,6 +15962,442 @@ async function protectedJsonEndpoint(request, response, context, roles, buildPay
   sendJson(response, 200, payload);
 }
 
+async function sourceIntakeJsonlImportEndpoint(request, response, context, routeOptions = {}) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!extractionBatchJsonlImportSpec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: extractionBatchJsonlImportSpec.roles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, extractionBatchJsonlImportSpec);
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  const dryRun = Boolean(routeOptions.dryRun || jsonlImportDryRunRequested(null, body));
+  if (isTemplateOnlyRecord(body)) {
+    sendJson(response, 400, {
+      error: "source_intake_template_record",
+      detail: "generated source-workbench template records must be replaced with real source-intake data before import",
+    });
+    return;
+  }
+  const batchCandidate = body.extractionBatch ?? body.resource;
+  if (!batchCandidate || typeof batchCandidate !== "object" || Array.isArray(batchCandidate)) {
+    sendJson(response, 400, { error: "invalid_workflow_payload", detail: "extractionBatch object is required" });
+    return;
+  }
+  if (isTemplateOnlyRecord(batchCandidate)) {
+    sendJson(response, 400, {
+      error: "source_intake_template_record",
+      detail: "generated source-workbench extractionBatch templates must be replaced with real data before import",
+      resourceKey: "extractionBatch",
+    });
+    return;
+  }
+  const batchSideEffectFields = sourceIntakeSideEffectAttemptFields(batchCandidate);
+  if (batchSideEffectFields.length) {
+    sendJson(response, 400, {
+      error: "source_intake_side_effect_attempt",
+      detail: `source-intake JSONL import cannot execute AI extraction or create downstream artifacts: ${batchSideEffectFields.join(", ")}`,
+      resourceKey: "extractionBatch",
+    });
+    return;
+  }
+  const parseResult = parseArgumentExtractionJsonl(body.jsonl);
+  if (!parseResult.ok) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: parseResult.detail, line: parseResult.line });
+    return;
+  }
+  if (parseResult.records.length === 0) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: "jsonl must contain at least one argument extraction record" });
+    return;
+  }
+
+  const batchDefaults = {
+    createsPreparedDraft: false,
+    createsCandidateItem: false,
+    createsCandidateBatch: false,
+    liveQueueIntegration: false,
+    aiExtractionExecuted: false,
+    downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+    importFormat: "jsonl",
+  };
+  const batchValidation = validateWorkflowPayload({ ...batchDefaults, ...batchCandidate }, session.user, extractionBatchJsonlImportSpec, {});
+  if (!batchValidation.ok) {
+    sendJson(response, batchValidation.statusCode ?? 400, { error: batchValidation.error ?? "invalid_workflow_payload", detail: batchValidation.detail });
+    return;
+  }
+  const extractionBatch = batchValidation.resource;
+  if (routeOptions.sourceCardId && extractionBatch.sourceCardId !== routeOptions.sourceCardId) {
+    sendJson(response, 400, {
+      error: "invalid_jsonl_import",
+      detail: `extractionBatch.sourceCardId must match route source ${routeOptions.sourceCardId}`,
+      routeSourceCardId: routeOptions.sourceCardId,
+    });
+    return;
+  }
+  if (extractionBatch.extractionCount !== parseResult.records.length) {
+    sendJson(response, 400, {
+      error: "invalid_jsonl_import",
+      detail: `extractionBatch.extractionCount must equal parsed JSONL records (${parseResult.records.length})`,
+      parsedExtractionCount: parseResult.records.length,
+    });
+    return;
+  }
+  if (await workflowResourceById(context, "extractionBatch", extractionBatch.id)) {
+    sendJson(response, 409, {
+      error: "source_intake_duplicate_resource",
+      detail: `extractionBatch.id ${extractionBatch.id} already exists; use a new batch id for JSONL import`,
+      resourceKey: "extractionBatch",
+      resourceId: extractionBatch.id,
+    });
+    return;
+  }
+
+  const batchBinding = await validateSourceIntakeResourceBindings(context, extractionBatch, extractionBatchJsonlImportSpec);
+  if (!batchBinding.ok) {
+    sendJson(response, batchBinding.statusCode ?? 409, {
+      error: batchBinding.error ?? "source_intake_binding_failed",
+      detail: batchBinding.detail,
+      ...(batchBinding.extra ?? {}),
+    });
+    return;
+  }
+
+  const argumentExtractions = [];
+  const seenArgumentExtractionIds = new Set();
+  for (const [index, record] of parseResult.records.entries()) {
+    if (isTemplateOnlyRecord(record)) {
+      sendJson(response, 400, {
+        error: "source_intake_template_record",
+        detail: `line ${index + 1}: generated source-workbench JSONL templates must be replaced with real argument extraction data before import`,
+        line: index + 1,
+      });
+      return;
+    }
+    const rawExtraction = record.argumentExtraction ?? record.resource ?? record;
+    if (!rawExtraction || typeof rawExtraction !== "object" || Array.isArray(rawExtraction)) {
+      sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${index + 1} must be an object`, line: index + 1 });
+      return;
+    }
+    if (isTemplateOnlyRecord(rawExtraction)) {
+      sendJson(response, 400, {
+        error: "source_intake_template_record",
+        detail: `line ${index + 1}: generated source-workbench argumentExtraction templates must be replaced with real data before import`,
+        line: index + 1,
+        resourceKey: "argumentExtraction",
+      });
+      return;
+    }
+    const sideEffectFields = sourceIntakeSideEffectAttemptFields(rawExtraction);
+    if (sideEffectFields.length) {
+      sendJson(response, 400, {
+        error: "source_intake_side_effect_attempt",
+        detail: `line ${index + 1}: source-intake JSONL import cannot execute AI extraction or create downstream artifacts: ${sideEffectFields.join(", ")}`,
+        line: index + 1,
+        resourceKey: "argumentExtraction",
+      });
+      return;
+    }
+    const reviewBypassFields = sourceIntakeImportReviewBypassFields(rawExtraction);
+    if (reviewBypassFields.length) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${index + 1} cannot include review fields on import: ${reviewBypassFields.join(", ")}; use the extraction review route`,
+        line: index + 1,
+      });
+      return;
+    }
+    const candidate = {
+      reviewStatus: "pending_admin_review",
+      sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+      downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+      createsPreparedDraft: false,
+      createsCandidateItem: false,
+      createsCandidateBatch: false,
+      liveQueueIntegration: false,
+      aiExtractionExecuted: false,
+      importedAt: extractionBatch.importedAt,
+      extractionBatchId: extractionBatch.id,
+      sourceCardId: extractionBatch.sourceCardId,
+      ...rawExtraction,
+    };
+    if (candidate.extractionBatchId !== extractionBatch.id) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${index + 1} extractionBatchId must match ${extractionBatch.id}`,
+        line: index + 1,
+      });
+      return;
+    }
+    if (candidate.sourceCardId !== extractionBatch.sourceCardId) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${index + 1} sourceCardId must match ${extractionBatch.sourceCardId}`,
+        line: index + 1,
+      });
+      return;
+    }
+    const validation = validateWorkflowPayload(candidate, session.user, argumentExtractionWorkflowSpec, {});
+    if (!validation.ok) {
+      sendJson(response, validation.statusCode ?? 400, {
+        error: validation.error ?? "invalid_workflow_payload",
+        detail: `line ${index + 1}: ${validation.detail}`,
+        line: index + 1,
+      });
+      return;
+    }
+    if (seenArgumentExtractionIds.has(validation.resource.id)) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${index + 1}: duplicate argumentExtraction.id ${validation.resource.id}`,
+        line: index + 1,
+      });
+      return;
+    }
+    if (await workflowResourceById(context, "argumentExtraction", validation.resource.id)) {
+      sendJson(response, 409, {
+        error: "source_intake_duplicate_resource",
+        detail: `line ${index + 1}: argumentExtraction.id ${validation.resource.id} already exists; use the extraction review route for review updates`,
+        line: index + 1,
+        resourceKey: "argumentExtraction",
+        resourceId: validation.resource.id,
+      });
+      return;
+    }
+    const binding = await validateSourceIntakeResourceBindings(context, validation.resource, argumentExtractionWorkflowSpec, {
+      extractionBatches: [extractionBatch],
+    });
+    if (!binding.ok) {
+      sendJson(response, binding.statusCode ?? 409, {
+        error: binding.error ?? "source_intake_binding_failed",
+        detail: `line ${index + 1}: ${binding.detail}`,
+        line: index + 1,
+        ...(binding.extra ?? {}),
+      });
+      return;
+    }
+    seenArgumentExtractionIds.add(validation.resource.id);
+    argumentExtractions.push(validation.resource);
+  }
+
+  if (dryRun) {
+    const sourceSpanIds = [...new Set(argumentExtractions.flatMap((extraction) => extraction.sourceSpanIds ?? []))];
+    sendJson(response, 200, {
+      ok: true,
+      dryRun: true,
+      resourceKey: "extractionBatch",
+      importRoute: routeOptions.route ?? extractionBatchJsonlImportSpec.route,
+      validatedResourceCount: 1 + argumentExtractions.length,
+      validatedExtractionBatchId: extractionBatch.id,
+      validatedArgumentExtractionCount: argumentExtractions.length,
+      argumentExtractionIds: argumentExtractions.map((extraction) => extraction.id),
+      sourceCardIds: [extractionBatch.sourceCardId],
+      sourceSpanIds,
+      allOrNothing: true,
+      noSideEffects: true,
+      safety: {
+        createdPreparedDrafts: false,
+        createdCandidateItems: false,
+        createdCandidateBatches: false,
+        liveQueueIntegrated: false,
+        aiExtractionExecuted: false,
+        importedSourceCards: 0,
+        importedSourceSpans: 0,
+      },
+      validationPolicy: "dry_run_validates_source_cards_spans_extraction_batch_and_argument_extractions_without_appending_events",
+    });
+    return;
+  }
+
+  const batchEvent = createWorkflowAuditEvent(extractionBatchJsonlImportSpec.eventType, session.user, "extractionBatch", extractionBatch, request, {
+    route: routeOptions.route ?? extractionBatchJsonlImportSpec.route,
+    requiredRoles: extractionBatchJsonlImportSpec.roles,
+  });
+  const extractionEvents = argumentExtractions.map((argumentExtraction) =>
+    createWorkflowAuditEvent(argumentExtractionWorkflowSpec.eventType, session.user, "argumentExtraction", argumentExtraction, request, {
+      route: argumentExtractionWorkflowSpec.route,
+      requiredRoles: argumentExtractionWorkflowSpec.roles,
+    }),
+  );
+  await context.auditStore.appendWorkflowEvent(batchEvent);
+  for (const event of extractionEvents) {
+    await context.auditStore.appendWorkflowEvent(event);
+  }
+  sendJson(response, 201, {
+    ok: true,
+    eventId: batchEvent.id,
+    eventType: batchEvent.type,
+    resourceKey: "extractionBatch",
+    resourceId: extractionBatch.id,
+    extractionBatchId: extractionBatch.id,
+    argumentExtractionIds: argumentExtractions.map((extraction) => extraction.id),
+    argumentExtractionEventIds: extractionEvents.map((event) => event.id),
+    importedExtractionCount: argumentExtractions.length,
+    payloadHash: batchEvent.payloadHash,
+    accessAudit: batchEvent.accessAudit,
+    safety: {
+      createdPreparedDrafts: false,
+      createdCandidateItems: false,
+      createdCandidateBatches: false,
+      liveQueueIntegrated: false,
+      aiExtractionExecuted: false,
+    },
+  });
+}
+
+async function argumentExtractionReviewEndpoint(request, response, context, extractionId, routeOptions = {}) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!argumentExtractionReviewSpec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: argumentExtractionReviewSpec.roles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, argumentExtractionReviewSpec);
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
+  const body = await readJsonBody(request);
+  const review = body.argumentExtractionReview ?? body.review ?? body;
+  if (!review || typeof review !== "object" || Array.isArray(review)) {
+    sendJson(response, 400, { error: "invalid_workflow_payload", detail: "argumentExtractionReview object is required" });
+    return;
+  }
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(review)) {
+    sendJson(response, 400, {
+      error: "source_intake_template_record",
+      detail: "generated source-workbench extraction-review templates must be replaced with real review data before append",
+      resourceKey: "argumentExtraction",
+    });
+    return;
+  }
+  const existing = await workflowResourceById(context, "argumentExtraction", extractionId);
+  if (!existing) {
+    sendJson(response, 404, { error: "argument_extraction_not_found" });
+    return;
+  }
+  if (!ARGUMENT_EXTRACTION_REVIEW_STATUSES.includes(review.reviewStatus)) {
+    sendJson(response, 400, {
+      error: "invalid_workflow_payload",
+      detail: `argumentExtractionReview.reviewStatus must be one of: ${ARGUMENT_EXTRACTION_REVIEW_STATUSES.join(", ")}`,
+    });
+    return;
+  }
+  const reviewed = {
+    ...existing,
+    reviewStatus: review.reviewStatus,
+    reviewNotes: review.reviewNotes ?? existing.reviewNotes ?? "",
+    reviewedBy: review.reviewedBy ?? session.user.id,
+    reviewedAt: review.reviewedAt ?? new Date().toISOString(),
+    downstreamIntegrationStatus: SOURCE_INTAKE_DOWNSTREAM_INTEGRATION_STATUS,
+    sourceVisibility: SOURCE_INTAKE_VISIBILITY,
+    createsPreparedDraft: false,
+    createsCandidateItem: false,
+    createsCandidateBatch: false,
+    liveQueueIntegration: false,
+    aiExtractionExecuted: false,
+  };
+  const validation = validateWorkflowPayload(reviewed, session.user, argumentExtractionReviewSpec, { id: extractionId });
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
+    return;
+  }
+  const binding = await validateSourceIntakeResourceBindings(context, validation.resource, argumentExtractionReviewSpec);
+  if (!binding.ok) {
+    sendJson(response, binding.statusCode ?? 409, {
+      error: binding.error ?? "source_intake_binding_failed",
+      detail: binding.detail,
+      ...(binding.extra ?? {}),
+    });
+    return;
+  }
+  const event = createWorkflowAuditEvent(argumentExtractionReviewSpec.eventType, session.user, "argumentExtraction", validation.resource, request, {
+    route: routeOptions.route ?? argumentExtractionReviewSpec.route,
+    params: { id: extractionId },
+    requiredRoles: argumentExtractionReviewSpec.roles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: "argumentExtraction",
+    resourceId: validation.resource.id,
+    reviewStatus: validation.resource.reviewStatus,
+    argumentExtraction: validation.resource,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+    safety: {
+      createdPreparedDrafts: false,
+      createdCandidateItems: false,
+      createdCandidateBatches: false,
+      liveQueueIntegrated: false,
+      aiExtractionExecuted: false,
+    },
+  });
+}
+
+function parseArgumentExtractionJsonl(jsonl) {
+  return parseJsonlRecords(jsonl);
+}
+
+function parseJsonlRecords(jsonl) {
+  if (typeof jsonl !== "string" || jsonl.trim() === "") {
+    return { ok: false, detail: "jsonl string is required" };
+  }
+  const records = [];
+  const lines = jsonl.split(/\r?\n/);
+  for (const [index, line] of lines.entries()) {
+    if (!line.trim()) continue;
+    try {
+      records.push(JSON.parse(line));
+    } catch (error) {
+      return {
+        ok: false,
+        detail: `invalid JSON on line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        line: index + 1,
+      };
+    }
+  }
+  return { ok: true, records };
+}
+
+function sourceIntakeImportReviewBypassFields(record) {
+  const forbiddenFields = [];
+  if (Object.hasOwn(record, "reviewStatus") && record.reviewStatus !== "pending_admin_review") {
+    forbiddenFields.push("reviewStatus");
+  }
+  for (const field of ["reviewedBy", "reviewedAt", "reviewNotes"]) {
+    if (Object.hasOwn(record, field)) forbiddenFields.push(field);
+  }
+  return forbiddenFields;
+}
+
+function sourceIntakeNoPlatformAiExecution(value) {
+  const normalized = String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "_");
+  return normalized.includes("no_platform_ai") || normalized.includes("no_ai_extraction");
+}
+
+function sourceIntakeSideEffectAttemptFields(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return [];
+  const sideEffectFields = ["createsPreparedDraft", "createsCandidateItem", "createsCandidateBatch", "liveQueueIntegration", "aiExtractionExecuted"];
+  const attemptedFields = sideEffectFields.filter((field) => record[field] === true);
+  if (Object.hasOwn(record, "extractionExecutionMode") && !sourceIntakeNoPlatformAiExecution(record.extractionExecutionMode)) {
+    attemptedFields.push("extractionExecutionMode");
+  }
+  return attemptedFields;
+}
+
 async function workflowWriteEndpoint(request, response, context, match) {
   const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
@@ -7248,16 +16415,57 @@ async function workflowWriteEndpoint(request, response, context, match) {
     return;
   }
   const body = await readJsonBody(request);
+  const dryRun = workflowSingleRecordDryRunRequested(request, body);
   const candidate = body[spec.resourceKey] ?? body.resource ?? body;
-  const validationContext = spec.requireAssignmentClaimField
-    ? { workflowAssignments: latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "assignment") }
-    : {};
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(candidate)) {
+    sendJson(response, 400, {
+      error: "workflow_template_record",
+      detail: `generated template records must be replaced with real ${spec.resourceKey} data before append`,
+      resourceKey: spec.resourceKey,
+    });
+    return;
+  }
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const validationContext = spec.requireAssignmentClaimField ? { workflowAssignments: latestWorkflowResources(workflowEvents, "assignment") } : {};
   const validation = validateWorkflowPayload(candidate, session.user, spec, params, validationContext);
   if (!validation.ok) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
     return;
   }
   let resource = validation.resource;
+  const duplicateResource = validateWorkflowDuplicateResourceFromEvents(workflowEvents, spec, resource);
+  if (!duplicateResource.ok) {
+    sendJson(response, duplicateResource.statusCode ?? 409, {
+      error: duplicateResource.error,
+      detail: duplicateResource.detail,
+      resourceKey: spec.resourceKey,
+      resourceId: resource.id,
+      route: spec.route,
+    });
+    return;
+  }
+  const qualificationGate = await validateWorkflowQualificationGate(context, session.user, resource, spec);
+  if (!qualificationGate.ok) {
+    sendJson(response, qualificationGate.statusCode ?? 403, {
+      error: qualificationGate.error,
+      detail: qualificationGate.detail,
+      ...(qualificationGate.extra ?? {}),
+    });
+    return;
+  }
+  if (dryRun) {
+    const bindingValidation = await validateWorkflowResourceBindings(context, resource, spec);
+    if (!bindingValidation.ok) {
+      sendJson(response, bindingValidation.statusCode ?? 409, {
+        error: bindingValidation.error ?? "workflow_resource_binding_failed",
+        detail: bindingValidation.detail,
+        ...(bindingValidation.extra ?? {}),
+      });
+      return;
+    }
+    sendJson(response, 200, workflowSingleRecordDryRunResponse(spec, resource, params));
+    return;
+  }
   let policyGate = null;
   if (spec.policyActionKind) {
     policyGate = await appendWorkflowPolicyDecisionGate(context, request, session.user, resource, spec, params);
@@ -7306,6 +16514,1384 @@ async function workflowWriteEndpoint(request, response, context, match) {
   });
 }
 
+const targetScaleBulkJsonlImportRoutes = [
+  { pattern: /^\/api\/v1\/intake\/positions\/import-jsonl$/, route: "/api/v1/intake/positions/import-jsonl", writeRoute: "/api/v1/intake/positions" },
+  { pattern: /^\/api\/v1\/intake\/critiques\/import-jsonl$/, route: "/api/v1/intake/critiques/import-jsonl", writeRoute: "/api/v1/intake/critiques" },
+  { pattern: /^\/api\/v1\/assignments\/import-jsonl$/, route: "/api/v1/assignments/import-jsonl", writeRoute: "/api/v1/assignments" },
+  {
+    pattern: /^\/api\/v1\/rating-context-snapshots\/import-jsonl$/,
+    route: ratingContextSnapshotBulkJsonlImportRoute,
+    writeRoute: "/api/v1/rating-context-snapshots",
+  },
+  { pattern: /^\/api\/v1\/gold-items\/import-jsonl$/, route: "/api/v1/gold-items/import-jsonl", writeRoute: "/api/v1/gold-items" },
+  {
+    pattern: /^\/api\/v1\/validation-tranche-evidence\/import-jsonl$/,
+    route: "/api/v1/validation-tranche-evidence/import-jsonl",
+    writeRoute: "/api/v1/validation-tranche-evidence",
+  },
+];
+
+function targetScaleBulkJsonlImportRoute(pathname) {
+  return targetScaleBulkJsonlImportRoutes.find((route) => route.pattern.test(pathname)) ?? null;
+}
+
+function jsonlImportDryRunRequested(searchParams, body = null) {
+  const queryValue = searchParams?.get?.("dryRun") ?? searchParams?.get?.("dry_run") ?? searchParams?.get?.("validateOnly") ?? null;
+  if (["1", "true", "yes", "validate", "validate_only"].includes(String(queryValue ?? "").toLowerCase())) return true;
+  return body?.dryRun === true || body?.dry_run === true || body?.validateOnly === true;
+}
+
+function isTemplateOnlyRecord(record) {
+  return record?.templateOnly === true || record?.template_only === true;
+}
+
+async function workflowBulkJsonlImportEndpoint(request, response, context, route, options = {}) {
+  const matchedWriteRoute = matchWorkflowEndpoint("POST", route.writeRoute, workflowWriteEndpoints);
+  const spec = matchedWriteRoute?.spec;
+  if (!spec) {
+    sendJson(response, 500, { error: "bulk_import_spec_missing", detail: `No workflow write spec for ${route.writeRoute}` });
+    return;
+  }
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!spec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
+    return;
+  }
+  if (spec.policyActionKind) {
+    sendJson(response, 400, {
+      error: "bulk_import_policy_gated_resource_unsupported",
+      detail: `${spec.resourceKey} requires per-resource policy decisions and cannot be imported through this bulk route`,
+    });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, spec);
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
+  const body = await readJsonBody(request);
+  const dryRun = Boolean(options.dryRun || jsonlImportDryRunRequested(null, body));
+  const parseResult = parseJsonlRecords(body.jsonl);
+  if (!parseResult.ok) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: parseResult.detail, line: parseResult.line });
+    return;
+  }
+  if (parseResult.records.length === 0) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: `${spec.resourceKey} JSONL import must contain at least one record` });
+    return;
+  }
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const existingResourcesById = new Map(latestWorkflowResources(workflowEvents, spec.resourceKey).map((resource) => [resource.id, resource]));
+  const validationContext = spec.requireAssignmentClaimField ? { workflowAssignments: latestWorkflowResources(workflowEvents, "assignment") } : {};
+  const resources = [];
+  const importEntries = [];
+  const seenIds = new Set();
+  for (const [index, record] of parseResult.records.entries()) {
+    const line = index + 1;
+    if (isTemplateOnlyRecord(record)) {
+      sendJson(response, 400, {
+        error: "target_data_collection_template_record",
+        detail: `line ${line}: generated template records must be replaced with real ${spec.resourceKey} data before import`,
+        line,
+      });
+      return;
+    }
+    const importMetadata = targetDataCollectionPackageRecordImpact(record);
+    const routeMetadataValidation = targetDataCollectionImportRouteMetadataValidation(route.route, importMetadata);
+    if (!routeMetadataValidation.ok) {
+      sendJson(response, 400, {
+        error: routeMetadataValidation.error,
+        detail: `line ${line}: ${routeMetadataValidation.detail}`,
+        line,
+        route: route.route,
+        ...routeMetadataValidation.extra,
+      });
+      return;
+    }
+    const candidate = record?.[spec.resourceKey] ?? record?.resource ?? record;
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${line}: ${spec.resourceKey} object is required`, line });
+      return;
+    }
+    if (isTemplateOnlyRecord(candidate)) {
+      sendJson(response, 400, {
+        error: "target_data_collection_template_record",
+        detail: `line ${line}: generated template records must be replaced with real ${spec.resourceKey} data before import`,
+        line,
+      });
+      return;
+    }
+    const validation = validateWorkflowPayload(candidate, session.user, spec, {}, validationContext);
+    if (!validation.ok) {
+      sendJson(response, validation.statusCode ?? 400, {
+        error: validation.error ?? "invalid_workflow_payload",
+        detail: `line ${line}: ${validation.detail}`,
+        line,
+      });
+      return;
+    }
+    if (seenIds.has(validation.resource.id)) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${line}: duplicate ${spec.resourceKey}.id ${validation.resource.id}`,
+        line,
+      });
+      return;
+    }
+    if (existingResourcesById.has(validation.resource.id)) {
+      sendJson(response, 409, {
+        error: "bulk_import_duplicate_resource",
+        detail: `line ${line}: ${spec.resourceKey}.id ${validation.resource.id} already exists; use a new id for ${route.route}`,
+        line,
+        resourceKey: spec.resourceKey,
+        resourceId: validation.resource.id,
+      });
+      return;
+    }
+    seenIds.add(validation.resource.id);
+    const qualificationGate = await validateWorkflowQualificationGate(context, session.user, validation.resource, spec);
+    if (!qualificationGate.ok) {
+      sendJson(response, qualificationGate.statusCode ?? 403, {
+        error: qualificationGate.error,
+        detail: `line ${line}: ${qualificationGate.detail}`,
+        line,
+        ...(qualificationGate.extra ?? {}),
+      });
+      return;
+    }
+    const bindingValidation = await validateWorkflowResourceBindings(context, validation.resource, spec);
+    if (!bindingValidation.ok) {
+      sendJson(response, bindingValidation.statusCode ?? 409, {
+        error: bindingValidation.error ?? "workflow_resource_binding_failed",
+        detail: `line ${line}: ${bindingValidation.detail}`,
+        line,
+        ...(bindingValidation.extra ?? {}),
+      });
+      return;
+    }
+    resources.push(validation.resource);
+    importEntries.push({
+      kind: "workflow",
+      line,
+      route: route.route,
+      sourceWriteRoute: spec.route,
+      eventType: spec.eventType,
+      resourceKey: spec.resourceKey,
+      resource: validation.resource,
+      importMetadata,
+    });
+  }
+
+  const targetGapImpactSummary = targetDataCollectionPackageImpactSummary(importEntries);
+
+  if (dryRun) {
+    sendJson(response, 200, {
+      ok: true,
+      dryRun: true,
+      eventType: spec.eventType,
+      resourceKey: spec.resourceKey,
+      importRoute: route.route,
+      sourceWriteRoute: spec.route,
+      validatedResourceCount: resources.length,
+      validatedResources: targetDataCollectionPackageEntrySummaries(importEntries),
+      resourceIds: resources.map((resource) => resource.id),
+      targetGapImpactSummary,
+      allOrNothing: true,
+      noSideEffects: true,
+      validationPolicy: "dry_run_validates_each_jsonl_line_with_single_record_workflow_validator_without_appending_events",
+    });
+    return;
+  }
+
+  const events = resources.map((resource) =>
+    createWorkflowAuditEvent(spec.eventType, session.user, spec.resourceKey, resource, request, {
+      route: route.route,
+      requiredRoles: spec.roles,
+      bulkImportSourceRoute: spec.route,
+    }),
+  );
+  for (const event of events) {
+    await context.auditStore.appendWorkflowEvent(event);
+  }
+  sendJson(response, 201, {
+    ok: true,
+    eventType: spec.eventType,
+    resourceKey: spec.resourceKey,
+    importRoute: route.route,
+    sourceWriteRoute: spec.route,
+    importedResourceCount: resources.length,
+    importedResources: importEntries.map((entry, index) => ({
+      line: entry.line,
+      route: entry.route,
+      sourceWriteRoute: entry.sourceWriteRoute,
+      resourceKey: entry.resourceKey,
+      resourceId: entry.resource.id,
+      ...targetDataCollectionPackageEntryImpactSummary(entry),
+      eventId: events[index].id,
+      payloadHash: events[index].payloadHash,
+    })),
+    resourceIds: resources.map((resource) => resource.id),
+    eventIds: events.map((event) => event.id),
+    payloadHashes: events.map((event) => event.payloadHash),
+    accessAudit: events[0]?.accessAudit ?? null,
+    targetGapImpactSummary,
+    allOrNothing: true,
+    validationPolicy: "each_jsonl_line_reuses_single_record_workflow_validator_before_any_append",
+  });
+}
+
+async function targetDataCollectionPackageJsonlImportEndpoint(request, response, context, options = {}) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  const dryRun = Boolean(options.dryRun || jsonlImportDryRunRequested(null, body));
+  const parseResult = parseJsonlRecords(body.jsonl);
+  if (!parseResult.ok) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: parseResult.detail, line: parseResult.line });
+    return;
+  }
+  if (parseResult.records.length === 0) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: "target data package JSONL import must contain at least one record" });
+    return;
+  }
+
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const persistedRatings = await readPersistedRatings(context.auditStore);
+  const existingWorkflowResourcesByKey = new Map();
+  const existingRatingIds = new Set([...seedRatings, ...persistedRatings].map((rating) => rating.id).filter(Boolean));
+  const seenWorkflowResourceKeys = new Set();
+  const seenRatingIds = new Set();
+  const entries = [];
+  const workflowEntries = [];
+  const ratingEntries = [];
+  const actor = session.user;
+
+  for (const [index, record] of parseResult.records.entries()) {
+    const line = index + 1;
+    if (isTemplateOnlyRecord(record)) {
+      sendJson(response, 400, {
+        error: "target_data_collection_package_template_record",
+        detail: `line ${line}: generated target-data template records must be replaced with real data before package import`,
+        line,
+      });
+      return;
+    }
+
+    const route = targetDataCollectionPackageRecordRoute(record);
+    if (!route) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${line}: importRoute, route, or endpoint is required`,
+        line,
+      });
+      return;
+    }
+    const match = targetDataCollectionPackageRouteMatch(route);
+    if (!match) {
+      sendJson(response, 400, {
+        error: "target_data_collection_package_route_unsupported",
+        detail: `line ${line}: ${route} is not a supported target-data JSONL import route`,
+        line,
+        route,
+      });
+      return;
+    }
+    const importMetadata = targetDataCollectionPackageRecordImpact(record);
+    const routeMetadataValidation = targetDataCollectionPackageRouteMetadataValidation(route, importMetadata);
+    if (!routeMetadataValidation.ok) {
+      sendJson(response, 400, {
+        error: routeMetadataValidation.error,
+        detail: `line ${line}: ${routeMetadataValidation.detail}`,
+        line,
+        route,
+        ...routeMetadataValidation.extra,
+      });
+      return;
+    }
+
+    if (match.kind === "rating") {
+      const allowedRatingRoles = ["rater", "graduate", "phd", "expert", "admin"];
+      if (!allowedRatingRoles.includes(actor.role)) {
+        sendJson(response, 403, {
+          error: "authorized_rater_role_required",
+          detail: `line ${line}: rating package import requires an assigned rater-compatible role`,
+          line,
+          requiredRoles: allowedRatingRoles,
+        });
+        return;
+      }
+      const candidate = targetDataCollectionPackageRatingCandidate(record);
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+        sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${line}: rating object is required`, line, route });
+        return;
+      }
+      if (isTemplateOnlyRecord(candidate)) {
+        sendJson(response, 400, {
+          error: "target_data_collection_package_template_record",
+          detail: `line ${line}: generated rating template records must be replaced with real rating data before package import`,
+          line,
+          route,
+        });
+        return;
+      }
+      if (candidate.id && seenRatingIds.has(candidate.id)) {
+        sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${line}: duplicate rating.id ${candidate.id}`, line, route });
+        return;
+      }
+      if (candidate.id && existingRatingIds.has(candidate.id)) {
+        sendJson(response, 409, {
+          error: "bulk_import_duplicate_rating",
+          detail: `line ${line}: rating.id ${candidate.id} already exists; use a new id for ${targetDataCollectionPackageImportRoute}`,
+          line,
+          route,
+          ratingId: candidate.id,
+        });
+        return;
+      }
+      if (candidate.id) seenRatingIds.add(candidate.id);
+      const entry = {
+        kind: "rating",
+        line,
+        route,
+        sourceWriteRoute: "/api/v1/ratings",
+        eventType: "blind_initial_submitted",
+        resourceKey: "rating",
+        rating: candidate,
+        importMetadata,
+      };
+      entries.push(entry);
+      ratingEntries.push(entry);
+      continue;
+    }
+
+    const { bulkRoute } = match;
+    const matchedWriteRoute = matchWorkflowEndpoint("POST", bulkRoute.writeRoute, workflowWriteEndpoints);
+    const spec = matchedWriteRoute?.spec;
+    if (!spec) {
+      sendJson(response, 500, {
+        error: "bulk_import_spec_missing",
+        detail: `line ${line}: no workflow write spec for ${bulkRoute.writeRoute}`,
+        line,
+        route,
+      });
+      return;
+    }
+    if (!spec.roles.includes(actor.role)) {
+      sendJson(response, 403, {
+        error: "required_role_missing",
+        detail: `line ${line}: ${spec.resourceKey} requires one of ${spec.roles.join(", ")}`,
+        line,
+        route,
+        requiredRoles: spec.roles,
+      });
+      return;
+    }
+    if (spec.policyActionKind) {
+      sendJson(response, 400, {
+        error: "target_data_collection_package_policy_gated_resource_unsupported",
+        detail: `line ${line}: ${spec.resourceKey} requires per-resource policy decision evidence and must use ${spec.route}`,
+        line,
+        route,
+        policyActionKind: spec.policyActionKind,
+      });
+      return;
+    }
+    const phaseGate = await enforceWorkflowSpecPhaseGate(context, actor, spec);
+    if (!phaseGate.ok) {
+      sendWorkflowPhaseGateFailure(response, phaseGate);
+      return;
+    }
+    const candidate = targetDataCollectionPackageRecordCandidate(record, spec.resourceKey);
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${line}: payload.${spec.resourceKey}, payload.resource, ${spec.resourceKey}, or resource object is required`,
+        line,
+        route,
+      });
+      return;
+    }
+    if (isTemplateOnlyRecord(candidate)) {
+      sendJson(response, 400, {
+        error: "target_data_collection_package_template_record",
+        detail: `line ${line}: generated template records must be replaced with real ${spec.resourceKey} data before package import`,
+        line,
+        route,
+      });
+      return;
+    }
+    const normalizedCandidate = typeof spec.normalize === "function" ? spec.normalize(candidate, matchedWriteRoute.params, record) : candidate;
+    const validationContext = await workflowValidationContextForSpec(context, session, request, spec, normalizedCandidate);
+    const validation = validateWorkflowPayload(normalizedCandidate, actor, spec, matchedWriteRoute.params, validationContext);
+    if (!validation.ok) {
+      sendJson(response, validation.statusCode ?? 400, {
+        error: validation.error ?? "invalid_workflow_payload",
+        detail: `line ${line}: ${validation.detail}`,
+        line,
+        route,
+      });
+      return;
+    }
+    const resourceKey = `${spec.resourceKey}:${validation.resource.id}`;
+    if (seenWorkflowResourceKeys.has(resourceKey)) {
+      sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${line}: duplicate ${resourceKey}`, line, route });
+      return;
+    }
+    if (!existingWorkflowResourcesByKey.has(spec.resourceKey)) {
+      existingWorkflowResourcesByKey.set(
+        spec.resourceKey,
+        new Map(latestWorkflowResources(workflowEvents, spec.resourceKey).map((resource) => [resource.id, resource])),
+      );
+    }
+    if (existingWorkflowResourcesByKey.get(spec.resourceKey).has(validation.resource.id)) {
+      sendJson(response, 409, {
+        error: "bulk_import_duplicate_resource",
+        detail: `line ${line}: ${spec.resourceKey}.id ${validation.resource.id} already exists; use a new id for ${targetDataCollectionPackageImportRoute}`,
+        line,
+        route,
+        resourceKey: spec.resourceKey,
+        resourceId: validation.resource.id,
+      });
+      return;
+    }
+    seenWorkflowResourceKeys.add(resourceKey);
+    const qualificationGate = await validateWorkflowQualificationGate(context, actor, validation.resource, spec);
+    if (!qualificationGate.ok) {
+      sendJson(response, qualificationGate.statusCode ?? 403, {
+        error: qualificationGate.error,
+        detail: `line ${line}: ${qualificationGate.detail}`,
+        line,
+        route,
+        ...(qualificationGate.extra ?? {}),
+      });
+      return;
+    }
+    const entry = {
+      kind: "workflow",
+      line,
+      route,
+      bulkRoute,
+      spec,
+      params: matchedWriteRoute.params,
+      sourceWriteRoute: bulkRoute.writeRoute,
+      eventType: spec.eventType,
+      resourceKey: spec.resourceKey,
+      resource: validation.resource,
+      importMetadata,
+    };
+    entries.push(entry);
+    workflowEntries.push(entry);
+  }
+
+  const stagedResources = workflowEntries.map((entry) => ({ resourceKey: entry.spec.resourceKey, resource: entry.resource }));
+  for (const entry of workflowEntries) {
+    const bindingValidation = await validateWorkflowResourceBindings(context, entry.resource, entry.spec, { stagedResources });
+    if (!bindingValidation.ok) {
+      sendJson(response, bindingValidation.statusCode ?? 409, {
+        error: bindingValidation.error ?? "workflow_resource_binding_failed",
+        detail: `line ${entry.line}: ${bindingValidation.detail}`,
+        line: entry.line,
+        route: entry.route,
+        ...(bindingValidation.extra ?? {}),
+      });
+      return;
+    }
+  }
+
+  if (ratingEntries.length) {
+    const ratingValidationContext = targetDataCollectionPackageRatingValidationContext(
+      await buildRatingValidationContext(context),
+      workflowEntries,
+    );
+    for (const entry of ratingEntries) {
+      const validation = validateRatingPayload(entry.rating, entry.eventType, ratingValidationContext);
+      if (!validation.ok) {
+        sendJson(response, 400, {
+          error: "invalid_rating_payload",
+          detail: `line ${entry.line}: ${validation.detail}`,
+          line: entry.line,
+          route: entry.route,
+        });
+        return;
+      }
+      const actorValidation = validateRatingActor(entry.rating, actor, ratingValidationContext);
+      if (!actorValidation.ok) {
+        sendJson(response, 403, {
+          error: "rating_actor_not_authorized",
+          detail: `line ${entry.line}: ${actorValidation.detail}`,
+          line: entry.line,
+          route: entry.route,
+        });
+        return;
+      }
+    }
+  }
+
+  const targetGapImpactSummary = targetDataCollectionPackageImpactSummary(entries);
+
+  if (dryRun) {
+    sendJson(response, 200, {
+      ok: true,
+      dryRun: true,
+      importRoute: targetDataCollectionPackageImportRoute,
+      validatedResourceCount: entries.length,
+      validatedResources: targetDataCollectionPackageEntrySummaries(entries),
+      targetGapImpactSummary,
+      resourceIds: entries.map((entry) => entry.resource?.id ?? entry.rating?.id).filter(Boolean),
+      ratingIds: ratingEntries.map((entry) => entry.rating.id),
+      allOrNothing: true,
+      noSideEffects: true,
+      policyGateDryRun: ratingEntries.length ? "not_minted_or_consumed" : "not_applicable",
+      validationPolicy:
+        "dry_run_validates_each_jsonl_line_route_roles_phase_gate_payload_qualification_bindings_rating_actor_and_policy_gate_inputs_without_appending_events",
+      packageRoutePolicy: "each line names a concrete target-data JSONL import route; unchanged template records are rejected",
+    });
+    return;
+  }
+
+  const workflowEventsToAppend = new Map(
+    workflowEntries.map((entry) => [
+      entry.line,
+      createWorkflowAuditEvent(entry.spec.eventType, actor, entry.spec.resourceKey, entry.resource, request, {
+        route: targetDataCollectionPackageImportRoute,
+        params: entry.params,
+        requiredRoles: entry.spec.roles,
+        bulkImportSourceRoute: entry.route,
+        concreteWriteRoute: entry.sourceWriteRoute,
+      }),
+    ]),
+  );
+  const preparedRatings = [];
+  for (const entry of ratingEntries) {
+    const policyGate = await appendRatingPolicyDecisionGate(context, request, actor, entry.rating, entry.eventType, { append: false });
+    if (!policyGate.ok) {
+      sendJson(response, policyGate.statusCode ?? 409, {
+        error: policyGate.error ?? "policy_decision_gate_failed",
+        detail: `line ${entry.line}: ${policyGate.detail}`,
+        line: entry.line,
+        route: entry.route,
+        ...(policyGate.extra ?? {}),
+      });
+      return;
+    }
+    const governedRating = {
+      ...entry.rating,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+    };
+    preparedRatings.push({
+      line: entry.line,
+      rating: governedRating,
+      policyGate,
+      event: createAuditEvent(entry.eventType, actor, governedRating, request),
+    });
+  }
+  const preparedRatingsByLine = new Map(preparedRatings.map((item) => [item.line, item]));
+
+  for (const entry of entries) {
+    if (entry.kind === "workflow") {
+      await context.auditStore.appendWorkflowEvent(workflowEventsToAppend.get(entry.line));
+      continue;
+    }
+    const prepared = preparedRatingsByLine.get(entry.line);
+    await context.auditStore.appendWorkflowEvent(prepared.policyGate.decisionEvent);
+    await context.auditStore.appendWorkflowEvent(prepared.policyGate.consumptionEvent);
+    await context.auditStore.appendRatingEvent(prepared.event);
+  }
+
+  sendJson(response, 201, {
+    ok: true,
+    importRoute: targetDataCollectionPackageImportRoute,
+    importedResourceCount: entries.length,
+    importedResources: entries.map((entry) => {
+      if (entry.kind === "workflow") {
+        const event = workflowEventsToAppend.get(entry.line);
+        return {
+          line: entry.line,
+          route: entry.route,
+          sourceWriteRoute: entry.sourceWriteRoute,
+          resourceKey: entry.resourceKey,
+          resourceId: entry.resource.id,
+          ...targetDataCollectionPackageEntryImpactSummary(entry),
+          eventId: event.id,
+          payloadHash: event.payloadHash,
+        };
+      }
+      const prepared = preparedRatingsByLine.get(entry.line);
+      return {
+        line: entry.line,
+        route: entry.route,
+        sourceWriteRoute: entry.sourceWriteRoute,
+        resourceKey: "rating",
+        resourceId: prepared.rating.id,
+        ratingId: prepared.rating.id,
+        ...targetDataCollectionPackageEntryImpactSummary(entry),
+        eventId: prepared.event.id,
+        payloadHash: prepared.event.payloadHash,
+        policyDecisionId: prepared.policyGate.decision.id,
+        policyDecisionConsumptionId: prepared.policyGate.consumption.id,
+      };
+    }),
+    resourceIds: entries.map((entry) => entry.resource?.id ?? entry.rating?.id).filter(Boolean),
+    ratingIds: preparedRatings.map((item) => item.rating.id),
+    eventIds: [
+      ...workflowEntries.map((entry) => workflowEventsToAppend.get(entry.line).id),
+      ...preparedRatings.map((item) => item.event.id),
+    ],
+    policyDecisionIds: preparedRatings.map((item) => item.policyGate.decision.id),
+    policyDecisionConsumptionIds: preparedRatings.map((item) => item.policyGate.consumption.id),
+    policyEventIds: preparedRatings.flatMap((item) => item.policyGate.eventIds),
+    accessAudit: workflowEventsToAppend.values().next().value?.accessAudit ?? preparedRatings[0]?.event.accessAudit ?? null,
+    targetGapImpactSummary,
+    allOrNothing: true,
+    validationPolicy:
+      "each_jsonl_line_names_a_concrete_target_data_import_route_and_reuses_that_route_validator_before_any_resource_append",
+    packageRoutePolicy: "unchanged generated templates are rejected and rating policy gates are prepared before package append",
+  });
+}
+
+function targetDataCollectionPackageRecordRoute(record) {
+  const route = record?.importRoute ?? record?.route ?? record?.bulkImportRoute ?? record?.endpoint;
+  return typeof route === "string" && route.startsWith("/") ? route : null;
+}
+
+function targetDataCollectionPackageRouteMatch(route) {
+  if (route === ratingBulkJsonlImportRoute) {
+    return { kind: "rating", importRoute: ratingBulkJsonlImportRoute };
+  }
+  const bulkRoute = targetScaleBulkJsonlImportRoute(route);
+  if (bulkRoute) return { kind: "workflow", bulkRoute };
+  return null;
+}
+
+const targetDataCollectionPackageRouteMetadataPolicies = {
+  "/api/v1/intake/positions/import-jsonl": {
+    allowedTargetGapIds: ["positions"],
+    requiredImportKind: "primary_data_import",
+  },
+  "/api/v1/intake/critiques/import-jsonl": {
+    allowedTargetGapIds: ["critiques"],
+    requiredImportKind: "primary_data_import",
+  },
+  "/api/v1/assignments/import-jsonl": {
+    allowedTargetGapIds: ["blind_initial_ratings"],
+    requiredImportKind: "setup_data_import",
+  },
+  [ratingContextSnapshotBulkJsonlImportRoute]: {
+    allowedTargetGapIds: ["blind_initial_ratings"],
+    requiredImportKind: "setup_data_import",
+  },
+  "/api/v1/ratings/import-jsonl": {
+    allowedTargetGapIds: ["blind_initial_ratings"],
+    requiredImportKind: "primary_data_import",
+  },
+  "/api/v1/gold-items/import-jsonl": {
+    allowedTargetGapIds: ["gold_library_items"],
+    requiredImportKind: "primary_data_import",
+  },
+  "/api/v1/validation-tranche-evidence/import-jsonl": {
+    allowedTargetGapIds: ["validation_critiques", "validation_positions", "validation_core_all_items_raters"],
+    requiredImportKind: "primary_data_import",
+  },
+};
+
+function targetDataCollectionPackageRouteMetadataValidation(route, metadata) {
+  return targetDataCollectionImportRouteMetadataValidation(route, metadata, {
+    errorPrefix: "target_data_collection_package",
+  });
+}
+
+function targetDataCollectionImportRouteMetadataValidation(route, metadata, options = {}) {
+  const policy = targetDataCollectionPackageRouteMetadataPolicies[route];
+  if (!policy) return { ok: true };
+  const errorPrefix = options.errorPrefix ?? "target_data_collection";
+  const importImpact = metadata.importImpact ?? null;
+  const declaredImportRoute = targetDataCollectionPackageString(importImpact?.importRoute);
+  if (declaredImportRoute && declaredImportRoute !== route) {
+    return {
+      ok: false,
+      error: `${errorPrefix}_import_route_mismatch`,
+      detail: `importImpact.importRoute ${declaredImportRoute} does not match import route ${route}`,
+      extra: { expectedImportRoute: route, observedImportRoute: declaredImportRoute },
+    };
+  }
+  const declaredKinds = uniqueValues([metadata.importKind, importImpact?.importKind]);
+  const invalidImportKind = declaredKinds.find((kind) => kind !== policy.requiredImportKind);
+  if (invalidImportKind) {
+    return {
+      ok: false,
+      error: `${errorPrefix}_import_kind_mismatch`,
+      detail: `importKind ${invalidImportKind} is not valid for ${route}; expected ${policy.requiredImportKind}`,
+      extra: {
+        expectedImportKind: policy.requiredImportKind,
+        observedImportKind: invalidImportKind,
+      },
+    };
+  }
+  const declaredTargetGapIds = uniqueValues([
+    metadata.targetGapId,
+    ...(metadata.targetGapIds ?? []),
+    importImpact?.targetGapId,
+    ...(Array.isArray(importImpact?.targetGapIds) ? importImpact.targetGapIds : []),
+    ...(Array.isArray(importImpact?.relatedTargetGapIds) ? importImpact.relatedTargetGapIds : []),
+  ]);
+  const invalidTargetGapIds = declaredTargetGapIds.filter((targetGapId) => !policy.allowedTargetGapIds.includes(targetGapId));
+  if (invalidTargetGapIds.length) {
+    return {
+      ok: false,
+      error: `${errorPrefix}_target_gap_mismatch`,
+      detail: `target gap metadata ${invalidTargetGapIds.join(",")} is not valid for ${route}`,
+      extra: {
+        invalidTargetGapIds,
+        allowedTargetGapIds: policy.allowedTargetGapIds,
+      },
+    };
+  }
+  return { ok: true };
+}
+
+function targetDataCollectionPackageRecordCandidate(record, resourceKey) {
+  const payload = record?.payload ?? record?.body ?? record;
+  const candidate = payload?.[resourceKey] ?? payload?.resource ?? record?.[resourceKey] ?? record?.resource;
+  if (candidate) return candidate;
+  if (payload !== record || !record || typeof record !== "object" || Array.isArray(record)) return null;
+  const {
+    route,
+    importRoute,
+    bulkImportRoute,
+    sourceWriteRoute,
+    endpoint,
+    method,
+    actionId,
+    checklistRowId,
+    targetGapId,
+    targetGapIds,
+    importKind,
+    importImpact,
+    templateExpansionMode,
+    expandedRecordIndex,
+    expandedRecordCount,
+    expandedRecordCapApplied,
+    ...resource
+  } = record;
+  return resource;
+}
+
+function targetDataCollectionPackageRatingCandidate(record) {
+  const payload = record?.payload ?? record?.body ?? record;
+  const candidate = payload?.rating ?? payload?.resource ?? record?.rating ?? record?.resource;
+  if (candidate) return candidate;
+  if (payload !== record || !record || typeof record !== "object" || Array.isArray(record)) return null;
+  const {
+    route,
+    importRoute,
+    bulkImportRoute,
+    sourceWriteRoute,
+    endpoint,
+    method,
+    actionId,
+    checklistRowId,
+    targetGapId,
+    targetGapIds,
+    importKind,
+    importImpact,
+    templateExpansionMode,
+    expandedRecordIndex,
+    expandedRecordCount,
+    expandedRecordCapApplied,
+    ...rating
+  } = record;
+  return rating;
+}
+
+function targetDataCollectionPackageRatingValidationContext(baseContext, workflowEntries) {
+  const stagedByKey = (resourceKey) =>
+    workflowEntries.filter((entry) => entry.spec.resourceKey === resourceKey).map((entry) => entry.resource);
+  return {
+    ...baseContext,
+    assignments: mergeById(baseContext.assignments ?? [], stagedByKey("assignment")),
+    positions: mergeById(baseContext.positions ?? [], stagedByKey("position")),
+    critiques: mergeById(baseContext.critiques ?? [], stagedByKey("critique")),
+    ratingContextSnapshots: buildEffectiveRatingContextSnapshots(stagedByKey("ratingContextSnapshot"), baseContext.ratingContextSnapshots ?? []),
+  };
+}
+
+function targetDataCollectionPackageRecordImpact(record) {
+  const payload = record?.payload ?? record?.body ?? null;
+  const importImpact = targetDataCollectionPackagePlainObject(record?.importImpact)
+    ? record.importImpact
+    : targetDataCollectionPackagePlainObject(payload?.importImpact)
+      ? payload.importImpact
+      : null;
+  const targetGapIds = uniqueValues([
+    ...targetDataCollectionPackageStringArray(record?.targetGapIds),
+    ...targetDataCollectionPackageStringArray(payload?.targetGapIds),
+    ...targetDataCollectionPackageStringArray(importImpact?.targetGapIds),
+    ...targetDataCollectionPackageStringArray(importImpact?.relatedTargetGapIds),
+    record?.targetGapId,
+    payload?.targetGapId,
+    importImpact?.targetGapId,
+  ]);
+  const targetGapId =
+    targetDataCollectionPackageString(record?.targetGapId) ??
+    targetDataCollectionPackageString(payload?.targetGapId) ??
+    targetDataCollectionPackageString(importImpact?.targetGapId) ??
+    targetGapIds[0] ??
+    null;
+  const importKind =
+    targetDataCollectionPackageString(record?.importKind) ??
+    targetDataCollectionPackageString(payload?.importKind) ??
+    targetDataCollectionPackageString(importImpact?.importKind);
+  return {
+    targetGapId,
+    targetGapIds,
+    importKind,
+    importImpact,
+    templateExpansionMode:
+      targetDataCollectionPackageString(record?.templateExpansionMode) ??
+      targetDataCollectionPackageString(payload?.templateExpansionMode),
+    expandedRecordIndex: targetDataCollectionPackageFiniteNumber(record?.expandedRecordIndex ?? payload?.expandedRecordIndex),
+    expandedRecordCount: targetDataCollectionPackageFiniteNumber(record?.expandedRecordCount ?? payload?.expandedRecordCount),
+    expandedRecordCapApplied: Boolean(record?.expandedRecordCapApplied ?? payload?.expandedRecordCapApplied ?? false),
+  };
+}
+
+function targetDataCollectionPackagePlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function targetDataCollectionPackageString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function targetDataCollectionPackageStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return uniqueValues(value);
+}
+
+function targetDataCollectionPackageFiniteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function targetDataCollectionPackageMaxNumber(values) {
+  const numbers = values.map((value) => targetDataCollectionPackageFiniteNumber(value)).filter((value) => value !== null);
+  return numbers.length ? Math.max(...numbers) : null;
+}
+
+function targetDataCollectionPackageEntryImportKind(entry) {
+  return entry.importMetadata?.importKind ?? entry.importMetadata?.importImpact?.importKind ?? null;
+}
+
+function targetDataCollectionPackageEntryExpectedDelta(entry) {
+  const targetGapId = entry.importMetadata?.targetGapId ?? entry.importMetadata?.importImpact?.targetGapId ?? null;
+  if (!targetGapId) return null;
+  const importKind = targetDataCollectionPackageEntryImportKind(entry);
+  if (importKind === "setup_data_import") return 0;
+  if (entry.resourceKey === "validationTrancheEvidence") {
+    return targetDataCollectionPackageFiniteNumber(entry.importMetadata?.importImpact?.expectedResourceDelta);
+  }
+  if (["position", "critique", "goldItem", "rating"].includes(entry.resourceKey)) {
+    return 1;
+  }
+  if (targetDataCollectionPackageFiniteNumber(entry.importMetadata?.importImpact?.estimatedRecordsRequired) === 1) {
+    return targetDataCollectionPackageFiniteNumber(entry.importMetadata?.importImpact?.expectedResourceDelta);
+  }
+  return null;
+}
+
+function targetDataCollectionPackageEntryImpactSummary(entry) {
+  const metadata = entry.importMetadata ?? {};
+  const importImpact = metadata.importImpact ?? null;
+  const targetGapId = metadata.targetGapId ?? importImpact?.targetGapId ?? null;
+  const importKind = targetDataCollectionPackageEntryImportKind(entry);
+  const verificationRoute =
+    targetDataCollectionPackageString(importImpact?.verificationRoute) ??
+    (targetGapId ? `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}` : null);
+  return {
+    targetGapId,
+    targetGapIds: metadata.targetGapIds ?? (targetGapId ? [targetGapId] : []),
+    relatedTargetGapIds: (metadata.targetGapIds ?? []).filter((item) => item !== targetGapId),
+    importKind,
+    importImpactKnown: Boolean(importImpact),
+    expectedResourceDeltaFromPackageRecord: targetDataCollectionPackageEntryExpectedDelta(entry),
+    templateExpectedResourceDelta: targetDataCollectionPackageFiniteNumber(importImpact?.expectedResourceDelta),
+    templateEstimatedRecordsRequired: targetDataCollectionPackageFiniteNumber(importImpact?.estimatedRecordsRequired),
+    closesTargetGapWhenValidated: importKind !== "setup_data_import" && importImpact?.closesTargetGapWhenValidated === true,
+    verificationRoute,
+  };
+}
+
+function targetDataCollectionPackageImpactSummary(entries) {
+  const rowsByKey = new Map();
+  for (const entry of entries) {
+    const targetGapId = entry.importMetadata?.targetGapId ?? entry.importMetadata?.importImpact?.targetGapId ?? null;
+    const key = targetGapId ? `targetGap:${targetGapId}` : `unscopedRoute:${entry.route}`;
+    if (!rowsByKey.has(key)) {
+      rowsByKey.set(key, { key, targetGapId, entries: [] });
+    }
+    rowsByKey.get(key).entries.push(entry);
+  }
+
+  const rows = [...rowsByKey.values()].map((group) => {
+    const deltas = group.entries.map((entry) => targetDataCollectionPackageEntryExpectedDelta(entry));
+    const knownDeltas = deltas.filter((delta) => delta !== null);
+    const primaryEntries = group.entries.filter((entry) => targetDataCollectionPackageEntryImportKind(entry) !== "setup_data_import");
+    const setupEntries = group.entries.filter((entry) => targetDataCollectionPackageEntryImportKind(entry) === "setup_data_import");
+    const unknownDeltaLineCount = primaryEntries.filter((entry) => targetDataCollectionPackageEntryExpectedDelta(entry) === null).length;
+    const importImpacts = group.entries.map((entry) => entry.importMetadata?.importImpact).filter(targetDataCollectionPackagePlainObject);
+    const verificationRoutes = uniqueValues([
+      ...importImpacts.map((impact) => impact.verificationRoute),
+      group.targetGapId ? `/api/v1/target-gaps/${encodeURIComponent(group.targetGapId)}` : null,
+    ]);
+    const expectedResourceDeltaFromPackageRecords = knownDeltas.length
+      ? knownDeltas.reduce((sum, value) => sum + value, 0)
+      : null;
+    return {
+      key: group.key,
+      targetGapId: group.targetGapId,
+      scopedToTargetGap: Boolean(group.targetGapId),
+      importKinds: uniqueValues(group.entries.map((entry) => targetDataCollectionPackageEntryImportKind(entry))),
+      importRoutes: uniqueValues(group.entries.map((entry) => entry.route)),
+      sourceWriteRoutes: uniqueValues(group.entries.map((entry) => entry.sourceWriteRoute)),
+      lines: group.entries.map((entry) => entry.line),
+      resourceKeys: uniqueValues(group.entries.map((entry) => entry.resourceKey)),
+      resourceIds: uniqueValues(group.entries.map((entry) => entry.resource?.id ?? entry.rating?.id)),
+      submittedRecordCount: group.entries.length,
+      primaryRecordCount: primaryEntries.length,
+      setupRecordCount: setupEntries.length,
+      setupOnly: setupEntries.length > 0 && primaryEntries.length === 0,
+      impactKnown: importImpacts.length > 0,
+      expectedResourceDeltaFromPackageRecords,
+      unknownDeltaLineCount,
+      templateEstimatedRecordsRequired: targetDataCollectionPackageMaxNumber(importImpacts.map((impact) => impact.estimatedRecordsRequired)),
+      templateExpectedResourceDelta: targetDataCollectionPackageMaxNumber(importImpacts.map((impact) => impact.expectedResourceDelta)),
+      remainingBefore: targetDataCollectionPackageMaxNumber(importImpacts.map((impact) => impact.remaining)),
+      currentBefore: targetDataCollectionPackageMaxNumber(importImpacts.map((impact) => impact.current)),
+      target: targetDataCollectionPackageMaxNumber(importImpacts.map((impact) => impact.target)),
+      relatedTargetGapIds: uniqueValues(
+        group.entries.flatMap((entry) => entry.importMetadata?.targetGapIds ?? []).filter((targetGapId) => targetGapId !== group.targetGapId),
+      ),
+      closesTargetGapWhenValidated: group.entries.some((entry) => {
+        const impact = entry.importMetadata?.importImpact;
+        return targetDataCollectionPackageEntryImportKind(entry) !== "setup_data_import" && impact?.closesTargetGapWhenValidated === true;
+      }),
+      verificationRoutes,
+    };
+  });
+
+  const knownDeltas = rows.map((row) => row.expectedResourceDeltaFromPackageRecords).filter((value) => value !== null);
+  return {
+    releaseReportVerificationRoute: "/api/release/report",
+    advisoryOnly: true,
+    completionPolicy:
+      "Package impact summarizes validated or appended JSONL rows; release completion remains authoritative in /api/release/report after real submitted evidence is recomputed.",
+    submittedRecordCount: entries.length,
+    scopedTargetGapCount: rows.filter((row) => row.scopedToTargetGap).length,
+    unscopedRouteCount: rows.filter((row) => !row.scopedToTargetGap).length,
+    expectedResourceDeltaFromPackageRecords: knownDeltas.length ? knownDeltas.reduce((sum, value) => sum + value, 0) : null,
+    unknownDeltaLineCount: rows.reduce((sum, row) => sum + row.unknownDeltaLineCount, 0),
+    rows,
+  };
+}
+
+function targetDataCollectionPackageEntrySummaries(entries) {
+  return entries.map((entry) => ({
+    line: entry.line,
+    route: entry.route,
+    sourceWriteRoute: entry.sourceWriteRoute,
+    resourceKey: entry.resourceKey,
+    resourceId: entry.resource?.id ?? entry.rating?.id ?? null,
+    ...targetDataCollectionPackageEntryImpactSummary(entry),
+  }));
+}
+
+async function operatorEvidencePackageJsonlImportEndpoint(request, response, context, options = {}) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminRoles });
+    return;
+  }
+  const body = await readJsonBody(request);
+  const dryRun = Boolean(options.dryRun || jsonlImportDryRunRequested(null, body));
+  const parseResult = parseJsonlRecords(body.jsonl);
+  if (!parseResult.ok) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: parseResult.detail, line: parseResult.line });
+    return;
+  }
+  if (parseResult.records.length === 0) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: "operator evidence JSONL import must contain at least one record" });
+    return;
+  }
+
+  const entries = [];
+  const seenResourceKeys = new Set();
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const existingResourcesByKey = new Map();
+  for (const [index, record] of parseResult.records.entries()) {
+    const line = index + 1;
+    if (record?.templateOnly === true || record?.template_only === true) {
+      sendJson(response, 400, {
+        error: "operator_evidence_package_template_record",
+        detail: `line ${line}: generated template records must be replaced with real artifact data before import`,
+        line,
+      });
+      return;
+    }
+    const route = operatorEvidencePackageRecordRoute(record);
+    if (!route) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${line}: route, writeRoute, or endpoint is required`,
+        line,
+      });
+      return;
+    }
+    const match = operatorEvidencePackageWriteMatch(route);
+    if (!match?.spec) {
+      sendJson(response, 400, {
+        error: "operator_evidence_package_route_unsupported",
+        detail: `line ${line}: ${route} is not a supported append-only workflow write route`,
+        line,
+        route,
+      });
+      return;
+    }
+    const { spec, params } = match;
+    if (!spec.roles.includes(session.user.role)) {
+      sendJson(response, 403, {
+        error: "required_role_missing",
+        detail: `line ${line}: ${spec.resourceKey} requires one of ${spec.roles.join(", ")}`,
+        line,
+        requiredRoles: spec.roles,
+      });
+      return;
+    }
+    if (spec.packageImportUnsupportedReason) {
+      sendJson(response, 400, {
+        error: "operator_evidence_package_route_unsupported",
+        detail: `line ${line}: ${route} cannot be imported through the operator package route: ${spec.packageImportUnsupportedReason}`,
+        line,
+        route,
+      });
+      return;
+    }
+    if (spec.policyActionKind) {
+      sendJson(response, 400, {
+        error: "operator_evidence_package_policy_gated_resource_unsupported",
+        detail: `line ${line}: ${spec.resourceKey} requires per-resource policy decision evidence and must use ${spec.route}`,
+        line,
+        route,
+        policyActionKind: spec.policyActionKind,
+      });
+      return;
+    }
+    const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, spec);
+    if (!phaseGate.ok) {
+      sendWorkflowPhaseGateFailure(response, phaseGate);
+      return;
+    }
+    const candidate = operatorEvidencePackageRecordCandidate(record, spec);
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${line}: payload.${spec.resourceKey}, payload.resource, ${spec.resourceKey}, or resource object is required`,
+        line,
+        route,
+      });
+      return;
+    }
+    if (isTemplateOnlyRecord(candidate)) {
+      sendJson(response, 400, {
+        error: "operator_evidence_package_template_record",
+        detail: `line ${line}: generated template records must be replaced with real ${spec.resourceKey} data before import`,
+        line,
+        route,
+        resourceKey: spec.resourceKey,
+      });
+      return;
+    }
+    const normalizedCandidate = typeof spec.normalize === "function" ? spec.normalize(candidate, params, record) : candidate;
+    const validationContext = await workflowValidationContextForSpec(context, session, request, spec, normalizedCandidate);
+    const validation = validateWorkflowPayload(normalizedCandidate, session.user, spec, params, validationContext);
+    if (!validation.ok) {
+      sendJson(response, validation.statusCode ?? 400, {
+        error: validation.error ?? "invalid_workflow_payload",
+        detail: `line ${line}: ${validation.detail}`,
+        line,
+        route,
+      });
+      return;
+    }
+    const resourceKey = `${spec.resourceKey}:${validation.resource.id}`;
+    if (seenResourceKeys.has(resourceKey)) {
+      sendJson(response, 400, {
+        error: "invalid_jsonl_import",
+        detail: `line ${line}: duplicate ${resourceKey}`,
+        line,
+        route,
+      });
+      return;
+    }
+    if (!existingResourcesByKey.has(spec.resourceKey)) {
+      existingResourcesByKey.set(
+        spec.resourceKey,
+        new Map(latestWorkflowResources(workflowEvents, spec.resourceKey).map((resource) => [resource.id, resource])),
+      );
+    }
+    if (existingResourcesByKey.get(spec.resourceKey).has(validation.resource.id)) {
+      sendJson(response, 409, {
+        error: "bulk_import_duplicate_resource",
+        detail: `line ${line}: ${spec.resourceKey}.id ${validation.resource.id} already exists; use a new id for ${route}`,
+        line,
+        route,
+        resourceKey: spec.resourceKey,
+        resourceId: validation.resource.id,
+      });
+      return;
+    }
+    seenResourceKeys.add(resourceKey);
+    const qualificationGate = await validateWorkflowQualificationGate(context, session.user, validation.resource, spec);
+    if (!qualificationGate.ok) {
+      sendJson(response, qualificationGate.statusCode ?? 403, {
+        error: qualificationGate.error,
+        detail: `line ${line}: ${qualificationGate.detail}`,
+        line,
+        route,
+        ...(qualificationGate.extra ?? {}),
+      });
+      return;
+    }
+    entries.push({ line, route, spec, params, resource: validation.resource });
+  }
+
+  const stagedResources = entries.map((entry) => ({ resourceKey: entry.spec.resourceKey, resource: entry.resource }));
+  for (const entry of entries) {
+    const bindingValidation = await validateWorkflowResourceBindings(context, entry.resource, entry.spec, { stagedResources });
+    if (!bindingValidation.ok) {
+      sendJson(response, bindingValidation.statusCode ?? 409, {
+        error: bindingValidation.error ?? "workflow_resource_binding_failed",
+        detail: `line ${entry.line}: ${bindingValidation.detail}`,
+        line: entry.line,
+        route: entry.route,
+        ...(bindingValidation.extra ?? {}),
+      });
+      return;
+    }
+  }
+
+  const operatorEvidenceImpactSummary = await operatorEvidencePackageImpactSummary(context, entries);
+
+  if (dryRun) {
+    sendJson(response, 200, {
+      ok: true,
+      dryRun: true,
+      importRoute: "/api/v1/operator-evidence/import-jsonl",
+      validatedResourceCount: entries.length,
+      validatedResources: entries.map((entry) => ({
+        line: entry.line,
+        route: entry.route,
+        sourceWriteRoute: entry.spec.route,
+        resourceKey: entry.spec.resourceKey,
+        resourceId: entry.resource.id,
+      })),
+      operatorEvidenceImpactSummary,
+      resourceIds: entries.map((entry) => entry.resource.id),
+      allOrNothing: true,
+      noSideEffects: true,
+      validationPolicy:
+        "dry_run_validates_each_jsonl_line_route_roles_phase_gate_payload_qualification_and_bindings_without_appending_events",
+      policyGatedResourcePolicy:
+        "policy-gated and server-materialized artifacts are rejected from package import and must use their single-artifact governance routes",
+    });
+    return;
+  }
+
+  const events = entries.map((entry) =>
+    createWorkflowAuditEvent(entry.spec.eventType, session.user, entry.spec.resourceKey, entry.resource, request, {
+      route: "/api/v1/operator-evidence/import-jsonl",
+      params: entry.params,
+      requiredRoles: entry.spec.roles,
+      bulkImportSourceRoute: entry.spec.route,
+      concreteWriteRoute: entry.route,
+    }),
+  );
+  for (const event of events) {
+    await context.auditStore.appendWorkflowEvent(event);
+  }
+  sendJson(response, 201, {
+    ok: true,
+    importRoute: "/api/v1/operator-evidence/import-jsonl",
+    importedResourceCount: entries.length,
+    importedResources: entries.map((entry, index) => ({
+      line: entry.line,
+      route: entry.route,
+      sourceWriteRoute: entry.spec.route,
+      resourceKey: entry.spec.resourceKey,
+      resourceId: entry.resource.id,
+      eventId: events[index].id,
+      payloadHash: events[index].payloadHash,
+    })),
+    operatorEvidenceImpactSummary,
+    eventIds: events.map((event) => event.id),
+    accessAudit: events[0]?.accessAudit ?? null,
+    allOrNothing: true,
+    validationPolicy:
+      "each_jsonl_line_names_a_concrete_route_and_reuses_that_route_single_record_workflow_validator_before_any_resource_append",
+    policyGatedResourcePolicy:
+      "policy-gated and server-materialized artifacts are rejected from package import and must use their single-artifact governance routes",
+  });
+}
+
+async function operatorEvidencePackageImpactSummary(context, entries) {
+  const { report } = await buildCurrentReleaseArtifacts(context);
+  const actionItems = Array.isArray(report?.operatorEvidenceSubmissionPlan?.actionItems)
+    ? report.operatorEvidenceSubmissionPlan.actionItems
+    : [];
+  const packageActions = actionItems.filter((action) => action?.bulkImportRoute === operatorEvidencePackageImportRoute);
+  const entrySummaries = entries.map((entry) => {
+    const matchedActions = packageActions.filter((action) => operatorEvidencePackageActionMatchesEntry(action, entry));
+    return {
+      line: entry.line,
+      route: entry.route,
+      sourceWriteRoute: workflowSpecResponseRoute(entry.spec),
+      resourceKey: entry.spec.resourceKey,
+      resourceId: entry.resource.id,
+      matchedOperatorActionIds: matchedActions.map((action) => action.id).filter(Boolean),
+      matchedChecklistRowIds: uniqueValues(matchedActions.map((action) => action.checklistRowId)),
+      matchedArtifactKinds: uniqueValues(matchedActions.map((action) => action.artifactKind)),
+      matchedReadbackRoutes: uniqueValues(
+        matchedActions.flatMap((action) => [action.readbackRoute, action.readbackItemRoute, action.submissionReadbackRoute]),
+      ),
+      matchStatus: matchedActions.length ? "matched_operator_action" : "unmatched_operator_action",
+    };
+  });
+  const actionRows = [];
+  const matchedActionIds = new Set();
+  for (const action of packageActions) {
+    const matchingEntries = entries.filter((entry) => operatorEvidencePackageActionMatchesEntry(action, entry));
+    if (!matchingEntries.length) continue;
+    if (action.id) matchedActionIds.add(action.id);
+    actionRows.push({
+      key: `operatorAction:${action.id}`,
+      matchStatus: "matched_operator_action",
+      checklistRowId: action.checklistRowId ?? null,
+      artifactKind: action.artifactKind ?? null,
+      operatorActionIds: action.id ? [action.id] : [],
+      actionStatus: action.status ?? action.actionStatus ?? null,
+      executionStatus: action.executionStatus ?? null,
+      preconditionStatus: action.preconditionStatus ?? null,
+      importRoute: operatorEvidencePackageImportRoute,
+      writeRoutes: uniqueValues([action.writeRoute]),
+      concreteRoutes: uniqueValues(matchingEntries.map((entry) => entry.route)),
+      readbackRoutes: uniqueValues([action.readbackRoute, action.readbackItemRoute, action.submissionReadbackRoute]),
+      verificationRoutes: uniqueValues([action.readbackItemRoute, action.readbackRoute, action.submissionReadbackRoute, "/api/release/report"]),
+      resourceKeys: uniqueValues(matchingEntries.map((entry) => entry.spec.resourceKey)),
+      resourceIds: uniqueValues(matchingEntries.map((entry) => entry.resource.id)),
+      submittedRecordCount: matchingEntries.length,
+      completionEvidence: action.completionEvidence ?? "Verify authoritative release status in /api/release/report after append.",
+    });
+  }
+  const unmatchedEntries = entrySummaries.filter((entry) => entry.matchStatus === "unmatched_operator_action");
+  const unmatchedRows = unmatchedEntries.map((entry) => ({
+    key: `unmatched:${entry.route}:${entry.resourceKey}`,
+    matchStatus: "unmatched_operator_action",
+    checklistRowId: null,
+    artifactKind: null,
+    operatorActionIds: [],
+    actionStatus: null,
+    executionStatus: null,
+    preconditionStatus: null,
+    importRoute: operatorEvidencePackageImportRoute,
+    writeRoutes: [entry.sourceWriteRoute],
+    concreteRoutes: [entry.route],
+    readbackRoutes: [],
+    verificationRoutes: ["/api/release/report"],
+    resourceKeys: [entry.resourceKey],
+    resourceIds: [entry.resourceId],
+    submittedRecordCount: 1,
+    completionEvidence:
+      "No open operator action currently matches this package route; append may still be valid workflow evidence, but release closure must be verified through /api/release/report.",
+  }));
+  return {
+    releaseReportVerificationRoute: "/api/release/report",
+    advisoryOnly: true,
+    completionPolicy:
+      "Operator-evidence package impact summarizes matched open action items before append; release completion remains authoritative in /api/release/report after submitted evidence is recomputed.",
+    importRoute: operatorEvidencePackageImportRoute,
+    submittedRecordCount: entries.length,
+    matchedRecordCount: entrySummaries.filter((entry) => entry.matchStatus === "matched_operator_action").length,
+    unmatchedRecordCount: unmatchedEntries.length,
+    matchedOpenActionCount: matchedActionIds.size,
+    matchedChecklistRowIds: uniqueValues(entrySummaries.flatMap((entry) => entry.matchedChecklistRowIds)),
+    matchedArtifactKinds: uniqueValues(entrySummaries.flatMap((entry) => entry.matchedArtifactKinds)),
+    entrySummaries,
+    rows: [...actionRows, ...unmatchedRows],
+  };
+}
+
+function operatorEvidencePackageActionMatchesEntry(action, entry) {
+  if (!action?.writeRoute || !entry?.route) return false;
+  if (!routeTemplateMatches(action.writeRoute, entry.route)) return false;
+  if (action.resourceKey && action.resourceKey !== entry.spec.resourceKey) return false;
+  return true;
+}
+
+function routeTemplateMatches(template, route) {
+  const templateParts = String(template ?? "").split("/").filter(Boolean);
+  const routeParts = String(route ?? "").split("/").filter(Boolean);
+  if (templateParts.length !== routeParts.length) return false;
+  return templateParts.every((part, index) => {
+    if (part.startsWith("{") && part.endsWith("}")) return Boolean(routeParts[index]);
+    return part === routeParts[index];
+  });
+}
+
+function operatorEvidencePackageRecordRoute(record) {
+  const route = record?.route ?? record?.writeRoute ?? record?.endpoint;
+  return typeof route === "string" && route.startsWith("/") ? route : null;
+}
+
+function operatorEvidencePackageRecordCandidate(record, spec) {
+  const payload = record?.payload ?? record?.body ?? record;
+  const candidate = payload?.[spec.resourceKey] ?? payload?.resource ?? record?.[spec.resourceKey] ?? record?.resource;
+  if (candidate) return candidate;
+  if (payload !== record || !record || typeof record !== "object" || Array.isArray(record)) return null;
+  const { route, writeRoute, endpoint, method, ...resource } = record;
+  return resource;
+}
+
+async function workflowValidationContextForSpec(context, session, request, spec, candidate) {
+  if (typeof spec.validationContext === "function") {
+    return spec.validationContext({ context, session, request, candidate });
+  }
+  if (spec.requireAssignmentClaimField) {
+    return { workflowAssignments: latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "assignment") };
+  }
+  return {};
+}
+
+function operatorEvidencePackageWriteMatch(pathname) {
+  return (
+    matchWorkflowEndpoint("POST", pathname, workflowWriteEndpoints) ??
+    matchWorkflowEndpoint("POST", pathname, operatorEvidencePackageImportSpecialWriteSpecs)
+  );
+}
+
 async function enforceWorkflowSpecPhaseGate(context, actor, spec) {
   const laneKind = workflowSpecPhaseGateLaneKind(spec);
   const phaseGate = await resolveImplementationPhaseGate(context, laneKind, actor);
@@ -7351,11 +17937,372 @@ async function workflowReadEndpoint(request, response, context, match) {
     return;
   }
   const resource = await workflowResourceById(context, spec.resourceKey, params.id);
-  if (!resource) {
+  let readbackResource = resource;
+  if (!readbackResource && spec.resourceKey === "benchmarkFreezeReport") {
+    const benchmarkReadback = await workflowComputedBenchmarkFreezeReportReadback(request, context, session, params.id);
+    if (!benchmarkReadback.ok) {
+      sendJson(response, benchmarkReadback.statusCode ?? 403, { error: benchmarkReadback.error });
+      return;
+    }
+    readbackResource = benchmarkReadback.resource;
+  }
+  readbackResource = readbackResource ?? (await workflowReleaseReportReadbackResource(context, spec.resourceKey, params.id));
+  if (!readbackResource) {
     sendJson(response, 404, { error: "artifact_not_found" });
     return;
   }
-  sendJson(response, 200, resource);
+  sendJson(response, 200, readbackResource);
+}
+
+async function adminArgumentExtractionReadbackEndpoint(request, response, context, extractionId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!adminAuditRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: adminAuditRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const extraction = model.argumentExtractions.find((item) => item.id === extractionId);
+  if (!extraction) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  const sourceCard = model.sourceCards.find((item) => item.id === extraction.sourceCardId) ?? null;
+  const extractionBatch = model.extractionBatches.find((item) => item.id === extraction.extractionBatchId) ?? null;
+  const sourceSpanIds = Array.isArray(extraction.sourceSpanIds) ? extraction.sourceSpanIds : [];
+  const sourceSpans = sourceSpanIds
+    .map((spanId) => model.sourceSpans.find((item) => item.id === spanId))
+    .filter(Boolean);
+  const foundSourceSpanIds = new Set(sourceSpans.map((span) => span.id));
+  const missingSourceSpanIds = sourceSpanIds.filter((spanId) => !foundSourceSpanIds.has(spanId));
+  sendJson(response, 200, {
+    ...extraction,
+    resourceKey: "argumentExtraction",
+    readbackSource: "admin_extraction_review_context",
+    extraction,
+    sourceCard,
+    extractionBatch,
+    sourceSpans,
+    linkedContext: {
+      sourceCardId: extraction.sourceCardId ?? null,
+      extractionBatchId: extraction.extractionBatchId ?? null,
+      sourceSpanIds,
+      missingSourceSpanIds,
+      sourceCardFound: Boolean(sourceCard),
+      extractionBatchFound: Boolean(extractionBatch),
+      sourceSpanCount: sourceSpans.length,
+      readbackRoutes: {
+        sourceCard: extraction.sourceCardId ? `/api/v1/admin/sources/${encodeURIComponent(extraction.sourceCardId)}` : null,
+        extractionBatch: extraction.extractionBatchId ? `/api/v1/extraction-batches/${encodeURIComponent(extraction.extractionBatchId)}` : null,
+        sourceSpans: sourceSpanIds.map((spanId) => `/api/v1/source-spans/${encodeURIComponent(spanId)}`),
+      },
+      reviewRoute: `/api/v1/admin/extractions/${encodeURIComponent(extraction.id)}/review`,
+      adminReadbackRoute: `/api/v1/argument-extractions/${encodeURIComponent(extraction.id)}`,
+      readbackAccess: "admin_auditor_only",
+    },
+    reviewReadiness: {
+      status: extraction.reviewStatus === "pending_admin_review" ? "pending_manual_review" : "reviewed",
+      currentReviewStatus: extraction.reviewStatus,
+      canReviewWithoutCreatingDownstreamArtifacts: true,
+      createsPreparedDrafts: false,
+      createsCandidateItems: false,
+      createsCandidateBatches: false,
+      liveQueueIntegration: false,
+      aiExtractionExecuted: false,
+      noDownstreamArtifactsCreatedByReadback: true,
+      nonPromotionBoundary:
+        "Admin extraction readback is review context only; downstream preparation, candidate creation, batch membership, AI extraction, and live queue integration stay outside Phase 1 intake.",
+    },
+  });
+}
+
+async function workflowComputedBenchmarkFreezeReportReadback(request, context, session, id) {
+  const computedFreezeReportId = `hidden-benchmark-freeze-${releaseId}`;
+  if (id !== computedFreezeReportId) return { ok: true, resource: null };
+  const exposure = {
+    action: "freeze_report_read",
+    artifactId: computedFreezeReportId,
+    purpose: "release_freeze",
+    accessPhase: "pre_freeze",
+  };
+  if (session.user.role !== "admin") {
+    await appendBenchmarkExposure(
+      context,
+      createBenchmarkExposureEvent("benchmark_access_denied", session.user, exposure, request, { allowed: false }),
+    );
+    return { ok: false, statusCode: 403, error: "admin_role_required_for_hidden_benchmark" };
+  }
+  await appendBenchmarkExposure(context, createBenchmarkExposureEvent("benchmark_exposure_recorded", session.user, exposure, request));
+  const report = await buildAdminBenchmarkFreezeReport(context);
+  if (!artifactIdMatches(report, id)) return { ok: true, resource: null };
+  return {
+    ok: true,
+    resource: {
+      ...report,
+      readbackSource: "computed_hidden_benchmark_freeze_report",
+    },
+  };
+}
+
+const workflowReleaseReportReadbackSelectors = {
+  metaphilosophyArchitectureLayer: (report) =>
+    metaphilosophyEffectiveReadbackRows(report.greenfieldArchitecture?.layerRows ?? [], report.greenfieldArchitecture),
+  metaphilosophyTaskTrack: (report) =>
+    metaphilosophyEffectiveReadbackRows(report.taskTrackTaxonomy?.taskTrackRows ?? [], report.taskTrackTaxonomy),
+  metaphilosophyResearchBacklogItem: (report) =>
+    metaphilosophyEffectiveReadbackRows(report.researchBacklog?.rows ?? [], report.researchBacklog),
+  ratingWorkflowProfile: (report) => report.policyBundleEvidence?.ratingWorkflowProfileRows ?? [],
+  scoreExplanationPolicy: (report) => [
+    ...(report.policyBundleEvidence?.scoreExplanationPolicyRows ?? []),
+    ...(report.scoreExplanationAudit?.scoreExplanationPolicyRows ?? []),
+  ],
+  scoreInputPolicy: (report) => report.ratingExperienceEvidence?.scoreInputPolicyRows ?? [],
+  draftStoragePolicy: (report) => report.ratingExperienceEvidence?.draftStoragePolicyRows ?? [],
+  validationTrancheEvidence: (report) =>
+    report.validationDesign
+      ? [
+          {
+            ...report.validationDesign,
+            readbackSource: "release_report_validation_design",
+          },
+        ]
+      : [],
+};
+
+const workflowReleaseReportCollectionFallbackResourceKeys = new Set([
+  "metaphilosophyArchitectureLayer",
+  "metaphilosophyTaskTrack",
+  "metaphilosophyResearchBacklogItem",
+]);
+
+function metaphilosophyEffectiveReadbackRows(rows, section) {
+  return rows.map((row) => ({
+    ...row,
+    readbackSource: "release_report_effective_metaphilosophy",
+    releaseReportSectionId: section?.id ?? null,
+    releaseUseStatus: section?.releaseUseStatus ?? row.releaseUseStatus ?? null,
+  }));
+}
+
+async function workflowReleaseReportReadbackResource(context, resourceKey, id) {
+  const selector = workflowReleaseReportReadbackSelectors[resourceKey];
+  if (!selector) return null;
+  const { report } = await buildCurrentReleaseArtifacts(context);
+  const row = workflowReleaseReportReadbackRows(selector(report)).find((item) => item.id === id);
+  if (!row) return null;
+  return {
+    ...row,
+    readbackSource: row.readbackSource ?? "release_report_effective_policy",
+    releaseReportId: report.id ?? null,
+    releaseReportGeneratedAt: report.generatedAt ?? null,
+  };
+}
+
+async function workflowReleaseReportReadbackCollection(context, resourceKey) {
+  if (!workflowReleaseReportCollectionFallbackResourceKeys.has(resourceKey)) return null;
+  const selector = workflowReleaseReportReadbackSelectors[resourceKey];
+  if (!selector) return null;
+  const { report } = await buildCurrentReleaseArtifacts(context);
+  const items = workflowReleaseReportReadbackRows(selector(report)).map((row) => ({
+    ...row,
+    readbackSource: row.readbackSource ?? "release_report_effective_policy",
+    releaseReportId: report.id ?? null,
+    releaseReportGeneratedAt: report.generatedAt ?? null,
+  }));
+  if (!items.length) return null;
+  return {
+    readbackSource: items[0]?.readbackSource ?? "release_report_effective_policy",
+    releaseReportId: report.id ?? null,
+    releaseReportGeneratedAt: report.generatedAt ?? null,
+    items,
+  };
+}
+
+function workflowReleaseReportReadbackRows(rows) {
+  const byId = new Map();
+  for (const row of rows) {
+    if (row?.id) byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+async function workflowCollectionReadEndpoint(request, response, context, match) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const { spec } = match;
+  if (!spec.roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: spec.roles });
+    return;
+  }
+  const url = new URL(request.url, "http://localhost");
+  const filters = workflowCollectionReadFilters(spec.resourceKey, url.searchParams);
+  const events = await readPersistedWorkflowEvents(context.auditStore);
+  const items = latestWorkflowResources(events, spec.resourceKey);
+  if (!items.length) {
+    const effectiveReadback = await workflowReleaseReportReadbackCollection(context, spec.resourceKey);
+    if (effectiveReadback) {
+      const filteredItems = workflowCollectionReadFilteredItems(spec.resourceKey, effectiveReadback.items, filters);
+      sendJson(response, 200, {
+        resourceKey: spec.resourceKey,
+        count: filteredItems.length,
+        totalCount: effectiveReadback.items.length,
+        submittedCount: 0,
+        readbackSource: effectiveReadback.readbackSource,
+        releaseReportId: effectiveReadback.releaseReportId,
+        releaseReportGeneratedAt: effectiveReadback.releaseReportGeneratedAt,
+        filteredCounts: workflowCollectionReadFilteredCounts(spec.resourceKey, filteredItems),
+        items: filteredItems,
+      });
+      return;
+    }
+  }
+  const submittedItems = workflowCollectionSubmittedReadItems(spec.resourceKey, items);
+  const filteredItems = workflowCollectionReadFilteredItems(spec.resourceKey, submittedItems, filters);
+  sendJson(response, 200, {
+    resourceKey: spec.resourceKey,
+    count: filteredItems.length,
+    totalCount: submittedItems.length,
+    submittedCount: submittedItems.length,
+    filteredCounts: workflowCollectionReadFilteredCounts(spec.resourceKey, filteredItems),
+    items: filteredItems,
+  });
+}
+
+function workflowCollectionSubmittedReadItems(resourceKey, items) {
+  const rows = Array.isArray(items) ? items : [];
+  if (
+    ![
+      "metaphilosophyArchitectureLayer",
+      "metaphilosophyTaskTrack",
+      "metaphilosophyResearchBacklogItem",
+    ].includes(resourceKey)
+  ) {
+    return rows;
+  }
+  return rows.map((item) => ({
+    ...item,
+    readbackSource: item.readbackSource ?? "submitted_workflow_evidence",
+  }));
+}
+
+function workflowCollectionReadFilters(resourceKey, searchParams) {
+  if (
+    ![
+      "metaphilosophyArchitectureLayer",
+      "metaphilosophyTaskTrack",
+      "metaphilosophyResearchBacklogItem",
+    ].includes(resourceKey)
+  ) {
+    return {};
+  }
+  return {
+    id: firstSearchValue(searchParams, ["id", "artifactId", "layerId", "architectureLayerId", "taskTrackId", "backlogItemId"]),
+    status: firstSearchValue(searchParams, ["status", "releaseUseStatus"]),
+    readbackSource: firstSearchValue(searchParams, ["readbackSource"]),
+    releaseClaimRole: firstSearchValue(searchParams, ["releaseClaimRole"]),
+    lmcaRelationship: firstSearchValue(searchParams, ["lmcaRelationship"]),
+    metricFamily: firstSearchValue(searchParams, ["metricFamily"]),
+    experimentType: firstSearchValue(searchParams, ["experimentType"]),
+    releaseGateStatus: firstSearchValue(searchParams, ["releaseGateStatus"]),
+    directRequirement: parseOptionalBoolean(firstSearchValue(searchParams, ["directRequirement"])),
+  };
+}
+
+function firstSearchValue(searchParams, names) {
+  for (const name of names) {
+    const value = searchParams.get(name);
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function parseOptionalBoolean(value) {
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) return true;
+  if (["false", "0", "no"].includes(normalized)) return false;
+  return null;
+}
+
+function workflowCollectionReadFilteredItems(resourceKey, items, filters) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!filters || !Object.values(filters).some((value) => value !== "" && value !== null && value !== undefined)) return rows;
+  return rows.filter((item) => workflowCollectionReadItemMatches(resourceKey, item, filters));
+}
+
+function workflowCollectionReadItemMatches(resourceKey, item, filters) {
+  if (filters.id && !sameFilterValue(item?.id ?? item?.artifactId, filters.id)) return false;
+  if (filters.status && ![item?.status, item?.releaseUseStatus].some((value) => sameFilterValue(value, filters.status))) return false;
+  if (filters.readbackSource && !sameFilterValue(item?.readbackSource, filters.readbackSource)) return false;
+  if (resourceKey === "metaphilosophyArchitectureLayer" && filters.releaseClaimRole && !sameFilterValue(item?.releaseClaimRole, filters.releaseClaimRole)) return false;
+  if (resourceKey === "metaphilosophyTaskTrack") {
+    if (filters.lmcaRelationship && !sameFilterValue(item?.lmcaRelationship, filters.lmcaRelationship)) return false;
+    if (filters.metricFamily && !arrayIncludesFilterValue(item?.primaryMetricFamilies, filters.metricFamily)) return false;
+  }
+  if (resourceKey === "metaphilosophyResearchBacklogItem") {
+    if (filters.experimentType && !sameFilterValue(item?.experimentType, filters.experimentType)) return false;
+    if (filters.releaseGateStatus && !sameFilterValue(item?.releaseGateStatus, filters.releaseGateStatus)) return false;
+    if (filters.directRequirement !== null && item?.directRequirement !== filters.directRequirement) return false;
+  }
+  return true;
+}
+
+function sameFilterValue(value, filterValue) {
+  return typeof value === "string" && value.toLowerCase() === String(filterValue).toLowerCase();
+}
+
+function arrayIncludesFilterValue(values, filterValue) {
+  return Array.isArray(values) && values.some((value) => sameFilterValue(value, filterValue));
+}
+
+function workflowCollectionReadFilteredCounts(resourceKey, items) {
+  const rows = Array.isArray(items) ? items : [];
+  const counts = {
+    rows: rows.length,
+    byReleaseUseStatus: countByField(rows, "releaseUseStatus"),
+    byReadbackSource: countByField(rows, "readbackSource"),
+  };
+  if (resourceKey === "metaphilosophyArchitectureLayer") counts.byReleaseClaimRole = countByField(rows, "releaseClaimRole");
+  if (resourceKey === "metaphilosophyTaskTrack") {
+    counts.byLmcaRelationship = countByField(rows, "lmcaRelationship");
+    counts.byMetricFamily = countByArrayField(rows, "primaryMetricFamilies");
+  }
+  if (resourceKey === "metaphilosophyResearchBacklogItem") {
+    counts.byExperimentType = countByField(rows, "experimentType");
+    counts.byReleaseGateStatus = countByField(rows, "releaseGateStatus");
+    counts.byDirectRequirement = countByField(rows, "directRequirement");
+  }
+  return counts;
+}
+
+function countByField(rows, fieldName) {
+  const counts = {};
+  for (const row of rows) {
+    const value = row?.[fieldName];
+    if (value === null || value === undefined || value === "") continue;
+    const key = String(value);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function countByArrayField(rows, fieldName) {
+  const counts = {};
+  for (const row of rows) {
+    const values = Array.isArray(row?.[fieldName]) ? row[fieldName] : [];
+    for (const value of values) {
+      if (value === null || value === undefined || value === "") continue;
+      const key = String(value);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+  }
+  return counts;
 }
 
 function contributionConfigEndpoint(response) {
@@ -7466,6 +18413,7 @@ async function adminContributionQueueEndpoint(request, response, context, queueN
   const model = await contributionReadModel(context);
   if (queueName === "prepared-drafts") {
     sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
       tabs: [
         "All drafts",
         "Has review signals",
@@ -7484,6 +18432,7 @@ async function adminContributionQueueEndpoint(request, response, context, queueN
   if (queueName === "candidate-batches") {
     const batchingEnabled = model.candidateBatches.length > 0;
     sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
       batchingEnabled,
       tabs: batchingEnabled
         ? ["All batches", "Draft batches", "Ready for review", "Has review signals", "Blocked by gate", "Under review", "Ready for downstream promotion", "Closed"]
@@ -7492,7 +18441,48 @@ async function adminContributionQueueEndpoint(request, response, context, queueN
     });
     return;
   }
+  if (queueName === "review-signals") {
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "reviewSignal",
+      count: model.reviewSignals.length,
+      tabs: ["All signals", "Prepared drafts", "Source workbench", "Candidate items", "Candidate batches"],
+      rows: model.reviewSignals.map((signal) => adminReviewSignalRow(signal, model)),
+    });
+    return;
+  }
+  if (queueName === "gate-decisions") {
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "gateDecision",
+      count: model.gateDecisions.length,
+      tabs: ["All decisions", "Passed", "Failed", "Waived", "Pending", "Prepared draft readiness", "Candidate item downstream use"],
+      rows: model.gateDecisions.map(adminGateDecisionRow),
+    });
+    return;
+  }
+  if (queueName === "candidate-items") {
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "candidateItem",
+      count: model.candidateItems.length,
+      tabs: ["All candidate items", "Positions", "Critiques", "Source cards", "Not promoted to live", "Assignment excluded"],
+      rows: model.candidateItems.map(adminCandidateItemRow),
+    });
+    return;
+  }
+  if (queueName === "promotion-records") {
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "promotionRecord",
+      count: model.promotionRecords.length,
+      tabs: ["All promotions", "Source extractions", "Contribution parts", "No live record created", "No candidate batch created"],
+      rows: model.promotionRecords.map(adminPromotionRecordRow),
+    });
+    return;
+  }
   sendJson(response, 200, {
+    ...sourcePreparationAdminReadbackBoundary(queueName),
     tabs: [
       "All pending",
       "Needs clarification",
@@ -7526,6 +18516,98 @@ async function adminContributionQueueEndpoint(request, response, context, queueN
     ],
     rows: model.contributionSubmissions.map((submission) => adminContributionSubmissionRow(submission, model)),
   });
+}
+
+function sourcePreparationAdminReadbackBoundary(queueName) {
+  return {
+    readbackAccess: "admin_auditor_only",
+    raterVisibility: "not_rater_visible_before_initial_lock",
+    workflowBoundary: "admin_source_preparation_control_plane",
+    queueName,
+  };
+}
+
+async function adminContributionQueueItemEndpoint(request, response, context, queueName, itemId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  if (queueName === "review-signals") {
+    const reviewSignal = model.reviewSignals.find((item) => item.id === itemId);
+    if (!reviewSignal) {
+      sendJson(response, 404, { error: "artifact_not_found" });
+      return;
+    }
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "reviewSignal",
+      id: reviewSignal.id,
+      reviewSignal,
+      row: adminReviewSignalRow(reviewSignal, model),
+      affectedObject: contributionLinkedObject(model, reviewSignal.affectedObjectType, reviewSignal.affectedObjectId),
+      relatedGateDecisions: model.gateDecisions.filter((decision) => (reviewSignal.relatedGateIds ?? []).includes(decision.gateId)),
+    });
+    return;
+  }
+  if (queueName === "gate-decisions") {
+    const gateDecision = model.gateDecisions.find((item) => item.id === itemId);
+    if (!gateDecision) {
+      sendJson(response, 404, { error: "artifact_not_found" });
+      return;
+    }
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "gateDecision",
+      id: gateDecision.id,
+      gateDecision,
+      row: adminGateDecisionRow(gateDecision),
+      object: contributionLinkedObject(model, gateDecision.objectType, gateDecision.objectId),
+      citedReviewSignals: model.reviewSignals.filter((signal) => (gateDecision.citedReviewSignalIds ?? []).includes(signal.id)),
+    });
+    return;
+  }
+  if (queueName === "candidate-items") {
+    const candidateItem = model.candidateItems.find((item) => item.id === itemId);
+    if (!candidateItem) {
+      sendJson(response, 404, { error: "artifact_not_found" });
+      return;
+    }
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "candidateItem",
+      id: candidateItem.id,
+      candidateItem,
+      row: adminCandidateItemRow(candidateItem),
+      sourcePreparedDraft: model.preparedDrafts.find((draft) => draft.id === candidateItem.sourcePreparedDraftId) ?? null,
+      reviewSignals: model.reviewSignals.filter((signal) => signal.affectedObjectType === "CandidateItem" && signal.affectedObjectId === candidateItem.id),
+      promotionRecords: model.promotionRecords.filter((record) => record.targetCandidateItemId === candidateItem.id),
+    });
+    return;
+  }
+  if (queueName === "promotion-records") {
+    const promotionRecord = model.promotionRecords.find((item) => item.id === itemId);
+    if (!promotionRecord) {
+      sendJson(response, 404, { error: "artifact_not_found" });
+      return;
+    }
+    sendJson(response, 200, {
+      ...sourcePreparationAdminReadbackBoundary(queueName),
+      resourceKey: "promotionRecord",
+      id: promotionRecord.id,
+      promotionRecord,
+      row: adminPromotionRecordRow(promotionRecord),
+      sourcePreparedDraft: model.preparedDrafts.find((draft) => draft.id === promotionRecord.sourcePreparedDraftId) ?? null,
+      targetCandidateItem: model.candidateItems.find((item) => item.id === promotionRecord.targetCandidateItemId) ?? null,
+    });
+    return;
+  }
+  sendJson(response, 404, { error: "artifact_not_found" });
 }
 
 async function contributionGateDecisionEndpoint(request, response, context) {
@@ -7563,6 +18645,124 @@ async function contributionGateDecisionEndpoint(request, response, context) {
     resourceKey: "gateDecision",
     resourceId: validation.resource.id,
     gateDecision: validation.resource,
+  });
+}
+
+async function contributionReviewSignalEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "reviewSignal", roles: contributionAdminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
+  const body = await readJsonBody(request);
+  const candidate = body.reviewSignal ?? body.resource ?? body;
+  const validation = createReviewSignalResource(candidate, session.user);
+  if (!validation.ok) {
+    sendJson(response, 400, { error: validation.error, detail: validation.detail });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  if (!contributionReviewSignalObjectExists(model, validation.resource)) {
+    sendJson(response, 400, {
+      error: "review_signal_object_not_found",
+      detail: `${validation.resource.affectedObjectType} ${validation.resource.affectedObjectId} was not found.`,
+    });
+    return;
+  }
+  const [event] = await appendContributionWorkflowResources(
+    context,
+    request,
+    session.user,
+    { reviewSignal: [validation.resource] },
+    { eventSuffix: "recorded", route: "/api/v1/admin/review-signals", requiredRoles: contributionAdminRoles },
+  );
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    resourceKey: "reviewSignal",
+    resourceId: validation.resource.id,
+    reviewSignal: validation.resource,
+    safety: {
+      createdGateDecision: false,
+      createdPreparedDraft: false,
+      createdCandidateItem: false,
+      createdCandidateBatch: false,
+      createdLivePosition: false,
+      createdLiveCritique: false,
+    },
+  });
+}
+
+async function sourceExtractionPreparedDraftEndpoint(request, response, context, extractionId, draftType, route) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "preparedDraft", roles: contributionAdminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
+  const body = await readJsonBody(request);
+  const rawCandidate = body.preparedDraft ?? body.resource ?? body ?? {};
+  if (!rawCandidate || typeof rawCandidate !== "object" || Array.isArray(rawCandidate)) {
+    sendJson(response, 400, { error: "invalid_prepared_draft", detail: "preparedDraft object is required" });
+    return;
+  }
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(rawCandidate)) {
+    sendJson(response, 400, {
+      error: "workflow_template_record",
+      detail: "Replace the source-workbench PreparedDraft template with a real accepted extraction and reviewed prepared text before submitting.",
+    });
+    return;
+  }
+  const extraction = await workflowResourceById(context, "argumentExtraction", extractionId);
+  if (!extraction) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  const candidate = { ...rawCandidate, draftType };
+  const validation = createPreparedDraftFromArgumentExtraction(extraction, candidate, session.user, { draftType });
+  if (!validation.ok) {
+    sendJson(response, 400, { error: validation.error, detail: validation.detail });
+    return;
+  }
+  const [event] = await appendContributionWorkflowResources(
+    context,
+    request,
+    session.user,
+    { preparedDraft: [validation.resource] },
+    { eventSuffix: "created", route, requiredRoles: contributionAdminRoles },
+  );
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    preparedDraft: validation.resource,
+    sourceArgumentExtraction: extraction,
+    requiredPreparedDraftGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
+    safety: {
+      createdPreparedDraft: true,
+      createdCandidateItem: false,
+      createdCandidateBatch: false,
+      createdLivePosition: false,
+      createdLiveCritique: false,
+      liveQueueIntegrated: false,
+      aiExtractionExecuted: false,
+    },
   });
 }
 
@@ -7615,6 +18815,200 @@ async function contributionPreparedDraftEndpoint(request, response, context, sub
   });
 }
 
+async function contributionPreparedDraftByIdEndpoint(request, response, context, preparedDraftId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const preparedDraft = model.preparedDrafts.find((item) => item.id === preparedDraftId);
+  if (!preparedDraft) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  sendJson(response, 200, {
+    ...sourcePreparationAdminReadbackBoundary("prepared-drafts"),
+    preparedDraft,
+    row: adminPreparedDraftRow(preparedDraft, model),
+    sourcePart: model.contributionParts.find((part) => part.id === preparedDraft.sourceContributionPartId) ?? null,
+    sourceArgumentExtraction: model.argumentExtractions.find((extraction) => extraction.id === preparedDraft.sourceArgumentExtractionId) ?? null,
+    reviewSignals: reviewSignalsForPreparedDraft(model, preparedDraft),
+    gateDecisions: model.gateDecisions.filter(
+      (decision) => decision.workflowPolicyId === "prepared_draft_readiness" && decision.objectId === preparedDraft.id,
+    ),
+    requiredPreparedDraftGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
+  });
+}
+
+async function contributionPreparedDraftReviewEndpoint(request, response, context, preparedDraftId) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!contributionAdminRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: contributionAdminRoles });
+    return;
+  }
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, session.user, { resourceKey: "preparedDraft", roles: contributionAdminRoles });
+  if (!phaseGate.ok) {
+    sendWorkflowPhaseGateFailure(response, phaseGate);
+    return;
+  }
+  const body = await readJsonBody(request);
+  const review = body.preparedDraftReview ?? body.review ?? body;
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(review)) {
+    sendJson(response, 400, {
+      error: "workflow_template_record",
+      detail: "Replace the source-workbench PreparedDraft review template with a real reviewed draft, review signals, and gate decisions before submitting.",
+    });
+    return;
+  }
+  const model = await contributionReadModel(context);
+  const preparedDraft = model.preparedDrafts.find((item) => item.id === preparedDraftId);
+  if (!preparedDraft) {
+    sendJson(response, 404, { error: "artifact_not_found" });
+    return;
+  }
+  if (!review || typeof review !== "object" || Array.isArray(review)) {
+    sendJson(response, 400, { error: "invalid_prepared_draft_review", detail: "preparedDraftReview object is required" });
+    return;
+  }
+  const preparedDraftStatus = review.preparedDraftStatus ?? preparedDraft.preparedDraftStatus;
+  if (!PREPARED_DRAFT_STATUSES.includes(preparedDraftStatus)) {
+    sendJson(response, 400, { error: "invalid_prepared_draft_status", detail: `Unsupported prepared draft status: ${preparedDraftStatus}` });
+    return;
+  }
+  const preparedText = Object.hasOwn(review, "preparedText") ? review.preparedText : preparedDraft.preparedText;
+  const preparedSourceCardContent = Object.hasOwn(review, "preparedSourceCardContent")
+    ? review.preparedSourceCardContent
+    : preparedDraft.preparedSourceCardContent;
+  if (preparedDraft.draftType === "prepared_source_card_draft") {
+    if (!preparedSourceCardContent || typeof preparedSourceCardContent !== "object" || Array.isArray(preparedSourceCardContent)) {
+      sendJson(response, 400, { error: "prepared_source_card_content_required", detail: "Source-card prepared drafts require preparedSourceCardContent." });
+      return;
+    }
+  } else if (typeof preparedText !== "string" || !preparedText.trim()) {
+    sendJson(response, 400, { error: "prepared_text_required", detail: "Position and critique prepared drafts require preparedText." });
+    return;
+  }
+  const candidateRaterVisibleText = Object.hasOwn(review, "candidateRaterVisibleText")
+    ? review.candidateRaterVisibleText
+    : Object.hasOwn(review, "candidate_rater_visible_text")
+      ? review.candidate_rater_visible_text
+      : preparedDraft.candidateRaterVisibleText ?? preparedText;
+  if (preparedDraft.draftType !== "prepared_source_card_draft" && (typeof candidateRaterVisibleText !== "string" || !candidateRaterVisibleText.trim())) {
+    sendJson(response, 400, {
+      error: "candidate_rater_visible_text_required",
+      detail: "Position and critique prepared drafts require candidateRaterVisibleText.",
+    });
+    return;
+  }
+  const now = review.reviewedAt ?? new Date().toISOString();
+  const candidateItemReadiness =
+    review.candidateItemReadiness ??
+    (preparedDraftStatus === "ready_for_candidate_item_creation" ? "ready_for_candidate_item_creation" : "not_ready");
+  const reviewedDraft = {
+    ...preparedDraft,
+    preparedText: preparedText ? preparedText.trim() : null,
+    preparedSourceCardContent,
+    preparedDraftStatus,
+    candidateRaterVisibleText: candidateRaterVisibleText ? candidateRaterVisibleText.trim() : null,
+    blindingReviewStatus: review.blindingReviewStatus ?? preparedDraft.blindingReviewStatus ?? "pending_blinding_review",
+    sourceLeakageReviewStatus: review.sourceLeakageReviewStatus ?? preparedDraft.sourceLeakageReviewStatus ?? "pending_source_leakage_review",
+    gateReadinessStatus: review.gateReadinessStatus ?? preparedDraft.gateReadinessStatus ?? candidateItemReadiness,
+    candidateItemReadiness,
+    reviewNotes: review.reviewNotes ?? preparedDraft.reviewNotes ?? "",
+    reviewedBy: review.reviewedBy ?? session.user.id,
+    reviewedAt: now,
+    updatedAt: now,
+    auditTrail: {
+      ...(preparedDraft.auditTrail ?? {}),
+      lastReviewedBy: review.reviewedBy ?? session.user.id,
+      lastReviewedAt: now,
+      lastReviewRoute: "/api/v1/admin/prepared-drafts/{id}/review",
+    },
+  };
+  const reviewSignalInputs = Array.isArray(review.reviewSignals) ? review.reviewSignals : [];
+  const reviewSignals = [];
+  for (const [index, reviewSignalInput] of reviewSignalInputs.entries()) {
+    const affectedObjectType =
+      reviewSignalInput?.affectedObjectType ?? reviewSignalInput?.affected_object_type ?? reviewSignalInput?.objectType ?? reviewSignalInput?.object_type ?? "PreparedDraft";
+    const affectedObjectId =
+      reviewSignalInput?.affectedObjectId ?? reviewSignalInput?.affected_object_id ?? reviewSignalInput?.objectId ?? reviewSignalInput?.object_id ?? preparedDraft.id;
+    const validation = createReviewSignalResource(
+      {
+        ...reviewSignalInput,
+        affectedObjectType,
+        affectedObjectId,
+      },
+      session.user,
+    );
+    if (!validation.ok) {
+      sendJson(response, 400, {
+        error: validation.error,
+        detail: `reviewSignals[${index}]: ${validation.detail}`,
+        reviewSignalIndex: index,
+      });
+      return;
+    }
+    if (!preparedDraftReviewSignalTargetsLineage(validation.resource, preparedDraft)) {
+      sendJson(response, 400, {
+        error: "review_signal_object_not_in_prepared_draft_lineage",
+        detail: `reviewSignals[${index}] targets ${validation.resource.affectedObjectType} ${validation.resource.affectedObjectId}, which is not part of prepared draft ${preparedDraft.id}.`,
+        reviewSignalIndex: index,
+      });
+      return;
+    }
+    reviewSignals.push(validation.resource);
+  }
+  if (reviewSignals.length) {
+    reviewedDraft.auditTrail.lastReviewSignalIds = reviewSignals.map((signal) => signal.id);
+  }
+  const gateDecisionInputs = Array.isArray(review.gateDecisions) ? review.gateDecisions : [];
+  const gateDecisions = [];
+  for (const [index, gateDecisionInput] of gateDecisionInputs.entries()) {
+    const validation = createGateDecisionResource(
+      {
+        ...gateDecisionInput,
+        workflowPolicyId: "prepared_draft_readiness",
+        objectType: "PreparedDraft",
+        objectId: preparedDraft.id,
+      },
+      session.user,
+    );
+    if (!validation.ok) {
+      sendJson(response, 400, {
+        error: validation.error,
+        detail: `gateDecisions[${index}]: ${validation.detail}`,
+        gateDecisionIndex: index,
+      });
+      return;
+    }
+    gateDecisions.push(validation.resource);
+  }
+  const events = await appendContributionWorkflowResources(
+    context,
+    request,
+    session.user,
+    { preparedDraft: [reviewedDraft], reviewSignal: reviewSignals, gateDecision: gateDecisions },
+    { eventSuffix: "reviewed", route: `/api/v1/admin/prepared-drafts/${preparedDraftId}/review`, requiredRoles: contributionAdminRoles },
+  );
+  sendJson(response, 201, {
+    ok: true,
+    eventIds: events.map((event) => event.id),
+    preparedDraft: reviewedDraft,
+    reviewSignalIds: reviewSignals.map((signal) => signal.id),
+    gateDecisionIds: gateDecisions.map((decision) => decision.id),
+    requiredPreparedDraftGateIds: requiredGateIdsForPolicy("prepared_draft_readiness"),
+  });
+}
+
 async function contributionPreparedDraftPromotionEndpoint(request, response, context, preparedDraftId) {
   const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
@@ -7630,14 +19024,21 @@ async function contributionPreparedDraftPromotionEndpoint(request, response, con
     sendWorkflowPhaseGateFailure(response, phaseGate);
     return;
   }
+  const body = await readJsonBody(request);
+  const candidate = body.promotion ?? body.resource ?? body;
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(candidate)) {
+    sendJson(response, 400, {
+      error: "workflow_template_record",
+      detail: "Replace the source-workbench prepared-draft promotion template with a real gate-satisfied PreparedDraft before submitting.",
+    });
+    return;
+  }
   const model = await contributionReadModel(context);
   const preparedDraft = model.preparedDrafts.find((item) => item.id === preparedDraftId);
   if (!preparedDraft) {
     sendJson(response, 404, { error: "artifact_not_found" });
     return;
   }
-  const body = await readJsonBody(request);
-  const candidate = body.promotion ?? body.resource ?? body;
   const validation = promotePreparedDraftToCandidateItem(preparedDraft, candidate, model.gateDecisions, session.user);
   if (!validation.ok) {
     sendJson(response, 400, { error: validation.error, detail: validation.detail });
@@ -7710,6 +19111,10 @@ async function contributionReadModel(context) {
     candidateBatches: latestWorkflowResources(workflowEvents, "candidateBatch"),
     candidateBatchMemberships: latestWorkflowResources(workflowEvents, "candidateBatchMembership"),
     exposureConflicts: latestWorkflowResources(workflowEvents, "exposureConflict"),
+    argumentExtractions: latestWorkflowResources(workflowEvents, "argumentExtraction"),
+    extractionBatches: latestWorkflowResources(workflowEvents, "extractionBatch"),
+    sourceCards: latestWorkflowResources(workflowEvents, "sourceCard"),
+    sourceSpans: latestWorkflowResources(workflowEvents, "sourceSpan"),
   };
 }
 
@@ -7740,19 +19145,184 @@ function adminContributionSubmissionRow(submission, model) {
 
 function adminPreparedDraftRow(draft, model) {
   const sourcePart = model.contributionParts.find((part) => part.id === draft.sourceContributionPartId);
+  const sourceArgumentExtraction = model.argumentExtractions.find((extraction) => extraction.id === draft.sourceArgumentExtractionId);
   const origin = model.originDisclosures.find((item) => item.contributionPartId === draft.sourceContributionPartId);
-  const signals = model.reviewSignals.filter((signal) => signal.affectedObjectId === draft.id || signal.affectedObjectId === draft.sourceContributionPartId);
+  const signals = reviewSignalsForPreparedDraft(model, draft);
   return {
     id: draft.id,
     preparedDraftType: draft.draftType,
     sourceContributionPart: draft.sourceContributionPartId,
-    preview: String(draft.preparedText ?? draft.preparedSourceCardContent?.source_title ?? sourcePart?.submittedText ?? "").slice(0, 120),
-    sourceOriginSummary: origin?.origin_choice ?? "none",
+    sourceArgumentExtraction: draft.sourceArgumentExtractionId ?? null,
+    sourceCardId: draft.sourceCardId ?? null,
+    preview: String(
+      draft.preparedText ??
+        draft.preparedSourceCardContent?.source_title ??
+        sourcePart?.submittedText ??
+        sourceArgumentExtraction?.possiblePreparedPositionText ??
+        sourceArgumentExtraction?.possiblePreparedCritiqueText ??
+        sourceArgumentExtraction?.argumentSummary ??
+        "",
+    ).slice(0, 120),
+    sourceOriginSummary: draft.sourceArgumentExtractionId ? "source_extraction" : origin?.origin_choice ?? "none",
     reviewSignalBadges: [...new Set(signals.map((signal) => signal.signalType))],
     requiredGateSummary: contributionGateSummary(model.gateDecisions, [draft.id], "prepared_draft_readiness"),
     candidateItemReadiness: draft.candidateItemReadiness,
     primaryAction: "Review prepared draft",
   };
+}
+
+function reviewSignalsForPreparedDraft(model, draft) {
+  const lineageRefs = preparedDraftLineageRefs(draft);
+  return model.reviewSignals.filter((signal) =>
+    lineageRefs.some((ref) => ref.objectType === signal.affectedObjectType && ref.objectId === signal.affectedObjectId),
+  );
+}
+
+function preparedDraftLineageRefs(draft) {
+  const refs = [];
+  const push = (objectType, objectId) => {
+    if (objectId) refs.push({ objectType, objectId });
+  };
+  push("PreparedDraft", draft.id);
+  push("ContributionPart", draft.sourceContributionPartId);
+  push("ArgumentExtraction", draft.sourceArgumentExtractionId);
+  push("ExtractionBatch", draft.sourceExtractionBatchId);
+  push("SourceCard", draft.sourceCardId);
+  for (const sourceSpanId of draft.sourceSpanIds ?? []) push("SourceSpan", sourceSpanId);
+  return refs;
+}
+
+function adminReviewSignalRow(signal, model) {
+  return {
+    id: signal.id,
+    signalType: signal.signalType,
+    source: signal.source,
+    affectedObjectType: signal.affectedObjectType,
+    affectedObjectId: signal.affectedObjectId,
+    affectedObjectExists: contributionReviewSignalObjectExists(model, signal),
+    visibilityClass: signal.visibilityClass,
+    confidence: signal.confidence ?? null,
+    relatedGateIds: signal.relatedGateIds ?? [],
+    reviewerId: signal.reviewerId ?? null,
+    explanationPreview: String(signal.explanation ?? "").slice(0, 160),
+    createdAt: signal.createdAt ?? null,
+    primaryAction: "Review signal evidence",
+  };
+}
+
+function adminGateDecisionRow(decision) {
+  return {
+    id: decision.id,
+    gateId: decision.gateId,
+    workflowPolicyId: decision.workflowPolicyId,
+    objectType: decision.objectType ?? null,
+    objectId: decision.objectId,
+    gateStatus: decision.gateStatus,
+    decisionSource: decision.decisionSource,
+    citedReviewSignalIds: decision.citedReviewSignalIds ?? [],
+    waiverReason: decision.waiverReason ?? null,
+    reviewerId: decision.reviewerId ?? null,
+    timestamp: decision.timestamp ?? null,
+    visibilityClass: decision.visibilityClass,
+    primaryAction: "Inspect gate decision",
+  };
+}
+
+function adminCandidateItemRow(item) {
+  return {
+    id: item.id,
+    itemType: item.itemType,
+    sourcePreparedDraftId: item.sourcePreparedDraftId,
+    sourceArgumentExtractionId: item.sourceArgumentExtractionId ?? null,
+    sourceCardId: item.sourceCardId ?? null,
+    sourceSpanIds: item.sourceSpanIds ?? [],
+    targetPositionId: item.targetPositionId ?? null,
+    preview: String(item.candidateRaterVisibleText ?? item.candidateSourceCardContent?.source_title ?? "").slice(0, 160),
+    candidateItemStatus: item.candidateItemStatus,
+    downstreamPromotionStatus: item.downstreamPromotionStatus,
+    assignmentExclusionRequired: item.assignmentExclusionRequired === true,
+    publicReleaseEligibilityStatus: item.publicReleaseEligibilityStatus,
+    modelTrainingExportEligibilityStatus: item.modelTrainingExportEligibilityStatus,
+    validationUseEligibilityStatus: item.validationUseEligibilityStatus,
+    hiddenBenchmarkEligibilityStatus: item.hiddenBenchmarkEligibilityStatus,
+    createdAt: item.createdAt ?? null,
+    primaryAction: "Review candidate item",
+  };
+}
+
+function adminPromotionRecordRow(record) {
+  return {
+    id: record.id,
+    sourcePreparedDraftId: record.sourcePreparedDraftId,
+    targetCandidateItemId: record.targetCandidateItemId,
+    targetType: record.targetType,
+    promotedBy: record.promotedBy ?? null,
+    promotedAt: record.promotedAt ?? null,
+    createdLiveRecord: record.createdLiveRecord === true,
+    createdCandidateBatch: record.createdCandidateBatch === true,
+    sourceType: record.auditTrail?.sourceType ?? null,
+    sourceArgumentExtractionId: record.auditTrail?.argumentExtractionId ?? null,
+    sourceCardId: record.auditTrail?.sourceCardId ?? null,
+    primaryAction: "Inspect promotion audit trail",
+  };
+}
+
+function contributionLinkedObject(model, objectType, objectId) {
+  if (!objectType || !objectId) return null;
+  const collections = {
+    ContributionSubmission: model.contributionSubmissions,
+    ContributionPart: model.contributionParts,
+    ReviewSignal: model.reviewSignals,
+    GateDecision: model.gateDecisions,
+    PreparedDraft: model.preparedDrafts,
+    CandidateItem: model.candidateItems,
+    PromotionRecord: model.promotionRecords,
+    CandidateBatch: model.candidateBatches,
+    CandidateBatchMembership: model.candidateBatchMemberships,
+    ArgumentExtraction: model.argumentExtractions,
+    ExtractionBatch: model.extractionBatches,
+    SourceCard: model.sourceCards,
+    SourceSpan: model.sourceSpans,
+  };
+  const record = (collections[objectType] ?? []).find((item) => item.id === objectId);
+  if (!record) return null;
+  return { objectType, objectId, record };
+}
+
+function contributionReviewSignalObjectExists(model, signal) {
+  if (!signal) return false;
+  const objectId = signal.affectedObjectId;
+  const exists = {
+    ContributionSubmission: () => model.contributionSubmissions.some((item) => item.id === objectId),
+    ContributionPart: () => model.contributionParts.some((item) => item.id === objectId),
+    OriginDisclosure: () => model.originDisclosures.some((item) => item.id === objectId),
+    PreparedDraft: () => model.preparedDrafts.some((item) => item.id === objectId),
+    SourceCard: () => model.sourceCards.some((item) => item.id === objectId),
+    SourceSpan: () => model.sourceSpans.some((item) => item.id === objectId),
+    ExtractionBatch: () => model.extractionBatches.some((item) => item.id === objectId),
+    ArgumentExtraction: () => model.argumentExtractions.some((item) => item.id === objectId),
+    CandidateItem: () => model.candidateItems.some((item) => item.id === objectId),
+    CandidateBatch: () => model.candidateBatches.some((item) => item.id === objectId),
+  }[signal.affectedObjectType];
+  return typeof exists === "function" ? exists() : false;
+}
+
+function preparedDraftReviewSignalTargetsLineage(signal, preparedDraft) {
+  if (!signal || !preparedDraft) return false;
+  const objectId = signal.affectedObjectId;
+  if (signal.affectedObjectType === "PreparedDraft") return objectId === preparedDraft.id;
+  if (signal.affectedObjectType === "ContributionPart") return Boolean(preparedDraft.sourceContributionPartId && objectId === preparedDraft.sourceContributionPartId);
+  if (signal.affectedObjectType === "ArgumentExtraction") {
+    return Boolean(preparedDraft.sourceArgumentExtractionId && objectId === preparedDraft.sourceArgumentExtractionId);
+  }
+  if (signal.affectedObjectType === "ExtractionBatch") {
+    return Boolean(preparedDraft.sourceExtractionBatchId && objectId === preparedDraft.sourceExtractionBatchId);
+  }
+  if (signal.affectedObjectType === "SourceCard") return Boolean(preparedDraft.sourceCardId && objectId === preparedDraft.sourceCardId);
+  if (signal.affectedObjectType === "SourceSpan") {
+    return Array.isArray(preparedDraft.sourceSpanIds) && preparedDraft.sourceSpanIds.includes(objectId);
+  }
+  return false;
 }
 
 function adminCandidateBatchRow(batch, model) {
@@ -7854,6 +19424,313 @@ async function assignmentTrainingExposureSnapshotEndpoint(request, response, con
     return;
   }
   sendJson(response, 200, snapshot);
+}
+
+async function assignmentDraftSessionEndpoint(request, response, context, assignmentId, url) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  if (!ratingWorkflowRoles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: ratingWorkflowRoles });
+    return;
+  }
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const workflowAssignments = latestWorkflowResources(workflowEvents, "assignment");
+  const assignment = workflowAssignments.find((item) => item.id === assignmentId) ?? assignments.find((item) => item.id === assignmentId);
+  if (!assignment) {
+    sendJson(response, 404, { error: "assignment_not_found" });
+    return;
+  }
+  if (!(await actorCanAccessAssignmentId(context, assignmentId, session.user))) {
+    sendJson(response, 403, { error: "workflow_actor_not_authorized", detail: `actor ${session.user.id} is not assigned to ${assignmentId}` });
+    return;
+  }
+
+  if (request.method === "GET") {
+    const requestedRaterId = session.user.role === "admin" ? url.searchParams.get("raterId") ?? session.user.id : session.user.id;
+    const draft = latestAssignmentDraftSessionForRater(workflowEvents, assignmentId, requestedRaterId);
+    if (!draft) {
+      sendJson(response, 404, { error: "draft_not_found" });
+      return;
+    }
+    sendJson(response, 200, {
+      assignmentId,
+      raterId: requestedRaterId,
+      ratingDraftSession: draft,
+      draftPayload: draft.draftPayload ?? {},
+      serverSidePersistence: true,
+      sourceMetadataDisclosed: false,
+    });
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  const draftInput = body.draftPayload ?? body.draft ?? {};
+  const sanitizedDraft = sanitizeAssignmentDraftPayload(draftInput);
+  if (!sanitizedDraft.ok) {
+    sendJson(response, 400, { error: "invalid_draft_payload", detail: sanitizedDraft.detail });
+    return;
+  }
+  const { positionList, critiqueList } = await buildCurrentCorpus(context);
+  const dependencyVersionSnapshot = assignmentDraftDependencyVersionSnapshot(assignment, positionList, critiqueList, workflowEvents);
+  const now = new Date().toISOString();
+  const latestDraft = latestAssignmentDraftSessionForRater(workflowEvents, assignmentId, session.user.id);
+  const resource = {
+    id: `rating-draft-session-${assignmentId}-${session.user.id}`,
+    assignmentId,
+    raterId: session.user.id,
+    autosaveRevisionId: body.autosaveRevisionId ?? `autosave-${Date.now()}`,
+    dependencyVersionSnapshot,
+    staleDependencyStatus: assignment.draftDependencyStaleStatus ?? "current",
+    staleSubmissionBlocked: true,
+    fieldCompletionState: assignmentDraftFieldCompletionState(sanitizedDraft.draftPayload),
+    lastSavedAt: now,
+    resumeCount: Number.isInteger(latestDraft?.resumeCount) ? latestDraft.resumeCount + 1 : 0,
+    recoveredAfterInterruption: Boolean(body.recoveredAfterInterruption),
+    abandonedVsSubmittedStatus: "draft_not_submitted",
+    draftNotExportedAsLabel: true,
+    draftPayload: sanitizedDraft.draftPayload,
+    serverSidePersistence: true,
+    clientPersistenceMechanism: "ephemeral_in_memory_only",
+    localPersistentCacheAccepted: false,
+    timestamp: now,
+  };
+  const validation = validateWorkflowPayload(
+    resource,
+    session.user,
+    {
+      resourceKey: "ratingDraftSession",
+      requiredFields: ratingDraftSessionRequiredFields,
+      requiredNestedFields: ratingDraftSessionDependencyFields,
+      requiredExactFields: {
+        staleSubmissionBlocked: true,
+        draftNotExportedAsLabel: true,
+      },
+      requireAssignmentClaimField: "assignmentId",
+      rejectHiddenMetadata: true,
+      rejectRawBenchmarkContent: true,
+    },
+    { id: assignmentId },
+    { workflowAssignments },
+  );
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });
+    return;
+  }
+  const event = createWorkflowAuditEvent("rating_draft_session_submitted", session.user, "ratingDraftSession", validation.resource, request, {
+    route: "/api/v1/assignments/:id/draft",
+    params: { id: assignmentId },
+    requiredRoles: ratingWorkflowRoles,
+  });
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: "ratingDraftSession",
+    resourceId: validation.resource.id,
+    ratingDraftSession: validation.resource,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+  });
+}
+
+function latestAssignmentDraftSessionForRater(workflowEvents, assignmentId, raterId) {
+  return latestWorkflowResources(workflowEvents, "ratingDraftSession")
+    .filter((draft) => draft.assignmentId === assignmentId && draft.raterId === raterId)
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.lastSavedAt ?? left.timestamp ?? "");
+      const rightTime = Date.parse(right.lastSavedAt ?? right.timestamp ?? "");
+      return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0);
+    })
+    .at(-1) ?? null;
+}
+
+function sanitizeAssignmentDraftPayload(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return invalid("draft payload must be an object");
+  const hiddenKeys = findHiddenKeys(input);
+  if (hiddenKeys.length) return invalid(`draft payload cannot include hidden metadata keys: ${hiddenKeys.join(", ")}`);
+  const rawBenchmarkKeys = findRawBenchmarkContentKeys(input);
+  if (rawBenchmarkKeys.length) return invalid(`draft payload cannot include raw protected item text keys: ${rawBenchmarkKeys.join(", ")}`);
+
+  const scoresInput = input.scores ?? input.draftScores ?? {};
+  if (scoresInput && (typeof scoresInput !== "object" || Array.isArray(scoresInput))) return invalid("draft scores must be an object");
+  const scores = Object.fromEntries(
+    RUBRIC_DIMENSIONS.map((dimension) => {
+      const value = scoresInput?.[dimension];
+      if (value === undefined || value === null || value === "") return [dimension, null];
+      const numericValue = Number(value);
+      return [dimension, Number.isFinite(numericValue) && numericValue >= 0 && numericValue <= 1 ? numericValue : null];
+    }),
+  );
+  const invalidScoreFields = RUBRIC_DIMENSIONS.filter((dimension) => {
+    const value = scoresInput?.[dimension];
+    return value !== undefined && value !== null && value !== "" && scores[dimension] === null;
+  });
+  if (invalidScoreFields.length) return invalid(`draft scores must be finite numbers in [0, 1]: ${invalidScoreFields.join(", ")}`);
+
+  const flagsInput = input.flags ?? input.draftFlags ?? {};
+  if (flagsInput && (typeof flagsInput !== "object" || Array.isArray(flagsInput))) return invalid("draft flags must be an object");
+  const unknownFlags = Object.keys(flagsInput ?? {}).filter((flag) => !allowedRatingFlagKeys.has(flag));
+  if (unknownFlags.length) return invalid(`unsupported draft flags: ${unknownFlags.join(", ")}`);
+  const flags = Object.fromEntries([...allowedRatingFlagKeys].map((flag) => [flag, Boolean(flagsInput?.[flag])]));
+  const languageArtifactAssessmentInput = input.languageArtifactAssessment ?? input.languageArtifactImpact ?? null;
+  const draftLanguageArtifactAssessment = sanitizeBlindRatingLanguageArtifactAssessment(languageArtifactAssessmentInput, {
+    required: false,
+    fieldName: "draft languageArtifactAssessment",
+  });
+  if (!draftLanguageArtifactAssessment.ok) return draftLanguageArtifactAssessment;
+  const draftExternalAssistanceDeclaration = sanitizeDraftExternalAssistanceDeclaration(
+    input.externalAssistanceDeclaration ?? input.externalAssistanceAttestation ?? null,
+  );
+  if (!draftExternalAssistanceDeclaration.ok) return draftExternalAssistanceDeclaration;
+  const correctnessVerificationStatus = input.correctnessVerificationStatus ?? input.verificationStatus ?? input.draftVerification?.status ?? "not_needed";
+  if (!ratingVerificationStatuses.has(correctnessVerificationStatus)) {
+    return invalid(`unsupported correctnessVerificationStatus: ${correctnessVerificationStatus}`);
+  }
+  const draftPayload = {
+    scores,
+    scoreConfidenceJudgment: ratingConfidenceJudgmentValues.has(input.scoreConfidenceJudgment ?? input.draftConfidenceJudgment)
+      ? input.scoreConfidenceJudgment ?? input.draftConfidenceJudgment
+      : "",
+    generalRatingNote: shortDraftString(input.generalRatingNote ?? input.draftGeneralRatingNote, 1000),
+    scoreExplanation: shortDraftString(input.scoreExplanation ?? input.draftScoreExplanation, 1200),
+    obfuscationNote: shortDraftString(input.obfuscationNote ?? input.draftObfuscationNote, 500),
+    flags,
+    languageArtifactAssessment:
+      flags.languageTranslationArtifactConcern && draftLanguageArtifactAssessment.languageArtifactAssessment
+        ? draftLanguageArtifactAssessment.languageArtifactAssessment
+        : null,
+    externalAssistanceDeclaration: draftExternalAssistanceDeclaration.externalAssistanceDeclaration,
+    correctnessVerificationStatus,
+    correctnessVerificationNote: shortDraftString(input.correctnessVerificationNote ?? input.draftVerification?.note, 500),
+  };
+  return { ok: true, draftPayload };
+}
+
+function sanitizeDraftExternalAssistanceDeclaration(input) {
+  if (input === undefined || input === null || input === "") {
+    return {
+      ok: true,
+      externalAssistanceDeclaration: {
+        assistanceType: "none",
+        protectedTextEventFlag: false,
+        outsideSystemDescription: "",
+        contaminationRouting: "none_recorded",
+        accessibilityExceptionStatus: "not_applicable",
+      },
+    };
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) return invalid("draft externalAssistanceDeclaration must be an object");
+  const assistanceType = input.assistanceType;
+  if (!externalAssistanceTypes.includes(assistanceType)) {
+    return invalid(`draft externalAssistanceDeclaration.assistanceType must be one of: ${externalAssistanceTypes.join(", ")}`);
+  }
+  if (typeof input.protectedTextEventFlag !== "boolean") {
+    return invalid("draft externalAssistanceDeclaration.protectedTextEventFlag must be boolean");
+  }
+  const contaminationRequired = externalAssistanceContaminatingTypes.includes(assistanceType) || input.protectedTextEventFlag === true;
+  const contaminationRouting = input.contaminationRouting ?? (contaminationRequired ? externalAssistanceContaminationRoutes[0] : externalAssistanceCleanRoutes[0]);
+  const routeAllowed = contaminationRequired
+    ? externalAssistanceContaminationRoutes.includes(contaminationRouting) || String(contaminationRouting).toLowerCase().includes("excluded")
+    : externalAssistanceCleanRoutes.includes(contaminationRouting);
+  if (!routeAllowed) return invalid("draft externalAssistanceDeclaration.contaminationRouting is incompatible with the declared assistance state");
+  const accessibilityExceptionStatus = input.accessibilityExceptionStatus ?? "not_applicable";
+  if (!externalAssistanceAccessibilityStatuses.includes(accessibilityExceptionStatus)) {
+    return invalid(`draft externalAssistanceDeclaration.accessibilityExceptionStatus must be one of: ${externalAssistanceAccessibilityStatuses.join(", ")}`);
+  }
+  return {
+    ok: true,
+    externalAssistanceDeclaration: {
+      assistanceType,
+      protectedTextEventFlag: input.protectedTextEventFlag,
+      outsideSystemDescription: shortDraftString(input.outsideSystemDescription, 500),
+      contaminationRouting,
+      accessibilityExceptionStatus: assistanceType === "accessibility_tool" ? accessibilityExceptionStatus : "not_applicable",
+    },
+  };
+}
+
+function shortDraftString(value, maxLength) {
+  if (value === undefined || value === null) return "";
+  return String(value).slice(0, maxLength);
+}
+
+function sanitizeBlindRatingLanguageArtifactAssessment(input, { required = false, fieldName = "languageArtifactAssessment" } = {}) {
+  if (input === undefined || input === null || input === "") {
+    return required ? invalid(`${fieldName} object is required when languageTranslationArtifactConcern is flagged`) : { ok: true, languageArtifactAssessment: null };
+  }
+  if (typeof input !== "object" || Array.isArray(input)) return invalid(`${fieldName} must be an object`);
+  const forbiddenRouteFields = blindRatingLanguageArtifactForbiddenRouteFields.filter((field) => input[field] !== undefined);
+  if (forbiddenRouteFields.length) {
+    return invalid(`${fieldName} cannot include source/adaptation metadata in blind ratings: ${forbiddenRouteFields.join(", ")}`);
+  }
+  const artifactType = input.artifactType ?? input.languageArtifactType;
+  if (!languageArtifactTypes.includes(artifactType)) {
+    return invalid(`${fieldName}.artifactType must be one of: ${languageArtifactTypes.join(", ")}`);
+  }
+  const impacts = {};
+  for (const field of languageArtifactImpactFields) {
+    const value = input[field];
+    if (!languageArtifactImpactValues.includes(value)) {
+      return invalid(`${fieldName}.${field} must be one of: ${languageArtifactImpactValues.join(", ")}`);
+    }
+    impacts[field] = value;
+  }
+  if (input.automaticScorePenaltyApplied !== false) {
+    return invalid(`${fieldName}.automaticScorePenaltyApplied must be false`);
+  }
+  return {
+    ok: true,
+    languageArtifactAssessment: {
+      artifactType,
+      ...impacts,
+      automaticScorePenaltyApplied: false,
+      reviewerRole: input.reviewerRole ?? "rater",
+      visibilityState: input.visibilityState ?? "blind_rating_issue_flag",
+    },
+  };
+}
+
+function assignmentDraftFieldCompletionState(draftPayload) {
+  const scoreValues = Object.values(draftPayload.scores ?? {});
+  const filledScores = scoreValues.filter((value) => Number.isFinite(value)).length;
+  const hasAnyText = [
+    draftPayload.generalRatingNote,
+    draftPayload.scoreExplanation,
+    draftPayload.obfuscationNote,
+    draftPayload.correctnessVerificationNote,
+  ].some((value) => typeof value === "string" && value.trim());
+  if (filledScores === 0 && !draftPayload.scoreConfidenceJudgment && !hasAnyText) return "empty";
+  if (filledScores === RUBRIC_DIMENSIONS.length && ratingConfidenceJudgmentValues.has(draftPayload.scoreConfidenceJudgment)) return "complete";
+  return "partial";
+}
+
+function assignmentDraftDependencyVersionSnapshot(assignment, positionList, critiqueList, workflowEvents) {
+  const position = positionList.find((item) => item.id === assignment.positionId);
+  const critique = critiqueList.find((item) => item.id === assignment.critiqueId);
+  const ratingContextSnapshotList = buildEffectiveRatingContextSnapshots(latestWorkflowResources(workflowEvents, "ratingContextSnapshot"));
+  const contextSnapshot =
+    ratingContextSnapshotList.find((snapshot) => snapshot.id === assignment.ratingContextSnapshotId) ??
+    ratingContextSnapshotList.find((snapshot) => snapshot.positionId === assignment.positionId && snapshot.visibleCritiqueIds.includes(assignment.critiqueId));
+  const scoreInputPolicy = latestWorkflowResources(workflowEvents, "scoreInputPolicy").at(-1);
+  const draftStoragePolicy = latestWorkflowResources(workflowEvents, "draftStoragePolicy").at(-1);
+  const renderVersion = latestWorkflowResources(workflowEvents, "raterInstructionRenderVersion").at(-1);
+  const lintConfig = latestWorkflowResources(workflowEvents, "rubricLintConfig").at(-1);
+  return {
+    itemTextVersionId: position?.textVersions?.at(-1)?.id ?? assignment.positionTextVersionId ?? "unknown-position-text-version",
+    critiqueTextVersionId: critique?.textVersions?.at(-1)?.id ?? assignment.critiqueTextVersionId ?? "unknown-critique-text-version",
+    rubricVersion: renderVersion?.rubricVersion ?? "appendix-f-operational-v1",
+    instructionRenderVersionId: renderVersion?.id ?? `rater-instruction-render-${releaseId}`,
+    workflowProfileId: assignment.workflowProfileId ?? renderVersion?.workflowProfileId ?? `rating-workflow-profile-${releaseId}`,
+    assistPolicyId: renderVersion?.preSubmitAssistPolicyId ?? `pre-submit-assist-${releaseId}`,
+    rubricLintConfigId: lintConfig?.id ?? renderVersion?.rubricLintConfigId ?? `rubric-lint-config-${releaseId}`,
+    scoreInputPolicyId: assignment.scoreInputPolicyId ?? scoreInputPolicy?.id ?? renderVersion?.scoreInputPolicyId ?? `score-input-policy-${releaseId}`,
+    draftStoragePolicyId: draftStoragePolicy?.id ?? `draft-storage-policy-${releaseId}`,
+    ratingContextSnapshotId: contextSnapshot?.id ?? assignment.ratingContextSnapshotId ?? "rc-target-only-1",
+  };
 }
 
 async function assignmentDraftStoragePolicyEndpoint(request, response, context, assignmentId) {
@@ -8083,6 +19960,275 @@ async function postLockDiscussionSessionEndpoint(request, response, context, dis
   sendJson(response, 200, resource);
 }
 
+function addAdjudicationCockpitLinkValue(set, value) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => addAdjudicationCockpitLinkValue(set, item));
+    return;
+  }
+  if (value === null || value === undefined) return;
+  const normalized = String(value).trim();
+  if (normalized) set.add(normalized);
+}
+
+function createAdjudicationCockpitLinks(adjudicationId) {
+  const links = {
+    adjudicationIds: new Set(),
+    discussionIds: new Set(),
+    discussionThreadIds: new Set(),
+    reviewSessionIds: new Set(),
+    memoIds: new Set(),
+    finalizationIds: new Set(),
+    commentIds: new Set(),
+    revisionProposalIds: new Set(),
+    revisionRecordIds: new Set(),
+    verificationRecordIds: new Set(),
+    verificationWorkspaceIds: new Set(),
+    targetMapIds: new Set(),
+    rationaleSpanIds: new Set(),
+    samePositionBatchReviewIds: new Set(),
+    ratingContextSnapshotIds: new Set(),
+    itemIds: new Set(),
+    itemKeys: new Set(),
+    positionIds: new Set(),
+    critiqueIds: new Set(),
+    assignmentIds: new Set(),
+    ratingIds: new Set(),
+  };
+  [
+    links.adjudicationIds,
+    links.discussionIds,
+    links.discussionThreadIds,
+    links.reviewSessionIds,
+    links.memoIds,
+    links.itemIds,
+    links.itemKeys,
+  ].forEach((set) => addAdjudicationCockpitLinkValue(set, adjudicationId));
+  return links;
+}
+
+function collectAdjudicationCockpitLinks(resource, links, resourceKind = "") {
+  if (!resource || typeof resource !== "object") return;
+  const directIdSetByKind = {
+    adjudication: links.adjudicationIds,
+    discussion: links.discussionIds,
+    discussionThread: links.discussionThreadIds,
+    adjudicationReviewSession: links.reviewSessionIds,
+    adjudicationMemo: links.memoIds,
+    adjudicationFinalization: links.finalizationIds,
+    discussionComment: links.commentIds,
+    discussionRevisionProposal: links.revisionProposalIds,
+    revisionRecord: links.revisionRecordIds,
+    verificationRecord: links.verificationRecordIds,
+    verificationWorkspaceSession: links.verificationWorkspaceIds,
+    interpretationTargetMap: links.targetMapIds,
+    rationaleEvidenceSpan: links.rationaleSpanIds,
+    samePositionBatchReview: links.samePositionBatchReviewIds,
+    ratingContextSnapshot: links.ratingContextSnapshotIds,
+  };
+  if (directIdSetByKind[resourceKind]) addAdjudicationCockpitLinkValue(directIdSetByKind[resourceKind], resource.id);
+
+  addAdjudicationCockpitLinkValue(links.adjudicationIds, [
+    resource.adjudicationId,
+    resource.linkedAdjudicationId,
+  ]);
+  addAdjudicationCockpitLinkValue(links.discussionIds, [resource.discussionId]);
+  addAdjudicationCockpitLinkValue(links.discussionThreadIds, [
+    resource.discussionThreadId,
+    resource.threadId,
+    resource.linkedDiscussionThreadId,
+  ]);
+  addAdjudicationCockpitLinkValue(links.memoIds, [
+    resource.memoId,
+    resource.adjudicationMemoId,
+    resource.linkedAdjudicationMemoId,
+    resource.memoIds,
+    resource.adjudicationMemoIds,
+  ]);
+  addAdjudicationCockpitLinkValue(links.commentIds, [resource.objectLevelCommentRecords, resource.commentIds]);
+  addAdjudicationCockpitLinkValue(links.revisionProposalIds, [resource.revisionProposalIds]);
+  addAdjudicationCockpitLinkValue(links.revisionRecordIds, [
+    resource.revisionId,
+    resource.revisionIds,
+    resource.revisionRecordId,
+    resource.revisionRecordIds,
+    resource.revisionTimelineRefs,
+  ]);
+  addAdjudicationCockpitLinkValue(links.verificationRecordIds, [
+    resource.verificationRecordId,
+    resource.verificationRecordIds,
+    resource.evidenceArtifactIds,
+  ]);
+  addAdjudicationCockpitLinkValue(links.verificationWorkspaceIds, [
+    resource.verificationWorkspaceId,
+    resource.verificationWorkspaceIds,
+    resource.verificationWorkspaceSessionId,
+  ]);
+  addAdjudicationCockpitLinkValue(links.targetMapIds, [resource.targetMapId, resource.targetMapIds, resource.interpretationTargetMapId]);
+  addAdjudicationCockpitLinkValue(links.rationaleSpanIds, [
+    resource.rationaleSpanIds,
+    resource.rationaleSpanOverlayRefs,
+    resource.spanReferenceLinks,
+    resource.claimSpanIds,
+    resource.claimSpanRefs,
+  ]);
+  addAdjudicationCockpitLinkValue(links.samePositionBatchReviewIds, [
+    resource.samePositionBatchReviewId,
+    resource.samePositionBatchReviewIds,
+  ]);
+  addAdjudicationCockpitLinkValue(links.ratingContextSnapshotIds, [
+    resource.ratingContextSnapshotId,
+    resource.ratingContextSnapshotIds,
+  ]);
+  addAdjudicationCockpitLinkValue(links.assignmentIds, [resource.assignmentId, resource.assignmentIds]);
+  addAdjudicationCockpitLinkValue(links.ratingIds, [
+    resource.ratingId,
+    resource.ratingIds,
+    resource.relatedRatingIds,
+    resource.ratingIdPrior,
+    resource.siblingRatingIdsReviewed,
+  ]);
+  addAdjudicationCockpitLinkValue(links.positionIds, [resource.positionId, resource.positionIds]);
+  addAdjudicationCockpitLinkValue(links.critiqueIds, [
+    resource.critiqueId,
+    resource.critiqueIds,
+    resource.targetCritiqueId,
+    resource.targetCritiqueIds,
+  ]);
+  addAdjudicationCockpitLinkValue(links.itemIds, [resource.itemId, resource.itemIds, resource.itemKeys]);
+  addAdjudicationCockpitLinkValue(links.itemKeys, [resource.itemKeys]);
+  if (typeof resource.itemId === "string" && resource.itemId.includes("::")) {
+    addAdjudicationCockpitLinkValue(links.itemKeys, resource.itemId);
+  }
+  if (resource.positionId && resource.critiqueId) {
+    addAdjudicationCockpitLinkValue(links.itemKeys, `${resource.positionId}::${resource.critiqueId}`);
+  }
+}
+
+function adjudicationCockpitValueMatches(set, value) {
+  if (Array.isArray(value)) return value.some((item) => adjudicationCockpitValueMatches(set, item));
+  if (value === null || value === undefined) return false;
+  const normalized = String(value).trim();
+  return normalized ? set.has(normalized) : false;
+}
+
+function adjudicationCockpitResourceMatches(resource, links, resourceKind = "") {
+  if (!resource || typeof resource !== "object") return false;
+  const directIdSetByKind = {
+    adjudication: links.adjudicationIds,
+    discussion: links.discussionIds,
+    discussionThread: links.discussionThreadIds,
+    adjudicationReviewSession: links.reviewSessionIds,
+    adjudicationMemo: links.memoIds,
+    adjudicationFinalization: links.finalizationIds,
+    discussionComment: links.commentIds,
+    discussionRevisionProposal: links.revisionProposalIds,
+    revisionRecord: links.revisionRecordIds,
+    verificationRecord: links.verificationRecordIds,
+    verificationWorkspaceSession: links.verificationWorkspaceIds,
+    interpretationTargetMap: links.targetMapIds,
+    rationaleEvidenceSpan: links.rationaleSpanIds,
+    samePositionBatchReview: links.samePositionBatchReviewIds,
+    ratingContextSnapshot: links.ratingContextSnapshotIds,
+  };
+  if (directIdSetByKind[resourceKind] && adjudicationCockpitValueMatches(directIdSetByKind[resourceKind], resource.id)) return true;
+  return [
+    [links.adjudicationIds, [resource.adjudicationId, resource.linkedAdjudicationId]],
+    [links.discussionIds, [resource.discussionId]],
+    [links.discussionThreadIds, [resource.discussionThreadId, resource.threadId, resource.linkedDiscussionThreadId]],
+    [links.memoIds, [resource.memoId, resource.adjudicationMemoId, resource.linkedAdjudicationMemoId, resource.memoIds, resource.adjudicationMemoIds]],
+    [links.commentIds, [resource.objectLevelCommentRecords, resource.commentIds]],
+    [links.revisionProposalIds, [resource.revisionProposalIds]],
+    [links.revisionRecordIds, [resource.revisionId, resource.revisionIds, resource.revisionRecordId, resource.revisionRecordIds, resource.revisionTimelineRefs]],
+    [links.verificationRecordIds, [resource.verificationRecordId, resource.verificationRecordIds, resource.evidenceArtifactIds]],
+    [links.verificationWorkspaceIds, [resource.verificationWorkspaceId, resource.verificationWorkspaceIds, resource.verificationWorkspaceSessionId]],
+    [links.targetMapIds, [resource.targetMapId, resource.targetMapIds, resource.interpretationTargetMapId]],
+    [links.rationaleSpanIds, [resource.rationaleSpanIds, resource.rationaleSpanOverlayRefs, resource.spanReferenceLinks, resource.claimSpanIds, resource.claimSpanRefs]],
+    [links.samePositionBatchReviewIds, [resource.samePositionBatchReviewId, resource.samePositionBatchReviewIds]],
+    [links.ratingContextSnapshotIds, [resource.ratingContextSnapshotId, resource.ratingContextSnapshotIds]],
+    [links.assignmentIds, [resource.assignmentId, resource.assignmentIds]],
+    [links.ratingIds, [resource.ratingId, resource.ratingIds, resource.relatedRatingIds, resource.ratingIdPrior, resource.siblingRatingIdsReviewed]],
+    [links.positionIds, [resource.positionId, resource.positionIds]],
+    [links.critiqueIds, [resource.critiqueId, resource.critiqueIds, resource.targetCritiqueId, resource.targetCritiqueIds]],
+    [links.itemIds, [resource.itemId, resource.itemIds, resource.itemKeys]],
+    [links.itemKeys, [resource.itemId, resource.itemKeys, resource.positionId && resource.critiqueId ? `${resource.positionId}::${resource.critiqueId}` : null]],
+  ].some(([set, values]) => adjudicationCockpitValueMatches(set, values));
+}
+
+function selectAdjudicationCockpitResources(resources, links, resourceKind) {
+  const selected = resources.filter((resource) => adjudicationCockpitResourceMatches(resource, links, resourceKind));
+  selected.forEach((resource) => collectAdjudicationCockpitLinks(resource, links, resourceKind));
+  return selected;
+}
+
+function adjudicationCockpitLinkSnapshot(links) {
+  return Object.fromEntries(Object.entries(links).map(([key, value]) => [key, [...value].sort()]));
+}
+
+function adjudicationCockpitReadbackRoutes(resourceGroups) {
+  const route = (base, id) => id ? `${base}/${encodeURIComponent(id)}` : null;
+  return {
+    adjudicationCollection: "/api/v1/adjudications",
+    adjudications: resourceGroups.adjudications.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/adjudications", item.id),
+    })),
+    adjudicationReviewSessions: resourceGroups.reviewSessions.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/adjudication-review-sessions", item.id),
+    })),
+    postLockDiscussionSessions: resourceGroups.postLockDiscussionSessions.map((item) => ({
+      id: item.id,
+      route: item.discussionThreadId
+        ? `/api/v1/discussions/${encodeURIComponent(item.discussionThreadId)}/post-lock-sessions/${encodeURIComponent(item.id)}`
+        : route("/api/v1/post-lock-discussion-sessions", item.id),
+    })),
+    discussionThreads: resourceGroups.discussionThreads.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/discussion-threads", item.id),
+    })),
+    discussions: resourceGroups.discussions.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/discussions", item.id),
+    })),
+    discussionComments: resourceGroups.discussionComments.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/discussion-comments", item.id),
+    })),
+    discussionRevisionProposals: resourceGroups.discussionRevisionProposals.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/discussion-revision-proposals", item.id),
+    })),
+    adjudicationMemos: resourceGroups.adjudicationMemos.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/adjudication-memos", item.id),
+    })),
+    adjudicationFinalizations: resourceGroups.adjudicationFinalizations.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/adjudication-finalizations", item.id),
+    })),
+    verificationRecords: resourceGroups.verificationRecords.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/verification-records", item.id),
+    })),
+    interpretationTargetMaps: resourceGroups.interpretationTargetMaps.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/interpretation-target-maps", item.id),
+    })),
+    verificationWorkspaceSessions: resourceGroups.verificationWorkspaceSessions.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/verification-workspace-sessions", item.id),
+    })),
+    correctnessClaimWeightWorksheets: resourceGroups.correctnessClaimWeightWorksheets.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/correctness-claim-weight-worksheets", item.id),
+    })),
+    rationaleEvidenceSpans: resourceGroups.rationaleEvidenceSpans.map((item) => ({
+      id: item.id,
+      route: route("/api/v1/rationale-evidence-spans", item.id),
+    })),
+  };
+}
+
 async function adjudicationCockpitEndpoint(request, response, context, adjudicationId) {
   const session = await authenticateRequest(request, context.auth);
   if (!session.ok) {
@@ -8093,15 +20239,146 @@ async function adjudicationCockpitEndpoint(request, response, context, adjudicat
     sendJson(response, 403, { error: "required_role_missing", requiredRoles: expertAuditWorkflowRoles });
     return;
   }
-  const allSessions = latestWorkflowResources(await readPersistedWorkflowEvents(context.auditStore), "adjudicationReviewSession");
-  const reviewSessions = allSessions.filter(
-    (item) => item.adjudicationId === adjudicationId || item.discussionThreadId === adjudicationId || item.id === adjudicationId,
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const links = createAdjudicationCockpitLinks(adjudicationId);
+  const allAdjudications = latestWorkflowResources(workflowEvents, "adjudication");
+  const allReviewSessions = latestWorkflowResources(workflowEvents, "adjudicationReviewSession");
+
+  let reviewSessions = selectAdjudicationCockpitResources(allReviewSessions, links, "adjudicationReviewSession");
+  let adjudications = selectAdjudicationCockpitResources(allAdjudications, links, "adjudication");
+  reviewSessions = selectAdjudicationCockpitResources(allReviewSessions, links, "adjudicationReviewSession");
+  adjudications = selectAdjudicationCockpitResources(allAdjudications, links, "adjudication");
+
+  let postLockDiscussionSessions = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "postLockDiscussionSession"),
+    links,
+    "postLockDiscussionSession",
   );
+  let discussionThreads = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "discussionThread"), links, "discussionThread");
+  const discussions = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "discussion"), links, "discussion");
+  postLockDiscussionSessions = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "postLockDiscussionSession"),
+    links,
+    "postLockDiscussionSession",
+  );
+  discussionThreads = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "discussionThread"), links, "discussionThread");
+
+  const discussionComments = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "discussionComment"), links, "discussionComment");
+  const discussionRevisionProposals = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "discussionRevisionProposal"),
+    links,
+    "discussionRevisionProposal",
+  );
+  const adjudicationMemos = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "adjudicationMemo"), links, "adjudicationMemo");
+  const adjudicationFinalizations = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "adjudicationFinalization"),
+    links,
+    "adjudicationFinalization",
+  );
+  const adjudicatorPreReads = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "adjudicatorPreRead"),
+    links,
+    "adjudicatorPreRead",
+  );
+  const revisionRecords = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "revisionRecord"), links, "revisionRecord");
+  const interpretationTargetMaps = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "interpretationTargetMap"),
+    links,
+    "interpretationTargetMap",
+  );
+  const verificationRecords = selectAdjudicationCockpitResources(latestWorkflowResources(workflowEvents, "verificationRecord"), links, "verificationRecord");
+  const verificationWorkspaceSessions = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "verificationWorkspaceSession"),
+    links,
+    "verificationWorkspaceSession",
+  );
+  const correctnessClaimWeightWorksheets = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "correctnessClaimWeightWorksheet"),
+    links,
+    "correctnessClaimWeightWorksheet",
+  );
+  const rationaleEvidenceSpans = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "rationaleEvidenceSpan"),
+    links,
+    "rationaleEvidenceSpan",
+  );
+  const samePositionBatchReviews = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "samePositionBatchReview"),
+    links,
+    "samePositionBatchReview",
+  );
+  const ratingContextSnapshots = selectAdjudicationCockpitResources(
+    latestWorkflowResources(workflowEvents, "ratingContextSnapshot"),
+    links,
+    "ratingContextSnapshot",
+  );
+
   const latestSession = reviewSessions.at(-1) ?? null;
+  const resourceGroups = {
+    adjudications,
+    reviewSessions,
+    postLockDiscussionSessions,
+    discussionThreads,
+    discussions,
+    discussionComments,
+    discussionRevisionProposals,
+    adjudicationMemos,
+    adjudicationFinalizations,
+    adjudicatorPreReads,
+    revisionRecords,
+    interpretationTargetMaps,
+    verificationRecords,
+    verificationWorkspaceSessions,
+    correctnessClaimWeightWorksheets,
+    rationaleEvidenceSpans,
+    samePositionBatchReviews,
+    ratingContextSnapshots,
+  };
+  const counts = Object.fromEntries(Object.entries(resourceGroups).map(([key, value]) => [key, value.length]));
   sendJson(response, 200, {
     adjudicationId,
+    readbackSource: "adjudication_cockpit_linked_context",
     cockpitStatus: latestSession ? "adjudication_review_session_available" : "no_review_session_recorded",
     reviewSession: latestSession,
+    latestReviewSession: latestSession,
+    adjudication: adjudications.find((item) => item.id === adjudicationId) ?? adjudications.at(-1) ?? null,
+    linkedContext: {
+      counts,
+      ids: adjudicationCockpitLinkSnapshot(links),
+      missingReviewSession: !latestSession,
+      missingFinalization: adjudicationFinalizations.length === 0,
+      readbackRoutes: adjudicationCockpitReadbackRoutes(resourceGroups),
+    },
+    discussionContext: {
+      discussions,
+      discussionThreads,
+      postLockDiscussionSessions,
+      discussionComments,
+      discussionRevisionProposals,
+    },
+    adjudicationContext: {
+      reviewSessions,
+      adjudicationMemos,
+      adjudicationFinalizations,
+      adjudicatorPreReads,
+      revisionRecords,
+    },
+    verificationContext: {
+      verificationRecords,
+      interpretationTargetMaps,
+      verificationWorkspaceSessions,
+      correctnessClaimWeightWorksheets,
+    },
+    rationaleContext: {
+      rationaleEvidenceSpans,
+      samePositionBatchReviews,
+      ratingContextSnapshots,
+    },
+    accessBoundary: {
+      ordinaryRaterAccess: "denied_until_initial_ratings_locked_and_adjudication_material_sanitized",
+      sourceMetadataPolicy: "expert_admin_auditor_readback_only",
+      mutationPolicy: "read_only_no_label_or_release_evidence_mutation",
+    },
     screenState: buildScreenStatePayload("adjudication", adjudicationId, session.user, {
       primaryNextAction: latestSession ? "finalize_or_request_revision" : "open_adjudication_review_session",
       visibleFieldAllowlist: [
@@ -8948,6 +21225,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const modelFamilyOverlapPolicies = latestWorkflowResources(workflowEvents, "modelFamilyOverlapPolicy");
   const ratingChecks = latestWorkflowResources(workflowEvents, "ratingCheck");
   const labelSnapshots = latestWorkflowResources(workflowEvents, "labelSnapshot");
+  const releaseReports = latestWorkflowResources(workflowEvents, "releaseReport").map(releaseReportSnapshotSummary);
+  const benchmarkFreezeReports = latestWorkflowResources(workflowEvents, "benchmarkFreezeReport").map(benchmarkFreezeReportSnapshotSummary);
   const corpusManifests = latestWorkflowResources(workflowEvents, "corpusManifest");
   const trainingExports = latestWorkflowResources(workflowEvents, "trainingExport");
   const exportManifests = latestWorkflowResources(workflowEvents, "exportManifest");
@@ -8985,6 +21264,15 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const modelFailureAudits = latestWorkflowResources(workflowEvents, "modelFailureAudit");
   const goldItems = latestWorkflowResources(workflowEvents, "goldItem");
   const sourceAnchorExamples = latestWorkflowResources(workflowEvents, "sourceAnchorExample");
+  const sourceCards = latestWorkflowResources(workflowEvents, "sourceCard");
+  const sourceSpans = latestWorkflowResources(workflowEvents, "sourceSpan");
+  const extractionBatches = latestWorkflowResources(workflowEvents, "extractionBatch");
+  const argumentExtractions = latestWorkflowResources(workflowEvents, "argumentExtraction");
+  const preparedDrafts = latestWorkflowResources(workflowEvents, "preparedDraft");
+  const reviewSignals = latestWorkflowResources(workflowEvents, "reviewSignal");
+  const gateDecisions = latestWorkflowResources(workflowEvents, "gateDecision");
+  const candidateItems = latestWorkflowResources(workflowEvents, "candidateItem");
+  const promotionRecords = latestWorkflowResources(workflowEvents, "promotionRecord");
   const benchmarkSplitMembers = latestWorkflowResources(workflowEvents, "benchmarkSplitMember");
   const rightsRecords = latestWorkflowResources(workflowEvents, "rightsRecord");
   const releaseVersions = latestWorkflowResources(workflowEvents, "releaseVersion");
@@ -9025,6 +21313,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const draftStoragePolicies = latestWorkflowResources(workflowEvents, "draftStoragePolicy");
   const raterInstructionCompatibilityPolicies = latestWorkflowResources(workflowEvents, "raterInstructionCompatibilityPolicy");
   const raterInstructionRenderVersions = latestWorkflowResources(workflowEvents, "raterInstructionRenderVersion");
+  const raterInstructionComprehensionAudits = latestWorkflowResources(workflowEvents, "raterInstructionComprehensionAudit");
   const rubricLintConfigs = latestWorkflowResources(workflowEvents, "rubricLintConfig");
   const rubricLintEvents = latestWorkflowResources(workflowEvents, "rubricLintEvent");
   const itemIssueQuarantinePolicies = latestWorkflowResources(workflowEvents, "itemIssueQuarantinePolicy");
@@ -9111,6 +21400,9 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
   const externalWormAuditLogPolicies = latestWorkflowResources(workflowEvents, "externalWormAuditLogPolicy");
   const sensitiveAuditChainEvents = latestWorkflowResources(workflowEvents, "sensitiveAuditChainEvent");
   const sensitiveAuditChainVerifications = latestWorkflowResources(workflowEvents, "sensitiveAuditChainVerification");
+  const metaphilosophyArchitectureLayers = latestWorkflowResources(workflowEvents, "metaphilosophyArchitectureLayer");
+  const metaphilosophyTaskTracks = latestWorkflowResources(workflowEvents, "metaphilosophyTaskTrack");
+  const metaphilosophyResearchBacklogItems = latestWorkflowResources(workflowEvents, "metaphilosophyResearchBacklogItem");
   const ratings = [...seedRatings, ...persistedRatings];
   const certificationAttempts = [...seedCertificationAttempts, ...persistedCertificationAttempts];
   const benchmarkExposureEvents = [...seedBenchmarkExposureEvents, ...persistedBenchmarkExposureEvents];
@@ -9144,6 +21436,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelFamilyOverlapPolicies,
     ratingChecks,
     labelSnapshots,
+    releaseReports,
+    benchmarkFreezeReports,
     corpusManifests,
     trainingExports,
     exportManifests,
@@ -9181,6 +21475,15 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelFailureAudits,
     goldItems,
     sourceAnchorExamples,
+    sourceCards,
+    sourceSpans,
+    extractionBatches,
+    argumentExtractions,
+    preparedDrafts,
+    reviewSignals,
+    gateDecisions,
+    candidateItems,
+    promotionRecords,
     benchmarkSplitMembers,
     rightsClearancePolicies,
     rightsRecords,
@@ -9222,6 +21525,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     draftStoragePolicies,
     raterInstructionCompatibilityPolicies,
     raterInstructionRenderVersions,
+    raterInstructionComprehensionAudits,
     rubricLintConfigs,
     rubricLintEvents,
     itemIssueQuarantinePolicies,
@@ -9308,6 +21612,12 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     externalWormAuditLogPolicies,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications,
+    metaphilosophyArchitectureLayers,
+    greenfieldArchitectureLayers: metaphilosophyArchitectureLayers,
+    metaphilosophyTaskTracks,
+    metaphilosophyResearchBacklogItems,
+    taskTracks: metaphilosophyTaskTracks,
+    researchBacklogItems: metaphilosophyResearchBacklogItems,
   });
   return {
     report,
@@ -9337,6 +21647,8 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelFamilyOverlapPolicies,
     ratingChecks,
     labelSnapshots,
+    releaseReports,
+    benchmarkFreezeReports,
     corpusManifests,
     trainingExports,
     exportManifests,
@@ -9374,6 +21686,15 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     modelFailureAudits,
     goldItems,
     sourceAnchorExamples,
+    sourceCards,
+    sourceSpans,
+    extractionBatches,
+    argumentExtractions,
+    preparedDrafts,
+    reviewSignals,
+    gateDecisions,
+    candidateItems,
+    promotionRecords,
     benchmarkSplitMembers,
     rightsRecords,
     releaseVersions,
@@ -9414,6 +21735,7 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     draftStoragePolicies,
     raterInstructionCompatibilityPolicies,
     raterInstructionRenderVersions,
+    raterInstructionComprehensionAudits,
     rubricLintConfigs,
     rubricLintEvents,
     itemIssueQuarantinePolicies,
@@ -9499,6 +21821,41 @@ async function buildCurrentReleaseArtifacts(context, options = {}) {
     externalWormAuditLogPolicies,
     sensitiveAuditChainEvents,
     sensitiveAuditChainVerifications,
+    metaphilosophyArchitectureLayers,
+    metaphilosophyTaskTracks,
+    metaphilosophyResearchBacklogItems,
+  };
+}
+
+function releaseReportSnapshotSummary(snapshot) {
+  return {
+    id: snapshot.id ?? null,
+    releaseId: snapshot.releaseId ?? null,
+    inputHash: snapshot.inputHash ?? null,
+    generatedAt: snapshot.generatedAt ?? null,
+    materializedAt: snapshot.materializedAt ?? null,
+    materializedBy: snapshot.materializedBy ?? null,
+    source: snapshot.source ?? null,
+    reportId: snapshot.report?.id ?? snapshot.reportId ?? null,
+    reportGeneratedAt: snapshot.report?.generatedAt ?? null,
+    reportCurrentStatus: snapshot.report?.currentStatus ?? null,
+  };
+}
+
+function benchmarkFreezeReportSnapshotSummary(snapshot) {
+  return {
+    id: snapshot.id ?? null,
+    releaseId: snapshot.releaseId ?? null,
+    inputHash: snapshot.inputHash ?? null,
+    generatedAt: snapshot.generatedAt ?? null,
+    materializedAt: snapshot.materializedAt ?? null,
+    materializedBy: snapshot.materializedBy ?? null,
+    source: snapshot.source ?? null,
+    freezeStatus: snapshot.freezeStatus ?? snapshot.report?.freezeStatus ?? null,
+    reviewStatus: snapshot.reviewStatus ?? null,
+    freezeCheckStatuses: snapshot.freezeCheckStatuses ?? null,
+    reportId: snapshot.report?.id ?? snapshot.reportId ?? null,
+    reportGeneratedAt: snapshot.report?.generatedAt ?? null,
   };
 }
 
@@ -9580,6 +21937,17 @@ function workflowReadSpec(pattern, resourceKey, roles, options = {}) {
   };
 }
 
+function workflowCollectionReadSpec(pattern, resourceKey, roles, options = {}) {
+  return {
+    method: "GET",
+    pattern,
+    resourceKey,
+    roles,
+    route: routeFromPattern(pattern),
+    ...options,
+  };
+}
+
 function matchWorkflowEndpoint(method, pathname, specs) {
   for (const spec of specs) {
     if (method !== spec.method) continue;
@@ -9607,18 +21975,63 @@ async function nextAssignmentEndpoint(request, response, context) {
     return;
   }
   const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const withdrawalBlock = futureAssignmentWithdrawalBlockForActor(latestWorkflowResources(workflowEvents, "volunteerDataWithdrawalRequest"), session.user);
+  if (withdrawalBlock) {
+    sendJson(response, 409, {
+      error: "future_assignment_stopped_by_withdrawal",
+      detail: `future assignment is stopped by volunteer withdrawal request ${withdrawalBlock.id}`,
+      withdrawalRequestId: withdrawalBlock.id,
+      requestType: withdrawalBlock.requestType,
+      frozenSnapshotImpact: withdrawalBlock.frozenSnapshotImpact ?? null,
+      denominatorMutationAllowed: false,
+    });
+    return;
+  }
+  const queueFreshnessBlock = queueFreshnessBlockForLane(workflowEvents, "assignment");
+  if (queueFreshnessBlock) {
+    sendJson(response, 409, {
+      error: "assignment_queue_stale_by_delay",
+      detail: "assignment queue freshness policy requires dependency revalidation before issuing new blind assignments",
+      lane: queueFreshnessBlock.lane,
+      queueFreshnessPolicyId: queueFreshnessBlock.queueFreshnessPolicyId,
+      queueStaleByDelayScanId: queueFreshnessBlock.queueStaleByDelayScanId,
+      staleCount: queueFreshnessBlock.staleCount,
+      staleTransitionBehavior: queueFreshnessBlock.staleTransitionBehavior,
+      sideChannelSafeNotification: true,
+    });
+    return;
+  }
   const { positionList, critiqueList } = await buildCurrentCorpus(context);
   const workflowAssignments = latestWorkflowResources(workflowEvents, "assignment");
   const ratingContextSnapshotList = buildEffectiveRatingContextSnapshots(latestWorkflowResources(workflowEvents, "ratingContextSnapshot"));
   const workflowAssignmentIds = new Set(workflowAssignments.map((item) => item.id));
-  const assignment = [
+  const assignmentCandidates = [
     ...workflowAssignments.filter(isIssuableBlindAssignment),
     ...assignments.filter((item) => !workflowAssignmentIds.has(item.id) && isIssuableBlindAssignment(item)),
-  ].find((item) => actorCanReceiveAssignment(item, session.user));
-  if (!assignment) {
+  ].filter((item) => actorCanReceiveAssignment(item, session.user));
+  const assignmentEligibilityChecks = assignmentCandidates.map((item) => ({
+    assignment: item,
+    block: exposureAwareAssignmentEligibilityBlock(item, session.user, positionList, critiqueList, workflowEvents),
+  }));
+  const eligibleAssignmentCheck = assignmentEligibilityChecks.find((item) => !item.block);
+  if (!eligibleAssignmentCheck) {
+    const blockingTypes = [...new Set(assignmentEligibilityChecks.flatMap((item) => item.block?.recordTypes ?? []))];
+    if (blockingTypes.length) {
+      sendJson(response, 409, {
+        error: "assignment_blocked_by_exposure_conflict",
+        detail: "recorded rater exposure or conflict evidence requires reassignment before issuing a blind initial assignment",
+        eligibilityStatus: "blocked_reassign_required",
+        blockingRecordTypes: blockingTypes,
+        blockedAssignmentCount: assignmentEligibilityChecks.length,
+        denominatorMutationAllowed: false,
+        sourceMetadataDisclosed: false,
+      });
+      return;
+    }
     sendJson(response, 404, { error: "no_blind_initial_assignment_available" });
     return;
   }
+  const assignment = eligibleAssignmentCheck.assignment;
   const position = positionList.find((item) => item.id === assignment.positionId);
   const critique = critiqueList.find((item) => item.id === assignment.critiqueId);
   if (!position || !critique) {
@@ -9797,6 +22210,153 @@ function actorCanReceiveAssignment(assignment, actor) {
   return Boolean(assignedRaterId && assignedRaterId === actor.id);
 }
 
+function queueFreshnessBlockForLane(workflowEvents, lane) {
+  const policy = latestWorkflowResources(workflowEvents, "queueFreshnessPolicy")
+    .filter((record) => record?.lane === lane)
+    .at(-1);
+  const scan = latestWorkflowResources(workflowEvents, "queueStaleByDelayScan")
+    .filter((record) => record?.lane === lane)
+    .at(-1);
+  if (!policy || !scan) return null;
+  const staleCount = Number(scan.staleCount ?? 0);
+  const staleTransitionBehavior = scan.staleTransitionBehavior ?? policy.staleBehavior ?? "";
+  const blockingBehavior = ["stale", "paused", "pause", "cancel", "cancelled", "recompute", "suppress"].includes(staleTransitionBehavior);
+  if (
+    staleCount <= 0 ||
+    scan.scanStatus !== "passed" ||
+    !blockingBehavior ||
+    policy.workerConsumeRevalidationRequired !== true ||
+    scan.workerConsumeRevalidationConfirmed !== true ||
+    scan.sideEffectSuppressionConfirmed !== true ||
+    scan.sideChannelSafeNotificationConfirmed !== true
+  ) {
+    return null;
+  }
+  return {
+    lane,
+    queueFreshnessPolicyId: policy.id ?? null,
+    queueStaleByDelayScanId: scan.id ?? null,
+    staleCount,
+    staleTransitionBehavior,
+  };
+}
+
+function exposureAwareAssignmentEligibilityBlock(assignment, actor, positionList, critiqueList, workflowEvents) {
+  if (!assignment?.id || !actor?.id) return null;
+  const position = positionList.find((item) => item.id === assignment.positionId);
+  const critique = critiqueList.find((item) => item.id === assignment.critiqueId);
+  const matchContext = assignmentEligibilityMatchContext(assignment, position, critique);
+  const recordTypes = [];
+
+  if (
+    latestWorkflowResources(workflowEvents, "raterPositionClusterExposure").some(
+      (record) =>
+        record?.raterId === actor.id &&
+        assignmentEligibilityRecordMatches(record, matchContext) &&
+        isBlockingEligibilityEffect(record.blindEligibilityEffect),
+    )
+  ) {
+    recordTypes.push("raterPositionClusterExposure");
+  }
+
+  if (
+    latestWorkflowResources(workflowEvents, "raterItemConflict").some(
+      (record) =>
+        record?.raterId === actor.id &&
+        assignmentEligibilityRecordMatches(record, matchContext) &&
+        isBlockingEligibilityEffect(record.independentBlindEligibilityEffect),
+    )
+  ) {
+    recordTypes.push("raterItemConflict");
+  }
+
+  if (
+    latestWorkflowResources(workflowEvents, "sourceRecognitionEvent").some(
+      (record) =>
+        record?.raterId === actor.id &&
+        assignmentEligibilityRecordMatches(record, matchContext) &&
+        isBlockingEligibilityEffect(record.independentBlindEligibilityEffect),
+    )
+  ) {
+    recordTypes.push("sourceRecognitionEvent");
+  }
+
+  if (
+    latestWorkflowResources(workflowEvents, "raterTrainingExposureSnapshot").some(
+      (record) =>
+        record?.raterId === actor.id &&
+        assignmentEligibilityRecordMatches(record, matchContext) &&
+        (isBlockingEligibilityEffect(record.protectedClusterEligibilityEffect) ||
+          isBlockingEligibilityEffect(record.independentBlindEligibilityEffect) ||
+          isBlockingConflictStatus(record.protectedSplitConflictStatus)),
+    )
+  ) {
+    recordTypes.push("raterTrainingExposureSnapshot");
+  }
+
+  return recordTypes.length ? { recordTypes } : null;
+}
+
+function assignmentEligibilityMatchContext(assignment, position, critique) {
+  const positionClusterId = assignment.positionClusterId ?? position?.clusterId ?? null;
+  const itemKey = assignment.positionId && assignment.critiqueId ? `${assignment.positionId}::${assignment.critiqueId}` : null;
+  return {
+    assignmentId: assignment.id,
+    positionId: assignment.positionId ?? null,
+    critiqueId: assignment.critiqueId ?? null,
+    positionClusterIds: new Set([positionClusterId, position?.clusterId, assignment.positionClusterId].filter(Boolean)),
+    sourceFamilyIds: new Set([assignment.sourceFamilyId, position?.sourceFamilyId, critique?.sourceFamilyId].filter(Boolean)),
+    adaptationClusterIds: new Set([assignment.adaptationClusterId, position?.adaptationClusterId, critique?.adaptationClusterId].filter(Boolean)),
+    nearDuplicateClusterIds: new Set([assignment.nearDuplicateClusterId, position?.nearDuplicateClusterId, critique?.nearDuplicateClusterId].filter(Boolean)),
+    itemIds: new Set([assignment.id, assignment.positionId, assignment.critiqueId, itemKey].filter(Boolean)),
+  };
+}
+
+function assignmentEligibilityRecordMatches(record, context) {
+  if (!record || !context) return false;
+  if (record.assignmentId && record.assignmentId === context.assignmentId) return true;
+  if (record.positionId && record.positionId === context.positionId) return true;
+  if (record.critiqueId && record.critiqueId === context.critiqueId) return true;
+  if (record.positionClusterId && context.positionClusterIds.has(record.positionClusterId)) return true;
+  if (record.sourceFamilyId && context.sourceFamilyIds.has(record.sourceFamilyId)) return true;
+  if (record.adaptationClusterId && context.adaptationClusterIds.has(record.adaptationClusterId)) return true;
+  if (record.nearDuplicateClusterId && context.nearDuplicateClusterIds.has(record.nearDuplicateClusterId)) return true;
+  if (Array.isArray(record.itemIds) && record.itemIds.some((itemId) => context.itemIds.has(itemId))) return true;
+  if (Array.isArray(record.itemKeys) && record.itemKeys.some((itemKey) => context.itemIds.has(itemKey))) return true;
+  if (Array.isArray(record.positionIds) && record.positionIds.includes(context.positionId)) return true;
+  if (Array.isArray(record.critiqueIds) && record.critiqueIds.includes(context.critiqueId)) return true;
+  if (Array.isArray(record.positionClusterIds) && record.positionClusterIds.some((id) => context.positionClusterIds.has(id))) return true;
+  return false;
+}
+
+function isBlockingEligibilityEffect(value) {
+  const effect = String(value ?? "").toLowerCase();
+  return (
+    effect.includes("excluded") ||
+    effect.includes("blocked") ||
+    effect.includes("non_independent") ||
+    effect.includes("non_blind") ||
+    effect.includes("reassign")
+  );
+}
+
+function isBlockingConflictStatus(value) {
+  const status = String(value ?? "").toLowerCase();
+  if (!status || status === "no_conflict" || status.includes("no_conflict")) return false;
+  return status.includes("conflict") || status.includes("blocked") || status.includes("quarantine");
+}
+
+function futureAssignmentWithdrawalBlockForActor(withdrawalRequests, actor) {
+  if (!actor?.id || !Array.isArray(withdrawalRequests)) return null;
+  const matchingRequests = withdrawalRequests.filter(
+    (request) =>
+      request?.raterId === actor.id &&
+      request.futureAssignmentStop === true &&
+      ["future_assignment_stop", "account_deactivation"].includes(request.requestType),
+  );
+  return matchingRequests.at(-1) ?? null;
+}
+
 async function actorCanAccessAssignmentId(context, assignmentId, actor) {
   if (actor.allowedAssignmentIds?.includes("*") || actor.allowedAssignmentIds?.includes(assignmentId)) return true;
   const assignment = await workflowResourceById(context, "assignment", assignmentId);
@@ -9859,6 +22419,201 @@ async function recordRatingEndpoint(request, response, context, eventType, optio
     policyDecisionConsumptionId: policyGate.consumption.id,
     payloadHash: event.payloadHash,
     accessAudit: event.accessAudit,
+  });
+}
+
+async function recordRatingJsonlImportEndpoint(request, response, context, eventType, options = {}) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const actor = session.user;
+  if (!["rater", "graduate", "phd", "expert", "admin"].includes(actor.role)) {
+    sendJson(response, 403, { error: "authorized_rater_role_required" });
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  const dryRun = Boolean(options.dryRun || jsonlImportDryRunRequested(null, body));
+  const parseResult = parseJsonlRecords(body.jsonl);
+  if (!parseResult.ok) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: parseResult.detail, line: parseResult.line });
+    return;
+  }
+  if (parseResult.records.length === 0) {
+    sendJson(response, 400, { error: "invalid_jsonl_import", detail: "rating JSONL import must contain at least one record" });
+    return;
+  }
+
+  const ratingValidationContext = await buildRatingValidationContext(context);
+  const existingRatingIds = new Set(
+    [...seedRatings, ...(await readPersistedRatings(context.auditStore))]
+      .map((rating) => rating.id)
+      .filter(Boolean),
+  );
+  const seenIds = new Set();
+  const ratings = [];
+  const ratingEntries = [];
+  for (const [index, record] of parseResult.records.entries()) {
+    const line = index + 1;
+    if (record?.templateOnly === true || record?.template_only === true) {
+      sendJson(response, 400, {
+        error: "rating_template_record",
+        detail: `line ${line}: generated rating template records must be replaced with real rating data before import`,
+        line,
+      });
+      return;
+    }
+    const importMetadata = targetDataCollectionPackageRecordImpact(record);
+    const routeMetadataValidation = targetDataCollectionImportRouteMetadataValidation(ratingBulkJsonlImportRoute, importMetadata);
+    if (!routeMetadataValidation.ok) {
+      sendJson(response, 400, {
+        error: routeMetadataValidation.error,
+        detail: `line ${line}: ${routeMetadataValidation.detail}`,
+        line,
+        route: ratingBulkJsonlImportRoute,
+        ...routeMetadataValidation.extra,
+      });
+      return;
+    }
+    const candidate = record?.rating ?? record?.resource ?? record;
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${line}: rating object is required`, line });
+      return;
+    }
+    if (candidate?.templateOnly === true || candidate?.template_only === true) {
+      sendJson(response, 400, {
+        error: "rating_template_record",
+        detail: `line ${line}: generated rating template records must be replaced with real rating data before import`,
+        line,
+      });
+      return;
+    }
+    const validation = validateRatingPayload(candidate, eventType, ratingValidationContext);
+    if (!validation.ok) {
+      sendJson(response, 400, { error: "invalid_rating_payload", detail: `line ${line}: ${validation.detail}`, line });
+      return;
+    }
+    const actorValidation = validateRatingActor(candidate, actor, ratingValidationContext);
+    if (!actorValidation.ok) {
+      sendJson(response, 403, { error: "rating_actor_not_authorized", detail: `line ${line}: ${actorValidation.detail}`, line });
+      return;
+    }
+    if (seenIds.has(candidate.id)) {
+      sendJson(response, 400, { error: "invalid_jsonl_import", detail: `line ${line}: duplicate rating.id ${candidate.id}`, line });
+      return;
+    }
+    if (existingRatingIds.has(candidate.id)) {
+      sendJson(response, 409, {
+        error: "bulk_import_duplicate_rating",
+        detail: `line ${line}: rating.id ${candidate.id} already exists; use a new id for /api/v1/ratings/import-jsonl`,
+        line,
+        ratingId: candidate.id,
+      });
+      return;
+    }
+    seenIds.add(candidate.id);
+    ratings.push(candidate);
+    ratingEntries.push({
+      kind: "rating",
+      line,
+      route: ratingBulkJsonlImportRoute,
+      sourceWriteRoute: "/api/v1/ratings",
+      eventType,
+      resourceKey: "rating",
+      rating: candidate,
+      importMetadata,
+    });
+  }
+
+  const targetGapImpactSummary = targetDataCollectionPackageImpactSummary(ratingEntries);
+
+  if (dryRun) {
+    sendJson(response, 200, {
+      ok: true,
+      dryRun: true,
+      eventType,
+      resourceKey: "rating",
+      importRoute: "/api/v1/ratings/import-jsonl",
+      sourceWriteRoute: "/api/v1/ratings",
+      validatedRatingCount: ratings.length,
+      validatedRatings: targetDataCollectionPackageEntrySummaries(ratingEntries),
+      ratingIds: ratings.map((rating) => rating.id),
+      targetGapImpactSummary,
+      allOrNothing: true,
+      noSideEffects: true,
+      policyGateDryRun: "not_minted_or_consumed",
+      validationPolicy: "dry_run_validates_each_jsonl_line_with_rating_validator_and_actor_assignment_check_without_appending_events",
+    });
+    return;
+  }
+
+  const preparedRatings = [];
+  for (const [index, rating] of ratings.entries()) {
+    const line = index + 1;
+    const policyGate = await appendRatingPolicyDecisionGate(context, request, actor, rating, eventType, { append: false });
+    if (!policyGate.ok) {
+      sendJson(response, policyGate.statusCode ?? 409, {
+        error: policyGate.error ?? "policy_decision_gate_failed",
+        detail: `line ${line}: ${policyGate.detail}`,
+        line,
+        ...(policyGate.extra ?? {}),
+      });
+      return;
+    }
+    const governedRating = {
+      ...rating,
+      policyActionKind: policyGate.actionKind,
+      policyDecisionId: policyGate.decision.id,
+      policyDecisionConsumptionId: policyGate.consumption.id,
+      policyDecisionIdempotencyKey: policyGate.decision.idempotencyKey,
+    };
+    preparedRatings.push({
+      rating: governedRating,
+      policyGate,
+      event: createAuditEvent(eventType, actor, governedRating, request),
+    });
+  }
+
+  for (const prepared of preparedRatings) {
+    await context.auditStore.appendWorkflowEvent(prepared.policyGate.decisionEvent);
+    await context.auditStore.appendWorkflowEvent(prepared.policyGate.consumptionEvent);
+    await context.auditStore.appendRatingEvent(prepared.event);
+  }
+  sendJson(response, 201, {
+    ok: true,
+    eventType,
+    resourceKey: "rating",
+    importRoute: "/api/v1/ratings/import-jsonl",
+    sourceWriteRoute: "/api/v1/ratings",
+    importedRatingCount: preparedRatings.length,
+    importedRatings: ratingEntries.map((entry, index) => {
+      const prepared = preparedRatings[index];
+      return {
+        line: entry.line,
+        route: entry.route,
+        sourceWriteRoute: entry.sourceWriteRoute,
+        resourceKey: "rating",
+        resourceId: prepared.rating.id,
+        ratingId: prepared.rating.id,
+        ...targetDataCollectionPackageEntryImpactSummary(entry),
+        eventId: prepared.event.id,
+        payloadHash: prepared.event.payloadHash,
+        policyDecisionId: prepared.policyGate.decision.id,
+        policyDecisionConsumptionId: prepared.policyGate.consumption.id,
+      };
+    }),
+    ratingIds: preparedRatings.map((item) => item.rating.id),
+    eventIds: preparedRatings.map((item) => item.event.id),
+    policyDecisionIds: preparedRatings.map((item) => item.policyGate.decision.id),
+    policyDecisionConsumptionIds: preparedRatings.map((item) => item.policyGate.consumption.id),
+    policyEventIds: preparedRatings.flatMap((item) => item.policyGate.eventIds),
+    payloadHashes: preparedRatings.map((item) => item.event.payloadHash),
+    targetGapImpactSummary,
+    accessAudit: preparedRatings[0]?.event.accessAudit ?? null,
+    allOrNothing: true,
+    validationPolicy: "each_jsonl_line_reuses_single_rating_validator_actor_assignment_check_and_policy_gate_before_any_append",
   });
 }
 
@@ -10093,14 +22848,486 @@ function resolveWorkflowPolicyActionKind(spec, resource) {
   return spec.policyActionKindMap?.[resourceValue] ?? spec.policyActionKind;
 }
 
-async function validateWorkflowResourceBindings(context, resource, spec) {
+async function validateWorkflowQualificationGate(context, actor, resource, spec) {
+  const requiredScope = workflowRequiredQualificationScope(spec, resource);
+  if (!requiredScope || actor.role === "admin") return { ok: true };
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const requiredRole = qualificationApprovedRoleForScope(requiredScope);
+  const records = latestWorkflowResources(workflowEvents, "raterQualificationRecord").filter(
+    (record) => record?.raterId === actor.id && record.qualificationScope === requiredScope,
+  );
+  const currentRecord =
+    records.find((record) =>
+      raterQualificationRecordIsCurrent(record, {
+        qualificationScope: requiredScope,
+        approvedRole: requiredRole,
+        requiredEligibility: "release_critical",
+      }),
+    ) ?? null;
+  if (currentRecord) return { ok: true };
+  return {
+    ok: false,
+    statusCode: 403,
+    error: "rater_qualification_required",
+    detail: `${spec.resourceKey} requires current ${requiredScope} qualification evidence for expert actor ${actor.id}`,
+    extra: {
+      requiredQualificationScope: requiredScope,
+      requiredApprovedRole: requiredRole,
+      actorId: actor.id,
+      resourceId: resource?.id ?? null,
+    },
+  };
+}
+
+function workflowRequiredQualificationScope(spec, resource) {
+  if (spec.requiredQualificationScope) return spec.requiredQualificationScope;
+  const discriminator = spec.requiredQualificationScopeByFieldValue;
+  if (!discriminator) return null;
+  const observedValue = workflowFieldValue(resource, discriminator.field);
+  return discriminator.values?.[observedValue] ?? null;
+}
+
+function qualificationApprovedRoleForScope(scope) {
+  if (scope === "adjudicator") return "adjudicator";
+  return "expert";
+}
+
+async function validateWorkflowResourceBindings(context, resource, spec, options = {}) {
   if (spec.validateSensitiveAuditChainBindings) {
     return validateSensitiveAuditChainEventBindings(context, resource);
+  }
+  if (["sourceSpan", "extractionBatch", "argumentExtraction"].includes(spec.resourceKey)) {
+    return validateSourceIntakeResourceBindings(context, resource, spec, sourceIntakePendingResourcesFromStaged(options.stagedResources));
+  }
+  if (spec.resourceKey === "ratingCheck") {
+    return validateRatingCheckResourceBindings(context, resource);
+  }
+  if (spec.resourceKey === "critiqueGenerationRun") {
+    return validateModelProviderPolicyBindings(context, [
+      {
+        field: "modelProviderDataHandlingPolicyId",
+        policyId: resource.modelProviderDataHandlingPolicyId ?? resource.generationModelProviderDataHandlingPolicyId,
+        runClass: "critique_generation",
+      },
+      {
+        field: "judgeModelProviderDataHandlingPolicyId",
+        policyId: resource.modelJudgeScreening?.modelProviderDataHandlingPolicyId ?? resource.judgeModelProviderDataHandlingPolicyId,
+        runClass: "model_judge",
+      },
+    ]);
+  }
+  if (["generatedCritiqueSubmission", "generatedCritiquePromotion", "generationEvaluationReport"].includes(spec.resourceKey)) {
+    return validateCritiqueGenerationResourceBindings(context, resource, spec, options);
+  }
+  if (
+    [
+      "candidateCritique",
+      "modelJudgeScore",
+      "modelJudgeScores",
+      "candidateReview",
+      "candidatePromotion",
+      "activeLearningSelectionAudit",
+    ].includes(spec.resourceKey)
+  ) {
+    return validateCandidateIntakeResourceBindings(context, resource, spec, options);
+  }
+  if (spec.resourceKey === "evaluationRun") {
+    return validateModelProviderPolicyBindings(context, [
+      { field: "modelProviderDataHandlingPolicyId", policyId: resource.modelProviderDataHandlingPolicyId, runClass: "model_evaluation" },
+    ]);
+  }
+  if (["modelEvaluationPrediction", "calibrationRun", "modelFailureAudit"].includes(spec.resourceKey)) {
+    return validateWorkflowParentResourceBindings(context, resource, spec, [
+      { field: "evaluationRunId", resourceKey: "evaluationRun", staticExists: (id) => Boolean(evaluationRunById(id)) },
+    ], options);
+  }
+  if (["postLockDiscussionSession", "discussionComment", "discussionRevisionProposal", "adjudication", "adjudicationMemo"].includes(spec.resourceKey)) {
+    return validateWorkflowParentResourceBindings(context, resource, spec, [
+      { field: "discussionThreadId", resourceKey: "discussionThread" },
+    ], options);
+  }
+  if (spec.resourceKey === "adjudicationFinalization") {
+    return validateWorkflowParentResourceBindings(context, resource, spec, [
+      { field: "adjudicationId", resourceKey: "adjudication" },
+      { field: "memoId", resourceKey: "adjudicationMemo" },
+    ], options);
   }
   if (spec.resourceKey === "comparabilityClaim") {
     return validateComparabilityClaimBindings(context, resource);
   }
   return { ok: true };
+}
+
+async function validateCritiqueGenerationResourceBindings(context, resource, spec, options = {}) {
+  const failures = [];
+  const parentExists = (resourceKey, id) =>
+    workflowParentResourceExists(context, resourceKey, id, { stagedResources: options.stagedResources });
+
+  if (spec.resourceKey === "generatedCritiqueSubmission") {
+    const generationRunId = resource.generationRunId ?? resource.critiqueGenerationRunId;
+    if (!generationRunId) {
+      failures.push("generationRunId:missing");
+    } else if (!(await parentExists("critiqueGenerationRun", generationRunId))) {
+      failures.push(`generationRunId:${generationRunId}:not_found`);
+    }
+  }
+
+  if (spec.resourceKey === "generatedCritiquePromotion") {
+    const generatedCritiqueId = resource.generatedCritiqueId ?? resource.outputId;
+    if (!generatedCritiqueId) {
+      failures.push("generatedCritiqueId:missing");
+    } else if (!(await parentExists("generatedCritiqueSubmission", generatedCritiqueId))) {
+      failures.push(`generatedCritiqueId:${generatedCritiqueId}:not_found`);
+    }
+  }
+
+  if (spec.resourceKey === "generationEvaluationReport") {
+    const generationRunIds = normalizeWorkflowStringArray(resource.generationRunIds ?? resource.critiqueGenerationRunIds);
+    if (generationRunIds.length === 0) {
+      failures.push("generationRunIds:empty");
+    }
+    for (const generationRunId of generationRunIds) {
+      if (!(await parentExists("critiqueGenerationRun", generationRunId))) {
+        failures.push(`generationRunIds:${generationRunId}:not_found`);
+      }
+    }
+  }
+
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "critique_generation_binding_failed",
+      detail: failures.join(", "),
+      extra: {
+        resourceKey: spec.resourceKey,
+        resourceId: resource?.id ?? null,
+        bindingFailures: failures,
+      },
+    };
+  }
+  return { ok: true };
+}
+
+async function validateCandidateIntakeResourceBindings(context, resource, spec, options = {}) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const resourceMap = (resourceKey) =>
+    workflowResourceMap([
+      ...latestWorkflowResources(workflowEvents, resourceKey),
+      ...stagedWorkflowResourcesForKey(options.stagedResources, resourceKey),
+    ]);
+  const candidateBatches = resourceMap("candidateBatch");
+  const candidateCritiques = resourceMap("candidateCritique");
+  const modelJudgeScores = resourceMap("modelJudgeScore");
+  const candidateReviews = resourceMap("candidateReview");
+  const activeLearningSelectionPolicies = resourceMap("activeLearningSelectionPolicy");
+  const failures = [];
+
+  const batchForResource = (field = "candidateBatchId") => {
+    const batchId = resource[field] ?? resource.batchId;
+    if (!batchId) {
+      failures.push(`${field}:missing`);
+      return null;
+    }
+    const batch = candidateBatches.get(batchId);
+    if (!batch) {
+      failures.push(`${field}:${batchId}:not_found`);
+      return null;
+    }
+    return batch;
+  };
+
+  const critiqueForResource = (field = "candidateId") => {
+    const candidateId = resource[field] ?? resource.candidateCritiqueId;
+    if (!candidateId) {
+      failures.push(`${field}:missing`);
+      return null;
+    }
+    const candidate = candidateCritiques.get(candidateId);
+    if (!candidate) {
+      failures.push(`${field}:${candidateId}:not_found`);
+      return null;
+    }
+    return candidate;
+  };
+
+  if (spec.resourceKey === "candidateCritique") {
+    const batch = batchForResource();
+    if (batch?.positionId && resource.positionId && batch.positionId !== resource.positionId) {
+      failures.push(`candidateBatchId:${resource.candidateBatchId}:positionId_mismatch`);
+    }
+  }
+
+  if (spec.resourceKey === "modelJudgeScore") {
+    const batch = batchForResource();
+    const candidate = critiqueForResource();
+    const candidateBatchId = candidate?.candidateBatchId ?? candidate?.batchId;
+    if (candidate && batch && candidateBatchId !== batch.id) {
+      failures.push(`candidateId:${candidate.id}:candidateBatchId_mismatch`);
+    }
+  }
+
+  if (spec.resourceKey === "modelJudgeScores") {
+    const batch = batchForResource();
+    for (const scoreId of normalizeWorkflowStringArray(resource.submittedScoreIds)) {
+      const score = modelJudgeScores.get(scoreId);
+      if (!score) {
+        failures.push(`submittedScoreIds:${scoreId}:not_found`);
+        continue;
+      }
+      const scoreBatchId = score.candidateBatchId ?? score.batchId;
+      if (batch && scoreBatchId !== batch.id) {
+        failures.push(`submittedScoreIds:${scoreId}:candidateBatchId_mismatch`);
+      }
+    }
+  }
+
+  if (spec.resourceKey === "candidateReview") {
+    critiqueForResource();
+  }
+
+  if (spec.resourceKey === "candidatePromotion") {
+    const candidate = critiqueForResource();
+    const matchingReviews = [...candidateReviews.values()].filter((review) => {
+      const reviewCandidateId = review.candidateId ?? review.candidateCritiqueId;
+      return candidate && reviewCandidateId === candidate.id;
+    });
+    if (candidate && matchingReviews.length === 0) {
+      failures.push(`candidateId:${candidate.id}:review_not_found`);
+    }
+  }
+
+  if (spec.resourceKey === "activeLearningSelectionAudit") {
+    batchForResource();
+    const policyId = resource.activeLearningSelectionPolicyId;
+    if (!policyId) {
+      failures.push("activeLearningSelectionPolicyId:missing");
+    } else if (!activeLearningSelectionPolicies.has(policyId)) {
+      failures.push(`activeLearningSelectionPolicyId:${policyId}:not_found`);
+    }
+  }
+
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "candidate_intake_binding_failed",
+      detail: failures.join(", "),
+      extra: {
+        resourceKey: spec.resourceKey,
+        resourceId: resource?.id ?? null,
+        bindingFailures: failures,
+      },
+    };
+  }
+  return { ok: true };
+}
+
+async function validateWorkflowParentResourceBindings(context, resource, spec, bindings, options = {}) {
+  const failures = [];
+  for (const binding of bindings) {
+    const id = workflowFieldValue(resource, binding.field);
+    if (!id) {
+      failures.push(`${binding.field}:missing`);
+      continue;
+    }
+    const exists = await workflowParentResourceExists(context, binding.resourceKey, id, {
+      stagedResources: options.stagedResources,
+      staticExists: binding.staticExists,
+    });
+    if (!exists) failures.push(`${binding.field}:${id}:not_found`);
+  }
+  if (!failures.length) return { ok: true };
+  return {
+    ok: false,
+    statusCode: 409,
+    error: "workflow_resource_binding_failed",
+    detail: failures.join(", "),
+    extra: {
+      resourceKey: spec.resourceKey,
+      resourceId: resource?.id ?? null,
+      bindingFailures: failures,
+    },
+  };
+}
+
+async function workflowParentResourceExists(context, resourceKey, id, { stagedResources = [], staticExists = null } = {}) {
+  if (typeof staticExists === "function" && staticExists(id)) return true;
+  if (stagedResources.some((entry) => entry?.resourceKey === resourceKey && entry?.resource?.id === id)) return true;
+  return Boolean(await workflowResourceById(context, resourceKey, id));
+}
+
+async function validateRatingCheckResourceBindings(context, resource) {
+  const [workflowEvents, persistedRatings] = await Promise.all([
+    readPersistedWorkflowEvents(context.auditStore),
+    readPersistedRatings(context.auditStore),
+  ]);
+  const ratingById = new Map([...seedRatings, ...persistedRatings].filter((rating) => rating?.id).map((rating) => [rating.id, rating]));
+  const ratingChecks = workflowResourceMap(latestWorkflowResources(workflowEvents, "ratingCheck"));
+  const failures = [];
+
+  const rating = ratingById.get(resource.ratingId);
+  if (!rating) {
+    failures.push("ratingId:not_found");
+  } else {
+    if (rating.kind !== "blind_initial") failures.push("ratingId:not_blind_initial");
+    if (!Number.isFinite(Date.parse(rating.lockedAt))) failures.push("ratingId:not_locked");
+    if (resource.assignmentId && rating.assignmentId !== resource.assignmentId) failures.push("assignmentId:rating_mismatch");
+  }
+
+  const checkType = resource.checkType ?? resource.checkKind;
+  if (checkType === "model_assisted_check") {
+    failures.push(
+      ...modelProviderPolicyBindingFailures(workflowEvents, [
+        { field: "modelProviderDataHandlingPolicyId", policyId: resource.modelProviderDataHandlingPolicyId, runClass: "model_assisted_check" },
+      ]),
+    );
+    const preModelCheck = ratingChecks.get(resource.preModelRatingCheckId);
+    if (!preModelCheck) {
+      failures.push("preModelRatingCheckId:not_found");
+    } else {
+      const preModelCheckType = preModelCheck.checkType ?? preModelCheck.checkKind;
+      if (preModelCheck.ratingId !== resource.ratingId) failures.push("preModelRatingCheckId:rating_mismatch");
+      if (preModelCheckType !== "self_check") failures.push("preModelRatingCheckId:not_self_check");
+      if (preModelCheck.modelExposureTiming !== "none") failures.push("preModelRatingCheckId:model_exposed");
+      if (preModelCheck.humanOnlyCheckLockedBeforeModelExposure !== true) failures.push("preModelRatingCheckId:not_human_only_locked");
+      const preModelTimestamp = Date.parse(preModelCheck.timestamp);
+      const modelAssistedTimestamp = Date.parse(resource.timestamp);
+      if (Number.isFinite(preModelTimestamp) && Number.isFinite(modelAssistedTimestamp) && preModelTimestamp > modelAssistedTimestamp) {
+        failures.push("preModelRatingCheckId:not_locked_before_model_check");
+      }
+    }
+  }
+
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "rating_check_binding_failed",
+      detail: failures.join(", "),
+      extra: { bindingFailures: failures },
+    };
+  }
+  return { ok: true };
+}
+
+async function validateModelProviderPolicyBindings(context, bindings) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const failures = modelProviderPolicyBindingFailures(workflowEvents, bindings);
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "model_provider_policy_binding_failed",
+      detail: failures.join(", "),
+      extra: { bindingFailures: failures },
+    };
+  }
+  return { ok: true };
+}
+
+function modelProviderPolicyBindingFailures(workflowEvents, bindings) {
+  const policies = workflowResourceMap(latestWorkflowResources(workflowEvents, "modelProviderDataHandlingPolicy"));
+  return bindings.flatMap(({ field, policyId, runClass }) => {
+    const fieldName = field ?? "modelProviderDataHandlingPolicyId";
+    if (!policyId) return [`${fieldName}:required`];
+    const policy = policies.get(policyId);
+    if (!policy) return [`${fieldName}:not_found`];
+    const approvedSplitContentClasses = Array.isArray(policy.approvedSplitContentClasses) ? policy.approvedSplitContentClasses : [];
+    return [
+      policy.coveredRunClass === runClass ? null : `${fieldName}:coveredRunClass`,
+      policy.policyVersion === modelProviderEndpointContractPolicyVersion ? null : `${fieldName}:policyVersion`,
+      canonicalJson(policy.endpointContractClauses ?? {}) === canonicalJson(modelProviderEndpointContractClauses) ? null : `${fieldName}:endpointContractClauses`,
+      policy.endpointContractLanguageFrozen === true ? null : `${fieldName}:endpointContractLanguageFrozen`,
+      policy.contractAppliesToProtectedContent === true ? null : `${fieldName}:contractAppliesToProtectedContent`,
+      approvedSplitContentClasses.includes("protected_validation") ? null : `${fieldName}:approvedSplitContentClasses.protected_validation`,
+      approvedSplitContentClasses.includes("hidden_benchmark") ? null : `${fieldName}:approvedSplitContentClasses.hidden_benchmark`,
+      policy.noTrainingOnInputsOutputs === true ? null : `${fieldName}:noTrainingOnInputsOutputs`,
+      policy.noPromptOrOutputReuse === true ? null : `${fieldName}:noPromptOrOutputReuse`,
+      policy.unnecessaryHumanReviewProhibited === true ? null : `${fieldName}:unnecessaryHumanReviewProhibited`,
+      Number.isFinite(policy.logRetentionWindowDays) && policy.logRetentionWindowDays >= 0 && policy.logRetentionWindowDays <= 30
+        ? null
+        : `${fieldName}:logRetentionWindowDays`,
+      policy.deletionOrRetentionProofRequired === true ? null : `${fieldName}:deletionOrRetentionProofRequired`,
+      policy.protectedContentEligible === true ? null : `${fieldName}:protectedContentEligible`,
+      policy.approvalStatus === "approved" ? null : `${fieldName}:approvalStatus`,
+    ].filter(Boolean);
+  });
+}
+
+async function validateSourceIntakeResourceBindings(context, resource, spec, pendingResources = {}) {
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const sourceCards = workflowResourceMap([
+    ...latestWorkflowResources(workflowEvents, "sourceCard"),
+    ...(pendingResources.sourceCards ?? []),
+  ]);
+  const sourceSpans = workflowResourceMap([
+    ...latestWorkflowResources(workflowEvents, "sourceSpan"),
+    ...(pendingResources.sourceSpans ?? []),
+  ]);
+  const extractionBatches = workflowResourceMap([
+    ...latestWorkflowResources(workflowEvents, "extractionBatch"),
+    ...(pendingResources.extractionBatches ?? []),
+  ]);
+  const failures = [];
+
+  if (spec.resourceKey === "sourceSpan") {
+    if (!sourceCards.has(resource.sourceCardId)) failures.push("sourceCardId:not_found");
+  }
+
+  if (spec.resourceKey === "extractionBatch") {
+    if (!sourceCards.has(resource.sourceCardId)) failures.push("sourceCardId:not_found");
+  }
+
+  if (spec.resourceKey === "argumentExtraction") {
+    const sourceCard = sourceCards.get(resource.sourceCardId);
+    const batch = extractionBatches.get(resource.extractionBatchId);
+    if (!sourceCard) failures.push("sourceCardId:not_found");
+    if (!batch) {
+      failures.push("extractionBatchId:not_found");
+    } else if (batch.sourceCardId !== resource.sourceCardId) {
+      failures.push("extractionBatchId:sourceCardId_mismatch");
+    }
+    const sourceSpanIds = Array.isArray(resource.sourceSpanIds) ? resource.sourceSpanIds : [];
+    if (sourceSpanIds.length === 0) failures.push("sourceSpanIds:empty");
+    for (const spanId of sourceSpanIds) {
+      const span = sourceSpans.get(spanId);
+      if (!span) {
+        failures.push(`sourceSpanIds:${spanId}:not_found`);
+      } else if (span.sourceCardId !== resource.sourceCardId) {
+        failures.push(`sourceSpanIds:${spanId}:sourceCardId_mismatch`);
+      }
+    }
+  }
+
+  if (failures.length) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "source_intake_binding_failed",
+      detail: failures.join(", "),
+      extra: { bindingFailures: failures },
+    };
+  }
+  return { ok: true };
+}
+
+function workflowResourceMap(resources) {
+  return new Map(resources.filter((resource) => resource?.id).map((resource) => [resource.id, resource]));
+}
+
+function stagedWorkflowResourcesForKey(stagedResources = [], resourceKey) {
+  return (stagedResources ?? [])
+    .filter((entry) => entry?.resourceKey === resourceKey && entry.resource && typeof entry.resource === "object")
+    .map((entry) => entry.resource);
+}
+
+function sourceIntakePendingResourcesFromStaged(stagedResources = []) {
+  return {
+    sourceCards: stagedWorkflowResourcesForKey(stagedResources, "sourceCard"),
+    sourceSpans: stagedWorkflowResourcesForKey(stagedResources, "sourceSpan"),
+    extractionBatches: stagedWorkflowResourcesForKey(stagedResources, "extractionBatch"),
+  };
 }
 
 async function validateComparabilityClaimBindings(context, claim) {
@@ -10221,7 +23448,7 @@ async function validateSensitiveAuditChainEventBindings(context, event) {
   return { ok: true };
 }
 
-async function appendRatingPolicyDecisionGate(context, request, actor, rating, eventType) {
+async function appendRatingPolicyDecisionGate(context, request, actor, rating, eventType, options = {}) {
   const actionKind = eventType === "revision_submitted" ? "revision_submit" : "rating_lock";
   const phaseGate = await resolveImplementationPhaseGate(context, "route", actor);
   if (!phaseGate.ok) {
@@ -10353,13 +23580,17 @@ async function appendRatingPolicyDecisionGate(context, request, actor, rating, e
     route: "internal:/api/ratings/policy-decision-gate",
     requiredRoles: ratingWorkflowRoles,
   });
-  await context.auditStore.appendWorkflowEvent(decisionEvent);
-  await context.auditStore.appendWorkflowEvent(consumptionEvent);
+  if (options.append !== false) {
+    await context.auditStore.appendWorkflowEvent(decisionEvent);
+    await context.auditStore.appendWorkflowEvent(consumptionEvent);
+  }
   return {
     ok: true,
     actionKind,
     decision: decisionValidation.resource,
     consumption: consumptionValidation.resource,
+    decisionEvent,
+    consumptionEvent,
     eventIds: [decisionEvent.id, consumptionEvent.id],
   };
 }
@@ -10449,6 +23680,15 @@ async function benchmarkFreezeReportEndpoint(request, response, context) {
     sendJson(response, 403, { error: "admin_role_required_for_hidden_benchmark" });
     return;
   }
+  const body = request.method === "POST" ? await readJsonBody(request) : {};
+  if (request.method === "POST" && (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(body.benchmarkFreezeReport) || isTemplateOnlyRecord(body.resource))) {
+    sendJson(response, 400, {
+      error: "benchmark_freeze_template_record",
+      detail: "generated benchmark freeze templates must be replaced with a deliberate materialization request before append",
+      resourceKey: "benchmarkFreezeReport",
+    });
+    return;
+  }
   const exposure = {
     action: "freeze_report_read",
     artifactId: `hidden-benchmark-freeze-${releaseId}`,
@@ -10456,7 +23696,57 @@ async function benchmarkFreezeReportEndpoint(request, response, context) {
     accessPhase: "pre_freeze",
   };
   await appendBenchmarkExposure(context, createBenchmarkExposureEvent("benchmark_exposure_recorded", session.user, exposure, request));
-  sendJson(response, 200, await buildAdminBenchmarkFreezeReport(context));
+  const report = await buildAdminBenchmarkFreezeReport(context);
+  if (request.method !== "POST") {
+    sendJson(response, 200, report);
+    return;
+  }
+  const inputHash = `sha256:${sha256(canonicalJson(report))}`;
+  const benchmarkFreezeReportId =
+    body.benchmarkFreezeReport?.id ?? body.resource?.id ?? body.id ?? `${report.id}-${String(inputHash).replace(/^sha256:/, "").slice(0, 12)}`;
+  const freezeCheckStatuses = Object.fromEntries(
+    (Array.isArray(report.freezeChecks) ? report.freezeChecks : []).map((check) => [check.id, check.status]),
+  );
+  const materializedReport = {
+    id: benchmarkFreezeReportId,
+    releaseId: report.releaseId,
+    inputHash,
+    generatedAt: report.generatedAt,
+    materializedAt: new Date().toISOString(),
+    materializedBy: session.user.id,
+    source: "server_generated_hidden_benchmark_freeze_report_snapshot",
+    freezeStatus: report.freezeStatus,
+    freezeCheckStatuses,
+    reviewStatus: report.freezeStatus === "frozen" ? "hidden_benchmark_freeze_ready_for_review" : "hidden_benchmark_freeze_not_ready_for_release",
+    report,
+  };
+  const event = createWorkflowAuditEvent(
+    "hidden_benchmark_freeze_report_materialized",
+    session.user,
+    "benchmarkFreezeReport",
+    materializedReport,
+    request,
+    {
+      route: "/api/v1/benchmark/candidates/freeze",
+      requiredRoles: adminRoles,
+    },
+  );
+  await context.auditStore.appendWorkflowEvent(event);
+  sendJson(response, 201, {
+    ok: true,
+    eventId: event.id,
+    eventType: event.type,
+    resourceKey: "benchmarkFreezeReport",
+    resourceId: materializedReport.id,
+    benchmarkFreezeReportId: materializedReport.id,
+    releaseId: materializedReport.releaseId,
+    freezeStatus: materializedReport.freezeStatus,
+    reviewStatus: materializedReport.reviewStatus,
+    inputHash,
+    payloadHash: event.payloadHash,
+    accessAudit: event.accessAudit,
+    report,
+  });
 }
 
 async function recordBenchmarkExposureEndpoint(request, response, context) {
@@ -10528,6 +23818,10 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
     "scoreConfidenceJudgment",
     "scoreExplanationPolicyId",
     "scoreExplanationTriggers",
+    "scoreExplanationRequiredReasons",
+    "scoreExplanationPromptShown",
+    "scoreExplanationCompletionStatus",
+    "overallVsCentralityStrengthDiagnostic",
     "scoreEntryExplicitnessStatus",
     "scoreMissingFieldValidationStatus",
     "activeSeconds",
@@ -10539,6 +23833,9 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
   const missing = required.filter((field) => rating[field] === undefined || rating[field] === null || rating[field] === "");
   if (missing.length) return invalid(`missing required fields: ${missing.join(", ")}`);
   if (eventType === "blind_initial_submitted" && rating.kind !== "blind_initial") return invalid("blind rating endpoint only accepts kind=blind_initial");
+  if (eventType === "blind_initial_submitted" && !String(rating.externalAssistanceDeclarationId ?? "").trim()) {
+    return invalid("externalAssistanceDeclarationId is required for blind initial external-assistance lock-time declaration");
+  }
   if (eventType === "revision_submitted" && (rating.kind !== "revision" || !rating.parentRatingId)) {
     return invalid("revision endpoint requires kind=revision and parentRatingId");
   }
@@ -10603,6 +23900,16 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
       .map(([flag]) => flag);
     if (nonBooleanFlags.length) return invalid(`rating flags must be boolean: ${nonBooleanFlags.join(", ")}`);
   }
+  const languageArtifactAssessmentInput = rating.languageArtifactAssessment ?? rating.languageArtifactImpact ?? null;
+  if (rating.flags?.languageTranslationArtifactConcern === true) {
+    const languageArtifactAssessmentValidation = sanitizeBlindRatingLanguageArtifactAssessment(languageArtifactAssessmentInput, {
+      required: true,
+      fieldName: "languageArtifactAssessment",
+    });
+    if (!languageArtifactAssessmentValidation.ok) return languageArtifactAssessmentValidation;
+  } else if (languageArtifactAssessmentInput !== null && languageArtifactAssessmentInput !== undefined) {
+    return invalid("languageArtifactAssessment is only allowed when languageTranslationArtifactConcern is flagged");
+  }
   const obfuscationNote = ratingObfuscationNoteForRating(rating);
   if (obfuscationNote !== "" && typeof obfuscationNote !== "string") return invalid("obfuscationNote must be a short string when provided");
   if (rating.flags?.obfuscatedArgumentRisk === true) {
@@ -10624,6 +23931,16 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
   const unexpectedExplanationTriggers = rating.scoreExplanationTriggers.filter((trigger) => !expectedExplanationTriggers.includes(trigger));
   if (unexpectedExplanationTriggers.length) return invalid(`unexpected scoreExplanationTriggers: ${unexpectedExplanationTriggers.join(", ")}`);
   const explanationRequired = expectedExplanationTriggers.length > 0;
+  const requiredReasonsValidation = validateExactStringArray(
+    rating.scoreExplanationRequiredReasons,
+    expectedExplanationTriggers,
+    "scoreExplanationRequiredReasons",
+  );
+  if (!requiredReasonsValidation.ok) return requiredReasonsValidation;
+  const expectedProductDiagnostic = scoreExplanationOverallProductDiagnostic(rating.scores);
+  if (!scoreExplanationProductDiagnosticMatches(rating.overallVsCentralityStrengthDiagnostic, expectedProductDiagnostic)) {
+    return invalid("overallVsCentralityStrengthDiagnostic must match the submitted scores and active ScoreExplanationPolicy threshold");
+  }
   if (rating.generalRatingNote !== undefined && (typeof rating.generalRatingNote !== "string" || rating.generalRatingNote.length > 1000)) {
     return invalid("generalRatingNote must be a short string when provided");
   }
@@ -10641,6 +23958,14 @@ export function validateRatingPayload(rating, eventType, validationContext = {})
     return invalid("scoreExplanationRequired cannot be true without ScoreExplanationPolicy triggers");
   } else if (typeof rating.scoreExplanation === "string" && rating.scoreExplanation.trim()) {
     return invalid("scoreExplanation is only allowed when ScoreExplanationPolicy triggers; use generalRatingNote for optional ordinary notes");
+  }
+  if (typeof rating.scoreExplanationPromptShown !== "boolean") return invalid("scoreExplanationPromptShown must be boolean");
+  if (rating.scoreExplanationPromptShown !== explanationRequired) {
+    return invalid(`scoreExplanationPromptShown must be ${explanationRequired} for the server-derived ScoreExplanationPolicy trigger state`);
+  }
+  const expectedCompletionStatus = explanationRequired ? "triggered_explanation_complete" : "ordinary_note_optional";
+  if (rating.scoreExplanationCompletionStatus !== expectedCompletionStatus) {
+    return invalid(`scoreExplanationCompletionStatus must be ${expectedCompletionStatus}`);
   }
   if (!Number.isFinite(rating.activeSeconds) || rating.activeSeconds <= 0) return invalid("activeSeconds must be a positive number");
   if (!Number.isFinite(rating.idleGapSeconds) || rating.idleGapSeconds < 0) return invalid("idleGapSeconds must be a non-negative number");
@@ -10682,6 +24007,28 @@ function validateRatingScoreObject(scores, fieldName) {
     if (badFields.length) return invalid(`full-rubric rating requires valid ${fieldName} for: ${badFields.join(", ")}`);
   }
   return { ok: true };
+}
+
+function validateExactStringArray(value, expected, fieldName) {
+  if (!Array.isArray(value)) return invalid(`${fieldName} must be an array`);
+  if (value.some((item) => typeof item !== "string" || !item.trim())) return invalid(`${fieldName} must contain only non-empty strings`);
+  const missing = expected.filter((item) => !value.includes(item));
+  const unexpected = value.filter((item) => !expected.includes(item));
+  if (missing.length) return invalid(`${fieldName} missing server-derived reasons: ${missing.join(", ")}`);
+  if (unexpected.length) return invalid(`${fieldName} includes unsupported reasons: ${unexpected.join(", ")}`);
+  return { ok: true };
+}
+
+function scoreExplanationProductDiagnosticMatches(submitted, expected) {
+  if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) return false;
+  return (
+    submitted.overallScore === expected.overallScore &&
+    submitted.centralityStrengthProduct === expected.centralityStrengthProduct &&
+    submitted.absoluteGap === expected.absoluteGap &&
+    submitted.threshold === expected.threshold &&
+    submitted.triggerFired === expected.triggerFired &&
+    submitted.status === expected.status
+  );
 }
 
 export function validatePostLockSourceStyleAuditPayload(audit, ratings = seedRatings) {
@@ -11243,6 +24590,11 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}, vali
     }
   }
 
+  if (typeof spec.customValidator === "function") {
+    const customValidation = spec.customValidator(normalized, actor, params, validationContext);
+    if (!customValidation.ok) return customValidation;
+  }
+
   const hiddenKeys = findHiddenKeys(normalized);
   if (spec.rejectHiddenMetadata && hiddenKeys.length) return invalid(`${spec.resourceKey} cannot include hidden metadata keys: ${hiddenKeys.join(", ")}`);
   if (!spec.allowHiddenMetadata && actor.role !== "admin" && hiddenKeys.length) {
@@ -11274,6 +24626,73 @@ export function validateWorkflowPayload(resource, actor, spec, params = {}, vali
   return { ok: true, resource: normalized };
 }
 
+function validateCorrectnessClaimWeightWorksheetResource(resource) {
+  const claimSpanIds = Array.isArray(resource.claimSpanIds) ? resource.claimSpanIds : [];
+  const weights = Array.isArray(resource.claimSignificanceWeights) ? resource.claimSignificanceWeights : [];
+  const statuses = Array.isArray(resource.correctnessCredencesStatuses) ? resource.correctnessCredencesStatuses : [];
+  const unclearFlags = Array.isArray(resource.unclearClaimExclusionFlags) ? resource.unclearClaimExclusionFlags : [];
+  const expectedLength = claimSpanIds.length;
+  if (
+    !expectedLength ||
+    weights.length !== expectedLength ||
+    statuses.length !== expectedLength ||
+    unclearFlags.length !== expectedLength
+  ) {
+    return invalid("claimSpanIds, claimSignificanceWeights, correctnessCredencesStatuses, and unclearClaimExclusionFlags must have matching lengths");
+  }
+  if (!weights.every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) {
+    return invalid("claimSignificanceWeights must be finite numbers in [0, 1]");
+  }
+  const weightSum = weights.reduce((sum, value) => sum + value, 0);
+  if (Math.abs(weightSum - 1) > 0.001) {
+    return invalid("claimSignificanceWeightsSum must equal 1");
+  }
+  if (!unclearFlags.every((value) => typeof value === "boolean")) {
+    return invalid("unclearClaimExclusionFlags must contain only booleans");
+  }
+  const parsedStatuses = statuses.map(parseCorrectnessClaimWeightStatus);
+  if (!parsedStatuses.every(Boolean)) {
+    return invalid("correctnessCredencesStatuses must use status:credence with status verified, unresolved, not_practicable, or excluded_due_to_unclear_text and credence in [0, 1]");
+  }
+  const computedAggregate = computeCorrectnessClaimWeightAggregate(weights, parsedStatuses, unclearFlags);
+  if (
+    !Number.isFinite(resource.advisoryAggregateCorrectnessEstimate) ||
+    resource.advisoryAggregateCorrectnessEstimate < 0 ||
+    resource.advisoryAggregateCorrectnessEstimate > 1
+  ) {
+    return invalid("advisoryAggregateCorrectnessEstimate must be a finite number in [0, 1]");
+  }
+  if (Math.abs(resource.advisoryAggregateCorrectnessEstimate - computedAggregate) > 0.001) {
+    return invalid("advisoryAggregateCorrectnessEstimate must match weighted non-excluded claim credences");
+  }
+  return { ok: true };
+}
+
+function parseCorrectnessClaimWeightStatus(value) {
+  const text = String(value ?? "").trim();
+  const match = text.match(/^([a-z_]+):([01](?:\.\d+)?|0?\.\d+)$/);
+  if (!match) return null;
+  const status = match[1];
+  const correctnessCredence = Number(match[2]);
+  if (!correctnessClaimWeightStatuses.includes(status)) return null;
+  if (!Number.isFinite(correctnessCredence) || correctnessCredence < 0 || correctnessCredence > 1) return null;
+  return { status, correctnessCredence };
+}
+
+function computeCorrectnessClaimWeightAggregate(weights, parsedStatuses, unclearFlags) {
+  let numerator = 0;
+  let denominator = 0;
+  for (const [index, weight] of weights.entries()) {
+    const parsed = parsedStatuses[index];
+    const excluded = unclearFlags[index] === true || parsed?.status === "excluded_due_to_unclear_text";
+    if (excluded) continue;
+    numerator += weight * parsed.correctnessCredence;
+    denominator += weight;
+  }
+  if (denominator <= 0) return 0.5;
+  return Math.round((numerator / denominator) * 1000) / 1000;
+}
+
 function workflowFieldValue(resource, fieldPath) {
   return String(fieldPath)
     .split(".")
@@ -11281,6 +24700,20 @@ function workflowFieldValue(resource, fieldPath) {
       if (!current || typeof current !== "object") return undefined;
       return current[segment];
     }, resource);
+}
+
+function setWorkflowFieldValue(resource, fieldPath, value) {
+  const segments = String(fieldPath).split(".").filter(Boolean);
+  if (!segments.length) return resource;
+  let current = resource;
+  for (const segment of segments.slice(0, -1)) {
+    if (!current[segment] || typeof current[segment] !== "object" || Array.isArray(current[segment])) {
+      current[segment] = {};
+    }
+    current = current[segment];
+  }
+  current[segments.at(-1)] = value;
+  return resource;
 }
 
 function normalizeFieldFragment(value) {
@@ -11589,6 +25022,7 @@ function normalizeWorkflowPosition(resource, base = {}) {
     llmAssistance: resource.llmAssistance ?? base.llmAssistance ?? "unknown",
     conceptualScope: resource.conceptualScope ?? base.conceptualScope ?? "pending_scope_review",
     groundTruthAvailability: resource.groundTruthAvailability ?? base.groundTruthAvailability ?? "pending_ground_truth_review",
+    acceptedMethodologyStatus: resource.acceptedMethodologyStatus ?? base.acceptedMethodologyStatus ?? "pending_methodology_review",
     nonConceptualDependencyNotes: resource.nonConceptualDependencyNotes ?? base.nonConceptualDependencyNotes ?? "",
     contextSufficiency: resource.contextSufficiency ?? base.contextSufficiency ?? "needs_review",
     assumedBackgroundPolicy: resource.assumedBackgroundPolicy ?? base.assumedBackgroundPolicy ?? "",
@@ -11683,6 +25117,7 @@ async function buildAdminTrainingExport(context) {
   const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
   const trainingExportUncertaintyPolicies = latestWorkflowResources(workflowEvents, "trainingExportUncertaintyPolicy");
   const pairwiseComparisonSnapshots = latestWorkflowResources(workflowEvents, "pairwiseComparisonSnapshot");
+  const volunteerDataWithdrawalRequests = latestWorkflowResources(workflowEvents, "volunteerDataWithdrawalRequest");
   const ratings = [...seedRatings, ...(await readPersistedRatings(context.auditStore))];
   const snapshot = createLabelSnapshot(
     "snapshot-oct-training-api",
@@ -11695,6 +25130,7 @@ async function buildAdminTrainingExport(context) {
   return buildTrainingExport(releaseId, snapshot, positionList, critiqueList, ratings, ratingContextSnapshots, {
     trainingExportUncertaintyPolicies,
     pairwiseComparisonSnapshots,
+    volunteerDataWithdrawalRequests,
   });
 }
 
@@ -11709,7 +25145,7 @@ async function serveStatic(response, rootDir, pathname) {
     const file = await readFile(filePath);
     response.writeHead(200, {
       "content-type": mimeTypes[extname(filePath)] ?? "application/octet-stream",
-      "cache-control": "no-store",
+      ...clientSurfaceResponseHeaders(),
     });
     response.end(file);
   } catch (error) {
@@ -11740,13 +25176,26 @@ async function readJsonBody(request) {
 }
 
 function sendJson(response, statusCode, body) {
-  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+  response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8", ...clientSurfaceResponseHeaders() });
   response.end(JSON.stringify(body));
 }
 
 function sendText(response, statusCode, body) {
-  response.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
+  response.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8", ...clientSurfaceResponseHeaders() });
   response.end(body);
+}
+
+function clientSurfaceResponseHeaders() {
+  return {
+    "cache-control": "no-store, max-age=0",
+    ...clientSurfaceSecurityHeaders,
+  };
+}
+
+function clientSurfaceCspHeaderValue(directives) {
+  return Object.entries(directives)
+    .map(([directive, values]) => `${directive} ${values.join(" ")}`)
+    .join("; ");
 }
 
 function normalizeWorkflowStateEntityType(value) {
