@@ -8276,6 +8276,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const missingPublicDatasetPackageManifestAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-package-manifest" });
   assert.equal(missingPublicDatasetPackageManifestAuth.status, 401);
 
+  const missingPublicDatasetReleasePackageAuth = await invokeApi(context, { method: "GET", url: "/api/v1/public-dataset-release-package" });
+  assert.equal(missingPublicDatasetReleasePackageAuth.status, 401);
+
   const missingPublicDatasetDownstreamLaunchAuth = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/public-dataset-downstream-launches",
@@ -8442,6 +8445,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${raterToken}` },
   });
   assert.equal(deniedPublicDatasetPackageManifest.status, 403);
+
+  const deniedPublicDatasetReleasePackage = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package",
+    headers: { authorization: `Bearer ${raterToken}` },
+  });
+  assert.equal(deniedPublicDatasetReleasePackage.status, 403);
 
   const deniedPublicDatasetDownstreamLaunch = await invokeApi(context, {
     method: "GET",
@@ -10853,6 +10863,125 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(publicDatasetPackageMissing.status, 404);
   assert.equal(publicDatasetPackageMissing.body.error, "artifact_not_found");
+
+  const publicDatasetReleasePackage = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackage.status, 200, JSON.stringify(publicDatasetReleasePackage.body));
+  assert.equal(publicDatasetReleasePackage.body.resourceKey, "publicDatasetReleasePackageArtifact");
+  assert.equal(publicDatasetReleasePackage.body.releaseUseStatus, "public_dataset_v0_1_blocked_by_target_scale");
+  assert.equal(publicDatasetReleasePackage.body.packageStatus, "public_dataset_package_blocked");
+  assert.equal(publicDatasetReleasePackage.body.releasePackageStatus, "public_dataset_release_package_blocked");
+  assert.equal(publicDatasetReleasePackage.body.currentBlockingArtifactId, "release-cleared-position-critique-pairs");
+  assert.equal(publicDatasetReleasePackage.body.count, 11);
+  assert.equal(publicDatasetReleasePackage.body.totalCount, 11);
+  assert.equal(publicDatasetReleasePackage.body.counts.openRows, 7);
+  assert.equal(publicDatasetReleasePackage.body.counts.readyRows, 4);
+  assert.equal(publicDatasetReleasePackage.body.counts.publishableRows, 0);
+  assert.equal(publicDatasetReleasePackage.body.counts.byArtifactKind.dataset_records, 1);
+  assert.equal(publicDatasetReleasePackage.body.counts.byArtifactKind.dataset_card, 1);
+  assert.equal(publicDatasetReleasePackage.body.counts.byArtifactKind.public_first_boundary, 1);
+  assert.equal(publicDatasetReleasePackage.body.counts.byFileFormat.jsonl, 3);
+  assert.equal(publicDatasetReleasePackage.body.counts.byFileFormat.json, 6);
+  assert.equal(publicDatasetReleasePackage.body.counts.byFileFormat.md, 2);
+  assert.equal(publicDatasetReleasePackage.body.counts.byStatus.review_required, 2);
+  assert.equal(publicDatasetReleasePackage.body.counts.byStatus.documentation_not_submitted, 2);
+  assert.equal(publicDatasetReleasePackage.body.counts.byPackageStepId["release-artifact-package"], 5);
+  assert.equal(publicDatasetReleasePackage.body.counts.byReadinessRowId.label_snapshot, 1);
+  assert.equal(publicDatasetReleasePackage.body.counts.bySourceEvidenceId["snapshot-oct-api"], 2);
+  assert.equal(publicDatasetReleasePackage.body.counts.byRoute["/api/v1/public-dataset-release-package"], 11);
+  assert.match(publicDatasetReleasePackage.body.policy.scope, /expected package files/);
+  assert.match(publicDatasetReleasePackage.body.policy.authority, /cannot create files/);
+  assert.equal(publicDatasetReleasePackage.body.sourceRoutes.publicDatasetPackageManifest, "/api/v1/public-dataset-package-manifest");
+
+  const releasePackageDatasetRecords = publicDatasetReleasePackage.body.items.find((item) => item.id === "release-cleared-position-critique-pairs");
+  assert.equal(releasePackageDatasetRecords.status, "blocked_by_target_scale");
+  assert.equal(releasePackageDatasetRecords.artifactKind, "dataset_records");
+  assert.equal(releasePackageDatasetRecords.fileFormat, "jsonl");
+  assert.equal(releasePackageDatasetRecords.expectedFilename, "dataset-v0.1/release-cleared-position-critique-pairs.jsonl");
+  assert.equal(releasePackageDatasetRecords.artifactReady, false);
+  assert.equal(releasePackageDatasetRecords.packagePublishable, false);
+  assert.equal(releasePackageDatasetRecords.publishActionAvailable, false);
+  assert.ok(releasePackageDatasetRecords.readinessRowIds.includes("release_cleared_position_critique_pairs"));
+  assert.ok(releasePackageDatasetRecords.targetGapIds.includes("positions"));
+  assert.ok(releasePackageDatasetRecords.routes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
+
+  const releasePackageLabelSnapshot = publicDatasetReleasePackage.body.items.find((item) => item.id === "label-snapshot");
+  assert.equal(releasePackageLabelSnapshot.status, "review_required");
+  assert.equal(releasePackageLabelSnapshot.artifactKind, "label_snapshot");
+  assert.equal(releasePackageLabelSnapshot.expectedFilename, "dataset-v0.1/label-snapshot.json");
+  assert.ok(releasePackageLabelSnapshot.readinessReviewReasons.includes("labelSnapshotEvidence:no_submitted_artifact"));
+  assert.ok(releasePackageLabelSnapshot.sourceEvidenceIds.includes("snapshot-oct-api"));
+
+  const releasePackageExpertLabels = publicDatasetReleasePackage.body.items.find((item) => item.id === "expert-labels");
+  assert.equal(releasePackageExpertLabels.status, "ready");
+  assert.equal(releasePackageExpertLabels.packagePublishable, false);
+  assert.ok(releasePackageExpertLabels.requiredFields.includes("overall"));
+
+  const publicDatasetReleasePackageOpen = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package?status=open",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageOpen.status, 200, JSON.stringify(publicDatasetReleasePackageOpen.body));
+  assert.equal(publicDatasetReleasePackageOpen.body.count, 7);
+  assert.equal(publicDatasetReleasePackageOpen.body.filteredCounts.openRows, 7);
+
+  const publicDatasetReleasePackageByArtifactKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package?artifactKind=dataset_card",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageByArtifactKind.status, 200, JSON.stringify(publicDatasetReleasePackageByArtifactKind.body));
+  assert.equal(publicDatasetReleasePackageByArtifactKind.body.count, 1);
+  assert.equal(publicDatasetReleasePackageByArtifactKind.body.items[0].id, "dataset-card");
+
+  const publicDatasetReleasePackageByReadinessRow = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package?readinessRowId=label_snapshot",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageByReadinessRow.status, 200, JSON.stringify(publicDatasetReleasePackageByReadinessRow.body));
+  assert.equal(publicDatasetReleasePackageByReadinessRow.body.count, 1);
+  assert.equal(publicDatasetReleasePackageByReadinessRow.body.items[0].id, "label-snapshot");
+
+  const publicDatasetReleasePackageByStep = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package?packageStepId=public-documentation",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageByStep.status, 200, JSON.stringify(publicDatasetReleasePackageByStep.body));
+  assert.equal(publicDatasetReleasePackageByStep.body.count, 2);
+  assert.equal(publicDatasetReleasePackageByStep.body.filteredCounts.byStatus.documentation_not_submitted, 2);
+
+  const publicDatasetReleasePackageByRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-release-package?route=${encodeURIComponent("/api/v1/public-dataset-documents/template")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageByRoute.status, 200, JSON.stringify(publicDatasetReleasePackageByRoute.body));
+  assert.equal(publicDatasetReleasePackageByRoute.body.count, 2);
+  assert.equal(publicDatasetReleasePackageByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 2);
+
+  const publicDatasetReleasePackageById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package/label-snapshot",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageById.status, 200, JSON.stringify(publicDatasetReleasePackageById.body));
+  assert.equal(publicDatasetReleasePackageById.body.count, 1);
+  assert.equal(publicDatasetReleasePackageById.body.item.artifactKind, "label_snapshot");
+  assert.equal(publicDatasetReleasePackageById.body.item.expectedFilename, "dataset-v0.1/label-snapshot.json");
+
+  const publicDatasetReleasePackageMissing = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-release-package/not-present",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleasePackageMissing.status, 404);
+  assert.equal(publicDatasetReleasePackageMissing.body.error, "artifact_not_found");
 
   const publicDatasetDownstreamLaunches = await invokeApi(context, {
     method: "GET",
@@ -14497,6 +14626,13 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageManifestStep"'));
   assert.ok(appSource.includes("function publicDatasetPackageManifestPreviewRow(item)"));
   assert.ok(appSource.includes('url.searchParams.set("stepKind", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('id: "public-dataset-release-package"'));
+  assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-release-package"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetReleasePackageArtifact"'));
+  assert.ok(appSource.includes("function publicDatasetReleasePackagePreviewRow(item)"));
+  assert.ok(appSource.includes('url.searchParams.set("artifactKind", state.workflowArtifactKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("readinessRowId", state.workflowPublicDatasetGateKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("packageStepId", state.workflowTemplateKindFilter)'));
   assert.ok(appSource.includes('id: "public-dataset-downstream-launches"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-downstream-launches"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetDownstreamLaunchGuard"'));
@@ -14871,6 +15007,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageManifestStep"));
   assert.ok(architectureDoc.includes("does not create a Dataset object, submit release artifacts or documentation, publish a dataset"));
+  assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-release-package"));
+  assert.ok(architectureDoc.includes("publicDatasetReleasePackageArtifact"));
+  assert.ok(architectureDoc.includes("release-cleared position-critique records, expert labels, item/version provenance"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-downstream-launches"));
   assert.ok(architectureDoc.includes("publicDatasetDownstreamLaunchGuard"));
   assert.ok(architectureDoc.includes("public leaderboard, API evaluator, public training export, and judge-model launch"));

@@ -7899,6 +7899,14 @@ export async function handleApiRequest(request, response, url, context) {
     );
     return;
   }
+  const publicDatasetReleasePackageMatch = url.pathname.match(/^\/api\/v1\/public-dataset-release-package(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetReleasePackageMatch) {
+    const itemId = publicDatasetReleasePackageMatch[1] ? decodeURIComponent(publicDatasetReleasePackageMatch[1]) : null;
+    await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
+      publicDatasetReleasePackageReadback(report, { itemId, searchParams: url.searchParams }),
+    );
+    return;
+  }
   const publicDatasetDownstreamLaunchMatch = url.pathname.match(/^\/api\/v1\/public-dataset-downstream-launches(?:\/([^/]+))?$/);
   if (request.method === "GET" && publicDatasetDownstreamLaunchMatch) {
     const itemId = publicDatasetDownstreamLaunchMatch[1] ? decodeURIComponent(publicDatasetDownstreamLaunchMatch[1]) : null;
@@ -12409,6 +12417,344 @@ function publicDatasetPackageManifestCounts(items) {
     byStatus: countItemsBy(items, "status"),
     byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
     byTargetGapId: countExpandedValues(items, "targetGapIds"),
+    byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+const publicDatasetReleasePackageArtifactDefinitions = [
+  {
+    id: "release-cleared-position-critique-pairs",
+    artifactKind: "dataset_records",
+    fileFormat: "jsonl",
+    expectedFilename: "dataset-v0.1/release-cleared-position-critique-pairs.jsonl",
+    packageStepId: "target-data-package",
+    label: "Release-cleared position-critique pair records",
+    readinessRowIds: ["release_cleared_position_critique_pairs"],
+    requiredFields: ["position_id", "critique_id", "split", "position_text_version_id", "critique_text_version_id", "rights_clearance_status"],
+    summary: "Public package data rows for release-cleared position-critique pairs; blocked until target-scale data is actually collected.",
+  },
+  {
+    id: "expert-labels",
+    artifactKind: "label_data",
+    fileFormat: "jsonl",
+    expectedFilename: "dataset-v0.1/expert-labels.jsonl",
+    packageStepId: "release-artifact-package",
+    label: "Seven-dimensional expert-supervised labels",
+    readinessRowIds: ["seven_dimension_labels", "confidence_and_triggered_explanations"],
+    requiredFields: ["item_id", "centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall", "confidence"],
+    summary: "Expert-supervised seven-dimensional labels with confidence and triggered explanation metadata where available.",
+  },
+  {
+    id: "item-version-provenance",
+    artifactKind: "reproducibility_data",
+    fileFormat: "jsonl",
+    expectedFilename: "dataset-v0.1/item-version-provenance.jsonl",
+    packageStepId: "release-artifact-package",
+    label: "Item text and rating-context provenance",
+    readinessRowIds: ["item_text_version_hashes", "rating_context_snapshot_manifest"],
+    requiredFields: ["item_id", "position_text_version_id", "critique_text_version_id", "canonical_hash", "rating_context_snapshot_id"],
+    summary: "Content-addressed item-text versions and rating-context snapshots needed to reproduce the rated unit.",
+  },
+  {
+    id: "label-snapshot",
+    artifactKind: "label_snapshot",
+    fileFormat: "json",
+    expectedFilename: "dataset-v0.1/label-snapshot.json",
+    packageStepId: "release-artifact-package",
+    label: "Immutable label snapshot manifest",
+    readinessRowIds: ["label_snapshot"],
+    requiredFields: ["label_snapshot_id", "target_label_version", "aggregation_policy", "snapshot_hash"],
+    summary: "Immutable label-snapshot manifest tying package labels to the frozen release label foundation.",
+  },
+  {
+    id: "split-manifest",
+    artifactKind: "split_manifest",
+    fileFormat: "json",
+    expectedFilename: "dataset-v0.1/split-manifest.json",
+    packageStepId: "release-artifact-package",
+    label: "Public split manifest",
+    readinessRowIds: ["split_manifest"],
+    requiredFields: ["public_split_ids", "excluded_split_ids", "split_policy", "export_manifest_id"],
+    summary: "Public split manifest for Dataset v0.1, excluding hidden benchmark and protected validation material.",
+  },
+  {
+    id: "hidden-protected-exclusions",
+    artifactKind: "exclusion_manifest",
+    fileFormat: "json",
+    expectedFilename: "dataset-v0.1/hidden-protected-exclusions.json",
+    packageStepId: "hidden-protected-exclusions",
+    label: "Hidden/protected exclusion manifest",
+    readinessRowIds: ["hidden_protected_exclusions"],
+    requiredFields: ["hidden_benchmark_excluded", "protected_validation_excluded", "source_metadata_excluded", "model_judge_scores_excluded"],
+    summary: "Explicit exclusion manifest for hidden benchmark items, protected validation labels, source metadata, model-judge scores, and unreleased notes.",
+  },
+  {
+    id: "corpus-manifest",
+    artifactKind: "corpus_manifest",
+    fileFormat: "json",
+    expectedFilename: "dataset-v0.1/corpus-manifest.json",
+    packageStepId: "release-artifact-package",
+    label: "Corpus composition manifest",
+    readinessRowIds: ["corpus_manifest"],
+    requiredFields: ["corpus_manifest_id", "position_count", "critique_count", "source_composition", "topic_family_coverage"],
+    summary: "Corpus composition manifest with LMCA source-scale, source-family, topic, rater, and rights/provenance coverage summaries.",
+  },
+  {
+    id: "dataset-card",
+    artifactKind: "dataset_card",
+    fileFormat: "md",
+    expectedFilename: "dataset-v0.1/DATASET_CARD.md",
+    packageStepId: "public-documentation",
+    label: "Dataset card",
+    readinessRowIds: ["dataset_card"],
+    requiredFields: ["artifact_name", "release_scope", "intended_uses", "limitations", "hidden_protected_exclusions", "body_hash"],
+    summary: "Public dataset card documenting release scope, uses, limitations, linked release objects, and hidden/protected exclusions.",
+  },
+  {
+    id: "methodology-report",
+    artifactKind: "methodology_report",
+    fileFormat: "md",
+    expectedFilename: "dataset-v0.1/METHODOLOGY.md",
+    packageStepId: "public-documentation",
+    label: "Methodology report",
+    readinessRowIds: ["methodology_report"],
+    requiredFields: ["annotation_unit", "rubric_dimensions", "aggregation_method", "split_governance", "body_hash"],
+    summary: "Short public methodology report for the LMCA-style position-critique-rating measurement regime.",
+  },
+  {
+    id: "release-version-manifest",
+    artifactKind: "release_version_manifest",
+    fileFormat: "json",
+    expectedFilename: "dataset-v0.1/release-version-manifest.json",
+    packageStepId: "release-version-freeze",
+    label: "Release version and freeze manifest",
+    readinessRowIds: ["release_version_freeze"],
+    requiredFields: ["release_version_id", "release_freeze_id", "linked_artifact_ids", "phase_gate_bundle_id", "frozen_at"],
+    summary: "ReleaseVersion/ReleaseFreeze manifest binding the package to reviewed artifact ids, phase gates, and freeze evidence.",
+  },
+  {
+    id: "public-first-boundary",
+    artifactKind: "public_first_boundary",
+    fileFormat: "json",
+    expectedFilename: "dataset-v0.1/public-first-boundary.json",
+    packageStepId: "public-first-ladder",
+    label: "Public-first downstream boundary",
+    readinessRowIds: ["public_first_ladder_gate"],
+    requiredFields: ["dataset_v0_1_ready", "leaderboard_blocked", "api_evaluator_blocked", "training_export_blocked", "judge_model_blocked"],
+    summary: "Package policy artifact recording that leaderboard, API evaluator, public training export, and judge-model launch remain downstream.",
+  },
+];
+
+function publicDatasetReleasePackageReadback(report, options = {}) {
+  const allItems = publicDatasetReleasePackageItems(report);
+  const filters = publicDatasetReleasePackageFilters(options.searchParams);
+  const filteredItems = allItems.filter((item) => publicDatasetReleasePackageMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter(
+        (item) =>
+          item.id === options.itemId ||
+          item.artifactKind === options.itemId ||
+          item.expectedFilename === options.itemId ||
+          item.readinessRowIds?.includes(options.itemId),
+      )
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
+  const counts = publicDatasetReleasePackageCounts(allItems);
+  const currentBlockingArtifact = allItems.find(publicDatasetReleasePackageItemIsOpen) ?? null;
+  const packageManifest = publicDatasetPackageManifestReadback(report);
+  return {
+    id: `public-dataset-release-package-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: report.generatedAt,
+    sourceEvidenceId: report.publicDatasetReadiness?.id ?? null,
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    artifactKind: report.publicDatasetReadiness?.artifactKind ?? "expert_rated_position_critique_dataset",
+    resourceKey: "publicDatasetReleasePackageArtifact",
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    packageStatus: packageManifest.packageStatus ?? "public_dataset_package_status_missing",
+    releasePackageStatus: currentBlockingArtifact ? "public_dataset_release_package_blocked" : "public_dataset_release_package_ready_for_publication_review",
+    currentBlockingArtifactId: currentBlockingArtifact?.id ?? null,
+    currentBlockingArtifact,
+    policy: {
+      scope:
+        "Read-only Dataset v0.1 release-package artifact manifest derived from /api/release/report, public dataset readiness, and the step-level package manifest. It enumerates expected package files and linked release objects without producing or publishing the dataset.",
+      access:
+        "Admin/auditor readback only because rows expose release-governance ids, source evidence ids, hidden/protected exclusion boundaries, and downstream launch blockers.",
+      authority:
+        "This projection cannot create files, submit artifacts, publish a dataset, launch public surfaces, deprotect hidden/protected content, or waive readiness/package gates.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      publicDatasetReadiness: "/api/v1/public-dataset-readiness",
+      publicDatasetPackageManifest: "/api/v1/public-dataset-package-manifest",
+      publicDatasetDocuments: "/api/v1/public-dataset-documents",
+      releaseArtifactTemplates: "/api/v1/release-artifacts/template",
+    },
+    filters,
+    count: items.length,
+    totalCount: allItems.length,
+    counts,
+    filteredCounts: publicDatasetReleasePackageCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
+    items,
+  };
+}
+
+function publicDatasetReleasePackageItems(report) {
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
+  const packageManifest = publicDatasetPackageManifestReadback(report);
+  const packageStepById = new Map((packageManifest.items ?? []).map((item) => [item.id, item]));
+  return publicDatasetReleasePackageArtifactDefinitions.map((definition, index) =>
+    publicDatasetReleasePackageItem({
+      definition,
+      sequence: index + 1,
+      report,
+      readinessRows: definition.readinessRowIds.map((rowId) => readinessById.get(rowId)).filter(Boolean),
+      packageStep: packageStepById.get(definition.packageStepId) ?? null,
+      packageManifest,
+    }),
+  );
+}
+
+function publicDatasetReleasePackageItem({ definition, sequence, report, readinessRows, packageStep, packageManifest }) {
+  const status = publicDatasetReleasePackageStatus(readinessRows, packageStep?.status);
+  const readinessRowIds = readinessRows.map((row) => row.id).filter(Boolean);
+  const reviewReasons = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])));
+  const sourceEvidenceIds = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.sourceEvidenceIds) ? row.sourceEvidenceIds : [])));
+  const sourceStatuses = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.sourceStatuses) ? row.sourceStatuses : [])));
+  const targetGapIds = uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.targetGapIds) ? row.targetGapIds : [])));
+  const routes = uniqueValues([
+    "/api/v1/public-dataset-release-package",
+    `/api/v1/public-dataset-release-package/${encodeURIComponent(definition.id)}`,
+    "/api/v1/public-dataset-readiness",
+    "/api/v1/public-dataset-package-manifest",
+    packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+    "/api/release/report",
+    ...readinessRows.flatMap(publicDatasetReadinessRoutes),
+    ...(Array.isArray(packageStep?.routes) ? packageStep.routes : []),
+  ]);
+  return {
+    id: definition.id,
+    rowId: definition.id,
+    sequence,
+    artifactKind: definition.artifactKind,
+    fileFormat: definition.fileFormat,
+    expectedFilename: definition.expectedFilename,
+    label: definition.label,
+    status,
+    artifactReady: status === "ready",
+    packagePublishable: status === "ready" && packageManifest.packageStatus === "public_dataset_package_ready_for_release_review",
+    publishActionAvailable: false,
+    summary: definition.summary,
+    packageStepId: definition.packageStepId,
+    packageStepStatus: packageStep?.status ?? "package_step_not_reported",
+    releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    readinessRowIds,
+    readinessStatuses: readinessRows.map((row) => row.status).filter(Boolean),
+    readinessReviewReasons: reviewReasons,
+    sourceEvidenceIds,
+    sourceStatuses,
+    targetGapIds,
+    requiredFields: definition.requiredFields,
+    counts: publicDatasetReleasePackageArtifactCounts(definition, readinessRows, report),
+    packageStepReadbackRoute: packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+    readinessReadbackRoutes: uniqueValues(readinessRows.flatMap(publicDatasetReadinessRoutes)),
+    verificationRoutes: uniqueValues([
+      "/api/release/report",
+      "/api/v1/public-dataset-readiness",
+      "/api/v1/public-dataset-package-manifest",
+      packageStep ? `/api/v1/public-dataset-package-manifest/${encodeURIComponent(packageStep.id)}` : null,
+    ]),
+    routes,
+  };
+}
+
+function publicDatasetReleasePackageArtifactCounts(definition, readinessRows, report) {
+  const mergedCounts = Object.assign({}, ...readinessRows.map((row) => row.counts ?? {}));
+  if (definition.id === "corpus-manifest") {
+    return { ...mergedCounts, ...(report.corpusManifest?.counts ?? {}) };
+  }
+  if (definition.id === "dataset-card" || definition.id === "methodology-report") {
+    return { ...mergedCounts, submittedPublicDocuments: Array.isArray(report.publicDatasetDocuments) ? report.publicDatasetDocuments.length : 0 };
+  }
+  if (definition.id === "public-first-boundary") {
+    return {
+      ...mergedCounts,
+      downstreamArtifacts: readinessRows.flatMap((row) => row.downstreamArtifacts ?? []).length,
+      publicDatasetOpenRows: report.publicDatasetReadiness?.counts?.openRows ?? null,
+    };
+  }
+  return mergedCounts;
+}
+
+function publicDatasetReleasePackageStatus(readinessRows, fallbackStatus) {
+  const openRows = readinessRows.filter(publicDatasetReadinessItemIsOpen);
+  if (openRows.length) {
+    if (openRows.some((row) => row.status === "blocked_by_target_scale")) return "blocked_by_target_scale";
+    if (openRows.some((row) => row.status === "blocked_by_release_freeze")) return "blocked_by_release_freeze";
+    if (openRows.some((row) => row.status === "documentation_not_submitted")) return "documentation_not_submitted";
+    if (openRows.some((row) => row.status === "downstream_blocked_until_dataset_v0_1_ready")) {
+      return "downstream_blocked_until_dataset_v0_1_ready";
+    }
+    if (openRows.some((row) => String(row.status ?? "").includes("review_required"))) return "review_required";
+    return openRows[0].status ?? fallbackStatus ?? "open";
+  }
+  if (readinessRows.length) return "ready";
+  return fallbackStatus ?? "not_reported";
+}
+
+function publicDatasetReleasePackageFilters(searchParams) {
+  const value = (key) => {
+    const item = searchParams?.get?.(key);
+    return item && item.trim() ? item.trim() : null;
+  };
+  return {
+    id: value("id"),
+    artifactKind: value("artifactKind"),
+    fileFormat: value("fileFormat"),
+    status: value("status"),
+    readinessRowId: value("readinessRowId"),
+    packageStepId: value("packageStepId"),
+    sourceEvidenceId: value("sourceEvidenceId"),
+    route: value("route"),
+  };
+}
+
+function publicDatasetReleasePackageMatchesFilters(item, filters) {
+  return Object.entries(filters).every(([key, value]) => {
+    if (!value) return true;
+    if (key === "id") return item.id === value || item.artifactKind === value || item.expectedFilename === value;
+    if (key === "status") return publicDatasetReleasePackageMatchesStatus(item, value);
+    if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
+    if (key === "sourceEvidenceId") return Array.isArray(item.sourceEvidenceIds) && item.sourceEvidenceIds.includes(value);
+    if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
+    return item?.[key] === value;
+  });
+}
+
+function publicDatasetReleasePackageMatchesStatus(item, value) {
+  if (value === "open") return publicDatasetReleasePackageItemIsOpen(item);
+  if (value === "closed") return !publicDatasetReleasePackageItemIsOpen(item);
+  return item.status === value;
+}
+
+function publicDatasetReleasePackageItemIsOpen(item) {
+  return item.status !== "ready";
+}
+
+function publicDatasetReleasePackageCounts(items) {
+  return {
+    rows: items.length,
+    openRows: items.filter(publicDatasetReleasePackageItemIsOpen).length,
+    readyRows: items.filter((item) => item.status === "ready").length,
+    publishableRows: items.filter((item) => item.packagePublishable === true).length,
+    byArtifactKind: countItemsBy(items, "artifactKind"),
+    byFileFormat: countItemsBy(items, "fileFormat"),
+    byStatus: countItemsBy(items, "status"),
+    byPackageStepId: countItemsBy(items, "packageStepId"),
+    byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
+    bySourceEvidenceId: countExpandedValues(items, "sourceEvidenceIds"),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }
