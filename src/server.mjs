@@ -19114,9 +19114,10 @@ function targetDataCollectionImportImpact(action, routeInfo) {
   const target = Number(action.target);
   const safeRemaining = Number.isFinite(remaining) && remaining > 0 ? remaining : 0;
   const isSetupImport = routeInfo.importKind === "setup_data_import";
+  const isAssignmentSetup = routeInfo.importRoute === "/api/v1/assignments/import-jsonl";
   const isRatingContextSnapshotSetup = routeInfo.importRoute === ratingContextSnapshotBulkJsonlImportRoute;
   const isValidationEvidence = routeInfo.importRoute === "/api/v1/validation-tranche-evidence/import-jsonl";
-  const estimatedRecordsRequired = isRatingContextSnapshotSetup
+  const estimatedRecordsRequired = isAssignmentSetup || isRatingContextSnapshotSetup
     ? safeRemaining
     : isSetupImport || isValidationEvidence
       ? (safeRemaining > 0 ? 1 : 0)
@@ -19137,6 +19138,8 @@ function targetDataCollectionImportImpact(action, routeInfo) {
     effect:
       safeRemaining === 0
         ? "target_gap_already_met"
+        : isAssignmentSetup
+          ? "assignment_setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap"
         : isRatingContextSnapshotSetup
           ? "rating_context_snapshot_setup_records_enable_self_contained_blind_rating_imports_but_do_not_close_target_gap"
           : isSetupImport

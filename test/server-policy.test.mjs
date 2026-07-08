@@ -9978,9 +9978,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(fullRunbook.body.counts.byExecutionStatus.ready_to_verify_release ?? 0, 0);
   assert.equal(fullRunbook.body.counts.byExecutionStatus.blocked_by_open_release_work, expectedBlockedVerifySteps.length);
   assert.equal(fullRunbook.body.counts.blockedReleaseVerificationSteps, expectedBlockedVerifySteps.length);
-  assert.equal(fullRunbook.body.counts.expectedRecordsRequired, 3401);
+  assert.equal(fullRunbook.body.counts.expectedRecordsRequired, 4834);
   assert.equal(fullRunbook.body.counts.estimatedPrimaryRecordsRequired, 1966);
-  assert.equal(fullRunbook.body.counts.expectedSetupRecordsRequired, 1435);
+  assert.equal(fullRunbook.body.counts.expectedSetupRecordsRequired, 2868);
   assert.equal(fullRunbook.body.counts.expectedResourceDelta, 2034);
   assert.equal(fullRunbook.body.counts.expectedSetupResourceDelta, 0);
   assert.equal(fullRunbook.body.counts.targetResourceDeltaBeyondPrimaryRecords, 68);
@@ -10019,7 +10019,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.targetGapCount, 7);
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.stepCount, 9);
-  assert.equal(fullRunbook.body.currentBlockingPackageManifest.estimatedRecordsRequired, 3401);
+  assert.equal(fullRunbook.body.currentBlockingPackageManifest.estimatedRecordsRequired, 4834);
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.expectedResourceDelta, 2034);
   assert.equal(fullRunbook.body.currentBlockingPackageManifest.setupBeforePrimary, true);
   assert.equal(
@@ -10064,7 +10064,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
   );
   assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.stepCount, 9);
-  assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.estimatedRecordsRequired, 3401);
+  assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.estimatedRecordsRequired, 4834);
   assert.equal(releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.expectedResourceDelta, 2034);
   assert.equal(
     releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.templateStarter.starterTemplateRoute,
@@ -10091,7 +10091,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifest.body.counts.stepCount, 9);
   assert.equal(currentPackageManifest.body.counts.setupStepCount, 2);
   assert.equal(currentPackageManifest.body.counts.primaryStepCount, 7);
-  assert.equal(currentPackageManifest.body.counts.estimatedRecordsRequired, 3401);
+  assert.equal(currentPackageManifest.body.counts.estimatedRecordsRequired, 4834);
   assert.equal(currentPackageManifest.body.counts.expectedResourceDelta, 2034);
   assert.equal(currentPackageManifest.body.counts.setupBeforePrimary, true);
   assert.equal(currentPackageManifest.body.totalCount, 9);
@@ -10872,7 +10872,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const targetDataPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "target-data-package");
   assert.equal(targetDataPackageStep.status, "blocked_by_target_scale");
   assert.equal(targetDataPackageStep.stepKind, "target_data_collection");
-  assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 3401);
+  assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 4834);
   assert.equal(targetDataPackageStep.counts.expectedResourceDelta, 2034);
   assert.equal(targetDataPackageStep.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
   assert.ok(targetDataPackageStep.targetGapIds.includes("positions"));
@@ -12489,7 +12489,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetGapCollectionPlan.body.counts.dependentCollectActions, 11);
   assert.equal(targetGapCollectionPlan.body.counts.duplicateCollectActions, 4);
   assert.equal(targetGapCollectionPlan.body.counts.estimatedPrimaryRecordsRequired, 1966);
-  assert.equal(targetGapCollectionPlan.body.counts.estimatedSetupRecordsRequired, 1435);
+  assert.equal(targetGapCollectionPlan.body.counts.estimatedSetupRecordsRequired, 2868);
   assert.equal(targetGapCollectionPlan.body.counts.expectedResourceDelta, 2034);
   assert.equal(targetGapCollectionPlan.body.counts.expectedSetupResourceDelta, 0);
   assert.equal(targetGapCollectionPlan.body.counts.targetResourceDeltaBeyondPrimaryRecords, 68);
@@ -12513,9 +12513,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.stepCount, 9);
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.setupStepCount, 2);
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.primaryStepCount, 7);
-  assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.estimatedRecordsRequired, 3401);
+  assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.estimatedRecordsRequired, 4834);
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.estimatedPrimaryRecordsRequired, 1966);
-  assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.estimatedSetupRecordsRequired, 1435);
+  assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.estimatedSetupRecordsRequired, 2868);
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.expectedResourceDelta, 2034);
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.expectedPrimaryResourceDelta, 2034);
   assert.equal(targetGapCollectionPlan.body.targetDataPackagePlan.expectedSetupResourceDelta, 0);
@@ -12777,7 +12777,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   ]);
   assert.deepEqual(blindRatingsCollectionPlan.setupResourceKeys, ["assignment", "ratingContextSnapshot"]);
   assert.equal(blindRatingsCollectionPlan.estimatedRecordsRequired, 1434);
-  assert.equal(blindRatingsCollectionPlan.estimatedSetupRecordsRequired, 1435);
+  assert.equal(blindRatingsCollectionPlan.estimatedSetupRecordsRequired, 2868);
   assert.deepEqual(
     blindRatingsCollectionPlan.collectionChecklist.map((step) => step.stepKind),
     [
@@ -12969,11 +12969,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(blindInitialRatingsTargetGap.body.item.operatorActions[0].setupBulkImportWorkflowTemplateId, "assignment-jsonl-import");
   assert.equal(blindInitialRatingsTargetGap.body.item.operatorActions[0].setupActorRole, "admin_or_operator");
   assert.equal(blindInitialRatingsTargetGap.body.item.operatorActions[0].importImpact.estimatedRecordsRequired, 1434);
-  assert.equal(blindInitialRatingsTargetGap.body.item.operatorActions[0].setupImportImpact.estimatedRecordsRequired, 1);
+  assert.equal(blindInitialRatingsTargetGap.body.item.operatorActions[0].setupImportImpact.estimatedRecordsRequired, 1434);
   assert.equal(blindInitialRatingsTargetGap.body.item.operatorActions[0].setupImportImpact.expectedResourceDelta, 0);
   assert.equal(
     blindInitialRatingsTargetGap.body.item.operatorActions[0].setupImportImpact.effect,
-    "setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap",
+    "assignment_setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap",
   );
 
   const filteredTargetGaps = await invokeApi(context, {
@@ -13866,8 +13866,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetDataTemplate.body.expansionCoverage.mode, "single");
   assert.equal(targetDataTemplate.body.expansionCoverage.groupCount, 9);
   assert.equal(targetDataTemplate.body.expansionCoverage.emittedTemplateRecordCount, 13);
-  assert.equal(targetDataTemplate.body.expansionCoverage.estimatedRecordsRequired, 3401);
-  assert.equal(targetDataTemplate.body.expansionCoverage.remainingTemplateRecordCount, 3391);
+  assert.equal(targetDataTemplate.body.expansionCoverage.estimatedRecordsRequired, 4834);
+  assert.equal(targetDataTemplate.body.expansionCoverage.remainingTemplateRecordCount, 4824);
   assert.equal(targetDataTemplate.body.expansionCoverage.expectedResourceDeltaWhenFullyReplaced, 2034);
   assert.equal(targetDataTemplate.body.expansionCoverage.fullEstimatedTemplateEmitted, false);
   assert.equal(targetDataTemplate.body.expansionCoverage.byCoverageStatus.single_template_preview, 9);
@@ -13950,10 +13950,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(assignmentSetupTemplate.importRoute, "/api/v1/assignments/import-jsonl");
   assert.equal(assignmentSetupTemplate.resourceKey, "assignment");
   assert.equal(assignmentSetupTemplate.record.assignment.templateOnly, true);
-  assert.equal(assignmentSetupTemplate.importImpact.estimatedRecordsRequired, 1);
+  assert.equal(assignmentSetupTemplate.importImpact.estimatedRecordsRequired, 1434);
   assert.equal(assignmentSetupTemplate.importImpact.expectedResourceDelta, 0);
   assert.equal(assignmentSetupTemplate.importImpact.closesTargetGapWhenValidated, false);
-  assert.equal(assignmentSetupTemplate.importImpact.effect, "setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap");
+  assert.equal(
+    assignmentSetupTemplate.importImpact.effect,
+    "assignment_setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap",
+  );
   const ratingContextSetupTemplate = targetDataTemplate.body.items.find(
     (item) => item.targetGapId === "blind_initial_ratings" && item.importRoute === "/api/v1/rating-context-snapshots/import-jsonl",
   );
@@ -14053,29 +14056,31 @@ test("operator action item queue is admin/auditor readback derived from the rele
     headers: { authorization: `Bearer ${adminToken}` },
   });
   assert.equal(expandedBlindRatingTemplate.status, 200, JSON.stringify(expandedBlindRatingTemplate.body));
-  assert.equal(expandedBlindRatingTemplate.body.count, 11);
+  assert.equal(expandedBlindRatingTemplate.body.count, 15);
   assert.equal(expandedBlindRatingTemplate.body.items[0].importKind, "setup_data_import");
   assert.equal(expandedBlindRatingTemplate.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
   assert.equal(expandedBlindRatingTemplate.body.items[1].importKind, "setup_data_import");
   assert.equal(expandedBlindRatingTemplate.body.items[1].importRoute, "/api/v1/rating-context-snapshots/import-jsonl");
   assert.equal(expandedBlindRatingTemplate.body.items[1].expandedRecordIndex, 1);
-  assert.equal(expandedBlindRatingTemplate.body.items[5].expandedRecordIndex, 5);
-  assert.equal(expandedBlindRatingTemplate.body.items[6].importKind, "primary_data_import");
-  assert.equal(expandedBlindRatingTemplate.body.items[6].expandedRecordIndex, 1);
-  assert.equal(expandedBlindRatingTemplate.body.items[10].expandedRecordIndex, 5);
+  assert.equal(expandedBlindRatingTemplate.body.items[2].importKind, "setup_data_import");
+  assert.equal(expandedBlindRatingTemplate.body.items[2].importRoute, "/api/v1/assignments/import-jsonl");
+  assert.equal(expandedBlindRatingTemplate.body.items[8].expandedRecordIndex, 5);
+  assert.equal(expandedBlindRatingTemplate.body.items[10].importKind, "primary_data_import");
+  assert.equal(expandedBlindRatingTemplate.body.items[10].expandedRecordIndex, 1);
+  assert.equal(expandedBlindRatingTemplate.body.items[14].expandedRecordIndex, 5);
   const expandedBlindRatingFirstRecord = JSON.parse(expandedBlindRatingTemplate.body.jsonl.split("\n")[0]);
   assert.equal(expandedBlindRatingFirstRecord.importKind, "setup_data_import");
   assert.equal(expandedBlindRatingFirstRecord.importRoute, "/api/v1/assignments/import-jsonl");
   const expandedBlindRatingSecondRecord = JSON.parse(expandedBlindRatingTemplate.body.jsonl.split("\n")[1]);
   assert.equal(expandedBlindRatingSecondRecord.importRoute, "/api/v1/rating-context-snapshots/import-jsonl");
-  assert.equal(expandedBlindRatingSecondRecord.ratingContextSnapshot.id, "TODO_ratingContextSnapshot_id_2");
+  assert.equal(expandedBlindRatingSecondRecord.ratingContextSnapshot.id, "TODO_ratingContextSnapshot_id_6");
   assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.groupCount, 3);
-  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.estimatedRecordsRequired, 2869);
-  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.emittedTemplateRecordCount, 11);
-  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.remainingTemplateRecordCount, 2858);
+  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.estimatedRecordsRequired, 4302);
+  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.emittedTemplateRecordCount, 15);
+  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.remainingTemplateRecordCount, 4287);
   assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.expectedResourceDeltaWhenFullyReplaced, 1434);
-  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.byCoverageStatus.estimated_required_template_emitted, 1);
-  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.byCoverageStatus.capped_template_preview, 2);
+  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.byCoverageStatus.estimated_required_template_emitted ?? 0, 0);
+  assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.byCoverageStatus.capped_template_preview, 3);
   assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.rows[0].importKind, "setup_data_import");
   assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.rows[0].importRoute, "/api/v1/assignments/import-jsonl");
   assert.equal(expandedBlindRatingTemplate.body.expansionCoverage.rows[1].importKind, "setup_data_import");

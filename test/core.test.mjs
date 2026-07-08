@@ -14682,10 +14682,13 @@ test("October completion checklist records operator-evidence statuses when child
   assert.equal(targetScaleGapById.blind_initial_ratings.primaryImportImpact.estimatedRecordsRequired, 1434);
   assert.equal(targetScaleGapById.blind_initial_ratings.primaryImportImpact.expectedResourceDelta, 1434);
   assert.equal(targetScaleGapById.blind_initial_ratings.primaryImportImpact.closesTargetGapWhenValidated, true);
-  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.estimatedRecordsRequired, 1);
+  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.estimatedRecordsRequired, 1434);
   assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.expectedResourceDelta, 0);
   assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.closesTargetGapWhenValidated, false);
-  assert.equal(targetScaleGapById.blind_initial_ratings.setupImportImpact.effect, "setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap");
+  assert.equal(
+    targetScaleGapById.blind_initial_ratings.setupImportImpact.effect,
+    "assignment_setup_records_enable_assigned_rater_completion_but_do_not_close_target_gap",
+  );
   assert.equal(targetScaleGapById.validation_core_all_items_raters.writeRoute, "/api/v1/validation-tranche-evidence");
   assert.equal(targetScaleGapById.validation_core_all_items_raters.workflowTemplateId, "validation-tranche-evidence");
   assert.equal(targetScaleGapById.validation_core_all_items_raters.primaryImportImpact.estimatedRecordsRequired, 1);
