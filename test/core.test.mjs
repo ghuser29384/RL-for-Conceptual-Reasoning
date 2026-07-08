@@ -14321,6 +14321,51 @@ test("October completion checklist records operator-evidence statuses when child
       .flatMap((row) => row.operatorActionSummaries ?? [])
       .every((summary) => summary.executionStatus && summary.executionStatusReason),
   );
+  assert.equal(releaseReport.releaseCompletionNavigation.releaseUseStatus, "release_completion_unblockers_open");
+  assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingPhase, "collect_data");
+  assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingExecutionStatus, "ready_to_collect_data");
+  assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstReadbackRoute, "/api/v1/target-gaps/collection-plan");
+  assert.equal(releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstImportRoute, "/api/v1/target-gaps/import-jsonl-package");
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstDryRunRoute,
+    "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
+  );
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.currentBlockingGroup.firstTemplateRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.deepEqual(
+    releaseReport.releaseCompletionNavigation.nextUnblockerSequence.map((item) => item.executionStatus),
+    [
+      "ready_to_collect_data",
+      "blocked_by_target_data",
+      "ready_to_submit_evidence",
+      "ready_to_review_evidence",
+      "blocked_by_open_release_work",
+    ],
+  );
+  assert.deepEqual(
+    releaseReport.releaseCompletionNavigation.nextUnblockerSequence.map((item) => item.sequence),
+    [1, 2, 3, 4, 5],
+  );
+  assert.equal(releaseReport.releaseCompletionNavigation.counts.openTargetGaps, 7);
+  assert.equal(releaseReport.releaseCompletionNavigation.counts.targetGapRemainingTotal, 2034);
+  assert.equal(releaseReport.releaseCompletionNavigation.counts.openChecklistRows, releaseReport.operatorEvidenceSubmissionPlan.counts.openRows);
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.counts.openOperatorActionItems,
+    releaseReport.operatorEvidenceSubmissionPlan.actionItems.length,
+  );
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.counts.byActionExecutionStatus.ready_to_collect_data,
+    releaseReport.operatorEvidenceSubmissionPlan.counts.byExecutionStatus.ready_to_collect_data,
+  );
+  assert.equal(releaseReport.releaseCompletionNavigation.routes.runbookRoute, "/api/v1/october-completion-runbook");
+  assert.equal(
+    releaseReport.releaseCompletionNavigation.routes.currentBlockingRunbookRoute,
+    "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data",
+  );
+  assert.equal(releaseReport.releaseCompletionNavigation.routes.operatorEvidenceTemplateRoute, "/api/v1/operator-evidence/import-jsonl-template");
+  assert.equal(releaseReport.releaseCompletionNavigation.policy.sideEffects.includes("does not submit data"), true);
   const actionItemExecutionStatusCounts = releaseReport.operatorEvidenceSubmissionPlan.actionItems.reduce((counts, item) => {
     counts[item.executionStatus] = (counts[item.executionStatus] ?? 0) + 1;
     return counts;

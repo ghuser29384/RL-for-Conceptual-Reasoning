@@ -11232,6 +11232,12 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
     reviewSections: [],
     releaseUseStatus: "not_reported",
   };
+  const releaseCompletionNavigation = report.releaseCompletionNavigation ?? {
+    counts: {},
+    routes: {},
+    nextUnblockerSequence: [],
+    releaseUseStatus: "not_reported",
+  };
   const targetGapRows = Array.isArray(report.targetGaps?.rows) ? report.targetGaps.rows : [];
   const targetGapTotals = report.targetGaps?.totals ?? report.targetGaps?.counts ?? {};
   const targetGapCounts = report.targetGaps?.counts ?? {};
@@ -11324,6 +11330,7 @@ function governancePanel(report, certificationStatus, lastCertificationStatus, h
           ${metricCard("Budget envelope", `$${Math.round((octoberOperatingPlan.budgetEnvelopeUsd.min ?? 0) / 1000)}k-$${Math.round((octoberOperatingPlan.budgetEnvelopeUsd.max ?? 0) / 1000)}k`, "planning assumption")}
           ${metricCard("Expert adjudicators", String(octoberOperatingPlan.counts.expertAdjudicatorRequiredCount ?? "?"), `${octoberOperatingPlan.counts.blockedWorkstreams ?? 0} blocked workstreams`)}
         </div>
+        ${releaseCompletionNavigationPanel(releaseCompletionNavigation)}
         <div class="failureList">
           ${
             targetGapRows.length
@@ -12689,6 +12696,73 @@ function metaphilosophyDeliverableChecklistPanel(metaphilosophyDeliverableCheckl
         }
       </div>
     </section>
+  `;
+}
+
+function releaseCompletionNavigationPanel(releaseCompletionNavigation) {
+  const navigation = releaseCompletionNavigation ?? {};
+  const counts = navigation.counts ?? {};
+  const routes = navigation.routes ?? {};
+  const currentGroup = navigation.currentBlockingGroup ?? navigation.nextUnblockerSequence?.[0] ?? null;
+  const sequence = Array.isArray(navigation.nextUnblockerSequence) ? navigation.nextUnblockerSequence : [];
+  const firstSafeRoute =
+    currentGroup?.firstDryRunRoute ??
+    currentGroup?.firstValidateOnlyRoute ??
+    currentGroup?.firstTemplateRoute ??
+    currentGroup?.firstReadbackRoute ??
+    routes.currentBlockingRunbookRoute ??
+    "not available";
+  return `
+    <article class="claimRow releaseCompletionNavigation">
+      <header>${statusChip(navigation.releaseUseStatus ?? "not_reported")}<strong>Release Completion Navigation</strong></header>
+      <div class="metricCards benchmarkMetricCards">
+        ${metricCard(
+          "Current blocker",
+          currentGroup ? humanize(currentGroup.executionStatus) : "none",
+          currentGroup ? humanize(currentGroup.phase) : "ready to verify",
+        )}
+        ${metricCard("Open target gaps", String(counts.openTargetGaps ?? 0), `${counts.targetGapRemainingTotal ?? "?"} remaining target resources`)}
+        ${metricCard("Open actions", String(counts.openOperatorActionItems ?? 0), workflowCountMapSummary(counts.byActionExecutionStatus))}
+        ${metricCard("Unblocker groups", String(sequence.length), routes.currentBlockingRunbookRoute ?? routes.runbookRoute ?? "runbook route missing")}
+      </div>
+      ${metricList([
+        ["First safe route", firstSafeRoute],
+        ["Current blocker runbook", routes.currentBlockingRunbookRoute ?? routes.runbookRoute ?? "not available"],
+        ["Target-data package", routes.targetDataPackageValidateOnlyRoute ?? routes.targetDataPackageDryRunRoute ?? routes.targetDataPackageImportRoute ?? "not available"],
+        ["Target-data starter template", routes.targetDataStarterTemplateRoute ?? "not available"],
+        ["Operator-evidence package", routes.operatorEvidencePackageValidateOnlyRoute ?? routes.operatorEvidencePackageDryRunRoute ?? routes.operatorEvidencePackageImportRoute ?? "not available"],
+        ["Operator-evidence template", routes.operatorEvidenceTemplateRoute ?? "not available"],
+        ["Completion rule", navigation.policy?.completionRule ?? "Release verification remains blocked until upstream work closes."],
+      ])}
+      <div class="failureList">
+        ${
+          sequence.length
+            ? sequence
+                .map(
+                  (group) => `
+                    <article class="claimRow">
+                      <header>${statusChip(group.executionStatus)}<strong>${escapeHtml(`${group.sequence ?? "?"}. ${humanize(group.operatorAction ?? group.phase ?? "release action")}`)}</strong></header>
+                      ${metricList([
+                        ["Phase", humanize(group.phase ?? "not reported")],
+                        ["Execution", humanize(group.executionStatus ?? "not reported")],
+                        ["Steps", String(group.stepCount ?? 0)],
+                        ["Target gaps", routeListSummary(Array.isArray(group.targetGapIds) ? group.targetGapIds.map(humanize) : [])],
+                        ["Checklist rows", routeListSummary(Array.isArray(group.checklistRowIds) ? group.checklistRowIds.map(humanize) : [])],
+                        ["Readback", group.firstReadbackRoute ?? "not available"],
+                        ["Template", group.firstTemplateRoute ?? "not available"],
+                        ["Validate-only", group.firstValidateOnlyRoute ?? "not available"],
+                      ])}
+                    </article>
+                  `,
+                )
+                .join("")
+            : `<article class="claimRow">
+                <header>${statusChip("pass")}<strong>No open release-navigation groups</strong></header>
+                <p>The release report does not expose current blocker groups; verify the full report and runbook before making completion claims.</p>
+              </article>`
+        }
+      </div>
+    </article>
   `;
 }
 

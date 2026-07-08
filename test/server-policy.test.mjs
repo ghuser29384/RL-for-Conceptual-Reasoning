@@ -13780,6 +13780,7 @@ test("rating UI starts score controls unset and requires explicit values before 
 test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   const appSource = readFileSync("src/app.mjs", "utf8");
   assert.ok(appSource.includes("const octoberCompletionChecklist = report.octoberCompletionChecklist"));
+  assert.ok(appSource.includes("const releaseCompletionNavigation = report.releaseCompletionNavigation"));
   assert.ok(appSource.includes("const operatorEvidenceSubmissionPlan = report.operatorEvidenceSubmissionPlan"));
   assert.ok(appSource.includes("const assignmentWorkflowEvidence = report.assignmentWorkflowEvidence"));
   assert.ok(appSource.includes("const discussionAdjudicationWorkflowEvidence = report.discussionAdjudicationWorkflowEvidence"));
@@ -13799,6 +13800,7 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('`${targetGapTotals.remainingTotal ?? "?"} remaining total`'));
   assert.ok(appSource.includes('metricCard(\n            "Ready target gaps"'));
   assert.ok(appSource.includes('targetGapCounts.readyTargetGaps'));
+  assert.ok(appSource.includes("releaseCompletionNavigationPanel(releaseCompletionNavigation)"));
   assert.ok(appSource.includes("octoberCompletionChecklistPanel(octoberCompletionChecklist)"));
   assert.ok(appSource.includes("operatorEvidenceSubmissionPlanPanel(operatorEvidenceSubmissionPlan)"));
   assert.ok(appSource.includes("releaseWorkflowEvidenceReadinessPanel({"));
@@ -13809,6 +13811,12 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("metaphilosophyDecisionLogPanel(metaphilosophyDecisionLog)"));
   assert.ok(appSource.includes("metaphilosophyDeliverableChecklistPanel(metaphilosophyDeliverableChecklist)"));
   assert.ok(appSource.includes("function octoberCompletionChecklistPanel(octoberCompletionChecklist)"));
+  assert.ok(appSource.includes("function releaseCompletionNavigationPanel(releaseCompletionNavigation)"));
+  assert.ok(appSource.includes("Release Completion Navigation"));
+  assert.ok(appSource.includes("Current blocker runbook"));
+  assert.ok(appSource.includes("Target-data starter template"));
+  assert.ok(appSource.includes("Operator-evidence package"));
+  assert.ok(appSource.includes("routes.currentBlockingRunbookRoute"));
   assert.ok(appSource.includes("function operatorEvidenceSubmissionPlanPanel(operatorEvidenceSubmissionPlan)"));
   assert.ok(appSource.includes("function releaseWorkflowEvidenceReadinessPanel({"));
   assert.ok(appSource.includes("function operatorPlanActionQueuePanel(plan)"));

@@ -28526,6 +28526,174 @@ function targetGapSetupBulkImportRouteList(row) {
   ]);
 }
 
+function buildReleaseCompletionNavigationSummary(
+  releaseId,
+  { currentStatus, targetGaps, octoberCompletionChecklist, operatorEvidenceSubmissionPlan } = {},
+) {
+  const targetGapRows = Array.isArray(targetGaps?.rows) ? targetGaps.rows : [];
+  const openTargetGapRows = targetGapRows.filter(
+    (row) => row?.status === "target_gap_remaining" || row?.executionStatus === "ready_to_collect_data" || Number(row?.remaining ?? 0) > 0,
+  );
+  const checklistRows = Array.isArray(octoberCompletionChecklist?.rows) ? octoberCompletionChecklist.rows : [];
+  const openChecklistRows = checklistRows.filter(releaseCompletionChecklistRowIsOpen);
+  const actionItems = Array.isArray(operatorEvidenceSubmissionPlan?.actionItems)
+    ? operatorEvidenceSubmissionPlan.actionItems
+    : (Array.isArray(operatorEvidenceSubmissionPlan?.rows) ? operatorEvidenceSubmissionPlan.rows : []).flatMap((row) => row.actionItems ?? []);
+  const openActionItems = actionItems
+    .map((item) => (item?.executionStatus ? item : operatorActionItemWithExecutionStatus(item)))
+    .filter(operatorActionItemIsOpen);
+  const actionsByExecutionStatus = countBy(openActionItems, "executionStatus");
+  const targetGapRemainingTotal =
+    Number(targetGaps?.totals?.remainingTotal ?? targetGaps?.counts?.remainingTotal) ||
+    openTargetGapRows.reduce((sum, row) => sum + (Number.isFinite(Number(row?.remaining)) ? Number(row.remaining) : 0), 0);
+  const sequence = [
+    openTargetGapRows.length
+      ? releaseCompletionNavigationGroup("collect_data", "ready_to_collect_data", "collect_real_target_data", {
+          stepCount: actionsByExecutionStatus.ready_to_collect_data ?? openTargetGapRows.length,
+          targetGapIds: openTargetGapRows.map((row) => row.id),
+          checklistRowIds: uniqueStrings(openTargetGapRows.flatMap((row) => row.checklistRowIds ?? [])),
+          targetGapRemainingTotal,
+          firstReadbackRoute: "/api/v1/target-gaps/collection-plan",
+          firstTargetGapRoute: openTargetGapRows[0]?.collectionPlanRoute ?? "/api/v1/target-gaps/collection-plan",
+          firstTemplateRoute:
+            openTargetGapRows[0]?.starterExpandedTemplateReadbackRoute ??
+            operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", { expand: "remaining", maxExpandedRecords: 25 }),
+          firstImportRoute: TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE,
+          firstDryRunRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
+          firstValidateOnlyRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
+        })
+      : null,
+    actionsByExecutionStatus.blocked_by_target_data
+      ? releaseCompletionNavigationGroup("resolve_data_blockers", "blocked_by_target_data", "collect_blocking_target_data_before_evidence_review", {
+          stepCount: actionsByExecutionStatus.blocked_by_target_data,
+          targetGapIds: uniqueStrings(openActionItems.flatMap((item) => item.blockedByTargetGapIds ?? [])),
+          checklistRowIds: uniqueStrings(
+            openActionItems.filter((item) => item.executionStatus === "blocked_by_target_data").map((item) => item.checklistRowId),
+          ),
+          firstReadbackRoute: "/api/v1/operator-action-items?status=data_dependency_blocked",
+          firstTargetGapRoute: "/api/v1/target-gaps/collection-plan",
+        })
+      : null,
+    actionsByExecutionStatus.ready_to_submit_evidence
+      ? releaseCompletionNavigationGroup("submit_operator_evidence", "ready_to_submit_evidence", "submit_real_operator_evidence", {
+          stepCount: actionsByExecutionStatus.ready_to_submit_evidence,
+          checklistRowIds: uniqueStrings(
+            openActionItems.filter((item) => item.executionStatus === "ready_to_submit_evidence").map((item) => item.checklistRowId),
+          ),
+          firstReadbackRoute: "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
+          firstTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
+          firstImportRoute: OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE,
+          firstDryRunRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
+          firstValidateOnlyRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
+        })
+      : null,
+    actionsByExecutionStatus.ready_to_review_evidence
+      ? releaseCompletionNavigationGroup("review_current_evidence", "ready_to_review_evidence", "review_or_replace_current_evidence", {
+          stepCount: actionsByExecutionStatus.ready_to_review_evidence,
+          checklistRowIds: uniqueStrings(
+            openActionItems.filter((item) => item.executionStatus === "ready_to_review_evidence").map((item) => item.checklistRowId),
+          ),
+          firstReadbackRoute: "/api/v1/operator-action-items?executionStatus=ready_to_review_evidence",
+        })
+      : null,
+    openTargetGapRows.length || openChecklistRows.length || openActionItems.length
+      ? releaseCompletionNavigationGroup("verify_release_completion", "blocked_by_open_release_work", "close_open_release_work_before_verification", {
+          stepCount: 1,
+          targetGapIds: openTargetGapRows.map((row) => row.id),
+          checklistRowIds: openChecklistRows.map((row) => row.id),
+          targetGapRemainingTotal,
+          firstReadbackRoute: "/api/release/report",
+        })
+      : releaseCompletionNavigationGroup("verify_release_completion", "ready_to_verify_release", "verify_release_completion", {
+          stepCount: 1,
+          firstReadbackRoute: "/api/release/report",
+        }),
+  ]
+    .filter(Boolean)
+    .map((group, index) => ({ ...group, sequence: index + 1 }));
+
+  const currentBlockingGroup = sequence[0] ?? null;
+  const releaseReady =
+    currentStatus === "target_scale_met" &&
+    openTargetGapRows.length === 0 &&
+    openChecklistRows.length === 0 &&
+    openActionItems.length === 0;
+
+  return {
+    id: `release-completion-navigation-${releaseId}`,
+    releaseId,
+    releaseUseStatus: releaseReady ? "release_completion_ready_to_verify" : "release_completion_unblockers_open",
+    policy: {
+      scope:
+        "Compact top-level navigation derived from targetGaps, octoberCompletionChecklist, and operatorEvidenceSubmissionPlan; the detailed ordered runbook remains /api/v1/october-completion-runbook.",
+      sideEffects:
+        "Read-only routing metadata only. It does not submit data, append evidence, waive gates, freeze releases, or change completion status.",
+      completionRule:
+        "Release verification remains blocked until target gaps, checklist rows, and operator action items are closed in /api/release/report.",
+    },
+    routes: {
+      releaseReportRoute: "/api/release/report",
+      runbookRoute: "/api/v1/october-completion-runbook",
+      currentBlockingRunbookRoute: currentBlockingGroup
+        ? `/api/v1/october-completion-runbook?executionStatus=${encodeURIComponent(currentBlockingGroup.executionStatus)}`
+        : "/api/v1/october-completion-runbook",
+      targetGapsRoute: "/api/v1/target-gaps",
+      targetGapCollectionPlanRoute: "/api/v1/target-gaps/collection-plan",
+      targetDataPackageImportRoute: TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE,
+      targetDataPackageDryRunRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
+      targetDataPackageValidateOnlyRoute: operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
+      targetDataStarterTemplateRoute: operatorTemplateReadbackRoute("/api/v1/target-gaps/import-jsonl-template", {
+        expand: "remaining",
+        maxExpandedRecords: 25,
+      }),
+      octoberCompletionChecklistRoute: "/api/v1/october-completion-checklist",
+      operatorActionItemsRoute: "/api/v1/operator-action-items",
+      operatorEvidencePackageImportRoute: OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE,
+      operatorEvidencePackageDryRunRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "dryRun", "true"),
+      operatorEvidencePackageValidateOnlyRoute: operatorImportRouteWithQueryFlag(OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE, "validateOnly", "true"),
+      operatorEvidenceTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
+    },
+    counts: {
+      targetGapRows: targetGapRows.length,
+      openTargetGaps: openTargetGapRows.length,
+      targetGapRemainingTotal,
+      checklistRows: checklistRows.length,
+      openChecklistRows: openChecklistRows.length,
+      operatorActionItems: actionItems.length,
+      openOperatorActionItems: openActionItems.length,
+      byActionExecutionStatus: actionsByExecutionStatus,
+    },
+    currentBlockingPhase: currentBlockingGroup?.phase ?? null,
+    currentBlockingExecutionStatus: currentBlockingGroup?.executionStatus ?? null,
+    currentBlockingGroup,
+    nextUnblockerSequence: sequence,
+  };
+}
+
+function releaseCompletionChecklistRowIsOpen(row) {
+  const status = String(row?.status ?? "open");
+  return !["complete", "completed", "closed"].includes(status) && !status.startsWith("not_applicable");
+}
+
+function releaseCompletionNavigationGroup(phase, executionStatus, operatorAction, details = {}) {
+  return {
+    sequence: null,
+    phase,
+    executionStatus,
+    operatorAction,
+    stepCount: details.stepCount ?? 0,
+    targetGapIds: uniqueStrings(details.targetGapIds ?? []),
+    checklistRowIds: uniqueStrings(details.checklistRowIds ?? []),
+    targetGapRemainingTotal: details.targetGapRemainingTotal ?? null,
+    firstReadbackRoute: details.firstReadbackRoute ?? null,
+    firstTargetGapRoute: details.firstTargetGapRoute ?? null,
+    firstTemplateRoute: details.firstTemplateRoute ?? null,
+    firstImportRoute: details.firstImportRoute ?? null,
+    firstDryRunRoute: details.firstDryRunRoute ?? null,
+    firstValidateOnlyRoute: details.firstValidateOnlyRoute ?? null,
+  };
+}
+
 function operatorTargetGapDefaultSetupReadbackRoute(importRoute) {
   if (importRoute === RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE) return "/api/v1/rating-context-snapshots";
   if (importRoute === "/api/v1/assignments/import-jsonl") return "/api/v1/assignments";
@@ -34352,6 +34520,12 @@ export function buildOctoberReleaseReport(
     operatorEvidenceSubmissionPlan,
   );
   const targetGapsWithOperatorActions = buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissionPlan);
+  const releaseCompletionNavigation = buildReleaseCompletionNavigationSummary(releaseId, {
+    currentStatus,
+    targetGaps: targetGapsWithOperatorActions,
+    octoberCompletionChecklist: octoberCompletionChecklistWithOperatorRoutes,
+    operatorEvidenceSubmissionPlan,
+  });
   return {
     id: `release-report-${releaseId}`,
     releaseId,
@@ -34359,6 +34533,7 @@ export function buildOctoberReleaseReport(
     octoberTargets: OCTOBER_RELEASE_TARGETS,
     currentStatus,
     targetGaps: targetGapsWithOperatorActions,
+    releaseCompletionNavigation,
     octoberOperatingPlan,
     releaseVersionManifest,
     releaseArtifactEvidence,
