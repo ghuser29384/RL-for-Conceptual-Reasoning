@@ -24036,6 +24036,55 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.completionState === "closed",
     ),
   );
+  const modelReproSubmittedArtifactsAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "model_evaluation_reproducibility-submitted_evaluation_artifacts_bound_to_release",
+  );
+  assert.ok(modelReproSubmittedArtifactsAuditRow);
+  assert.equal(modelReproSubmittedArtifactsAuditRow.completionState, "open");
+  assert.ok(
+    modelReproSubmittedArtifactsAuditRow.routes.includes(
+      "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Asubmitted_evaluation_artifacts_bound_to_release",
+    ),
+  );
+  assert.ok(modelReproSubmittedArtifactsAuditRow.routes.includes("/api/v1/evaluations/run?validateOnly=true"));
+  assert.ok(
+    modelReproSubmittedArtifactsAuditRow.routes.includes(
+      "/api/v1/operator-action-items/payload-template?checklistRowId=model_evaluation_reproducibility&actionType=submit_artifact&artifactKind=submitted_evaluation_artifacts_bound_to_release",
+    ),
+  );
+  const modelReproLeaderboardAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "model_evaluation_reproducibility-leaderboard_model_run_provenance",
+  );
+  assert.ok(modelReproLeaderboardAuditRow);
+  assert.equal(modelReproLeaderboardAuditRow.completionState, "open");
+  assert.ok(
+    modelReproLeaderboardAuditRow.routes.includes(
+      "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Aleaderboard_model_run_provenance",
+    ),
+  );
+  assert.ok(
+    modelReproLeaderboardAuditRow.routes.includes(
+      "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance",
+    ),
+  );
+  assert.ok(modelReproLeaderboardAuditRow.routes.includes("/api/v1/operator-evidence/import-jsonl?validateOnly=true"));
+  const modelReproInferenceEnvironmentAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "model_evaluation_reproducibility-submitted_run_inference_environment_provenance",
+  );
+  assert.ok(modelReproInferenceEnvironmentAuditRow);
+  assert.equal(modelReproInferenceEnvironmentAuditRow.completionState, "open");
+  assert.ok(modelReproInferenceEnvironmentAuditRow.routes.includes("/api/v1/model-inference-configs"));
+  assert.ok(modelReproInferenceEnvironmentAuditRow.routes.includes("/api/v1/model-run-environments"));
+  assert.ok(
+    modelReproInferenceEnvironmentAuditRow.routes.includes(
+      "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=model_inference_config",
+    ),
+  );
+  assert.ok(
+    modelReproInferenceEnvironmentAuditRow.routes.includes(
+      "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=model_run_environment",
+    ),
+  );
 
   const rlhf93CompletionAuditOpen = await invokeApi(context, {
     method: "GET",
@@ -24176,6 +24225,22 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditUnblockerRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditUnblockerRouteFilter.body));
   assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "release-current-status"));
   assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "october-target_scale_and_data_collection"));
+
+  const rlhf93CompletionAuditModelReproRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(
+    rlhf93CompletionAuditModelReproRouteFilter.status,
+    200,
+    JSON.stringify(rlhf93CompletionAuditModelReproRouteFilter.body),
+  );
+  assert.ok(
+    rlhf93CompletionAuditModelReproRouteFilter.body.items.some(
+      (item) => item.id === "model_evaluation_reproducibility-leaderboard_model_run_provenance",
+    ),
+  );
 
   const rlhf93CompletionAuditItem = await invokeApi(context, {
     method: "GET",

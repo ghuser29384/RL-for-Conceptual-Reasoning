@@ -17627,6 +17627,7 @@ function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, che
   const routeBase = routeBaseByGroup[requirementGroup] ?? "/api/release/report";
   return (Array.isArray(checklist.rows) ? checklist.rows : []).map((row, index) => {
     const sourceRowId = row.id ?? row.rowId ?? `${requirementGroup}-row-${index + 1}`;
+    const derivedRoutes = rlhf93CompletionAuditDerivedChecklistRowRoutes(report, requirementGroup, sourceRowId, row, routeBase);
     return rlhf93CompletionAuditDecoratedItem({
       ...row,
       id: `${requirementGroup}-${sourceRowId}`,
@@ -17640,10 +17641,94 @@ function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, che
       sourceChecklistId: checklist.id ?? null,
       sourceEvidenceId: row.sourceEvidenceId ?? (Array.isArray(row.evidenceIds) ? row.evidenceIds[0] : null),
       evidenceRoutes: ["/api/release/report", `${routeBase}/${encodeURIComponent(sourceRowId)}`],
-      verificationRoutes: [`${routeBase}/${encodeURIComponent(sourceRowId)}`, ...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : [])],
-      remediationRoutes: Array.isArray(row.remediationRoutes) ? row.remediationRoutes : [],
+      verificationRoutes: [
+        `${routeBase}/${encodeURIComponent(sourceRowId)}`,
+        ...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : []),
+        ...derivedRoutes,
+      ],
+      remediationRoutes: uniqueValues([...(Array.isArray(row.remediationRoutes) ? row.remediationRoutes : []), ...derivedRoutes]),
       generatedAt: report.generatedAt ?? new Date().toISOString(),
     });
+  });
+}
+
+function rlhf93CompletionAuditDerivedChecklistRowRoutes(report, requirementGroup, sourceRowId, row = {}, routeBase = "/api/release/report") {
+  const operatorActions = rlhf93CompletionAuditDerivedChecklistRowOperatorActions(report, requirementGroup, sourceRowId);
+  return uniqueValues([
+    routeBase,
+    `${routeBase}/${encodeURIComponent(sourceRowId)}`,
+    ...(Array.isArray(row?.routes) ? row.routes : []),
+    ...(Array.isArray(row?.readbackRoutes) ? row.readbackRoutes : []),
+    ...(Array.isArray(row?.remediationRoutes) ? row.remediationRoutes : []),
+    ...(Array.isArray(row?.verificationRoutes) ? row.verificationRoutes : []),
+    ...operatorActions.flatMap(operatorActionItemRoutes),
+    ...operatorActions.flatMap(rlhf93CompletionAuditOperatorActionFilterRoutes),
+  ]);
+}
+
+function rlhf93CompletionAuditDerivedChecklistRowOperatorActions(report, requirementGroup, sourceRowId) {
+  const checklistRowId = rlhf93CompletionAuditDerivedChecklistOperatorRowId(requirementGroup);
+  if (!checklistRowId) return [];
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = (Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? [])).map(
+      operatorActionItemWithExecutionStatus,
+    );
+  return actionItems.filter(
+    (action) =>
+      action.checklistRowId === checklistRowId &&
+      rlhf93CompletionAuditOperatorActionMatchesDerivedRow(action, sourceRowId),
+  );
+}
+
+function rlhf93CompletionAuditDerivedChecklistOperatorRowId(requirementGroup) {
+  return {
+    candidate_generation_intake: "candidate_generation_and_active_learning",
+    label_aggregation_reliability: "label_aggregation_and_reliability",
+    model_evaluation_reproducibility: "model_evaluation_reproducibility",
+  }[requirementGroup] ?? null;
+}
+
+function rlhf93CompletionAuditOperatorActionFilterRoutes(action) {
+  const actionId = action?.actionId ?? action?.id;
+  return uniqueValues([
+    actionId ? `/api/v1/operator-action-items?actionId=${encodeURIComponent(actionId)}` : null,
+    ...(Array.isArray(action?.relatedSubmitActionIds)
+      ? action.relatedSubmitActionIds.map(
+          (relatedSubmitActionId) =>
+            `/api/v1/operator-action-items?relatedSubmitActionId=${encodeURIComponent(relatedSubmitActionId)}`,
+        )
+      : []),
+  ]);
+}
+
+function rlhf93CompletionAuditOperatorActionMatchesDerivedRow(action, sourceRowId) {
+  const source = String(sourceRowId ?? "");
+  if (!source) return false;
+  const values = [
+    action?.id,
+    action?.actionId,
+    action?.artifactKind,
+    action?.artifactType,
+    action?.artifactId,
+    action?.relatedArtifactKind,
+    action?.relatedArtifactId,
+    action?.reason,
+    action?.reviewReason,
+    ...(Array.isArray(action?.reviewReasons) ? action.reviewReasons : []),
+    ...(Array.isArray(action?.relatedSubmitActionIds) ? action.relatedSubmitActionIds : []),
+    ...operatorActionItemRelatedSubmitActions(action).flatMap((related) => [
+      related?.actionId,
+      related?.artifactKind,
+      related?.artifactId,
+    ]),
+  ].filter((value) => typeof value === "string" && value.trim());
+  return values.some((value) => {
+    if (value === source) return true;
+    if (value.endsWith(`:${source}`)) return true;
+    if (value.includes(`:${source}:`)) return true;
+    return value.includes(source);
   });
 }
 
