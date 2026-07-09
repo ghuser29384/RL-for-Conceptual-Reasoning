@@ -902,6 +902,8 @@ const state = {
   workflowTemplateKindFilter: "",
   workflowResourceKeyFilter: "",
   workflowSourceWorkbenchRouteLaneFilter: "",
+  workflowSourceWorkbenchPhaseGateFilter: "",
+  workflowSourceWorkbenchClaimSupportFilter: "",
   workflowMetaphilosophyItemIdFilter: "",
   workflowMetaphilosophyStatusFilter: "",
   workflowMetaphilosophyReadbackSourceFilter: "",
@@ -8753,6 +8755,10 @@ function workflowReadbackPanel(collection) {
                 </select>
               </label>
               <label>
+                <span>Unblocker coverage</span>
+                <input id="workflowPreflightCoverageStatusFilter" type="text" value="${escapeHtml(state.workflowPreflightCoverageStatusFilter)}" placeholder="package_covers_current_unblocker" />
+              </label>
+              <label>
                 <span>Current unblocker</span>
                 <select id="workflowRlhf93HasUnblockerFilter">
                   ${["", "true", "false"]
@@ -8766,6 +8772,22 @@ function workflowReadbackPanel(collection) {
               <label>
                 <span>Route</span>
                 <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/public-dataset-readiness/public_first_ladder_gate" />
+              </label>`
+            : ""
+        }
+        ${
+          collection.id === "metaphilosophy-source-workbench-readiness"
+            ? `<label>
+                <span>Phase gate</span>
+                <input id="workflowSourceWorkbenchPhaseGateFilter" type="text" value="${escapeHtml(state.workflowSourceWorkbenchPhaseGateFilter)}" placeholder="workbench_route_lane_available" />
+              </label>
+              <label>
+                <span>Claim support</span>
+                <input id="workflowSourceWorkbenchClaimSupportFilter" type="text" value="${escapeHtml(state.workflowSourceWorkbenchClaimSupportFilter)}" placeholder="source_derived_release_claims_supported" />
+              </label>
+              <label>
+                <span>Route</span>
+                <input id="workflowRouteFilter" type="text" value="${escapeHtml(state.workflowRouteFilter)}" placeholder="/api/v1/admin/sources/{id}/extract?dryRun=true" />
               </label>`
             : ""
         }
@@ -9017,6 +9039,10 @@ function workflowReadbackPanel(collection) {
           <label>
             <span>Target gap</span>
             <input id="workflowPublicDatasetTargetGapFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetTargetGapFilter)}" placeholder="positions" />
+          </label>
+          <label>
+            <span>Coverage status</span>
+            <input id="workflowPreflightCoverageStatusFilter" type="text" value="${escapeHtml(state.workflowPreflightCoverageStatusFilter)}" placeholder="package_covers_current_unblocker" />
           </label>
           <label>
             <span>Route</span>
@@ -9544,6 +9570,7 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Closed requirements", counts.closedRows ?? "not reported"],
       ["Requirement groups", workflowCountMapSummary(counts.byRequirementGroup)],
       ["Next actions", workflowCountMapSummary(counts.byNextActionKind)],
+      ["Unblocker coverage", workflowCountMapSummary(counts.byUnblockerPreflightCoverageStatus)],
       ["Remaining target records", result.targetGapTotals?.remainingTotal ?? "not reported"],
       ["Unblocker package steps", packageManifest.stepCount ?? "not reported"],
     ];
@@ -9551,10 +9578,26 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
   if (collection.id === "metaphilosophy-source-workbench-readiness") {
     const readiness = result.item ?? (Array.isArray(result.items) ? result.items[0] : null);
     const counts = readiness?.counts ?? {};
+    const aggregateCounts = result.counts ?? {};
     return [
       ["Readiness status", readiness ? humanize(readiness.status ?? "not reported") : "not reported"],
       ["Source-intake status", readiness ? humanize(readiness.sourceIntakeStatus ?? "not reported") : "not reported"],
       ["Source-preparation status", readiness ? humanize(readiness.sourcePreparationStatus ?? "not reported") : "not reported"],
+      [
+        "Claim support",
+        readiness ? humanize(readiness.sourceDerivedReleaseClaimSupportStatus ?? "not reported") : "not reported",
+      ],
+      [
+        "Claim-support states",
+        workflowCountMapSummary(
+          aggregateCounts.filteredBySourceDerivedReleaseClaimSupportStatus ??
+            aggregateCounts.bySourceDerivedReleaseClaimSupportStatus,
+        ),
+      ],
+      [
+        "Phase-gate states",
+        workflowCountMapSummary(aggregateCounts.filteredByPhaseGateStatus ?? aggregateCounts.byPhaseGateStatus),
+      ],
       ["Workbench artifacts", counts.totalSourceWorkbenchArtifacts ?? "not reported"],
       ["Accepted extractions", counts.acceptedForSourcePreparationExtractions ?? "not reported"],
       ["Route lane", humanize(readiness?.sourceWorkbenchPhaseGateStatus ?? readiness?.phaseGateReadiness?.status ?? "not reported")],
@@ -9625,6 +9668,7 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Current blocker", result.currentBlockingStep ? humanize(result.currentBlockingStep.label ?? result.currentBlockingStep.id) : "none"],
       ["Open steps", counts.openRows ?? "not reported"],
       ["Step kinds", workflowCountMapSummary(counts.byStepKind)],
+      ["Coverage states", workflowCountMapSummary(counts.byCoverageStatus)],
       ["Target data route", result.sourceRoutes?.targetDataPackageManifest ?? "not available"],
       ["Document templates route", result.sourceRoutes?.publicDatasetDocumentTemplates ?? "not available"],
     ];
@@ -16162,7 +16206,9 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       if (!operatorEvidencePackageManifestCollection) state.workflowChecklistRowFilter = "";
       state.workflowBlockedByTargetGapIdFilter = "";
       state.workflowTemplateCoverageStatusFilter = "";
-      state.workflowPreflightCoverageStatusFilter = "";
+      if (collection.id !== "public-dataset-package-manifest" && collection.id !== "rlhf93-completion-audit") {
+        state.workflowPreflightCoverageStatusFilter = "";
+      }
       state.workflowGovernanceCoverageStatusFilter = "";
       if (
         collection.id !== "release-artifact-package-template" &&
@@ -16284,6 +16330,10 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (collection.id !== "metaphilosophy-source-workbench-template") {
       state.workflowResourceKeyFilter = "";
       state.workflowSourceWorkbenchRouteLaneFilter = "";
+    }
+    if (collection.id !== "metaphilosophy-source-workbench-readiness") {
+      state.workflowSourceWorkbenchPhaseGateFilter = "";
+      state.workflowSourceWorkbenchClaimSupportFilter = "";
     }
     if (!isMetaphilosophyEvidenceCollection(collection)) {
       state.workflowMetaphilosophyItemIdFilter = "";
@@ -16578,6 +16628,18 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
   });
   document.getElementById("workflowSourceWorkbenchRouteLaneFilter")?.addEventListener("change", (event) => {
     state.workflowSourceWorkbenchRouteLaneFilter = event.target.value;
+    state.workflowCollectionResult = null;
+    state.lastWorkflowReadbackStatus = null;
+    render();
+  });
+  document.getElementById("workflowSourceWorkbenchPhaseGateFilter")?.addEventListener("change", (event) => {
+    state.workflowSourceWorkbenchPhaseGateFilter = event.target.value.trim();
+    state.workflowCollectionResult = null;
+    state.lastWorkflowReadbackStatus = null;
+    render();
+  });
+  document.getElementById("workflowSourceWorkbenchClaimSupportFilter")?.addEventListener("change", (event) => {
+    state.workflowSourceWorkbenchClaimSupportFilter = event.target.value.trim();
     state.workflowCollectionResult = null;
     state.lastWorkflowReadbackStatus = null;
     render();
@@ -18826,11 +18888,12 @@ function isTargetGapCollection(collection) {
 function isWorkflowRouteFilterCollection(collection) {
   return (
     collection.id === "rlhf93-completion-audit" ||
-	    collection.id === "metaphilosophy-source-workbench-template" ||
-	    collection.id === "target-gap-collection-plan" ||
-	    collection.id === "target-data-current-package-manifest" ||
+    collection.id === "metaphilosophy-source-workbench-readiness" ||
+    collection.id === "metaphilosophy-source-workbench-template" ||
+    collection.id === "target-gap-collection-plan" ||
+    collection.id === "target-data-current-package-manifest" ||
     collection.id === "operator-evidence-package-manifest" ||
-	    collection.id === "october-completion-checklist" ||
+    collection.id === "october-completion-checklist" ||
     collection.id === "october-completion-runbook" ||
     collection.id === "release-report-sections" ||
     collection.id === "release-artifact-package-template" ||
@@ -18956,6 +19019,15 @@ function workflowCollectionEndpoint(collection) {
     }
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
+  if (collection.id === "metaphilosophy-source-workbench-readiness") {
+    if (state.workflowSourceWorkbenchPhaseGateFilter) {
+      url.searchParams.set("phaseGateStatus", state.workflowSourceWorkbenchPhaseGateFilter);
+    }
+    if (state.workflowSourceWorkbenchClaimSupportFilter) {
+      url.searchParams.set("sourceDerivedReleaseClaimSupportStatus", state.workflowSourceWorkbenchClaimSupportFilter);
+    }
+    if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
+  }
   if (isMetaphilosophyEvidenceCollection(collection)) {
     if (state.workflowMetaphilosophyItemIdFilter) url.searchParams.set("id", state.workflowMetaphilosophyItemIdFilter);
     if (state.workflowMetaphilosophyStatusFilter) url.searchParams.set("status", state.workflowMetaphilosophyStatusFilter);
@@ -18973,6 +19045,9 @@ function workflowCollectionEndpoint(collection) {
       if (state.workflowRlhf93UnblockerPhaseFilter) url.searchParams.set("unblockerPhase", state.workflowRlhf93UnblockerPhaseFilter);
       if (state.workflowRlhf93UnblockerExecutionFilter) {
         url.searchParams.set("unblockerExecutionStatus", state.workflowRlhf93UnblockerExecutionFilter);
+      }
+      if (state.workflowPreflightCoverageStatusFilter) {
+        url.searchParams.set("unblockerPreflightCoverageStatus", state.workflowPreflightCoverageStatusFilter);
       }
       if (state.workflowRlhf93HasUnblockerFilter) url.searchParams.set("hasCurrentUnblocker", state.workflowRlhf93HasUnblockerFilter);
       if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
@@ -19050,6 +19125,7 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowTemplateKindFilter) url.searchParams.set("stepKind", state.workflowTemplateKindFilter);
     if (state.workflowActionStatusFilter) url.searchParams.set("status", state.workflowActionStatusFilter);
     if (state.workflowPublicDatasetTargetGapFilter) url.searchParams.set("targetGapId", state.workflowPublicDatasetTargetGapFilter);
+    if (state.workflowPreflightCoverageStatusFilter) url.searchParams.set("coverageStatus", state.workflowPreflightCoverageStatusFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if (collection.id === "public-dataset-release-package") {

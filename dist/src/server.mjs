@@ -13803,6 +13803,7 @@ function publicDatasetPackageManifestStep({
     counts,
     preflightCoverageSummary,
     preflightActionSummary,
+    preflightCoverageStatus: counts.coverageStatus ?? preflightCoverageSummary?.status ?? null,
     nextActionRoute,
     readbackItemRoute,
     packageManifestItemRoute,
@@ -13842,6 +13843,7 @@ function publicDatasetPackageManifestFilters(searchParams) {
     stepKind: value("stepKind"),
     status: value("status"),
     readinessRowId: value("readinessRowId"),
+    coverageStatus: value("coverageStatus") ?? value("preflightCoverageStatus"),
     route: value("route"),
     targetGapId: value("targetGapId"),
   };
@@ -13853,6 +13855,7 @@ function publicDatasetPackageManifestMatchesFilters(item, filters) {
     if (key === "id") return item.id === value || item.stepKind === value;
     if (key === "status") return publicDatasetPackageManifestMatchesStatus(item, value);
     if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
+    if (key === "coverageStatus") return publicDatasetPackageManifestCoverageStatuses(item).includes(value);
     if (key === "route") return Array.isArray(item.routes) && item.routes.includes(value);
     if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
     return item?.[key] === value;
@@ -13869,6 +13872,15 @@ function publicDatasetPackageManifestItemIsOpen(item) {
   return item.status !== "ready";
 }
 
+function publicDatasetPackageManifestCoverageStatuses(item) {
+  return uniqueValues([
+    item?.preflightCoverageStatus,
+    item?.counts?.coverageStatus,
+    item?.preflightCoverageSummary?.status,
+    item?.preflightActionSummary?.coverageStatus,
+  ]);
+}
+
 function publicDatasetPackageManifestCounts(items) {
   return {
     rows: items.length,
@@ -13878,6 +13890,7 @@ function publicDatasetPackageManifestCounts(items) {
     byStatus: countItemsBy(items, "status"),
     byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
     byTargetGapId: countExpandedValues(items, "targetGapIds"),
+    byCoverageStatus: countValues(items.flatMap(publicDatasetPackageManifestCoverageStatuses)),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }
@@ -18577,6 +18590,8 @@ function rlhf93CompletionAuditFilters(searchParams) {
     nextActionKind: value("nextActionKind"),
     unblockerPhase: value("unblockerPhase") ?? value("phase"),
     unblockerExecutionStatus: value("unblockerExecutionStatus") ?? value("executionStatus"),
+    unblockerPreflightCoverageStatus:
+      value("unblockerPreflightCoverageStatus") ?? value("preflightCoverageStatus") ?? value("coverageStatus"),
     hasCurrentUnblocker: value("hasCurrentUnblocker") ?? value("currentUnblocker"),
     route: value("route"),
   };
@@ -18598,6 +18613,7 @@ function rlhf93CompletionAuditMatchesFilters(item, filters) {
     if (key === "nextActionKind") return item.nextActionKind === value;
     if (key === "unblockerPhase") return item.unblocker?.phase === value;
     if (key === "unblockerExecutionStatus") return item.unblocker?.executionStatus === value;
+    if (key === "unblockerPreflightCoverageStatus") return item.unblockerPreflightCoverageStatus === value;
     if (key === "hasCurrentUnblocker") return booleanFilterMatches(value, Boolean(item.unblocker));
     if (key === "route") return item.routes.includes(value);
     return String(item?.[key] ?? "") === value;
@@ -18722,6 +18738,7 @@ function rlhf93CompletionAuditCounts(items) {
     byNextActionKind: countItemsBy(items, "nextActionKind"),
     byUnblockerPhase: countValues(items.map((item) => item.unblocker?.phase).filter(Boolean)),
     byUnblockerExecutionStatus: countValues(items.map((item) => item.unblocker?.executionStatus).filter(Boolean)),
+    byUnblockerPreflightCoverageStatus: countItemsBy(items, "unblockerPreflightCoverageStatus"),
     withCurrentUnblocker: items.filter((item) => Boolean(item.unblocker)).length,
     byRoute: countValues(items.flatMap(rlhf93CompletionAuditItemRoutes)),
   };
@@ -18769,6 +18786,16 @@ function metaphilosophySourceWorkbenchReadinessReadback(report, options = {}) {
       filteredClosedRows: items.filter((row) => !metaphilosophyStatusIsOpen(row)).length,
       byStatus: countItemsBy([item], "status"),
       filteredByStatus: countItemsBy(items, "status"),
+      bySourceIntakeStatus: countItemsBy([item], "sourceIntakeStatus"),
+      filteredBySourceIntakeStatus: countItemsBy(items, "sourceIntakeStatus"),
+      bySourcePreparationStatus: countItemsBy([item], "sourcePreparationStatus"),
+      filteredBySourcePreparationStatus: countItemsBy(items, "sourcePreparationStatus"),
+      byPhaseGateStatus: countItemsBy([item], "phaseGateStatus"),
+      filteredByPhaseGateStatus: countItemsBy(items, "phaseGateStatus"),
+      bySourceDerivedReleaseClaimSupportStatus: countItemsBy([item], "sourceDerivedReleaseClaimSupportStatus"),
+      filteredBySourceDerivedReleaseClaimSupportStatus: countItemsBy(items, "sourceDerivedReleaseClaimSupportStatus"),
+      byRoute: countValues(metaphilosophySourceWorkbenchReadinessRoutes(item)),
+      filteredByRoute: countValues(items.flatMap(metaphilosophySourceWorkbenchReadinessRoutes)),
     },
     ...(options.itemId ? { item: items[0] } : {}),
     items,
@@ -20142,8 +20169,13 @@ function metaphilosophySourceWorkbenchReadinessFilters(searchParams) {
     status: value("status"),
     sourceIntakeStatus: value("sourceIntakeStatus"),
     sourcePreparationStatus: value("sourcePreparationStatus"),
-    phaseGateStatus: value("phaseGateStatus"),
+    phaseGateStatus: value("phaseGateStatus") ?? value("sourceWorkbenchPhaseGateStatus"),
+    phaseGateState: value("phaseGateState") ?? value("sourceWorkbenchPhaseGateState"),
+    sourceDerivedReleaseClaimSupportStatus: value("sourceDerivedReleaseClaimSupportStatus") ?? value("releaseClaimSupportStatus"),
+    sourceWorkbenchRouteLaneAvailable: value("sourceWorkbenchRouteLaneAvailable") ?? value("routeLaneAvailable"),
+    sourceWorkbenchDisabledByPhaseGate: value("sourceWorkbenchDisabledByPhaseGate") ?? value("disabledByPhaseGate"),
     usesSourceDerivedItems: value("usesSourceDerivedItems"),
+    route: value("route"),
   };
 }
 
@@ -20415,8 +20447,37 @@ function metaphilosophySourceWorkbenchReadinessMatchesFilters(item, filters) {
     if (!value) return true;
     if (key === "status") return metaphilosophyMatchesStatus(item, value);
     if (key === "usesSourceDerivedItems") return String(item.usesSourceDerivedItems) === value;
+    if (key === "sourceWorkbenchRouteLaneAvailable") return booleanFilterMatches(value, item.sourceWorkbenchRouteLaneAvailable === true);
+    if (key === "sourceWorkbenchDisabledByPhaseGate") return booleanFilterMatches(value, item.sourceWorkbenchDisabledByPhaseGate === true);
+    if (key === "route") return metaphilosophySourceWorkbenchReadinessRoutes(item).includes(value);
     return item?.[key] === value;
   });
+}
+
+function metaphilosophySourceWorkbenchReadinessRoutes(item) {
+  return uniqueValues([
+    "/api/v1/metaphilosophy/source-workbench-readiness",
+    `/api/v1/metaphilosophy/source-workbench-readiness/${encodeURIComponent(item?.id ?? "source-workbench-readiness")}`,
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.adminRoutes) ? item.adminRoutes : []),
+    ...(Array.isArray(item?.sourceIntakeAdminRoutes) ? item.sourceIntakeAdminRoutes : []),
+    ...(Array.isArray(item?.sourcePreparationAdminRoutes) ? item.sourcePreparationAdminRoutes : []),
+    ...(Array.isArray(item?.sourceIntakeJsonlImportRoutes)
+      ? item.sourceIntakeJsonlImportRoutes.flatMap((route) => [route.route, route.dryRunImportRoute, route.validateOnlyImportRoute])
+      : []),
+    ...(Array.isArray(item?.sourceIntakeValidationPlan?.steps)
+      ? item.sourceIntakeValidationPlan.steps.flatMap((step) => [step.route, ...(Array.isArray(step.routes) ? step.routes : [])])
+      : []),
+    ...(Array.isArray(item?.sourcePreparationValidationPlan?.steps)
+      ? item.sourcePreparationValidationPlan.steps.flatMap((step) => [step.route, ...(Array.isArray(step.routes) ? step.routes : [])])
+      : []),
+    item?.sourcePreparationValidationPlan?.workflowGateDefinitionsRoute,
+    item?.sourcePreparationValidationPlan?.workflowPolicy?.gateDefinitionRoute,
+    item?.sourcePreparationValidationPlan?.workflowPolicy?.gateDecisionRoute,
+    ...(Array.isArray(item?.sourcePreparationValidationPlan?.workflowPolicy?.requiredGates)
+      ? item.sourcePreparationValidationPlan.workflowPolicy.requiredGates.map((gate) => gate.readbackRoute)
+      : []),
+  ]);
 }
 
 function metaphilosophyMatchesStatus(item, value) {

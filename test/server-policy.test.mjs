@@ -12247,6 +12247,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageManifest.body.counts.byStatus.blocked_by_target_scale, 1);
   assert.equal(publicDatasetPackageManifest.body.counts.byStatus.review_required, 1);
   assert.equal(publicDatasetPackageManifest.body.counts.byStatus.documentation_not_submitted, 1);
+  assert.equal(publicDatasetPackageManifest.body.counts.byCoverageStatus.package_covers_current_unblocker, 1);
   assert.equal(publicDatasetPackageManifest.body.counts.byRoute["/api/v1/public-dataset-package-manifest"], 6);
   assert.match(publicDatasetPackageManifest.body.policy.scope, /Read-only Dataset v0\.1 package manifest/);
   assert.match(publicDatasetPackageManifest.body.policy.scope, /without creating a Dataset object/);
@@ -12267,6 +12268,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 4834);
   assert.equal(targetDataPackageStep.counts.expectedResourceDelta, 2034);
   assert.equal(targetDataPackageStep.counts.coverageStatus, "package_covers_current_unblocker");
+  assert.equal(targetDataPackageStep.preflightCoverageStatus, "package_covers_current_unblocker");
   assert.equal(targetDataPackageStep.counts.coveredTargetGapCount, 7);
   assert.equal(targetDataPackageStep.counts.projectedRemainingAfterPackage, 0);
   assert.equal(targetDataPackageStep.preflightCoverageSummary.status, "package_covers_current_unblocker");
@@ -12281,6 +12283,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(targetDataPackageStep.routes.includes(targetDataPackageStep.sourcePackageManifestRoute));
   assert.ok(targetDataPackageStep.routes.includes(targetDataPackageStep.sourceRunbookGroupRoute));
   assert.ok(targetDataPackageStep.routes.includes(targetDataPackageStep.sourceActionGroupRoute));
+
+  const publicDatasetPackageCoverageFilter = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-package-manifest?coverageStatus=package_covers_current_unblocker",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageCoverageFilter.status, 200, JSON.stringify(publicDatasetPackageCoverageFilter.body));
+  assert.equal(publicDatasetPackageCoverageFilter.body.count, 1);
+  assert.equal(publicDatasetPackageCoverageFilter.body.items[0].id, "target-data-package");
+  assert.equal(publicDatasetPackageCoverageFilter.body.filteredCounts.byCoverageStatus.package_covers_current_unblocker, 1);
 
   const releaseArtifactPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "release-artifact-package");
   assert.equal(releaseArtifactPackageStep.status, "review_required");
@@ -17770,6 +17782,8 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('["Coverage status", counts.coverageStatus ? humanize(counts.coverageStatus)'));
   assert.ok(appSource.includes('["Projected remaining", counts.projectedRemainingAfterPackage'));
   assert.ok(appSource.includes('url.searchParams.set("stepKind", state.workflowTemplateKindFilter)'));
+  assert.ok(appSource.includes('url.searchParams.set("coverageStatus", state.workflowPreflightCoverageStatusFilter)'));
+  assert.ok(appSource.includes('["Coverage states", workflowCountMapSummary(counts.byCoverageStatus)]'));
   assert.ok(appSource.includes('id: "public-dataset-release-package"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-release-package"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetReleasePackageArtifact"'));
@@ -17938,6 +17952,8 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("metaphilosophyDecisionLogEntryPreviewRow(item)"));
   assert.ok(appSource.includes("rlhf93CompletionAuditPreviewRow(item)"));
   assert.ok(appSource.includes("function rlhf93CompletionAuditPreviewRow(item)"));
+  assert.ok(appSource.includes('url.searchParams.set("unblockerPreflightCoverageStatus", state.workflowPreflightCoverageStatusFilter)'));
+  assert.ok(appSource.includes('["Unblocker coverage", workflowCountMapSummary(counts.byUnblockerPreflightCoverageStatus)]'));
   assert.ok(appSource.includes("item.primaryUnblockerRoute"));
   assert.ok(appSource.includes("item.unblockerRoutes"));
   assert.ok(appSource.includes('["Next action", item.nextActionKind ? humanize(item.nextActionKind) : "not reported"]'));
@@ -17972,6 +17988,18 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('["Readiness status", readiness ? humanize(readiness.status ?? "not reported") : "not reported"]'));
   assert.ok(appSource.includes('["Source-intake status", readiness ? humanize(readiness.sourceIntakeStatus ?? "not reported") : "not reported"]'));
   assert.ok(appSource.includes('["Source-preparation status", readiness ? humanize(readiness.sourcePreparationStatus ?? "not reported") : "not reported"]'));
+  assert.ok(appSource.includes("workflowSourceWorkbenchPhaseGateFilter"));
+  assert.ok(appSource.includes("workflowSourceWorkbenchClaimSupportFilter"));
+  assert.ok(appSource.includes('url.searchParams.set("phaseGateStatus", state.workflowSourceWorkbenchPhaseGateFilter)'));
+  assert.ok(
+    appSource.includes(
+      'url.searchParams.set("sourceDerivedReleaseClaimSupportStatus", state.workflowSourceWorkbenchClaimSupportFilter)',
+    ),
+  );
+  assert.ok(appSource.includes('collection.id === "metaphilosophy-source-workbench-readiness"'));
+  assert.ok(appSource.includes('"Claim-support states"'));
+  assert.ok(appSource.includes("aggregateCounts.filteredBySourceDerivedReleaseClaimSupportStatus"));
+  assert.ok(appSource.includes("aggregateCounts.filteredByPhaseGateStatus"));
   assert.ok(appSource.includes('["Template records returned", counts.templateRecords ?? result.count ?? "not reported"]'));
   assert.ok(appSource.includes('["Readiness route coverage", workflowSourceWorkbenchRouteCoverageSummary(routeCoverage)]'));
   assert.ok(appSource.includes("function workflowCountMapSummary(counts)"));
@@ -18204,6 +18232,7 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("projectedRemainingAfterManifest"));
   assert.ok(architectureDoc.includes("package_covers_current_unblocker"));
   assert.ok(architectureDoc.includes("unblockerPreflightCoverageStatus"));
+  assert.ok(architectureDoc.includes("byUnblockerPreflightCoverageStatus"));
   assert.ok(architectureDoc.includes("unblockerProjectedRemainingAfterPreflightPackage"));
   assert.ok(architectureDoc.includes("dependencyStatus`, `setupRequiredBeforePrimary`, `prerequisiteStepIds`, and `dependentPrimaryStepIds"));
   assert.ok(architectureDoc.includes("packageDependencySummary"));
@@ -18233,6 +18262,8 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("direct unblocker and next-action route aliases"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageManifestStep"));
+  assert.ok(architectureDoc.includes("byCoverageStatus"));
+  assert.ok(architectureDoc.includes("preflight coverage status"));
   assert.ok(architectureDoc.includes("does not create a Dataset object, submit release artifacts or documentation, publish a dataset"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-release-package"));
   assert.ok(architectureDoc.includes("publicDatasetReleasePackageArtifact"));
@@ -18374,6 +18405,10 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("metaphilosophyDecisionLog"));
   assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/decision-log"));
   assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/rlhf93-completion-audit"));
+  assert.ok(architectureDoc.includes("GET /api/v1/metaphilosophy/source-workbench-readiness"));
+  assert.ok(architectureDoc.includes("sourceDerivedReleaseClaimSupportStatus"));
+  assert.ok(architectureDoc.includes("phaseGateStatus"));
+  assert.ok(architectureDoc.includes("copied `route` filters"));
   assert.ok(architectureDoc.includes("reports completion as unproven while target data"));
   assert.ok(architectureDoc.includes("current release-completion unblocker"));
   assert.ok(architectureDoc.includes("package dry-run/validate-only routes"));
@@ -25354,6 +25389,8 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceWorkbenchRouteLaneAvailable, true);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceWorkbenchDisabledByPhaseGate, false);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceWorkbenchPhaseGateStatus, "workbench_route_lane_available");
+  assert.equal(sourceWorkbenchReadiness.body.counts.byPhaseGateStatus.workbench_route_lane_available, 1);
+  assert.equal(sourceWorkbenchReadiness.body.counts.bySourceDerivedReleaseClaimSupportStatus.source_derived_release_claims_supported, 1);
   assert.ok(sourceWorkbenchReadiness.body.items[0].adminRoutes.includes("/api/v1/admin/sources/{id}/extract"));
   assert.ok(sourceWorkbenchReadiness.body.items[0].adminRoutes.includes("/api/v1/admin/extractions/{id}/create-prepared-position"));
   assert.ok(sourceWorkbenchReadiness.body.items[0].adminRoutes.includes("/api/v1/admin/prepared-drafts/{id}/promote"));
@@ -25391,6 +25428,18 @@ test("admin source-preparation aliases create PreparedDrafts from accepted extra
     ],
   );
   assert.match(sourceWorkbenchReadiness.body.items[0].sourceIntakeValidationPlan.validationPolicy, /without appending Phase 1 events/);
+  const sourceClaimSupportedWorkbenchReadiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/source-workbench-readiness?sourceDerivedReleaseClaimSupportStatus=source_derived_release_claims_supported",
+    headers: adminHeaders,
+  });
+  assert.equal(sourceClaimSupportedWorkbenchReadiness.status, 200, JSON.stringify(sourceClaimSupportedWorkbenchReadiness.body));
+  assert.equal(sourceClaimSupportedWorkbenchReadiness.body.count, 1);
+  assert.equal(
+    sourceClaimSupportedWorkbenchReadiness.body.counts.filteredBySourceDerivedReleaseClaimSupportStatus
+      .source_derived_release_claims_supported,
+    1,
+  );
   assert.deepEqual(
     sourceWorkbenchReadiness.body.items[0].sourcePreparationValidationPlan.steps.map((step) => step.stepKind),
     [
@@ -25915,6 +25964,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_release_version_freeze, 1);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.verify_public_first_blockers, 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byUnblockerExecutionStatus.ready_to_collect_data >= 1);
+  assert.ok(rlhf93CompletionAudit.body.counts.byUnblockerPreflightCoverageStatus.package_covers_current_unblocker >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.withCurrentUnblocker >= 1);
 
   const rlhf93CompletionAuditPublicDataset = await invokeApi(context, {
@@ -25983,6 +26033,23 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
     rlhf93CompletionAuditCurrentUnblocker.body.items.every(
       (item) => item.unblocker?.executionStatus === "ready_to_collect_data",
     ),
+  );
+
+  const rlhf93CompletionAuditCoverageFilter = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?unblockerPreflightCoverageStatus=package_covers_current_unblocker",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditCoverageFilter.status, 200, JSON.stringify(rlhf93CompletionAuditCoverageFilter.body));
+  assert.ok(rlhf93CompletionAuditCoverageFilter.body.count >= 1);
+  assert.ok(
+    rlhf93CompletionAuditCoverageFilter.body.items.every(
+      (item) => item.unblockerPreflightCoverageStatus === "package_covers_current_unblocker",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditCoverageFilter.body.filteredCounts.byUnblockerPreflightCoverageStatus
+      .package_covers_current_unblocker >= 1,
   );
 
   const rlhf93CompletionAuditRouteFilter = await invokeApi(context, {
@@ -26567,6 +26634,14 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceWorkbenchRouteLaneAvailable, true);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceWorkbenchDisabledByPhaseGate, false);
   assert.equal(sourceWorkbenchReadiness.body.items[0].sourceWorkbenchPhaseGateStatus, "workbench_route_lane_available");
+  assert.equal(sourceWorkbenchReadiness.body.counts.bySourceIntakeStatus.phase1_source_intake_not_started, 1);
+  assert.equal(sourceWorkbenchReadiness.body.counts.bySourcePreparationStatus.source_preparation_not_started, 1);
+  assert.equal(sourceWorkbenchReadiness.body.counts.byPhaseGateStatus.workbench_route_lane_available, 1);
+  assert.equal(
+    sourceWorkbenchReadiness.body.counts.bySourceDerivedReleaseClaimSupportStatus.not_applicable_without_source_derived_items,
+    1,
+  );
+  assert.equal(sourceWorkbenchReadiness.body.counts.byRoute["/api/v1/admin/extractions/import-jsonl?validateOnly=true"], 1);
   assert.equal(sourceWorkbenchReadiness.body.items[0].counts.sourceIntakeArtifacts, 0);
   assert.equal(sourceWorkbenchReadiness.body.items[0].counts.sourcePreparationArtifacts, 0);
   assert.equal(sourceWorkbenchReadiness.body.items[0].counts.totalSourceWorkbenchArtifacts, 0);
@@ -26631,6 +26706,43 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(closedSourceWorkbenchReadiness.body.counts.filteredOpenRows, 0);
   assert.equal(closedSourceWorkbenchReadiness.body.counts.filteredClosedRows, 1);
   assert.equal(closedSourceWorkbenchReadiness.body.items[0].status, "not_applicable_without_source_derived_items");
+
+  const routeFilteredSourceWorkbenchReadiness = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/source-workbench-readiness?route=${encodeURIComponent(
+      "/api/v1/admin/extractions/import-jsonl?validateOnly=true",
+    )}`,
+    headers: adminHeaders,
+  });
+  assert.equal(routeFilteredSourceWorkbenchReadiness.status, 200, JSON.stringify(routeFilteredSourceWorkbenchReadiness.body));
+  assert.equal(routeFilteredSourceWorkbenchReadiness.body.count, 1);
+  assert.equal(routeFilteredSourceWorkbenchReadiness.body.filters.route, "/api/v1/admin/extractions/import-jsonl?validateOnly=true");
+  assert.equal(
+    routeFilteredSourceWorkbenchReadiness.body.counts.filteredByRoute["/api/v1/admin/extractions/import-jsonl?validateOnly=true"],
+    1,
+  );
+
+  const claimFilteredSourceWorkbenchReadiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/source-workbench-readiness?sourceDerivedReleaseClaimSupportStatus=not_applicable_without_source_derived_items",
+    headers: adminHeaders,
+  });
+  assert.equal(claimFilteredSourceWorkbenchReadiness.status, 200, JSON.stringify(claimFilteredSourceWorkbenchReadiness.body));
+  assert.equal(claimFilteredSourceWorkbenchReadiness.body.count, 1);
+  assert.equal(
+    claimFilteredSourceWorkbenchReadiness.body.counts.filteredBySourceDerivedReleaseClaimSupportStatus
+      .not_applicable_without_source_derived_items,
+    1,
+  );
+
+  const phaseGateFilteredSourceWorkbenchReadiness = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/source-workbench-readiness?phaseGateStatus=workbench_route_lane_available",
+    headers: adminHeaders,
+  });
+  assert.equal(phaseGateFilteredSourceWorkbenchReadiness.status, 200, JSON.stringify(phaseGateFilteredSourceWorkbenchReadiness.body));
+  assert.equal(phaseGateFilteredSourceWorkbenchReadiness.body.count, 1);
+  assert.equal(phaseGateFilteredSourceWorkbenchReadiness.body.counts.filteredByPhaseGateStatus.workbench_route_lane_available, 1);
 
   const sourceWorkbenchReadinessItem = await invokeApi(context, {
     method: "GET",
