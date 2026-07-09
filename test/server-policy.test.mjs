@@ -4792,6 +4792,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/rights-records"],
     ["GET", "/api/v1/rights-records"],
     ["GET", "/api/v1/rights-records/rights-record-smoke"],
+    ["GET", "/api/v1/rights-reviews"],
+    ["GET", "/api/v1/rights-reviews/rights-review-smoke"],
     ["POST", "/api/v1/release-versions"],
     ["GET", "/api/v1/release-versions"],
     ["GET", "/api/v1/release-versions/release-version-smoke"],
@@ -4816,6 +4818,12 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/model-judge-scores"],
     ["GET", "/api/v1/model-judge-scores"],
     ["GET", "/api/v1/model-judge-scores/model-judge-score-smoke"],
+    ["GET", "/api/v1/candidate-batch-model-judge-scores"],
+    ["GET", "/api/v1/candidate-batch-model-judge-scores/candidate-batch-model-judge-scores-smoke"],
+    ["GET", "/api/v1/candidate-reviews"],
+    ["GET", "/api/v1/candidate-reviews/candidate-review-smoke"],
+    ["GET", "/api/v1/candidate-promotions"],
+    ["GET", "/api/v1/candidate-promotions/candidate-promotion-smoke"],
     ["POST", "/api/v1/active-learning-selection-policies"],
     ["GET", "/api/v1/active-learning-selection-policies"],
     ["GET", "/api/v1/active-learning-selection-policies/active-learning-selection-policy-smoke"],
@@ -4835,6 +4843,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/generated-critiques"],
     ["GET", "/api/v1/generated-critiques/generated-critique-smoke"],
     ["POST", "/api/v1/generated-critiques/generated-critique-smoke/promote"],
+    ["GET", "/api/v1/generated-critique-promotions"],
+    ["GET", "/api/v1/generated-critique-promotions/generated-critique-promotion-smoke"],
     ["POST", "/api/v1/generation-evaluation-reports"],
     ["GET", "/api/v1/generation-evaluation-reports"],
     ["GET", "/api/v1/generation-evaluation-reports/generation-report-smoke"],
@@ -4844,9 +4854,17 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/ratings/rating-smoke/check"],
     ["GET", "/api/v1/assignments/assign-ai-base-rate/screen-state"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/flag"],
+    ["GET", "/api/v1/assignment-flags"],
+    ["GET", "/api/v1/assignment-flags/assignment-flag-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/self-screen"],
+    ["GET", "/api/v1/assignment-self-screens"],
+    ["GET", "/api/v1/assignment-self-screens/assignment-self-screen-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/decline"],
+    ["GET", "/api/v1/assignment-declines"],
+    ["GET", "/api/v1/assignment-declines/assignment-decline-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/defer"],
+    ["GET", "/api/v1/assignment-deferrals"],
+    ["GET", "/api/v1/assignment-deferrals/assignment-deferral-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/source-recognition-events"],
     ["POST", "/api/v1/discussions"],
     ["GET", "/api/v1/discussions"],
@@ -5140,6 +5158,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/partial-task-outputs/partial-task-smoke"],
     ["GET", "/api/v1/raters/me/exposure-eligibility"],
     ["POST", "/api/v1/raters/demo-rater/position-cluster-exposures"],
+    ["GET", "/api/v1/rater-position-cluster-exposures"],
+    ["GET", "/api/v1/rater-position-cluster-exposures/rater-position-cluster-exposure-smoke"],
     ["POST", "/api/v1/spot-check-sampling-policies"],
     ["GET", "/api/v1/spot-check-sampling-policies"],
     ["GET", "/api/v1/spot-check-sampling-policies/spot-check-sampling-policy-smoke"],
@@ -6701,6 +6721,7 @@ test("release-readiness operator evidence collections are routed for admin readb
     ["comparabilityClaim", "/api/v1/comparability-claims"],
     ["releaseErratumDisclosurePolicy", "/api/v1/release-erratum-disclosure-policies"],
     ["releaseErratum", "/api/v1/release-errata"],
+    ["rightsReview", "/api/v1/rights-reviews"],
     ["benchmarkSubmissionPolicy", "/api/v1/benchmark-submission-policies"],
     ["benchmarkSubmission", "/api/v1/benchmark-submissions"],
   ];
@@ -6724,6 +6745,7 @@ test("release-readiness operator evidence collections are routed for admin readb
       "/api/v1/release-config-manifest-verifications",
       "release-config-manifest-verification-readback",
     ],
+    ["rightsReview", "/api/v1/rights-reviews", "rights-review-readback"],
   ];
   for (const [resourceKey, url, id] of releaseArtifactReadbacks) {
     await auditStore.appendWorkflowEvent({
@@ -6953,10 +6975,14 @@ test("candidate-generation and active-learning collections are routed for operat
     ["candidateBatch", "/api/v1/candidate-batches"],
     ["candidateCritique", "/api/v1/candidate-critiques"],
     ["modelJudgeScore", "/api/v1/model-judge-scores"],
+    ["modelJudgeScores", "/api/v1/candidate-batch-model-judge-scores"],
+    ["candidateReview", "/api/v1/candidate-reviews"],
+    ["candidatePromotion", "/api/v1/candidate-promotions"],
     ["activeLearningSelectionPolicy", "/api/v1/active-learning-selection-policies"],
     ["activeLearningSelectionAudit", "/api/v1/active-learning-selection-audits"],
     ["critiqueGenerationRun", "/api/v1/critique-generation-runs"],
     ["generatedCritiqueSubmission", "/api/v1/generated-critiques"],
+    ["generatedCritiquePromotion", "/api/v1/generated-critique-promotions"],
     ["generationEvaluationReport", "/api/v1/generation-evaluation-reports"],
   ];
   for (const [resourceKey, url] of candidateGenerationCollections) {
@@ -6974,6 +7000,83 @@ test("candidate-generation and active-learning collections are routed for operat
   const denied = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/candidate-batches",
+    headers: raterHeaders,
+  });
+  assert.equal(denied.status, 403);
+
+  for (const [resourceKey, url, id] of [
+    ["modelJudgeScores", "/api/v1/candidate-batch-model-judge-scores", "candidate-batch-model-judge-scores-readback"],
+    ["candidateReview", "/api/v1/candidate-reviews", "candidate-review-readback"],
+    ["candidatePromotion", "/api/v1/candidate-promotions", "candidate-promotion-readback"],
+    ["generatedCritiquePromotion", "/api/v1/generated-critique-promotions", "generated-critique-promotion-readback"],
+  ]) {
+    await auditStore.appendWorkflowEvent({
+      eventType: `test_${resourceKey}_submitted`,
+      payload: { [resourceKey]: { id, releaseId: "october-2026-demo", status: "submitted" } },
+    });
+    const byId = await invokeApi(context, {
+      method: "GET",
+      url: `${url}/${id}`,
+      headers: adminHeaders,
+    });
+    assert.equal(byId.status, 200, `${resourceKey} by-id`);
+    assert.equal(byId.body.id, id, `${resourceKey} by-id`);
+  }
+});
+
+test("assignment safety event readbacks are routed for audit without broad rater access", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const expertToken = signSessionToken(demoUsers.find((item) => item.id === "demo-expert"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const expertHeaders = { authorization: `Bearer ${expertToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const assignmentSafetyReadbacks = [
+    ["assignmentFlag", "/api/v1/assignment-flags", "assignment-flag-readback"],
+    ["assignmentSelfScreen", "/api/v1/assignment-self-screens", "assignment-self-screen-readback"],
+    ["assignmentDecline", "/api/v1/assignment-declines", "assignment-decline-readback"],
+    ["assignmentDeferral", "/api/v1/assignment-deferrals", "assignment-deferral-readback"],
+    ["raterPositionClusterExposure", "/api/v1/rater-position-cluster-exposures", "rater-position-cluster-exposure-readback"],
+  ];
+
+  for (const [resourceKey, url] of assignmentSafetyReadbacks) {
+    const empty = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: expertHeaders,
+    });
+    assert.equal(empty.status, 200, url);
+    assert.equal(empty.body.resourceKey, resourceKey, url);
+    assert.equal(empty.body.count, 0, url);
+    assert.deepEqual(empty.body.items, [], url);
+  }
+
+  for (const [resourceKey, url, id] of assignmentSafetyReadbacks) {
+    await auditStore.appendWorkflowEvent({
+      eventType: `test_${resourceKey}_submitted`,
+      payload: { [resourceKey]: { id, assignmentId: "assign-ai-base-rate", raterId: "demo-rater", status: "submitted" } },
+    });
+    const collection = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: expertHeaders,
+    });
+    assert.equal(collection.status, 200, `${resourceKey} collection`);
+    assert.equal(collection.body.count, 1, `${resourceKey} collection`);
+    assert.equal(collection.body.items[0].id, id, `${resourceKey} collection`);
+
+    const byId = await invokeApi(context, {
+      method: "GET",
+      url: `${url}/${id}`,
+      headers: expertHeaders,
+    });
+    assert.equal(byId.status, 200, `${resourceKey} by-id`);
+    assert.equal(byId.body.id, id, `${resourceKey} by-id`);
+  }
+
+  const denied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/assignment-declines",
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
