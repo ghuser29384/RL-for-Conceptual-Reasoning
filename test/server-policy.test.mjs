@@ -6906,6 +6906,10 @@ test("policy-bundle and participant-safeguard collections are routed for operato
     ["volunteerIncentivePolicy", "/api/v1/volunteer-incentive-policies", adminHeaders],
     ["raterQualificationRecord", "/api/v1/rater-qualification-records", adminHeaders],
     ["languageArtifactAssessment", "/api/v1/language-artifact-assessments", expertHeaders],
+    ["raterDataConsent", "/api/v1/rater-data-consents", adminHeaders],
+    ["volunteerDataConsentProfile", "/api/v1/volunteer-data-consent-profiles", adminHeaders],
+    ["raterDataRestrictionRequest", "/api/v1/rater-data-restriction-requests", adminHeaders],
+    ["volunteerDataWithdrawalRequest", "/api/v1/volunteer-data-withdrawal-requests", adminHeaders],
   ];
   for (const [resourceKey, url, headers] of policyEvidenceCollections) {
     const response = await invokeApi(context, {
@@ -6919,12 +6923,92 @@ test("policy-bundle and participant-safeguard collections are routed for operato
     assert.deepEqual(response.body.items, [], url);
   }
 
+  const participantGovernanceResources = [
+    [
+      "raterDataConsent",
+      "/api/v1/rater-data-consents",
+      {
+        id: "rater-data-consent-readback",
+        raterId: "demo-rater",
+        noticeVersion: "notice-v1",
+        dataCategoriesCovered: ["rating_metadata"],
+        useScopesAcknowledged: ["internal_research"],
+        consentStatus: "rater_data_consent_notice_complete",
+      },
+    ],
+    [
+      "volunteerDataConsentProfile",
+      "/api/v1/volunteer-data-consent-profiles",
+      {
+        id: "volunteer-data-consent-profile-readback",
+        raterId: "demo-rater",
+        noticeVersion: "notice-v1",
+        dataCategoriesCovered: ["rating_metadata"],
+        useScopesAcknowledged: ["internal_research"],
+        status: "rater_data_consent_notice_complete",
+      },
+    ],
+    [
+      "raterDataRestrictionRequest",
+      "/api/v1/rater-data-restriction-requests",
+      {
+        id: "rater-data-restriction-readback",
+        raterId: "demo-rater",
+        requestType: "future_training_export_exclusion",
+        affectedDataCategories: ["free_text_rationale"],
+        actionTaken: "future_training_export_excluded",
+      },
+    ],
+    [
+      "volunteerDataWithdrawalRequest",
+      "/api/v1/volunteer-data-withdrawal-requests",
+      {
+        id: "volunteer-data-withdrawal-readback",
+        raterId: "demo-rater",
+        requestType: "future_assignment_stop",
+        affectedDataCategories: ["assignment_queue"],
+        actionTaken: "future_assignments_stopped",
+        futureAssignmentStop: true,
+      },
+    ],
+  ];
+  for (const [resourceKey, url, resource] of participantGovernanceResources) {
+    await auditStore.appendWorkflowEvent({
+      eventType: `test_${resourceKey}_submitted`,
+      payload: { [resourceKey]: resource },
+    });
+    const collection = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: adminHeaders,
+    });
+    assert.equal(collection.status, 200, url);
+    assert.equal(collection.body.resourceKey, resourceKey, url);
+    assert.equal(collection.body.count, 1, url);
+    assert.equal(collection.body.items[0].id, resource.id, url);
+
+    const byId = await invokeApi(context, {
+      method: "GET",
+      url: `${url}/${resource.id}`,
+      headers: adminHeaders,
+    });
+    assert.equal(byId.status, 200, `${url}/${resource.id}`);
+    assert.equal(byId.body.id, resource.id, `${url}/${resource.id}`);
+  }
+
   const denied = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/visibility-policies",
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
+
+  const participantGovernanceDenied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/rater-data-consents",
+    headers: raterHeaders,
+  });
+  assert.equal(participantGovernanceDenied.status, 403);
 });
 
 test("rating-control policy collections are routed for operator readback", async () => {
