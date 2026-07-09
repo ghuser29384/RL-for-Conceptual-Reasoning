@@ -17533,6 +17533,34 @@ function rlhf93CompletionAuditNextAction(item, { open, readbackItemRoute } = {})
       nextActionPolicy: item.nextActionPolicy ?? "Inspect the linked requirement and verification routes before appending evidence.",
     };
   }
+  if (open && item?.sourceRowId === "source_intake_and_metaphilosophy") {
+    return {
+      nextActionKind: "review_metaphilosophy_public_dataset_deliverable",
+      nextActionRoute: "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact",
+      nextActionReadbackRoute: "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact",
+      nextActionTemplateRoute: null,
+      nextActionDryRunRoute: null,
+      nextActionValidateOnlyRoute: null,
+      nextActionWriteRoute: null,
+      nextActionVerificationRoute: "/api/v1/public-dataset-readiness?status=open",
+      nextActionPolicy:
+        "Review the public Dataset v0.1 deliverable and its open readiness gates before claiming the source-intake/metaphilosophy checklist row is complete.",
+    };
+  }
+  if (open && item?.sourceRowId === "public_dataset_v0_1_first_artifact") {
+    return {
+      nextActionKind: "review_public_dataset_v0_1_blockers",
+      nextActionRoute: "/api/v1/public-dataset-readiness?status=open",
+      nextActionReadbackRoute: "/api/v1/public-dataset-readiness",
+      nextActionTemplateRoute: null,
+      nextActionDryRunRoute: null,
+      nextActionValidateOnlyRoute: null,
+      nextActionWriteRoute: null,
+      nextActionVerificationRoute: "/api/v1/public-dataset-publication-gate",
+      nextActionPolicy:
+        "Review the open Dataset v0.1 readiness blockers before treating the first-public-artifact deliverable as satisfied.",
+    };
+  }
   const packageManifest = item?.unblocker?.packageManifest ?? null;
   if (open && packageManifest) {
     return {

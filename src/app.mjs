@@ -912,6 +912,7 @@ const state = {
   workflowMetaphilosophyBacklogDirectRequirementFilter: "",
   workflowRlhf93RequirementGroupFilter: "",
   workflowRlhf93RequirementKindFilter: "",
+  workflowRlhf93NextActionKindFilter: "",
   workflowRlhf93SourceStatusFilter: "",
   workflowRlhf93EvidenceFilter: "",
   workflowRlhf93ReviewReasonFilter: "",
@@ -8153,6 +8154,10 @@ function workflowReadbackPanel(collection) {
                 <input id="workflowRlhf93RequirementKindFilter" type="text" value="${escapeHtml(state.workflowRlhf93RequirementKindFilter)}" placeholder="public_documentation" />
               </label>
               <label>
+                <span>Next action</span>
+                <input id="workflowRlhf93NextActionKindFilter" type="text" value="${escapeHtml(state.workflowRlhf93NextActionKindFilter)}" placeholder="validate_public_document" />
+              </label>
+              <label>
                 <span>Source status</span>
                 <input id="workflowRlhf93SourceStatusFilter" type="text" value="${escapeHtml(state.workflowRlhf93SourceStatusFilter)}" placeholder="not_submitted" />
               </label>
@@ -8980,6 +8985,7 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Open requirements", counts.openRows ?? "not reported"],
       ["Closed requirements", counts.closedRows ?? "not reported"],
       ["Requirement groups", workflowCountMapSummary(counts.byRequirementGroup)],
+      ["Next actions", workflowCountMapSummary(counts.byNextActionKind)],
       ["Remaining target records", result.targetGapTotals?.remainingTotal ?? "not reported"],
       ["Unblocker package steps", packageManifest.stepCount ?? "not reported"],
     ];
@@ -15688,6 +15694,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     if (collection.id !== "rlhf93-completion-audit") {
       state.workflowRlhf93RequirementGroupFilter = "";
       state.workflowRlhf93RequirementKindFilter = "";
+      state.workflowRlhf93NextActionKindFilter = "";
       state.workflowRlhf93SourceStatusFilter = "";
       state.workflowRlhf93EvidenceFilter = "";
       state.workflowRlhf93ReviewReasonFilter = "";
@@ -15968,6 +15975,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     ["workflowMetaphilosophyBacklogDirectRequirementFilter", "workflowMetaphilosophyBacklogDirectRequirementFilter", false],
     ["workflowRlhf93RequirementGroupFilter", "workflowRlhf93RequirementGroupFilter", false],
     ["workflowRlhf93RequirementKindFilter", "workflowRlhf93RequirementKindFilter", true],
+    ["workflowRlhf93NextActionKindFilter", "workflowRlhf93NextActionKindFilter", true],
     ["workflowRlhf93SourceStatusFilter", "workflowRlhf93SourceStatusFilter", true],
     ["workflowRlhf93EvidenceFilter", "workflowRlhf93EvidenceFilter", true],
     ["workflowRlhf93ReviewReasonFilter", "workflowRlhf93ReviewReasonFilter", true],
@@ -18335,6 +18343,7 @@ function workflowCollectionEndpoint(collection) {
         url.searchParams.set("requirementGroup", state.workflowRlhf93RequirementGroupFilter);
       }
       if (state.workflowRlhf93RequirementKindFilter) url.searchParams.set("requirementKind", state.workflowRlhf93RequirementKindFilter);
+      if (state.workflowRlhf93NextActionKindFilter) url.searchParams.set("nextActionKind", state.workflowRlhf93NextActionKindFilter);
       if (state.workflowRlhf93SourceStatusFilter) url.searchParams.set("sourceStatus", state.workflowRlhf93SourceStatusFilter);
       if (state.workflowRlhf93EvidenceFilter) url.searchParams.set("evidenceId", state.workflowRlhf93EvidenceFilter);
       if (state.workflowRlhf93ReviewReasonFilter) url.searchParams.set("reviewReason", state.workflowRlhf93ReviewReasonFilter);

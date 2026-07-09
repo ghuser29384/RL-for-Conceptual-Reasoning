@@ -16819,6 +16819,9 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("item.nextActionTemplateRoute"));
   assert.ok(appSource.includes("workflowRlhf93RequirementGroupFilter"));
   assert.ok(appSource.includes('url.searchParams.set("requirementGroup", state.workflowRlhf93RequirementGroupFilter)'));
+  assert.ok(appSource.includes("workflowRlhf93NextActionKindFilter"));
+  assert.ok(appSource.includes('url.searchParams.set("nextActionKind", state.workflowRlhf93NextActionKindFilter)'));
+  assert.ok(appSource.includes('["Next actions", workflowCountMapSummary(counts.byNextActionKind)]'));
   assert.ok(appSource.includes('url.searchParams.set("targetGapId", state.workflowRlhf93TargetGapFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("unblockerExecutionStatus", state.workflowRlhf93UnblockerExecutionFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("hasCurrentUnblocker", state.workflowRlhf93HasUnblockerFilter)'));
@@ -17072,6 +17075,8 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
   assert.ok(architectureDoc.includes("Open readiness rows also carry first-class `nextActionKind`, `nextActionRoute`"));
   assert.ok(architectureDoc.includes("documentation blockers to `publicDatasetDocument` validation"));
+  assert.ok(architectureDoc.includes("Review-required source/metaphilosophy rows blocked by the Dataset v0.1 deliverable"));
+  assert.ok(architectureDoc.includes("open public-dataset readiness filters instead of generic audit inspection rows"));
   assert.ok(architectureDoc.includes("next-action kind"));
   assert.ok(architectureDoc.includes("Open audit rows also carry first-class `nextActionKind`, `nextActionRoute`"));
   assert.ok(architectureDoc.includes("direct unblocker and next-action route aliases"));
@@ -23710,6 +23715,34 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(
     rlhf93CompletionAudit.body.items.some(
       (item) =>
+        item.id === "october-source_intake_and_metaphilosophy" &&
+        item.requirementGroup === "october_completion" &&
+        item.completionState === "open" &&
+        item.nextActionKind === "review_metaphilosophy_public_dataset_deliverable" &&
+        item.nextActionRoute === "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact" &&
+        item.nextActionReadbackRoute === "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact" &&
+        item.nextActionVerificationRoute === "/api/v1/public-dataset-readiness?status=open" &&
+        item.routes.includes(item.nextActionRoute) &&
+        item.routes.includes(item.nextActionVerificationRoute),
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
+        item.id === "metaphilosophy-public_dataset_v0_1_first_artifact" &&
+        item.requirementGroup === "metaphilosophy_deliverable" &&
+        item.completionState === "open" &&
+        item.nextActionKind === "review_public_dataset_v0_1_blockers" &&
+        item.nextActionRoute === "/api/v1/public-dataset-readiness?status=open" &&
+        item.nextActionReadbackRoute === "/api/v1/public-dataset-readiness" &&
+        item.nextActionVerificationRoute === "/api/v1/public-dataset-publication-gate" &&
+        item.routes.includes(item.nextActionRoute) &&
+        item.routes.includes(item.nextActionVerificationRoute),
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
         item.id === "metaphilosophy-decision_log_preserved" &&
         item.requirementGroup === "metaphilosophy_deliverable" &&
         item.completionState === "closed",
@@ -23735,6 +23768,8 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(rlhf93CompletionAudit.body.counts.byReviewReason["datasetCard:not_submitted"] >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byTargetGapId.positions >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_current_unblocker_package >= 1);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.review_metaphilosophy_public_dataset_deliverable, 1);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.review_public_dataset_v0_1_blockers, 1);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_public_document, 2);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_release_version_freeze, 1);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.verify_public_first_blockers, 1);
@@ -23767,6 +23802,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditPublicDocNextActions.status, 200, JSON.stringify(rlhf93CompletionAuditPublicDocNextActions.body));
   assert.equal(rlhf93CompletionAuditPublicDocNextActions.body.count, 2);
   assert.ok(rlhf93CompletionAuditPublicDocNextActions.body.items.every((item) => item.nextActionKind === "validate_public_document"));
+
+  const rlhf93CompletionAuditDatasetReviewNextActions = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?nextActionKind=review_public_dataset_v0_1_blockers",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditDatasetReviewNextActions.status, 200, JSON.stringify(rlhf93CompletionAuditDatasetReviewNextActions.body));
+  assert.equal(rlhf93CompletionAuditDatasetReviewNextActions.body.count, 1);
+  assert.equal(rlhf93CompletionAuditDatasetReviewNextActions.body.items[0].id, "metaphilosophy-public_dataset_v0_1_first_artifact");
 
   const rlhf93CompletionAuditDatasetCardReason = await invokeApi(context, {
     method: "GET",
@@ -23817,6 +23861,24 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditNextActionRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditNextActionRouteFilter.body));
   assert.equal(rlhf93CompletionAuditNextActionRouteFilter.body.count, 2);
   assert.ok(rlhf93CompletionAuditNextActionRouteFilter.body.items.every((item) => item.nextActionKind === "validate_public_document"));
+
+  const rlhf93CompletionAuditOpenPublicDatasetRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/public-dataset-readiness?status=open")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditOpenPublicDatasetRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditOpenPublicDatasetRouteFilter.body));
+  assert.equal(rlhf93CompletionAuditOpenPublicDatasetRouteFilter.body.count, 2);
+  assert.ok(
+    rlhf93CompletionAuditOpenPublicDatasetRouteFilter.body.items.some(
+      (item) => item.id === "october-source_intake_and_metaphilosophy",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditOpenPublicDatasetRouteFilter.body.items.some(
+      (item) => item.id === "metaphilosophy-public_dataset_v0_1_first_artifact",
+    ),
+  );
 
   const rlhf93CompletionAuditUnblockerRouteFilter = await invokeApi(context, {
     method: "GET",
