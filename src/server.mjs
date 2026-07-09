@@ -9308,6 +9308,10 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
   const executionPreview = targetDataCurrentPackageManifestItems(
     Array.isArray(currentBlockingPackageManifest?.executionSequencePreview) ? currentBlockingPackageManifest.executionSequencePreview : [],
   );
+  const preflightDependencySummary = targetDataPackagePreflightDependencySummary(
+    executionPreview,
+    currentBlockingPackageManifest,
+  );
   const filters = targetDataCurrentPackageManifestFilters(options.searchParams);
   const filteredItems = executionPreview.filter((item) => targetDataCurrentPackageManifestMatchesFilters(item, filters));
   const items = options.itemId
@@ -9344,6 +9348,7 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
     status: manifestStatus,
     manifestKind: currentBlockingPackageManifest?.manifestKind ?? null,
     resourceKey: "targetDataCurrentPackageManifest",
+    preflightDependencySummary,
     policy: {
       scope:
         "Read-only current target-data package manifest derived from /api/release/report and the existing target-gap collection plan; it does not submit target data, create templates, append evidence, waive gates, or create completion claims.",
@@ -9369,9 +9374,14 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       setupBeforePrimary: currentBlockingPackageManifest?.setupBeforePrimary === true,
       omittedExecutionStepCount: currentBlockingPackageManifest?.omittedExecutionStepCount ?? 0,
       byStepKind: countItemsBy(executionPreview, "stepKind"),
+      byDependencyStatus: countItemsBy(executionPreview, "dependencyStatus"),
       byTargetGapId: countItemsBy(executionPreview, "targetGapId"),
       byImportRoute: countItemsBy(executionPreview, "importRoute"),
       byRoute: countValues(executionPreview.flatMap(targetDataCurrentPackageManifestStepRoutes)),
+      setupPrerequisiteStepCount: executionPreview.filter((item) => item.dependencyStatus === "setup_prerequisite").length,
+      primaryStepsRequiringSetupCount: executionPreview.filter(
+        (item) => item.dependencyStatus === "primary_requires_setup_prerequisites",
+      ).length,
     },
     filteredCounts: {
       stepCount: items.length,
@@ -9380,9 +9390,14 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       estimatedRecordsRequired: sumNumericField(items, "estimatedRecordsRequired"),
       expectedResourceDelta: sumNumericField(items, "expectedResourceDelta"),
       byStepKind: countItemsBy(items, "stepKind"),
+      byDependencyStatus: countItemsBy(items, "dependencyStatus"),
       byTargetGapId: countItemsBy(items, "targetGapId"),
       byImportRoute: countItemsBy(items, "importRoute"),
       byRoute: countValues(items.flatMap(targetDataCurrentPackageManifestStepRoutes)),
+      setupPrerequisiteStepCount: items.filter((item) => item.dependencyStatus === "setup_prerequisite").length,
+      primaryStepsRequiringSetupCount: items.filter(
+        (item) => item.dependencyStatus === "primary_requires_setup_prerequisites",
+      ).length,
     },
     routes: {
       packageImportRoute: currentBlockingPackageManifest?.packageImportRoute ?? targetDataCollectionPackageImportRoute,
@@ -9408,24 +9423,128 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
 }
 
 function targetDataCurrentPackageManifestItems(items) {
-  return (Array.isArray(items) ? items : []).map((item, index) => {
+  const baseItems = (Array.isArray(items) ? items : []).map((item, index) => {
     const route = item?.importRoute ?? item?.route ?? item?.templateReadbackRoute ?? `step-${index + 1}`;
     const id =
       item?.id ??
       `target-data-current-package-step:${item?.sequence ?? index + 1}:${item?.targetGapId ?? "target-gap"}:${item?.stepKind ?? "step"}:${encodeURIComponent(route)}`;
     const packageManifestItemRoute = `/api/v1/target-gaps/current-package-manifest/${encodeURIComponent(id)}`;
-    const stepItem = {
+    return {
       ...item,
       id,
       packageManifestItemRoute,
     };
-    const routes = targetDataCurrentPackageManifestStepRoutes(stepItem);
-    return {
+  });
+  const setupStepIdsByTargetGapId = new Map();
+  const primaryStepIdsByTargetGapId = new Map();
+  for (const item of baseItems) {
+    const targetGapId = item?.targetGapId;
+    if (!targetGapId) continue;
+    const stepKind = item?.stepKind ?? item?.importKind;
+    if (stepKind === "setup_data_import") {
+      setupStepIdsByTargetGapId.set(targetGapId, [...(setupStepIdsByTargetGapId.get(targetGapId) ?? []), item.id]);
+    }
+    if (stepKind === "primary_data_import") {
+      primaryStepIdsByTargetGapId.set(targetGapId, [...(primaryStepIdsByTargetGapId.get(targetGapId) ?? []), item.id]);
+    }
+  }
+  return baseItems.map((stepItem) => {
+    const targetGapId = stepItem?.targetGapId;
+    const stepKind = stepItem?.stepKind ?? stepItem?.importKind;
+    const setupStepIds = targetGapId ? setupStepIdsByTargetGapId.get(targetGapId) ?? [] : [];
+    const primaryStepIds = targetGapId ? primaryStepIdsByTargetGapId.get(targetGapId) ?? [] : [];
+    const isSetupStep = stepKind === "setup_data_import";
+    const isPrimaryStep = stepKind === "primary_data_import";
+    const prerequisiteStepIds = isPrimaryStep ? setupStepIds : [];
+    const dependentPrimaryStepIds = isSetupStep ? primaryStepIds : [];
+    const dependencyStatus = isSetupStep
+      ? "setup_prerequisite"
+      : isPrimaryStep && prerequisiteStepIds.length
+        ? "primary_requires_setup_prerequisites"
+        : isPrimaryStep
+          ? "primary_no_setup_prerequisite"
+          : "not_target_data_import_step";
+    const preflightOrderPolicy = isSetupStep
+      ? "Validate and append this setup import before validating the dependent primary import for the same target gap."
+      : dependencyStatus === "primary_requires_setup_prerequisites"
+        ? "Validate prerequisite setup imports first, then validate this primary import; only primary imports can reduce target-gap remaining counts."
+        : dependencyStatus === "primary_no_setup_prerequisite"
+          ? "Validate this primary import with real data; it can reduce the target-gap remaining count after append and release-report recomputation."
+          : "Validate this package step only through its listed route and verify completion through /api/release/report.";
+    const enrichedStepItem = {
       ...stepItem,
+      dependencyStatus,
+      prerequisiteStepIds,
+      dependentPrimaryStepIds,
+      setupRequiredBeforePrimary: prerequisiteStepIds.length > 0 || dependentPrimaryStepIds.length > 0,
+      preflightOrderPolicy,
+    };
+    const routes = targetDataCurrentPackageManifestStepRoutes(enrichedStepItem);
+    return {
+      ...enrichedStepItem,
       routes,
       routeCount: routes.length,
     };
   });
+}
+
+function targetDataPackagePreflightDependencySummary(items = [], manifest = {}) {
+  const setupSteps = items.filter((item) => item.dependencyStatus === "setup_prerequisite");
+  const primarySteps = items.filter(
+    (item) =>
+      item.dependencyStatus === "primary_requires_setup_prerequisites" ||
+      item.dependencyStatus === "primary_no_setup_prerequisite",
+  );
+  const primaryStepsWithSetup = primarySteps.filter((item) => Array.isArray(item.prerequisiteStepIds) && item.prerequisiteStepIds.length > 0);
+  const targetGapSummaries = uniqueValues(items.map((item) => item.targetGapId).filter(Boolean)).map((targetGapId) => {
+    const targetGapItems = items.filter((item) => item.targetGapId === targetGapId);
+    const setupTargetGapSteps = targetGapItems.filter((item) => item.dependencyStatus === "setup_prerequisite");
+    const primaryTargetGapSteps = targetGapItems.filter(
+      (item) =>
+        item.dependencyStatus === "primary_requires_setup_prerequisites" ||
+        item.dependencyStatus === "primary_no_setup_prerequisite",
+    );
+    return {
+      targetGapId,
+      setupStepIds: setupTargetGapSteps.map((item) => item.id),
+      primaryStepIds: primaryTargetGapSteps.map((item) => item.id),
+      setupStepCount: setupTargetGapSteps.length,
+      primaryStepCount: primaryTargetGapSteps.length,
+      setupRequiredBeforePrimary: setupTargetGapSteps.length > 0 && primaryTargetGapSteps.length > 0,
+      dependencyStatus:
+        setupTargetGapSteps.length > 0 && primaryTargetGapSteps.length > 0
+          ? "setup_before_primary_required"
+          : setupTargetGapSteps.length > 0
+            ? "setup_only"
+            : "primary_ready_without_setup",
+      estimatedSetupRecordsRequired: sumNumericField(setupTargetGapSteps, "estimatedRecordsRequired"),
+      estimatedPrimaryRecordsRequired: sumNumericField(primaryTargetGapSteps, "estimatedRecordsRequired"),
+      expectedResourceDelta: sumNumericField(primaryTargetGapSteps, "expectedResourceDelta"),
+    };
+  });
+  return {
+    status:
+      setupSteps.length > 0 && primaryStepsWithSetup.length > 0
+        ? "setup_prerequisites_required_before_primary_imports"
+        : setupSteps.length > 0
+          ? "setup_prerequisites_present"
+          : "primary_imports_ready_for_validation",
+    setupBeforePrimary: manifest?.setupBeforePrimary === true || primaryStepsWithSetup.length > 0,
+    setupStepCount: setupSteps.length,
+    primaryStepCount: primarySteps.length,
+    primaryStepsRequiringSetupCount: primaryStepsWithSetup.length,
+    setupStepIds: setupSteps.map((item) => item.id),
+    primaryStepIds: primarySteps.map((item) => item.id),
+    primaryStepIdsRequiringSetup: primaryStepsWithSetup.map((item) => item.id),
+    estimatedSetupRecordsRequired: manifest?.estimatedSetupRecordsRequired ?? sumNumericField(setupSteps, "estimatedRecordsRequired"),
+    estimatedPrimaryRecordsRequired: manifest?.estimatedPrimaryRecordsRequired ?? sumNumericField(primarySteps, "estimatedRecordsRequired"),
+    expectedSetupResourceDelta: manifest?.expectedSetupResourceDelta ?? sumNumericField(setupSteps, "expectedResourceDelta"),
+    expectedPrimaryResourceDelta: manifest?.expectedPrimaryResourceDelta ?? sumNumericField(primarySteps, "expectedResourceDelta"),
+    expectedResourceDelta: manifest?.expectedResourceDelta ?? sumNumericField(primarySteps, "expectedResourceDelta"),
+    targetGapSummaries,
+    validationOrderPolicy:
+      "Run setup prerequisite imports before their dependent primary imports; setup imports prepare assignments/context and do not close target gaps, while primary imports can reduce remaining target counts only after real data append and /api/release/report recomputation.",
+  };
 }
 
 function targetDataCurrentPackageManifestFilters(searchParams) {
@@ -9438,6 +9557,8 @@ function targetDataCurrentPackageManifestFilters(searchParams) {
     stepKind: value("stepKind") ?? value("importKind"),
     checklistRowId: value("checklistRowId"),
     actionId: value("actionId"),
+    dependencyStatus: value("dependencyStatus"),
+    setupRequiredBeforePrimary: value("setupRequiredBeforePrimary") ?? value("requiresSetup"),
     importRoute: value("importRoute"),
     route: value("route"),
   };
@@ -9448,6 +9569,7 @@ function targetDataCurrentPackageManifestMatchesFilters(item, filters) {
     if (!value) return true;
     if (key === "stepKind") return item?.stepKind === value || item?.importKind === value;
     if (key === "route") return targetDataCurrentPackageManifestStepRoutes(item).includes(value);
+    if (key === "setupRequiredBeforePrimary") return booleanFilterMatches(value, item?.setupRequiredBeforePrimary === true);
     return item?.[key] === value;
   });
 }
@@ -11894,6 +12016,7 @@ function releaseVersionManifestReadback(report, options = {}) {
     targetScaleStatus: manifest.targetScaleStatus ?? null,
     linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
     resourceKey: "releaseVersionManifestCheck",
+    releaseFreezePreflightSummary: releaseVersionManifestFreezePreflightSummary(allItems, manifest, report),
     policy: {
       scope:
         "Read-only RLHF91 release-version manifest projection derived from /api/release/report; it exposes computed freeze, target-scale, artifact-link, and contract checks without creating release versions, release freezes, policy decisions, artifacts, target data, or release claims.",
@@ -12045,7 +12168,132 @@ function releaseVersionManifestItems(report, manifest) {
       submittedReleaseVersionReadbackRoute,
     });
   });
-  return items;
+  return items.map((item) => releaseVersionManifestItemWithFreezeDependency(item));
+}
+
+function releaseVersionManifestItemWithFreezeDependency(item) {
+  const checkKind = item?.checkKind;
+  const status = String(item?.status ?? "");
+  let freezeDependencyStatus = "release_freeze_dependency_not_applicable";
+  let releaseFreezePrerequisiteKind = checkKind ?? "unknown";
+  if (checkKind === "manifest_summary") {
+    releaseFreezePrerequisiteKind = "release_version";
+    freezeDependencyStatus = item?.submittedId ? "release_version_submitted" : "release_version_not_submitted";
+  } else if (checkKind === "freeze_evidence") {
+    releaseFreezePrerequisiteKind = "release_freeze";
+    freezeDependencyStatus = item?.submittedId ? "release_freeze_submitted" : "release_freeze_not_submitted";
+  } else if (checkKind === "target_scale") {
+    releaseFreezePrerequisiteKind = "target_scale";
+    freezeDependencyStatus =
+      item?.targetScaleStatus === "target_scale_met" || item?.currentStatus === "complete_against_october_target"
+        ? "target_scale_ready"
+        : "target_scale_incomplete";
+  } else if (checkKind === "linked_artifact") {
+    releaseFreezePrerequisiteKind = "linked_artifact";
+    freezeDependencyStatus = status === "pass" || status === "linked_artifact_current"
+      ? "linked_artifact_ready"
+      : status.includes("mismatch")
+        ? "linked_artifact_mismatch"
+        : status.includes("missing")
+          ? "linked_artifact_missing"
+          : "linked_artifact_review_required";
+  } else if (checkKind === "release_version_contract") {
+    releaseFreezePrerequisiteKind = "release_version_contract";
+    freezeDependencyStatus = releaseVersionManifestItemIsOpen(item) ? "release_version_contract_open" : "release_version_contract_passed";
+  }
+  const blocksReleaseFreeze = ![
+    "release_version_submitted",
+    "release_freeze_submitted",
+    "target_scale_ready",
+    "linked_artifact_ready",
+    "release_version_contract_passed",
+    "release_freeze_dependency_not_applicable",
+  ].includes(freezeDependencyStatus);
+  const releaseFreezeDependencyPolicy = blocksReleaseFreeze
+    ? releaseVersionManifestFreezeDependencyPolicy(freezeDependencyStatus)
+    : "This prerequisite is satisfied for release-freeze preflight; verify the full manifest before freezing.";
+  return {
+    ...item,
+    freezeDependencyStatus,
+    releaseFreezePrerequisiteKind,
+    blocksReleaseFreeze,
+    releaseFreezeDependencyPolicy,
+  };
+}
+
+function releaseVersionManifestFreezeDependencyPolicy(status) {
+  if (status === "target_scale_incomplete") {
+    return "Collect and validate the remaining target data before submitting a release freeze; target-scale gaps remain authoritative in /api/release/report.";
+  }
+  if (status === "linked_artifact_missing") {
+    return "Submit and verify the missing linked release artifact before treating the release version as freeze-ready.";
+  }
+  if (status === "linked_artifact_mismatch") {
+    return "Resolve the submitted artifact id mismatch against the current release manifest before freezing.";
+  }
+  if (status === "release_version_not_submitted") {
+    return "Submit a reviewed ReleaseVersion record before submitting ReleaseFreeze evidence.";
+  }
+  if (status === "release_freeze_not_submitted") {
+    return "Submit ReleaseFreeze evidence only after target scale, linked artifacts, and release-version checks are current.";
+  }
+  if (status === "release_version_contract_open") {
+    return "Resolve the release-version contract check before treating freeze preflight as clear.";
+  }
+  return "Review this release-freeze prerequisite before submitting freeze evidence.";
+}
+
+function releaseVersionManifestFreezePreflightSummary(items = [], manifest = {}, report = {}) {
+  const targetScaleRows = items.filter((item) => item.releaseFreezePrerequisiteKind === "target_scale");
+  const linkedArtifactRows = items.filter((item) => item.releaseFreezePrerequisiteKind === "linked_artifact");
+  const contractRows = items.filter((item) => item.releaseFreezePrerequisiteKind === "release_version_contract");
+  const missingLinkedArtifactRows = linkedArtifactRows.filter((item) => item.freezeDependencyStatus === "linked_artifact_missing");
+  const mismatchedLinkedArtifactRows = linkedArtifactRows.filter((item) => item.freezeDependencyStatus === "linked_artifact_mismatch");
+  const openContractRows = contractRows.filter((item) => item.freezeDependencyStatus === "release_version_contract_open");
+  const blockingRows = items.filter((item) => item.blocksReleaseFreeze);
+  const targetScaleReady =
+    manifest?.targetScaleStatus === "target_scale_met" ||
+    manifest?.currentStatus === "complete_against_october_target" ||
+    report?.currentStatus === "complete_against_october_target";
+  const releaseVersionSubmitted = Boolean(manifest?.submittedReleaseVersionId);
+  const releaseFreezeSubmitted = Boolean(manifest?.submittedReleaseFreezeId);
+  const linkedArtifactsReady = missingLinkedArtifactRows.length === 0 && mismatchedLinkedArtifactRows.length === 0;
+  const status = !targetScaleReady && !linkedArtifactsReady
+    ? "release_freeze_blocked_by_target_scale_and_artifact_links"
+    : !targetScaleReady
+      ? "release_freeze_blocked_by_target_scale"
+      : !linkedArtifactsReady
+        ? "release_freeze_blocked_by_artifact_links"
+        : !releaseVersionSubmitted
+          ? "release_freeze_blocked_by_missing_release_version"
+          : !releaseFreezeSubmitted
+            ? "release_freeze_evidence_not_submitted"
+            : openContractRows.length
+              ? "release_freeze_blocked_by_contract_checks"
+              : "release_freeze_preflight_clear";
+  return {
+    status,
+    targetScaleReady,
+    linkedArtifactsReady,
+    releaseVersionSubmitted,
+    releaseFreezeSubmitted,
+    openDependencyRows: blockingRows.length,
+    targetScaleDependencyRows: targetScaleRows.length,
+    missingLinkedArtifactRows: missingLinkedArtifactRows.length,
+    mismatchedLinkedArtifactRows: mismatchedLinkedArtifactRows.length,
+    openContractRows: openContractRows.length,
+    blockingDependencyStatuses: countItemsBy(blockingRows, "freezeDependencyStatus"),
+    missingLinkedArtifacts: missingLinkedArtifactRows.map((item) => ({
+      artifact: item.artifact,
+      expectedId: item.expectedId ?? null,
+      submittedId: item.submittedId ?? null,
+      expectedArtifactReadbackRoute: item.expectedArtifactReadbackRoute ?? null,
+    })),
+    targetGapIds: uniqueValues(items.flatMap((item) => (Array.isArray(item.targetGapIds) ? item.targetGapIds : []))),
+    remainingTargetRecords: manifest?.targetGaps?.totals?.remainingTotal ?? null,
+    validationOrderPolicy:
+      "Freeze only after target-scale gaps are closed, linked release artifacts are submitted and current, ReleaseVersion evidence is recorded, ReleaseFreeze evidence is validated, and /api/release/report recomputes the release as freeze-ready.",
+  };
 }
 
 function releaseVersionManifestArtifactReadbackRoute(artifact, id, manifest = {}) {
@@ -12074,6 +12322,7 @@ function releaseVersionManifestFilters(searchParams) {
     checkKind: value("checkKind"),
     artifact: value("artifact") ?? value("artifactKind"),
     status: value("status"),
+    freezeDependencyStatus: value("freezeDependencyStatus") ?? value("dependencyStatus"),
     expectedId: value("expectedId"),
     submittedId: value("submittedId"),
     targetGapId: value("targetGapId"),
@@ -12144,6 +12393,8 @@ function releaseVersionManifestCounts(items) {
     targetScaleRows: items.filter((item) => item.checkKind === "target_scale").length,
     freezeRows: items.filter((item) => item.checkKind === "freeze_evidence").length,
     byCheckKind: countItemsBy(items, "checkKind"),
+    byFreezeDependencyStatus: countItemsBy(items, "freezeDependencyStatus"),
+    blockingReleaseFreezeRows: items.filter((item) => item.blocksReleaseFreeze).length,
     byArtifact: countItemsBy(items, "artifact"),
     byStatus: countItemsBy(items, "status"),
     byRoute: countValues(items.flatMap(releaseVersionManifestItemRoutes)),
@@ -13918,6 +14169,12 @@ function publicDatasetPublicationGateReadback(report, options = {}) {
   const packageManifest = publicDatasetPackageManifestReadback(report);
   const releasePackage = publicDatasetReleasePackageReadback(report);
   const downstreamLaunches = publicDatasetDownstreamLaunchGuardReadback(report);
+  const publicationPreflightSummary = publicDatasetPublicationPreflightSummary(allItems, {
+    packageManifest,
+    releasePackage,
+    downstreamLaunches,
+    report,
+  });
   return {
     id: `public-dataset-publication-gate-${report.releaseId ?? releaseId}`,
     releaseId: report.releaseId ?? releaseId,
@@ -13933,6 +14190,7 @@ function publicDatasetPublicationGateReadback(report, options = {}) {
     publicationGateStatus: currentBlockingGate ? "public_dataset_publication_blocked" : "public_dataset_publication_ready_for_governed_review",
     publicationBlocked: Boolean(currentBlockingGate),
     publicationActionAvailable: false,
+    publicationPreflightSummary,
     currentBlockingGateId: currentBlockingGate?.id ?? null,
     currentBlockingGate,
     policy: {
@@ -14064,6 +14322,15 @@ function publicDatasetPublicationGateItem({
     ]),
   );
   const downstreamArtifacts = uniqueValues(downstreamRows.map((launch) => launch.downstreamArtifact).filter(Boolean));
+  const publicationDependencyStatus = publicDatasetPublicationDependencyStatus({
+    definition,
+    status,
+    blockingReadinessRows,
+    blockingPackageSteps,
+    blockingReleaseArtifacts,
+    blockingDownstreamRows,
+  });
+  const publicationDependencyPolicy = publicDatasetPublicationDependencyPolicy(publicationDependencyStatus);
   const readbackItemRoute = `/api/v1/public-dataset-publication-gate/${encodeURIComponent(definition.id)}`;
   const routes = uniqueValues([
     "/api/v1/public-dataset-publication-gate",
@@ -14091,6 +14358,8 @@ function publicDatasetPublicationGateItem({
     gateKind: definition.gateKind,
     label: definition.label,
     status,
+    publicationDependencyStatus,
+    publicationDependencyPolicy,
     readbackItemRoute,
     gateOpen: status !== "ready",
     publicationBlocked: status !== "ready",
@@ -14168,6 +14437,101 @@ function publicDatasetPublicationGateItem({
   };
 }
 
+function publicDatasetPublicationDependencyStatus({
+  definition,
+  status,
+  blockingReadinessRows,
+  blockingPackageSteps,
+  blockingReleaseArtifacts,
+  blockingDownstreamRows,
+}) {
+  if (status === "ready") return "publication_dependency_ready";
+  const statuses = [
+    ...blockingReadinessRows.map((row) => row.status),
+    ...blockingPackageSteps.map((step) => step.status),
+    ...blockingReleaseArtifacts.map((artifact) => artifact.status),
+    ...blockingDownstreamRows.map((launch) => launch.status),
+  ].map((item) => String(item ?? ""));
+  if (statuses.includes("blocked_by_target_scale")) return "publication_blocked_by_target_scale";
+  if (statuses.includes("documentation_not_submitted")) return "publication_blocked_by_public_documentation";
+  if (statuses.includes("blocked_by_release_freeze")) return "publication_blocked_by_release_freeze";
+  if (
+    definition?.gateKind === "public_first_downstream_hold" ||
+    statuses.some((item) => item.includes("downstream") || item.includes("launch"))
+  ) {
+    return "publication_blocked_by_downstream_hold";
+  }
+  if (statuses.some((item) => item.includes("review_required"))) return "publication_blocked_by_review";
+  return "publication_blocked_by_open_gate";
+}
+
+function publicDatasetPublicationDependencyPolicy(status) {
+  if (status === "publication_dependency_ready") {
+    return "This gate is ready, but publication still requires every Dataset v0.1 gate to be ready and governed review to approve a publish action.";
+  }
+  if (status === "publication_blocked_by_target_scale") {
+    return "Complete and verify the target-data package before treating Dataset v0.1 publication as ready.";
+  }
+  if (status === "publication_blocked_by_public_documentation") {
+    return "Submit and validate the dataset card and methodology report as publicDatasetDocument evidence before publication review.";
+  }
+  if (status === "publication_blocked_by_release_freeze") {
+    return "Submit and verify ReleaseVersion and ReleaseFreeze evidence before Dataset v0.1 publication review.";
+  }
+  if (status === "publication_blocked_by_downstream_hold") {
+    return "Keep downstream public surfaces held until Dataset v0.1 target data, documentation, release freeze, and exclusion gates are ready.";
+  }
+  if (status === "publication_blocked_by_review") {
+    return "Resolve the open review-required publication gate before considering a publish action.";
+  }
+  return "Resolve all open Dataset v0.1 publication gate blockers before exposing or using a publish action.";
+}
+
+function publicDatasetPublicationPreflightSummary(items = [], context = {}) {
+  const openItems = items.filter(publicDatasetPublicationGateItemIsOpen);
+  const readyItems = items.filter((item) => item.status === "ready");
+  const targetScaleBlockedRows = items.filter((item) => item.publicationDependencyStatus === "publication_blocked_by_target_scale");
+  const documentationBlockedRows = items.filter((item) => item.publicationDependencyStatus === "publication_blocked_by_public_documentation");
+  const releaseFreezeBlockedRows = items.filter((item) => item.publicationDependencyStatus === "publication_blocked_by_release_freeze");
+  const downstreamHoldRows = items.filter((item) => item.publicationDependencyStatus === "publication_blocked_by_downstream_hold");
+  const publicationActionBoundary = items.find((item) => item.id === "publication-action-boundary") ?? null;
+  const publicationReady = openItems.length === 0 && publicationActionBoundary?.publicationActionAvailable === true;
+  return {
+    status: publicationReady
+      ? "publication_ready_for_governed_action"
+      : openItems.length
+        ? "publication_blocked_by_open_dataset_v0_1_gates"
+        : "publication_gates_ready_but_publish_action_not_exposed",
+    publicationBlocked: openItems.length > 0,
+    publicationActionAvailable: Boolean(publicationActionBoundary?.publicationActionAvailable),
+    openGateCount: openItems.length,
+    readyGateCount: readyItems.length,
+    targetScaleBlockedGateCount: targetScaleBlockedRows.length,
+    publicDocumentationBlockedGateCount: documentationBlockedRows.length,
+    releaseFreezeBlockedGateCount: releaseFreezeBlockedRows.length,
+    downstreamHoldGateCount: downstreamHoldRows.length,
+    currentBlockingGateId: openItems[0]?.id ?? null,
+    currentBlockingGateKind: openItems[0]?.gateKind ?? null,
+    currentBlockingDependencyStatus: openItems[0]?.publicationDependencyStatus ?? null,
+    dependencyStatusCounts: countItemsBy(items, "publicationDependencyStatus"),
+    blockingGateIds: openItems.map((item) => item.id),
+    blockingReadinessRowIds: uniqueValues(openItems.flatMap((item) => item.blockingReadinessRowIds ?? [])),
+    blockingPackageStepIds: uniqueValues(openItems.flatMap((item) => item.blockingPackageStepIds ?? [])),
+    blockingReleasePackageArtifactIds: uniqueValues(openItems.flatMap((item) => item.blockingReleasePackageArtifactIds ?? [])),
+    blockingDownstreamLaunchIds: uniqueValues(openItems.flatMap((item) => item.blockingDownstreamLaunchIds ?? [])),
+    sourcePackageManifestRoutes: uniqueValues(openItems.flatMap((item) => item.sourcePackageManifestRoutes ?? [])),
+    sourceRunbookGroupRoutes: uniqueValues(openItems.flatMap((item) => item.sourceRunbookGroupRoutes ?? [])),
+    sourceActionGroupRoutes: uniqueValues(openItems.flatMap((item) => item.sourceActionGroupRoutes ?? [])),
+    targetGapIds: uniqueValues(openItems.flatMap((item) => item.targetGapIds ?? [])),
+    releaseUseStatus: context.report?.publicDatasetReadiness?.releaseUseStatus ?? context.report?.currentStatus ?? null,
+    packageStatus: context.packageManifest?.packageStatus ?? null,
+    releasePackageStatus: context.releasePackage?.releasePackageStatus ?? null,
+    launchGuardStatus: context.downstreamLaunches?.launchGuardStatus ?? null,
+    validationOrderPolicy:
+      "Publication stays unavailable until target data, release artifacts, public documentation, hidden/protected exclusions, release freeze, and downstream-hold gates are ready; this preflight never publishes the dataset or waives governance.",
+  };
+}
+
 function publicDatasetPublicationGateStatus({
   blockingReadinessRows,
   blockingPackageSteps,
@@ -14200,6 +14564,7 @@ function publicDatasetPublicationGateFilters(searchParams) {
     id: value("id"),
     gateKind: value("gateKind"),
     status: value("status"),
+    publicationDependencyStatus: value("publicationDependencyStatus") ?? value("dependencyStatus"),
     readinessRowId: value("readinessRowId"),
     packageStepId: value("packageStepId"),
     releasePackageArtifactId: value("releasePackageArtifactId"),
@@ -14213,6 +14578,7 @@ function publicDatasetPublicationGateMatchesFilters(item, filters) {
     if (!value) return true;
     if (key === "id") return item.id === value || item.gateKind === value;
     if (key === "status") return publicDatasetPublicationGateMatchesStatus(item, value);
+    if (key === "publicationDependencyStatus") return item.publicationDependencyStatus === value;
     if (key === "readinessRowId") return Array.isArray(item.readinessRowIds) && item.readinessRowIds.includes(value);
     if (key === "packageStepId") return Array.isArray(item.packageStepIds) && item.packageStepIds.includes(value);
     if (key === "releasePackageArtifactId") {
@@ -14242,6 +14608,7 @@ function publicDatasetPublicationGateCounts(items) {
     publicationActionAvailableRows: items.filter((item) => item.publicationActionAvailable === true).length,
     byGateKind: countItemsBy(items, "gateKind"),
     byStatus: countItemsBy(items, "status"),
+    byPublicationDependencyStatus: countItemsBy(items, "publicationDependencyStatus"),
     byReadinessRowId: countExpandedValues(items, "readinessRowIds"),
     byPackageStepId: countExpandedValues(items, "packageStepIds"),
     byReleasePackageArtifactId: countExpandedValues(items, "releasePackageArtifactIds"),

@@ -896,6 +896,7 @@ const state = {
   workflowTargetCollectionSetupFilter: "",
   workflowTargetCollectionDuplicateFilter: "",
   workflowTargetPackageImportRouteFilter: "",
+  workflowTargetPackageDependencyFilter: "",
   workflowTargetDataTemplateExpand: false,
   workflowTargetDataTemplateMaxExpandedRecords: "100",
   workflowTemplateKindFilter: "",
@@ -946,12 +947,14 @@ const state = {
   workflowReleaseManifestStatusFilter: "",
   workflowReleaseManifestCheckKindFilter: "",
   workflowReleaseManifestTargetGapFilter: "",
+  workflowReleaseManifestDependencyFilter: "",
   workflowPublicDatasetGateKindFilter: "",
   workflowPublicDatasetStatusFilter: "",
   workflowPublicDatasetEvidenceFilter: "",
   workflowPublicDatasetReviewReasonFilter: "",
   workflowPublicDatasetTargetGapFilter: "",
   workflowPublicDatasetDownstreamFilter: "",
+  workflowPublicDatasetPublicationDependencyFilter: "",
   workflowPublicDatasetDocumentKindFilter: "",
   workflowPublicDatasetDocumentStatusFilter: "",
   workflowRaterProfileRaterFilter: "",
@@ -8011,6 +8014,17 @@ function workflowReadbackPanel(collection) {
             <input id="workflowActionIdFilter" type="text" value="${escapeHtml(state.workflowActionIdFilter)}" placeholder="target_scale_and_data_collection:collect:blind_initial_ratings" />
           </label>
           <label>
+            <span>Dependency</span>
+            <select id="workflowTargetPackageDependencyFilter">
+              ${["", "setup_prerequisite", "primary_requires_setup_prerequisites", "primary_no_setup_prerequisite"]
+                .map(
+                  (item) =>
+                    `<option ${item === state.workflowTargetPackageDependencyFilter ? "selected" : ""} value="${escapeHtml(item)}">${escapeHtml(item ? humanize(item) : "All dependency states")}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>
             <span>Import route</span>
             <input id="workflowTargetPackageImportRouteFilter" type="text" value="${escapeHtml(state.workflowTargetPackageImportRouteFilter)}" placeholder="/api/v1/ratings/import-jsonl" />
           </label>
@@ -8423,6 +8437,10 @@ function workflowReadbackPanel(collection) {
             <input id="workflowReleaseManifestCheckKindFilter" type="text" value="${escapeHtml(state.workflowReleaseManifestCheckKindFilter)}" placeholder="linked_artifact" />
           </label>
           <label>
+            <span>Dependency</span>
+            <input id="workflowReleaseManifestDependencyFilter" type="text" value="${escapeHtml(state.workflowReleaseManifestDependencyFilter)}" placeholder="linked_artifact_missing" />
+          </label>
+          <label>
             <span>Target gap</span>
             <input id="workflowReleaseManifestTargetGapFilter" type="text" value="${escapeHtml(state.workflowReleaseManifestTargetGapFilter)}" placeholder="positions" />
           </label>
@@ -8567,6 +8585,10 @@ function workflowReadbackPanel(collection) {
           <label>
             <span>Downstream artifact</span>
             <input id="workflowPublicDatasetDownstreamFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetDownstreamFilter)}" placeholder="public_leaderboard" />
+          </label>
+          <label>
+            <span>Dependency</span>
+            <input id="workflowPublicDatasetPublicationDependencyFilter" type="text" value="${escapeHtml(state.workflowPublicDatasetPublicationDependencyFilter)}" placeholder="publication_blocked_by_target_scale" />
           </label>
           <label>
             <span>Route</span>
@@ -9036,6 +9058,18 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
       ["Validate route", result.singleRecordValidateOnlyRoute ?? "not available"],
     ];
   }
+  if (collection.id === "release-version-manifest") {
+    const counts = result.filteredCounts ?? result.counts ?? {};
+    const preflight = result.releaseFreezePreflightSummary ?? null;
+    return [
+      ["Release status", humanize(result.releaseUseStatus ?? "not reported")],
+      ["Freeze preflight", humanize(preflight?.status ?? "not reported")],
+      ["Open dependencies", preflight?.openDependencyRows ?? counts.blockingReleaseFreezeRows ?? "not reported"],
+      ["Target scale", preflight ? (preflight.targetScaleReady ? "ready" : "blocked") : humanize(result.targetScaleStatus ?? "not reported")],
+      ["Linked artifacts", preflight ? (preflight.linkedArtifactsReady ? "ready" : `${preflight.missingLinkedArtifactRows ?? 0} missing`) : humanize(result.linkedArtifactStatus ?? "not reported")],
+      ["Dependency states", workflowCountMapSummary(counts.byFreezeDependencyStatus)],
+    ];
+  }
   if (collection.id === "release-version-manifest-template") {
     const counts = result.filteredCounts ?? result.counts ?? {};
     return [
@@ -9095,11 +9129,15 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
   }
   if (collection.id === "public-dataset-publication-gate") {
     const counts = result.filteredCounts ?? result.counts ?? {};
+    const preflight = result.publicationPreflightSummary ?? null;
     return [
       ["Publication gate", humanize(result.publicationGateStatus ?? "not reported")],
+      ["Publication preflight", humanize(preflight?.status ?? "not reported")],
       ["Current blocker", result.currentBlockingGate ? humanize(result.currentBlockingGate.label ?? result.currentBlockingGate.id) : "none"],
+      ["Current dependency", humanize(preflight?.currentBlockingDependencyStatus ?? "not reported")],
       ["Open gates", counts.openRows ?? "not reported"],
       ["Ready gates", counts.readyRows ?? "not reported"],
+      ["Dependency states", workflowCountMapSummary(counts.byPublicationDependencyStatus)],
       ["Publish action", result.publicationActionAvailable ? "available" : "not exposed by this preflight"],
       ["Downstream guard", result.sourceRoutes?.publicDatasetDownstreamLaunches ?? "not available"],
     ];
@@ -9174,12 +9212,16 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
   if (collection.id === "target-data-current-package-manifest") {
     const manifest = result.currentBlockingPackageManifest ?? null;
     const counts = result.counts ?? {};
+    const preflight = result.preflightDependencySummary ?? null;
     return [
       ["Manifest status", humanize(result.status ?? "not reported")],
       ["Current blocker", `${humanize(result.currentBlockingPhase ?? "not reported")} / ${humanize(result.currentBlockingExecutionStatus ?? "not reported")}`],
+      ["Dependency status", humanize(preflight?.status ?? "not reported")],
       ["Runbook group", result.routes?.sourceRunbookGroupRoute ?? result.sourceRunbookGroupRoute ?? "not available"],
       ["Action group", result.routes?.sourceActionGroupRoute ?? result.sourceActionGroupRoute ?? "not available"],
       ["Package steps", manifest ? `${counts.stepCount ?? manifest.stepCount ?? 0} steps across ${counts.targetGapCount ?? manifest.targetGapCount ?? 0} gaps` : "not available"],
+      ["Setup prerequisites", preflight ? `${preflight.setupStepCount ?? 0} setup / ${preflight.primaryStepsRequiringSetupCount ?? 0} primary requiring setup` : "not reported"],
+      ["Dependency states", workflowCountMapSummary(counts.byDependencyStatus)],
       ["Package validate-only", result.routes?.packageValidateOnlyImportRoute ?? manifest?.packageValidateOnlyImportRoute ?? "not available"],
       ["Starter template", result.routes?.starterTemplateRoute ?? manifest?.templateStarter?.starterTemplateRoute ?? "not available"],
       ["Starter template cap", manifest?.templateStarter?.recommendedStarterRecordCap ?? "not reported"],
@@ -9624,6 +9666,9 @@ function releaseVersionManifestPreviewRow(item) {
         ["Expected id", item.expectedId ?? "not applicable"],
         ["Submitted id", item.submittedId ?? "not submitted"],
         ["Link status", item.linkedArtifactStatus ? humanize(item.linkedArtifactStatus) : "not applicable"],
+        ["Freeze dependency", humanize(item.freezeDependencyStatus ?? "not reported")],
+        ["Blocks freeze", item.blocksReleaseFreeze ? "yes" : "no"],
+        ["Dependency policy", item.releaseFreezeDependencyPolicy ?? "Review through /api/release/report."],
         ["Target gaps", targetGaps],
         ["Readbacks", routes],
       ])}
@@ -9956,6 +10001,8 @@ function publicDatasetPublicationGatePreviewRow(item) {
       ${metricList([
         ["Publication blocked", item.publicationBlocked ? "yes" : "no"],
         ["Publish action", item.publicationActionAvailable ? "available" : "not exposed by this preflight"],
+        ["Dependency", humanize(item.publicationDependencyStatus ?? "not reported")],
+        ["Dependency policy", item.publicationDependencyPolicy ?? "Resolve open gates before publication."],
         ["Item readback", item.readbackItemRoute ?? "not available"],
         ["Routes", item.routeCount ?? workflowPreviewArraySummary(item.routes, "not reported")],
         ["Readiness rows", readinessRows],
@@ -11077,6 +11124,10 @@ function targetDataPackageManifestPreviewRow(item) {
         ["Starter template", item.starterExpandedTemplateReadbackRoute ?? "not available"],
         ["Collection plan", item.collectionPlanRoute ?? "not available"],
         ["Package manifest item", item.packageManifestItemRoute ?? "not available"],
+        ["Dependency status", humanize(item.dependencyStatus ?? "not reported")],
+        ["Prerequisite steps", workflowPreviewArraySummary(item.prerequisiteStepIds, "none")],
+        ["Dependent primary steps", workflowPreviewArraySummary(item.dependentPrimaryStepIds, "none")],
+        ["Preflight order", item.preflightOrderPolicy ?? "Validate real data before append."],
         ["Records needed", item.estimatedRecordsRequired ?? "not reported"],
         ["Expected target-resource delta", item.expectedResourceDelta ?? "not reported"],
         ["Verification", item.verificationRoute ?? item.targetGapReadbackItemRoute ?? "/api/release/report"],
@@ -15657,6 +15708,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     }
     if (collection.id !== "target-data-current-package-manifest") {
       state.workflowTargetPackageImportRouteFilter = "";
+      state.workflowTargetPackageDependencyFilter = "";
     }
     if (collection.id !== "target-data-jsonl-template") state.workflowTargetDataTemplateExpand = false;
     if (
@@ -15737,6 +15789,7 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       state.workflowReleaseManifestStatusFilter = "";
       state.workflowReleaseManifestCheckKindFilter = "";
       state.workflowReleaseManifestTargetGapFilter = "";
+      state.workflowReleaseManifestDependencyFilter = "";
     }
     if (
       collection.id !== "public-dataset-readiness" &&
@@ -15759,6 +15812,9 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
       collection.id !== "public-dataset-publication-gate"
     ) {
       state.workflowPublicDatasetDownstreamFilter = "";
+    }
+    if (collection.id !== "public-dataset-publication-gate") {
+      state.workflowPublicDatasetPublicationDependencyFilter = "";
     }
     if (collection.id !== "public-dataset-document-template") {
       state.workflowPublicDatasetDocumentKindFilter = "";
@@ -15945,6 +16001,12 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     state.lastWorkflowReadbackStatus = null;
     render();
   });
+  document.getElementById("workflowTargetPackageDependencyFilter")?.addEventListener("change", (event) => {
+    state.workflowTargetPackageDependencyFilter = event.target.value;
+    state.workflowCollectionResult = null;
+    state.lastWorkflowReadbackStatus = null;
+    render();
+  });
   document.getElementById("workflowTemplateKindFilter")?.addEventListener("change", (event) => {
     state.workflowTemplateKindFilter = event.target.value;
     state.workflowCollectionResult = null;
@@ -16093,12 +16155,14 @@ function bindEvents({ selectedAssignment, labelSnapshot, manifests, releaseRepor
     "workflowReleaseManifestStatusFilter",
     "workflowReleaseManifestCheckKindFilter",
     "workflowReleaseManifestTargetGapFilter",
+    "workflowReleaseManifestDependencyFilter",
     "workflowPublicDatasetGateKindFilter",
     "workflowPublicDatasetStatusFilter",
     "workflowPublicDatasetEvidenceFilter",
     "workflowPublicDatasetReviewReasonFilter",
     "workflowPublicDatasetTargetGapFilter",
     "workflowPublicDatasetDownstreamFilter",
+    "workflowPublicDatasetPublicationDependencyFilter",
     "workflowPublicDatasetDocumentKindFilter",
     "workflowPublicDatasetDocumentStatusFilter",
   ].forEach((elementId) => {
@@ -18311,6 +18375,7 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowTargetCollectionImportKindFilter) url.searchParams.set("importKind", state.workflowTargetCollectionImportKindFilter);
     if (state.workflowTargetCollectionChecklistFilter) url.searchParams.set("checklistRowId", state.workflowTargetCollectionChecklistFilter);
     if (state.workflowActionIdFilter) url.searchParams.set("actionId", state.workflowActionIdFilter);
+    if (state.workflowTargetPackageDependencyFilter) url.searchParams.set("dependencyStatus", state.workflowTargetPackageDependencyFilter);
     if (state.workflowTargetPackageImportRouteFilter) url.searchParams.set("importRoute", state.workflowTargetPackageImportRouteFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
@@ -18413,6 +18478,9 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowReleaseManifestArtifactFilter) url.searchParams.set("artifact", state.workflowReleaseManifestArtifactFilter);
     if (state.workflowReleaseManifestStatusFilter) url.searchParams.set("status", state.workflowReleaseManifestStatusFilter);
     if (state.workflowReleaseManifestCheckKindFilter) url.searchParams.set("checkKind", state.workflowReleaseManifestCheckKindFilter);
+    if (state.workflowReleaseManifestDependencyFilter) {
+      url.searchParams.set("freezeDependencyStatus", state.workflowReleaseManifestDependencyFilter);
+    }
     if (state.workflowReleaseManifestTargetGapFilter) url.searchParams.set("targetGapId", state.workflowReleaseManifestTargetGapFilter);
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
@@ -18454,6 +18522,9 @@ function workflowCollectionEndpoint(collection) {
     if (state.workflowPublicDatasetGateKindFilter) url.searchParams.set("readinessRowId", state.workflowPublicDatasetGateKindFilter);
     if (state.workflowArtifactIdFilter) url.searchParams.set("releasePackageArtifactId", state.workflowArtifactIdFilter);
     if (state.workflowPublicDatasetDownstreamFilter) url.searchParams.set("downstreamArtifact", state.workflowPublicDatasetDownstreamFilter);
+    if (state.workflowPublicDatasetPublicationDependencyFilter) {
+      url.searchParams.set("publicationDependencyStatus", state.workflowPublicDatasetPublicationDependencyFilter);
+    }
     if (state.workflowRouteFilter) url.searchParams.set("route", state.workflowRouteFilter);
   }
   if (collection.id === "public-dataset-downstream-launches") {

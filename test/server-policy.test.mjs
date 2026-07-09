@@ -10295,11 +10295,31 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifest.body.counts.setupBeforePrimary, true);
   assert.equal(currentPackageManifest.body.counts.byStepKind.setup_data_import, 2);
   assert.equal(currentPackageManifest.body.counts.byStepKind.primary_data_import, 7);
+  assert.equal(currentPackageManifest.body.preflightDependencySummary.status, "setup_prerequisites_required_before_primary_imports");
+  assert.equal(currentPackageManifest.body.preflightDependencySummary.setupBeforePrimary, true);
+  assert.equal(currentPackageManifest.body.preflightDependencySummary.setupStepCount, 2);
+  assert.equal(currentPackageManifest.body.preflightDependencySummary.primaryStepCount, 7);
+  assert.equal(currentPackageManifest.body.preflightDependencySummary.primaryStepsRequiringSetupCount, 1);
+  assert.equal(currentPackageManifest.body.preflightDependencySummary.expectedResourceDelta, 2034);
+  assert.match(
+    currentPackageManifest.body.preflightDependencySummary.validationOrderPolicy,
+    /setup prerequisite imports before their dependent primary imports/,
+  );
+  assert.equal(currentPackageManifest.body.counts.byDependencyStatus.setup_prerequisite, 2);
+  assert.equal(currentPackageManifest.body.counts.byDependencyStatus.primary_requires_setup_prerequisites, 1);
+  assert.equal(currentPackageManifest.body.counts.byDependencyStatus.primary_no_setup_prerequisite, 6);
+  assert.equal(currentPackageManifest.body.counts.setupPrerequisiteStepCount, 2);
+  assert.equal(currentPackageManifest.body.counts.primaryStepsRequiringSetupCount, 1);
   assert.equal(currentPackageManifest.body.counts.byTargetGapId.blind_initial_ratings, 3);
   assert.equal(currentPackageManifest.body.counts.byRoute["/api/v1/assignments/import-jsonl"], 1);
   assert.equal(currentPackageManifest.body.totalCount, 9);
   assert.equal(currentPackageManifest.body.items[0].stepKind, "setup_data_import");
   assert.equal(currentPackageManifest.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
+  assert.equal(currentPackageManifest.body.items[0].dependencyStatus, "setup_prerequisite");
+  assert.equal(currentPackageManifest.body.items[0].setupRequiredBeforePrimary, true);
+  assert.deepEqual(currentPackageManifest.body.items[0].prerequisiteStepIds, []);
+  assert.equal(currentPackageManifest.body.items[0].dependentPrimaryStepIds.length, 1);
+  assert.match(currentPackageManifest.body.items[0].preflightOrderPolicy, /before validating the dependent primary import/);
   assert.ok(currentPackageManifest.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
   assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/assignments/import-jsonl"));
   assert.ok(currentPackageManifest.body.items[0].routes.includes("/api/v1/assignments/import-jsonl?dryRun=true"));
@@ -10312,6 +10332,15 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.match(currentPackageManifest.body.policy.scope, /does not submit target data/);
   assert.match(currentPackageManifest.body.policy.authority, /remains authoritative/);
+  const blindRatingPrimaryStep = currentPackageManifest.body.items.find(
+    (item) => item.importRoute === "/api/v1/ratings/import-jsonl",
+  );
+  assert.ok(blindRatingPrimaryStep);
+  assert.equal(blindRatingPrimaryStep.dependencyStatus, "primary_requires_setup_prerequisites");
+  assert.equal(blindRatingPrimaryStep.setupRequiredBeforePrimary, true);
+  assert.equal(blindRatingPrimaryStep.prerequisiteStepIds.length, 2);
+  assert.deepEqual(blindRatingPrimaryStep.dependentPrimaryStepIds, []);
+  assert.match(blindRatingPrimaryStep.preflightOrderPolicy, /Validate prerequisite setup imports first/);
   const currentPackageManifestById = await invokeApi(context, {
     method: "GET",
     url: currentPackageManifest.body.items[0].packageManifestItemRoute,
@@ -10337,6 +10366,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifestByRoute.body.filteredCounts.byRoute["/api/v1/ratings/import-jsonl"], 1);
   assert.equal(currentPackageManifestByRoute.body.items[0].targetGapId, "blind_initial_ratings");
   assert.equal(currentPackageManifestByRoute.body.items[0].stepKind, "primary_data_import");
+  assert.equal(currentPackageManifestByRoute.body.items[0].dependencyStatus, "primary_requires_setup_prerequisites");
+  assert.equal(currentPackageManifestByRoute.body.items[0].prerequisiteStepIds.length, 2);
   const currentPackageManifestByTargetGap = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/target-gaps/current-package-manifest?targetGapId=validation_critiques",
@@ -10355,6 +10386,24 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifestSetupSteps.body.count, 2);
   assert.equal(currentPackageManifestSetupSteps.body.filteredCounts.setupStepCount, 2);
   assert.equal(currentPackageManifestSetupSteps.body.filteredCounts.primaryStepCount, 0);
+  const currentPackageManifestByDependency = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest?dependencyStatus=primary_requires_setup_prerequisites",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestByDependency.status, 200, JSON.stringify(currentPackageManifestByDependency.body));
+  assert.equal(currentPackageManifestByDependency.body.count, 1);
+  assert.equal(currentPackageManifestByDependency.body.filteredCounts.byDependencyStatus.primary_requires_setup_prerequisites, 1);
+  assert.equal(currentPackageManifestByDependency.body.items[0].importRoute, "/api/v1/ratings/import-jsonl");
+  const currentPackageManifestRequiresSetup = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest?requiresSetup=true",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestRequiresSetup.status, 200, JSON.stringify(currentPackageManifestRequiresSetup.body));
+  assert.equal(currentPackageManifestRequiresSetup.body.count, 3);
+  assert.equal(currentPackageManifestRequiresSetup.body.filteredCounts.setupPrerequisiteStepCount, 2);
+  assert.equal(currentPackageManifestRequiresSetup.body.filteredCounts.primaryStepsRequiringSetupCount, 1);
   const missingCurrentPackageManifestById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/target-gaps/current-package-manifest/not-present",
@@ -10947,6 +10996,23 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifest.body.counts.linkedArtifactRows, 6);
   assert.equal(releaseVersionManifest.body.counts.missingLinkRows, 6);
   assert.equal(releaseVersionManifest.body.counts.byCheckKind.linked_artifact, 6);
+  assert.equal(
+    releaseVersionManifest.body.releaseFreezePreflightSummary.status,
+    "release_freeze_blocked_by_target_scale_and_artifact_links",
+  );
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.targetScaleReady, false);
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.linkedArtifactsReady, false);
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.releaseVersionSubmitted, false);
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.releaseFreezeSubmitted, false);
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.openDependencyRows, 9);
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.missingLinkedArtifactRows, 6);
+  assert.equal(releaseVersionManifest.body.releaseFreezePreflightSummary.remainingTargetRecords, 2034);
+  assert.match(releaseVersionManifest.body.releaseFreezePreflightSummary.validationOrderPolicy, /Freeze only after target-scale gaps are closed/);
+  assert.equal(releaseVersionManifest.body.counts.byFreezeDependencyStatus.release_version_not_submitted, 1);
+  assert.equal(releaseVersionManifest.body.counts.byFreezeDependencyStatus.release_freeze_not_submitted, 1);
+  assert.equal(releaseVersionManifest.body.counts.byFreezeDependencyStatus.target_scale_incomplete, 1);
+  assert.equal(releaseVersionManifest.body.counts.byFreezeDependencyStatus.linked_artifact_missing, 6);
+  assert.equal(releaseVersionManifest.body.counts.blockingReleaseFreezeRows, 9);
   assert.equal(releaseVersionManifest.body.counts.byRoute["/api/v1/release-version-manifest"], 9);
   assert.match(releaseVersionManifest.body.policy.scope, /release-version manifest projection/);
 
@@ -10958,6 +11024,21 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestMissingLinks.status, 200, JSON.stringify(releaseVersionManifestMissingLinks.body));
   assert.equal(releaseVersionManifestMissingLinks.body.count, 6);
   assert.equal(releaseVersionManifestMissingLinks.body.filteredCounts.missingLinkRows, 6);
+
+  const releaseVersionManifestMissingDependencies = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-version-manifest?freezeDependencyStatus=linked_artifact_missing",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(
+    releaseVersionManifestMissingDependencies.status,
+    200,
+    JSON.stringify(releaseVersionManifestMissingDependencies.body),
+  );
+  assert.equal(releaseVersionManifestMissingDependencies.body.count, 6);
+  assert.equal(releaseVersionManifestMissingDependencies.body.filteredCounts.byFreezeDependencyStatus.linked_artifact_missing, 6);
+  assert.ok(releaseVersionManifestMissingDependencies.body.items.every((item) => item.blocksReleaseFreeze === true));
+  assert.ok(releaseVersionManifestMissingDependencies.body.items.every((item) => item.releaseFreezePrerequisiteKind === "linked_artifact"));
 
   const releaseVersionManifestCorpus = await invokeApi(context, {
     method: "GET",
@@ -10996,6 +11077,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestById.body.count, 1);
   assert.equal(releaseVersionManifestById.body.item.artifact, "corpus_manifest");
   assert.equal(releaseVersionManifestById.body.item.status, "missing_submitted_artifact_link");
+  assert.equal(releaseVersionManifestById.body.item.freezeDependencyStatus, "linked_artifact_missing");
+  assert.equal(releaseVersionManifestById.body.item.blocksReleaseFreeze, true);
+  assert.match(releaseVersionManifestById.body.item.releaseFreezeDependencyPolicy, /missing linked release artifact/);
 
   const releaseVersionManifestTargetScaleById = await invokeApi(context, {
     method: "GET",
@@ -11006,6 +11090,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestTargetScaleById.body.count, 1);
   assert.ok(releaseVersionManifestTargetScaleById.body.item.targetGapIds.includes("positions"));
   assert.equal(releaseVersionManifestTargetScaleById.body.item.targetGaps.totals.remainingTotal, 2034);
+  assert.equal(releaseVersionManifestTargetScaleById.body.item.freezeDependencyStatus, "target_scale_incomplete");
+  assert.equal(releaseVersionManifestTargetScaleById.body.item.blocksReleaseFreeze, true);
 
   const releaseVersionManifestTemplate = await invokeApi(context, {
     method: "GET",
@@ -12609,6 +12695,12 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGate.body.publicationBlocked, true);
   assert.equal(publicDatasetPublicationGate.body.publicationActionAvailable, false);
   assert.equal(publicDatasetPublicationGate.body.currentBlockingGateId, "target-data-ready");
+  assert.equal(publicDatasetPublicationGate.body.publicationPreflightSummary.status, "publication_blocked_by_open_dataset_v0_1_gates");
+  assert.equal(publicDatasetPublicationGate.body.publicationPreflightSummary.publicationBlocked, true);
+  assert.equal(publicDatasetPublicationGate.body.publicationPreflightSummary.publicationActionAvailable, false);
+  assert.equal(publicDatasetPublicationGate.body.publicationPreflightSummary.currentBlockingGateId, "target-data-ready");
+  assert.equal(publicDatasetPublicationGate.body.publicationPreflightSummary.currentBlockingDependencyStatus, "publication_blocked_by_target_scale");
+  assert.match(publicDatasetPublicationGate.body.publicationPreflightSummary.validationOrderPolicy, /Publication stays unavailable/);
   assert.equal(publicDatasetPublicationGate.body.count, 7);
   assert.equal(publicDatasetPublicationGate.body.totalCount, 7);
   assert.equal(publicDatasetPublicationGate.body.counts.openRows, 6);
@@ -12616,6 +12708,15 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGate.body.counts.publicationActionAvailableRows, 0);
   assert.equal(publicDatasetPublicationGate.body.counts.byGateKind.publication_action_boundary, 1);
   assert.equal(publicDatasetPublicationGate.body.counts.byStatus.blocked_by_target_scale, 2);
+  assert.equal(publicDatasetPublicationGate.body.counts.byPublicationDependencyStatus.publication_blocked_by_target_scale, 2);
+  assert.equal(
+    publicDatasetPublicationGate.body.counts.byPublicationDependencyStatus.publication_dependency_ready,
+    publicDatasetPublicationGate.body.counts.readyRows,
+  );
+  assert.equal(
+    publicDatasetPublicationGate.body.publicationPreflightSummary.dependencyStatusCounts.publication_blocked_by_target_scale,
+    publicDatasetPublicationGate.body.counts.byPublicationDependencyStatus.publication_blocked_by_target_scale,
+  );
   assert.equal(publicDatasetPublicationGate.body.counts.byPackageStepId["target-data-package"], 2);
   assert.equal(publicDatasetPublicationGate.body.counts.byReleasePackageArtifactId["release-cleared-position-critique-pairs"], 2);
   assert.equal(publicDatasetPublicationGate.body.counts.byDownstreamArtifact.public_leaderboard, 2);
@@ -12641,6 +12742,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
 
   const targetDataPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "target-data-ready");
   assert.equal(targetDataPublicationGate.status, "blocked_by_target_scale");
+  assert.equal(targetDataPublicationGate.publicationDependencyStatus, "publication_blocked_by_target_scale");
+  assert.match(targetDataPublicationGate.publicationDependencyPolicy, /target-data package/);
   assert.equal(targetDataPublicationGate.gateKind, "target_data_ready");
   assert.equal(targetDataPublicationGate.publicationBlocked, true);
   assert.equal(targetDataPublicationGate.publicationActionAvailable, false);
@@ -12665,6 +12768,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
 
   const publicDocumentsPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "public-documents-ready");
   assert.equal(publicDocumentsPublicationGate.status, "documentation_not_submitted");
+  assert.equal(publicDocumentsPublicationGate.publicationDependencyStatus, "publication_blocked_by_public_documentation");
+  assert.match(publicDocumentsPublicationGate.publicationDependencyPolicy, /dataset card and methodology report/);
   assert.ok(publicDocumentsPublicationGate.releasePackageArtifactIds.includes("dataset-card"));
   assert.ok(publicDocumentsPublicationGate.releasePackageArtifactIds.includes("methodology-report"));
   assert.equal(publicDocumentsPublicationGate.readbackItemRoute, "/api/v1/public-dataset-publication-gate/public-documents-ready");
@@ -12672,16 +12777,20 @@ test("operator action item queue is admin/auditor readback derived from the rele
 
   const hiddenExclusionsPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "hidden-protected-exclusions-ready");
   assert.equal(hiddenExclusionsPublicationGate.status, "ready");
+  assert.equal(hiddenExclusionsPublicationGate.publicationDependencyStatus, "publication_dependency_ready");
   assert.equal(hiddenExclusionsPublicationGate.publicationBlocked, false);
 
   const downstreamHoldPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "downstream-surfaces-held");
   assert.equal(downstreamHoldPublicationGate.status, "downstream_blocked_until_dataset_v0_1_ready");
+  assert.equal(downstreamHoldPublicationGate.publicationDependencyStatus, "publication_blocked_by_downstream_hold");
+  assert.match(downstreamHoldPublicationGate.publicationDependencyPolicy, /downstream public surfaces held/);
   assert.ok(downstreamHoldPublicationGate.blockingDownstreamLaunchIds.includes("public-leaderboard"));
   assert.ok(downstreamHoldPublicationGate.downstreamArtifacts.includes("public_leaderboard"));
   assert.ok(downstreamHoldPublicationGate.reviewReasons.includes("publicFirstLadder:target_scale_incomplete"));
 
   const publicationBoundaryGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "publication-action-boundary");
   assert.equal(publicationBoundaryGate.status, "blocked_by_target_scale");
+  assert.equal(publicationBoundaryGate.publicationDependencyStatus, "publication_blocked_by_target_scale");
   assert.equal(publicationBoundaryGate.publicationActionAvailable, false);
   assert.ok(publicationBoundaryGate.blockingPackageStepIds.includes("target-data-package"));
   assert.ok(publicationBoundaryGate.blockingReleasePackageArtifactIds.includes("release-cleared-position-critique-pairs"));
@@ -12727,6 +12836,28 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGateByDownstream.status, 200, JSON.stringify(publicDatasetPublicationGateByDownstream.body));
   assert.equal(publicDatasetPublicationGateByDownstream.body.count, 2);
   assert.equal(publicDatasetPublicationGateByDownstream.body.filteredCounts.byDownstreamArtifact.public_leaderboard, 2);
+
+  const publicDatasetPublicationGateByDependency = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate?publicationDependencyStatus=publication_blocked_by_public_documentation",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByDependency.status, 200, JSON.stringify(publicDatasetPublicationGateByDependency.body));
+  assert.equal(publicDatasetPublicationGateByDependency.body.count, 1);
+  assert.equal(publicDatasetPublicationGateByDependency.body.items[0].id, "public-documents-ready");
+  assert.equal(
+    publicDatasetPublicationGateByDependency.body.filteredCounts.byPublicationDependencyStatus.publication_blocked_by_public_documentation,
+    1,
+  );
+
+  const publicDatasetPublicationGateByLegacyDependency = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-publication-gate?dependencyStatus=publication_blocked_by_target_scale",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByLegacyDependency.status, 200, JSON.stringify(publicDatasetPublicationGateByLegacyDependency.body));
+  assert.equal(publicDatasetPublicationGateByLegacyDependency.body.count, 2);
+  assert.equal(publicDatasetPublicationGateByLegacyDependency.body.items[0].publicationDependencyStatus, "publication_blocked_by_target_scale");
 
   const publicDatasetPublicationGateByRoute = await invokeApi(context, {
     method: "GET",
@@ -12776,6 +12907,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGateById.status, 200, JSON.stringify(publicDatasetPublicationGateById.body));
   assert.equal(publicDatasetPublicationGateById.body.count, 1);
   assert.equal(publicDatasetPublicationGateById.body.item.gateKind, "public_documentation_ready");
+  assert.equal(publicDatasetPublicationGateById.body.item.publicationDependencyStatus, "publication_blocked_by_public_documentation");
   assert.equal(publicDatasetPublicationGateById.body.item.readbackItemRoute, "/api/v1/public-dataset-publication-gate/public-documents-ready");
   assert.equal(publicDatasetPublicationGateById.body.item.routeCount, publicDatasetPublicationGateById.body.item.routes.length);
 
@@ -16638,6 +16770,12 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/release-version-manifest"'));
   assert.ok(appSource.includes('resourceKey: "releaseVersionManifestCheck"'));
   assert.ok(appSource.includes("function releaseVersionManifestPreviewRow(item)"));
+  assert.ok(appSource.includes("workflowReleaseManifestDependencyFilter"));
+  assert.ok(appSource.includes('url.searchParams.set("freezeDependencyStatus", state.workflowReleaseManifestDependencyFilter)'));
+  assert.ok(appSource.includes('["Freeze preflight", humanize(preflight?.status ?? "not reported")]'));
+  assert.ok(appSource.includes('["Dependency states", workflowCountMapSummary(counts.byFreezeDependencyStatus)]'));
+  assert.ok(appSource.includes('["Freeze dependency", humanize(item.freezeDependencyStatus ?? "not reported")]'));
+  assert.ok(appSource.includes('["Blocks freeze", item.blocksReleaseFreeze ? "yes" : "no"]'));
   assert.ok(appSource.includes('id: "release-version-manifest-template"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/release-version-manifest/template"'));
   assert.ok(appSource.includes('resourceKey: "releaseVersionManifestTemplate"'));
@@ -16679,6 +16817,11 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("function publicDatasetPublicationGatePreviewRow(item)"));
   assert.ok(appSource.includes('url.searchParams.set("gateKind", state.workflowTemplateKindFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("releasePackageArtifactId", state.workflowArtifactIdFilter)'));
+  assert.ok(appSource.includes("workflowPublicDatasetPublicationDependencyFilter"));
+  assert.ok(appSource.includes('url.searchParams.set("publicationDependencyStatus", state.workflowPublicDatasetPublicationDependencyFilter)'));
+  assert.ok(appSource.includes('["Publication preflight", humanize(preflight?.status ?? "not reported")]'));
+  assert.ok(appSource.includes('["Dependency states", workflowCountMapSummary(counts.byPublicationDependencyStatus)]'));
+  assert.ok(appSource.includes('["Dependency", humanize(item.publicationDependencyStatus ?? "not reported")]'));
   assert.ok(appSource.includes('id: "public-dataset-downstream-launches"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-downstream-launches"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetDownstreamLaunchGuard"'));
@@ -16822,6 +16965,11 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("workflowRlhf93NextActionKindFilter"));
   assert.ok(appSource.includes('url.searchParams.set("nextActionKind", state.workflowRlhf93NextActionKindFilter)'));
   assert.ok(appSource.includes('["Next actions", workflowCountMapSummary(counts.byNextActionKind)]'));
+  assert.ok(appSource.includes("workflowTargetPackageDependencyFilter"));
+  assert.ok(appSource.includes('url.searchParams.set("dependencyStatus", state.workflowTargetPackageDependencyFilter)'));
+  assert.ok(appSource.includes('["Dependency status", humanize(preflight?.status ?? "not reported")]'));
+  assert.ok(appSource.includes('["Dependency states", workflowCountMapSummary(counts.byDependencyStatus)]'));
+  assert.ok(appSource.includes('["Prerequisite steps", workflowPreviewArraySummary(item.prerequisiteStepIds, "none")]'));
   assert.ok(appSource.includes('url.searchParams.set("targetGapId", state.workflowRlhf93TargetGapFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("unblockerExecutionStatus", state.workflowRlhf93UnblockerExecutionFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("hasCurrentUnblocker", state.workflowRlhf93HasUnblockerFilter)'));
@@ -17063,10 +17211,14 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/release/report` endpoint remains read-only and side-effect-free"));
   assert.ok(architectureDoc.includes("GET /api/v1/target-gaps/current-package-manifest"));
   assert.ok(architectureDoc.includes("bounded admin/auditor readback for the current blocking target-data package only"));
+  assert.ok(architectureDoc.includes("preflightDependencySummary"));
+  assert.ok(architectureDoc.includes("dependencyStatus`, `setupRequiredBeforePrimary`, `prerequisiteStepIds`, and `dependentPrimaryStepIds"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-artifacts/template"));
   assert.ok(architectureDoc.includes("label snapshot, corpus manifest, training export, public export manifest, internal export manifest, and release report snapshot"));
   assert.ok(architectureDoc.includes("does not submit artifacts, materialize release reports, waive gates, create a new release-artifact type"));
   assert.ok(architectureDoc.includes("GET `/api/v1/release-version-manifest`"));
+  assert.ok(architectureDoc.includes("releaseFreezePreflightSummary"));
+  assert.ok(architectureDoc.includes("freezeDependencyStatus`, `releaseFreezePrerequisiteKind`, `blocksReleaseFreeze`, and `releaseFreezeDependencyPolicy"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/{id}"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/template"));
   assert.ok(architectureDoc.includes("templateOnly=true` `ReleaseVersion` and `ReleaseFreeze` request bodies"));
@@ -17114,6 +17266,8 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-publication-gate"));
   assert.ok(architectureDoc.includes("publicDatasetPublicationGate"));
   assert.ok(architectureDoc.includes("target-data, release-artifact, public-documentation, hidden/protected-exclusion"));
+  assert.ok(architectureDoc.includes("publicationDependencyStatus` and `publicationDependencyPolicy"));
+  assert.ok(architectureDoc.includes("publicationPreflightSummary"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-downstream-launches"));
   assert.ok(architectureDoc.includes("publicDatasetDownstreamLaunchGuard"));
   assert.ok(architectureDoc.includes("public leaderboard, API evaluator, public training export, and judge-model launch"));
