@@ -8745,6 +8745,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
         item.routes.includes(item.operatorActionItemRoute),
     ),
   );
+  assert.ok(
+    queue.body.items.every((item) =>
+      item.routes.includes(`/api/v1/operator-action-items?actionId=${encodeURIComponent(item.id)}`),
+    ),
+  );
   assert.deepEqual(
     queue.body.items
       .filter((item) => item.actionType === "submit_artifact" && item.executionStatus !== "closed")
@@ -8773,7 +8778,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.match(queue.body.items[0].executionStatusReason, /real target data/);
   assert.equal(queue.body.items[0].operatorActionItemRoute, "/api/v1/operator-action-items/target_scale_and_data_collection%3Acollect%3Apositions");
   assert.equal(queue.body.items[0].readbackItemRoute, queue.body.items[0].operatorActionItemRoute);
+  const firstActionIdFilterRoute = `/api/v1/operator-action-items?actionId=${encodeURIComponent(queue.body.items[0].id)}`;
+  assert.ok(queue.body.items[0].routes.includes(firstActionIdFilterRoute));
   assert.equal(queue.body.filteredCounts.byRoute[queue.body.items[0].operatorActionItemRoute], 1);
+  assert.equal(queue.body.filteredCounts.byRoute[firstActionIdFilterRoute], 1);
   assert.equal(queue.body.items[0].writeRoute, "/api/v1/intake/positions");
   assert.equal(queue.body.items[0].readbackRoute, "/api/v1/intake/positions");
   assert.equal(queue.body.items[0].submissionReadbackRoute, "/api/v1/intake/positions");
@@ -9096,12 +9104,24 @@ test("operator action item queue is admin/auditor readback derived from the rele
     relatedLeaderboardQueue.body.items.map((item) => item.id),
     ["model_evaluation_reproducibility:review:model_evaluation_reproducibility_checklist:leaderboard_model_run_provenance"],
   );
+  const relatedLeaderboardFilterRoute =
+    "/api/v1/operator-action-items?relatedSubmitActionId=model_evaluation_reproducibility%3Asubmit%3Aleaderboard_model_run_provenance";
+  assert.ok(relatedLeaderboardQueue.body.items[0].routes.includes(relatedLeaderboardFilterRoute));
   assert.equal(
     relatedLeaderboardQueue.body.filteredCounts.byRelatedSubmitActionId[
       "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance"
     ],
     1,
   );
+  assert.equal(relatedLeaderboardQueue.body.filteredCounts.byRoute[relatedLeaderboardFilterRoute], 1);
+  const relatedLeaderboardFilterRouteQueue = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/operator-action-items?route=${encodeURIComponent(relatedLeaderboardFilterRoute)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(relatedLeaderboardFilterRouteQueue.status, 200, JSON.stringify(relatedLeaderboardFilterRouteQueue.body));
+  assert.equal(relatedLeaderboardFilterRouteQueue.body.count, 1);
+  assert.equal(relatedLeaderboardFilterRouteQueue.body.items[0].id, relatedLeaderboardQueue.body.items[0].id);
   const leaderboardTemplateRoute =
     "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance";
   const leaderboardTemplateRouteQueue = await invokeApi(context, {
@@ -13019,6 +13039,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(candidateGenerationChecklist.body.counts.byEvidenceId["active-learning-selection-denominator-audit"], 3);
   assert.equal(candidateGenerationChecklist.body.counts.byRoute["/api/v1/candidate-generation-intake-checklist"], 8);
   assert.match(candidateGenerationChecklist.body.policy.scope, /candidate-generation and active-learning checklist/);
+  assert.ok(
+    candidateGenerationChecklist.body.items.every(
+      (item) =>
+        Array.isArray(item.routes) &&
+        item.routeCount === item.routes.length &&
+        item.routes.includes(item.collectionReadbackRoute) &&
+        item.routes.includes(item.readbackItemRoute) &&
+        item.routes.includes(item.releaseReportRoute),
+    ),
+  );
   const candidateGenerationDenominatorRow = candidateGenerationChecklist.body.items.find(
     (item) => item.id === "candidate_generation_denominator_audit",
   );
@@ -13055,6 +13085,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(candidateGenerationById.status, 200, JSON.stringify(candidateGenerationById.body));
   assert.equal(candidateGenerationById.body.count, 1);
   assert.equal(candidateGenerationById.body.item.id, "critique_generation_evaluation_provenance");
+  assert.equal(candidateGenerationById.body.item.routeCount, candidateGenerationById.body.item.routes.length);
+  assert.ok(candidateGenerationById.body.item.routes.includes(candidateGenerationById.body.item.readbackItemRoute));
 
   const labelAggregationChecklist = await invokeApi(context, {
     method: "GET",
@@ -13070,6 +13102,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(labelAggregationChecklist.body.counts.byEvidenceId["reliability-weight-model-snapshot-oct-api"], 4);
   assert.equal(labelAggregationChecklist.body.counts.byRoute["/api/v1/label-aggregation-reliability-checklist"], 9);
   assert.match(labelAggregationChecklist.body.policy.scope, /label aggregation and reliability checklist/);
+  assert.ok(
+    labelAggregationChecklist.body.items.every(
+      (item) =>
+        Array.isArray(item.routes) &&
+        item.routeCount === item.routes.length &&
+        item.routes.includes(item.collectionReadbackRoute) &&
+        item.routes.includes(item.readbackItemRoute) &&
+        item.routes.includes(item.releaseReportRoute),
+    ),
+  );
 
   const labelAggregationByStatus = await invokeApi(context, {
     method: "GET",
@@ -13097,6 +13139,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(labelAggregationById.status, 200, JSON.stringify(labelAggregationById.body));
   assert.equal(labelAggregationById.body.count, 1);
   assert.equal(labelAggregationById.body.item.id, "rater_dominance_disclosed");
+  assert.equal(labelAggregationById.body.item.routeCount, labelAggregationById.body.item.routes.length);
+  assert.ok(labelAggregationById.body.item.routes.includes(labelAggregationById.body.item.readbackItemRoute));
   assert.ok(labelAggregationById.body.item.releaseReportSectionRoutes.includes("/api/v1/release-report-sections/reliability-weight-model-snapshot-oct-api"));
 
   const raterProfileEvidence = await invokeApi(context, {
@@ -13195,6 +13239,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(modelEvaluationReproChecklist.body.counts.byEvidenceId["prompt-parser-provenance-october-2026-demo"], 1);
   assert.equal(modelEvaluationReproChecklist.body.counts.byRoute["/api/v1/model-evaluation-reproducibility-checklist"], 9);
   assert.match(modelEvaluationReproChecklist.body.policy.scope, /model-evaluation reproducibility checklist/);
+  assert.ok(
+    modelEvaluationReproChecklist.body.items.every(
+      (item) =>
+        Array.isArray(item.routes) &&
+        item.routeCount === item.routes.length &&
+        item.routes.includes(item.collectionReadbackRoute) &&
+        item.routes.includes(item.readbackItemRoute) &&
+        item.routes.includes(item.releaseReportRoute),
+    ),
+  );
 
   const modelEvaluationReproOpen = await invokeApi(context, {
     method: "GET",
@@ -13231,6 +13285,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(modelEvaluationReproById.status, 200, JSON.stringify(modelEvaluationReproById.body));
   assert.equal(modelEvaluationReproById.body.count, 1);
   assert.equal(modelEvaluationReproById.body.item.id, "prompt_parser_and_injection_controls");
+  assert.equal(modelEvaluationReproById.body.item.routeCount, modelEvaluationReproById.body.item.routes.length);
+  assert.ok(modelEvaluationReproById.body.item.routes.includes(modelEvaluationReproById.body.item.readbackItemRoute));
   assert.ok(modelEvaluationReproById.body.item.releaseReportSectionRoutes.includes("/api/v1/release-report-sections/prompt-parser-provenance-october-2026-demo"));
 
   const modelRunProvenance = await invokeApi(context, {
@@ -23956,14 +24012,26 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.unblocker.packageManifest.starterTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
     ),
   );
-  assert.ok(
-    rlhf93CompletionAudit.body.items.some(
-      (item) =>
-        item.id === "october-target_scale_and_data_collection" &&
-        item.unblockerPackageManifestRoute === "/api/v1/target-gaps/current-package-manifest" &&
-        item.unblocker.packageManifest.packageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
-    ),
+  const targetScaleAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "october-target_scale_and_data_collection",
   );
+  assert.ok(targetScaleAuditRow);
+  assert.equal(targetScaleAuditRow.unblockerPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
+  assert.equal(targetScaleAuditRow.unblocker.packageManifest.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(targetScaleAuditRow.routeCount, targetScaleAuditRow.routes.length);
+  assert.ok(targetScaleAuditRow.templateReadbackRoutes.length > 0);
+  assert.ok(targetScaleAuditRow.templateReadbackRoutes.every((route) => targetScaleAuditRow.routes.includes(route)));
+  assert.ok((targetScaleAuditRow.preflightCoverageRoutes ?? []).every((route) => targetScaleAuditRow.routes.includes(route)));
+  assert.ok((targetScaleAuditRow.releaseReportSectionRoutes ?? []).every((route) => targetScaleAuditRow.routes.includes(route)));
+  const hiddenBenchmarkAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "october-validation_hidden_benchmark_and_claims",
+  );
+  assert.ok(hiddenBenchmarkAuditRow);
+  assert.equal(hiddenBenchmarkAuditRow.routeCount, hiddenBenchmarkAuditRow.routes.length);
+  assert.ok(hiddenBenchmarkAuditRow.templateReadbackRoutes.length > 0);
+  assert.ok(hiddenBenchmarkAuditRow.preflightCoverageRoutes.length > 0);
+  assert.ok(hiddenBenchmarkAuditRow.templateReadbackRoutes.every((route) => hiddenBenchmarkAuditRow.routes.includes(route)));
+  assert.ok(hiddenBenchmarkAuditRow.preflightCoverageRoutes.every((route) => hiddenBenchmarkAuditRow.routes.includes(route)));
   assert.ok(
     rlhf93CompletionAudit.body.items.some(
       (item) =>
@@ -24225,6 +24293,38 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditUnblockerRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditUnblockerRouteFilter.body));
   assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "release-current-status"));
   assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "october-target_scale_and_data_collection"));
+
+  const rlhf93CompletionAuditTargetTemplateRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent(targetScaleAuditRow.templateReadbackRoutes[0])}`,
+    headers: adminHeaders,
+  });
+  assert.equal(
+    rlhf93CompletionAuditTargetTemplateRouteFilter.status,
+    200,
+    JSON.stringify(rlhf93CompletionAuditTargetTemplateRouteFilter.body),
+  );
+  assert.ok(
+    rlhf93CompletionAuditTargetTemplateRouteFilter.body.items.some(
+      (item) => item.id === "october-target_scale_and_data_collection",
+    ),
+  );
+
+  const rlhf93CompletionAuditHiddenBenchmarkPreflightRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent(hiddenBenchmarkAuditRow.preflightCoverageRoutes[0])}`,
+    headers: adminHeaders,
+  });
+  assert.equal(
+    rlhf93CompletionAuditHiddenBenchmarkPreflightRouteFilter.status,
+    200,
+    JSON.stringify(rlhf93CompletionAuditHiddenBenchmarkPreflightRouteFilter.body),
+  );
+  assert.ok(
+    rlhf93CompletionAuditHiddenBenchmarkPreflightRouteFilter.body.items.some(
+      (item) => item.id === "october-validation_hidden_benchmark_and_claims",
+    ),
+  );
 
   const rlhf93CompletionAuditModelReproRouteFilter = await invokeApi(context, {
     method: "GET",

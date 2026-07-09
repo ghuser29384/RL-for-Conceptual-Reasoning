@@ -16346,7 +16346,7 @@ function derivedChecklistItem(row, index, { checklist, report, sectionKey, route
   const evidenceIds = Array.isArray(row.evidenceIds) ? row.evidenceIds : [];
   const sourceStatuses = Array.isArray(row.sourceStatuses) ? row.sourceStatuses : [];
   const releaseReportSectionRoutes = evidenceIds.map((evidenceId) => `/api/v1/release-report-sections/${encodeURIComponent(evidenceId)}`);
-  return {
+  const item = {
     ...row,
     id: rowId,
     rowId,
@@ -16364,6 +16364,12 @@ function derivedChecklistItem(row, index, { checklist, report, sectionKey, route
     reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
     evidenceIdCount: evidenceIds.length,
     sourceStatusCount: sourceStatuses.length,
+  };
+  const routes = derivedChecklistItemRoutes(item);
+  return {
+    ...item,
+    routes,
+    routeCount: routes.length,
   };
 }
 
@@ -17662,7 +17668,7 @@ function rlhf93CompletionAuditDerivedChecklistRowRoutes(report, requirementGroup
     ...(Array.isArray(row?.remediationRoutes) ? row.remediationRoutes : []),
     ...(Array.isArray(row?.verificationRoutes) ? row.verificationRoutes : []),
     ...operatorActions.flatMap(operatorActionItemRoutes),
-    ...operatorActions.flatMap(rlhf93CompletionAuditOperatorActionFilterRoutes),
+    ...operatorActions.flatMap(operatorActionItemFilterRoutes),
   ]);
 }
 
@@ -17688,19 +17694,6 @@ function rlhf93CompletionAuditDerivedChecklistOperatorRowId(requirementGroup) {
     label_aggregation_reliability: "label_aggregation_and_reliability",
     model_evaluation_reproducibility: "model_evaluation_reproducibility",
   }[requirementGroup] ?? null;
-}
-
-function rlhf93CompletionAuditOperatorActionFilterRoutes(action) {
-  const actionId = action?.actionId ?? action?.id;
-  return uniqueValues([
-    actionId ? `/api/v1/operator-action-items?actionId=${encodeURIComponent(actionId)}` : null,
-    ...(Array.isArray(action?.relatedSubmitActionIds)
-      ? action.relatedSubmitActionIds.map(
-          (relatedSubmitActionId) =>
-            `/api/v1/operator-action-items?relatedSubmitActionId=${encodeURIComponent(relatedSubmitActionId)}`,
-        )
-      : []),
-  ]);
 }
 
 function rlhf93CompletionAuditOperatorActionMatchesDerivedRow(action, sourceRowId) {
@@ -18195,6 +18188,10 @@ function rlhf93CompletionAuditItemRoutes(item) {
     ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
     ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
     ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.templateReadbackRoutes) ? item.templateReadbackRoutes : []),
+    ...(Array.isArray(item?.preflightCoverageRoutes) ? item.preflightCoverageRoutes : []),
+    ...(Array.isArray(item?.governanceCoverageRoutes) ? item.governanceCoverageRoutes : []),
+    ...(Array.isArray(item?.releaseReportSectionRoutes) ? item.releaseReportSectionRoutes : []),
     item?.readbackRoute,
     item?.writeRoute,
     item?.bulkImportRoute,
@@ -20291,6 +20288,7 @@ function operatorActionItemRoutes(item) {
     item?.operatorActionItemRoute,
     item?.actionReadbackItemRoute,
     item?.operatorActionGroupRoute,
+    ...operatorActionItemFilterRoutes(item),
     item?.writeRoute,
     item?.readbackRoute,
     item?.readbackItemRoute,
@@ -20328,6 +20326,17 @@ function operatorActionItemRoutes(item) {
     ...(Array.isArray(item?.preflightCoverageRoutes) ? item.preflightCoverageRoutes : []),
     ...(Array.isArray(item?.governanceCoverageRoutes) ? item.governanceCoverageRoutes : []),
     ...operatorActionItemRelatedSubmitActions(item).flatMap(operatorActionItemRoutes),
+  ]);
+}
+
+function operatorActionItemFilterRoutes(item) {
+  const actionId = item?.id ?? item?.actionId;
+  return uniqueValues([
+    actionId ? `/api/v1/operator-action-items?actionId=${encodeURIComponent(actionId)}` : null,
+    ...operatorActionItemRelatedSubmitActionIds(item).map(
+      (relatedSubmitActionId) =>
+        `/api/v1/operator-action-items?relatedSubmitActionId=${encodeURIComponent(relatedSubmitActionId)}`,
+    ),
   ]);
 }
 
