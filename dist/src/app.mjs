@@ -9721,6 +9721,8 @@ function publicDatasetPackageManifestPreviewRow(item) {
         ["Sequence", item.sequence ?? "not reported"],
         ["Readiness rows", readinessRows],
         ["Target gaps", targetGaps],
+        ["Item readback", item.readbackItemRoute ?? item.packageManifestItemRoute ?? "not available"],
+        ["Routes", item.routeCount ?? workflowPreviewArraySummary(item.routes, "not reported")],
         ["Next action", item.nextActionRoute ?? "not available"],
         ["Source package", item.sourcePackageManifestRoute ?? "not package-linked"],
         ["Runbook group", item.sourceRunbookGroupRoute ?? "not group-linked"],
@@ -9938,6 +9940,8 @@ function publicDatasetPublicationGatePreviewRow(item) {
       ${metricList([
         ["Publication blocked", item.publicationBlocked ? "yes" : "no"],
         ["Publish action", item.publicationActionAvailable ? "available" : "not exposed by this preflight"],
+        ["Item readback", item.readbackItemRoute ?? "not available"],
+        ["Routes", item.routeCount ?? workflowPreviewArraySummary(item.routes, "not reported")],
         ["Readiness rows", readinessRows],
         ["Package steps", packageSteps],
         ["Source packages", sourcePackages],
@@ -10038,6 +10042,7 @@ function publicDatasetDocumentTemplatePreviewRow(item) {
         ["POST route", item.writeRoute ?? "not available"],
         ["Dry-run route", item.singleRecordDryRunRoute ?? "not available"],
         ["Validate route", item.singleRecordValidateOnlyRoute ?? "not available"],
+        ["Template route", item.templateReadbackItemRoute ?? item.templateReadbackRoute ?? "not available"],
         ["Readiness row", item.readinessRowReadbackRoute ?? "not available"],
         ["Linked release objects", linkedSummary || "not reported"],
         ["Draft sections", draftSectionSummary],
@@ -10509,6 +10514,8 @@ function metaphilosophyTaskTrackPreviewRow(item) {
         ["Metric families", workflowPreviewArraySummary(item.primaryMetricFamilies, "not reported")],
         ["Split policy", item.splitPolicy ?? "not reported"],
         ["Training export", item.trainingExportPolicy ?? "not reported"],
+        ["Routes", item.routeCount ?? workflowPreviewArraySummary(item.routes, "not reported")],
+        ["Readback route", item.readbackItemRoute ?? "not linked"],
         ["Review reasons", workflowPreviewReviewReasons(item)],
       ])}
     </article>

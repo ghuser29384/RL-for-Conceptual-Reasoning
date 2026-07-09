@@ -11224,10 +11224,20 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageManifest.body.counts.byRoute["/api/v1/public-dataset-package-manifest"], 6);
   assert.match(publicDatasetPackageManifest.body.policy.scope, /Read-only Dataset v0\.1 package manifest/);
   assert.match(publicDatasetPackageManifest.body.policy.scope, /without creating a Dataset object/);
+  assert.ok(publicDatasetPackageManifest.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
+  assert.ok(
+    publicDatasetPackageManifest.body.items.every(
+      (item) =>
+        item.readbackItemRoute === `/api/v1/public-dataset-package-manifest/${encodeURIComponent(item.id)}` &&
+        item.packageManifestItemRoute === item.readbackItemRoute &&
+        item.routes.includes(item.readbackItemRoute),
+    ),
+  );
 
   const targetDataPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "target-data-package");
   assert.equal(targetDataPackageStep.status, "blocked_by_target_scale");
   assert.equal(targetDataPackageStep.stepKind, "target_data_collection");
+  assert.equal(targetDataPackageStep.readbackItemRoute, "/api/v1/public-dataset-package-manifest/target-data-package");
   assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 4834);
   assert.equal(targetDataPackageStep.counts.expectedResourceDelta, 2034);
   assert.equal(targetDataPackageStep.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
@@ -11260,6 +11270,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDocumentationPackageStep.status, "documentation_not_submitted");
   assert.deepEqual(publicDocumentationPackageStep.readinessRowIds, ["dataset_card", "methodology_report"]);
   assert.equal(publicDocumentationPackageStep.nextActionRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  assert.equal(publicDocumentationPackageStep.readbackItemRoute, "/api/v1/public-dataset-package-manifest/public-documentation");
+  assert.equal(publicDocumentationPackageStep.routeCount, publicDocumentationPackageStep.routes.length);
 
   const publicDatasetPackageByStepKind = await invokeApi(context, {
     method: "GET",
@@ -11290,6 +11302,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageByRoute.body.count, 1);
   assert.equal(publicDatasetPackageByRoute.body.items[0].id, "public-documentation");
   assert.equal(publicDatasetPackageByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 1);
+
+  const publicDatasetPackageByItemRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-manifest?route=${encodeURIComponent("/api/v1/public-dataset-package-manifest/public-documentation")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByItemRoute.status, 200, JSON.stringify(publicDatasetPackageByItemRoute.body));
+  assert.equal(publicDatasetPackageByItemRoute.body.count, 1);
+  assert.equal(publicDatasetPackageByItemRoute.body.items[0].id, "public-documentation");
+  assert.equal(publicDatasetPackageByItemRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-package-manifest/public-documentation"], 1);
 
   const publicDatasetPackageByTargetRunbookGroup = await invokeApi(context, {
     method: "GET",
@@ -11333,6 +11355,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageById.status, 200, JSON.stringify(publicDatasetPackageById.body));
   assert.equal(publicDatasetPackageById.body.count, 1);
   assert.equal(publicDatasetPackageById.body.item.stepKind, "public_documentation");
+  assert.equal(publicDatasetPackageById.body.item.readbackItemRoute, "/api/v1/public-dataset-package-manifest/public-documentation");
+  assert.equal(publicDatasetPackageById.body.item.routeCount, publicDatasetPackageById.body.item.routes.length);
 
   const publicDatasetPackageMissing = await invokeApi(context, {
     method: "GET",
@@ -12384,6 +12408,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 7);
   assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 7);
   assert.equal(publicDatasetPublicationGate.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 7);
+  assert.ok(publicDatasetPublicationGate.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
+  assert.ok(
+    publicDatasetPublicationGate.body.items.every(
+      (item) =>
+        item.readbackItemRoute === `/api/v1/public-dataset-publication-gate/${encodeURIComponent(item.id)}` &&
+        item.routes.includes(item.readbackItemRoute),
+    ),
+  );
   assert.match(publicDatasetPublicationGate.body.policy.scope, /publication preflight/);
   assert.match(publicDatasetPublicationGate.body.policy.authority, /cannot publish a dataset/);
   assert.equal(publicDatasetPublicationGate.body.sourceRoutes.publicDatasetReleasePackage, "/api/v1/public-dataset-release-package");
@@ -12409,6 +12441,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(
     targetDataPublicationGate.sourceRunbookGroupRoutes.includes("/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data"),
   );
+  assert.equal(targetDataPublicationGate.readbackItemRoute, "/api/v1/public-dataset-publication-gate/target-data-ready");
+  assert.equal(targetDataPublicationGate.routeCount, targetDataPublicationGate.routes.length);
   assert.ok(targetDataPublicationGate.sourceActionGroupRoutes.includes("/api/v1/operator-action-items?executionStatus=ready_to_collect_data"));
   assert.ok(targetDataPublicationGate.routes.includes("/api/v1/public-dataset-package-manifest/target-data-package"));
   assert.ok(targetDataPublicationGate.routes.includes("/api/v1/target-gaps/current-package-manifest"));
@@ -12418,6 +12452,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDocumentsPublicationGate.status, "documentation_not_submitted");
   assert.ok(publicDocumentsPublicationGate.releasePackageArtifactIds.includes("dataset-card"));
   assert.ok(publicDocumentsPublicationGate.releasePackageArtifactIds.includes("methodology-report"));
+  assert.equal(publicDocumentsPublicationGate.readbackItemRoute, "/api/v1/public-dataset-publication-gate/public-documents-ready");
   assert.ok(publicDocumentsPublicationGate.routes.includes("/api/v1/public-dataset-documents/template"));
 
   const hiddenExclusionsPublicationGate = publicDatasetPublicationGate.body.items.find((item) => item.id === "hidden-protected-exclusions-ready");
@@ -12487,6 +12522,21 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGateByRoute.body.count, 2);
   assert.equal(publicDatasetPublicationGateByRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents/template"], 2);
 
+  const publicDatasetPublicationGateByItemRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-publication-gate?route=${encodeURIComponent("/api/v1/public-dataset-publication-gate/public-documents-ready")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPublicationGateByItemRoute.status, 200, JSON.stringify(publicDatasetPublicationGateByItemRoute.body));
+  assert.equal(publicDatasetPublicationGateByItemRoute.body.count, 1);
+  assert.equal(publicDatasetPublicationGateByItemRoute.body.items[0].id, "public-documents-ready");
+  assert.equal(
+    publicDatasetPublicationGateByItemRoute.body.filteredCounts.byRoute[
+      "/api/v1/public-dataset-publication-gate/public-documents-ready"
+    ],
+    1,
+  );
+
   const publicDatasetPublicationGateBySourceGroupRoute = await invokeApi(context, {
     method: "GET",
     url: `/api/v1/public-dataset-publication-gate?route=${encodeURIComponent(
@@ -12511,6 +12561,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPublicationGateById.status, 200, JSON.stringify(publicDatasetPublicationGateById.body));
   assert.equal(publicDatasetPublicationGateById.body.count, 1);
   assert.equal(publicDatasetPublicationGateById.body.item.gateKind, "public_documentation_ready");
+  assert.equal(publicDatasetPublicationGateById.body.item.readbackItemRoute, "/api/v1/public-dataset-publication-gate/public-documents-ready");
+  assert.equal(publicDatasetPublicationGateById.body.item.routeCount, publicDatasetPublicationGateById.body.item.routes.length);
 
   const publicDatasetPublicationGateMissing = await invokeApi(context, {
     method: "GET",
@@ -15813,6 +15865,36 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(datasetCardTemplateOnly.status, 200, JSON.stringify(datasetCardTemplateOnly.body));
   assert.equal(datasetCardTemplateOnly.body.count, 1);
   assert.equal(datasetCardTemplateOnly.body.items[0].documentKind, "dataset_card");
+  assert.equal(
+    datasetCardTemplateOnly.body.items[0].templateReadbackItemRoute,
+    "/api/v1/public-dataset-documents/template/dataset_card",
+  );
+
+  const datasetCardTemplateByKind = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents/template/dataset_card",
+    headers: adminHeaders,
+  });
+  assert.equal(datasetCardTemplateByKind.status, 200, JSON.stringify(datasetCardTemplateByKind.body));
+  assert.equal(datasetCardTemplateByKind.body.count, 1);
+  assert.equal(datasetCardTemplateByKind.body.item.documentKind, "dataset_card");
+  assert.equal(datasetCardTemplateByKind.body.item.id, "public-dataset-document-template:dataset_card");
+
+  const methodologyTemplateById = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-documents/template/${encodeURIComponent("public-dataset-document-template:methodology_report")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(methodologyTemplateById.status, 200, JSON.stringify(methodologyTemplateById.body));
+  assert.equal(methodologyTemplateById.body.count, 1);
+  assert.equal(methodologyTemplateById.body.item.documentKind, "methodology_report");
+
+  const missingTemplateById = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-documents/template/not-present",
+    headers: adminHeaders,
+  });
+  assert.equal(missingTemplateById.status, 404);
 
   const templateByRoute = await invokeApi(context, {
     method: "GET",
@@ -23069,6 +23151,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(effectiveTaskTrackCollection.body.readbackSource, "release_report_effective_metaphilosophy");
   assert.ok(effectiveTaskTrackCollection.body.items.every((item) => item.readbackSource === "release_report_effective_metaphilosophy"));
   assert.ok(effectiveTaskTrackCollection.body.items.some((item) => item.id === "critique_rating"));
+  assert.ok(effectiveTaskTrackCollection.body.items.every((item) => item.routeCount === item.routes.length));
+  assert.equal(effectiveTaskTrackCollection.body.filteredCounts.byRoute["/api/v1/metaphilosophy/task-tracks"], METAPHILOSOPHY_TASK_TRACKS.length);
+  assert.equal(effectiveTaskTrackCollection.body.filteredCounts.byRoute["/api/release/report"], METAPHILOSOPHY_TASK_TRACKS.length);
+  assert.equal(
+    effectiveTaskTrackCollection.body.filteredCounts.byRoute["/api/v1/metaphilosophy/deliverable-checklist/greenfield_task_track_taxonomy"],
+    METAPHILOSOPHY_TASK_TRACKS.length,
+  );
+  assert.equal(
+    effectiveTaskTrackCollection.body.filteredCounts.byRoute["/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-greenfield_task_track_taxonomy"],
+    METAPHILOSOPHY_TASK_TRACKS.length,
+  );
 
   const effectiveLmcaDirectTaskTracks = await invokeApi(context, {
     method: "GET",
@@ -23090,6 +23183,19 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(effectiveCustomLossTaskTracks.body.items.some((item) => item.id === "critique_rating"));
   assert.ok(effectiveCustomLossTaskTracks.body.items.every((item) => item.primaryMetricFamilies.includes("custom_weighted_loss")));
 
+  const effectiveTaskTracksByCompletionAuditRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/task-tracks?route=${encodeURIComponent("/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-greenfield_task_track_taxonomy")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(effectiveTaskTracksByCompletionAuditRoute.status, 200, JSON.stringify(effectiveTaskTracksByCompletionAuditRoute.body));
+  assert.equal(effectiveTaskTracksByCompletionAuditRoute.body.count, METAPHILOSOPHY_TASK_TRACKS.length);
+  assert.ok(
+    effectiveTaskTracksByCompletionAuditRoute.body.items.every((item) =>
+      item.routes.includes("/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-greenfield_task_track_taxonomy"),
+    ),
+  );
+
   const effectiveCritiqueRatingTrack = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/metaphilosophy/task-tracks/critique_rating",
@@ -23099,6 +23205,9 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(effectiveCritiqueRatingTrack.body.id, "critique_rating");
   assert.equal(effectiveCritiqueRatingTrack.body.readbackSource, "release_report_effective_metaphilosophy");
   assert.equal(effectiveCritiqueRatingTrack.body.releaseUseStatus, "metaphilosophy_task_track_taxonomy_declared");
+  assert.equal(effectiveCritiqueRatingTrack.body.readbackItemRoute, "/api/v1/metaphilosophy/task-tracks/critique_rating");
+  assert.equal(effectiveCritiqueRatingTrack.body.deliverableChecklistRoute, "/api/v1/metaphilosophy/deliverable-checklist/greenfield_task_track_taxonomy");
+  assert.ok(effectiveCritiqueRatingTrack.body.routes.includes("/api/release/report"));
 
   const effectiveBacklogCollection = await invokeApi(context, {
     method: "GET",
@@ -23558,6 +23667,10 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(fetchedTaskTrack.status, 200);
   assert.equal(fetchedTaskTrack.body.id, "critique_revision");
   assert.equal(fetchedTaskTrack.body.lmcaRelationship, "rd_backlog_extension");
+  assert.equal(fetchedTaskTrack.body.readbackSource, "submitted_workflow_evidence");
+  assert.equal(fetchedTaskTrack.body.readbackItemRoute, "/api/v1/metaphilosophy/task-tracks/critique_revision");
+  assert.ok(fetchedTaskTrack.body.routes.includes("/api/v1/metaphilosophy/deliverable-checklist/greenfield_task_track_taxonomy"));
+  assert.equal(fetchedTaskTrack.body.routeCount, fetchedTaskTrack.body.routes.length);
 
   const fetchedAdjudicationExplanationTrack = await invokeApi(context, {
     method: "GET",
@@ -23567,6 +23680,10 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(fetchedAdjudicationExplanationTrack.status, 200);
   assert.equal(fetchedAdjudicationExplanationTrack.body.id, "adjudication_explanation");
   assert.equal(fetchedAdjudicationExplanationTrack.body.lmcaRelationship, "project_governance_extension");
+  assert.equal(
+    fetchedAdjudicationExplanationTrack.body.completionAuditRoute,
+    "/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-greenfield_task_track_taxonomy",
+  );
 
   const taskTrackCollection = await invokeApi(context, {
     method: "GET",
@@ -23578,6 +23695,21 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(taskTrackCollection.body.count, 2);
   assert.equal(taskTrackCollection.body.items[0].id, "critique_revision");
   assert.ok(taskTrackCollection.body.items.some((item) => item.id === "adjudication_explanation"));
+  assert.ok(taskTrackCollection.body.items.every((item) => item.routeCount === item.routes.length));
+  assert.equal(taskTrackCollection.body.filteredCounts.byRoute["/api/v1/metaphilosophy/task-tracks"], 2);
+  assert.equal(
+    taskTrackCollection.body.filteredCounts.byRoute["/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-greenfield_task_track_taxonomy"],
+    2,
+  );
+
+  const submittedTaskTracksByDeliverableRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/task-tracks?route=${encodeURIComponent("/api/v1/metaphilosophy/deliverable-checklist/greenfield_task_track_taxonomy")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(submittedTaskTracksByDeliverableRoute.status, 200, JSON.stringify(submittedTaskTracksByDeliverableRoute.body));
+  assert.equal(submittedTaskTracksByDeliverableRoute.body.count, 2);
+  assert.ok(submittedTaskTracksByDeliverableRoute.body.items.every((item) => item.readbackSource === "submitted_workflow_evidence"));
 
   const raterTaskTrackCollection = await invokeApi(context, {
     method: "GET",

@@ -8158,9 +8158,11 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/v1/public-dataset-documents/template") {
+  const publicDatasetDocumentTemplateMatch = url.pathname.match(/^\/api\/v1\/public-dataset-documents\/template(?:\/([^/]+))?$/);
+  if (request.method === "GET" && publicDatasetDocumentTemplateMatch) {
+    const itemId = publicDatasetDocumentTemplateMatch[1] ? decodeURIComponent(publicDatasetDocumentTemplateMatch[1]) : null;
     await reportArtifactEndpoint(request, response, context, ["admin", "auditor"], (report) =>
-      publicDatasetDocumentTemplateReadback(report, { searchParams: url.searchParams }),
+      publicDatasetDocumentTemplateReadback(report, { itemId, searchParams: url.searchParams }),
     );
     return;
   }
@@ -12474,7 +12476,11 @@ function releaseVersionManifestTemplateCounts(items) {
 function publicDatasetDocumentTemplateReadback(report, options = {}) {
   const allItems = publicDatasetDocumentTemplateItems(report);
   const filters = publicDatasetDocumentTemplateFilters(options.searchParams);
-  const items = allItems.filter((item) => publicDatasetDocumentTemplateMatchesFilters(item, filters));
+  const filteredItems = allItems.filter((item) => publicDatasetDocumentTemplateMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || item.documentKind === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
   return {
     id: `public-dataset-document-template-${report.releaseId ?? releaseId}`,
     releaseId: report.releaseId ?? releaseId,
@@ -12506,6 +12512,7 @@ function publicDatasetDocumentTemplateReadback(report, options = {}) {
     totalCount: allItems.length,
     counts: publicDatasetDocumentTemplateCounts(allItems),
     filteredCounts: publicDatasetDocumentTemplateCounts(items),
+    ...(options.itemId ? { item: items[0] } : {}),
     items,
   };
 }
@@ -12535,6 +12542,7 @@ function publicDatasetDocumentTemplateItems(report) {
       readinessReviewReasons: Array.isArray(readinessRow.reviewReasons) ? readinessRow.reviewReasons : [],
       readinessRowReadbackRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(documentKind)}`,
       templateReadbackRoute,
+      templateReadbackItemRoute: `/api/v1/public-dataset-documents/template/${encodeURIComponent(documentKind)}`,
       writeRoute: "/api/v1/public-dataset-documents",
       singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
       singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
@@ -12568,6 +12576,7 @@ function publicDatasetDocumentTemplateItems(report) {
       requestBody,
       routes: [
         templateReadbackRoute,
+        `/api/v1/public-dataset-documents/template/${encodeURIComponent(documentKind)}`,
         "/api/v1/public-dataset-documents/template",
         "/api/v1/public-dataset-documents",
         routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
@@ -13054,6 +13063,19 @@ function publicDatasetPackageManifestStep({
 }) {
   const status = publicDatasetPackageManifestStepStatus(readinessRows, fallbackStatus);
   const readinessRowIds = readinessRows.map((row) => row.id).filter(Boolean);
+  const readbackItemRoute = `/api/v1/public-dataset-package-manifest/${encodeURIComponent(id)}`;
+  const packageManifestItemRoute = readbackItemRoute;
+  const allRoutes = uniqueValues([
+    "/api/v1/public-dataset-package-manifest",
+    readbackItemRoute,
+    sourcePackageManifestRoute,
+    sourceRunbookGroupRoute,
+    sourceActionGroupRoute,
+    ...routes,
+    ...readinessRows.flatMap(publicDatasetReadinessRoutes),
+    ...templateRoutes,
+    ...verificationRoutes,
+  ]);
   return {
     id,
     rowId: id,
@@ -13070,22 +13092,15 @@ function publicDatasetPackageManifestStep({
     downstreamArtifacts: uniqueValues(readinessRows.flatMap((row) => (Array.isArray(row.downstreamArtifacts) ? row.downstreamArtifacts : []))),
     counts,
     nextActionRoute,
+    readbackItemRoute,
+    packageManifestItemRoute,
     sourcePackageManifestRoute,
     sourceRunbookGroupRoute,
     sourceActionGroupRoute,
     templateRoutes: uniqueValues(templateRoutes),
     verificationRoutes: uniqueValues(verificationRoutes),
-    routes: uniqueValues([
-      "/api/v1/public-dataset-package-manifest",
-      `/api/v1/public-dataset-package-manifest/${encodeURIComponent(id)}`,
-      sourcePackageManifestRoute,
-      sourceRunbookGroupRoute,
-      sourceActionGroupRoute,
-      ...routes,
-      ...readinessRows.flatMap(publicDatasetReadinessRoutes),
-      ...templateRoutes,
-      ...verificationRoutes,
-    ]),
+    routeCount: allRoutes.length,
+    routes: allRoutes,
   };
 }
 
@@ -14030,9 +14045,10 @@ function publicDatasetPublicationGateItem({
     ]),
   );
   const downstreamArtifacts = uniqueValues(downstreamRows.map((launch) => launch.downstreamArtifact).filter(Boolean));
+  const readbackItemRoute = `/api/v1/public-dataset-publication-gate/${encodeURIComponent(definition.id)}`;
   const routes = uniqueValues([
     "/api/v1/public-dataset-publication-gate",
-    `/api/v1/public-dataset-publication-gate/${encodeURIComponent(definition.id)}`,
+    readbackItemRoute,
     "/api/release/report",
     "/api/v1/public-dataset-readiness",
     "/api/v1/public-dataset-package-manifest",
@@ -14056,6 +14072,7 @@ function publicDatasetPublicationGateItem({
     gateKind: definition.gateKind,
     label: definition.label,
     status,
+    readbackItemRoute,
     gateOpen: status !== "ready",
     publicationBlocked: status !== "ready",
     publicationActionAvailable: false,
@@ -14127,6 +14144,7 @@ function publicDatasetPublicationGateItem({
       ...sourceRunbookGroupRoutes,
       ...sourceActionGroupRoutes,
     ]),
+    routeCount: routes.length,
     routes,
   };
 }
@@ -23707,7 +23725,7 @@ async function workflowReadEndpoint(request, response, context, match) {
     sendJson(response, 404, { error: "artifact_not_found" });
     return;
   }
-  sendJson(response, 200, readbackResource);
+  sendJson(response, 200, workflowCollectionDecoratedReadItem(spec.resourceKey, readbackResource));
 }
 
 async function adminArgumentExtractionReadbackEndpoint(request, response, context, extractionId) {
@@ -24046,11 +24064,12 @@ async function workflowCollectionReadEndpoint(request, response, context, match)
   if (!items.length) {
     const effectiveReadback = await workflowReleaseReportReadbackCollection(context, spec.resourceKey);
     if (effectiveReadback) {
-      const filteredItems = workflowCollectionReadFilteredItems(spec.resourceKey, effectiveReadback.items, filters);
+      const effectiveItems = workflowCollectionSubmittedReadItems(spec.resourceKey, effectiveReadback.items);
+      const filteredItems = workflowCollectionReadFilteredItems(spec.resourceKey, effectiveItems, filters);
       sendJson(response, 200, {
         resourceKey: spec.resourceKey,
         count: filteredItems.length,
-        totalCount: effectiveReadback.items.length,
+        totalCount: effectiveItems.length,
         submittedCount: 0,
         readbackSource: effectiveReadback.readbackSource,
         releaseReportId: effectiveReadback.releaseReportId,
@@ -24084,10 +24103,76 @@ function workflowCollectionSubmittedReadItems(resourceKey, items) {
   ) {
     return rows;
   }
-  return rows.map((item) => ({
+  return rows.map((item) => workflowCollectionDecoratedReadItem(resourceKey, item));
+}
+
+function workflowCollectionDecoratedReadItem(resourceKey, item) {
+  if (!item || typeof item !== "object") return item;
+  if (resourceKey === "metaphilosophyTaskTrack") return metaphilosophyTaskTrackDecoratedReadItem(item);
+  if (
+    [
+      "metaphilosophyArchitectureLayer",
+      "metaphilosophyResearchBacklogItem",
+    ].includes(resourceKey)
+  ) {
+    return {
+      ...item,
+      readbackSource: item.readbackSource ?? "submitted_workflow_evidence",
+    };
+  }
+  return item;
+}
+
+function metaphilosophyTaskTrackDecoratedReadItem(item) {
+  const taskTrackId = item.id ?? item.taskTrackId ?? item.resourceId ?? "task-track";
+  const readbackItemRoute = `/api/v1/metaphilosophy/task-tracks/${encodeURIComponent(taskTrackId)}`;
+  const collectionReadbackRoute = "/api/v1/metaphilosophy/task-tracks";
+  const submissionRoute = "/api/v1/metaphilosophy/task-tracks";
+  const releaseReportRoute = "/api/release/report";
+  const deliverableChecklistRoute = "/api/v1/metaphilosophy/deliverable-checklist/greenfield_task_track_taxonomy";
+  const completionAuditRoute = "/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-greenfield_task_track_taxonomy";
+  const routes = metaphilosophyTaskTrackItemRoutes({
     ...item,
+    taskTrackId,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    submissionRoute,
+    releaseReportRoute,
+    deliverableChecklistRoute,
+    completionAuditRoute,
+  });
+  return {
+    ...item,
+    taskTrackId,
     readbackSource: item.readbackSource ?? "submitted_workflow_evidence",
-  }));
+    routeCount: routes.length,
+    routes,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    submissionRoute,
+    releaseReportRoute,
+    deliverableChecklistRoute,
+    completionAuditRoute,
+  };
+}
+
+function metaphilosophyTaskTrackItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.submissionRoute,
+    item?.releaseReportRoute,
+    item?.deliverableChecklistRoute,
+    item?.completionAuditRoute,
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
+    ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
+    ...(Array.isArray(item?.evidenceRoutes) ? item.evidenceRoutes : []),
+    ...(Array.isArray(item?.evidenceIds)
+      ? item.evidenceIds.map((evidenceId) => `/api/v1/release-report-sections/${encodeURIComponent(evidenceId)}`)
+      : []),
+  ]);
 }
 
 function workflowCollectionReadFilters(resourceKey, searchParams) {
@@ -24107,6 +24192,7 @@ function workflowCollectionReadFilters(resourceKey, searchParams) {
     releaseClaimRole: firstSearchValue(searchParams, ["releaseClaimRole"]),
     lmcaRelationship: firstSearchValue(searchParams, ["lmcaRelationship"]),
     metricFamily: firstSearchValue(searchParams, ["metricFamily"]),
+    route: firstSearchValue(searchParams, ["route"]),
     experimentType: firstSearchValue(searchParams, ["experimentType"]),
     releaseGateStatus: firstSearchValue(searchParams, ["releaseGateStatus"]),
     directRequirement: parseOptionalBoolean(firstSearchValue(searchParams, ["directRequirement"])),
@@ -24139,6 +24225,7 @@ function workflowCollectionReadItemMatches(resourceKey, item, filters) {
   if (filters.id && !sameFilterValue(item?.id ?? item?.artifactId, filters.id)) return false;
   if (filters.status && ![item?.status, item?.releaseUseStatus].some((value) => sameFilterValue(value, filters.status))) return false;
   if (filters.readbackSource && !sameFilterValue(item?.readbackSource, filters.readbackSource)) return false;
+  if (filters.route && !workflowCollectionReadItemRoutes(resourceKey, item).includes(filters.route)) return false;
   if (resourceKey === "metaphilosophyArchitectureLayer" && filters.releaseClaimRole && !sameFilterValue(item?.releaseClaimRole, filters.releaseClaimRole)) return false;
   if (resourceKey === "metaphilosophyTaskTrack") {
     if (filters.lmcaRelationship && !sameFilterValue(item?.lmcaRelationship, filters.lmcaRelationship)) return false;
@@ -24150,6 +24237,11 @@ function workflowCollectionReadItemMatches(resourceKey, item, filters) {
     if (filters.directRequirement !== null && item?.directRequirement !== filters.directRequirement) return false;
   }
   return true;
+}
+
+function workflowCollectionReadItemRoutes(resourceKey, item) {
+  if (resourceKey === "metaphilosophyTaskTrack") return metaphilosophyTaskTrackItemRoutes(item);
+  return Array.isArray(item?.routes) ? item.routes : [];
 }
 
 function sameFilterValue(value, filterValue) {
@@ -24171,6 +24263,7 @@ function workflowCollectionReadFilteredCounts(resourceKey, items) {
   if (resourceKey === "metaphilosophyTaskTrack") {
     counts.byLmcaRelationship = countByField(rows, "lmcaRelationship");
     counts.byMetricFamily = countByArrayField(rows, "primaryMetricFamilies");
+    counts.byRoute = countValues(rows.flatMap(metaphilosophyTaskTrackItemRoutes));
   }
   if (resourceKey === "metaphilosophyResearchBacklogItem") {
     counts.byExperimentType = countByField(rows, "experimentType");
