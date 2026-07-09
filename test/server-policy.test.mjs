@@ -7249,10 +7249,22 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   );
   assert.equal(targetPackageDryRun.body.validatedResources[0].targetGapId, "positions");
   assert.equal(targetPackageDryRun.body.validatedResources[0].expectedResourceDeltaFromPackageRecord, 1);
+  assert.equal(targetPackageDryRun.body.validatedResources[0].packageDependencyStatus, "primary_without_package_setup");
   assert.equal(targetPackageDryRun.body.validatedResources[1].importKind, "setup_data_import");
+  assert.equal(targetPackageDryRun.body.validatedResources[1].packageDependencyStatus, "setup_prerequisite");
   assert.equal(targetPackageDryRun.body.validatedResources[1].expectedResourceDeltaFromPackageRecord, 0);
   assert.equal(targetPackageDryRun.body.validatedResources[2].targetGapId, "blind_initial_ratings");
+  assert.equal(targetPackageDryRun.body.validatedResources[2].packageDependencyStatus, "primary_after_setup_prerequisites");
   assert.equal(targetPackageDryRun.body.validatedResources[2].templateExpectedResourceDelta, 1434);
+  assert.equal(targetPackageDryRun.body.packageDependencySummary.status, "setup_before_primary_order_satisfied");
+  assert.equal(targetPackageDryRun.body.packageDependencySummary.setupBeforePrimaryRequired, true);
+  assert.equal(targetPackageDryRun.body.packageDependencySummary.setupEntryCount, 1);
+  assert.equal(targetPackageDryRun.body.packageDependencySummary.primaryEntryCount, 2);
+  assert.deepEqual(targetPackageDryRun.body.packageDependencySummary.targetGapsWithSetupAndPrimary, ["blind_initial_ratings"]);
+  assert.deepEqual(targetPackageDryRun.body.packageDependencySummary.targetGapsWithPrimaryOnly, ["positions"]);
+  assert.equal(targetPackageDryRun.body.packageDependencySummary.byDependencyStatus.setup_before_primary_order_satisfied, 1);
+  assert.equal(targetPackageDryRun.body.packageDependencySummary.byDependencyStatus.primary_without_package_setup, 1);
+  assert.match(targetPackageDryRun.body.packageDependencySummary.validationPolicy, /setup_data_import rows must appear before dependent primary_data_import rows/);
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.releaseReportVerificationRoute, "/api/release/report");
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.submittedRecordCount, 3);
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.scopedTargetGapCount, 2);
@@ -7296,6 +7308,44 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(targetPackageValidateOnly.body.targetGapImpactSummary.releaseReportVerificationRoute, "/api/release/report");
   assert.equal(targetPackageValidateOnly.body.targetGapImpactSummary.scopedTargetGapCount, 2);
   assert.equal(targetPackageValidateOnly.body.targetGapImpactSummary.expectedResourceDeltaFromPackageRecords, 2);
+  assert.equal(targetPackageValidateOnly.body.packageDependencySummary.status, "setup_before_primary_order_satisfied");
+  assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
+  assert.equal((await auditStore.readRatingEvents()).length, ratingEventCountBeforeTargetPackageDryRun);
+
+  const misorderedDependencyPackageDryRun = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      jsonl: [
+        JSON.stringify({
+          importRoute: "/api/v1/ratings/import-jsonl",
+          targetGapId: "blind_initial_ratings",
+          importKind: "primary_data_import",
+          importImpact: packageRatingImportImpact,
+          rating: {
+            ...packageRating,
+            id: "rating-package-before-setup",
+            assignmentId: "assignment-package-after-rating",
+          },
+        }),
+        JSON.stringify({
+          importRoute: "/api/v1/assignments/import-jsonl",
+          targetGapId: "blind_initial_ratings",
+          importKind: "setup_data_import",
+          importImpact: packageAssignmentImportImpact,
+          assignment: { ...packageAssignment, id: "assignment-package-after-rating" },
+        }),
+      ].join("\n"),
+    }),
+  });
+  assert.equal(misorderedDependencyPackageDryRun.status, 400, JSON.stringify(misorderedDependencyPackageDryRun.body));
+  assert.equal(misorderedDependencyPackageDryRun.body.error, "target_data_collection_package_dependency_order");
+  assert.equal(misorderedDependencyPackageDryRun.body.line, 1);
+  assert.equal(misorderedDependencyPackageDryRun.body.targetGapId, "blind_initial_ratings");
+  assert.equal(misorderedDependencyPackageDryRun.body.primaryRoute, "/api/v1/ratings/import-jsonl");
+  assert.equal(misorderedDependencyPackageDryRun.body.setupRoute, "/api/v1/assignments/import-jsonl");
+  assert.equal(misorderedDependencyPackageDryRun.body.dependencyStatus, "primary_before_setup_prerequisites");
   assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
   assert.equal((await auditStore.readRatingEvents()).length, ratingEventCountBeforeTargetPackageDryRun);
 
@@ -7454,6 +7504,7 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(targetPackageImport.body.importedResourceCount, 3);
   assert.deepEqual(targetPackageImport.body.resourceIds, ["pos-package-live", "assignment-package-live", "rating-target-package-live"]);
   assert.deepEqual(targetPackageImport.body.ratingIds, ["rating-target-package-live"]);
+  assert.equal(targetPackageImport.body.packageDependencySummary.status, "setup_before_primary_order_satisfied");
   assert.equal(targetPackageImport.body.policyDecisionIds.length, 1);
   assert.match(targetPackageImport.body.policyDecisionIds[0], /^policy-decision-rating_lock-/);
   assert.equal(targetPackageImport.body.importedResources.find((item) => item.resourceKey === "rating").targetGapId, "blind_initial_ratings");
@@ -16001,6 +16052,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes("isOperatorRelatedSubmitFilterCollection(collection)"));
   assert.ok(appSource.includes("function workflowTargetGapImpactDetail(body)"));
   assert.ok(appSource.includes("targetGapImpactSummary"));
+  assert.ok(appSource.includes("packageDependencySummary"));
+  assert.ok(appSource.includes("Package dependency order"));
   assert.ok(appSource.includes("operatorEvidenceImpactSummary"));
   assert.ok(appSource.includes("Advisory impact preview"));
   assert.ok(appSource.includes("Operator evidence preview"));
@@ -17213,6 +17266,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("bounded admin/auditor readback for the current blocking target-data package only"));
   assert.ok(architectureDoc.includes("preflightDependencySummary"));
   assert.ok(architectureDoc.includes("dependencyStatus`, `setupRequiredBeforePrimary`, `prerequisiteStepIds`, and `dependentPrimaryStepIds"));
+  assert.ok(architectureDoc.includes("packageDependencySummary"));
+  assert.ok(architectureDoc.includes("packageDependencyStatus"));
+  assert.ok(architectureDoc.includes("rejects primary rows that precede staged setup rows"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-artifacts/template"));
   assert.ok(architectureDoc.includes("label snapshot, corpus manifest, training export, public export manifest, internal export manifest, and release report snapshot"));
   assert.ok(architectureDoc.includes("does not submit artifacts, materialize release reports, waive gates, create a new release-artifact type"));

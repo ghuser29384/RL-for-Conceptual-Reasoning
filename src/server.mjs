@@ -23435,6 +23435,15 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
   }
 
   const stagedResources = workflowEntries.map((entry) => ({ resourceKey: entry.spec.resourceKey, resource: entry.resource }));
+  const dependencyOrderValidation = targetDataCollectionPackageDependencyOrderValidation(entries);
+  if (!dependencyOrderValidation.ok) {
+    sendJson(response, 400, {
+      error: dependencyOrderValidation.error,
+      detail: dependencyOrderValidation.detail,
+      ...(dependencyOrderValidation.extra ?? {}),
+    });
+    return;
+  }
   for (const entry of workflowEntries) {
     const bindingValidation = await validateWorkflowResourceBindings(context, entry.resource, entry.spec, { stagedResources });
     if (!bindingValidation.ok) {
@@ -23479,6 +23488,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
   }
 
   const targetGapImpactSummary = targetDataCollectionPackageImpactSummary(entries);
+  const packageDependencySummary = targetDataCollectionPackageDependencySummary(entries);
 
   if (dryRun) {
     sendJson(response, 200, {
@@ -23488,6 +23498,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
       validatedResourceCount: entries.length,
       validatedResources: targetDataCollectionPackageEntrySummaries(entries),
       targetGapImpactSummary,
+      packageDependencySummary,
       resourceIds: entries.map((entry) => entry.resource?.id ?? entry.rating?.id).filter(Boolean),
       ratingIds: ratingEntries.map((entry) => entry.rating.id),
       allOrNothing: true,
@@ -23565,7 +23576,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
           sourceWriteRoute: entry.sourceWriteRoute,
           resourceKey: entry.resourceKey,
           resourceId: entry.resource.id,
-          ...targetDataCollectionPackageEntryImpactSummary(entry),
+          ...targetDataCollectionPackageEntryImpactSummary(entry, entries),
           eventId: event.id,
           payloadHash: event.payloadHash,
         };
@@ -23578,7 +23589,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
         resourceKey: "rating",
         resourceId: prepared.rating.id,
         ratingId: prepared.rating.id,
-        ...targetDataCollectionPackageEntryImpactSummary(entry),
+        ...targetDataCollectionPackageEntryImpactSummary(entry, entries),
         eventId: prepared.event.id,
         payloadHash: prepared.event.payloadHash,
         policyDecisionId: prepared.policyGate.decision.id,
@@ -23596,6 +23607,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
     policyEventIds: preparedRatings.flatMap((item) => item.policyGate.eventIds),
     accessAudit: workflowEventsToAppend.values().next().value?.accessAudit ?? preparedRatings[0]?.event.accessAudit ?? null,
     targetGapImpactSummary,
+    packageDependencySummary,
     allOrNothing: true,
     validationPolicy:
       "each_jsonl_line_names_a_concrete_target_data_import_route_and_reuses_that_route_validator_before_any_resource_append",
@@ -23836,6 +23848,127 @@ function targetDataCollectionPackageEntryImportKind(entry) {
   return entry.importMetadata?.importKind ?? entry.importMetadata?.importImpact?.importKind ?? null;
 }
 
+function targetDataCollectionPackageEntryTargetGapId(entry) {
+  return entry.importMetadata?.targetGapId ?? entry.importMetadata?.importImpact?.targetGapId ?? null;
+}
+
+function targetDataCollectionPackageDependencyOrderValidation(entries = []) {
+  for (const row of targetDataCollectionPackageDependencyRows(entries)) {
+    if (!row.setupEntryCount || !row.primaryEntryCount) continue;
+    const firstMisorderedPrimary = row.primaryEntries.find((primaryEntry) =>
+      row.setupEntries.some((setupEntry) => setupEntry.line > primaryEntry.line),
+    );
+    if (!firstMisorderedPrimary) continue;
+    const blockingSetup = row.setupEntries.find((setupEntry) => setupEntry.line > firstMisorderedPrimary.line);
+    return {
+      ok: false,
+      error: "target_data_collection_package_dependency_order",
+      detail:
+        `line ${firstMisorderedPrimary.line}: primary_data_import for ${row.targetGapId} appears before setup_data_import ` +
+        `line ${blockingSetup.line}; package setup rows must appear before dependent primary rows for the same target gap`,
+      extra: {
+        line: firstMisorderedPrimary.line,
+        targetGapId: row.targetGapId,
+        primaryLine: firstMisorderedPrimary.line,
+        primaryRoute: firstMisorderedPrimary.route,
+        setupLine: blockingSetup.line,
+        setupRoute: blockingSetup.route,
+        dependencyStatus: "primary_before_setup_prerequisites",
+      },
+    };
+  }
+  return { ok: true };
+}
+
+function targetDataCollectionPackageDependencyRows(entries = []) {
+  const rowsByTargetGap = new Map();
+  for (const entry of entries) {
+    const targetGapId = targetDataCollectionPackageEntryTargetGapId(entry);
+    if (!targetGapId) continue;
+    if (!rowsByTargetGap.has(targetGapId)) rowsByTargetGap.set(targetGapId, []);
+    rowsByTargetGap.get(targetGapId).push(entry);
+  }
+  return [...rowsByTargetGap.entries()].map(([targetGapId, targetGapEntries]) => {
+    const setupEntries = targetGapEntries.filter((entry) => targetDataCollectionPackageEntryImportKind(entry) === "setup_data_import");
+    const primaryEntries = targetGapEntries.filter((entry) => targetDataCollectionPackageEntryImportKind(entry) !== "setup_data_import");
+    const setupLines = setupEntries.map((entry) => entry.line);
+    const primaryLines = primaryEntries.map((entry) => entry.line);
+    const setupBeforePrimarySatisfied =
+      setupEntries.length > 0 &&
+      primaryEntries.length > 0 &&
+      Math.max(...setupLines) < Math.min(...primaryLines);
+    const misorderedPrimaryEntries = primaryEntries.filter((primaryEntry) =>
+      setupEntries.some((setupEntry) => setupEntry.line > primaryEntry.line),
+    );
+    return {
+      targetGapId,
+      setupEntries,
+      primaryEntries,
+      setupEntryCount: setupEntries.length,
+      primaryEntryCount: primaryEntries.length,
+      setupLines,
+      primaryLines,
+      setupRoutes: uniqueValues(setupEntries.map((entry) => entry.route)),
+      primaryRoutes: uniqueValues(primaryEntries.map((entry) => entry.route)),
+      dependencyStatus:
+        setupEntries.length > 0 && primaryEntries.length > 0
+          ? setupBeforePrimarySatisfied
+            ? "setup_before_primary_order_satisfied"
+            : "setup_before_primary_order_misordered"
+          : setupEntries.length > 0
+            ? "setup_prerequisites_only"
+            : "primary_without_package_setup",
+      setupBeforePrimarySatisfied,
+      misorderedPrimaryLines: misorderedPrimaryEntries.map((entry) => entry.line),
+    };
+  });
+}
+
+function targetDataCollectionPackageDependencySummary(entries = []) {
+  const rows = targetDataCollectionPackageDependencyRows(entries);
+  const setupRows = rows.filter((row) => row.setupEntryCount > 0);
+  const primaryRows = rows.filter((row) => row.primaryEntryCount > 0);
+  const rowsWithSetupAndPrimary = rows.filter((row) => row.setupEntryCount > 0 && row.primaryEntryCount > 0);
+  const misorderedRows = rowsWithSetupAndPrimary.filter((row) => row.dependencyStatus === "setup_before_primary_order_misordered");
+  return {
+    status: misorderedRows.length
+      ? "setup_before_primary_order_misordered"
+      : rowsWithSetupAndPrimary.length
+        ? "setup_before_primary_order_satisfied"
+        : setupRows.length
+          ? "setup_prerequisites_without_primary_rows"
+          : "primary_rows_without_package_setup_prerequisites",
+    setupBeforePrimaryRequired: rowsWithSetupAndPrimary.length > 0,
+    setupEntryCount: rows.reduce((sum, row) => sum + row.setupEntryCount, 0),
+    primaryEntryCount: rows.reduce((sum, row) => sum + row.primaryEntryCount, 0),
+    targetGapCount: rows.length,
+    targetGapsWithSetupAndPrimary: rowsWithSetupAndPrimary.map((row) => row.targetGapId),
+    targetGapsWithSetupOnly: rows.filter((row) => row.setupEntryCount > 0 && row.primaryEntryCount === 0).map((row) => row.targetGapId),
+    targetGapsWithPrimaryOnly: rows.filter((row) => row.setupEntryCount === 0 && row.primaryEntryCount > 0).map((row) => row.targetGapId),
+    byDependencyStatus: countItemsBy(rows, "dependencyStatus"),
+    rows: rows.map(({ setupEntries, primaryEntries, ...row }) => row),
+    validationPolicy:
+      "When a target-data package includes setup and primary rows for the same target gap, setup_data_import rows must appear before dependent primary_data_import rows; primary-only package rows remain valid when prerequisites are already persisted and validated by route bindings.",
+  };
+}
+
+function targetDataCollectionPackageEntryDependencyStatus(entry, entries = []) {
+  const importKind = targetDataCollectionPackageEntryImportKind(entry);
+  if (importKind === "setup_data_import") return "setup_prerequisite";
+  const targetGapId = targetDataCollectionPackageEntryTargetGapId(entry);
+  if (!targetGapId) return "primary_unscoped_dependency";
+  const setupEntries = entries.filter(
+    (candidate) =>
+      candidate !== entry &&
+      targetDataCollectionPackageEntryTargetGapId(candidate) === targetGapId &&
+      targetDataCollectionPackageEntryImportKind(candidate) === "setup_data_import",
+  );
+  if (!setupEntries.length) return "primary_without_package_setup";
+  return setupEntries.every((setupEntry) => setupEntry.line < entry.line)
+    ? "primary_after_setup_prerequisites"
+    : "primary_before_setup_prerequisites";
+}
+
 function targetDataCollectionPackageEntryExpectedDelta(entry) {
   const targetGapId = entry.importMetadata?.targetGapId ?? entry.importMetadata?.importImpact?.targetGapId ?? null;
   if (!targetGapId) return null;
@@ -23853,7 +23986,7 @@ function targetDataCollectionPackageEntryExpectedDelta(entry) {
   return null;
 }
 
-function targetDataCollectionPackageEntryImpactSummary(entry) {
+function targetDataCollectionPackageEntryImpactSummary(entry, packageEntries = null) {
   const metadata = entry.importMetadata ?? {};
   const importImpact = metadata.importImpact ?? null;
   const targetGapId = metadata.targetGapId ?? importImpact?.targetGapId ?? null;
@@ -23866,6 +23999,9 @@ function targetDataCollectionPackageEntryImpactSummary(entry) {
     targetGapIds: metadata.targetGapIds ?? (targetGapId ? [targetGapId] : []),
     relatedTargetGapIds: (metadata.targetGapIds ?? []).filter((item) => item !== targetGapId),
     importKind,
+    packageDependencyStatus: Array.isArray(packageEntries)
+      ? targetDataCollectionPackageEntryDependencyStatus(entry, packageEntries)
+      : undefined,
     importImpactKnown: Boolean(importImpact),
     expectedResourceDeltaFromPackageRecord: targetDataCollectionPackageEntryExpectedDelta(entry),
     templateExpectedResourceDelta: targetDataCollectionPackageFiniteNumber(importImpact?.expectedResourceDelta),
@@ -23955,7 +24091,7 @@ function targetDataCollectionPackageEntrySummaries(entries) {
     sourceWriteRoute: entry.sourceWriteRoute,
     resourceKey: entry.resourceKey,
     resourceId: entry.resource?.id ?? entry.rating?.id ?? null,
-    ...targetDataCollectionPackageEntryImpactSummary(entry),
+    ...targetDataCollectionPackageEntryImpactSummary(entry, entries),
   }));
 }
 
