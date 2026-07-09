@@ -7363,6 +7363,7 @@ const workflowCollectionReadEndpoints = [
   workflowCollectionReadSpec(/^\/api\/v1\/interpretation-target-maps$/, "interpretationTargetMap", expertAuditWorkflowRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/verification-claim-granularity-policies$/, "verificationClaimGranularityPolicy", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/verification-workspace-sessions$/, "verificationWorkspaceSession", expertAuditWorkflowRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/correctness-claim-weight-worksheets$/, "correctnessClaimWeightWorksheet", expertAuditWorkflowRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/calibration-feedback-events$/, "calibrationFeedbackEvent", expertAuditWorkflowRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/label-snapshots$/, "labelSnapshot", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/release-reports$/, "releaseReport", adminAuditRoles),
@@ -7393,6 +7394,7 @@ const workflowCollectionReadEndpoints = [
   workflowCollectionReadSpec(/^\/api\/v1\/parser-configs$/, "parserConfig", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/ux-simplification-policies$/, "uxSimplificationPolicy", adminAuditRoles),
   workflowCollectionReadSpec(/^\/api\/v1\/ux-simplification-reviews$/, "uxSimplificationReview", adminAuditRoles),
+  workflowCollectionReadSpec(/^\/api\/v1\/screen-state-payloads$/, "screenStatePayload", adminAuditRoles),
   workflowCollectionReadSpec(
     /^\/api\/v1\/rater-instruction-compatibility-policies$/,
     "raterInstructionCompatibilityPolicy",

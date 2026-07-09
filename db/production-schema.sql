@@ -1259,6 +1259,10 @@ create table if not exists verification_workspace_sessions (
   like verification_records including all
 );
 
+create table if not exists correctness_claim_weight_worksheets (
+  like verification_records including all
+);
+
 create table if not exists calibration_feedback_events (
   like verification_records including all
 );
@@ -1638,6 +1642,7 @@ create table if not exists rater_learning_plans (like session_pacing_policies in
 create table if not exists source_anchor_examples (like session_pacing_policies including all);
 create table if not exists ux_simplification_policies (like session_pacing_policies including all);
 create table if not exists ux_simplification_reviews (like session_pacing_policies including all);
+create table if not exists screen_state_payloads (like session_pacing_policies including all);
 create table if not exists item_issue_quarantine_policies (like session_pacing_policies including all);
 create table if not exists item_issue_reports (like session_pacing_policies including all);
 create table if not exists item_issue_actions (like session_pacing_policies including all);
@@ -2542,6 +2547,15 @@ create index if not exists verification_workspace_sessions_policy_idx
 create index if not exists verification_workspace_sessions_item_idx
   on verification_workspace_sessions (position_id, critique_id);
 
+create index if not exists correctness_claim_weight_worksheets_workspace_idx
+  on correctness_claim_weight_worksheets (verification_workspace_id);
+
+create index if not exists correctness_claim_weight_worksheets_rating_idx
+  on correctness_claim_weight_worksheets (rating_id);
+
+create index if not exists correctness_claim_weight_worksheets_adjudication_idx
+  on correctness_claim_weight_worksheets (adjudication_id);
+
 create index if not exists adjudicator_pre_reads_policy_idx
   on adjudicator_pre_reads (policy_id);
 
@@ -2715,6 +2729,12 @@ create index if not exists source_anchor_examples_release_idx
 
 create index if not exists ux_simplification_reviews_policy_idx
   on ux_simplification_reviews (policy_id);
+
+create index if not exists screen_state_payloads_policy_idx
+  on screen_state_payloads (policy_id);
+
+create index if not exists screen_state_payloads_screen_idx
+  on screen_state_payloads (screen_id);
 
 create index if not exists item_issue_reports_policy_idx
   on item_issue_reports (policy_id);
@@ -2921,6 +2941,7 @@ alter table interpretation_target_map_requiredness_policies enable row level sec
 alter table interpretation_target_maps enable row level security;
 alter table verification_claim_granularity_policies enable row level security;
 alter table verification_workspace_sessions enable row level security;
+alter table correctness_claim_weight_worksheets enable row level security;
 alter table calibration_feedback_events enable row level security;
 alter table source_recognition_events enable row level security;
 alter table external_assistance_contamination_policies enable row level security;
@@ -2945,6 +2966,7 @@ alter table rater_learning_plans enable row level security;
 alter table source_anchor_examples enable row level security;
 alter table ux_simplification_policies enable row level security;
 alter table ux_simplification_reviews enable row level security;
+alter table screen_state_payloads enable row level security;
 alter table item_issue_quarantine_policies enable row level security;
 alter table item_issue_reports enable row level security;
 alter table item_issue_actions enable row level security;
@@ -3833,6 +3855,17 @@ create policy verification_workspace_sessions_write_expert_admin_or_service on v
   using (app_auth.has_role('expert', 'admin', 'service'))
   with check (app_auth.has_role('expert', 'admin', 'service'));
 
+drop policy if exists correctness_claim_weight_worksheets_read_experts_and_auditors on correctness_claim_weight_worksheets;
+create policy correctness_claim_weight_worksheets_read_experts_and_auditors on correctness_claim_weight_worksheets
+  for select
+  using (app_auth.has_role('expert', 'admin', 'auditor'));
+
+drop policy if exists correctness_claim_weight_worksheets_write_expert_admin_or_service on correctness_claim_weight_worksheets;
+create policy correctness_claim_weight_worksheets_write_expert_admin_or_service on correctness_claim_weight_worksheets
+  for all
+  using (app_auth.has_role('expert', 'admin', 'service'))
+  with check (app_auth.has_role('expert', 'admin', 'service'));
+
 drop policy if exists calibration_feedback_events_read_experts_and_auditors on calibration_feedback_events;
 create policy calibration_feedback_events_read_experts_and_auditors on calibration_feedback_events
   for select
@@ -4093,6 +4126,17 @@ create policy ux_simplification_reviews_read_auditors on ux_simplification_revie
 
 drop policy if exists ux_simplification_reviews_write_admin_or_service on ux_simplification_reviews;
 create policy ux_simplification_reviews_write_admin_or_service on ux_simplification_reviews
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists screen_state_payloads_read_auditors on screen_state_payloads;
+create policy screen_state_payloads_read_auditors on screen_state_payloads
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists screen_state_payloads_write_admin_or_service on screen_state_payloads;
+create policy screen_state_payloads_write_admin_or_service on screen_state_payloads
   for all
   using (app_auth.has_role('admin', 'service'))
   with check (app_auth.has_role('admin', 'service'));

@@ -27,6 +27,7 @@ const interactionUxProjectionTables = Object.freeze({
   sourceAnchorExample: "source_anchor_examples",
   uxSimplificationPolicy: "ux_simplification_policies",
   uxSimplificationReview: "ux_simplification_reviews",
+  screenStatePayload: "screen_state_payloads",
   itemIssueQuarantinePolicy: "item_issue_quarantine_policies",
   itemIssueReport: "item_issue_reports",
   itemIssueAction: "item_issue_actions",
@@ -99,6 +100,7 @@ const verificationAdjudicationProjectionTables = Object.freeze({
   interpretationTargetMap: "interpretation_target_maps",
   verificationClaimGranularityPolicy: "verification_claim_granularity_policies",
   verificationWorkspaceSession: "verification_workspace_sessions",
+  correctnessClaimWeightWorksheet: "correctness_claim_weight_worksheets",
   calibrationFeedbackEvent: "calibration_feedback_events",
 });
 
@@ -519,10 +521,12 @@ function interactionUxProjectionValuesForWorkflowResource(resourceKey, resource,
       resource.rater_dashboard_policy_id ??
       resource.uxSimplificationPolicyId ??
       resource.ux_simplification_policy_id ??
+      resource.policyVersionProvenance?.uxSimplificationPolicyId ??
+      resource.policy_version_provenance?.ux_simplification_policy_id ??
       resource.itemIssueQuarantinePolicyId ??
       resource.item_issue_quarantine_policy_id ??
       (resourceKey.endsWith("Policy") ? resource.id : null),
-    screen_id: resource.screenId ?? resource.screen_id ?? null,
+    screen_id: resource.screenId ?? resource.screen_id ?? resource.surface ?? null,
     issue_id: resource.itemIssueId ?? resource.item_issue_id ?? resource.issueId ?? resource.issue_id ?? null,
     practice_session_id:
       resource.practiceSessionId ?? resource.practice_session_id ?? (resourceKey === "publicExamplePracticeSession" ? resource.id : null),
@@ -578,6 +582,9 @@ function interactionUxWorkflowStatus(resourceKey, resource) {
     resource.protectedSplitVariantDisposition ??
     resource.protectedSplitConflictCheck ??
     resource.expectedEffortCompleted ??
+    (resourceKey === "screenStatePayload" && resource.sanitized === true && resource.rejectedUnknownKeys === true
+      ? "submitted_screen_state_payload_sanitized"
+      : null) ??
     (resource.noFeatureLoss === true ? "no_feature_loss_passed" : null) ??
     `${resourceKey}_submitted`
   );

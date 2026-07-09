@@ -4980,6 +4980,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/ux-simplification-reviews"],
     ["GET", "/api/v1/ux-simplification-reviews/ux-review-smoke"],
     ["POST", "/api/v1/screen-state-payloads"],
+    ["GET", "/api/v1/screen-state-payloads"],
     ["GET", "/api/v1/screen-state-payloads/screen-state-smoke"],
     ["POST", "/api/v1/rubric-copy-traceability-maps"],
     ["GET", "/api/v1/rubric-copy-traceability-maps"],
@@ -5076,6 +5077,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/same-position-batch-reviews"],
     ["GET", "/api/v1/same-position-batch-reviews/same-position-batch-review-smoke"],
     ["POST", "/api/v1/correctness-claim-weight-worksheets"],
+    ["GET", "/api/v1/correctness-claim-weight-worksheets"],
     ["GET", "/api/v1/correctness-claim-weight-worksheets/correctness-claim-weight-worksheet-smoke"],
     ["POST", "/api/v1/external-assistance-contamination-policies"],
     ["GET", "/api/v1/external-assistance-contamination-policies"],
@@ -6151,6 +6153,9 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "ux-simplification-reviews"',
     'endpoint: "/api/v1/ux-simplification-reviews"',
     'resourceKey: "uxSimplificationReview"',
+    'id: "screen-state-payloads"',
+    'endpoint: "/api/v1/screen-state-payloads"',
+    'resourceKey: "screenStatePayload"',
     'id: "rater-instruction-compatibility-policies"',
     'endpoint: "/api/v1/rater-instruction-compatibility-policies"',
     'resourceKey: "raterInstructionCompatibilityPolicy"',
@@ -6214,6 +6219,9 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "verification-workspace-sessions"',
     'endpoint: "/api/v1/verification-workspace-sessions"',
     'resourceKey: "verificationWorkspaceSession"',
+    'id: "correctness-claim-weight-worksheets"',
+    'endpoint: "/api/v1/correctness-claim-weight-worksheets"',
+    'resourceKey: "correctnessClaimWeightWorksheet"',
     'id: "screen-feature-parity-checks"',
     'endpoint: "/api/v1/screen-feature-parity-checks"',
     'resourceKey: "screenFeatureParityCheck"',
@@ -6537,6 +6545,7 @@ test("interaction and practice evidence collections are routed for operator read
     ["protectedArtifactRevalidation", "/api/v1/protected-artifact-revalidations", adminHeaders],
     ["uxSimplificationPolicy", "/api/v1/ux-simplification-policies", adminHeaders],
     ["uxSimplificationReview", "/api/v1/ux-simplification-reviews", adminHeaders],
+    ["screenStatePayload", "/api/v1/screen-state-payloads", adminHeaders],
     ["raterInstructionCompatibilityPolicy", "/api/v1/rater-instruction-compatibility-policies", adminHeaders],
     ["raterInstructionRenderVersion", "/api/v1/rater-instruction-render-versions", adminHeaders],
     ["rubricCopyTraceabilityMap", "/api/v1/rubric-copy-traceability-maps", adminHeaders],
@@ -17758,6 +17767,7 @@ test("production schema includes verification and adjudication-control projectio
     "adjudicator_pre_reads",
     "interpretation_target_maps",
     "verification_workspace_sessions",
+    "correctness_claim_weight_worksheets",
     "calibration_feedback_events",
   ];
   const adminReadTables = [
@@ -17790,12 +17800,15 @@ test("production schema includes verification and adjudication-control projectio
   assert.ok(schema.includes("create index if not exists verification_evidence_artifacts_record_idx"));
   assert.ok(schema.includes("create index if not exists interpretation_target_maps_policy_idx"));
   assert.ok(schema.includes("create index if not exists verification_workspace_sessions_policy_idx"));
+  assert.ok(schema.includes("create index if not exists correctness_claim_weight_worksheets_workspace_idx"));
+  assert.ok(schema.includes("create index if not exists correctness_claim_weight_worksheets_rating_idx"));
   assert.ok(schema.includes("create index if not exists adjudicator_pre_reads_memo_idx"));
   assert.ok(schema.includes("create index if not exists calibration_feedback_events_rater_idx"));
   assert.ok(architectureDoc.includes("verification/adjudication-control projection tables"));
   assert.ok(architectureDoc.includes("verification_evidence_artifacts"));
   assert.ok(architectureDoc.includes("interpretation_target_maps"));
   assert.ok(architectureDoc.includes("verification_workspace_sessions"));
+  assert.ok(architectureDoc.includes("correctness_claim_weight_worksheets"));
   assert.ok(architectureDoc.includes("adjudicator_pre_reads"));
   assert.ok(architectureDoc.includes("post-lock calibration review"));
   assert.ok(architectureDoc.includes("without becoming label, score, live queue, or release-gate tables"));
@@ -18732,6 +18745,28 @@ test("postgres audit store projects verification and adjudication-control workfl
       "expert_admin_audit_only",
     ],
     [
+      "correctnessClaimWeightWorksheet",
+      {
+        id: "correctness-claim-weight-worksheet-projection",
+        releaseId: "october-2026-demo",
+        itemKeys: ["pos::crit"],
+        positionId: "pos",
+        critiqueId: "crit",
+        ratingId: "rating-projection",
+        verificationWorkspaceId: "verification-workspace-projection",
+        adjudicationId: "adjudication-projection",
+        claimSpanIds: ["claim-span-1"],
+        claimSignificanceWeights: [1],
+        correctnessCredencesStatuses: ["verified:0.8"],
+        unclearClaimExclusionFlags: [false],
+        advisoryAggregateCorrectnessEstimate: 0.8,
+        reviewStatus: "claim_weight_worksheet_recorded",
+      },
+      "correctness_claim_weight_worksheets",
+      "claim_weight_worksheet_recorded",
+      "expert_admin_audit_only",
+    ],
+    [
       "adjudicatorPreReadRequirednessPolicy",
       {
         id: "adjudicator-pre-read-policy-projection",
@@ -18810,10 +18845,14 @@ test("postgres audit store projects verification and adjudication-control workfl
   const workspaceProjection = verificationAdjudicationProjectionForWorkflowEvent(baseEvent("verificationWorkspaceSession", cases[5][1]));
   assert.equal(workspaceProjection.values.verification_workspace_id, "verification-workspace-projection");
   assert.equal(workspaceProjection.values.policy_id, "verification-claim-granularity-policy-projection");
-  const preReadProjection = verificationAdjudicationProjectionForWorkflowEvent(baseEvent("adjudicatorPreRead", cases[7][1]));
+  const worksheetProjection = verificationAdjudicationProjectionForWorkflowEvent(baseEvent("correctnessClaimWeightWorksheet", cases[6][1]));
+  assert.equal(worksheetProjection.values.verification_workspace_id, "verification-workspace-projection");
+  assert.equal(worksheetProjection.values.rating_id, "rating-projection");
+  assert.equal(worksheetProjection.values.adjudication_id, "adjudication-projection");
+  const preReadProjection = verificationAdjudicationProjectionForWorkflowEvent(baseEvent("adjudicatorPreRead", cases[8][1]));
   assert.equal(preReadProjection.values.policy_id, "adjudicator-pre-read-policy-projection");
   assert.equal(preReadProjection.values.adjudication_memo_id, "adjudication-memo-projection");
-  const calibrationProjection = verificationAdjudicationProjectionForWorkflowEvent(baseEvent("calibrationFeedbackEvent", cases[9][1]));
+  const calibrationProjection = verificationAdjudicationProjectionForWorkflowEvent(baseEvent("calibrationFeedbackEvent", cases[10][1]));
   assert.equal(calibrationProjection.values.rater_id, "demo-rater");
   assert.equal(calibrationProjection.values.rating_id, "rating-projection");
   assert.equal(verificationAdjudicationProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-verification-artifact" })), null);
@@ -19781,6 +19820,7 @@ test("production schema includes interaction, practice, UX, and item-issue proje
     "source_anchor_examples",
     "ux_simplification_policies",
     "ux_simplification_reviews",
+    "screen_state_payloads",
     "item_issue_quarantine_policies",
     "screen_feature_parity_checks",
     "simplified_copy_previews",
@@ -19811,6 +19851,8 @@ test("production schema includes interaction, practice, UX, and item-issue proje
   assert.ok(schema.includes("create index if not exists rater_learning_plans_policy_idx"));
   assert.ok(schema.includes("create index if not exists source_anchor_examples_release_idx"));
   assert.ok(schema.includes("create index if not exists ux_simplification_reviews_policy_idx"));
+  assert.ok(schema.includes("create index if not exists screen_state_payloads_policy_idx"));
+  assert.ok(schema.includes("create index if not exists screen_state_payloads_screen_idx"));
   assert.ok(schema.includes("create index if not exists item_issue_reports_policy_idx"));
   assert.ok(schema.includes("create index if not exists item_issue_reports_item_idx"));
   assert.ok(schema.includes("create index if not exists item_issue_actions_issue_idx"));
@@ -19818,6 +19860,7 @@ test("production schema includes interaction, practice, UX, and item-issue proje
   assert.ok(schema.includes("create index if not exists simplified_copy_previews_screen_idx"));
   assert.ok(architectureDoc.includes("interaction/practice/UX projection tables"));
   assert.ok(architectureDoc.includes("Private rater session"));
+  assert.ok(architectureDoc.includes("screen_state_payloads"));
   assert.ok(architectureDoc.includes("item_issue_reports"));
   assert.ok(architectureDoc.includes("item_issue_actions"));
   assert.ok(architectureDoc.includes("without becoming label, score, live queue, or release-gate tables"));
@@ -20091,6 +20134,22 @@ test("postgres audit store projects interaction, practice, UX, and item-issue wo
       "admin_audit_only",
     ],
     [
+      "screenStatePayload",
+      "screen_state_payloads",
+      {
+        id: "screen-state-payload-projection",
+        releaseId: "october-2026-demo",
+        surface: "rating",
+        role: "graduate",
+        payloadSource: "server_derived",
+        policyVersionProvenance: { uxSimplificationPolicyId: "ux-simplification-policy-projection" },
+        rejectedUnknownKeys: true,
+        sanitized: true,
+      },
+      "submitted_screen_state_payload_sanitized",
+      "admin_audit_only",
+    ],
+    [
       "itemIssueQuarantinePolicy",
       "item_issue_quarantine_policies",
       {
@@ -20191,22 +20250,26 @@ test("postgres audit store projects interaction, practice, UX, and item-issue wo
   const uxPolicyProjection = interactionUxProjectionForWorkflowEvent(baseEvent("uxSimplificationPolicy", cases[7][2]));
   assert.equal(uxPolicyProjection.values.hidden_metadata_leakage_check, "hidden_metadata_excluded");
 
-  const issueReportProjection = interactionUxProjectionForWorkflowEvent(baseEvent("itemIssueReport", cases[10][2]));
+  const screenStateProjection = interactionUxProjectionForWorkflowEvent(baseEvent("screenStatePayload", cases[9][2]));
+  assert.equal(screenStateProjection.values.policy_id, "ux-simplification-policy-projection");
+  assert.equal(screenStateProjection.values.screen_id, "rating");
+
+  const issueReportProjection = interactionUxProjectionForWorkflowEvent(baseEvent("itemIssueReport", cases[11][2]));
   assert.equal(issueReportProjection.values.rater_id, "expert-projection");
   assert.equal(issueReportProjection.values.policy_id, "item-issue-quarantine-policy-projection");
   assert.equal(issueReportProjection.values.item_id, "item-projection");
   assert.equal(issueReportProjection.values.position_id, "position-projection");
   assert.equal(issueReportProjection.values.critique_id, "critique-projection");
 
-  const issueActionProjection = interactionUxProjectionForWorkflowEvent(baseEvent("itemIssueAction", cases[11][2]));
+  const issueActionProjection = interactionUxProjectionForWorkflowEvent(baseEvent("itemIssueAction", cases[12][2]));
   assert.equal(issueActionProjection.values.issue_id, "item-issue-report-projection");
   assert.equal(issueActionProjection.values.action_kind, "quarantine");
 
-  const screenCheckProjection = interactionUxProjectionForWorkflowEvent(baseEvent("screenFeatureParityCheck", cases[12][2]));
+  const screenCheckProjection = interactionUxProjectionForWorkflowEvent(baseEvent("screenFeatureParityCheck", cases[13][2]));
   assert.equal(screenCheckProjection.values.policy_id, "ux-simplification-policy-projection");
   assert.equal(screenCheckProjection.values.screen_id, "rating-screen");
 
-  const copyPreviewProjection = interactionUxProjectionForWorkflowEvent(baseEvent("simplifiedCopyPreview", cases[13][2]));
+  const copyPreviewProjection = interactionUxProjectionForWorkflowEvent(baseEvent("simplifiedCopyPreview", cases[14][2]));
   assert.equal(copyPreviewProjection.values.hidden_metadata_leakage_check, "passed");
   assert.equal(copyPreviewProjection.values.screen_id, "rating-screen");
 
@@ -30705,6 +30768,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   assert.equal(screenStateById.status, 200);
   assert.equal(screenStateById.body.surface, "rating");
 
+  const screenStateCollection = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/screen-state-payloads",
+    headers: adminHeaders,
+  });
+  assert.equal(screenStateCollection.status, 200);
+  assert.equal(screenStateCollection.body.resourceKey, "screenStatePayload");
+  assert.equal(screenStateCollection.body.count, uxSimplificationSurfaces.length);
+  assert.ok(screenStateCollection.body.items.some((item) => item.id === "screen-state-workflow-rating"));
+
   const incompleteUxPolicy = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/ux-simplification-policies",
@@ -32930,6 +33003,16 @@ test("v1 workflow endpoints persist lifecycle events with role and assignment ch
   });
   assert.equal(worksheetById.status, 200);
   assert.deepEqual(worksheetById.body.claimSignificanceWeights, [0.7, 0.3]);
+
+  const worksheetCollection = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/correctness-claim-weight-worksheets",
+    headers: adminHeaders,
+  });
+  assert.equal(worksheetCollection.status, 200);
+  assert.equal(worksheetCollection.body.resourceKey, "correctnessClaimWeightWorksheet");
+  assert.equal(worksheetCollection.body.count, 1);
+  assert.equal(worksheetCollection.body.items[0].id, "correctness-claim-weight-worksheet-workflow-new");
 
   const externalAssistancePolicyById = await invokeApi(context, {
     method: "GET",

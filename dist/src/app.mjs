@@ -1590,6 +1590,14 @@ const workflowEvidenceCollections = [
     summary: "Submitted no-feature-loss reviews for enabled simplified workflow surfaces.",
   },
   {
+    id: "screen-state-payloads",
+    label: "Screen state payloads",
+    endpoint: "/api/v1/screen-state-payloads",
+    resourceKey: "screenStatePayload",
+    group: "Rating experience",
+    summary: "Submitted sanitized server-derived screen states with visible field/action allowlists and policy provenance.",
+  },
+  {
     id: "rater-instruction-compatibility-policies",
     label: "Instruction compatibility policies",
     endpoint: "/api/v1/rater-instruction-compatibility-policies",
@@ -1964,6 +1972,14 @@ const workflowEvidenceCollections = [
     resourceKey: "verificationWorkspaceSession",
     group: "Interaction/practice",
     summary: "Verification workspace sessions and claim-granularity review evidence.",
+  },
+  {
+    id: "correctness-claim-weight-worksheets",
+    label: "Claim-weight worksheets",
+    endpoint: "/api/v1/correctness-claim-weight-worksheets",
+    resourceKey: "correctnessClaimWeightWorksheet",
+    group: "Interaction/practice",
+    summary: "Submitted correctness claim-weight worksheets for release-critical verification and adjudication review.",
   },
   {
     id: "screen-feature-parity-checks",
