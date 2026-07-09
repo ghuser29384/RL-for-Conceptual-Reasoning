@@ -9749,21 +9749,30 @@ function workflowCollectionResultSummaryMetrics(collection, result) {
     const manifest = result.currentBlockingPackageManifest ?? null;
     const counts = result.counts ?? {};
     const preflight = result.preflightDependencySummary ?? null;
+    const coverage = result.preflightCoverageSummary ?? null;
+    const actionSummary = result.preflightActionSummary ?? null;
     return [
       ["Manifest status", humanize(result.status ?? "not reported")],
       ["Current blocker", `${humanize(result.currentBlockingPhase ?? "not reported")} / ${humanize(result.currentBlockingExecutionStatus ?? "not reported")}`],
       ["Dependency status", humanize(preflight?.status ?? "not reported")],
+      ["Coverage status", humanize(coverage?.status ?? "not reported")],
+      ["Next action", humanize(actionSummary?.nextActionKind ?? "not reported")],
       ["Runbook group", result.routes?.sourceRunbookGroupRoute ?? result.sourceRunbookGroupRoute ?? "not available"],
       ["Action group", result.routes?.sourceActionGroupRoute ?? result.sourceActionGroupRoute ?? "not available"],
       ["Package steps", manifest ? `${counts.stepCount ?? manifest.stepCount ?? 0} steps across ${counts.targetGapCount ?? manifest.targetGapCount ?? 0} gaps` : "not available"],
       ["Setup prerequisites", preflight ? `${preflight.setupStepCount ?? 0} setup / ${preflight.primaryStepsRequiringSetupCount ?? 0} primary requiring setup` : "not reported"],
       ["Dependency states", workflowCountMapSummary(counts.byDependencyStatus)],
-      ["Package validate-only", result.routes?.packageValidateOnlyImportRoute ?? manifest?.packageValidateOnlyImportRoute ?? "not available"],
+      [
+        "Package validate-only",
+        actionSummary?.nextActionValidateOnlyRoute ?? result.routes?.packageValidateOnlyImportRoute ?? manifest?.packageValidateOnlyImportRoute ?? "not available",
+      ],
       ["Starter template", result.routes?.starterTemplateRoute ?? manifest?.templateStarter?.starterTemplateRoute ?? "not available"],
       ["Starter template cap", manifest?.templateStarter?.recommendedStarterRecordCap ?? "not reported"],
       ["Package records needed", counts.estimatedRecordsRequired ?? manifest?.estimatedRecordsRequired ?? "not reported"],
       ["Expected target-resource delta", counts.expectedResourceDelta ?? manifest?.expectedResourceDelta ?? "not reported"],
+      ["Projected remaining after package", coverage?.projectedCurrentRemainingAfterManifest ?? "not reported"],
       ["Setup before primary", counts.setupBeforePrimary ? "yes" : "no"],
+      ["Preflight policy", actionSummary?.policy?.validation ?? "not reported"],
     ];
   }
   if (collection.id === "release-workflow-readiness") {
@@ -10326,6 +10335,8 @@ function publicDatasetPackageManifestPreviewRow(item) {
         ["Action group", item.sourceActionGroupRoute ?? "not group-linked"],
         ["Template routes", templateRoutes],
         ["Verification routes", verificationRoutes],
+        ["Coverage status", counts.coverageStatus ? humanize(counts.coverageStatus) : humanize(item.preflightCoverageSummary?.status ?? "not reported")],
+        ["Projected remaining", counts.projectedRemainingAfterPackage ?? item.preflightCoverageSummary?.projectedCurrentRemainingAfterManifest ?? "not reported"],
         ["Counts", countSummary || "not reported"],
       ])}
     </article>

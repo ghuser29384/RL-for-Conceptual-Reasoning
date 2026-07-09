@@ -11044,6 +11044,69 @@ test("operator action item queue is admin/auditor readback derived from the rele
     currentPackageManifest.body.preflightDependencySummary.validationOrderPolicy,
     /setup prerequisite imports before their dependent primary imports/,
   );
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.status, "package_covers_current_unblocker");
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.advisoryOnly, true);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.coverageSource, "current_blocking_package_manifest");
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.currentOpenTargetGapCount, 7);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.packageTargetGapCount, 7);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.missingCurrentTargetGapCount, 0);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.coveredTargetGapCount, 7);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.underCoveredTargetGapCount, 0);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.expectedResourceDeltaFromManifest, 2034);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.currentRemainingBeforeManifest, 2034);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.projectedCurrentRemainingAfterManifest, 0);
+  assert.equal(currentPackageManifest.body.preflightCoverageSummary.byCoverageStatus.package_exactly_covers_target_gap, 7);
+  assert.match(currentPackageManifest.body.preflightCoverageSummary.coveragePolicy, /advisory and cannot close release gaps/);
+  const blindRatingPreflightCoverage = currentPackageManifest.body.preflightCoverageSummary.rows.find(
+    (row) => row.targetGapId === "blind_initial_ratings",
+  );
+  assert.ok(blindRatingPreflightCoverage);
+  assert.equal(blindRatingPreflightCoverage.coverageStatus, "package_exactly_covers_target_gap");
+  assert.equal(blindRatingPreflightCoverage.coverageRatio, 1);
+  assert.equal(blindRatingPreflightCoverage.setupStepCount, 2);
+  assert.equal(blindRatingPreflightCoverage.primaryStepCount, 1);
+  assert.equal(blindRatingPreflightCoverage.setupRequiredBeforePrimary, true);
+  assert.equal(blindRatingPreflightCoverage.projectedRemainingAfterManifest, 0);
+  assert.ok(blindRatingPreflightCoverage.packageManifestItemRoutes.length >= 3);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.status, "setup_prerequisites_required_before_primary_imports");
+  assert.equal(currentPackageManifest.body.preflightActionSummary.nextActionKind, "validate_current_target_data_package");
+  assert.equal(
+    currentPackageManifest.body.preflightActionSummary.nextActionRoute,
+    "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+  );
+  assert.equal(
+    currentPackageManifest.body.preflightActionSummary.nextActionValidateOnlyRoute,
+    "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+  );
+  assert.equal(
+    currentPackageManifest.body.preflightActionSummary.nextActionDryRunRoute,
+    "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
+  );
+  assert.equal(currentPackageManifest.body.preflightActionSummary.appendRoute, "/api/v1/target-gaps/import-jsonl-package");
+  assert.equal(
+    currentPackageManifest.body.preflightActionSummary.starterTemplateRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.equal(currentPackageManifest.body.preflightActionSummary.setupBeforePrimary, true);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.setupStepCount, 2);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.primaryStepCount, 7);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.primaryStepsRequiringSetupCount, 1);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.estimatedRecordsRequired, 4834);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.estimatedSetupRecordsRequired, 2868);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.estimatedPrimaryRecordsRequired, 1966);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.expectedResourceDelta, 2034);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.coverageStatus, "package_covers_current_unblocker");
+  assert.equal(currentPackageManifest.body.preflightActionSummary.projectedRemainingAfterPreflightPackage, 0);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.coveredTargetGapCount, 7);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.underCoveredTargetGapCount, 0);
+  assert.equal(currentPackageManifest.body.preflightActionSummary.missingCurrentTargetGapCount, 0);
+  assert.ok(currentPackageManifest.body.preflightActionSummary.targetGapIds.includes("positions"));
+  assert.ok(currentPackageManifest.body.preflightActionSummary.operatorChecklist.length >= 4);
+  assert.match(currentPackageManifest.body.preflightActionSummary.policy.validation, /dryRun or validateOnly before append/);
+  assert.match(currentPackageManifest.body.preflightActionSummary.policy.authority, /\/api\/release\/report recomputation/);
+  assert.ok(
+    currentPackageManifest.body.preflightActionSummary.routes.includes("/api/v1/target-gaps/import-jsonl-package?validateOnly=true"),
+  );
   assert.equal(currentPackageManifest.body.counts.byDependencyStatus.setup_prerequisite, 2);
   assert.equal(currentPackageManifest.body.counts.byDependencyStatus.primary_requires_setup_prerequisites, 1);
   assert.equal(currentPackageManifest.body.counts.byDependencyStatus.primary_no_setup_prerequisite, 6);
@@ -12203,6 +12266,13 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(targetDataPackageStep.readbackItemRoute, "/api/v1/public-dataset-package-manifest/target-data-package");
   assert.equal(targetDataPackageStep.counts.estimatedRecordsRequired, 4834);
   assert.equal(targetDataPackageStep.counts.expectedResourceDelta, 2034);
+  assert.equal(targetDataPackageStep.counts.coverageStatus, "package_covers_current_unblocker");
+  assert.equal(targetDataPackageStep.counts.coveredTargetGapCount, 7);
+  assert.equal(targetDataPackageStep.counts.projectedRemainingAfterPackage, 0);
+  assert.equal(targetDataPackageStep.preflightCoverageSummary.status, "package_covers_current_unblocker");
+  assert.equal(targetDataPackageStep.preflightCoverageSummary.projectedCurrentRemainingAfterManifest, 0);
+  assert.equal(targetDataPackageStep.preflightActionSummary.nextActionKind, "validate_current_target_data_package");
+  assert.equal(targetDataPackageStep.preflightActionSummary.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
   assert.equal(targetDataPackageStep.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
   assert.equal(targetDataPackageStep.sourcePackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
   assert.equal(targetDataPackageStep.sourceRunbookGroupRoute, "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data");
@@ -16904,7 +16974,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes('["Collection plan", item.collectionPlanRoute ?? "not available"]'));
   assert.ok(appSource.includes('["Route coverage", routes.length ?'));
   assert.ok(appSource.includes('["Manifest status", humanize(result.status ?? "not reported")]'));
+  assert.ok(appSource.includes('["Coverage status", humanize(coverage?.status ?? "not reported")]'));
   assert.ok(appSource.includes('["Package records needed", counts.estimatedRecordsRequired ?? manifest?.estimatedRecordsRequired ?? "not reported"]'));
+  assert.ok(appSource.includes('["Projected remaining after package", coverage?.projectedCurrentRemainingAfterManifest ?? "not reported"]'));
   assert.ok(appSource.includes('["Setup before primary", counts.setupBeforePrimary ? "yes" : "no"]'));
   assert.ok(appSource.includes('["Template policy", item.unchangedTemplatePolicy ?? "Replace template placeholders before import."]'));
   assert.ok(appSource.includes('["Expansion policy", item.templateExpansionPolicy ?? "Use expanded templates only after replacing placeholders with real data."]'));
@@ -17695,6 +17767,8 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-manifest"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageManifestStep"'));
   assert.ok(appSource.includes("function publicDatasetPackageManifestPreviewRow(item)"));
+  assert.ok(appSource.includes('["Coverage status", counts.coverageStatus ? humanize(counts.coverageStatus)'));
+  assert.ok(appSource.includes('["Projected remaining", counts.projectedRemainingAfterPackage'));
   assert.ok(appSource.includes('url.searchParams.set("stepKind", state.workflowTemplateKindFilter)'));
   assert.ok(appSource.includes('id: "public-dataset-release-package"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-release-package"'));
@@ -18126,6 +18200,11 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/target-gaps/current-package-manifest"));
   assert.ok(architectureDoc.includes("bounded admin/auditor readback for the current blocking target-data package only"));
   assert.ok(architectureDoc.includes("preflightDependencySummary"));
+  assert.ok(architectureDoc.includes("preflightCoverageSummary"));
+  assert.ok(architectureDoc.includes("projectedRemainingAfterManifest"));
+  assert.ok(architectureDoc.includes("package_covers_current_unblocker"));
+  assert.ok(architectureDoc.includes("unblockerPreflightCoverageStatus"));
+  assert.ok(architectureDoc.includes("unblockerProjectedRemainingAfterPreflightPackage"));
   assert.ok(architectureDoc.includes("dependencyStatus`, `setupRequiredBeforePrimary`, `prerequisiteStepIds`, and `dependentPrimaryStepIds"));
   assert.ok(architectureDoc.includes("packageDependencySummary"));
   assert.ok(architectureDoc.includes("packageDependencyStatus"));
@@ -25602,6 +25681,19 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.executionStatus, "ready_to_collect_data");
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.stepCount, 9);
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.expectedResourceDelta, 2034);
+  assert.equal(
+    rlhf93CompletionAudit.body.currentUnblocker.packageManifest.preflightDependencyStatus,
+    "setup_prerequisites_required_before_primary_imports",
+  );
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.preflightCoverageStatus, "package_covers_current_unblocker");
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.projectedRemainingAfterPreflightPackage, 0);
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.coveredTargetGapCount, 7);
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.underCoveredTargetGapCount, 0);
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.missingCurrentTargetGapCount, 0);
+  assert.equal(
+    rlhf93CompletionAudit.body.currentUnblocker.packageManifest.preflightActionSummary.nextActionRoute,
+    "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+  );
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.routeCount, rlhf93CompletionAudit.body.currentUnblocker.routes.length);
   assert.equal(
     rlhf93CompletionAudit.body.currentUnblocker.packageManifest.routeCount,
@@ -25643,6 +25735,12 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.unblockerPackageDryRunImportRoute === "/api/v1/target-gaps/import-jsonl-package?dryRun=true" &&
         item.unblockerPackageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
         item.unblockerExpectedResourceDelta === 2034 &&
+        item.unblockerPreflightDependencyStatus === "setup_prerequisites_required_before_primary_imports" &&
+        item.unblockerPreflightCoverageStatus === "package_covers_current_unblocker" &&
+        item.unblockerProjectedRemainingAfterPreflightPackage === 0 &&
+        item.unblockerCoveredTargetGapCount === 7 &&
+        item.unblockerUnderCoveredTargetGapCount === 0 &&
+        item.unblockerMissingCurrentTargetGapCount === 0 &&
         item.unblockerStepCount === 9 &&
         item.unblockerRouteCount === item.unblockerRoutes.length &&
         item.unblockerRoutes.includes(item.unblockerStarterTemplateRoute) &&
