@@ -13559,7 +13559,7 @@ function publicDatasetPackageManifestReadback(report, options = {}) {
 }
 
 function publicDatasetPackageManifestItems(report) {
-  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {}, report);
   const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
   const targetPackage = targetDataCurrentPackageManifestReadback(report);
   const releaseArtifactTemplates = releaseArtifactPackageTemplateReadback(report);
@@ -14081,7 +14081,7 @@ function publicDatasetReleasePackageReadback(report, options = {}) {
 }
 
 function publicDatasetReleasePackageItems(report) {
-  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {}, report);
   const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
   const packageManifest = publicDatasetPackageManifestReadback(report);
   const packageStepById = new Map((packageManifest.items ?? []).map((item) => [item.id, item]));
@@ -14371,7 +14371,7 @@ function publicDatasetDownstreamLaunchGuardReadback(report, options = {}) {
 }
 
 function publicDatasetDownstreamLaunchGuardItems(report) {
-  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {}, report);
   const publicFirstGate = readinessItems.find((item) => item.id === "public_first_ladder_gate") ?? null;
   const packageManifest = publicDatasetPackageManifestReadback(report);
   const packageItems = Array.isArray(packageManifest.items) ? packageManifest.items : [];
@@ -14695,7 +14695,7 @@ function publicDatasetPublicationGateReadback(report, options = {}) {
 }
 
 function publicDatasetPublicationGateItems(report) {
-  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {});
+  const readinessItems = publicDatasetReadinessItems(report.publicDatasetReadiness ?? {}, report);
   const readinessById = new Map(readinessItems.map((item) => [item.id, item]));
   const packageManifest = publicDatasetPackageManifestReadback(report);
   const packageItems = Array.isArray(packageManifest.items) ? packageManifest.items : [];
@@ -16351,7 +16351,7 @@ function releaseArtifactPackageTemplateCounts(items) {
 function publicDatasetReadinessReadback(report, options = {}) {
   const readiness = report.publicDatasetReadiness ?? {};
   const filters = publicDatasetReadinessFilters(options.searchParams);
-  const allItems = publicDatasetReadinessItems(readiness);
+  const allItems = publicDatasetReadinessItems(readiness, report);
   const filteredItems = allItems.filter((item) => publicDatasetReadinessMatchesFilters(item, filters));
   const items = options.itemId
     ? filteredItems.filter((item) => item.id === options.itemId || item.label === options.itemId || item.gateKind === options.itemId)
@@ -16386,11 +16386,11 @@ function publicDatasetReadinessReadback(report, options = {}) {
   };
 }
 
-function publicDatasetReadinessItems(readiness) {
+function publicDatasetReadinessItems(readiness, report = {}) {
   const routeBase = "/api/v1/public-dataset-readiness";
   const rows = Array.isArray(readiness.rows) ? readiness.rows : [];
   return rows.map((row, index) => {
-    const nextAction = publicDatasetReadinessNextAction(row);
+    const nextAction = publicDatasetReadinessNextAction(row, report);
     const item = {
       ...row,
       sequence: index + 1,
@@ -16412,7 +16412,7 @@ function publicDatasetReadinessItems(readiness) {
   });
 }
 
-function publicDatasetReadinessNextAction(row = {}) {
+function publicDatasetReadinessNextAction(row = {}, report = {}) {
   if (!publicDatasetReadinessItemIsOpen(row)) {
     return {
       nextActionKind: "verification_only",
@@ -16472,12 +16472,53 @@ function publicDatasetReadinessNextAction(row = {}) {
         "Keep downstream leaderboard, API, public training export, and judge-model launch blocked until Dataset v0.1 readiness and publication gates are complete.",
     };
   }
+  const releaseArtifactNextAction = publicDatasetReadinessReleaseArtifactNextAction(row, report);
+  if (releaseArtifactNextAction) return releaseArtifactNextAction;
   return {
     nextActionKind: "inspect_readiness_blocker",
     nextActionRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? "unknown")}`,
     nextActionReadbackRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? "unknown")}`,
     nextActionPolicy: "Inspect this readiness row and linked routes before appending evidence.",
   };
+}
+
+function publicDatasetReadinessReleaseArtifactNextAction(row = {}, report = {}) {
+  if (row.status !== "release_artifact_review_required") return null;
+  const artifactKind = {
+    label_snapshot: "label_snapshot",
+    corpus_manifest: "corpus_manifest",
+  }[row.id];
+  if (!artifactKind) return null;
+  const action = publicDatasetReadinessReleaseArtifactAction(report, artifactKind);
+  if (!action) return null;
+  const readinessRoute = `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? artifactKind)}`;
+  const nextAction = rlhf93CompletionAuditOperatorActionNextAction(
+    { nextOperatorActionSummary: rlhf93CompletionAuditOperatorActionSummary(action) },
+    { readbackItemRoute: readinessRoute },
+  );
+  if (!nextAction) return null;
+  return {
+    ...nextAction,
+    nextActionKind: "validate_release_artifact_evidence",
+    nextActionVerificationRoute: readinessRoute,
+    nextActionPolicy:
+      "Use the existing release-artifact operator action template and validate-only route before appending evidence; Dataset v0.1 readiness is proven only by the readiness row and /api/release/report.",
+  };
+}
+
+function publicDatasetReadinessReleaseArtifactAction(report = {}, artifactKind) {
+  const plan = report.operatorEvidenceSubmissionPlan ?? {};
+  const actionItems = (Array.isArray(plan.actionItems)
+    ? plan.actionItems
+    : (Array.isArray(plan.rows) ? plan.rows : []).flatMap((row) => row.actionItems ?? [])).map(
+      operatorActionItemWithExecutionStatus,
+    );
+  return actionItems.find(
+    (action) =>
+      action.checklistRowId === "release_artifact_submission_package" &&
+      action.actionType === "submit_artifact" &&
+      action.artifactKind === artifactKind,
+  ) ?? null;
 }
 
 function publicDatasetReadinessFilters(searchParams) {
@@ -16493,6 +16534,7 @@ function publicDatasetReadinessFilters(searchParams) {
     sourceStatus: value("sourceStatus"),
     reviewReason: value("reviewReason"),
     targetGapId: value("targetGapId"),
+    nextActionKind: value("nextActionKind"),
     route: value("route"),
     downstreamArtifact: value("downstreamArtifact"),
   };
@@ -16507,6 +16549,7 @@ function publicDatasetReadinessMatchesFilters(item, filters) {
     if (key === "sourceStatus") return Array.isArray(item.sourceStatuses) && item.sourceStatuses.includes(value);
     if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
     if (key === "targetGapId") return Array.isArray(item.targetGapIds) && item.targetGapIds.includes(value);
+    if (key === "nextActionKind") return item.nextActionKind === value;
     if (key === "downstreamArtifact") return Array.isArray(item.downstreamArtifacts) && item.downstreamArtifacts.includes(value);
     if (key === "route") return publicDatasetReadinessRoutes(item).includes(value);
     return String(item?.[key] ?? "") === value;
@@ -16542,6 +16585,7 @@ function publicDatasetReadinessRoutes(item) {
     item?.nextActionValidateOnlyRoute,
     item?.nextActionWriteRoute,
     item?.nextActionVerificationRoute,
+    item?.nextActionOperatorActionRoute,
   ]);
 }
 
@@ -18047,7 +18091,7 @@ function rlhf93CompletionAuditItems(report) {
   const publicDataset = report.publicDatasetReadiness ?? {};
   for (const [index, row] of (Array.isArray(publicDataset.rows) ? publicDataset.rows : []).entries()) {
     const sourceRowId = row.id ?? `public-dataset-row-${index + 1}`;
-    const nextAction = publicDatasetReadinessNextAction(row);
+    const nextAction = publicDatasetReadinessNextAction(row, report);
     items.push(
       rlhf93CompletionAuditDecoratedItem({
         ...row,
@@ -18103,7 +18147,10 @@ function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, che
   const routeBase = routeBaseByGroup[requirementGroup] ?? "/api/release/report";
   return (Array.isArray(checklist.rows) ? checklist.rows : []).map((row, index) => {
     const sourceRowId = row.id ?? row.rowId ?? `${requirementGroup}-row-${index + 1}`;
-    const derivedRoutes = rlhf93CompletionAuditDerivedChecklistRowRoutes(report, requirementGroup, sourceRowId, row, routeBase);
+    const operatorActions = rlhf93CompletionAuditDerivedChecklistRowOperatorActions(report, requirementGroup, sourceRowId);
+    const operatorActionSummaries = operatorActions.map(rlhf93CompletionAuditOperatorActionSummary);
+    const nextOperatorActionSummary = rlhf93CompletionAuditPreferredOperatorAction(operatorActionSummaries);
+    const derivedRoutes = rlhf93CompletionAuditDerivedChecklistRowRoutes(report, requirementGroup, sourceRowId, row, routeBase, operatorActions);
     return rlhf93CompletionAuditDecoratedItem({
       ...row,
       id: `${requirementGroup}-${sourceRowId}`,
@@ -18116,6 +18163,8 @@ function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, che
       releaseUseStatus: checklist.releaseUseStatus ?? row.releaseUseStatus ?? "unknown",
       sourceChecklistId: checklist.id ?? null,
       sourceEvidenceId: row.sourceEvidenceId ?? (Array.isArray(row.evidenceIds) ? row.evidenceIds[0] : null),
+      operatorActionSummaries,
+      nextOperatorActionSummary,
       evidenceRoutes: ["/api/release/report", `${routeBase}/${encodeURIComponent(sourceRowId)}`],
       verificationRoutes: [
         `${routeBase}/${encodeURIComponent(sourceRowId)}`,
@@ -18128,8 +18177,14 @@ function rlhf93CompletionAuditDerivedChecklistRows(report, requirementGroup, che
   });
 }
 
-function rlhf93CompletionAuditDerivedChecklistRowRoutes(report, requirementGroup, sourceRowId, row = {}, routeBase = "/api/release/report") {
-  const operatorActions = rlhf93CompletionAuditDerivedChecklistRowOperatorActions(report, requirementGroup, sourceRowId);
+function rlhf93CompletionAuditDerivedChecklistRowRoutes(
+  report,
+  requirementGroup,
+  sourceRowId,
+  row = {},
+  routeBase = "/api/release/report",
+  operatorActions = rlhf93CompletionAuditDerivedChecklistRowOperatorActions(report, requirementGroup, sourceRowId),
+) {
   return uniqueValues([
     routeBase,
     `${routeBase}/${encodeURIComponent(sourceRowId)}`,
@@ -18193,6 +18248,240 @@ function rlhf93CompletionAuditOperatorActionMatchesDerivedRow(action, sourceRowI
     if (value.includes(`:${source}:`)) return true;
     return value.includes(source);
   });
+}
+
+function rlhf93CompletionAuditOperatorActionSummary(action = {}) {
+  const decorated = action?.executionStatus ? action : operatorActionItemWithExecutionStatus(action);
+  const base = octoberCompletionChecklistActionSummary(decorated);
+  const relatedSubmitActions = operatorActionItemRelatedSubmitActions(decorated).map((related) =>
+    rlhf93CompletionAuditRelatedOperatorActionSummary(related),
+  );
+  const routes = uniqueValues([
+    rlhf93CompletionAuditOperatorActionItemRoute(decorated),
+    rlhf93CompletionAuditOperatorActionFilterRoute(decorated),
+    ...operatorActionItemRoutes(decorated),
+    ...relatedSubmitActions.flatMap(rlhf93CompletionAuditItemRoutes),
+  ]);
+  return {
+    ...base,
+    executionStatus: decorated.executionStatus ?? operatorActionExecutionStatus(decorated),
+    executionStatusReason: decorated.executionStatusReason ?? operatorActionExecutionStatusReason(decorated),
+    operatorActionItemRoute: decorated.operatorActionItemRoute ?? rlhf93CompletionAuditOperatorActionItemRoute(decorated),
+    actionReadbackItemRoute: decorated.actionReadbackItemRoute ?? rlhf93CompletionAuditOperatorActionItemRoute(decorated),
+    operatorActionGroupRoute: decorated.operatorActionGroupRoute ?? null,
+    relatedSubmitActions,
+    routes,
+    routeCount: routes.length,
+  };
+}
+
+function rlhf93CompletionAuditRelatedOperatorActionSummary(action = {}) {
+  const routes = uniqueValues([
+    action.writeRoute,
+    action.readbackRoute,
+    action.bulkImportRoute,
+    action.dryRunImportRoute,
+    action.validateOnlyImportRoute,
+    action.singleRecordDryRunRoute,
+    action.singleRecordValidateOnlyRoute,
+    ...(Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes : []),
+  ]);
+  return {
+    id: action.actionId ?? action.id ?? null,
+    actionId: action.actionId ?? action.id ?? null,
+    actionType: action.actionType ?? "submit_artifact",
+    artifactKind: action.artifactKind ?? null,
+    artifactType: action.artifactType ?? null,
+    artifactId: action.artifactId ?? null,
+    status: action.status ?? action.actionStatus ?? null,
+    writeRoute: action.writeRoute ?? null,
+    readbackRoute: action.readbackRoute ?? null,
+    bulkImportRoute: action.bulkImportRoute ?? null,
+    dryRunImportRoute: action.dryRunImportRoute ?? routeWithQueryFlag(action.bulkImportRoute, "dryRun", "true"),
+    validateOnlyImportRoute: action.validateOnlyImportRoute ?? routeWithQueryFlag(action.bulkImportRoute, "validateOnly", "true"),
+    singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
+    singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
+    templateReadbackRoutes: Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes : [],
+    routes,
+    routeCount: routes.length,
+  };
+}
+
+function rlhf93CompletionAuditOperatorActionCandidates(item = {}) {
+  const direct = [
+    item.nextOperatorActionSummary,
+    ...(Array.isArray(item.operatorActionSummaries) ? item.operatorActionSummaries : []),
+    ...(Array.isArray(item.operatorActions) ? item.operatorActions.map(rlhf93CompletionAuditOperatorActionSummary) : []),
+  ].filter(Boolean);
+  const related = direct.flatMap((action) =>
+    operatorActionItemRelatedSubmitActions(action).length
+      ? operatorActionItemRelatedSubmitActions(action).map(rlhf93CompletionAuditRelatedOperatorActionSummary)
+      : Array.isArray(action.relatedSubmitActions)
+        ? action.relatedSubmitActions
+        : [],
+  );
+  const seen = new Set();
+  return [...direct, ...related].filter((action) => {
+    const key = [
+      action.id,
+      action.actionId,
+      action.operatorActionItemRoute,
+      action.artifactKind,
+      action.artifactType,
+      action.artifactId,
+      action.writeRoute,
+      action.bulkImportRoute,
+      action.readbackRoute,
+    ]
+      .filter(Boolean)
+      .join("|");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function rlhf93CompletionAuditPreferredOperatorAction(actions = []) {
+  return [...actions]
+    .filter(Boolean)
+    .sort((left, right) => rlhf93CompletionAuditOperatorActionRank(right) - rlhf93CompletionAuditOperatorActionRank(left))[0] ?? null;
+}
+
+function rlhf93CompletionAuditOperatorActionRank(action = {}) {
+  const executionStatus = action.executionStatus ?? operatorActionExecutionStatus(action);
+  const open = operatorActionItemIsOpen(action);
+  const statusWeight = open ? 50 : 0;
+  const executionWeight = {
+    ready_to_collect_data: 45,
+    ready_to_submit_evidence: 50,
+    ready_to_review_evidence: 30,
+    ready_to_execute: 25,
+    blocked_by_target_data: 5,
+    closed: 0,
+  }[executionStatus] ?? 20;
+  const actionWeight = action.actionType === "submit_artifact" ? 8 : action.actionType === "collect_data" ? 6 : 0;
+  const preflightWeight = rlhf93CompletionAuditOperatorActionValidateOnlyRoute(action) ? 4 : 0;
+  const templateWeight = rlhf93CompletionAuditOperatorActionTemplateRoute(action) ? 2 : 0;
+  return statusWeight + executionWeight + actionWeight + preflightWeight + templateWeight;
+}
+
+function rlhf93CompletionAuditOperatorActionNextAction(item, { readbackItemRoute } = {}) {
+  const action = rlhf93CompletionAuditPreferredOperatorAction(rlhf93CompletionAuditOperatorActionCandidates(item));
+  if (!action) return null;
+  const operatorActionRoute = rlhf93CompletionAuditOperatorActionItemRoute(action);
+  const validateOnlyRoute = rlhf93CompletionAuditOperatorActionValidateOnlyRoute(action);
+  const dryRunRoute = rlhf93CompletionAuditOperatorActionDryRunRoute(action);
+  const templateRoute = rlhf93CompletionAuditOperatorActionTemplateRoute(action);
+  const writeRoute = rlhf93CompletionAuditOperatorActionWriteRoute(action);
+  const readbackRoute = operatorActionRoute ?? action.actionReadbackItemRoute ?? action.readbackItemRoute ?? action.readbackRoute ?? readbackItemRoute;
+  const executionStatus = action.executionStatus ?? operatorActionExecutionStatus(action);
+  return {
+    nextActionKind: rlhf93CompletionAuditOperatorNextActionKind(action, { executionStatus, validateOnlyRoute, dryRunRoute, writeRoute }),
+    nextActionRoute: validateOnlyRoute ?? dryRunRoute ?? templateRoute ?? operatorActionRoute ?? writeRoute ?? readbackRoute,
+    nextActionReadbackRoute: readbackRoute ?? readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+    nextActionTemplateRoute: templateRoute,
+    nextActionDryRunRoute: dryRunRoute,
+    nextActionValidateOnlyRoute: validateOnlyRoute,
+    nextActionWriteRoute: writeRoute,
+    nextActionVerificationRoute: "/api/release/report",
+    nextActionOperatorActionId: action.id ?? action.actionId ?? null,
+    nextActionOperatorActionRoute: operatorActionRoute,
+    nextActionOperatorActionExecutionStatus: executionStatus,
+    nextActionArtifactKind: action.artifactKind ?? null,
+    nextActionArtifactType: action.artifactType ?? null,
+    nextActionPolicy:
+      "Use the linked operator action template and validate-only or dry-run route before appending real evidence; completion is proven only by /api/release/report and the RLHF93 completion audit.",
+  };
+}
+
+function rlhf93CompletionAuditOperatorNextActionKind(action = {}, routes = {}) {
+  const executionStatus = routes.executionStatus ?? action.executionStatus ?? operatorActionExecutionStatus(action);
+  if (executionStatus === "blocked_by_target_data") return "resolve_operator_action_target_data";
+  if (action.actionType === "review_artifact" || action.actionType === "review_report_section") return "review_operator_evidence";
+  if (routes.validateOnlyRoute) return "validate_operator_evidence";
+  if (routes.dryRunRoute) return "dry_run_operator_evidence";
+  if (routes.writeRoute) return "submit_operator_evidence";
+  return "inspect_operator_action";
+}
+
+function rlhf93CompletionAuditOperatorActionItemRoute(action = {}) {
+  return (
+    action.operatorActionItemRoute ??
+    action.actionReadbackItemRoute ??
+    (action.id ? `/api/v1/operator-action-items/${encodeURIComponent(action.id)}` : null) ??
+    (action.actionId ? `/api/v1/operator-action-items/${encodeURIComponent(action.actionId)}` : null)
+  );
+}
+
+function rlhf93CompletionAuditOperatorActionFilterRoute(action = {}) {
+  const actionId = action.id ?? action.actionId;
+  return actionId ? `/api/v1/operator-action-items?actionId=${encodeURIComponent(actionId)}` : null;
+}
+
+function rlhf93CompletionAuditOperatorActionTemplateRoute(action = {}) {
+  return uniqueValues([
+    ...(Array.isArray(action.templateReadbackRoutes) ? action.templateReadbackRoutes : []),
+    action.templateReadbackRoute,
+    action.targetDataTemplateReadbackRoute,
+    action.expandedTemplateReadbackRoute,
+    action.starterExpandedTemplateReadbackRoute,
+    action.cappedExpandedTemplateReadbackRoute,
+    ...(Array.isArray(action.relatedSubmitActions)
+      ? action.relatedSubmitActions.flatMap((related) => (Array.isArray(related.templateReadbackRoutes) ? related.templateReadbackRoutes : []))
+      : []),
+  ])[0] ?? null;
+}
+
+function rlhf93CompletionAuditOperatorActionValidateOnlyRoute(action = {}) {
+  return uniqueValues([
+    action.packageValidateOnlyImportRoute,
+    action.validateOnlyImportRoute,
+    action.singleRecordValidateOnlyRoute,
+    action.setupSingleRecordValidateOnlyRoute,
+    action.setupValidateOnlyImportRoute,
+    ...(Array.isArray(action.setupValidateOnlyImportRoutes) ? action.setupValidateOnlyImportRoutes : []),
+    ...(Array.isArray(action.relatedSubmitActions)
+      ? action.relatedSubmitActions.flatMap((related) => [
+          related.packageValidateOnlyImportRoute,
+          related.validateOnlyImportRoute,
+          related.singleRecordValidateOnlyRoute,
+          related.setupSingleRecordValidateOnlyRoute,
+        ])
+      : []),
+  ])[0] ?? null;
+}
+
+function rlhf93CompletionAuditOperatorActionDryRunRoute(action = {}) {
+  return uniqueValues([
+    action.packageDryRunImportRoute,
+    action.dryRunImportRoute,
+    action.singleRecordDryRunRoute,
+    action.setupSingleRecordDryRunRoute,
+    action.setupDryRunImportRoute,
+    ...(Array.isArray(action.setupDryRunImportRoutes) ? action.setupDryRunImportRoutes : []),
+    ...(Array.isArray(action.relatedSubmitActions)
+      ? action.relatedSubmitActions.flatMap((related) => [
+          related.packageDryRunImportRoute,
+          related.dryRunImportRoute,
+          related.singleRecordDryRunRoute,
+          related.setupSingleRecordDryRunRoute,
+        ])
+      : []),
+  ])[0] ?? null;
+}
+
+function rlhf93CompletionAuditOperatorActionWriteRoute(action = {}) {
+  return uniqueValues([
+    action.packageImportRoute,
+    action.bulkImportRoute,
+    action.writeRoute,
+    action.setupWriteRoute,
+    action.setupBulkImportRoute,
+    ...(Array.isArray(action.setupBulkImportRoutes) ? action.setupBulkImportRoutes : []),
+    ...(Array.isArray(action.relatedSubmitActions)
+      ? action.relatedSubmitActions.flatMap((related) => [related.packageImportRoute, related.bulkImportRoute, related.writeRoute])
+      : []),
+  ])[0] ?? null;
 }
 
 function rlhf93CompletionAuditCurrentUnblocker(report) {
@@ -18513,6 +18802,8 @@ function rlhf93CompletionAuditNextAction(item, { open, readbackItemRoute } = {})
         "Validate the current target-data package before append, then verify completion only through /api/release/report and the RLHF93 completion audit.",
     };
   }
+  const operatorActionNextAction = open ? rlhf93CompletionAuditOperatorActionNextAction(item, { readbackItemRoute }) : null;
+  if (operatorActionNextAction) return operatorActionNextAction;
   if (!open) {
     return {
       nextActionKind: "verification_only",
@@ -18683,6 +18974,9 @@ function rlhf93CompletionAuditItemRoutes(item) {
     ...(Array.isArray(item?.governanceCoverageRoutes) ? item.governanceCoverageRoutes : []),
     ...(Array.isArray(item?.releaseReportSectionRoutes) ? item.releaseReportSectionRoutes : []),
     item?.readbackRoute,
+    item?.operatorActionItemRoute,
+    item?.actionReadbackItemRoute,
+    item?.operatorActionGroupRoute,
     item?.writeRoute,
     item?.bulkImportRoute,
     item?.packageImportRoute,
@@ -18696,6 +18990,9 @@ function rlhf93CompletionAuditItemRoutes(item) {
     item?.nextActionValidateOnlyRoute,
     item?.nextActionWriteRoute,
     item?.nextActionVerificationRoute,
+    item?.nextActionOperatorActionRoute,
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+    ...(Array.isArray(item?.operatorActionSummaries) ? item.operatorActionSummaries.flatMap(rlhf93CompletionAuditItemRoutes) : []),
   ]);
 }
 

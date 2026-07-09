@@ -12062,10 +12062,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReadiness.body.counts.downstreamBlockedRows, 1);
   assert.equal(publicDatasetReadiness.body.counts.byGateKind.public_documentation, 2);
   assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_target_data_package, 1);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_release_artifact_evidence, 2);
   assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_public_document, 2);
   assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_release_version_freeze, 1);
   assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.verify_public_first_blockers, 1);
-  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.inspect_readiness_blocker, 2);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.inspect_readiness_blocker ?? 0, 0);
   assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.verification_only, publicDatasetReadiness.body.counts.readyRows);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-readiness"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 13);
@@ -12094,6 +12095,33 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.ok(targetPackageReadiness.routes.includes(targetPackageReadiness.nextActionRoute));
   assert.ok(targetPackageReadiness.routes.includes(targetPackageReadiness.nextActionReadbackRoute));
+  const labelSnapshotReadiness = publicDatasetRowsById.get("label_snapshot");
+  assert.equal(labelSnapshotReadiness.nextActionKind, "validate_release_artifact_evidence");
+  assert.equal(labelSnapshotReadiness.nextActionRoute, "/api/v1/label-snapshots?validateOnly=true");
+  assert.equal(labelSnapshotReadiness.nextActionTemplateRoute, "/api/v1/operator-action-items/payload-template?checklistRowId=release_artifact_submission_package&actionType=submit_artifact&artifactKind=label_snapshot");
+  assert.equal(labelSnapshotReadiness.nextActionWriteRoute, "/api/v1/label-snapshots");
+  assert.equal(
+    labelSnapshotReadiness.nextActionOperatorActionRoute,
+    "/api/v1/operator-action-items/release_artifact_submission_package%3Asubmit%3Alabel_snapshot",
+  );
+  assert.equal(labelSnapshotReadiness.nextActionVerificationRoute, "/api/v1/public-dataset-readiness/label_snapshot");
+  assert.ok(labelSnapshotReadiness.routes.includes(labelSnapshotReadiness.nextActionRoute));
+  assert.ok(labelSnapshotReadiness.routes.includes(labelSnapshotReadiness.nextActionOperatorActionRoute));
+  const corpusManifestReadiness = publicDatasetRowsById.get("corpus_manifest");
+  assert.equal(corpusManifestReadiness.nextActionKind, "validate_release_artifact_evidence");
+  assert.equal(corpusManifestReadiness.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(
+    corpusManifestReadiness.nextActionTemplateRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=release_artifact_submission_package&artifactKind=corpus_manifest",
+  );
+  assert.equal(corpusManifestReadiness.nextActionWriteRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.equal(
+    corpusManifestReadiness.nextActionOperatorActionRoute,
+    "/api/v1/operator-action-items/release_artifact_submission_package%3Asubmit%3Acorpus_manifest",
+  );
+  assert.equal(corpusManifestReadiness.nextActionVerificationRoute, "/api/v1/public-dataset-readiness/corpus_manifest");
+  assert.ok(corpusManifestReadiness.routes.includes(corpusManifestReadiness.nextActionRoute));
+  assert.ok(corpusManifestReadiness.routes.includes(corpusManifestReadiness.nextActionOperatorActionRoute));
   const releaseFreezeReadiness = publicDatasetRowsById.get("release_version_freeze");
   assert.equal(releaseFreezeReadiness.nextActionKind, "validate_release_version_freeze");
   assert.equal(releaseFreezeReadiness.nextActionRoute, "/api/v1/release-version-manifest/template");
@@ -12119,6 +12147,19 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetOpen.status, 200, JSON.stringify(publicDatasetOpen.body));
   assert.equal(publicDatasetOpen.body.count, 7);
   assert.equal(publicDatasetOpen.body.filteredCounts.openRows, 7);
+
+  const publicDatasetReleaseArtifactNextActions = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/public-dataset-readiness?nextActionKind=validate_release_artifact_evidence",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetReleaseArtifactNextActions.status, 200, JSON.stringify(publicDatasetReleaseArtifactNextActions.body));
+  assert.equal(publicDatasetReleaseArtifactNextActions.body.count, 2);
+  assert.ok(
+    publicDatasetReleaseArtifactNextActions.body.items.every(
+      (item) => item.nextActionKind === "validate_release_artifact_evidence",
+    ),
+  );
 
   const publicDatasetDocs = await invokeApi(context, {
     method: "GET",
@@ -18261,6 +18302,7 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("do not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
   assert.ok(architectureDoc.includes("Open readiness rows also carry first-class `nextActionKind`, `nextActionRoute`"));
+  assert.ok(architectureDoc.includes("label-snapshot and corpus-manifest review blockers to the existing release-artifact operator action"));
   assert.ok(architectureDoc.includes("documentation blockers to `publicDatasetDocument` validation"));
   assert.ok(architectureDoc.includes("Review-required source/metaphilosophy rows blocked by the Dataset v0.1 deliverable"));
   assert.ok(architectureDoc.includes("open public-dataset readiness filters instead of generic audit inspection rows"));
@@ -18421,6 +18463,8 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("package dry-run/validate-only routes"));
   assert.ok(architectureDoc.includes("target gap, next-action kind, unblocker phase/execution, current-unblocker presence"));
   assert.ok(architectureDoc.includes("Open audit rows also carry first-class `nextActionKind`, `nextActionRoute`"));
+  assert.ok(architectureDoc.includes("nextActionOperatorActionRoute"));
+  assert.ok(architectureDoc.includes("nextActionKind=validate_operator_evidence"));
   assert.ok(architectureDoc.includes("does not create release gates, promote rejected or pruned ideas, create candidates, or mutate the main spec"));
   assert.ok(
     architectureDoc.includes(
@@ -25824,6 +25868,45 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(hiddenBenchmarkAuditRow.preflightCoverageRoutes.length > 0);
   assert.ok(hiddenBenchmarkAuditRow.templateReadbackRoutes.every((route) => hiddenBenchmarkAuditRow.routes.includes(route)));
   assert.ok(hiddenBenchmarkAuditRow.preflightCoverageRoutes.every((route) => hiddenBenchmarkAuditRow.routes.includes(route)));
+  const releaseArtifactAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "october-release_artifact_submission_package",
+  );
+  assert.ok(releaseArtifactAuditRow);
+  assert.equal(releaseArtifactAuditRow.nextActionKind, "validate_operator_evidence");
+  assert.equal(releaseArtifactAuditRow.nextActionOperatorActionId, "release_artifact_submission_package:submit:label_snapshot");
+  assert.equal(
+    releaseArtifactAuditRow.nextActionOperatorActionRoute,
+    "/api/v1/operator-action-items/release_artifact_submission_package%3Asubmit%3Alabel_snapshot",
+  );
+  assert.equal(releaseArtifactAuditRow.nextActionTemplateRoute, "/api/v1/operator-action-items/payload-template?checklistRowId=release_artifact_submission_package&actionType=submit_artifact&artifactKind=label_snapshot");
+  assert.equal(releaseArtifactAuditRow.nextActionValidateOnlyRoute, "/api/v1/label-snapshots?validateOnly=true");
+  assert.equal(releaseArtifactAuditRow.nextActionWriteRoute, "/api/v1/label-snapshots");
+  assert.equal(releaseArtifactAuditRow.nextActionVerificationRoute, "/api/release/report");
+  assert.ok(releaseArtifactAuditRow.routes.includes(releaseArtifactAuditRow.nextActionRoute));
+  assert.ok(releaseArtifactAuditRow.routes.includes(releaseArtifactAuditRow.nextActionOperatorActionRoute));
+
+  const modelEvaluationPackageAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "october-model_evaluation_submission_package",
+  );
+  assert.ok(modelEvaluationPackageAuditRow);
+  assert.equal(modelEvaluationPackageAuditRow.nextActionKind, "validate_operator_evidence");
+  assert.equal(modelEvaluationPackageAuditRow.nextActionOperatorActionId, "model_evaluation_submission_package:submit:model_improvement_run");
+  assert.equal(modelEvaluationPackageAuditRow.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(
+    modelEvaluationPackageAuditRow.nextActionTemplateRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_submission_package&artifactKind=model_improvement_run",
+  );
+  assert.equal(modelEvaluationPackageAuditRow.nextActionWriteRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.ok(modelEvaluationPackageAuditRow.routes.includes(modelEvaluationPackageAuditRow.nextActionOperatorActionRoute));
+
+  const discussionPackageAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "october-discussion_and_adjudication_workflows",
+  );
+  assert.ok(discussionPackageAuditRow);
+  assert.equal(discussionPackageAuditRow.nextActionKind, "validate_operator_evidence");
+  assert.equal(discussionPackageAuditRow.nextActionRoute, "/api/v1/discussions?validateOnly=true");
+  assert.equal(discussionPackageAuditRow.nextActionTemplateRoute, "/api/v1/operator-action-items/payload-template?checklistRowId=discussion_and_adjudication_workflows&actionType=submit_artifact&artifactKind=discussion");
+  assert.equal(discussionPackageAuditRow.nextActionOperatorActionExecutionStatus, "ready_to_submit_evidence");
   assert.ok(
     rlhf93CompletionAudit.body.items.some(
       (item) =>
@@ -25901,6 +25984,14 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   );
   assert.ok(modelReproSubmittedArtifactsAuditRow);
   assert.equal(modelReproSubmittedArtifactsAuditRow.completionState, "open");
+  assert.equal(modelReproSubmittedArtifactsAuditRow.nextActionKind, "validate_operator_evidence");
+  assert.equal(modelReproSubmittedArtifactsAuditRow.nextActionRoute, "/api/v1/evaluations/run?validateOnly=true");
+  assert.equal(
+    modelReproSubmittedArtifactsAuditRow.nextActionOperatorActionRoute,
+    "/api/v1/operator-action-items/model_evaluation_reproducibility%3Asubmit%3Asubmitted_evaluation_artifacts_bound_to_release",
+  );
+  assert.equal(modelReproSubmittedArtifactsAuditRow.nextActionTemplateRoute, "/api/v1/operator-action-items/payload-template?checklistRowId=model_evaluation_reproducibility&actionType=submit_artifact&artifactKind=submitted_evaluation_artifacts_bound_to_release");
+  assert.equal(modelReproSubmittedArtifactsAuditRow.nextActionWriteRoute, "/api/v1/evaluations/run");
   assert.ok(
     modelReproSubmittedArtifactsAuditRow.routes.includes(
       "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Asubmitted_evaluation_artifacts_bound_to_release",
@@ -25917,6 +26008,13 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   );
   assert.ok(modelReproLeaderboardAuditRow);
   assert.equal(modelReproLeaderboardAuditRow.completionState, "open");
+  assert.equal(modelReproLeaderboardAuditRow.nextActionKind, "validate_operator_evidence");
+  assert.equal(modelReproLeaderboardAuditRow.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(
+    modelReproLeaderboardAuditRow.nextActionTemplateRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=leaderboard_model_run_provenance",
+  );
+  assert.equal(modelReproLeaderboardAuditRow.nextActionOperatorActionId, "model_evaluation_reproducibility:submit:leaderboard_model_run_provenance");
   assert.ok(
     modelReproLeaderboardAuditRow.routes.includes(
       "/api/v1/operator-action-items?actionId=model_evaluation_reproducibility%3Asubmit%3Aleaderboard_model_run_provenance",
@@ -25933,6 +26031,13 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   );
   assert.ok(modelReproInferenceEnvironmentAuditRow);
   assert.equal(modelReproInferenceEnvironmentAuditRow.completionState, "open");
+  assert.equal(modelReproInferenceEnvironmentAuditRow.nextActionKind, "validate_operator_evidence");
+  assert.equal(modelReproInferenceEnvironmentAuditRow.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(
+    modelReproInferenceEnvironmentAuditRow.nextActionTemplateRoute,
+    "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_reproducibility&artifactKind=model_inference_config",
+  );
+  assert.equal(modelReproInferenceEnvironmentAuditRow.nextActionOperatorActionId, "model_evaluation_reproducibility:submit:model_inference_config");
   assert.ok(modelReproInferenceEnvironmentAuditRow.routes.includes("/api/v1/model-inference-configs"));
   assert.ok(modelReproInferenceEnvironmentAuditRow.routes.includes("/api/v1/model-run-environments"));
   assert.ok(
@@ -25965,6 +26070,10 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(rlhf93CompletionAudit.body.counts.byReviewReason["datasetCard:not_submitted"] >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byTargetGapId.positions >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_current_unblocker_package >= 1);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_operator_evidence, 7);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_release_artifact_evidence, 2);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.inspect_readiness_blocker ?? 0, 0);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.inspect_completion_requirement ?? 0, 0);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.review_metaphilosophy_public_dataset_deliverable, 1);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.review_public_dataset_v0_1_blockers, 1);
   assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_public_document, 2);
