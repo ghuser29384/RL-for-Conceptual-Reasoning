@@ -17805,6 +17805,11 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-reviews"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageReview"'));
   assert.ok(appSource.includes("function publicDatasetPackageReviewPreviewRow(item)"));
+  assert.ok(appSource.includes('id: "public-dataset-package-review-manifest"'));
+  assert.ok(appSource.includes('endpoint: () => "/api/v1/public-dataset-package-files/review-manifest"'));
+  assert.ok(appSource.includes('resourceKey: "publicDatasetPackageReviewManifest"'));
+  assert.ok(appSource.includes("publicDatasetPackageReviewManifestSampleFiles()"));
+  assert.ok(appSource.includes("Workflow preflight returned"));
   assert.ok(appSource.includes('["Validation route", result.validationRoute ?? "not available"]'));
   assert.ok(appSource.includes('["Review manifest route", result.sourceRoutes?.packageFileReviewManifest ?? "not available"]'));
   assert.ok(appSource.includes('["Review manifest route", item.sourceRoutes?.packageFileReviewManifest ?? "not available"]'));

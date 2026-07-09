@@ -2801,6 +2801,138 @@ const sourceWorkbenchTemplateKindFilters = [
   "prepared_draft_promote",
 ];
 const sourceWorkbenchRouteLaneFilters = ["", "source_intake", "source_preparation"];
+
+function publicDatasetPackageReviewManifestSampleFiles() {
+  const jsonl = (record) => `${JSON.stringify(record)}\n`;
+  const json = (record) => JSON.stringify(record, null, 2);
+  return [
+    {
+      expectedFilename: "dataset-v0.1/release-cleared-position-critique-pairs.jsonl",
+      content: jsonl({
+        templateOnly: true,
+        position_id: "reviewed-position-id",
+        critique_id: "reviewed-critique-id",
+        split: "public_train",
+        position_text_version_id: "reviewed-position-text-version-id",
+        critique_text_version_id: "reviewed-critique-text-version-id",
+        rights_clearance_status: "release_cleared",
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/expert-labels.jsonl",
+      content: jsonl({
+        templateOnly: true,
+        item_id: "reviewed-position-id:reviewed-critique-id",
+        centrality: 0.72,
+        strength: 0.68,
+        correctness: 0.84,
+        clarity: 0.91,
+        dead_weight: 0.08,
+        single_issue: 0.86,
+        overall: 0.67,
+        confidence: "medium",
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/item-version-provenance.jsonl",
+      content: jsonl({
+        templateOnly: true,
+        item_id: "reviewed-position-id:reviewed-critique-id",
+        position_text_version_id: "reviewed-position-text-version-id",
+        critique_text_version_id: "reviewed-critique-text-version-id",
+        canonical_hash: "sha256:reviewed-item-version-provenance",
+        rating_context_snapshot_id: "reviewed-rating-context-snapshot-id",
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/label-snapshot.json",
+      content: json({
+        templateOnly: true,
+        label_snapshot_id: "snapshot-oct-api",
+        target_label_version: "initial_mean",
+        aggregation_policy: "seven_dimension_expert_supervised_labels",
+        snapshot_hash: "sha256:reviewed-label-snapshot",
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/split-manifest.json",
+      content: json({
+        templateOnly: true,
+        public_split_ids: ["public_train"],
+        excluded_split_ids: ["hidden_benchmark", "protected_validation"],
+        split_policy: "hidden_and_protected_splits_excluded_from_public_dataset_v0_1",
+        export_manifest_id: "public-manifest-october-2026-demo",
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/hidden-protected-exclusions.json",
+      content: json({
+        templateOnly: true,
+        hidden_benchmark_excluded: true,
+        protected_validation_excluded: true,
+        source_metadata_excluded: true,
+        model_judge_scores_excluded: true,
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/corpus-manifest.json",
+      content: json({
+        templateOnly: true,
+        corpus_manifest_id: "corpus-composition-october-2026-demo",
+        position_count: "replace_with_real_position_count",
+        critique_count: "replace_with_real_critique_count",
+        source_composition: { release_public: "reviewed_manifest_only" },
+        topic_family_coverage: { metaphilosophy: "reviewed_manifest_only" },
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/DATASET_CARD.md",
+      content: [
+        "# TEMPLATE: Metaphilosophy Critique Ratings Dataset v0.1",
+        "",
+        "Replace this template with reviewed dataset-card content for the package review manifest.",
+        "Hidden benchmark and protected validation content are excluded.",
+        "Public leaderboard, API evaluator, and training-export launch remain blocked until readiness gates pass.",
+        "",
+      ].join("\n"),
+    },
+    {
+      expectedFilename: "dataset-v0.1/METHODOLOGY.md",
+      content: [
+        "# TEMPLATE: Dataset v0.1 Methodology",
+        "",
+        "Replace this template with reviewed methodology content before generating governed review evidence.",
+        "Annotation unit: contextualized position, critique, and seven rubric dimensions.",
+        "Rubric dimensions: centrality, strength, correctness, clarity, dead weight, single issue, and overall.",
+        "Aggregation and split governance remain bound to the release report and public-dataset gates.",
+        "",
+      ].join("\n"),
+    },
+    {
+      expectedFilename: "dataset-v0.1/release-version-manifest.json",
+      content: json({
+        templateOnly: true,
+        release_version_id: "release-version-october-2026-demo",
+        release_freeze_id: "release-freeze-october-2026-demo",
+        linked_artifact_ids: ["snapshot-oct-api", "corpus-composition-october-2026-demo"],
+        phase_gate_bundle_id: "implementation-phase-gate-bundle-october-2026-demo",
+        frozen_at: new Date().toISOString(),
+      }),
+    },
+    {
+      expectedFilename: "dataset-v0.1/public-first-boundary.json",
+      content: json({
+        templateOnly: true,
+        dataset_v0_1_ready: false,
+        leaderboard_blocked: true,
+        api_evaluator_blocked: true,
+        training_export_blocked: true,
+        judge_model_blocked: true,
+      }),
+    },
+  ];
+}
+
 const workflowTemplates = [
   {
     id: "cloud-security-budget-policy",
@@ -4905,6 +5037,18 @@ const workflowTemplates = [
         },
       };
     },
+  },
+  {
+    id: "public-dataset-package-review-manifest",
+    label: "Dataset Package Review Manifest",
+    endpoint: () => "/api/v1/public-dataset-package-files/review-manifest",
+    resourceKey: "publicDatasetPackageReviewManifest",
+    requiredRole: "admin",
+    summary:
+      "Generate a hash-only Dataset v0.1 package review-manifest preflight from editable package-file content without storing raw files, appending evidence, or publishing the dataset.",
+    payload: () => ({
+      files: publicDatasetPackageReviewManifestSampleFiles(),
+    }),
   },
   {
     id: "operator-evidence-package-jsonl-import",
@@ -19303,6 +19447,17 @@ async function persistWorkflowEvent(template, payloadText, options = {}) {
         tone: "good",
         title: "Workflow import persisted",
         detail: `${body.resourceKey ?? template.resourceKey}: ${count} JSONL row(s) appended via ${body.importRoute ?? template.endpoint()}.${impactDetail}`,
+      };
+    }
+    if (body.noSideEffects === true || body.validationOnly === true || body.reviewOnly === true) {
+      const preflightStatus =
+        body.packageReviewStatus ?? body.packageValidationStatus ?? body.status ?? body.releaseUseStatus ?? "preflight_returned";
+      return {
+        tone: "good",
+        title: "Workflow preflight returned",
+        detail: `${body.resourceKey ?? template.resourceKey}:${body.id ?? body.resourceId ?? "preflight"} returned ${humanize(
+          preflightStatus,
+        )} with no side effects.`,
       };
     }
     return {
