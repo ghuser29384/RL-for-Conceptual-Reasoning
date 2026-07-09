@@ -7882,6 +7882,15 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
       ["rating", "/api/v1/ratings/import-jsonl", "/api/v1/ratings"],
     ],
   );
+  assert.match(targetPackageDryRun.body.packageInputSummary.submittedJsonlHash, /^sha256:/);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.submittedRecordCount, 3);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.rows[0].resourceId, "pos-package-dry-run");
+  assert.match(targetPackageDryRun.body.packageInputSummary.rows[0].submittedRecordHash, /^sha256:/);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.byResourceKey.position, 1);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.byResourceKey.assignment, 1);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.byResourceKey.rating, 1);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.byTargetGapId.positions, 1);
+  assert.equal(targetPackageDryRun.body.packageInputSummary.byTargetGapId.blind_initial_ratings, 2);
   assert.equal(targetPackageDryRun.body.validatedResources[0].targetGapId, "positions");
   assert.equal(targetPackageDryRun.body.validatedResources[0].expectedResourceDeltaFromPackageRecord, 1);
   assert.equal(targetPackageDryRun.body.validatedResources[0].packageDependencyStatus, "primary_without_package_setup");
@@ -7948,6 +7957,46 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(dryRunBlindRatingCoverage.projectedRemainingAfterPackage, dryRunBlindRatingCoverage.remainingBeforePackage - 1);
   assert.equal(targetPackageDryRun.body.policyGateDryRun, "not_minted_or_consumed");
   assert.match(targetPackageDryRun.body.validationPolicy, /without_appending_events/);
+  assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
+  assert.equal((await auditStore.readRatingEvents()).length, ratingEventCountBeforeTargetPackageDryRun);
+
+  const targetPackageReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+    headers: adminHeaders,
+    body: JSON.stringify({ jsonl: targetPackageJsonl }),
+  });
+  assert.equal(targetPackageReviewManifest.status, 200, JSON.stringify(targetPackageReviewManifest.body));
+  assert.equal(targetPackageReviewManifest.body.resourceKey, "targetDataPackageReviewManifest");
+  assert.equal(targetPackageReviewManifest.body.reviewOnly, true);
+  assert.equal(targetPackageReviewManifest.body.noSideEffects, true);
+  assert.equal(targetPackageReviewManifest.body.packageWriteActionAvailable, false);
+  assert.equal(
+    targetPackageReviewManifest.body.packageReviewStatus,
+    "target_data_package_review_requires_operator_attention",
+  );
+  assert.match(targetPackageReviewManifest.body.packageManifestHash, /^sha256:/);
+  assert.equal(
+    targetPackageReviewManifest.body.submittedJsonlHash,
+    targetPackageDryRun.body.packageInputSummary.submittedJsonlHash,
+  );
+  assert.equal(targetPackageReviewManifest.body.counts.reviewManifestRows, 3);
+  assert.equal(targetPackageReviewManifest.body.counts.byResourceKey.position, 1);
+  assert.equal(targetPackageReviewManifest.body.counts.byPackageDependencyStatus.setup_prerequisite, 1);
+  assert.equal(targetPackageReviewManifest.body.counts.byCoverageStatus.package_under_covers_target_gap, 2);
+  assert.equal(
+    targetPackageReviewManifest.body.packageManifest.rows[0].submittedRecordHash,
+    targetPackageDryRun.body.packageInputSummary.rows[0].submittedRecordHash,
+  );
+  assert.equal(
+    targetPackageReviewManifest.body.packageManifest.coverageRows[0].coverageStatus,
+    "package_under_covers_target_gap",
+  );
+  assert.match(targetPackageReviewManifest.body.policy.authority, /not completion evidence/);
+  assert.equal(
+    targetPackageReviewManifest.body.sourceRoutes.targetDataPackageReviewManifest,
+    "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+  );
   assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
   assert.equal((await auditStore.readRatingEvents()).length, ratingEventCountBeforeTargetPackageDryRun);
 
@@ -8385,6 +8434,22 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(templateTargetPackageImport.status, 400, JSON.stringify(templateTargetPackageImport.body));
   assert.equal(templateTargetPackageImport.body.error, "target_data_collection_package_template_record");
   assert.equal(templateTargetPackageImport.body.line, 1);
+
+  const templateTargetPackageReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      jsonl: JSON.stringify({
+        templateOnly: true,
+        importRoute: "/api/v1/intake/positions/import-jsonl",
+        position: position("pos-package-template-review-manifest", "ptv-pos-package-template-review-manifest-v1"),
+      }),
+    }),
+  });
+  assert.equal(templateTargetPackageReviewManifest.status, 400, JSON.stringify(templateTargetPackageReviewManifest.body));
+  assert.equal(templateTargetPackageReviewManifest.body.error, "target_data_collection_package_template_record");
+  assert.equal(templateTargetPackageReviewManifest.body.line, 1);
 
   const raterImport = await invokeApi(context, {
     method: "POST",
@@ -11024,6 +11089,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
   );
   assert.equal(currentPackageManifest.body.routes.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
   assert.equal(
+    currentPackageManifest.body.routes.packageReviewManifestRoute,
+    "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+  );
+  assert.equal(
     currentPackageManifest.body.routes.starterTemplateRoute,
     "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
   );
@@ -11084,6 +11153,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
     currentPackageManifest.body.preflightActionSummary.nextActionDryRunRoute,
     "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
   );
+  assert.equal(
+    currentPackageManifest.body.preflightActionSummary.reviewManifestRoute,
+    "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+  );
   assert.equal(currentPackageManifest.body.preflightActionSummary.appendRoute, "/api/v1/target-gaps/import-jsonl-package");
   assert.equal(
     currentPackageManifest.body.preflightActionSummary.starterTemplateRoute,
@@ -11109,17 +11182,37 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(
     currentPackageManifest.body.preflightActionSummary.routes.includes("/api/v1/target-gaps/import-jsonl-package?validateOnly=true"),
   );
+  assert.ok(
+    currentPackageManifest.body.preflightActionSummary.routes.includes(
+      "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+    ),
+  );
   assert.equal(currentPackageManifest.body.counts.byDependencyStatus.setup_prerequisite, 2);
   assert.equal(currentPackageManifest.body.counts.byDependencyStatus.primary_requires_setup_prerequisites, 1);
   assert.equal(currentPackageManifest.body.counts.byDependencyStatus.primary_no_setup_prerequisite, 6);
+  assert.equal(currentPackageManifest.body.counts.byCoverageStatus.package_exactly_covers_target_gap, 9);
+  assert.equal(currentPackageManifest.body.counts.byPreflightCoverageStatus.package_covers_current_unblocker, 9);
   assert.equal(currentPackageManifest.body.counts.setupPrerequisiteStepCount, 2);
   assert.equal(currentPackageManifest.body.counts.primaryStepsRequiringSetupCount, 1);
+  assert.equal(currentPackageManifest.body.counts.coverageKnownStepCount, 9);
+  assert.equal(currentPackageManifest.body.counts.coveredStepCount, 9);
+  assert.equal(currentPackageManifest.body.counts.underCoveredStepCount, 0);
+  assert.equal(currentPackageManifest.body.counts.unknownCoverageStepCount, 0);
   assert.equal(currentPackageManifest.body.counts.byTargetGapId.blind_initial_ratings, 3);
   assert.equal(currentPackageManifest.body.counts.byRoute["/api/v1/assignments/import-jsonl"], 1);
   assert.equal(currentPackageManifest.body.totalCount, 9);
   assert.equal(currentPackageManifest.body.items[0].stepKind, "setup_data_import");
   assert.equal(currentPackageManifest.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
   assert.equal(currentPackageManifest.body.items[0].dependencyStatus, "setup_prerequisite");
+  assert.equal(currentPackageManifest.body.items[0].preflightCoverageStatus, "package_covers_current_unblocker");
+  assert.equal(currentPackageManifest.body.items[0].coverageStatus, "package_exactly_covers_target_gap");
+  assert.equal(currentPackageManifest.body.items[0].targetGapCoverageStatus, "package_exactly_covers_target_gap");
+  assert.equal(currentPackageManifest.body.items[0].coverageRatio, 1);
+  assert.equal(currentPackageManifest.body.items[0].remainingBeforeManifest, 1434);
+  assert.equal(currentPackageManifest.body.items[0].expectedResourceDeltaFromManifest, 1434);
+  assert.equal(currentPackageManifest.body.items[0].projectedRemainingAfterManifest, 0);
+  assert.equal(currentPackageManifest.body.items[0].coverageTargetGapReadbackRoute, "/api/v1/target-gaps/blind_initial_ratings");
+  assert.ok(currentPackageManifest.body.items[0].coveragePackageManifestItemRoutes.length >= 3);
   assert.equal(currentPackageManifest.body.items[0].setupRequiredBeforePrimary, true);
   assert.deepEqual(currentPackageManifest.body.items[0].prerequisiteStepIds, []);
   assert.equal(currentPackageManifest.body.items[0].dependentPrimaryStepIds.length, 1);
@@ -11154,6 +11247,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifestById.body.count, 1);
   assert.equal(currentPackageManifestById.body.totalCount, 9);
   assert.equal(currentPackageManifestById.body.item.id, currentPackageManifest.body.items[0].id);
+  assert.equal(currentPackageManifestById.body.item.coverageStatus, "package_exactly_covers_target_gap");
+  assert.equal(currentPackageManifestById.body.item.projectedRemainingAfterManifest, 0);
   assert.equal(
     currentPackageManifestById.body.item.packageManifestItemRoute,
     releaseReportWithNavigationManifest.body.releaseCompletionNavigation.currentBlockingPackageManifest.executionSequencePreview[0].packageManifestItemRoute,
@@ -11199,6 +11294,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifestByDependency.body.count, 1);
   assert.equal(currentPackageManifestByDependency.body.filteredCounts.byDependencyStatus.primary_requires_setup_prerequisites, 1);
   assert.equal(currentPackageManifestByDependency.body.items[0].importRoute, "/api/v1/ratings/import-jsonl");
+  assert.equal(currentPackageManifestByDependency.body.items[0].coverageStatus, "package_exactly_covers_target_gap");
   const currentPackageManifestRequiresSetup = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/target-gaps/current-package-manifest?requiresSetup=true",
@@ -11208,6 +11304,31 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(currentPackageManifestRequiresSetup.body.count, 3);
   assert.equal(currentPackageManifestRequiresSetup.body.filteredCounts.setupPrerequisiteStepCount, 2);
   assert.equal(currentPackageManifestRequiresSetup.body.filteredCounts.primaryStepsRequiringSetupCount, 1);
+  const currentPackageManifestByCoverage = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest?coverageStatus=package_exactly_covers_target_gap",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestByCoverage.status, 200, JSON.stringify(currentPackageManifestByCoverage.body));
+  assert.equal(currentPackageManifestByCoverage.body.count, 9);
+  assert.equal(currentPackageManifestByCoverage.body.filteredCounts.byCoverageStatus.package_exactly_covers_target_gap, 9);
+  assert.ok(currentPackageManifestByCoverage.body.items.every((item) => item.coverageStatus === "package_exactly_covers_target_gap"));
+  const currentPackageManifestByPreflightCoverage = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/target-gaps/current-package-manifest?preflightCoverageStatus=package_covers_current_unblocker",
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(currentPackageManifestByPreflightCoverage.status, 200, JSON.stringify(currentPackageManifestByPreflightCoverage.body));
+  assert.equal(currentPackageManifestByPreflightCoverage.body.count, 9);
+  assert.equal(
+    currentPackageManifestByPreflightCoverage.body.filteredCounts.byPreflightCoverageStatus.package_covers_current_unblocker,
+    9,
+  );
+  assert.ok(
+    currentPackageManifestByPreflightCoverage.body.items.every(
+      (item) => item.preflightCoverageStatus === "package_covers_current_unblocker",
+    ),
+  );
   const missingCurrentPackageManifestById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/target-gaps/current-package-manifest/not-present",
@@ -17827,6 +17948,9 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('url.searchParams.set("stepKind", state.workflowTemplateKindFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("coverageStatus", state.workflowPreflightCoverageStatusFilter)'));
   assert.ok(appSource.includes('["Coverage states", workflowCountMapSummary(counts.byCoverageStatus)]'));
+  assert.ok(appSource.includes('id: "target-data-package-review-manifest"'));
+  assert.ok(appSource.includes('endpoint: () => "/api/v1/target-gaps/import-jsonl-package/review-manifest"'));
+  assert.ok(appSource.includes('resourceKey: "targetDataPackageReviewManifest"'));
   assert.ok(appSource.includes('id: "public-dataset-release-package"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-release-package"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetReleasePackageArtifact"'));
@@ -18332,6 +18456,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("publicDatasetPackageReviewManifest"));
   assert.ok(architectureDoc.includes("Validation reports and hash-only review manifests retain the package-step"));
   assert.ok(architectureDoc.includes("does not store package contents, append evidence, create files, publish the dataset"));
+  assert.ok(architectureDoc.includes("POST /api/v1/target-gaps/import-jsonl-package/review-manifest"));
+  assert.ok(architectureDoc.includes("targetDataPackageReviewManifest"));
+  assert.ok(architectureDoc.includes("It also exposes the target-data package review-manifest action"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("publicDatasetPackageReview"));

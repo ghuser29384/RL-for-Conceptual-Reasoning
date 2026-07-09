@@ -7926,6 +7926,10 @@ export async function handleApiRequest(request, response, url, context) {
     });
     return;
   }
+  if (request.method === "POST" && url.pathname === targetDataCollectionPackageReviewManifestRoute) {
+    await targetDataCollectionPackageReviewManifestEndpoint(request, response, context);
+    return;
+  }
   if (request.method === "POST" && url.pathname === "/api/v1/operator-evidence/import-jsonl") {
     await operatorEvidencePackageJsonlImportEndpoint(request, response, context, {
       dryRun: jsonlImportDryRunRequested(url.searchParams),
@@ -9415,19 +9419,13 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
   const currentBlockingPackageManifest =
     navigation.currentBlockingPackageManifest ??
     octoberCompletionRunbookCurrentBlockingPackageManifest(report, navigation.currentBlockingGroup ?? null);
-  const executionPreview = targetDataCurrentPackageManifestItems(
+  const baseExecutionPreview = targetDataCurrentPackageManifestItems(
     Array.isArray(currentBlockingPackageManifest?.executionSequencePreview) ? currentBlockingPackageManifest.executionSequencePreview : [],
   );
   const preflightDependencySummary = targetDataPackagePreflightDependencySummary(
-    executionPreview,
+    baseExecutionPreview,
     currentBlockingPackageManifest,
   );
-  const filters = targetDataCurrentPackageManifestFilters(options.searchParams);
-  const filteredItems = executionPreview.filter((item) => targetDataCurrentPackageManifestMatchesFilters(item, filters));
-  const items = options.itemId
-    ? filteredItems.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
-    : filteredItems;
-  if (options.itemId && items.length === 0) return null;
   const manifestStatus =
     currentBlockingPackageManifest?.status ??
     (navigation.currentBlockingPhase === "collect_data" ? "target_data_package_manifest_unavailable" : "no_current_target_data_package_manifest");
@@ -9445,6 +9443,7 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
     packageValidateOnlyImportRoute:
       currentBlockingPackageManifest?.packageValidateOnlyImportRoute ??
       routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    packageReviewManifestRoute: targetDataCollectionPackageReviewManifestRoute,
     starterTemplateRoute: currentBlockingPackageManifest?.templateStarter?.starterTemplateRoute ?? null,
     fullTemplateRoute: currentBlockingPackageManifest?.templateStarter?.fullTemplateRoute ?? null,
     sourceReportRoute: "/api/release/report",
@@ -9455,10 +9454,20 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       currentBlockingPackageManifest?.sourceCollectionPlanRoute ?? "/api/v1/target-gaps/collection-plan?executionStatus=ready_to_collect_data",
   };
   const preflightCoverageSummary = targetDataPackagePreflightCoverageSummary(
-    executionPreview,
+    baseExecutionPreview,
     report,
     currentBlockingPackageManifest,
   );
+  const executionPreview = targetDataCurrentPackageManifestItemsWithCoverage(
+    baseExecutionPreview,
+    preflightCoverageSummary,
+  );
+  const filters = targetDataCurrentPackageManifestFilters(options.searchParams);
+  const filteredItems = executionPreview.filter((item) => targetDataCurrentPackageManifestMatchesFilters(item, filters));
+  const items = options.itemId
+    ? filteredItems.filter((item) => item.id === options.itemId || String(item.sequence) === options.itemId)
+    : filteredItems;
+  if (options.itemId && items.length === 0) return null;
   const preflightActionSummary = targetDataPackagePreflightActionSummary({
     manifest: currentBlockingPackageManifest,
     preflightDependencySummary,
@@ -9514,12 +9523,22 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       omittedExecutionStepCount: currentBlockingPackageManifest?.omittedExecutionStepCount ?? 0,
       byStepKind: countItemsBy(executionPreview, "stepKind"),
       byDependencyStatus: countItemsBy(executionPreview, "dependencyStatus"),
+      byCoverageStatus: countItemsBy(executionPreview, "coverageStatus"),
+      byPreflightCoverageStatus: countItemsBy(executionPreview, "preflightCoverageStatus"),
       byTargetGapId: countItemsBy(executionPreview, "targetGapId"),
       byImportRoute: countItemsBy(executionPreview, "importRoute"),
       byRoute: countValues(executionPreview.flatMap(targetDataCurrentPackageManifestStepRoutes)),
       setupPrerequisiteStepCount: executionPreview.filter((item) => item.dependencyStatus === "setup_prerequisite").length,
       primaryStepsRequiringSetupCount: executionPreview.filter(
         (item) => item.dependencyStatus === "primary_requires_setup_prerequisites",
+      ).length,
+      coverageKnownStepCount: executionPreview.filter((item) => item.coverageStatus).length,
+      coveredStepCount: executionPreview.filter((item) =>
+        ["package_exactly_covers_target_gap", "package_exceeds_target_gap"].includes(item.coverageStatus),
+      ).length,
+      underCoveredStepCount: executionPreview.filter((item) => item.coverageStatus === "package_under_covers_target_gap").length,
+      unknownCoverageStepCount: executionPreview.filter((item) =>
+        ["package_targets_unknown_gap", "package_coverage_unknown_delta", "package_coverage_unknown_remaining"].includes(item.coverageStatus),
       ).length,
     },
     filteredCounts: {
@@ -9530,12 +9549,22 @@ function targetDataCurrentPackageManifestReadback(report, options = {}) {
       expectedResourceDelta: sumNumericField(items, "expectedResourceDelta"),
       byStepKind: countItemsBy(items, "stepKind"),
       byDependencyStatus: countItemsBy(items, "dependencyStatus"),
+      byCoverageStatus: countItemsBy(items, "coverageStatus"),
+      byPreflightCoverageStatus: countItemsBy(items, "preflightCoverageStatus"),
       byTargetGapId: countItemsBy(items, "targetGapId"),
       byImportRoute: countItemsBy(items, "importRoute"),
       byRoute: countValues(items.flatMap(targetDataCurrentPackageManifestStepRoutes)),
       setupPrerequisiteStepCount: items.filter((item) => item.dependencyStatus === "setup_prerequisite").length,
       primaryStepsRequiringSetupCount: items.filter(
         (item) => item.dependencyStatus === "primary_requires_setup_prerequisites",
+      ).length,
+      coverageKnownStepCount: items.filter((item) => item.coverageStatus).length,
+      coveredStepCount: items.filter((item) =>
+        ["package_exactly_covers_target_gap", "package_exceeds_target_gap"].includes(item.coverageStatus),
+      ).length,
+      underCoveredStepCount: items.filter((item) => item.coverageStatus === "package_under_covers_target_gap").length,
+      unknownCoverageStepCount: items.filter((item) =>
+        ["package_targets_unknown_gap", "package_coverage_unknown_delta", "package_coverage_unknown_remaining"].includes(item.coverageStatus),
       ).length,
     },
     routes: packageRoutes,
@@ -9606,6 +9635,62 @@ function targetDataCurrentPackageManifestItems(items) {
     const routes = targetDataCurrentPackageManifestStepRoutes(enrichedStepItem);
     return {
       ...enrichedStepItem,
+      routes,
+      routeCount: routes.length,
+    };
+  });
+}
+
+function targetDataCurrentPackageManifestItemsWithCoverage(items, preflightCoverageSummary = {}) {
+  const coverageRowsByTargetGapId = new Map(
+    (Array.isArray(preflightCoverageSummary?.rows) ? preflightCoverageSummary.rows : [])
+      .filter((row) => row?.targetGapId)
+      .map((row) => [row.targetGapId, row]),
+  );
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const coverage = coverageRowsByTargetGapId.get(item?.targetGapId);
+    const coverageFields = coverage
+      ? {
+          preflightCoverageStatus: preflightCoverageSummary.status ?? null,
+          coverageStatus: coverage.coverageStatus ?? null,
+          targetGapCoverageStatus: coverage.coverageStatus ?? null,
+          coverageRatio: coverage.coverageRatio ?? null,
+          remainingBeforeManifest: coverage.remainingBeforeManifest ?? null,
+          currentBeforeManifest: coverage.currentBeforeManifest ?? null,
+          targetBeforeManifest: coverage.target ?? null,
+          expectedResourceDeltaFromManifest: coverage.expectedResourceDeltaFromManifest ?? null,
+          projectedCurrentAfterManifest: coverage.projectedCurrentAfterManifest ?? null,
+          projectedRemainingAfterManifest: coverage.projectedRemainingAfterManifest ?? null,
+          coverageOverage: coverage.overage ?? null,
+          coverageTargetGapReadbackRoute: coverage.targetGapReadbackRoute ?? null,
+          coveragePackageManifestItemRoutes: Array.isArray(coverage.packageManifestItemRoutes) ? coverage.packageManifestItemRoutes : [],
+          coverageVerificationRoutes: Array.isArray(coverage.verificationRoutes) ? coverage.verificationRoutes : [],
+          coveragePolicy: preflightCoverageSummary.coveragePolicy ?? null,
+        }
+      : {
+          preflightCoverageStatus: preflightCoverageSummary.status ?? null,
+          coverageStatus: null,
+          targetGapCoverageStatus: null,
+          coverageRatio: null,
+          remainingBeforeManifest: null,
+          currentBeforeManifest: null,
+          targetBeforeManifest: null,
+          expectedResourceDeltaFromManifest: null,
+          projectedCurrentAfterManifest: null,
+          projectedRemainingAfterManifest: null,
+          coverageOverage: null,
+          coverageTargetGapReadbackRoute: null,
+          coveragePackageManifestItemRoutes: [],
+          coverageVerificationRoutes: [],
+          coveragePolicy: preflightCoverageSummary.coveragePolicy ?? null,
+        };
+    const enrichedItem = {
+      ...item,
+      ...coverageFields,
+    };
+    const routes = targetDataCurrentPackageManifestStepRoutes(enrichedItem);
+    return {
+      ...enrichedItem,
       routes,
       routeCount: routes.length,
     };
@@ -9689,6 +9774,7 @@ function targetDataPackagePreflightActionSummary({
     [
       routes.packageValidateOnlyImportRoute,
       routes.packageDryRunImportRoute,
+      routes.packageReviewManifestRoute,
       routes.packageImportRoute,
       routes.starterTemplateRoute,
       routes.fullTemplateRoute,
@@ -9705,6 +9791,7 @@ function targetDataPackagePreflightActionSummary({
     nextActionRoute: routes.packageValidateOnlyImportRoute ?? routes.packageDryRunImportRoute ?? routes.packageImportRoute ?? null,
     nextActionValidateOnlyRoute: routes.packageValidateOnlyImportRoute ?? null,
     nextActionDryRunRoute: routes.packageDryRunImportRoute ?? null,
+    reviewManifestRoute: routes.packageReviewManifestRoute ?? null,
     appendRoute: routes.packageImportRoute ?? null,
     starterTemplateRoute: routes.starterTemplateRoute ?? null,
     fullTemplateRoute: routes.fullTemplateRoute ?? null,
@@ -9873,7 +9960,7 @@ function targetDataPackagePreflightCoverageRow(targetGapId, items = [], targetGa
     packageManifestItemRoutes: uniqueValues(items.map((item) => item.packageManifestItemRoute)),
     collectionPlanRoutes: uniqueValues(items.map((item) => item.collectionPlanRoute)),
     verificationRoutes: uniqueValues(items.flatMap((item) => [item.verificationRoute, item.targetGapReadbackItemRoute])),
-    targetGapReadbackRoute: targetGap?.targetGapReadbackRoute ?? `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}`,
+    targetGapReadbackRoute: targetGap?.targetGapReadbackItemRoute ?? targetGap?.targetGapReadbackRoute ?? `/api/v1/target-gaps/${encodeURIComponent(targetGapId)}`,
   };
 }
 
@@ -9898,6 +9985,8 @@ function targetDataCurrentPackageManifestFilters(searchParams) {
     checklistRowId: value("checklistRowId"),
     actionId: value("actionId"),
     dependencyStatus: value("dependencyStatus"),
+    coverageStatus: value("coverageStatus") ?? value("targetGapCoverageStatus"),
+    preflightCoverageStatus: value("preflightCoverageStatus") ?? value("packageCoverageStatus"),
     setupRequiredBeforePrimary: value("setupRequiredBeforePrimary") ?? value("requiresSetup"),
     importRoute: value("importRoute"),
     route: value("route"),
@@ -9910,6 +9999,8 @@ function targetDataCurrentPackageManifestMatchesFilters(item, filters) {
     if (key === "stepKind") return item?.stepKind === value || item?.importKind === value;
     if (key === "route") return targetDataCurrentPackageManifestStepRoutes(item).includes(value);
     if (key === "setupRequiredBeforePrimary") return booleanFilterMatches(value, item?.setupRequiredBeforePrimary === true);
+    if (key === "coverageStatus") return item?.coverageStatus === value || item?.targetGapCoverageStatus === value;
+    if (key === "preflightCoverageStatus") return item?.preflightCoverageStatus === value;
     return item?.[key] === value;
   });
 }
@@ -9930,6 +10021,8 @@ function targetDataCurrentPackageManifestStepRoutes(item) {
     item?.cappedExpandedTemplateReadbackRoute,
     item?.collectionPlanRoute,
     item?.verificationRoute,
+    item?.coverageTargetGapReadbackRoute,
+    ...(Array.isArray(item?.coverageVerificationRoutes) ? item.coverageVerificationRoutes : []),
   ]);
 }
 
@@ -21584,6 +21677,7 @@ function countValues(values) {
 
 const operatorEvidencePackageImportRoute = "/api/v1/operator-evidence/import-jsonl";
 const targetDataCollectionPackageImportRoute = "/api/v1/target-gaps/import-jsonl-package";
+const targetDataCollectionPackageReviewManifestRoute = "/api/v1/target-gaps/import-jsonl-package/review-manifest";
 const targetDataPackageStarterRecordCap = 25;
 const ratingBulkJsonlImportRoute = "/api/v1/ratings/import-jsonl";
 const ratingContextSnapshotBulkJsonlImportRoute = "/api/v1/rating-context-snapshots/import-jsonl";
@@ -24474,6 +24568,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
   const packageDependencySummary = targetDataCollectionPackageDependencySummary(entries);
   const { report: currentReleaseReport } = await buildCurrentReleaseArtifacts(context);
   const packageCoverageSummary = targetDataCollectionPackageCoverageSummary(entries, currentReleaseReport);
+  const packageInputSummary = targetDataCollectionPackageInputSummary(entries, parseResult.records, body);
 
   if (dryRun) {
     sendJson(response, 200, {
@@ -24482,6 +24577,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
       importRoute: targetDataCollectionPackageImportRoute,
       validatedResourceCount: entries.length,
       validatedResources: targetDataCollectionPackageEntrySummaries(entries),
+      packageInputSummary,
       targetGapImpactSummary,
       packageDependencySummary,
       packageCoverageSummary,
@@ -24600,6 +24696,179 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
       "each_jsonl_line_names_a_concrete_target_data_import_route_and_reuses_that_route_validator_before_any_resource_append",
     packageRoutePolicy: "unchanged generated templates are rejected and rating policy gates are prepared before package append",
   });
+}
+
+async function targetDataCollectionPackageReviewManifestEndpoint(request, response, context) {
+  const validation = await captureTargetDataCollectionPackageDryRun(request, context);
+  if (validation.statusCode !== 200) {
+    sendJson(response, validation.statusCode, validation.body);
+    return;
+  }
+  sendJson(response, 200, targetDataCollectionPackageReviewManifestReadback(validation.body));
+}
+
+async function captureTargetDataCollectionPackageDryRun(request, context) {
+  const captured = { statusCode: 500, bodyText: "{}" };
+  const captureResponse = {
+    writeHead(statusCode) {
+      captured.statusCode = statusCode;
+    },
+    end(body) {
+      captured.bodyText = typeof body === "string" ? body : body ? String(body) : "{}";
+    },
+  };
+  await targetDataCollectionPackageJsonlImportEndpoint(request, captureResponse, context, { dryRun: true });
+  let body;
+  try {
+    body = JSON.parse(captured.bodyText || "{}");
+  } catch (error) {
+    body = { error: "invalid_captured_target_data_package_response", detail: error instanceof Error ? error.message : String(error) };
+    captured.statusCode = 500;
+  }
+  return { statusCode: captured.statusCode, body };
+}
+
+function targetDataCollectionPackageInputSummary(entries = [], records = [], body = {}) {
+  const rows = (Array.isArray(entries) ? entries : []).map((entry) => {
+    const record = records[entry.line - 1];
+    return {
+      line: entry.line,
+      route: entry.route,
+      sourceWriteRoute: entry.sourceWriteRoute,
+      resourceKey: entry.resourceKey,
+      resourceId: entry.resource?.id ?? entry.rating?.id ?? null,
+      submittedRecordHash: record ? `sha256:${sha256(canonicalJson(record))}` : null,
+      ...targetDataCollectionPackageEntryImpactSummary(entry, entries),
+    };
+  });
+  return {
+    submittedJsonlHash: typeof body?.jsonl === "string" ? `sha256:${sha256(body.jsonl)}` : null,
+    submittedRecordCount: rows.length,
+    submittedRecordHashes: rows.map((row) => row.submittedRecordHash).filter(Boolean),
+    byResourceKey: countItemsBy(rows, "resourceKey"),
+    byTargetGapId: countItemsBy(rows, "targetGapId"),
+    byImportRoute: countItemsBy(rows, "route"),
+    byPackageDependencyStatus: countItemsBy(rows, "packageDependencyStatus"),
+    rows,
+  };
+}
+
+function targetDataCollectionPackageReviewManifestReadback(validation = {}) {
+  const inputSummary = validation.packageInputSummary ?? {};
+  const validatedRows = Array.isArray(validation.validatedResources) ? validation.validatedResources : [];
+  const inputRowsByLine = new Map((Array.isArray(inputSummary.rows) ? inputSummary.rows : []).map((row) => [row.line, row]));
+  const rows = validatedRows.map((row) => {
+    const inputRow = inputRowsByLine.get(row.line) ?? {};
+    return {
+      line: row.line,
+      route: row.route,
+      sourceWriteRoute: row.sourceWriteRoute,
+      resourceKey: row.resourceKey,
+      resourceId: row.resourceId,
+      submittedRecordHash: inputRow.submittedRecordHash ?? null,
+      targetGapId: row.targetGapId ?? null,
+      targetGapIds: Array.isArray(row.targetGapIds) ? row.targetGapIds : [],
+      importKind: row.importKind ?? null,
+      packageDependencyStatus: row.packageDependencyStatus ?? null,
+      expectedResourceDeltaFromPackageRecord: row.expectedResourceDeltaFromPackageRecord ?? null,
+      templateExpectedResourceDelta: row.templateExpectedResourceDelta ?? null,
+      targetGapReadbackRoute: row.targetGapReadbackRoute ?? null,
+      verificationRoutes: Array.isArray(row.verificationRoutes) ? row.verificationRoutes : [],
+    };
+  });
+  const coverageRows = (Array.isArray(validation.packageCoverageSummary?.rows) ? validation.packageCoverageSummary.rows : []).map((row) => ({
+    targetGapId: row.targetGapId,
+    coverageStatus: row.coverageStatus,
+    remainingBeforePackage: row.remainingBeforePackage,
+    expectedResourceDeltaFromPackageRecords: row.expectedResourceDeltaFromPackageRecords,
+    projectedRemainingAfterPackage: row.projectedRemainingAfterPackage,
+    coverageRatio: row.coverageRatio,
+    targetGapReadbackRoute: row.targetGapReadbackRoute,
+    verificationRoutes: Array.isArray(row.verificationRoutes) ? row.verificationRoutes : [],
+  }));
+  const impactRows = (Array.isArray(validation.targetGapImpactSummary?.rows) ? validation.targetGapImpactSummary.rows : []).map((row) => ({
+    targetGapId: row.targetGapId,
+    scopedToTargetGap: row.scopedToTargetGap,
+    submittedRecordCount: row.submittedRecordCount,
+    primaryRecordCount: row.primaryRecordCount,
+    setupRecordCount: row.setupRecordCount,
+    expectedResourceDeltaFromPackageRecords: row.expectedResourceDeltaFromPackageRecords,
+    templateExpectedResourceDelta: row.templateExpectedResourceDelta,
+    closesTargetGapWhenValidated: row.closesTargetGapWhenValidated,
+    verificationRoutes: Array.isArray(row.verificationRoutes) ? row.verificationRoutes : [],
+  }));
+  const manifestPayload = {
+    manifestVersion: "target_data_package_review_manifest_v1",
+    importRoute: targetDataCollectionPackageImportRoute,
+    submittedJsonlHash: inputSummary.submittedJsonlHash ?? null,
+    packageCoverageStatus: validation.packageCoverageSummary?.status ?? null,
+    packageDependencyStatus: validation.packageDependencySummary?.status ?? null,
+    releaseReportVerificationRoute: validation.packageCoverageSummary?.releaseReportVerificationRoute ?? "/api/release/report",
+    rows,
+    coverageRows,
+    impactRows,
+  };
+  const packageManifestHash = `sha256:${sha256(canonicalJson(manifestPayload))}`;
+  const packageReviewStatus =
+    validation.packageCoverageSummary?.status === "package_covers_current_unblocker"
+      ? "target_data_package_review_ready_for_append_review"
+      : "target_data_package_review_requires_operator_attention";
+  return {
+    id: `target-data-package-review-manifest-${validation.packageCoverageSummary?.releaseId ?? releaseId}`,
+    releaseId: validation.packageCoverageSummary?.releaseId ?? releaseId,
+    generatedAt: new Date().toISOString(),
+    resourceKey: "targetDataPackageReviewManifest",
+    reviewOnly: true,
+    noSideEffects: true,
+    packageWriteActionAvailable: false,
+    packageReviewStatus,
+    packageManifestHash,
+    importRoute: targetDataCollectionPackageImportRoute,
+    reviewManifestRoute: targetDataCollectionPackageReviewManifestRoute,
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageAppendRoute: targetDataCollectionPackageImportRoute,
+    submittedJsonlHash: inputSummary.submittedJsonlHash ?? null,
+    submittedRecordHashes: Array.isArray(inputSummary.submittedRecordHashes) ? inputSummary.submittedRecordHashes : [],
+    validationSummary: {
+      dryRun: validation.dryRun === true,
+      validatedResourceCount: validation.validatedResourceCount ?? rows.length,
+      targetGapImpactSummary: validation.targetGapImpactSummary ?? null,
+      packageDependencySummary: validation.packageDependencySummary ?? null,
+      packageCoverageSummary: validation.packageCoverageSummary ?? null,
+      policyGateDryRun: validation.policyGateDryRun ?? null,
+    },
+    counts: {
+      reviewManifestRows: rows.length,
+      submittedRecordCount: inputSummary.submittedRecordCount ?? rows.length,
+      submittedRecordHashes: Array.isArray(inputSummary.submittedRecordHashes) ? inputSummary.submittedRecordHashes.length : 0,
+      byResourceKey: countItemsBy(rows, "resourceKey"),
+      byTargetGapId: countItemsBy(rows, "targetGapId"),
+      byImportRoute: countItemsBy(rows, "route"),
+      byPackageDependencyStatus: countItemsBy(rows, "packageDependencyStatus"),
+      byCoverageStatus: countItemsBy(coverageRows, "coverageStatus"),
+    },
+    policy: {
+      scope:
+        "Review-only target-data package manifest derived from the existing mixed JSONL package validator. It stores no raw JSONL, appends no workflow or rating evidence, and creates no target-data package object.",
+      access:
+        "Admin/auditor only because target-data packages can contain rater-visible position and critique text, assignment ids, rating context ids, and validation evidence.",
+      authority:
+        "A review manifest is not completion evidence. Target gaps close only after real append-only submissions and /api/release/report recomputation.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      targetDataPackageManifest: "/api/v1/target-gaps/current-package-manifest",
+      targetDataPackageReviewManifest: targetDataCollectionPackageReviewManifestRoute,
+      targetDataPackageValidateOnly: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+      targetDataPackageDryRun: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+      targetDataPackageAppend: targetDataCollectionPackageImportRoute,
+    },
+    packageManifest: {
+      ...manifestPayload,
+      packageManifestHash,
+    },
+  };
 }
 
 function targetDataCollectionPackageRecordRoute(record) {

@@ -4262,6 +4262,16 @@ const workflowTemplates = [
     },
   },
   {
+    id: "target-data-package-review-manifest",
+    label: "Target Data Package Review Manifest",
+    endpoint: () => "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+    resourceKey: "targetDataPackageReviewManifest",
+    requiredRole: "admin",
+    summary:
+      "Generate a hash-only target-data package review manifest from replaced JSONL by reusing the mixed package validator without appending workflow or rating evidence.",
+    payload: () => workflowTemplates.find((template) => template.id === "target-data-package-jsonl-import")?.payload?.() ?? { jsonl: "" },
+  },
+  {
     id: "release-gate-profile",
     label: "Release Gate Profile",
     endpoint: () => "/api/v1/release-gate-profiles",
@@ -11871,6 +11881,10 @@ function targetDataPackageManifestPreviewRow(item) {
         ["Collection plan", item.collectionPlanRoute ?? "not available"],
         ["Package manifest item", item.packageManifestItemRoute ?? "not available"],
         ["Dependency status", humanize(item.dependencyStatus ?? "not reported")],
+        ["Coverage status", humanize(item.coverageStatus ?? "not reported")],
+        ["Coverage ratio", item.coverageRatio ?? "not reported"],
+        ["Remaining before manifest", item.remainingBeforeManifest ?? "not reported"],
+        ["Projected remaining", item.projectedRemainingAfterManifest ?? "not reported"],
         ["Prerequisite steps", workflowPreviewArraySummary(item.prerequisiteStepIds, "none")],
         ["Dependent primary steps", workflowPreviewArraySummary(item.dependentPrimaryStepIds, "none")],
         ["Preflight order", item.preflightOrderPolicy ?? "Validate real data before append."],
