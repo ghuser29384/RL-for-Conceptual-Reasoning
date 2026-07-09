@@ -5110,6 +5110,16 @@ const workflowTemplates = [
     },
   },
   {
+    id: "operator-evidence-package-review-manifest",
+    label: "Operator Evidence Package Review Manifest",
+    endpoint: () => "/api/v1/operator-evidence/import-jsonl/review-manifest",
+    resourceKey: "operatorEvidencePackageReviewManifest",
+    requiredRole: "admin",
+    summary:
+      "Generate a hash-only operator-evidence package review manifest from replaced JSONL by reusing the package validator without appending workflow evidence.",
+    payload: () => workflowTemplates.find((template) => template.id === "operator-evidence-package-jsonl-import")?.payload?.() ?? { jsonl: "" },
+  },
+  {
     id: "training-export-uncertainty-policy",
     label: "Training Export Uncertainty Policy",
     endpoint: () => "/api/v1/training-export-uncertainty-policies",

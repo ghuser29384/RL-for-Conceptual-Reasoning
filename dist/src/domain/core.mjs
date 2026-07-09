@@ -18024,6 +18024,7 @@ function withLmcaComparisonRouteMetadata(section, id, row) {
   const releaseArtifactRoutes = [
     "/api/v1/operator-evidence/package-manifest",
     "/api/v1/operator-evidence/import-jsonl?validateOnly=true",
+    "/api/v1/operator-evidence/import-jsonl/review-manifest",
     "/api/v1/october-completion-runbook?executionStatus=ready_to_submit_evidence",
     "/api/v1/operator-action-items?executionStatus=ready_to_submit_evidence",
   ];
@@ -28481,6 +28482,7 @@ function buildOctoberCompletionChecklistWithOperatorRoutes(octoberCompletionChec
         packageImportRoutes: uniqueStrings(actionItems.map((item) => item.packageImportRoute)),
         packageDryRunImportRoutes: uniqueStrings(actionItems.map((item) => item.packageDryRunImportRoute)),
         packageValidateOnlyImportRoutes: uniqueStrings(actionItems.map((item) => item.packageValidateOnlyImportRoute)),
+        packageReviewManifestRoutes: uniqueStrings(actionItems.map((item) => item.packageReviewManifestRoute)),
         verificationRoutes: uniqueStrings(actionItems.map((item) => item.verificationRoute)),
         targetGapReadbackItemRoutes: uniqueStrings(actionItems.map((item) => item.targetGapReadbackItemRoute)),
         workflowTemplateIds: uniqueStrings([...(planRow.workflowTemplateIds ?? []), ...actionItems.map((item) => item.workflowTemplateId)]),
@@ -28549,6 +28551,7 @@ function octoberCompletionChecklistActionSummary(action) {
     setupValidateOnlyImportRoute: operatorImportRouteWithQueryFlag(setupBulkImportRoute, "validateOnly", "true"),
     packageValidateOnlyImportRoute:
       action.packageValidateOnlyImportRoute ?? operatorImportRouteWithQueryFlag(action.packageImportRoute, "validateOnly", "true"),
+    packageReviewManifestRoute: action.packageReviewManifestRoute ?? null,
     singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
     singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
     setupSingleRecordDryRunRoute: action.setupSingleRecordDryRunRoute ?? null,
@@ -28608,6 +28611,7 @@ function operatorSubmissionChecklistItemsForSubmitActions(checklistRowId, action
       bulkImportRoute: item.bulkImportRoute ?? null,
       dryRunImportRoute: item.dryRunImportRoute ?? null,
       validateOnlyImportRoute: item.validateOnlyImportRoute ?? null,
+      packageReviewManifestRoute: item.packageReviewManifestRoute ?? null,
       singleRecordDryRunRoute: item.singleRecordDryRunRoute ?? null,
       singleRecordValidateOnlyRoute: item.singleRecordValidateOnlyRoute ?? null,
       setupSingleRecordDryRunRoute: item.setupSingleRecordDryRunRoute ?? null,
@@ -28658,6 +28662,7 @@ function operatorPlanRowActionRouteFields(row, actionItems = []) {
     : uniqueStrings(row.setupBulkImportWorkflowTemplateIds ?? []);
   const dryRunImportRoutes = uniqueStrings(actionItems.map((item) => item.dryRunImportRoute));
   const validateOnlyImportRoutes = uniqueStrings(actionItems.map((item) => item.validateOnlyImportRoute));
+  const packageReviewManifestRoutes = uniqueStrings(actionItems.map((item) => item.packageReviewManifestRoute));
   const setupDryRunImportRoutes = uniqueStrings(actionItems.map((item) => item.setupDryRunImportRoute));
   const setupValidateOnlyImportRoutes = uniqueStrings(actionItems.map((item) => item.setupValidateOnlyImportRoute));
   const singleRecordDryRunRoutes = uniqueStrings(actionItems.map((item) => item.singleRecordDryRunRoute));
@@ -28672,6 +28677,7 @@ function operatorPlanRowActionRouteFields(row, actionItems = []) {
     setupBulkImportWorkflowTemplateIds,
     ...(dryRunImportRoutes.length ? { dryRunImportRoutes } : {}),
     ...(validateOnlyImportRoutes.length ? { validateOnlyImportRoutes } : {}),
+    ...(packageReviewManifestRoutes.length ? { packageReviewManifestRoutes } : {}),
     ...(setupDryRunImportRoutes.length ? { setupDryRunImportRoutes } : {}),
     ...(setupValidateOnlyImportRoutes.length ? { setupValidateOnlyImportRoutes } : {}),
     ...(singleRecordDryRunRoutes.length ? { singleRecordDryRunRoutes } : {}),
@@ -28786,6 +28792,7 @@ function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissi
         bulkImportRoute || setupBulkImportRoutes.length
           ? operatorImportRouteWithQueryFlag(TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE, "validateOnly", "true")
           : null,
+      ...(primaryAction.packageReviewManifestRoute ? { packageReviewManifestRoute: primaryAction.packageReviewManifestRoute } : {}),
       setupWriteRoute: setupAction.setupWriteRoute ?? null,
       setupReadbackRoute: setupAction.setupReadbackRoute ?? null,
       setupBulkImportRoute,
@@ -28833,6 +28840,7 @@ function buildTargetGapsWithOperatorActions(targetGaps, operatorEvidenceSubmissi
         ...(item.packageImportRoute ? { packageImportRoute: item.packageImportRoute } : {}),
         ...(item.packageDryRunImportRoute ? { packageDryRunImportRoute: item.packageDryRunImportRoute } : {}),
         ...(item.packageValidateOnlyImportRoute ? { packageValidateOnlyImportRoute: item.packageValidateOnlyImportRoute } : {}),
+        ...(item.packageReviewManifestRoute ? { packageReviewManifestRoute: item.packageReviewManifestRoute } : {}),
         targetGapReadbackRoute: item.targetGapReadbackRoute ?? null,
         targetGapReadbackItemRoute: item.targetGapReadbackItemRoute ?? null,
         ...(item.verificationRoute || item.importImpact?.verificationRoute || item.targetGapReadbackItemRoute
@@ -29502,6 +29510,9 @@ function operatorActionTemplateReadbackFields(item) {
     item.actionType === "collect_data" && item.targetGapId && (item.bulkImportRoute || setupBulkImportRoutes.length)
       ? TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE
       : null;
+  const operatorEvidencePackageImportRoute =
+    item.bulkImportRoute === OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE ? OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE : null;
+  const packageImportRoute = targetDataPackageImportRoute ?? operatorEvidencePackageImportRoute;
   const dryRunImportRoute = operatorImportRouteWithQueryFlag(item.bulkImportRoute, "dryRun", "true");
   const setupDryRunImportRoute = operatorImportRouteWithQueryFlag(item.setupBulkImportRoute, "dryRun", "true");
   const setupDryRunImportRoutes = uniqueStrings(setupBulkImportRoutes.map((route) => operatorImportRouteWithQueryFlag(route, "dryRun", "true")));
@@ -29510,8 +29521,10 @@ function operatorActionTemplateReadbackFields(item) {
   const setupValidateOnlyImportRoutes = uniqueStrings(
     setupBulkImportRoutes.map((route) => operatorImportRouteWithQueryFlag(route, "validateOnly", "true")),
   );
-  const packageDryRunImportRoute = operatorImportRouteWithQueryFlag(targetDataPackageImportRoute, "dryRun", "true");
-  const packageValidateOnlyImportRoute = operatorImportRouteWithQueryFlag(targetDataPackageImportRoute, "validateOnly", "true");
+  const packageDryRunImportRoute = operatorImportRouteWithQueryFlag(packageImportRoute, "dryRun", "true");
+  const packageValidateOnlyImportRoute = operatorImportRouteWithQueryFlag(packageImportRoute, "validateOnly", "true");
+  const packageReviewManifestRoute =
+    operatorEvidencePackageImportRoute ? OPERATOR_EVIDENCE_PACKAGE_REVIEW_MANIFEST_ROUTE : null;
   const singleRecordDryRunRoute = operatorActionHasPrimaryPayloadTemplate(item)
     ? operatorSingleRecordPreflightRoute(item.writeRoute, "dryRun", "true")
     : null;
@@ -29568,9 +29581,10 @@ function operatorActionTemplateReadbackFields(item) {
     validateOnlyImportRoute ||
     setupValidateOnlyImportRoute ||
     setupValidateOnlyImportRoutes.length ||
-    targetDataPackageImportRoute ||
+    packageImportRoute ||
     packageDryRunImportRoute ||
     packageValidateOnlyImportRoute ||
+    packageReviewManifestRoute ||
     singleRecordDryRunRoute ||
     singleRecordValidateOnlyRoute ||
     setupSingleRecordDryRunRoute ||
@@ -29584,6 +29598,7 @@ function operatorActionTemplateReadbackFields(item) {
     setupValidateOnlyImportRoutes,
     packageDryRunImportRoute,
     packageValidateOnlyImportRoute,
+    packageReviewManifestRoute,
     singleRecordDryRunRoute,
     singleRecordValidateOnlyRoute,
     setupSingleRecordDryRunRoute,
@@ -29606,9 +29621,10 @@ function operatorActionTemplateReadbackFields(item) {
     ...(validateOnlyImportRoute ? { validateOnlyImportRoute } : {}),
     ...(setupValidateOnlyImportRoute ? { setupValidateOnlyImportRoute } : {}),
     ...(setupValidateOnlyImportRoutes.length ? { setupValidateOnlyImportRoutes } : {}),
-    ...(targetDataPackageImportRoute ? { packageImportRoute: targetDataPackageImportRoute } : {}),
+    ...(packageImportRoute ? { packageImportRoute } : {}),
     ...(packageDryRunImportRoute ? { packageDryRunImportRoute } : {}),
     ...(packageValidateOnlyImportRoute ? { packageValidateOnlyImportRoute } : {}),
+    ...(packageReviewManifestRoute ? { packageReviewManifestRoute } : {}),
     ...(singleRecordDryRunRoute ? { singleRecordDryRunRoute } : {}),
     ...(singleRecordValidateOnlyRoute ? { singleRecordValidateOnlyRoute } : {}),
     ...(setupSingleRecordDryRunRoute ? { setupSingleRecordDryRunRoute } : {}),
@@ -29642,6 +29658,7 @@ function operatorActionPreflightCoverageFields(item, routes = {}) {
     ...(Array.isArray(routes.setupValidateOnlyImportRoutes) ? routes.setupValidateOnlyImportRoutes : []),
     routes.packageDryRunImportRoute,
     routes.packageValidateOnlyImportRoute,
+    routes.packageReviewManifestRoute,
   ]);
   const singleRecordPreflightRoutes = uniqueStrings([
     routes.singleRecordDryRunRoute,
@@ -29657,6 +29674,7 @@ function operatorActionPreflightCoverageFields(item, routes = {}) {
     routes.setupValidateOnlyImportRoute || routes.setupValidateOnlyImportRoutes?.length ? "setup_validate_only_import" : null,
     routes.packageDryRunImportRoute ? "package_dry_run_import" : null,
     routes.packageValidateOnlyImportRoute ? "package_validate_only_import" : null,
+    routes.packageReviewManifestRoute ? "package_review_manifest" : null,
     routes.singleRecordDryRunRoute ? "single_record_dry_run" : null,
     routes.singleRecordValidateOnlyRoute ? "single_record_validate_only" : null,
     routes.setupSingleRecordDryRunRoute ? "setup_single_record_dry_run" : null,
@@ -29767,8 +29785,14 @@ function preflightCoveragePolicyForKinds(preflightCoverageKinds = [], preflightR
     "setup_single_record_dry_run",
     "setup_single_record_validate_only",
   ].some((kind) => preflightCoverageKinds.includes(kind));
+  if (preflightCoverageKinds.includes("package_review_manifest") && supportsDryRunOrValidateOnly) {
+    return "Use dryRun=true or validateOnly=true before append, and generate the hash-only review manifest for governed package review; generated templates must be replaced with real data.";
+  }
   if (supportsDryRunOrValidateOnly) {
     return "Use dryRun=true or validateOnly=true before append; generated templates must be replaced with real data.";
+  }
+  if (preflightCoverageKinds.includes("package_review_manifest")) {
+    return "Generate the hash-only package review manifest before append; generated templates must be replaced with real data.";
   }
   if (preflightCoverageKinds.includes("unchanged_payload_template_rejection")) {
     return "Generated payload templates are rejected unchanged by write routes before workflow side effects; replace templateOnly values before append.";
@@ -30285,6 +30309,7 @@ const OPERATOR_ACTION_EXTRA_GOVERNANCE_BY_ARTIFACT_KIND = {
 };
 
 const OPERATOR_EVIDENCE_PACKAGE_IMPORT_ROUTE = "/api/v1/operator-evidence/import-jsonl";
+const OPERATOR_EVIDENCE_PACKAGE_REVIEW_MANIFEST_ROUTE = "/api/v1/operator-evidence/import-jsonl/review-manifest";
 const TARGET_DATA_COLLECTION_PACKAGE_IMPORT_ROUTE = "/api/v1/target-gaps/import-jsonl-package";
 const RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_ROUTE = "/api/v1/rating-context-snapshots/import-jsonl";
 const RATING_CONTEXT_SNAPSHOT_BULK_IMPORT_TEMPLATE_ID = "rating-context-snapshot-jsonl-import";
@@ -34076,6 +34101,7 @@ function targetGapRouteList(row) {
     row?.packageImportRoute,
     row?.packageDryRunImportRoute,
     row?.packageValidateOnlyImportRoute,
+    row?.packageReviewManifestRoute,
     row?.setupWriteRoute,
     row?.setupBulkImportRoute,
     row?.setupDryRunImportRoute,
@@ -34121,6 +34147,7 @@ function targetGapOperatorActionRouteList(action) {
     action?.packageImportRoute,
     action?.packageDryRunImportRoute,
     action?.packageValidateOnlyImportRoute,
+    action?.packageReviewManifestRoute,
     action?.verificationRoute,
     action?.targetGapReadbackRoute,
     action?.targetGapReadbackItemRoute,

@@ -7930,7 +7930,11 @@ export async function handleApiRequest(request, response, url, context) {
     await targetDataCollectionPackageReviewManifestEndpoint(request, response, context);
     return;
   }
-  if (request.method === "POST" && url.pathname === "/api/v1/operator-evidence/import-jsonl") {
+  if (request.method === "POST" && url.pathname === operatorEvidencePackageReviewManifestRoute) {
+    await operatorEvidencePackageReviewManifestEndpoint(request, response, context);
+    return;
+  }
+  if (request.method === "POST" && url.pathname === operatorEvidencePackageImportRoute) {
     await operatorEvidencePackageJsonlImportEndpoint(request, response, context, {
       dryRun: jsonlImportDryRunRequested(url.searchParams),
     });
@@ -11464,6 +11468,8 @@ function octoberCompletionRunbookItems(report) {
       importRoute,
       dryRunImportRoute: routeWithQueryFlag(importRoute, "dryRun", "true"),
       validateOnlyImportRoute: routeWithQueryFlag(importRoute, "validateOnly", "true"),
+      packageReviewManifestRoute:
+        packageImportRoute === operatorEvidencePackageImportRoute ? operatorEvidencePackageReviewManifestRoute : null,
       singleRecordDryRunRoute: action.singleRecordDryRunRoute ?? null,
       singleRecordValidateOnlyRoute: action.singleRecordValidateOnlyRoute ?? null,
       setupSingleRecordDryRunRoute: action.setupSingleRecordDryRunRoute ?? null,
@@ -13734,6 +13740,7 @@ function publicDatasetPackageManifestItems(report) {
         operatorEvidencePackage.routes?.sourceRunbookGroupRoute,
         operatorEvidencePackage.routes?.sourceActionGroupRoute,
         releaseArtifactTemplates.packageValidateOnlyImportRoute,
+        releaseArtifactTemplates.packageReviewManifestRoute,
         releaseArtifactTemplates.packageDryRunImportRoute,
         releaseArtifactTemplates.packageImportRoute,
         "/api/v1/public-dataset-readiness/label_snapshot",
@@ -16204,6 +16211,7 @@ function releaseArtifactPackageTemplateReadback(report, options = {}) {
     packageImportRoute: operatorEvidencePackageImportRoute,
     packageDryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
     packageValidateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+    packageReviewManifestRoute: operatorEvidencePackageReviewManifestRoute,
     policy: {
       scope:
         "Read-only release-artifact package templates derived from /api/release/report and existing operator action templates. This endpoint does not submit artifacts, materialize a release report, waive gates, or create production evidence.",
@@ -16274,6 +16282,7 @@ function releaseArtifactPackageTemplateItems(report) {
       packageImportRoute: jsonlTemplate?.importRoute ?? action.packageImportRoute ?? null,
       packageDryRunImportRoute: jsonlTemplate?.dryRunImportRoute ?? action.packageDryRunImportRoute ?? null,
       packageValidateOnlyImportRoute: jsonlTemplate?.validateOnlyImportRoute ?? action.packageValidateOnlyImportRoute ?? null,
+      packageReviewManifestRoute: jsonlTemplate?.reviewManifestRoute ?? action.packageReviewManifestRoute ?? null,
       dryRunImportRoute: jsonlTemplate?.dryRunImportRoute ?? action.dryRunImportRoute ?? null,
       validateOnlyImportRoute: jsonlTemplate?.validateOnlyImportRoute ?? action.validateOnlyImportRoute ?? null,
       completionEvidence: action.completionEvidence ?? checklistItem?.completionEvidence ?? null,
@@ -16320,6 +16329,7 @@ function releaseArtifactPackageTemplateSyntheticAction(definition, report, evide
     action.packageImportRoute = operatorEvidencePackageImportRoute;
     action.packageDryRunImportRoute = routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true");
     action.packageValidateOnlyImportRoute = routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true");
+    action.packageReviewManifestRoute = operatorEvidencePackageReviewManifestRoute;
     action.operatorEvidenceTemplateReadbackRoute = `/api/v1/operator-evidence/import-jsonl-template?checklistRowId=${releaseArtifactPackageChecklistRowId}&artifactKind=${definition.artifactKind}`;
     action.templateReadbackRoutes = [action.operatorEvidenceTemplateReadbackRoute];
     return operatorActionItemWithExecutionStatus(action);
@@ -16390,6 +16400,8 @@ function releaseArtifactPackageTemplateRoutes(action, payloadTemplate, jsonlTemp
     jsonlTemplate?.importRoute,
     jsonlTemplate?.dryRunImportRoute,
     jsonlTemplate?.validateOnlyImportRoute,
+    jsonlTemplate?.reviewManifestRoute,
+    action?.packageReviewManifestRoute,
     jsonlTemplate?.id ? `/api/v1/operator-evidence/import-jsonl-template/${encodeURIComponent(jsonlTemplate.id)}` : null,
     checklistItem?.operatorPlanItemRoute,
     checklistItem?.readbackRoute,
@@ -18475,6 +18487,7 @@ function rlhf93CompletionAuditOperatorActionNextAction(item, { readbackItemRoute
   const operatorActionRoute = rlhf93CompletionAuditOperatorActionItemRoute(action);
   const validateOnlyRoute = rlhf93CompletionAuditOperatorActionValidateOnlyRoute(action);
   const dryRunRoute = rlhf93CompletionAuditOperatorActionDryRunRoute(action);
+  const reviewManifestRoute = rlhf93CompletionAuditOperatorActionReviewManifestRoute(action);
   const templateRoute = rlhf93CompletionAuditOperatorActionTemplateRoute(action);
   const writeRoute = rlhf93CompletionAuditOperatorActionWriteRoute(action);
   const readbackRoute = operatorActionRoute ?? action.actionReadbackItemRoute ?? action.readbackItemRoute ?? action.readbackRoute ?? readbackItemRoute;
@@ -18486,6 +18499,7 @@ function rlhf93CompletionAuditOperatorActionNextAction(item, { readbackItemRoute
     nextActionTemplateRoute: templateRoute,
     nextActionDryRunRoute: dryRunRoute,
     nextActionValidateOnlyRoute: validateOnlyRoute,
+    nextActionReviewManifestRoute: reviewManifestRoute,
     nextActionWriteRoute: writeRoute,
     nextActionVerificationRoute: "/api/release/report",
     nextActionOperatorActionId: action.id ?? action.actionId ?? null,
@@ -18551,6 +18565,15 @@ function rlhf93CompletionAuditOperatorActionValidateOnlyRoute(action = {}) {
           related.singleRecordValidateOnlyRoute,
           related.setupSingleRecordValidateOnlyRoute,
         ])
+      : []),
+  ])[0] ?? null;
+}
+
+function rlhf93CompletionAuditOperatorActionReviewManifestRoute(action = {}) {
+  return uniqueValues([
+    action.packageReviewManifestRoute,
+    ...(Array.isArray(action.relatedSubmitActions)
+      ? action.relatedSubmitActions.map((related) => related.packageReviewManifestRoute)
       : []),
   ])[0] ?? null;
 }
@@ -21706,6 +21729,7 @@ function countValues(values) {
 }
 
 const operatorEvidencePackageImportRoute = "/api/v1/operator-evidence/import-jsonl";
+const operatorEvidencePackageReviewManifestRoute = "/api/v1/operator-evidence/import-jsonl/review-manifest";
 const targetDataCollectionPackageImportRoute = "/api/v1/target-gaps/import-jsonl-package";
 const targetDataCollectionPackageReviewManifestRoute = "/api/v1/target-gaps/import-jsonl-package/review-manifest";
 const targetDataPackageStarterRecordCap = 25;
@@ -22610,6 +22634,7 @@ function operatorEvidencePackageJsonlTemplateReadback(report, options = {}) {
     importRoute: operatorEvidencePackageImportRoute,
     dryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
     validateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+    reviewManifestRoute: operatorEvidencePackageReviewManifestRoute,
     policy: {
       scope:
         "Read-only JSONL skeleton derived from open operator actions; it does not submit artifacts, waive gates, or create production evidence.",
@@ -22719,6 +22744,7 @@ function operatorEvidencePackageManifestReadback(report, options = {}) {
       packageImportRoute: packageTemplate.importRoute,
       packageDryRunImportRoute: packageTemplate.dryRunImportRoute,
       packageValidateOnlyImportRoute: packageTemplate.validateOnlyImportRoute,
+      packageReviewManifestRoute: packageTemplate.reviewManifestRoute,
       packageJsonlTemplateRoute: "/api/v1/operator-evidence/import-jsonl-template",
       payloadTemplateRoute: "/api/v1/operator-action-items/payload-template",
       sourceRunbookRoute: submitEvidenceRunbookGroupRoute,
@@ -22821,6 +22847,7 @@ function operatorEvidencePackageManifestStepRoutes(item) {
     item?.packageImportRoute,
     item?.packageDryRunImportRoute,
     item?.packageValidateOnlyImportRoute,
+    item?.packageReviewManifestRoute,
     item?.singleRecordDryRunRoute,
     item?.singleRecordValidateOnlyRoute,
     item?.templateReadbackRoute,
@@ -22871,6 +22898,7 @@ function operatorEvidencePackageManifestStep(templateRow, runbookStep, manifestS
     packageImportRoute: isPackageJsonl ? templateRow.importRoute : null,
     packageDryRunImportRoute: isPackageJsonl ? templateRow.dryRunImportRoute : null,
     packageValidateOnlyImportRoute: isPackageJsonl ? templateRow.validateOnlyImportRoute : null,
+    packageReviewManifestRoute: isPackageJsonl ? templateRow.reviewManifestRoute : null,
     singleRecordDryRunRoute: templateRow.singleRecordDryRunRoute ?? runbookStep.singleRecordDryRunRoute ?? null,
     singleRecordValidateOnlyRoute: templateRow.singleRecordValidateOnlyRoute ?? runbookStep.singleRecordValidateOnlyRoute ?? null,
     templateReadbackRoute,
@@ -23333,6 +23361,7 @@ function operatorEvidencePackageJsonlTemplateRow(action, index, report) {
       importRoute: operatorEvidencePackageImportRoute,
       dryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
       validateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+      reviewManifestRoute: operatorEvidencePackageReviewManifestRoute,
       resourceKey: spec.resourceKey,
       requiredFields: operatorEvidencePackageTemplateRequiredFields(spec),
       templateOnly: true,
@@ -25684,6 +25713,7 @@ async function operatorEvidencePackageJsonlImportEndpoint(request, response, con
   }
 
   const operatorEvidenceImpactSummary = await operatorEvidencePackageImpactSummary(context, entries);
+  const packageInputSummary = operatorEvidencePackageInputSummary(entries, parseResult.records, body);
 
   if (dryRun) {
     sendJson(response, 200, {
@@ -25698,6 +25728,7 @@ async function operatorEvidencePackageJsonlImportEndpoint(request, response, con
         resourceKey: entry.spec.resourceKey,
         resourceId: entry.resource.id,
       })),
+      packageInputSummary,
       operatorEvidenceImpactSummary,
       resourceIds: entries.map((entry) => entry.resource.id),
       allOrNothing: true,
@@ -25744,6 +25775,178 @@ async function operatorEvidencePackageJsonlImportEndpoint(request, response, con
     policyGatedResourcePolicy:
       "policy-gated and server-materialized artifacts are rejected from package import and must use their single-artifact governance routes",
   });
+}
+
+async function operatorEvidencePackageReviewManifestEndpoint(request, response, context) {
+  const validation = await captureOperatorEvidencePackageDryRun(request, context);
+  if (validation.statusCode !== 200) {
+    sendJson(response, validation.statusCode, validation.body);
+    return;
+  }
+  sendJson(response, 200, operatorEvidencePackageReviewManifestReadback(validation.body));
+}
+
+async function captureOperatorEvidencePackageDryRun(request, context) {
+  const captured = { statusCode: 500, bodyText: "{}" };
+  const captureResponse = {
+    writeHead(statusCode) {
+      captured.statusCode = statusCode;
+    },
+    end(body) {
+      captured.bodyText = typeof body === "string" ? body : body ? String(body) : "{}";
+    },
+  };
+  await operatorEvidencePackageJsonlImportEndpoint(request, captureResponse, context, { dryRun: true });
+  let body;
+  try {
+    body = JSON.parse(captured.bodyText || "{}");
+  } catch (error) {
+    body = {
+      error: "invalid_captured_operator_evidence_package_response",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+    captured.statusCode = 500;
+  }
+  return { statusCode: captured.statusCode, body };
+}
+
+function operatorEvidencePackageInputSummary(entries = [], records = [], body = {}) {
+  const rows = (Array.isArray(entries) ? entries : []).map((entry) => {
+    const record = records[entry.line - 1];
+    return {
+      line: entry.line,
+      route: entry.route,
+      sourceWriteRoute: entry.spec?.route ?? null,
+      resourceKey: entry.spec?.resourceKey ?? null,
+      resourceId: entry.resource?.id ?? null,
+      submittedRecordHash: record ? `sha256:${sha256(canonicalJson(record))}` : null,
+    };
+  });
+  return {
+    submittedJsonlHash: typeof body?.jsonl === "string" ? `sha256:${sha256(body.jsonl)}` : null,
+    submittedRecordCount: rows.length,
+    submittedRecordHashes: rows.map((row) => row.submittedRecordHash).filter(Boolean),
+    byResourceKey: countItemsBy(rows, "resourceKey"),
+    byImportRoute: countItemsBy(rows, "route"),
+    rows,
+  };
+}
+
+function operatorEvidencePackageReviewManifestReadback(validation = {}) {
+  const inputSummary = validation.packageInputSummary ?? {};
+  const validatedRows = Array.isArray(validation.validatedResources) ? validation.validatedResources : [];
+  const inputRowsByLine = new Map((Array.isArray(inputSummary.rows) ? inputSummary.rows : []).map((row) => [row.line, row]));
+  const impactEntriesByLine = new Map(
+    (Array.isArray(validation.operatorEvidenceImpactSummary?.entrySummaries)
+      ? validation.operatorEvidenceImpactSummary.entrySummaries
+      : []
+    ).map((row) => [row.line, row]),
+  );
+  const rows = validatedRows.map((row) => {
+    const inputRow = inputRowsByLine.get(row.line) ?? {};
+    const impactRow = impactEntriesByLine.get(row.line) ?? {};
+    return {
+      line: row.line,
+      route: row.route,
+      sourceWriteRoute: row.sourceWriteRoute,
+      resourceKey: row.resourceKey,
+      resourceId: row.resourceId,
+      submittedRecordHash: inputRow.submittedRecordHash ?? null,
+      matchedOperatorActionIds: Array.isArray(impactRow.matchedOperatorActionIds) ? impactRow.matchedOperatorActionIds : [],
+      matchedChecklistRowIds: Array.isArray(impactRow.matchedChecklistRowIds) ? impactRow.matchedChecklistRowIds : [],
+      matchedArtifactKinds: Array.isArray(impactRow.matchedArtifactKinds) ? impactRow.matchedArtifactKinds : [],
+      matchedReadbackRoutes: Array.isArray(impactRow.matchedReadbackRoutes) ? impactRow.matchedReadbackRoutes : [],
+      matchStatus: impactRow.matchStatus ?? "unmatched_operator_action",
+    };
+  });
+  const impactRows = (Array.isArray(validation.operatorEvidenceImpactSummary?.rows)
+    ? validation.operatorEvidenceImpactSummary.rows
+    : []
+  ).map((row) => ({
+    key: row.key,
+    matchStatus: row.matchStatus,
+    checklistRowId: row.checklistRowId ?? null,
+    artifactKind: row.artifactKind ?? null,
+    operatorActionIds: Array.isArray(row.operatorActionIds) ? row.operatorActionIds : [],
+    actionStatus: row.actionStatus ?? null,
+    executionStatus: row.executionStatus ?? null,
+    preconditionStatus: row.preconditionStatus ?? null,
+    importRoute: row.importRoute ?? operatorEvidencePackageImportRoute,
+    writeRoutes: Array.isArray(row.writeRoutes) ? row.writeRoutes : [],
+    concreteRoutes: Array.isArray(row.concreteRoutes) ? row.concreteRoutes : [],
+    readbackRoutes: Array.isArray(row.readbackRoutes) ? row.readbackRoutes : [],
+    verificationRoutes: Array.isArray(row.verificationRoutes) ? row.verificationRoutes : [],
+    resourceKeys: Array.isArray(row.resourceKeys) ? row.resourceKeys : [],
+    resourceIds: Array.isArray(row.resourceIds) ? row.resourceIds : [],
+    submittedRecordCount: row.submittedRecordCount ?? 0,
+    completionEvidence: row.completionEvidence ?? null,
+  }));
+  const manifestPayload = {
+    manifestVersion: "operator_evidence_package_review_manifest_v1",
+    importRoute: operatorEvidencePackageImportRoute,
+    submittedJsonlHash: inputSummary.submittedJsonlHash ?? null,
+    releaseReportVerificationRoute: validation.operatorEvidenceImpactSummary?.releaseReportVerificationRoute ?? "/api/release/report",
+    rows,
+    impactRows,
+  };
+  const packageManifestHash = `sha256:${sha256(canonicalJson(manifestPayload))}`;
+  const packageReviewStatus =
+    Number(validation.operatorEvidenceImpactSummary?.unmatchedRecordCount ?? 0) > 0
+      ? "operator_evidence_package_review_requires_operator_attention"
+      : "operator_evidence_package_review_ready_for_append_review";
+  return {
+    id: `operator-evidence-package-review-manifest-${releaseId}`,
+    releaseId,
+    generatedAt: new Date().toISOString(),
+    resourceKey: "operatorEvidencePackageReviewManifest",
+    reviewOnly: true,
+    noSideEffects: true,
+    packageWriteActionAvailable: false,
+    packageReviewStatus,
+    packageManifestHash,
+    importRoute: operatorEvidencePackageImportRoute,
+    reviewManifestRoute: operatorEvidencePackageReviewManifestRoute,
+    packageValidateOnlyImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+    packageDryRunImportRoute: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
+    packageAppendRoute: operatorEvidencePackageImportRoute,
+    submittedJsonlHash: inputSummary.submittedJsonlHash ?? null,
+    submittedRecordHashes: Array.isArray(inputSummary.submittedRecordHashes) ? inputSummary.submittedRecordHashes : [],
+    validationSummary: {
+      dryRun: validation.dryRun === true,
+      validatedResourceCount: validation.validatedResourceCount ?? rows.length,
+      operatorEvidenceImpactSummary: validation.operatorEvidenceImpactSummary ?? null,
+    },
+    counts: {
+      reviewManifestRows: rows.length,
+      submittedRecordCount: inputSummary.submittedRecordCount ?? rows.length,
+      submittedRecordHashes: Array.isArray(inputSummary.submittedRecordHashes) ? inputSummary.submittedRecordHashes.length : 0,
+      byResourceKey: countItemsBy(rows, "resourceKey"),
+      byImportRoute: countItemsBy(rows, "route"),
+      byMatchStatus: countItemsBy(rows, "matchStatus"),
+      byChecklistRow: countExpandedValues(rows, "matchedChecklistRowIds"),
+      byArtifactKind: countExpandedValues(rows, "matchedArtifactKinds"),
+    },
+    policy: {
+      scope:
+        "Review-only operator-evidence package manifest derived from the existing JSONL package validator. It stores no raw JSONL, appends no workflow evidence, and creates no operator-evidence package object.",
+      access:
+        "Admin/auditor only because operator-evidence packages can contain release artifacts, model-evaluation artifacts, and governance-gated workflow identifiers.",
+      authority:
+        "A review manifest is not completion evidence. Operator evidence closes release rows only after real append-only submissions and /api/release/report recomputation.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      operatorEvidencePackageManifest: "/api/v1/operator-evidence/package-manifest",
+      operatorEvidencePackageReviewManifest: operatorEvidencePackageReviewManifestRoute,
+      operatorEvidencePackageValidateOnly: routeWithQueryFlag(operatorEvidencePackageImportRoute, "validateOnly", "true"),
+      operatorEvidencePackageDryRun: routeWithQueryFlag(operatorEvidencePackageImportRoute, "dryRun", "true"),
+      operatorEvidencePackageAppend: operatorEvidencePackageImportRoute,
+    },
+    packageManifest: {
+      ...manifestPayload,
+      packageManifestHash,
+    },
+  };
 }
 
 async function operatorEvidencePackageImpactSummary(context, entries) {

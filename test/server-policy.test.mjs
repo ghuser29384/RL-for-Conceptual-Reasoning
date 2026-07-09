@@ -4699,6 +4699,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/intake/critiques"],
     ["GET", "/api/v1/intake/critiques/crit-intake-smoke"],
     ["POST", "/api/v1/operator-evidence/import-jsonl"],
+    ["POST", "/api/v1/operator-evidence/import-jsonl/review-manifest"],
     ["POST", "/api/v1/target-gaps/import-jsonl-package"],
     ["POST", "/api/v1/rights/review"],
     ["POST", "/api/v1/releases/freeze"],
@@ -8528,6 +8529,11 @@ test("operator evidence package JSONL import validates concrete routes and appen
     "corpus_manifest",
     "public_export_manifest",
   ]);
+  assert.match(packageDryRun.body.packageInputSummary.submittedJsonlHash, /^sha256:/);
+  assert.equal(packageDryRun.body.packageInputSummary.submittedRecordCount, 2);
+  assert.equal(packageDryRun.body.packageInputSummary.submittedRecordHashes.length, 2);
+  assert.equal(packageDryRun.body.packageInputSummary.byResourceKey.corpusManifest, 1);
+  assert.equal(packageDryRun.body.packageInputSummary.byResourceKey.exportManifest, 1);
   assert.deepEqual(
     packageDryRun.body.operatorEvidenceImpactSummary.entrySummaries.map((item) => [
       item.resourceKey,
@@ -8548,6 +8554,49 @@ test("operator evidence package JSONL import validates concrete routes and appen
     ),
   );
   assert.match(packageDryRun.body.validationPolicy, /without_appending_events/);
+  assert.equal((await auditStore.readWorkflowEvents()).length, 0);
+
+  const packageReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/operator-evidence/import-jsonl/review-manifest",
+    headers: adminHeaders,
+    body: JSON.stringify({ jsonl: operatorPackageJsonl }),
+  });
+  assert.equal(packageReviewManifest.status, 200, JSON.stringify(packageReviewManifest.body));
+  assert.equal(packageReviewManifest.body.resourceKey, "operatorEvidencePackageReviewManifest");
+  assert.equal(packageReviewManifest.body.reviewOnly, true);
+  assert.equal(packageReviewManifest.body.noSideEffects, true);
+  assert.equal(packageReviewManifest.body.packageWriteActionAvailable, false);
+  assert.equal(packageReviewManifest.body.packageReviewStatus, "operator_evidence_package_review_ready_for_append_review");
+  assert.match(packageReviewManifest.body.packageManifestHash, /^sha256:/);
+  assert.equal(packageReviewManifest.body.importRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.equal(packageReviewManifest.body.reviewManifestRoute, "/api/v1/operator-evidence/import-jsonl/review-manifest");
+  assert.equal(packageReviewManifest.body.packageValidateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(packageReviewManifest.body.packageDryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
+  assert.equal(packageReviewManifest.body.packageAppendRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.equal(packageReviewManifest.body.counts.reviewManifestRows, 2);
+  assert.equal(packageReviewManifest.body.counts.submittedRecordHashes, 2);
+  assert.equal(packageReviewManifest.body.counts.byResourceKey.corpusManifest, 1);
+  assert.equal(packageReviewManifest.body.counts.byResourceKey.exportManifest, 1);
+  assert.equal(packageReviewManifest.body.counts.byMatchStatus.matched_operator_action, 2);
+  assert.equal(packageReviewManifest.body.counts.byChecklistRow.release_artifact_submission_package, 2);
+  assert.equal(packageReviewManifest.body.counts.byArtifactKind.corpus_manifest, 1);
+  assert.equal(packageReviewManifest.body.counts.byArtifactKind.public_export_manifest, 1);
+  assert.match(packageReviewManifest.body.submittedJsonlHash, /^sha256:/);
+  assert.equal(packageReviewManifest.body.submittedRecordHashes.length, 2);
+  assert.equal(packageReviewManifest.body.packageManifest.manifestVersion, "operator_evidence_package_review_manifest_v1");
+  assert.equal(packageReviewManifest.body.packageManifest.importRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.equal(packageReviewManifest.body.packageManifest.packageManifestHash, packageReviewManifest.body.packageManifestHash);
+  assert.equal(packageReviewManifest.body.packageManifest.rows[0].submittedRecordHash.startsWith("sha256:"), true);
+  assert.equal(
+    packageReviewManifest.body.packageManifest.rows[0].matchedOperatorActionIds[0],
+    "release_artifact_submission_package:submit:corpus_manifest",
+  );
+  assert.equal(
+    packageReviewManifest.body.packageManifest.impactRows.some((row) => row.verificationRoutes.includes("/api/release/report")),
+    true,
+  );
+  assert.match(packageReviewManifest.body.policy.authority, /not completion evidence/);
   assert.equal((await auditStore.readWorkflowEvents()).length, 0);
 
   const sourceIntakePackageDryRun = await invokeApi(context, {
@@ -16632,6 +16681,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(packageTemplate.body.importRoute, "/api/v1/operator-evidence/import-jsonl");
   assert.equal(packageTemplate.body.dryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
   assert.equal(packageTemplate.body.validateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(packageTemplate.body.reviewManifestRoute, "/api/v1/operator-evidence/import-jsonl/review-manifest");
   assert.ok(packageTemplate.body.count > 0);
   assert.equal(packageTemplate.body.filteredActionCount, queue.body.items.length);
   assert.ok(packageTemplate.body.items.every((item) => item.templateOnly === true));
@@ -16646,6 +16696,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(corpusTemplate.importRoute, "/api/v1/operator-evidence/import-jsonl");
   assert.equal(corpusTemplate.dryRunImportRoute, "/api/v1/operator-evidence/import-jsonl?dryRun=true");
   assert.equal(corpusTemplate.validateOnlyImportRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
+  assert.equal(corpusTemplate.reviewManifestRoute, "/api/v1/operator-evidence/import-jsonl/review-manifest");
   assert.equal(corpusTemplate.resourceKey, "corpusManifest");
   assert.ok(corpusTemplate.requiredFields.includes("id"));
   assert.equal(corpusTemplate.record.payload.corpusManifest.templateOnly, true);
@@ -16759,6 +16810,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
     operatorEvidencePackageManifest.body.routes.packageValidateOnlyImportRoute,
     "/api/v1/operator-evidence/import-jsonl?validateOnly=true",
   );
+  assert.equal(
+    operatorEvidencePackageManifest.body.routes.packageReviewManifestRoute,
+    "/api/v1/operator-evidence/import-jsonl/review-manifest",
+  );
   assert.equal(operatorEvidencePackageManifest.body.routes.packageJsonlTemplateRoute, "/api/v1/operator-evidence/import-jsonl-template");
   assert.equal(operatorEvidencePackageManifest.body.routes.payloadTemplateRoute, "/api/v1/operator-action-items/payload-template");
   assert.equal(
@@ -16782,6 +16837,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifest.body.counts.byManifestStepKind.single_record_payload_template, 7);
   assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/operator-evidence/import-jsonl"], 21);
   assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/operator-evidence/import-jsonl?dryRun=true"], 21);
+  assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/operator-evidence/import-jsonl/review-manifest"], 21);
   assert.equal(operatorEvidencePackageManifest.body.counts.byAllRoute["/api/v1/label-snapshots"], 1);
   assert.equal(operatorEvidencePackageManifest.body.counts.actionsWithSetupPayloadAndPackageJsonl, 6);
   assert.ok(operatorEvidencePackageManifest.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
@@ -16811,6 +16867,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(predictionSetupManifestStep.route, "/api/v1/evaluations/run");
   assert.equal(predictionPackageManifestStep.route, "/api/v1/evaluations/TODO_ID/predictions");
   assert.equal(predictionPackageManifestStep.routeTemplate, "/api/v1/evaluations/{id}/predictions");
+  assert.equal(predictionPackageManifestStep.packageReviewManifestRoute, "/api/v1/operator-evidence/import-jsonl/review-manifest");
+  assert.ok(predictionPackageManifestStep.routes.includes("/api/v1/operator-evidence/import-jsonl/review-manifest"));
   assert.ok(predictionSetupManifestStep.sequence < predictionPackageManifestStep.sequence);
   assert.equal(operatorEvidencePackageManifest.body.blockedByTargetDataPreview.length, 6);
   assert.deepEqual(operatorEvidencePackageManifest.body.blockedByTargetDataPreview[0].blockedByTargetGapIds, [
@@ -16860,6 +16918,23 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(operatorEvidencePackageManifestByRoute.body.count, 1);
   assert.equal(operatorEvidencePackageManifestByRoute.body.filteredCounts.byAllRoute["/api/v1/label-snapshots"], 1);
   assert.equal(operatorEvidencePackageManifestByRoute.body.items[0].route, "/api/v1/label-snapshots");
+  const operatorEvidencePackageManifestByReviewManifestRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/operator-evidence/package-manifest?route=${encodeURIComponent("/api/v1/operator-evidence/import-jsonl/review-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(
+    operatorEvidencePackageManifestByReviewManifestRoute.status,
+    200,
+    JSON.stringify(operatorEvidencePackageManifestByReviewManifestRoute.body),
+  );
+  assert.equal(operatorEvidencePackageManifestByReviewManifestRoute.body.count, 21);
+  assert.equal(
+    operatorEvidencePackageManifestByReviewManifestRoute.body.filteredCounts.byAllRoute[
+      "/api/v1/operator-evidence/import-jsonl/review-manifest"
+    ],
+    21,
+  );
   const operatorEvidencePackageManifestByStep = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/operator-evidence/package-manifest?manifestStepKind=operator_evidence_jsonl_record",
@@ -17975,6 +18050,9 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('id: "public-dataset-package-review-manifest"'));
   assert.ok(appSource.includes('endpoint: () => "/api/v1/public-dataset-package-files/review-manifest"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageReviewManifest"'));
+  assert.ok(appSource.includes('id: "operator-evidence-package-review-manifest"'));
+  assert.ok(appSource.includes('endpoint: () => "/api/v1/operator-evidence/import-jsonl/review-manifest"'));
+  assert.ok(appSource.includes('resourceKey: "operatorEvidencePackageReviewManifest"'));
   assert.ok(appSource.includes("publicDatasetPackageReviewManifestSampleFiles()"));
   assert.ok(appSource.includes("Workflow preflight returned"));
   assert.ok(appSource.includes('["Validation route", result.validationRoute ?? "not available"]'));
@@ -18458,8 +18536,11 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("does not store package contents, append evidence, create files, publish the dataset"));
   assert.ok(architectureDoc.includes("POST /api/v1/target-gaps/import-jsonl-package/review-manifest"));
   assert.ok(architectureDoc.includes("targetDataPackageReviewManifest"));
-  assert.ok(architectureDoc.includes("It also exposes the target-data package review-manifest action"));
+  assert.ok(architectureDoc.includes("POST /api/v1/operator-evidence/import-jsonl/review-manifest"));
+  assert.ok(architectureDoc.includes("operatorEvidencePackageReviewManifest"));
+  assert.ok(architectureDoc.includes("It also exposes the target-data package review-manifest action and the operator-evidence package review-manifest action"));
   assert.ok(architectureDoc.includes("The RLHF93 completion audit includes the current target-data package review-manifest route"));
+  assert.ok(architectureDoc.includes("the operator-evidence package review-manifest route"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("publicDatasetPackageReview"));
@@ -26028,10 +26109,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(modelEvaluationPackageAuditRow.nextActionOperatorActionId, "model_evaluation_submission_package:submit:model_improvement_run");
   assert.equal(modelEvaluationPackageAuditRow.nextActionRoute, "/api/v1/operator-evidence/import-jsonl?validateOnly=true");
   assert.equal(
+    modelEvaluationPackageAuditRow.nextActionReviewManifestRoute,
+    "/api/v1/operator-evidence/import-jsonl/review-manifest",
+  );
+  assert.equal(
     modelEvaluationPackageAuditRow.nextActionTemplateRoute,
     "/api/v1/operator-evidence/import-jsonl-template?checklistRowId=model_evaluation_submission_package&artifactKind=model_improvement_run",
   );
   assert.equal(modelEvaluationPackageAuditRow.nextActionWriteRoute, "/api/v1/operator-evidence/import-jsonl");
+  assert.ok(modelEvaluationPackageAuditRow.routes.includes("/api/v1/operator-evidence/import-jsonl/review-manifest"));
   assert.ok(modelEvaluationPackageAuditRow.routes.includes(modelEvaluationPackageAuditRow.nextActionOperatorActionRoute));
 
   const discussionPackageAuditRow = rlhf93CompletionAudit.body.items.find(
@@ -26371,6 +26457,32 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(
     rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter.body.filteredCounts.byRoute[
       "/api/v1/target-gaps/import-jsonl-package/review-manifest"
+    ] >= 2,
+  );
+
+  const rlhf93CompletionAuditOperatorPackageReviewManifestRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/operator-evidence/import-jsonl/review-manifest")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(
+    rlhf93CompletionAuditOperatorPackageReviewManifestRouteFilter.status,
+    200,
+    JSON.stringify(rlhf93CompletionAuditOperatorPackageReviewManifestRouteFilter.body),
+  );
+  assert.ok(
+    rlhf93CompletionAuditOperatorPackageReviewManifestRouteFilter.body.items.some(
+      (item) => item.id === "october-release_artifact_submission_package",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditOperatorPackageReviewManifestRouteFilter.body.items.some(
+      (item) => item.id === "october-model_evaluation_submission_package",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditOperatorPackageReviewManifestRouteFilter.body.filteredCounts.byRoute[
+      "/api/v1/operator-evidence/import-jsonl/review-manifest"
     ] >= 2,
   );
 
