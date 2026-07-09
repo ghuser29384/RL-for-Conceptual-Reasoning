@@ -15094,6 +15094,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(positionTemplate.packageImportRoute, "/api/v1/target-gaps/import-jsonl-package");
   assert.equal(positionTemplate.sourceWriteRoute, "/api/v1/intake/positions");
   assert.equal(positionTemplate.resourceKey, "position");
+  assert.equal(positionTemplate.readbackItemRoute, positionTemplate.templateReadbackItemRoute);
+  assert.ok(
+    positionTemplate.templateReadbackItemRoute.startsWith(
+      `/api/v1/target-gaps/import-jsonl-template/${encodeURIComponent(positionTemplate.id)}?`,
+    ),
+  );
+  assert.ok(positionTemplate.templateReadbackItemRoute.includes("targetGapId=positions"));
+  assert.ok(positionTemplate.templateReadbackItemRoute.includes("actionId="));
   assert.ok(positionTemplate.requiredFields.includes("id"));
   assert.equal(positionTemplate.record.position.templateOnly, true);
   assert.equal(positionTemplate.record.position.intakeScreening.originalTextPreserved, true);
@@ -15272,6 +15280,36 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(expandedBlindRatingTemplate.status, 200, JSON.stringify(expandedBlindRatingTemplate.body));
   assert.equal(expandedBlindRatingTemplate.body.count, 15);
+  assert.equal(new Set(expandedBlindRatingTemplate.body.items.map((item) => item.id)).size, expandedBlindRatingTemplate.body.count);
+  assert.ok(expandedBlindRatingTemplate.body.items[0].id.includes(encodeURIComponent("/api/v1/assignments/import-jsonl")));
+  assert.ok(expandedBlindRatingTemplate.body.items[1].id.includes(encodeURIComponent("/api/v1/rating-context-snapshots/import-jsonl")));
+  assert.equal(expandedBlindRatingTemplate.body.items[0].readbackItemRoute, expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute);
+  assert.ok(
+    expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute.startsWith(
+      `/api/v1/target-gaps/import-jsonl-template/${encodeURIComponent(expandedBlindRatingTemplate.body.items[0].id)}?`,
+    ),
+  );
+  assert.ok(expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute.includes("targetGapId=blind_initial_ratings"));
+  assert.ok(expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute.includes("actionId="));
+  assert.ok(expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute.includes("expand=remaining"));
+  assert.ok(expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute.includes("maxExpandedRecords=5"));
+  const expandedBlindRatingTemplateByItemRoute = await invokeApi(context, {
+    method: "GET",
+    url: expandedBlindRatingTemplate.body.items[0].templateReadbackItemRoute,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(expandedBlindRatingTemplateByItemRoute.status, 200, JSON.stringify(expandedBlindRatingTemplateByItemRoute.body));
+  assert.equal(expandedBlindRatingTemplateByItemRoute.body.count, 1);
+  assert.equal(expandedBlindRatingTemplateByItemRoute.body.item.id, expandedBlindRatingTemplate.body.items[0].id);
+  const expandedBlindRatingTemplateByBareId = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/target-gaps/import-jsonl-template/${encodeURIComponent(expandedBlindRatingTemplate.body.items[0].id)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(expandedBlindRatingTemplateByBareId.status, 200, JSON.stringify(expandedBlindRatingTemplateByBareId.body));
+  assert.equal(expandedBlindRatingTemplateByBareId.body.count, 1);
+  assert.equal(expandedBlindRatingTemplateByBareId.body.item.id, expandedBlindRatingTemplate.body.items[0].id);
+  assert.equal(expandedBlindRatingTemplateByBareId.body.expansion.requestedMode, "expanded_item_lookup");
   assert.equal(expandedBlindRatingTemplate.body.items[0].importKind, "setup_data_import");
   assert.equal(expandedBlindRatingTemplate.body.items[0].importRoute, "/api/v1/assignments/import-jsonl");
   assert.equal(expandedBlindRatingTemplate.body.items[1].importKind, "setup_data_import");

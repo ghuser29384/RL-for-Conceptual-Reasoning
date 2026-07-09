@@ -20672,6 +20672,73 @@ function targetDataCollectionJsonlTemplateReadback(report, options = {}) {
     );
   const filters = operatorActionItemFilters(options.searchParams);
   const expansion = targetDataCollectionJsonlTemplateExpansion(options.searchParams);
+  let build = targetDataCollectionJsonlTemplateBuild(report, allItems, filters, expansion);
+  let selectedItems = options.itemId ? build.orderedItems.filter((item) => item.id === options.itemId) : build.orderedItems;
+  let selectedExpansion = expansion;
+  if (options.itemId && selectedItems.length === 0 && expansion.mode !== "remaining") {
+    const expandedLookup = targetDataCollectionJsonlTemplateBuild(
+      report,
+      allItems,
+      filters,
+      targetDataCollectionJsonlTemplateExpandedLookupExpansion(),
+    );
+    const expandedSelectedItems = expandedLookup.orderedItems.filter((item) => item.id === options.itemId);
+    if (expandedSelectedItems.length > 0) {
+      build = expandedLookup;
+      selectedItems = expandedSelectedItems;
+      selectedExpansion = expandedLookup.expansion;
+    }
+  }
+  if (options.itemId && selectedItems.length === 0) return null;
+  const expansionCoverage = targetDataCollectionJsonlTemplateExpansionCoverage(selectedItems, selectedExpansion);
+  return {
+    id: `target-data-jsonl-template-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: plan.generatedAt ?? report.generatedAt,
+    sourcePlanId: plan.id ?? null,
+    resourceKey: "targetDataCollectionJsonlTemplate",
+    packageImportRoute: targetDataCollectionPackageImportRoute,
+    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
+    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
+    policy: {
+      scope:
+        "Read-only JSONL skeleton for open collect_data operator actions that already expose a bulk import route; operators may submit replaced records individually or as one mixed package, but this readback does not submit data, waive gates, or satisfy target gaps.",
+      access: "Admin/auditor only because target data templates expose operator routes and release target counts.",
+      templateOnly:
+        "Generated records include templateOnly=true and TODO placeholders; per-route and package bulk import routes reject unchanged template records until operators replace them with real data.",
+      packageImport:
+        "POST replaced JSONL records to the package import route when one file spans multiple target-data import routes; every line must still name its concrete importRoute and the whole package is rejected before append if any line fails.",
+      expansion:
+        "By default the endpoint emits one skeleton line per matching import action. Use expand=remaining to emit the estimated number of required placeholder lines for the filtered target gap; shared primary imports are de-duplicated unless the request is scoped to a specific actionId or checklistRowId. Unchanged expanded templates are still rejected by import routes.",
+      packageOrder:
+        "Rows are ordered for package execution: setup imports such as assignment allocation appear before primary corpus/rating/gold/validation imports, with expanded rows kept in sequence.",
+    },
+    filters,
+    expansion: selectedExpansion,
+    expansionCoverage,
+    count: selectedItems.length,
+    totalCount: allItems.length,
+    filteredActionCount: build.filteredActions.length,
+    skippedCount: build.skippedItems.length,
+    counts: {
+      templateRecords: selectedItems.length,
+      skippedActions: build.skippedItems.length,
+      byChecklistRow: countItemsBy(selectedItems, "checklistRowId"),
+      byTargetGap: countItemsBy(selectedItems, "targetGapId"),
+      byResourceKey: countItemsBy(selectedItems, "resourceKey"),
+      byImportRoute: countItemsBy(selectedItems, "importRoute"),
+      byImportKind: countItemsBy(selectedItems, "importKind"),
+      byExecutionStatus: countItemsBy(selectedItems, "executionStatus"),
+      bySkipReason: countItemsBy(build.skippedItems, "skipReason"),
+    },
+    ...(options.itemId ? { item: selectedItems[0] } : {}),
+    jsonl: selectedItems.map((item) => JSON.stringify(item.record)).join("\n"),
+    items: selectedItems,
+    skippedItems: build.skippedItems,
+  };
+}
+
+function targetDataCollectionJsonlTemplateBuild(report, allItems, filters, expansion) {
   const filteredActions = allItems.filter((item) => operatorActionItemMatchesFilters(item, filters));
   const items = [];
   const skippedItems = [];
@@ -20708,54 +20775,20 @@ function targetDataCollectionJsonlTemplateReadback(report, options = {}) {
       );
     }
   }
-  const orderedItems = targetDataCollectionJsonlTemplatePackageOrder(items);
-  const selectedItems = options.itemId ? orderedItems.filter((item) => item.id === options.itemId) : orderedItems;
-  if (options.itemId && selectedItems.length === 0) return null;
-  const expansionCoverage = targetDataCollectionJsonlTemplateExpansionCoverage(selectedItems, expansion);
   return {
-    id: `target-data-jsonl-template-${report.releaseId ?? releaseId}`,
-    releaseId: report.releaseId ?? releaseId,
-    generatedAt: plan.generatedAt ?? report.generatedAt,
-    sourcePlanId: plan.id ?? null,
-    resourceKey: "targetDataCollectionJsonlTemplate",
-    packageImportRoute: targetDataCollectionPackageImportRoute,
-    packageDryRunImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "dryRun", "true"),
-    packageValidateOnlyImportRoute: routeWithQueryFlag(targetDataCollectionPackageImportRoute, "validateOnly", "true"),
-    policy: {
-      scope:
-        "Read-only JSONL skeleton for open collect_data operator actions that already expose a bulk import route; operators may submit replaced records individually or as one mixed package, but this readback does not submit data, waive gates, or satisfy target gaps.",
-      access: "Admin/auditor only because target data templates expose operator routes and release target counts.",
-      templateOnly:
-        "Generated records include templateOnly=true and TODO placeholders; per-route and package bulk import routes reject unchanged template records until operators replace them with real data.",
-      packageImport:
-        "POST replaced JSONL records to the package import route when one file spans multiple target-data import routes; every line must still name its concrete importRoute and the whole package is rejected before append if any line fails.",
-      expansion:
-        "By default the endpoint emits one skeleton line per matching import action. Use expand=remaining to emit the estimated number of required placeholder lines for the filtered target gap; shared primary imports are de-duplicated unless the request is scoped to a specific actionId or checklistRowId. Unchanged expanded templates are still rejected by import routes.",
-      packageOrder:
-        "Rows are ordered for package execution: setup imports such as assignment allocation appear before primary corpus/rating/gold/validation imports, with expanded rows kept in sequence.",
-    },
-    filters,
     expansion,
-    expansionCoverage,
-    count: selectedItems.length,
-    totalCount: allItems.length,
-    filteredActionCount: filteredActions.length,
-    skippedCount: skippedItems.length,
-    counts: {
-      templateRecords: selectedItems.length,
-      skippedActions: skippedItems.length,
-      byChecklistRow: countItemsBy(selectedItems, "checklistRowId"),
-      byTargetGap: countItemsBy(selectedItems, "targetGapId"),
-      byResourceKey: countItemsBy(selectedItems, "resourceKey"),
-      byImportRoute: countItemsBy(selectedItems, "importRoute"),
-      byImportKind: countItemsBy(selectedItems, "importKind"),
-      byExecutionStatus: countItemsBy(selectedItems, "executionStatus"),
-      bySkipReason: countItemsBy(skippedItems, "skipReason"),
-    },
-    ...(options.itemId ? { item: selectedItems[0] } : {}),
-    jsonl: selectedItems.map((item) => JSON.stringify(item.record)).join("\n"),
-    items: selectedItems,
+    filteredActions,
     skippedItems,
+    orderedItems: targetDataCollectionJsonlTemplatePackageOrder(items),
+  };
+}
+
+function targetDataCollectionJsonlTemplateExpandedLookupExpansion() {
+  return {
+    mode: "remaining",
+    requestedMode: "expanded_item_lookup",
+    maxExpandedRecords: 10000,
+    expandsToEstimatedRequiredRecords: true,
   };
 }
 
@@ -21043,13 +21076,34 @@ function targetDataCollectionExpandedRecordCount(importImpact, expansion) {
   return Math.max(1, Math.min(estimatedRequired, expansion.maxExpandedRecords ?? 5000));
 }
 
+function targetDataCollectionJsonlTemplateItemRoute(id, action, routeInfo) {
+  const params = new URLSearchParams();
+  if (action?.targetGapId) params.set("targetGapId", action.targetGapId);
+  if (action?.id) params.set("actionId", action.id);
+  if (action?.checklistRowId) params.set("checklistRowId", action.checklistRowId);
+  if (routeInfo?.expansionMode === "remaining") {
+    params.set("expand", "remaining");
+    const expandedRecordCount = Number(routeInfo.expandedRecordCount);
+    if (Number.isInteger(expandedRecordCount) && expandedRecordCount > 0) {
+      params.set("maxExpandedRecords", String(Math.min(expandedRecordCount, 10000)));
+    }
+  }
+  const query = params.toString();
+  return `/api/v1/target-gaps/import-jsonl-template/${encodeURIComponent(id)}${query ? `?${query}` : ""}`;
+}
+
 function targetDataCollectionJsonlTemplateRow(action, routeInfo, report, index) {
   const importImpact = routeInfo.importImpact ?? targetDataCollectionImportImpact(action, routeInfo);
   const expandedRecordIndex = routeInfo.expandedRecordIndex ?? 1;
   const expandedRecordCount = routeInfo.expandedRecordCount ?? 1;
   const expandedSuffix = expandedRecordCount > 1 ? `:${expandedRecordIndex}` : "";
+  const routeSegment = encodeURIComponent(routeInfo.importRoute ?? "no-import-route");
+  const id = `target-data-jsonl-template:${routeInfo.importKind}:${routeSegment}:${action.id ?? index + 1}${expandedSuffix}`;
+  const templateReadbackItemRoute = targetDataCollectionJsonlTemplateItemRoute(id, action, routeInfo);
   const base = {
-    id: `target-data-jsonl-template:${routeInfo.importKind}:${action.id ?? index + 1}${expandedSuffix}`,
+    id,
+    templateReadbackItemRoute,
+    readbackItemRoute: templateReadbackItemRoute,
     actionId: action.id ?? null,
     checklistRowId: action.checklistRowId ?? null,
     actionType: action.actionType ?? null,
