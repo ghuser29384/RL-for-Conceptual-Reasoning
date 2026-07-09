@@ -13671,6 +13671,18 @@ test("operator action item queue is admin/auditor readback derived from the rele
     /packageReadyForPublicationReview must be true only when packageValidationStatus is public_dataset_package_files_ready_for_governed_review/,
   );
 
+  const validateOnlyPackageReview = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews?validateOnly=true",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(packageReviewPayload),
+  });
+  assert.equal(validateOnlyPackageReview.status, 200, JSON.stringify(validateOnlyPackageReview.body));
+  assert.equal(validateOnlyPackageReview.body.resourceKey, "publicDatasetPackageReview");
+  assert.equal(validateOnlyPackageReview.body.resourceId, "dataset-v0-1-package-review-blocked");
+  assert.equal(validateOnlyPackageReview.body.dryRun, true);
+  assert.equal(validateOnlyPackageReview.body.eventType, "public_dataset_package_review_submitted");
+
   const packageReview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/public-dataset-package-reviews",
@@ -18159,6 +18171,11 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-package-reviews"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageReview"'));
   assert.ok(appSource.includes("function publicDatasetPackageReviewPreviewRow(item)"));
+  assert.ok(appSource.includes("function publicDatasetPackageReviewSubmissionPayload()"));
+  assert.ok(appSource.includes('id: "public-dataset-package-review"'));
+  assert.ok(appSource.includes('endpoint: () => "/api/v1/public-dataset-package-reviews"'));
+  assert.ok(appSource.includes('reviewDecision: "record_hash_only_review_for_followup"'));
+  assert.ok(appSource.includes('"/api/v1/public-dataset-package-reviews",'));
   assert.ok(appSource.includes('id: "public-dataset-package-review-manifest"'));
   assert.ok(appSource.includes('endpoint: () => "/api/v1/public-dataset-package-files/review-manifest"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetPackageReviewManifest"'));
@@ -18661,6 +18678,7 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("publicDatasetPackageReview"));
+  assert.ok(architectureDoc.includes("The workflow console exposes a separate Dataset Package Review template"));
   assert.ok(architectureDoc.includes("public_dataset_package_reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-files/validate/template"));
   assert.ok(architectureDoc.includes("publicDatasetPackageFileValidationTemplate"));

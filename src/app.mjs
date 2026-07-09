@@ -2933,6 +2933,67 @@ function publicDatasetPackageReviewManifestSampleFiles() {
   ];
 }
 
+function publicDatasetPackageReviewSubmissionPayload() {
+  const packageManifestHash = "sha256:2f62d39a8e45807cc344713b6d92cc5c354e14df5cec3cdadb4651ddf1804e31";
+  const packageManifest = {
+    manifestVersion: "dataset_v0_1_package_review_manifest_v1",
+    packageManifestHash,
+    artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+    releaseId,
+    packageStepReadbackRoutes: ["/api/v1/public-dataset-package-manifest"],
+    sourcePackageManifestRoutes: ["/api/v1/public-dataset-package-files/review-manifest"],
+    sourceRunbookGroupRoutes: ["/api/v1/october-completion-runbook?phase=collect_data"],
+    sourceActionGroupRoutes: ["/api/v1/operator-action-items?executionStatus=ready_to_collect_data"],
+    files: [
+      {
+        expectedFilename: "dataset-v0.1/REPLACE_WITH_REVIEW_MANIFEST.json",
+        artifactKind: "package_review_manifest",
+        fileFormat: "json",
+        submittedContentHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        validationStatus: "missing_file",
+        contentStatus: "missing_file",
+      },
+    ],
+    unexpectedFiles: [],
+  };
+  return {
+    publicDatasetPackageReview: {
+      id: `public-dataset-package-review-${Date.now()}`,
+      releaseId,
+      artifactName: "Metaphilosophy Critique Ratings Dataset v0.1",
+      packageManifestHash,
+      packageValidationStatus: "public_dataset_package_files_invalid",
+      packageReviewStatus: "public_dataset_package_review_blocked_by_invalid_files",
+      releasePackageStatus: "public_dataset_release_package_blocked",
+      publicationGateStatus: "public_dataset_publication_blocked",
+      packageReadyForPublicationReview: false,
+      packageStepReadbackRoutes: packageManifest.packageStepReadbackRoutes,
+      sourcePackageManifestRoutes: packageManifest.sourcePackageManifestRoutes,
+      sourceRunbookGroupRoutes: packageManifest.sourceRunbookGroupRoutes,
+      sourceActionGroupRoutes: packageManifest.sourceActionGroupRoutes,
+      packageManifest,
+      validationSummary: {
+        id: `public-dataset-package-file-validation-${releaseId}`,
+        packageValidationStatus: "public_dataset_package_files_invalid",
+        packageReadyForPublicationReview: false,
+        counts: {
+          expectedFiles: 1,
+          submittedExpectedFiles: 0,
+          missingFiles: 1,
+          invalidContentFiles: 1,
+          readyForReviewFiles: 0,
+        },
+      },
+      reviewDecision: "record_hash_only_review_for_followup",
+      reviewedBy: state.session?.user?.id ?? "demo-admin",
+      reviewedAt: new Date().toISOString(),
+      rawPackageContentsStored: false,
+      packageWriteActionAvailable: false,
+      publicationActionAvailable: false,
+    },
+  };
+}
+
 const workflowTemplates = [
   {
     id: "cloud-security-budget-policy",
@@ -5060,6 +5121,16 @@ const workflowTemplates = [
     payload: () => ({
       files: publicDatasetPackageReviewManifestSampleFiles(),
     }),
+  },
+  {
+    id: "public-dataset-package-review",
+    label: "Dataset Package Review",
+    endpoint: () => "/api/v1/public-dataset-package-reviews",
+    resourceKey: "publicDatasetPackageReview",
+    requiredRole: "admin",
+    summary:
+      "Submit reviewed hash-only Dataset v0.1 package-review evidence after generating or replacing the package review manifest; this stores no raw package files and does not publish the dataset.",
+    payload: publicDatasetPackageReviewSubmissionPayload,
   },
   {
     id: "operator-evidence-package-jsonl-import",
@@ -19025,6 +19096,7 @@ const dryRunWorkflowTemplateEndpoints = new Set([
   "/api/v1/target-gaps/import-jsonl-package",
   "/api/v1/operator-evidence/import-jsonl",
   "/api/v1/public-dataset-documents",
+  "/api/v1/public-dataset-package-reviews",
 ]);
 const workflowSubmitModes = [
   { id: "append", label: "Append" },
