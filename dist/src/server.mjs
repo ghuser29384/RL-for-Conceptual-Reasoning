@@ -15553,6 +15553,7 @@ function publicDatasetReadinessItems(readiness) {
   const routeBase = "/api/v1/public-dataset-readiness";
   const rows = Array.isArray(readiness.rows) ? readiness.rows : [];
   return rows.map((row, index) => {
+    const nextAction = publicDatasetReadinessNextAction(row);
     const item = {
       ...row,
       sequence: index + 1,
@@ -15563,6 +15564,7 @@ function publicDatasetReadinessItems(readiness) {
       readbackItemRoute: `${routeBase}/${encodeURIComponent(row.id)}`,
       releaseReportRoute: "/api/release/report",
       readbackRoutes: uniqueValues([routeBase, `${routeBase}/${encodeURIComponent(row.id)}`, "/api/release/report", ...(row.readbackRoutes ?? [])]),
+      ...nextAction,
     };
     const routes = publicDatasetReadinessRoutes(item);
     return {
@@ -15571,6 +15573,74 @@ function publicDatasetReadinessItems(readiness) {
       routeCount: routes.length,
     };
   });
+}
+
+function publicDatasetReadinessNextAction(row = {}) {
+  if (!publicDatasetReadinessItemIsOpen(row)) {
+    return {
+      nextActionKind: "verification_only",
+      nextActionRoute: row.readbackRoutes?.[0] ?? "/api/v1/public-dataset-readiness",
+      nextActionReadbackRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? "unknown")}`,
+      nextActionPolicy: "This readiness row is currently satisfied; verify through the row readback and /api/release/report.",
+    };
+  }
+  if (row.status === "blocked_by_target_scale" || (Array.isArray(row.targetGapIds) && row.targetGapIds.length > 0)) {
+    return {
+      nextActionKind: "validate_target_data_package",
+      nextActionRoute: "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+      nextActionValidateOnlyRoute: "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
+      nextActionDryRunRoute: "/api/v1/target-gaps/import-jsonl-package?dryRun=true",
+      nextActionWriteRoute: "/api/v1/target-gaps/import-jsonl-package",
+      nextActionTemplateRoute: "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+      nextActionReadbackRoute: "/api/v1/target-gaps/current-package-manifest",
+      nextActionVerificationRoute: "/api/release/report",
+      nextActionPolicy:
+        "Replace target-data templates with real release data, validate the package first, then verify remaining counts through /api/release/report.",
+    };
+  }
+  if (row.gateKind === "public_documentation") {
+    const documentKind = row.id === "methodology_report" ? "methodology_report" : "dataset_card";
+    return {
+      nextActionKind: "validate_public_document",
+      nextActionRoute: "/api/v1/public-dataset-documents?validateOnly=true",
+      nextActionValidateOnlyRoute: "/api/v1/public-dataset-documents?validateOnly=true",
+      nextActionWriteRoute: "/api/v1/public-dataset-documents",
+      nextActionTemplateRoute: `/api/v1/public-dataset-documents/template?documentKind=${encodeURIComponent(documentKind)}`,
+      nextActionReadbackRoute: "/api/v1/public-dataset-documents",
+      nextActionVerificationRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? documentKind)}`,
+      nextActionPolicy:
+        "Replace the generated public-documentation template with reviewed content and validate before appending publicDatasetDocument evidence.",
+    };
+  }
+  if (row.gateKind === "release_freeze" || row.status === "blocked_by_release_freeze") {
+    return {
+      nextActionKind: "validate_release_version_freeze",
+      nextActionRoute: "/api/v1/release-version-manifest/template",
+      nextActionValidateOnlyRoute: "/api/v1/releases/freeze?validateOnly=true",
+      nextActionWriteRoute: "/api/v1/releases/freeze",
+      nextActionTemplateRoute: "/api/v1/release-version-manifest/template",
+      nextActionReadbackRoute: "/api/v1/release-version-manifest",
+      nextActionVerificationRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? "release_version_freeze")}`,
+      nextActionPolicy:
+        "Submit reviewed ReleaseVersion and release-freeze evidence only after target scale and artifact links are current.",
+    };
+  }
+  if (row.gateKind === "release_ladder" || row.status === "downstream_blocked_until_dataset_v0_1_ready") {
+    return {
+      nextActionKind: "verify_public_first_blockers",
+      nextActionRoute: "/api/v1/public-dataset-publication-gate",
+      nextActionReadbackRoute: "/api/v1/public-dataset-publication-gate/publication-action-boundary",
+      nextActionVerificationRoute: "/api/v1/public-dataset-downstream-launches",
+      nextActionPolicy:
+        "Keep downstream leaderboard, API, public training export, and judge-model launch blocked until Dataset v0.1 readiness and publication gates are complete.",
+    };
+  }
+  return {
+    nextActionKind: "inspect_readiness_blocker",
+    nextActionRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? "unknown")}`,
+    nextActionReadbackRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(row.id ?? "unknown")}`,
+    nextActionPolicy: "Inspect this readiness row and linked routes before appending evidence.",
+  };
 }
 
 function publicDatasetReadinessFilters(searchParams) {
@@ -15628,6 +15698,13 @@ function publicDatasetReadinessRoutes(item) {
     ...(Array.isArray(item?.reviewRoutes) ? item.reviewRoutes : []),
     ...(Array.isArray(item?.packageRoutes) ? item.packageRoutes : []),
     ...(Array.isArray(item?.downstreamRoutes) ? item.downstreamRoutes : []),
+    item?.nextActionRoute,
+    item?.nextActionReadbackRoute,
+    item?.nextActionTemplateRoute,
+    item?.nextActionDryRunRoute,
+    item?.nextActionValidateOnlyRoute,
+    item?.nextActionWriteRoute,
+    item?.nextActionVerificationRoute,
   ]);
 }
 
@@ -15644,6 +15721,7 @@ function publicDatasetReadinessCounts(items) {
     reviewReasonCount: items.reduce((sum, item) => sum + (Array.isArray(item.reviewReasons) ? item.reviewReasons.length : 0), 0),
     byGateKind: countItemsBy(items, "gateKind"),
     byStatus: countItemsBy(items, "status"),
+    byNextActionKind: countItemsBy(items, "nextActionKind"),
     byRoute: countValues(items.flatMap(publicDatasetReadinessRoutes)),
     bySourceEvidenceId: countExpandedValues(items, "sourceEvidenceIds"),
     bySourceStatus: countExpandedValues(items, "sourceStatuses"),
@@ -17235,7 +17313,7 @@ function rlhf93CompletionAuditCurrentUnblocker(report) {
         omittedExecutionStepCount: manifest.omittedExecutionStepCount ?? 0,
       }
     : null;
-  return {
+  const unblocker = {
     phase: group.phase ?? navigation.currentBlockingPhase ?? null,
     executionStatus: group.executionStatus ?? navigation.currentBlockingExecutionStatus ?? null,
     operatorAction: group.operatorAction ?? null,
@@ -17271,6 +17349,62 @@ function rlhf93CompletionAuditCurrentUnblocker(report) {
     ]),
     packageManifest,
   };
+  const routes = rlhf93CompletionAuditUnblockerRoutes(unblocker);
+  return {
+    ...unblocker,
+    routeCount: routes.length,
+    routes,
+    packageManifest: packageManifest ? rlhf93CompletionAuditPackageManifestWithRoutes(packageManifest) : null,
+  };
+}
+
+function rlhf93CompletionAuditPackageManifestWithRoutes(packageManifest = {}) {
+  const routes = rlhf93CompletionAuditPackageManifestRoutes(packageManifest);
+  return {
+    ...packageManifest,
+    routeCount: routes.length,
+    routes,
+  };
+}
+
+function rlhf93CompletionAuditPackageManifestRoutes(packageManifest = {}) {
+  return uniqueValues([
+    packageManifest?.sourceCollectionPlanRoute,
+    packageManifest?.sourceRunbookGroupRoute,
+    packageManifest?.sourceActionGroupRoute,
+    packageManifest?.packageImportRoute,
+    packageManifest?.packageDryRunImportRoute,
+    packageManifest?.packageValidateOnlyImportRoute,
+    packageManifest?.starterTemplateRoute,
+    packageManifest?.fullTemplateRoute,
+    ...(Array.isArray(packageManifest?.executionSequencePreview)
+      ? packageManifest.executionSequencePreview.flatMap((step) => [
+          step.importRoute,
+          step.dryRunImportRoute,
+          step.validateOnlyImportRoute,
+          step.templateReadbackRoute,
+          step.collectionPlanRoute,
+          step.verificationRoute,
+          step.packageManifestItemRoute,
+        ])
+      : []),
+  ]);
+}
+
+function rlhf93CompletionAuditUnblockerRoutes(unblocker = {}) {
+  return uniqueValues([
+    unblocker?.runbookGroupRoute,
+    unblocker?.operatorActionGroupRoute,
+    unblocker?.firstReadbackRoute,
+    unblocker?.firstTargetGapRoute,
+    unblocker?.firstTemplateRoute,
+    unblocker?.firstPackageManifestRoute,
+    unblocker?.firstImportRoute,
+    unblocker?.firstDryRunRoute,
+    unblocker?.firstValidateOnlyRoute,
+    ...(Array.isArray(unblocker?.routes) ? unblocker.routes : []),
+    ...rlhf93CompletionAuditPackageManifestRoutes(unblocker?.packageManifest),
+  ]);
 }
 
 function rlhf93CompletionAuditPackageStepPreview(step = {}) {
@@ -17339,15 +17473,35 @@ function rlhf93CompletionAuditRowUnblocker(currentUnblocker, row = {}) {
 function rlhf93CompletionAuditDecoratedItem(item) {
   const readbackItemRoute = `/api/v1/metaphilosophy/rlhf93-completion-audit/${encodeURIComponent(item.id)}`;
   const collectionReadbackRoute = "/api/v1/metaphilosophy/rlhf93-completion-audit";
+  const unblockerRoutes = rlhf93CompletionAuditUnblockerRoutes(item.unblocker);
+  const unblockerPackageManifest = item.unblocker?.packageManifest ?? null;
   const routes = rlhf93CompletionAuditItemRoutes({
     ...item,
     readbackItemRoute,
     collectionReadbackRoute,
     releaseReportRoute: "/api/release/report",
+    unblockerRoutes,
   });
   const open = rlhf93CompletionAuditItemIsOpen(item);
   return {
     ...item,
+    unblockerPhase: item.unblocker?.phase ?? null,
+    unblockerExecutionStatus: item.unblocker?.executionStatus ?? null,
+    primaryUnblockerRoute: unblockerRoutes[0] ?? null,
+    unblockerRoutes,
+    unblockerRouteCount: unblockerRoutes.length,
+    unblockerRunbookGroupRoute: item.unblocker?.runbookGroupRoute ?? null,
+    unblockerActionGroupRoute: item.unblocker?.operatorActionGroupRoute ?? null,
+    unblockerCollectionPlanRoute: unblockerPackageManifest?.sourceCollectionPlanRoute ?? item.unblocker?.firstReadbackRoute ?? null,
+    unblockerPackageManifestRoute: item.unblocker?.firstPackageManifestRoute ?? null,
+    unblockerStarterTemplateRoute: unblockerPackageManifest?.starterTemplateRoute ?? item.unblocker?.firstTemplateRoute ?? null,
+    unblockerFullTemplateRoute: unblockerPackageManifest?.fullTemplateRoute ?? null,
+    unblockerPackageImportRoute: unblockerPackageManifest?.packageImportRoute ?? item.unblocker?.firstImportRoute ?? null,
+    unblockerPackageDryRunImportRoute: unblockerPackageManifest?.packageDryRunImportRoute ?? item.unblocker?.firstDryRunRoute ?? null,
+    unblockerPackageValidateOnlyImportRoute: unblockerPackageManifest?.packageValidateOnlyImportRoute ?? item.unblocker?.firstValidateOnlyRoute ?? null,
+    unblockerExpectedResourceDelta: unblockerPackageManifest?.expectedResourceDelta ?? null,
+    unblockerStepCount: unblockerPackageManifest?.stepCount ?? item.unblocker?.stepCount ?? null,
+    unblockerTargetGapIds: Array.isArray(item.unblocker?.targetGapIds) ? item.unblocker.targetGapIds : [],
     completionState: open ? "open" : "closed",
     isComplete: !open,
     routeCount: routes.length,
@@ -17479,6 +17633,7 @@ function rlhf93CompletionAuditItemRoutes(item) {
     item?.collectionReadbackRoute,
     item?.readbackItemRoute,
     item?.releaseReportRoute,
+    ...(Array.isArray(item?.unblockerRoutes) ? item.unblockerRoutes : []),
     ...(Array.isArray(item?.unblocker?.routes) ? item.unblocker.routes : []),
     item?.unblocker?.packageManifest?.packageImportRoute,
     item?.unblocker?.packageManifest?.packageDryRunImportRoute,
@@ -19585,6 +19740,8 @@ function operatorActionItemMatchesActionStatus(item, value) {
 
 function operatorActionItemRoutes(item) {
   return uniqueValues([
+    item?.operatorActionItemRoute,
+    item?.actionReadbackItemRoute,
     item?.operatorActionGroupRoute,
     item?.writeRoute,
     item?.readbackRoute,
@@ -19659,12 +19816,22 @@ function operatorActionItemRelatedSubmitActions(item) {
 
 function operatorActionItemWithExecutionStatus(item) {
   const executionStatus = operatorActionExecutionStatus(item);
-  return {
+  const operatorActionItemRoute = item?.id ? `/api/v1/operator-action-items/${encodeURIComponent(item.id)}` : null;
+  const decorated = {
     ...item,
     executionStatus,
+    operatorActionItemRoute,
+    actionReadbackItemRoute: operatorActionItemRoute,
+    readbackItemRoute: item?.readbackItemRoute ?? operatorActionItemRoute,
     operatorActionGroupRoute:
       item?.operatorActionGroupRoute ?? `/api/v1/operator-action-items?executionStatus=${encodeURIComponent(executionStatus)}`,
     executionStatusReason: item?.executionStatusReason ?? operatorActionExecutionStatusReason(item, executionStatus),
+  };
+  const routes = operatorActionItemRoutes(decorated);
+  return {
+    ...decorated,
+    routes,
+    routeCount: routes.length,
   };
 }
 

@@ -8649,6 +8649,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(queue.body.items.every((item) => Array.isArray(item.governanceCoverageRoutes)));
   assert.ok(queue.body.items.every((item) => Array.isArray(item.governanceCoverageKinds)));
   assert.ok(queue.body.items.every((item) => item.governanceCoveragePolicy));
+  assert.ok(
+    queue.body.items.every(
+      (item) =>
+        item.operatorActionItemRoute === `/api/v1/operator-action-items/${encodeURIComponent(item.id)}` &&
+        item.actionReadbackItemRoute === item.operatorActionItemRoute &&
+        Array.isArray(item.routes) &&
+        item.routeCount === item.routes.length &&
+        item.routes.includes(item.operatorActionItemRoute),
+    ),
+  );
   assert.deepEqual(
     queue.body.items
       .filter((item) => item.actionType === "submit_artifact" && item.executionStatus !== "closed")
@@ -8675,6 +8685,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(queue.body.items[0].actionType, "collect_data");
   assert.equal(queue.body.items[0].executionStatus, "ready_to_collect_data");
   assert.match(queue.body.items[0].executionStatusReason, /real target data/);
+  assert.equal(queue.body.items[0].operatorActionItemRoute, "/api/v1/operator-action-items/target_scale_and_data_collection%3Acollect%3Apositions");
+  assert.equal(queue.body.items[0].readbackItemRoute, queue.body.items[0].operatorActionItemRoute);
+  assert.equal(queue.body.filteredCounts.byRoute[queue.body.items[0].operatorActionItemRoute], 1);
   assert.equal(queue.body.items[0].writeRoute, "/api/v1/intake/positions");
   assert.equal(queue.body.items[0].readbackRoute, "/api/v1/intake/positions");
   assert.equal(queue.body.items[0].submissionReadbackRoute, "/api/v1/intake/positions");
@@ -11099,12 +11112,48 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReadiness.body.counts.missingDocumentationRows, 2);
   assert.equal(publicDatasetReadiness.body.counts.downstreamBlockedRows, 1);
   assert.equal(publicDatasetReadiness.body.counts.byGateKind.public_documentation, 2);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_target_data_package, 1);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_public_document, 2);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.validate_release_version_freeze, 1);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.verify_public_first_blockers, 1);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.inspect_readiness_blocker, 2);
+  assert.equal(publicDatasetReadiness.body.counts.byNextActionKind.verification_only, publicDatasetReadiness.body.counts.readyRows);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-readiness"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-documents/template?documentKind=dataset_card"], 1);
   assert.ok(publicDatasetReadiness.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
+  const publicDatasetRowsById = new Map(publicDatasetReadiness.body.items.map((item) => [item.id, item]));
+  const datasetCardReadiness = publicDatasetRowsById.get("dataset_card");
+  assert.equal(datasetCardReadiness.nextActionKind, "validate_public_document");
+  assert.equal(datasetCardReadiness.nextActionRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  assert.equal(datasetCardReadiness.nextActionValidateOnlyRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  assert.equal(datasetCardReadiness.nextActionTemplateRoute, "/api/v1/public-dataset-documents/template?documentKind=dataset_card");
+  assert.equal(datasetCardReadiness.nextActionWriteRoute, "/api/v1/public-dataset-documents");
+  assert.match(datasetCardReadiness.nextActionPolicy, /publicDatasetDocument evidence/);
+  assert.ok(datasetCardReadiness.routes.includes(datasetCardReadiness.nextActionRoute));
+  assert.ok(datasetCardReadiness.routes.includes(datasetCardReadiness.nextActionValidateOnlyRoute));
+  assert.ok(datasetCardReadiness.routes.includes(datasetCardReadiness.nextActionTemplateRoute));
+  const targetPackageReadiness = publicDatasetRowsById.get("release_cleared_position_critique_pairs");
+  assert.equal(targetPackageReadiness.nextActionKind, "validate_target_data_package");
+  assert.equal(targetPackageReadiness.nextActionRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(targetPackageReadiness.nextActionDryRunRoute, "/api/v1/target-gaps/import-jsonl-package?dryRun=true");
+  assert.equal(
+    targetPackageReadiness.nextActionTemplateRoute,
+    "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+  );
+  assert.ok(targetPackageReadiness.routes.includes(targetPackageReadiness.nextActionRoute));
+  assert.ok(targetPackageReadiness.routes.includes(targetPackageReadiness.nextActionReadbackRoute));
+  const releaseFreezeReadiness = publicDatasetRowsById.get("release_version_freeze");
+  assert.equal(releaseFreezeReadiness.nextActionKind, "validate_release_version_freeze");
+  assert.equal(releaseFreezeReadiness.nextActionRoute, "/api/v1/release-version-manifest/template");
+  assert.equal(releaseFreezeReadiness.nextActionValidateOnlyRoute, "/api/v1/releases/freeze?validateOnly=true");
+  assert.ok(releaseFreezeReadiness.routes.includes(releaseFreezeReadiness.nextActionValidateOnlyRoute));
+  const publicFirstReadiness = publicDatasetRowsById.get("public_first_ladder_gate");
+  assert.equal(publicFirstReadiness.nextActionKind, "verify_public_first_blockers");
+  assert.equal(publicFirstReadiness.nextActionRoute, "/api/v1/public-dataset-publication-gate");
+  assert.ok(publicFirstReadiness.routes.includes(publicFirstReadiness.nextActionRoute));
   assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "dataset_card" && item.status === "documentation_not_submitted"));
   assert.ok(publicDatasetReadiness.body.items.some((item) => item.id === "methodology_report" && item.status === "documentation_not_submitted"));
   assert.ok(
@@ -11149,6 +11198,30 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetTargetGap.body.count, 1);
   assert.equal(publicDatasetTargetGap.body.items[0].id, "release_cleared_position_critique_pairs");
 
+  const publicDatasetByDocumentValidateRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/public-dataset-documents?validateOnly=true")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetByDocumentValidateRoute.status, 200, JSON.stringify(publicDatasetByDocumentValidateRoute.body));
+  assert.equal(publicDatasetByDocumentValidateRoute.body.count, 2);
+  assert.equal(publicDatasetByDocumentValidateRoute.body.filteredCounts.byNextActionKind.validate_public_document, 2);
+  assert.equal(publicDatasetByDocumentValidateRoute.body.filteredCounts.byRoute["/api/v1/public-dataset-documents?validateOnly=true"], 2);
+
+  const publicDatasetByTargetPackageValidateRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/target-gaps/import-jsonl-package?validateOnly=true")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetByTargetPackageValidateRoute.status, 200, JSON.stringify(publicDatasetByTargetPackageValidateRoute.body));
+  assert.equal(publicDatasetByTargetPackageValidateRoute.body.count, 1);
+  assert.equal(publicDatasetByTargetPackageValidateRoute.body.items[0].id, "release_cleared_position_critique_pairs");
+  assert.equal(publicDatasetByTargetPackageValidateRoute.body.filteredCounts.byNextActionKind.validate_target_data_package, 1);
+  assert.equal(
+    publicDatasetByTargetPackageValidateRoute.body.filteredCounts.byRoute["/api/v1/target-gaps/import-jsonl-package?validateOnly=true"],
+    1,
+  );
+
   const publicDatasetByRoute = await invokeApi(context, {
     method: "GET",
     url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/release-version-manifest")}`,
@@ -11192,6 +11265,12 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(publicDatasetById.body.item.routes.includes("/api/v1/public-dataset-readiness/dataset_card"));
   assert.ok(publicDatasetById.body.item.routes.includes("/api/v1/public-dataset-documents/template?documentKind=dataset_card"));
   assert.ok(publicDatasetById.body.item.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
+  assert.equal(publicDatasetById.body.item.nextActionKind, "validate_public_document");
+  assert.equal(publicDatasetById.body.item.nextActionRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  assert.equal(publicDatasetById.body.item.nextActionValidateOnlyRoute, "/api/v1/public-dataset-documents?validateOnly=true");
+  assert.equal(publicDatasetById.body.item.nextActionTemplateRoute, "/api/v1/public-dataset-documents/template?documentKind=dataset_card");
+  assert.equal(publicDatasetById.body.item.nextActionWriteRoute, "/api/v1/public-dataset-documents");
+  assert.ok(publicDatasetById.body.item.routes.includes(publicDatasetById.body.item.nextActionRoute));
   assert.equal(publicDatasetById.body.item.routeCount, publicDatasetById.body.item.routes.length);
 
   const publicDatasetMissing = await invokeApi(context, {
@@ -15136,6 +15215,17 @@ test("operator action item queue is admin/auditor readback derived from the rele
     ),
   );
 
+  const firstActionRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/operator-action-items?route=${encodeURIComponent(queue.body.items[0].operatorActionItemRoute)}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(firstActionRouteFilter.status, 200, JSON.stringify(firstActionRouteFilter.body));
+  assert.equal(firstActionRouteFilter.body.count, 1);
+  assert.equal(firstActionRouteFilter.body.item, undefined);
+  assert.equal(firstActionRouteFilter.body.items[0].id, queue.body.items[0].id);
+  assert.equal(firstActionRouteFilter.body.filteredCounts.byRoute[queue.body.items[0].operatorActionItemRoute], 1);
+
   const artifactProbeActionFilter = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/operator-action-items?artifactKind=artifact_probe",
@@ -15255,6 +15345,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(benchmarkReviewReadback.body.count, 1);
   assert.equal(benchmarkReviewReadback.body.item.id, benchmarkFreezeItem.id);
   assert.equal(benchmarkReviewReadback.body.item.readbackRoute, "/api/v1/benchmark-freeze-reports");
+  assert.equal(
+    benchmarkReviewReadback.body.item.operatorActionItemRoute,
+    `/api/v1/operator-action-items/${encodeURIComponent(benchmarkFreezeItem.id)}`,
+  );
+  assert.ok(benchmarkReviewReadback.body.item.routes.includes(benchmarkReviewReadback.body.item.operatorActionItemRoute));
   assert.equal(benchmarkReviewReadback.body.items[0].id, benchmarkFreezeItem.id);
 
   const benchmarkSectionReviewReadback = await invokeApi(context, {
@@ -15270,6 +15365,12 @@ test("operator action item queue is admin/auditor readback derived from the rele
     benchmarkSectionReviewReadback.body.item.readbackItemRoute,
     "/api/v1/benchmark-freeze-reports/hidden-benchmark-freeze-october-2026-demo",
   );
+  assert.equal(
+    benchmarkSectionReviewReadback.body.item.operatorActionItemRoute,
+    `/api/v1/operator-action-items/${encodeURIComponent(benchmarkFreezeReviewItem.id)}`,
+  );
+  assert.ok(benchmarkSectionReviewReadback.body.item.routes.includes(benchmarkSectionReviewReadback.body.item.operatorActionItemRoute));
+  assert.ok(benchmarkSectionReviewReadback.body.item.routes.includes(benchmarkSectionReviewReadback.body.item.readbackItemRoute));
 
   const packageTemplate = await invokeApi(context, {
     method: "GET",
@@ -15913,6 +16014,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
           item.setupBulkImportRoute ? { method: "POST", url: concreteDocumentedEndpointUrl(item.setupBulkImportRoute), itemId: item.id } : null,
           item.readbackRoute ? { method: "GET", url: concreteDocumentedEndpointUrl(item.readbackRoute), itemId: item.id } : null,
           item.readbackItemRoute ? { method: "GET", url: concreteDocumentedEndpointUrl(item.readbackItemRoute), itemId: item.id } : null,
+          item.operatorActionItemRoute ? { method: "GET", url: concreteDocumentedEndpointUrl(item.operatorActionItemRoute), itemId: item.id } : null,
         ])
         .filter(Boolean)
         .map((item) => [`${item.method} ${item.url}`, item]),
@@ -16593,6 +16695,10 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('endpoint: "/api/v1/public-dataset-documents/template"'));
   assert.ok(appSource.includes('resourceKey: "publicDatasetDocumentTemplate"'));
   assert.ok(appSource.includes("function publicDatasetReadinessPreviewRow(item)"));
+  assert.ok(appSource.includes('["Next action", item.nextActionKind ? humanize(item.nextActionKind) : "not reported"]'));
+  assert.ok(appSource.includes('["Next route", item.nextActionRoute ?? "not available"]'));
+  assert.ok(appSource.includes("item.nextActionValidateOnlyRoute"));
+  assert.ok(appSource.includes("item.nextActionTemplateRoute"));
   assert.ok(appSource.includes("function publicDatasetDocumentTemplatePreviewRow(item)"));
   assert.ok(appSource.includes("workflowPublicDatasetGateKindFilter"));
   assert.ok(appSource.includes("workflowPublicDatasetReviewReasonFilter"));
@@ -16705,6 +16811,8 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("metaphilosophyDecisionLogEntryPreviewRow(item)"));
   assert.ok(appSource.includes("rlhf93CompletionAuditPreviewRow(item)"));
   assert.ok(appSource.includes("function rlhf93CompletionAuditPreviewRow(item)"));
+  assert.ok(appSource.includes("item.primaryUnblockerRoute"));
+  assert.ok(appSource.includes("item.unblockerRoutes"));
   assert.ok(appSource.includes("workflowRlhf93RequirementGroupFilter"));
   assert.ok(appSource.includes('url.searchParams.set("requirementGroup", state.workflowRlhf93RequirementGroupFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("targetGapId", state.workflowRlhf93TargetGapFilter)'));
@@ -16958,6 +17066,8 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("POST /api/v1/release-versions` and `POST /api/v1/releases/freeze`"));
   assert.ok(architectureDoc.includes("do not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
+  assert.ok(architectureDoc.includes("Open readiness rows also carry first-class `nextActionKind`, `nextActionRoute`"));
+  assert.ok(architectureDoc.includes("documentation blockers to `publicDatasetDocument` validation"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageManifestStep"));
   assert.ok(architectureDoc.includes("does not create a Dataset object, submit release artifacts or documentation, publish a dataset"));
@@ -23497,7 +23607,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.executionStatus, "ready_to_collect_data");
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.stepCount, 9);
   assert.equal(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.expectedResourceDelta, 2034);
+  assert.equal(rlhf93CompletionAudit.body.currentUnblocker.routeCount, rlhf93CompletionAudit.body.currentUnblocker.routes.length);
+  assert.equal(
+    rlhf93CompletionAudit.body.currentUnblocker.packageManifest.routeCount,
+    rlhf93CompletionAudit.body.currentUnblocker.packageManifest.routes.length,
+  );
   assert.ok(rlhf93CompletionAudit.body.currentUnblocker.routes.includes("/api/v1/target-gaps/import-jsonl-package?dryRun=true"));
+  assert.ok(
+    rlhf93CompletionAudit.body.currentUnblocker.packageManifest.routes.includes(
+      "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
+    ),
+  );
   assert.ok(rlhf93CompletionAudit.body.currentUnblocker.packageManifest.operatorChecklist.length > 0);
   assert.equal(rlhf93CompletionAudit.body.nextUnblockerSequence[0].phase, "collect_data");
   assert.ok(rlhf93CompletionAudit.body.counts.openRows > 0);
@@ -23513,6 +23633,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.completionState === "open" &&
         item.reviewReasons.includes("targetGaps.remainingTotal:2034") &&
         item.unblocker.phase === "collect_data" &&
+        item.unblockerPhase === "collect_data" &&
+        item.unblockerExecutionStatus === "ready_to_collect_data" &&
+        item.primaryUnblockerRoute === "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data" &&
+        item.unblockerStarterTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25" &&
+        item.unblockerPackageDryRunImportRoute === "/api/v1/target-gaps/import-jsonl-package?dryRun=true" &&
+        item.unblockerPackageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
+        item.unblockerExpectedResourceDelta === 2034 &&
+        item.unblockerStepCount === 9 &&
+        item.unblockerRouteCount === item.unblockerRoutes.length &&
+        item.unblockerRoutes.includes(item.unblockerStarterTemplateRoute) &&
+        item.routes.includes(item.unblockerPackageValidateOnlyImportRoute) &&
         item.unblocker.packageManifest.starterTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25",
     ),
   );
@@ -23520,6 +23651,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
     rlhf93CompletionAudit.body.items.some(
       (item) =>
         item.id === "october-target_scale_and_data_collection" &&
+        item.unblockerPackageManifestRoute === "/api/v1/target-gaps/current-package-manifest" &&
         item.unblocker.packageManifest.packageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true",
     ),
   );

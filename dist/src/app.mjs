@@ -9689,6 +9689,10 @@ function publicDatasetReadinessPreviewRow(item) {
         ["Review reasons", reviewReasons],
         ["Target gaps", targetGaps],
         ["Downstream artifacts", downstream],
+        ["Next action", item.nextActionKind ? humanize(item.nextActionKind) : "not reported"],
+        ["Next route", item.nextActionRoute ?? "not available"],
+        ["Validate-only", item.nextActionValidateOnlyRoute ?? "not applicable"],
+        ["Template", item.nextActionTemplateRoute ?? "not applicable"],
         ["Readbacks", routes],
       ])}
     </article>
@@ -10586,9 +10590,13 @@ function rlhf93CompletionAuditPreviewRow(item) {
   const sourceStatuses =
     Array.isArray(item.sourceStatuses) && item.sourceStatuses.length ? item.sourceStatuses.map(humanize).join(", ") : "not reported";
   const routes = Array.isArray(item.routes) && item.routes.length ? item.routes : item.verificationRoutes ?? [];
+  const unblockerRoutes = Array.isArray(item.unblockerRoutes) && item.unblockerRoutes.length ? item.unblockerRoutes : [];
   const unblocker = item.unblocker ?? null;
   const packageManifest = unblocker?.packageManifest ?? null;
-  const unblockerStatus = unblocker ? `${humanize(unblocker.phase ?? "blocked")} / ${humanize(unblocker.executionStatus ?? "not reported")}` : "not current blocker";
+  const unblockerStatus =
+    item.unblockerPhase || unblocker
+      ? `${humanize(item.unblockerPhase ?? unblocker?.phase ?? "blocked")} / ${humanize(item.unblockerExecutionStatus ?? unblocker?.executionStatus ?? "not reported")}`
+      : "not current blocker";
   const targetGapIds = Array.isArray(item.targetGapIds) && item.targetGapIds.length
     ? item.targetGapIds
     : (Array.isArray(unblocker?.targetGapIds) ? unblocker.targetGapIds : []);
@@ -10610,11 +10618,13 @@ function rlhf93CompletionAuditPreviewRow(item) {
         ["Target gaps", workflowPreviewPathSummary(targetGapIds, "not linked", 5)],
         ["Review reasons", workflowPreviewReviewReasons(item)],
         ["Current unblocker", unblockerStatus],
-        ["Starter template", packageManifest?.starterTemplateRoute ?? unblocker?.firstTemplateRoute ?? "not applicable"],
-        ["Package dry-run", packageManifest?.packageDryRunImportRoute ?? unblocker?.firstDryRunRoute ?? "not applicable"],
-        ["Package validate-only", packageManifest?.packageValidateOnlyImportRoute ?? unblocker?.firstValidateOnlyRoute ?? "not applicable"],
-        ["Expected target-resource delta", packageManifest?.expectedResourceDelta ?? "not applicable"],
-        ["Unblocker steps", packageManifest?.stepCount ?? unblocker?.stepCount ?? "not applicable"],
+        ["Primary unblocker route", item.primaryUnblockerRoute ?? "not applicable"],
+        ["Starter template", item.unblockerStarterTemplateRoute ?? packageManifest?.starterTemplateRoute ?? unblocker?.firstTemplateRoute ?? "not applicable"],
+        ["Package dry-run", item.unblockerPackageDryRunImportRoute ?? packageManifest?.packageDryRunImportRoute ?? unblocker?.firstDryRunRoute ?? "not applicable"],
+        ["Package validate-only", item.unblockerPackageValidateOnlyImportRoute ?? packageManifest?.packageValidateOnlyImportRoute ?? unblocker?.firstValidateOnlyRoute ?? "not applicable"],
+        ["Expected target-resource delta", item.unblockerExpectedResourceDelta ?? packageManifest?.expectedResourceDelta ?? "not applicable"],
+        ["Unblocker steps", item.unblockerStepCount ?? packageManifest?.stepCount ?? unblocker?.stepCount ?? "not applicable"],
+        ["Unblocker routes", workflowPreviewPathSummary(unblockerRoutes, "not current blocker", 5)],
         ["Routes", workflowPreviewPathSummary(routes, "not linked", 5)],
       ])}
     </article>
@@ -11174,6 +11184,8 @@ function operatorActionPreviewRow(item) {
   const actionMetrics = [
     ["Execution", humanize(executionStatus)],
     ["Execution reason", executionStatusReason],
+    ["Action item readback", item.operatorActionItemRoute ?? item.actionReadbackItemRoute ?? "not available"],
+    ["Routes", item.routeCount ?? workflowPreviewArraySummary(item.routes, "not reported")],
     ["Write route", writeRoute],
     ...(templateEndpoint && writeRoute.includes("{") ? [["Resolved template endpoint", templateEndpoint]] : []),
     ...dataDependencyMetrics,
