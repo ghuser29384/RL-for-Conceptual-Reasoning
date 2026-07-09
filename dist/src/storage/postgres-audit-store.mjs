@@ -8,6 +8,24 @@ const streams = {
 
 const ratingScoreDimensions = ["centrality", "strength", "correctness", "clarity", "dead_weight", "single_issue", "overall"];
 
+const policyEvidenceProjectionTables = Object.freeze({
+  visibilityPolicy: "visibility_policies",
+  ratingWorkflowProfile: "rating_workflow_profiles",
+  scoreExplanationPolicy: "score_explanation_policies",
+  ratingEscalationPolicy: "rating_escalation_policies",
+  disagreementThresholdPolicy: "disagreement_threshold_policies",
+  uiExperimentPolicy: "ui_experiment_policies",
+  preSubmitAssistPolicy: "pre_submit_assist_policies",
+  accessibilityConformanceReport: "accessibility_conformance_reports",
+  volunteerIncentivePolicy: "volunteer_incentive_policies",
+  raterQualificationRecord: "rater_qualification_records",
+  languageArtifactAssessment: "language_artifact_assessments",
+});
+
+const policyEvidenceProjectionTableNames = new Set(Object.values(policyEvidenceProjectionTables));
+
+const expertReadablePolicyEvidenceResourceKeys = new Set(["languageArtifactAssessment"]);
+
 const ratingExperienceProjectionTables = Object.freeze({
   raterInstructionCompatibilityPolicy: "rater_instruction_compatibility_policies",
   raterInstructionRenderVersion: "rater_instruction_render_versions",
@@ -605,6 +623,93 @@ function interactionUxArtifactStatus(resourceKey, resource) {
     resource.remediationRoutingStatus ??
     interactionUxWorkflowStatus(resourceKey, resource)
   );
+}
+
+export function policyEvidenceProjectionForWorkflowEvent(event) {
+  const resourceKey = event?.resourceKey;
+  const resource = event?.payload?.[resourceKey];
+  if (!policyEvidenceProjectionTables[resourceKey] || !resource || typeof resource !== "object" || Array.isArray(resource)) return null;
+  const eventId = event.id ?? event.eventId ?? null;
+  const recordJson = event;
+  return {
+    table: policyEvidenceProjectionTables[resourceKey],
+    values: policyEvidenceProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event),
+  };
+}
+
+function policyEvidenceProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event) {
+  const expertReadable = expertReadablePolicyEvidenceResourceKeys.has(resourceKey);
+  return {
+    id: resource.id,
+    release_id: resource.releaseId ?? resource.release_id ?? null,
+    resource_key: resourceKey,
+    policy_id:
+      resource.policyId ??
+      resource.policy_id ??
+      resource.visibilityPolicyId ??
+      resource.visibility_policy_id ??
+      resource.scoreExplanationPolicyId ??
+      resource.score_explanation_policy_id ??
+      resource.ratingEscalationPolicyId ??
+      resource.rating_escalation_policy_id ??
+      resource.disagreementThresholdPolicyId ??
+      resource.disagreement_threshold_policy_id ??
+      resource.uiExperimentPolicyId ??
+      resource.ui_experiment_policy_id ??
+      resource.preSubmitAssistPolicyId ??
+      resource.pre_submit_assist_policy_id ??
+      resource.volunteerIncentivePolicyId ??
+      resource.volunteer_incentive_policy_id ??
+      (resourceKey.endsWith("Policy") ? resource.id : null),
+    workflow_profile_id:
+      resource.workflowProfileId ??
+      resource.workflow_profile_id ??
+      resource.ratingWorkflowProfileId ??
+      resource.rating_workflow_profile_id ??
+      (resourceKey === "ratingWorkflowProfile" ? resource.id : null),
+    score_explanation_policy_id: resource.scoreExplanationPolicyId ?? resource.score_explanation_policy_id ?? null,
+    accessibility_conformance_report_id:
+      resource.accessibilityConformanceReportId ??
+      resource.accessibility_conformance_report_id ??
+      (resourceKey === "accessibilityConformanceReport" ? resource.id : null),
+    rater_id: resource.raterId ?? resource.rater_id ?? resource.reviewerId ?? resource.reviewer_id ?? null,
+    workflow_status:
+      resource.status ??
+      resource.reviewStatus ??
+      resource.qualificationStatus ??
+      resource.accessibilityStatus ??
+      resource.readabilityReviewStatus ??
+      resource.toolingReviewStatus ??
+      resource.languageArtifactStatus ??
+      resource.translationReviewStatus ??
+      `${resourceKey}_submitted`,
+    visibility_class: expertReadable ? "expert_admin_audit_only" : "admin_audit_only",
+    artifact_status:
+      resource.artifactStatus ??
+      resource.releaseUseStatus ??
+      resource.reviewStatus ??
+      resource.qualificationStatus ??
+      resource.accessibilityStatus ??
+      resource.readabilityReviewStatus ??
+      resource.toolingReviewStatus ??
+      resource.status ??
+      `${resourceKey}_submitted`,
+    input_hash:
+      resource.inputHash ??
+      resource.input_hash ??
+      resource.artifactHash ??
+      resource.artifact_hash ??
+      resource.policyHash ??
+      resource.policy_hash ??
+      resource.reportHash ??
+      resource.report_hash ??
+      event.payloadHash ??
+      `sha256:${resourceKey}:${resource.id}`,
+    artifact_json: resource,
+    event_id: eventId,
+    record_json: recordJson,
+    created_at: resource.createdAt ?? resource.created_at ?? resource.frozenAt ?? resource.timestamp ?? resource.reviewedAt ?? event.receivedAt ?? null,
+  };
 }
 
 export function metricGovernanceProjectionForWorkflowEvent(event) {
@@ -1956,6 +2061,7 @@ async function appendWorkflowResourceProjection(db, event) {
   await appendReleaseArtifactWorkflowProjection(db, event);
   await appendReleaseConfigWorkflowProjection(db, event);
   await appendMetaphilosophyWorkflowProjection(db, event);
+  await appendPolicyEvidenceWorkflowProjection(db, event);
   await appendDiscussionAdjudicationWorkflowProjection(db, event);
   await appendVerificationAdjudicationWorkflowProjection(db, event);
   await appendReleaseReadinessWorkflowProjection(db, event);
@@ -3533,6 +3639,68 @@ async function appendMetaphilosophyWorkflowProjection(db, event) {
       direct_requirement = excluded.direct_requirement,
       pilot_evidence_requirement = excluded.pilot_evidence_requirement,
       promotion_governance = excluded.promotion_governance,
+      artifact_status = excluded.artifact_status,
+      input_hash = excluded.input_hash,
+      artifact_json = excluded.artifact_json,
+      event_id = excluded.event_id,
+      record_json = excluded.record_json,
+      created_at = excluded.created_at
+  `;
+}
+
+async function appendPolicyEvidenceWorkflowProjection(db, event) {
+  const projection = policyEvidenceProjectionForWorkflowEvent(event);
+  if (!projection) return;
+  const { values } = projection;
+  if (!policyEvidenceProjectionTableNames.has(projection.table)) return;
+  const table = db(projection.table);
+  await db`
+    insert into ${table} (
+      id,
+      release_id,
+      resource_key,
+      policy_id,
+      workflow_profile_id,
+      score_explanation_policy_id,
+      accessibility_conformance_report_id,
+      rater_id,
+      workflow_status,
+      visibility_class,
+      artifact_status,
+      input_hash,
+      artifact_json,
+      event_id,
+      record_json,
+      created_at
+    )
+    values (
+      ${values.id},
+      ${values.release_id},
+      ${values.resource_key},
+      ${values.policy_id},
+      ${values.workflow_profile_id},
+      ${values.score_explanation_policy_id},
+      ${values.accessibility_conformance_report_id},
+      ${values.rater_id},
+      ${values.workflow_status},
+      ${values.visibility_class},
+      ${values.artifact_status},
+      ${values.input_hash},
+      ${db.json(values.artifact_json)},
+      ${values.event_id},
+      ${db.json(values.record_json)},
+      coalesce(${values.created_at}::timestamptz, now())
+    )
+    on conflict (id) do update set
+      release_id = excluded.release_id,
+      resource_key = excluded.resource_key,
+      policy_id = excluded.policy_id,
+      workflow_profile_id = excluded.workflow_profile_id,
+      score_explanation_policy_id = excluded.score_explanation_policy_id,
+      accessibility_conformance_report_id = excluded.accessibility_conformance_report_id,
+      rater_id = excluded.rater_id,
+      workflow_status = excluded.workflow_status,
+      visibility_class = excluded.visibility_class,
       artifact_status = excluded.artifact_status,
       input_hash = excluded.input_hash,
       artifact_json = excluded.artifact_json,

@@ -1498,6 +1498,65 @@ create table if not exists rating_score_values (
   primary key (rating_id, dimension)
 );
 
+create table if not exists visibility_policies (
+  id text primary key,
+  release_id text,
+  resource_key text not null,
+  policy_id text,
+  workflow_profile_id text,
+  score_explanation_policy_id text,
+  accessibility_conformance_report_id text,
+  rater_id text,
+  workflow_status text not null,
+  visibility_class text not null check (visibility_class in ('admin_audit_only', 'expert_admin_audit_only')),
+  artifact_status text not null,
+  input_hash text not null check (input_hash like 'sha256:%'),
+  artifact_json jsonb not null,
+  event_id text,
+  record_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists rating_workflow_profiles (
+  like visibility_policies including all
+);
+
+create table if not exists score_explanation_policies (
+  like visibility_policies including all
+);
+
+create table if not exists rating_escalation_policies (
+  like visibility_policies including all
+);
+
+create table if not exists disagreement_threshold_policies (
+  like visibility_policies including all
+);
+
+create table if not exists ui_experiment_policies (
+  like visibility_policies including all
+);
+
+create table if not exists pre_submit_assist_policies (
+  like visibility_policies including all
+);
+
+create table if not exists accessibility_conformance_reports (
+  like visibility_policies including all
+);
+
+create table if not exists volunteer_incentive_policies (
+  like visibility_policies including all
+);
+
+create table if not exists rater_qualification_records (
+  like visibility_policies including all
+);
+
+create table if not exists language_artifact_assessments (
+  like visibility_policies including all
+);
+
 create table if not exists rater_instruction_compatibility_policies (
   id text primary key,
   release_id text,
@@ -2670,6 +2729,66 @@ create index if not exists ratings_rater_idx
 create index if not exists ratings_kind_idx
   on ratings (kind);
 
+create index if not exists visibility_policies_policy_idx
+  on visibility_policies (policy_id);
+
+create index if not exists visibility_policies_release_idx
+  on visibility_policies (release_id);
+
+create index if not exists rating_workflow_profiles_policy_idx
+  on rating_workflow_profiles (policy_id);
+
+create index if not exists rating_workflow_profiles_release_idx
+  on rating_workflow_profiles (release_id);
+
+create index if not exists score_explanation_policies_policy_idx
+  on score_explanation_policies (policy_id);
+
+create index if not exists score_explanation_policies_release_idx
+  on score_explanation_policies (release_id);
+
+create index if not exists rating_escalation_policies_policy_idx
+  on rating_escalation_policies (policy_id);
+
+create index if not exists rating_escalation_policies_release_idx
+  on rating_escalation_policies (release_id);
+
+create index if not exists disagreement_threshold_policies_policy_idx
+  on disagreement_threshold_policies (policy_id);
+
+create index if not exists disagreement_threshold_policies_release_idx
+  on disagreement_threshold_policies (release_id);
+
+create index if not exists ui_experiment_policies_policy_idx
+  on ui_experiment_policies (policy_id);
+
+create index if not exists ui_experiment_policies_release_idx
+  on ui_experiment_policies (release_id);
+
+create index if not exists pre_submit_assist_policies_policy_idx
+  on pre_submit_assist_policies (policy_id);
+
+create index if not exists pre_submit_assist_policies_workflow_profile_idx
+  on pre_submit_assist_policies (workflow_profile_id);
+
+create index if not exists accessibility_conformance_reports_report_idx
+  on accessibility_conformance_reports (accessibility_conformance_report_id);
+
+create index if not exists accessibility_conformance_reports_workflow_profile_idx
+  on accessibility_conformance_reports (workflow_profile_id);
+
+create index if not exists volunteer_incentive_policies_policy_idx
+  on volunteer_incentive_policies (policy_id);
+
+create index if not exists rater_qualification_records_rater_idx
+  on rater_qualification_records (rater_id);
+
+create index if not exists language_artifact_assessments_rater_idx
+  on language_artifact_assessments (rater_id);
+
+create index if not exists language_artifact_assessments_release_idx
+  on language_artifact_assessments (release_id);
+
 create index if not exists rater_instruction_compatibility_policies_release_idx
   on rater_instruction_compatibility_policies (release_id);
 
@@ -2953,6 +3072,17 @@ alter table diagnostic_deferral_visibility_policies enable row level security;
 alter table diagnostic_deferral_records enable row level security;
 alter table ratings enable row level security;
 alter table rating_score_values enable row level security;
+alter table visibility_policies enable row level security;
+alter table rating_workflow_profiles enable row level security;
+alter table score_explanation_policies enable row level security;
+alter table rating_escalation_policies enable row level security;
+alter table disagreement_threshold_policies enable row level security;
+alter table ui_experiment_policies enable row level security;
+alter table pre_submit_assist_policies enable row level security;
+alter table accessibility_conformance_reports enable row level security;
+alter table volunteer_incentive_policies enable row level security;
+alter table rater_qualification_records enable row level security;
+alter table language_artifact_assessments enable row level security;
 alter table rater_instruction_compatibility_policies enable row level security;
 alter table rater_instruction_render_versions enable row level security;
 alter table rubric_copy_traceability_maps enable row level security;
@@ -3986,6 +4116,127 @@ create policy rating_score_values_write_admin_or_service on rating_score_values
   for all
   using (app_auth.has_role('admin', 'service'))
   with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists visibility_policies_read_auditors on visibility_policies;
+create policy visibility_policies_read_auditors on visibility_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists visibility_policies_write_admin_or_service on visibility_policies;
+create policy visibility_policies_write_admin_or_service on visibility_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists rating_workflow_profiles_read_auditors on rating_workflow_profiles;
+create policy rating_workflow_profiles_read_auditors on rating_workflow_profiles
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists rating_workflow_profiles_write_admin_or_service on rating_workflow_profiles;
+create policy rating_workflow_profiles_write_admin_or_service on rating_workflow_profiles
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists score_explanation_policies_read_auditors on score_explanation_policies;
+create policy score_explanation_policies_read_auditors on score_explanation_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists score_explanation_policies_write_admin_or_service on score_explanation_policies;
+create policy score_explanation_policies_write_admin_or_service on score_explanation_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists rating_escalation_policies_read_auditors on rating_escalation_policies;
+create policy rating_escalation_policies_read_auditors on rating_escalation_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists rating_escalation_policies_write_admin_or_service on rating_escalation_policies;
+create policy rating_escalation_policies_write_admin_or_service on rating_escalation_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists disagreement_threshold_policies_read_auditors on disagreement_threshold_policies;
+create policy disagreement_threshold_policies_read_auditors on disagreement_threshold_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists disagreement_threshold_policies_write_admin_or_service on disagreement_threshold_policies;
+create policy disagreement_threshold_policies_write_admin_or_service on disagreement_threshold_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists ui_experiment_policies_read_auditors on ui_experiment_policies;
+create policy ui_experiment_policies_read_auditors on ui_experiment_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists ui_experiment_policies_write_admin_or_service on ui_experiment_policies;
+create policy ui_experiment_policies_write_admin_or_service on ui_experiment_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists pre_submit_assist_policies_read_auditors on pre_submit_assist_policies;
+create policy pre_submit_assist_policies_read_auditors on pre_submit_assist_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists pre_submit_assist_policies_write_admin_or_service on pre_submit_assist_policies;
+create policy pre_submit_assist_policies_write_admin_or_service on pre_submit_assist_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists accessibility_conformance_reports_read_auditors on accessibility_conformance_reports;
+create policy accessibility_conformance_reports_read_auditors on accessibility_conformance_reports
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists accessibility_conformance_reports_write_admin_or_service on accessibility_conformance_reports;
+create policy accessibility_conformance_reports_write_admin_or_service on accessibility_conformance_reports
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists volunteer_incentive_policies_read_auditors on volunteer_incentive_policies;
+create policy volunteer_incentive_policies_read_auditors on volunteer_incentive_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists volunteer_incentive_policies_write_admin_or_service on volunteer_incentive_policies;
+create policy volunteer_incentive_policies_write_admin_or_service on volunteer_incentive_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists rater_qualification_records_read_auditors on rater_qualification_records;
+create policy rater_qualification_records_read_auditors on rater_qualification_records
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists rater_qualification_records_write_admin_or_service on rater_qualification_records;
+create policy rater_qualification_records_write_admin_or_service on rater_qualification_records
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists language_artifact_assessments_read_experts_and_auditors on language_artifact_assessments;
+create policy language_artifact_assessments_read_experts_and_auditors on language_artifact_assessments
+  for select
+  using (app_auth.has_role('expert', 'admin', 'auditor', 'service'));
+
+drop policy if exists language_artifact_assessments_write_expert_admin_or_service on language_artifact_assessments;
+create policy language_artifact_assessments_write_expert_admin_or_service on language_artifact_assessments
+  for all
+  using (app_auth.has_role('expert', 'admin', 'service'))
+  with check (app_auth.has_role('expert', 'admin', 'service'));
 
 drop policy if exists rater_instruction_compatibility_policies_read_auditors on rater_instruction_compatibility_policies;
 create policy rater_instruction_compatibility_policies_read_auditors on rater_instruction_compatibility_policies

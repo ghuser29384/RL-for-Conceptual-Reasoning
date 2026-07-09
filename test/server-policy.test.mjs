@@ -13,6 +13,7 @@ import {
   metricGovernanceProjectionForWorkflowEvent,
   metaphilosophyProjectionForWorkflowEvent,
   operationalControlProjectionForWorkflowEvent,
+  policyEvidenceProjectionForWorkflowEvent,
   ratingExperienceProjectionForWorkflowEvent,
   ratingProjectionForAuditEvent,
   releaseArtifactProjectionForWorkflowEvent,
@@ -4996,6 +4997,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/raters/me/calibration-dashboard"],
     ["POST", "/api/v1/raters/me/remediation/module-smoke/complete"],
     ["POST", "/api/v1/visibility-policies"],
+    ["GET", "/api/v1/visibility-policies"],
     ["GET", "/api/v1/visibility-policies/visibility-policy-smoke"],
     ["POST", "/api/v1/source-leakage-redaction-policies"],
     ["GET", "/api/v1/source-leakage-redaction-policies/source-leakage-redaction-policy-smoke"],
@@ -5006,18 +5008,25 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/cloud-security-budget-policies"],
     ["GET", "/api/v1/cloud-security-budget-policies/cloud-security-budget-policy-smoke"],
     ["POST", "/api/v1/rating-workflow-profiles"],
+    ["GET", "/api/v1/rating-workflow-profiles"],
     ["GET", "/api/v1/rating-workflow-profiles/rating-profile-smoke"],
     ["POST", "/api/v1/ui-experiment-policies"],
+    ["GET", "/api/v1/ui-experiment-policies"],
     ["GET", "/api/v1/ui-experiment-policies/ui-experiment-smoke"],
     ["POST", "/api/v1/pre-submit-assist-policies"],
+    ["GET", "/api/v1/pre-submit-assist-policies"],
     ["GET", "/api/v1/pre-submit-assist-policies/pre-submit-assist-smoke"],
     ["POST", "/api/v1/accessibility-conformance-reports"],
+    ["GET", "/api/v1/accessibility-conformance-reports"],
     ["GET", "/api/v1/accessibility-conformance-reports/accessibility-smoke"],
     ["POST", "/api/v1/volunteer-incentive-policies"],
+    ["GET", "/api/v1/volunteer-incentive-policies"],
     ["GET", "/api/v1/volunteer-incentive-policies/volunteer-incentive-smoke"],
     ["POST", "/api/v1/rater-qualification-records"],
+    ["GET", "/api/v1/rater-qualification-records"],
     ["GET", "/api/v1/rater-qualification-records/rater-qualification-smoke"],
     ["POST", "/api/v1/language-artifact-assessments"],
+    ["GET", "/api/v1/language-artifact-assessments"],
     ["GET", "/api/v1/language-artifact-assessments/language-artifact-smoke"],
     ["POST", "/api/v1/source-recognition-events"],
     ["GET", "/api/v1/source-recognition-events"],
@@ -5030,10 +5039,13 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/score-input-policies"],
     ["GET", "/api/v1/score-input-policies/score-input-policy-smoke"],
     ["POST", "/api/v1/score-explanation-policies"],
+    ["GET", "/api/v1/score-explanation-policies"],
     ["GET", "/api/v1/score-explanation-policies/score-explanation-policy-smoke"],
     ["POST", "/api/v1/rating-escalation-policies"],
+    ["GET", "/api/v1/rating-escalation-policies"],
     ["GET", "/api/v1/rating-escalation-policies/rating-escalation-policy-smoke"],
     ["POST", "/api/v1/disagreement-threshold-policies"],
+    ["GET", "/api/v1/disagreement-threshold-policies"],
     ["GET", "/api/v1/disagreement-threshold-policies/disagreement-threshold-policy-smoke"],
     ["POST", "/api/v1/draft-storage-policies"],
     ["GET", "/api/v1/draft-storage-policies/draft-storage-policy-smoke"],
@@ -6156,6 +6168,39 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "screen-state-payloads"',
     'endpoint: "/api/v1/screen-state-payloads"',
     'resourceKey: "screenStatePayload"',
+    'id: "visibility-policies"',
+    'endpoint: "/api/v1/visibility-policies"',
+    'resourceKey: "visibilityPolicy"',
+    'id: "rating-workflow-profiles"',
+    'endpoint: "/api/v1/rating-workflow-profiles"',
+    'resourceKey: "ratingWorkflowProfile"',
+    'id: "score-explanation-policies"',
+    'endpoint: "/api/v1/score-explanation-policies"',
+    'resourceKey: "scoreExplanationPolicy"',
+    'id: "rating-escalation-policies"',
+    'endpoint: "/api/v1/rating-escalation-policies"',
+    'resourceKey: "ratingEscalationPolicy"',
+    'id: "disagreement-threshold-policies"',
+    'endpoint: "/api/v1/disagreement-threshold-policies"',
+    'resourceKey: "disagreementThresholdPolicy"',
+    'id: "ui-experiment-policies"',
+    'endpoint: "/api/v1/ui-experiment-policies"',
+    'resourceKey: "uiExperimentPolicy"',
+    'id: "pre-submit-assist-policies"',
+    'endpoint: "/api/v1/pre-submit-assist-policies"',
+    'resourceKey: "preSubmitAssistPolicy"',
+    'id: "accessibility-conformance-reports"',
+    'endpoint: "/api/v1/accessibility-conformance-reports"',
+    'resourceKey: "accessibilityConformanceReport"',
+    'id: "volunteer-incentive-policies"',
+    'endpoint: "/api/v1/volunteer-incentive-policies"',
+    'resourceKey: "volunteerIncentivePolicy"',
+    'id: "rater-qualification-records"',
+    'endpoint: "/api/v1/rater-qualification-records"',
+    'resourceKey: "raterQualificationRecord"',
+    'id: "language-artifact-assessments"',
+    'endpoint: "/api/v1/language-artifact-assessments"',
+    'resourceKey: "languageArtifactAssessment"',
     'id: "rater-instruction-compatibility-policies"',
     'endpoint: "/api/v1/rater-instruction-compatibility-policies"',
     'resourceKey: "raterInstructionCompatibilityPolicy"',
@@ -6508,6 +6553,48 @@ test("release-readiness operator evidence collections are routed for admin readb
   const denied = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/gold-items",
+    headers: raterHeaders,
+  });
+  assert.equal(denied.status, 403);
+});
+
+test("policy-bundle and participant-safeguard collections are routed for operator readback", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const expertToken = signSessionToken(demoUsers.find((item) => item.id === "demo-expert"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const expertHeaders = { authorization: `Bearer ${expertToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const policyEvidenceCollections = [
+    ["visibilityPolicy", "/api/v1/visibility-policies", adminHeaders],
+    ["ratingWorkflowProfile", "/api/v1/rating-workflow-profiles", adminHeaders],
+    ["scoreExplanationPolicy", "/api/v1/score-explanation-policies", adminHeaders],
+    ["ratingEscalationPolicy", "/api/v1/rating-escalation-policies", adminHeaders],
+    ["disagreementThresholdPolicy", "/api/v1/disagreement-threshold-policies", adminHeaders],
+    ["uiExperimentPolicy", "/api/v1/ui-experiment-policies", adminHeaders],
+    ["preSubmitAssistPolicy", "/api/v1/pre-submit-assist-policies", adminHeaders],
+    ["accessibilityConformanceReport", "/api/v1/accessibility-conformance-reports", adminHeaders],
+    ["volunteerIncentivePolicy", "/api/v1/volunteer-incentive-policies", adminHeaders],
+    ["raterQualificationRecord", "/api/v1/rater-qualification-records", adminHeaders],
+    ["languageArtifactAssessment", "/api/v1/language-artifact-assessments", expertHeaders],
+  ];
+  for (const [resourceKey, url, headers] of policyEvidenceCollections) {
+    const response = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers,
+    });
+    assert.equal(response.status, 200, url);
+    assert.equal(response.body.resourceKey, resourceKey, url);
+    assert.equal(response.body.count, 0, url);
+    assert.deepEqual(response.body.items, [], url);
+  }
+
+  const denied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/visibility-policies",
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
@@ -19750,6 +19837,55 @@ test("production schema includes immutable protected rating projection tables", 
   assert.ok(architectureDoc.includes("revisions append as distinct rows"));
 });
 
+test("production schema includes policy-bundle and participant-safeguard projection tables with split reviewer RLS", () => {
+  const schema = readFileSync("db/production-schema.sql", "utf8");
+  const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
+  const adminReadTables = [
+    "visibility_policies",
+    "rating_workflow_profiles",
+    "score_explanation_policies",
+    "rating_escalation_policies",
+    "disagreement_threshold_policies",
+    "ui_experiment_policies",
+    "pre_submit_assist_policies",
+    "accessibility_conformance_reports",
+    "volunteer_incentive_policies",
+    "rater_qualification_records",
+  ];
+  const expertReadTables = ["language_artifact_assessments"];
+  for (const table of [...adminReadTables, ...expertReadTables]) {
+    assert.ok(schema.includes(`create table if not exists ${table}`), table);
+    assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
+  }
+  for (const table of adminReadTables) {
+    assert.ok(schema.includes(`create policy ${table}_read_auditors on ${table}`), table);
+    assert.ok(schema.includes(`create policy ${table}_write_admin_or_service on ${table}`), table);
+  }
+  for (const table of expertReadTables) {
+    assert.ok(schema.includes(`create policy ${table}_read_experts_and_auditors on ${table}`), table);
+    assert.ok(schema.includes(`create policy ${table}_write_expert_admin_or_service on ${table}`), table);
+  }
+  assert.ok(schema.includes("workflow_profile_id text"));
+  assert.ok(schema.includes("score_explanation_policy_id text"));
+  assert.ok(schema.includes("accessibility_conformance_report_id text"));
+  assert.ok(schema.includes("visibility_class text not null check (visibility_class in ('admin_audit_only', 'expert_admin_audit_only'))"));
+  assert.ok(schema.includes("input_hash text not null check (input_hash like 'sha256:%')"));
+  assert.ok(schema.includes("create index if not exists visibility_policies_policy_idx"));
+  assert.ok(schema.includes("create index if not exists rating_workflow_profiles_release_idx"));
+  assert.ok(schema.includes("create index if not exists score_explanation_policies_policy_idx"));
+  assert.ok(schema.includes("create index if not exists rating_escalation_policies_policy_idx"));
+  assert.ok(schema.includes("create index if not exists disagreement_threshold_policies_policy_idx"));
+  assert.ok(schema.includes("create index if not exists pre_submit_assist_policies_workflow_profile_idx"));
+  assert.ok(schema.includes("create index if not exists accessibility_conformance_reports_report_idx"));
+  assert.ok(schema.includes("create index if not exists rater_qualification_records_rater_idx"));
+  assert.ok(schema.includes("create index if not exists language_artifact_assessments_rater_idx"));
+  assert.ok(architectureDoc.includes("policy-bundle and participant-safeguard projection tables"));
+  assert.ok(architectureDoc.includes("visibility_policies"));
+  assert.ok(architectureDoc.includes("accessibility_conformance_reports"));
+  assert.ok(architectureDoc.includes("language_artifact_assessments"));
+  assert.ok(architectureDoc.includes("without becoming score tables, assignment queues, source-preparation gates, or release-completion evidence"));
+});
+
 test("production schema includes rater instruction projection tables", () => {
   const schema = readFileSync("db/production-schema.sql", "utf8");
   const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
@@ -19906,6 +20042,190 @@ test("production schema includes metric and governance-control projection tables
   assert.ok(architectureDoc.includes("governance_approval_records"));
   assert.ok(architectureDoc.includes("protected_artifact_revalidations"));
   assert.ok(architectureDoc.includes("not a scoring engine, approval authority, deprotection mechanism, protected-content restore path, or live release gate"));
+});
+
+test("postgres audit store projects policy-bundle and participant-safeguard workflow events into normalized rows", () => {
+  const baseEvent = (resourceKey, resource) => ({
+    id: `event-${resource.id}`,
+    type: `${resourceKey}_submitted`,
+    resourceKey,
+    resourceId: resource.id,
+    payloadHash: `sha256:${resource.id}`,
+    receivedAt: "2026-10-01T00:00:00.000Z",
+    payload: { [resourceKey]: resource },
+  });
+  const cases = [
+    [
+      "visibilityPolicy",
+      "visibility_policies",
+      {
+        id: "visibility-policy-projection",
+        releaseId: "october-2026-demo",
+        policyVersion: "visibility-v1",
+        status: "visibility_policy_complete",
+      },
+      "visibility_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "ratingWorkflowProfile",
+      "rating_workflow_profiles",
+      {
+        id: "rating-workflow-profile-projection",
+        releaseId: "october-2026-demo",
+        scoreExplanationPolicyId: "score-explanation-policy-projection",
+        status: "rating_workflow_profile_complete",
+      },
+      "rating_workflow_profile_complete",
+      "admin_audit_only",
+    ],
+    [
+      "scoreExplanationPolicy",
+      "score_explanation_policies",
+      {
+        id: "score-explanation-policy-projection",
+        releaseId: "october-2026-demo",
+        policyVersion: "score-explanation-v1",
+        status: "score_explanation_policy_complete",
+      },
+      "score_explanation_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "ratingEscalationPolicy",
+      "rating_escalation_policies",
+      {
+        id: "rating-escalation-policy-projection",
+        releaseId: "october-2026-demo",
+        policyVersion: "rating-escalation-v1",
+        status: "rating_escalation_policy_complete",
+      },
+      "rating_escalation_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "disagreementThresholdPolicy",
+      "disagreement_threshold_policies",
+      {
+        id: "disagreement-threshold-policy-projection",
+        releaseId: "october-2026-demo",
+        policyVersion: "disagreement-threshold-v1",
+        status: "disagreement_threshold_policy_complete",
+      },
+      "disagreement_threshold_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "uiExperimentPolicy",
+      "ui_experiment_policies",
+      {
+        id: "ui-experiment-policy-projection",
+        releaseId: "october-2026-demo",
+        policyVersion: "ui-experiment-v1",
+        status: "ui_experiment_policy_complete",
+      },
+      "ui_experiment_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "preSubmitAssistPolicy",
+      "pre_submit_assist_policies",
+      {
+        id: "pre-submit-assist-policy-projection",
+        releaseId: "october-2026-demo",
+        workflowProfileId: "rating-workflow-profile-projection",
+        status: "pre_submit_assist_policy_complete",
+      },
+      "pre_submit_assist_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "accessibilityConformanceReport",
+      "accessibility_conformance_reports",
+      {
+        id: "accessibility-report-projection",
+        releaseId: "october-2026-demo",
+        workflowProfileId: "rating-workflow-profile-projection",
+        status: "accessibility_conformance_complete",
+      },
+      "accessibility_conformance_complete",
+      "admin_audit_only",
+    ],
+    [
+      "volunteerIncentivePolicy",
+      "volunteer_incentive_policies",
+      {
+        id: "volunteer-incentive-policy-projection",
+        releaseId: "october-2026-demo",
+        policyVersion: "volunteer-incentive-v1",
+        status: "volunteer_incentive_policy_complete",
+      },
+      "volunteer_incentive_policy_complete",
+      "admin_audit_only",
+    ],
+    [
+      "raterQualificationRecord",
+      "rater_qualification_records",
+      {
+        id: "rater-qualification-record-projection",
+        releaseId: "october-2026-demo",
+        raterId: "rater-projection",
+        qualificationStatus: "qualification_active",
+      },
+      "qualification_active",
+      "admin_audit_only",
+    ],
+    [
+      "languageArtifactAssessment",
+      "language_artifact_assessments",
+      {
+        id: "language-artifact-assessment-projection",
+        releaseId: "october-2026-demo",
+        raterId: "expert-projection",
+        reviewStatus: "language_artifact_review_passed",
+      },
+      "language_artifact_review_passed",
+      "expert_admin_audit_only",
+    ],
+  ];
+
+  for (const [resourceKey, table, resource, expectedStatus, visibilityClass] of cases) {
+    const projection = policyEvidenceProjectionForWorkflowEvent(baseEvent(resourceKey, resource));
+    assert.equal(projection.table, table, resourceKey);
+    assert.equal(projection.values.id, resource.id, resourceKey);
+    assert.equal(projection.values.resource_key, resourceKey, resourceKey);
+    assert.equal(projection.values.release_id, "october-2026-demo", resourceKey);
+    assert.equal(projection.values.workflow_status, expectedStatus, resourceKey);
+    assert.equal(projection.values.artifact_status, expectedStatus, resourceKey);
+    assert.equal(projection.values.visibility_class, visibilityClass, resourceKey);
+    assert.equal(projection.values.input_hash, `sha256:${resource.id}`, resourceKey);
+    assert.equal(projection.values.event_id, `event-${resource.id}`, resourceKey);
+  }
+
+  const profileProjection = policyEvidenceProjectionForWorkflowEvent(
+    baseEvent("ratingWorkflowProfile", {
+      id: "rating-workflow-profile-projection-linked",
+      releaseId: "october-2026-demo",
+      scoreExplanationPolicyId: "score-explanation-policy-projection",
+    }),
+  );
+  assert.equal(profileProjection.values.workflow_profile_id, "rating-workflow-profile-projection-linked");
+  assert.equal(profileProjection.values.score_explanation_policy_id, "score-explanation-policy-projection");
+
+  const accessibilityProjection = policyEvidenceProjectionForWorkflowEvent(
+    baseEvent("accessibilityConformanceReport", {
+      id: "accessibility-report-projection-linked",
+      releaseId: "october-2026-demo",
+      workflowProfileId: "rating-workflow-profile-projection",
+    }),
+  );
+  assert.equal(accessibilityProjection.values.accessibility_conformance_report_id, "accessibility-report-projection-linked");
+  assert.equal(accessibilityProjection.values.workflow_profile_id, "rating-workflow-profile-projection");
+
+  assert.equal(
+    policyEvidenceProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-policy-evidence" })),
+    null,
+  );
 });
 
 test("postgres audit store projects rater instruction workflow artifacts into normalized rows", () => {
