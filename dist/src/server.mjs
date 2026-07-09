@@ -2124,7 +2124,25 @@ function validateSourceIntakePhase1Boundary(resource) {
   return { ok: true };
 }
 
-function validatePublicDatasetDocumentResource(resource) {
+function validateReleaseVersionResource(resource, _actor, _params, validationContext = {}) {
+  return validateReleasePreflightOnlyResource(resource, "releaseVersion", validationContext);
+}
+
+function validateReleaseFreezeResource(resource, _actor, _params, validationContext = {}) {
+  return validateReleasePreflightOnlyResource(resource, "releaseFreeze", validationContext);
+}
+
+function validateReleasePreflightOnlyResource(resource, resourceKey, validationContext = {}) {
+  if (resource.preflightOnly === true && !validationContext.dryRun) {
+    return invalid(`${resourceKey}.preflightOnly payloads are validation-only release preflights and cannot be appended as submitted release evidence`);
+  }
+  return { ok: true };
+}
+
+function validatePublicDatasetDocumentResource(resource, _actor, _params, validationContext = {}) {
+  if (resource.reviewDraftOnly === true && !validationContext.dryRun) {
+    return invalid("publicDatasetDocument.reviewDraftOnly payloads are validation-only review drafts and cannot be appended as submitted documentation");
+  }
   const expectedBodyHash = `sha256:${sha256(resource.bodyMarkdown)}`;
   if (resource.bodyHash !== expectedBodyHash) {
     return invalid("publicDatasetDocument.bodyHash must equal sha256(bodyMarkdown)");
@@ -2581,6 +2599,7 @@ const workflowWriteEndpoints = [
     allowHiddenMetadata: true,
     policyActionKind: "release_freeze",
     phaseGateLaneKind: "governance_action",
+    customValidator: validateReleaseFreezeResource,
   }),
   workflowWriteSpec(/^\/api\/v1\/certification-threshold-policies$/, "certification_threshold_policy_submitted", "certificationThresholdPolicy", adminRoles, {
     allowHiddenMetadata: true,
@@ -3193,6 +3212,7 @@ const workflowWriteEndpoints = [
     ],
     requiredNonEmptyArrayFields: ["immutableOutputArtifactIds"],
     requiredStringPrefixes: { releaseConfigManifestHash: "sha256:", phaseGateBundleHash: "sha256:" },
+    customValidator: validateReleaseVersionResource,
   }),
   workflowWriteSpec(/^\/api\/v1\/release-gate-profiles$/, "release_gate_profile_submitted", "releaseGateProfile", adminRoles, {
     allowHiddenMetadata: true,
@@ -6393,6 +6413,9 @@ const workflowWriteEndpoints = [
     requiredExactFields: {
       artifactName: publicDatasetArtifactName,
     },
+    validationContext: ({ request, body }) => ({
+      dryRun: workflowSingleRecordDryRunRequested(request, body),
+    }),
     customValidator: validatePublicDatasetDocumentResource,
     requiredWhen: [
       {
@@ -9029,9 +9052,10 @@ async function maybePersistSubmittedWorkflowArtifact(request, response, context,
     });
     return true;
   }
-  const validationContext = typeof spec.validationContext === "function"
-    ? await spec.validationContext({ context, session, request, candidate })
+  const specValidationContext = typeof spec.validationContext === "function"
+    ? await spec.validationContext({ context, session, request, body, candidate })
     : {};
+  const validationContext = { ...specValidationContext, dryRun };
   const normalizedCandidate = spec.normalize ? spec.normalize(candidate) : candidate;
   const validation = validateWorkflowPayload(normalizedCandidate, session.user, spec, {}, validationContext);
   if (!validation.ok) {
@@ -12459,6 +12483,8 @@ function releaseVersionManifestTemplateItems(report) {
   const linkedIds = releaseVersionManifestTemplateLinkedIds(report);
   const releaseVersionResource = releaseVersionManifestTemplateReleaseVersionResource(report, linkedIds);
   const releaseFreezeResource = releaseVersionManifestTemplateReleaseFreezeResource(report, linkedIds);
+  const releaseVersionPreflightResource = releaseVersionManifestPreflightReleaseVersionResource(report, linkedIds);
+  const releaseFreezePreflightResource = releaseVersionManifestPreflightReleaseFreezeResource(report, linkedIds);
   const sharedRoutes = [
     "/api/release/report",
     "/api/v1/release-version-manifest",
@@ -12508,6 +12534,9 @@ function releaseVersionManifestTemplateItems(report) {
       ],
       linkedReleaseObjectIds: linkedIds,
       requestBody: { releaseVersion: releaseVersionResource },
+      preflightPolicy:
+        "preflightRequestBody is a placeholder-free validation-only release-version draft; POST it only to the validateOnly/dryRun route, because append routes reject preflightOnly=true before release evidence is created.",
+      preflightRequestBody: { releaseVersion: releaseVersionPreflightResource },
       routes: uniqueValues([
         ...sharedRoutes,
         "/api/v1/release-version-manifest/template",
@@ -12551,6 +12580,9 @@ function releaseVersionManifestTemplateItems(report) {
       ],
       linkedReleaseObjectIds: linkedIds,
       requestBody: { releaseFreeze: releaseFreezeResource },
+      preflightPolicy:
+        "preflightRequestBody is a placeholder-free validation-only release-freeze draft; POST it only to the validateOnly/dryRun route, because append routes reject preflightOnly=true before release evidence or policy decisions are created.",
+      preflightRequestBody: { releaseFreeze: releaseFreezePreflightResource },
       routes: uniqueValues([
         ...sharedRoutes,
         "/api/v1/release-version-manifest/template",
@@ -12611,6 +12643,56 @@ function releaseVersionManifestTemplateReleaseFreezeResource(report, linkedIds) 
     targetScaleStatus: manifest.targetScaleStatus ?? null,
     frozenBy: "TODO_OPERATOR_ID",
     frozenAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function releaseVersionManifestPreflightReleaseVersionResource(report, linkedIds) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const releaseIdValue = report.releaseId ?? releaseId;
+  return {
+    preflightOnly: true,
+    id: `preflight-release-version-${releaseIdValue}`,
+    releaseId: releaseIdValue,
+    version: `${releaseIdValue}.candidate.preflight`,
+    corpusManifestId: linkedIds.corpusManifestId,
+    labelSnapshotId: linkedIds.labelSnapshotId,
+    metricConfigId: linkedIds.metricConfigId,
+    gateProfileId: linkedIds.releaseGateProfileId,
+    releaseConfigManifestId: linkedIds.releaseConfigManifestId,
+    releaseConfigManifestHash: linkedIds.releaseConfigManifestHash,
+    phaseGateBundleId: linkedIds.phaseGateBundleId,
+    phaseGateBundleHash: linkedIds.phaseGateBundleHash,
+    immutableOutputArtifactIds: linkedIds.immutableOutputArtifactIds,
+    status: releaseVersionManifestTemplateReleaseVersionStatus(report),
+    targetScaleStatus: manifest.targetScaleStatus ?? null,
+    linkedArtifactStatus: manifest.linkedArtifactStatus ?? null,
+    releaseNotes:
+      "Validation-only preflight derived from the current release report; release remains limited until target-scale gaps, linked artifacts, and freeze checks close.",
+    frozenAt: report.generatedAt ?? "2026-10-01T00:00:00.000Z",
+  };
+}
+
+function releaseVersionManifestPreflightReleaseFreezeResource(report, linkedIds) {
+  const manifest = report.releaseVersionManifest ?? {};
+  const releaseIdValue = report.releaseId ?? releaseId;
+  return {
+    preflightOnly: true,
+    id: `preflight-release-freeze-${releaseIdValue}`,
+    releaseId: releaseIdValue,
+    releaseVersionId: manifest.submittedReleaseVersionId ?? `preflight-release-version-${releaseIdValue}`,
+    corpusManifestId: linkedIds.corpusManifestId,
+    labelSnapshotId: linkedIds.labelSnapshotId,
+    metricConfigId: linkedIds.metricConfigId,
+    releaseGateProfileId: linkedIds.releaseGateProfileId,
+    gateProfileId: linkedIds.releaseGateProfileId,
+    releaseConfigManifestId: linkedIds.releaseConfigManifestId,
+    releaseConfigManifestHash: linkedIds.releaseConfigManifestHash,
+    phaseGateBundleId: linkedIds.phaseGateBundleId,
+    phaseGateBundleHash: linkedIds.phaseGateBundleHash,
+    freezeStatus: releaseVersionManifestTemplateFreezeStatus(report),
+    targetScaleStatus: manifest.targetScaleStatus ?? null,
+    frozenBy: "release-freeze-preflight-generator",
+    frozenAt: report.generatedAt ?? "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -12717,6 +12799,7 @@ function releaseVersionManifestTemplateCounts(items) {
     templateRows: items.length,
     openRows: items.filter(releaseVersionManifestTemplateItemIsOpen).length,
     closedRows: items.filter((item) => !releaseVersionManifestTemplateItemIsOpen(item)).length,
+    preflightRequestBodyRows: items.filter((item) => item.preflightRequestBody?.releaseVersion?.preflightOnly === true || item.preflightRequestBody?.releaseFreeze?.preflightOnly === true).length,
     byTemplateKind: countItemsBy(items, "templateKind"),
     byTemplateStatus: countItemsBy(items, "templateStatus"),
     byWriteRoute: countItemsBy(items, "writeRoute"),
@@ -12779,6 +12862,9 @@ function publicDatasetDocumentTemplateItems(report) {
     const requestBody = {
       publicDatasetDocument: publicDatasetDocumentTemplateResource(documentKind, report, linkedReleaseObjectIds, index),
     };
+    const reviewDraftRequestBody = {
+      publicDatasetDocument: publicDatasetDocumentReviewDraftResource(documentKind, report, linkedReleaseObjectIds, draftBodyMarkdown, index),
+    };
     const templateReadbackRoute = `/api/v1/public-dataset-documents/template?documentKind=${encodeURIComponent(documentKind)}`;
     const templateReadbackItemRoute = `/api/v1/public-dataset-documents/template/${encodeURIComponent(documentKind)}`;
     const allRoutes = uniqueValues([
@@ -12819,6 +12905,9 @@ function publicDatasetDocumentTemplateItems(report) {
       draftSectionKeys: draftSections.map((section) => section.sectionKey),
       draftBodyMarkdown,
       draftBodyHash: `sha256:${sha256(draftBodyMarkdown)}`,
+      reviewDraftPolicy:
+        "reviewDraftRequestBody is a hash-correct validation-only draft for admin review; POST it only to the validateOnly/dryRun route, because append routes reject reviewDraftOnly=true before evidence is created.",
+      reviewDraftRequestBody,
       requiredFields: [
         "id",
         "releaseId",
@@ -12871,6 +12960,36 @@ function publicDatasetDocumentTemplateResource(documentKind, report, linkedRelea
     preparedBy: "TODO_OPERATOR_ID",
     reviewedBy: "TODO_REVIEWER_ID",
     createdAt: "TODO_ISO_TIMESTAMP",
+  };
+}
+
+function publicDatasetDocumentReviewDraftResource(documentKind, report, linkedReleaseObjectIds, draftBodyMarkdown, index) {
+  const suffix = index + 1;
+  const isDatasetCard = documentKind === "dataset_card";
+  const releaseIdentifier = report.releaseId ?? releaseId;
+  return {
+    reviewDraftOnly: true,
+    id: `review-draft-${documentKind}-document-${releaseIdentifier}-${suffix}`,
+    releaseId: releaseIdentifier,
+    documentKind,
+    artifactName: publicDatasetArtifactName,
+    documentVersion: isDatasetCard ? "dataset-card-v0.1-review-draft" : "methodology-report-v0.1-review-draft",
+    title: isDatasetCard
+      ? "Metaphilosophy Critique Ratings Dataset v0.1 dataset card review draft"
+      : "Metaphilosophy Critique Ratings Dataset v0.1 methodology report review draft",
+    summary: isDatasetCard
+      ? "Dataset card review draft for expert-rated position-critique pairs, seven-dimensional labels, split governance, and release limitations."
+      : "Methodology report review draft for the expert rating workflow, label snapshot, split governance, and release limitations.",
+    bodyMarkdown: draftBodyMarkdown,
+    bodyHash: `sha256:${sha256(draftBodyMarkdown)}`,
+    linkedReleaseObjectIds,
+    hiddenProtectedExclusionSummary:
+      "Hidden benchmark items, protected validation labels, source/provenance metadata, rater identities, model-judge scores, active-learning reasons, and unreleased adjudication notes are excluded.",
+    downstreamLaunchBoundary:
+      "No public leaderboard, API evaluator, public training export launch, or judge-model launch before Dataset v0.1 readiness is complete.",
+    preparedBy: "release-report-review-draft-generator",
+    reviewedBy: "operator-review-required",
+    createdAt: report.generatedAt ?? "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -12938,6 +13057,7 @@ function publicDatasetDocumentTemplateCounts(items) {
     byReadinessStatus: countItemsBy(items, "readinessStatus"),
     byDraftSource: countItemsBy(items, "draftSource"),
     draftSectionRows: items.reduce((total, item) => total + (Array.isArray(item.draftSections) ? item.draftSections.length : 0), 0),
+    reviewDraftRequestBodyRows: items.filter((item) => item.reviewDraftRequestBody?.publicDatasetDocument?.reviewDraftOnly === true).length,
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
   };
 }
@@ -23017,7 +23137,10 @@ async function workflowWriteEndpoint(request, response, context, match) {
     return;
   }
   const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
-  const validationContext = spec.requireAssignmentClaimField ? { workflowAssignments: latestWorkflowResources(workflowEvents, "assignment") } : {};
+  const assignmentValidationContext = spec.requireAssignmentClaimField ? { workflowAssignments: latestWorkflowResources(workflowEvents, "assignment") } : {};
+  const specValidationContext =
+    typeof spec.validationContext === "function" ? await spec.validationContext({ context, session, request, body, candidate, params }) : {};
+  const validationContext = { ...assignmentValidationContext, ...specValidationContext, dryRun };
   const validation = validateWorkflowPayload(candidate, session.user, spec, params, validationContext);
   if (!validation.ok) {
     sendJson(response, validation.statusCode ?? 400, { error: validation.error ?? "invalid_workflow_payload", detail: validation.detail });

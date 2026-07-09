@@ -11211,6 +11211,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestTemplate.body.totalCount, 2);
   assert.equal(releaseVersionManifestTemplate.body.counts.templateRows, 2);
   assert.equal(releaseVersionManifestTemplate.body.counts.openRows, 2);
+  assert.equal(releaseVersionManifestTemplate.body.counts.preflightRequestBodyRows, 2);
   assert.equal(releaseVersionManifestTemplate.body.counts.byTemplateKind.release_version, 1);
   assert.equal(releaseVersionManifestTemplate.body.counts.byTemplateKind.release_freeze, 1);
   assert.equal(releaseVersionManifestTemplate.body.counts.byRoute["/api/v1/release-version-manifest/template"], 2);
@@ -11237,6 +11238,11 @@ test("operator action item queue is admin/auditor readback derived from the rele
     "internal-manifest-october-2026-demo",
   ]);
   assert.equal(releaseVersionTemplate.requestBody.releaseVersion.status, "method_preserving_demo_not_target_scale");
+  assert.equal(releaseVersionTemplate.preflightRequestBody.releaseVersion.preflightOnly, true);
+  assert.equal(releaseVersionTemplate.preflightRequestBody.releaseVersion.templateOnly, undefined);
+  assert.equal(releaseVersionTemplate.preflightRequestBody.releaseVersion.releaseConfigManifestHash, "sha256:seed-release-config-october-2026-demo");
+  assert.equal(releaseVersionTemplate.preflightRequestBody.releaseVersion.status, "method_preserving_demo_not_target_scale");
+  assert.match(releaseVersionTemplate.preflightPolicy, /validation-only release-version draft/);
 
   const releaseFreezeTemplate = releaseVersionManifestTemplate.body.items.find((item) => item.templateKind === "release_freeze");
   assert.equal(releaseFreezeTemplate.writeRoute, "/api/v1/releases/freeze");
@@ -11248,6 +11254,10 @@ test("operator action item queue is admin/auditor readback derived from the rele
     releaseFreezeTemplate.requestBody.releaseFreeze.targetScaleStatus,
     "not_target_scale_until_120_positions_360_critiques_1440_blind_ratings_60_gold_items_appendix_c_validation",
   );
+  assert.equal(releaseFreezeTemplate.preflightRequestBody.releaseFreeze.preflightOnly, true);
+  assert.equal(releaseFreezeTemplate.preflightRequestBody.releaseFreeze.templateOnly, undefined);
+  assert.equal(releaseFreezeTemplate.preflightRequestBody.releaseFreeze.freezeStatus, "not_ready_for_release_freeze");
+  assert.match(releaseFreezeTemplate.preflightPolicy, /validation-only release-freeze draft/);
 
   const releaseVersionManifestTemplateByKind = await invokeApi(context, {
     method: "GET",
@@ -11284,6 +11294,53 @@ test("operator action item queue is admin/auditor readback derived from the rele
   });
   assert.equal(unchangedReleaseVersionTemplate.status, 400, JSON.stringify(unchangedReleaseVersionTemplate.body));
   assert.equal(unchangedReleaseVersionTemplate.body.error, "workflow_template_record");
+
+  const releaseVersionPreflight = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-versions?validateOnly=true",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(releaseVersionTemplate.preflightRequestBody),
+  });
+  assert.equal(releaseVersionPreflight.status, 200, JSON.stringify(releaseVersionPreflight.body));
+  assert.equal(releaseVersionPreflight.body.dryRun, true);
+  assert.equal(releaseVersionPreflight.body.noSideEffects, true);
+  assert.equal(releaseVersionPreflight.body.resourceKey, "releaseVersion");
+  assert.equal(releaseVersionPreflight.body.resourceId, releaseVersionTemplate.preflightRequestBody.releaseVersion.id);
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
+  const releaseVersionPreflightAppendRejected = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-versions",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(releaseVersionTemplate.preflightRequestBody),
+  });
+  assert.equal(releaseVersionPreflightAppendRejected.status, 400, JSON.stringify(releaseVersionPreflightAppendRejected.body));
+  assert.match(releaseVersionPreflightAppendRejected.body.detail, /preflightOnly payloads are validation-only/);
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
+  const releaseFreezePreflight = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/releases/freeze?validateOnly=true",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(releaseFreezeTemplate.preflightRequestBody),
+  });
+  assert.equal(releaseFreezePreflight.status, 200, JSON.stringify(releaseFreezePreflight.body));
+  assert.equal(releaseFreezePreflight.body.dryRun, true);
+  assert.equal(releaseFreezePreflight.body.noSideEffects, true);
+  assert.equal(releaseFreezePreflight.body.resourceKey, "releaseFreeze");
+  assert.equal(releaseFreezePreflight.body.resourceId, releaseFreezeTemplate.preflightRequestBody.releaseFreeze.id);
+  assert.equal(releaseFreezePreflight.body.policyGateDryRun, "not_minted_or_consumed");
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
+  const releaseFreezePreflightAppendRejected = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/releases/freeze",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify(releaseFreezeTemplate.preflightRequestBody),
+  });
+  assert.equal(releaseFreezePreflightAppendRejected.status, 400, JSON.stringify(releaseFreezePreflightAppendRejected.body));
+  assert.match(releaseFreezePreflightAppendRejected.body.detail, /preflightOnly payloads are validation-only/);
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
 
   const publicDatasetReadiness = await invokeApi(context, {
     method: "GET",
@@ -16380,6 +16437,7 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(documentTemplate.body.counts.byDocumentKind.methodology_report, 1);
   assert.equal(documentTemplate.body.counts.byDraftSource.release_report_derived_review_draft, 2);
   assert.ok(documentTemplate.body.counts.draftSectionRows >= 12);
+  assert.equal(documentTemplate.body.counts.reviewDraftRequestBodyRows, 2);
   assert.equal(documentTemplate.body.counts.openReadinessRows, 2);
   assert.equal(documentTemplate.body.writeRoute, "/api/v1/public-dataset-documents");
   assert.equal(documentTemplate.body.singleRecordValidateOnlyRoute, "/api/v1/public-dataset-documents?validateOnly=true");
@@ -16411,10 +16469,19 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   assert.equal(datasetCardTemplate.draftReviewBoundary.includes("do not satisfy Dataset v0.1 documentation readiness"), true);
   assert.match(datasetCardTemplate.draftBodyHash, /^sha256:[0-9a-f]{64}$/);
   assert.match(datasetCardTemplate.draftBodyMarkdown, /# Metaphilosophy Critique Ratings Dataset v0\.1 Dataset Card Draft/);
+  assert.equal(datasetCardTemplate.reviewDraftRequestBody.publicDatasetDocument.reviewDraftOnly, true);
+  assert.equal(datasetCardTemplate.reviewDraftRequestBody.publicDatasetDocument.bodyMarkdown, datasetCardTemplate.draftBodyMarkdown);
+  assert.equal(
+    datasetCardTemplate.reviewDraftRequestBody.publicDatasetDocument.bodyHash,
+    `sha256:${createHash("sha256").update(datasetCardTemplate.draftBodyMarkdown).digest("hex")}`,
+  );
+  assert.match(datasetCardTemplate.reviewDraftPolicy, /validation-only draft/);
   assert.ok(datasetCardTemplate.draftSectionKeys.includes("dataset_scope"));
   assert.ok(datasetCardTemplate.draftSectionKeys.includes("scale_limitations"));
   assert.ok(datasetCardTemplate.draftSections.some((section) => section.sectionKey === "public_boundary"));
   assert.equal(methodologyTemplate.draftSource, "release_report_derived_review_draft");
+  assert.equal(methodologyTemplate.reviewDraftRequestBody.publicDatasetDocument.reviewDraftOnly, true);
+  assert.equal(methodologyTemplate.reviewDraftRequestBody.publicDatasetDocument.bodyMarkdown, methodologyTemplate.draftBodyMarkdown);
   assert.ok(methodologyTemplate.draftSectionKeys.includes("rating_workflow"));
   assert.ok(methodologyTemplate.draftSectionKeys.includes("validation_and_benchmark_limits"));
   assert.ok(datasetCardTemplate.requiredFields.includes("bodyHash"));
@@ -16471,6 +16538,29 @@ test("public dataset document submissions satisfy Dataset v0.1 documentation rea
   });
   assert.equal(templateByRoute.status, 200, JSON.stringify(templateByRoute.body));
   assert.equal(templateByRoute.body.count, 2);
+
+  const reviewDraftValidateOnly = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents?validateOnly=true",
+    headers: adminHeaders,
+    body: JSON.stringify(datasetCardTemplate.reviewDraftRequestBody),
+  });
+  assert.equal(reviewDraftValidateOnly.status, 200, JSON.stringify(reviewDraftValidateOnly.body));
+  assert.equal(reviewDraftValidateOnly.body.dryRun, true);
+  assert.equal(reviewDraftValidateOnly.body.noSideEffects, true);
+  assert.equal(reviewDraftValidateOnly.body.resourceKey, "publicDatasetDocument");
+  assert.equal(reviewDraftValidateOnly.body.resourceId, datasetCardTemplate.reviewDraftRequestBody.publicDatasetDocument.id);
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
+  const reviewDraftAppendRejected = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-documents",
+    headers: adminHeaders,
+    body: JSON.stringify(datasetCardTemplate.reviewDraftRequestBody),
+  });
+  assert.equal(reviewDraftAppendRejected.status, 400, JSON.stringify(reviewDraftAppendRejected.body));
+  assert.match(reviewDraftAppendRejected.body.detail, /reviewDraftOnly payloads are validation-only/);
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
 
   const unchangedTemplateWrite = await invokeApi(context, {
     method: "POST",

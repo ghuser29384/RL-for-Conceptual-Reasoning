@@ -9698,6 +9698,12 @@ function releaseVersionManifestTemplatePreviewRow(item) {
         ["Submitted id", item.submittedArtifactId ?? "not submitted"],
         ["Write route", item.writeRoute ?? "not available"],
         ["Validate route", item.singleRecordValidateOnlyRoute ?? "not available"],
+        [
+          "Preflight payload",
+          item.preflightRequestBody?.releaseVersion?.preflightOnly === true || item.preflightRequestBody?.releaseFreeze?.preflightOnly === true
+            ? "validate-only ready"
+            : "not generated",
+        ],
         ["Release config", linkedIds.releaseConfigManifestId ?? "not reported"],
         ["Phase bundle", linkedIds.phaseGateBundleId ?? "not reported"],
         ["Output artifacts", outputArtifacts],
@@ -10113,6 +10119,10 @@ function publicDatasetDocumentTemplatePreviewRow(item) {
         ["Linked release objects", linkedSummary || "not reported"],
         ["Draft sections", draftSectionSummary],
         ["Draft hash", item.draftBodyHash ?? "not generated"],
+        [
+          "Review draft payload",
+          item.reviewDraftRequestBody?.publicDatasetDocument?.reviewDraftOnly === true ? "validate-only ready" : "not generated",
+        ],
         ["Required fields", requiredFields.length ? requiredFields.slice(0, 7).join(", ") : "not reported"],
       ])}
     </article>
