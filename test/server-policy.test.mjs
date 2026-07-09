@@ -16813,6 +16813,10 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes("function rlhf93CompletionAuditPreviewRow(item)"));
   assert.ok(appSource.includes("item.primaryUnblockerRoute"));
   assert.ok(appSource.includes("item.unblockerRoutes"));
+  assert.ok(appSource.includes('["Next action", item.nextActionKind ? humanize(item.nextActionKind) : "not reported"]'));
+  assert.ok(appSource.includes('["Next action route", item.nextActionRoute ?? "not available"]'));
+  assert.ok(appSource.includes("item.nextActionValidateOnlyRoute"));
+  assert.ok(appSource.includes("item.nextActionTemplateRoute"));
   assert.ok(appSource.includes("workflowRlhf93RequirementGroupFilter"));
   assert.ok(appSource.includes('url.searchParams.set("requirementGroup", state.workflowRlhf93RequirementGroupFilter)'));
   assert.ok(appSource.includes('url.searchParams.set("targetGapId", state.workflowRlhf93TargetGapFilter)'));
@@ -17068,6 +17072,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
   assert.ok(architectureDoc.includes("Open readiness rows also carry first-class `nextActionKind`, `nextActionRoute`"));
   assert.ok(architectureDoc.includes("documentation blockers to `publicDatasetDocument` validation"));
+  assert.ok(architectureDoc.includes("next-action kind"));
+  assert.ok(architectureDoc.includes("Open audit rows also carry first-class `nextActionKind`, `nextActionRoute`"));
+  assert.ok(architectureDoc.includes("direct unblocker and next-action route aliases"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-manifest"));
   assert.ok(architectureDoc.includes("publicDatasetPackageManifestStep"));
   assert.ok(architectureDoc.includes("does not create a Dataset object, submit release artifacts or documentation, publish a dataset"));
@@ -17205,7 +17212,8 @@ test("production schema includes Metaphilosophy projection tables with admin aud
   assert.ok(architectureDoc.includes("reports completion as unproven while target data"));
   assert.ok(architectureDoc.includes("current release-completion unblocker"));
   assert.ok(architectureDoc.includes("package dry-run/validate-only routes"));
-  assert.ok(architectureDoc.includes("target gap, unblocker phase/execution, current-unblocker presence"));
+  assert.ok(architectureDoc.includes("target gap, next-action kind, unblocker phase/execution, current-unblocker presence"));
+  assert.ok(architectureDoc.includes("Open audit rows also carry first-class `nextActionKind`, `nextActionRoute`"));
   assert.ok(architectureDoc.includes("does not create release gates, promote rejected or pruned ideas, create candidates, or mutate the main spec"));
   assert.ok(
     architectureDoc.includes(
@@ -23636,6 +23644,14 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.unblockerPhase === "collect_data" &&
         item.unblockerExecutionStatus === "ready_to_collect_data" &&
         item.primaryUnblockerRoute === "/api/v1/october-completion-runbook?executionStatus=ready_to_collect_data" &&
+        item.nextActionKind === "validate_current_unblocker_package" &&
+        item.nextActionRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
+        item.nextActionValidateOnlyRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
+        item.nextActionDryRunRoute === "/api/v1/target-gaps/import-jsonl-package?dryRun=true" &&
+        item.nextActionTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25" &&
+        item.nextActionWriteRoute === "/api/v1/target-gaps/import-jsonl-package" &&
+        item.nextActionExpectedResourceDelta === 2034 &&
+        item.routes.includes(item.nextActionRoute) &&
         item.unblockerStarterTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25" &&
         item.unblockerPackageDryRunImportRoute === "/api/v1/target-gaps/import-jsonl-package?dryRun=true" &&
         item.unblockerPackageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
@@ -23658,9 +23674,36 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(
     rlhf93CompletionAudit.body.items.some(
       (item) =>
+        item.id === "public-dataset-dataset_card" &&
+        item.requirementGroup === "public_dataset_v0_1" &&
+        item.completionState === "open" &&
+        item.nextActionKind === "validate_public_document" &&
+        item.nextActionRoute === "/api/v1/public-dataset-documents?validateOnly=true" &&
+        item.nextActionValidateOnlyRoute === "/api/v1/public-dataset-documents?validateOnly=true" &&
+        item.nextActionTemplateRoute === "/api/v1/public-dataset-documents/template?documentKind=dataset_card" &&
+        item.nextActionWriteRoute === "/api/v1/public-dataset-documents" &&
+        item.routes.includes(item.nextActionRoute),
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
+        item.id === "public-dataset-release_version_freeze" &&
+        item.requirementGroup === "public_dataset_v0_1" &&
+        item.completionState === "open" &&
+        item.nextActionKind === "validate_release_version_freeze" &&
+        item.nextActionValidateOnlyRoute === "/api/v1/releases/freeze?validateOnly=true" &&
+        item.routes.includes(item.nextActionValidateOnlyRoute),
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAudit.body.items.some(
+      (item) =>
         item.id === "public-dataset-public_first_ladder_gate" &&
         item.requirementGroup === "public_dataset_v0_1" &&
         item.completionState === "open" &&
+        item.nextActionKind === "verify_public_first_blockers" &&
+        item.nextActionRoute === "/api/v1/public-dataset-publication-gate" &&
         item.routes.includes("/api/v1/public-dataset-readiness/public_first_ladder_gate"),
     ),
   );
@@ -23691,6 +23734,10 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(rlhf93CompletionAudit.body.counts.bySourceStatus.not_submitted >= 2);
   assert.ok(rlhf93CompletionAudit.body.counts.byReviewReason["datasetCard:not_submitted"] >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byTargetGapId.positions >= 1);
+  assert.ok(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_current_unblocker_package >= 1);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_public_document, 2);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.validate_release_version_freeze, 1);
+  assert.equal(rlhf93CompletionAudit.body.counts.byNextActionKind.verify_public_first_blockers, 1);
   assert.ok(rlhf93CompletionAudit.body.counts.byUnblockerExecutionStatus.ready_to_collect_data >= 1);
   assert.ok(rlhf93CompletionAudit.body.counts.withCurrentUnblocker >= 1);
 
@@ -23711,6 +23758,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditPublicDocs.status, 200, JSON.stringify(rlhf93CompletionAuditPublicDocs.body));
   assert.equal(rlhf93CompletionAuditPublicDocs.body.count, 2);
   assert.ok(rlhf93CompletionAuditPublicDocs.body.items.every((item) => item.requirementKind === "public_documentation"));
+
+  const rlhf93CompletionAuditPublicDocNextActions = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/metaphilosophy/rlhf93-completion-audit?nextActionKind=validate_public_document",
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditPublicDocNextActions.status, 200, JSON.stringify(rlhf93CompletionAuditPublicDocNextActions.body));
+  assert.equal(rlhf93CompletionAuditPublicDocNextActions.body.count, 2);
+  assert.ok(rlhf93CompletionAuditPublicDocNextActions.body.items.every((item) => item.nextActionKind === "validate_public_document"));
 
   const rlhf93CompletionAuditDatasetCardReason = await invokeApi(context, {
     method: "GET",
@@ -23752,6 +23808,15 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditRouteFilter.body));
   assert.ok(rlhf93CompletionAuditRouteFilter.body.count >= 1);
   assert.ok(rlhf93CompletionAuditRouteFilter.body.items.some((item) => item.id === "public-dataset-public_first_ladder_gate"));
+
+  const rlhf93CompletionAuditNextActionRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/public-dataset-documents?validateOnly=true")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditNextActionRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditNextActionRouteFilter.body));
+  assert.equal(rlhf93CompletionAuditNextActionRouteFilter.body.count, 2);
+  assert.ok(rlhf93CompletionAuditNextActionRouteFilter.body.items.every((item) => item.nextActionKind === "validate_public_document"));
 
   const rlhf93CompletionAuditUnblockerRouteFilter = await invokeApi(context, {
     method: "GET",

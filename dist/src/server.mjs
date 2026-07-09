@@ -17204,9 +17204,11 @@ function rlhf93CompletionAuditItems(report) {
   const publicDataset = report.publicDatasetReadiness ?? {};
   for (const [index, row] of (Array.isArray(publicDataset.rows) ? publicDataset.rows : []).entries()) {
     const sourceRowId = row.id ?? `public-dataset-row-${index + 1}`;
+    const nextAction = publicDatasetReadinessNextAction(row);
     items.push(
       rlhf93CompletionAuditDecoratedItem({
         ...row,
+        ...nextAction,
         id: `public-dataset-${sourceRowId}`,
         requirementId: sourceRowId,
         sourceRowId,
@@ -17475,16 +17477,19 @@ function rlhf93CompletionAuditDecoratedItem(item) {
   const collectionReadbackRoute = "/api/v1/metaphilosophy/rlhf93-completion-audit";
   const unblockerRoutes = rlhf93CompletionAuditUnblockerRoutes(item.unblocker);
   const unblockerPackageManifest = item.unblocker?.packageManifest ?? null;
+  const open = rlhf93CompletionAuditItemIsOpen(item);
+  const nextAction = rlhf93CompletionAuditNextAction(item, { open, readbackItemRoute });
   const routes = rlhf93CompletionAuditItemRoutes({
     ...item,
+    ...nextAction,
     readbackItemRoute,
     collectionReadbackRoute,
     releaseReportRoute: "/api/release/report",
     unblockerRoutes,
   });
-  const open = rlhf93CompletionAuditItemIsOpen(item);
   return {
     ...item,
+    ...nextAction,
     unblockerPhase: item.unblocker?.phase ?? null,
     unblockerExecutionStatus: item.unblocker?.executionStatus ?? null,
     primaryUnblockerRoute: unblockerRoutes[0] ?? null,
@@ -17511,6 +17516,59 @@ function rlhf93CompletionAuditDecoratedItem(item) {
     readbackItemRoute,
     collectionReadbackRoute,
     releaseReportRoute: "/api/release/report",
+  };
+}
+
+function rlhf93CompletionAuditNextAction(item, { open, readbackItemRoute } = {}) {
+  if (item?.nextActionRoute || item?.nextActionKind) {
+    return {
+      nextActionKind: item.nextActionKind ?? "inspect_completion_requirement",
+      nextActionRoute: item.nextActionRoute ?? readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+      nextActionReadbackRoute: item.nextActionReadbackRoute ?? readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+      nextActionTemplateRoute: item.nextActionTemplateRoute ?? null,
+      nextActionDryRunRoute: item.nextActionDryRunRoute ?? null,
+      nextActionValidateOnlyRoute: item.nextActionValidateOnlyRoute ?? null,
+      nextActionWriteRoute: item.nextActionWriteRoute ?? null,
+      nextActionVerificationRoute: item.nextActionVerificationRoute ?? "/api/release/report",
+      nextActionPolicy: item.nextActionPolicy ?? "Inspect the linked requirement and verification routes before appending evidence.",
+    };
+  }
+  const packageManifest = item?.unblocker?.packageManifest ?? null;
+  if (open && packageManifest) {
+    return {
+      nextActionKind: "validate_current_unblocker_package",
+      nextActionRoute: packageManifest.packageValidateOnlyImportRoute ?? item.unblocker?.firstValidateOnlyRoute ?? item.unblocker?.firstDryRunRoute ?? readbackItemRoute,
+      nextActionValidateOnlyRoute: packageManifest.packageValidateOnlyImportRoute ?? item.unblocker?.firstValidateOnlyRoute ?? null,
+      nextActionDryRunRoute: packageManifest.packageDryRunImportRoute ?? item.unblocker?.firstDryRunRoute ?? null,
+      nextActionWriteRoute: packageManifest.packageImportRoute ?? item.unblocker?.firstImportRoute ?? null,
+      nextActionTemplateRoute: packageManifest.starterTemplateRoute ?? item.unblocker?.firstTemplateRoute ?? null,
+      nextActionReadbackRoute:
+        item.unblocker?.firstPackageManifestRoute ??
+        packageManifest.sourceCollectionPlanRoute ??
+        item.unblocker?.firstReadbackRoute ??
+        readbackItemRoute,
+      nextActionVerificationRoute: "/api/release/report",
+      nextActionExpectedResourceDelta: packageManifest.expectedResourceDelta ?? null,
+      nextActionPolicy:
+        "Validate the current target-data package before append, then verify completion only through /api/release/report and the RLHF93 completion audit.",
+    };
+  }
+  if (!open) {
+    return {
+      nextActionKind: "verification_only",
+      nextActionRoute: readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+      nextActionReadbackRoute: readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+      nextActionVerificationRoute: "/api/release/report",
+      nextActionPolicy: "This requirement currently reads as closed; verify through the item readback and /api/release/report.",
+    };
+  }
+  return {
+    nextActionKind: "inspect_completion_requirement",
+    nextActionRoute: readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+    nextActionReadbackRoute: readbackItemRoute ?? "/api/v1/metaphilosophy/rlhf93-completion-audit",
+    nextActionVerificationRoute: "/api/release/report",
+    nextActionPolicy:
+      "Inspect this open completion-audit row and its linked evidence routes before deciding which existing workflow route to use next.",
   };
 }
 
@@ -17569,6 +17627,7 @@ function rlhf93CompletionAuditFilters(searchParams) {
     evidenceId: value("evidenceId") ?? value("sourceEvidenceId"),
     reviewReason: value("reviewReason"),
     targetGapId: value("targetGapId"),
+    nextActionKind: value("nextActionKind"),
     unblockerPhase: value("unblockerPhase") ?? value("phase"),
     unblockerExecutionStatus: value("unblockerExecutionStatus") ?? value("executionStatus"),
     hasCurrentUnblocker: value("hasCurrentUnblocker") ?? value("currentUnblocker"),
@@ -17589,6 +17648,7 @@ function rlhf93CompletionAuditMatchesFilters(item, filters) {
     }
     if (key === "reviewReason") return Array.isArray(item.reviewReasons) && item.reviewReasons.includes(value);
     if (key === "targetGapId") return rlhf93CompletionAuditTargetGapIds(item).includes(value);
+    if (key === "nextActionKind") return item.nextActionKind === value;
     if (key === "unblockerPhase") return item.unblocker?.phase === value;
     if (key === "unblockerExecutionStatus") return item.unblocker?.executionStatus === value;
     if (key === "hasCurrentUnblocker") return booleanFilterMatches(value, Boolean(item.unblocker));
@@ -17662,6 +17722,13 @@ function rlhf93CompletionAuditItemRoutes(item) {
     item?.dryRunImportRoute,
     item?.validateOnlyImportRoute,
     item?.templateReadbackRoute,
+    item?.nextActionRoute,
+    item?.nextActionReadbackRoute,
+    item?.nextActionTemplateRoute,
+    item?.nextActionDryRunRoute,
+    item?.nextActionValidateOnlyRoute,
+    item?.nextActionWriteRoute,
+    item?.nextActionVerificationRoute,
   ]);
 }
 
@@ -17701,6 +17768,7 @@ function rlhf93CompletionAuditCounts(items) {
     bySourceStatus: countExpandedValues(items, "sourceStatuses"),
     byReviewReason: countExpandedValues(items, "reviewReasons"),
     byTargetGapId: countValues(items.flatMap(rlhf93CompletionAuditTargetGapIds)),
+    byNextActionKind: countItemsBy(items, "nextActionKind"),
     byUnblockerPhase: countValues(items.map((item) => item.unblocker?.phase).filter(Boolean)),
     byUnblockerExecutionStatus: countValues(items.map((item) => item.unblocker?.executionStatus).filter(Boolean)),
     withCurrentUnblocker: items.filter((item) => Boolean(item.unblocker)).length,
