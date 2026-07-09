@@ -18694,6 +18694,7 @@ function workflowTargetGapImpactDetail(body) {
   const rows = Array.isArray(summary?.rows) ? summary.rows : [];
   if (!summary || rows.length === 0) return "";
   const dependencySummary = body?.packageDependencySummary;
+  const coverageSummary = body?.packageCoverageSummary;
   const rowDetails = rows.slice(0, 3).map((row) => {
     const label = row.targetGapId ? humanize(row.targetGapId) : row.importRoutes?.[0] ?? "unscoped route";
     const submitted = Number(row.submittedRecordCount ?? 0);
@@ -18717,8 +18718,11 @@ function workflowTargetGapImpactDetail(body) {
   const dependencyText = dependencySummary
     ? ` Package dependency order: ${humanize(dependencySummary.status ?? "not reported")} (${dependencySummary.setupEntryCount ?? 0} setup / ${dependencySummary.primaryEntryCount ?? 0} primary).`
     : "";
+  const coverageText = coverageSummary
+    ? ` Package coverage: ${humanize(coverageSummary.status ?? "not reported")} (${coverageSummary.expectedResourceDeltaFromPackageRecords ?? "unknown"} expected delta; ${coverageSummary.projectedCurrentRemainingAfterPackage ?? "unknown"} remaining after package preview).`
+    : "";
   const verificationRoute = summary.releaseReportVerificationRoute ?? "/api/release/report";
-  return ` Advisory impact preview: ${rowDetails.join("; ")}${extra}${unscoped}.${dependencyText} Verify authoritative release status in ${verificationRoute}.`;
+  return ` Advisory impact preview: ${rowDetails.join("; ")}${extra}${unscoped}.${dependencyText}${coverageText} Verify authoritative release status in ${verificationRoute}.`;
 }
 
 function workflowOperatorEvidenceImpactDetail(body) {

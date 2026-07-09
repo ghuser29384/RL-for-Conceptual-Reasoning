@@ -7265,23 +7265,42 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(targetPackageDryRun.body.packageDependencySummary.byDependencyStatus.setup_before_primary_order_satisfied, 1);
   assert.equal(targetPackageDryRun.body.packageDependencySummary.byDependencyStatus.primary_without_package_setup, 1);
   assert.match(targetPackageDryRun.body.packageDependencySummary.validationPolicy, /setup_data_import rows must appear before dependent primary_data_import rows/);
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.releaseReportVerificationRoute, "/api/release/report");
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.advisoryOnly, true);
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.coverageComputedBeforeAppend, true);
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.status, "package_under_covers_current_unblocker");
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.scopedTargetGapCount, 2);
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.expectedResourceDeltaFromPackageRecords, 2);
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.underCoveredTargetGapCount, 2);
+  assert.equal(targetPackageDryRun.body.packageCoverageSummary.byCoverageStatus.package_under_covers_target_gap, 2);
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.releaseReportVerificationRoute, "/api/release/report");
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.submittedRecordCount, 3);
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.scopedTargetGapCount, 2);
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.unscopedRouteCount, 0);
   assert.equal(targetPackageDryRun.body.targetGapImpactSummary.expectedResourceDeltaFromPackageRecords, 2);
   const dryRunPositionImpact = targetPackageDryRun.body.targetGapImpactSummary.rows.find((item) => item.targetGapId === "positions");
+  const dryRunPositionCoverage = targetPackageDryRun.body.packageCoverageSummary.rows.find((item) => item.targetGapId === "positions");
   assert.ok(dryRunPositionImpact);
+  assert.ok(dryRunPositionCoverage);
   assert.equal(dryRunPositionImpact.submittedRecordCount, 1);
   assert.equal(dryRunPositionImpact.expectedResourceDeltaFromPackageRecords, 1);
   assert.equal(dryRunPositionImpact.templateExpectedResourceDelta, 117);
   assert.equal(dryRunPositionImpact.remainingBefore, 117);
   assert.equal(dryRunPositionImpact.closesTargetGapWhenValidated, true);
   assert.deepEqual(dryRunPositionImpact.verificationRoutes, ["/api/v1/target-gaps/positions"]);
+  assert.equal(dryRunPositionCoverage.coverageStatus, "package_under_covers_target_gap");
+  assert.equal(dryRunPositionCoverage.expectedResourceDeltaFromPackageRecords, 1);
+  assert.equal(dryRunPositionCoverage.projectedRemainingAfterPackage, dryRunPositionCoverage.remainingBeforePackage - 1);
+  assert.equal(dryRunPositionCoverage.targetGapReadbackRoute, "/api/v1/target-gaps");
+  assert.ok(dryRunPositionCoverage.verificationRoutes.includes("/api/v1/target-gaps/positions"));
   const dryRunBlindRatingImpact = targetPackageDryRun.body.targetGapImpactSummary.rows.find(
     (item) => item.targetGapId === "blind_initial_ratings",
   );
+  const dryRunBlindRatingCoverage = targetPackageDryRun.body.packageCoverageSummary.rows.find(
+    (item) => item.targetGapId === "blind_initial_ratings",
+  );
   assert.ok(dryRunBlindRatingImpact);
+  assert.ok(dryRunBlindRatingCoverage);
   assert.equal(dryRunBlindRatingImpact.submittedRecordCount, 2);
   assert.equal(dryRunBlindRatingImpact.setupRecordCount, 1);
   assert.equal(dryRunBlindRatingImpact.primaryRecordCount, 1);
@@ -7289,6 +7308,9 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(dryRunBlindRatingImpact.templateExpectedResourceDelta, 1434);
   assert.equal(dryRunBlindRatingImpact.unknownDeltaLineCount, 0);
   assert.equal(dryRunBlindRatingImpact.closesTargetGapWhenValidated, true);
+  assert.equal(dryRunBlindRatingCoverage.coverageStatus, "package_under_covers_target_gap");
+  assert.equal(dryRunBlindRatingCoverage.expectedResourceDeltaFromPackageRecords, 1);
+  assert.equal(dryRunBlindRatingCoverage.projectedRemainingAfterPackage, dryRunBlindRatingCoverage.remainingBeforePackage - 1);
   assert.equal(targetPackageDryRun.body.policyGateDryRun, "not_minted_or_consumed");
   assert.match(targetPackageDryRun.body.validationPolicy, /without_appending_events/);
   assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
@@ -7309,6 +7331,7 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(targetPackageValidateOnly.body.targetGapImpactSummary.scopedTargetGapCount, 2);
   assert.equal(targetPackageValidateOnly.body.targetGapImpactSummary.expectedResourceDeltaFromPackageRecords, 2);
   assert.equal(targetPackageValidateOnly.body.packageDependencySummary.status, "setup_before_primary_order_satisfied");
+  assert.equal(targetPackageValidateOnly.body.packageCoverageSummary.status, "package_under_covers_current_unblocker");
   assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
   assert.equal((await auditStore.readRatingEvents()).length, ratingEventCountBeforeTargetPackageDryRun);
 
@@ -7368,6 +7391,9 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(unscopedTargetPackageDryRun.body.targetGapImpactSummary.expectedResourceDeltaFromPackageRecords, null);
   assert.equal(unscopedTargetPackageDryRun.body.targetGapImpactSummary.rows[0].targetGapId, null);
   assert.equal(unscopedTargetPackageDryRun.body.targetGapImpactSummary.rows[0].unknownDeltaLineCount, 1);
+  assert.equal(unscopedTargetPackageDryRun.body.packageCoverageSummary.status, "package_coverage_unscoped");
+  assert.equal(unscopedTargetPackageDryRun.body.packageCoverageSummary.scopedTargetGapCount, 0);
+  assert.equal(unscopedTargetPackageDryRun.body.packageCoverageSummary.expectedResourceDeltaFromPackageRecords, null);
   assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
 
   const mismatchedTargetGapPackageDryRun = await invokeApi(context, {
@@ -7467,6 +7493,14 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.ok(validationPackageImpact);
   assert.equal(validationPackageImpact.expectedResourceDeltaFromPackageRecords, 50);
   assert.deepEqual(validationPackageImpact.relatedTargetGapIds, ["validation_positions", "validation_core_all_items_raters"]);
+  assert.equal(validationTargetPackageDryRun.body.packageCoverageSummary.status, "package_exceeds_current_unblocker");
+  const validationPackageCoverage = validationTargetPackageDryRun.body.packageCoverageSummary.rows.find(
+    (item) => item.targetGapId === "validation_critiques",
+  );
+  assert.ok(validationPackageCoverage);
+  assert.equal(validationPackageCoverage.coverageStatus, "package_exceeds_target_gap");
+  assert.equal(validationPackageCoverage.remainingBeforePackage, 0);
+  assert.equal(validationPackageCoverage.overage, 50);
   assert.equal((await auditStore.readWorkflowEvents()).length, workflowEventCountBeforeTargetPackageDryRun);
 
   const targetPackageImport = await invokeApi(context, {
@@ -7511,6 +7545,7 @@ test("target-scale bulk JSONL imports reuse workflow validators and append all-o
   assert.equal(targetPackageImport.body.targetGapImpactSummary.releaseReportVerificationRoute, "/api/release/report");
   assert.equal(targetPackageImport.body.targetGapImpactSummary.expectedResourceDeltaFromPackageRecords, 2);
   assert.equal(targetPackageImport.body.targetGapImpactSummary.rows.length, 2);
+  assert.equal(targetPackageImport.body.packageCoverageSummary.status, "package_under_covers_current_unblocker");
   assert.equal((await auditStore.readRatingEvents()).some((event) => event.payload.rating.id === "rating-target-package-live"), true);
 
   const eventCountAfterBulkImports = (await auditStore.readWorkflowEvents()).length;
@@ -16053,7 +16088,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.ok(appSource.includes("function workflowTargetGapImpactDetail(body)"));
   assert.ok(appSource.includes("targetGapImpactSummary"));
   assert.ok(appSource.includes("packageDependencySummary"));
+  assert.ok(appSource.includes("packageCoverageSummary"));
   assert.ok(appSource.includes("Package dependency order"));
+  assert.ok(appSource.includes("Package coverage"));
   assert.ok(appSource.includes("operatorEvidenceImpactSummary"));
   assert.ok(appSource.includes("Advisory impact preview"));
   assert.ok(appSource.includes("Operator evidence preview"));
@@ -17268,6 +17305,9 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("dependencyStatus`, `setupRequiredBeforePrimary`, `prerequisiteStepIds`, and `dependentPrimaryStepIds"));
   assert.ok(architectureDoc.includes("packageDependencySummary"));
   assert.ok(architectureDoc.includes("packageDependencyStatus"));
+  assert.ok(architectureDoc.includes("packageCoverageSummary"));
+  assert.ok(architectureDoc.includes("package_under_covers_current_unblocker"));
+  assert.ok(architectureDoc.includes("projectedRemainingAfterPackage"));
   assert.ok(architectureDoc.includes("rejects primary rows that precede staged setup rows"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-artifacts/template"));
   assert.ok(architectureDoc.includes("label snapshot, corpus manifest, training export, public export manifest, internal export manifest, and release report snapshot"));

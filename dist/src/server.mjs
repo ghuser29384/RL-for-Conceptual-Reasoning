@@ -23489,6 +23489,8 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
 
   const targetGapImpactSummary = targetDataCollectionPackageImpactSummary(entries);
   const packageDependencySummary = targetDataCollectionPackageDependencySummary(entries);
+  const { report: currentReleaseReport } = await buildCurrentReleaseArtifacts(context);
+  const packageCoverageSummary = targetDataCollectionPackageCoverageSummary(entries, currentReleaseReport);
 
   if (dryRun) {
     sendJson(response, 200, {
@@ -23499,6 +23501,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
       validatedResources: targetDataCollectionPackageEntrySummaries(entries),
       targetGapImpactSummary,
       packageDependencySummary,
+      packageCoverageSummary,
       resourceIds: entries.map((entry) => entry.resource?.id ?? entry.rating?.id).filter(Boolean),
       ratingIds: ratingEntries.map((entry) => entry.rating.id),
       allOrNothing: true,
@@ -23608,6 +23611,7 @@ async function targetDataCollectionPackageJsonlImportEndpoint(request, response,
     accessAudit: workflowEventsToAppend.values().next().value?.accessAudit ?? preparedRatings[0]?.event.accessAudit ?? null,
     targetGapImpactSummary,
     packageDependencySummary,
+    packageCoverageSummary,
     allOrNothing: true,
     validationPolicy:
       "each_jsonl_line_names_a_concrete_target_data_import_route_and_reuses_that_route_validator_before_any_resource_append",
@@ -24082,6 +24086,129 @@ function targetDataCollectionPackageImpactSummary(entries) {
     unknownDeltaLineCount: rows.reduce((sum, row) => sum + row.unknownDeltaLineCount, 0),
     rows,
   };
+}
+
+function targetDataCollectionPackageCoverageSummary(entries, report) {
+  const targetRows = Array.isArray(report?.targetGaps?.rows) ? report.targetGaps.rows : [];
+  const targetRowsById = new Map(targetRows.map((row) => [row.id, row]));
+  const openTargetRows = targetRows.filter((row) => {
+    const remaining = targetDataCollectionPackageFiniteNumber(row.remaining);
+    return remaining !== null && remaining > 0;
+  });
+  const impactRows = targetDataCollectionPackageImpactSummary(entries).rows.filter((row) => row.scopedToTargetGap);
+  const rows = impactRows.map((row) => targetDataCollectionPackageCoverageRow(row, targetRowsById.get(row.targetGapId)));
+  const packageTargetGapIds = uniqueValues(rows.map((row) => row.targetGapId).filter(Boolean));
+  const missingCurrentTargetGapIds = openTargetRows
+    .map((row) => row.id)
+    .filter((targetGapId) => !packageTargetGapIds.includes(targetGapId));
+  const expectedDeltas = rows
+    .map((row) => row.expectedResourceDeltaFromPackageRecords)
+    .filter((value) => value !== null);
+  const currentRemainingByTargetGap = new Map(openTargetRows.map((row) => [row.id, targetDataCollectionPackageFiniteNumber(row.remaining) ?? 0]));
+  for (const row of rows) {
+    if (!currentRemainingByTargetGap.has(row.targetGapId)) continue;
+    if (row.expectedResourceDeltaFromPackageRecords === null) continue;
+    currentRemainingByTargetGap.set(row.targetGapId, Math.max(0, currentRemainingByTargetGap.get(row.targetGapId) - row.expectedResourceDeltaFromPackageRecords));
+  }
+  const scopedRemainingBeforePackage = rows
+    .map((row) => row.remainingBeforePackage)
+    .filter((value) => value !== null)
+    .reduce((sum, value) => sum + value, 0);
+  const scopedProjectedRemainingAfterPackage = rows
+    .map((row) => row.projectedRemainingAfterPackage)
+    .filter((value) => value !== null)
+    .reduce((sum, value) => sum + value, 0);
+  return {
+    releaseReportVerificationRoute: "/api/release/report",
+    advisoryOnly: true,
+    coverageComputedBeforeAppend: true,
+    status: targetDataCollectionPackageCoverageStatus(rows, missingCurrentTargetGapIds),
+    releaseReportStatus: report?.currentStatus ?? null,
+    releaseId: report?.releaseId ?? null,
+    currentTargetGapCount: targetRows.length,
+    currentOpenTargetGapCount: openTargetRows.length,
+    scopedTargetGapCount: rows.length,
+    packageTargetGapCount: packageTargetGapIds.length,
+    missingCurrentTargetGapCount: missingCurrentTargetGapIds.length,
+    missingCurrentTargetGapIds,
+    coveredTargetGapCount: rows.filter((row) =>
+      ["package_exactly_covers_target_gap", "package_exceeds_target_gap"].includes(row.coverageStatus),
+    ).length,
+    underCoveredTargetGapCount: rows.filter((row) => row.coverageStatus === "package_under_covers_target_gap").length,
+    exceededTargetGapCount: rows.filter((row) => row.coverageStatus === "package_exceeds_target_gap").length,
+    unknownDeltaTargetGapCount: rows.filter((row) => row.coverageStatus === "package_coverage_unknown_delta").length,
+    setupOnlyTargetGapCount: rows.filter((row) => row.coverageStatus === "package_setup_only_no_target_delta").length,
+    expectedResourceDeltaFromPackageRecords: expectedDeltas.length ? expectedDeltas.reduce((sum, value) => sum + value, 0) : null,
+    currentRemainingBeforePackage: report?.targetGaps?.totals?.remainingTotal ?? null,
+    projectedCurrentRemainingAfterPackage: [...currentRemainingByTargetGap.values()].reduce((sum, value) => sum + value, 0),
+    scopedRemainingBeforePackage,
+    scopedProjectedRemainingAfterPackage,
+    byCoverageStatus: countItemsBy(rows, "coverageStatus"),
+    coveragePolicy:
+      "Package coverage compares validated package row deltas with the current /api/release/report target gaps before append. It is advisory and cannot close release gaps until real submitted evidence is appended and the release report is recomputed.",
+    rows,
+  };
+}
+
+function targetDataCollectionPackageCoverageRow(row, targetGap) {
+  const remainingBeforePackage =
+    targetDataCollectionPackageFiniteNumber(targetGap?.remaining) ?? targetDataCollectionPackageFiniteNumber(row.remainingBefore);
+  const currentBeforePackage =
+    targetDataCollectionPackageFiniteNumber(targetGap?.current) ?? targetDataCollectionPackageFiniteNumber(row.currentBefore);
+  const target = targetDataCollectionPackageFiniteNumber(targetGap?.target) ?? targetDataCollectionPackageFiniteNumber(row.target);
+  const expectedDelta = targetDataCollectionPackageFiniteNumber(row.expectedResourceDeltaFromPackageRecords);
+  const projectedRemainingAfterPackage =
+    remainingBeforePackage !== null && expectedDelta !== null ? Math.max(0, remainingBeforePackage - expectedDelta) : null;
+  const projectedCurrentAfterPackage =
+    currentBeforePackage !== null && expectedDelta !== null ? currentBeforePackage + expectedDelta : null;
+  const overage = remainingBeforePackage !== null && expectedDelta !== null ? Math.max(0, expectedDelta - remainingBeforePackage) : null;
+  return {
+    targetGapId: row.targetGapId,
+    currentReportTargetGapStatus: targetGap?.status ?? null,
+    currentBeforePackage,
+    target,
+    remainingBeforePackage,
+    expectedResourceDeltaFromPackageRecords: expectedDelta,
+    projectedCurrentAfterPackage,
+    projectedRemainingAfterPackage,
+    coverageRatio:
+      remainingBeforePackage !== null && remainingBeforePackage > 0 && expectedDelta !== null
+        ? Number((expectedDelta / remainingBeforePackage).toFixed(4))
+        : null,
+    overage,
+    coverageStatus: targetDataCollectionPackageCoverageRowStatus(row, targetGap, remainingBeforePackage, expectedDelta),
+    submittedRecordCount: row.submittedRecordCount,
+    primaryRecordCount: row.primaryRecordCount,
+    setupRecordCount: row.setupRecordCount,
+    unknownDeltaLineCount: row.unknownDeltaLineCount,
+    importRoutes: row.importRoutes,
+    relatedTargetGapIds: row.relatedTargetGapIds,
+    targetGapReadbackRoute: targetGap?.targetGapReadbackRoute ?? `/api/v1/target-gaps/${encodeURIComponent(row.targetGapId)}`,
+    verificationRoutes: row.verificationRoutes,
+  };
+}
+
+function targetDataCollectionPackageCoverageRowStatus(row, targetGap, remainingBeforePackage, expectedDelta) {
+  if (!targetGap) return "package_targets_unknown_gap";
+  if (row.unknownDeltaLineCount > 0 || expectedDelta === null) return "package_coverage_unknown_delta";
+  if (remainingBeforePackage === null) return "package_coverage_unknown_remaining";
+  if (expectedDelta <= 0) return row.setupOnly ? "package_setup_only_no_target_delta" : "package_no_target_delta";
+  if (expectedDelta < remainingBeforePackage) return "package_under_covers_target_gap";
+  if (expectedDelta === remainingBeforePackage) return "package_exactly_covers_target_gap";
+  return "package_exceeds_target_gap";
+}
+
+function targetDataCollectionPackageCoverageStatus(rows, missingCurrentTargetGapIds = []) {
+  if (!rows.length) return "package_coverage_unscoped";
+  if (rows.some((row) => row.coverageStatus === "package_targets_unknown_gap")) return "package_targets_unknown_gap";
+  if (rows.some((row) => row.coverageStatus === "package_coverage_unknown_delta")) return "package_coverage_unknown_delta";
+  if (rows.some((row) => row.coverageStatus === "package_exceeds_target_gap")) return "package_exceeds_current_unblocker";
+  if (rows.some((row) => row.coverageStatus === "package_under_covers_target_gap")) return "package_under_covers_current_unblocker";
+  if (rows.some((row) => ["package_setup_only_no_target_delta", "package_no_target_delta"].includes(row.coverageStatus))) {
+    return "package_under_covers_current_unblocker";
+  }
+  if (missingCurrentTargetGapIds.length) return "package_covers_current_unblocker_subset";
+  return "package_covers_current_unblocker";
 }
 
 function targetDataCollectionPackageEntrySummaries(entries) {
