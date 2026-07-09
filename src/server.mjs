@@ -18444,6 +18444,8 @@ function rlhf93CompletionAuditItems(report) {
         ],
         remediationRoutes: rlhf93ChecklistRowRoutes(row),
         unblocker: rlhf93CompletionAuditRowUnblocker(currentUnblocker, { ...row, checklistRowId: sourceRowId }),
+        publicDatasetReviewPackage:
+          sourceRowId === "source_intake_and_metaphilosophy" ? rlhf93CompletionAuditPublicDatasetReviewPackage(report) : null,
         generatedAt,
       }),
     );
@@ -18470,6 +18472,8 @@ function rlhf93CompletionAuditItems(report) {
           `/api/v1/metaphilosophy/deliverable-checklist/${encodeURIComponent(sourceRowId)}`,
           ...(Array.isArray(row.readbackRoutes) ? row.readbackRoutes : []),
         ],
+        publicDatasetReviewPackage:
+          sourceRowId === "public_dataset_v0_1_first_artifact" ? rlhf93CompletionAuditPublicDatasetReviewPackage(report) : null,
         generatedAt,
       }),
     );
@@ -19088,11 +19092,133 @@ function rlhf93CompletionAuditRowUnblocker(currentUnblocker, row = {}) {
   return null;
 }
 
+function rlhf93CompletionAuditPublicDatasetReviewPackage(report = {}) {
+  const openFilter = new URLSearchParams("status=open");
+  const readiness = publicDatasetReadinessReadback(report, { searchParams: openFilter });
+  const packageManifest = publicDatasetPackageManifestReadback(report, { searchParams: openFilter });
+  const releasePackage = publicDatasetReleasePackageReadback(report, { searchParams: openFilter });
+  const publicationGate = publicDatasetPublicationGateReadback(report, { searchParams: openFilter });
+  const downstreamLaunches = publicDatasetDownstreamLaunchGuardReadback(report, { searchParams: openFilter });
+  const readinessRows = Array.isArray(readiness.items) ? readiness.items : [];
+  const packageSteps = Array.isArray(packageManifest.items) ? packageManifest.items : [];
+  const releaseArtifacts = Array.isArray(releasePackage.items) ? releasePackage.items : [];
+  const publicationGates = Array.isArray(publicationGate.items) ? publicationGate.items : [];
+  const downstreamRows = Array.isArray(downstreamLaunches.items) ? downstreamLaunches.items : [];
+  const routes = uniqueValues([
+    "/api/release/report",
+    "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact",
+    "/api/v1/public-dataset-readiness?status=open",
+    "/api/v1/public-dataset-readiness",
+    "/api/v1/public-dataset-package-manifest?status=open",
+    "/api/v1/public-dataset-package-manifest",
+    "/api/v1/public-dataset-release-package?status=open",
+    "/api/v1/public-dataset-release-package",
+    "/api/v1/public-dataset-publication-gate?status=open",
+    "/api/v1/public-dataset-publication-gate",
+    "/api/v1/public-dataset-downstream-launches?status=open",
+    "/api/v1/public-dataset-downstream-launches",
+    publicDatasetPackageFileTemplateRoute,
+    publicDatasetPackageFileValidationTemplateRoute,
+    publicDatasetPackageFileValidationRoute,
+    publicDatasetPackageFileReviewManifestRoute,
+    publicDatasetPackageReviewsRoute,
+    ...readinessRows.flatMap(rlhf93CompletionAuditPublicDatasetReviewItemRoutes),
+    ...packageSteps.flatMap(rlhf93CompletionAuditPublicDatasetReviewItemRoutes),
+    ...releaseArtifacts.flatMap(rlhf93CompletionAuditPublicDatasetReviewItemRoutes),
+    ...publicationGates.flatMap(rlhf93CompletionAuditPublicDatasetReviewItemRoutes),
+    ...downstreamRows.flatMap(rlhf93CompletionAuditPublicDatasetReviewItemRoutes),
+  ]);
+  return {
+    packageKind: "public_dataset_v0_1_review_package",
+    artifactName: report.publicDatasetReadiness?.artifactName ?? publicDatasetArtifactName,
+    releaseUseStatus: readiness.releaseUseStatus ?? report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
+    reviewStatus:
+      readinessRows.length || packageSteps.length || releaseArtifacts.length || publicationGates.length || downstreamRows.length
+        ? "review_blocked_by_open_public_dataset_gates"
+        : "review_ready_for_final_verification",
+    policy:
+      "Read-only review package only; it reuses existing readiness, package, release-package, publication-gate, and downstream-launch readbacks and cannot submit evidence, create package files, publish a dataset, launch downstream surfaces, or waive gates.",
+    counts: {
+      openReadinessRows: readinessRows.length,
+      openPackageSteps: packageSteps.length,
+      openReleasePackageArtifacts: releaseArtifacts.length,
+      openPublicationGates: publicationGates.length,
+      blockedDownstreamLaunches: downstreamRows.length,
+    },
+    currentBlockingReadinessRowId: readinessRows[0]?.id ?? null,
+    currentBlockingPackageStepId: packageManifest.currentBlockingStepId ?? packageSteps[0]?.id ?? null,
+    currentBlockingReleasePackageArtifactId: releasePackage.currentBlockingArtifactId ?? releaseArtifacts[0]?.id ?? null,
+    currentBlockingPublicationGateId: publicationGate.currentBlockingGateId ?? publicationGates[0]?.id ?? null,
+    currentBlockingDownstreamLaunchId: downstreamLaunches.currentBlockingLaunchId ?? downstreamRows[0]?.id ?? null,
+    readinessRows: readinessRows.map(rlhf93CompletionAuditPublicDatasetReviewSummary),
+    packageSteps: packageSteps.map(rlhf93CompletionAuditPublicDatasetReviewSummary),
+    releasePackageArtifacts: releaseArtifacts.map(rlhf93CompletionAuditPublicDatasetReviewSummary),
+    publicationGates: publicationGates.map(rlhf93CompletionAuditPublicDatasetReviewSummary),
+    downstreamLaunches: downstreamRows.map(rlhf93CompletionAuditPublicDatasetReviewSummary),
+    reviewRoutes: {
+      deliverableChecklist: "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact",
+      openReadiness: "/api/v1/public-dataset-readiness?status=open",
+      openPackageManifest: "/api/v1/public-dataset-package-manifest?status=open",
+      openReleasePackage: "/api/v1/public-dataset-release-package?status=open",
+      openPublicationGate: "/api/v1/public-dataset-publication-gate?status=open",
+      blockedDownstreamLaunches: "/api/v1/public-dataset-downstream-launches?status=open",
+      packageFileTemplates: publicDatasetPackageFileTemplateRoute,
+      packageFileValidationTemplate: publicDatasetPackageFileValidationTemplateRoute,
+      packageFileValidation: publicDatasetPackageFileValidationRoute,
+      packageFileReviewManifest: publicDatasetPackageFileReviewManifestRoute,
+      packageReviews: publicDatasetPackageReviewsRoute,
+    },
+    routeCount: routes.length,
+    routes,
+  };
+}
+
+function rlhf93CompletionAuditPublicDatasetReviewItemRoutes(item = {}) {
+  return uniqueValues([
+    item.readbackItemRoute,
+    item.collectionReadbackRoute,
+    item.nextActionRoute,
+    item.nextActionReadbackRoute,
+    item.nextActionTemplateRoute,
+    item.nextActionDryRunRoute,
+    item.nextActionValidateOnlyRoute,
+    item.nextActionReviewManifestRoute,
+    item.nextActionWriteRoute,
+    item.nextActionVerificationRoute,
+    item.packageManifestItemRoute,
+    item.releasePackageItemRoute,
+    item.downstreamLaunchItemRoute,
+    item.publicationGateItemRoute,
+    item.sourcePackageManifestRoute,
+    item.sourceRunbookGroupRoute,
+    item.sourceActionGroupRoute,
+    item.reviewManifestRoute,
+    ...(Array.isArray(item.blockingPackageStepReadbackRoutes) ? item.blockingPackageStepReadbackRoutes : []),
+    ...(Array.isArray(item.packageStepReadbackRoutes) ? item.packageStepReadbackRoutes : []),
+  ]);
+}
+
+function rlhf93CompletionAuditPublicDatasetReviewSummary(item = {}) {
+  return {
+    id: item.id ?? item.rowId ?? null,
+    kind: item.gateKind ?? item.stepKind ?? item.artifactKind ?? item.launchKind ?? null,
+    label: item.label ?? item.requirement ?? null,
+    status: item.status ?? item.releaseUseStatus ?? null,
+    nextActionKind: item.nextActionKind ?? null,
+    nextActionRoute: item.nextActionRoute ?? null,
+    readbackItemRoute: item.readbackItemRoute ?? null,
+    routeCount: Array.isArray(item.routes) ? item.routes.length : item.routeCount ?? 0,
+    reviewReasons: Array.isArray(item.reviewReasons) ? item.reviewReasons : [],
+    targetGapIds: Array.isArray(item.targetGapIds) ? item.targetGapIds : [],
+  };
+}
+
 function rlhf93CompletionAuditDecoratedItem(item) {
   const readbackItemRoute = `/api/v1/metaphilosophy/rlhf93-completion-audit/${encodeURIComponent(item.id)}`;
   const collectionReadbackRoute = "/api/v1/metaphilosophy/rlhf93-completion-audit";
   const unblockerRoutes = rlhf93CompletionAuditUnblockerRoutes(item.unblocker);
   const unblockerPackageManifest = item.unblocker?.packageManifest ?? null;
+  const publicDatasetReviewPackage = item.publicDatasetReviewPackage ?? null;
   const open = rlhf93CompletionAuditItemIsOpen(item);
   const nextAction = rlhf93CompletionAuditNextAction(item, { open, readbackItemRoute });
   const routes = rlhf93CompletionAuditItemRoutes({
@@ -19130,6 +19256,14 @@ function rlhf93CompletionAuditDecoratedItem(item) {
     unblockerMissingCurrentTargetGapCount: unblockerPackageManifest?.missingCurrentTargetGapCount ?? null,
     unblockerStepCount: unblockerPackageManifest?.stepCount ?? item.unblocker?.stepCount ?? null,
     unblockerTargetGapIds: Array.isArray(item.unblocker?.targetGapIds) ? item.unblocker.targetGapIds : [],
+    publicDatasetReviewPackage,
+    publicDatasetReviewStatus: publicDatasetReviewPackage?.reviewStatus ?? null,
+    publicDatasetOpenReadinessRowCount: publicDatasetReviewPackage?.counts?.openReadinessRows ?? null,
+    publicDatasetOpenPackageStepCount: publicDatasetReviewPackage?.counts?.openPackageSteps ?? null,
+    publicDatasetOpenReleasePackageArtifactCount: publicDatasetReviewPackage?.counts?.openReleasePackageArtifacts ?? null,
+    publicDatasetOpenPublicationGateCount: publicDatasetReviewPackage?.counts?.openPublicationGates ?? null,
+    publicDatasetBlockedDownstreamLaunchCount: publicDatasetReviewPackage?.counts?.blockedDownstreamLaunches ?? null,
+    publicDatasetReviewRoutes: Array.isArray(publicDatasetReviewPackage?.routes) ? publicDatasetReviewPackage.routes : [],
     completionState: open ? "open" : "closed",
     isComplete: !open,
     routeCount: routes.length,
@@ -19370,6 +19504,8 @@ function rlhf93CompletionAuditItemRoutes(item) {
           step.packageManifestItemRoute,
         ])
       : []),
+    ...(Array.isArray(item?.publicDatasetReviewPackage?.routes) ? item.publicDatasetReviewPackage.routes : []),
+    ...(item?.publicDatasetReviewPackage?.reviewRoutes ? Object.values(item.publicDatasetReviewPackage.reviewRoutes) : []),
     ...(Array.isArray(item?.evidenceRoutes) ? item.evidenceRoutes : []),
     ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
     ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),

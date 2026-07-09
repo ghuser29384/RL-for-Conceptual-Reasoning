@@ -26568,6 +26568,56 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.routes.includes(item.nextActionVerificationRoute),
     ),
   );
+  const sourceIntakePublicDatasetReviewAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "october-source_intake_and_metaphilosophy",
+  );
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow);
+  assert.equal(sourceIntakePublicDatasetReviewAuditRow.publicDatasetReviewStatus, "review_blocked_by_open_public_dataset_gates");
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.publicDatasetOpenReadinessRowCount >= 3);
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.publicDatasetOpenPackageStepCount >= 3);
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.publicDatasetOpenReleasePackageArtifactCount >= 3);
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.publicDatasetOpenPublicationGateCount >= 4);
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.publicDatasetBlockedDownstreamLaunchCount >= 4);
+  assert.equal(
+    sourceIntakePublicDatasetReviewAuditRow.publicDatasetReviewPackage.reviewRoutes.openPackageManifest,
+    "/api/v1/public-dataset-package-manifest?status=open",
+  );
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.routes.includes("/api/v1/public-dataset-release-package?status=open"));
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.routes.includes("/api/v1/public-dataset-publication-gate?status=open"));
+  assert.ok(sourceIntakePublicDatasetReviewAuditRow.routes.includes("/api/v1/public-dataset-downstream-launches?status=open"));
+
+  const publicDatasetDeliverableReviewAuditRow = rlhf93CompletionAudit.body.items.find(
+    (item) => item.id === "metaphilosophy-public_dataset_v0_1_first_artifact",
+  );
+  assert.ok(publicDatasetDeliverableReviewAuditRow);
+  assert.equal(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewStatus, "review_blocked_by_open_public_dataset_gates");
+  assert.ok(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.counts.openReadinessRows >= 3);
+  assert.ok(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.counts.openPackageSteps >= 3);
+  assert.ok(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.counts.openReleasePackageArtifacts >= 3);
+  assert.ok(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.counts.openPublicationGates >= 4);
+  assert.ok(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.counts.blockedDownstreamLaunches >= 4);
+  assert.equal(publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.currentBlockingReadinessRowId, "release_cleared_position_critique_pairs");
+  assert.ok(
+    publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.readinessRows.some(
+      (row) => row.id === "release_version_freeze" && row.nextActionKind === "validate_release_version_freeze",
+    ),
+  );
+  assert.ok(
+    publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.publicationGates.some(
+      (row) => row.id === "publication-action-boundary" && row.status === "blocked_by_target_scale",
+    ),
+  );
+  assert.ok(
+    publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.downstreamLaunches.every(
+      (row) => row.status === "blocked_until_dataset_v0_1_ready",
+    ),
+  );
+  assert.ok(publicDatasetDeliverableReviewAuditRow.routes.includes("/api/v1/public-dataset-package-manifest?status=open"));
+  assert.ok(publicDatasetDeliverableReviewAuditRow.routes.includes("/api/v1/public-dataset-package-files/review-manifest"));
+  assert.equal(
+    publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.routeCount,
+    publicDatasetDeliverableReviewAuditRow.publicDatasetReviewPackage.routes.length,
+  );
   assert.ok(
     rlhf93CompletionAudit.body.items.some(
       (item) =>
@@ -26780,8 +26830,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
     headers: adminHeaders,
   });
   assert.equal(rlhf93CompletionAuditNextActionRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditNextActionRouteFilter.body));
-  assert.equal(rlhf93CompletionAuditNextActionRouteFilter.body.count, 2);
-  assert.ok(rlhf93CompletionAuditNextActionRouteFilter.body.items.every((item) => item.nextActionKind === "validate_public_document"));
+  assert.ok(rlhf93CompletionAuditNextActionRouteFilter.body.count >= 2);
+  assert.ok(
+    rlhf93CompletionAuditNextActionRouteFilter.body.items.some(
+      (item) => item.id === "public-dataset-dataset_card" && item.nextActionKind === "validate_public_document",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditNextActionRouteFilter.body.items.some(
+      (item) => item.id === "public-dataset-methodology_report" && item.nextActionKind === "validate_public_document",
+    ),
+  );
 
   const rlhf93CompletionAuditOpenPublicDatasetRouteFilter = await invokeApi(context, {
     method: "GET",
@@ -26798,6 +26857,19 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(
     rlhf93CompletionAuditOpenPublicDatasetRouteFilter.body.items.some(
       (item) => item.id === "metaphilosophy-public_dataset_v0_1_first_artifact",
+    ),
+  );
+
+  const rlhf93CompletionAuditOpenPublicDatasetPackageRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/public-dataset-package-manifest?status=open")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(rlhf93CompletionAuditOpenPublicDatasetPackageRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditOpenPublicDatasetPackageRouteFilter.body));
+  assert.equal(rlhf93CompletionAuditOpenPublicDatasetPackageRouteFilter.body.count, 2);
+  assert.ok(
+    rlhf93CompletionAuditOpenPublicDatasetPackageRouteFilter.body.items.every(
+      (item) => item.publicDatasetReviewStatus === "review_blocked_by_open_public_dataset_gates",
     ),
   );
 
