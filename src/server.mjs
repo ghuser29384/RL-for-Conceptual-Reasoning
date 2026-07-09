@@ -2179,6 +2179,33 @@ function validatePublicDatasetPackageReviewResource(resource) {
   if (!Array.isArray(manifest.unexpectedFiles)) return invalid("publicDatasetPackageReview.packageManifest.unexpectedFiles must be an array");
   const packageValidationStatus = resource.packageValidationStatus;
   const packageReviewStatus = resource.packageReviewStatus;
+  const packageReadyForPublicationReview = resource.packageReadyForPublicationReview === true;
+  const expectedPackageReadyForPublicationReview =
+    packageValidationStatus === "public_dataset_package_files_ready_for_governed_review";
+  if (packageReadyForPublicationReview !== expectedPackageReadyForPublicationReview) {
+    return invalid(
+      "publicDatasetPackageReview.packageReadyForPublicationReview must be true only when packageValidationStatus is public_dataset_package_files_ready_for_governed_review",
+    );
+  }
+  if (
+    expectedPackageReadyForPublicationReview &&
+    resource.releasePackageStatus !== "public_dataset_release_package_ready_for_publication_review"
+  ) {
+    return invalid("ready package reviews require public_dataset_release_package_ready_for_publication_review");
+  }
+  if (
+    expectedPackageReadyForPublicationReview &&
+    resource.publicationGateStatus !== "public_dataset_publication_ready_for_governed_review"
+  ) {
+    return invalid("ready package reviews require public_dataset_publication_ready_for_governed_review");
+  }
+  if (
+    packageValidationStatus === "public_dataset_package_files_valid_but_release_blocked" &&
+    resource.releasePackageStatus === "public_dataset_release_package_ready_for_publication_review" &&
+    resource.publicationGateStatus === "public_dataset_publication_ready_for_governed_review"
+  ) {
+    return invalid("release-blocked package validation requires a blocked release-package or publication-gate status");
+  }
   if (packageValidationStatus === "public_dataset_package_files_invalid" && packageReviewStatus !== "public_dataset_package_review_blocked_by_invalid_files") {
     return invalid("invalid package-file validation must map to public_dataset_package_review_blocked_by_invalid_files");
   }
@@ -6399,6 +6426,7 @@ const workflowWriteEndpoints = [
       "packageReviewStatus",
       "releasePackageStatus",
       "publicationGateStatus",
+      "packageReadyForPublicationReview",
       "packageManifest",
       "validationSummary",
       "reviewDecision",
@@ -6414,7 +6442,7 @@ const workflowWriteEndpoints = [
       validationSummary: ["id", "packageValidationStatus", "packageReadyForPublicationReview", "counts"],
     },
     requiredNonEmptyArrayFields: ["packageManifest.files"],
-    requiredBooleanFields: ["rawPackageContentsStored", "packageWriteActionAvailable", "publicationActionAvailable"],
+    requiredBooleanFields: ["packageReadyForPublicationReview", "rawPackageContentsStored", "packageWriteActionAvailable", "publicationActionAvailable"],
     requiredStringPrefixes: {
       packageManifestHash: "sha256:",
       "packageManifest.packageManifestHash": "sha256:",
@@ -6429,6 +6457,14 @@ const workflowWriteEndpoints = [
         "public_dataset_package_review_blocked_by_invalid_files",
         "public_dataset_package_review_blocked_by_release_gates",
         "public_dataset_package_review_ready_for_governed_publication_review",
+      ],
+      releasePackageStatus: [
+        "public_dataset_release_package_blocked",
+        "public_dataset_release_package_ready_for_publication_review",
+      ],
+      publicationGateStatus: [
+        "public_dataset_publication_blocked",
+        "public_dataset_publication_ready_for_governed_review",
       ],
       reviewDecision: [
         "record_hash_only_review_for_followup",
@@ -6449,6 +6485,7 @@ const workflowWriteEndpoints = [
       { field: "artifactName", matchesField: "packageManifest.artifactName" },
       { field: "packageManifestHash", matchesField: "packageManifest.packageManifestHash" },
       { field: "packageValidationStatus", matchesField: "validationSummary.packageValidationStatus" },
+      { field: "packageReadyForPublicationReview", matchesField: "validationSummary.packageReadyForPublicationReview" },
     ],
     customValidator: validatePublicDatasetPackageReviewResource,
   }),
@@ -16727,15 +16764,7 @@ function metaphilosophyDeliverableChecklistReadback(report, options = {}) {
   const rows = Array.isArray(checklist.rows) ? checklist.rows : [];
   const filters = metaphilosophyDeliverableChecklistFilters(options.searchParams);
   const filteredItems = rows
-    .map((row, index) => ({
-      ...row,
-      sequence: index + 1,
-      deliverableId: row.id,
-      sourceChecklistId: checklist.id ?? null,
-      releaseUseStatus: checklist.releaseUseStatus ?? "metaphilosophy_deliverable_checklist_missing",
-      reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
-      evidenceIdCount: Array.isArray(row.evidenceIds) ? row.evidenceIds.length : 0,
-    }))
+    .map((row, index) => metaphilosophyDeliverableChecklistDecoratedItem(row, index, checklist))
     .filter((item) => metaphilosophyDeliverableChecklistMatchesFilters(item, filters));
   const items = options.itemId ? filteredItems.filter((item) => item.id === options.itemId || item.deliverableId === options.itemId) : filteredItems;
   if (options.itemId && items.length === 0) return null;
@@ -16761,6 +16790,7 @@ function metaphilosophyDeliverableChecklistReadback(report, options = {}) {
       openRows: rows.filter(metaphilosophyStatusIsOpen).length,
       closedRows: rows.filter((item) => !metaphilosophyStatusIsOpen(item)).length,
       byStatus: countItemsBy(rows, "status"),
+      byRoute: countValues(rows.map((row, index) => metaphilosophyDeliverableChecklistDecoratedItem(row, index, checklist)).flatMap((item) => item.routes)),
     },
     filteredCounts: {
       rows: items.length,
@@ -16771,9 +16801,38 @@ function metaphilosophyDeliverableChecklistReadback(report, options = {}) {
       notApplicable: items.filter((item) => String(item.status ?? "").startsWith("not_applicable")).length,
       byStatus: countItemsBy(items, "status"),
       byEvidenceId: countExpandedValues(items, "evidenceIds"),
+      byRoute: countValues(items.flatMap(metaphilosophyDeliverableChecklistItemRoutes)),
     },
     ...(options.itemId ? { item: items[0] } : {}),
     items,
+  };
+}
+
+function metaphilosophyDeliverableChecklistDecoratedItem(row, index, checklist) {
+  const deliverableId = row.id ?? `metaphilosophy-deliverable-${index + 1}`;
+  const readbackItemRoute = `/api/v1/metaphilosophy/deliverable-checklist/${encodeURIComponent(deliverableId)}`;
+  const collectionReadbackRoute = "/api/v1/metaphilosophy/deliverable-checklist";
+  const releaseReportRoute = "/api/release/report";
+  const routes = metaphilosophyDeliverableChecklistItemRoutes({
+    ...row,
+    deliverableId,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    releaseReportRoute,
+  });
+  return {
+    ...row,
+    sequence: index + 1,
+    deliverableId,
+    sourceChecklistId: checklist.id ?? null,
+    releaseUseStatus: checklist.releaseUseStatus ?? "metaphilosophy_deliverable_checklist_missing",
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+    evidenceIdCount: Array.isArray(row.evidenceIds) ? row.evidenceIds.length : 0,
+    routeCount: routes.length,
+    routes,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    releaseReportRoute,
   };
 }
 
@@ -16781,17 +16840,8 @@ function metaphilosophyDecisionLogReadback(report, options = {}) {
   const decisionLog = report.metaphilosophyDecisionLog ?? {};
   const rows = Array.isArray(decisionLog.entries) ? decisionLog.entries : [];
   const filters = metaphilosophyDecisionLogFilters(options.searchParams);
-  const filteredItems = rows
-    .map((row, index) => ({
-      ...row,
-      sequence: index + 1,
-      decisionLogEntryId: row.id,
-      sourceDecisionLogId: decisionLog.id ?? null,
-      releaseUseStatus: decisionLog.releaseUseStatus ?? "metaphilosophy_decision_log_missing",
-      reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
-      sourceFile: row.sourceFile ?? row.preservedIn ?? decisionLog.sourceFile ?? "Metaphilosophy_Decision_Log.md",
-    }))
-    .filter((item) => metaphilosophyDecisionLogMatchesFilters(item, filters));
+  const decoratedRows = rows.map((row, index) => metaphilosophyDecisionLogDecoratedItem(row, index, decisionLog));
+  const filteredItems = decoratedRows.filter((item) => metaphilosophyDecisionLogMatchesFilters(item, filters));
   const items = options.itemId
     ? filteredItems.filter((item) => item.id === options.itemId || item.decisionLogEntryId === options.itemId)
     : filteredItems;
@@ -16826,6 +16876,7 @@ function metaphilosophyDecisionLogReadback(report, options = {}) {
       byDecisionStatus: countItemsBy(rows, "decisionStatus"),
       bySourceVersion: countItemsBy(rows, "sourceVersion"),
       byStatus: countItemsBy(rows, "status"),
+      byRoute: countValues(decoratedRows.flatMap((item) => item.routes)),
     },
     filteredCounts: {
       rows: items.length,
@@ -16838,9 +16889,44 @@ function metaphilosophyDecisionLogReadback(report, options = {}) {
       bySourceVersion: countItemsBy(items, "sourceVersion"),
       byReleaseGateImpact: countItemsBy(items, "releaseGateImpact"),
       byStatus: countItemsBy(items, "status"),
+      byRoute: countValues(items.flatMap((item) => item.routes)),
     },
     ...(options.itemId ? { item: items[0] } : {}),
     items,
+  };
+}
+
+function metaphilosophyDecisionLogDecoratedItem(row, index, decisionLog) {
+  const decisionLogEntryId = row.id ?? `metaphilosophy-decision-log-entry-${index + 1}`;
+  const readbackItemRoute = `/api/v1/metaphilosophy/decision-log/${encodeURIComponent(decisionLogEntryId)}`;
+  const collectionReadbackRoute = "/api/v1/metaphilosophy/decision-log";
+  const releaseReportRoute = "/api/release/report";
+  const deliverableChecklistRoute = "/api/v1/metaphilosophy/deliverable-checklist/decision_log_preserved";
+  const completionAuditRoute = "/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-decision_log_preserved";
+  const routes = metaphilosophyDecisionLogItemRoutes({
+    ...row,
+    decisionLogEntryId,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    releaseReportRoute,
+    deliverableChecklistRoute,
+    completionAuditRoute,
+  });
+  return {
+    ...row,
+    sequence: index + 1,
+    decisionLogEntryId,
+    sourceDecisionLogId: decisionLog.id ?? null,
+    releaseUseStatus: decisionLog.releaseUseStatus ?? "metaphilosophy_decision_log_missing",
+    reviewReasonCount: Array.isArray(row.reviewReasons) ? row.reviewReasons.length : 0,
+    sourceFile: row.sourceFile ?? row.preservedIn ?? decisionLog.sourceFile ?? "Metaphilosophy_Decision_Log.md",
+    routeCount: routes.length,
+    routes,
+    readbackItemRoute,
+    collectionReadbackRoute,
+    releaseReportRoute,
+    deliverableChecklistRoute,
+    completionAuditRoute,
   };
 }
 
@@ -18795,6 +18881,7 @@ function metaphilosophyDeliverableChecklistFilters(searchParams) {
     deliverableId: value("deliverableId") ?? value("id"),
     status: value("status"),
     evidenceId: value("evidenceId"),
+    route: value("route"),
   };
 }
 
@@ -18811,6 +18898,7 @@ function metaphilosophyDecisionLogFilters(searchParams) {
     sourceVersion: value("sourceVersion"),
     releaseGateImpact: value("releaseGateImpact"),
     sourceFile: value("sourceFile"),
+    route: value("route"),
   };
 }
 
@@ -19042,8 +19130,25 @@ function metaphilosophyDeliverableChecklistMatchesFilters(item, filters) {
     if (key === "deliverableId") return item.id === value || item.deliverableId === value;
     if (key === "status") return metaphilosophyMatchesStatus(item, value);
     if (key === "evidenceId") return Array.isArray(item.evidenceIds) && item.evidenceIds.includes(value);
+    if (key === "route") return metaphilosophyDeliverableChecklistItemRoutes(item).includes(value);
     return item?.[key] === value;
   });
+}
+
+function metaphilosophyDeliverableChecklistItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
+    ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
+    ...(Array.isArray(item?.evidenceRoutes) ? item.evidenceRoutes : []),
+    ...(Array.isArray(item?.evidenceIds)
+      ? item.evidenceIds.map((evidenceId) => `/api/v1/release-report-sections/${encodeURIComponent(evidenceId)}`)
+      : []),
+  ]);
 }
 
 function metaphilosophyDecisionLogMatchesFilters(item, filters) {
@@ -19051,8 +19156,27 @@ function metaphilosophyDecisionLogMatchesFilters(item, filters) {
     if (!value) return true;
     if (key === "decisionLogEntryId") return item.id === value || item.decisionLogEntryId === value;
     if (key === "status") return metaphilosophyMatchesStatus(item, value);
+    if (key === "route") return metaphilosophyDecisionLogItemRoutes(item).includes(value);
     return item?.[key] === value;
   });
+}
+
+function metaphilosophyDecisionLogItemRoutes(item) {
+  return uniqueValues([
+    item?.collectionReadbackRoute,
+    item?.readbackItemRoute,
+    item?.releaseReportRoute,
+    item?.deliverableChecklistRoute,
+    item?.completionAuditRoute,
+    ...(Array.isArray(item?.routes) ? item.routes : []),
+    ...(Array.isArray(item?.readbackRoutes) ? item.readbackRoutes : []),
+    ...(Array.isArray(item?.verificationRoutes) ? item.verificationRoutes : []),
+    ...(Array.isArray(item?.remediationRoutes) ? item.remediationRoutes : []),
+    ...(Array.isArray(item?.evidenceRoutes) ? item.evidenceRoutes : []),
+    ...(Array.isArray(item?.evidenceIds)
+      ? item.evidenceIds.map((evidenceId) => `/api/v1/release-report-sections/${encodeURIComponent(evidenceId)}`)
+      : []),
+  ]);
 }
 
 function metaphilosophySourceWorkbenchReadinessMatchesFilters(item, filters) {

@@ -12132,6 +12132,46 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(driftedInnerPackageReviewHash.status, 400);
   assert.match(driftedInnerPackageReviewHash.body.detail, /packageManifestHash must match packageManifest\.packageManifestHash/);
 
+  const driftedPackageReviewReadiness = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      publicDatasetPackageReview: {
+        ...packageReviewPayload.publicDatasetPackageReview,
+        id: "dataset-v0-1-package-review-readiness-drift",
+        packageReadyForPublicationReview: true,
+      },
+    }),
+  });
+  assert.equal(driftedPackageReviewReadiness.status, 400);
+  assert.match(
+    driftedPackageReviewReadiness.body.detail,
+    /packageReadyForPublicationReview must match validationSummary\.packageReadyForPublicationReview/,
+  );
+
+  const driftedPackageReviewSummaryReadiness = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/public-dataset-package-reviews",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      publicDatasetPackageReview: {
+        ...packageReviewPayload.publicDatasetPackageReview,
+        id: "dataset-v0-1-package-review-summary-readiness-drift",
+        packageReadyForPublicationReview: true,
+        validationSummary: {
+          ...packageReviewPayload.publicDatasetPackageReview.validationSummary,
+          packageReadyForPublicationReview: true,
+        },
+      },
+    }),
+  });
+  assert.equal(driftedPackageReviewSummaryReadiness.status, 400);
+  assert.match(
+    driftedPackageReviewSummaryReadiness.body.detail,
+    /packageReadyForPublicationReview must be true only when packageValidationStatus is public_dataset_package_files_ready_for_governed_review/,
+  );
+
   const packageReview = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/public-dataset-package-reviews",
@@ -23127,7 +23167,14 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(decisionLogCollection.body.counts.bySourceVersion.RLHF84, 1);
   assert.equal(decisionLogCollection.body.counts.bySourceVersion.RLHF92, 1);
   assert.equal(decisionLogCollection.body.counts.closedRows, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.equal(decisionLogCollection.body.counts.byRoute["/api/v1/metaphilosophy/decision-log"], METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.equal(decisionLogCollection.body.counts.byRoute["/api/release/report"], METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.equal(
+    decisionLogCollection.body.counts.byRoute["/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-decision_log_preserved"],
+    METAPHILOSOPHY_DECISION_LOG_ENTRIES.length,
+  );
   assert.ok(decisionLogCollection.body.items.every((item) => item.status === "complete"));
+  assert.ok(decisionLogCollection.body.items.every((item) => item.routeCount === item.routes.length));
   assert.ok(decisionLogCollection.body.items.some((item) => item.id === "rlhf84-volunteer-platform-safeguards"));
   assert.ok(decisionLogCollection.body.items.some((item) => item.id === "rlhf93-prune-historical-revision-log"));
   assert.match(decisionLogCollection.body.policy.historicalCoverage, /RLHF84-RLHF92/);
@@ -23152,6 +23199,20 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93DecisionLog.body.count, 1);
   assert.equal(rlhf93DecisionLog.body.items[0].sourceVersion, "RLHF93");
 
+  const decisionLogByCompletionAuditRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/decision-log?route=${encodeURIComponent("/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-decision_log_preserved")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(decisionLogByCompletionAuditRoute.status, 200, JSON.stringify(decisionLogByCompletionAuditRoute.body));
+  assert.equal(decisionLogByCompletionAuditRoute.body.count, METAPHILOSOPHY_DECISION_LOG_ENTRIES.length);
+  assert.equal(
+    decisionLogByCompletionAuditRoute.body.filteredCounts.byRoute[
+      "/api/v1/metaphilosophy/rlhf93-completion-audit/metaphilosophy-decision_log_preserved"
+    ],
+    METAPHILOSOPHY_DECISION_LOG_ENTRIES.length,
+  );
+
   const decisionLogItem = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/metaphilosophy/decision-log/rlhf93-prune-historical-revision-log",
@@ -23161,6 +23222,8 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(decisionLogItem.body.count, 1);
   assert.equal(decisionLogItem.body.item.id, "rlhf93-prune-historical-revision-log");
   assert.equal(decisionLogItem.body.item.decisionStatus, "pruned");
+  assert.equal(decisionLogItem.body.item.readbackItemRoute, "/api/v1/metaphilosophy/decision-log/rlhf93-prune-historical-revision-log");
+  assert.ok(decisionLogItem.body.item.routes.includes("/api/v1/metaphilosophy/deliverable-checklist/decision_log_preserved"));
 
   const rlhf93CompletionAudit = await invokeApi(context, {
     method: "GET",
@@ -23654,12 +23717,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.review_required, 2);
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.complete, 3);
   assert.equal(deliverableChecklist.body.filteredCounts.byStatus.not_applicable_without_source_derived_items, 1);
+  assert.equal(deliverableChecklist.body.counts.byRoute["/api/v1/metaphilosophy/deliverable-checklist"], 6);
+  assert.equal(deliverableChecklist.body.counts.byRoute["/api/release/report"], 6);
   assert.ok(deliverableChecklist.body.items.some((row) => row.deliverableId === "greenfield_task_track_taxonomy" && row.status === "review_required"));
   assert.ok(
     deliverableChecklist.body.items.some(
       (row) =>
         row.deliverableId === "public_dataset_v0_1_first_artifact" &&
         row.status === "review_required" &&
+        row.routeCount > 0 &&
+        row.readbackItemRoute === "/api/v1/metaphilosophy/deliverable-checklist/public_dataset_v0_1_first_artifact" &&
+        row.routes.includes("/api/v1/public-dataset-readiness/public_first_ladder_gate") &&
         row.readbackRoutes.includes("/api/v1/public-dataset-readiness/public_first_ladder_gate"),
     ),
   );
@@ -23675,6 +23743,17 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(filteredDeliverableChecklist.body.count, 1);
   assert.equal(filteredDeliverableChecklist.body.items[0].deliverableId, "greenfield_task_track_taxonomy");
   assert.equal(filteredDeliverableChecklist.body.items[0].status, "review_required");
+
+  const routeFilteredDeliverableChecklist = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/deliverable-checklist?route=${encodeURIComponent("/api/v1/public-dataset-readiness/public_first_ladder_gate")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(routeFilteredDeliverableChecklist.status, 200, JSON.stringify(routeFilteredDeliverableChecklist.body));
+  assert.equal(routeFilteredDeliverableChecklist.body.count, 1);
+  assert.equal(routeFilteredDeliverableChecklist.body.filters.route, "/api/v1/public-dataset-readiness/public_first_ladder_gate");
+  assert.equal(routeFilteredDeliverableChecklist.body.items[0].deliverableId, "public_dataset_v0_1_first_artifact");
+  assert.equal(routeFilteredDeliverableChecklist.body.filteredCounts.byRoute["/api/v1/public-dataset-readiness/public_first_ladder_gate"], 1);
 
   const openDeliverableChecklist = await invokeApi(context, {
     method: "GET",
