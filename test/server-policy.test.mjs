@@ -4801,6 +4801,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/release-gate-profiles"],
     ["GET", "/api/v1/release-gate-profiles/release-gate-smoke"],
     ["POST", "/api/v1/primary-rater-anchor-policies"],
+    ["GET", "/api/v1/primary-rater-anchor-policies"],
     ["GET", "/api/v1/primary-rater-anchor-policies/primary-rater-policy-smoke"],
     ["POST", "/api/v1/comparability-tier-policies"],
     ["GET", "/api/v1/comparability-tier-policies/comparability-tier-policy-smoke"],
@@ -4819,6 +4820,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/active-learning-selection-policies"],
     ["GET", "/api/v1/active-learning-selection-policies/active-learning-selection-policy-smoke"],
     ["POST", "/api/v1/training-export-uncertainty-policies"],
+    ["GET", "/api/v1/training-export-uncertainty-policies"],
     ["GET", "/api/v1/training-export-uncertainty-policies/training-export-uncertainty-policy-smoke"],
     ["POST", "/api/v1/active-learning-selection-audits"],
     ["GET", "/api/v1/active-learning-selection-audits"],
@@ -4893,6 +4895,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/verification-workspace-sessions"],
     ["GET", "/api/v1/verification-workspace-sessions/verification-workspace-smoke"],
     ["POST", "/api/v1/model-family-overlap-policies"],
+    ["GET", "/api/v1/model-family-overlap-policies"],
     ["GET", "/api/v1/model-family-overlap-policies/model-family-overlap-policy-smoke"],
     ["POST", "/api/v1/rating-checks"],
     ["GET", "/api/v1/rating-checks/rating-check-smoke"],
@@ -5167,14 +5170,17 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/model-run-environments"],
     ["GET", "/api/v1/model-run-environments/model-run-env-smoke"],
     ["POST", "/api/v1/source-family-clustering-policies"],
+    ["GET", "/api/v1/source-family-clustering-policies"],
     ["GET", "/api/v1/source-family-clustering-policies/source-family-clustering-policy-smoke"],
     ["POST", "/api/v1/rater-item-conflicts"],
     ["GET", "/api/v1/rater-item-conflicts"],
     ["GET", "/api/v1/rater-item-conflicts/rater-conflict-smoke"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/conflict-screen"],
     ["POST", "/api/v1/rater-training-exposure-policies"],
+    ["GET", "/api/v1/rater-training-exposure-policies"],
     ["GET", "/api/v1/rater-training-exposure-policies/training-exposure-policy-smoke"],
     ["POST", "/api/v1/rater-training-exposure-snapshots"],
+    ["GET", "/api/v1/rater-training-exposure-snapshots"],
     ["GET", "/api/v1/rater-training-exposure-snapshots/training-exposure-smoke"],
     ["GET", "/api/v1/assignments/assign-ai-base-rate/training-exposure-snapshot"],
     ["POST", "/api/v1/assignments/assign-ai-base-rate/draft"],
@@ -5236,11 +5242,13 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/queue-freshness-policies/queue-freshness-smoke"],
     ["POST", "/api/v1/queues/assignment/stale-by-delay-scan"],
     ["GET", "/api/v1/queue-stale-by-delay-scans"],
+    ["GET", "/api/v1/queue-stale-by-delay-scans/queue-stale-smoke"],
     ["POST", "/api/v1/client-surface-integrity-policies"],
     ["GET", "/api/v1/client-surface-integrity-policies"],
     ["GET", "/api/v1/client-surface-integrity-policies/client-surface-policy-smoke"],
     ["POST", "/api/v1/client-surfaces/client-surface-policy-smoke/integrity-check"],
     ["GET", "/api/v1/client-surface-integrity-checks"],
+    ["GET", "/api/v1/client-surface-integrity-checks/client-surface-check-smoke"],
     ["POST", "/api/v1/external-worm-audit-log-policies"],
     ["GET", "/api/v1/external-worm-audit-log-policies"],
     ["GET", "/api/v1/external-worm-audit-log-policies/external-worm-policy-smoke"],
@@ -6174,6 +6182,12 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/corpus-manifests"',
     'resourceKey: "corpusManifest"',
     "Submitted corpus composition manifests for release-scale, source, topic, split, and provenance review.",
+    'id: "primary-rater-anchor-policies"',
+    'endpoint: "/api/v1/primary-rater-anchor-policies"',
+    'resourceKey: "primaryRaterAnchorPolicy"',
+    'id: "training-export-uncertainty-policies"',
+    'endpoint: "/api/v1/training-export-uncertainty-policies"',
+    'resourceKey: "trainingExportUncertaintyPolicy"',
     'id: "position-intake"',
     'endpoint: "/api/v1/intake/positions"',
     'resourceKey: "position"',
@@ -6222,6 +6236,9 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "model-provider-data-handling-policies"',
     'endpoint: "/api/v1/model-provider-data-handling-policies"',
     'resourceKey: "modelProviderDataHandlingPolicy"',
+    'id: "model-family-overlap-policies"',
+    'endpoint: "/api/v1/model-family-overlap-policies"',
+    'resourceKey: "modelFamilyOverlapPolicy"',
     'id: "prompt-templates"',
     'endpoint: "/api/v1/prompt-templates"',
     'resourceKey: "promptTemplate"',
@@ -6364,6 +6381,15 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "rater-item-conflicts"',
     'endpoint: "/api/v1/rater-item-conflicts"',
     'resourceKey: "raterItemConflict"',
+    'id: "source-family-clustering-policies"',
+    'endpoint: "/api/v1/source-family-clustering-policies"',
+    'resourceKey: "sourceFamilyClusteringPolicy"',
+    'id: "rater-training-exposure-policies"',
+    'endpoint: "/api/v1/rater-training-exposure-policies"',
+    'resourceKey: "raterTrainingExposurePolicy"',
+    'id: "rater-training-exposure-snapshots"',
+    'endpoint: "/api/v1/rater-training-exposure-snapshots"',
+    'resourceKey: "raterTrainingExposureSnapshot"',
     'id: "rater-instruction-compatibility-policies"',
     'endpoint: "/api/v1/rater-instruction-compatibility-policies"',
     'resourceKey: "raterInstructionCompatibilityPolicy"',
@@ -6791,6 +6817,8 @@ test("release provenance evidence collections are routed for admin readback", as
     ["itemTextVersion", "/api/v1/item-text-versions", "item-text-version-readback"],
     ["modelPromptSiblingContextPolicy", "/api/v1/model-prompt-sibling-context-policies", "model-prompt-sibling-context-policy-readback"],
     ["raterReliabilityWeightModel", "/api/v1/rater-reliability-weight-models", "reliability-weight-model-readback"],
+    ["primaryRaterAnchorPolicy", "/api/v1/primary-rater-anchor-policies", "primary-rater-anchor-policy-readback"],
+    ["trainingExportUncertaintyPolicy", "/api/v1/training-export-uncertainty-policies", "training-export-uncertainty-policy-readback"],
   ];
   for (const [resourceKey, url] of provenanceCollections) {
     const empty = await invokeApi(context, {
@@ -6890,6 +6918,9 @@ test("rating-control policy collections are routed for operator readback", async
     ["partialTaskPromotionPolicy", "/api/v1/partial-task-promotion-policies"],
     ["exposureQuarantinePolicy", "/api/v1/exposure-quarantine-policies"],
     ["raterItemConflict", "/api/v1/rater-item-conflicts"],
+    ["sourceFamilyClusteringPolicy", "/api/v1/source-family-clustering-policies"],
+    ["raterTrainingExposurePolicy", "/api/v1/rater-training-exposure-policies"],
+    ["raterTrainingExposureSnapshot", "/api/v1/rater-training-exposure-snapshots"],
   ];
   for (const [resourceKey, url] of ratingControlCollections) {
     const response = await invokeApi(context, {
@@ -6984,6 +7015,23 @@ test("operational-control collections are routed for operator readback", async (
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
+
+  for (const [resourceKey, url, id] of [
+    ["queueStaleByDelayScan", "/api/v1/queue-stale-by-delay-scans", "queue-stale-by-delay-scan-readback"],
+    ["clientSurfaceIntegrityCheck", "/api/v1/client-surface-integrity-checks", "client-surface-integrity-check-readback"],
+  ]) {
+    await auditStore.appendWorkflowEvent({
+      eventType: `test_${resourceKey}_submitted`,
+      payload: { [resourceKey]: { id, releaseId: "october-2026-demo", status: "submitted" } },
+    });
+    const byId = await invokeApi(context, {
+      method: "GET",
+      url: `${url}/${id}`,
+      headers: adminHeaders,
+    });
+    assert.equal(byId.status, 200, `${resourceKey} by-id`);
+    assert.equal(byId.body.id, id, `${resourceKey} by-id`);
+  }
 });
 
 test("interaction and practice evidence collections are routed for operator readback", async () => {
@@ -17247,6 +17295,7 @@ test("model-evaluation operator evidence collections are routed for admin readba
     ["modelInferenceConfig", "/api/v1/model-inference-configs"],
     ["modelRunEnvironment", "/api/v1/model-run-environments"],
     ["modelProviderDataHandlingPolicy", "/api/v1/model-provider-data-handling-policies"],
+    ["modelFamilyOverlapPolicy", "/api/v1/model-family-overlap-policies"],
     ["promptTemplate", "/api/v1/prompt-templates"],
     ["parserConfig", "/api/v1/parser-configs"],
     ["leaderboard", "/api/v1/leaderboards"],
@@ -20332,7 +20381,10 @@ test("production schema includes rating-control projection tables with admin aud
   assert.ok(architectureDoc.includes("exposure_quarantine_policies"));
   assert.ok(architectureDoc.includes("/api/v1/blinding-preview-audits"));
   assert.ok(architectureDoc.includes("/api/v1/rater-item-conflicts"));
-  assert.ok(architectureDoc.includes("blinding-preview, partial-output, exposure-quarantine, and rater-item conflict controls"));
+  assert.ok(architectureDoc.includes("/api/v1/source-family-clustering-policies"));
+  assert.ok(architectureDoc.includes("/api/v1/rater-training-exposure-policies"));
+  assert.ok(architectureDoc.includes("/api/v1/rater-training-exposure-snapshots"));
+  assert.ok(architectureDoc.includes("source-family conflict, and training-exposure controls"));
   assert.ok(architectureDoc.includes("without becoming scores, labels, live queue execution, candidate promotion"));
 });
 
@@ -21906,7 +21958,9 @@ test("production schema includes normalized RLHF90 operational-control projectio
   assert.ok(architectureDoc.includes("queue_freshness_policies"));
   assert.ok(architectureDoc.includes("sensitive_audit_chain_verifications"));
   assert.ok(architectureDoc.includes("GET /api/v1/queue-stale-by-delay-scans"));
+  assert.ok(architectureDoc.includes("GET /api/v1/queue-stale-by-delay-scans/{id}"));
   assert.ok(architectureDoc.includes("GET /api/v1/client-surface-integrity-checks"));
+  assert.ok(architectureDoc.includes("GET /api/v1/client-surface-integrity-checks/{id}"));
   assert.ok(architectureDoc.includes("does not create policy decisions, consume decisions, run queue scans, inspect browser clients, or submit operational evidence"));
   assert.ok(architectureDoc.includes("Phase 1 source-intake"));
   assert.ok(architectureDoc.includes("operational-control events"));
