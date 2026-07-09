@@ -14,6 +14,7 @@ import {
   metricGovernanceProjectionForWorkflowEvent,
   metaphilosophyProjectionForWorkflowEvent,
   operationalControlProjectionForWorkflowEvent,
+  participantDataGovernanceProjectionForWorkflowEvent,
   policyEvidenceProjectionForWorkflowEvent,
   ratingControlProjectionForWorkflowEvent,
   ratingExperienceProjectionForWorkflowEvent,
@@ -18527,7 +18528,7 @@ test("production schema includes normalized Phase 1 source-intake tables with se
   );
   assert.ok(
     architectureDoc.includes(
-      "projects work-unit, rating, release-artifact/operator-evidence, discussion/adjudication, verification/adjudication-control, interaction/practice/UX, metric/governance-control, release-readiness, safeguard/auxiliary-QA, workflow-state transition, Phase 1 source-intake, source-preparation, and operational-control events",
+      "projects work-unit, rating, release-artifact/operator-evidence, discussion/adjudication, verification/adjudication-control, interaction/practice/UX, participant data-governance, metric/governance-control, release-readiness, safeguard/auxiliary-QA, workflow-state transition, Phase 1 source-intake, source-preparation, and operational-control events",
     ),
   );
   assert.ok(architectureDoc.includes("argument_extraction_source_spans"));
@@ -18718,7 +18719,7 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("does not create prompt templates, parser configs, model runs, candidate artifacts, labels, or release claims"));
   assert.ok(
     architectureDoc.includes(
-      "projects work-unit, rating, release-artifact/operator-evidence, discussion/adjudication, verification/adjudication-control, interaction/practice/UX, metric/governance-control, release-readiness, safeguard/auxiliary-QA, workflow-state transition, Phase 1 source-intake, source-preparation, and operational-control events",
+      "projects work-unit, rating, release-artifact/operator-evidence, discussion/adjudication, verification/adjudication-control, interaction/practice/UX, participant data-governance, metric/governance-control, release-readiness, safeguard/auxiliary-QA, workflow-state transition, Phase 1 source-intake, source-preparation, and operational-control events",
     ),
   );
 });
@@ -18900,7 +18901,7 @@ test("production schema includes discussion and adjudication projection tables w
   assert.ok(architectureDoc.includes("ordinary raters do not gain SQL access"));
   assert.ok(
     architectureDoc.includes(
-      "projects work-unit, rating, release-artifact/operator-evidence, discussion/adjudication, verification/adjudication-control, interaction/practice/UX, metric/governance-control, release-readiness, safeguard/auxiliary-QA, workflow-state transition",
+      "projects work-unit, rating, release-artifact/operator-evidence, discussion/adjudication, verification/adjudication-control, interaction/practice/UX, participant data-governance, metric/governance-control, release-readiness, safeguard/auxiliary-QA, workflow-state transition",
     ),
   );
 });
@@ -19050,6 +19051,48 @@ test("production schema includes safeguard and auxiliary QA projection tables wi
   assert.ok(architectureDoc.includes("external_assistance_declarations"));
   assert.ok(architectureDoc.includes("diagnostic_deferral_records"));
   assert.ok(architectureDoc.includes("do not become label, score, queue, or release-gate tables"));
+});
+
+test("production schema includes participant data-governance projection tables with self/auditor RLS", () => {
+  const schema = readFileSync("db/production-schema.sql", "utf8");
+  const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
+  const tables = [
+    "rater_data_consents",
+    "volunteer_data_consent_profiles",
+    "rater_data_restriction_requests",
+    "volunteer_data_withdrawal_requests",
+  ];
+  for (const table of tables) {
+    assert.ok(schema.includes(`create table if not exists ${table}`), table);
+    assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
+    assert.ok(schema.includes(`create policy ${table}_read_self_or_auditors on ${table}`), table);
+    assert.ok(schema.includes(`create policy ${table}_write_admin_or_service on ${table}`), table);
+    assert.ok(schema.includes("or rater_id = app_auth.current_external_auth_id()"), table);
+    assert.ok(schema.includes("app_auth.has_role('admin', 'service')"), table);
+  }
+  assert.ok(schema.includes("resource_key text not null check (resource_key = 'raterDataConsent')"));
+  assert.ok(schema.includes("check (resource_key = 'volunteerDataConsentProfile')"));
+  assert.ok(schema.includes("check (resource_key = 'raterDataRestrictionRequest')"));
+  assert.ok(schema.includes("check (resource_key = 'volunteerDataWithdrawalRequest')"));
+  assert.ok(schema.includes("visibility_class text not null default 'participant_self_or_admin_audit'"));
+  assert.ok(schema.includes("future_training_export_excluded boolean not null default false"));
+  assert.ok(schema.includes("future_assignment_stop boolean not null default false"));
+  assert.ok(schema.includes("frozen_snapshot_impact text"));
+  assert.ok(schema.includes("requester_notification_status text"));
+  assert.ok(schema.includes("create index if not exists rater_data_consents_rater_idx"));
+  assert.ok(schema.includes("create index if not exists rater_data_consents_notice_idx"));
+  assert.ok(schema.includes("create index if not exists volunteer_data_consent_profiles_rater_idx"));
+  assert.ok(schema.includes("create index if not exists rater_data_restriction_requests_rater_idx"));
+  assert.ok(schema.includes("create index if not exists rater_data_restriction_requests_type_idx"));
+  assert.ok(schema.includes("create index if not exists volunteer_data_withdrawal_requests_rater_idx"));
+  assert.ok(schema.includes("create index if not exists volunteer_data_withdrawal_requests_type_idx"));
+  assert.ok(architectureDoc.includes("participant data-governance projection tables"));
+  assert.ok(architectureDoc.includes("rater_data_consents"));
+  assert.ok(architectureDoc.includes("volunteer_data_consent_profiles"));
+  assert.ok(architectureDoc.includes("rater_data_restriction_requests"));
+  assert.ok(architectureDoc.includes("volunteer_data_withdrawal_requests"));
+  assert.ok(architectureDoc.includes("participant-self-or-admin audit RLS"));
+  assert.ok(architectureDoc.includes("do not mutate frozen label snapshots, revise existing ratings, change training-export contents, or waive release gates"));
 });
 
 test("postgres audit store projects release artifact workflow events into normalized rows", () => {
@@ -20378,6 +20421,118 @@ test("postgres audit store projects safeguard and auxiliary QA workflow events i
   const diagnosticProjection = safeguardAuxiliaryProjectionForWorkflowEvent(baseEvent("diagnosticDeferralRecord", cases[7][1]));
   assert.equal(diagnosticProjection.values.policy_id, "diagnostic-deferral-policy-projection");
   assert.equal(safeguardAuxiliaryProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-safeguard-artifact" })), null);
+});
+
+test("postgres audit store projects participant data-governance workflow events into normalized rows", () => {
+  const baseEvent = (resourceKey, resource) => ({
+    id: `event-${resource.id}`,
+    type: `${resourceKey}_submitted`,
+    resourceKey,
+    resourceId: resource.id,
+    payloadHash: `sha256:${resource.id}`,
+    receivedAt: "2026-10-01T02:00:00.000Z",
+    payload: { [resourceKey]: resource },
+  });
+  const cases = [
+    [
+      "raterDataConsent",
+      {
+        id: "rater-consent-projection",
+        releaseId: "october-2026-demo",
+        raterId: "rater-projection",
+        noticeVersion: "notice-v1",
+        consentedCategories: ["rating_metadata", "deidentified_public_artifact"],
+        useScopesAcknowledged: ["internal_research", "public_dataset_release"],
+        consentStatus: "consented_current_notice",
+        publicArtifactsDeidentifiedByDefault: true,
+        inputHash: "sha256:rater-consent-projection",
+        consentedAt: "2026-10-01T02:00:00.000Z",
+      },
+      "rater_data_consents",
+    ],
+    [
+      "volunteerDataConsentProfile",
+      {
+        id: "volunteer-consent-profile-projection",
+        releaseId: "october-2026-demo",
+        rater_id: "rater-projection",
+        notice_version: "notice-v1",
+        data_categories_covered: ["rating_metadata"],
+        use_scopes_acknowledged: ["internal_research"],
+        status: "active_current_notice",
+        private_learning_data_excluded_from_release_and_training: true,
+        input_hash: "sha256:volunteer-consent-profile-projection",
+      },
+      "volunteer_data_consent_profiles",
+    ],
+    [
+      "raterDataRestrictionRequest",
+      {
+        id: "rater-restriction-projection",
+        releaseId: "october-2026-demo",
+        actorId: "rater-projection",
+        requestType: "restrict_future_training_export",
+        affectedDataCategories: ["free_text_rationale"],
+        actionTaken: "future_training_export_excluded",
+        requesterNotificationStatus: "notified",
+        artifactHash: "sha256:rater-restriction-projection",
+      },
+      "rater_data_restriction_requests",
+    ],
+    [
+      "volunteerDataWithdrawalRequest",
+      {
+        id: "withdrawal-request-projection",
+        releaseId: "october-2026-demo",
+        raterId: "rater-projection",
+        requestType: "withdraw_future_assignments_and_training_export",
+        affectedDataCategories: ["rating_metadata", "free_text_rationale"],
+        withdrawalStatus: "withdrawal_recorded",
+        futureAssignmentStop: true,
+        futureTrainingExportExcluded: true,
+        frozenSnapshotImpact: "no_mutation_to_frozen_label_snapshots",
+        requesterNotificationStatus: "notified",
+        inputHash: "sha256:withdrawal-request-projection",
+      },
+      "volunteer_data_withdrawal_requests",
+    ],
+  ];
+
+  for (const [resourceKey, resource, table] of cases) {
+    const projection = participantDataGovernanceProjectionForWorkflowEvent(baseEvent(resourceKey, resource));
+    assert.equal(projection.table, table, resourceKey);
+    assert.equal(projection.values.id, resource.id, resourceKey);
+    assert.equal(projection.values.release_id, "october-2026-demo", resourceKey);
+    assert.equal(projection.values.resource_key, resourceKey, resourceKey);
+    assert.equal(projection.values.rater_id, "rater-projection", resourceKey);
+    assert.equal(projection.values.visibility_class, "participant_self_or_admin_audit", resourceKey);
+    assert.equal(projection.values.input_hash.startsWith("sha256:"), true, resourceKey);
+    assert.equal(projection.values.artifact_json.id, resource.id, resourceKey);
+    assert.equal(projection.values.record_json.resourceKey, resourceKey, resourceKey);
+    assert.equal(projection.values.event_id, `event-${resource.id}`, resourceKey);
+  }
+
+  const consentProjection = participantDataGovernanceProjectionForWorkflowEvent(baseEvent("raterDataConsent", cases[0][1]));
+  assert.deepEqual(consentProjection.values.data_categories_covered, ["rating_metadata", "deidentified_public_artifact"]);
+  assert.deepEqual(consentProjection.values.use_scopes_acknowledged, ["internal_research", "public_dataset_release"]);
+  assert.equal(consentProjection.values.workflow_status, "consented_current_notice");
+  assert.equal(consentProjection.values.privacy_disposition, "public_artifacts_deidentified_by_default");
+
+  const profileProjection = participantDataGovernanceProjectionForWorkflowEvent(baseEvent("volunteerDataConsentProfile", cases[1][1]));
+  assert.equal(profileProjection.values.privacy_disposition, "private_learning_data_excluded_from_release_and_training");
+
+  const restrictionProjection = participantDataGovernanceProjectionForWorkflowEvent(baseEvent("raterDataRestrictionRequest", cases[2][1]));
+  assert.equal(restrictionProjection.values.request_type, "restrict_future_training_export");
+  assert.deepEqual(restrictionProjection.values.affected_data_categories, ["free_text_rationale"]);
+  assert.equal(restrictionProjection.values.action_taken, "future_training_export_excluded");
+  assert.equal(restrictionProjection.values.requester_notification_status, "notified");
+
+  const withdrawalProjection = participantDataGovernanceProjectionForWorkflowEvent(baseEvent("volunteerDataWithdrawalRequest", cases[3][1]));
+  assert.equal(withdrawalProjection.values.future_assignment_stop, true);
+  assert.equal(withdrawalProjection.values.future_training_export_excluded, true);
+  assert.equal(withdrawalProjection.values.frozen_snapshot_impact, "no_mutation_to_frozen_label_snapshots");
+  assert.equal(withdrawalProjection.values.privacy_disposition, "no_mutation_to_frozen_label_snapshots");
+  assert.equal(participantDataGovernanceProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-participant-data-governance" })), null);
 });
 
 test("postgres audit store projects work-unit workflow events into normalized rows", () => {

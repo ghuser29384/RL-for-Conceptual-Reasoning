@@ -1557,6 +1557,56 @@ create table if not exists language_artifact_assessments (
   like visibility_policies including all
 );
 
+create table if not exists rater_data_consents (
+  id text primary key,
+  release_id text,
+  resource_key text not null check (resource_key = 'raterDataConsent'),
+  rater_id text not null,
+  notice_version text,
+  request_type text,
+  data_categories_covered text[] not null default '{}'::text[],
+  use_scopes_acknowledged text[] not null default '{}'::text[],
+  affected_data_categories text[] not null default '{}'::text[],
+  action_taken text,
+  workflow_status text not null,
+  privacy_disposition text,
+  future_assignment_stop boolean not null default false,
+  future_training_export_excluded boolean not null default false,
+  frozen_snapshot_impact text,
+  requester_notification_status text,
+  visibility_class text not null default 'participant_self_or_admin_audit'
+    check (visibility_class = 'participant_self_or_admin_audit'),
+  input_hash text not null check (input_hash like 'sha256:%'),
+  artifact_json jsonb not null,
+  event_id text,
+  record_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists volunteer_data_consent_profiles (
+  like rater_data_consents including defaults,
+  primary key (id),
+  check (resource_key = 'volunteerDataConsentProfile'),
+  check (visibility_class = 'participant_self_or_admin_audit'),
+  check (input_hash like 'sha256:%')
+);
+
+create table if not exists rater_data_restriction_requests (
+  like rater_data_consents including defaults,
+  primary key (id),
+  check (resource_key = 'raterDataRestrictionRequest'),
+  check (visibility_class = 'participant_self_or_admin_audit'),
+  check (input_hash like 'sha256:%')
+);
+
+create table if not exists volunteer_data_withdrawal_requests (
+  like rater_data_consents including defaults,
+  primary key (id),
+  check (resource_key = 'volunteerDataWithdrawalRequest'),
+  check (visibility_class = 'participant_self_or_admin_audit'),
+  check (input_hash like 'sha256:%')
+);
+
 create table if not exists task_output_eligibility_policies (
   id text primary key,
   release_id text,
@@ -2996,6 +3046,27 @@ create index if not exists language_artifact_assessments_rater_idx
 create index if not exists language_artifact_assessments_release_idx
   on language_artifact_assessments (release_id);
 
+create index if not exists rater_data_consents_rater_idx
+  on rater_data_consents (rater_id);
+
+create index if not exists rater_data_consents_notice_idx
+  on rater_data_consents (notice_version);
+
+create index if not exists volunteer_data_consent_profiles_rater_idx
+  on volunteer_data_consent_profiles (rater_id);
+
+create index if not exists rater_data_restriction_requests_rater_idx
+  on rater_data_restriction_requests (rater_id);
+
+create index if not exists rater_data_restriction_requests_type_idx
+  on rater_data_restriction_requests (request_type);
+
+create index if not exists volunteer_data_withdrawal_requests_rater_idx
+  on volunteer_data_withdrawal_requests (rater_id);
+
+create index if not exists volunteer_data_withdrawal_requests_type_idx
+  on volunteer_data_withdrawal_requests (request_type);
+
 create index if not exists task_output_eligibility_policies_policy_idx
   on task_output_eligibility_policies (policy_id);
 
@@ -3392,6 +3463,10 @@ alter table accessibility_conformance_reports enable row level security;
 alter table volunteer_incentive_policies enable row level security;
 alter table rater_qualification_records enable row level security;
 alter table language_artifact_assessments enable row level security;
+alter table rater_data_consents enable row level security;
+alter table volunteer_data_consent_profiles enable row level security;
+alter table rater_data_restriction_requests enable row level security;
+alter table volunteer_data_withdrawal_requests enable row level security;
 alter table task_output_eligibility_policies enable row level security;
 alter table score_input_policies enable row level security;
 alter table draft_storage_policies enable row level security;
@@ -4573,6 +4648,62 @@ create policy language_artifact_assessments_write_expert_admin_or_service on lan
   for all
   using (app_auth.has_role('expert', 'admin', 'service'))
   with check (app_auth.has_role('expert', 'admin', 'service'));
+
+drop policy if exists rater_data_consents_read_self_or_auditors on rater_data_consents;
+create policy rater_data_consents_read_self_or_auditors on rater_data_consents
+  for select
+  using (
+    app_auth.has_role('admin', 'auditor', 'service')
+    or rater_id = app_auth.current_external_auth_id()
+  );
+
+drop policy if exists rater_data_consents_write_admin_or_service on rater_data_consents;
+create policy rater_data_consents_write_admin_or_service on rater_data_consents
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists volunteer_data_consent_profiles_read_self_or_auditors on volunteer_data_consent_profiles;
+create policy volunteer_data_consent_profiles_read_self_or_auditors on volunteer_data_consent_profiles
+  for select
+  using (
+    app_auth.has_role('admin', 'auditor', 'service')
+    or rater_id = app_auth.current_external_auth_id()
+  );
+
+drop policy if exists volunteer_data_consent_profiles_write_admin_or_service on volunteer_data_consent_profiles;
+create policy volunteer_data_consent_profiles_write_admin_or_service on volunteer_data_consent_profiles
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists rater_data_restriction_requests_read_self_or_auditors on rater_data_restriction_requests;
+create policy rater_data_restriction_requests_read_self_or_auditors on rater_data_restriction_requests
+  for select
+  using (
+    app_auth.has_role('admin', 'auditor', 'service')
+    or rater_id = app_auth.current_external_auth_id()
+  );
+
+drop policy if exists rater_data_restriction_requests_write_admin_or_service on rater_data_restriction_requests;
+create policy rater_data_restriction_requests_write_admin_or_service on rater_data_restriction_requests
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists volunteer_data_withdrawal_requests_read_self_or_auditors on volunteer_data_withdrawal_requests;
+create policy volunteer_data_withdrawal_requests_read_self_or_auditors on volunteer_data_withdrawal_requests
+  for select
+  using (
+    app_auth.has_role('admin', 'auditor', 'service')
+    or rater_id = app_auth.current_external_auth_id()
+  );
+
+drop policy if exists volunteer_data_withdrawal_requests_write_admin_or_service on volunteer_data_withdrawal_requests;
+create policy volunteer_data_withdrawal_requests_write_admin_or_service on volunteer_data_withdrawal_requests
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
 
 drop policy if exists task_output_eligibility_policies_read_auditors on task_output_eligibility_policies;
 create policy task_output_eligibility_policies_read_auditors on task_output_eligibility_policies

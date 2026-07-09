@@ -26,6 +26,15 @@ const policyEvidenceProjectionTableNames = new Set(Object.values(policyEvidenceP
 
 const expertReadablePolicyEvidenceResourceKeys = new Set(["languageArtifactAssessment"]);
 
+const participantDataGovernanceProjectionTables = Object.freeze({
+  raterDataConsent: "rater_data_consents",
+  volunteerDataConsentProfile: "volunteer_data_consent_profiles",
+  raterDataRestrictionRequest: "rater_data_restriction_requests",
+  volunteerDataWithdrawalRequest: "volunteer_data_withdrawal_requests",
+});
+
+const participantDataGovernanceProjectionTableNames = new Set(Object.values(participantDataGovernanceProjectionTables));
+
 const ratingControlProjectionTables = Object.freeze({
   taskOutputEligibilityPolicy: "task_output_eligibility_policies",
   scoreInputPolicy: "score_input_policies",
@@ -752,6 +761,90 @@ function policyEvidenceProjectionValuesForWorkflowResource(resourceKey, resource
     record_json: recordJson,
     created_at: resource.createdAt ?? resource.created_at ?? resource.frozenAt ?? resource.timestamp ?? resource.reviewedAt ?? event.receivedAt ?? null,
   };
+}
+
+export function participantDataGovernanceProjectionForWorkflowEvent(event) {
+  const resourceKey = event?.resourceKey;
+  const resource = event?.payload?.[resourceKey];
+  if (!participantDataGovernanceProjectionTables[resourceKey] || !resource || typeof resource !== "object" || Array.isArray(resource)) return null;
+  const eventId = event.id ?? event.eventId ?? null;
+  const recordJson = event;
+  const dataCategoriesCovered = textArray(
+    resource.dataCategoriesCovered ?? resource.data_categories_covered ?? resource.consentedCategories ?? resource.consented_categories,
+  );
+  const useScopesAcknowledged = textArray(resource.useScopesAcknowledged ?? resource.use_scopes_acknowledged ?? resource.useScopes);
+  const affectedDataCategories = textArray(resource.affectedDataCategories ?? resource.affected_data_categories);
+  return {
+    table: participantDataGovernanceProjectionTables[resourceKey],
+    values: {
+      id: resource.id,
+      release_id: resource.releaseId ?? resource.release_id ?? null,
+      resource_key: resourceKey,
+      rater_id: resource.raterId ?? resource.rater_id ?? resource.actorId ?? resource.actor_id ?? null,
+      notice_version: resource.noticeVersion ?? resource.notice_version ?? null,
+      request_type: resource.requestType ?? resource.request_type ?? null,
+      data_categories_covered: dataCategoriesCovered,
+      use_scopes_acknowledged: useScopesAcknowledged,
+      affected_data_categories: affectedDataCategories,
+      action_taken: resource.actionTaken ?? resource.action_taken ?? null,
+      workflow_status: participantDataGovernanceWorkflowStatus(resourceKey, resource),
+      privacy_disposition: participantDataGovernancePrivacyDisposition(resourceKey, resource),
+      future_assignment_stop: resource.futureAssignmentStop === true || resource.future_assignment_stop === true,
+      future_training_export_excluded:
+        resource.futureTrainingExportExcluded === true || resource.future_training_export_excluded === true,
+      frozen_snapshot_impact: resource.frozenSnapshotImpact ?? resource.frozen_snapshot_impact ?? null,
+      requester_notification_status:
+        resource.requesterNotificationStatus ?? resource.requester_notification_status ?? null,
+      visibility_class: "participant_self_or_admin_audit",
+      input_hash:
+        resource.inputHash ??
+        resource.input_hash ??
+        resource.artifactHash ??
+        resource.artifact_hash ??
+        event.payloadHash ??
+        `sha256:${resourceKey}:${resource.id}`,
+      artifact_json: resource,
+      event_id: eventId,
+      record_json: recordJson,
+      created_at: resource.createdAt ?? resource.created_at ?? resource.consentedAt ?? resource.consented_at ?? resource.timestamp ?? event.receivedAt ?? null,
+    },
+  };
+}
+
+function participantDataGovernanceWorkflowStatus(resourceKey, resource) {
+  return (
+    resource.status ??
+    resource.reviewStatus ??
+    resource.review_status ??
+    resource.consentStatus ??
+    resource.consent_status ??
+    resource.restrictionStatus ??
+    resource.restriction_status ??
+    resource.withdrawalStatus ??
+    resource.withdrawal_status ??
+    resource.actionTaken ??
+    resource.action_taken ??
+    (resourceKey === "raterDataConsent" || resourceKey === "volunteerDataConsentProfile"
+      ? "rater_data_consent_submitted"
+      : null) ??
+    `${resourceKey}_submitted`
+  );
+}
+
+function participantDataGovernancePrivacyDisposition(resourceKey, resource) {
+  if (resourceKey === "raterDataConsent" || resourceKey === "volunteerDataConsentProfile") {
+    if (resource.privateLearningDataExcludedFromReleaseAndTraining === true || resource.private_learning_data_excluded_from_release_and_training === true) {
+      return "private_learning_data_excluded_from_release_and_training";
+    }
+    if (resource.publicArtifactsDeidentifiedByDefault === true || resource.public_artifacts_deidentified_by_default === true) {
+      return "public_artifacts_deidentified_by_default";
+    }
+    return resource.identifiableAccessRestriction ?? resource.identifiable_access_restriction ?? "consent_profile_recorded";
+  }
+  if (resourceKey === "volunteerDataWithdrawalRequest") {
+    return resource.frozenSnapshotImpact ?? resource.frozen_snapshot_impact ?? resource.actionTaken ?? resource.action_taken ?? "withdrawal_request_recorded";
+  }
+  return resource.actionTaken ?? resource.action_taken ?? "restriction_request_recorded";
 }
 
 export function ratingControlProjectionForWorkflowEvent(event) {
@@ -2533,6 +2626,7 @@ async function appendWorkflowResourceProjection(db, event) {
   await appendReleaseConfigWorkflowProjection(db, event);
   await appendMetaphilosophyWorkflowProjection(db, event);
   await appendPolicyEvidenceWorkflowProjection(db, event);
+  await appendParticipantDataGovernanceWorkflowProjection(db, event);
   await appendRatingControlWorkflowProjection(db, event);
   await appendCandidateGenerationWorkflowProjection(db, event);
   await appendDiscussionAdjudicationWorkflowProjection(db, event);
@@ -4175,6 +4269,85 @@ async function appendPolicyEvidenceWorkflowProjection(db, event) {
       workflow_status = excluded.workflow_status,
       visibility_class = excluded.visibility_class,
       artifact_status = excluded.artifact_status,
+      input_hash = excluded.input_hash,
+      artifact_json = excluded.artifact_json,
+      event_id = excluded.event_id,
+      record_json = excluded.record_json,
+      created_at = excluded.created_at
+    `;
+}
+
+async function appendParticipantDataGovernanceWorkflowProjection(db, event) {
+  const projection = participantDataGovernanceProjectionForWorkflowEvent(event);
+  if (!projection || !participantDataGovernanceProjectionTableNames.has(projection.table)) return;
+  const { values } = projection;
+  const table = db(projection.table);
+  await db`
+    insert into ${table} (
+      id,
+      release_id,
+      resource_key,
+      rater_id,
+      notice_version,
+      request_type,
+      data_categories_covered,
+      use_scopes_acknowledged,
+      affected_data_categories,
+      action_taken,
+      workflow_status,
+      privacy_disposition,
+      future_assignment_stop,
+      future_training_export_excluded,
+      frozen_snapshot_impact,
+      requester_notification_status,
+      visibility_class,
+      input_hash,
+      artifact_json,
+      event_id,
+      record_json,
+      created_at
+    )
+    values (
+      ${values.id},
+      ${values.release_id},
+      ${values.resource_key},
+      ${values.rater_id},
+      ${values.notice_version},
+      ${values.request_type},
+      ${values.data_categories_covered},
+      ${values.use_scopes_acknowledged},
+      ${values.affected_data_categories},
+      ${values.action_taken},
+      ${values.workflow_status},
+      ${values.privacy_disposition},
+      ${values.future_assignment_stop},
+      ${values.future_training_export_excluded},
+      ${values.frozen_snapshot_impact},
+      ${values.requester_notification_status},
+      ${values.visibility_class},
+      ${values.input_hash},
+      ${db.json(values.artifact_json)},
+      ${values.event_id},
+      ${db.json(values.record_json)},
+      coalesce(${values.created_at}::timestamptz, now())
+    )
+    on conflict (id) do update set
+      release_id = excluded.release_id,
+      resource_key = excluded.resource_key,
+      rater_id = excluded.rater_id,
+      notice_version = excluded.notice_version,
+      request_type = excluded.request_type,
+      data_categories_covered = excluded.data_categories_covered,
+      use_scopes_acknowledged = excluded.use_scopes_acknowledged,
+      affected_data_categories = excluded.affected_data_categories,
+      action_taken = excluded.action_taken,
+      workflow_status = excluded.workflow_status,
+      privacy_disposition = excluded.privacy_disposition,
+      future_assignment_stop = excluded.future_assignment_stop,
+      future_training_export_excluded = excluded.future_training_export_excluded,
+      frozen_snapshot_impact = excluded.frozen_snapshot_impact,
+      requester_notification_status = excluded.requester_notification_status,
+      visibility_class = excluded.visibility_class,
       input_hash = excluded.input_hash,
       artifact_json = excluded.artifact_json,
       event_id = excluded.event_id,
