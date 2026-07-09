@@ -18459,6 +18459,7 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("POST /api/v1/target-gaps/import-jsonl-package/review-manifest"));
   assert.ok(architectureDoc.includes("targetDataPackageReviewManifest"));
   assert.ok(architectureDoc.includes("It also exposes the target-data package review-manifest action"));
+  assert.ok(architectureDoc.includes("The RLHF93 completion audit includes the current target-data package review-manifest route"));
   assert.ok(architectureDoc.includes("POST /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-package-reviews"));
   assert.ok(architectureDoc.includes("publicDatasetPackageReview"));
@@ -25954,6 +25955,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.nextActionRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
         item.nextActionValidateOnlyRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
         item.nextActionDryRunRoute === "/api/v1/target-gaps/import-jsonl-package?dryRun=true" &&
+        item.nextActionReviewManifestRoute === "/api/v1/target-gaps/import-jsonl-package/review-manifest" &&
         item.nextActionTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25" &&
         item.nextActionWriteRoute === "/api/v1/target-gaps/import-jsonl-package" &&
         item.nextActionExpectedResourceDelta === 2034 &&
@@ -25961,6 +25963,7 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.unblockerStarterTemplateRoute === "/api/v1/target-gaps/import-jsonl-template?expand=remaining&maxExpandedRecords=25" &&
         item.unblockerPackageDryRunImportRoute === "/api/v1/target-gaps/import-jsonl-package?dryRun=true" &&
         item.unblockerPackageValidateOnlyImportRoute === "/api/v1/target-gaps/import-jsonl-package?validateOnly=true" &&
+        item.unblockerPackageReviewManifestRoute === "/api/v1/target-gaps/import-jsonl-package/review-manifest" &&
         item.unblockerExpectedResourceDelta === 2034 &&
         item.unblockerPreflightDependencyStatus === "setup_prerequisites_required_before_primary_imports" &&
         item.unblockerPreflightCoverageStatus === "package_covers_current_unblocker" &&
@@ -25981,7 +25984,12 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.ok(targetScaleAuditRow);
   assert.equal(targetScaleAuditRow.unblockerPackageManifestRoute, "/api/v1/target-gaps/current-package-manifest");
   assert.equal(targetScaleAuditRow.unblocker.packageManifest.packageValidateOnlyImportRoute, "/api/v1/target-gaps/import-jsonl-package?validateOnly=true");
+  assert.equal(
+    targetScaleAuditRow.unblocker.packageManifest.packageReviewManifestRoute,
+    "/api/v1/target-gaps/import-jsonl-package/review-manifest",
+  );
   assert.equal(targetScaleAuditRow.routeCount, targetScaleAuditRow.routes.length);
+  assert.ok(targetScaleAuditRow.routes.includes("/api/v1/target-gaps/import-jsonl-package/review-manifest"));
   assert.ok(targetScaleAuditRow.templateReadbackRoutes.length > 0);
   assert.ok(targetScaleAuditRow.templateReadbackRoutes.every((route) => targetScaleAuditRow.routes.includes(route)));
   assert.ok((targetScaleAuditRow.preflightCoverageRoutes ?? []).every((route) => targetScaleAuditRow.routes.includes(route)));
@@ -26339,6 +26347,32 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
   assert.equal(rlhf93CompletionAuditUnblockerRouteFilter.status, 200, JSON.stringify(rlhf93CompletionAuditUnblockerRouteFilter.body));
   assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "release-current-status"));
   assert.ok(rlhf93CompletionAuditUnblockerRouteFilter.body.items.some((item) => item.id === "october-target_scale_and_data_collection"));
+
+  const rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/metaphilosophy/rlhf93-completion-audit?route=${encodeURIComponent("/api/v1/target-gaps/import-jsonl-package/review-manifest")}`,
+    headers: adminHeaders,
+  });
+  assert.equal(
+    rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter.status,
+    200,
+    JSON.stringify(rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter.body),
+  );
+  assert.ok(
+    rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter.body.items.some(
+      (item) => item.id === "release-current-status",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter.body.items.some(
+      (item) => item.id === "october-target_scale_and_data_collection",
+    ),
+  );
+  assert.ok(
+    rlhf93CompletionAuditTargetPackageReviewManifestRouteFilter.body.filteredCounts.byRoute[
+      "/api/v1/target-gaps/import-jsonl-package/review-manifest"
+    ] >= 2,
+  );
 
   const rlhf93CompletionAuditTargetTemplateRouteFilter = await invokeApi(context, {
     method: "GET",
