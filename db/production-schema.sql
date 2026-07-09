@@ -1622,6 +1622,68 @@ create table if not exists exposure_quarantine_policies (
   like task_output_eligibility_policies including all
 );
 
+create table if not exists candidate_batches (
+  id text primary key,
+  release_id text,
+  resource_key text not null,
+  position_id text,
+  position_ids text[] not null default '{}'::text[],
+  candidate_batch_id text,
+  candidate_id text,
+  generated_submission_id text,
+  generation_run_id text,
+  generation_run_ids text[] not null default '{}'::text[],
+  label_snapshot_id text,
+  policy_id text,
+  active_learning_selection_policy_id text,
+  prompt_template_id text,
+  model_provider_policy_id text,
+  judge_model_provider_policy_id text,
+  source_type text,
+  generation_route text,
+  workflow_status text not null,
+  review_status text,
+  artifact_status text not null,
+  visibility_class text not null default 'admin_audit_only' check (visibility_class = 'admin_audit_only'),
+  candidate_count integer,
+  judged_count integer,
+  promoted_count integer,
+  score_value double precision,
+  input_hash text not null check (input_hash like 'sha256:%'),
+  artifact_json jsonb not null,
+  event_id text,
+  record_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists candidate_critiques (
+  like candidate_batches including all
+);
+
+create table if not exists model_judge_scores (
+  like candidate_batches including all
+);
+
+create table if not exists active_learning_selection_policies (
+  like candidate_batches including all
+);
+
+create table if not exists active_learning_selection_audits (
+  like candidate_batches including all
+);
+
+create table if not exists critique_generation_runs (
+  like candidate_batches including all
+);
+
+create table if not exists generated_critique_submissions (
+  like candidate_batches including all
+);
+
+create table if not exists generation_evaluation_reports (
+  like candidate_batches including all
+);
+
 create table if not exists rater_instruction_compatibility_policies (
   id text primary key,
   release_id text,
@@ -2911,6 +2973,51 @@ create index if not exists partial_task_promotion_policies_policy_idx
 create index if not exists exposure_quarantine_policies_policy_idx
   on exposure_quarantine_policies (policy_id);
 
+create index if not exists candidate_batches_position_idx
+  on candidate_batches (position_id);
+
+create index if not exists candidate_batches_status_idx
+  on candidate_batches (workflow_status);
+
+create index if not exists candidate_critiques_candidate_batch_idx
+  on candidate_critiques (candidate_batch_id);
+
+create index if not exists candidate_critiques_position_idx
+  on candidate_critiques (position_id);
+
+create index if not exists model_judge_scores_candidate_idx
+  on model_judge_scores (candidate_id);
+
+create index if not exists model_judge_scores_candidate_batch_idx
+  on model_judge_scores (candidate_batch_id);
+
+create index if not exists active_learning_selection_policies_policy_idx
+  on active_learning_selection_policies (policy_id);
+
+create index if not exists active_learning_selection_audits_batch_idx
+  on active_learning_selection_audits (candidate_batch_id);
+
+create index if not exists active_learning_selection_audits_policy_idx
+  on active_learning_selection_audits (active_learning_selection_policy_id);
+
+create index if not exists critique_generation_runs_prompt_idx
+  on critique_generation_runs (prompt_template_id);
+
+create index if not exists critique_generation_runs_status_idx
+  on critique_generation_runs (workflow_status);
+
+create index if not exists generated_critique_submissions_generation_run_idx
+  on generated_critique_submissions (generation_run_id);
+
+create index if not exists generated_critique_submissions_position_idx
+  on generated_critique_submissions (position_id);
+
+create index if not exists generation_evaluation_reports_label_snapshot_idx
+  on generation_evaluation_reports (label_snapshot_id);
+
+create index if not exists generation_evaluation_reports_generation_run_idx
+  on generation_evaluation_reports (generation_run_id);
+
 create index if not exists rater_instruction_compatibility_policies_release_idx
   on rater_instruction_compatibility_policies (release_id);
 
@@ -3216,6 +3323,14 @@ alter table protected_artifact_retention_records enable row level security;
 alter table source_leakage_redaction_policies enable row level security;
 alter table partial_task_promotion_policies enable row level security;
 alter table exposure_quarantine_policies enable row level security;
+alter table candidate_batches enable row level security;
+alter table candidate_critiques enable row level security;
+alter table model_judge_scores enable row level security;
+alter table active_learning_selection_policies enable row level security;
+alter table active_learning_selection_audits enable row level security;
+alter table critique_generation_runs enable row level security;
+alter table generated_critique_submissions enable row level security;
+alter table generation_evaluation_reports enable row level security;
 alter table rater_instruction_compatibility_policies enable row level security;
 alter table rater_instruction_render_versions enable row level security;
 alter table rubric_copy_traceability_maps enable row level security;
@@ -4488,6 +4603,94 @@ create policy exposure_quarantine_policies_read_auditors on exposure_quarantine_
 
 drop policy if exists exposure_quarantine_policies_write_admin_or_service on exposure_quarantine_policies;
 create policy exposure_quarantine_policies_write_admin_or_service on exposure_quarantine_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists candidate_batches_read_auditors on candidate_batches;
+create policy candidate_batches_read_auditors on candidate_batches
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists candidate_batches_write_admin_or_service on candidate_batches;
+create policy candidate_batches_write_admin_or_service on candidate_batches
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists candidate_critiques_read_auditors on candidate_critiques;
+create policy candidate_critiques_read_auditors on candidate_critiques
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists candidate_critiques_write_admin_or_service on candidate_critiques;
+create policy candidate_critiques_write_admin_or_service on candidate_critiques
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists model_judge_scores_read_auditors on model_judge_scores;
+create policy model_judge_scores_read_auditors on model_judge_scores
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists model_judge_scores_write_admin_or_service on model_judge_scores;
+create policy model_judge_scores_write_admin_or_service on model_judge_scores
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists active_learning_selection_policies_read_auditors on active_learning_selection_policies;
+create policy active_learning_selection_policies_read_auditors on active_learning_selection_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists active_learning_selection_policies_write_admin_or_service on active_learning_selection_policies;
+create policy active_learning_selection_policies_write_admin_or_service on active_learning_selection_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists active_learning_selection_audits_read_auditors on active_learning_selection_audits;
+create policy active_learning_selection_audits_read_auditors on active_learning_selection_audits
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists active_learning_selection_audits_write_admin_or_service on active_learning_selection_audits;
+create policy active_learning_selection_audits_write_admin_or_service on active_learning_selection_audits
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists critique_generation_runs_read_auditors on critique_generation_runs;
+create policy critique_generation_runs_read_auditors on critique_generation_runs
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists critique_generation_runs_write_admin_or_service on critique_generation_runs;
+create policy critique_generation_runs_write_admin_or_service on critique_generation_runs
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists generated_critique_submissions_read_auditors on generated_critique_submissions;
+create policy generated_critique_submissions_read_auditors on generated_critique_submissions
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists generated_critique_submissions_write_admin_or_service on generated_critique_submissions;
+create policy generated_critique_submissions_write_admin_or_service on generated_critique_submissions
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists generation_evaluation_reports_read_auditors on generation_evaluation_reports;
+create policy generation_evaluation_reports_read_auditors on generation_evaluation_reports
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists generation_evaluation_reports_write_admin_or_service on generation_evaluation_reports;
+create policy generation_evaluation_reports_write_admin_or_service on generation_evaluation_reports
   for all
   using (app_auth.has_role('admin', 'service'))
   with check (app_auth.has_role('admin', 'service'));

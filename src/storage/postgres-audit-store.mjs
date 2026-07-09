@@ -42,6 +42,19 @@ const ratingControlProjectionTables = Object.freeze({
 
 const ratingControlProjectionTableNames = new Set(Object.values(ratingControlProjectionTables));
 
+const candidateGenerationProjectionTables = Object.freeze({
+  candidateBatch: "candidate_batches",
+  candidateCritique: "candidate_critiques",
+  modelJudgeScore: "model_judge_scores",
+  activeLearningSelectionPolicy: "active_learning_selection_policies",
+  activeLearningSelectionAudit: "active_learning_selection_audits",
+  critiqueGenerationRun: "critique_generation_runs",
+  generatedCritiqueSubmission: "generated_critique_submissions",
+  generationEvaluationReport: "generation_evaluation_reports",
+});
+
+const candidateGenerationProjectionTableNames = new Set(Object.values(candidateGenerationProjectionTables));
+
 const ratingExperienceProjectionTables = Object.freeze({
   raterInstructionCompatibilityPolicy: "rater_instruction_compatibility_policies",
   raterInstructionRenderVersion: "rater_instruction_render_versions",
@@ -867,6 +880,170 @@ function ratingControlArtifactStatus(resourceKey, resource) {
     resource.exposureQuarantineStatus ??
     resource.exposure_quarantine_status ??
     ratingControlWorkflowStatus(resourceKey, resource)
+  );
+}
+
+export function candidateGenerationProjectionForWorkflowEvent(event) {
+  const resourceKey = event?.resourceKey;
+  const resource = event?.payload?.[resourceKey];
+  if (!candidateGenerationProjectionTables[resourceKey] || !resource || typeof resource !== "object" || Array.isArray(resource)) {
+    return null;
+  }
+  const eventId = event.id ?? event.eventId ?? null;
+  const recordJson = event;
+  return {
+    table: candidateGenerationProjectionTables[resourceKey],
+    values: candidateGenerationProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event),
+  };
+}
+
+function candidateGenerationProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event) {
+  const positionIds = textArray(resource.positionIds ?? resource.position_ids, resource.positionId ?? resource.position_id ?? null);
+  const generationRunIds = textArray(
+    resource.generationRunIds ?? resource.generation_run_ids ?? resource.critiqueGenerationRunIds ?? resource.critique_generation_run_ids,
+    resource.generationRunId ?? resource.generation_run_id ?? resource.critiqueGenerationRunId ?? resource.critique_generation_run_id ?? null,
+  );
+  const candidateBatchId =
+    resource.candidateBatchId ??
+    resource.candidate_batch_id ??
+    resource.batchId ??
+    resource.batch_id ??
+    (resourceKey === "candidateBatch" ? resource.id : null);
+  const candidateId =
+    resource.candidateId ??
+    resource.candidate_id ??
+    resource.candidateCritiqueId ??
+    resource.candidate_critique_id ??
+    (resourceKey === "candidateCritique" ? resource.id : null);
+  const generatedSubmissionId =
+    resource.generatedSubmissionId ??
+    resource.generated_submission_id ??
+    resource.generatedCritiqueId ??
+    resource.generated_critique_id ??
+    (resourceKey === "generatedCritiqueSubmission" ? resource.id : null);
+  const generationRunId =
+    resource.generationRunId ??
+    resource.generation_run_id ??
+    resource.critiqueGenerationRunId ??
+    resource.critique_generation_run_id ??
+    firstArrayValue(generationRunIds) ??
+    (resourceKey === "critiqueGenerationRun" ? resource.id : null);
+  const activeLearningSelectionPolicyId =
+    resource.activeLearningSelectionPolicyId ??
+    resource.active_learning_selection_policy_id ??
+    (resourceKey === "activeLearningSelectionPolicy" ? resource.id : null);
+
+  return {
+    id: resource.id,
+    release_id: resource.releaseId ?? resource.release_id ?? null,
+    resource_key: resourceKey,
+    position_id: resource.positionId ?? resource.position_id ?? firstArrayValue(positionIds) ?? null,
+    position_ids: positionIds,
+    candidate_batch_id: candidateBatchId,
+    candidate_id: candidateId,
+    generated_submission_id: generatedSubmissionId,
+    generation_run_id: generationRunId,
+    generation_run_ids: generationRunIds,
+    label_snapshot_id: resource.labelSnapshotId ?? resource.label_snapshot_id ?? null,
+    policy_id:
+      resource.policyId ??
+      resource.policy_id ??
+      activeLearningSelectionPolicyId ??
+      (resourceKey === "activeLearningSelectionPolicy" ? resource.id : null),
+    active_learning_selection_policy_id: activeLearningSelectionPolicyId,
+    prompt_template_id: resource.promptTemplateId ?? resource.prompt_template_id ?? resource.judgePromptTemplateId ?? null,
+    model_provider_policy_id:
+      resource.modelProviderDataHandlingPolicyId ?? resource.model_provider_data_handling_policy_id ?? null,
+    judge_model_provider_policy_id:
+      resource.judgeModelProviderDataHandlingPolicyId ?? resource.judge_model_provider_data_handling_policy_id ?? null,
+    source_type: resource.sourceType ?? resource.source_type ?? resource.sourceSplit ?? resource.source_split ?? null,
+    generation_route: resource.generationRoute ?? resource.generation_route ?? null,
+    workflow_status: candidateGenerationWorkflowStatus(resourceKey, resource),
+    review_status:
+      resource.reviewStatus ??
+      resource.review_status ??
+      resource.humanReviewStatus ??
+      resource.human_review_status ??
+      resource.rightsProvenanceStatus ??
+      resource.rights_provenance_status ??
+      null,
+    artifact_status: candidateGenerationArtifactStatus(resourceKey, resource),
+    visibility_class: "admin_audit_only",
+    candidate_count: finiteNumberOrNull(
+      resource.generatedOrIngestedCandidateCount ??
+        resource.generated_or_ingested_candidate_count ??
+        resource.generatedOrIngestedCount ??
+        resource.outputsGenerated ??
+        resource.numberGenerated ??
+        resource.generatedCount ??
+        resource.counts?.generated,
+    ),
+    judged_count: finiteNumberOrNull(resource.judgedCandidateCount ?? resource.judged_count ?? resource.judgedCount),
+    promoted_count: finiteNumberOrNull(
+      resource.promotedToRatingCount ?? resource.promoted_to_rating_count ?? resource.promotedCount ?? resource.counts?.promoted,
+    ),
+    score_value: finiteNumberOrNull(resource.overallScore ?? resource.overall_score ?? resource.passThresholdOverall ?? null),
+    input_hash:
+      resource.inputHash ??
+      resource.input_hash ??
+      resource.artifactHash ??
+      resource.artifact_hash ??
+      resource.policyHash ??
+      resource.policy_hash ??
+      resource.renderedPromptChecksum ??
+      resource.rendered_prompt_checksum ??
+      event.payloadHash ??
+      `sha256:${resourceKey}:${resource.id}`,
+    artifact_json: resource,
+    event_id: eventId,
+    record_json: recordJson,
+    created_at:
+      resource.createdAt ??
+      resource.created_at ??
+      resource.frozenAt ??
+      resource.frozen_at ??
+      resource.timestamp ??
+      resource.promotedAt ??
+      resource.promoted_at ??
+      event.receivedAt ??
+      null,
+  };
+}
+
+function candidateGenerationWorkflowStatus(resourceKey, resource) {
+  return (
+    resource.workflowStatus ??
+    resource.workflow_status ??
+    resource.batchStatus ??
+    resource.batch_status ??
+    resource.generationOutputStatus ??
+    resource.generation_output_status ??
+    resource.reviewStatus ??
+    resource.review_status ??
+    resource.humanReviewStatus ??
+    resource.human_review_status ??
+    resource.parseStatus ??
+    resource.parse_status ??
+    resource.selectionAuditStatus ??
+    resource.selection_audit_status ??
+    resource.evaluationStatus ??
+    resource.evaluation_status ??
+    resource.status ??
+    `${resourceKey}_submitted`
+  );
+}
+
+function candidateGenerationArtifactStatus(resourceKey, resource) {
+  return (
+    resource.artifactStatus ??
+    resource.artifact_status ??
+    resource.releaseUseStatus ??
+    resource.release_use_status ??
+    resource.reviewStatus ??
+    resource.review_status ??
+    resource.rightsProvenanceStatus ??
+    resource.rights_provenance_status ??
+    candidateGenerationWorkflowStatus(resourceKey, resource)
   );
 }
 
@@ -1776,6 +1953,18 @@ function firstArrayValue(value) {
   return Array.isArray(value) && value.length ? value[0] : null;
 }
 
+function textArray(value, fallbackValue = null) {
+  const values = Array.isArray(value) ? value : value == null ? [] : [value];
+  const normalized = values.filter((item) => typeof item === "string" && item.length > 0);
+  if (!normalized.length && typeof fallbackValue === "string" && fallbackValue.length > 0) normalized.push(fallbackValue);
+  return normalized;
+}
+
+function finiteNumberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function discussionAdjudicationWorkflowStatus(resourceKey, resource) {
   return (
     resource.status ??
@@ -2221,6 +2410,7 @@ async function appendWorkflowResourceProjection(db, event) {
   await appendMetaphilosophyWorkflowProjection(db, event);
   await appendPolicyEvidenceWorkflowProjection(db, event);
   await appendRatingControlWorkflowProjection(db, event);
+  await appendCandidateGenerationWorkflowProjection(db, event);
   await appendDiscussionAdjudicationWorkflowProjection(db, event);
   await appendVerificationAdjudicationWorkflowProjection(db, event);
   await appendReleaseReadinessWorkflowProjection(db, event);
@@ -3940,6 +4130,112 @@ async function appendRatingControlWorkflowProjection(db, event) {
       workflow_status = excluded.workflow_status,
       artifact_status = excluded.artifact_status,
       visibility_class = excluded.visibility_class,
+      input_hash = excluded.input_hash,
+      artifact_json = excluded.artifact_json,
+      event_id = excluded.event_id,
+      record_json = excluded.record_json,
+      created_at = excluded.created_at
+    `;
+}
+
+async function appendCandidateGenerationWorkflowProjection(db, event) {
+  const projection = candidateGenerationProjectionForWorkflowEvent(event);
+  if (!projection || !candidateGenerationProjectionTableNames.has(projection.table)) return;
+  const { values } = projection;
+  const table = db(projection.table);
+  await db`
+    insert into ${table} (
+      id,
+      release_id,
+      resource_key,
+      position_id,
+      position_ids,
+      candidate_batch_id,
+      candidate_id,
+      generated_submission_id,
+      generation_run_id,
+      generation_run_ids,
+      label_snapshot_id,
+      policy_id,
+      active_learning_selection_policy_id,
+      prompt_template_id,
+      model_provider_policy_id,
+      judge_model_provider_policy_id,
+      source_type,
+      generation_route,
+      workflow_status,
+      review_status,
+      artifact_status,
+      visibility_class,
+      candidate_count,
+      judged_count,
+      promoted_count,
+      score_value,
+      input_hash,
+      artifact_json,
+      event_id,
+      record_json,
+      created_at
+    )
+    values (
+      ${values.id},
+      ${values.release_id},
+      ${values.resource_key},
+      ${values.position_id},
+      ${values.position_ids},
+      ${values.candidate_batch_id},
+      ${values.candidate_id},
+      ${values.generated_submission_id},
+      ${values.generation_run_id},
+      ${values.generation_run_ids},
+      ${values.label_snapshot_id},
+      ${values.policy_id},
+      ${values.active_learning_selection_policy_id},
+      ${values.prompt_template_id},
+      ${values.model_provider_policy_id},
+      ${values.judge_model_provider_policy_id},
+      ${values.source_type},
+      ${values.generation_route},
+      ${values.workflow_status},
+      ${values.review_status},
+      ${values.artifact_status},
+      ${values.visibility_class},
+      ${values.candidate_count},
+      ${values.judged_count},
+      ${values.promoted_count},
+      ${values.score_value},
+      ${values.input_hash},
+      ${db.json(values.artifact_json)},
+      ${values.event_id},
+      ${db.json(values.record_json)},
+      coalesce(${values.created_at}::timestamptz, now())
+    )
+    on conflict (id) do update set
+      release_id = excluded.release_id,
+      resource_key = excluded.resource_key,
+      position_id = excluded.position_id,
+      position_ids = excluded.position_ids,
+      candidate_batch_id = excluded.candidate_batch_id,
+      candidate_id = excluded.candidate_id,
+      generated_submission_id = excluded.generated_submission_id,
+      generation_run_id = excluded.generation_run_id,
+      generation_run_ids = excluded.generation_run_ids,
+      label_snapshot_id = excluded.label_snapshot_id,
+      policy_id = excluded.policy_id,
+      active_learning_selection_policy_id = excluded.active_learning_selection_policy_id,
+      prompt_template_id = excluded.prompt_template_id,
+      model_provider_policy_id = excluded.model_provider_policy_id,
+      judge_model_provider_policy_id = excluded.judge_model_provider_policy_id,
+      source_type = excluded.source_type,
+      generation_route = excluded.generation_route,
+      workflow_status = excluded.workflow_status,
+      review_status = excluded.review_status,
+      artifact_status = excluded.artifact_status,
+      visibility_class = excluded.visibility_class,
+      candidate_count = excluded.candidate_count,
+      judged_count = excluded.judged_count,
+      promoted_count = excluded.promoted_count,
+      score_value = excluded.score_value,
       input_hash = excluded.input_hash,
       artifact_json = excluded.artifact_json,
       event_id = excluded.event_id,

@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 
 import vercelHealthHandler from "../api/health.mjs";
 import {
+  candidateGenerationProjectionForWorkflowEvent,
   discussionAdjudicationProjectionForWorkflowEvent,
   interactionUxProjectionForWorkflowEvent,
   metricGovernanceProjectionForWorkflowEvent,
@@ -4799,26 +4800,34 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/comparability-claims"],
     ["GET", "/api/v1/comparability-claims/comparability-claim-smoke"],
     ["POST", "/api/v1/candidate-batches"],
+    ["GET", "/api/v1/candidate-batches"],
     ["GET", "/api/v1/candidate-batches/candidate-batch-smoke"],
     ["POST", "/api/v1/candidate-critiques"],
+    ["GET", "/api/v1/candidate-critiques"],
     ["GET", "/api/v1/candidate-critiques/candidate-critique-smoke"],
     ["POST", "/api/v1/model-judge-scores"],
+    ["GET", "/api/v1/model-judge-scores"],
     ["GET", "/api/v1/model-judge-scores/model-judge-score-smoke"],
     ["POST", "/api/v1/active-learning-selection-policies"],
+    ["GET", "/api/v1/active-learning-selection-policies"],
     ["GET", "/api/v1/active-learning-selection-policies/active-learning-selection-policy-smoke"],
     ["POST", "/api/v1/training-export-uncertainty-policies"],
     ["GET", "/api/v1/training-export-uncertainty-policies/training-export-uncertainty-policy-smoke"],
     ["POST", "/api/v1/active-learning-selection-audits"],
+    ["GET", "/api/v1/active-learning-selection-audits"],
     ["GET", "/api/v1/active-learning-selection-audits/selection-audit-smoke"],
     ["POST", "/api/v1/candidate-batches/candidate-batch-smoke/model-judge-scores"],
     ["POST", "/api/v1/candidates/candidate-smoke/review"],
     ["POST", "/api/v1/candidates/candidate-smoke/promote"],
     ["POST", "/api/v1/critique-generation-runs"],
+    ["GET", "/api/v1/critique-generation-runs"],
     ["GET", "/api/v1/critique-generation-runs/generation-run-smoke"],
     ["POST", "/api/v1/generated-critiques"],
+    ["GET", "/api/v1/generated-critiques"],
     ["GET", "/api/v1/generated-critiques/generated-critique-smoke"],
     ["POST", "/api/v1/generated-critiques/generated-critique-smoke/promote"],
     ["POST", "/api/v1/generation-evaluation-reports"],
+    ["GET", "/api/v1/generation-evaluation-reports"],
     ["GET", "/api/v1/generation-evaluation-reports/generation-report-smoke"],
     ["GET", "/api/v1/assignments/next"],
     ["POST", "/api/v1/ratings"],
@@ -6215,6 +6224,30 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "language-artifact-assessments"',
     'endpoint: "/api/v1/language-artifact-assessments"',
     'resourceKey: "languageArtifactAssessment"',
+    'id: "candidate-batches"',
+    'endpoint: "/api/v1/candidate-batches"',
+    'resourceKey: "candidateBatch"',
+    'id: "candidate-critiques"',
+    'endpoint: "/api/v1/candidate-critiques"',
+    'resourceKey: "candidateCritique"',
+    'id: "model-judge-scores"',
+    'endpoint: "/api/v1/model-judge-scores"',
+    'resourceKey: "modelJudgeScore"',
+    'id: "active-learning-selection-policies"',
+    'endpoint: "/api/v1/active-learning-selection-policies"',
+    'resourceKey: "activeLearningSelectionPolicy"',
+    'id: "active-learning-selection-audits"',
+    'endpoint: "/api/v1/active-learning-selection-audits"',
+    'resourceKey: "activeLearningSelectionAudit"',
+    'id: "critique-generation-runs"',
+    'endpoint: "/api/v1/critique-generation-runs"',
+    'resourceKey: "critiqueGenerationRun"',
+    'id: "generated-critiques"',
+    'endpoint: "/api/v1/generated-critiques"',
+    'resourceKey: "generatedCritiqueSubmission"',
+    'id: "generation-evaluation-reports"',
+    'endpoint: "/api/v1/generation-evaluation-reports"',
+    'resourceKey: "generationEvaluationReport"',
     'id: "task-output-eligibility-policies"',
     'endpoint: "/api/v1/task-output-eligibility-policies"',
     'resourceKey: "taskOutputEligibilityPolicy"',
@@ -6682,6 +6715,43 @@ test("rating-control policy collections are routed for operator readback", async
   const denied = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/score-input-policies",
+    headers: raterHeaders,
+  });
+  assert.equal(denied.status, 403);
+});
+
+test("candidate-generation and active-learning collections are routed for operator readback", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const candidateGenerationCollections = [
+    ["candidateBatch", "/api/v1/candidate-batches"],
+    ["candidateCritique", "/api/v1/candidate-critiques"],
+    ["modelJudgeScore", "/api/v1/model-judge-scores"],
+    ["activeLearningSelectionPolicy", "/api/v1/active-learning-selection-policies"],
+    ["activeLearningSelectionAudit", "/api/v1/active-learning-selection-audits"],
+    ["critiqueGenerationRun", "/api/v1/critique-generation-runs"],
+    ["generatedCritiqueSubmission", "/api/v1/generated-critiques"],
+    ["generationEvaluationReport", "/api/v1/generation-evaluation-reports"],
+  ];
+  for (const [resourceKey, url] of candidateGenerationCollections) {
+    const response = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: adminHeaders,
+    });
+    assert.equal(response.status, 200, url);
+    assert.equal(response.body.resourceKey, resourceKey, url);
+    assert.equal(response.body.count, 0, url);
+    assert.deepEqual(response.body.items, [], url);
+  }
+
+  const denied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/candidate-batches",
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
@@ -20021,6 +20091,51 @@ test("production schema includes rating-control projection tables with admin aud
   assert.ok(architectureDoc.includes("without becoming scores, labels, live queue execution, candidate promotion"));
 });
 
+test("production schema includes candidate-generation projection tables with admin audit RLS", () => {
+  const schema = readFileSync("db/production-schema.sql", "utf8");
+  const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
+  const tables = [
+    "candidate_batches",
+    "candidate_critiques",
+    "model_judge_scores",
+    "active_learning_selection_policies",
+    "active_learning_selection_audits",
+    "critique_generation_runs",
+    "generated_critique_submissions",
+    "generation_evaluation_reports",
+  ];
+  for (const table of tables) {
+    assert.ok(schema.includes(`create table if not exists ${table}`), table);
+    assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
+    assert.ok(schema.includes(`create policy ${table}_read_auditors on ${table}`), table);
+    assert.ok(schema.includes(`create policy ${table}_write_admin_or_service on ${table}`), table);
+  }
+  assert.ok(schema.includes("position_ids text[] not null default '{}'::text[]"));
+  assert.ok(schema.includes("candidate_batch_id text"));
+  assert.ok(schema.includes("candidate_id text"));
+  assert.ok(schema.includes("generated_submission_id text"));
+  assert.ok(schema.includes("generation_run_ids text[] not null default '{}'::text[]"));
+  assert.ok(schema.includes("label_snapshot_id text"));
+  assert.ok(schema.includes("active_learning_selection_policy_id text"));
+  assert.ok(schema.includes("prompt_template_id text"));
+  assert.ok(schema.includes("judge_model_provider_policy_id text"));
+  assert.ok(schema.includes("candidate_count integer"));
+  assert.ok(schema.includes("score_value double precision"));
+  assert.ok(schema.includes("visibility_class text not null default 'admin_audit_only' check (visibility_class = 'admin_audit_only')"));
+  assert.ok(schema.includes("create index if not exists candidate_batches_position_idx"));
+  assert.ok(schema.includes("create index if not exists candidate_critiques_candidate_batch_idx"));
+  assert.ok(schema.includes("create index if not exists model_judge_scores_candidate_idx"));
+  assert.ok(schema.includes("create index if not exists active_learning_selection_audits_policy_idx"));
+  assert.ok(schema.includes("create index if not exists critique_generation_runs_prompt_idx"));
+  assert.ok(schema.includes("create index if not exists generated_critique_submissions_generation_run_idx"));
+  assert.ok(schema.includes("create index if not exists generation_evaluation_reports_label_snapshot_idx"));
+  assert.ok(architectureDoc.includes("candidate-generation projection tables"));
+  assert.ok(architectureDoc.includes("candidate_batches"));
+  assert.ok(architectureDoc.includes("model_judge_scores"));
+  assert.ok(architectureDoc.includes("generated_critique_submissions"));
+  assert.ok(architectureDoc.includes("without adding `CandidateItem`, `CandidateBatchMembership`, live queue integration"));
+});
+
 test("production schema includes rater instruction projection tables", () => {
   const schema = readFileSync("db/production-schema.sql", "utf8");
   const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
@@ -20556,6 +20671,230 @@ test("postgres audit store projects rating-control workflow events into normaliz
 
   assert.equal(
     ratingControlProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-rating-control" })),
+    null,
+  );
+});
+
+test("postgres audit store projects candidate-generation workflow events into normalized rows", () => {
+  const baseEvent = (resourceKey, resource) => ({
+    id: `event-${resource.id}`,
+    type: `${resourceKey}_submitted`,
+    resourceKey,
+    resourceId: resource.id,
+    payloadHash: `sha256:${resource.id}`,
+    receivedAt: "2026-10-01T00:00:00.000Z",
+    payload: { [resourceKey]: resource },
+  });
+  const cases = [
+    [
+      "candidateBatch",
+      "candidate_batches",
+      {
+        id: "candidate-batch-projection",
+        releaseId: "october-2026-demo",
+        positionId: "position-projection",
+        generatedOrIngestedCandidateCount: 20,
+        judgedCandidateCount: 18,
+        batchStatus: "candidate_batch_ready_for_selection",
+      },
+      "candidate_batch_ready_for_selection",
+    ],
+    [
+      "candidateCritique",
+      "candidate_critiques",
+      {
+        id: "candidate-critique-projection",
+        releaseId: "october-2026-demo",
+        candidateBatchId: "candidate-batch-projection",
+        positionId: "position-projection",
+        sourceType: "model_generated",
+        generationRoute: "critique_generation_run",
+        reviewStatus: "candidate_review_pending",
+      },
+      "candidate_review_pending",
+    ],
+    [
+      "modelJudgeScore",
+      "model_judge_scores",
+      {
+        id: "model-judge-score-projection",
+        releaseId: "october-2026-demo",
+        candidateId: "candidate-critique-projection",
+        candidateBatchId: "candidate-batch-projection",
+        overallScore: 0.71,
+        parseStatus: "parsed",
+      },
+      "parsed",
+    ],
+    [
+      "activeLearningSelectionPolicy",
+      "active_learning_selection_policies",
+      {
+        ...activeLearningSelectionPolicy("active-learning-selection-policy-projection"),
+        releaseId: "october-2026-demo",
+      },
+      "activeLearningSelectionPolicy_submitted",
+    ],
+    [
+      "activeLearningSelectionAudit",
+      "active_learning_selection_audits",
+      {
+        id: "active-learning-selection-audit-projection",
+        releaseId: "october-2026-demo",
+        candidateBatchId: "candidate-batch-projection",
+        positionId: "position-projection",
+        activeLearningSelectionPolicyId: "active-learning-selection-policy-projection",
+        generatedOrIngestedCandidateCount: 20,
+        judgedCount: 18,
+        promotedToRatingCount: 6,
+        selectionAuditStatus: "selection_audit_complete",
+      },
+      "selection_audit_complete",
+    ],
+    [
+      "critiqueGenerationRun",
+      "critique_generation_runs",
+      {
+        id: "critique-generation-run-projection",
+        releaseId: "october-2026-demo",
+        positionIds: ["position-projection", "position-projection-2"],
+        promptTemplateId: "candidate-gen-v3",
+        modelProviderDataHandlingPolicyId: "model-provider-policy-projection",
+        outputsGenerated: 12,
+        status: "generation_run_complete",
+      },
+      "generation_run_complete",
+    ],
+    [
+      "generatedCritiqueSubmission",
+      "generated_critique_submissions",
+      {
+        id: "generated-critique-projection",
+        releaseId: "october-2026-demo",
+        generationRunId: "critique-generation-run-projection",
+        positionId: "position-projection",
+        generationOutputStatus: "generated",
+        rightsProvenanceStatus: "rights_review_passed",
+      },
+      "generated",
+    ],
+    [
+      "generationEvaluationReport",
+      "generation_evaluation_reports",
+      {
+        id: "generation-evaluation-report-projection",
+        releaseId: "october-2026-demo",
+        generationRunIds: ["critique-generation-run-projection"],
+        labelSnapshotId: "label-snapshot-projection",
+        passThresholdOverall: 0.68,
+        counts: { generated: 12, promoted: 5 },
+        evaluationStatus: "generation_evaluation_complete",
+      },
+      "generation_evaluation_complete",
+    ],
+  ];
+
+  for (const [resourceKey, table, resource, expectedStatus] of cases) {
+    const event = baseEvent(resourceKey, resource);
+    const projection = candidateGenerationProjectionForWorkflowEvent(event);
+    assert.equal(projection.table, table, resourceKey);
+    assert.equal(projection.values.id, resource.id, resourceKey);
+    assert.equal(projection.values.resource_key, resourceKey, resourceKey);
+    assert.equal(projection.values.release_id, "october-2026-demo", resourceKey);
+    assert.equal(projection.values.workflow_status, expectedStatus, resourceKey);
+    assert.equal(projection.values.artifact_status, resource.rightsProvenanceStatus ?? resource.reviewStatus ?? expectedStatus, resourceKey);
+    assert.equal(projection.values.visibility_class, "admin_audit_only", resourceKey);
+    assert.equal(projection.values.input_hash, `sha256:${resource.id}`, resourceKey);
+    assert.deepEqual(projection.values.artifact_json, resource, resourceKey);
+    assert.deepEqual(projection.values.record_json, event, resourceKey);
+    assert.equal(projection.values.event_id, `event-${resource.id}`, resourceKey);
+  }
+
+  const batchProjection = candidateGenerationProjectionForWorkflowEvent(
+    baseEvent("candidateBatch", {
+      id: "candidate-batch-projection-linked",
+      releaseId: "october-2026-demo",
+      positionId: "position-projection",
+      generatedOrIngestedCandidateCount: 14,
+      judgedCandidateCount: 12,
+    }),
+  );
+  assert.equal(batchProjection.values.candidate_batch_id, "candidate-batch-projection-linked");
+  assert.equal(batchProjection.values.position_id, "position-projection");
+  assert.deepEqual(batchProjection.values.position_ids, ["position-projection"]);
+  assert.equal(batchProjection.values.candidate_count, 14);
+  assert.equal(batchProjection.values.judged_count, 12);
+
+  const candidateProjection = candidateGenerationProjectionForWorkflowEvent(
+    baseEvent("candidateCritique", {
+      id: "candidate-critique-projection-linked",
+      releaseId: "october-2026-demo",
+      candidateBatchId: "candidate-batch-projection-linked",
+      generationRoute: "human_curated_source_intake",
+    }),
+  );
+  assert.equal(candidateProjection.values.candidate_id, "candidate-critique-projection-linked");
+  assert.equal(candidateProjection.values.candidate_batch_id, "candidate-batch-projection-linked");
+  assert.equal(candidateProjection.values.generation_route, "human_curated_source_intake");
+
+  const scoreProjection = candidateGenerationProjectionForWorkflowEvent(
+    baseEvent("modelJudgeScore", {
+      id: "model-judge-score-projection-linked",
+      releaseId: "october-2026-demo",
+      candidateId: "candidate-critique-projection-linked",
+      candidateBatchId: "candidate-batch-projection-linked",
+      overallScore: 0.88,
+    }),
+  );
+  assert.equal(scoreProjection.values.candidate_id, "candidate-critique-projection-linked");
+  assert.equal(scoreProjection.values.candidate_batch_id, "candidate-batch-projection-linked");
+  assert.equal(scoreProjection.values.score_value, 0.88);
+
+  const generationRunProjection = candidateGenerationProjectionForWorkflowEvent(
+    baseEvent("critiqueGenerationRun", {
+      id: "critique-generation-run-projection-linked",
+      releaseId: "october-2026-demo",
+      positionIds: ["position-a", "position-b"],
+      promptTemplateId: "prompt-template-projection",
+      judgeModelProviderDataHandlingPolicyId: "judge-provider-policy-projection",
+      outputsGenerated: 9,
+    }),
+  );
+  assert.equal(generationRunProjection.values.generation_run_id, "critique-generation-run-projection-linked");
+  assert.deepEqual(generationRunProjection.values.position_ids, ["position-a", "position-b"]);
+  assert.equal(generationRunProjection.values.prompt_template_id, "prompt-template-projection");
+  assert.equal(generationRunProjection.values.judge_model_provider_policy_id, "judge-provider-policy-projection");
+  assert.equal(generationRunProjection.values.candidate_count, 9);
+
+  const generatedCritiqueProjection = candidateGenerationProjectionForWorkflowEvent(
+    baseEvent("generatedCritiqueSubmission", {
+      id: "generated-critique-projection-linked",
+      releaseId: "october-2026-demo",
+      generationRunId: "critique-generation-run-projection-linked",
+      positionId: "position-a",
+    }),
+  );
+  assert.equal(generatedCritiqueProjection.values.generated_submission_id, "generated-critique-projection-linked");
+  assert.equal(generatedCritiqueProjection.values.generation_run_id, "critique-generation-run-projection-linked");
+
+  const generationEvaluationProjection = candidateGenerationProjectionForWorkflowEvent(
+    baseEvent("generationEvaluationReport", {
+      id: "generation-evaluation-report-projection-linked",
+      releaseId: "october-2026-demo",
+      generationRunIds: ["critique-generation-run-projection-linked"],
+      labelSnapshotId: "label-snapshot-projection",
+      passThresholdOverall: 0.73,
+      counts: { promoted: 4 },
+    }),
+  );
+  assert.deepEqual(generationEvaluationProjection.values.generation_run_ids, ["critique-generation-run-projection-linked"]);
+  assert.equal(generationEvaluationProjection.values.generation_run_id, "critique-generation-run-projection-linked");
+  assert.equal(generationEvaluationProjection.values.label_snapshot_id, "label-snapshot-projection");
+  assert.equal(generationEvaluationProjection.values.promoted_count, 4);
+  assert.equal(generationEvaluationProjection.values.score_value, 0.73);
+
+  assert.equal(
+    candidateGenerationProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-candidate-generation" })),
     null,
   );
 });
