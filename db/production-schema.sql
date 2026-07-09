@@ -1557,6 +1557,71 @@ create table if not exists language_artifact_assessments (
   like visibility_policies including all
 );
 
+create table if not exists task_output_eligibility_policies (
+  id text primary key,
+  release_id text,
+  resource_key text not null,
+  policy_id text,
+  workflow_profile_id text,
+  score_input_policy_id text,
+  draft_storage_policy_id text,
+  rubric_lint_config_id text,
+  artifact_id text,
+  assignment_id text,
+  rating_id text,
+  item_id text,
+  position_id text,
+  critique_id text,
+  workflow_status text not null,
+  artifact_status text not null,
+  visibility_class text not null default 'admin_audit_only' check (visibility_class = 'admin_audit_only'),
+  input_hash text not null check (input_hash like 'sha256:%'),
+  artifact_json jsonb not null,
+  event_id text,
+  record_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists score_input_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists draft_storage_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists rubric_lint_configs (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists score_confidence_scale_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists rationale_evidence_span_requiredness_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists same_position_batch_review_requiredness_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists protected_artifact_retention_records (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists source_leakage_redaction_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists partial_task_promotion_policies (
+  like task_output_eligibility_policies including all
+);
+
+create table if not exists exposure_quarantine_policies (
+  like task_output_eligibility_policies including all
+);
+
 create table if not exists rater_instruction_compatibility_policies (
   id text primary key,
   release_id text,
@@ -2789,6 +2854,63 @@ create index if not exists language_artifact_assessments_rater_idx
 create index if not exists language_artifact_assessments_release_idx
   on language_artifact_assessments (release_id);
 
+create index if not exists task_output_eligibility_policies_policy_idx
+  on task_output_eligibility_policies (policy_id);
+
+create index if not exists task_output_eligibility_policies_workflow_profile_idx
+  on task_output_eligibility_policies (workflow_profile_id);
+
+create index if not exists score_input_policies_policy_idx
+  on score_input_policies (policy_id);
+
+create index if not exists score_input_policies_workflow_profile_idx
+  on score_input_policies (workflow_profile_id);
+
+create index if not exists score_input_policies_score_input_policy_idx
+  on score_input_policies (score_input_policy_id);
+
+create index if not exists draft_storage_policies_policy_idx
+  on draft_storage_policies (policy_id);
+
+create index if not exists draft_storage_policies_workflow_profile_idx
+  on draft_storage_policies (workflow_profile_id);
+
+create index if not exists draft_storage_policies_draft_storage_policy_idx
+  on draft_storage_policies (draft_storage_policy_id);
+
+create index if not exists rubric_lint_configs_policy_idx
+  on rubric_lint_configs (policy_id);
+
+create index if not exists rubric_lint_configs_workflow_profile_idx
+  on rubric_lint_configs (workflow_profile_id);
+
+create index if not exists rubric_lint_configs_config_idx
+  on rubric_lint_configs (rubric_lint_config_id);
+
+create index if not exists score_confidence_scale_policies_policy_idx
+  on score_confidence_scale_policies (policy_id);
+
+create index if not exists rationale_evidence_span_requiredness_policies_policy_idx
+  on rationale_evidence_span_requiredness_policies (policy_id);
+
+create index if not exists same_position_batch_review_requiredness_policies_policy_idx
+  on same_position_batch_review_requiredness_policies (policy_id);
+
+create index if not exists protected_artifact_retention_records_artifact_idx
+  on protected_artifact_retention_records (artifact_id);
+
+create index if not exists protected_artifact_retention_records_status_idx
+  on protected_artifact_retention_records (artifact_status);
+
+create index if not exists source_leakage_redaction_policies_policy_idx
+  on source_leakage_redaction_policies (policy_id);
+
+create index if not exists partial_task_promotion_policies_policy_idx
+  on partial_task_promotion_policies (policy_id);
+
+create index if not exists exposure_quarantine_policies_policy_idx
+  on exposure_quarantine_policies (policy_id);
+
 create index if not exists rater_instruction_compatibility_policies_release_idx
   on rater_instruction_compatibility_policies (release_id);
 
@@ -3083,6 +3205,17 @@ alter table accessibility_conformance_reports enable row level security;
 alter table volunteer_incentive_policies enable row level security;
 alter table rater_qualification_records enable row level security;
 alter table language_artifact_assessments enable row level security;
+alter table task_output_eligibility_policies enable row level security;
+alter table score_input_policies enable row level security;
+alter table draft_storage_policies enable row level security;
+alter table rubric_lint_configs enable row level security;
+alter table score_confidence_scale_policies enable row level security;
+alter table rationale_evidence_span_requiredness_policies enable row level security;
+alter table same_position_batch_review_requiredness_policies enable row level security;
+alter table protected_artifact_retention_records enable row level security;
+alter table source_leakage_redaction_policies enable row level security;
+alter table partial_task_promotion_policies enable row level security;
+alter table exposure_quarantine_policies enable row level security;
 alter table rater_instruction_compatibility_policies enable row level security;
 alter table rater_instruction_render_versions enable row level security;
 alter table rubric_copy_traceability_maps enable row level security;
@@ -4237,6 +4370,127 @@ create policy language_artifact_assessments_write_expert_admin_or_service on lan
   for all
   using (app_auth.has_role('expert', 'admin', 'service'))
   with check (app_auth.has_role('expert', 'admin', 'service'));
+
+drop policy if exists task_output_eligibility_policies_read_auditors on task_output_eligibility_policies;
+create policy task_output_eligibility_policies_read_auditors on task_output_eligibility_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists task_output_eligibility_policies_write_admin_or_service on task_output_eligibility_policies;
+create policy task_output_eligibility_policies_write_admin_or_service on task_output_eligibility_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists score_input_policies_read_auditors on score_input_policies;
+create policy score_input_policies_read_auditors on score_input_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists score_input_policies_write_admin_or_service on score_input_policies;
+create policy score_input_policies_write_admin_or_service on score_input_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists draft_storage_policies_read_auditors on draft_storage_policies;
+create policy draft_storage_policies_read_auditors on draft_storage_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists draft_storage_policies_write_admin_or_service on draft_storage_policies;
+create policy draft_storage_policies_write_admin_or_service on draft_storage_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists rubric_lint_configs_read_auditors on rubric_lint_configs;
+create policy rubric_lint_configs_read_auditors on rubric_lint_configs
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists rubric_lint_configs_write_admin_or_service on rubric_lint_configs;
+create policy rubric_lint_configs_write_admin_or_service on rubric_lint_configs
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists score_confidence_scale_policies_read_auditors on score_confidence_scale_policies;
+create policy score_confidence_scale_policies_read_auditors on score_confidence_scale_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists score_confidence_scale_policies_write_admin_or_service on score_confidence_scale_policies;
+create policy score_confidence_scale_policies_write_admin_or_service on score_confidence_scale_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists rationale_evidence_span_requiredness_policies_read_auditors on rationale_evidence_span_requiredness_policies;
+create policy rationale_evidence_span_requiredness_policies_read_auditors on rationale_evidence_span_requiredness_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists rationale_evidence_span_requiredness_policies_write_admin_or_service on rationale_evidence_span_requiredness_policies;
+create policy rationale_evidence_span_requiredness_policies_write_admin_or_service on rationale_evidence_span_requiredness_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists same_position_batch_review_requiredness_policies_read_auditors on same_position_batch_review_requiredness_policies;
+create policy same_position_batch_review_requiredness_policies_read_auditors on same_position_batch_review_requiredness_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists same_position_batch_review_requiredness_policies_write_admin_or_service on same_position_batch_review_requiredness_policies;
+create policy same_position_batch_review_requiredness_policies_write_admin_or_service on same_position_batch_review_requiredness_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists protected_artifact_retention_records_read_auditors on protected_artifact_retention_records;
+create policy protected_artifact_retention_records_read_auditors on protected_artifact_retention_records
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists protected_artifact_retention_records_write_admin_or_service on protected_artifact_retention_records;
+create policy protected_artifact_retention_records_write_admin_or_service on protected_artifact_retention_records
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists source_leakage_redaction_policies_read_auditors on source_leakage_redaction_policies;
+create policy source_leakage_redaction_policies_read_auditors on source_leakage_redaction_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists source_leakage_redaction_policies_write_admin_or_service on source_leakage_redaction_policies;
+create policy source_leakage_redaction_policies_write_admin_or_service on source_leakage_redaction_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists partial_task_promotion_policies_read_auditors on partial_task_promotion_policies;
+create policy partial_task_promotion_policies_read_auditors on partial_task_promotion_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists partial_task_promotion_policies_write_admin_or_service on partial_task_promotion_policies;
+create policy partial_task_promotion_policies_write_admin_or_service on partial_task_promotion_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists exposure_quarantine_policies_read_auditors on exposure_quarantine_policies;
+create policy exposure_quarantine_policies_read_auditors on exposure_quarantine_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor', 'service'));
+
+drop policy if exists exposure_quarantine_policies_write_admin_or_service on exposure_quarantine_policies;
+create policy exposure_quarantine_policies_write_admin_or_service on exposure_quarantine_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
 
 drop policy if exists rater_instruction_compatibility_policies_read_auditors on rater_instruction_compatibility_policies;
 create policy rater_instruction_compatibility_policies_read_auditors on rater_instruction_compatibility_policies

@@ -26,6 +26,22 @@ const policyEvidenceProjectionTableNames = new Set(Object.values(policyEvidenceP
 
 const expertReadablePolicyEvidenceResourceKeys = new Set(["languageArtifactAssessment"]);
 
+const ratingControlProjectionTables = Object.freeze({
+  taskOutputEligibilityPolicy: "task_output_eligibility_policies",
+  scoreInputPolicy: "score_input_policies",
+  draftStoragePolicy: "draft_storage_policies",
+  rubricLintConfig: "rubric_lint_configs",
+  scoreConfidenceScalePolicy: "score_confidence_scale_policies",
+  rationaleEvidenceSpanRequirednessPolicy: "rationale_evidence_span_requiredness_policies",
+  samePositionBatchReviewRequirednessPolicy: "same_position_batch_review_requiredness_policies",
+  protectedArtifactRetentionRecord: "protected_artifact_retention_records",
+  sourceLeakageRedactionPolicy: "source_leakage_redaction_policies",
+  partialTaskPromotionPolicy: "partial_task_promotion_policies",
+  exposureQuarantinePolicy: "exposure_quarantine_policies",
+});
+
+const ratingControlProjectionTableNames = new Set(Object.values(ratingControlProjectionTables));
+
 const ratingExperienceProjectionTables = Object.freeze({
   raterInstructionCompatibilityPolicy: "rater_instruction_compatibility_policies",
   raterInstructionRenderVersion: "rater_instruction_render_versions",
@@ -710,6 +726,148 @@ function policyEvidenceProjectionValuesForWorkflowResource(resourceKey, resource
     record_json: recordJson,
     created_at: resource.createdAt ?? resource.created_at ?? resource.frozenAt ?? resource.timestamp ?? resource.reviewedAt ?? event.receivedAt ?? null,
   };
+}
+
+export function ratingControlProjectionForWorkflowEvent(event) {
+  const resourceKey = event?.resourceKey;
+  const resource = event?.payload?.[resourceKey];
+  if (!ratingControlProjectionTables[resourceKey] || !resource || typeof resource !== "object" || Array.isArray(resource)) return null;
+  const eventId = event.id ?? event.eventId ?? null;
+  const recordJson = event;
+  return {
+    table: ratingControlProjectionTables[resourceKey],
+    values: ratingControlProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event),
+  };
+}
+
+function ratingControlProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event) {
+  return {
+    id: resource.id,
+    release_id: resource.releaseId ?? resource.release_id ?? null,
+    resource_key: resourceKey,
+    policy_id:
+      resource.policyId ??
+      resource.policy_id ??
+      resource.taskOutputEligibilityPolicyId ??
+      resource.task_output_eligibility_policy_id ??
+      resource.scoreConfidenceScalePolicyId ??
+      resource.score_confidence_scale_policy_id ??
+      resource.rationaleEvidenceSpanRequirednessPolicyId ??
+      resource.rationale_evidence_span_requiredness_policy_id ??
+      resource.samePositionBatchReviewRequirednessPolicyId ??
+      resource.same_position_batch_review_requiredness_policy_id ??
+      resource.sourceLeakageRedactionPolicyId ??
+      resource.source_leakage_redaction_policy_id ??
+      resource.partialTaskPromotionPolicyId ??
+      resource.partial_task_promotion_policy_id ??
+      resource.exposureQuarantinePolicyId ??
+      resource.exposure_quarantine_policy_id ??
+      (resourceKey.endsWith("Policy") || resourceKey === "rubricLintConfig" ? resource.id : null),
+    workflow_profile_id: resource.workflowProfileId ?? resource.workflow_profile_id ?? null,
+    score_input_policy_id:
+      resource.scoreInputPolicyId ??
+      resource.score_input_policy_id ??
+      (resourceKey === "scoreInputPolicy" ? resource.id : null),
+    draft_storage_policy_id:
+      resource.draftStoragePolicyId ??
+      resource.draft_storage_policy_id ??
+      (resourceKey === "draftStoragePolicy" ? resource.id : null),
+    rubric_lint_config_id:
+      resource.rubricLintConfigId ??
+      resource.rubric_lint_config_id ??
+      (resourceKey === "rubricLintConfig" ? resource.id : null),
+    artifact_id:
+      resource.protectedArtifactId ??
+      resource.protected_artifact_id ??
+      resource.artifactId ??
+      resource.artifact_id ??
+      firstArrayValue(resource.affectedArtifactIds ?? resource.affected_artifact_ids) ??
+      firstArrayValue(resource.protectedArtifactIds ?? resource.protected_artifact_ids) ??
+      null,
+    assignment_id: resource.assignmentId ?? resource.assignment_id ?? null,
+    rating_id: resource.ratingId ?? resource.rating_id ?? resource.attemptRatingId ?? resource.attempt_rating_id ?? null,
+    item_id: resource.itemId ?? resource.item_id ?? firstArrayValue(resource.itemIds ?? resource.item_ids) ?? null,
+    position_id: resource.positionId ?? resource.position_id ?? null,
+    critique_id: resource.critiqueId ?? resource.critique_id ?? null,
+    workflow_status: ratingControlWorkflowStatus(resourceKey, resource),
+    artifact_status: ratingControlArtifactStatus(resourceKey, resource),
+    visibility_class: "admin_audit_only",
+    input_hash:
+      resource.inputHash ??
+      resource.input_hash ??
+      resource.artifactHash ??
+      resource.artifact_hash ??
+      resource.policyHash ??
+      resource.policy_hash ??
+      resource.configHash ??
+      resource.config_hash ??
+      resource.retentionHash ??
+      resource.retention_hash ??
+      event.payloadHash ??
+      `sha256:${resourceKey}:${resource.id}`,
+    artifact_json: resource,
+    event_id: eventId,
+    record_json: recordJson,
+    created_at:
+      resource.createdAt ??
+      resource.created_at ??
+      resource.reviewedAt ??
+      resource.reviewed_at ??
+      resource.checkedAt ??
+      resource.checked_at ??
+      resource.frozenAt ??
+      resource.frozen_at ??
+      resource.timestamp ??
+      event.receivedAt ??
+      null,
+  };
+}
+
+function ratingControlWorkflowStatus(resourceKey, resource) {
+  return (
+    resource.workflowStatus ??
+    resource.workflow_status ??
+    resource.status ??
+    resource.reviewStatus ??
+    resource.review_status ??
+    resource.lintConfigStatus ??
+    resource.lint_config_status ??
+    resource.requirednessStatus ??
+    resource.requiredness_status ??
+    resource.retentionStatus ??
+    resource.retention_status ??
+    resource.incidentReviewDecision ??
+    resource.incident_review_decision ??
+    resource.redactionReviewStatus ??
+    resource.redaction_review_status ??
+    resource.promotionDecision ??
+    resource.promotion_decision ??
+    resource.exposureQuarantineStatus ??
+    resource.exposure_quarantine_status ??
+    `${resourceKey}_submitted`
+  );
+}
+
+function ratingControlArtifactStatus(resourceKey, resource) {
+  return (
+    resource.artifactStatus ??
+    resource.artifact_status ??
+    resource.releaseUseStatus ??
+    resource.release_use_status ??
+    resource.reviewStatus ??
+    resource.review_status ??
+    resource.retentionStatus ??
+    resource.retention_status ??
+    resource.incidentReviewDecision ??
+    resource.incident_review_decision ??
+    resource.redactionReviewStatus ??
+    resource.redaction_review_status ??
+    resource.promotionDecision ??
+    resource.promotion_decision ??
+    resource.exposureQuarantineStatus ??
+    resource.exposure_quarantine_status ??
+    ratingControlWorkflowStatus(resourceKey, resource)
+  );
 }
 
 export function metricGovernanceProjectionForWorkflowEvent(event) {
@@ -2062,6 +2220,7 @@ async function appendWorkflowResourceProjection(db, event) {
   await appendReleaseConfigWorkflowProjection(db, event);
   await appendMetaphilosophyWorkflowProjection(db, event);
   await appendPolicyEvidenceWorkflowProjection(db, event);
+  await appendRatingControlWorkflowProjection(db, event);
   await appendDiscussionAdjudicationWorkflowProjection(db, event);
   await appendVerificationAdjudicationWorkflowProjection(db, event);
   await appendReleaseReadinessWorkflowProjection(db, event);
@@ -3707,7 +3866,86 @@ async function appendPolicyEvidenceWorkflowProjection(db, event) {
       event_id = excluded.event_id,
       record_json = excluded.record_json,
       created_at = excluded.created_at
-  `;
+    `;
+}
+
+async function appendRatingControlWorkflowProjection(db, event) {
+  const projection = ratingControlProjectionForWorkflowEvent(event);
+  if (!projection || !ratingControlProjectionTableNames.has(projection.table)) return;
+  const { values } = projection;
+  const table = db(projection.table);
+  await db`
+    insert into ${table} (
+      id,
+      release_id,
+      resource_key,
+      policy_id,
+      workflow_profile_id,
+      score_input_policy_id,
+      draft_storage_policy_id,
+      rubric_lint_config_id,
+      artifact_id,
+      assignment_id,
+      rating_id,
+      item_id,
+      position_id,
+      critique_id,
+      workflow_status,
+      artifact_status,
+      visibility_class,
+      input_hash,
+      artifact_json,
+      event_id,
+      record_json,
+      created_at
+    )
+    values (
+      ${values.id},
+      ${values.release_id},
+      ${values.resource_key},
+      ${values.policy_id},
+      ${values.workflow_profile_id},
+      ${values.score_input_policy_id},
+      ${values.draft_storage_policy_id},
+      ${values.rubric_lint_config_id},
+      ${values.artifact_id},
+      ${values.assignment_id},
+      ${values.rating_id},
+      ${values.item_id},
+      ${values.position_id},
+      ${values.critique_id},
+      ${values.workflow_status},
+      ${values.artifact_status},
+      ${values.visibility_class},
+      ${values.input_hash},
+      ${db.json(values.artifact_json)},
+      ${values.event_id},
+      ${db.json(values.record_json)},
+      coalesce(${values.created_at}::timestamptz, now())
+    )
+    on conflict (id) do update set
+      release_id = excluded.release_id,
+      resource_key = excluded.resource_key,
+      policy_id = excluded.policy_id,
+      workflow_profile_id = excluded.workflow_profile_id,
+      score_input_policy_id = excluded.score_input_policy_id,
+      draft_storage_policy_id = excluded.draft_storage_policy_id,
+      rubric_lint_config_id = excluded.rubric_lint_config_id,
+      artifact_id = excluded.artifact_id,
+      assignment_id = excluded.assignment_id,
+      rating_id = excluded.rating_id,
+      item_id = excluded.item_id,
+      position_id = excluded.position_id,
+      critique_id = excluded.critique_id,
+      workflow_status = excluded.workflow_status,
+      artifact_status = excluded.artifact_status,
+      visibility_class = excluded.visibility_class,
+      input_hash = excluded.input_hash,
+      artifact_json = excluded.artifact_json,
+      event_id = excluded.event_id,
+      record_json = excluded.record_json,
+      created_at = excluded.created_at
+    `;
 }
 
 async function appendDiscussionAdjudicationWorkflowProjection(db, event) {

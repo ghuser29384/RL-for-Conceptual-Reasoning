@@ -14,6 +14,7 @@ import {
   metaphilosophyProjectionForWorkflowEvent,
   operationalControlProjectionForWorkflowEvent,
   policyEvidenceProjectionForWorkflowEvent,
+  ratingControlProjectionForWorkflowEvent,
   ratingExperienceProjectionForWorkflowEvent,
   ratingProjectionForAuditEvent,
   releaseArtifactProjectionForWorkflowEvent,
@@ -5000,10 +5001,13 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/visibility-policies"],
     ["GET", "/api/v1/visibility-policies/visibility-policy-smoke"],
     ["POST", "/api/v1/source-leakage-redaction-policies"],
+    ["GET", "/api/v1/source-leakage-redaction-policies"],
     ["GET", "/api/v1/source-leakage-redaction-policies/source-leakage-redaction-policy-smoke"],
     ["POST", "/api/v1/partial-task-promotion-policies"],
+    ["GET", "/api/v1/partial-task-promotion-policies"],
     ["GET", "/api/v1/partial-task-promotion-policies/partial-task-promotion-policy-smoke"],
     ["POST", "/api/v1/exposure-quarantine-policies"],
+    ["GET", "/api/v1/exposure-quarantine-policies"],
     ["GET", "/api/v1/exposure-quarantine-policies/exposure-quarantine-policy-smoke"],
     ["POST", "/api/v1/cloud-security-budget-policies"],
     ["GET", "/api/v1/cloud-security-budget-policies/cloud-security-budget-policy-smoke"],
@@ -5035,8 +5039,10 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/model-provider-data-handling-policies"],
     ["GET", "/api/v1/model-provider-data-handling-policies/model-provider-policy-smoke"],
     ["POST", "/api/v1/task-output-eligibility-policies"],
+    ["GET", "/api/v1/task-output-eligibility-policies"],
     ["GET", "/api/v1/task-output-eligibility-policies/task-output-eligibility-smoke"],
     ["POST", "/api/v1/score-input-policies"],
+    ["GET", "/api/v1/score-input-policies"],
     ["GET", "/api/v1/score-input-policies/score-input-policy-smoke"],
     ["POST", "/api/v1/score-explanation-policies"],
     ["GET", "/api/v1/score-explanation-policies"],
@@ -5048,6 +5054,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/disagreement-threshold-policies"],
     ["GET", "/api/v1/disagreement-threshold-policies/disagreement-threshold-policy-smoke"],
     ["POST", "/api/v1/draft-storage-policies"],
+    ["GET", "/api/v1/draft-storage-policies"],
     ["GET", "/api/v1/draft-storage-policies/draft-storage-policy-smoke"],
     ["POST", "/api/v1/rater-instruction-compatibility-policies"],
     ["GET", "/api/v1/rater-instruction-compatibility-policies"],
@@ -5058,6 +5065,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/rater-instruction-comprehension-audits"],
     ["GET", "/api/v1/rater-instruction-comprehension-audits/rater-instruction-comprehension-audit-smoke"],
     ["POST", "/api/v1/rubric-lint-configs"],
+    ["GET", "/api/v1/rubric-lint-configs"],
     ["GET", "/api/v1/rubric-lint-configs/rubric-lint-config-smoke"],
     ["POST", "/api/v1/rubric-lint-events"],
     ["GET", "/api/v1/rubric-lint-events/rubric-lint-event-smoke"],
@@ -5074,17 +5082,22 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/item-issue-actions/item-issue-action-smoke"],
     ["POST", "/api/v1/rating-draft-sessions"],
     ["GET", "/api/v1/rating-draft-sessions/rating-draft-session-smoke"],
+    ["POST", "/api/v1/score-confidence-scale-policies"],
+    ["GET", "/api/v1/score-confidence-scale-policies"],
+    ["GET", "/api/v1/score-confidence-scale-policies/score-confidence-scale-policy-smoke"],
     ["POST", "/api/v1/score-confidence-annotations"],
     ["GET", "/api/v1/score-confidence-annotations/score-confidence-annotation-smoke"],
     ["POST", "/api/v1/rater-score-confidences"],
     ["GET", "/api/v1/rater-score-confidences/rater-score-confidence-smoke"],
     ["POST", "/api/v1/rationale-evidence-span-requiredness-policies"],
+    ["GET", "/api/v1/rationale-evidence-span-requiredness-policies"],
     ["GET", "/api/v1/rationale-evidence-span-requiredness-policies/rationale-requiredness-smoke"],
     ["POST", "/api/v1/rationale-evidence-spans"],
     ["GET", "/api/v1/rationale-evidence-spans/rationale-evidence-span-smoke"],
     ["POST", "/api/v1/same-position-scratchpads"],
     ["GET", "/api/v1/same-position-scratchpads/same-position-scratchpad-smoke"],
     ["POST", "/api/v1/same-position-batch-review-requiredness-policies"],
+    ["GET", "/api/v1/same-position-batch-review-requiredness-policies"],
     ["GET", "/api/v1/same-position-batch-review-requiredness-policies/same-position-batch-review-requiredness-policy-smoke"],
     ["POST", "/api/v1/same-position-batch-reviews"],
     ["GET", "/api/v1/same-position-batch-reviews/same-position-batch-review-smoke"],
@@ -5098,6 +5111,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/external-assistance-declarations"],
     ["GET", "/api/v1/external-assistance-declarations/external-assistance-declaration-smoke"],
     ["POST", "/api/v1/protected-artifact-retention-records"],
+    ["GET", "/api/v1/protected-artifact-retention-records"],
     ["GET", "/api/v1/protected-artifact-retention-records/protected-artifact-retention-smoke"],
     ["POST", "/api/v1/blinding-preview-audits"],
     ["GET", "/api/v1/blinding-preview-audits/blinding-preview-smoke"],
@@ -6201,6 +6215,39 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "language-artifact-assessments"',
     'endpoint: "/api/v1/language-artifact-assessments"',
     'resourceKey: "languageArtifactAssessment"',
+    'id: "task-output-eligibility-policies"',
+    'endpoint: "/api/v1/task-output-eligibility-policies"',
+    'resourceKey: "taskOutputEligibilityPolicy"',
+    'id: "score-input-policies"',
+    'endpoint: "/api/v1/score-input-policies"',
+    'resourceKey: "scoreInputPolicy"',
+    'id: "draft-storage-policies"',
+    'endpoint: "/api/v1/draft-storage-policies"',
+    'resourceKey: "draftStoragePolicy"',
+    'id: "rubric-lint-configs"',
+    'endpoint: "/api/v1/rubric-lint-configs"',
+    'resourceKey: "rubricLintConfig"',
+    'id: "score-confidence-scale-policies"',
+    'endpoint: "/api/v1/score-confidence-scale-policies"',
+    'resourceKey: "scoreConfidenceScalePolicy"',
+    'id: "rationale-evidence-span-requiredness-policies"',
+    'endpoint: "/api/v1/rationale-evidence-span-requiredness-policies"',
+    'resourceKey: "rationaleEvidenceSpanRequirednessPolicy"',
+    'id: "same-position-batch-review-requiredness-policies"',
+    'endpoint: "/api/v1/same-position-batch-review-requiredness-policies"',
+    'resourceKey: "samePositionBatchReviewRequirednessPolicy"',
+    'id: "protected-artifact-retention-records"',
+    'endpoint: "/api/v1/protected-artifact-retention-records"',
+    'resourceKey: "protectedArtifactRetentionRecord"',
+    'id: "source-leakage-redaction-policies"',
+    'endpoint: "/api/v1/source-leakage-redaction-policies"',
+    'resourceKey: "sourceLeakageRedactionPolicy"',
+    'id: "partial-task-promotion-policies"',
+    'endpoint: "/api/v1/partial-task-promotion-policies"',
+    'resourceKey: "partialTaskPromotionPolicy"',
+    'id: "exposure-quarantine-policies"',
+    'endpoint: "/api/v1/exposure-quarantine-policies"',
+    'resourceKey: "exposureQuarantinePolicy"',
     'id: "rater-instruction-compatibility-policies"',
     'endpoint: "/api/v1/rater-instruction-compatibility-policies"',
     'resourceKey: "raterInstructionCompatibilityPolicy"',
@@ -6595,6 +6642,46 @@ test("policy-bundle and participant-safeguard collections are routed for operato
   const denied = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/visibility-policies",
+    headers: raterHeaders,
+  });
+  assert.equal(denied.status, 403);
+});
+
+test("rating-control policy collections are routed for operator readback", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const ratingControlCollections = [
+    ["taskOutputEligibilityPolicy", "/api/v1/task-output-eligibility-policies"],
+    ["scoreInputPolicy", "/api/v1/score-input-policies"],
+    ["draftStoragePolicy", "/api/v1/draft-storage-policies"],
+    ["rubricLintConfig", "/api/v1/rubric-lint-configs"],
+    ["scoreConfidenceScalePolicy", "/api/v1/score-confidence-scale-policies"],
+    ["rationaleEvidenceSpanRequirednessPolicy", "/api/v1/rationale-evidence-span-requiredness-policies"],
+    ["samePositionBatchReviewRequirednessPolicy", "/api/v1/same-position-batch-review-requiredness-policies"],
+    ["protectedArtifactRetentionRecord", "/api/v1/protected-artifact-retention-records"],
+    ["sourceLeakageRedactionPolicy", "/api/v1/source-leakage-redaction-policies"],
+    ["partialTaskPromotionPolicy", "/api/v1/partial-task-promotion-policies"],
+    ["exposureQuarantinePolicy", "/api/v1/exposure-quarantine-policies"],
+  ];
+  for (const [resourceKey, url] of ratingControlCollections) {
+    const response = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: adminHeaders,
+    });
+    assert.equal(response.status, 200, url);
+    assert.equal(response.body.resourceKey, resourceKey, url);
+    assert.equal(response.body.count, 0, url);
+    assert.deepEqual(response.body.items, [], url);
+  }
+
+  const denied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/score-input-policies",
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
@@ -19886,6 +19973,54 @@ test("production schema includes policy-bundle and participant-safeguard project
   assert.ok(architectureDoc.includes("without becoming score tables, assignment queues, source-preparation gates, or release-completion evidence"));
 });
 
+test("production schema includes rating-control projection tables with admin audit RLS", () => {
+  const schema = readFileSync("db/production-schema.sql", "utf8");
+  const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
+  const tables = [
+    "task_output_eligibility_policies",
+    "score_input_policies",
+    "draft_storage_policies",
+    "rubric_lint_configs",
+    "score_confidence_scale_policies",
+    "rationale_evidence_span_requiredness_policies",
+    "same_position_batch_review_requiredness_policies",
+    "protected_artifact_retention_records",
+    "source_leakage_redaction_policies",
+    "partial_task_promotion_policies",
+    "exposure_quarantine_policies",
+  ];
+  for (const table of tables) {
+    assert.ok(schema.includes(`create table if not exists ${table}`), table);
+    assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
+    assert.ok(schema.includes(`create policy ${table}_read_auditors on ${table}`), table);
+    assert.ok(schema.includes(`create policy ${table}_write_admin_or_service on ${table}`), table);
+  }
+  assert.ok(schema.includes("score_input_policy_id text"));
+  assert.ok(schema.includes("draft_storage_policy_id text"));
+  assert.ok(schema.includes("rubric_lint_config_id text"));
+  assert.ok(schema.includes("artifact_id text"));
+  assert.ok(schema.includes("assignment_id text"));
+  assert.ok(schema.includes("rating_id text"));
+  assert.ok(schema.includes("item_id text"));
+  assert.ok(schema.includes("position_id text"));
+  assert.ok(schema.includes("critique_id text"));
+  assert.ok(schema.includes("visibility_class text not null default 'admin_audit_only' check (visibility_class = 'admin_audit_only')"));
+  assert.ok(schema.includes("input_hash text not null check (input_hash like 'sha256:%')"));
+  assert.ok(schema.includes("create index if not exists task_output_eligibility_policies_policy_idx"));
+  assert.ok(schema.includes("create index if not exists score_input_policies_score_input_policy_idx"));
+  assert.ok(schema.includes("create index if not exists draft_storage_policies_draft_storage_policy_idx"));
+  assert.ok(schema.includes("create index if not exists rubric_lint_configs_config_idx"));
+  assert.ok(schema.includes("create index if not exists protected_artifact_retention_records_artifact_idx"));
+  assert.ok(schema.includes("create index if not exists source_leakage_redaction_policies_policy_idx"));
+  assert.ok(schema.includes("create index if not exists exposure_quarantine_policies_policy_idx"));
+  assert.ok(architectureDoc.includes("rating-control projection tables"));
+  assert.ok(architectureDoc.includes("task_output_eligibility_policies"));
+  assert.ok(architectureDoc.includes("score_input_policies"));
+  assert.ok(architectureDoc.includes("protected_artifact_retention_records"));
+  assert.ok(architectureDoc.includes("exposure_quarantine_policies"));
+  assert.ok(architectureDoc.includes("without becoming scores, labels, live queue execution, candidate promotion"));
+});
+
 test("production schema includes rater instruction projection tables", () => {
   const schema = readFileSync("db/production-schema.sql", "utf8");
   const architectureDoc = readFileSync("docs/production-architecture.md", "utf8");
@@ -20224,6 +20359,203 @@ test("postgres audit store projects policy-bundle and participant-safeguard work
 
   assert.equal(
     policyEvidenceProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-policy-evidence" })),
+    null,
+  );
+});
+
+test("postgres audit store projects rating-control workflow events into normalized rows", () => {
+  const baseEvent = (resourceKey, resource) => ({
+    id: `event-${resource.id}`,
+    type: `${resourceKey}_submitted`,
+    resourceKey,
+    resourceId: resource.id,
+    payloadHash: `sha256:${resource.id}`,
+    receivedAt: "2026-10-01T00:00:00.000Z",
+    payload: { [resourceKey]: resource },
+  });
+  const cases = [
+    [
+      "taskOutputEligibilityPolicy",
+      "task_output_eligibility_policies",
+      {
+        id: "task-output-eligibility-policy-projection",
+        releaseId: "october-2026-demo",
+        workflowProfileId: "rating-workflow-profile-projection",
+        status: "task_output_policy_active",
+      },
+      "task_output_policy_active",
+    ],
+    [
+      "scoreInputPolicy",
+      "score_input_policies",
+      {
+        id: "score-input-policy-projection",
+        releaseId: "october-2026-demo",
+        workflowProfileId: "rating-workflow-profile-projection",
+        status: "score_input_policy_active",
+      },
+      "score_input_policy_active",
+    ],
+    [
+      "draftStoragePolicy",
+      "draft_storage_policies",
+      {
+        id: "draft-storage-policy-projection",
+        releaseId: "october-2026-demo",
+        workflowProfileId: "rating-workflow-profile-projection",
+        status: "draft_storage_policy_active",
+      },
+      "draft_storage_policy_active",
+    ],
+    [
+      "rubricLintConfig",
+      "rubric_lint_configs",
+      {
+        id: "rubric-lint-config-projection",
+        releaseId: "october-2026-demo",
+        workflowProfileId: "rating-workflow-profile-projection",
+        lintConfigStatus: "rubric_lint_config_active",
+      },
+      "rubric_lint_config_active",
+    ],
+    [
+      "scoreConfidenceScalePolicy",
+      "score_confidence_scale_policies",
+      {
+        id: "score-confidence-scale-policy-projection",
+        releaseId: "october-2026-demo",
+        status: "score_confidence_scale_active",
+      },
+      "score_confidence_scale_active",
+    ],
+    [
+      "rationaleEvidenceSpanRequirednessPolicy",
+      "rationale_evidence_span_requiredness_policies",
+      {
+        id: "rationale-requiredness-policy-projection",
+        releaseId: "october-2026-demo",
+        requirednessStatus: "required_for_triggered_explanations",
+      },
+      "required_for_triggered_explanations",
+    ],
+    [
+      "samePositionBatchReviewRequirednessPolicy",
+      "same_position_batch_review_requiredness_policies",
+      {
+        id: "same-position-review-policy-projection",
+        releaseId: "october-2026-demo",
+        requirednessStatus: "same_position_review_required",
+      },
+      "same_position_review_required",
+    ],
+    [
+      "protectedArtifactRetentionRecord",
+      "protected_artifact_retention_records",
+      {
+        id: "protected-artifact-retention-projection",
+        releaseId: "october-2026-demo",
+        protectedArtifactId: "protected-artifact-projection",
+        retentionStatus: "retention_review_passed",
+      },
+      "retention_review_passed",
+    ],
+    [
+      "sourceLeakageRedactionPolicy",
+      "source_leakage_redaction_policies",
+      {
+        id: "source-leakage-redaction-policy-projection",
+        releaseId: "october-2026-demo",
+        redactionReviewStatus: "source_leakage_redaction_passed",
+      },
+      "source_leakage_redaction_passed",
+    ],
+    [
+      "partialTaskPromotionPolicy",
+      "partial_task_promotion_policies",
+      {
+        id: "partial-task-promotion-policy-projection",
+        releaseId: "october-2026-demo",
+        promotionDecision: "partial_outputs_excluded_from_denominators",
+      },
+      "partial_outputs_excluded_from_denominators",
+    ],
+    [
+      "exposureQuarantinePolicy",
+      "exposure_quarantine_policies",
+      {
+        id: "exposure-quarantine-policy-projection",
+        releaseId: "october-2026-demo",
+        exposureQuarantineStatus: "post_lock_exposure_quarantined",
+      },
+      "post_lock_exposure_quarantined",
+    ],
+  ];
+
+  for (const [resourceKey, table, resource, expectedStatus] of cases) {
+    const event = baseEvent(resourceKey, resource);
+    const projection = ratingControlProjectionForWorkflowEvent(event);
+    assert.equal(projection.table, table, resourceKey);
+    assert.equal(projection.values.id, resource.id, resourceKey);
+    assert.equal(projection.values.resource_key, resourceKey, resourceKey);
+    assert.equal(projection.values.release_id, "october-2026-demo", resourceKey);
+    assert.equal(projection.values.workflow_status, expectedStatus, resourceKey);
+    assert.equal(projection.values.artifact_status, expectedStatus, resourceKey);
+    assert.equal(projection.values.visibility_class, "admin_audit_only", resourceKey);
+    assert.equal(projection.values.input_hash, `sha256:${resource.id}`, resourceKey);
+    assert.deepEqual(projection.values.artifact_json, resource, resourceKey);
+    assert.deepEqual(projection.values.record_json, event, resourceKey);
+    assert.equal(projection.values.event_id, `event-${resource.id}`, resourceKey);
+  }
+
+  const scoreInputProjection = ratingControlProjectionForWorkflowEvent(
+    baseEvent("scoreInputPolicy", {
+      id: "score-input-policy-projection-linked",
+      releaseId: "october-2026-demo",
+      workflowProfileId: "rating-workflow-profile-projection",
+    }),
+  );
+  assert.equal(scoreInputProjection.values.policy_id, "score-input-policy-projection-linked");
+  assert.equal(scoreInputProjection.values.score_input_policy_id, "score-input-policy-projection-linked");
+  assert.equal(scoreInputProjection.values.workflow_profile_id, "rating-workflow-profile-projection");
+
+  const draftProjection = ratingControlProjectionForWorkflowEvent(
+    baseEvent("draftStoragePolicy", {
+      id: "draft-storage-policy-projection-linked",
+      releaseId: "october-2026-demo",
+    }),
+  );
+  assert.equal(draftProjection.values.draft_storage_policy_id, "draft-storage-policy-projection-linked");
+
+  const rubricProjection = ratingControlProjectionForWorkflowEvent(
+    baseEvent("rubricLintConfig", {
+      id: "rubric-lint-config-projection-linked",
+      releaseId: "october-2026-demo",
+    }),
+  );
+  assert.equal(rubricProjection.values.policy_id, "rubric-lint-config-projection-linked");
+  assert.equal(rubricProjection.values.rubric_lint_config_id, "rubric-lint-config-projection-linked");
+
+  const retentionProjection = ratingControlProjectionForWorkflowEvent(
+    baseEvent("protectedArtifactRetentionRecord", {
+      id: "protected-artifact-retention-projection-linked",
+      releaseId: "october-2026-demo",
+      affectedArtifactIds: ["protected-artifact-fallback"],
+      assignmentId: "assignment-projection",
+      ratingId: "rating-projection",
+      itemId: "item-projection",
+      positionId: "position-projection",
+      critiqueId: "critique-projection",
+    }),
+  );
+  assert.equal(retentionProjection.values.artifact_id, "protected-artifact-fallback");
+  assert.equal(retentionProjection.values.assignment_id, "assignment-projection");
+  assert.equal(retentionProjection.values.rating_id, "rating-projection");
+  assert.equal(retentionProjection.values.item_id, "item-projection");
+  assert.equal(retentionProjection.values.position_id, "position-projection");
+  assert.equal(retentionProjection.values.critique_id, "critique-projection");
+
+  assert.equal(
+    ratingControlProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "not-rating-control" })),
     null,
   );
 });
