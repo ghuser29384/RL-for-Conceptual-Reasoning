@@ -4703,6 +4703,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/target-gaps/import-jsonl-package"],
     ["POST", "/api/v1/rights/review"],
     ["POST", "/api/v1/releases/freeze"],
+    ["POST", "/api/v1/release-version-manifest/review-manifest"],
     ["POST", "/api/v1/certification-records"],
     ["GET", "/api/v1/certification-records/certification-record-smoke"],
     ["POST", "/api/v1/exposure-logs"],
@@ -5360,6 +5361,9 @@ test("Workflow console exposes templates for RLHF77 operator action endpoints", 
     "reuses the single-position workflow validator",
     'id: "release-freeze"',
     'endpoint: () => "/api/v1/releases/freeze"',
+    'id: "release-version-freeze-review-manifest"',
+    'endpoint: () => "/api/v1/release-version-manifest/review-manifest"',
+    'resourceKey: "releaseVersionFreezeReviewManifest"',
     'id: "candidate-batch-model-judge-scores"',
     'endpoint: () => "/api/v1/candidate-batches/candidate-batch-demo/model-judge-scores"',
     'id: "candidate-review"',
@@ -11988,6 +11992,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifest.body.counts.byFreezeDependencyStatus.linked_artifact_missing, 6);
   assert.equal(releaseVersionManifest.body.counts.blockingReleaseFreezeRows, 9);
   assert.equal(releaseVersionManifest.body.counts.byRoute["/api/v1/release-version-manifest"], 9);
+  assert.equal(releaseVersionManifest.body.counts.byRoute["/api/v1/release-version-manifest/review-manifest"], 2);
   assert.match(releaseVersionManifest.body.policy.scope, /release-version manifest projection/);
 
   const releaseVersionManifestMissingLinks = await invokeApi(context, {
@@ -12042,6 +12047,18 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestByRoute.body.count, 3);
   assert.equal(releaseVersionManifestByRoute.body.filteredCounts.byRoute["/api/v1/target-gaps/positions"], 3);
 
+  const releaseVersionManifestByReviewManifestRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/release-version-manifest?route=${encodeURIComponent("/api/v1/release-version-manifest/review-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(releaseVersionManifestByReviewManifestRoute.status, 200, JSON.stringify(releaseVersionManifestByReviewManifestRoute.body));
+  assert.equal(releaseVersionManifestByReviewManifestRoute.body.count, 2);
+  assert.equal(
+    releaseVersionManifestByReviewManifestRoute.body.filteredCounts.byRoute["/api/v1/release-version-manifest/review-manifest"],
+    2,
+  );
+
   const releaseVersionManifestById = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/release-version-manifest/linked-corpus_manifest",
@@ -12083,12 +12100,14 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestTemplate.body.counts.byTemplateKind.release_version, 1);
   assert.equal(releaseVersionManifestTemplate.body.counts.byTemplateKind.release_freeze, 1);
   assert.equal(releaseVersionManifestTemplate.body.counts.byRoute["/api/v1/release-version-manifest/template"], 2);
+  assert.equal(releaseVersionManifestTemplate.body.counts.byRoute["/api/v1/release-version-manifest/review-manifest"], 2);
   assert.match(releaseVersionManifestTemplate.body.policy.scope, /release-version and release-freeze request templates/);
   assert.match(releaseVersionManifestTemplate.body.policy.templateOnly, /reject unchanged templates/);
 
   const releaseVersionTemplate = releaseVersionManifestTemplate.body.items.find((item) => item.templateKind === "release_version");
   assert.equal(releaseVersionTemplate.writeRoute, "/api/v1/release-versions");
   assert.equal(releaseVersionTemplate.singleRecordValidateOnlyRoute, "/api/v1/release-versions?validateOnly=true");
+  assert.equal(releaseVersionTemplate.reviewManifestRoute, "/api/v1/release-version-manifest/review-manifest");
   assert.equal(releaseVersionTemplate.requestBody.releaseVersion.templateOnly, true);
   assert.equal(releaseVersionTemplate.requestBody.releaseVersion.corpusManifestId, "corpus-composition-october-2026-demo");
   assert.equal(releaseVersionTemplate.requestBody.releaseVersion.labelSnapshotId, "snapshot-oct-api");
@@ -12115,6 +12134,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const releaseFreezeTemplate = releaseVersionManifestTemplate.body.items.find((item) => item.templateKind === "release_freeze");
   assert.equal(releaseFreezeTemplate.writeRoute, "/api/v1/releases/freeze");
   assert.equal(releaseFreezeTemplate.singleRecordValidateOnlyRoute, "/api/v1/releases/freeze?validateOnly=true");
+  assert.equal(releaseFreezeTemplate.reviewManifestRoute, "/api/v1/release-version-manifest/review-manifest");
   assert.equal(releaseFreezeTemplate.collectionReadbackRoute, "/api/v1/release-freezes");
   assert.ok(releaseFreezeTemplate.routes.includes("/api/v1/release-freezes"));
   assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.templateOnly, true);
@@ -12146,6 +12166,19 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseVersionManifestTemplateByRoute.status, 200, JSON.stringify(releaseVersionManifestTemplateByRoute.body));
   assert.equal(releaseVersionManifestTemplateByRoute.body.count, 1);
   assert.equal(releaseVersionManifestTemplateByRoute.body.items[0].templateKind, "release_version");
+
+  const releaseVersionManifestTemplateByReviewManifestRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/release-version-manifest/template?route=${encodeURIComponent("/api/v1/release-version-manifest/review-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(
+    releaseVersionManifestTemplateByReviewManifestRoute.status,
+    200,
+    JSON.stringify(releaseVersionManifestTemplateByReviewManifestRoute.body),
+  );
+  assert.equal(releaseVersionManifestTemplateByReviewManifestRoute.body.count, 2);
+  assert.equal(releaseVersionManifestTemplateByReviewManifestRoute.body.filteredCounts.byRoute["/api/v1/release-version-manifest/review-manifest"], 2);
 
   const releaseVersionManifestTemplateById = await invokeApi(context, {
     method: "GET",
@@ -12202,6 +12235,57 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseFreezePreflight.body.policyGateDryRun, "not_minted_or_consumed");
   assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
 
+  const releaseFreezeReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-version-manifest/review-manifest",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      releaseVersion: releaseVersionTemplate.preflightRequestBody.releaseVersion,
+      releaseFreeze: releaseFreezeTemplate.preflightRequestBody.releaseFreeze,
+    }),
+  });
+  assert.equal(releaseFreezeReviewManifest.status, 200, JSON.stringify(releaseFreezeReviewManifest.body));
+  assert.equal(releaseFreezeReviewManifest.body.resourceKey, "releaseVersionFreezeReviewManifest");
+  assert.equal(releaseFreezeReviewManifest.body.reviewOnly, true);
+  assert.equal(releaseFreezeReviewManifest.body.noSideEffects, true);
+  assert.match(releaseFreezeReviewManifest.body.reviewManifestHash, /^sha256:/);
+  assert.match(releaseFreezeReviewManifest.body.releaseVersionHash, /^sha256:/);
+  assert.match(releaseFreezeReviewManifest.body.releaseFreezeHash, /^sha256:/);
+  assert.equal(releaseFreezeReviewManifest.body.releaseVersionWriteActionAvailable, false);
+  assert.equal(releaseFreezeReviewManifest.body.releaseFreezeWriteActionAvailable, false);
+  assert.equal(releaseFreezeReviewManifest.body.policyGateDryRun, "not_minted_or_consumed");
+  assert.equal(
+    releaseFreezeReviewManifest.body.releaseFreezePreflightSummary.status,
+    "release_freeze_blocked_by_target_scale_and_artifact_links",
+  );
+  assert.equal(releaseFreezeReviewManifest.body.validationSummary.releaseVersion.resourceKey, "releaseVersion");
+  assert.equal(releaseFreezeReviewManifest.body.validationSummary.releaseFreeze.resourceKey, "releaseFreeze");
+  assert.equal(releaseFreezeReviewManifest.body.validationSummary.releaseFreeze.policyGateDryRun, "not_minted_or_consumed");
+  assert.equal(releaseFreezeReviewManifest.body.counts.reviewManifestResources, 2);
+  assert.equal(releaseFreezeReviewManifest.body.counts.submittedResourceHashes, 2);
+  assert.equal(releaseFreezeReviewManifest.body.counts.byResourceKey.releaseVersion, 1);
+  assert.equal(releaseFreezeReviewManifest.body.counts.byResourceKey.releaseFreeze, 1);
+  assert.equal(releaseFreezeReviewManifest.body.manifest.manifestVersion, "release_version_freeze_review_manifest_v1");
+  assert.equal(releaseFreezeReviewManifest.body.manifest.reviewManifestHash, releaseFreezeReviewManifest.body.reviewManifestHash);
+  assert.equal(releaseFreezeReviewManifest.body.manifest.resources.length, 2);
+  assert.equal(releaseFreezeReviewManifest.body.manifest.resources[0].submittedResourceHash, releaseFreezeReviewManifest.body.releaseVersionHash);
+  assert.equal(releaseFreezeReviewManifest.body.manifest.resources[1].submittedResourceHash, releaseFreezeReviewManifest.body.releaseFreezeHash);
+  assert.match(releaseFreezeReviewManifest.body.policy.authority, /does not submit ReleaseVersion evidence/);
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
+  const unchangedReleaseFreezeReviewManifest = await invokeApi(context, {
+    method: "POST",
+    url: "/api/v1/release-version-manifest/review-manifest",
+    headers: { authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      releaseVersion: releaseVersionTemplate.requestBody.releaseVersion,
+      releaseFreeze: releaseFreezeTemplate.requestBody.releaseFreeze,
+    }),
+  });
+  assert.equal(unchangedReleaseFreezeReviewManifest.status, 400);
+  assert.equal(unchangedReleaseFreezeReviewManifest.body.error, "workflow_template_record");
+  assert.equal((await context.auditStore.readWorkflowEvents()).length, 0);
+
   const releaseFreezePreflightAppendRejected = await invokeApi(context, {
     method: "POST",
     url: "/api/v1/releases/freeze",
@@ -12242,6 +12326,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate/template"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/validate"], 13);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-package-files/review-manifest"], 13);
+  assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/release-version-manifest/review-manifest"], 1);
   assert.equal(publicDatasetReadiness.body.counts.byRoute["/api/v1/public-dataset-documents/template?documentKind=dataset_card"], 1);
   assert.ok(publicDatasetReadiness.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
   const publicDatasetRowsById = new Map(publicDatasetReadiness.body.items.map((item) => [item.id, item]));
@@ -12296,7 +12381,9 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseFreezeReadiness.nextActionKind, "validate_release_version_freeze");
   assert.equal(releaseFreezeReadiness.nextActionRoute, "/api/v1/release-version-manifest/template");
   assert.equal(releaseFreezeReadiness.nextActionValidateOnlyRoute, "/api/v1/releases/freeze?validateOnly=true");
+  assert.equal(releaseFreezeReadiness.nextActionReviewManifestRoute, "/api/v1/release-version-manifest/review-manifest");
   assert.ok(releaseFreezeReadiness.routes.includes(releaseFreezeReadiness.nextActionValidateOnlyRoute));
+  assert.ok(releaseFreezeReadiness.routes.includes(releaseFreezeReadiness.nextActionReviewManifestRoute));
   const publicFirstReadiness = publicDatasetRowsById.get("public_first_ladder_gate");
   assert.equal(publicFirstReadiness.nextActionKind, "verify_public_first_blockers");
   assert.equal(publicFirstReadiness.nextActionRoute, "/api/v1/public-dataset-publication-gate");
@@ -12391,6 +12478,16 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetByRoute.body.count, 2);
   assert.equal(publicDatasetByRoute.body.filteredCounts.byRoute["/api/v1/release-version-manifest"], 2);
 
+  const publicDatasetByReleaseFreezeReviewRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/release-version-manifest/review-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetByReleaseFreezeReviewRoute.status, 200, JSON.stringify(publicDatasetByReleaseFreezeReviewRoute.body));
+  assert.equal(publicDatasetByReleaseFreezeReviewRoute.body.count, 1);
+  assert.equal(publicDatasetByReleaseFreezeReviewRoute.body.items[0].id, "release_version_freeze");
+  assert.equal(publicDatasetByReleaseFreezeReviewRoute.body.filteredCounts.byNextActionKind.validate_release_version_freeze, 1);
+
   const publicDatasetByPackageValidationRoute = await invokeApi(context, {
     method: "GET",
     url: `/api/v1/public-dataset-readiness?route=${encodeURIComponent("/api/v1/public-dataset-package-files/validate/template")}`,
@@ -12462,6 +12559,7 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(publicDatasetPackageManifest.body.counts.byStatus.documentation_not_submitted, 1);
   assert.equal(publicDatasetPackageManifest.body.counts.byCoverageStatus.package_covers_current_unblocker, 1);
   assert.equal(publicDatasetPackageManifest.body.counts.byRoute["/api/v1/public-dataset-package-manifest"], 6);
+  assert.equal(publicDatasetPackageManifest.body.counts.byRoute["/api/v1/release-version-manifest/review-manifest"], 1);
   assert.match(publicDatasetPackageManifest.body.policy.scope, /Read-only Dataset v0\.1 package manifest/);
   assert.match(publicDatasetPackageManifest.body.policy.scope, /without creating a Dataset object/);
   assert.ok(publicDatasetPackageManifest.body.items.every((item) => Array.isArray(item.routes) && item.routeCount === item.routes.length));
@@ -12523,6 +12621,17 @@ test("operator action item queue is admin/auditor readback derived from the rele
   assert.equal(releaseFreezePackageStep.status, "blocked_by_release_freeze");
   assert.equal(releaseFreezePackageStep.counts.templateRows, 2);
   assert.equal(releaseFreezePackageStep.counts.openRows, 2);
+  assert.equal(releaseFreezePackageStep.reviewManifestRoute, "/api/v1/release-version-manifest/review-manifest");
+  assert.ok(releaseFreezePackageStep.routes.includes(releaseFreezePackageStep.reviewManifestRoute));
+
+  const publicDatasetPackageByReleaseFreezeReviewRoute = await invokeApi(context, {
+    method: "GET",
+    url: `/api/v1/public-dataset-package-manifest?route=${encodeURIComponent("/api/v1/release-version-manifest/review-manifest")}`,
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+  assert.equal(publicDatasetPackageByReleaseFreezeReviewRoute.status, 200, JSON.stringify(publicDatasetPackageByReleaseFreezeReviewRoute.body));
+  assert.equal(publicDatasetPackageByReleaseFreezeReviewRoute.body.count, 1);
+  assert.equal(publicDatasetPackageByReleaseFreezeReviewRoute.body.items[0].id, "release-version-freeze");
 
   const publicDocumentationPackageStep = publicDatasetPackageManifest.body.items.find((item) => item.id === "public-documentation");
   assert.equal(publicDocumentationPackageStep.status, "documentation_not_submitted");
@@ -18012,6 +18121,9 @@ test("governance UI exposes source-intake and metaphilosophy evidence", () => {
   assert.ok(appSource.includes('id: "release-version-manifest-template"'));
   assert.ok(appSource.includes('endpoint: "/api/v1/release-version-manifest/template"'));
   assert.ok(appSource.includes('resourceKey: "releaseVersionManifestTemplate"'));
+  assert.ok(appSource.includes('id: "release-version-freeze-review-manifest"'));
+  assert.ok(appSource.includes('endpoint: () => "/api/v1/release-version-manifest/review-manifest"'));
+  assert.ok(appSource.includes('resourceKey: "releaseVersionFreezeReviewManifest"'));
   assert.ok(appSource.includes("function releaseVersionManifestTemplatePreviewRow(item)"));
   assert.ok(appSource.includes("workflowReleaseManifestArtifactFilter"));
   assert.ok(appSource.includes('id: "public-dataset-package-manifest"'));
@@ -18500,12 +18612,17 @@ test("production schema includes release-artifact projections for label snapshot
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/{id}"));
   assert.ok(architectureDoc.includes("GET /api/v1/release-version-manifest/template"));
   assert.ok(architectureDoc.includes("templateOnly=true` `ReleaseVersion` and `ReleaseFreeze` request bodies"));
+  assert.ok(architectureDoc.includes("POST /api/v1/release-version-manifest/review-manifest"));
+  assert.ok(architectureDoc.includes("releaseVersionFreezeReviewManifest"));
+  assert.ok(architectureDoc.includes("It does not append ReleaseVersion evidence, submit ReleaseFreeze evidence"));
+  assert.ok(architectureDoc.includes("mint or consume the `release_freeze` policy decision"));
   assert.ok(architectureDoc.includes("POST /api/v1/release-versions` and `POST /api/v1/releases/freeze`"));
   assert.ok(architectureDoc.includes("do not submit release versions, freeze releases, consume policy decisions, create artifacts, collect target data, or make release claims"));
   assert.ok(architectureDoc.includes("GET /api/v1/public-dataset-readiness"));
   assert.ok(architectureDoc.includes("Open readiness rows also carry first-class `nextActionKind`, `nextActionRoute`"));
   assert.ok(architectureDoc.includes("label-snapshot and corpus-manifest review blockers to the existing release-artifact operator action"));
   assert.ok(architectureDoc.includes("documentation blockers to `publicDatasetDocument` validation"));
+  assert.ok(architectureDoc.includes("release-freeze blockers to release-version/freeze templates plus the hash-only release-freeze review manifest"));
   assert.ok(architectureDoc.includes("Review-required source/metaphilosophy rows blocked by the Dataset v0.1 deliverable"));
   assert.ok(architectureDoc.includes("open public-dataset readiness filters instead of generic audit inspection rows"));
   assert.ok(architectureDoc.includes("next-action kind"));
@@ -26150,6 +26267,8 @@ test("metaphilosophy architecture, task-track, and backlog workflow records driv
         item.completionState === "open" &&
         item.nextActionKind === "validate_release_version_freeze" &&
         item.nextActionValidateOnlyRoute === "/api/v1/releases/freeze?validateOnly=true" &&
+        item.nextActionReviewManifestRoute === "/api/v1/release-version-manifest/review-manifest" &&
+        item.routes.includes(item.nextActionReviewManifestRoute) &&
         item.routes.includes(item.nextActionValidateOnlyRoute),
     ),
   );

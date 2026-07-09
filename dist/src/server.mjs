@@ -273,6 +273,7 @@ const publicDatasetPackageFileValidationTemplateRoute = "/api/v1/public-dataset-
 const publicDatasetPackageFileValidationRoute = "/api/v1/public-dataset-package-files/validate";
 const publicDatasetPackageFileReviewManifestRoute = "/api/v1/public-dataset-package-files/review-manifest";
 const publicDatasetPackageReviewsRoute = "/api/v1/public-dataset-package-reviews";
+const releaseVersionFreezeReviewManifestRoute = "/api/v1/release-version-manifest/review-manifest";
 const clientSurfaceCspHeader = clientSurfaceCspHeaderValue(REQUIRED_CLIENT_SURFACE_CSP_DIRECTIVES);
 const clientSurfaceSecurityHeaders = {
   "content-security-policy": clientSurfaceCspHeader,
@@ -8491,6 +8492,11 @@ export async function handleApiRequest(request, response, url, context) {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === releaseVersionFreezeReviewManifestRoute) {
+    await releaseVersionFreezeReviewManifestEndpoint(request, response, context);
+    return;
+  }
+
   const releaseVersionManifestMatch = url.pathname.match(/^\/api\/v1\/release-version-manifest(?:\/([^/]+))?$/);
   if (request.method === "GET" && releaseVersionManifestMatch) {
     const itemId = releaseVersionManifestMatch[1] ? decodeURIComponent(releaseVersionManifestMatch[1]) : null;
@@ -12514,6 +12520,7 @@ function releaseVersionManifestItems(report, manifest) {
       releaseReportRoute: "/api/release/report",
       releaseVersionsReadbackRoute: "/api/v1/release-versions",
       submittedReleaseVersionReadbackRoute,
+      releaseFreezeReviewManifestRoute: releaseVersionFreezeReviewManifestRoute,
       targetGapsReadbackRoute: "/api/v1/target-gaps",
       targetGapReadbackItemRoutes,
       targetGapIds,
@@ -12542,6 +12549,7 @@ function releaseVersionManifestItems(report, manifest) {
         ? `/api/v1/release-freezes/${encodeURIComponent(manifest.submittedReleaseFreezeId)}`
         : null,
       releaseFreezeWriteRoute: "/api/v1/releases/freeze",
+      releaseFreezeReviewManifestRoute: releaseVersionFreezeReviewManifestRoute,
       targetGapsReadbackRoute: "/api/v1/target-gaps",
       targetGapReadbackItemRoutes,
       targetGapIds,
@@ -12826,6 +12834,7 @@ function releaseVersionManifestItemRoutes(item) {
     item?.releaseVersionsReadbackRoute,
     item?.submittedReleaseVersionReadbackRoute,
     item?.releaseFreezeWriteRoute,
+    item?.releaseFreezeReviewManifestRoute,
     item?.targetGapsReadbackRoute,
     item?.targetGapCollectionPlanRoute,
     item?.expectedArtifactReadbackRoute,
@@ -12889,6 +12898,7 @@ function releaseVersionManifestTemplateReadback(report, options = {}) {
     sourceRoutes: {
       releaseReport: "/api/release/report",
       releaseVersionManifest: "/api/v1/release-version-manifest",
+      releaseVersionFreezeReviewManifest: releaseVersionFreezeReviewManifestRoute,
     },
     policy: {
       scope:
@@ -12942,6 +12952,7 @@ function releaseVersionManifestTemplateItems(report) {
       writeRoute: "/api/v1/release-versions",
       singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/release-versions", "dryRun", "true"),
       singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/release-versions", "validateOnly", "true"),
+      reviewManifestRoute: releaseVersionFreezeReviewManifestRoute,
       collectionReadbackRoute: "/api/v1/release-versions",
       submittedArtifactReadbackRoute: manifest.submittedReleaseVersionId
         ? `/api/v1/release-versions/${encodeURIComponent(manifest.submittedReleaseVersionId)}`
@@ -12977,6 +12988,7 @@ function releaseVersionManifestTemplateItems(report) {
         "/api/v1/release-versions",
         routeWithQueryFlag("/api/v1/release-versions", "dryRun", "true"),
         routeWithQueryFlag("/api/v1/release-versions", "validateOnly", "true"),
+        releaseVersionFreezeReviewManifestRoute,
         manifest.submittedReleaseVersionId ? `/api/v1/release-versions/${encodeURIComponent(manifest.submittedReleaseVersionId)}` : null,
       ]),
     },
@@ -12996,6 +13008,7 @@ function releaseVersionManifestTemplateItems(report) {
       writeRoute: "/api/v1/releases/freeze",
       singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/releases/freeze", "dryRun", "true"),
       singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/releases/freeze", "validateOnly", "true"),
+      reviewManifestRoute: releaseVersionFreezeReviewManifestRoute,
       collectionReadbackRoute: "/api/v1/release-freezes",
       submittedArtifactReadbackRoute: manifest.submittedReleaseFreezeId
         ? `/api/v1/release-freezes/${encodeURIComponent(manifest.submittedReleaseFreezeId)}`
@@ -13026,6 +13039,7 @@ function releaseVersionManifestTemplateItems(report) {
         "/api/v1/release-freezes",
         routeWithQueryFlag("/api/v1/releases/freeze", "dryRun", "true"),
         routeWithQueryFlag("/api/v1/releases/freeze", "validateOnly", "true"),
+        releaseVersionFreezeReviewManifestRoute,
         manifest.submittedReleaseFreezeId ? `/api/v1/release-freezes/${encodeURIComponent(manifest.submittedReleaseFreezeId)}` : null,
         "/api/v1/release-version-manifest/release-freeze",
       ]),
@@ -13241,6 +13255,248 @@ function releaseVersionManifestTemplateCounts(items) {
     byTemplateStatus: countItemsBy(items, "templateStatus"),
     byWriteRoute: countItemsBy(items, "writeRoute"),
     byRoute: countValues(items.flatMap((item) => item.routes ?? [])),
+  };
+}
+
+async function releaseVersionFreezeReviewManifestEndpoint(request, response, context) {
+  const session = await authenticateRequest(request, context.auth);
+  if (!session.ok) {
+    sendJson(response, 401, { error: session.error });
+    return;
+  }
+  const roles = ["admin", "auditor"];
+  if (!roles.includes(session.user.role)) {
+    sendJson(response, 403, { error: "required_role_missing", requiredRoles: roles });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(request);
+  } catch (error) {
+    sendJson(response, 400, { error: "invalid_json_body", detail: error.message });
+    return;
+  }
+  const validation = await validateReleaseVersionFreezeReviewManifestInput(context, session.user, body);
+  if (!validation.ok) {
+    sendJson(response, validation.statusCode ?? 400, {
+      error: validation.error ?? "invalid_release_freeze_review_manifest",
+      detail: validation.detail,
+      ...(validation.extra ?? {}),
+    });
+    return;
+  }
+  const { report } = await buildCurrentReleaseArtifacts(context);
+  sendJson(response, 200, releaseVersionFreezeReviewManifestReadback(report, validation, session.user));
+}
+
+async function validateReleaseVersionFreezeReviewManifestInput(context, actor, body = {}) {
+  const releaseVersionSpec = matchWorkflowEndpoint("POST", "/api/v1/release-versions", workflowWriteEndpoints)?.spec;
+  const releaseFreezeSpec = matchWorkflowEndpoint("POST", "/api/v1/releases/freeze", workflowWriteEndpoints)?.spec;
+  if (!releaseVersionSpec || !releaseFreezeSpec) {
+    return { ok: false, statusCode: 500, error: "release_freeze_review_specs_missing", detail: "ReleaseVersion or ReleaseFreeze workflow spec missing" };
+  }
+  const releaseVersion = body.releaseVersion ?? body.resource?.releaseVersion ?? null;
+  const releaseFreeze = body.releaseFreeze ?? body.resource?.releaseFreeze ?? null;
+  if (!releaseVersion || typeof releaseVersion !== "object" || Array.isArray(releaseVersion)) {
+    return { ok: false, detail: "releaseVersion object is required" };
+  }
+  if (!releaseFreeze || typeof releaseFreeze !== "object" || Array.isArray(releaseFreeze)) {
+    return { ok: false, detail: "releaseFreeze object is required" };
+  }
+  if (isTemplateOnlyRecord(body) || isTemplateOnlyRecord(releaseVersion) || isTemplateOnlyRecord(releaseFreeze)) {
+    return {
+      ok: false,
+      error: "workflow_template_record",
+      detail: "generated ReleaseVersion/ReleaseFreeze templates must be replaced with reviewed evidence or placeholder-free preflight bodies before review-manifest validation",
+    };
+  }
+  const workflowEvents = await readPersistedWorkflowEvents(context.auditStore);
+  const releaseVersionValidation = await validateReleaseReviewResource(context, actor, releaseVersionSpec, releaseVersion, workflowEvents);
+  if (!releaseVersionValidation.ok) return releaseVersionValidation;
+  const releaseFreezeValidation = await validateReleaseReviewResource(context, actor, releaseFreezeSpec, releaseFreeze, workflowEvents);
+  if (!releaseFreezeValidation.ok) return releaseFreezeValidation;
+  return {
+    ok: true,
+    releaseVersion: releaseVersionValidation.resource,
+    releaseFreeze: releaseFreezeValidation.resource,
+    releaseVersionDryRun: workflowSingleRecordDryRunResponse(releaseVersionSpec, releaseVersionValidation.resource),
+    releaseFreezeDryRun: workflowSingleRecordDryRunResponse(releaseFreezeSpec, releaseFreezeValidation.resource),
+  };
+}
+
+async function validateReleaseReviewResource(context, actor, spec, resource, workflowEvents) {
+  const phaseGate = await enforceWorkflowSpecPhaseGate(context, actor, spec);
+  if (!phaseGate.ok) {
+    return {
+      ok: false,
+      statusCode: phaseGate.statusCode ?? 409,
+      error: phaseGate.error ?? "workflow_phase_gate_blocked",
+      detail: phaseGate.detail,
+      extra: phaseGate.extra ?? {},
+    };
+  }
+  const validation = validateWorkflowPayload(resource, actor, spec, {}, { dryRun: true });
+  if (!validation.ok) {
+    return {
+      ok: false,
+      statusCode: validation.statusCode ?? 400,
+      error: validation.error ?? "invalid_workflow_payload",
+      detail: validation.detail,
+      extra: { resourceKey: spec.resourceKey },
+    };
+  }
+  const duplicateResource = validateWorkflowDuplicateResourceFromEvents(workflowEvents, spec, validation.resource);
+  if (!duplicateResource.ok) {
+    return {
+      ok: false,
+      statusCode: duplicateResource.statusCode ?? 409,
+      error: duplicateResource.error,
+      detail: duplicateResource.detail,
+      extra: { resourceKey: spec.resourceKey, resourceId: validation.resource.id },
+    };
+  }
+  const bindingValidation = await validateWorkflowResourceBindings(context, validation.resource, spec);
+  if (!bindingValidation.ok) {
+    return {
+      ok: false,
+      statusCode: bindingValidation.statusCode ?? 409,
+      error: bindingValidation.error ?? "workflow_resource_binding_failed",
+      detail: bindingValidation.detail,
+      extra: bindingValidation.extra ?? {},
+    };
+  }
+  return { ok: true, resource: validation.resource };
+}
+
+function releaseVersionFreezeReviewManifestReadback(report, validation = {}, actor = {}) {
+  const manifestReadback = releaseVersionManifestReadback(report);
+  const templateReadback = releaseVersionManifestTemplateReadback(report);
+  const releaseVersion = validation.releaseVersion ?? {};
+  const releaseFreeze = validation.releaseFreeze ?? {};
+  const releaseVersionHash = `sha256:${sha256(canonicalJson(releaseVersion))}`;
+  const releaseFreezeHash = `sha256:${sha256(canonicalJson(releaseFreeze))}`;
+  const resources = [
+    releaseVersionFreezeReviewManifestResourceRow({
+      sequence: 1,
+      resourceKey: "releaseVersion",
+      resource: releaseVersion,
+      submittedResourceHash: releaseVersionHash,
+      dryRun: validation.releaseVersionDryRun,
+      template: templateReadback.items?.find((item) => item.templateKind === "release_version"),
+    }),
+    releaseVersionFreezeReviewManifestResourceRow({
+      sequence: 2,
+      resourceKey: "releaseFreeze",
+      resource: releaseFreeze,
+      submittedResourceHash: releaseFreezeHash,
+      dryRun: validation.releaseFreezeDryRun,
+      template: templateReadback.items?.find((item) => item.templateKind === "release_freeze"),
+    }),
+  ];
+  const freezePreflightSummary = manifestReadback.releaseFreezePreflightSummary ?? {};
+  const manifestPayload = {
+    releaseId: report.releaseId ?? releaseId,
+    releaseUseStatus: manifestReadback.releaseUseStatus,
+    currentStatus: manifestReadback.currentStatus,
+    targetScaleStatus: manifestReadback.targetScaleStatus,
+    linkedArtifactStatus: manifestReadback.linkedArtifactStatus,
+    freezePreflightStatus: freezePreflightSummary.status ?? null,
+    releaseVersionHash,
+    releaseFreezeHash,
+    resources: resources.map((item) => ({
+      resourceKey: item.resourceKey,
+      resourceId: item.resourceId,
+      submittedResourceHash: item.submittedResourceHash,
+      validationStatus: item.validationStatus,
+      writeRoute: item.writeRoute,
+      validateOnlyRoute: item.validateOnlyRoute,
+      readbackRoute: item.collectionReadbackRoute,
+    })),
+  };
+  const reviewManifestHash = `sha256:${sha256(canonicalJson(manifestPayload))}`;
+  return {
+    id: `release-version-freeze-review-manifest-${report.releaseId ?? releaseId}`,
+    releaseId: report.releaseId ?? releaseId,
+    generatedAt: new Date().toISOString(),
+    generatedBy: actor.id ?? null,
+    resourceKey: "releaseVersionFreezeReviewManifest",
+    reviewOnly: true,
+    noSideEffects: true,
+    releaseUseStatus: manifestReadback.releaseUseStatus,
+    currentStatus: manifestReadback.currentStatus,
+    targetScaleStatus: manifestReadback.targetScaleStatus,
+    linkedArtifactStatus: manifestReadback.linkedArtifactStatus,
+    reviewManifestHash,
+    releaseVersionHash,
+    releaseFreezeHash,
+    releaseVersionWriteActionAvailable: false,
+    releaseFreezeWriteActionAvailable: false,
+    policyGateDryRun: "not_minted_or_consumed",
+    releaseFreezePreflightSummary: freezePreflightSummary,
+    policy: {
+      scope:
+        "Review-only ReleaseVersion/ReleaseFreeze preflight. It validates submitted release-version and release-freeze drafts and returns canonical hashes without appending release evidence or freezing a release.",
+      access:
+        "Admin/auditor only because review manifests expose release-governance ids, target-scale status, phase-gate bindings, and artifact-link status.",
+      authority:
+        "This review manifest does not submit ReleaseVersion evidence, submit ReleaseFreeze evidence, consume release-freeze policy decisions, create artifacts, collect target data, publish a dataset, or waive release gates. Completion remains authoritative only after /api/release/report recomputes from submitted workflow evidence.",
+    },
+    sourceRoutes: {
+      releaseReport: "/api/release/report",
+      releaseVersionManifest: "/api/v1/release-version-manifest",
+      releaseVersionManifestTemplate: "/api/v1/release-version-manifest/template",
+      reviewManifest: releaseVersionFreezeReviewManifestRoute,
+      releaseVersions: "/api/v1/release-versions",
+      releaseFreezes: "/api/v1/release-freezes",
+      releaseVersionValidateOnly: routeWithQueryFlag("/api/v1/release-versions", "validateOnly", "true"),
+      releaseFreezeValidateOnly: routeWithQueryFlag("/api/v1/releases/freeze", "validateOnly", "true"),
+    },
+    validationSummary: {
+      releaseVersion: validation.releaseVersionDryRun,
+      releaseFreeze: validation.releaseFreezeDryRun,
+      releaseFreezePreflightStatus: freezePreflightSummary.status ?? null,
+      openDependencyRows: freezePreflightSummary.openDependencyRows ?? null,
+      remainingTargetRecords: freezePreflightSummary.remainingTargetRecords ?? null,
+    },
+    counts: {
+      reviewManifestResources: resources.length,
+      submittedResourceHashes: resources.filter((item) => item.submittedResourceHash).length,
+      byResourceKey: countItemsBy(resources, "resourceKey"),
+      byValidationStatus: countItemsBy(resources, "validationStatus"),
+      openDependencyRows: freezePreflightSummary.openDependencyRows ?? 0,
+      remainingTargetRecords: freezePreflightSummary.remainingTargetRecords ?? 0,
+    },
+    manifest: {
+      manifestVersion: "release_version_freeze_review_manifest_v1",
+      reviewManifestHash,
+      releaseId: report.releaseId ?? releaseId,
+      releaseUseStatus: manifestReadback.releaseUseStatus,
+      freezePreflightStatus: freezePreflightSummary.status ?? null,
+      resources,
+    },
+  };
+}
+
+function releaseVersionFreezeReviewManifestResourceRow({ sequence, resourceKey, resource, submittedResourceHash, dryRun, template }) {
+  return {
+    sequence,
+    resourceKey,
+    resourceId: resource.id ?? null,
+    submittedResourceHash,
+    validationStatus: dryRun?.ok ? "validated_no_side_effects" : "validation_not_reported",
+    eventType: dryRun?.eventType ?? null,
+    writeRoute: template?.writeRoute ?? dryRun?.sourceWriteRoute ?? null,
+    validateOnlyRoute: template?.singleRecordValidateOnlyRoute ?? null,
+    dryRunRoute: template?.singleRecordDryRunRoute ?? null,
+    collectionReadbackRoute: template?.collectionReadbackRoute ?? null,
+    submittedArtifactReadbackRoute: resource.id && template?.collectionReadbackRoute ? `${template.collectionReadbackRoute}/${encodeURIComponent(resource.id)}` : null,
+    templateReadbackRoute: template?.templateReadbackRoute ?? null,
+    manifestCheckRoute: template?.manifestCheckRoute ?? null,
+    policyActionKind: dryRun?.policyActionKind ?? null,
+    policyGateDryRun: dryRun?.policyGateDryRun ?? null,
+    phaseGateLaneKind: dryRun?.phaseGateLaneKind ?? null,
+    status: resource.status ?? resource.freezeStatus ?? null,
+    targetScaleStatus: resource.targetScaleStatus ?? null,
   };
 }
 
@@ -13774,6 +14030,7 @@ function publicDatasetPackageManifestItems(report) {
         "/api/v1/release-version-manifest",
         "/api/v1/release-versions?validateOnly=true",
         "/api/v1/releases/freeze?validateOnly=true",
+        releaseVersionFreezeReviewManifestRoute,
         "/api/v1/public-dataset-readiness/release_version_freeze",
       ],
       counts: {
@@ -13781,6 +14038,7 @@ function publicDatasetPackageManifestItems(report) {
         openRows: releaseVersionTemplates.counts?.openRows ?? 0,
       },
       nextActionRoute: "/api/v1/release-version-manifest/template",
+      reviewManifestRoute: releaseVersionFreezeReviewManifestRoute,
       templateRoutes: ["/api/v1/release-version-manifest/template"],
       verificationRoutes: ["/api/release/report", "/api/v1/release-version-manifest", "/api/v1/public-dataset-readiness/release_version_freeze"],
     }),
@@ -13874,6 +14132,7 @@ function publicDatasetPackageManifestStep({
   routes = [],
   counts = {},
   nextActionRoute = null,
+  reviewManifestRoute = null,
   preflightCoverageSummary = null,
   preflightActionSummary = null,
   sourcePackageManifestRoute = null,
@@ -13892,6 +14151,7 @@ function publicDatasetPackageManifestStep({
     sourcePackageManifestRoute,
     sourceRunbookGroupRoute,
     sourceActionGroupRoute,
+    reviewManifestRoute,
     ...routes,
     ...readinessRows.flatMap(publicDatasetReadinessRoutes),
     ...templateRoutes,
@@ -13916,6 +14176,7 @@ function publicDatasetPackageManifestStep({
     preflightActionSummary,
     preflightCoverageStatus: counts.coverageStatus ?? preflightCoverageSummary?.status ?? null,
     nextActionRoute,
+    reviewManifestRoute,
     readbackItemRoute,
     packageManifestItemRoute,
     sourcePackageManifestRoute,
@@ -16570,6 +16831,7 @@ function publicDatasetReadinessNextAction(row = {}, report = {}) {
       nextActionKind: "validate_release_version_freeze",
       nextActionRoute: "/api/v1/release-version-manifest/template",
       nextActionValidateOnlyRoute: "/api/v1/releases/freeze?validateOnly=true",
+      nextActionReviewManifestRoute: releaseVersionFreezeReviewManifestRoute,
       nextActionWriteRoute: "/api/v1/releases/freeze",
       nextActionTemplateRoute: "/api/v1/release-version-manifest/template",
       nextActionReadbackRoute: "/api/v1/release-version-manifest",
@@ -16699,6 +16961,7 @@ function publicDatasetReadinessRoutes(item) {
     item?.nextActionTemplateRoute,
     item?.nextActionDryRunRoute,
     item?.nextActionValidateOnlyRoute,
+    item?.nextActionReviewManifestRoute,
     item?.nextActionWriteRoute,
     item?.nextActionVerificationRoute,
     item?.nextActionOperatorActionRoute,
