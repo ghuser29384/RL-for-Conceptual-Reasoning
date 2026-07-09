@@ -12529,6 +12529,17 @@ function publicDatasetDocumentTemplateItems(report) {
       publicDatasetDocument: publicDatasetDocumentTemplateResource(documentKind, report, linkedReleaseObjectIds, index),
     };
     const templateReadbackRoute = `/api/v1/public-dataset-documents/template?documentKind=${encodeURIComponent(documentKind)}`;
+    const templateReadbackItemRoute = `/api/v1/public-dataset-documents/template/${encodeURIComponent(documentKind)}`;
+    const allRoutes = uniqueValues([
+      templateReadbackRoute,
+      templateReadbackItemRoute,
+      "/api/v1/public-dataset-documents/template",
+      "/api/v1/public-dataset-documents",
+      routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
+      routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
+      `/api/v1/public-dataset-readiness/${encodeURIComponent(documentKind)}`,
+      "/api/v1/public-dataset-readiness",
+    ]);
     return {
       id: `public-dataset-document-template:${documentKind}`,
       sequence: index + 1,
@@ -12542,7 +12553,8 @@ function publicDatasetDocumentTemplateItems(report) {
       readinessReviewReasons: Array.isArray(readinessRow.reviewReasons) ? readinessRow.reviewReasons : [],
       readinessRowReadbackRoute: `/api/v1/public-dataset-readiness/${encodeURIComponent(documentKind)}`,
       templateReadbackRoute,
-      templateReadbackItemRoute: `/api/v1/public-dataset-documents/template/${encodeURIComponent(documentKind)}`,
+      templateReadbackItemRoute,
+      readbackItemRoute: templateReadbackItemRoute,
       writeRoute: "/api/v1/public-dataset-documents",
       singleRecordDryRunRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
       singleRecordValidateOnlyRoute: routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
@@ -12574,16 +12586,8 @@ function publicDatasetDocumentTemplateItems(report) {
         "createdAt",
       ],
       requestBody,
-      routes: [
-        templateReadbackRoute,
-        `/api/v1/public-dataset-documents/template/${encodeURIComponent(documentKind)}`,
-        "/api/v1/public-dataset-documents/template",
-        "/api/v1/public-dataset-documents",
-        routeWithQueryFlag("/api/v1/public-dataset-documents", "dryRun", "true"),
-        routeWithQueryFlag("/api/v1/public-dataset-documents", "validateOnly", "true"),
-        `/api/v1/public-dataset-readiness/${encodeURIComponent(documentKind)}`,
-        "/api/v1/public-dataset-readiness",
-      ],
+      routeCount: allRoutes.length,
+      routes: allRoutes,
     };
   });
 }
@@ -13383,9 +13387,13 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
   const sourcePackageManifestRoute = packageStep?.sourcePackageManifestRoute ?? null;
   const sourceRunbookGroupRoute = packageStep?.sourceRunbookGroupRoute ?? null;
   const sourceActionGroupRoute = packageStep?.sourceActionGroupRoute ?? null;
+  const readbackItemRoute = `/api/v1/public-dataset-release-package/${encodeURIComponent(definition.id)}`;
+  const releasePackageItemRoute = readbackItemRoute;
+  const packageFileTemplateReadbackItemRoute = `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`;
+  const packageFileValidationTemplateReadbackItemRoute = `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`;
   const routes = uniqueValues([
     "/api/v1/public-dataset-release-package",
-    `/api/v1/public-dataset-release-package/${encodeURIComponent(definition.id)}`,
+    readbackItemRoute,
     "/api/v1/public-dataset-readiness",
     "/api/v1/public-dataset-package-manifest",
     packageStepReadbackRoute,
@@ -13393,9 +13401,9 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
     sourceRunbookGroupRoute,
     sourceActionGroupRoute,
     publicDatasetPackageFileTemplateRoute,
-    `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`,
+    packageFileTemplateReadbackItemRoute,
     publicDatasetPackageFileValidationTemplateRoute,
-    `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`,
+    packageFileValidationTemplateReadbackItemRoute,
     publicDatasetPackageFileValidationRoute,
     publicDatasetPackageFileReviewManifestRoute,
     publicDatasetPackageReviewsRoute,
@@ -13428,6 +13436,10 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
     requiredFields: definition.requiredFields,
     counts: publicDatasetReleasePackageArtifactCounts(definition, readinessRows, report),
     packageStepReadbackRoute,
+    readbackItemRoute,
+    releasePackageItemRoute,
+    packageFileTemplateReadbackItemRoute,
+    packageFileValidationTemplateReadbackItemRoute,
     sourcePackageManifestRoute,
     sourceRunbookGroupRoute,
     sourceActionGroupRoute,
@@ -13441,13 +13453,14 @@ function publicDatasetReleasePackageItem({ definition, sequence, report, readine
       sourceRunbookGroupRoute,
       sourceActionGroupRoute,
       publicDatasetPackageFileTemplateRoute,
-      `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(definition.id)}`,
+      packageFileTemplateReadbackItemRoute,
       publicDatasetPackageFileValidationTemplateRoute,
-      `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(definition.id)}`,
+      packageFileValidationTemplateReadbackItemRoute,
       publicDatasetPackageFileValidationRoute,
       publicDatasetPackageFileReviewManifestRoute,
       publicDatasetPackageReviewsRoute,
     ]),
+    routeCount: routes.length,
     routes,
   };
 }
@@ -13680,9 +13693,11 @@ function publicDatasetDownstreamLaunchGuardItem({
   const sourceActionGroupRoutes = uniqueValues(openPackageSteps.map((step) => step.sourceActionGroupRoute).filter(Boolean));
   const readinessReviewReasons = uniqueValues(openReadinessRows.flatMap((row) => (Array.isArray(row.reviewReasons) ? row.reviewReasons : [])));
   const publicFirstReviewReasons = Array.isArray(publicFirstGate?.reviewReasons) ? publicFirstGate.reviewReasons : [];
+  const readbackItemRoute = `/api/v1/public-dataset-downstream-launches/${encodeURIComponent(definition.id)}`;
+  const downstreamLaunchItemRoute = readbackItemRoute;
   const routes = uniqueValues([
     "/api/v1/public-dataset-downstream-launches",
-    `/api/v1/public-dataset-downstream-launches/${encodeURIComponent(definition.id)}`,
+    readbackItemRoute,
     "/api/v1/public-dataset-readiness/public_first_ladder_gate",
     "/api/v1/public-dataset-readiness",
     "/api/v1/public-dataset-package-manifest",
@@ -13712,6 +13727,8 @@ function publicDatasetDownstreamLaunchGuardItem({
     releaseUseStatus: report.publicDatasetReadiness?.releaseUseStatus ?? "public_dataset_readiness_missing",
     datasetPackageStatus: packageManifest.packageStatus ?? "public_dataset_package_status_missing",
     publicFirstGateStatus: publicFirstGate?.status ?? "public_first_ladder_gate_missing",
+    readbackItemRoute,
+    downstreamLaunchItemRoute,
     currentBlockingPackageStepId: packageManifest.currentBlockingStepId ?? null,
     blockingReadinessRowIds,
     blockingPackageStepIds,
@@ -13734,7 +13751,9 @@ function publicDatasetDownstreamLaunchGuardItem({
       ...sourceRunbookGroupRoutes,
       ...sourceActionGroupRoutes,
       "/api/v1/public-dataset-downstream-launches",
+      readbackItemRoute,
     ],
+    routeCount: routes.length,
     routes,
   };
 }
@@ -14314,15 +14333,18 @@ function publicDatasetPackageFileTemplateItems(report) {
 function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, releasePackage, publicationGate }) {
   const status = publicDatasetPackageFileTemplateStatus(artifact, publicationGate);
   const templateContent = publicDatasetPackageFileTemplateContent(artifact, report, publicationGate);
+  const templateReadbackItemRoute = `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(artifact.id)}`;
+  const validationTemplateReadbackItemRoute = `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(artifact.id)}`;
+  const releasePackageItemRoute = `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`;
   const routes = uniqueValues([
     publicDatasetPackageFileTemplateRoute,
-    `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+    templateReadbackItemRoute,
     publicDatasetPackageFileValidationTemplateRoute,
-    `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+    validationTemplateReadbackItemRoute,
     publicDatasetPackageFileValidationRoute,
     publicDatasetPackageFileReviewManifestRoute,
     "/api/v1/public-dataset-release-package",
-    `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`,
+    releasePackageItemRoute,
     "/api/v1/public-dataset-publication-gate",
     "/api/v1/public-dataset-package-manifest",
     "/api/v1/public-dataset-readiness",
@@ -14352,6 +14374,10 @@ function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, rele
     publicationBlocked: publicationGate.publicationBlocked !== false,
     packageStepId: artifact.packageStepId,
     packageStepReadbackRoute: artifact.packageStepReadbackRoute ?? null,
+    readbackItemRoute: templateReadbackItemRoute,
+    templateReadbackItemRoute,
+    validationTemplateReadbackItemRoute,
+    releasePackageItemRoute,
     sourcePackageManifestRoute: artifact.sourcePackageManifestRoute ?? null,
     sourceRunbookGroupRoute: artifact.sourceRunbookGroupRoute ?? null,
     sourceActionGroupRoute: artifact.sourceActionGroupRoute ?? null,
@@ -14370,15 +14396,16 @@ function publicDatasetPackageFileTemplateItem({ artifact, sequence, report, rele
     verificationRoutes: uniqueValues([
       "/api/release/report",
       "/api/v1/public-dataset-release-package",
-      `/api/v1/public-dataset-release-package/${encodeURIComponent(artifact.id)}`,
+      releasePackageItemRoute,
       "/api/v1/public-dataset-publication-gate",
       publicDatasetPackageFileTemplateRoute,
-      `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+      templateReadbackItemRoute,
       publicDatasetPackageFileValidationTemplateRoute,
-      `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(artifact.id)}`,
+      validationTemplateReadbackItemRoute,
       publicDatasetPackageFileValidationRoute,
       publicDatasetPackageFileReviewManifestRoute,
     ]),
+    routeCount: routes.length,
     routes,
   };
 }
@@ -14576,14 +14603,17 @@ function publicDatasetPackageFileValidationTemplateItem(template, sequence, temp
     content: template.templateContent,
     sha256: template.templateContentHash,
   };
+  const validationTemplateReadbackItemRoute = `${publicDatasetPackageFileValidationTemplateRoute}/${encodeURIComponent(template.id)}`;
+  const templateReadbackItemRoute = `${publicDatasetPackageFileTemplateRoute}/${encodeURIComponent(template.id)}`;
+  const releasePackageItemRoute = `/api/v1/public-dataset-release-package/${encodeURIComponent(template.releasePackageArtifactId ?? template.id)}`;
   const routes = uniqueValues([
     "/api/v1/public-dataset-package-files/validate/template",
-    `/api/v1/public-dataset-package-files/validate/template/${encodeURIComponent(template.id)}`,
+    validationTemplateReadbackItemRoute,
     "/api/v1/public-dataset-package-files/validate",
     "/api/v1/public-dataset-package-files/template",
-    `/api/v1/public-dataset-package-files/template/${encodeURIComponent(template.id)}`,
+    templateReadbackItemRoute,
     "/api/v1/public-dataset-release-package",
-    `/api/v1/public-dataset-release-package/${encodeURIComponent(template.releasePackageArtifactId ?? template.id)}`,
+    releasePackageItemRoute,
     "/api/v1/public-dataset-publication-gate",
     "/api/release/report",
     ...(Array.isArray(template.routes) ? template.routes : []),
@@ -14608,6 +14638,10 @@ function publicDatasetPackageFileValidationTemplateItem(template, sequence, temp
     publicationGateStatus: template.publicationGateStatus,
     packageStepId: template.packageStepId,
     packageStepReadbackRoute: template.packageStepReadbackRoute ?? null,
+    readbackItemRoute: validationTemplateReadbackItemRoute,
+    validationTemplateReadbackItemRoute,
+    templateReadbackItemRoute,
+    releasePackageItemRoute,
     sourcePackageManifestRoute: template.sourcePackageManifestRoute ?? null,
     sourceRunbookGroupRoute: template.sourceRunbookGroupRoute ?? null,
     sourceActionGroupRoute: template.sourceActionGroupRoute ?? null,
@@ -14633,11 +14667,16 @@ function publicDatasetPackageFileValidationTemplateItem(template, sequence, temp
     verificationRoutes: uniqueValues([
       "/api/release/report",
       "/api/v1/public-dataset-package-files/template",
-    publicDatasetPackageFileValidationTemplateRoute,
-    publicDatasetPackageFileValidationRoute,
-    publicDatasetPackageFileReviewManifestRoute,
-    "/api/v1/public-dataset-publication-gate",
+      templateReadbackItemRoute,
+      publicDatasetPackageFileValidationTemplateRoute,
+      validationTemplateReadbackItemRoute,
+      publicDatasetPackageFileValidationRoute,
+      publicDatasetPackageFileReviewManifestRoute,
+      "/api/v1/public-dataset-release-package",
+      releasePackageItemRoute,
+      "/api/v1/public-dataset-publication-gate",
     ]),
+    routeCount: routes.length,
     routes,
   };
 }
