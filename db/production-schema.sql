@@ -2301,6 +2301,59 @@ create table if not exists implementation_phase_gate_lanes (
   primary key (bundle_id, lane_kind)
 );
 
+create table if not exists queue_freshness_policies (
+  id text primary key,
+  release_id text,
+  resource_key text not null,
+  policy_id text,
+  lane text,
+  surface text,
+  action_kind text,
+  policy_decision_id text,
+  governance_approval_record_id text,
+  external_worm_audit_log_policy_id text,
+  chain_id text,
+  sequence_number integer,
+  workflow_status text not null,
+  artifact_status text not null,
+  visibility_class text not null default 'admin_audit_only' check (visibility_class = 'admin_audit_only'),
+  stale_count integer,
+  failure_count integer,
+  input_hash text not null check (input_hash like 'sha256:%'),
+  artifact_json jsonb not null,
+  event_id text,
+  record_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists queue_stale_by_delay_scans (
+  like queue_freshness_policies including all
+);
+
+create table if not exists client_surface_integrity_policies (
+  like queue_freshness_policies including all
+);
+
+create table if not exists client_surface_integrity_checks (
+  like queue_freshness_policies including all
+);
+
+create table if not exists cloud_security_budget_policies (
+  like queue_freshness_policies including all
+);
+
+create table if not exists external_worm_audit_log_policies (
+  like queue_freshness_policies including all
+);
+
+create table if not exists sensitive_audit_chain_events (
+  like queue_freshness_policies including all
+);
+
+create table if not exists sensitive_audit_chain_verifications (
+  like queue_freshness_policies including all
+);
+
 alter table positions add column if not exists event_id text;
 alter table positions add column if not exists record_json jsonb not null default '{}'::jsonb;
 alter table position_text_versions add column if not exists model_visible_hash text;
@@ -2844,6 +2897,33 @@ create index if not exists policy_decision_consumptions_decision_idx
 create index if not exists implementation_phase_gate_lanes_state_idx
   on implementation_phase_gate_lanes (phase_state);
 
+create index if not exists queue_freshness_policies_lane_idx
+  on queue_freshness_policies (lane);
+
+create index if not exists queue_stale_by_delay_scans_lane_idx
+  on queue_stale_by_delay_scans (lane);
+
+create index if not exists client_surface_integrity_policies_surface_idx
+  on client_surface_integrity_policies (surface);
+
+create index if not exists client_surface_integrity_checks_surface_idx
+  on client_surface_integrity_checks (surface);
+
+create index if not exists cloud_security_budget_policies_policy_idx
+  on cloud_security_budget_policies (policy_id);
+
+create index if not exists external_worm_audit_log_policies_policy_idx
+  on external_worm_audit_log_policies (policy_id);
+
+create index if not exists sensitive_audit_chain_events_chain_idx
+  on sensitive_audit_chain_events (chain_id, sequence_number);
+
+create index if not exists sensitive_audit_chain_events_policy_decision_idx
+  on sensitive_audit_chain_events (policy_decision_id);
+
+create index if not exists sensitive_audit_chain_verifications_chain_idx
+  on sensitive_audit_chain_verifications (chain_id);
+
 create index if not exists ratings_assignment_idx
   on ratings (assignment_id);
 
@@ -3371,6 +3451,14 @@ alter table policy_decisions enable row level security;
 alter table policy_decision_consumptions enable row level security;
 alter table implementation_phase_gate_bundles enable row level security;
 alter table implementation_phase_gate_lanes enable row level security;
+alter table queue_freshness_policies enable row level security;
+alter table queue_stale_by_delay_scans enable row level security;
+alter table client_surface_integrity_policies enable row level security;
+alter table client_surface_integrity_checks enable row level security;
+alter table cloud_security_budget_policies enable row level security;
+alter table external_worm_audit_log_policies enable row level security;
+alter table sensitive_audit_chain_events enable row level security;
+alter table sensitive_audit_chain_verifications enable row level security;
 
 drop policy if exists audit_events_append_authenticated on audit_events;
 create policy audit_events_append_authenticated on audit_events
@@ -5136,6 +5224,94 @@ create policy implementation_phase_gate_lanes_read_auditors on implementation_ph
 
 drop policy if exists implementation_phase_gate_lanes_write_admin_or_service on implementation_phase_gate_lanes;
 create policy implementation_phase_gate_lanes_write_admin_or_service on implementation_phase_gate_lanes
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists queue_freshness_policies_read_auditors on queue_freshness_policies;
+create policy queue_freshness_policies_read_auditors on queue_freshness_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists queue_freshness_policies_write_admin_or_service on queue_freshness_policies;
+create policy queue_freshness_policies_write_admin_or_service on queue_freshness_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists queue_stale_by_delay_scans_read_auditors on queue_stale_by_delay_scans;
+create policy queue_stale_by_delay_scans_read_auditors on queue_stale_by_delay_scans
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists queue_stale_by_delay_scans_write_admin_or_service on queue_stale_by_delay_scans;
+create policy queue_stale_by_delay_scans_write_admin_or_service on queue_stale_by_delay_scans
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists client_surface_integrity_policies_read_auditors on client_surface_integrity_policies;
+create policy client_surface_integrity_policies_read_auditors on client_surface_integrity_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists client_surface_integrity_policies_write_admin_or_service on client_surface_integrity_policies;
+create policy client_surface_integrity_policies_write_admin_or_service on client_surface_integrity_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists client_surface_integrity_checks_read_auditors on client_surface_integrity_checks;
+create policy client_surface_integrity_checks_read_auditors on client_surface_integrity_checks
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists client_surface_integrity_checks_write_admin_or_service on client_surface_integrity_checks;
+create policy client_surface_integrity_checks_write_admin_or_service on client_surface_integrity_checks
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists cloud_security_budget_policies_read_auditors on cloud_security_budget_policies;
+create policy cloud_security_budget_policies_read_auditors on cloud_security_budget_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists cloud_security_budget_policies_write_admin_or_service on cloud_security_budget_policies;
+create policy cloud_security_budget_policies_write_admin_or_service on cloud_security_budget_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists external_worm_audit_log_policies_read_auditors on external_worm_audit_log_policies;
+create policy external_worm_audit_log_policies_read_auditors on external_worm_audit_log_policies
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists external_worm_audit_log_policies_write_admin_or_service on external_worm_audit_log_policies;
+create policy external_worm_audit_log_policies_write_admin_or_service on external_worm_audit_log_policies
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists sensitive_audit_chain_events_read_auditors on sensitive_audit_chain_events;
+create policy sensitive_audit_chain_events_read_auditors on sensitive_audit_chain_events
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists sensitive_audit_chain_events_write_admin_or_service on sensitive_audit_chain_events;
+create policy sensitive_audit_chain_events_write_admin_or_service on sensitive_audit_chain_events
+  for all
+  using (app_auth.has_role('admin', 'service'))
+  with check (app_auth.has_role('admin', 'service'));
+
+drop policy if exists sensitive_audit_chain_verifications_read_auditors on sensitive_audit_chain_verifications;
+create policy sensitive_audit_chain_verifications_read_auditors on sensitive_audit_chain_verifications
+  for select
+  using (app_auth.has_role('admin', 'auditor'));
+
+drop policy if exists sensitive_audit_chain_verifications_write_admin_or_service on sensitive_audit_chain_verifications;
+create policy sensitive_audit_chain_verifications_write_admin_or_service on sensitive_audit_chain_verifications
   for all
   using (app_auth.has_role('admin', 'service'))
   with check (app_auth.has_role('admin', 'service'));

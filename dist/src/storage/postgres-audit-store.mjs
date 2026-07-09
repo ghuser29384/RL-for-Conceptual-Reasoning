@@ -55,6 +55,19 @@ const candidateGenerationProjectionTables = Object.freeze({
 
 const candidateGenerationProjectionTableNames = new Set(Object.values(candidateGenerationProjectionTables));
 
+const operationalControlEvidenceProjectionTables = Object.freeze({
+  queueFreshnessPolicy: "queue_freshness_policies",
+  queueStaleByDelayScan: "queue_stale_by_delay_scans",
+  clientSurfaceIntegrityPolicy: "client_surface_integrity_policies",
+  clientSurfaceIntegrityCheck: "client_surface_integrity_checks",
+  cloudSecurityBudgetPolicy: "cloud_security_budget_policies",
+  externalWormAuditLogPolicy: "external_worm_audit_log_policies",
+  sensitiveAuditChainEvent: "sensitive_audit_chain_events",
+  sensitiveAuditChainVerification: "sensitive_audit_chain_verifications",
+});
+
+const operationalControlEvidenceProjectionTableNames = new Set(Object.values(operationalControlEvidenceProjectionTables));
+
 const ratingExperienceProjectionTables = Object.freeze({
   raterInstructionCompatibilityPolicy: "rater_instruction_compatibility_policies",
   raterInstructionRenderVersion: "rater_instruction_render_versions",
@@ -2262,7 +2275,118 @@ export function operationalControlProjectionForWorkflowEvent(event) {
       },
     };
   }
+  if (operationalControlEvidenceProjectionTables[resourceKey]) {
+    return {
+      table: operationalControlEvidenceProjectionTables[resourceKey],
+      values: operationalControlEvidenceProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event),
+    };
+  }
   return null;
+}
+
+function operationalControlEvidenceProjectionValuesForWorkflowResource(resourceKey, resource, eventId, recordJson, event) {
+  return {
+    id: resource.id,
+    release_id: resource.releaseId ?? resource.release_id ?? null,
+    resource_key: resourceKey,
+    policy_id:
+      resource.policyId ??
+      resource.policy_id ??
+      resource.queueFreshnessPolicyId ??
+      resource.queue_freshness_policy_id ??
+      resource.clientSurfaceIntegrityPolicyId ??
+      resource.client_surface_integrity_policy_id ??
+      resource.clientSurfaceId ??
+      resource.client_surface_id ??
+      (resourceKey.endsWith("Policy") ? resource.id : null),
+    lane: resource.lane ?? resource.queueLane ?? resource.queue_lane ?? null,
+    surface: resource.surface ?? resource.clientSurface ?? resource.client_surface ?? null,
+    action_kind: resource.actionKind ?? resource.action_kind ?? resource.eventKind ?? resource.event_kind ?? null,
+    policy_decision_id: resource.policyDecisionId ?? resource.policy_decision_id ?? null,
+    governance_approval_record_id: resource.governanceApprovalRecordId ?? resource.governance_approval_record_id ?? null,
+    external_worm_audit_log_policy_id:
+      resource.externalWormAuditLogPolicyId ??
+      resource.external_worm_audit_log_policy_id ??
+      (resourceKey === "externalWormAuditLogPolicy" ? resource.id : null),
+    chain_id: resource.chainId ?? resource.chain_id ?? null,
+    sequence_number: finiteNumberOrNull(resource.sequence ?? resource.sequenceNumber ?? resource.sequence_number),
+    workflow_status: operationalControlEvidenceWorkflowStatus(resourceKey, resource),
+    artifact_status: operationalControlEvidenceArtifactStatus(resourceKey, resource),
+    visibility_class: "admin_audit_only",
+    stale_count: finiteNumberOrNull(resource.staleCount ?? resource.stale_count ?? null),
+    failure_count: finiteNumberOrNull(
+      resource.failureCount ??
+        resource.failure_count ??
+        resource.failedCheckCount ??
+        resource.failed_check_count ??
+        (Array.isArray(resource.failures) ? resource.failures.length : null),
+    ),
+    input_hash:
+      resource.inputHash ??
+      resource.input_hash ??
+      resource.artifactHash ??
+      resource.artifact_hash ??
+      resource.policyHash ??
+      resource.policy_hash ??
+      resource.eventHash ??
+      resource.event_hash ??
+      resource.externalWormReceiptHash ??
+      resource.external_worm_receipt_hash ??
+      event.payloadHash ??
+      `sha256:${resourceKey}:${resource.id}`,
+    artifact_json: resource,
+    event_id: eventId,
+    record_json: recordJson,
+    created_at:
+      resource.createdAt ??
+      resource.created_at ??
+      resource.frozenAt ??
+      resource.frozen_at ??
+      resource.scannedAt ??
+      resource.scanned_at ??
+      resource.checkedAt ??
+      resource.checked_at ??
+      resource.occurredAt ??
+      resource.occurred_at ??
+      resource.verifiedAt ??
+      resource.verified_at ??
+      event.receivedAt ??
+      null,
+  };
+}
+
+function operationalControlEvidenceWorkflowStatus(resourceKey, resource) {
+  return (
+    resource.workflowStatus ??
+    resource.workflow_status ??
+    resource.scanStatus ??
+    resource.scan_status ??
+    resource.checkStatus ??
+    resource.check_status ??
+    resource.verificationStatus ??
+    resource.verification_status ??
+    resource.releaseUseStatus ??
+    resource.release_use_status ??
+    resource.status ??
+    `${resourceKey}_submitted`
+  );
+}
+
+function operationalControlEvidenceArtifactStatus(resourceKey, resource) {
+  return (
+    resource.artifactStatus ??
+    resource.artifact_status ??
+    resource.scanStatus ??
+    resource.scan_status ??
+    resource.checkStatus ??
+    resource.check_status ??
+    resource.verificationStatus ??
+    resource.verification_status ??
+    resource.releaseUseStatus ??
+    resource.release_use_status ??
+    resource.status ??
+    `${resourceKey}_submitted`
+  );
 }
 
 async function appendRatingProjection(db, event) {
@@ -4855,6 +4979,82 @@ async function appendOperationalControlWorkflowProjection(db, event) {
           position_index = excluded.position_index,
           event_id = excluded.event_id,
         record_json = excluded.record_json
+    `;
+    return;
+  }
+  if (operationalControlEvidenceProjectionTableNames.has(projection.table)) {
+    const table = db(projection.table);
+    await db`
+      insert into ${table} (
+        id,
+        release_id,
+        resource_key,
+        policy_id,
+        lane,
+        surface,
+        action_kind,
+        policy_decision_id,
+        governance_approval_record_id,
+        external_worm_audit_log_policy_id,
+        chain_id,
+        sequence_number,
+        workflow_status,
+        artifact_status,
+        visibility_class,
+        stale_count,
+        failure_count,
+        input_hash,
+        artifact_json,
+        event_id,
+        record_json,
+        created_at
+      )
+      values (
+        ${values.id},
+        ${values.release_id},
+        ${values.resource_key},
+        ${values.policy_id},
+        ${values.lane},
+        ${values.surface},
+        ${values.action_kind},
+        ${values.policy_decision_id},
+        ${values.governance_approval_record_id},
+        ${values.external_worm_audit_log_policy_id},
+        ${values.chain_id},
+        ${values.sequence_number},
+        ${values.workflow_status},
+        ${values.artifact_status},
+        ${values.visibility_class},
+        ${values.stale_count},
+        ${values.failure_count},
+        ${values.input_hash},
+        ${db.json(values.artifact_json)},
+        ${values.event_id},
+        ${db.json(values.record_json)},
+        coalesce(${values.created_at}::timestamptz, now())
+      )
+      on conflict (id) do update set
+        release_id = excluded.release_id,
+        resource_key = excluded.resource_key,
+        policy_id = excluded.policy_id,
+        lane = excluded.lane,
+        surface = excluded.surface,
+        action_kind = excluded.action_kind,
+        policy_decision_id = excluded.policy_decision_id,
+        governance_approval_record_id = excluded.governance_approval_record_id,
+        external_worm_audit_log_policy_id = excluded.external_worm_audit_log_policy_id,
+        chain_id = excluded.chain_id,
+        sequence_number = excluded.sequence_number,
+        workflow_status = excluded.workflow_status,
+        artifact_status = excluded.artifact_status,
+        visibility_class = excluded.visibility_class,
+        stale_count = excluded.stale_count,
+        failure_count = excluded.failure_count,
+        input_hash = excluded.input_hash,
+        artifact_json = excluded.artifact_json,
+        event_id = excluded.event_id,
+        record_json = excluded.record_json,
+        created_at = excluded.created_at
     `;
     return;
   }

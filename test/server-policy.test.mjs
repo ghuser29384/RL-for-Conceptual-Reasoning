@@ -4790,6 +4790,8 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["POST", "/api/v1/release-versions"],
     ["GET", "/api/v1/release-versions"],
     ["GET", "/api/v1/release-versions/release-version-smoke"],
+    ["GET", "/api/v1/release-freezes"],
+    ["GET", "/api/v1/release-freezes/release-freeze-smoke"],
     ["POST", "/api/v1/release-gate-profiles"],
     ["GET", "/api/v1/release-gate-profiles"],
     ["GET", "/api/v1/release-gate-profiles/release-gate-smoke"],
@@ -5019,6 +5021,7 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/exposure-quarantine-policies"],
     ["GET", "/api/v1/exposure-quarantine-policies/exposure-quarantine-policy-smoke"],
     ["POST", "/api/v1/cloud-security-budget-policies"],
+    ["GET", "/api/v1/cloud-security-budget-policies"],
     ["GET", "/api/v1/cloud-security-budget-policies/cloud-security-budget-policy-smoke"],
     ["POST", "/api/v1/rating-workflow-profiles"],
     ["GET", "/api/v1/rating-workflow-profiles"],
@@ -5211,20 +5214,26 @@ test("v1 API surface from RLHF77 routes through auth instead of falling through"
     ["GET", "/api/v1/releases/october-2026-demo/config-manifest"],
     ["GET", "/api/v1/evaluations/eval-smoke/release-config-manifest"],
     ["POST", "/api/v1/policy-action-kinds"],
+    ["GET", "/api/v1/policy-action-kinds"],
     ["GET", "/api/v1/policy-action-kinds/policy-action-kind-smoke"],
     ["POST", "/api/v1/policy-decisions"],
+    ["GET", "/api/v1/policy-decisions"],
     ["GET", "/api/v1/policy-decisions/policy-decision-smoke"],
     ["POST", "/api/v1/policy-decisions/policy-decision-smoke/consume"],
     ["POST", "/api/v1/implementation-phase-gate-bundles"],
+    ["GET", "/api/v1/implementation-phase-gate-bundles"],
     ["GET", "/api/v1/implementation-phase-gate-bundles/implementation-phase-smoke"],
     ["GET", "/api/v1/implementation-phase"],
     ["POST", "/api/v1/queue-freshness-policies"],
+    ["GET", "/api/v1/queue-freshness-policies"],
     ["GET", "/api/v1/queue-freshness-policies/queue-freshness-smoke"],
     ["POST", "/api/v1/queues/assignment/stale-by-delay-scan"],
     ["POST", "/api/v1/client-surface-integrity-policies"],
+    ["GET", "/api/v1/client-surface-integrity-policies"],
     ["GET", "/api/v1/client-surface-integrity-policies/client-surface-policy-smoke"],
     ["POST", "/api/v1/client-surfaces/client-surface-policy-smoke/integrity-check"],
     ["POST", "/api/v1/external-worm-audit-log-policies"],
+    ["GET", "/api/v1/external-worm-audit-log-policies"],
     ["GET", "/api/v1/external-worm-audit-log-policies/external-worm-policy-smoke"],
     ["POST", "/api/v1/sensitive-audit-chain/events"],
     ["GET", "/api/v1/sensitive-audit-chain/events"],
@@ -5535,6 +5544,14 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'endpoint: "/api/v1/release-version-manifest"',
     'resourceKey: "releaseVersionManifestCheck"',
     "Read-only computed release manifest, freeze, target-scale, artifact-link, and contract checks.",
+    'id: "release-versions"',
+    'endpoint: "/api/v1/release-versions"',
+    'resourceKey: "releaseVersion"',
+    "Submitted ReleaseVersion evidence that binds corpus, labels, metrics, phase gates, release config, and artifact ids for release review.",
+    'id: "release-freezes"',
+    'endpoint: "/api/v1/release-freezes"',
+    'resourceKey: "releaseFreeze"',
+    "Submitted ReleaseFreeze evidence separated from the freeze mutation route",
     'id: "public-dataset-readiness"',
     'endpoint: "/api/v1/public-dataset-readiness"',
     'resourceKey: "publicDatasetReadinessRow"',
@@ -6224,6 +6241,31 @@ test("Workflow console exposes submitted evidence collection readback", () => {
     'id: "language-artifact-assessments"',
     'endpoint: "/api/v1/language-artifact-assessments"',
     'resourceKey: "languageArtifactAssessment"',
+    'group: "Operational controls"',
+    'id: "policy-action-kinds"',
+    'endpoint: "/api/v1/policy-action-kinds"',
+    'resourceKey: "policyActionKind"',
+    'id: "policy-decisions"',
+    'endpoint: "/api/v1/policy-decisions"',
+    'resourceKey: "policyDecisionRecord"',
+    'id: "implementation-phase-gate-bundles"',
+    'endpoint: "/api/v1/implementation-phase-gate-bundles"',
+    'resourceKey: "implementationPhaseGateBundle"',
+    'id: "queue-freshness-policies"',
+    'endpoint: "/api/v1/queue-freshness-policies"',
+    'resourceKey: "queueFreshnessPolicy"',
+    'id: "client-surface-integrity-policies"',
+    'endpoint: "/api/v1/client-surface-integrity-policies"',
+    'resourceKey: "clientSurfaceIntegrityPolicy"',
+    'id: "cloud-security-budget-policies"',
+    'endpoint: "/api/v1/cloud-security-budget-policies"',
+    'resourceKey: "cloudSecurityBudgetPolicy"',
+    'id: "external-worm-audit-log-policies"',
+    'endpoint: "/api/v1/external-worm-audit-log-policies"',
+    'resourceKey: "externalWormAuditLogPolicy"',
+    'id: "sensitive-audit-chain-events"',
+    'endpoint: "/api/v1/sensitive-audit-chain/events"',
+    'resourceKey: "sensitiveAuditChainEvent"',
     'id: "candidate-batches"',
     'endpoint: "/api/v1/candidate-batches"',
     'resourceKey: "candidateBatch"',
@@ -6638,6 +6680,63 @@ test("release-readiness operator evidence collections are routed for admin readb
   assert.equal(denied.status, 403);
 });
 
+test("release-config governance collections include release-freeze audit readback", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const releaseConfigCollections = [
+    ["releaseVersion", "/api/v1/release-versions"],
+    ["releaseFreeze", "/api/v1/release-freezes"],
+    ["releaseGateProfile", "/api/v1/release-gate-profiles"],
+    ["governedBundleCanonicalizationProfile", "/api/v1/governed-bundle-canonicalization-profiles"],
+    ["governedBundleRecord", "/api/v1/governed-bundles"],
+    ["governedBundleVerification", "/api/v1/governed-bundle-verifications"],
+    ["releaseConfigManifest", "/api/v1/release-config-manifests"],
+    ["releaseConfigManifestVerification", "/api/v1/release-config-manifest-verifications"],
+  ];
+  for (const [resourceKey, url] of releaseConfigCollections) {
+    const response = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: adminHeaders,
+    });
+    assert.equal(response.status, 200, url);
+    assert.equal(response.body.resourceKey, resourceKey, url);
+    assert.equal(response.body.count, 0, url);
+    assert.deepEqual(response.body.items, [], url);
+  }
+
+  await auditStore.appendWorkflowEvent({
+    eventType: "release_freeze_submitted",
+    resourceKey: "releaseFreeze",
+    payload: {
+      releaseFreeze: {
+        id: "release-freeze-readback",
+        releaseId: "october-2026-demo",
+        freezeStatus: "candidate_freeze_recorded",
+      },
+    },
+  });
+  const byId = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-freezes/release-freeze-readback",
+    headers: adminHeaders,
+  });
+  assert.equal(byId.status, 200);
+  assert.equal(byId.body.id, "release-freeze-readback");
+  assert.equal(byId.body.freezeStatus, "candidate_freeze_recorded");
+
+  const denied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/release-freezes",
+    headers: raterHeaders,
+  });
+  assert.equal(denied.status, 403);
+});
+
 test("policy-bundle and participant-safeguard collections are routed for operator readback", async () => {
   const auditStore = createMemoryAuditStore();
   const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
@@ -6752,6 +6851,42 @@ test("candidate-generation and active-learning collections are routed for operat
   const denied = await invokeApi(context, {
     method: "GET",
     url: "/api/v1/candidate-batches",
+    headers: raterHeaders,
+  });
+  assert.equal(denied.status, 403);
+});
+
+test("operational-control collections are routed for operator readback", async () => {
+  const auditStore = createMemoryAuditStore();
+  const context = createApiContext({ sessionSecret: "unit-test-secret", auditStore });
+  const adminToken = signSessionToken(demoUsers.find((item) => item.id === "demo-admin"), "unit-test-secret");
+  const raterToken = signSessionToken(demoUsers.find((item) => item.id === "demo-rater"), "unit-test-secret");
+  const adminHeaders = { authorization: `Bearer ${adminToken}`, "content-type": "application/json" };
+  const raterHeaders = { authorization: `Bearer ${raterToken}`, "content-type": "application/json" };
+  const operationalControlCollections = [
+    ["policyActionKind", "/api/v1/policy-action-kinds"],
+    ["policyDecisionRecord", "/api/v1/policy-decisions"],
+    ["implementationPhaseGateBundle", "/api/v1/implementation-phase-gate-bundles"],
+    ["queueFreshnessPolicy", "/api/v1/queue-freshness-policies"],
+    ["clientSurfaceIntegrityPolicy", "/api/v1/client-surface-integrity-policies"],
+    ["cloudSecurityBudgetPolicy", "/api/v1/cloud-security-budget-policies"],
+    ["externalWormAuditLogPolicy", "/api/v1/external-worm-audit-log-policies"],
+  ];
+  for (const [resourceKey, url] of operationalControlCollections) {
+    const response = await invokeApi(context, {
+      method: "GET",
+      url,
+      headers: adminHeaders,
+    });
+    assert.equal(response.status, 200, url);
+    assert.equal(response.body.resourceKey, resourceKey, url);
+    assert.equal(response.body.count, 0, url);
+    assert.deepEqual(response.body.items, [], url);
+  }
+
+  const denied = await invokeApi(context, {
+    method: "GET",
+    url: "/api/v1/policy-decisions",
     headers: raterHeaders,
   });
   assert.equal(denied.status, 403);
@@ -11500,6 +11635,8 @@ test("operator action item queue is admin/auditor readback derived from the rele
   const releaseFreezeTemplate = releaseVersionManifestTemplate.body.items.find((item) => item.templateKind === "release_freeze");
   assert.equal(releaseFreezeTemplate.writeRoute, "/api/v1/releases/freeze");
   assert.equal(releaseFreezeTemplate.singleRecordValidateOnlyRoute, "/api/v1/releases/freeze?validateOnly=true");
+  assert.equal(releaseFreezeTemplate.collectionReadbackRoute, "/api/v1/release-freezes");
+  assert.ok(releaseFreezeTemplate.routes.includes("/api/v1/release-freezes"));
   assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.templateOnly, true);
   assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.releaseGateProfileId, "gate-october-2026-demo");
   assert.equal(releaseFreezeTemplate.requestBody.releaseFreeze.freezeStatus, "not_ready_for_release_freeze");
@@ -17859,6 +17996,8 @@ test("production schema includes release-config governance projection tables wit
   assert.ok(architectureDoc.includes("release_versions"));
   assert.ok(architectureDoc.includes("governed_bundle_verifications"));
   assert.ok(architectureDoc.includes("release_config_manifest_verifications"));
+  assert.ok(architectureDoc.includes("GET /api/v1/release-freezes"));
+  assert.ok(architectureDoc.includes("separate from the side-effecting `POST /api/v1/releases/freeze` route"));
   assert.ok(architectureDoc.includes("do not activate releases, mutate governed bundles in place, bypass manifest verification, or close release gates"));
 });
 
@@ -21627,6 +21766,14 @@ test("production schema includes normalized RLHF90 operational-control projectio
     "policy_decision_consumptions",
     "implementation_phase_gate_bundles",
     "implementation_phase_gate_lanes",
+    "queue_freshness_policies",
+    "queue_stale_by_delay_scans",
+    "client_surface_integrity_policies",
+    "client_surface_integrity_checks",
+    "cloud_security_budget_policies",
+    "external_worm_audit_log_policies",
+    "sensitive_audit_chain_events",
+    "sensitive_audit_chain_verifications",
   ]) {
     assert.ok(schema.includes(`create table if not exists ${table}`), table);
     assert.ok(schema.includes(`alter table ${table} enable row level security`), table);
@@ -21644,9 +21791,14 @@ test("production schema includes normalized RLHF90 operational-control projectio
   assert.ok(schema.includes("supports_release_claims_when_disabled boolean not null check (supports_release_claims_when_disabled = false)"));
   assert.ok(schema.includes("create index if not exists policy_decisions_action_kind_idx"));
   assert.ok(schema.includes("create index if not exists implementation_phase_gate_lanes_state_idx"));
+  assert.ok(schema.includes("create index if not exists queue_freshness_policies_lane_idx"));
+  assert.ok(schema.includes("create index if not exists client_surface_integrity_policies_surface_idx"));
+  assert.ok(schema.includes("create index if not exists sensitive_audit_chain_events_chain_idx"));
   assert.ok(architectureDoc.includes("operational-control tables"));
   assert.ok(architectureDoc.includes("policy_action_kinds"));
   assert.ok(architectureDoc.includes("implementation_phase_gate_lanes"));
+  assert.ok(architectureDoc.includes("queue_freshness_policies"));
+  assert.ok(architectureDoc.includes("sensitive_audit_chain_verifications"));
   assert.ok(architectureDoc.includes("Phase 1 source-intake"));
   assert.ok(architectureDoc.includes("operational-control events"));
 });
@@ -21788,6 +21940,82 @@ test("postgres audit store projects RLHF90 operational-control workflow events i
   );
   assert.deepEqual(implementationPhaseProjection.values.lane_rows[0].allowed_action_kinds, ["rating_lock"]);
   assert.equal(implementationPhaseProjection.values.lane_rows[1].labels_exposed_when_disabled, false);
+
+  const operationalControls = completeOperationalControlWorkflowFixtures();
+  const queueFreshnessPolicy = operationalControls.queueFreshnessPolicies.find((item) => item.lane === "assignment");
+  const queueFreshnessProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("queueFreshnessPolicy", queueFreshnessPolicy),
+  );
+  assert.equal(queueFreshnessProjection.table, "queue_freshness_policies");
+  assert.equal(queueFreshnessProjection.values.policy_id, queueFreshnessPolicy.id);
+  assert.equal(queueFreshnessProjection.values.lane, "assignment");
+  assert.equal(queueFreshnessProjection.values.workflow_status, "queueFreshnessPolicy_submitted");
+
+  const queueStaleScan = operationalControls.queueStaleByDelayScans.find((item) => item.lane === "assignment");
+  const queueStaleScanProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("queueStaleByDelayScan", queueStaleScan),
+  );
+  assert.equal(queueStaleScanProjection.table, "queue_stale_by_delay_scans");
+  assert.equal(queueStaleScanProjection.values.policy_id, queueFreshnessPolicy.id);
+  assert.equal(queueStaleScanProjection.values.artifact_status, "passed");
+  assert.equal(queueStaleScanProjection.values.stale_count, 1);
+
+  const clientSurfacePolicy = operationalControls.clientSurfaceIntegrityPolicies[0];
+  const clientSurfacePolicyProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("clientSurfaceIntegrityPolicy", clientSurfacePolicy),
+  );
+  assert.equal(clientSurfacePolicyProjection.table, "client_surface_integrity_policies");
+  assert.equal(clientSurfacePolicyProjection.values.policy_id, clientSurfacePolicy.id);
+  assert.equal(clientSurfacePolicyProjection.values.surface, clientSurfacePolicy.surface);
+
+  const clientSurfaceCheck = operationalControls.clientSurfaceIntegrityChecks[0];
+  const clientSurfaceCheckProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("clientSurfaceIntegrityCheck", clientSurfaceCheck),
+  );
+  assert.equal(clientSurfaceCheckProjection.table, "client_surface_integrity_checks");
+  assert.equal(clientSurfaceCheckProjection.values.policy_id, clientSurfacePolicy.id);
+  assert.equal(clientSurfaceCheckProjection.values.artifact_status, "passed");
+  assert.equal(clientSurfaceCheckProjection.values.failure_count, 0);
+
+  const cloudSecurityBudgetProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("cloudSecurityBudgetPolicy", operationalControls.cloudSecurityBudgetPolicy),
+  );
+  assert.equal(cloudSecurityBudgetProjection.table, "cloud_security_budget_policies");
+  assert.equal(cloudSecurityBudgetProjection.values.policy_id, operationalControls.cloudSecurityBudgetPolicy.id);
+  assert.equal(cloudSecurityBudgetProjection.values.visibility_class, "admin_audit_only");
+
+  const externalWormPolicyProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("externalWormAuditLogPolicy", operationalControls.externalWormAuditLogPolicy),
+  );
+  assert.equal(externalWormPolicyProjection.table, "external_worm_audit_log_policies");
+  assert.equal(externalWormPolicyProjection.values.policy_id, operationalControls.externalWormAuditLogPolicy.id);
+  assert.equal(externalWormPolicyProjection.values.external_worm_audit_log_policy_id, operationalControls.externalWormAuditLogPolicy.id);
+
+  const sensitiveAuditEvent = operationalControls.sensitiveAuditChainEvents[0];
+  const sensitiveAuditEventProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("sensitiveAuditChainEvent", sensitiveAuditEvent),
+  );
+  assert.equal(sensitiveAuditEventProjection.table, "sensitive_audit_chain_events");
+  assert.equal(sensitiveAuditEventProjection.values.chain_id, sensitiveAuditEvent.chainId);
+  assert.equal(sensitiveAuditEventProjection.values.sequence_number, 1);
+  assert.equal(sensitiveAuditEventProjection.values.action_kind, sensitiveAuditEvent.actionKind);
+  assert.equal(sensitiveAuditEventProjection.values.policy_decision_id, sensitiveAuditEvent.policyDecisionId);
+  assert.equal(sensitiveAuditEventProjection.values.governance_approval_record_id, sensitiveAuditEvent.governanceApprovalRecordId);
+  assert.equal(sensitiveAuditEventProjection.values.external_worm_audit_log_policy_id, sensitiveAuditEvent.externalWormAuditLogPolicyId);
+
+  const sensitiveAuditVerificationProjection = operationalControlProjectionForWorkflowEvent(
+    baseEvent("sensitiveAuditChainVerification", {
+      id: "sensitive-audit-chain-verification-projection",
+      chainId: sensitiveAuditEvent.chainId,
+      verificationStatus: "passed",
+      failures: [],
+      verifiedAt: "2026-10-01T00:18:00.000Z",
+    }),
+  );
+  assert.equal(sensitiveAuditVerificationProjection.table, "sensitive_audit_chain_verifications");
+  assert.equal(sensitiveAuditVerificationProjection.values.chain_id, sensitiveAuditEvent.chainId);
+  assert.equal(sensitiveAuditVerificationProjection.values.artifact_status, "passed");
+  assert.equal(sensitiveAuditVerificationProjection.values.failure_count, 0);
 
   assert.equal(
     operationalControlProjectionForWorkflowEvent(baseEvent("sourceCard", { id: "source-card-not-operational-control" })),
