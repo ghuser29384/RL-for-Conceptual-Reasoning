@@ -5004,7 +5004,8 @@ const workflowTemplates = [
     endpoint: () => "/api/v1/public-dataset-documents",
     resourceKey: "publicDatasetDocument",
     requiredRole: "admin",
-    summary: "Submit a Dataset v0.1 dataset-card or methodology-report evidence record without publishing the dataset.",
+    summary:
+      "Validate or submit a Dataset v0.1 dataset-card or methodology-report evidence record without publishing the dataset; use validate-only before appending reviewed documentation.",
     payload: () => {
       const now = Date.now();
       const bodyMarkdown =
@@ -18949,6 +18950,7 @@ const dryRunWorkflowTemplateEndpoints = new Set([
   "/api/v1/validation-tranche-evidence/import-jsonl",
   "/api/v1/target-gaps/import-jsonl-package",
   "/api/v1/operator-evidence/import-jsonl",
+  "/api/v1/public-dataset-documents",
 ]);
 const workflowSubmitModes = [
   { id: "append", label: "Append" },
