@@ -43,6 +43,25 @@ export const PREPARED_DRAFT_STATUSES = [
 
 export const GATE_DECISION_STATUSES = ["not_started", "not_applicable", "pending", "passed", "failed", "waived_with_reason"];
 export const GATE_PASSING_STATUSES = ["passed", "not_applicable", "waived_with_reason"];
+export const REVIEW_SIGNAL_SOURCES = ["automated_prescreen", "deterministic_rule", "human_reviewer", "admin"];
+export const REVIEW_SIGNAL_AFFECTED_OBJECT_TYPES = [
+  "ContributionSubmission",
+  "ContributionPart",
+  "OriginDisclosure",
+  "PreparedDraft",
+  "SourceCard",
+  "SourceSpan",
+  "ExtractionBatch",
+  "ArgumentExtraction",
+  "CandidateItem",
+  "CandidateBatch",
+];
+export const REVIEW_SIGNAL_RATER_HIDDEN_VISIBILITY_CLASSES = ["admin_only", "reviewer_visible", "never_rater_visible"];
+const SOURCE_PREPARATION_ACCEPTED_EXTRACTION_STATUSES = [
+  "accepted_for_position_intake",
+  "accepted_for_critique_intake",
+  "accepted_for_source_preparation",
+];
 
 export const ORIGIN_CHOICES = [
   {
@@ -423,6 +442,19 @@ const candidateItemTypeByPreparedDraftType = {
   prepared_critique_draft: "candidate_critique",
   prepared_source_card_draft: "source_card",
 };
+const PROMOTABLE_PREPARED_DRAFT_STATUS = "ready_for_candidate_item_creation";
+const PROMOTABLE_PREPARED_DRAFT_REVIEW_STATUSES = {
+  blindingReviewStatus: new Set(["blinding_review_passed", "not_applicable", "waived_with_reason"]),
+  sourceLeakageReviewStatus: new Set(["source_leakage_review_passed", "not_applicable", "waived_with_reason"]),
+  gateReadinessStatus: new Set([PROMOTABLE_PREPARED_DRAFT_STATUS]),
+  candidateItemReadiness: new Set([PROMOTABLE_PREPARED_DRAFT_STATUS]),
+};
+const INITIAL_PREPARED_DRAFT_REVIEW_STATUSES = {
+  blindingReviewStatus: "pending_blinding_review",
+  sourceLeakageReviewStatus: "pending_source_leakage_review",
+  gateReadinessStatus: "not_ready",
+  candidateItemReadiness: "not_ready",
+};
 const allowedSubmissionRoles = new Set(["rater", "graduate", "phd", "expert", "admin"]);
 
 export function contributionTemplateForType(type) {
@@ -610,6 +642,51 @@ export function createGateDecisionResource(input, actor, options = {}) {
   };
 }
 
+export function createReviewSignalResource(input, actor, options = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return invalidContribution("invalid_review_signal", "reviewSignal object is required.");
+  const signalType = input.signalType ?? input.signal_type;
+  const source = input.source ?? input.signalSource ?? input.signal_source ?? (actor?.role === "admin" ? "admin" : "human_reviewer");
+  const affectedObjectType = input.affectedObjectType ?? input.affected_object_type ?? input.objectType ?? input.object_type;
+  const affectedObjectId = input.affectedObjectId ?? input.affected_object_id ?? input.objectId ?? input.object_id;
+  const explanation = input.explanation ?? input.signalExplanation ?? input.signal_explanation;
+  const visibilityClass = input.visibilityClass ?? input.visibility_class ?? "admin_only";
+  const confidence = input.confidence ?? null;
+  const missing = [
+    ["signalType", signalType],
+    ["source", source],
+    ["affectedObjectType", affectedObjectType],
+    ["affectedObjectId", affectedObjectId],
+    ["explanation", explanation],
+  ].filter(([, value]) => value === undefined || value === null || value === "");
+  if (missing.length) return invalidContribution("invalid_review_signal", `missing required fields: ${missing.map(([field]) => field).join(", ")}`);
+  if (!REVIEW_SIGNAL_SOURCES.includes(source)) return invalidContribution("invalid_review_signal_source", `Unsupported review-signal source: ${source}`);
+  if (!REVIEW_SIGNAL_AFFECTED_OBJECT_TYPES.includes(affectedObjectType)) {
+    return invalidContribution("invalid_review_signal_object_type", `Unsupported review-signal object type: ${affectedObjectType}`);
+  }
+  if (!REVIEW_SIGNAL_RATER_HIDDEN_VISIBILITY_CLASSES.includes(visibilityClass)) {
+    return invalidContribution("invalid_review_signal_visibility", "ReviewSignal records must stay hidden from ordinary raters.");
+  }
+  if (confidence !== null && (!Number.isFinite(Number(confidence)) || Number(confidence) < 0 || Number(confidence) > 1)) {
+    return invalidContribution("invalid_review_signal_confidence", "ReviewSignal confidence must be a number between 0 and 1.");
+  }
+  return {
+    ok: true,
+    resource: {
+      id: input.id ?? nextContributionId(`review-signal-${normalizeKey(signalType) || "signal"}`, options),
+      signalType,
+      source,
+      confidence: confidence === null ? null : Number(confidence),
+      explanation: String(explanation).trim(),
+      affectedObjectType,
+      affectedObjectId,
+      reviewerId: input.reviewerId ?? input.reviewer_id ?? actor?.id ?? null,
+      relatedGateIds: normalizeStringArray(input.relatedGateIds ?? input.related_gate_ids),
+      visibilityClass,
+      createdAt: input.createdAt ?? input.created_at ?? input.timestamp ?? options.now ?? new Date().toISOString(),
+    },
+  };
+}
+
 export function requiredGateIdsForPolicy(policyId) {
   return WORKFLOW_POLICIES[policyId]?.requiredGateIds ?? [];
 }
@@ -658,6 +735,13 @@ export function createPreparedDraftFromPart(part, input, gateDecisions = [], act
   }
   const status = input.preparedDraftStatus ?? "drafting";
   if (!PREPARED_DRAFT_STATUSES.includes(status)) return invalidContribution("invalid_prepared_draft_status", `Unsupported prepared draft status: ${status}`);
+  const creationReviewBypassFields = preparedDraftCreationReviewBypassFields(input, status);
+  if (creationReviewBypassFields.length) {
+    return invalidContribution(
+      "prepared_draft_review_route_required",
+      `PreparedDraft creation cannot mark review/readiness fields complete; use the prepared-draft review route before promotion: ${creationReviewBypassFields.join(", ")}.`,
+    );
+  }
   const preparedText = input.preparedText ?? input.prepared_text ?? null;
   const preparedSourceCardContent = input.preparedSourceCardContent ?? input.prepared_source_card_content ?? null;
   if (draftType === "prepared_source_card_draft") {
@@ -668,6 +752,8 @@ export function createPreparedDraftFromPart(part, input, gateDecisions = [], act
     return invalidContribution("prepared_text_required", "Position and critique prepared drafts require preparedText.");
   }
   const now = options.now ?? new Date().toISOString();
+  const candidateRaterVisibleText = preparedDraftCandidateRaterVisibleText(input, preparedText);
+  const candidateItemReadiness = status === "ready_for_candidate_item_creation" ? "ready_for_candidate_item_creation" : "not_ready";
   const preparedDraft = {
     id: input.id ?? nextContributionId("prepared-draft", options),
     sourceContributionPartId: part.id,
@@ -675,8 +761,13 @@ export function createPreparedDraftFromPart(part, input, gateDecisions = [], act
     draftType,
     preparedText: preparedText ? preparedText.trim() : null,
     preparedSourceCardContent,
-    candidateItemReadiness: status === "ready_for_candidate_item_creation" ? "ready_for_candidate_item_creation" : "not_ready",
+    candidateRaterVisibleText,
+    blindingReviewStatus: input.blindingReviewStatus ?? input.blinding_review_status ?? "pending_blinding_review",
+    sourceLeakageReviewStatus: input.sourceLeakageReviewStatus ?? input.source_leakage_review_status ?? "pending_source_leakage_review",
+    gateReadinessStatus: input.gateReadinessStatus ?? input.gate_readiness_status ?? candidateItemReadiness,
+    candidateItemReadiness,
     preparedDraftStatus: status,
+    createdBy: actor?.id ?? null,
     auditTrail: {
       contributionSubmissionId: part.submissionId,
       contributionPartId: part.id,
@@ -686,8 +777,113 @@ export function createPreparedDraftFromPart(part, input, gateDecisions = [], act
     },
     visibilityClasses: {
       preparedText: "reviewer_visible",
+      candidateRaterVisibleText: "reviewer_visible",
       preparedSourceCardContent: "reviewer_visible",
       sourceContributionPartId: "admin_only",
+      blindingReviewStatus: "admin_only",
+      sourceLeakageReviewStatus: "admin_only",
+      gateReadinessStatus: "admin_only",
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+  return { ok: true, resource: preparedDraft };
+}
+
+export function createPreparedDraftFromArgumentExtraction(extraction, input, actor, options = {}) {
+  if (!extraction || typeof extraction !== "object" || Array.isArray(extraction)) {
+    return invalidContribution("prepared_draft_requires_argument_extraction", "Source-derived prepared drafts must derive from an ArgumentExtraction.");
+  }
+  if (!SOURCE_PREPARATION_ACCEPTED_EXTRACTION_STATUSES.includes(extraction.reviewStatus)) {
+    return invalidContribution(
+      "argument_extraction_not_accepted",
+      `ArgumentExtraction ${extraction.id ?? "(missing id)"} must be accepted for source preparation before prepared draft creation.`,
+    );
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) return invalidContribution("invalid_prepared_draft", "preparedDraft object is required.");
+
+  const draftType = input.draftType ?? options.draftType;
+  if (!["prepared_position_draft", "prepared_critique_draft"].includes(draftType)) {
+    return invalidContribution("invalid_prepared_draft_type", "Source extractions can create prepared_position_draft or prepared_critique_draft only.");
+  }
+  if (draftType === "prepared_position_draft" && !["position_argument", "mixed_position_and_critique"].includes(extraction.argumentRole)) {
+    return invalidContribution("source_extraction_role_mismatch", `${extraction.argumentRole} cannot create a prepared_position_draft.`);
+  }
+  if (draftType === "prepared_critique_draft" && !["critique_argument", "mixed_position_and_critique"].includes(extraction.argumentRole)) {
+    return invalidContribution("source_extraction_role_mismatch", `${extraction.argumentRole} cannot create a prepared_critique_draft.`);
+  }
+  const status = input.preparedDraftStatus ?? "drafting";
+  if (!PREPARED_DRAFT_STATUSES.includes(status)) return invalidContribution("invalid_prepared_draft_status", `Unsupported prepared draft status: ${status}`);
+  const creationReviewBypassFields = preparedDraftCreationReviewBypassFields(input, status);
+  if (creationReviewBypassFields.length) {
+    return invalidContribution(
+      "prepared_draft_review_route_required",
+      `PreparedDraft creation cannot mark review/readiness fields complete; use the prepared-draft review route before promotion: ${creationReviewBypassFields.join(", ")}.`,
+    );
+  }
+
+  const preparedText = sourceExtractionPreparedText(extraction, input, draftType);
+  if (!preparedText) {
+    return invalidContribution("prepared_text_required", "Source-derived prepared position and critique drafts require preparedText or prepared extraction text.");
+  }
+
+  const targetPreparedDraftId = input.targetPreparedDraftId ?? input.target_prepared_draft_id ?? null;
+  const targetCandidateItemId = input.targetCandidateItemId ?? input.target_candidate_item_id ?? null;
+  const targetPositionId = input.targetPositionId ?? input.target_position_id ?? input.targetLivePositionId ?? input.target_live_position_id ?? null;
+  if (draftType === "prepared_critique_draft" && !targetPreparedDraftId && !targetCandidateItemId && !targetPositionId) {
+    return invalidContribution(
+      "critique_target_link_required",
+      "Source-derived critique drafts require targetPreparedDraftId, targetCandidateItemId, or targetPositionId.",
+    );
+  }
+
+  const now = options.now ?? new Date().toISOString();
+  const sourceSpanIds = normalizeStringArray(extraction.sourceSpanIds);
+  const candidateRaterVisibleText = preparedDraftCandidateRaterVisibleText(input, preparedText);
+  const candidateItemReadiness = status === "ready_for_candidate_item_creation" ? "ready_for_candidate_item_creation" : "not_ready";
+  const preparedDraft = {
+    id: input.id ?? nextContributionId("prepared-draft", options),
+    sourceArgumentExtractionId: extraction.id,
+    sourceExtractionBatchId: extraction.extractionBatchId ?? null,
+    sourceCardId: extraction.sourceCardId ?? null,
+    sourceSpanIds,
+    draftType,
+    preparedText,
+    preparedSourceCardContent: null,
+    candidateRaterVisibleText,
+    blindingReviewStatus: input.blindingReviewStatus ?? input.blinding_review_status ?? "pending_blinding_review",
+    sourceLeakageReviewStatus: input.sourceLeakageReviewStatus ?? input.source_leakage_review_status ?? "pending_source_leakage_review",
+    gateReadinessStatus: input.gateReadinessStatus ?? input.gate_readiness_status ?? candidateItemReadiness,
+    candidateItemReadiness,
+    preparedDraftStatus: status,
+    createdBy: actor?.id ?? null,
+    targetPreparedDraftId,
+    targetCandidateItemId,
+    targetPositionId,
+    critiqueTarget: draftType === "prepared_critique_draft" ? extraction.critiqueTarget ?? input.critiqueTarget ?? null : null,
+    sourcePreparationPhase: "phase2_source_preparation",
+    sourcePreparationReviewStatus: "prepared_from_accepted_extraction",
+    auditTrail: {
+      argumentExtractionId: extraction.id,
+      extractionBatchId: extraction.extractionBatchId ?? null,
+      sourceCardId: extraction.sourceCardId ?? null,
+      sourceSpanIds,
+      rawExtractionTextHash: `sha256:${stableHash(JSON.stringify(extraction))}`,
+      preparedBy: actor?.id ?? null,
+      preparedAt: now,
+      source: "argument_extraction",
+    },
+    visibilityClasses: {
+      preparedText: "reviewer_visible",
+      candidateRaterVisibleText: "reviewer_visible",
+      sourceArgumentExtractionId: "admin_only",
+      sourceExtractionBatchId: "admin_only",
+      sourceCardId: "admin_only",
+      sourceSpanIds: "admin_only",
+      critiqueTarget: "admin_only",
+      blindingReviewStatus: "admin_only",
+      sourceLeakageReviewStatus: "admin_only",
+      gateReadinessStatus: "admin_only",
     },
     createdAt: now,
     updatedAt: now,
@@ -696,8 +892,27 @@ export function createPreparedDraftFromPart(part, input, gateDecisions = [], act
 }
 
 export function promotePreparedDraftToCandidateItem(preparedDraft, input = {}, gateDecisions = [], actor, options = {}) {
-  if (!preparedDraft || !candidateItemTypeByPreparedDraftType[preparedDraft.draftType] || !preparedDraft.sourceContributionPartId) {
-    return invalidContribution("promotion_requires_prepared_draft", "Promotion must start from a PreparedDraft, not a raw ContributionPart.");
+  if (
+    !preparedDraft ||
+    !candidateItemTypeByPreparedDraftType[preparedDraft.draftType] ||
+    (!preparedDraft.sourceContributionPartId && !preparedDraft.sourceArgumentExtractionId)
+  ) {
+    return invalidContribution("promotion_requires_prepared_draft", "Promotion must start from a PreparedDraft, not a raw source artifact.");
+  }
+  if (preparedDraft.preparedDraftStatus !== PROMOTABLE_PREPARED_DRAFT_STATUS) {
+    return invalidContribution(
+      "prepared_draft_not_ready_for_promotion",
+      `PreparedDraft ${preparedDraft.id ?? "(missing id)"} must be ready_for_candidate_item_creation before promotion.`,
+    );
+  }
+  const reviewStatusFailures = Object.entries(PROMOTABLE_PREPARED_DRAFT_REVIEW_STATUSES)
+    .filter(([field, passingStatuses]) => !passingStatuses.has(preparedDraft[field]))
+    .map(([field]) => field);
+  if (reviewStatusFailures.length) {
+    return invalidContribution(
+      "prepared_draft_review_status_not_ready",
+      `PreparedDraft ${preparedDraft.id ?? "(missing id)"} has non-promotable review status fields: ${reviewStatusFailures.join(", ")}.`,
+    );
   }
   const gateCheck = gatesSatisfiedForPolicy("prepared_draft_readiness", preparedDraft.id, gateDecisions);
   if (!gateCheck.ok) {
@@ -710,7 +925,7 @@ export function promotePreparedDraftToCandidateItem(preparedDraft, input = {}, g
   const candidateItemType = candidateItemTypeByPreparedDraftType[preparedDraft.draftType];
   const candidateItemId = input.candidateItemId ?? input.id ?? nextContributionId("candidate-item", options);
   const candidateRaterVisibleText =
-    input.candidateRaterVisibleText ?? input.candidate_rater_visible_text ?? preparedDraft.preparedText ?? null;
+    input.candidateRaterVisibleText ?? input.candidate_rater_visible_text ?? preparedDraft.candidateRaterVisibleText ?? preparedDraft.preparedText ?? null;
   const candidateSourceCardContent = input.candidateSourceCardContent ?? input.candidate_source_card_content ?? preparedDraft.preparedSourceCardContent ?? null;
   if (candidateItemType !== "source_card" && (typeof candidateRaterVisibleText !== "string" || !candidateRaterVisibleText.trim())) {
     return invalidContribution("candidate_rater_visible_text_required", "Candidate positions and critiques require candidate_rater_visible_text.");
@@ -723,6 +938,13 @@ export function promotePreparedDraftToCandidateItem(preparedDraft, input = {}, g
     itemType: candidateItemType,
     sourcePreparedDraftId: preparedDraft.id,
     sourceContributionPartId: preparedDraft.sourceContributionPartId,
+    sourceArgumentExtractionId: preparedDraft.sourceArgumentExtractionId ?? null,
+    sourceExtractionBatchId: preparedDraft.sourceExtractionBatchId ?? null,
+    sourceCardId: preparedDraft.sourceCardId ?? null,
+    sourceSpanIds: normalizeStringArray(preparedDraft.sourceSpanIds),
+    targetPreparedDraftId: preparedDraft.targetPreparedDraftId ?? null,
+    targetCandidateItemId: preparedDraft.targetCandidateItemId ?? null,
+    targetPositionId: preparedDraft.targetPositionId ?? null,
     candidateRaterVisibleText: candidateRaterVisibleText ? candidateRaterVisibleText.trim() : null,
     candidateSourceCardContent,
     candidateItemStatus: "candidate_review_pending",
@@ -736,6 +958,10 @@ export function promotePreparedDraftToCandidateItem(preparedDraft, input = {}, g
       candidateRaterVisibleText: "rater_visible_after_promotion",
       sourcePreparedDraftId: "admin_only",
       sourceContributionPartId: "admin_only",
+      sourceArgumentExtractionId: "admin_only",
+      sourceExtractionBatchId: "admin_only",
+      sourceCardId: "admin_only",
+      sourceSpanIds: "admin_only",
     },
     createdAt: now,
     createdBy: actor?.id ?? null,
@@ -750,8 +976,13 @@ export function promotePreparedDraftToCandidateItem(preparedDraft, input = {}, g
     createdLiveRecord: false,
     createdCandidateBatch: false,
     auditTrail: {
-      contributionSubmissionId: preparedDraft.sourceSubmissionId,
-      contributionPartId: preparedDraft.sourceContributionPartId,
+      sourceType: preparedDraft.sourceArgumentExtractionId ? "argument_extraction" : "contribution_part",
+      contributionSubmissionId: preparedDraft.sourceSubmissionId ?? null,
+      contributionPartId: preparedDraft.sourceContributionPartId ?? null,
+      argumentExtractionId: preparedDraft.sourceArgumentExtractionId ?? null,
+      extractionBatchId: preparedDraft.sourceExtractionBatchId ?? null,
+      sourceCardId: preparedDraft.sourceCardId ?? null,
+      sourceSpanIds: normalizeStringArray(preparedDraft.sourceSpanIds),
       preparedDraftId: preparedDraft.id,
       candidateItemId: candidateItem.id,
     },
@@ -765,6 +996,35 @@ export function promotePreparedDraftToCandidateItem(preparedDraft, input = {}, g
     candidateItem,
     promotionRecord,
   };
+}
+
+function sourceExtractionPreparedText(extraction, input, draftType) {
+  const explicit = input.preparedText ?? input.prepared_text ?? null;
+  if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+  const candidate =
+    draftType === "prepared_position_draft"
+      ? extraction.possiblePreparedPositionText ?? extraction.extractedPositionText ?? extraction.intendedConclusion
+      : extraction.possiblePreparedCritiqueText;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+}
+
+function preparedDraftCandidateRaterVisibleText(input, preparedText) {
+  const explicit = input.candidateRaterVisibleText ?? input.candidate_rater_visible_text ?? null;
+  if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+  return typeof preparedText === "string" && preparedText.trim() ? preparedText.trim() : null;
+}
+
+function preparedDraftCreationReviewBypassFields(input, preparedDraftStatus) {
+  const failures = [];
+  if ([PROMOTABLE_PREPARED_DRAFT_STATUS, "promoted_to_candidate_item"].includes(preparedDraftStatus)) {
+    failures.push("preparedDraftStatus");
+  }
+  for (const [field, initialStatus] of Object.entries(INITIAL_PREPARED_DRAFT_REVIEW_STATUSES)) {
+    const snakeField = field.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`);
+    const value = input[field] ?? input[snakeField];
+    if (value !== undefined && value !== null && value !== initialStatus) failures.push(field);
+  }
+  return failures;
 }
 
 export function sanitizeContributionSubmissionForUser(submission, resources = {}) {
