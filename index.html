@@ -1,13 +1,459 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LMCA Volunteer Annotation Platform</title>
-    <link rel="stylesheet" href="/src/styles.css?v=6" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/app.mjs"></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Paid expert review of a conceptual argument for an independent conceptual-reasoning research project." />
+  <meta name="robots" content="index,follow" />
+  <meta property="og:title" content="Paid expert review: conceptual reasoning" />
+  <meta property="og:description" content="Complete one blinded 10–15 minute calibration review. $25 honorarium for accepted, good-faith submissions." />
+  <meta property="og:type" content="website" />
+  <title>Conceptual Reasoning Review</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+  <script defer src="./src/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="#top" aria-label="Conceptual Reasoning Review home">
+        <span class="brand-mark" aria-hidden="true">CR</span>
+        <span>Conceptual Reasoning Review</span>
+      </a>
+      <div class="deadline-pill" aria-label="Current recruitment deadline">
+        Intake closes <strong>July 16, 2026</strong>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="shell hero-grid">
+        <div>
+          <p class="eyebrow">Paid expert calibration · 10–15 minutes</p>
+          <h1>Help evaluate whether AI can reason about difficult conceptual questions.</h1>
+          <p class="hero-copy">
+            Read one short position and one critique, then rate the critique using a structured rubric.
+            The source of the critique is blinded. No ongoing commitment is required.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#application" data-track="hero_start">Review one argument</a>
+            <a class="button secondary" href="#how-it-works" data-track="hero_details">See how it works</a>
+          </div>
+          <p class="microcopy">
+            <strong>$25 calibration honorarium</strong> for accepted, good-faith submissions that meet eligibility and quality controls.
+            Selected reviewers may be invited for follow-on work at <strong>$60/hour</strong>.
+          </p>
+        </div>
+        <aside class="proof-card" aria-label="Study summary">
+          <h2>What you will do</h2>
+          <ol>
+            <li>Confirm your relevant expertise.</li>
+            <li>Read a concise scoring guide.</li>
+            <li>Rate one blinded position–critique pair.</li>
+            <li>Receive payment instructions after quality review.</li>
+          </ol>
+          <div class="stat-row">
+            <div><strong>7</strong><span>rating dimensions</span></div>
+            <div><strong>1</strong><span>calibration item</span></div>
+            <div><strong>48h</strong><span>current intake window</span></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section muted" id="how-it-works">
+      <div class="shell narrow">
+        <p class="eyebrow">Who should participate</p>
+        <h2>Relevant expertise is broader than academic rank.</h2>
+        <p>
+          We are seeking adults with serious experience evaluating arguments in philosophy, AI safety, ethics,
+          decision theory, political theory, law, economics, cognitive science, or adjacent research fields.
+          Doctoral students, postdocs, faculty, research staff, advanced independent researchers, and experienced
+          educators are all eligible. Strong generalists may also qualify through calibration.
+        </p>
+        <div class="principles-grid">
+          <article>
+            <h3>Blinded evaluation</h3>
+            <p>You are not shown whether a critique was written by a person or a model.</p>
+          </article>
+          <article>
+            <h3>Argument-level judgment</h3>
+            <p>You assess how well the critique engages the position, not whether you share its worldview.</p>
+          </article>
+          <article>
+            <h3>Private contact data</h3>
+            <p>Your email is used for audit, payment, and optional follow-on invitations; it is not published.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="application">
+      <div class="shell form-shell">
+        <div class="form-heading">
+          <div>
+            <p class="eyebrow">Reviewer intake</p>
+            <h2>Complete one calibration review</h2>
+          </div>
+          <div class="progress-wrap" aria-label="Form progress">
+            <span id="progress-label">Step 1 of 4</span>
+            <div class="progress-track" aria-hidden="true"><div id="progress-bar"></div></div>
+          </div>
+        </div>
+
+        <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
+
+        <form id="reviewer-form" novalidate>
+          <input type="text" name="website" id="website" class="honeypot" tabindex="-1" autocomplete="off" aria-hidden="true" />
+          <input type="hidden" name="started_at" id="started-at" />
+
+          <fieldset class="form-step" data-step="1">
+            <legend>Your background</legend>
+            <p class="step-intro">This screen is used to match reviewers to topics and prevent duplicate submissions.</p>
+
+            <div class="field-grid two">
+              <label class="field">
+                <span>Full name <b aria-hidden="true">*</b></span>
+                <input name="display_name" id="display-name" type="text" autocomplete="name" maxlength="120" required />
+                <small>Your name is not published unless you separately opt in.</small>
+              </label>
+              <label class="field">
+                <span>Email <b aria-hidden="true">*</b></span>
+                <input name="email" id="email" type="email" autocomplete="email" maxlength="254" required />
+                <small>Used for audit, honorarium, and optional follow-on work.</small>
+              </label>
+            </div>
+
+            <div class="field-grid two">
+              <label class="field">
+                <span>Current role <b aria-hidden="true">*</b></span>
+                <select name="role" id="role" required>
+                  <option value="">Select one</option>
+                  <option>Faculty or lecturer</option>
+                  <option>Postdoctoral researcher</option>
+                  <option>Doctoral student</option>
+                  <option>Masters student</option>
+                  <option>Research staff</option>
+                  <option>Professional in law, policy, or economics</option>
+                  <option>Experienced philosophy or debate educator</option>
+                  <option>Independent researcher</option>
+                  <option>Other relevant role</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Affiliation</span>
+                <input name="affiliation" id="affiliation" type="text" maxlength="180" placeholder="University, lab, organization, or independent" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Primary field <b aria-hidden="true">*</b></span>
+              <select name="primary_field" id="primary-field" required>
+                <option value="">Select one</option>
+                <option>Normative or applied ethics</option>
+                <option>Epistemology or philosophy of science</option>
+                <option>Philosophy of mind or cognitive science</option>
+                <option>Political or social philosophy</option>
+                <option>Decision theory or formal epistemology</option>
+                <option>Philosophy of AI or technology</option>
+                <option>AI safety, alignment, or governance</option>
+                <option>Law or legal philosophy</option>
+                <option>Economics or game theory</option>
+                <option>Argumentation, debate, or critical thinking</option>
+                <option>Other</option>
+              </select>
+            </label>
+
+            <fieldset class="nested-fieldset">
+              <legend>Topics you can review <b aria-hidden="true">*</b></legend>
+              <p class="field-help">Select at least one.</p>
+              <div class="check-grid" id="topic-grid">
+                <label><input type="checkbox" name="topics" value="AI safety and governance" /> AI safety and governance</label>
+                <label><input type="checkbox" name="topics" value="Decision theory" /> Decision theory</label>
+                <label><input type="checkbox" name="topics" value="Normative ethics" /> Normative ethics</label>
+                <label><input type="checkbox" name="topics" value="Philosophy of mind" /> Philosophy of mind</label>
+                <label><input type="checkbox" name="topics" value="Political philosophy" /> Political philosophy</label>
+                <label><input type="checkbox" name="topics" value="Law and public policy" /> Law and public policy</label>
+                <label><input type="checkbox" name="topics" value="Economics and social choice" /> Economics and social choice</label>
+                <label><input type="checkbox" name="topics" value="General argument analysis" /> General argument analysis</label>
+              </div>
+              <p class="error-text" id="topics-error" hidden>Please select at least one topic.</p>
+            </fieldset>
+
+            <div class="field-grid two">
+              <label class="field">
+                <span>Years evaluating complex arguments <b aria-hidden="true">*</b></span>
+                <select name="experience_years" id="experience-years" required>
+                  <option value="">Select one</option>
+                  <option value="0-1">Less than 1 year</option>
+                  <option value="1-2">1–2 years</option>
+                  <option value="3-5">3–5 years</option>
+                  <option value="6-10">6–10 years</option>
+                  <option value="10+">More than 10 years</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Public profile or evidence of expertise</span>
+                <input name="profile_url" id="profile-url" type="url" maxlength="500" placeholder="Faculty page, ORCID, Google Scholar, LinkedIn, publication, or portfolio" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Briefly describe your relevant experience <b aria-hidden="true">*</b></span>
+              <textarea name="experience_summary" id="experience-summary" rows="4" minlength="40" maxlength="900" required placeholder="Examples: research area, graduate coursework, publications, teaching, debate adjudication, or professional work."></textarea>
+              <small><span id="experience-count">0</span>/900 characters</small>
+            </label>
+
+            <label class="consent-line">
+              <input type="checkbox" name="adult" id="adult" required />
+              <span>I confirm that I am at least 18 years old. <b aria-hidden="true">*</b></span>
+            </label>
+          </fieldset>
+
+          <fieldset class="form-step" data-step="2" hidden>
+            <legend>Consent and payment terms</legend>
+            <div class="notice-card">
+              <h3>How your submission is used</h3>
+              <p>
+                Your contact details are kept private and used to verify eligibility, prevent duplicates, arrange the
+                honorarium, and invite you to optional follow-on work. Your de-identified calibration ratings and written
+                rationale may be analyzed, published in aggregate or as anonymized research data, used to evaluate AI
+                systems, and used in model-development or training workflows.
+              </p>
+              <p>
+                Do not include confidential, proprietary, or personally identifying information in your rationale.
+                You may request withdrawal before de-identified data are incorporated into a released dataset by emailing
+                <a href="mailto:caijun054@gmail.com">caijun054@gmail.com</a>.
+              </p>
+            </div>
+
+            <div class="notice-card compact">
+              <h3>Honorarium conditions</h3>
+              <ul>
+                <li>$25 for one accepted, good-faith calibration submission.</li>
+                <li>Submissions may be rejected for ineligibility, duplication, automation, plagiarism, implausibly short completion time, or failure to engage the rubric.</li>
+                <li>Payment instructions are sent after manual audit. Do not enter banking information on this form.</li>
+                <li>Follow-on work, when offered, is optional and compensated at $60/hour.</li>
+              </ul>
+            </div>
+
+            <label class="consent-line">
+              <input type="checkbox" name="research_consent" id="research-consent" required />
+              <span>I consent to the private processing of my contact information and the research uses of my de-identified submission described above. <b aria-hidden="true">*</b></span>
+            </label>
+            <label class="consent-line">
+              <input type="checkbox" name="good_faith" id="good-faith" required />
+              <span>I will complete the review independently, without using an AI assistant or copying another person’s analysis. <b aria-hidden="true">*</b></span>
+            </label>
+            <label class="consent-line">
+              <input type="checkbox" name="follow_on" id="follow-on" />
+              <span>I am open to being contacted for optional follow-on reviews.</span>
+            </label>
+            <label class="consent-line">
+              <input type="checkbox" name="acknowledgment" id="acknowledgment" />
+              <span>I am open to being named in an acknowledgments list. Naming would require a separate confirmation.</span>
+            </label>
+          </fieldset>
+
+          <fieldset class="form-step" data-step="3" hidden>
+            <legend>Scoring guide</legend>
+            <p class="step-intro">
+              Use the full 0–100 range. The goal is not to agree with the position; it is to assess the critique’s quality and impact on the position as written.
+            </p>
+
+            <div class="rubric-list">
+              <article><h3>Centrality</h3><p>How important are the claims attacked by the critique to the position? 100 means the position would collapse if those claims were false.</p></article>
+              <article><h3>Strength</h3><p>How successfully does the critique refute the claims it attacks? Assess the object-level reasoning, not the confidence of its wording.</p></article>
+              <article><h3>Correctness</h3><p>What proportion of the critique’s claims are true? Wrong but irrelevant claims still reduce correctness.</p></article>
+              <article><h3>Clarity</h3><p>After careful reading, how precisely can you determine what the critique is arguing?</p></article>
+              <article><h3>Dead weight</h3><p>How much content contributes neither an argument nor useful clarification? Here, 100 means entirely dead weight.</p></article>
+              <article><h3>Single issue</h3><p>How fully does the critique focus on one issue rather than several independent objections?</p></article>
+              <article><h3>Overall</h3><p>How good is the critique all things considered? Anchor on centrality × strength, then adjust for correctness, clarity, insight, and extraneous material.</p></article>
+            </div>
+
+            <div class="rubric-warning">
+              <strong>Important:</strong> Centrality and strength can trade off depending on interpretation. Focus especially on getting their product—how much the critique weakens the position—approximately right.
+            </div>
+
+            <label class="consent-line">
+              <input type="checkbox" name="rubric_read" id="rubric-read" required />
+              <span>I have read the guide and understand that “dead weight” runs in the opposite direction from the other quality dimensions. <b aria-hidden="true">*</b></span>
+            </label>
+          </fieldset>
+
+          <fieldset class="form-step" data-step="4" hidden>
+            <legend>Blinded calibration review</legend>
+            <p class="step-intro">Read the position and critique closely. The item is used only for calibration and reviewer qualification.</p>
+
+            <article class="argument-card">
+              <div class="argument-label">Position</div>
+              <p>
+                Clearly, one can infer “ought” from “is,” thus bridging the is/ought gap:
+              </p>
+              <ol>
+                <li>“Bertie morally ought to marry Madeline” is one of Aunt Dahlia’s beliefs.</li>
+                <li>All of Aunt Dahlia’s beliefs are true.</li>
+                <li>Therefore, Bertie morally ought to marry Madeline.</li>
+              </ol>
+              <p>
+                Both premises are descriptive: the first is about what a person believes, and the second is about the truth-value of that person’s beliefs. The conclusion is moral. The argument is logically valid because necessarily, if its premises are true, its conclusion is true.
+              </p>
+            </article>
+
+            <article class="argument-card critique">
+              <div class="argument-label">Critique</div>
+              <p>
+                While the argument is logically valid—the conclusion follows from Premises 1 and 2—it does not bridge from “is” to “ought.” After all, Premise 1 already contains an “ought.”
+              </p>
+            </article>
+
+            <div class="rating-grid" id="rating-grid">
+              <div class="rating-row" data-rating="centrality">
+                <label for="centrality"><span>Centrality</span><output id="centrality-output" for="centrality">50</output></label>
+                <input id="centrality" name="centrality" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · unimportant</span><span>100 · position collapses</span></div>
+              </div>
+              <div class="rating-row" data-rating="strength">
+                <label for="strength"><span>Strength</span><output id="strength-output" for="strength">50</output></label>
+                <input id="strength" name="strength" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · no weakening</span><span>100 · fully refutes target</span></div>
+              </div>
+              <div class="rating-row" data-rating="correctness">
+                <label for="correctness"><span>Correctness</span><output id="correctness-output" for="correctness">50</output></label>
+                <input id="correctness" name="correctness" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · entirely false</span><span>100 · entirely correct</span></div>
+              </div>
+              <div class="rating-row" data-rating="clarity">
+                <label for="clarity"><span>Clarity</span><output id="clarity-output" for="clarity">50</output></label>
+                <input id="clarity" name="clarity" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · unintelligible</span><span>100 · precise and clear</span></div>
+              </div>
+              <div class="rating-row inverse" data-rating="dead_weight">
+                <label for="dead-weight"><span>Dead weight</span><output id="dead-weight-output" for="dead-weight">50</output></label>
+                <input id="dead-weight" name="dead_weight" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · none</span><span>100 · entirely dead weight</span></div>
+              </div>
+              <div class="rating-row" data-rating="single_issue">
+                <label for="single-issue"><span>Single issue</span><output id="single-issue-output" for="single-issue">50</output></label>
+                <input id="single-issue" name="single_issue" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · multiple independent issues</span><span>100 · one issue</span></div>
+              </div>
+              <div class="rating-row" data-rating="overall">
+                <label for="overall"><span>Overall</span><output id="overall-output" for="overall">50</output></label>
+                <input id="overall" name="overall" type="range" min="0" max="100" step="1" value="50" />
+                <div class="range-labels"><span>0 · no real problem</span><span>100 · decisive, high quality</span></div>
+              </div>
+            </div>
+
+            <div class="computed-note">Centrality × strength: <strong id="impact-product">25%</strong> estimated weakening of the position.</div>
+
+            <label class="field">
+              <span>Rationale <b aria-hidden="true">*</b></span>
+              <textarea name="rationale" id="rationale" rows="7" minlength="120" maxlength="2500" required placeholder="Explain what the critique gets right or wrong, the most plausible interpretation of the position, and how that interpretation affected your scores."></textarea>
+              <small><span id="rationale-count">0</span>/2500 characters · minimum 120</small>
+            </label>
+
+            <div class="field-grid two">
+              <label class="field">
+                <span>Confidence in your assessment <b aria-hidden="true">*</b></span>
+                <select name="confidence" id="confidence" required>
+                  <option value="">Select one</option>
+                  <option value="1">1 — very uncertain</option>
+                  <option value="2">2</option>
+                  <option value="3">3 — moderate</option>
+                  <option value="4">4</option>
+                  <option value="5">5 — very confident</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>How did you hear about this?</span>
+                <input name="referral" id="referral" type="text" maxlength="240" placeholder="Person, group, post, or organization" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Optional: nominate up to two qualified reviewers</span>
+              <textarea name="nominations" id="nominations" rows="3" maxlength="700" placeholder="Names or public profile links only. Please do not enter private contact details without permission."></textarea>
+            </label>
+          </fieldset>
+
+          <div class="form-actions">
+            <button class="button secondary" type="button" id="back-button" hidden>Back</button>
+            <button class="button primary" type="button" id="next-button">Continue</button>
+            <button class="button primary" type="submit" id="submit-button" hidden>Submit calibration review</button>
+          </div>
+          <p class="form-footnote">Required fields are marked with an asterisk. Your progress is stored only in this browser until submission.</p>
+        </form>
+
+        <section id="completion" class="completion-card" hidden tabindex="-1">
+          <p class="eyebrow">Submission received</p>
+          <h2>Thank you. Your calibration is pending manual audit.</h2>
+          <p>
+            A confirmation and, if accepted, honorarium instructions will be sent to <strong id="completion-email"></strong>.
+            Most audits are completed during the current July 14–16 intake window.
+          </p>
+          <div class="completion-actions">
+            <button class="button primary" id="copy-referral" type="button">Copy referral message</button>
+            <a class="button secondary" id="mailto-referral" href="#">Email a colleague</a>
+          </div>
+          <div id="referral-copy" class="copy-box">
+            Paid 10–15 minute expert review: evaluate one conceptual argument using a structured, blinded rubric. $25 calibration honorarium; no ongoing commitment. Current intake closes July 16. [LINK]
+          </div>
+          <p class="microcopy">Please refer only adults with relevant research, teaching, adjudication, or professional argument-analysis experience.</p>
+        </section>
+
+        <section id="offline-recovery" class="offline-card" hidden>
+          <h2>Your response is saved on this device</h2>
+          <p>The network submission did not complete. Your full response has been stored locally. Retry when connected or download a backup copy.</p>
+          <div class="completion-actions">
+            <button class="button primary" id="retry-submit" type="button">Retry submission</button>
+            <button class="button secondary" id="download-backup" type="button">Download backup JSON</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="section muted faq" id="faq">
+      <div class="shell narrow">
+        <p class="eyebrow">FAQ</p>
+        <h2>Common questions</h2>
+        <details>
+          <summary>Do I need a philosophy PhD?</summary>
+          <p>No. Relevant doctoral study, research employment, legal or policy analysis, debate adjudication, advanced teaching, or demonstrated independent research can qualify. Calibration quality matters.</p>
+        </details>
+        <details>
+          <summary>Can I use an AI assistant?</summary>
+          <p>No. The purpose is to obtain independent human judgments. Using an AI assistant, copied analysis, or automated form completion disqualifies the submission.</p>
+        </details>
+        <details>
+          <summary>How is acceptance decided?</summary>
+          <p>Eligibility, completion time, rubric engagement, internal consistency, and the written rationale are reviewed together. Exact numerical agreement with one reference rater is not required.</p>
+        </details>
+        <details>
+          <summary>How will I be paid?</summary>
+          <p>Accepted reviewers receive instructions by email after audit. The form never asks for banking credentials.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <div>
+        <strong>Conceptual Reasoning Review</strong>
+        <p>Independent reviewer recruitment for research on evaluating conceptual arguments.</p>
+      </div>
+      <div class="footer-links">
+        <a href="mailto:caijun054@gmail.com">Contact</a>
+        <a href="#application">Begin review</a>
+      </div>
+    </div>
+  </footer>
+
+  <noscript>
+    <div class="noscript">JavaScript is required to complete and securely submit the calibration form.</div>
+  </noscript>
+</body>
 </html>
