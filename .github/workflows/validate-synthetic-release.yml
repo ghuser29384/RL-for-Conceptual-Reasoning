@@ -1,0 +1,53 @@
+name: Validate synthetic release
+
+on:
+  pull_request:
+    paths:
+      - "arguments/**"
+      - "scripts/build-static.mjs"
+      - "scripts/unpack-synthetic-1000.mjs"
+      - "src/releases/metaphilosophy-1000/**"
+      - ".github/workflows/validate-synthetic-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static release
+        run: npm run build
+
+      - name: Verify generated manifest
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const manifest = JSON.parse(await readFile("dist/arguments/data/manifest.json", "utf8"));
+          const expected = { records: 1000, positions: 250, critiques: 1000, domains: 25, critiques_per_position: 4 };
+          for (const [key, value] of Object.entries(expected)) {
+            if (manifest[key] !== value) throw new Error(`${key}: expected ${value}, found ${manifest[key]}`);
+          }
+          console.log(JSON.stringify(manifest, null, 2));
+          NODE
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-release-manifest
+          path: dist/arguments/data/manifest.json
+          if-no-files-found: error
