@@ -13,9 +13,14 @@ function stitchChunks(chunks) {
   if (!chunks.length) return "";
 
   let encoded = chunks[0].replace(/\s+/gu, "");
+  const overlaps = [];
+
   for (const rawChunk of chunks.slice(1)) {
     const chunk = rawChunk.replace(/\s+/gu, "");
-    if (!chunk) continue;
+    if (!chunk) {
+      overlaps.push(0);
+      continue;
+    }
 
     const maximum = Math.min(encoded.length, chunk.length);
     const markerLength = Math.min(64, chunk.length);
@@ -35,18 +40,11 @@ function stitchChunks(chunks) {
       }
     }
 
-    if (overlap === 0) {
-      for (let candidate = Math.min(markerLength - 1, maximum); candidate > 0; candidate -= 1) {
-        if (encoded.endsWith(chunk.slice(0, candidate))) {
-          overlap = candidate;
-          break;
-        }
-      }
-    }
-
+    overlaps.push(overlap);
     encoded += chunk.slice(overlap);
   }
 
+  console.log(`Synthetic payload chunks: ${chunks.length}; detected overlaps: ${overlaps.join(",") || "none"}.`);
   return encoded;
 }
 
