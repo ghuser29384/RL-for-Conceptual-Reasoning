@@ -9,21 +9,41 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function stitchOverlappingChunks(chunks) {
+function stitchChunks(chunks) {
   if (!chunks.length) return "";
 
   let encoded = chunks[0].replace(/\s+/gu, "");
   for (const rawChunk of chunks.slice(1)) {
     const chunk = rawChunk.replace(/\s+/gu, "");
-    const markerLength = Math.min(96, chunk.length);
-    const marker = chunk.slice(0, markerLength);
-    const start = encoded.lastIndexOf(marker);
-    if (start < 0) throw new Error("Could not determine overlap between synthetic release payload windows.");
+    if (!chunk) continue;
 
-    const overlap = encoded.length - start;
-    if (overlap <= 0 || overlap > chunk.length || !chunk.startsWith(encoded.slice(start))) {
-      throw new Error("Synthetic release payload windows have an invalid overlap.");
+    const maximum = Math.min(encoded.length, chunk.length);
+    const markerLength = Math.min(64, chunk.length);
+    let overlap = 0;
+
+    if (markerLength > 0) {
+      const marker = chunk.slice(0, markerLength);
+      const searchStart = Math.max(0, encoded.length - maximum);
+      let index = encoded.indexOf(marker, searchStart);
+
+      while (index >= 0) {
+        const candidate = encoded.length - index;
+        if (candidate <= chunk.length && candidate > overlap && chunk.startsWith(encoded.slice(index))) {
+          overlap = candidate;
+        }
+        index = encoded.indexOf(marker, index + 1);
+      }
     }
+
+    if (overlap === 0) {
+      for (let candidate = Math.min(markerLength - 1, maximum); candidate > 0; candidate -= 1) {
+        if (encoded.endsWith(chunk.slice(0, candidate))) {
+          overlap = candidate;
+          break;
+        }
+      }
+    }
+
     encoded += chunk.slice(overlap);
   }
 
@@ -139,7 +159,7 @@ export async function unpackSyntheticRelease() {
   if (!chunkNames.length) throw new Error("Synthetic release payload chunks were not found.");
 
   const chunks = await Promise.all(chunkNames.map((name) => readFile(resolve(sourceDirectory, name), "utf8")));
-  const encoded = stitchOverlappingChunks(chunks);
+  const encoded = stitchChunks(chunks);
   const compressed = Buffer.from(encoded, "base64");
   const inflated = gunzipSync(compressed);
   const inflatedText = inflated.toString("utf8");
