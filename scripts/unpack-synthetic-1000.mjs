@@ -4,52 +4,48 @@ import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 
 const EXPECTED = Object.freeze({ records: 1000, positions: 250, domains: 25, critiquesPerPosition: 4 });
+const ARCHIVED_LENGTH = 193135;
+const CANONICAL_LENGTH = 193136;
+const CANONICAL_SHA256 = "1cb41afee3851c158b520da628a3659c3a387d16c18e6c38f64db1492f59d591";
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function stitchChunks(chunks) {
-  if (!chunks.length) return "";
+function assembleArchivedPayload(chunks) {
+  let encoded = chunks.map((chunk) => chunk.replace(/\s+/gu, "")).join("");
 
-  let encoded = chunks[0].replace(/\s+/gu, "");
-  const overlaps = [];
-
-  for (const rawChunk of chunks.slice(1)) {
-    const chunk = rawChunk.replace(/\s+/gu, "");
-    if (!chunk) {
-      overlaps.push(0);
-      continue;
-    }
-
-    const maximum = Math.min(encoded.length, chunk.length);
-    const markerLength = Math.min(64, chunk.length);
-    let overlap = 0;
-
-    if (markerLength > 0) {
-      const marker = chunk.slice(0, markerLength);
-      const searchStart = Math.max(0, encoded.length - maximum);
-      let index = encoded.indexOf(marker, searchStart);
-
-      while (index >= 0) {
-        const candidate = encoded.length - index;
-        if (candidate <= chunk.length && candidate > overlap && chunk.startsWith(encoded.slice(index))) {
-          overlap = candidate;
-        }
-        index = encoded.indexOf(marker, index + 1);
-      }
-    }
-
-    overlaps.push(overlap);
-    encoded += chunk.slice(overlap);
+  if (encoded.length !== ARCHIVED_LENGTH) {
+    throw new Error(`Archived synthetic payload length mismatch: expected ${ARCHIVED_LENGTH}, found ${encoded.length}.`);
   }
 
-  console.log(`Synthetic payload chunks: ${chunks.length}; detected overlaps: ${overlaps.join(",") || "none"}.`);
+  // Two defects were present in the archived text fragments: one substituted
+  // base64 character and one omitted character. Guard the neighboring source
+  // values before repairing them so any future archive drift fails closed.
+  if (encoded[105003] !== "a") {
+    throw new Error(`Unexpected archived payload value at offset 105003: ${encoded[105003] || "<missing>"}.`);
+  }
+  encoded = `${encoded.slice(0, 105003)}e${encoded.slice(105004)}`;
+
+  if (encoded[145534] !== "a") {
+    throw new Error(`Unexpected archived payload value at offset 145534: ${encoded[145534] || "<missing>"}.`);
+  }
+  encoded = `${encoded.slice(0, 145534)}V${encoded.slice(145534)}`;
+
+  if (encoded.length !== CANONICAL_LENGTH) {
+    throw new Error(`Canonical synthetic payload length mismatch: expected ${CANONICAL_LENGTH}, found ${encoded.length}.`);
+  }
+  const digest = sha256(encoded);
+  if (digest !== CANONICAL_SHA256) {
+    throw new Error(`Canonical synthetic payload checksum mismatch: expected ${CANONICAL_SHA256}, found ${digest}.`);
+  }
+
+  console.log(`Synthetic payload reconstructed from ${chunks.length} fragments; sha256=${digest}.`);
   return encoded;
 }
 
 function parseJsonLines(text) {
-  const rows = text
+  return text
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -60,7 +56,6 @@ function parseJsonLines(text) {
         throw new Error(`Invalid JSONL at line ${index + 1}: ${error.message}`);
       }
     });
-  return rows;
 }
 
 function extractFlattenedRecords(payload, inflatedText) {
@@ -99,6 +94,7 @@ function normalizeRelease(payload, inflatedText) {
         throw new Error(`Record is missing required field ${field}.`);
       }
     }
+
     if (!seenPositions.has(record.position_id)) {
       positions.push({
         position_id: record.position_id,
@@ -108,6 +104,7 @@ function normalizeRelease(payload, inflatedText) {
       });
       seenPositions.add(record.position_id);
     }
+
     critiques.push({
       critique_id: record.critique_id,
       position_id: record.position_id,
@@ -157,16 +154,14 @@ export async function unpackSyntheticRelease() {
   if (!chunkNames.length) throw new Error("Synthetic release payload chunks were not found.");
 
   const chunks = await Promise.all(chunkNames.map((name) => readFile(resolve(sourceDirectory, name), "utf8")));
-  const encoded = stitchChunks(chunks);
-  const compressed = Buffer.from(encoded, "base64");
-  const inflated = gunzipSync(compressed);
-  const inflatedText = inflated.toString("utf8");
+  const encoded = assembleArchivedPayload(chunks);
+  const inflatedText = gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
 
   let payload = null;
   try {
     payload = JSON.parse(inflatedText);
   } catch {
-    // The canonical payload is JSONL; parsing continues below.
+    // The canonical payload may be JSONL; parsing continues below.
   }
 
   const release = normalizeRelease(payload, inflatedText);
@@ -188,6 +183,7 @@ export async function unpackSyntheticRelease() {
     critiques_per_position: EXPECTED.critiquesPerPosition,
     domains: new Set(release.positions.map((position) => position.domain)).size,
     source_chunks: chunkNames.length,
+    source_sha256: CANONICAL_SHA256,
     files: {
       "positions.json": { bytes: Buffer.byteLength(positionsText), sha256: sha256(positionsText) },
       "critiques.json": { bytes: Buffer.byteLength(critiquesText), sha256: sha256(critiquesText) },
