@@ -34,10 +34,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Preserve archived payload fragments
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-release-source-fragments
+          path: src/releases/metaphilosophy-1000/data-*.txt
+          if-no-files-found: error
+
       - name: Build static release
         id: build
         continue-on-error: true
-        run: npm run build 2>&1 | tee build.log
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
 
       - name: Upload build diagnostics
         if: always()
