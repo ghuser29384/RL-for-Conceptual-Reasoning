@@ -3,6 +3,16 @@
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/contribute",
+      "destination": "/reviewers/index.html"
+    },
+    {
+      "source": "/contribute/",
+      "destination": "/reviewers/index.html"
+    }
+  ],
   "functions": {
     "api/**/*.mjs": {
       "maxDuration": 300
