@@ -1,0 +1,71 @@
+const initialQuery = new URLSearchParams(window.location.search);
+const isPublicHome = window.location.pathname === "/" && !initialQuery.has("section");
+
+function platformBrandMarkup() {
+  return `
+    <div class="platformWordmark">
+      <strong>Metaphilosophy</strong>
+      <span>Expert argument ratings</span>
+    </div>
+  `;
+}
+
+function enhanceWorkspace() {
+  const root = document.querySelector("#root");
+  if (!root) return;
+
+  const currentBrand = root.querySelector(".brand");
+  if (currentBrand && currentBrand.dataset.metaphilosophyBrand !== "true") {
+    const brandLink = document.createElement("a");
+    brandLink.className = currentBrand.className;
+    brandLink.href = "/";
+    brandLink.setAttribute("aria-label", "Metaphilosophy home");
+    brandLink.dataset.metaphilosophyBrand = "true";
+    brandLink.innerHTML = platformBrandMarkup();
+    currentBrand.replaceWith(brandLink);
+  }
+
+  const topbar = root.querySelector(".topbar");
+  const topbarCopy = topbar?.firstElementChild;
+  const activeSection = root.querySelector(".navItem.active")?.textContent?.trim() || "Research operations";
+
+  if (topbarCopy && topbarCopy.dataset.metaphilosophySection !== activeSection) {
+    topbarCopy.dataset.metaphilosophySection = activeSection;
+    topbarCopy.replaceChildren();
+
+    const label = document.createElement("span");
+    label.className = "topbarLabel";
+    label.textContent = "Metaphilosophy / October 2026 release";
+
+    const heading = document.createElement("h1");
+    heading.textContent = activeSection;
+
+    const detail = document.createElement("p");
+    detail.textContent = "Expert annotation, evaluation, and release operations for conceptual-argument research.";
+
+    topbarCopy.append(label, heading, detail);
+  }
+
+  root.querySelectorAll(".stat span").forEach((label) => {
+    if (label.textContent?.trim() === "Deferred diagnostics") label.textContent = "Deferred";
+  });
+}
+
+if (isPublicHome) {
+  document.body.classList.add("publicHomeBody");
+  const { bindPublicHomeEvents, publicHomePage } = await import("./exact-home.mjs");
+  const root = document.querySelector("#root");
+  if (!root) throw new Error("Missing #root mount point");
+  root.innerHTML = publicHomePage();
+  bindPublicHomeEvents();
+} else {
+  document.body.classList.remove("publicHomeBody");
+  await import("./app.mjs");
+  enhanceWorkspace();
+
+  const root = document.querySelector("#root");
+  if (root) {
+    const observer = new MutationObserver(() => enhanceWorkspace());
+    observer.observe(root, { childList: true, subtree: true });
+  }
+}
