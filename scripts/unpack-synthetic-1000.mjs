@@ -4,33 +4,44 @@ import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 
 const EXPECTED = Object.freeze({ records: 1000, positions: 250, domains: 25, critiquesPerPosition: 4 });
-const ARCHIVED_LENGTH = 193135;
+const ARCHIVED_LENGTH = 193134;
 const CANONICAL_LENGTH = 193136;
 const CANONICAL_SHA256 = "1cb41afee3851c158b520da628a3659c3a387d16c18e6c38f64db1492f59d591";
+const ARCHIVE_REPAIRS = Object.freeze({
+  "data-14.txt": { kind: "replace", offset: 379, expected: "a", value: "e" },
+  "data-19.txt": { kind: "insert", offset: 670, value: "V" },
+  "data-23.txt": { kind: "replace", offset: 5345, expected: "j", value: "k" },
+  "data-24.txt": { kind: "insert", offset: 370, value: "3" },
+});
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function assembleArchivedPayload(chunks) {
-  let encoded = chunks.map((chunk) => chunk.replace(/\s+/gu, "")).join("");
+function repairArchivedFragment(name, rawFragment) {
+  const fragment = rawFragment.replace(/\s+/gu, "");
+  const repair = ARCHIVE_REPAIRS[name];
+  if (!repair) return fragment;
 
-  if (encoded.length !== ARCHIVED_LENGTH) {
-    throw new Error(`Archived synthetic payload length mismatch: expected ${ARCHIVED_LENGTH}, found ${encoded.length}.`);
+  if (repair.kind === "replace") {
+    if (fragment[repair.offset] !== repair.expected) {
+      throw new Error(`${name} offset ${repair.offset}: expected ${repair.expected}, found ${fragment[repair.offset] || "<missing>"}.`);
+    }
+    return `${fragment.slice(0, repair.offset)}${repair.value}${fragment.slice(repair.offset + 1)}`;
   }
 
-  // Two defects were present in the archived text fragments: one substituted
-  // base64 character and one omitted character. Guard the neighboring source
-  // values before repairing them so any future archive drift fails closed.
-  if (encoded[105003] !== "a") {
-    throw new Error(`Unexpected archived payload value at offset 105003: ${encoded[105003] || "<missing>"}.`);
-  }
-  encoded = `${encoded.slice(0, 105003)}e${encoded.slice(105004)}`;
+  return `${fragment.slice(0, repair.offset)}${repair.value}${fragment.slice(repair.offset)}`;
+}
 
-  if (encoded[145534] !== "a") {
-    throw new Error(`Unexpected archived payload value at offset 145534: ${encoded[145534] || "<missing>"}.`);
+function assembleArchivedPayload(chunkNames, chunks) {
+  const archived = chunks.map((chunk) => chunk.replace(/\s+/gu, "")).join("");
+  if (archived.length !== ARCHIVED_LENGTH) {
+    throw new Error(`Archived synthetic payload length mismatch: expected ${ARCHIVED_LENGTH}, found ${archived.length}.`);
   }
-  encoded = `${encoded.slice(0, 145534)}V${encoded.slice(145534)}`;
+
+  const encoded = chunks
+    .map((chunk, index) => repairArchivedFragment(chunkNames[index], chunk))
+    .join("");
 
   if (encoded.length !== CANONICAL_LENGTH) {
     throw new Error(`Canonical synthetic payload length mismatch: expected ${CANONICAL_LENGTH}, found ${encoded.length}.`);
@@ -154,7 +165,7 @@ export async function unpackSyntheticRelease() {
   if (!chunkNames.length) throw new Error("Synthetic release payload chunks were not found.");
 
   const chunks = await Promise.all(chunkNames.map((name) => readFile(resolve(sourceDirectory, name), "utf8")));
-  const encoded = assembleArchivedPayload(chunks);
+  const encoded = assembleArchivedPayload(chunkNames, chunks);
   const inflatedText = gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
 
   let payload = null;
