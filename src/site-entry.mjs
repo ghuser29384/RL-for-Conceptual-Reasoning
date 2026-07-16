@@ -52,7 +52,7 @@ function enhanceWorkspace() {
 
 if (isPublicHome) {
   document.body.classList.add("publicHomeBody", "epochHomeBody");
-  const { bindPublicHomeEvents, publicHomePage } = await import("./public-home.mjs");
+  const { bindPublicHomeEvents, publicHomePage } = await import("./exact-reference-home.mjs");
   const root = document.querySelector("#root");
   if (!root) throw new Error("Missing #root mount point");
   root.innerHTML = publicHomePage();
