@@ -9,6 +9,27 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function stitchOverlappingChunks(chunks) {
+  if (!chunks.length) return "";
+
+  let encoded = chunks[0].replace(/\s+/gu, "");
+  for (const rawChunk of chunks.slice(1)) {
+    const chunk = rawChunk.replace(/\s+/gu, "");
+    const markerLength = Math.min(96, chunk.length);
+    const marker = chunk.slice(0, markerLength);
+    const start = encoded.lastIndexOf(marker);
+    if (start < 0) throw new Error("Could not determine overlap between synthetic release payload windows.");
+
+    const overlap = encoded.length - start;
+    if (overlap <= 0 || overlap > chunk.length || !chunk.startsWith(encoded.slice(start))) {
+      throw new Error("Synthetic release payload windows have an invalid overlap.");
+    }
+    encoded += chunk.slice(overlap);
+  }
+
+  return encoded;
+}
+
 function parseJsonLines(text) {
   const rows = text
     .split(/\r?\n/u)
@@ -117,9 +138,8 @@ export async function unpackSyntheticRelease() {
 
   if (!chunkNames.length) throw new Error("Synthetic release payload chunks were not found.");
 
-  const encoded = (await Promise.all(chunkNames.map((name) => readFile(resolve(sourceDirectory, name), "utf8"))))
-    .join("")
-    .replace(/\s+/gu, "");
+  const chunks = await Promise.all(chunkNames.map((name) => readFile(resolve(sourceDirectory, name), "utf8")));
+  const encoded = stitchOverlappingChunks(chunks);
   const compressed = Buffer.from(encoded, "base64");
   const inflated = gunzipSync(compressed);
   const inflatedText = inflated.toString("utf8");
