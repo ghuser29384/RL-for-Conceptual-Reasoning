@@ -1,0 +1,418 @@
+@media (max-width: 1280px) {
+  .epHeader {
+    grid-template-columns: minmax(250px, 1fr) auto minmax(175px, 1fr);
+  }
+
+  .epNav {
+    gap: 22px;
+  }
+
+  .epHero {
+    grid-template-columns: minmax(0, 0.85fr) minmax(570px, 1.15fr);
+  }
+
+  .epHero h1 {
+    font-size: clamp(58px, 6vw, 80px);
+  }
+
+  .epBenefitRail {
+    grid-template-columns: 1fr;
+  }
+
+  .epBenefitRail > div {
+    grid-template-columns: 25px 1fr;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--ep-rule);
+  }
+
+  .epBenefitRail > div + div {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .epSignalBand {
+    grid-template-columns: minmax(230px, 0.4fr) minmax(0, 1fr);
+  }
+
+  .epSignalNote {
+    grid-column: 2;
+  }
+
+  .epImpact {
+    grid-template-columns: minmax(0, 0.8fr) minmax(500px, 1.2fr);
+  }
+}
+
+@media (max-width: 1050px) {
+  .epHeader {
+    grid-template-columns: 1fr auto;
+  }
+
+  .epHeaderAction {
+    display: none;
+  }
+
+  .epNav {
+    gap: 24px;
+  }
+
+  .epHero {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .epHeroCopy {
+    padding-top: 30px;
+  }
+
+  .epBenefitRail {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .epBenefitRail > div {
+    padding: 20px 16px 0 0;
+    border-bottom: 0;
+  }
+
+  .epBenefitRail > div + div {
+    padding-left: 16px;
+    border-left: 1px solid var(--ep-rule);
+  }
+
+  .epProfileCard {
+    width: 100%;
+  }
+
+  .epSignalBand,
+  .epImpact,
+  .epPublication,
+  .epContribute {
+    grid-template-columns: 1fr;
+  }
+
+  .epSignalBand {
+    gap: 45px;
+  }
+
+  .epSignalNote {
+    grid-column: auto;
+    max-width: 680px;
+  }
+
+  .epImpactMap {
+    max-width: 900px;
+  }
+
+  .epContributeGraphic {
+    min-height: 440px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .epFooter {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .epFooter nav {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 780px) {
+  html {
+    scroll-padding-top: 76px;
+  }
+
+  .epHeader {
+    min-height: 76px;
+    padding: 0 18px;
+  }
+
+  .epBrand strong {
+    font-size: 18px;
+  }
+
+  .epBrand small {
+    display: none;
+  }
+
+  .epBrandMark {
+    width: 38px;
+    height: 38px;
+  }
+
+  .epMenuButton {
+    display: block;
+    justify-self: end;
+  }
+
+  .epNav {
+    position: absolute;
+    z-index: 45;
+    top: 76px;
+    right: 0;
+    left: 0;
+    display: grid;
+    align-content: start;
+    height: calc(100vh - 76px);
+    gap: 0;
+    padding: 16px 18px 26px;
+    transform: translateY(-125%);
+    border-bottom: 1px solid var(--ep-rule);
+    background: var(--ep-paper);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  .epNav.isOpen {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .epNav a {
+    min-height: 51px;
+    padding: 17px 3px;
+    border-bottom: 1px solid var(--ep-rule);
+    font-size: 15px;
+  }
+
+  .epMenuButton[aria-expanded="true"] > span:first-child {
+    transform: translateY(3.8px) rotate(45deg);
+  }
+
+  .epMenuButton[aria-expanded="true"] > span:nth-child(2) {
+    transform: translateY(-3.8px) rotate(-45deg);
+  }
+
+  .epHero {
+    gap: 46px;
+    padding: 54px 18px 58px;
+  }
+
+  .epHero h1 {
+    font-size: clamp(51px, 15vw, 72px);
+  }
+
+  .epHeroLede {
+    margin-top: 26px;
+    font-size: 17px;
+  }
+
+  .epHeroActions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 28px;
+  }
+
+  .epBenefitRail {
+    grid-template-columns: 1fr;
+    margin-top: 42px;
+  }
+
+  .epBenefitRail > div,
+  .epBenefitRail > div + div {
+    padding: 16px 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--ep-rule);
+  }
+
+  .epProfileTop {
+    flex-direction: column;
+  }
+
+  .epProfileControls {
+    align-self: stretch;
+  }
+
+  .epProfileControls button {
+    flex: 1;
+  }
+
+  .epProfileLegend {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .epProfileRows {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .epProfileRow {
+    grid-template-columns: 85px minmax(0, 1fr) 24px;
+    gap: 8px;
+  }
+
+  .epProfileAxis {
+    margin-right: 42px;
+    margin-left: 111px;
+  }
+
+  .epProfileStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .epProfileStats > div:nth-child(even) {
+    border-right: 0;
+  }
+
+  .epProfileStats > div {
+    border-bottom: 1px solid var(--ep-rule);
+  }
+
+  .epProfileStats > a {
+    grid-column: 1 / -1;
+    min-height: 90px;
+  }
+
+  .epSignalBand,
+  .epResearch,
+  .epImpact,
+  .epPublication {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .epSignalFlow {
+    grid-template-columns: 1fr;
+  }
+
+  .epSignalFlow > i {
+    transform: rotate(90deg);
+  }
+
+  .epResearchHeader,
+  .epResearchGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .epResearchHeader h2 {
+    font-size: clamp(43px, 12vw, 64px);
+  }
+
+  .epRubricPanel ol {
+    grid-template-columns: 1fr;
+  }
+
+  .epRubricPanel li,
+  .epRubricPanel li:nth-child(even),
+  .epRubricPanel li:nth-last-child(-n + 2) {
+    grid-column: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--ep-rule);
+  }
+
+  .epRubricPanel li:last-child {
+    border-bottom: 0;
+  }
+
+  .epImpactMap {
+    grid-template-columns: 1fr;
+  }
+
+  .epImpactMap article {
+    min-height: 240px;
+  }
+
+  .epPublicationCard {
+    padding: 30px 22px;
+  }
+
+  .epPublication h2 {
+    font-size: clamp(42px, 12vw, 62px);
+  }
+
+  .epContributeGraphic {
+    min-height: 330px;
+  }
+
+  .epContributeCopy {
+    padding: 75px 18px;
+  }
+
+  .epContribute h2 {
+    font-size: clamp(46px, 13vw, 68px);
+  }
+
+  .epContributeCopy > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .epFooter {
+    grid-template-columns: 1fr;
+    padding: 48px 18px;
+  }
+
+  .epFooter nav {
+    grid-column: auto;
+    flex-wrap: wrap;
+  }
+
+  body:not(.publicHomeBody) .appShell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 470px) {
+  .epProfileCard {
+    margin-right: -4px;
+    margin-left: -4px;
+    border-radius: 14px;
+  }
+
+  .epProfileTop,
+  .epProfileLegend {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .epProfileRow {
+    grid-template-columns: 78px minmax(0, 1fr) 20px;
+    font-size: 10px;
+  }
+
+  .epProfileRow > strong {
+    font-size: 9px;
+  }
+
+  .epProfileAxis {
+    margin-left: 101px;
+  }
+
+  .epProfileStats > div,
+  .epProfileStats > a {
+    padding: 14px;
+  }
+
+  .epBenchRow {
+    grid-template-columns: 105px minmax(0, 1fr) 40px;
+  }
+
+  .epImpact h2 {
+    font-size: clamp(44px, 13.5vw, 60px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .epReveal {
+    opacity: 1;
+    transform: none;
+  }
+}
