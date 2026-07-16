@@ -1,13 +1,13 @@
+import {
+  applyPublicWordmarkSystem,
+  workspaceWordmarkMarkup,
+} from "./wordmark-system.mjs";
+
 const initialQuery = new URLSearchParams(window.location.search);
 const isPublicHome = window.location.pathname === "/" && !initialQuery.has("section");
 
-function criterionBrandMarkup() {
-  return `
-    <div class="brandMark criterionBrandMark" aria-hidden="true">
-      <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
-    </div>
-    <div><strong>Metaphilosophy</strong><span>Expert ratings for AI</span></div>
-  `;
+function platformBrandMarkup() {
+  return workspaceWordmarkMarkup();
 }
 
 function enhanceWorkspace() {
@@ -21,7 +21,7 @@ function enhanceWorkspace() {
     brandLink.href = "/";
     brandLink.setAttribute("aria-label", "Metaphilosophy home");
     brandLink.dataset.metaphilosophyBrand = "true";
-    brandLink.innerHTML = criterionBrandMarkup();
+    brandLink.innerHTML = platformBrandMarkup();
     currentBrand.replaceWith(brandLink);
   }
 
@@ -56,6 +56,7 @@ if (isPublicHome) {
   const root = document.querySelector("#root");
   if (!root) throw new Error("Missing #root mount point");
   root.innerHTML = publicHomePage();
+  applyPublicWordmarkSystem();
   bindPublicHomeEvents();
 } else {
   document.body.classList.remove("publicHomeBody", "epochHomeBody");
