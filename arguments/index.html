@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Browse 1,000 model-authored critiques of 250 conceptual positions across 25 philosophical domains." />
+    <meta name="theme-color" content="#f4f1ea" />
+    <title>Argument Library — Metaphilosophy</title>
+    <link rel="canonical" href="https://www.metaphilosophy.org/arguments/" />
+    <link rel="stylesheet" href="/arguments/styles.css?v=1" />
+  </head>
+  <body>
+    <a class="skipLink" href="#library">Skip to the library</a>
+    <header class="siteHeader">
+      <a class="wordmark" href="/" aria-label="Metaphilosophy home">Metaphilosophy</a>
+      <nav class="siteNav" aria-label="Primary navigation">
+        <a href="/">Research</a>
+        <a href="/arguments/" aria-current="page">Argument library</a>
+        <a href="/?section=rating">Workspace</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div class="heroCopy">
+          <p class="releaseLine"><span>Synthetic release</span><strong>01 / 2026</strong></p>
+          <h1 id="page-title">A thousand critiques for harder questions.</h1>
+          <p class="heroLede">
+            A model-authored expansion for training, evaluation, and comparative study of conceptual reasoning. Each position is paired with four focused objections.
+          </p>
+          <div class="heroActions">
+            <a class="primaryAction" href="#library">Browse the collection</a>
+            <button class="lineAction" type="button" data-download="jsonl">Download JSONL</button>
+          </div>
+        </div>
+        <dl class="heroMetrics" aria-label="Release metrics">
+          <div><dt>Critiques</dt><dd>1,000</dd></div>
+          <div><dt>Positions</dt><dd>250</dd></div>
+          <div><dt>Domains</dt><dd>25</dd></div>
+          <div><dt>Per position</dt><dd>4</dd></div>
+        </dl>
+      </section>
+
+      <section class="provenance" aria-labelledby="provenance-title">
+        <h2 id="provenance-title">Release boundary</h2>
+        <p>
+          This collection is synthetic and unrated. It is published separately from Metaphilosophy’s expert-rated corpus and must not be interpreted as expert endorsement or included in the published LMCA rating totals.
+        </p>
+      </section>
+
+      <section class="library" id="library" aria-labelledby="library-title">
+        <div class="libraryHeading">
+          <div>
+            <p class="sectionNumber">01</p>
+            <h2 id="library-title">Argument library</h2>
+          </div>
+          <p>Search positions and critiques, isolate domains or attack families, and preserve any view in the URL.</p>
+        </div>
+
+        <form class="controls" id="controls" role="search">
+          <label class="searchField">
+            <span>Search</span>
+            <input id="query" name="q" type="search" autocomplete="off" placeholder="Search claims, critiques, domains…" />
+          </label>
+          <label>
+            <span>Domain</span>
+            <select id="domain" name="domain"><option value="">All domains</option></select>
+          </label>
+          <label>
+            <span>Attack family</span>
+            <select id="attack" name="attack"><option value="">All attack families</option></select>
+          </label>
+          <label>
+            <span>Sort</span>
+            <select id="sort" name="sort">
+              <option value="id">Position ID</option>
+              <option value="title">Title</option>
+              <option value="domain">Domain</option>
+            </select>
+          </label>
+          <button class="clearButton" id="clear" type="button">Clear</button>
+        </form>
+
+        <div class="libraryMeta" aria-live="polite">
+          <p id="result-count">Loading collection…</p>
+          <div class="downloadGroup" aria-label="Download formats">
+            <span>Download</span>
+            <button type="button" data-download="jsonl">JSONL</button>
+            <button type="button" data-download="csv">CSV</button>
+            <button type="button" data-download="markdown">Markdown</button>
+          </div>
+        </div>
+
+        <div class="status" id="status" role="status">Loading the argument library…</div>
+        <ol class="positionList" id="position-list"></ol>
+        <nav class="pagination" id="pagination" aria-label="Result pages"></nav>
+      </section>
+    </main>
+
+    <footer class="siteFooter">
+      <a class="wordmark" href="/">Metaphilosophy</a>
+      <p>Human-rated philosophical reasoning for AI.</p>
+      <div><a href="/">Research</a><a href="/arguments/">Argument library</a><a href="/?section=rating">Workspace</a></div>
+    </footer>
+
+    <script type="module" src="/arguments/app.mjs?v=1"></script>
+  </body>
+</html>
