@@ -1,0 +1,22 @@
+{
+  "format": "gzip+base64+json-map-v1",
+  "payloadSha256": "a3a6d49c6684f05b029f847c68ea0873af3c970268d3e9ac547606e9117ab7c1",
+  "gzipSha256": "56320626e7946550bcee142ff3ba6fa4cb72559ada1720f66ddfa031acd18bd4",
+  "base64Sha256": "1bef2942c7282dec934a690008823b3577825462f18c162b98537d22ef93f91e",
+  "rawBytes": 705738,
+  "gzipBytes": 161785,
+  "base64Bytes": 215716,
+  "chunkSize": 18000,
+  "chunkCount": 12,
+  "paths": [
+    "arguments/app.mjs",
+    "arguments/data/critiques.json",
+    "arguments/data/manifest.json",
+    "arguments/data/positions.json",
+    "arguments/index.html",
+    "arguments/styles.css",
+    "index.html",
+    "src/argument-library-entry.css",
+    "src/argument-library-entry.mjs"
+  ]
+}
