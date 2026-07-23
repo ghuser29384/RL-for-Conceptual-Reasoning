@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract_id": "metaphilosophy-public-release-contract-2026-07-23",
+  "contract_version": 1,
+  "audited_at": "2026-07-23T11:07:29Z",
+  "canonical_repository": "ghuser29384/RL-for-Conceptual-Reasoning",
+  "audited_main_commit": "f147f2e0159dc17aeda987b572b0a3a53d6e9f96",
+  "production": {
+    "origin": "https://www.metaphilosophy.org",
+    "vercel_project_id": "prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ",
+    "audited_production_deployment_id": "dpl_aft61xsr7PnQ4wP7v7cwuFvrAv2o",
+    "audited_production_state": "READY"
+  },
+  "artifact_classes": {
+    "expert_rated": {
+      "label": "LMCA expert-rated research data",
+      "public_release_status": "paper_described_not_frozen_as_a_numbered_repository_release",
+      "must_not_include": ["synthetic_unrated"]
+    },
+    "synthetic_unrated": {
+      "label": "Metaphilosophy synthetic argument library",
+      "release_id": "synthetic-1000-v1",
+      "release_date": "2026-07-16",
+      "manifest_path": "/arguments/data/manifest.json",
+      "library_path": "/arguments/",
+      "expected": {
+        "records": 1000,
+        "positions": 250,
+        "critiques": 1000,
+        "critiques_per_position": 4,
+        "domains": 25,
+        "source_chunks": 24,
+        "source_sha256": "1cb41afee3851c158b520da628a3659c3a387d16c18e6c38f64db1492f59d591",
+        "files": {
+          "positions.json": {
+            "bytes": 112973,
+            "sha256": "35f68251b28aa7d3985453abec27ec8555ab944e709e9016768c266c68ed5d8e"
+          },
+          "critiques.json": {
+            "bytes": 359239,
+            "sha256": "0387d0c8ba94eae78d4fddaae9f8d337c090583d05d4d41a597b4a505b1991ea"
+          }
+        }
+      },
+      "required_public_boundary_text": "This collection is synthetic and unrated.",
+      "forbidden_claims": [
+        "expert-rated synthetic release",
+        "LMCA contains 1,000 rated critiques",
+        "benchmark test set"
+      ]
+    },
+    "benchmark_hidden": {
+      "label": "Protected benchmark material",
+      "public_release_status": "not_frozen",
+      "must_not_be_served_from": ["/arguments/"]
+    },
+    "research_study": {
+      "label": "Human-utility study data",
+      "public_release_status": "not_collected"
+    }
+  },
+  "reviewer_intake": {
+    "campaign": "july-2026-expert-reviewer-sprint",
+    "scheduled_close": "2026-07-16T23:59:00-07:00",
+    "audited_at": "2026-07-23T11:07:29Z",
+    "audited_counts": {
+      "applications": 0,
+      "calibrations_completed": 0,
+      "qualified_reviewers": 0
+    },
+    "required_default_state_after_this_change": "closed",
+    "reopen_control": "RECRUITMENT_INTAKE_OPEN=true",
+    "reopen_requires": [
+      "approved campaign dates",
+      "approved compensation budget",
+      "named human qualification owner",
+      "outreach channel plan"
+    ]
+  },
+  "release_policy": {
+    "number_releases": true,
+    "immutable_manifest_required": true,
+    "checksums_required": true,
+    "provenance_state_required": true,
+    "synthetic_counts_must_not_enter_lmca_totals": true,
+    "hidden_benchmark_must_not_be_publicly_browsable": true
+  }
+}
