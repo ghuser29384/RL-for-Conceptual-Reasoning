@@ -31,12 +31,20 @@
       "decision": "Do not label any hard set, benchmark, or human-utility study complete until the required expert ratings or participant observations actually exist.",
       "credence": 0.99,
       "basis": "This prevents synthetic or planned records from being represented as expert-validated empirical results."
+    },
+    {
+      "id": "D-006",
+      "decision": "Adopt mixed Hard Set source allocation option 2: 50 LMCA positions, 20 public-synthetic positions, and 30 newly hidden public-domain-derived positions.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit selection. The credence concerns faithful execution of the instruction, not a claim that the allocation is empirically optimal.",
+      "approved_at": "2026-07-23",
+      "contract_path": "ops/next-steps-2026-07-23/hard-set-source-allocation.json"
     }
   ],
   "pending_decision": {
-    "id": "Q-001",
-    "question": "Which source composition should define the 100-position, 400-critique hard-set candidate pool?",
+    "id": "Q-002",
+    "question": "What core expert-panel size, compensation model, and committed capacity should cover at least 800 initial ratings plus pairwise and adjudication work?",
     "status": "user_decision_required",
-    "reason": "The expert-rated LMCA corpus, the public synthetic corpus, and a mixed acquisition pool have materially different cost, contamination, difficulty, and publication implications. No option currently has at least 0.90 credence."
+    "reason": "The paper's 5–15 minute estimate implies approximately 67–200 expert-hours for initial ratings alone. Panel structure materially affects reliability, schedule, and budget, and no option currently has at least 0.90 credence."
   }
 }

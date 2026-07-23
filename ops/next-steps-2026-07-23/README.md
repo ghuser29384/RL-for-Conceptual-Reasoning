@@ -11,18 +11,26 @@ This directory is the execution record for the programme that follows the first 
 
 ## Current checkpoint
 
-The release audit is complete enough to freeze the current public synthetic release and to stop the expired reviewer campaign from accepting new submissions by default. The next programme decision is the source composition of the 400-critique hard-set candidate pool. That decision is intentionally not encoded here because the available options have materially different validity and contamination consequences.
+The public synthetic release is frozen under a checksum-backed contract, and the expired reviewer campaign is closed by default. The project owner has now approved mixed Hard Set acquisition option 2: **50 LMCA positions, 20 public-synthetic positions, and 30 newly hidden public-domain-derived positions**.
+
+This freezes source quotas, not exact item IDs. The exact 50 LMCA items remain blocked by the missing canonical row-level dataset and license. The exact 20 public-synthetic items await cross-source coverage and difficulty screening. All 30 protected upstream draft positions are nominated but require independent source-fidelity and ambiguity/scope review before critique production.
+
+The next owner decision is core expert-panel size, compensation, and committed capacity for at least 800 initial ratings plus pairwise and adjudication work.
 
 ## Files
 
 - `release-audit.md` — human-readable audit findings and remediation status.
 - `release-contract.json` — machine-readable public-release invariants.
 - `decision-register.json` — decisions made under the user's 90% credence rule.
+- `hard-set-source-allocation.json` — machine-readable 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
+- `hard-set-source-allocation.md` — human-readable rationale, selection sequence, and explicit non-decisions.
 
 Local verification:
 
 ```bash
 node scripts/verify-program-contracts.mjs
+node scripts/verify-hard-set-source-allocation.mjs
+npm test
 ```
 
 Production verification:
