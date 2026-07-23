@@ -6,11 +6,23 @@
   "rewrites": [
     {
       "source": "/contribute",
-      "destination": "/reviewers/index.html"
+      "destination": "/reviewers/closed.html"
     },
     {
       "source": "/contribute/",
-      "destination": "/reviewers/index.html"
+      "destination": "/reviewers/closed.html"
+    },
+    {
+      "source": "/reviewers",
+      "destination": "/reviewers/closed.html"
+    },
+    {
+      "source": "/reviewers/",
+      "destination": "/reviewers/closed.html"
+    },
+    {
+      "source": "/reviewers/index.html",
+      "destination": "/reviewers/closed.html"
     }
   ],
   "functions": {
