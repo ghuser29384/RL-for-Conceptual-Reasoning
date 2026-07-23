@@ -1,0 +1,89 @@
+{
+  "plan_id": "hard-set-panel-honoraria-v1-2026-07-23",
+  "plan_version": 1,
+  "decision_status": "approved_structure_and_budget_model_schedule_and_distribution_pending",
+  "approved_at": "2026-07-23",
+  "approved_by": "project_owner",
+  "decision_references": [
+    "Expert panel option 2",
+    "Use the $500 as limited honoraria for volunteer expert work"
+  ],
+  "panel": {
+    "core_raters": 6,
+    "dedicated_adjudicators": 2,
+    "total_people": 8,
+    "role_separation": true,
+    "core_rater_scope": [
+      "blind initial ratings",
+      "required calibration",
+      "triggered clarification or re-rating"
+    ],
+    "adjudicator_scope": [
+      "disagreement review",
+      "interpretation and context adjudication",
+      "frozen label sign-off"
+    ]
+  },
+  "minimum_workload": {
+    "positions": 100,
+    "critiques": 400,
+    "independent_initial_ratings_per_critique": 2,
+    "initial_ratings": 800,
+    "nominal_initial_ratings_per_core_rater": {
+      "minimum": 133,
+      "maximum": 134
+    },
+    "source_estimate_minutes_per_short_rating": {
+      "minimum": 5,
+      "maximum": 15,
+      "source": "LMCA paper, Rating the critiques"
+    },
+    "estimated_initial_rating_hours": {
+      "minimum": 66.67,
+      "maximum": 200.0,
+      "excludes": [
+        "recruitment",
+        "calibration",
+        "pairwise judgments",
+        "discussion",
+        "adjudication",
+        "administration",
+        "replacement work"
+      ]
+    }
+  },
+  "budget": {
+    "currency": "USD",
+    "ceiling": 500,
+    "model": "limited_honoraria_for_volunteer_expert_work",
+    "rate_based_compensation": false,
+    "full_labour_cost_coverage_claim": false,
+    "external_funding": {
+      "may_be_sought": true,
+      "committed": false,
+      "amount": null,
+      "application_owner": null
+    },
+    "legal_classification": "not_determined_by_this_plan"
+  },
+  "controls": [
+    "Aggregate honoraria commitments and disbursements must not exceed USD 500 unless a later owner-approved funding decision changes the ceiling.",
+    "No individual amount, eligibility rule, or payment promise is approved by this plan.",
+    "The project must not describe the honoraria pool as covering the full estimated economic cost of the work.",
+    "Public recruitment remains closed until the delivery window, honoraria allocation rule, eligibility thresholds, and responsible human operator are approved.",
+    "Additional funding must remain separately traceable from the initial USD 500 ceiling."
+  ],
+  "unresolved_parameters": [
+    "End-to-end delivery window.",
+    "Honoraria allocation rule across six core raters and two adjudicators.",
+    "Minimum completed-contribution threshold for honorarium eligibility.",
+    "Replacement and attrition policy.",
+    "Payment administration, tax, jurisdiction, and legal review.",
+    "External-funding target, application owner, and trigger date."
+  ],
+  "next_decision": {
+    "id": "Q-003",
+    "question": "What delivery window and honoraria allocation rule should govern the eight-person panel?",
+    "status": "user_decision_required"
+  }
+}

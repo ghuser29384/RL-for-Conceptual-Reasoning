@@ -11,11 +11,13 @@ This directory is the execution record for the programme that follows the first 
 
 ## Current checkpoint
 
-The public synthetic release is frozen under a checksum-backed contract, and the expired reviewer campaign is closed by default. The project owner has now approved mixed Hard Set acquisition option 2: **50 LMCA positions, 20 public-synthetic positions, and 30 newly hidden public-domain-derived positions**.
+The public synthetic release is frozen under a checksum-backed contract, and the expired reviewer campaign is closed by default. The project owner has approved mixed Hard Set acquisition option 2: **50 LMCA positions, 20 public-synthetic positions, and 30 newly hidden public-domain-derived positions**.
 
 This freezes source quotas, not exact item IDs. The exact 50 LMCA items remain blocked by the missing canonical row-level dataset and license. The exact 20 public-synthetic items await cross-source coverage and difficulty screening. All 30 protected upstream draft positions are nominated but require independent source-fidelity and ambiguity/scope review before critique production.
 
-The next owner decision is core expert-panel size, compensation, and committed capacity for at least 800 initial ratings plus pairwise and adjudication work.
+The project owner has also approved **6 core raters and 2 dedicated adjudicators**. The current **USD 500** budget ceiling is reserved for **limited honoraria for volunteer expert work**. It is not represented as full labour-cost coverage, and no individual amount or payment promise has been approved.
+
+The next owner decision is the end-to-end delivery window and the rule for allocating the USD 500 honoraria pool across the eight-person panel.
 
 ## Files
 
@@ -24,12 +26,15 @@ The next owner decision is core expert-panel size, compensation, and committed c
 - `decision-register.json` — decisions made under the user's 90% credence rule.
 - `hard-set-source-allocation.json` — machine-readable 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
 - `hard-set-source-allocation.md` — human-readable rationale, selection sequence, and explicit non-decisions.
+- `panel-honoraria-plan.json` — machine-readable eight-person panel structure, USD 500 ceiling, controls, and unresolved schedule/payment parameters.
+- `panel-honoraria-plan.md` — human-readable panel and honoraria boundary.
 
 Local verification:
 
 ```bash
 node scripts/verify-program-contracts.mjs
 node scripts/verify-hard-set-source-allocation.mjs
+node scripts/verify-panel-honoraria-plan.mjs
 npm test
 ```
 

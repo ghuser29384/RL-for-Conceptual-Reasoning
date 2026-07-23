@@ -39,12 +39,28 @@
       "basis": "This records the project owner's explicit selection. The credence concerns faithful execution of the instruction, not a claim that the allocation is empirically optimal.",
       "approved_at": "2026-07-23",
       "contract_path": "ops/next-steps-2026-07-23/hard-set-source-allocation.json"
+    },
+    {
+      "id": "D-007",
+      "decision": "Adopt expert panel option 2: six core raters and two dedicated adjudicators.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit selection.",
+      "approved_at": "2026-07-23",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-008",
+      "decision": "Set the current programme budget ceiling at USD 500 and use it as limited honoraria for volunteer expert work; external funding may be pursued but is not committed.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction without choosing an individual allocation formula or making a full-cost compensation claim.",
+      "approved_at": "2026-07-23",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
     }
   ],
   "pending_decision": {
-    "id": "Q-002",
-    "question": "What core expert-panel size, compensation model, and committed capacity should cover at least 800 initial ratings plus pairwise and adjudication work?",
+    "id": "Q-003",
+    "question": "What delivery window and honoraria allocation rule should govern the six core raters and two dedicated adjudicators?",
     "status": "user_decision_required",
-    "reason": "The paper's 5–15 minute estimate implies approximately 67–200 expert-hours for initial ratings alone. Panel structure materially affects reliability, schedule, and budget, and no option currently has at least 0.90 credence."
+    "reason": "Schedule and honoraria distribution materially affect volunteer feasibility, attrition risk, adjudication capacity, and what can be promised in recruitment. No option currently has at least 0.90 credence."
   }
 }
