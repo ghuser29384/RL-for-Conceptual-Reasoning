@@ -1,12 +1,14 @@
 {
   "plan_id": "hard-set-panel-honoraria-v1-2026-07-23",
-  "plan_version": 1,
-  "decision_status": "approved_structure_and_budget_model_schedule_and_distribution_pending",
+  "plan_version": 2,
+  "decision_status": "approved_structure_budget_window_and_pool_envelopes_contribution_formula_pending",
   "approved_at": "2026-07-23",
   "approved_by": "project_owner",
   "decision_references": [
     "Expert panel option 2",
-    "Use the $500 as limited honoraria for volunteer expert work"
+    "Use the $500 as limited honoraria for volunteer expert work",
+    "Delivery window option A: four weeks",
+    "Honoraria allocation option 3: USD 400 core-rater completion pool plus USD 100 adjudication reserve"
   ],
   "panel": {
     "core_raters": 6,
@@ -52,12 +54,66 @@
       ]
     }
   },
+  "delivery_window": {
+    "model": "relative_to_readiness_gate",
+    "duration_weeks": 4,
+    "duration_days": 28,
+    "calendar_start": null,
+    "calendar_end": null,
+    "start_condition": "readiness_gate_passed",
+    "readiness_gate": [
+      "Exact 100-position and 400-critique controlled manifests are frozen and pass provenance, rights, exposure, and split checks.",
+      "Rubric v2 instructions, rating form, disagreement triggers, and adjudication protocol are frozen.",
+      "Six core raters and two dedicated adjudicators are confirmed, consented, conflict-checked, and calibrated.",
+      "Blind assignments are generated with two independent core raters per critique and no sibling split leakage.",
+      "A responsible human operations owner is named and payment administration plus applicable legal review are complete."
+    ],
+    "end_condition": "completion_gate_passed",
+    "completion_gate": [
+      "All 800 required blind initial ratings are accepted or validly replaced.",
+      "All cases required by the frozen disagreement policy are resolved or explicitly documented as unresolved.",
+      "Both dedicated adjudicators complete the required label-snapshot sign-off.",
+      "Rating, revision, adjudication, exposure, and payment audit records are complete."
+    ],
+    "nominal_pace": {
+      "initial_ratings_total_per_week": 200,
+      "initial_ratings_per_core_rater_per_week": {
+        "minimum": 33,
+        "maximum": 34
+      },
+      "status": "planning_average_not_honorarium_eligibility_threshold"
+    },
+    "rolling_adjudication": true,
+    "automatic_extension": false,
+    "extension_requires": "project_owner_approval"
+  },
   "budget": {
     "currency": "USD",
     "ceiling": 500,
     "model": "limited_honoraria_for_volunteer_expert_work",
     "rate_based_compensation": false,
     "full_labour_cost_coverage_claim": false,
+    "allocation": {
+      "status": "approved_pool_envelopes_contribution_unit_formula_pending",
+      "core_rater_completion_pool": {
+        "amount": 400,
+        "eligible_role": "core_rater",
+        "allocation_method": "contribution_weighted",
+        "contribution_unit_definition": null,
+        "minimum_eligibility_threshold": null,
+        "payment_timing": null
+      },
+      "adjudication_reserve": {
+        "amount": 100,
+        "eligible_role": "dedicated_adjudicator",
+        "allocation_method": "contribution_weighted",
+        "contribution_unit_definition": null,
+        "minimum_eligibility_threshold": null,
+        "unused_balance_rule": null,
+        "payment_timing": null
+      },
+      "total": 500
+    },
     "external_funding": {
       "may_be_sought": true,
       "committed": false,
@@ -68,22 +124,26 @@
   },
   "controls": [
     "Aggregate honoraria commitments and disbursements must not exceed USD 500 unless a later owner-approved funding decision changes the ceiling.",
-    "No individual amount, eligibility rule, or payment promise is approved by this plan.",
+    "Exactly USD 400 is reserved for the core-rater completion pool and USD 100 for the adjudication reserve under the current ceiling.",
+    "The 28-day clock starts only after the full readiness gate passes; no calendar deadline may be advertised before then.",
+    "The four-week window does not extend automatically; any extension requires a new project-owner decision and an updated audit record.",
+    "No individual amount, contribution-unit formula, eligibility threshold, or payment promise is approved by this plan.",
     "The project must not describe the honoraria pool as covering the full estimated economic cost of the work.",
-    "Public recruitment remains closed until the delivery window, honoraria allocation rule, eligibility thresholds, and responsible human operator are approved.",
+    "Public recruitment remains closed until the contribution formula, eligibility thresholds, responsible human operator, payment administration, and legal review are approved.",
     "Additional funding must remain separately traceable from the initial USD 500 ceiling."
   ],
   "unresolved_parameters": [
-    "End-to-end delivery window.",
-    "Honoraria allocation rule across six core raters and two adjudicators.",
-    "Minimum completed-contribution threshold for honorarium eligibility.",
+    "Contribution-unit definitions and relative weights for accepted core-rater and adjudicator work.",
+    "Minimum accepted-contribution threshold for each honorarium pool.",
+    "Rule for any unused adjudication-reserve balance.",
+    "Named human operations owner and absolute start date after the readiness gate passes.",
     "Replacement and attrition policy.",
     "Payment administration, tax, jurisdiction, and legal review.",
     "External-funding target, application owner, and trigger date."
   ],
   "next_decision": {
-    "id": "Q-003",
-    "question": "What delivery window and honoraria allocation rule should govern the eight-person panel?",
+    "id": "Q-004",
+    "question": "What contribution-unit formula, eligibility threshold, unused-reserve rule, responsible human operator, and absolute start date should govern the approved four-week programme?",
     "status": "user_decision_required"
   }
 }
