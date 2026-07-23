@@ -52,15 +52,31 @@
       "id": "D-008",
       "decision": "Set the current programme budget ceiling at USD 500 and use it as limited honoraria for volunteer expert work; external funding may be pursued but is not committed.",
       "credence": 1.0,
-      "basis": "This records the project owner's explicit instruction without choosing an individual allocation formula or making a full-cost compensation claim.",
+      "basis": "This records the project owner's explicit instruction without making a full-cost compensation claim.",
+      "approved_at": "2026-07-23",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-009",
+      "decision": "Adopt delivery-window option A: a four-week, 28-day end-to-end programme measured from a passed readiness gate to a passed completion gate.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit selection. Calendar dates remain unset until the item, panel, operations, and payment-readiness gates pass.",
+      "approved_at": "2026-07-23",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-010",
+      "decision": "Adopt honoraria option 3: reserve USD 400 for a contribution-weighted core-rater completion pool and USD 100 for a contribution-weighted adjudication reserve.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit selection. It fixes the two pool envelopes but does not silently choose contribution units, eligibility thresholds, payment timing, or the rule for unused reserve funds.",
       "approved_at": "2026-07-23",
       "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
     }
   ],
   "pending_decision": {
-    "id": "Q-003",
-    "question": "What delivery window and honoraria allocation rule should govern the six core raters and two dedicated adjudicators?",
+    "id": "Q-004",
+    "question": "What contribution-unit formula, eligibility threshold, unused-reserve rule, responsible human operator, and absolute start date should govern the approved four-week programme?",
     "status": "user_decision_required",
-    "reason": "Schedule and honoraria distribution materially affect volunteer feasibility, attrition risk, adjudication capacity, and what can be promised in recruitment. No option currently has at least 0.90 credence."
+    "reason": "The owner has fixed the duration and pool envelopes, but individual honorarium amounts and operational promises cannot be computed safely until accepted contribution units, minimum eligibility, reserve handling, payment administration, and accountable ownership are defined."
   }
 }
