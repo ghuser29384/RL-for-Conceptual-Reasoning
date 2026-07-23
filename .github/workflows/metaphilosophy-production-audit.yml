@@ -1,0 +1,26 @@
+name: Metaphilosophy production release audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: Origin to audit
+        required: false
+        default: https://www.metaphilosophy.org
+  schedule:
+    - cron: "17 9 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      METAPHILOSOPHY_ORIGIN: ${{ inputs.origin || 'https://www.metaphilosophy.org' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/audit-production-release.mjs
