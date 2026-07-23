@@ -1,0 +1,39 @@
+name: Metaphilosophy programme integrity
+
+on:
+  pull_request:
+    paths:
+      - "ops/next-steps-2026-07-23/**"
+      - "reviewers/closed.html"
+      - "api/reviewer-recruitment.mjs"
+      - "vercel.json"
+      - "scripts/verify-program-contracts.mjs"
+      - "test/recruitment-intake-gate.test.mjs"
+      - ".github/workflows/metaphilosophy-program-integrity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ops/next-steps-2026-07-23/**"
+      - "reviewers/closed.html"
+      - "api/reviewer-recruitment.mjs"
+      - "vercel.json"
+      - "scripts/verify-program-contracts.mjs"
+      - "test/recruitment-intake-gate.test.mjs"
+      - ".github/workflows/metaphilosophy-program-integrity.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-program-contracts.mjs
+      - run: npm test
+      - run: npm run build
