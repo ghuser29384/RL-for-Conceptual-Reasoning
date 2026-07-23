@@ -134,7 +134,7 @@
   ],
   "unresolved_parameters": [
     "Contribution-unit definitions and relative weights for accepted core-rater and adjudicator work.",
-    "Minimum accepted-contribution threshold for each honorarium pool.",
+    "Minimum accepted-contribution eligibility threshold for each honorarium pool.",
     "Rule for any unused adjudication-reserve balance.",
     "Named human operations owner and absolute start date after the readiness gate passes.",
     "Replacement and attrition policy.",
