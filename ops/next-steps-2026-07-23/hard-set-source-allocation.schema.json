@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.metaphilosophy.org/schemas/hard-set-source-allocation-v1.schema.json",
+  "title": "Metaphilosophy Hard Set source allocation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "allocation_id",
+    "allocation_version",
+    "decision_status",
+    "approved_at",
+    "approved_by",
+    "decision_reference",
+    "target",
+    "components",
+    "public_manifest_rules",
+    "invariants",
+    "unresolved_parameters"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "allocation_id": {"type": "string", "minLength": 1},
+    "allocation_version": {"type": "integer", "minimum": 1},
+    "decision_status": {"const": "approved_position_allocation_item_selection_pending"},
+    "approved_at": {"type": "string", "format": "date"},
+    "approved_by": {"type": "string", "minLength": 1},
+    "decision_reference": {"type": "string", "minLength": 1},
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "positions",
+        "critiques_per_position",
+        "critiques",
+        "minimum_independent_expert_ratings_per_critique",
+        "minimum_initial_ratings"
+      ],
+      "properties": {
+        "positions": {"type": "integer", "const": 100},
+        "critiques_per_position": {"type": "integer", "const": 4},
+        "critiques": {"type": "integer", "const": 400},
+        "minimum_independent_expert_ratings_per_critique": {"type": "integer", "minimum": 2},
+        "minimum_initial_ratings": {"type": "integer", "minimum": 800}
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_class",
+          "positions",
+          "critiques",
+          "public_exposure",
+          "selection_status",
+          "source_artifact",
+          "selection_rule",
+          "promotion_gates"
+        ],
+        "properties": {
+          "source_class": {
+            "enum": ["lmca_expert_rated", "public_synthetic", "newly_hidden_public_domain"]
+          },
+          "positions": {"type": "integer", "minimum": 1},
+          "critiques": {"type": "integer", "minimum": 4},
+          "public_exposure": {"type": "string", "minLength": 1},
+          "selection_status": {"type": "string", "minLength": 1},
+          "source_artifact": {"type": "object"},
+          "selection_rule": {"type": "string", "minLength": 1},
+          "promotion_gates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "public_manifest_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publish_component_counts",
+        "publish_hidden_item_ids",
+        "publish_hidden_item_text",
+        "publish_hidden_critiques",
+        "publish_hidden_labels",
+        "hidden_source_artifact_hash_may_be_published"
+      ],
+      "properties": {
+        "publish_component_counts": {"type": "boolean"},
+        "publish_hidden_item_ids": {"type": "boolean"},
+        "publish_hidden_item_text": {"type": "boolean"},
+        "publish_hidden_critiques": {"type": "boolean"},
+        "publish_hidden_labels": {"type": "boolean"},
+        "hidden_source_artifact_hash_may_be_published": {"type": "boolean"}
+      }
+    },
+    "invariants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "unresolved_parameters": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
