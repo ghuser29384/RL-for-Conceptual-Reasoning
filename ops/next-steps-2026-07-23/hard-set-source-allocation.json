@@ -1,0 +1,107 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/hard-set-source-allocation-v1.schema.json",
+  "allocation_id": "hard-set-source-allocation-v1-2026-07-23",
+  "allocation_version": 1,
+  "decision_status": "approved_position_allocation_item_selection_pending",
+  "approved_at": "2026-07-23",
+  "approved_by": "project_owner",
+  "decision_reference": "Mixed acquisition option 2",
+  "target": {
+    "positions": 100,
+    "critiques_per_position": 4,
+    "critiques": 400,
+    "minimum_independent_expert_ratings_per_critique": 2,
+    "minimum_initial_ratings": 800
+  },
+  "components": [
+    {
+      "source_class": "lmca_expert_rated",
+      "positions": 50,
+      "critiques": 200,
+      "public_exposure": "source_governed",
+      "selection_status": "blocked_missing_canonical_row_level_dataset",
+      "source_artifact": {
+        "name": "LMCA canonical expert-rated row-level dataset",
+        "availability": "not_supplied",
+        "paper_only_available": true
+      },
+      "selection_rule": "After the canonical row-level file and license are supplied, prefer positions with repeated expert evidence, useful within-position quality spread, and source/style balance; create additional critiques where a selected position has fewer than four eligible critiques.",
+      "promotion_gates": [
+        "canonical row-level file supplied",
+        "license and redistribution status recorded",
+        "position, critique, rating, and revision semantics audited",
+        "exact 50 position IDs frozen in a controlled manifest"
+      ]
+    },
+    {
+      "source_class": "public_synthetic",
+      "positions": 20,
+      "critiques": 80,
+      "public_exposure": "fully_public_unrated_source",
+      "selection_status": "screening_pool_frozen_exact_ids_pending_cross_source_balance",
+      "source_artifact": {
+        "name": "Metaphilosophy Synthetic Argument–Critique Library",
+        "release_id": "synthetic-1000-v1",
+        "positions_available": 250,
+        "critiques_available": 1000,
+        "critiques_per_position": 4,
+        "domains": 25,
+        "source_sha256": "1cb41afee3851c158b520da628a3659c3a387d16c18e6c38f64db1492f59d591"
+      },
+      "selection_rule": "Select exactly 20 positions only after the LMCA and protected-source inventories are available. Fill domain, attack-family, length, and source/style deficits first, then prefer positions that discriminate among frozen acquisition judges. Existing synthetic critiques remain unrated candidates until expert review.",
+      "promotion_gates": [
+        "cross-source coverage matrix available",
+        "difficulty and confound diagnostics computed",
+        "exact 20 position IDs frozen",
+        "all 80 critiques receive new human-review provenance"
+      ]
+    },
+    {
+      "source_class": "newly_hidden_public_domain",
+      "positions": 30,
+      "critiques": 120,
+      "public_exposure": "protected_item_transformations_public_domain_sources",
+      "selection_status": "all_30_upstream_positions_nominated_not_promoted",
+      "source_artifact": {
+        "name": "metaphilosophy_public_domain_arguments_v0_1",
+        "records": 30,
+        "works": 15,
+        "authors": 13,
+        "canonical_jsonl_bytes": 85237,
+        "canonical_jsonl_sha256": "3b43cc74d7185ca01e2925258faecd985de0dcc0f6cf8f0b41c4781adc4fef18",
+        "upstream_review_status": "draft_extraction_unrated"
+      },
+      "selection_rule": "Nominate all 30 upstream position records. Do not publish transformed item text, item IDs, critiques, or labels. Each position must pass independent source-fidelity and ambiguity/scope review before critique production. The human/model authorship mix for the four critiques is not yet approved.",
+      "promotion_gates": [
+        "independent source-fidelity review",
+        "independent ambiguity and scope review",
+        "rights and jurisdiction review for cited editions",
+        "four versioned critiques produced per approved position",
+        "protected item and exposure manifests frozen"
+      ]
+    }
+  ],
+  "public_manifest_rules": {
+    "publish_component_counts": true,
+    "publish_hidden_item_ids": false,
+    "publish_hidden_item_text": false,
+    "publish_hidden_critiques": false,
+    "publish_hidden_labels": false,
+    "hidden_source_artifact_hash_may_be_published": true
+  },
+  "invariants": [
+    "Component position counts sum to 100.",
+    "Each component critique count equals positions multiplied by four.",
+    "Component critique counts sum to 400.",
+    "The public synthetic component cannot be represented as expert rated until new human-review provenance exists.",
+    "Protected item IDs, text, critiques, and labels are absent from public manifests.",
+    "Position is the split unit; sibling critiques never cross splits."
+  ],
+  "unresolved_parameters": [
+    "Exact 50 LMCA position IDs and any additional critique acquisition plan.",
+    "Exact 20 public-synthetic position IDs, pending cross-source balance and difficulty screening.",
+    "Authorship mix and production method for 120 protected critiques.",
+    "Core expert-panel size, compensation, and committed capacity.",
+    "Adjudication capacity ceiling and pilot-derived trigger."
+  ]
+}
