@@ -42,9 +42,9 @@ for (const decision of register.decisions) {
   assert.ok(decision.credence >= 0.9 && decision.credence <= 1, `${decision.id} violates the 90% decision threshold`);
 }
 assert.equal(register.pending_decision.status, "user_decision_required");
-assert.equal(register.pending_decision.id, "Q-003");
+assert.equal(register.pending_decision.id, "Q-004");
 assert.equal(register.decisions.find((decision) => decision.id === "D-006")?.contract_path, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
-for (const decisionId of ["D-007", "D-008"]) {
+for (const decisionId of ["D-007", "D-008", "D-009", "D-010"]) {
   assert.equal(
     register.decisions.find((decision) => decision.id === decisionId)?.contract_path,
     "ops/next-steps-2026-07-23/panel-honoraria-plan.json",
@@ -62,10 +62,18 @@ assert.deepEqual(allocationReport.position_quotas, {
 const panelReport = validatePanelHonorariaPlan(panelPlan);
 assert.equal(panelReport.status, "pass", panelReport.errors.join("\n"));
 assert.deepEqual(panelReport.panel, { core_raters: 6, dedicated_adjudicators: 2, total_people: 8 });
+assert.deepEqual(panelReport.delivery_window, {
+  duration_weeks: 4,
+  duration_days: 28,
+  calendar_start: null,
+  calendar_end: null,
+});
 assert.deepEqual(panelReport.budget, {
   currency: "USD",
   ceiling: 500,
   model: "limited_honoraria_for_volunteer_expert_work",
+  core_rater_completion_pool: 400,
+  adjudication_reserve: 100,
 });
 
 assert.match(closedPage, /The July 2026 intake window has closed\./);
