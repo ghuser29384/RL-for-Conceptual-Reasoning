@@ -9,8 +9,10 @@ on:
       - "vercel.json"
       - "scripts/verify-program-contracts.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
+      - "scripts/verify-panel-honoraria-plan.mjs"
       - "test/recruitment-intake-gate.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
+      - "test/panel-honoraria-plan.test.mjs"
       - ".github/workflows/metaphilosophy-program-integrity.yml"
   push:
     branches: [main]
@@ -21,8 +23,10 @@ on:
       - "vercel.json"
       - "scripts/verify-program-contracts.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
+      - "scripts/verify-panel-honoraria-plan.mjs"
       - "test/recruitment-intake-gate.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
+      - "test/panel-honoraria-plan.test.mjs"
       - ".github/workflows/metaphilosophy-program-integrity.yml"
 
 permissions:
@@ -39,6 +43,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/verify-hard-set-source-allocation.mjs
+      - run: node scripts/verify-panel-honoraria-plan.mjs
       - run: node scripts/verify-program-contracts.mjs
       - run: npm test
       - run: npm run build
