@@ -1,0 +1,42 @@
+{
+  "register_id": "metaphilosophy-decision-register-2026-07-23",
+  "rule": "Do not make a decision when credence is below 0.90; ask the user before continuing.",
+  "decisions": [
+    {
+      "id": "D-001",
+      "decision": "Work on a dedicated Git branch rather than writing directly to main.",
+      "credence": 0.99,
+      "basis": "Reversible, consistent with repository instructions, and preserves production while the programme is reviewed."
+    },
+    {
+      "id": "D-002",
+      "decision": "Preserve a hard provenance boundary between expert-rated LMCA data, synthetic unrated material, protected benchmark material, and human-study data.",
+      "credence": 0.99,
+      "basis": "The paper and public synthetic release explicitly distinguish these artifact classes; conflation would invalidate public claims and evaluation results."
+    },
+    {
+      "id": "D-003",
+      "decision": "Freeze the current public synthetic release by recording its existing manifest, counts, checksums, source hash, repository commit, and production deployment.",
+      "credence": 0.99,
+      "basis": "The observed production manifest and deployment metadata agree on the canonical release."
+    },
+    {
+      "id": "D-004",
+      "decision": "Close the expired July 2026 reviewer intake by default instead of silently extending its deadline or financial terms.",
+      "credence": 0.97,
+      "basis": "The advertised deadline passed seven days before the audit, the aggregate endpoint reports zero applications, and extending a paid campaign requires a separate budget decision."
+    },
+    {
+      "id": "D-005",
+      "decision": "Do not label any hard set, benchmark, or human-utility study complete until the required expert ratings or participant observations actually exist.",
+      "credence": 0.99,
+      "basis": "This prevents synthetic or planned records from being represented as expert-validated empirical results."
+    }
+  ],
+  "pending_decision": {
+    "id": "Q-001",
+    "question": "Which source composition should define the 100-position, 400-critique hard-set candidate pool?",
+    "status": "user_decision_required",
+    "reason": "The expert-rated LMCA corpus, the public synthetic corpus, and a mixed acquisition pool have materially different cost, contamination, difficulty, and publication implications. No option currently has at least 0.90 credence."
+  }
+}
