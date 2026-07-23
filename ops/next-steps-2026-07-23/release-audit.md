@@ -56,4 +56,4 @@ The repository change in this execution package therefore closes POST intake by 
 
 ## Next decision checkpoint
 
-The next task is to construct the 400-critique hard-set candidate pool. The source composition cannot be selected at at least 0.90 credence from current evidence. The user must choose among an LMCA-first, synthetic-first, or mixed acquisition design before candidate IDs or review batches are frozen.
+The next task is to construct the 400-critique hard-set candidate pool. The source composition cannot be selected with at least 0.90 credence from current evidence. The user must choose among an LMCA-first, synthetic-first, or mixed acquisition design before candidate IDs or review batches are frozen.
