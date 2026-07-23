@@ -46,14 +46,18 @@ The repository change in this execution package therefore closes POST intake by 
 5. No human-utility study observations exist.
 6. The open draft reviewer-recruitment PR contains unique operational-interface files and should not be closed until those files are either retained or explicitly rejected.
 
-## Remediation in this branch
+## Remediation completed
 
-- Added a machine-readable release contract.
+- Added and merged a machine-readable public-release contract.
 - Added deterministic repository validation.
 - Added a networked production audit that verifies checksums and corpus invariants.
 - Added a closed-state reviewer page and an API-level default closure gate.
 - Recorded every programme decision made so far with credence at or above 0.90.
+- Recorded the project owner's Hard Set allocation: 50 LMCA / 20 public synthetic / 30 newly hidden positions.
+- Added a machine validator that prevents quota drift and public exposure of protected item identifiers or text.
 
-## Next decision checkpoint
+## Current checkpoint
 
-The next task is to construct the 400-critique hard-set candidate pool. The source composition cannot be selected with at least 0.90 credence from current evidence. The user must choose among an LMCA-first, synthetic-first, or mixed acquisition design before candidate IDs or review batches are frozen.
+The position-source allocation is resolved. Exact item IDs remain unfrozen: the 50 LMCA positions require the canonical row-level dataset and license; the 20 public-synthetic positions require cross-source coverage and difficulty screening; and all 30 nominated protected position extractions require independent source-fidelity and ambiguity/scope review before critique production.
+
+The next owner decision is core expert-panel size, compensation, and committed capacity for at least 800 initial ratings plus pairwise and adjudication work.
