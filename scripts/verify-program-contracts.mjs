@@ -79,7 +79,7 @@ assert.deepEqual(panelReport.budget, {
   core_rater_completion_pool: 400,
   adjudication_reserve: 100,
 });
-assert.match(calculator, /largest-remainder/i);
+assert.match(calculator, /remainderOrder/);
 assert.match(calculator, /owner_approved_early_closure/);
 
 assert.match(closedPage, /The July 2026 intake window has closed\./);
