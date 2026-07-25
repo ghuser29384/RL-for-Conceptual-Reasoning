@@ -10,9 +10,11 @@ on:
       - "scripts/verify-program-contracts.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
+      - "scripts/calculate-honoraria.mjs"
       - "test/recruitment-intake-gate.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
+      - "test/honoraria-calculator.test.mjs"
       - ".github/workflows/metaphilosophy-program-integrity.yml"
   push:
     branches: [main]
@@ -24,9 +26,11 @@ on:
       - "scripts/verify-program-contracts.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
+      - "scripts/calculate-honoraria.mjs"
       - "test/recruitment-intake-gate.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
+      - "test/honoraria-calculator.test.mjs"
       - ".github/workflows/metaphilosophy-program-integrity.yml"
 
 permissions:
@@ -45,5 +49,6 @@ jobs:
       - run: node scripts/verify-hard-set-source-allocation.mjs
       - run: node scripts/verify-panel-honoraria-plan.mjs
       - run: node scripts/verify-program-contracts.mjs
+      - run: node scripts/calculate-honoraria.mjs --help
       - run: npm test
       - run: npm run build
