@@ -15,9 +15,13 @@ The public synthetic release is frozen under a checksum-backed contract, and the
 
 This freezes source quotas, not exact item IDs. The exact 50 LMCA items remain blocked by the missing canonical row-level dataset and license. The exact 20 public-synthetic items await cross-source coverage and difficulty screening. All 30 protected upstream draft positions are nominated but require independent source-fidelity and ambiguity/scope review before critique production.
 
-The project owner has approved **6 core raters and 2 dedicated adjudicators**, a **four-week / 28-day end-to-end delivery window**, and a **USD 500 limited-honoraria ceiling** divided into a **USD 400 contribution-weighted core-rater completion pool** and a **USD 100 contribution-weighted adjudication reserve**. The delivery clock starts only after the readiness gate passes; calendar dates and individual honoraria are not yet frozen.
+The project owner has approved **6 core raters and 2 dedicated adjudicators**, a **four-week / 28-day end-to-end delivery window**, and a **USD 500 limited-honoraria ceiling** divided into a **USD 400 contribution-weighted core-rater completion pool** and a **USD 100 contribution-weighted adjudication reserve**.
 
-The next owner decision is the contribution-unit formula, minimum honorarium eligibility threshold, unused-reserve rule, responsible human operations owner, and absolute start date.
+The contribution rules are now frozen: accepted initial ratings, operator-assigned substantive re-ratings, required adjudication closures, and final label-snapshot sign-offs each earn one unit. Every accepted unit participates after qualification; there is no percentage-completion threshold. Unused adjudication funds remain unspent. The pools use transparent pro-rata allocation and largest-remainder cent rounding, with proportional release if the project owner approves an early closure.
+
+**Ellen Sun, project owner, is the human operations owner.** Once the complete readiness record is signed, the programme starts at 00:00 UTC on the earliest Monday at least 72 hours later and ends exactly 28 days after that. Accepted units remain credited if a contributor withdraws or is replaced.
+
+The next owner checkpoint concerns the exact panel identities and replacements, participant jurisdictions and payment methods, applicable legal/tax review, and any external-funding application owner and target.
 
 ## Files
 
@@ -26,8 +30,8 @@ The next owner decision is the contribution-unit formula, minimum honorarium eli
 - `decision-register.json` — decisions made under the user's 90% credence rule.
 - `hard-set-source-allocation.json` — machine-readable 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
 - `hard-set-source-allocation.md` — human-readable rationale, selection sequence, and explicit non-decisions.
-- `panel-honoraria-plan.json` — machine-readable eight-person panel, four-week readiness/completion gates, USD 400/USD 100 pool envelopes, controls, and unresolved individual-allocation parameters.
-- `panel-honoraria-plan.md` — human-readable panel, delivery-window, and honoraria boundary.
+- `panel-honoraria-plan.json` — machine-readable panel, delivery, contribution-unit, payout, operations, attrition, and readiness rules.
+- `panel-honoraria-plan.md` — human-readable panel and honoraria operating plan.
 
 Local verification:
 
@@ -35,6 +39,7 @@ Local verification:
 node scripts/verify-program-contracts.mjs
 node scripts/verify-hard-set-source-allocation.mjs
 node scripts/verify-panel-honoraria-plan.mjs
+node scripts/calculate-honoraria.mjs --help
 npm test
 ```
 
