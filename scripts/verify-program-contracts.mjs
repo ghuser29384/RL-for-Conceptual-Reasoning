@@ -10,14 +10,16 @@ const contractPath = resolve(root, "ops/next-steps-2026-07-23/release-contract.j
 const decisionsPath = resolve(root, "ops/next-steps-2026-07-23/decision-register.json");
 const allocationPath = resolve(root, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
 const panelPlanPath = resolve(root, "ops/next-steps-2026-07-23/panel-honoraria-plan.json");
+const calculatorPath = resolve(root, "scripts/calculate-honoraria.mjs");
 const closedPagePath = resolve(root, "reviewers/closed.html");
 const vercelPath = resolve(root, "vercel.json");
 
-const [contract, register, allocation, panelPlan, closedPage, vercel] = await Promise.all([
+const [contract, register, allocation, panelPlan, calculator, closedPage, vercel] = await Promise.all([
   readJson(contractPath),
   readJson(decisionsPath),
   readJson(allocationPath),
   readJson(panelPlanPath),
+  readFile(calculatorPath, "utf8"),
   readFile(closedPagePath, "utf8"),
   readJson(vercelPath),
 ]);
@@ -42,9 +44,9 @@ for (const decision of register.decisions) {
   assert.ok(decision.credence >= 0.9 && decision.credence <= 1, `${decision.id} violates the 90% decision threshold`);
 }
 assert.equal(register.pending_decision.status, "user_decision_required");
-assert.equal(register.pending_decision.id, "Q-004");
+assert.equal(register.pending_decision.id, "Q-005");
 assert.equal(register.decisions.find((decision) => decision.id === "D-006")?.contract_path, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
-for (const decisionId of ["D-007", "D-008", "D-009", "D-010"]) {
+for (const decisionId of ["D-007", "D-008", "D-009", "D-010", "D-011", "D-012", "D-013", "D-014", "D-015", "D-016", "D-017"]) {
   assert.equal(
     register.decisions.find((decision) => decision.id === decisionId)?.contract_path,
     "ops/next-steps-2026-07-23/panel-honoraria-plan.json",
@@ -62,9 +64,11 @@ assert.deepEqual(allocationReport.position_quotas, {
 const panelReport = validatePanelHonorariaPlan(panelPlan);
 assert.equal(panelReport.status, "pass", panelReport.errors.join("\n"));
 assert.deepEqual(panelReport.panel, { core_raters: 6, dedicated_adjudicators: 2, total_people: 8 });
+assert.deepEqual(panelReport.operations_owner, { name: "Ellen Sun", role: "project_owner" });
 assert.deepEqual(panelReport.delivery_window, {
   duration_weeks: 4,
   duration_days: 28,
+  start_rule: "first_monday_at_0000_utc_at_least_72_hours_after_readiness_signoff",
   calendar_start: null,
   calendar_end: null,
 });
@@ -75,6 +79,8 @@ assert.deepEqual(panelReport.budget, {
   core_rater_completion_pool: 400,
   adjudication_reserve: 100,
 });
+assert.match(calculator, /remainderOrder/);
+assert.match(calculator, /owner_approved_early_closure/);
 
 assert.match(closedPage, /The July 2026 intake window has closed\./);
 assert.match(closedPage, /No deadline or paid assignment is currently being offered/);

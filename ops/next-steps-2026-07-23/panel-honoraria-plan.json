@@ -1,14 +1,16 @@
 {
   "plan_id": "hard-set-panel-honoraria-v1-2026-07-23",
-  "plan_version": 2,
-  "decision_status": "approved_structure_budget_window_and_pool_envelopes_contribution_formula_pending",
-  "approved_at": "2026-07-23",
+  "plan_version": 3,
+  "decision_status": "approved_structure_budget_window_pool_envelopes_distribution_operations_and_attrition_calendar_dates_payment_legal_pending",
+  "approved_at": "2026-07-25",
   "approved_by": "project_owner",
   "decision_references": [
     "Expert panel option 2",
     "Use the $500 as limited honoraria for volunteer expert work",
     "Delivery window option A: four weeks",
-    "Honoraria allocation option 3: USD 400 core-rater completion pool plus USD 100 adjudication reserve"
+    "Honoraria allocation option 3: USD 400 core-rater completion pool plus USD 100 adjudication reserve",
+    "Use the recommended contribution, eligibility, reserve, start, payout, and attrition rules",
+    "Operations owner: Ellen Sun (project owner)"
   ],
   "panel": {
     "core_raters": 6,
@@ -18,12 +20,12 @@
     "core_rater_scope": [
       "blind initial ratings",
       "required calibration",
-      "triggered clarification or re-rating"
+      "operator-assigned substantive clarification or re-rating"
     ],
     "adjudicator_scope": [
       "disagreement review",
       "interpretation and context adjudication",
-      "frozen label sign-off"
+      "frozen label-snapshot sign-off"
     ]
   },
   "minimum_workload": {
@@ -60,13 +62,20 @@
     "duration_days": 28,
     "calendar_start": null,
     "calendar_end": null,
-    "start_condition": "readiness_gate_passed",
+    "start_condition": "readiness_gate_passed_and_start_rule_applied",
+    "start_rule": {
+      "model": "first_monday_at_0000_utc_at_least_72_hours_after_readiness_signoff",
+      "timezone": "UTC",
+      "minimum_notice_hours": 72,
+      "readiness_signed_at": null,
+      "calculation": "Choose the earliest Monday at 00:00:00 UTC that is at least 72 hours after the operations owner signs the complete readiness-gate record. Set calendar_end exactly 28 days after calendar_start."
+    },
     "readiness_gate": [
       "Exact 100-position and 400-critique controlled manifests are frozen and pass provenance, rights, exposure, and split checks.",
       "Rubric v2 instructions, rating form, disagreement triggers, and adjudication protocol are frozen.",
       "Six core raters and two dedicated adjudicators are confirmed, consented, conflict-checked, and calibrated.",
       "Blind assignments are generated with two independent core raters per critique and no sibling split leakage.",
-      "A responsible human operations owner is named and payment administration plus applicable legal review are complete."
+      "The operations owner has signed the readiness record and payment administration plus applicable legal and tax review are complete."
     ],
     "end_condition": "completion_gate_passed",
     "completion_gate": [
@@ -87,6 +96,43 @@
     "automatic_extension": false,
     "extension_requires": "project_owner_approval"
   },
+  "operations": {
+    "owner": {
+      "name": "Ellen Sun",
+      "role": "project_owner",
+      "authority": "human_operations_owner"
+    },
+    "assignment_and_attrition": {
+      "checkpoint_model": "individual_assignment_schedule_aligned_to_the_four_week_nominal_pace",
+      "missed_checkpoint_sequence": [
+        {
+          "elapsed_hours": 0,
+          "action": "notify_the_contributor_and_request_a_written_recovery_or_withdrawal_update"
+        },
+        {
+          "elapsed_hours": 48,
+          "action": "if_no_approved_recovery_plan_exists_pause_new_assignments_and_reassign_overdue_unstarted_work"
+        }
+      ],
+      "accepted_units_preserved_after_withdrawal_or_replacement": true,
+      "retroactive_forfeiture_of_accepted_units": false,
+      "replacement_requirements": [
+        "same role qualification standard",
+        "consent and conflict review",
+        "required calibration",
+        "blind assignment and exposure checks"
+      ]
+    },
+    "payment": {
+      "final_ledger_freeze_target_business_days_after_completion_gate": 5,
+      "disbursement_target_calendar_days_after_final_ledger_freeze": 14,
+      "targets_are_contingent_on": [
+        "payment onboarding complete",
+        "applicable legal, tax, sanctions, and jurisdiction checks complete",
+        "accurate accepted-unit and identity records"
+      ]
+    }
+  },
   "budget": {
     "currency": "USD",
     "ceiling": 500,
@@ -94,23 +140,95 @@
     "rate_based_compensation": false,
     "full_labour_cost_coverage_claim": false,
     "allocation": {
-      "status": "approved_pool_envelopes_contribution_unit_formula_pending",
+      "status": "approved_contribution_units_eligibility_distribution_and_unused_balance_rules",
+      "rounding_method": "largest_remainder_to_whole_cents_with_stable_contributor_id_tiebreak",
       "core_rater_completion_pool": {
         "amount": 400,
         "eligible_role": "core_rater",
         "allocation_method": "contribution_weighted",
-        "contribution_unit_definition": null,
-        "minimum_eligibility_threshold": null,
-        "payment_timing": null
+        "contribution_unit_definition": {
+          "version": "core-rating-unit-v1",
+          "earning_events": [
+            {
+              "event": "accepted_blind_initial_rating",
+              "units": 1
+            },
+            {
+              "event": "accepted_operator_assigned_substantive_rerating",
+              "units": 1
+            }
+          ],
+          "zero_unit_events": [
+            "calibration_or_practice_item",
+            "duplicate_submission",
+            "submission_rejected_by_quality_control",
+            "resubmission_required_only_to_correct_the_contributors_own_missing_field_formatting_error_or_avoidable_omission",
+            "unassigned_or_self_initiated_rerating"
+          ]
+        },
+        "minimum_eligibility_threshold": {
+          "model": "every_accepted_unit_participates_after_required_qualification",
+          "minimum_accepted_units": 1,
+          "required_conditions": [
+            "role qualification and consent complete",
+            "conflict and exposure checks passed",
+            "required calibration passed",
+            "the unit is accepted by the frozen quality-control rules"
+          ],
+          "minimum_assignment_completion_percentage": null
+        },
+        "distribution_rule": {
+          "normal_completion_distributable_fraction": 1,
+          "owner_approved_early_closure_distributable_fraction": "accepted_blind_initial_ratings_divided_by_800_capped_between_0_and_1",
+          "substantive_rerating_units_share_the_distributable_pool_but_do_not_increase_the_early_closure_fraction": true,
+          "individual_share": "distributable_amount_multiplied_by_contributors_accepted_units_divided_by_total_eligible_accepted_units",
+          "zero_eligible_units_rule": "remain_unspent"
+        },
+        "payment_timing_reference": "operations.payment"
       },
       "adjudication_reserve": {
         "amount": 100,
         "eligible_role": "dedicated_adjudicator",
         "allocation_method": "contribution_weighted",
-        "contribution_unit_definition": null,
-        "minimum_eligibility_threshold": null,
-        "unused_balance_rule": null,
-        "payment_timing": null
+        "contribution_unit_definition": {
+          "version": "adjudication-unit-v1",
+          "earning_events": [
+            {
+              "event": "accepted_adjudication_record_closing_an_operator_assigned_required_case",
+              "units": 1
+            },
+            {
+              "event": "accepted_required_final_label_snapshot_signoff",
+              "units": 1
+            }
+          ],
+          "zero_unit_events": [
+            "duplicate_or_administrative_comment",
+            "record_rejected_by_quality_control",
+            "rework_required_only_to_correct_the_adjudicators_own_missing_field_formatting_error_or_avoidable_omission",
+            "unassigned_or_self_initiated_case_review"
+          ]
+        },
+        "minimum_eligibility_threshold": {
+          "model": "every_accepted_unit_participates_after_required_qualification",
+          "minimum_accepted_units": 1,
+          "required_conditions": [
+            "adjudicator qualification and consent complete",
+            "conflict and exposure checks passed",
+            "required calibration passed",
+            "the unit is accepted by the frozen adjudication quality-control rules"
+          ],
+          "minimum_assignment_completion_percentage": null
+        },
+        "distribution_rule": {
+          "normal_completion_distributable_fraction": 1,
+          "owner_approved_early_closure_distributable_fraction": "accepted_adjudication_units_divided_by_opened_adjudication_obligation_units_capped_between_0_and_1",
+          "adjudication_obligation_unit": "one operator_assigned_required_case_record_or_one_required_final_label_snapshot_signoff_assignment",
+          "individual_share": "distributable_amount_multiplied_by_contributors_accepted_units_divided_by_total_eligible_accepted_units",
+          "zero_eligible_units_rule": "remain_unspent"
+        },
+        "unused_balance_rule": "remain_unspent_and_do_not_transfer_to_the_core_rater_pool",
+        "payment_timing_reference": "operations.payment"
       },
       "total": 500
     },
@@ -125,25 +243,24 @@
   "controls": [
     "Aggregate honoraria commitments and disbursements must not exceed USD 500 unless a later owner-approved funding decision changes the ceiling.",
     "Exactly USD 400 is reserved for the core-rater completion pool and USD 100 for the adjudication reserve under the current ceiling.",
-    "The 28-day clock starts only after the full readiness gate passes; no calendar deadline may be advertised before then.",
+    "Every accepted unit participates after qualification; no eighty-percent or all-assignment completion threshold may be introduced without a new owner-approved decision.",
+    "The pool formula allocates capped honoraria and must not be described as a per-rating wage or as full labour-cost coverage.",
+    "The 28-day clock starts only under the frozen first-Monday rule after the complete readiness gate is signed; no calendar deadline may be advertised before then.",
     "The four-week window does not extend automatically; any extension requires a new project-owner decision and an updated audit record.",
-    "No individual amount, contribution-unit formula, eligibility threshold, or payment promise is approved by this plan.",
-    "The project must not describe the honoraria pool as covering the full estimated economic cost of the work.",
-    "Public recruitment remains closed until the contribution formula, eligibility thresholds, responsible human operator, payment administration, and legal review are approved.",
+    "Unused adjudication-reserve funds remain unspent and may not be transferred silently to another pool.",
+    "Accepted contribution units are never forfeited solely because a contributor later withdraws or is replaced.",
+    "Public recruitment remains closed until panel identities, payment administration, and applicable legal and tax review are complete.",
     "Additional funding must remain separately traceable from the initial USD 500 ceiling."
   ],
   "unresolved_parameters": [
-    "Contribution-unit definitions and relative weights for accepted core-rater and adjudicator work.",
-    "Minimum accepted-contribution eligibility threshold for each honorarium pool.",
-    "Rule for any unused adjudication-reserve balance.",
-    "Named human operations owner and absolute start date after the readiness gate passes.",
-    "Replacement and attrition policy.",
-    "Payment administration, tax, jurisdiction, and legal review.",
+    "Exact six core-rater and two adjudicator identities, plus any prequalified replacement candidates.",
+    "Payment method, recipient jurisdictions, tax documentation, sanctions screening, and applicable legal review.",
+    "Readiness-signoff timestamp and the automatically derived absolute calendar start and end dates.",
     "External-funding target, application owner, and trigger date."
   ],
   "next_decision": {
-    "id": "Q-004",
-    "question": "What contribution-unit formula, eligibility threshold, unused-reserve rule, responsible human operator, and absolute start date should govern the approved four-week programme?",
+    "id": "Q-005",
+    "question": "Which payment methods and recipient jurisdictions, applicable legal and tax review, panel identities and replacement candidates, and external-funding application owner and target should be approved before the readiness gate can pass?",
     "status": "user_decision_required"
   }
 }

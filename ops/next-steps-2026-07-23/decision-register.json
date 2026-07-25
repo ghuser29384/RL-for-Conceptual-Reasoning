@@ -68,15 +68,71 @@
       "id": "D-010",
       "decision": "Adopt honoraria option 3: reserve USD 400 for a contribution-weighted core-rater completion pool and USD 100 for a contribution-weighted adjudication reserve.",
       "credence": 1.0,
-      "basis": "This records the project owner's explicit selection. It fixes the two pool envelopes but does not silently choose contribution units, eligibility thresholds, payment timing, or the rule for unused reserve funds.",
+      "basis": "This records the project owner's explicit selection.",
       "approved_at": "2026-07-23",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-011",
+      "decision": "Use one accepted unit for each blind initial rating, operator-assigned substantive re-rating, required adjudication-case closure, or final label-snapshot sign-off; calibration, duplicates, rejected work, unassigned work, and avoidable self-correction earn zero units.",
+      "credence": 0.94,
+      "basis": "Equal auditable units are simpler, less gameable, and easier to explain than subjective complexity weights. Operator assignment and quality acceptance prevent contributors from manufacturing units.",
+      "approved_at": "2026-07-25",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-012",
+      "decision": "After qualification and calibration, every accepted unit participates in the relevant honoraria pool; impose no 80-percent or full-assignment completion threshold.",
+      "credence": 0.96,
+      "basis": "This avoids an all-or-nothing penalty for accepted work, reduces concealment of attrition, and lets incomplete assignments be reassigned without retroactively confiscating earned units.",
+      "approved_at": "2026-07-25",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-013",
+      "decision": "Leave unused adjudication-reserve funds unspent and prohibit silent transfer to the core-rater pool.",
+      "credence": 0.94,
+      "basis": "The two envelopes were approved for distinct roles. Leaving unused funds unspent preserves the USD 500 ceiling and avoids retroactively changing incentives or role weights.",
+      "approved_at": "2026-07-25",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-014",
+      "decision": "Start at 00:00 UTC on the earliest Monday at least 72 hours after the complete readiness record is signed, then end exactly 28 days later.",
+      "credence": 0.95,
+      "basis": "A Monday start creates four complete operating weeks, UTC avoids local-time ambiguity, and 72 hours provides minimum notice without inventing an absolute date before readiness.",
+      "approved_at": "2026-07-25",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-015",
+      "decision": "Name Ellen Sun, project owner, as the accountable human operations owner.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction.",
+      "approved_at": "2026-07-25",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-016",
+      "decision": "Allocate each released pool pro rata by accepted units using largest-remainder cent rounding; scale released amounts proportionally at an owner-approved early closure, and target ledger freeze within five business days plus disbursement within fourteen calendar days after ledger freeze, contingent on payment and legal readiness.",
+      "credence": 0.92,
+      "basis": "This is transparent, exactly conserves the approved pools, avoids windfalls after a severely incomplete programme, and provides a workable payment timetable without misrepresenting the honoraria as wages.",
+      "approved_at": "2026-07-25",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-017",
+      "decision": "After a missed checkpoint, request a recovery or withdrawal update immediately; after 48 hours without an approved recovery plan, pause new assignments and reassign overdue unstarted work while preserving accepted units. Require replacements to pass the same gates.",
+      "credence": 0.94,
+      "basis": "This protects the four-week schedule while treating volunteers fairly, preserving completed work, and avoiding lower qualification standards for replacements.",
+      "approved_at": "2026-07-25",
       "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
     }
   ],
   "pending_decision": {
-    "id": "Q-004",
-    "question": "What contribution-unit formula, eligibility threshold, unused-reserve rule, responsible human operator, and absolute start date should govern the approved four-week programme?",
+    "id": "Q-005",
+    "question": "Which payment methods and recipient jurisdictions, applicable legal and tax review, panel identities and replacement candidates, and external-funding application owner and target should be approved before the readiness gate can pass?",
     "status": "user_decision_required",
-    "reason": "The owner has fixed the duration and pool envelopes, but individual honorarium amounts and operational promises cannot be computed safely until accepted contribution units, minimum eligibility, reserve handling, payment administration, and accountable ownership are defined."
+    "reason": "These parameters depend on the actual participants, jurisdictions, payment rails, and funding opportunities. Choosing them without that information would fall below the 0.90 decision threshold."
   }
 }
