@@ -1,0 +1,51 @@
+{
+  "gate_id": "metaphilosophy-full-hard-set-expansion-gate-v1",
+  "applies_to": "hard-set-source-allocation-v1-2026-07-23",
+  "current_status": "blocked_pending_pilot_results_and_resource_gate",
+  "policy": "The planned 100-position, 400-critique Hard Set must not enter bulk annotation merely because its source quotas are approved.",
+  "necessary_conditions": {
+    "pilot_evidence": [
+      "Pilot 01 completion gate has passed.",
+      "A frozen pilot result report contains actual rating time, agreement, attrition, disagreement, adjudication, and operational measurements.",
+      "At least one senior methodological adviser has reviewed the pilot summary.",
+      "The project owner records whether and how the rubric, assignment system, and adjudication protocol must change."
+    ],
+    "resource_gate": {
+      "model": "external_funding_or_substantial_committed_volunteer_capacity",
+      "external_funding_path": [
+        "Awarded or otherwise legally available funds are documented; pending applications and verbal interest do not count.",
+        "The funded budget covers the planned 800 blind initial ratings, pilot-derived re-rating and adjudication demand, operations, payment administration, and required legal or tax work.",
+        "The cost model uses observed pilot workload and variance rather than the LMCA 5–15 minute estimate alone.",
+        "No funding is double-counted across overlapping grants or the Pilot 01 USD 500 ceiling."
+      ],
+      "volunteer_capacity_path": [
+        "Qualified raters provide written, non-ambiguous commitments whose accepted capacities sum to at least 800 blind initial rating units during the proposed window.",
+        "Qualified adjudicators provide written commitments covering the pilot-derived expected adjudication and final-signoff workload.",
+        "At least two qualified replacement raters or equivalent documented replacement capacity are available.",
+        "Expressions of interest, referrals, and uncalibrated applicants do not count as committed capacity.",
+        "The operations owner verifies that commitments remain feasible after conflicts, exposure exclusions, and assignment balancing."
+      ]
+    },
+    "item_readiness": [
+      "The exact 50 LMCA, 20 public-synthetic, and 30 protected position records pass their source-specific promotion gates.",
+      "The exact 400 critiques, provenance records, exposure classes, and split assignments are frozen.",
+      "Protected items remain absent from public manifests and public application materials."
+    ],
+    "owner_authorization": "After all preceding conditions are evidenced, Ellen Sun must explicitly approve expansion and sign a new readiness record."
+  },
+  "prohibited_shortcuts": [
+    "Do not treat the USD 500 Pilot 01 budget as funding for the 400-critique programme.",
+    "Do not infer volunteer capacity from prestige, affiliation, prior LMCA work, or silence after outreach.",
+    "Do not count senior methodological advisers as bulk raters unless they separately accept and pass the applicable bulk-rater requirements.",
+    "Do not publish or advertise a full-set start date before the expansion and readiness gates pass.",
+    "Do not represent the Hard Set as completed, expert validated, hidden, or benchmark ready before the corresponding evidence exists."
+  ],
+  "gate_record_requirements": [
+    "Pilot result report identifier and checksum.",
+    "Senior methodological review record identifier.",
+    "Funding award documentation or deidentified signed-capacity ledger.",
+    "Pilot-derived workload and cost model.",
+    "Exact item-manifest identifiers and checksums.",
+    "Project-owner decision and timestamp."
+  ]
+}
