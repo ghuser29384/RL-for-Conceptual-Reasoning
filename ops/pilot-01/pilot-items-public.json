@@ -1,0 +1,90 @@
+{
+  "manifest_id": "metaphilosophy-pilot-01-public-items-v1",
+  "pilot_id": "metaphilosophy-pilot-01-2026-07-27",
+  "source_release_id": "synthetic-1000-v1",
+  "source_manifest_path": "/arguments/data/manifest.json",
+  "public_exposure": "fully_public_development_material",
+  "future_hidden_test_eligibility": false,
+  "positions": [
+    {
+      "position_id": "P001",
+      "domain": "Metaphilosophy and Philosophical Method",
+      "title": "Argument Evaluation Without Ground Truth",
+      "critique_ids": ["C0001", "C0002", "C0003", "C0004"]
+    },
+    {
+      "position_id": "P011",
+      "domain": "Epistemology",
+      "title": "Knowledge Requires Safety from Error",
+      "critique_ids": ["C0041", "C0042", "C0043", "C0044"]
+    },
+    {
+      "position_id": "P021",
+      "domain": "Philosophy of Science",
+      "title": "Falsifiability as a Demarcation Criterion",
+      "critique_ids": ["C0081", "C0082", "C0083", "C0084"]
+    },
+    {
+      "position_id": "P031",
+      "domain": "Logic and Argumentation",
+      "title": "Classical Logic as the Default Logic",
+      "critique_ids": ["C0121", "C0122", "C0123", "C0124"]
+    },
+    {
+      "position_id": "P041",
+      "domain": "Philosophy of Language",
+      "title": "Descriptivism About Proper Names",
+      "critique_ids": ["C0161", "C0162", "C0163", "C0164"]
+    },
+    {
+      "position_id": "P051",
+      "domain": "Metaphysics",
+      "title": "Presentism About Time",
+      "critique_ids": ["C0201", "C0202", "C0203", "C0204"]
+    },
+    {
+      "position_id": "P061",
+      "domain": "Philosophy of Mind",
+      "title": "Physicalism from Causal Closure",
+      "critique_ids": ["C0241", "C0242", "C0243", "C0244"]
+    },
+    {
+      "position_id": "P071",
+      "domain": "Personal Identity",
+      "title": "Psychological Continuity Grounds Personal Identity",
+      "critique_ids": ["C0281", "C0282", "C0283", "C0284"]
+    },
+    {
+      "position_id": "P081",
+      "domain": "Free Will and Agency",
+      "title": "Libertarian Agent Causation",
+      "critique_ids": ["C0321", "C0322", "C0323", "C0324"]
+    },
+    {
+      "position_id": "P091",
+      "domain": "Normative Ethics",
+      "title": "Act Utilitarianism",
+      "critique_ids": ["C0361", "C0362", "C0363", "C0364"]
+    },
+    {
+      "position_id": "P101",
+      "domain": "Metaethics",
+      "title": "Moral Realism from Deliberative Practice",
+      "critique_ids": ["C0401", "C0402", "C0403", "C0404"]
+    },
+    {
+      "position_id": "P208",
+      "domain": "Artificial Intelligence and AI Safety",
+      "title": "AI Debate Can Amplify Human Oversight",
+      "critique_ids": ["C0829", "C0830", "C0831", "C0832"]
+    }
+  ],
+  "invariants": [
+    "There are exactly 12 unique position IDs.",
+    "Every position has exactly four unique sibling critique IDs.",
+    "There are exactly 48 unique critique IDs.",
+    "There are exactly 12 distinct domains.",
+    "All item IDs resolve in synthetic-1000-v1.",
+    "No item may be represented as hidden, expert rated, or difficulty validated before Pilot 01 results exist."
+  ]
+}
