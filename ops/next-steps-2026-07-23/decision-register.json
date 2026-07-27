@@ -127,12 +127,52 @@
       "basis": "This protects the four-week schedule while treating volunteers fairly, preserving completed work, and avoiding lower qualification standards for replacements.",
       "approved_at": "2026-07-25",
       "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-018",
+      "decision": "Replace bulk-rating requests to senior researchers with bounded one-to-three-hour methodological-adviser requests, including review of 8–12 shared calibration cases and no assumed bulk annotation.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction and directs senior expertise toward protocol, calibration, disagreement, and referral work rather than repetitive bulk annotation.",
+      "approved_at": "2026-07-27",
+      "contract_path": "ops/pilot-01/pilot-contract.json"
+    },
+    {
+      "id": "D-019",
+      "decision": "Run a public 48-critique development pilot using 12 positions, four critiques per position, and two independent ratings per critique before attempting the full 400-critique programme.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction. The pilot measures workflow and reliability and is not a hidden benchmark or asserted difficulty-valid set.",
+      "approved_at": "2026-07-27",
+      "contract_path": "ops/pilot-01/pilot-contract.json"
+    },
+    {
+      "id": "D-020",
+      "decision": "Recruit calibrated early-career expert raters for Pilot 01 bulk ratings through adviser referrals, a public non-binding expression of interest, targeted public-profile outreach, and later approved opportunity notices.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction while retaining human qualification, conflict, calibration, and assignment gates.",
+      "approved_at": "2026-07-27",
+      "contract_path": "ops/pilot-01/pilot-contract.json"
+    },
+    {
+      "id": "D-021",
+      "decision": "Use frozen Pilot 01 results and consented senior methodological feedback as evidence in the Long-Term Future Fund and Emergent Ventures applications; do not fabricate or forecast missing results.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction and prevents funding applications from presenting plans or placeholders as empirical evidence.",
+      "approved_at": "2026-07-27",
+      "contract_path": "ops/pilot-01/pilot-contract.json"
+    },
+    {
+      "id": "D-022",
+      "decision": "Defer full 400-critique bulk annotation until Pilot 01 is reviewed and either awarded external funding or substantial signed qualified-volunteer capacity passes the expansion gate.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction and prohibits treating senior prestige, expressions of interest, pending grants, or the USD 500 pilot budget as full-set capacity.",
+      "approved_at": "2026-07-27",
+      "contract_path": "ops/pilot-01/full-hard-set-expansion-gate.json"
     }
   ],
   "pending_decision": {
-    "id": "Q-005",
-    "question": "Which payment methods and recipient jurisdictions, applicable legal and tax review, panel identities and replacement candidates, and external-funding application owner and target should be approved before the readiness gate can pass?",
-    "status": "user_decision_required",
-    "reason": "These parameters depend on the actual participants, jurisdictions, payment rails, and funding opportunities. Choosing them without that information would fall below the 0.90 decision threshold."
+    "id": "Q-006",
+    "question": "Which senior advisers accept the bounded role, which early-career applicants pass human screening and calibration, and when do payment and legal readiness permit Ellen Sun to sign the Pilot 01 readiness record?",
+    "status": "external_response_and_evidence_required",
+    "reason": "These are not safely selectable from public profiles alone. They require replies, applications, calibration results, conflicts, capacity confirmations, jurisdictions, and payment/legal evidence."
   }
 }
