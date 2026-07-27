@@ -1,0 +1,33 @@
+@import url("/reviewers/styles.css?v=1");
+
+.pilotBoundary {
+  margin: 0 0 28px;
+  border-radius: 10px;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.field small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  .statusPill {
+    white-space: normal;
+  }
+}
