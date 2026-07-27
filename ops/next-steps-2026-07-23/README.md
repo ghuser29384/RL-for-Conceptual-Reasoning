@@ -11,39 +11,61 @@ This directory is the execution record for the programme that follows the first 
 
 ## Current checkpoint
 
-The public synthetic release is frozen under a checksum-backed contract, and the expired reviewer campaign is closed by default. The project owner has approved mixed Hard Set acquisition option 2: **50 LMCA positions, 20 public-synthetic positions, and 30 newly hidden public-domain-derived positions**.
+The public synthetic release is frozen under a checksum-backed contract. The long-term Hard Set source allocation remains **50 LMCA positions, 20 public-synthetic positions, and 30 newly hidden public-domain-derived positions**, but its 400-critique bulk-annotation phase is now explicitly deferred.
 
-This freezes source quotas, not exact item IDs. The exact 50 LMCA items remain blocked by the missing canonical row-level dataset and license. The exact 20 public-synthetic items await cross-source coverage and difficulty screening. All 30 protected upstream draft positions are nominated but require independent source-fidelity and ambiguity/scope review before critique production.
+The current execution target is **Metaphilosophy Pilot 01**:
 
-The project owner has approved **6 core raters and 2 dedicated adjudicators**, a **four-week / 28-day end-to-end delivery window**, and a **USD 500 limited-honoraria ceiling** divided into a **USD 400 contribution-weighted core-rater completion pool** and a **USD 100 contribution-weighted adjudication reserve**.
+- 12 public synthetic positions across 12 domains;
+- four critiques per position, or 48 critiques;
+- two independent blind ratings per critique, or 96 required initial ratings;
+- 4–8 calibrated early-career expert raters, targeting six, plus two alternates;
+- one to two senior methodological advisers in bounded one-to-three-hour roles;
+- a four-week maximum window beginning only after pilot readiness passes;
+- the existing USD 500 limited-honoraria ceiling, divided into a USD 400 core-rater pool and USD 100 adjudication reserve.
 
-The contribution rules are now frozen: accepted initial ratings, operator-assigned substantive re-ratings, required adjudication closures, and final label-snapshot sign-offs each earn one unit. Every accepted unit participates after qualification; there is no percentage-completion threshold. Unused adjudication funds remain unspent. The pools use transparent pro-rata allocation and largest-remainder cent rounding, with proportional release if the project owner approves an early closure.
+Senior researchers must not receive an assumed bulk-rating request. Their requested contribution is protocol and Rubric v2 review, 8–12 shared calibration cases, disagreement/adjudication advice, early-career referrals, and—where relevant—guidance on the canonical LMCA data and licensing.
 
-**Ellen Sun, project owner, is the human operations owner.** Once the complete readiness record is signed, the programme starts at 00:00 UTC on the earliest Monday at least 72 hours later and ends exactly 28 days after that. Accepted units remain credited if a contributor withdraws or is replaced.
+The public early-career expression-of-interest route is `/pilot-raters/`. It is non-binding, uses human qualification decisions, and collects no bank credentials, tax identifiers, or identity documents.
 
-The next owner checkpoint concerns the exact panel identities and replacements, participant jurisdictions and payment methods, applicable legal/tax review, and any external-funding application owner and target.
+Emergent Ventures and Long-Term Future Fund application drafts now exist, but both are blocked until the Pilot 01 result report and at least one senior methodological feedback record are frozen. Missing results must remain explicit placeholders.
 
-## Files
+The full 400-critique programme may expand only after Pilot 01 review and either:
 
-- `release-audit.md` — human-readable audit findings and remediation status.
+1. awarded or legally available external funding sufficient for the pilot-derived workload; or
+2. written commitments from qualified volunteers covering at least 800 blind initial rating units, pilot-derived adjudication capacity, and replacement capacity.
+
+Expressions of interest, pending applications, prestige, prior LMCA work, and silence after outreach do not count as committed capacity.
+
+## Key files
+
+- `release-audit.md` — public release audit findings.
 - `release-contract.json` — machine-readable public-release invariants.
 - `decision-register.json` — decisions made under the user's 90% credence rule.
-- `hard-set-source-allocation.json` — machine-readable 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
-- `hard-set-source-allocation.md` — human-readable rationale, selection sequence, and explicit non-decisions.
-- `panel-honoraria-plan.json` — machine-readable panel, delivery, contribution-unit, payout, operations, attrition, and readiness rules.
-- `panel-honoraria-plan.md` — human-readable panel and honoraria operating plan.
+- `hard-set-source-allocation.json` — long-term 50/20/30 source quotas and source-specific gates.
+- `panel-honoraria-plan.json` — previously approved full-set panel and honoraria rules; full-set execution is now subordinate to the Pilot 01 expansion gate.
+- `../pilot-01/pilot-contract.json` — Pilot 01 design, panel bounds, budget, readiness, measurement, recruitment, and funding-evidence gates.
+- `../pilot-01/pilot-items-public.json` — exact 12-position and 48-critique public development manifest.
+- `../pilot-01/senior-methodological-adviser-brief.md` — bounded senior role.
+- `../pilot-01/early-career-rater-recruitment-plan.md` — recruitment and qualification workflow.
+- `../pilot-01/pilot-result-report-template.md` — empirical result-report contract.
+- `../pilot-01/full-hard-set-expansion-gate.json` — mandatory funding or committed-capacity gate.
+- `../../funding/emergent-ventures-pilot-evidence-draft.md` — blocked pilot-evidence application draft.
+- `../../funding/ltff-pilot-evidence-draft.md` — blocked pilot-evidence application draft.
 
-Local verification:
+## Local verification
 
 ```bash
 node scripts/verify-program-contracts.mjs
 node scripts/verify-hard-set-source-allocation.mjs
 node scripts/verify-panel-honoraria-plan.mjs
+node scripts/verify-pilot-01.mjs
 node scripts/calculate-honoraria.mjs --help
+node scripts/calculate-pilot-honoraria.mjs --help
 npm test
+npm run build
 ```
 
-Production verification:
+## Production verification
 
 ```bash
 node scripts/audit-production-release.mjs
