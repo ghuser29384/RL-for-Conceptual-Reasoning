@@ -23,6 +23,14 @@
     {
       "source": "/reviewers/index.html",
       "destination": "/reviewers/closed.html"
+    },
+    {
+      "source": "/pilot-raters",
+      "destination": "/pilot-raters/index.html"
+    },
+    {
+      "source": "/pilot-raters/",
+      "destination": "/pilot-raters/index.html"
     }
   ],
   "functions": {
