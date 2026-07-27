@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Non-binding expression of interest for early-career expert raters in Metaphilosophy Pilot 01."
+    />
+    <meta name="robots" content="index,follow" />
+    <title>Pilot 01 expert-rater expression of interest | Metaphilosophy</title>
+    <link rel="stylesheet" href="/pilot-raters/styles.css?v=1" />
+  </head>
+  <body>
+    <header class="siteHeader">
+      <a class="brand" href="/" aria-label="Metaphilosophy home">
+        <span class="brandMark" aria-hidden="true">M</span>
+        <span><strong>Metaphilosophy</strong><small>Pilot 01 rater intake</small></span>
+      </a>
+      <div class="deadline">Open non-binding expression of interest. No assignment or individual payment is guaranteed.</div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Early-career expert-rater pilot</p>
+          <h1 id="page-title">Help test how expert judgments of philosophical critiques can be made reliable.</h1>
+          <p class="lede">
+            Pilot 01 will collect two independent blind ratings for each of 48 public critiques. We are seeking advanced
+            philosophy doctoral students, postdocs, recent PhDs, and directly relevant early-career researchers.
+          </p>
+          <div class="trustRow" aria-label="Pilot terms">
+            <span><strong>48</strong> public critiques</span>
+            <span><strong>96</strong> required initial ratings</span>
+            <span><strong>12–24</strong> likely ratings per selected rater</span>
+            <span><strong>$400</strong> pooled core-rater honoraria</span>
+          </div>
+          <p class="finePrint">
+            The honorarium is a capped pool distributed proportionally by accepted rating units. It is not a wage or a
+            guarantee of any individual amount. This page collects interest only; payment and tax information are not
+            requested here.
+          </p>
+        </div>
+        <aside class="heroCard" aria-label="What participation involves">
+          <h2>What selected raters do</h2>
+          <ol>
+            <li>Complete a separate public calibration without external AI assistance.</li>
+            <li>Rate a blind tranche using the seven LMCA dimensions and Rubric v2.</li>
+            <li>Respond to narrowly triggered clarification or re-rating requests.</li>
+            <li>Provide short feedback on the instructions and workflow.</li>
+          </ol>
+          <p id="liveProgress" class="liveProgress" hidden></p>
+        </aside>
+      </section>
+
+      <section class="noticeBox pilotBoundary" aria-label="Pilot boundary">
+        <strong>This is a development pilot, not a hidden benchmark.</strong> All 48 critiques come from the public synthetic
+        library and are currently unrated. Pilot results will be used to revise the method and estimate the resources needed
+        for a future protected Hard Set.
+      </section>
+
+      <section class="intakeShell" aria-labelledby="intake-title">
+        <div class="progressHeader">
+          <div>
+            <p class="eyebrow">Expression of interest</p>
+            <h2 id="intake-title">Tell us about your background and availability</h2>
+          </div>
+          <span class="statusPill">Human-reviewed selection</span>
+        </div>
+
+        <div id="formAlert" class="alert" role="alert" tabindex="-1" hidden></div>
+
+        <form id="pilotRaterForm" novalidate>
+          <section class="formStep">
+            <div class="fieldGrid twoColumns">
+              <label class="field">
+                <span>Full name</span>
+                <input name="displayName" autocomplete="name" maxlength="120" required />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input name="email" type="email" autocomplete="email" maxlength="254" required />
+              </label>
+              <label class="field">
+                <span>Career stage</span>
+                <select name="careerStage" required>
+                  <option value="">Select one</option>
+                  <option value="doctoral_student">Doctoral student</option>
+                  <option value="postdoctoral_researcher">Postdoctoral researcher</option>
+                  <option value="recent_doctorate">Recent doctorate</option>
+                  <option value="research_staff">Research staff</option>
+                  <option value="independent_early_career_researcher">Independent early-career researcher</option>
+                  <option value="advanced_masters_with_research">Advanced master’s student with research experience</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label class="field conditional" data-show-when="careerStage:other" hidden>
+                <span>Describe your career stage</span>
+                <input name="otherCareerStage" maxlength="160" />
+              </label>
+              <label class="field">
+                <span>Affiliation <small>Optional</small></span>
+                <input name="affiliation" autocomplete="organization" maxlength="180" />
+              </label>
+              <label class="field">
+                <span>Public profile <small>Optional</small></span>
+                <input name="profileUrl" type="url" inputmode="url" maxlength="500" placeholder="Institutional page, ORCID, personal site, or publication profile" />
+              </label>
+              <label class="field">
+                <span>Total availability during a four-week pilot</span>
+                <input name="availableHours" type="number" inputmode="numeric" min="1" max="60" step="1" required />
+                <small>Enter an integer number of hours. Final assignments are confirmed before commitment.</small>
+              </label>
+              <label class="field">
+                <span>Time zone or UTC offset</span>
+                <input name="timezone" maxlength="100" placeholder="Example: America/New_York or UTC+1" required />
+              </label>
+            </div>
+
+            <fieldset class="checkboxFieldset">
+              <legend>Relevant areas <small>Select all that apply</small></legend>
+              <div class="checkboxGrid">
+                <label><input type="checkbox" name="expertise" value="metaphilosophy" /> Metaphilosophy</label>
+                <label><input type="checkbox" name="expertise" value="epistemology" /> Epistemology</label>
+                <label><input type="checkbox" name="expertise" value="logic_and_argumentation" /> Logic / argumentation</label>
+                <label><input type="checkbox" name="expertise" value="philosophy_of_science" /> Philosophy of science</label>
+                <label><input type="checkbox" name="expertise" value="philosophy_of_language" /> Philosophy of language</label>
+                <label><input type="checkbox" name="expertise" value="metaphysics" /> Metaphysics</label>
+                <label><input type="checkbox" name="expertise" value="philosophy_of_mind" /> Philosophy of mind</label>
+                <label><input type="checkbox" name="expertise" value="personal_identity" /> Personal identity</label>
+                <label><input type="checkbox" name="expertise" value="free_will" /> Free will / agency</label>
+                <label><input type="checkbox" name="expertise" value="normative_ethics" /> Normative ethics</label>
+                <label><input type="checkbox" name="expertise" value="metaethics" /> Metaethics</label>
+                <label><input type="checkbox" name="expertise" value="social_political_philosophy" /> Social / political philosophy</label>
+                <label><input type="checkbox" name="expertise" value="decision_theory" /> Decision theory</label>
+                <label><input type="checkbox" name="expertise" value="philosophy_of_ai" /> Philosophy of AI</label>
+                <label><input type="checkbox" name="expertise" value="ai_safety" /> AI safety</label>
+                <label><input type="checkbox" name="expertise" value="other" /> Other</label>
+              </div>
+              <p class="fieldError" data-error-for="expertise"></p>
+            </fieldset>
+
+            <label class="field conditional" data-show-when="expertise:other" hidden>
+              <span>Other relevant area</span>
+              <input name="otherExpertise" maxlength="180" />
+            </label>
+
+            <label class="field">
+              <span>Relevant research or argument-evaluation experience</span>
+              <textarea name="relevantExperience" rows="6" minlength="80" maxlength="2400" required></textarea>
+              <small>Describe advanced coursework, research, publications, teaching, reviewing, debate, or comparable work.</small>
+            </label>
+
+            <label class="field">
+              <span>Why are you interested in this pilot?</span>
+              <textarea name="motivation" rows="5" minlength="60" maxlength="1800" required></textarea>
+            </label>
+
+            <label class="field">
+              <span>Conflicts, authorship, or prior exposure <small>Write “None known” if none</small></span>
+              <textarea name="conflictDisclosure" rows="4" maxlength="1400" placeholder="Disclose authorship, close collaboration, prior access to non-public material, or other relevant conflicts."></textarea>
+            </label>
+
+            <fieldset class="consentList">
+              <legend>Required confirmations</legend>
+              <label><input type="checkbox" name="age18" required /> I am at least 18 years old.</label>
+              <label><input type="checkbox" name="accuracy" required /> The information in this expression of interest is accurate.</label>
+              <label><input type="checkbox" name="contact" required /> Metaphilosophy may contact me about screening, calibration, selection, and pilot logistics.</label>
+              <label><input type="checkbox" name="researchOperations" required /> My application and any later calibration may be used for recruitment, reliability analysis, and research operations in identifiable form internally and deidentified form in analysis.</label>
+              <label><input type="checkbox" name="nonbinding" required /> I understand this is non-binding and does not guarantee selection, assignments, or an individual honorarium amount.</label>
+              <label><input type="checkbox" name="noAiCalibration" required /> I will not use external AI assistance on the calibration or rating work.</label>
+            </fieldset>
+
+            <label class="honeypot" aria-hidden="true">
+              Website
+              <input name="website" autocomplete="off" tabindex="-1" />
+            </label>
+
+            <div class="stepActions end">
+              <button id="submitButton" class="primaryButton" type="submit">Submit expression of interest</button>
+            </div>
+          </section>
+        </form>
+
+        <section id="completionPanel" class="completionPanel" hidden tabindex="-1" aria-labelledby="completion-title">
+          <div class="completionIcon" aria-hidden="true">✓</div>
+          <p class="eyebrow">Expression recorded</p>
+          <h3 id="completion-title">Thank you. A human reviewer will screen your application.</h3>
+          <p>
+            Qualified applicants may be invited to a separate public calibration. This confirmation is not a selection,
+            assignment, or payment commitment.
+          </p>
+          <dl class="confirmationDetails">
+            <div><dt>Application reference</dt><dd id="applicationReference">—</dd></div>
+            <div><dt>Status</dt><dd>Pending human review</dd></div>
+          </dl>
+        </section>
+      </section>
+
+      <section class="faq" aria-labelledby="faq-title">
+        <p class="eyebrow">Details</p>
+        <h2 id="faq-title">Frequently asked questions</h2>
+        <details><summary>Does applying commit me to the full pilot?</summary><p>No. This is an expression of interest. Selected applicants receive an exact proposed assignment range and dates before committing.</p></details>
+        <details><summary>Is this a paid job?</summary><p>No. The current USD 400 core-rater budget is a limited pooled volunteer honorarium distributed by accepted units. It is not a wage or full-cost payment, and no individual amount is guaranteed.</p></details>
+        <details><summary>Are the items confidential?</summary><p>No. Pilot 01 uses public synthetic development material. Protected future Hard Set material is not used in this pilot or shown during recruitment.</p></details>
+        <details><summary>Will I need to provide tax or banking information here?</summary><p>No. This form does not request sensitive payment or tax data. Activated contributors complete any required onboarding later through an appropriate process.</p></details>
+        <details><summary>How are raters selected?</summary><p>A human reviewer verifies relevant training or equivalent experience, reviews conflicts and availability, and evaluates a separate calibration. Prestige and affiliation alone do not qualify an applicant.</p></details>
+      </section>
+    </main>
+
+    <footer>
+      <p>Metaphilosophy — expert data for better AI reasoning on conceptual questions.</p>
+      <p>No advertising pixels or third-party analytics are used on this page.</p>
+    </footer>
+
+    <script type="module" src="/pilot-raters/app.mjs?v=1"></script>
+  </body>
+</html>
