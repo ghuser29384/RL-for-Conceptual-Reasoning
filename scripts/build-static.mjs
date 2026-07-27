@@ -11,6 +11,7 @@ await mkdir(dist, { recursive: true });
 await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
 await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
 await cp(resolve(root, "reviewers"), resolve(dist, "reviewers"), { recursive: true });
+await cp(resolve(root, "pilot-raters"), resolve(dist, "pilot-raters"), { recursive: true });
 await cp(resolve(root, "arguments"), resolve(dist, "arguments"), { recursive: true });
 
 console.log(`Static build written to ${dist}`);
