@@ -1,0 +1,162 @@
+{
+  "pilot_id": "metaphilosophy-pilot-01-2026-07-27",
+  "pilot_version": 1,
+  "decision_status": "approved_definition_recruitment_open_results_pending",
+  "approved_at": "2026-07-27",
+  "approved_by": "project_owner",
+  "purpose": {
+    "primary": "Test the rating, calibration, assignment, disagreement, adjudication, and audit workflow on a small public development set before attempting the 400-critique Hard Set.",
+    "secondary": [
+      "Estimate actual rating and adjudication time.",
+      "Measure initial and post-discussion expert agreement.",
+      "Identify rubric ambiguities and operational failure modes.",
+      "Produce empirical evidence for external-funding applications."
+    ],
+    "not_a_claim": [
+      "Pilot 01 is not Bench 01.",
+      "Pilot 01 is not a hidden test set.",
+      "Pilot 01 does not establish that the public-synthetic source is representative of philosophical argument quality.",
+      "Pilot 01 does not complete or validate the planned 400-critique Hard Set."
+    ]
+  },
+  "items": {
+    "source_release_id": "synthetic-1000-v1",
+    "source_class": "public_synthetic_unrated",
+    "source_manifest_path": "/arguments/data/manifest.json",
+    "controlled_item_manifest_path": "ops/pilot-01/pilot-items-public.json",
+    "positions": 12,
+    "critiques_per_position": 4,
+    "critiques": 48,
+    "independent_initial_ratings_per_critique": 2,
+    "required_initial_ratings": 96,
+    "split_unit": "position",
+    "public_exposure": "fully_public_development_material",
+    "future_hidden_test_eligibility": false,
+    "selection_basis": [
+      "Twelve distinct philosophical domains.",
+      "Exactly four sibling critiques per position from the frozen public release.",
+      "No use of protected LMCA or newly hidden material.",
+      "Operational and reliability coverage rather than asserted difficulty optimization."
+    ]
+  },
+  "early_career_panel": {
+    "minimum_core_raters": 4,
+    "target_core_raters": 6,
+    "maximum_core_raters": 8,
+    "target_prequalified_alternates": 2,
+    "eligible_profiles": [
+      "advanced philosophy doctoral student",
+      "postdoctoral researcher",
+      "recent philosophy doctorate",
+      "early-career researcher in a directly relevant adjacent field",
+      "researcher with equivalent demonstrated argument-evaluation expertise"
+    ],
+    "selection_requirements": [
+      "Relevant research or advanced training is verified.",
+      "Required consent and conflict disclosure are complete.",
+      "The frozen calibration is passed after human review.",
+      "The applicant can complete an assigned tranche during the four-week pilot window.",
+      "The applicant agrees not to use external AI assistance while rating."
+    ],
+    "nominal_assignment_range_per_core_rater": {
+      "minimum": 12,
+      "maximum": 24,
+      "explanation": "The exact number depends on whether four to eight qualified core raters are activated; every critique still receives two independent ratings."
+    }
+  },
+  "senior_methodological_advisers": {
+    "minimum_confirmed": 1,
+    "target_confirmed": 2,
+    "bulk_annotation_request_prohibited": true,
+    "bounded_request": {
+      "expected_total_hours_per_person": {
+        "minimum": 1,
+        "maximum": 3
+      },
+      "shared_calibration_cases": {
+        "minimum": 8,
+        "maximum": 12
+      },
+      "tasks": [
+        "Review the protocol and Rubric v2.",
+        "Review a shared calibration tranche.",
+        "Comment on disagreement and adjudication triggers.",
+        "Identify methodological errors or missing safeguards.",
+        "Recommend qualified early-career raters and alternates.",
+        "Where applicable, advise on access to the canonical LMCA data and license terms."
+      ],
+      "optional_additional_task": "Review no more than ten difficult disagreement cases unless a separate agreement is made."
+    }
+  },
+  "delivery": {
+    "maximum_duration_days": 28,
+    "start_condition": "pilot_readiness_gate_passed_and_start_rule_applied",
+    "start_rule": "00:00 UTC on the earliest Monday at least 72 hours after Ellen Sun signs the complete Pilot 01 readiness record",
+    "calendar_start": null,
+    "calendar_end": null,
+    "readiness_gate": [
+      "The 12-position and 48-critique manifest is verified against synthetic-1000-v1.",
+      "Rubric v2, rating form, calibration, disagreement triggers, and adjudication protocol are frozen.",
+      "At least four qualified early-career core raters and at least one senior methodological adviser are confirmed.",
+      "Blind assignments cover every critique twice and prevent same-rater duplicate coverage.",
+      "Payment administration and applicable legal, tax, sanctions, and jurisdiction checks are complete for activated paid contributors.",
+      "Ellen Sun signs the readiness record."
+    ],
+    "completion_gate": [
+      "All 96 required blind initial ratings are accepted or validly replaced.",
+      "All triggered disagreement cases are resolved or documented as unresolved.",
+      "The pilot result report and deidentified audit record are frozen.",
+      "At least one confirmed senior methodological adviser reviews the pilot summary."
+    ]
+  },
+  "budget": {
+    "currency": "USD",
+    "ceiling": 500,
+    "model": "limited_honoraria_for_volunteer_expert_work",
+    "core_rater_pool": 400,
+    "adjudication_reserve": 100,
+    "rate_based_compensation": false,
+    "full_labour_cost_coverage_claim": false,
+    "unit_rules": {
+      "core": "One accepted blind initial rating or operator-assigned substantive re-rating earns one unit.",
+      "adjudication": "One accepted required adjudication closure or final pilot sign-off earns one unit.",
+      "distribution": "Each released pool is distributed pro rata by accepted eligible units using largest-remainder cent rounding.",
+      "unused_adjudication_balance": "Remain unspent; do not transfer silently to the core pool."
+    }
+  },
+  "measurement": {
+    "required_outputs": [
+      "Calibration pass and exclusion counts.",
+      "Completion, withdrawal, replacement, and missing-data counts.",
+      "Median and 90th-percentile rating time for accepted initial ratings.",
+      "Initial human-human agreement using the LMCA custom weighted loss and within-position ordering agreement.",
+      "Dimension-level disagreement distributions.",
+      "Number and proportion of ratings and positions triggering adjudication.",
+      "Adjudication time and categorized causes of disagreement.",
+      "Post-discussion agreement where discussion occurs.",
+      "Rater and adviser qualitative feedback.",
+      "Observed source, length, style, and domain confound diagnostics."
+    ],
+    "automatic_success_thresholds": false,
+    "interpretation": "The project owner and senior methodological adviser review the complete results before any expansion decision."
+  },
+  "recruitment": {
+    "public_expression_of_interest_route": "/pilot-raters/",
+    "api_route": "/api/pilot-rater-eoi",
+    "status": "open_nonbinding_expression_of_interest",
+    "no_assignment_or_payment_guarantee": true,
+    "sensitive_payment_or_tax_data_collected_at_eoi": false,
+    "selection_owner": "Ellen Sun"
+  },
+  "funding_evidence": {
+    "ltff_draft_path": "funding/ltff-pilot-evidence-draft.md",
+    "emergent_ventures_draft_path": "funding/emergent-ventures-pilot-evidence-draft.md",
+    "submission_gate": [
+      "Pilot result report is frozen.",
+      "At least one senior methodological feedback record is available and permission to quote or attribute it is recorded.",
+      "Requested scope and budget are recalculated from observed pilot workload rather than the LMCA 5–15 minute estimate alone."
+    ],
+    "application_owner": "Ellen Sun"
+  },
+  "full_hard_set_expansion_gate_path": "ops/pilot-01/full-hard-set-expansion-gate.json"
+}
