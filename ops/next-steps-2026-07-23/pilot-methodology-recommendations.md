@@ -134,7 +134,7 @@ Strength and centrality remain useful diagnostic fields but are not standalone q
 
 ### Dependence and uncertainty
 
-Four critiques share each position context, so the critique is not an independent resampling unit. The analysis should:
+Four critiques share each position context, so the critique is not an independent resampling unit. **Position, not individual critique, is the resampling unit.** The analysis should:
 
 - publish the twelve position-level result blocks;
 - use position for resampling or leave-one-position-out analysis;
