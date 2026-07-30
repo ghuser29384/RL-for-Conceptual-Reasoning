@@ -11,6 +11,8 @@ on:
       - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-pilot-methodology-recommendations.mjs"
       - "scripts/verify-pilot-readiness-ledger.mjs"
+      - "scripts/verify-pilot-rating-analysis-contract.mjs"
+      - "scripts/pilot-rating-analysis.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
@@ -18,6 +20,8 @@ on:
       - "test/pilot-48-plan.test.mjs"
       - "test/pilot-methodology-recommendations.test.mjs"
       - "test/pilot-readiness-ledger.test.mjs"
+      - "test/pilot-rating-analysis-contract.test.mjs"
+      - "test/pilot-rating-analysis.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -33,6 +37,8 @@ on:
       - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-pilot-methodology-recommendations.mjs"
       - "scripts/verify-pilot-readiness-ledger.mjs"
+      - "scripts/verify-pilot-rating-analysis-contract.mjs"
+      - "scripts/pilot-rating-analysis.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
@@ -40,6 +46,8 @@ on:
       - "test/pilot-48-plan.test.mjs"
       - "test/pilot-methodology-recommendations.test.mjs"
       - "test/pilot-readiness-ledger.test.mjs"
+      - "test/pilot-rating-analysis-contract.test.mjs"
+      - "test/pilot-rating-analysis.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -61,6 +69,8 @@ jobs:
       - run: node scripts/verify-pilot-48-plan.mjs
       - run: node scripts/verify-pilot-methodology-recommendations.mjs
       - run: node scripts/verify-pilot-readiness-ledger.mjs
+      - run: node scripts/verify-pilot-rating-analysis-contract.mjs
+      - run: node scripts/pilot-rating-analysis.mjs --help
       - run: node scripts/verify-hard-set-source-allocation.mjs
       - run: node scripts/verify-panel-honoraria-plan.mjs
       - run: node scripts/verify-program-contracts.mjs
