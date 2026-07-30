@@ -16,9 +16,11 @@ The public synthetic release is frozen under a checksum-backed contract, and the
 
 The recommended pilot structure is **12 positions × 4 critiques**, with **two independent blind ratings per critique** for **96 required initial ratings**. It uses **6 early-career core raters and 2 dedicated adjudicators**, a **four-week / 28-day end-to-end window**, and the already approved **USD 500 limited-honoraria ceiling**: **USD 400** for the contribution-weighted core-rater pool and **USD 100** for the contribution-weighted adjudication reserve.
 
-The pilot-first direction is owner-approved. The exact 12 × 4 structure, topic/source matrix, candidate-acquisition procedure, adviser envelope, and numerical adjudication and scale-readiness thresholds remain recommendations pending methodological review and explicit owner approval. The repository must not convert those recommendations into binding policy merely because they appear in the draft protocol.
+The pilot-first direction is owner-approved. The exact 12 × 4 structure, topic/source matrix, candidate-acquisition procedure, balanced assignment template, shared calibration rule, adviser envelope, and numerical adjudication and scale-readiness thresholds remain recommendations pending methodological review and explicit owner approval. The repository must not convert those recommendations into binding policy merely because they appear in the draft protocol.
 
 The LMCA work is treated as methodological prior art and an external benchmark. The pilot does not reuse LMCA rows because the canonical row-level dataset and redistribution license have not been supplied. The pilot instead tests a multi-rater, platform-mediated workflow designed to measure rating time, agreement, adjudication load, item defects, and auditability.
+
+A source-grounded LMCA audit now supports a preferred **six-six source crossing**, a **12-pair no-repeat anonymous assignment graph**, an **eight-critique shared public calibration proposal**, review whenever either rater assigns **clarity below 0.5**, and position-level small-sample safeguards. These remain non-binding Q-006A/Q-006B recommendations.
 
 Senior researchers are approached only for bounded methodological advice. Early-career experts perform the bulk ratings. Draft adviser, rater, and outreach materials are included for review, but no outreach has been authorized or sent from this package.
 
@@ -37,6 +39,9 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `decision-register.json` — decisions made under the user's 90% credence rule.
 - `pilot-48-plan.json` — machine-readable pilot scope, protocol recommendations, governance boundary, deliverables, and expansion gate.
 - `pilot-48-plan.md` — human-readable 48-critique pilot protocol.
+- `lmca-methodology-audit.md` — source-grounded audit mapping LMCA evidence and limitations to pilot design requirements.
+- `pilot-methodology-recommendations.json` — machine-readable non-binding assignment, source-crossing, calibration, adjudication, and analysis recommendation.
+- `pilot-methodology-recommendations.md` — human-readable balanced assignment template and small-sample safeguards.
 - `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
 - `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
@@ -50,6 +55,7 @@ Local verification:
 
 ```bash
 node scripts/verify-pilot-48-plan.mjs
+node scripts/verify-pilot-methodology-recommendations.mjs
 node scripts/verify-hard-set-source-allocation.mjs
 node scripts/verify-panel-honoraria-plan.mjs
 node scripts/verify-program-contracts.mjs
