@@ -20,7 +20,7 @@ The pilot-first direction is owner-approved. The exact 12 × 4 structure, topic/
 
 The LMCA work is treated as methodological prior art and an external benchmark. The pilot does not reuse LMCA rows because the canonical row-level dataset and redistribution license have not been supplied. The pilot instead tests a multi-rater, platform-mediated workflow designed to measure rating time, agreement, adjudication load, item defects, and auditability.
 
-Senior researchers are approached only for bounded methodological advice. Early-career experts perform the bulk ratings. No outreach has been authorized or sent from this package.
+Senior researchers are approached only for bounded methodological advice. Early-career experts perform the bulk ratings. Draft adviser, rater, and outreach materials are included for review, but no outreach has been authorized or sent from this package.
 
 The approved **50 LMCA / 20 public-synthetic / 30 newly hidden public-domain-derived** source allocation is preserved only as a possible **Phase 2** strategy. The 100-position / 400-critique programme is blocked until the pilot is reviewed, senior methodological concerns are recorded, external funding or documented complete qualified-volunteer capacity exists, and the project owner records a new activation decision.
 
@@ -37,6 +37,9 @@ The next owner checkpoint is **Q-006**: approve the recommended pilot structure 
 - `decision-register.json` — decisions made under the user's 90% credence rule.
 - `pilot-48-plan.json` — machine-readable pilot scope, protocol recommendations, governance boundary, deliverables, and expansion gate.
 - `pilot-48-plan.md` — human-readable 48-critique pilot protocol.
+- `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
+- `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
+- `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
 - `hard-set-source-allocation.json` — machine-readable deferred Phase 2 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
 - `hard-set-source-allocation.md` — human-readable deferred Phase 2 source-allocation rationale and activation boundary.
 - `panel-honoraria-plan.json` — machine-readable pilot panel, delivery, contribution-unit, payout, operations, attrition, and readiness rules.
