@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.metaphilosophy.org/schemas/pilot-48-plan-v1.schema.json",
   "pilot_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
-  "pilot_version": 1,
-  "decision_status": "approved_scope_and_protocol_exact_items_participants_payment_and_adviser_roster_pending",
+  "pilot_version": 2,
+  "decision_status": "approved_core_scope_recommended_methodology_exact_items_participants_payment_advisers_and_numeric_thresholds_pending",
   "approved_at": "2026-07-30",
   "approved_by": "project_owner",
   "decision_references": [
@@ -12,6 +12,22 @@
     "Use the pilot results and senior feedback to support the LTFF and Emergent Ventures applications",
     "Expand to the full 400 critiques only after external funding or substantial committed volunteer capacity is secured"
   ],
+  "governance": {
+    "owner_approved_core": [
+      "Run a 48-critique pilot before attempting the full 400-critique programme.",
+      "Use early-career experts for the bulk rating work.",
+      "Ask senior researchers only for bounded methodological advice, not bulk ratings.",
+      "Use pilot evidence and senior feedback to support Long-Term Future Fund and Emergent Ventures applications.",
+      "Do not activate the 400-critique programme without external funding or substantial committed qualified-volunteer capacity and a new owner decision."
+    ],
+    "recommended_protocol_elements": [
+      "Use 12 positions with four critiques per position and two independent initial ratings per critique.",
+      "Assign all four sibling critiques to the same pair of raters to support within-position comparison.",
+      "Use a six-family topic matrix and a mixed public-synthetic/protected-public-domain source pool.",
+      "Pre-register numerical adjudication and scale-readiness thresholds only after methodological-adviser review and explicit owner approval."
+    ],
+    "decision_rule": "No recommended element with decision credence below 0.90 becomes binding without explicit project-owner approval."
+  },
   "purpose": [
     "Demonstrate that Metaphilosophy can collect blind, auditable, multi-rater expert judgments on philosophical critiques.",
     "Estimate rating time, disagreement frequency, adjudication load, and operational cost before any 400-critique expansion.",
@@ -31,6 +47,7 @@
     ]
   },
   "scope": {
+    "structure_status": "recommended_and_recorded_pending_final_readiness_approval",
     "positions": 12,
     "critiques_per_position": 4,
     "critiques": 48,
@@ -42,50 +59,54 @@
     "nominal_initial_ratings_per_core_rater": 16,
     "duration_days": 28
   },
-  "topic_matrix": [
-    {
-      "topic_family": "normative_ethics",
-      "positions": 2,
-      "critiques": 8
-    },
-    {
-      "topic_family": "political_philosophy",
-      "positions": 2,
-      "critiques": 8
-    },
-    {
-      "topic_family": "epistemology_and_philosophy_of_science",
-      "positions": 2,
-      "critiques": 8
-    },
-    {
-      "topic_family": "philosophy_of_mind_and_ai_consciousness",
-      "positions": 2,
-      "critiques": 8
-    },
-    {
-      "topic_family": "decision_theory_and_social_choice",
-      "positions": 2,
-      "critiques": 8
-    },
-    {
-      "topic_family": "metaphilosophy_and_ai_governance",
-      "positions": 2,
-      "critiques": 8
-    }
-  ],
+  "topic_matrix": {
+    "status": "recommended_owner_and_methodological_adviser_review_required",
+    "families": [
+      {
+        "topic_family": "normative_ethics",
+        "positions": 2,
+        "critiques": 8
+      },
+      {
+        "topic_family": "political_philosophy",
+        "positions": 2,
+        "critiques": 8
+      },
+      {
+        "topic_family": "epistemology_and_philosophy_of_science",
+        "positions": 2,
+        "critiques": 8
+      },
+      {
+        "topic_family": "philosophy_of_mind_and_ai_consciousness",
+        "positions": 2,
+        "critiques": 8
+      },
+      {
+        "topic_family": "decision_theory_and_social_choice",
+        "positions": 2,
+        "critiques": 8
+      },
+      {
+        "topic_family": "metaphilosophy_and_ai_governance",
+        "positions": 2,
+        "critiques": 8
+      }
+    ]
+  },
   "source_policy": {
+    "status": "eligible_classes_frozen_exact_mix_and_minimums_recommended_pending_manifest_approval",
     "eligible_source_classes": [
       "public_synthetic_with_new_expert_ratings",
       "protected_public_domain_derived"
     ],
-    "minimum_positions_by_source_class": {
+    "recommended_minimum_positions_by_source_class": {
       "public_synthetic_with_new_expert_ratings": 4,
       "protected_public_domain_derived": 4
     },
-    "remaining_positions": 4,
-    "remaining_position_rule": "Select the remaining four positions from either eligible class to improve topic coverage, difficulty, source/style balance, and readiness; do not introduce LMCA rows unless the canonical data and license are separately approved.",
-    "exact_mix_status": "pending_controlled_manifest",
+    "recommended_flexible_positions": 4,
+    "recommended_flexible_position_rule": "Select the remaining four positions from either eligible class to improve topic coverage, difficulty, source/style balance, and readiness; do not introduce LMCA rows unless the canonical data and license are separately approved.",
+    "exact_mix_status": "pending_controlled_manifest_and_owner_approval",
     "rights_and_provenance_requirements": [
       "Every position and critique has a versioned source and authorship record.",
       "Protected public-domain-derived positions pass independent source-fidelity and ambiguity/scope review before critique production.",
@@ -94,7 +115,8 @@
     ]
   },
   "candidate_selection": {
-    "minimum_candidate_critiques_per_position": 8,
+    "status": "recommended_acquisition_policy_pending_manifest_approval",
+    "recommended_minimum_candidate_critiques_per_position": 8,
     "selected_critiques_per_position": 4,
     "selection_objectives": [
       "Include one candidate with high judge mean and low judge disagreement.",
@@ -145,6 +167,7 @@
     "revision_policy": "Preserve every original rating. Revisions require an object-level reason and create a new version; disagreement alone is not a sufficient reason to revise."
   },
   "assignment_design": {
+    "status": "recommended_and_recorded_pending_final_readiness_approval",
     "split_unit": "position",
     "sibling_critiques_cross_rater_split": false,
     "initial_raters_per_position": 2,
@@ -158,7 +181,8 @@
     ]
   },
   "adjudication_protocol": {
-    "trigger_rules": [
+    "numeric_threshold_status": "provisional_candidates_not_binding_until_methodological_adviser_review_and_explicit_owner_approval",
+    "provisional_numeric_trigger_candidates": [
       {
         "field": "overall",
         "absolute_difference_at_least": 0.3
@@ -174,7 +198,9 @@
       {
         "field": "clarity",
         "absolute_difference_at_least": 0.35
-      },
+      }
+    ],
+    "required_non_numeric_triggers": [
       {
         "field": "insufficient_context",
         "condition": "either_initial_rater_flags_true"
@@ -198,12 +224,12 @@
     "final_signoff": "Both adjudicators independently sign the frozen label snapshot and audit completeness record."
   },
   "methodological_adviser_protocol": {
-    "role": "bounded_review_not_bulk_rating",
-    "target_number": {
+    "status": "recommended_outreach_envelope_exact_roster_and_request_pending_owner_approval",
+    "recommended_target_number": {
       "minimum": 2,
       "maximum": 4
     },
-    "maximum_request": "Review a two-page protocol asynchronously in approximately 20 minutes or join one 30-minute call.",
+    "recommended_maximum_request": "Review a two-page protocol asynchronously in approximately 20 minutes or join one 30-minute call.",
     "questions": [
       "What is the largest threat to the pilot's validity or usefulness?",
       "Which rubric, assignment, or adjudication rule should be changed before launch?",
@@ -235,15 +261,21 @@
       "weighted pairwise ordering agreement within positions",
       "mean absolute rater difference"
     ],
-    "scale_readiness_criteria": [
+    "binding_completion_requirements": [
       "All 96 required blind initial ratings are accepted or validly replaced.",
+      "Every case required by the pre-registered adjudication policy is resolved or explicitly documented as unresolved.",
+      "Both adjudicators complete the required final label-snapshot sign-off.",
+      "The rating, revision, adjudication, exposure, and payment audit trails are complete."
+    ],
+    "numeric_scale_readiness_status": "provisional_candidates_not_binding_until_methodological_adviser_review_and_explicit_owner_approval",
+    "provisional_numeric_scale_readiness_candidates": [
       "Median time for an accepted initial rating is no more than 15 minutes.",
       "Weighted within-position pairwise agreement is at least 0.75 for critique pairs whose mean overall-score gap is at least 0.20.",
       "At least 9 of 12 positions contain a consensus overall-score spread of at least 0.30 across their four critiques.",
-      "No more than 25 percent of critiques remain unresolved because of defective context, source fidelity, ambiguity, or scope after adjudication.",
-      "The rating, revision, adjudication, exposure, and payment audit trails are complete."
+      "No more than 25 percent of critiques remain unresolved because of defective context, source fidelity, ambiguity, or scope after adjudication."
     ],
-    "interpretation": "Failure to meet a scale-readiness criterion triggers protocol or item redesign; it must not be hidden by redefining the metric after results are known."
+    "threshold_governance": "Freeze numerical adjudication and scale-readiness thresholds before the first protected rating, after methodological-adviser feedback and explicit project-owner approval. Later amendments require a versioned, time-stamped rationale and may not be applied retroactively to conceal an unfavorable result.",
+    "interpretation": "A missed pre-registered scale-readiness threshold triggers protocol or item redesign; it does not permit post hoc metric substitution."
   },
   "deliverables": [
     "controlled 12-position and 48-critique manifest",
@@ -263,7 +295,7 @@
     },
     "status": "blocked_before_pilot_results_and_capacity",
     "required_before_activation": [
-      "Pilot completion gate passes and scale-readiness findings are reviewed.",
+      "Pilot completion requirements pass and pre-registered scale-readiness findings are reviewed.",
       "Senior methodological feedback is recorded and material concerns are resolved or disclosed.",
       "External funding is secured or documented qualified volunteer commitments cover the complete 400-critique workload, expected re-ratings, adjudication, replacements, and operations.",
       "The project owner explicitly approves activation of the 400-critique programme in a new decision record."
@@ -271,16 +303,19 @@
     "no_automatic_rollover": true
   },
   "unresolved_parameters": [
-    "Exact 12 position IDs, 48 critique IDs, source mix within the approved bounds, and controlled manifest hash.",
+    "Final approval of the recommended 12-position by four-critique structure and paired-rater assignment design.",
+    "Exact six-family topic allocation and public-synthetic/protected-public-domain source minimums.",
+    "Exact 12 position IDs, 48 critique IDs, candidate-pool rule, source mix, and controlled manifest hash.",
+    "Exact numerical adjudication triggers and scale-readiness thresholds after methodological-adviser review.",
     "Exact six early-career core-rater identities, two dedicated adjudicator identities, and replacement candidates.",
     "Participant jurisdictions, payment methods, tax documentation, sanctions screening, and applicable legal review.",
-    "Exact senior methodological-adviser roster and outreach order.",
+    "Exact senior methodological-adviser roster, outreach order, and bounded request.",
     "Frozen model-baseline lineup and API reproducibility record.",
     "External-funding application owner, submission dates, and final application narratives."
   ],
   "next_decision": {
     "id": "Q-006",
-    "question": "Which exact pilot items, early-career rater and adjudicator candidates, senior methodological advisers, participant jurisdictions and payment methods, and external-funding application owner should be approved for readiness?",
+    "question": "Which recommended pilot structure, topic/source matrix, candidate-acquisition rule, numerical adjudication and scale-readiness thresholds, exact items, early-career raters and adjudicators, senior methodological advisers, participant jurisdictions and payment methods, and external-funding application owner should be approved for readiness?",
     "status": "user_decision_required"
   }
 }
