@@ -1,8 +1,8 @@
 {
-  "plan_id": "hard-set-panel-honoraria-v1-2026-07-23",
-  "plan_version": 3,
-  "decision_status": "approved_structure_budget_window_pool_envelopes_distribution_operations_and_attrition_calendar_dates_payment_legal_pending",
-  "approved_at": "2026-07-25",
+  "plan_id": "pilot-panel-honoraria-v1-2026-07-23",
+  "plan_version": 4,
+  "decision_status": "approved_panel_budget_window_distribution_operations_and_attrition_applied_to_pilot_exact_structure_thresholds_participants_payment_and_legal_pending",
+  "approved_at": "2026-07-30",
   "approved_by": "project_owner",
   "decision_references": [
     "Expert panel option 2",
@@ -10,13 +10,20 @@
     "Delivery window option A: four weeks",
     "Honoraria allocation option 3: USD 400 core-rater completion pool plus USD 100 adjudication reserve",
     "Use the recommended contribution, eligibility, reserve, start, payout, and attrition rules",
-    "Operations owner: Ellen Sun (project owner)"
+    "Operations owner: Ellen Sun (project owner)",
+    "Apply the approved operating plan to the immediate 48-critique pilot"
   ],
+  "programme_scope": {
+    "active_programme": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+    "full_400_critique_programme_status": "deferred_phase_2",
+    "scope_note": "The USD 500 plan applies to the pilot. It does not fund or activate the deferred 400-critique expansion."
+  },
   "panel": {
     "core_raters": 6,
     "dedicated_adjudicators": 2,
     "total_people": 8,
     "role_separation": true,
+    "core_rater_seniority": "early_career_expert",
     "core_rater_scope": [
       "blind initial ratings",
       "required calibration",
@@ -29,22 +36,22 @@
     ]
   },
   "minimum_workload": {
-    "positions": 100,
-    "critiques": 400,
+    "structure_status": "recommended_pending_final_readiness_approval",
+    "positions": 12,
+    "critiques_per_position": 4,
+    "critiques": 48,
     "independent_initial_ratings_per_critique": 2,
-    "initial_ratings": 800,
-    "nominal_initial_ratings_per_core_rater": {
-      "minimum": 133,
-      "maximum": 134
-    },
+    "initial_ratings": 96,
+    "nominal_positions_per_core_rater": 4,
+    "nominal_initial_ratings_per_core_rater": 16,
     "source_estimate_minutes_per_short_rating": {
       "minimum": 5,
       "maximum": 15,
       "source": "LMCA paper, Rating the critiques"
     },
     "estimated_initial_rating_hours": {
-      "minimum": 66.67,
-      "maximum": 200.0,
+      "minimum": 8,
+      "maximum": 24,
       "excludes": [
         "recruitment",
         "calibration",
@@ -62,34 +69,31 @@
     "duration_days": 28,
     "calendar_start": null,
     "calendar_end": null,
-    "start_condition": "readiness_gate_passed_and_start_rule_applied",
+    "start_condition": "pilot_readiness_gate_passed_and_start_rule_applied",
     "start_rule": {
       "model": "first_monday_at_0000_utc_at_least_72_hours_after_readiness_signoff",
       "timezone": "UTC",
       "minimum_notice_hours": 72,
       "readiness_signed_at": null,
-      "calculation": "Choose the earliest Monday at 00:00:00 UTC that is at least 72 hours after the operations owner signs the complete readiness-gate record. Set calendar_end exactly 28 days after calendar_start."
+      "calculation": "Choose the earliest Monday at 00:00:00 UTC that is at least 72 hours after the operations owner signs the complete pilot readiness-gate record. Set calendar_end exactly 28 days after calendar_start."
     },
     "readiness_gate": [
-      "Exact 100-position and 400-critique controlled manifests are frozen and pass provenance, rights, exposure, and split checks.",
-      "Rubric v2 instructions, rating form, disagreement triggers, and adjudication protocol are frozen.",
-      "Six core raters and two dedicated adjudicators are confirmed, consented, conflict-checked, and calibrated.",
-      "Blind assignments are generated with two independent core raters per critique and no sibling split leakage.",
-      "The operations owner has signed the readiness record and payment administration plus applicable legal and tax review are complete."
+      "The project owner approves the recommended 12-position by four-critique structure, topic/source matrix, candidate-acquisition rule, exact controlled manifest, and protected-item exposure rules.",
+      "Rubric v2 instructions, rating form, numerical disagreement triggers, numerical scale-readiness thresholds, and adjudication protocol are frozen after methodological-adviser review and explicit owner approval.",
+      "Six early-career core raters and two dedicated adjudicators are confirmed, consented, conflict-checked, and calibrated; replacement candidates are documented.",
+      "Blind assignments are generated with two independent core raters per critique, all sibling critiques kept within the same rater pair, and no protected exposure leakage.",
+      "The operations owner signs the readiness record and payment administration plus applicable legal, tax, sanctions, and jurisdiction review are complete."
     ],
-    "end_condition": "completion_gate_passed",
+    "end_condition": "pilot_completion_gate_passed",
     "completion_gate": [
-      "All 800 required blind initial ratings are accepted or validly replaced.",
-      "All cases required by the frozen disagreement policy are resolved or explicitly documented as unresolved.",
+      "All 96 required blind initial ratings are accepted or validly replaced.",
+      "All cases required by the frozen adjudication policy are resolved or explicitly documented as unresolved.",
       "Both dedicated adjudicators complete the required label-snapshot sign-off.",
       "Rating, revision, adjudication, exposure, and payment audit records are complete."
     ],
     "nominal_pace": {
-      "initial_ratings_total_per_week": 200,
-      "initial_ratings_per_core_rater_per_week": {
-        "minimum": 33,
-        "maximum": 34
-      },
+      "initial_ratings_total_per_week": 24,
+      "initial_ratings_per_core_rater_per_week": 4,
       "status": "planning_average_not_honorarium_eligibility_threshold"
     },
     "rolling_adjudication": true,
@@ -179,7 +183,7 @@
         },
         "distribution_rule": {
           "normal_completion_distributable_fraction": 1,
-          "owner_approved_early_closure_distributable_fraction": "accepted_blind_initial_ratings_divided_by_800_capped_between_0_and_1",
+          "owner_approved_early_closure_distributable_fraction": "accepted_blind_initial_ratings_divided_by_96_capped_between_0_and_1",
           "substantive_rerating_units_share_the_distributable_pool_but_do_not_increase_the_early_closure_fraction": true,
           "individual_share": "distributable_amount_multiplied_by_contributors_accepted_units_divided_by_total_eligible_accepted_units",
           "zero_eligible_units_rule": "remain_unspent"
@@ -236,31 +240,38 @@
       "may_be_sought": true,
       "committed": false,
       "amount": null,
+      "candidate_targets": [
+        "Long-Term Future Fund",
+        "Emergent Ventures"
+      ],
       "application_owner": null
     },
     "legal_classification": "not_determined_by_this_plan"
   },
   "controls": [
-    "Aggregate honoraria commitments and disbursements must not exceed USD 500 unless a later owner-approved funding decision changes the ceiling.",
-    "Exactly USD 400 is reserved for the core-rater completion pool and USD 100 for the adjudication reserve under the current ceiling.",
+    "Aggregate pilot honoraria commitments and disbursements must not exceed USD 500 unless a later owner-approved funding decision changes the ceiling.",
+    "Exactly USD 400 is reserved for the pilot core-rater completion pool and USD 100 for the pilot adjudication reserve under the current ceiling.",
     "Every accepted unit participates after qualification; no eighty-percent or all-assignment completion threshold may be introduced without a new owner-approved decision.",
     "The pool formula allocates capped honoraria and must not be described as a per-rating wage or as full labour-cost coverage.",
-    "The 28-day clock starts only under the frozen first-Monday rule after the complete readiness gate is signed; no calendar deadline may be advertised before then.",
+    "The 28-day clock starts only under the frozen first-Monday rule after the complete pilot readiness gate is signed; no calendar deadline may be advertised before then.",
     "The four-week window does not extend automatically; any extension requires a new project-owner decision and an updated audit record.",
     "Unused adjudication-reserve funds remain unspent and may not be transferred silently to another pool.",
     "Accepted contribution units are never forfeited solely because a contributor later withdraws or is replaced.",
-    "Public recruitment remains closed until panel identities, payment administration, and applicable legal and tax review are complete.",
+    "Public recruitment remains closed until the recommended pilot structure is approved and panel identities, payment administration, and applicable legal and tax review are complete.",
+    "The USD 500 plan does not activate, reserve funding for, or promise participation in the deferred 400-critique Phase 2 programme.",
     "Additional funding must remain separately traceable from the initial USD 500 ceiling."
   ],
   "unresolved_parameters": [
-    "Exact six core-rater and two adjudicator identities, plus any prequalified replacement candidates.",
+    "Final owner approval of the recommended 12-position by four-critique structure and paired-rater assignment design.",
+    "Exact numerical adjudication and scale-readiness thresholds after methodological-adviser review.",
+    "Exact six early-career core-rater and two adjudicator identities, plus any prequalified replacement candidates.",
     "Payment method, recipient jurisdictions, tax documentation, sanctions screening, and applicable legal review.",
     "Readiness-signoff timestamp and the automatically derived absolute calendar start and end dates.",
-    "External-funding target, application owner, and trigger date."
+    "External-funding application owner, submission dates, and final target-specific evidence packet."
   ],
   "next_decision": {
-    "id": "Q-005",
-    "question": "Which payment methods and recipient jurisdictions, applicable legal and tax review, panel identities and replacement candidates, and external-funding application owner and target should be approved before the readiness gate can pass?",
+    "id": "Q-006",
+    "question": "Which recommended pilot structure and thresholds, panel and replacement identities, payment and jurisdiction arrangements, and external-funding application owner should be approved before the pilot readiness gate can pass?",
     "status": "user_decision_required"
   }
 }
