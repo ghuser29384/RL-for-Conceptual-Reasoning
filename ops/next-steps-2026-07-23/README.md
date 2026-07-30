@@ -30,6 +30,8 @@ The contribution rules remain frozen: accepted initial ratings, operator-assigne
 
 **Ellen Sun, project owner, is the human operations owner.** Once the complete pilot readiness record is signed, the programme starts at 00:00 UTC on the earliest Monday at least 72 hours later and ends exactly 28 days after that. Accepted units remain credited if a contributor withdraws or is replaced.
 
+The public readiness ledger keeps every execution gate blocked while Q-006A is pending. It contains only empty templates and required-field contracts for methodological feedback, candidate screening, calibration, model baselines, people, payment, and readiness evidence. It contains no recipient addresses, participant names, protected item IDs or text, labels, assignments, payment data, or execution authorization.
+
 The next owner checkpoint is **Q-006**. The recommended decision packet splits it into Q-006A (approve the consultation design), Q-006B (freeze methodology and protected items after adviser feedback), and Q-006C (approve people, payment, and dates after expressions of interest).
 
 ## Files
@@ -42,11 +44,13 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `lmca-methodology-audit.md` — source-grounded audit mapping LMCA evidence and limitations to pilot design requirements.
 - `pilot-methodology-recommendations.json` — machine-readable non-binding assignment, source-crossing, calibration, adjudication, and analysis recommendation.
 - `pilot-methodology-recommendations.md` — human-readable balanced assignment template and small-sample safeguards.
+- `pilot-readiness-ledger.json` — machine-readable blocked readiness state, authorization boundaries, empty controlled-record templates, and six execution gates.
+- `pilot-readiness-ledger.md` — human-readable readiness and sensitive-data boundary.
 - `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
 - `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
 - `q-006-decision-packet.md` — staged owner decision packet separating consultation design, frozen methodology/items, and people/payment/dates.
-- `q-006a-owner-approval.md` — concise pending approval record stating exactly what Q-006A would and would not authorize.
+- `q-006a-owner-approval.md` — concise pending owner-approval record; silence is explicitly not approval.
 - `hard-set-source-allocation.json` — machine-readable deferred Phase 2 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
 - `hard-set-source-allocation.md` — human-readable deferred Phase 2 source-allocation rationale and activation boundary.
 - `panel-honoraria-plan.json` — machine-readable pilot panel, delivery, contribution-unit, payout, operations, attrition, and readiness rules.
@@ -57,6 +61,7 @@ Local verification:
 ```bash
 node scripts/verify-pilot-48-plan.mjs
 node scripts/verify-pilot-methodology-recommendations.mjs
+node scripts/verify-pilot-readiness-ledger.mjs
 node scripts/verify-hard-set-source-allocation.mjs
 node scripts/verify-panel-honoraria-plan.mjs
 node scripts/verify-program-contracts.mjs
