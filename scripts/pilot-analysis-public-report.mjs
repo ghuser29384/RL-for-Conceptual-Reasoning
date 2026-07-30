@@ -163,24 +163,35 @@ function normalizeControlledSnapshot(report, snapshot) {
 
 function normalizeAggregate(aggregate, snapshot) {
   const source = aggregate && typeof aggregate === "object" ? aggregate : {};
+  const acceptedSnapshotRatings = source.accepted_snapshot_ratings ?? source.accepted_initial_ratings ?? 0;
+  const acceptedSnapshotRatingTime =
+    source.accepted_snapshot_rating_time_seconds ?? source.accepted_rating_time_seconds ?? null;
+  const meanAbsoluteRaterDifference =
+    source.mean_absolute_rater_difference_by_dimension ??
+    source.mean_absolute_initial_rater_difference_by_dimension ??
+    null;
+  const totalCritiquesWithTwoSnapshotRatings =
+    source.total_critiques_with_two_snapshot_ratings ??
+    source.total_critiques_with_two_initial_ratings ??
+    0;
+
   return {
     positions_with_complete_pairs: source.positions_with_complete_pairs ?? 0,
-    accepted_snapshot_ratings: source.accepted_initial_ratings ?? 0,
-    accepted_snapshot_rating_time_seconds: source.accepted_rating_time_seconds ?? null,
+    accepted_snapshot_ratings: acceptedSnapshotRatings,
+    accepted_snapshot_rating_time_seconds: acceptedSnapshotRatingTime,
     mean_position_weighted_ordering_agreement: source.mean_position_weighted_ordering_agreement ?? null,
-    mean_absolute_rater_difference_by_dimension:
-      source.mean_absolute_initial_rater_difference_by_dimension ?? null,
+    mean_absolute_rater_difference_by_dimension: meanAbsoluteRaterDifference,
     ...(snapshot === "accepted_initial_ratings"
       ? {
-          accepted_initial_ratings: source.accepted_initial_ratings ?? 0,
+          accepted_initial_ratings: source.accepted_initial_ratings ?? acceptedSnapshotRatings,
           mean_absolute_initial_rater_difference_by_dimension:
-            source.mean_absolute_initial_rater_difference_by_dimension ?? null,
+            source.mean_absolute_initial_rater_difference_by_dimension ?? meanAbsoluteRaterDifference,
         }
       : {}),
     interval_krippendorff_alpha_by_dimension: source.interval_krippendorff_alpha_by_dimension ?? {},
     critiques_with_candidate_routes: source.critiques_with_candidate_routes ?? 0,
     critiques_with_operative_routes: source.critiques_with_operative_routes ?? 0,
-    total_critiques_with_two_snapshot_ratings: source.total_critiques_with_two_initial_ratings ?? 0,
+    total_critiques_with_two_snapshot_ratings: totalCritiquesWithTwoSnapshotRatings,
   };
 }
 
