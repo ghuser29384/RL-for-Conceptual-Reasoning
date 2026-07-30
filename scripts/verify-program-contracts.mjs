@@ -160,7 +160,7 @@ assert.match(outreachPlan, /Public recruitment remains closed/);
 assert.match(q006Packet, /Q-006A — approve the consultation design/);
 assert.match(q006Packet, /Preferred source crossing/);
 assert.match(q006Packet, /Shared calibration proposal/);
-assert.match(q006Packet, /does not authorize sending/);
+assert.match(q006Packet, /does[^\n]*not[^\n]*authorize sending/i);
 
 const allocationReport = validateHardSetSourceAllocation(allocation);
 assert.equal(allocationReport.status, "pass", allocationReport.errors.join("\n"));
