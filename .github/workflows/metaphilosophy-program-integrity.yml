@@ -8,10 +8,12 @@ on:
       - "api/reviewer-recruitment.mjs"
       - "vercel.json"
       - "scripts/verify-program-contracts.mjs"
+      - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
       - "test/recruitment-intake-gate.test.mjs"
+      - "test/pilot-48-plan.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -24,10 +26,12 @@ on:
       - "api/reviewer-recruitment.mjs"
       - "vercel.json"
       - "scripts/verify-program-contracts.mjs"
+      - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
       - "test/recruitment-intake-gate.test.mjs"
+      - "test/pilot-48-plan.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -46,6 +50,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: node scripts/verify-pilot-48-plan.mjs
       - run: node scripts/verify-hard-set-source-allocation.mjs
       - run: node scripts/verify-panel-honoraria-plan.mjs
       - run: node scripts/verify-program-contracts.mjs
