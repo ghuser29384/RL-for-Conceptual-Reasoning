@@ -28,7 +28,7 @@ The contribution rules remain frozen: accepted initial ratings, operator-assigne
 
 **Ellen Sun, project owner, is the human operations owner.** Once the complete pilot readiness record is signed, the programme starts at 00:00 UTC on the earliest Monday at least 72 hours later and ends exactly 28 days after that. Accepted units remain credited if a contributor withdraws or is replaced.
 
-The next owner checkpoint is **Q-006**: approve the recommended pilot structure and thresholds, exact protected items, rater/adjudicator and adviser rosters, participant jurisdictions and payment methods, and the external-funding application owner.
+The next owner checkpoint is **Q-006**. The recommended decision packet splits it into Q-006A (approve the consultation design), Q-006B (freeze methodology and protected items after adviser feedback), and Q-006C (approve people, payment, and dates after expressions of interest).
 
 ## Files
 
@@ -40,6 +40,7 @@ The next owner checkpoint is **Q-006**: approve the recommended pilot structure 
 - `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
 - `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
+- `q-006-decision-packet.md` — staged owner decision packet separating consultation design, frozen methodology/items, and people/payment/dates.
 - `hard-set-source-allocation.json` — machine-readable deferred Phase 2 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
 - `hard-set-source-allocation.md` — human-readable deferred Phase 2 source-allocation rationale and activation boundary.
 - `panel-honoraria-plan.json` — machine-readable pilot panel, delivery, contribution-unit, payout, operations, attrition, and readiness rules.
