@@ -130,7 +130,7 @@ assert.match(methodologyAudit, /clarity below 0\.5/i);
 assert.match(methodologyAudit, /does not approve outreach/i);
 assert.match(methodologyBrief, /twelve distinct rater pairs/i);
 assert.match(methodologyBrief, /two public, non-protected positions/i);
-assert.match(methodologyBrief, /position, not individual critique, as the resampling unit/i);
+assert.match(methodologyBrief, /use position, not individual critique, as the resampling unit/i);
 assert.match(methodologyBrief, /No effect by itself: no outreach/i);
 
 assert.match(adviserBrief, /Not sent\./);
@@ -146,9 +146,13 @@ assert.match(raterBrief, /Recruitment remains closed until Q-006/);
 assert.match(raterBrief, /USD 400/);
 assert.match(raterBrief, /not represented as employment, a per-rating wage, or full compensation/i);
 assert.match(raterBrief, /accepted blind initial ratings \/ 96/);
+assert.match(raterBrief, /3–8 hours/);
+assert.match(raterBrief, /calibration is not a paid unit/i);
 
 assert.match(outreachPlan, /No email has been sent/);
-assert.match(outreachPlan, /No email may be sent until the project owner reviews this plan/);
+assert.match(outreachPlan, /No email may be sent until the project owner reviews and approves/i);
+assert.match(outreachPlan, /Before methodological-adviser outreach/i);
+assert.match(outreachPlan, /Before early-career rater or adjudicator outreach/i);
 assert.match(outreachPlan, /Do not use Google Contacts to build the list/);
 assert.match(outreachPlan, /The project owner approves or edits the packet before Gmail/);
 assert.match(outreachPlan, /Public recruitment remains closed/);
