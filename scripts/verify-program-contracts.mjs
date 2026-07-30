@@ -5,14 +5,19 @@ import { resolve } from "node:path";
 import { validateHardSetSourceAllocation } from "./verify-hard-set-source-allocation.mjs";
 import { validatePanelHonorariaPlan } from "./verify-panel-honoraria-plan.mjs";
 import { validatePilot48Plan } from "./verify-pilot-48-plan.mjs";
+import { validatePilotMethodologyRecommendations } from "./verify-pilot-methodology-recommendations.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const contractPath = resolve(root, "ops/next-steps-2026-07-23/release-contract.json");
 const decisionsPath = resolve(root, "ops/next-steps-2026-07-23/decision-register.json");
 const pilotPath = resolve(root, "ops/next-steps-2026-07-23/pilot-48-plan.json");
+const methodologyPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.json");
+const methodologyAuditPath = resolve(root, "ops/next-steps-2026-07-23/lmca-methodology-audit.md");
+const methodologyBriefPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.md");
 const adviserBriefPath = resolve(root, "ops/next-steps-2026-07-23/methodological-adviser-brief.md");
 const raterBriefPath = resolve(root, "ops/next-steps-2026-07-23/early-career-rater-brief.md");
 const outreachPlanPath = resolve(root, "ops/next-steps-2026-07-23/outreach-plan.md");
+const q006PacketPath = resolve(root, "ops/next-steps-2026-07-23/q-006-decision-packet.md");
 const allocationPath = resolve(root, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
 const panelPlanPath = resolve(root, "ops/next-steps-2026-07-23/panel-honoraria-plan.json");
 const calculatorPath = resolve(root, "scripts/calculate-honoraria.mjs");
@@ -23,9 +28,13 @@ const [
   contract,
   register,
   pilot,
+  methodology,
+  methodologyAudit,
+  methodologyBrief,
   adviserBrief,
   raterBrief,
   outreachPlan,
+  q006Packet,
   allocation,
   panelPlan,
   calculator,
@@ -35,9 +44,13 @@ const [
   readJson(contractPath),
   readJson(decisionsPath),
   readJson(pilotPath),
+  readJson(methodologyPath),
+  readFile(methodologyAuditPath, "utf8"),
+  readFile(methodologyBriefPath, "utf8"),
   readFile(adviserBriefPath, "utf8"),
   readFile(raterBriefPath, "utf8"),
   readFile(outreachPlanPath, "utf8"),
+  readFile(q006PacketPath, "utf8"),
   readJson(allocationPath),
   readJson(panelPlanPath),
   readFile(calculatorPath, "utf8"),
@@ -98,9 +111,33 @@ assert.deepEqual(pilotReport.scope, {
 assert.equal(pilotReport.numeric_thresholds_binding, false);
 assert.equal(pilotReport.phase_2_status, "blocked_before_pilot_results_and_capacity");
 
+const methodologyReport = validatePilotMethodologyRecommendations(methodology);
+assert.equal(methodologyReport.status, "pass", methodologyReport.errors.join("\n"));
+assert.equal(methodologyReport.slots, 12);
+assert.equal(methodologyReport.unique_pairs, 12);
+assert.deepEqual(methodologyReport.preferred_source_mix, {
+  public_synthetic_with_new_expert_ratings: 6,
+  protected_public_domain_derived: 6,
+});
+assert.equal(methodologyReport.shared_calibration_critiques, 8);
+assert.equal(methodologyReport.binding_effect, false);
+
+assert.match(methodologyAudit, /951 rated critiques/);
+assert.match(methodologyAudit, /1,458 ratings/);
+assert.match(methodologyAudit, /rater concentration/i);
+assert.match(methodologyAudit, /source and style confounding/i);
+assert.match(methodologyAudit, /clarity below 0\.5/i);
+assert.match(methodologyAudit, /does not approve outreach/i);
+assert.match(methodologyBrief, /twelve distinct rater pairs/i);
+assert.match(methodologyBrief, /two public, non-protected positions/i);
+assert.match(methodologyBrief, /position, not individual critique, as the resampling unit/i);
+assert.match(methodologyBrief, /No effect by itself: no outreach/i);
+
 assert.match(adviserBrief, /Not sent\./);
 assert.match(adviserBrief, /Not requested:\*\* bulk rating/);
 assert.match(adviserBrief, /approximately 20 minutes of asynchronous review/);
+assert.match(adviserBrief, /12 distinct anonymous rater pairs/);
+assert.match(adviserBrief, /clarity below 0\.5/);
 assert.match(adviserBrief, /no continuing obligation/);
 assert.doesNotMatch(adviserBrief, /we endorse/i);
 
@@ -115,6 +152,11 @@ assert.match(outreachPlan, /No email may be sent until the project owner reviews
 assert.match(outreachPlan, /Do not use Google Contacts to build the list/);
 assert.match(outreachPlan, /The project owner approves or edits the packet before Gmail/);
 assert.match(outreachPlan, /Public recruitment remains closed/);
+
+assert.match(q006Packet, /Q-006A — approve the consultation design/);
+assert.match(q006Packet, /Preferred source crossing/);
+assert.match(q006Packet, /Shared calibration proposal/);
+assert.match(q006Packet, /does not authorize sending/);
 
 const allocationReport = validateHardSetSourceAllocation(allocation);
 assert.equal(allocationReport.status, "pass", allocationReport.errors.join("\n"));
