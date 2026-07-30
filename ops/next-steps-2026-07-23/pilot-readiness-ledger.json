@@ -1,0 +1,229 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-readiness-ledger-v1.schema.json",
+  "ledger_id": "metaphilosophy-pilot-readiness-v1-2026-07-30",
+  "ledger_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "blocked_pending_q006a_and_later_readiness_gates",
+  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach state.",
+  "public_record_policy": {
+    "contains_personal_or_professional_email_addresses": false,
+    "contains_identity_documents": false,
+    "contains_payment_or_tax_data": false,
+    "contains_protected_item_ids": false,
+    "contains_protected_item_text": false,
+    "contains_protected_critiques": false,
+    "contains_labels_or_assignments": false,
+    "private_controlled_records_required_for_sensitive_data": true
+  },
+  "authorization_state": {
+    "q006a": {
+      "status": "pending_project_owner_decision",
+      "approved_at": null,
+      "approval_record": "ops/next-steps-2026-07-23/q-006a-owner-approval.md"
+    },
+    "methodological_adviser_recipient_research_authorized": false,
+    "methodological_adviser_outreach_authorized": false,
+    "public_recruitment_authorized": false,
+    "participant_outreach_authorized": false,
+    "nonfinal_item_screening_authorized": false,
+    "protected_manifest_freeze_authorized": false,
+    "participant_selection_authorized": false,
+    "calibration_or_rating_work_authorized": false,
+    "payment_commitment_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_activation_authorized": false
+  },
+  "methodological_feedback_template": {
+    "status": "template_only_no_adviser_contact_authorized",
+    "target_advisers": {
+      "minimum": 2,
+      "maximum": 4
+    },
+    "public_entries": [],
+    "private_entry_required_fields": [
+      "controlled_adviser_id",
+      "role_rationale",
+      "public_professional_source",
+      "owner_approved_message_version",
+      "feedback_received_at",
+      "substantive_comment",
+      "disposition",
+      "disposition_rationale",
+      "protocol_version_before",
+      "protocol_version_after",
+      "attribution_permission"
+    ],
+    "allowed_dispositions": [
+      "adopted_before_launch",
+      "adopted_with_modification",
+      "not_adopted_with_rationale",
+      "unresolved_and_disclosed"
+    ],
+    "attribution_requires_separate_permission": true,
+    "endorsement_may_not_be_inferred": true
+  },
+  "item_screening_template": {
+    "status": "template_only_screening_not_authorized",
+    "controlled_private_manifest_required": true,
+    "public_summary": {
+      "positions_screened": 0,
+      "positions_provisionally_included": 0,
+      "positions_excluded": 0,
+      "candidate_critiques_screened": 0,
+      "candidate_critiques_provisionally_selected": 0,
+      "controlled_manifest_sha256": null,
+      "exclusion_ledger_sha256": null
+    },
+    "private_candidate_required_fields": [
+      "controlled_position_id",
+      "controlled_critique_id",
+      "topic_family",
+      "source_class",
+      "position_version",
+      "critique_version",
+      "source_and_authorship_record",
+      "rights_review_status",
+      "source_fidelity_review_status",
+      "ambiguity_scope_review_status",
+      "candidate_critiques_count_for_position",
+      "selected_critiques_count_for_position",
+      "word_sentence_formatting_and_citation_diagnostics",
+      "acquisition_judge_record_hash",
+      "attack_family_tags",
+      "source_style_cue_risk",
+      "inclusion_or_exclusion_status",
+      "inclusion_or_exclusion_reason",
+      "reviewer_conflict_and_exposure_status"
+    ],
+    "minimum_candidate_critiques_per_position_proposal": 8,
+    "selected_critiques_per_position_proposal": 4,
+    "exact_ids_and_text_must_remain_private": true
+  },
+  "calibration_template": {
+    "status": "template_only_materials_and_pass_rule_pending",
+    "proposed_public_nonprotected_positions": 2,
+    "proposed_critiques": 8,
+    "participant_roles": [
+      "core_rater",
+      "dedicated_adjudicator"
+    ],
+    "production_metric_exclusion_required": true,
+    "honorarium_units_per_calibration_rating": 0,
+    "qualification_rule": null,
+    "selected_materials_sha256": null,
+    "private_required_fields": [
+      "controlled_calibration_item_id",
+      "public_source_reference",
+      "rubric_issue_coverage",
+      "initial_rating_locked_at",
+      "considerations_dossier_version",
+      "discussion_record",
+      "object_level_revision_reason",
+      "qualification_disposition"
+    ]
+  },
+  "model_baseline_template": {
+    "status": "template_only_lineup_pending",
+    "may_serve_as_human_label": false,
+    "may_serve_as_adjudicator": false,
+    "entries": [],
+    "required_fields": [
+      "provider",
+      "model_identity",
+      "exact_model_version",
+      "prompt_version",
+      "rubric_version",
+      "reasoning_or_effort_setting",
+      "temperature_and_sampling_parameters",
+      "retry_policy",
+      "output_parser_version",
+      "invalid_output_rule",
+      "request_date",
+      "api_environment",
+      "raw_response_retention_policy",
+      "raw_response_hash_policy"
+    ]
+  },
+  "people_payment_template": {
+    "status": "template_only_no_people_selected",
+    "required_counts": {
+      "core_raters": 6,
+      "dedicated_adjudicators": 2,
+      "recommended_prequalified_replacements_minimum": 2
+    },
+    "public_named_people": [],
+    "sensitive_data_storage": "private_controlled_record_only",
+    "private_required_fields": [
+      "controlled_person_id",
+      "role",
+      "qualification_evidence",
+      "consent_status",
+      "conflict_status",
+      "prior_exposure_status",
+      "calibration_status",
+      "jurisdiction",
+      "feasible_payment_method",
+      "tax_documentation_status",
+      "sanctions_screening_status",
+      "availability_status"
+    ]
+  },
+  "readiness_gates": [
+    {
+      "id": "R-01",
+      "name": "Q-006A consultation and non-final screening design approved",
+      "status": "blocked",
+      "evidence": null
+    },
+    {
+      "id": "R-02",
+      "name": "Bounded methodological feedback collected and dispositioned",
+      "status": "blocked",
+      "evidence": null
+    },
+    {
+      "id": "R-03",
+      "name": "Q-006B methodology, calibration, analysis, and controlled item manifest approved",
+      "status": "blocked",
+      "evidence": null
+    },
+    {
+      "id": "R-04",
+      "name": "Q-006C people, payment, privacy, legal, outreach, and date decisions approved",
+      "status": "blocked",
+      "evidence": null
+    },
+    {
+      "id": "R-05",
+      "name": "Blind assignments generated and conflict and exposure checks passed",
+      "status": "blocked",
+      "evidence": null
+    },
+    {
+      "id": "R-06",
+      "name": "Operations owner signed the complete pilot readiness record",
+      "status": "blocked",
+      "evidence": null
+    }
+  ],
+  "overall_readiness": {
+    "status": "blocked",
+    "ready_to_start": false,
+    "readiness_signed_at": null,
+    "derived_calendar_start": null,
+    "derived_calendar_end": null
+  },
+  "invariants": [
+    "No outreach, public recruitment, participant selection, protected-item freeze, calibration, rating, payment commitment, funding submission, or Phase 2 activation is authorized by this ledger.",
+    "Sensitive participant and recipient records remain in private controlled storage and are never committed to the public repository.",
+    "Protected item IDs, text, critiques, labels, assignments, and exposure records remain absent from this public ledger.",
+    "Model judgments remain acquisition or comparison baselines and never become human labels or adjudications.",
+    "Calibration remains excluded from production metrics and earns zero honorarium units under the current approved plan.",
+    "Every gate remains blocked until supported by an explicit, versioned approval or completion record."
+  ],
+  "next_action": {
+    "id": "Q-006A",
+    "status": "project_owner_decision_required",
+    "question": "Approve, revise, or reject the consultation and non-final screening design without authorizing outreach or execution."
+  }
+}
