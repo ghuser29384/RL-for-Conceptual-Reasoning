@@ -7,6 +7,7 @@ import { validatePanelHonorariaPlan } from "./verify-panel-honoraria-plan.mjs";
 import { validatePilot48Plan } from "./verify-pilot-48-plan.mjs";
 import { validatePilotMethodologyRecommendations } from "./verify-pilot-methodology-recommendations.mjs";
 import { validatePilotReadinessLedger } from "./verify-pilot-readiness-ledger.mjs";
+import { validatePilotRatingAnalysisContract } from "./verify-pilot-rating-analysis-contract.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const contractPath = resolve(root, "ops/next-steps-2026-07-23/release-contract.json");
@@ -14,6 +15,8 @@ const decisionsPath = resolve(root, "ops/next-steps-2026-07-23/decision-register
 const pilotPath = resolve(root, "ops/next-steps-2026-07-23/pilot-48-plan.json");
 const methodologyPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.json");
 const readinessPath = resolve(root, "ops/next-steps-2026-07-23/pilot-readiness-ledger.json");
+const analysisContractPath = resolve(root, "ops/next-steps-2026-07-23/pilot-rating-analysis-contract.json");
+const analysisImplementationPath = resolve(root, "scripts/pilot-rating-analysis.mjs");
 const methodologyAuditPath = resolve(root, "ops/next-steps-2026-07-23/lmca-methodology-audit.md");
 const methodologyBriefPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.md");
 const adviserBriefPath = resolve(root, "ops/next-steps-2026-07-23/methodological-adviser-brief.md");
@@ -33,6 +36,8 @@ const [
   pilot,
   methodology,
   readiness,
+  analysisContract,
+  analysisImplementation,
   methodologyAudit,
   methodologyBrief,
   adviserBrief,
@@ -51,6 +56,8 @@ const [
   readJson(pilotPath),
   readJson(methodologyPath),
   readJson(readinessPath),
+  readJson(analysisContractPath),
+  readFile(analysisImplementationPath, "utf8"),
   readFile(methodologyAuditPath, "utf8"),
   readFile(methodologyBriefPath, "utf8"),
   readFile(adviserBriefPath, "utf8"),
@@ -135,6 +142,18 @@ assert.equal(readinessReport.q006a_status, "pending_project_owner_decision");
 assert.equal(readinessReport.readiness_gate_count, 6);
 assert.equal(readinessReport.blocked_gate_count, 6);
 assert.equal(readinessReport.ready_to_start, false);
+
+const analysisContractReport = validatePilotRatingAnalysisContract(analysisContract);
+assert.equal(analysisContractReport.status, "pass", analysisContractReport.errors.join("\n"));
+assert.equal(analysisContractReport.numeric_thresholds_binding, false);
+assert.equal(analysisContractReport.contains_rating_data, false);
+assert.match(analysisImplementation, /export function validatePilotRatingDataset/);
+assert.match(analysisImplementation, /export function lmcaCustomWeightedLoss/);
+assert.match(analysisImplementation, /export function lmcaWeightedPairwiseRankingError/);
+assert.match(analysisImplementation, /export function krippendorffAlphaInterval/);
+assert.match(analysisImplementation, /approved_routes/);
+assert.match(analysisImplementation, /phase_2_authorized: false/);
+assert.match(analysisImplementation, /diagnostic_only: true/);
 
 assert.match(methodologyAudit, /951 rated critiques/);
 assert.match(methodologyAudit, /1,458 ratings/);
