@@ -10,7 +10,9 @@ export const EXPECTED_POSITION_QUOTAS = Object.freeze({
 
 export function validateHardSetSourceAllocation(value) {
   const errors = [];
-  const target = value?.target && typeof value.target === "object" ? value.target : {};
+  const target = objectOrEmpty(value?.target);
+  const operational = objectOrEmpty(value?.current_operational_commitment);
+  const activationGate = objectOrEmpty(value?.phase_2_activation_gate);
   const positionsTarget = integerOrZero(target.positions);
   const critiquesPerPosition = integerOrZero(target.critiques_per_position);
   const critiquesTarget = integerOrZero(target.critiques);
@@ -58,6 +60,13 @@ export function validateHardSetSourceAllocation(value) {
           `(${observedPositions * critiquesPerPosition}); found ${observedCritiques}.`,
       );
     }
+    if (!String(component.selection_status ?? "").startsWith("deferred")) {
+      errors.push(`${sourceClass}.selection_status must identify the component as deferred.`);
+    }
+    const promotionGates = Array.isArray(component.promotion_gates) ? component.promotion_gates : [];
+    if (!promotionGates.some((gate) => String(gate).includes("Phase 2 activation gate passed"))) {
+      errors.push(`${sourceClass}.promotion_gates must require Phase 2 activation first.`);
+    }
   }
 
   if (positionsTarget !== 100) errors.push(`target.positions must equal 100; found ${positionsTarget}.`);
@@ -75,7 +84,23 @@ export function validateHardSetSourceAllocation(value) {
     errors.push("minimum_initial_ratings must cover two ratings for every critique.");
   }
 
-  const rules = value?.public_manifest_rules && typeof value.public_manifest_rules === "object" ? value.public_manifest_rules : {};
+  if (value?.decision_status !== "approved_source_allocation_deferred_phase_2_activation_blocked") {
+    errors.push("decision_status must preserve the approved allocation as deferred and activation-blocked.");
+  }
+  if (value?.execution_phase !== "deferred_phase_2") errors.push("execution_phase must equal deferred_phase_2.");
+  for (const field of ["item_acquisition_active", "bulk_rating_active", "funding_committed", "automatic_activation_after_pilot"]) {
+    if (operational[field] !== false) errors.push(`current_operational_commitment.${field} must be false.`);
+  }
+  if (activationGate.status !== "blocked") errors.push("phase_2_activation_gate.status must equal blocked.");
+  if (activationGate.no_automatic_rollover !== true) errors.push("Phase 2 must have no automatic rollover.");
+  const activationText = (Array.isArray(activationGate.required_before_activation) ? activationGate.required_before_activation : [])
+    .join(" ")
+    .toLowerCase();
+  for (const required of ["48-critique pilot", "methodological", "external funding", "volunteer", "project owner"]) {
+    if (!activationText.includes(required)) errors.push(`Phase 2 activation requirements must include ${required}.`);
+  }
+
+  const rules = objectOrEmpty(value?.public_manifest_rules);
   if (rules.publish_component_counts !== true) errors.push("publish_component_counts must be true.");
   for (const field of [
     "publish_hidden_item_ids",
@@ -87,14 +112,13 @@ export function validateHardSetSourceAllocation(value) {
   }
 
   const hidden = byClass.get("newly_hidden_public_domain") ?? {};
-  const hiddenSource = hidden.source_artifact && typeof hidden.source_artifact === "object" ? hidden.source_artifact : {};
+  const hiddenSource = objectOrEmpty(hidden.source_artifact);
   const forbiddenHiddenFields = ["position_ids", "critique_ids", "item_text", "critiques", "labels"];
   const leaked = forbiddenHiddenFields.filter((field) => Object.hasOwn(hiddenSource, field));
   if (leaked.length) errors.push(`Protected source_artifact exposes forbidden public fields: ${leaked.join(", ")}.`);
 
   const publicSynthetic = byClass.get("public_synthetic") ?? {};
-  const publicSyntheticSource =
-    publicSynthetic.source_artifact && typeof publicSynthetic.source_artifact === "object" ? publicSynthetic.source_artifact : {};
+  const publicSyntheticSource = objectOrEmpty(publicSynthetic.source_artifact);
   for (const [label, hash] of [
     ["public_synthetic.source_sha256", publicSyntheticSource.source_sha256],
     ["newly_hidden_public_domain.canonical_jsonl_sha256", hiddenSource.canonical_jsonl_sha256],
@@ -102,16 +126,19 @@ export function validateHardSetSourceAllocation(value) {
     if (!/^[a-f0-9]{64}$/.test(String(hash ?? ""))) errors.push(`${label} must be a lowercase SHA-256 digest.`);
   }
 
-  if (value?.decision_status !== "approved_position_allocation_item_selection_pending") {
-    errors.push("decision_status must preserve that exact item selection remains pending.");
+  if (!Array.isArray(value?.unresolved_parameters) || value.unresolved_parameters.length < 5) {
+    errors.push("unresolved_parameters must preserve the remaining Phase 2 dependencies.");
   }
-  if (!Array.isArray(value?.unresolved_parameters) || value.unresolved_parameters.length === 0) {
-    errors.push("unresolved_parameters must remain explicit.");
+  const unresolvedText = (value?.unresolved_parameters ?? []).join(" ").toLowerCase();
+  for (const required of ["lmca", "public-synthetic", "authorship", "funding", "panel"]) {
+    if (!unresolvedText.includes(required)) errors.push(`unresolved_parameters must include ${required}.`);
   }
 
   return {
     status: errors.length ? "fail" : "pass",
     allocation_id: value?.allocation_id ?? null,
+    execution_phase: value?.execution_phase ?? null,
+    activation_status: activationGate.status ?? null,
     positions,
     critiques,
     position_quotas: Object.fromEntries(
@@ -126,6 +153,10 @@ export function validateHardSetSourceAllocation(value) {
 export async function readAndValidateHardSetSourceAllocation(path) {
   const value = JSON.parse(await readFile(path, "utf8"));
   return validateHardSetSourceAllocation(value);
+}
+
+function objectOrEmpty(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function integerOrZero(value) {
