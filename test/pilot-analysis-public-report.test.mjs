@@ -78,8 +78,8 @@ test("initial and latest-accepted snapshots remain separate after an append-only
   assert.equal(report.initial.snapshot, "accepted_initial_ratings");
   assert.equal(report.latest_accepted.snapshot, "latest_accepted_ratings");
   assert.notEqual(
-    report.initial.aggregate.mean_position_weighted_ordering_agreement,
-    report.latest_accepted.aggregate.mean_position_weighted_ordering_agreement,
+    report.initial.aggregate.mean_absolute_rater_difference_by_dimension.overall,
+    report.latest_accepted.aggregate.mean_absolute_rater_difference_by_dimension.overall,
   );
 
   const derived = deriveLatestAcceptedAnalysisDataset(dataset);
