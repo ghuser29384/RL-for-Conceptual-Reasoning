@@ -1,0 +1,26 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-analysis-policy-template-v1.schema.json",
+  "policy_id": "pilot-analysis-policy-template-v1-2026-07-30",
+  "policy_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "diagnostic_only_no_routes_approved",
+  "approved_routes": [],
+  "diagnostic_minimum_mean_overall_gap": 0.2,
+  "low_clarity_below": 0.5,
+  "numeric_thresholds": {
+    "overall_gap": 0.3,
+    "strength_times_centrality_gap": 0.3,
+    "correctness_gap": 0.35,
+    "clarity_gap": 0.35
+  },
+  "governance": {
+    "values_are_provisional_candidates": true,
+    "operative_adjudication_routes": 0,
+    "q_006a_approved": false,
+    "q_006b_approved": false,
+    "may_be_used_for_diagnostic_output_only": true,
+    "may_not_trigger_work_or_modify_ratings": true,
+    "may_not_authorize_outreach_or_item_freeze": true,
+    "may_not_authorize_phase_2": true
+  }
+}
