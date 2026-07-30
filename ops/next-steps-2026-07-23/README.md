@@ -46,6 +46,7 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
 - `q-006-decision-packet.md` — staged owner decision packet separating consultation design, frozen methodology/items, and people/payment/dates.
+- `q-006a-owner-approval.md` — concise pending approval record stating exactly what Q-006A would and would not authorize.
 - `hard-set-source-allocation.json` — machine-readable deferred Phase 2 50/20/30 source quotas, gates, hashes, and public-disclosure rules.
 - `hard-set-source-allocation.md` — human-readable deferred Phase 2 source-allocation rationale and activation boundary.
 - `panel-honoraria-plan.json` — machine-readable pilot panel, delivery, contribution-unit, payout, operations, attrition, and readiness rules.
