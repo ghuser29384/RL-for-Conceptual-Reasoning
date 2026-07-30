@@ -10,16 +10,34 @@ const root = resolve(import.meta.dirname, "..");
 const contractPath = resolve(root, "ops/next-steps-2026-07-23/release-contract.json");
 const decisionsPath = resolve(root, "ops/next-steps-2026-07-23/decision-register.json");
 const pilotPath = resolve(root, "ops/next-steps-2026-07-23/pilot-48-plan.json");
+const adviserBriefPath = resolve(root, "ops/next-steps-2026-07-23/methodological-adviser-brief.md");
+const raterBriefPath = resolve(root, "ops/next-steps-2026-07-23/early-career-rater-brief.md");
+const outreachPlanPath = resolve(root, "ops/next-steps-2026-07-23/outreach-plan.md");
 const allocationPath = resolve(root, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
 const panelPlanPath = resolve(root, "ops/next-steps-2026-07-23/panel-honoraria-plan.json");
 const calculatorPath = resolve(root, "scripts/calculate-honoraria.mjs");
 const closedPagePath = resolve(root, "reviewers/closed.html");
 const vercelPath = resolve(root, "vercel.json");
 
-const [contract, register, pilot, allocation, panelPlan, calculator, closedPage, vercel] = await Promise.all([
+const [
+  contract,
+  register,
+  pilot,
+  adviserBrief,
+  raterBrief,
+  outreachPlan,
+  allocation,
+  panelPlan,
+  calculator,
+  closedPage,
+  vercel,
+] = await Promise.all([
   readJson(contractPath),
   readJson(decisionsPath),
   readJson(pilotPath),
+  readFile(adviserBriefPath, "utf8"),
+  readFile(raterBriefPath, "utf8"),
+  readFile(outreachPlanPath, "utf8"),
   readJson(allocationPath),
   readJson(panelPlanPath),
   readFile(calculatorPath, "utf8"),
@@ -79,6 +97,24 @@ assert.deepEqual(pilotReport.scope, {
 });
 assert.equal(pilotReport.numeric_thresholds_binding, false);
 assert.equal(pilotReport.phase_2_status, "blocked_before_pilot_results_and_capacity");
+
+assert.match(adviserBrief, /Not sent\./);
+assert.match(adviserBrief, /Not requested:\*\* bulk rating/);
+assert.match(adviserBrief, /approximately 20 minutes of asynchronous review/);
+assert.match(adviserBrief, /no continuing obligation/);
+assert.doesNotMatch(adviserBrief, /we endorse/i);
+
+assert.match(raterBrief, /Not published or sent/);
+assert.match(raterBrief, /Recruitment remains closed until Q-006/);
+assert.match(raterBrief, /USD 400/);
+assert.match(raterBrief, /not represented as employment, a per-rating wage, or full compensation/i);
+assert.match(raterBrief, /accepted blind initial ratings \/ 96/);
+
+assert.match(outreachPlan, /No email has been sent/);
+assert.match(outreachPlan, /No email may be sent until the project owner reviews this plan/);
+assert.match(outreachPlan, /Do not use Google Contacts to build the list/);
+assert.match(outreachPlan, /The project owner approves or edits the packet before Gmail/);
+assert.match(outreachPlan, /Public recruitment remains closed/);
 
 const allocationReport = validateHardSetSourceAllocation(allocation);
 assert.equal(allocationReport.status, "pass", allocationReport.errors.join("\n"));
