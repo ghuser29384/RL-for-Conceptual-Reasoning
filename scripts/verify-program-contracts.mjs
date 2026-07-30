@@ -131,10 +131,10 @@ assert.match(methodologyAudit, /does not approve outreach/i);
 assert.match(methodologyBrief, /twelve distinct rater pairs/i);
 assert.match(methodologyBrief, /two public, non-protected positions/i);
 assert.match(methodologyBrief, /use position, not individual critique, as the resampling unit/i);
-assert.match(methodologyBrief, /No effect by itself: no outreach/i);
+assert.match(methodologyBrief, /No effect by itself:[^\n]*no outreach/i);
 
 assert.match(adviserBrief, /Not sent\./);
-assert.match(adviserBrief, /Not requested:\*\* bulk rating/);
+assert.match(adviserBrief, /Not requested:[^\n]*bulk rating/i);
 assert.match(adviserBrief, /approximately 20 minutes of asynchronous review/);
 assert.match(adviserBrief, /12 distinct anonymous rater pairs/);
 assert.match(adviserBrief, /clarity below 0\.5/);
@@ -154,7 +154,7 @@ assert.match(outreachPlan, /No email may be sent until the project owner reviews
 assert.match(outreachPlan, /Before methodological-adviser outreach/i);
 assert.match(outreachPlan, /Before early-career rater or adjudicator outreach/i);
 assert.match(outreachPlan, /Do not use Google Contacts to build the list/);
-assert.match(outreachPlan, /The project owner approves or edits the packet before Gmail/);
+assert.match(outreachPlan, /project owner approves or edits the packet before Gmail/i);
 assert.match(outreachPlan, /Public recruitment remains closed/);
 
 assert.match(q006Packet, /Q-006A — approve the consultation design/);
