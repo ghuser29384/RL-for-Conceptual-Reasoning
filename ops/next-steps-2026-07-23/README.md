@@ -22,7 +22,17 @@ The LMCA work is treated as methodological prior art and an external benchmark. 
 
 A source-grounded LMCA audit now supports a preferred **six-six source crossing**, a **12-pair no-repeat anonymous assignment graph**, an **eight-critique shared public calibration proposal**, review whenever either rater assigns **clarity below 0.5**, and position-level small-sample safeguards. These remain non-binding Q-006A/Q-006B recommendations.
 
-The repository now also contains an executable, source-faithful rating-record and analysis layer. It validates append-only initial ratings and object-level re-ratings; implements the LMCA custom weighted loss and weighted pairwise ranking error; computes symmetric within-position ordering agreement, dimension gaps, interval-distance agreement diagnostics, rating-time summaries, position-level results, and leave-one-position-out ranges; and keeps every adjudication route inoperative unless an approved runtime policy explicitly names it.
+The repository also contains an executable, source-faithful rating-record and analysis layer. The controlled engine validates append-only initial ratings and object-level re-ratings; implements the LMCA custom weighted loss and weighted pairwise ranking error; computes symmetric within-position ordering agreement, dimension gaps, interval-distance agreement diagnostics, rating-time summaries, position-level results, and leave-one-position-out ranges; and keeps every adjudication route inoperative unless an approved policy explicitly names it.
+
+Policy parsing now fails closed. Unknown or duplicate routes, unsupported threshold keys, out-of-range values, and approved numerical routes without thresholds are rejected. Any non-empty operative route list additionally requires explicit Q-006B approval evidence, an approval-record identifier, and an approval timestamp. The checked-in policy has zero approved routes.
+
+The canonical reporting command is privacy-safe:
+
+```bash
+node scripts/run-pilot-rating-analysis.mjs <rating-dataset.json> [analysis-policy.json]
+```
+
+It returns separate immutable-initial and latest-accepted snapshots, plus aggregate revision counts. Controlled dataset, position, critique, rating, and pseudonymous rater identifiers are removed. Position-level results use generated public blocks, and item-level route records are reduced to aggregate counts. CI rejects identifier-bearing output.
 
 Senior researchers are approached only for bounded methodological advice. Early-career experts perform the bulk ratings. Draft adviser, rater, and outreach materials are included for review, but no outreach has been authorized or sent from this package.
 
@@ -49,7 +59,8 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `pilot-readiness-ledger.json` — machine-readable blocked readiness state, authorization boundaries, empty controlled-record templates, and six execution gates.
 - `pilot-readiness-ledger.md` — human-readable readiness and sensitive-data boundary.
 - `pilot-rating-analysis-contract.json` — machine-readable append-only rating, source-derived loss, diagnostic, privacy, and threshold-governance contract; contains no rating data.
-- `pilot-rating-analysis-contract.md` — human-readable implementation boundary and metric definitions.
+- `pilot-rating-analysis-contract.md` — human-readable implementation, strict-policy, snapshot, and public-report boundary.
+- `pilot-analysis-policy-template.json` — checked-in diagnostic policy with provisional values and zero approved routes.
 - `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
 - `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
@@ -67,7 +78,9 @@ node scripts/verify-pilot-48-plan.mjs
 node scripts/verify-pilot-methodology-recommendations.mjs
 node scripts/verify-pilot-readiness-ledger.mjs
 node scripts/verify-pilot-rating-analysis-contract.mjs
+node scripts/verify-pilot-public-analysis.mjs
 node scripts/pilot-rating-analysis.mjs --help
+node scripts/run-pilot-rating-analysis.mjs --help
 node scripts/verify-hard-set-source-allocation.mjs
 node scripts/verify-panel-honoraria-plan.mjs
 node scripts/verify-program-contracts.mjs
