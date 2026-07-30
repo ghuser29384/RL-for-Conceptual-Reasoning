@@ -8,7 +8,7 @@ Q-006 currently combines methodological, roster, payment, and outreach decisions
 
 ### Q-006A — approve the consultation design
 
-Approve the following as the protocol to show bounded methodological advisers, while keeping all numerical thresholds provisional:
+Approve the following as the protocol to show bounded methodological advisers, while keeping all numerical thresholds and exact items provisional:
 
 1. **Pilot structure:** 12 positions × 4 critiques = 48 critiques.
 2. **Independent review:** 2 blind initial ratings per critique = 96 initial ratings.
@@ -22,14 +22,25 @@ Approve the following as the protocol to show bounded methodological advisers, w
    - decision theory and social choice; and
    - metaphilosophy and AI governance.
 6. **Eligible item sources:** public synthetic material receiving new expert ratings and protected public-domain-derived positions that pass source-fidelity and ambiguity/scope review.
-7. **Source-mix rule:** at least 4 positions from each eligible source class; allocate the remaining 4 to improve topic coverage, difficulty, source/style balance, and readiness.
-8. **Candidate-acquisition proposal:** collect at least 8 candidate critiques per position, then select 4 that include a likely strong candidate, a plausible weak candidate, and two high-disagreement or attack-family-diverse candidates under frozen acquisition judges.
-9. **Rubric:** centrality, strength, correctness, clarity, dead weight, single issue, and overall; analyze substantive impact through `strength × centrality`.
-10. **Blindness:** hide source, author/model identity, model scores, provisional strata, paired-rater identity and ratings, aggregate ratings, and adjudication status until initial ratings are locked.
-11. **Revision:** preserve every original rating; require an object-level reason for any versioned re-rating.
-12. **Senior role:** bounded methodological review only—approximately 20 asynchronous minutes or one 30-minute call, with no bulk rating, ongoing board role, or implied endorsement.
+7. **Preferred source crossing:** target 6 positions from each source class, with one position from each source class in every topic family. If this is infeasible after independent item review, retain at least 4 from each source class and document all deviations for Q-006B.
+8. **Balanced anonymous assignment:** use 12 distinct rater pairs, four positions and four distinct partners per rater, four distinct topic families per rater, and—under the preferred source crossing—two positions from each source class per rater. The concrete anonymous template is in `pilot-methodology-recommendations.md`.
+9. **Candidate-acquisition proposal:** collect at least 8 candidate critiques per position, then select 4 that include a likely strong candidate, a plausible weak candidate, and two high-disagreement or attack-family-diverse candidates under frozen acquisition judges.
+10. **Candidate confound controls:** freeze length, formatting, citation, source, model/author, attack-family, judge-disagreement, and source-style-cue diagnostics before selection. Do not treat acquisition-judge strata as labels or substantively rewrite critiques merely to hide source.
+11. **Rubric:** centrality, strength, correctness, clarity, dead weight, single issue, and overall; analyze substantive impact through `strength × centrality`.
+12. **Blindness:** hide source, author/model identity, model scores, provisional strata, paired-rater identity and ratings, aggregate ratings, and adjudication status until initial ratings are locked.
+13. **Revision:** preserve every original rating; require an object-level reason for any versioned re-rating.
+14. **Shared calibration proposal:** all six core raters and both adjudicators independently rate the same 8 public, non-protected calibration critiques across 2 positions. Preserve initial ratings, discuss object-level reasons using a considerations dossier rather than an unquestionable gold vector, and exclude calibration from pilot outcomes.
+15. **Additional item-review proposals:** open review if either rater assigns clarity below 0.5 or reports an unresolved correctness-sensitive verification issue. Neither route automatically requires revision.
+16. **Small-sample safeguards:** publish position-level results, use position as the resampling or leave-one-out unit, separate initial from post-adjudication results, and treat ICC, alpha, model comparisons, and subgroup effects as exploratory.
+17. **Senior role:** bounded methodological review only—approximately 20 asynchronous minutes or one 30-minute call, with no bulk rating, ongoing board role, or implied endorsement.
 
-**Recommendation:** approve Q-006A. This is sufficiently specified for methodological criticism without pretending that the thresholds, items, or participants are final.
+**Recommendation:** approve Q-006A. This is sufficiently specified for methodological criticism without pretending that the thresholds, exact calibration rule, protected items, or participants are final.
+
+## Source-grounded rationale
+
+The LMCA paper already establishes the feasibility of multidimensional expert rating and reports 951 rated critiques. It also identifies rater concentration, source/style confounding, too few positions with a useful within-position quality spread, and interpretation-driven disagreement. Its scoring discussion treats `strength × centrality` as more meaningful than either component alone and uses only clarity plus overall when human clarity falls below 0.5.
+
+The new `lmca-methodology-audit.md` and `pilot-methodology-recommendations.*` convert those observations into concrete, testable consultation proposals while preserving LMCA as prior art and prohibiting uncleared row reuse.
 
 ## Provisional questions for advisers
 
@@ -41,9 +52,11 @@ The review packet should expose concrete candidates rather than ask only vague q
 - `strength × centrality` difference ≥ 0.30;
 - correctness difference ≥ 0.35;
 - clarity difference ≥ 0.35;
+- mandatory item review whenever either rater scores clarity below 0.5;
+- mandatory evidence review whenever either rater reports an unresolved correctness-sensitive verification issue; and
 - mandatory review whenever either rater flags insufficient context, source fidelity, ambiguity, scope, or leakage.
 
-The adviser should be asked whether the numerical values are too low, too high, redundant, or likely to create capacity or selection bias.
+The adviser should be asked whether the numerical values are too low, too high, redundant, or likely to create capacity or selection bias, and whether the non-numeric routes are properly classified as item/evidence review rather than pressure to converge.
 
 ### Scale-readiness candidates
 
@@ -52,23 +65,25 @@ The adviser should be asked whether the numerical values are too low, too high, 
 - at least 9 of 12 positions with a consensus overall-score spread ≥ 0.30; and
 - no more than 25% of critiques unresolved because of defective context, source fidelity, ambiguity, or scope after adjudication.
 
-These should be reported with uncertainty intervals and failure analysis. They must not automatically trigger Phase 2, even if met.
+These should be reported with uncertainty intervals, all position-level results, leave-one-position-out sensitivity, and failure analysis. They must not automatically trigger Phase 2, even if met.
 
 ## Q-006B — freeze methodology and protected items
 
-Resolve only after bounded adviser feedback and item screening are available.
+Resolve only after bounded adviser feedback, calibration feasibility review, and item screening are available.
 
 Approve:
 
 1. the final topic and source matrix;
 2. the final candidate-pool and critique-selection rule;
-3. final numerical adjudication triggers;
-4. final numerical scale-readiness criteria and uncertainty reporting;
-5. the exact 12 position IDs and 48 critique IDs;
-6. source, authorship, version, rights, exposure, and conflict records;
-7. the controlled manifest hash;
-8. the frozen model-baseline lineup and API reproducibility record; and
-9. the exclusion ledger for screened but rejected items.
+3. the final anonymous assignment generator and permitted conflict-driven regeneration rule;
+4. the exact public calibration examples, considerations dossier, remediation rule, and qualification threshold;
+5. final numerical adjudication triggers and non-numeric item/evidence-review routes;
+6. final numerical scale-readiness criteria and uncertainty reporting;
+7. the exact 12 position IDs and 48 critique IDs;
+8. source, authorship, version, rights, exposure, and conflict records;
+9. the controlled manifest hash;
+10. the frozen model-baseline lineup and API reproducibility record; and
+11. the exclusion ledger for screened but rejected items.
 
 The recommended default is not to change a protected position or critique after the manifest is frozen. A substantive text change creates a new version and requires assignment/exposure review.
 
@@ -93,7 +108,7 @@ Approve:
 
 ## Email authorization boundary
 
-Approval of Q-006A authorizes only preparation of the consultation packet and recipient research. It does **not** authorize sending.
+Approval of Q-006A authorizes only preparation of the consultation packet, recipient research, public calibration screening, and non-final item screening. It does **not** authorize sending.
 
 Before any email, the project owner receives:
 
@@ -109,9 +124,10 @@ The project owner then separately authorizes sending.
 
 ## Recommended immediate owner action
 
-Approve or revise **Q-006A only**. That unlocks two non-binding tasks:
+Approve or revise **Q-006A only**. That unlocks three non-binding tasks:
 
-1. assemble the exact bounded methodological-adviser candidate slate and complete email packet without sending; and
-2. screen candidate positions and critiques into a controlled, non-final pilot-item slate.
+1. assemble the exact bounded methodological-adviser candidate slate and complete email packet without sending;
+2. screen public examples for the shared calibration packet; and
+3. screen candidate positions and critiques into a controlled, non-final pilot-item slate using the balanced assignment and confound-control requirements.
 
 Q-006B and Q-006C should remain open until the evidence required to decide them exists.
