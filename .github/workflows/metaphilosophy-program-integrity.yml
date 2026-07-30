@@ -10,12 +10,14 @@ on:
       - "scripts/verify-program-contracts.mjs"
       - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-pilot-methodology-recommendations.mjs"
+      - "scripts/verify-pilot-readiness-ledger.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
       - "test/recruitment-intake-gate.test.mjs"
       - "test/pilot-48-plan.test.mjs"
       - "test/pilot-methodology-recommendations.test.mjs"
+      - "test/pilot-readiness-ledger.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -30,12 +32,14 @@ on:
       - "scripts/verify-program-contracts.mjs"
       - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-pilot-methodology-recommendations.mjs"
+      - "scripts/verify-pilot-readiness-ledger.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
       - "test/recruitment-intake-gate.test.mjs"
       - "test/pilot-48-plan.test.mjs"
       - "test/pilot-methodology-recommendations.test.mjs"
+      - "test/pilot-readiness-ledger.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -56,6 +60,7 @@ jobs:
       - run: npm ci
       - run: node scripts/verify-pilot-48-plan.mjs
       - run: node scripts/verify-pilot-methodology-recommendations.mjs
+      - run: node scripts/verify-pilot-readiness-ledger.mjs
       - run: node scripts/verify-hard-set-source-allocation.mjs
       - run: node scripts/verify-panel-honoraria-plan.mjs
       - run: node scripts/verify-program-contracts.mjs
