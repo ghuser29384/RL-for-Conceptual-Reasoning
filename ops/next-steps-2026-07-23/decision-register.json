@@ -127,12 +127,84 @@
       "basis": "This protects the four-week schedule while treating volunteers fairly, preserving completed work, and avoiding lower qualification standards for replacements.",
       "approved_at": "2026-07-25",
       "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-018",
+      "decision": "Replace bulk-rating requests to senior researchers with bounded methodological-adviser requests.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction and prevents senior-researcher time from being allocated to routine bulk work.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-019",
+      "decision": "Make a 48-critique pilot the immediate research and operations scope instead of beginning the full 400-critique programme.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction to define and run the 48-critique pilot first.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-020",
+      "decision": "Recruit early-career expert raters for the pilot's bulk rating work.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-021",
+      "decision": "Use the pilot results and bounded senior methodological feedback as evidence for Long-Term Future Fund and Emergent Ventures applications.",
+      "credence": 1.0,
+      "basis": "This records the project owner's explicit instruction without representing either application or award as completed.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-022",
+      "decision": "Do not activate the full 400-critique programme until external funding is secured or documented qualified-volunteer commitments cover the complete workload, and require a new explicit owner activation decision.",
+      "credence": 1.0,
+      "basis": "This faithfully implements the owner's expansion condition while preventing an automatic rollover from the pilot.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-023",
+      "decision": "Treat the LMCA work as methodological prior art and an external benchmark, but do not make the pilot depend on LMCA rows until the canonical row-level dataset and redistribution license are supplied and approved.",
+      "credence": 0.98,
+      "basis": "The supplied paper supports the methodological comparison, while the repository records that the canonical rows and license are not available. This avoids unsupported reuse and overclaiming novelty.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-024",
+      "decision": "Treat the proposed 12-by-4 structure, topic/source matrix, candidate-acquisition procedure, adviser envelope, and numerical adjudication and scale-readiness thresholds as recommendations pending Q-006 rather than silently freezing them as owner-approved policy.",
+      "credence": 0.99,
+      "basis": "These details materially affect methodology and workload but were not explicitly selected by the owner. Preserving them as reviewable proposals enforces the project's 0.90 decision rule.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/pilot-48-plan.json"
+    },
+    {
+      "id": "D-025",
+      "decision": "Apply the already approved six-rater, two-adjudicator, four-week, USD 400 plus USD 100 limited-honoraria operating plan to the immediate 48-critique pilot rather than reserving the current USD 500 for the deferred 400-critique expansion.",
+      "credence": 0.96,
+      "basis": "The owner approved the panel, duration, and honoraria for the next programme and subsequently made the pilot the immediate programme. Applying the scarce current budget to the executable pilot is the consistent interpretation and avoids an unfunded immediate scope.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json"
+    },
+    {
+      "id": "D-026",
+      "decision": "Preserve the approved 50/20/30 Hard Set source allocation as a deferred Phase 2 strategy, not an active item-acquisition or rating commitment.",
+      "credence": 0.97,
+      "basis": "The owner explicitly delayed the 400-critique expansion but did not revoke the previously selected source allocation. Deferral preserves prior work without misrepresenting it as funded or active.",
+      "approved_at": "2026-07-30",
+      "contract_path": "ops/next-steps-2026-07-23/hard-set-source-allocation.json"
     }
   ],
   "pending_decision": {
-    "id": "Q-005",
-    "question": "Which payment methods and recipient jurisdictions, applicable legal and tax review, panel identities and replacement candidates, and external-funding application owner and target should be approved before the readiness gate can pass?",
+    "id": "Q-006",
+    "question": "Which recommended pilot structure, topic/source matrix, candidate-acquisition rule, numerical adjudication and scale-readiness thresholds, exact items, early-career raters and adjudicators, senior methodological advisers, participant jurisdictions and payment methods, and external-funding application owner should be approved for readiness?",
     "status": "user_decision_required",
-    "reason": "These parameters depend on the actual participants, jurisdictions, payment rails, and funding opportunities. Choosing them without that information would fall below the 0.90 decision threshold."
+    "reason": "These choices affect study validity, protected-item composition, contributor eligibility, legal/payment readiness, and external outreach. Several exact values and identities cannot be selected above the 0.90 decision threshold without methodological feedback or user-specific information."
   }
 }
