@@ -91,6 +91,7 @@ function ratingForMetric(critiqueId, overall, overrides = {}) {
     insufficient_context: false,
     verification_status: "not_applicable",
     item_integrity_flags: [],
+    ...overrides,
     scores: {
       centrality: 0.8,
       strength: 0.7,
@@ -101,7 +102,6 @@ function ratingForMetric(critiqueId, overall, overrides = {}) {
       overall,
       ...(overrides.scores ?? {}),
     },
-    ...overrides,
   };
 }
 
@@ -122,7 +122,7 @@ test("rejects sibling split drift and incomplete rater allocation", () => {
   dataset.ratings.find((rating) => rating.position_id === "P01" && rating.critique_id === "P01-C1").rater_id = "R9";
   const report = validatePilotRatingDataset(dataset, { requireComplete: true });
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("same rater pair")));
+  assert.ok(report.errors.some((error) => error.includes("exactly two initial raters")));
   assert.ok(report.errors.some((error) => error.includes("six core raters") || error.includes("Complete pilot must contain 6 core raters")));
 });
 
