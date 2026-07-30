@@ -11,9 +11,19 @@ export const APPROVED_HONORARIA_ENVELOPES = Object.freeze({
   total: 500,
 });
 export const APPROVED_OPERATIONS_OWNER = Object.freeze({ name: "Ellen Sun", role: "project_owner" });
+export const PILOT_WORKLOAD = Object.freeze({
+  positions: 12,
+  critiques_per_position: 4,
+  critiques: 48,
+  independent_initial_ratings_per_critique: 2,
+  initial_ratings: 96,
+  nominal_positions_per_core_rater: 4,
+  nominal_initial_ratings_per_core_rater: 16,
+});
 
 export function validatePanelHonorariaPlan(value) {
   const errors = [];
+  const programmeScope = objectOrEmpty(value?.programme_scope);
   const panel = objectOrEmpty(value?.panel);
   const workload = objectOrEmpty(value?.minimum_workload);
   const delivery = objectOrEmpty(value?.delivery_window);
@@ -33,6 +43,16 @@ export function validatePanelHonorariaPlan(value) {
   const adjudicationEligibility = objectOrEmpty(adjudicationReserve.minimum_eligibility_threshold);
   const adjudicationDistribution = objectOrEmpty(adjudicationReserve.distribution_rule);
 
+  if (value?.plan_id !== "pilot-panel-honoraria-v1-2026-07-23") {
+    errors.push("plan_id must identify the pilot panel and honoraria plan.");
+  }
+  if (programmeScope.active_programme !== "metaphilosophy-48-critique-pilot-v1-2026-07-30") {
+    errors.push("programme_scope.active_programme must identify the 48-critique pilot.");
+  }
+  if (programmeScope.full_400_critique_programme_status !== "deferred_phase_2") {
+    errors.push("The full 400-critique programme must remain deferred Phase 2.");
+  }
+
   for (const [field, expected] of Object.entries(APPROVED_PANEL)) {
     if (panel[field] !== expected) errors.push(`panel.${field} must equal ${expected}; found ${String(panel[field])}.`);
   }
@@ -40,27 +60,36 @@ export function validatePanelHonorariaPlan(value) {
     errors.push("panel.total_people must equal core_raters + dedicated_adjudicators.");
   }
   if (panel.role_separation !== true) errors.push("panel.role_separation must be true.");
-
-  if (workload.positions !== 100) errors.push("minimum_workload.positions must equal 100.");
-  if (workload.critiques !== 400) errors.push("minimum_workload.critiques must equal 400.");
-  if (workload.independent_initial_ratings_per_critique !== 2) {
-    errors.push("minimum_workload.independent_initial_ratings_per_critique must equal 2.");
+  if (panel.core_rater_seniority !== "early_career_expert") {
+    errors.push("panel.core_rater_seniority must preserve early-career experts for bulk work.");
   }
-  if (workload.initial_ratings !== 800) errors.push("minimum_workload.initial_ratings must equal 800.");
+
+  for (const [field, expected] of Object.entries(PILOT_WORKLOAD)) {
+    if (workload[field] !== expected) errors.push(`minimum_workload.${field} must equal ${expected}; found ${String(workload[field])}.`);
+  }
+  if (!String(workload.structure_status ?? "").includes("pending")) {
+    errors.push("minimum_workload.structure_status must preserve final readiness approval as pending.");
+  }
+  if (workload.critiques !== workload.positions * workload.critiques_per_position) {
+    errors.push("minimum_workload.critiques must equal positions multiplied by critiques_per_position.");
+  }
   if (workload.initial_ratings !== workload.critiques * workload.independent_initial_ratings_per_critique) {
     errors.push("minimum_workload.initial_ratings must cover every critique twice.");
   }
-  if (workload.nominal_initial_ratings_per_core_rater?.minimum !== 133) {
-    errors.push("nominal_initial_ratings_per_core_rater.minimum must equal 133.");
+  if (workload.nominal_positions_per_core_rater * panel.core_raters !== workload.positions * 2) {
+    errors.push("nominal positions per core rater must allocate both position assignments across the panel.");
   }
-  if (workload.nominal_initial_ratings_per_core_rater?.maximum !== 134) {
-    errors.push("nominal_initial_ratings_per_core_rater.maximum must equal 134.");
+  if (workload.nominal_initial_ratings_per_core_rater * panel.core_raters !== workload.initial_ratings) {
+    errors.push("nominal initial ratings per core rater must allocate all 96 initial ratings.");
   }
   if (workload.source_estimate_minutes_per_short_rating?.minimum !== 5) {
     errors.push("source_estimate_minutes_per_short_rating.minimum must equal 5.");
   }
   if (workload.source_estimate_minutes_per_short_rating?.maximum !== 15) {
     errors.push("source_estimate_minutes_per_short_rating.maximum must equal 15.");
+  }
+  if (workload.estimated_initial_rating_hours?.minimum !== 8 || workload.estimated_initial_rating_hours?.maximum !== 24) {
+    errors.push("estimated_initial_rating_hours must equal 8 to 24 hours for 96 ratings at 5 to 15 minutes each.");
   }
 
   if (delivery.model !== "relative_to_readiness_gate") errors.push("delivery_window.model must equal relative_to_readiness_gate.");
@@ -70,8 +99,8 @@ export function validatePanelHonorariaPlan(value) {
   if (delivery.calendar_start !== null || delivery.calendar_end !== null) {
     errors.push("Calendar dates must remain null until the readiness gate passes and the start rule is applied.");
   }
-  if (delivery.start_condition !== "readiness_gate_passed_and_start_rule_applied") {
-    errors.push("delivery_window.start_condition must bind readiness and the approved start rule.");
+  if (delivery.start_condition !== "pilot_readiness_gate_passed_and_start_rule_applied") {
+    errors.push("delivery_window.start_condition must bind pilot readiness and the approved start rule.");
   }
   if (startRule.model !== "first_monday_at_0000_utc_at_least_72_hours_after_readiness_signoff") {
     errors.push("delivery_window.start_rule.model does not match the approved rule.");
@@ -79,21 +108,26 @@ export function validatePanelHonorariaPlan(value) {
   if (startRule.timezone !== "UTC" || startRule.minimum_notice_hours !== 72 || startRule.readiness_signed_at !== null) {
     errors.push("The start rule must use UTC, 72 hours of notice, and no premature readiness timestamp.");
   }
-  if (delivery.end_condition !== "completion_gate_passed") errors.push("delivery_window.end_condition must equal completion_gate_passed.");
-  if (!Array.isArray(delivery.readiness_gate) || delivery.readiness_gate.length < 5) {
-    errors.push("delivery_window.readiness_gate must contain the five minimum readiness conditions.");
+  if (delivery.end_condition !== "pilot_completion_gate_passed") {
+    errors.push("delivery_window.end_condition must equal pilot_completion_gate_passed.");
   }
-  if (!Array.isArray(delivery.completion_gate) || delivery.completion_gate.length < 4) {
-    errors.push("delivery_window.completion_gate must contain the four minimum completion conditions.");
+  const readinessGate = Array.isArray(delivery.readiness_gate) ? delivery.readiness_gate : [];
+  if (readinessGate.length < 5) errors.push("delivery_window.readiness_gate must contain the five minimum readiness conditions.");
+  const readinessText = readinessGate.join(" ").toLowerCase();
+  for (const required of ["project owner approves", "numerical disagreement", "methodological-adviser", "early-career", "two independent", "legal, tax"]) {
+    if (!readinessText.includes(required)) errors.push(`delivery_window.readiness_gate must include ${required}.`);
   }
-  if (delivery.nominal_pace?.initial_ratings_total_per_week !== 200) {
-    errors.push("delivery_window.nominal_pace.initial_ratings_total_per_week must equal 200.");
+  const completionGate = Array.isArray(delivery.completion_gate) ? delivery.completion_gate : [];
+  if (completionGate.length < 4) errors.push("delivery_window.completion_gate must contain the four minimum completion conditions.");
+  const completionText = completionGate.join(" ").toLowerCase();
+  for (const required of ["96", "adjudication", "sign-off", "audit records"]) {
+    if (!completionText.includes(required)) errors.push(`delivery_window.completion_gate must include ${required}.`);
   }
-  if (delivery.nominal_pace?.initial_ratings_per_core_rater_per_week?.minimum !== 33) {
-    errors.push("delivery_window.nominal_pace initial per-rater minimum must equal 33.");
+  if (delivery.nominal_pace?.initial_ratings_total_per_week !== 24) {
+    errors.push("delivery_window.nominal_pace.initial_ratings_total_per_week must equal 24.");
   }
-  if (delivery.nominal_pace?.initial_ratings_per_core_rater_per_week?.maximum !== 34) {
-    errors.push("delivery_window.nominal_pace initial per-rater maximum must equal 34.");
+  if (delivery.nominal_pace?.initial_ratings_per_core_rater_per_week !== 4) {
+    errors.push("delivery_window.nominal_pace.initial_ratings_per_core_rater_per_week must equal 4.");
   }
   if (delivery.nominal_pace?.status !== "planning_average_not_honorarium_eligibility_threshold") {
     errors.push("Nominal pace must not be represented as an honorarium eligibility threshold.");
@@ -141,6 +175,13 @@ export function validatePanelHonorariaPlan(value) {
   if (budget.external_funding?.committed !== false || budget.external_funding?.amount !== null) {
     errors.push("Unawarded external funding must not be represented as committed.");
   }
+  const fundingTargets = Array.isArray(budget.external_funding?.candidate_targets) ? budget.external_funding.candidate_targets : [];
+  for (const target of ["Long-Term Future Fund", "Emergent Ventures"]) {
+    if (!fundingTargets.includes(target)) errors.push(`budget.external_funding.candidate_targets must include ${target}.`);
+  }
+  if (budget.external_funding?.application_owner !== null) {
+    errors.push("The external-funding application owner must remain null until Q-006 is resolved.");
+  }
   if (budget.legal_classification !== "not_determined_by_this_plan") {
     errors.push("The plan must not silently determine legal classification.");
   }
@@ -178,8 +219,8 @@ export function validatePanelHonorariaPlan(value) {
   validateEligibility(coreEligibility, "core", errors);
   validateEligibility(adjudicationEligibility, "adjudication", errors);
   if (coreDistribution.normal_completion_distributable_fraction !== 1) errors.push("Core normal-completion release fraction must equal 1.");
-  if (!String(coreDistribution.owner_approved_early_closure_distributable_fraction ?? "").includes("800")) {
-    errors.push("Core early-closure release must be scaled by accepted initial ratings divided by 800.");
+  if (!String(coreDistribution.owner_approved_early_closure_distributable_fraction ?? "").includes("96")) {
+    errors.push("Core early-closure release must be scaled by accepted initial ratings divided by 96.");
   }
   if (coreDistribution.zero_eligible_units_rule !== "remain_unspent") errors.push("Core zero-unit funds must remain unspent.");
   if (adjudicationDistribution.normal_completion_distributable_fraction !== 1) {
@@ -197,25 +238,27 @@ export function validatePanelHonorariaPlan(value) {
 
   if (
     value?.decision_status !==
-    "approved_structure_budget_window_pool_envelopes_distribution_operations_and_attrition_calendar_dates_payment_legal_pending"
+    "approved_panel_budget_window_distribution_operations_and_attrition_applied_to_pilot_exact_structure_thresholds_participants_payment_and_legal_pending"
   ) {
-    errors.push("decision_status must preserve the remaining readiness dependencies.");
+    errors.push("decision_status must preserve the remaining pilot-readiness dependencies.");
   }
-  if (!Array.isArray(value?.controls) || value.controls.length < 9) errors.push("controls must remain explicit.");
-  if (!Array.isArray(value?.unresolved_parameters) || value.unresolved_parameters.length < 4) {
+  if (!Array.isArray(value?.controls) || value.controls.length < 11) errors.push("controls must remain explicit.");
+  if (!Array.isArray(value?.unresolved_parameters) || value.unresolved_parameters.length < 6) {
     errors.push("unresolved_parameters must remain explicit.");
   }
   const unresolvedText = (value?.unresolved_parameters ?? []).join(" ").toLowerCase();
-  for (const required of ["identities", "payment method", "jurisdiction", "readiness-signoff", "external-funding"]) {
+  for (const required of ["approval", "numerical", "identities", "payment method", "jurisdiction", "readiness-signoff", "external-funding"]) {
     if (!unresolvedText.includes(required)) errors.push(`unresolved_parameters must include ${required}.`);
   }
-  if (value?.next_decision?.id !== "Q-005" || value?.next_decision?.status !== "user_decision_required") {
-    errors.push("next_decision must remain Q-005 with user_decision_required status.");
+  if (value?.next_decision?.id !== "Q-006" || value?.next_decision?.status !== "user_decision_required") {
+    errors.push("next_decision must remain Q-006 with user_decision_required status.");
   }
 
   return {
     status: errors.length ? "fail" : "pass",
     plan_id: value?.plan_id ?? null,
+    active_programme: programmeScope.active_programme ?? null,
+    workload: Object.fromEntries(Object.keys(PILOT_WORKLOAD).map((field) => [field, workload[field] ?? null])),
     panel: {
       core_raters: panel.core_raters ?? null,
       dedicated_adjudicators: panel.dedicated_adjudicators ?? null,
