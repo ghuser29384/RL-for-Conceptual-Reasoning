@@ -19,13 +19,16 @@ The senior-adviser and bulk-rater roles are intentionally separate. Senior resea
 Do not contact anyone until the project owner has approved:
 
 1. the recommended 12-position × 4-critique structure and paired-rater design;
-2. the topic/source matrix and candidate-acquisition rule;
-3. provisional numerical adjudication and scale-readiness thresholds as review questions, not binding policy;
-4. the methodological-adviser brief and early-career rater brief;
-5. the exact recipient list, role classification, and outreach order;
-6. the jurisdictions and feasible payment methods for likely participants;
-7. the private method for collecting consent, identity, tax, payment, and sanctions-screening data; and
-8. the person authorized to send and respond to email.
+2. the preferred six-six source crossing, documented fallback, and balanced anonymous assignment invariants;
+3. the topic/source matrix and candidate-acquisition rule;
+4. the eight-item shared public calibration proposal and honest workload disclosure;
+5. provisional numerical adjudication and scale-readiness thresholds as review questions, not binding policy;
+6. the low-clarity and unresolved-verification item-review candidates;
+7. the methodological-adviser brief and early-career rater brief;
+8. the exact recipient list, role classification, and outreach order;
+9. the jurisdictions and feasible payment methods for likely participants;
+10. the private method for collecting consent, identity, tax, payment, and sanctions-screening data; and
+11. the person authorized to send and respond to email.
 
 Public recruitment remains closed until all preconditions pass.
 
@@ -44,6 +47,8 @@ The email attaches or links only to:
 
 - the bounded adviser brief;
 - the human-readable pilot protocol;
+- the LMCA-to-pilot methodology audit;
+- the balanced assignment, calibration, and analysis recommendation;
 - the seven-dimensional rubric;
 - one public, non-protected example; and
 - the three-question response form.
@@ -67,11 +72,14 @@ If fewer than six qualified and available candidates plus two replacements are i
 The first-contact message includes:
 
 - the role brief;
-- the proposed 16-rating workload and 28-day window rule;
-- the 5–15 minute source estimate per short rating and the broader 2–5 hour planning envelope;
-- the USD 400 contribution-weighted core-rater pool and an equal-work illustration;
+- the proposed 16 protected production ratings plus 8 shared public calibration ratings;
+- the eventual 28-day production-window rule;
+- the LMCA source estimate of 5–15 minutes per short rating;
+- the resulting estimate of roughly 2–6 hours of scoring alone and the broader **3–8 hour planning envelope**, with additional time possible for assigned re-ratings;
+- the fact that calibration is not an honorarium contribution unit under the current plan;
+- the USD 400 contribution-weighted core-rater pool and an equal-production-work illustration;
 - the fact that the amount is limited honoraria, not a wage or full-cost compensation;
-- the blindness, conflict, provenance, and withdrawal rules;
+- the blindness, conflict, provenance, balanced-assignment, and withdrawal rules;
 - the fact that exact dates do not exist until readiness; and
 - a request only for interest, relevant background, jurisdiction, feasible payment rail, and potential availability.
 
@@ -85,12 +93,15 @@ Adjudicator invitations are separate from core-rater invitations. A candidate ma
 
 The adjudicator message explains:
 
-- that workload depends on pre-registered disagreement and integrity triggers;
+- the shared eight-item public calibration proposal;
+- that workload depends on pre-registered disagreement, low-clarity, unresolved-verification, and integrity triggers;
 - that both adjudicators independently review required cases before seeing each other's disposition;
 - that consensus is not forced;
 - that original ratings are preserved;
 - that the USD 100 reserve is contribution-weighted; and
 - that unused reserve funds remain unspent.
+
+The adjudicator workload cannot be represented as a fixed number of hours until the final trigger policy and pilot items are frozen. Candidate acceptance requires a workload range or capacity cap derived from pre-launch simulations or screening estimates.
 
 At least one prequalified replacement should be available for each role family if feasible.
 
@@ -105,7 +116,7 @@ Prefer candidates who collectively provide:
 - experience with teaching, grading, peer review, argument mapping, debate, or research evaluation;
 - methodological diversity;
 - no protected-item exposure or authorship conflict; and
-- feasible participation within the eventual four-week window.
+- feasible participation in calibration and the eventual four-week production window.
 
 Do not select solely by institutional prestige, social proximity, effective-altruism affiliation, or agreement with the project's philosophical premises.
 
