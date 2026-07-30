@@ -3,10 +3,11 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 export const HONORARIA_POOLS_CENTS = Object.freeze({ core: 40_000, adjudication: 10_000 });
-export const REQUIRED_INITIAL_RATINGS = 800;
+export const REQUIRED_INITIAL_RATINGS = 96;
 
 /**
- * Calculate an auditable honoraria ledger from accepted contribution units.
+ * Calculate an auditable honoraria ledger from accepted contribution units for
+ * the 48-critique pilot.
  *
  * Input shape:
  * {
@@ -87,10 +88,12 @@ export function calculateHonorariaLedger(input) {
   );
 
   return {
-    version: "honoraria-ledger-v1",
+    version: "pilot-honoraria-ledger-v1",
+    programme: "metaphilosophy-48-critique-pilot-v1-2026-07-30",
     currency: "USD",
     mode,
     core: {
+      required_initial_ratings: REQUIRED_INITIAL_RATINGS,
       accepted_initial_ratings: acceptedInitialRatings,
       accepted_substantive_reratings: acceptedReratings,
       ...coreDistribution,
@@ -106,7 +109,7 @@ export function calculateHonorariaLedger(input) {
       paid_cents: coreDistribution.paid_cents + adjudicationDistribution.paid_cents,
       unspent_cents: coreDistribution.unspent_cents + adjudicationDistribution.unspent_cents,
     },
-    note: "This allocates capped volunteer honoraria; it is not a wage or per-rating compensation schedule.",
+    note: "This allocates capped volunteer honoraria for the 48-critique pilot; it is not a wage or per-rating compensation schedule and does not fund Phase 2.",
   };
 }
 
