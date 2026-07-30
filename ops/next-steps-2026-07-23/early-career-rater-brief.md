@@ -25,15 +25,19 @@ These qualifications are recommendations pending final owner approval. Affiliati
 
 Under the proposed 12-position × 4-critique structure:
 
-- each core rater receives 4 positions;
-- each position contains 4 sibling critiques;
-- each core rater therefore completes 16 blind initial ratings;
+- each core rater receives 4 production positions;
+- each production position contains 4 sibling critiques;
+- each core rater therefore completes 16 blind production ratings;
 - each position is independently rated by one pair of core raters; and
 - additional substantive re-rating occurs only when assigned by the operator under the frozen protocol.
 
-The LMCA paper reports roughly 5–15 minutes for short position–critique ratings. Sixteen initial ratings therefore imply about 1 hour 20 minutes to 4 hours of rating time, before calibration, breaks, verification, re-rating, or administration. A reasonable planning envelope is approximately 2–5 hours, but actual time will be measured in the pilot rather than promised in advance.
+The strengthened Q-006A proposal also includes a shared public calibration set of 2 positions × 4 critiques. All six core raters and both adjudicators would independently complete those 8 calibration ratings before production work.
 
-The nominal four-week pace is four initial ratings per rater per week. This is a planning average, not an honorarium-eligibility threshold.
+The LMCA paper reports roughly 5–15 minutes for a short position–critique rating. The proposed 16 production ratings imply about 1 hour 20 minutes to 4 hours of scoring. Including the 8 shared calibration ratings produces 24 scored critique pairs, or roughly **2–6 hours of scoring alone**. Orientation, calibration discussion, breaks, practical correctness verification, administration, and any assigned re-rating add time.
+
+A more honest planning envelope is therefore approximately **3–8 hours**, with the possibility of additional time for unusually long items or assigned re-ratings. This remains an estimate to be measured in the pilot, not a promised maximum. The full protocol and item-length distribution must be available before a candidate accepts.
+
+The nominal four-week production pace is four initial ratings per rater per week. This is a planning average, not an honorarium-eligibility threshold. Shared calibration occurs before protected production ratings and does not count toward the sixteen production ratings.
 
 ## What a rating contains
 
@@ -59,7 +63,7 @@ Substantive impact is analyzed through `strength × centrality`; neither field i
 
 ## Blindness and independence
 
-Before a rater locks all four sibling critiques for an assigned position, the system does not reveal:
+Before a rater locks all four sibling critiques for an assigned production position, the system does not reveal:
 
 - source or author/model identity;
 - model-judge scores or provisional quality strata;
@@ -67,7 +71,9 @@ Before a rater locks all four sibling critiques for an assigned position, the sy
 - aggregate human ratings; or
 - adjudication status.
 
-A candidate cannot receive a position they authored, substantively edited, or previously saw with labels. The assignment log records conflict, prior exposure, eligibility, and the deterministic assignment seed.
+A candidate cannot receive a production position they authored, substantively edited, or previously saw with labels. The assignment log records conflict, prior exposure, eligibility, and the deterministic assignment seed.
+
+The preferred anonymous assignment template uses twelve distinct rater pairs. Each rater receives four production positions, four distinct partners, four topic families, and—if the preferred six-six source crossing is feasible—two positions from each eligible source class. Named participants are mapped to anonymous slots only after conflict and exposure screening.
 
 ## Calibration and acceptance
 
@@ -75,13 +81,14 @@ The recommended qualification sequence is:
 
 1. eligibility, consent, conflict, and exposure screening;
 2. a short orientation to the rubric and interface;
-3. independent calibration ratings on public examples;
-4. object-level review of major discrepancies; and
-5. a recorded pass, conditional pass with targeted remediation, or non-selection decision.
+3. independent ratings of the eight shared public calibration critiques;
+4. preservation of every initial calibration rating;
+5. object-level review of major discrepancies using a rubric-based considerations dossier rather than an unquestionable gold vector; and
+6. a recorded pass, conditional pass with targeted remediation, or non-selection decision.
 
-The exact calibration items and pass rule remain pending methodological review and owner approval. Calibration is not a paid contribution unit.
+The exact calibration examples, reference considerations, and pass rule remain pending methodological review and owner approval. Calibration is not a paid contribution unit under the current plan and is excluded from the 48-critique pilot outcomes. This unpaid calibration burden must be disclosed before acceptance.
 
-An initial rating earns one honorarium unit only when it is complete, assigned, and accepted under the frozen quality-control rules. A substantive re-rating earns one additional unit only when the operator assigned it and the result is accepted. Duplicates, rejected work, self-initiated re-ratings, and avoidable formatting corrections earn zero units.
+An initial production rating earns one honorarium unit only when it is complete, assigned, and accepted under the frozen quality-control rules. A substantive re-rating earns one additional unit only when the operator assigned it and the result is accepted. Duplicates, rejected work, self-initiated re-ratings, avoidable formatting corrections, and calibration ratings earn zero units.
 
 ## Limited honoraria
 
@@ -92,9 +99,11 @@ The current ceiling reserves:
 
 At normal completion, each pool is distributed pro rata by accepted units using largest-remainder cent rounding. Every accepted unit participates after qualification; there is no 80% or full-assignment threshold. Accepted units remain credited if a contributor later withdraws or is replaced.
 
-As a transparent illustration only: if six eligible core raters each complete exactly 16 accepted initial ratings and no substantive re-ratings occur, the USD 400 pool would divide approximately equally, producing four payouts of USD 66.67 and two of USD 66.66 under the deterministic contributor-ID tiebreak. This is not a promised individual amount; accepted re-ratings, attrition, rejection, or an owner-approved early closure change the ledger.
+As a transparent illustration only: if six eligible core raters each complete exactly 16 accepted production ratings and no substantive re-ratings occur, the USD 400 pool would divide approximately equally, producing four payouts of USD 66.67 and two of USD 66.66 under the deterministic contributor-ID tiebreak. This is not a promised individual amount; accepted re-ratings, attrition, rejection, or an owner-approved early closure change the ledger.
 
 At an owner-approved early closure, the released core pool is scaled by `accepted blind initial ratings / 96`, capped at 1. Unreleased and otherwise unused funds remain unspent.
+
+The honorarium illustration must be read together with the 3–8 hour planning envelope and the statement that the pool does not represent full compensation for professional time.
 
 ## Withdrawal and replacement
 
@@ -118,12 +127,12 @@ A candidate packet should contain:
 - prior argument-evaluation, teaching, journal, debate, or dataset experience;
 - conflict and prior-exposure disclosure;
 - jurisdiction and feasible payment method, collected privately only after initial interest; and
-- availability across the eventual 28-day window.
+- availability across calibration and the eventual 28-day production window.
 
 Do not request identity, tax, payment, or sanctions-screening data through a public form before the project has approved the collection method, retention policy, and access controls.
 
 ## Draft invitation summary
 
-> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently rate 16 critiques using a seven-dimensional rubric. The expected contribution is roughly 2–5 hours including calibration, spread across four weeks. A USD 400 limited-honoraria pool is divided transparently among accepted core-rater contributions; it is not a per-rating wage or full-cost compensation. I would first send the full protocol, workload, privacy terms, and calibration rules for review—there is no commitment merely from expressing interest.
+> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, and calibration rules for review—there is no commitment merely from expressing interest.
 
 This is an internal draft, not an authorized or sent message.
