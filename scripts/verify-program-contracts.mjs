@@ -6,18 +6,21 @@ import { validateHardSetSourceAllocation } from "./verify-hard-set-source-alloca
 import { validatePanelHonorariaPlan } from "./verify-panel-honoraria-plan.mjs";
 import { validatePilot48Plan } from "./verify-pilot-48-plan.mjs";
 import { validatePilotMethodologyRecommendations } from "./verify-pilot-methodology-recommendations.mjs";
+import { validatePilotReadinessLedger } from "./verify-pilot-readiness-ledger.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const contractPath = resolve(root, "ops/next-steps-2026-07-23/release-contract.json");
 const decisionsPath = resolve(root, "ops/next-steps-2026-07-23/decision-register.json");
 const pilotPath = resolve(root, "ops/next-steps-2026-07-23/pilot-48-plan.json");
 const methodologyPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.json");
+const readinessPath = resolve(root, "ops/next-steps-2026-07-23/pilot-readiness-ledger.json");
 const methodologyAuditPath = resolve(root, "ops/next-steps-2026-07-23/lmca-methodology-audit.md");
 const methodologyBriefPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.md");
 const adviserBriefPath = resolve(root, "ops/next-steps-2026-07-23/methodological-adviser-brief.md");
 const raterBriefPath = resolve(root, "ops/next-steps-2026-07-23/early-career-rater-brief.md");
 const outreachPlanPath = resolve(root, "ops/next-steps-2026-07-23/outreach-plan.md");
 const q006PacketPath = resolve(root, "ops/next-steps-2026-07-23/q-006-decision-packet.md");
+const q006ApprovalPath = resolve(root, "ops/next-steps-2026-07-23/q-006a-owner-approval.md");
 const allocationPath = resolve(root, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
 const panelPlanPath = resolve(root, "ops/next-steps-2026-07-23/panel-honoraria-plan.json");
 const calculatorPath = resolve(root, "scripts/calculate-honoraria.mjs");
@@ -29,12 +32,14 @@ const [
   register,
   pilot,
   methodology,
+  readiness,
   methodologyAudit,
   methodologyBrief,
   adviserBrief,
   raterBrief,
   outreachPlan,
   q006Packet,
+  q006Approval,
   allocation,
   panelPlan,
   calculator,
@@ -45,12 +50,14 @@ const [
   readJson(decisionsPath),
   readJson(pilotPath),
   readJson(methodologyPath),
+  readJson(readinessPath),
   readFile(methodologyAuditPath, "utf8"),
   readFile(methodologyBriefPath, "utf8"),
   readFile(adviserBriefPath, "utf8"),
   readFile(raterBriefPath, "utf8"),
   readFile(outreachPlanPath, "utf8"),
   readFile(q006PacketPath, "utf8"),
+  readFile(q006ApprovalPath, "utf8"),
   readJson(allocationPath),
   readJson(panelPlanPath),
   readFile(calculatorPath, "utf8"),
@@ -122,6 +129,13 @@ assert.deepEqual(methodologyReport.preferred_source_mix, {
 assert.equal(methodologyReport.shared_calibration_critiques, 8);
 assert.equal(methodologyReport.binding_effect, false);
 
+const readinessReport = validatePilotReadinessLedger(readiness);
+assert.equal(readinessReport.status, "pass", readinessReport.errors.join("\n"));
+assert.equal(readinessReport.q006a_status, "pending_project_owner_decision");
+assert.equal(readinessReport.readiness_gate_count, 6);
+assert.equal(readinessReport.blocked_gate_count, 6);
+assert.equal(readinessReport.ready_to_start, false);
+
 assert.match(methodologyAudit, /951 rated critiques/);
 assert.match(methodologyAudit, /1,458 ratings/);
 assert.match(methodologyAudit, /rater concentration/i);
@@ -161,6 +175,9 @@ assert.match(q006Packet, /Q-006A — approve the consultation design/);
 assert.match(q006Packet, /Preferred source crossing/);
 assert.match(q006Packet, /Shared calibration proposal/);
 assert.match(q006Packet, /does[^\n]*not[^\n]*authorize sending/i);
+assert.match(q006Approval, /Pending project-owner decision/i);
+assert.match(q006Approval, /Does not authorize/i);
+assert.match(q006Approval, /Silence is not approval/i);
 
 const allocationReport = validateHardSetSourceAllocation(allocation);
 assert.equal(allocationReport.status, "pass", allocationReport.errors.join("\n"));
