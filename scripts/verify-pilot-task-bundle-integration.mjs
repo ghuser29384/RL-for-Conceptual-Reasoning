@@ -58,9 +58,9 @@ export async function verifyPilotTaskBundleIntegration() {
     /Controlled blind task-bundle generation \| No/i,
     /Task-bundle distribution \| No/i,
     /participant-specific HMAC task tokens/i,
-    /Generation is not distribution/i,
-    /does not authorize distribution/i,
-    /does not authorize rating work/i,
+    /Generating private task files does not authorize distribution/i,
+    /does not authorize task-bundle generation, distribution, rating work/i,
+    /does not itself create accepted rating records/i,
   ];
   for (const pattern of requiredReadinessPhrases) assert.match(readinessBrief, pattern);
 
