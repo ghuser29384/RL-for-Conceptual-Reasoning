@@ -2,9 +2,9 @@
 
 **Status:** blocked.  
 **Current decision:** Q-006A remains pending.  
-**Effect of this file:** none by itself. It does not authorize outreach, recruitment, participant selection, protected-item screening or freezing, calibration, rating work, payment, funding submission, or Phase 2 activation.
+**Effect of this file:** none by itself. It does not authorize outreach, recruitment, participant selection, controlled assignment generation, protected-item screening or freezing, calibration, rating work, payment, funding submission, or Phase 2 activation.
 
-This is the public companion to `pilot-readiness-ledger.json`. Sensitive recipient, participant, payment, tax, sanctions, conflict, exposure, and protected-item records must remain in private controlled storage.
+This is the public companion to `pilot-readiness-ledger.json`. Sensitive recipient, participant, protected-item, conflict, exposure, assignment, and administrative records remain in private controlled storage.
 
 ## Current authorization state
 
@@ -18,6 +18,7 @@ This is the public companion to `pilot-readiness-ledger.json`. Sensitive recipie
 | Non-final protected-item screening | No |
 | Protected manifest freeze | No |
 | Participant selection | No |
+| Controlled assignment generation | No |
 | Calibration or rating work | No |
 | Payment commitment | No |
 | LTFF or Emergent Ventures submission | No |
@@ -54,23 +55,31 @@ Before any protected human rating, a private reproducibility record must freeze 
 
 Model judgments may be used as acquisition signals or comparison baselines. They are not human labels and do not adjudicate human disagreements.
 
-### People, payment, and legal readiness
+### People and topic coverage
 
-The private record must eventually cover six core raters, two dedicated adjudicators, and at least two prequalified replacements where feasible. It must separately record qualification, consent, conflicts, prior exposure, calibration, jurisdiction, payment feasibility, tax documentation, sanctions review, and availability.
+The private readiness record must eventually cover six core raters, two dedicated adjudicators, and replacement coverage where feasible. It separately records qualification, approved topic families, consent, conflicts, prior exposure, calibration, availability, and administrative readiness.
 
-No identity document, bank detail, tax identifier, personal address, or professional email address belongs in the public repository.
+Baseline competence in two areas does not make a participant eligible for every position. Each assigned topic family must appear in that participant's approved coverage record.
+
+### Controlled assignment
+
+Participant selection and assignment generation are separate gates. A controlled mapping may be generated only after Q-006B and Q-006C, a frozen private manifest, passed calibration, completed conflict and exposure checks, confirmed topic coverage, private controlled storage, and a separate versioned assignment authorization.
+
+The deterministic generator enumerates all participant-to-anonymous-slot mappings and rejects any mapping that violates topic competence, conflict, prior exposure, or the frozen balance graph. If none is feasible, it produces no assignment. It may not relax a constraint or make an undocumented manual swap.
+
+The full mapping remains a private controlled record outside the repository. Only hashes and a privacy-safe summary may later be published. Assignment generation does not authorize rating work or set the pilot start date.
 
 ## Six readiness gates
 
 1. **Q-006A:** consultation and non-final screening design approved.
 2. **Methodological feedback:** bounded feedback collected and dispositioned.
-3. **Q-006B:** methodology, calibration, analysis, and controlled item manifest approved.
-4. **Q-006C:** people, payment, privacy, legal, outreach, and date decisions approved.
-5. **Assignments:** blind assignments generated with conflict and exposure checks passed.
+3. **Q-006B:** methodology, calibration, analysis, deterministic assignment controls, and controlled item manifest approved.
+4. **Q-006C:** people, topic coverage, administrative readiness, outreach, and date decisions approved.
+5. **Controlled assignment:** separately authorized blind mapping generated with conflict, exposure, topic-coverage, and balance checks passed.
 6. **Readiness signature:** Ellen Sun signs the complete readiness record.
 
 Only after all six gates pass may the first-Monday start rule be applied. Until then, calendar dates remain unset.
 
 ## Immediate next action
 
-Approve, revise, or reject Q-006A. Approval would authorize consultation-packet preparation, recipient research, public calibration screening, and non-final item screening only. Exact recipients and any email send action would still require a separate project-owner approval.
+Approve, revise, or reject Q-006A. Approval would authorize consultation-packet preparation, recipient research, public calibration screening, and non-final item screening only. Exact recipients, any email send action, participant selection, controlled assignment generation, and rating work would still require later separate approvals.
