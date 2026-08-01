@@ -1,0 +1,84 @@
+name: Metaphilosophy pre-outreach quality
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/app.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/exact-reference.css"
+      - "src/trust-home.css"
+      - "research/**"
+      - "arguments/**"
+      - "reviewers/**"
+      - "scripts/build-static.mjs"
+      - "scripts/verify-pre-outreach-public-site.mjs"
+      - "scripts/audit-pre-outreach-production.mjs"
+      - "test/pre-outreach-public-site.test.mjs"
+      - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
+      - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/app.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/exact-reference.css"
+      - "src/trust-home.css"
+      - "research/**"
+      - "arguments/**"
+      - "reviewers/**"
+      - "scripts/build-static.mjs"
+      - "scripts/verify-pre-outreach-public-site.mjs"
+      - "scripts/audit-pre-outreach-production.mjs"
+      - "test/pre-outreach-public-site.test.mjs"
+      - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
+      - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-public-product:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-pre-outreach-public-site.mjs
+      - run: node --test test/pre-outreach-public-site.test.mjs
+      - run: npm test
+      - run: npm run build
+      - name: Verify built public surfaces
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const required = [
+            'dist/index.html',
+            'dist/src/site-entry.mjs',
+            'dist/src/exact-reference-home.mjs',
+            'dist/src/trust-home.css',
+            'dist/research/index.html',
+            'dist/research/styles.css',
+            'dist/arguments/index.html',
+            'dist/reviewers/closed.html',
+          ];
+          for (const path of required) {
+            if (!fs.existsSync(path)) throw new Error(`Missing built public surface: ${path}`);
+          }
+          const home = fs.readFileSync('dist/src/exact-reference-home.mjs', 'utf8');
+          const research = fs.readFileSync('dist/research/index.html', 'utf8');
+          const library = fs.readFileSync('dist/arguments/index.html', 'utf8');
+          const reviewers = fs.readFileSync('dist/reviewers/closed.html', 'utf8');
+          if (!home.includes('No Metaphilosophy expert ratings claimed yet')) throw new Error('Homepage evidence boundary missing');
+          if (!research.includes('One gate passed. Five remain blocked.')) throw new Error('Research readiness boundary missing');
+          if (!library.includes('None has been expert-rated by Metaphilosophy')) throw new Error('Synthetic-library boundary missing');
+          if (!reviewers.includes('Reviewer intake is intentionally closed')) throw new Error('Closed-intake boundary missing');
+          NODE
+      - run: node scripts/audit-pre-outreach-production.mjs --help
