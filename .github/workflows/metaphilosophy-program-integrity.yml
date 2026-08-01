@@ -11,6 +11,8 @@ on:
       - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-pilot-methodology-recommendations.mjs"
       - "scripts/verify-pilot-readiness-ledger.mjs"
+      - "scripts/verify-pilot-assignment-contract.mjs"
+      - "scripts/pilot-assignment-generator.mjs"
       - "scripts/verify-pilot-rating-analysis-contract.mjs"
       - "scripts/verify-pilot-public-analysis.mjs"
       - "scripts/pilot-rating-analysis.mjs"
@@ -24,6 +26,9 @@ on:
       - "test/pilot-48-plan.test.mjs"
       - "test/pilot-methodology-recommendations.test.mjs"
       - "test/pilot-readiness-ledger.test.mjs"
+      - "test/pilot-assignment-generator.test.mjs"
+      - "test/pilot-assignment-cli.test.mjs"
+      - "test/fixtures/pilot-assignment-synthetic.json"
       - "test/pilot-rating-analysis-contract.test.mjs"
       - "test/pilot-rating-analysis.test.mjs"
       - "test/pilot-rating-analysis-cli.test.mjs"
@@ -46,6 +51,8 @@ on:
       - "scripts/verify-pilot-48-plan.mjs"
       - "scripts/verify-pilot-methodology-recommendations.mjs"
       - "scripts/verify-pilot-readiness-ledger.mjs"
+      - "scripts/verify-pilot-assignment-contract.mjs"
+      - "scripts/pilot-assignment-generator.mjs"
       - "scripts/verify-pilot-rating-analysis-contract.mjs"
       - "scripts/verify-pilot-public-analysis.mjs"
       - "scripts/pilot-rating-analysis.mjs"
@@ -59,6 +66,9 @@ on:
       - "test/pilot-48-plan.test.mjs"
       - "test/pilot-methodology-recommendations.test.mjs"
       - "test/pilot-readiness-ledger.test.mjs"
+      - "test/pilot-assignment-generator.test.mjs"
+      - "test/pilot-assignment-cli.test.mjs"
+      - "test/fixtures/pilot-assignment-synthetic.json"
       - "test/pilot-rating-analysis-contract.test.mjs"
       - "test/pilot-rating-analysis.test.mjs"
       - "test/pilot-rating-analysis-cli.test.mjs"
@@ -87,6 +97,10 @@ jobs:
       - run: node scripts/verify-pilot-48-plan.mjs
       - run: node scripts/verify-pilot-methodology-recommendations.mjs
       - run: node scripts/verify-pilot-readiness-ledger.mjs
+      - run: node scripts/verify-pilot-assignment-contract.mjs
+      - run: node scripts/pilot-assignment-generator.mjs --help
+      - run: node scripts/pilot-assignment-generator.mjs ops/next-steps-2026-07-23/pilot-methodology-recommendations.json test/fixtures/pilot-assignment-synthetic.json > /tmp/pilot-assignment-summary.json
+      - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-assignment-summary.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"participant_id\":","\"position_id\":","\"critique_id\":","\"anonymous_slot_mapping\":","\"position_assignments\":"]; if(report.mode!=="simulation" || report.feasibility.feasible_mapping_count!==1 || report.rating_work_authorized || report.phase_2_authorized || report.privacy.contains_participant_ids!==false || report.privacy.contains_position_or_critique_ids!==false || report.privacy.contains_assignment_pairs!==false || forbidden.some((token)=>text.includes(token))) process.exit(1);'
       - run: node scripts/verify-pilot-rating-analysis-contract.mjs
       - run: node scripts/verify-pilot-public-analysis.mjs
       - run: node scripts/pilot-rating-analysis.mjs --help
