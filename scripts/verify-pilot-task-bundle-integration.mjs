@@ -82,7 +82,7 @@ export async function verifyPilotTaskBundleIntegration() {
     /opaque task tokens/i,
     /all sixteen assigned task tokens exactly once/i,
     /private task packet is not permission to begin/i,
-    /original initial response is preserved/i,
+    /original (accepted )?initial response is preserved/i,
   ];
   for (const pattern of requiredRaterPhrases) assert.match(raterBrief, pattern);
 
