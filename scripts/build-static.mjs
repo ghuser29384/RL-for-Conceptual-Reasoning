@@ -24,7 +24,6 @@ await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
 for (const file of publicSrcFiles) {
   await cp(resolve(root, "src", file), resolve(dist, "src", file));
 }
-await cp(resolve(root, "src/assets"), resolve(dist, "src/assets"), { recursive: true });
 await cp(resolve(root, "reviewers"), resolve(dist, "reviewers"), { recursive: true });
 await cp(resolve(root, "arguments"), resolve(dist, "arguments"), { recursive: true });
 await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });
