@@ -4,6 +4,8 @@
 **Contains:** no real participant, position, critique, conflict, exposure, payment, or assignment record.  
 **Does not authorize:** recipient research, outreach, public recruitment, item screening or freezing, participant selection, calibration, rating work, payment, funding submission, or Phase 2.
 
+This contract does not authorize rating work.
+
 ## Why this layer is needed
 
 The current preferred design specifies twelve anonymous position slots and twelve distinct anonymous rater pairs. A design table alone does not safely map six named, qualified participants into `R1`–`R6`. Manual substitution could overlook an authorship conflict, prior exposure, topic-competence gap, or repeated-pair imbalance.
