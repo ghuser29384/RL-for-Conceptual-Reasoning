@@ -1,0 +1,122 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-readiness-ledger-v2.schema.json",
+  "ledger_id": "metaphilosophy-pilot-readiness-v2-2026-08-01",
+  "ledger_version": 2,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "supersedes": {
+    "ledger_id": "metaphilosophy-pilot-readiness-v1-2026-07-30",
+    "scope": "effective readiness and authorization state after Q-006A approval",
+    "historical_v1_retained": true
+  },
+  "status": "q006a_approved_preparation_only_r02_blocked",
+  "q006a": {
+    "status": "approved",
+    "approved_by": "Ellen Sun",
+    "approved_at": "2026-08-01T11:34:32Z",
+    "approval_record": "ops/next-steps-2026-07-23/q-006a-approved-state.json",
+    "interpretation_record": "ops/next-steps-2026-07-23/q-006a-approval-interpretation-2026-08-01.md"
+  },
+  "authorization_state": {
+    "methodological_consultation_packet_finalization_authorized": true,
+    "methodological_adviser_recipient_research_authorized": true,
+    "public_calibration_candidate_screening_authorized": true,
+    "controlled_nonfinal_item_screening_authorized": true,
+    "methodological_adviser_outreach_authorized": false,
+    "public_recruitment_authorized": false,
+    "participant_outreach_authorized": false,
+    "protected_manifest_or_calibration_freeze_authorized": false,
+    "participant_selection_authorized": false,
+    "controlled_assignment_generation_authorized": false,
+    "controlled_task_bundle_generation_authorized": false,
+    "task_bundle_distribution_authorized": false,
+    "calibration_or_rating_work_authorized": false,
+    "quality_control_acceptance_authorized": false,
+    "controlled_rating_ingestion_authorized": false,
+    "adjudication_case_generation_or_distribution_authorized": false,
+    "adjudication_discussion_or_rerating_authorized": false,
+    "case_resolution_or_final_snapshot_authorized": false,
+    "honorarium_ledger_freeze_or_payment_authorized": false,
+    "publication_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_activation_authorized": false
+  },
+  "prepared_q006a_artifacts": [
+    "ops/next-steps-2026-07-23/q-006a-methodological-adviser-slate.md",
+    "ops/next-steps-2026-07-23/q-006a-methodological-adviser-email-packet.md",
+    "ops/next-steps-2026-07-23/q-006a-methodological-review-excerpt.md"
+  ],
+  "readiness_gates": [
+    {
+      "id": "R-01",
+      "name": "Q-006A consultation and non-final screening design approved",
+      "status": "passed",
+      "evidence": [
+        "ops/next-steps-2026-07-23/q-006a-approved-state.json",
+        "ops/next-steps-2026-07-23/q-006a-approval-interpretation-2026-08-01.md"
+      ],
+      "passed_at": "2026-08-01T11:34:32Z"
+    },
+    {
+      "id": "R-02",
+      "name": "Bounded methodological feedback collected and dispositioned",
+      "status": "blocked",
+      "evidence": null,
+      "passed_at": null
+    },
+    {
+      "id": "R-03",
+      "name": "Q-006B methodology, calibration, analysis, assignment, task-bundle, ingestion, adjudication, and controlled item rules approved",
+      "status": "blocked",
+      "evidence": null,
+      "passed_at": null
+    },
+    {
+      "id": "R-04",
+      "name": "Q-006C people, topic coverage, payment, privacy, legal, outreach, delivery, and date decisions approved",
+      "status": "blocked",
+      "evidence": null,
+      "passed_at": null
+    },
+    {
+      "id": "R-05",
+      "name": "Controlled assignment and task-bundle generation separately authorized and verified",
+      "status": "blocked",
+      "evidence": null,
+      "passed_at": null
+    },
+    {
+      "id": "R-06",
+      "name": "Operations owner signed the complete pilot readiness record",
+      "status": "blocked",
+      "evidence": null,
+      "passed_at": null
+    }
+  ],
+  "overall_readiness": {
+    "status": "blocked_at_r02",
+    "ready_to_start": false,
+    "readiness_signed_at": null,
+    "derived_calendar_start": null,
+    "derived_calendar_end": null
+  },
+  "next_actions": [
+    {
+      "id": "Q006A-PREP-01",
+      "action": "Obtain separate owner approval for the exact Wave-1 email recipients, final message, protocol excerpt, sender, follow-up, and reply handling before any send.",
+      "status": "owner_send_decision_required"
+    },
+    {
+      "id": "Q006A-SCREEN-01",
+      "action": "Screen public non-protected calibration candidates and controlled non-final pilot-item candidates under the approved design.",
+      "status": "authorized_not_yet_frozen"
+    }
+  ],
+  "invariants": [
+    "Q-006A approval authorizes preparation and screening only.",
+    "No email or other outreach may be sent without separate owner approval of the exact packet.",
+    "No screened item or calibration example becomes frozen through screening alone.",
+    "No named rater, adjudicator, replacement, or adviser is selected by Q-006A.",
+    "No assignment, packet, rating, ingestion, adjudication, sign-off, honorarium, payment, publication, funding, or Phase 2 execution is authorized.",
+    "R-02 through R-06 remain blocked until supported by explicit versioned evidence."
+  ]
+}
