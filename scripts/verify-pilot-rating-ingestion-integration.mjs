@@ -77,19 +77,20 @@ export async function verifyPilotRatingIngestionIntegration() {
   for (const pattern of [
     /Rating-ingestion proposal/i,
     /structural submission validity does not imply acceptance/i,
-    /Rating-ingestion authorization boundary/i,
-    /rejected responses remain in the raw submission and decision archive/i,
-    /does not authorize payment, publication, a funding submission, or Phase 2/i,
+    /Rating-ingestion and adjudication boundaries/i,
+    /A valid submission is not an accepted rating/i,
+    /Ingestion does not authorize adjudication/i,
   ]) {
     assert.match(q006Packet, pattern);
   }
 
   for (const pattern of [
+    /Approved by the project owner/i,
     /controlled rating ingestion/i,
     /Rating-ingestion proposal/i,
     /submission validation does not authorize acceptance/i,
-    /accepting or ingesting ratings/i,
-    /Silence is not approval/i,
+    /any real quality-control acceptance, rejection, no-op, ingestion event, accepted rating record/i,
+    /No email was sent/i,
   ]) {
     assert.match(q006aApproval, pattern);
   }
@@ -139,6 +140,7 @@ export async function verifyPilotRatingIngestionIntegration() {
     synthetic_complete_dataset_sha256: report.synthetic_complete_dataset_sha256,
     synthetic_ingestion_event_sha256: report.synthetic_ingestion_event_sha256,
     synthetic_replay_rejected: report.synthetic_replay_rejected,
+    q006a_approved: true,
     controlled_ingestion_authorized: false,
     funding_submission_authorized: false,
     phase_2_authorized: false,
