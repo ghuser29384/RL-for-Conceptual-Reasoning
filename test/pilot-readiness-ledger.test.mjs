@@ -18,6 +18,8 @@ test("accepts the blocked public readiness shell", async () => {
   assert.equal(report.readiness_gate_count, EXPECTED_READINESS_GATES.length);
   assert.equal(report.blocked_gate_count, EXPECTED_READINESS_GATES.length);
   assert.equal(report.controlled_assignment_generation_authorized, false);
+  assert.equal(report.controlled_task_bundle_generation_authorized, false);
+  assert.equal(report.task_bundle_distribution_authorized, false);
   assert.equal(report.ready_to_start, false);
 });
 
@@ -77,17 +79,46 @@ test("rejects silently authorizing or publishing a controlled assignment", async
   assert.ok(report.errors.some((error) => error.includes("Forbidden public field populated")));
 });
 
-test("rejects removal of topic-coverage or controlled-assignment evidence requirements", async () => {
+test("rejects silently authorizing, distributing, or publishing controlled task bundles", async () => {
+  const ledger = await loadLedger();
+  ledger.authorization_state.controlled_task_bundle_generation_authorized = true;
+  ledger.authorization_state.task_bundle_distribution_authorized = true;
+  ledger.task_bundle_template.status = "generated_and_distributed";
+  ledger.task_bundle_template.public_summary = {
+    participant_bundles: [
+      {
+        participant_ids: ["RATER_1"],
+        task_position_token: "T_secret",
+        task_critique_token: "T_secret_critique",
+      },
+    ],
+  };
+  ledger.task_bundle_template.distribution_authorized_by_generation = true;
+  ledger.task_bundle_template.rating_work_authorized_by_bundle = true;
+  const report = validatePilotReadinessLedger(ledger);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes("controlled_task_bundle_generation_authorized")));
+  assert.ok(report.errors.some((error) => error.includes("task_bundle_distribution_authorized")));
+  assert.ok(report.errors.some((error) => error.includes("Task-bundle template must remain unauthorized")));
+  assert.ok(report.errors.some((error) => error.includes("task_bundle_template.public_summary")));
+  assert.ok(report.errors.some((error) => error.includes("must not authorize distribution")));
+  assert.ok(report.errors.some((error) => error.includes("must not authorize rating work")));
+  assert.ok(report.errors.some((error) => error.includes("Forbidden public field populated")));
+});
+
+test("rejects removal of topic-coverage, assignment, task-bundle, or R-05 evidence requirements", async () => {
   const ledger = await loadLedger();
   ledger.people_payment_template.private_required_fields = ledger.people_payment_template.private_required_fields.filter(
     (field) => field !== "approved_topic_families",
   );
   ledger.assignment_template.private_required_fields = ["q006b_approval_record"];
+  ledger.task_bundle_template.private_required_fields = ["q006b_approval_record"];
   ledger.readiness_gates.find((gate) => gate.id === "R-05").name = "Assignments generated";
   const report = validatePilotReadinessLedger(ledger);
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("approved_topic_families")));
   assert.ok(report.errors.some((error) => error.includes("assignment_template.private_required_fields")));
+  assert.ok(report.errors.some((error) => error.includes("task_bundle_template.private_required_fields")));
   assert.ok(report.errors.some((error) => error.includes("R-05 name")));
 });
 
