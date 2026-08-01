@@ -11,6 +11,7 @@ export const EXECUTION_AUTHORIZATION_FIELDS = Object.freeze([
   "nonfinal_item_screening_authorized",
   "protected_manifest_freeze_authorized",
   "participant_selection_authorized",
+  "controlled_assignment_generation_authorized",
   "calibration_or_rating_work_authorized",
   "payment_commitment_authorized",
   "funding_submission_authorized",
@@ -34,6 +35,21 @@ const REQUIRED_BASELINE_FIELDS = Object.freeze([
   "raw_response_hash_policy",
 ]);
 
+const REQUIRED_ASSIGNMENT_PRIVATE_FIELDS = Object.freeze([
+  "q006b_approval_record",
+  "q006c_approval_record",
+  "assignment_authorization_record",
+  "controlled_manifest_sha256",
+  "methodology_assignment_sha256",
+  "approved_topic_family_records",
+  "conflict_and_prior_exposure_records",
+  "calibration_completion_records",
+  "secret_assignment_seed",
+  "assignment_seed_sha256",
+  "selected_mapping_sha256",
+  "controlled_assignment_output_path",
+]);
+
 const FORBIDDEN_PUBLIC_KEYS = new Set([
   "email",
   "email_address",
@@ -45,6 +61,7 @@ const FORBIDDEN_PUBLIC_KEYS = new Set([
   "tax_identifier",
   "passport_number",
   "government_id",
+  "participant_ids",
   "position_ids",
   "critique_ids",
   "item_text",
@@ -52,6 +69,12 @@ const FORBIDDEN_PUBLIC_KEYS = new Set([
   "protected_critiques",
   "labels",
   "assignments",
+  "position_assignments",
+  "anonymous_slot_mapping",
+  "rater_ids",
+  "conflict_position_ids",
+  "prior_exposure_position_ids",
+  "secret_assignment_seed",
 ]);
 
 export function validatePilotReadinessLedger(value) {
@@ -66,6 +89,7 @@ export function validatePilotReadinessLedger(value) {
   const baseline = objectOrEmpty(value?.model_baseline_template);
   const people = objectOrEmpty(value?.people_payment_template);
   const requiredCounts = objectOrEmpty(people.required_counts);
+  const assignment = objectOrEmpty(value?.assignment_template);
   const overall = objectOrEmpty(value?.overall_readiness);
 
   if (value?.ledger_id !== "metaphilosophy-pilot-readiness-v1-2026-07-30") {
@@ -186,6 +210,30 @@ export function validatePilotReadinessLedger(value) {
   if (people.sensitive_data_storage !== "private_controlled_record_only") {
     errors.push("Sensitive people and payment data must remain in private controlled storage only.");
   }
+  const peopleFields = normalizeStrings(people.private_required_fields);
+  if (!peopleFields.includes("approved_topic_families")) {
+    errors.push("people_payment_template.private_required_fields must include approved_topic_families.");
+  }
+
+  if (assignment.status !== "template_only_controlled_generation_not_authorized") {
+    errors.push("Assignment template must remain unauthorized until the later controlled assignment gate.");
+  }
+  if (!String(assignment.contract_path ?? "").endsWith("pilot-assignment-contract.json")) {
+    errors.push("Assignment template must reference pilot-assignment-contract.json.");
+  }
+  if (assignment.public_summary !== null) {
+    errors.push("assignment_template.public_summary must remain null before controlled assignment authorization and generation.");
+  }
+  if (assignment.full_output_storage !== "private_controlled_record_outside_repository") {
+    errors.push("Assignment full output must remain a private controlled record outside the repository.");
+  }
+  if (assignment.rating_work_authorized_by_assignment !== false) {
+    errors.push("Assignment generation must not authorize rating work.");
+  }
+  const assignmentFields = normalizeStrings(assignment.private_required_fields);
+  for (const field of REQUIRED_ASSIGNMENT_PRIVATE_FIELDS) {
+    if (!assignmentFields.includes(field)) errors.push(`assignment_template.private_required_fields must include ${field}.`);
+  }
 
   const gates = Array.isArray(value?.readiness_gates) ? value.readiness_gates : [];
   if (gates.length !== EXPECTED_READINESS_GATES.length) errors.push("The readiness ledger must contain exactly six gates.");
@@ -196,6 +244,11 @@ export function validatePilotReadinessLedger(value) {
       errors.push(`${gate?.id ?? "unknown gate"} must remain blocked with null evidence.`);
     }
   }
+  const assignmentGate = gates.find((gate) => gate?.id === "R-05");
+  const assignmentGateName = String(assignmentGate?.name ?? "").toLowerCase();
+  for (const required of ["separately authorized", "topic-coverage", "balance"]) {
+    if (!assignmentGateName.includes(required)) errors.push(`R-05 name must include ${required}.`);
+  }
 
   if (overall.status !== "blocked" || overall.ready_to_start !== false) {
     errors.push("Overall readiness must remain blocked and not ready to start.");
@@ -204,7 +257,11 @@ export function validatePilotReadinessLedger(value) {
     if (overall[field] !== null) errors.push(`overall_readiness.${field} must remain null.`);
   }
 
-  if (!Array.isArray(value?.invariants) || value.invariants.length < 6) errors.push("At least six public-readiness invariants must remain explicit.");
+  if (!Array.isArray(value?.invariants) || value.invariants.length < 7) errors.push("At least seven public-readiness invariants must remain explicit.");
+  const invariantText = normalizeStrings(value?.invariants).join(" ").toLowerCase();
+  for (const required of ["controlled assignment generation", "assignment generation is separate", "does not authorize rating work"]) {
+    if (!invariantText.includes(required)) errors.push(`Readiness invariants must include ${required}.`);
+  }
   if (value?.next_action?.id !== "Q-006A" || value?.next_action?.status !== "project_owner_decision_required") {
     errors.push("The next action must remain Q-006A with a project-owner decision required.");
   }
@@ -222,6 +279,8 @@ export function validatePilotReadinessLedger(value) {
     q006a_status: q006a.status ?? null,
     readiness_gate_count: gates.length,
     blocked_gate_count: gates.filter((gate) => gate?.status === "blocked").length,
+    controlled_assignment_generation_authorized:
+      authorization.controlled_assignment_generation_authorized ?? null,
     ready_to_start: overall.ready_to_start ?? null,
     errors,
   };
