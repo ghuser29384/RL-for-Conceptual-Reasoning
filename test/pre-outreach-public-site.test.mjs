@@ -14,6 +14,7 @@ async function loadFiles() {
     homeModule,
     siteEntry,
     appModule,
+    exactCss,
     trustCss,
     researchHtml,
     researchCss,
@@ -25,6 +26,7 @@ async function loadFiles() {
     read("src/exact-reference-home.mjs"),
     read("src/site-entry.mjs"),
     read("src/app.mjs"),
+    read("src/exact-reference.css"),
     read("src/trust-home.css"),
     read("research/index.html"),
     read("research/styles.css"),
@@ -38,6 +40,7 @@ async function loadFiles() {
     homeModule,
     siteEntry,
     appModule,
+    exactCss,
     trustCss,
     researchHtml,
     researchCss,
@@ -104,9 +107,11 @@ test("rejects dropping the protocol from the static build or accessibility style
     'await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });',
     "",
   );
+  files.exactCss = files.exactCss.replaceAll(":focus-visible", ":focus-disabled");
   files.researchCss = files.researchCss.replaceAll(":focus-visible", ":focus-disabled");
   const report = validatePreOutreachPublicSite(files);
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("Static build must copy")));
+  assert.ok(report.errors.some((error) => error.includes("Base public CSS must include :focus-visible")));
   assert.ok(report.errors.some((error) => error.includes("Research protocol CSS must include :focus-visible")));
 });
