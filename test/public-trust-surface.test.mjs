@@ -11,23 +11,36 @@ import {
 const root = resolve(import.meta.dirname, "..");
 
 async function loadInputs() {
-  const [index, home, homeCss, workspace, research, researchCss, argumentsPage, reviewersPage, buildScript, vercelText] =
-    await Promise.all([
-      readFile(resolve(root, "index.html"), "utf8"),
-      readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
-      readFile(resolve(root, "src/trust-home.css"), "utf8"),
-      readFile(resolve(root, "src/app.mjs"), "utf8"),
-      readFile(resolve(root, "research/index.html"), "utf8"),
-      readFile(resolve(root, "research/styles.css"), "utf8"),
-      readFile(resolve(root, "arguments/index.html"), "utf8"),
-      readFile(resolve(root, "reviewers/closed.html"), "utf8"),
-      readFile(resolve(root, "scripts/build-static.mjs"), "utf8"),
-      readFile(resolve(root, "vercel.json"), "utf8"),
-    ]);
+  const [
+    index,
+    home,
+    baseCss,
+    homeCss,
+    workspace,
+    research,
+    researchCss,
+    argumentsPage,
+    reviewersPage,
+    buildScript,
+    vercelText,
+  ] = await Promise.all([
+    readFile(resolve(root, "index.html"), "utf8"),
+    readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
+    readFile(resolve(root, "src/exact-reference.css"), "utf8"),
+    readFile(resolve(root, "src/trust-home.css"), "utf8"),
+    readFile(resolve(root, "src/app.mjs"), "utf8"),
+    readFile(resolve(root, "research/index.html"), "utf8"),
+    readFile(resolve(root, "research/styles.css"), "utf8"),
+    readFile(resolve(root, "arguments/index.html"), "utf8"),
+    readFile(resolve(root, "reviewers/closed.html"), "utf8"),
+    readFile(resolve(root, "scripts/build-static.mjs"), "utf8"),
+    readFile(resolve(root, "vercel.json"), "utf8"),
+  ]);
 
   return {
     index,
     home,
+    baseCss,
     homeCss,
     workspace,
     research,
@@ -83,4 +96,15 @@ test("rejects lost research routing or baseline browser protections", async () =
   assert.ok(report.errors.some((error) => error.includes("route /research")));
   assert.ok(report.errors.some((error) => error.includes("X-Content-Type-Options")));
   assert.ok(report.errors.some((error) => error.includes("Permissions-Policy")));
+});
+
+test("rejects removal of homepage keyboard or reduced-motion controls", async () => {
+  const inputs = await loadInputs();
+  inputs.baseCss = inputs.baseCss
+    .replace(".mpHome :focus-visible", ".mpHome :focus-disabled")
+    .replace("@media (prefers-reduced-motion: reduce)", "@media (prefers-reduced-motion: no-preference)");
+  const report = validatePublicTrustSurface(inputs);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes(".mpHome :focus-visible")));
+  assert.ok(report.errors.some((error) => error.includes("prefers-reduced-motion")));
 });
