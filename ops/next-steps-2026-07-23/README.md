@@ -2,7 +2,7 @@
 
 Date opened: 2026-07-23  
 Pilot-first revision: 2026-07-30  
-Blind task-bundle revision: 2026-08-01
+Blind task-bundle and ingestion revision: 2026-08-01
 
 This directory is the execution record for the programme that follows the first LMCA paper and the synthetic argument-library release. It separates four artifact classes that must never be conflated:
 
@@ -41,7 +41,7 @@ A later controlled run requires Q-006B and Q-006C evidence, a frozen manifest, c
 
 ## Blind task bundles and submissions
 
-The assignment layer now feeds a separate blind task-bundle generator. It produces six participant-specific packets, each containing four assigned positions and four sibling critiques per position, for sixteen production-rating forms per core rater and ninety-six critique presentations overall.
+The assignment layer feeds a separate blind task-bundle generator. It produces six participant-specific packets, each containing four assigned positions and four sibling critiques per position, for sixteen production-rating forms per core rater and ninety-six critique presentations overall.
 
 The synthetic task-content fixture intentionally contains the metadata most likely to compromise blindness: source class and identity, author or model identity, acquisition-judge records and scores, provisional quality strata, paired-rater information, aggregate ratings, labels, and adjudication status. The generator strips all of it from the rater-facing packet. Controlled position and critique IDs are replaced with participant-specific HMAC-SHA-256 task tokens.
 
@@ -69,6 +69,28 @@ A controlled run remains blocked until Q-006B and Q-006C, a frozen manifest, a s
 
 Generation is not distribution. Even a valid private packet cannot be sent or opened for rating until a later distribution control and the final readiness signature pass. The submission validator requires all sixteen assigned task tokens exactly once and binds the participant, bundle, rubric, and bundle hash. It rejects token substitution, duplicates, omissions, invalid score vectors, and leaked source or assignment metadata. It does not itself materialize accepted rating records.
 
+## Replay-safe rating ingestion
+
+A separate ingestion layer now controls the transition from a validated blind submission to accepted append-only rating records. It never treats structural submission validity as acceptance.
+
+Every submitted response needs one private quality-control disposition:
+
+- `accepted_materialize` creates one accepted version-1 initial rating when no initial rating already exists for that participant and critique;
+- `rejected_no_materialization` retains the raw submission and quality-control record separately but creates no accepted rating; and
+- `already_materialized_noop` creates no record and is valid only when an accepted initial rating already exists from an earlier submission.
+
+This supports correction without overwrite. A rejected response can be corrected only through a new canonical submission. Previously accepted responses in that later packet must use no-op decisions, while the corrected response may be newly materialized. A later object-level change to an accepted rating uses the separate predecessor-linked re-rating contract.
+
+Before ingestion, the engine verifies the canonical operator-index hash, combined packet commitment, individual packet hashes and bodies, submission validity, canonical response-order-independent submission hashes, exact item-manifest agreement with the target dataset, and the full authorization record. It rejects exact submission replay, duplicate initial ratings, missing or duplicate quality-control decisions, invalid no-ops, manifest drift, and any task-delivery field in the rating dataset.
+
+Accepted records retain the exact submitted score vector and auxiliary fields. Quality control records a disposition and reason but does not rewrite the rating. Each accepted record receives deterministic controlled identifiers and provenance linking the canonical submission, packet, operator index, quality-control decision, and ingestion event.
+
+A successful batch produces a private ingestion receipt and before/after dataset commitments. Simulation prints only a sanitized aggregate summary. Controlled output must remain outside the repository with file mode `0600`. Ingestion does not authorize payment, publication, a funding submission, or Phase 2.
+
+```bash
+node scripts/pilot-rating-ingestion.mjs --help
+```
+
 ## Rating, analysis, and public reporting
 
 The repository contains an executable, source-faithful rating-record and analysis layer. The controlled engine validates append-only initial ratings and object-level re-ratings; implements the LMCA custom weighted loss and weighted pairwise ranking error; computes symmetric within-position ordering agreement, dimension gaps, interval-distance agreement diagnostics, rating-time summaries, position-level results, and leave-one-position-out ranges; and keeps every adjudication route inoperative unless an approved policy explicitly names it.
@@ -93,7 +115,7 @@ The contribution rules remain frozen: accepted initial ratings, operator-assigne
 
 The public readiness ledger keeps every execution gate blocked while Q-006A is pending. It contains only empty templates and required-field contracts for methodological feedback, candidate screening, calibration, model baselines, people, payment, assignment, task bundles, and readiness evidence. It contains no recipient addresses, participant names, protected item IDs or text, task tokens, rater packets, labels, assignments, payment data, or execution authorization.
 
-The next owner checkpoint is **Q-006**. The recommended decision packet splits it into Q-006A (approve the consultation design), Q-006B (freeze methodology, protected items, assignment, task-bundle, and analysis rules after adviser feedback), and Q-006C (approve people, delivery, payment, and dates after expressions of interest).
+The next owner checkpoint is **Q-006**. The recommended decision packet splits it into Q-006A (approve the consultation design), Q-006B (freeze methodology, protected items, assignment, task-bundle, ingestion, and analysis rules after adviser feedback), and Q-006C (approve people, delivery, operator roles, payment, and dates after expressions of interest).
 
 ## Files
 
@@ -111,6 +133,8 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `pilot-assignment-contract.md` — human-readable assignment-generation and no-constraint-relaxation boundary.
 - `pilot-task-bundle-contract.json` — machine-readable blind packet, opaque-token, commitment-chain, submission, privacy, generation, and distribution contract; contains no real task packet.
 - `pilot-task-bundle-contract.md` — human-readable blind task-delivery and hash-bound submission boundary.
+- `pilot-rating-ingestion-contract.json` — machine-readable submission binding, per-response quality-control, replay, materialization, receipt, privacy, and authorization contract; contains no real submission or rating data.
+- `pilot-rating-ingestion-contract.md` — human-readable transition from validated submissions to accepted append-only ratings.
 - `pilot-rating-analysis-contract.json` — machine-readable append-only rating, source-derived loss, diagnostic, privacy, and threshold-governance contract; contains no rating data.
 - `pilot-rating-analysis-contract.md` — human-readable implementation, strict-policy, snapshot, and public-report boundary.
 - `pilot-analysis-policy-template.json` — checked-in diagnostic policy with provisional values and zero approved routes.
@@ -133,7 +157,10 @@ node scripts/verify-pilot-readiness-ledger.mjs
 node scripts/verify-pilot-assignment-contract.mjs
 node scripts/pilot-assignment-generator.mjs --help
 node scripts/verify-pilot-task-bundle-contract.mjs
+node scripts/verify-pilot-task-bundle-integration.mjs
 node scripts/pilot-task-bundle-generator.mjs --help
+node scripts/verify-pilot-rating-ingestion-contract.mjs
+node scripts/pilot-rating-ingestion.mjs --help
 node scripts/verify-pilot-rating-analysis-contract.mjs
 node scripts/verify-pilot-public-analysis.mjs
 node scripts/pilot-rating-analysis.mjs --help
