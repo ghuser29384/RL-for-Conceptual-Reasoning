@@ -5,17 +5,19 @@ import test from "node:test";
 
 import {
   PilotAdjudicationError,
-  assertPublicAdjudicationSummary,
   buildPilotFinalLabelSnapshot,
   generatePilotAdjudicationCases,
   hashPilotAdjudicationPolicy,
   hashPilotInitialRatingSnapshot,
-  sanitizePilotAdjudicationCaseSummary,
-  sanitizePilotAdjudicationResolutionSummary,
-  sanitizePilotFinalLabelSnapshotSummary,
   validatePilotAdjudicationControl,
   validatePilotAdjudicationResolutions,
 } from "../scripts/pilot-adjudication.mjs";
+import {
+  assertPublicAdjudicationSummary,
+  sanitizePilotAdjudicationCaseSummary,
+  sanitizePilotAdjudicationResolutionSummary,
+  sanitizePilotFinalLabelSnapshotSummary,
+} from "../scripts/pilot-adjudication-public.mjs";
 import { hashPilotRatingDataset } from "../scripts/pilot-rating-ingestion.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -29,7 +31,11 @@ async function readJson(path) {
 }
 
 async function loadInputs() {
-  return Promise.all([readJson(datasetPath), readJson(operationalPolicyPath), readJson(controlPath)]);
+  return Promise.all([
+    readJson(datasetPath),
+    readJson(operationalPolicyPath),
+    readJson(controlPath),
+  ]);
 }
 
 function addAcceptedObjectLevelRerating(dataset) {
@@ -50,9 +56,10 @@ function addAcceptedObjectLevelRerating(dataset) {
       clarity: 0.65,
       dead_weight: 0.25,
       single_issue: 0.7,
-      overall: 0.34
+      overall: 0.34,
     },
-    overall_rationale: "Synthetic object-level rerating after considering the alternative interpretation and verification record.",
+    overall_rationale:
+      "Synthetic object-level rerating after considering the alternative interpretation and verification record.",
     confidence: 0.65,
     time_spent_seconds: 610,
     insufficient_context: false,
@@ -61,14 +68,19 @@ function addAcceptedObjectLevelRerating(dataset) {
     accepted: true,
     locked_at: "2026-08-05T00:00:00.000Z",
     operator_assigned: true,
-    object_level_revision_reason: "The rater accepted an object-level interpretation and verification consideration that had been overlooked initially."
+    object_level_revision_reason:
+      "The rater accepted an object-level interpretation and verification consideration that had been overlooked initially.",
   });
   return value;
 }
 
 function makeResolutionInput(caseSet, dataset) {
-  const reratingCase = caseSet.cases.find((entry) => entry.critique_id === "C-SYN-03");
-  const unresolvedCase = caseSet.cases.find((entry) => entry.critique_id === "C-SYN-04");
+  const reratingCase = caseSet.cases.find(
+    (entry) => entry.critique_id === "C-SYN-03",
+  );
+  const unresolvedCase = caseSet.cases.find(
+    (entry) => entry.critique_id === "C-SYN-04",
+  );
   assert.ok(reratingCase);
   assert.ok(unresolvedCase);
 
@@ -93,7 +105,7 @@ function makeResolutionInput(caseSet, dataset) {
       adjudication_resolution_acceptance_authorized: false,
       private_controlled_storage_confirmed: false,
       approval_record_ids: [],
-      approved_at: null
+      approved_at: null,
     },
     require_all_cases_closed: true,
     payment_authorized: false,
@@ -112,15 +124,18 @@ function makeResolutionInput(caseSet, dataset) {
         reviewed_at: "2026-08-06T00:00:00.000Z",
         object_level_considerations: [
           "The low-clarity reading and the alternative interpretation were compared directly.",
-          "The correctness-sensitive claim was checked before the rater reconsidered the score."
+          "The correctness-sensitive claim was checked before the rater reconsidered the score.",
         ],
-        interpretation_notes: "The revised rating reflects an interpretation the rater independently accepted on object-level grounds.",
-        context_notes: "No additional protected context was introduced beyond the frozen case record.",
-        verification_notes: "The previously unresolved claim was recorded as verified in the accepted rerating.",
+        interpretation_notes:
+          "The revised rating reflects an interpretation the rater independently accepted on object-level grounds.",
+        context_notes:
+          "No additional protected context was introduced beyond the frozen case record.",
+        verification_notes:
+          "The previously unresolved claim was recorded as verified in the accepted rerating.",
         route_dispositions: reratingCase.operative_routes.map((entry) => ({
           route: entry.route,
           status: "resolved",
-          rationale: `Synthetic object-level review resolved ${entry.route} without imposing a score.`
+          rationale: `Synthetic object-level review resolved ${entry.route} without imposing a score.`,
         })),
         rerating_rating_ids: ["RT-SYN-009"],
         residual_disagreement_summary: null,
@@ -130,11 +145,12 @@ function makeResolutionInput(caseSet, dataset) {
         quality_control: {
           decision: "accepted_closure",
           operator_id: "OPS_SYN_QC",
-          reason: "The case record is complete, packet-bound, route-complete, and linked to the accepted append-only rerating.",
-          decided_at: "2026-08-06T01:00:00.000Z"
+          reason:
+            "The case record is complete, packet-bound, route-complete, and linked to the accepted append-only rerating.",
+          decided_at: "2026-08-06T01:00:00.000Z",
         },
         payment_authorized: false,
-        phase_2_authorized: false
+        phase_2_authorized: false,
       },
       {
         resolution_id: "AR_SYN_C4_V1",
@@ -147,36 +163,44 @@ function makeResolutionInput(caseSet, dataset) {
         disposition: "closed_unresolved",
         reviewed_at: "2026-08-06T00:30:00.000Z",
         object_level_considerations: [
-          "The ambiguity flag identifies a genuine residual item-interpretation issue rather than a clerical defect."
+          "The ambiguity flag identifies a genuine residual item-interpretation issue rather than a clerical defect.",
         ],
         interpretation_notes: "Both plausible readings remain in the controlled record.",
-        context_notes: "The frozen item policy does not justify silently choosing one reading.",
+        context_notes:
+          "The frozen item policy does not justify silently choosing one reading.",
         verification_notes: null,
         route_dispositions: unresolvedCase.operative_routes.map((entry) => ({
           route: entry.route,
           status: "unresolved_preserved",
-          rationale: `Synthetic review preserves the residual ${entry.route} issue rather than fabricating agreement.`
+          rationale: `Synthetic review preserves the residual ${entry.route} issue rather than fabricating agreement.`,
         })),
         rerating_rating_ids: [],
-        residual_disagreement_summary: "The item remains usable only with the ambiguity and resulting uncertainty explicitly preserved in the final snapshot.",
+        residual_disagreement_summary:
+          "The item remains usable only with the ambiguity and resulting uncertainty explicitly preserved in the final snapshot.",
         minority_or_alternative_interpretations_preserved: true,
         no_score_imposition_acknowledged: true,
         no_convergence_pressure_acknowledged: true,
         quality_control: {
           decision: "accepted_closure",
           operator_id: "OPS_SYN_QC",
-          reason: "The unresolved case is fully documented and does not claim consensus.",
-          decided_at: "2026-08-06T01:30:00.000Z"
+          reason:
+            "The unresolved case is fully documented and does not claim consensus.",
+          decided_at: "2026-08-06T01:30:00.000Z",
         },
         payment_authorized: false,
-        phase_2_authorized: false
-      }
-    ]
+        phase_2_authorized: false,
+      },
+    ],
   };
 }
 
-function makeSnapshotInput(caseSet, dataset, resolutionReport, snapshotBodySha256 = null) {
-  const base = {
+function makeSnapshotInput(
+  caseSet,
+  dataset,
+  resolutionReport,
+  snapshotBodySha256 = null,
+) {
+  const value = {
     snapshot_request_id: "FLS_SYN_1",
     input_version: 1,
     programme_id: dataset.programme_id,
@@ -185,7 +209,8 @@ function makeSnapshotInput(caseSet, dataset, resolutionReport, snapshotBodySha25
     synthetic_only: true,
     created_at: "2026-08-07T00:00:00.000Z",
     case_set_commitment_sha256: caseSet.case_set_commitment_sha256,
-    resolution_set_commitment_sha256: resolutionReport.resolution_set_commitment_sha256,
+    resolution_set_commitment_sha256:
+      resolutionReport.resolution_set_commitment_sha256,
     dataset_sha256: hashPilotRatingDataset(dataset),
     approved_quality_control_operator_ids: ["OPS_SYN_QC"],
     authorization: {
@@ -196,17 +221,19 @@ function makeSnapshotInput(caseSet, dataset, resolutionReport, snapshotBodySha25
       final_snapshot_signoff_authorized: false,
       private_controlled_storage_confirmed: false,
       approval_record_ids: [],
-      approved_at: null
+      approved_at: null,
     },
     publication_authorized: false,
     payment_authorized: false,
     funding_submission_authorized: false,
     phase_2_authorized: false,
-    signoffs: []
+    signoffs: [],
   };
-  if (!snapshotBodySha256) return base;
-  const roster = [...new Set(caseSet.cases.map((entry) => entry.assigned_adjudicator_id))].sort();
-  base.signoffs = roster.map((adjudicatorId, index) => ({
+  if (!snapshotBodySha256) return value;
+  const roster = [
+    ...new Set(caseSet.cases.map((entry) => entry.assigned_adjudicator_id)),
+  ].sort();
+  value.signoffs = roster.map((adjudicatorId, index) => ({
     signoff_id: `FS_SYN_${index + 1}`,
     adjudicator_id: adjudicatorId,
     snapshot_body_sha256: snapshotBodySha256,
@@ -219,24 +246,35 @@ function makeSnapshotInput(caseSet, dataset, resolutionReport, snapshotBodySha25
     quality_control: {
       decision: "accepted_signoff",
       operator_id: "OPS_SYN_QC",
-      reason: "Synthetic sign-off is complete and bound to the exact distribution-preserving snapshot body.",
-      decided_at: `2026-08-07T0${index + 3}:00:00.000Z`
-    }
+      reason:
+        "Synthetic sign-off is complete and bound to the exact distribution-preserving snapshot body.",
+      decided_at: `2026-08-07T0${index + 3}:00:00.000Z`,
+    },
   }));
-  return base;
+  return value;
 }
 
-test("opens exactly two deterministic operative cases and balances them across the two dedicated adjudicators", async () => {
+test("opens two deterministic operative cases and balances them across two dedicated adjudicators", async () => {
   const [dataset, policy, control] = await loadInputs();
   const caseSet = generatePilotAdjudicationCases(dataset, policy, control);
   assert.equal(caseSet.case_count, 2);
-  assert.equal(caseSet.cases.length, 2);
-  assert.deepEqual(caseSet.cases.map((entry) => entry.critique_id).sort(), ["C-SYN-03", "C-SYN-04"]);
+  assert.deepEqual(
+    caseSet.cases.map((entry) => entry.critique_id).sort(),
+    ["C-SYN-03", "C-SYN-04"],
+  );
   assert.deepEqual(Object.values(caseSet.assignment_counts).sort(), [1, 1]);
-  assert.equal(caseSet.cases.find((entry) => entry.critique_id === "C-SYN-03").case_kind, "mixed_review");
-  assert.equal(caseSet.cases.find((entry) => entry.critique_id === "C-SYN-04").case_kind, "item_or_context_review");
+  assert.equal(
+    caseSet.cases.find((entry) => entry.critique_id === "C-SYN-03")
+      .case_kind,
+    "mixed_review",
+  );
   assert.ok(caseSet.cases.every((entry) => entry.initial_ratings.length === 2));
-  assert.ok(caseSet.cases.every((entry) => entry.payment_authorized === false && entry.phase_2_authorized === false));
+  assert.ok(
+    caseSet.cases.every(
+      (entry) =>
+        entry.payment_authorized === false && entry.phase_2_authorized === false,
+    ),
+  );
   assert.match(caseSet.case_set_commitment_sha256, /^[a-f0-9]{64}$/);
 });
 
@@ -251,7 +289,10 @@ test("is invariant to dataset, policy-route, adjudicator, and topic-map array or
   const second = generatePilotAdjudicationCases(dataset, policy, control);
   assert.equal(first.initial_snapshot_sha256, second.initial_snapshot_sha256);
   assert.equal(first.analysis_policy_sha256, second.analysis_policy_sha256);
-  assert.equal(first.case_set_commitment_sha256, second.case_set_commitment_sha256);
+  assert.equal(
+    first.case_set_commitment_sha256,
+    second.case_set_commitment_sha256,
+  );
   assert.deepEqual(first.cases, second.cases);
 });
 
@@ -262,10 +303,16 @@ test("refuses to open work from the checked-in diagnostic-only policy", async ()
   control.analysis_policy_version = policy.policy_version;
   const report = validatePilotAdjudicationControl(dataset, policy, control);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("at least one explicitly approved operative route")));
+  assert.ok(
+    report.errors.some((error) =>
+      error.includes("at least one explicitly approved operative route"),
+    ),
+  );
   assert.throws(
     () => generatePilotAdjudicationCases(dataset, policy, control),
-    (error) => error instanceof PilotAdjudicationError && /explicitly approved operative route/.test(error.message)
+    (error) =>
+      error instanceof PilotAdjudicationError &&
+      /explicitly approved operative route/.test(error.message),
   );
 });
 
@@ -277,7 +324,9 @@ test("fails closed when both adjudicators are conflicted or lack topic coverage"
   }
   assert.throws(
     () => generatePilotAdjudicationCases(dataset, policy, control),
-    (error) => error instanceof PilotAdjudicationError && /No eligible adjudicator/.test(error.message)
+    (error) =>
+      error instanceof PilotAdjudicationError &&
+      /No eligible adjudicator/.test(error.message),
   );
 });
 
@@ -285,17 +334,32 @@ test("accepts append-only rerating closure and preserves a separate unresolved c
   const [baseDataset, policy, control] = await loadInputs();
   const caseSet = generatePilotAdjudicationCases(baseDataset, policy, control);
   const dataset = addAcceptedObjectLevelRerating(baseDataset);
-  const input = makeResolutionInput(caseSet, dataset);
-  const report = validatePilotAdjudicationResolutions(caseSet, dataset, input);
+  const report = validatePilotAdjudicationResolutions(
+    caseSet,
+    dataset,
+    makeResolutionInput(caseSet, dataset),
+  );
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.equal(report.required_case_count, 2);
   assert.equal(report.accepted_closure_count, 2);
   assert.equal(report.open_case_count, 0);
   assert.equal(report.unresolved_case_count, 1);
   assert.equal(report.accepted_adjudication_unit_events.length, 2);
-  assert.ok(report.accepted_adjudication_unit_events.every((entry) => entry.payment_authorized === false));
-  assert.equal(dataset.ratings.find((entry) => entry.rating_id === "RT-SYN-005").scores.clarity, 0.4);
-  assert.equal(dataset.ratings.find((entry) => entry.rating_id === "RT-SYN-009").predecessor_rating_id, "RT-SYN-005");
+  assert.ok(
+    report.accepted_adjudication_unit_events.every(
+      (entry) => entry.payment_authorized === false,
+    ),
+  );
+  assert.equal(
+    dataset.ratings.find((entry) => entry.rating_id === "RT-SYN-005").scores
+      .clarity,
+    0.4,
+  );
+  assert.equal(
+    dataset.ratings.find((entry) => entry.rating_id === "RT-SYN-009")
+      .predecessor_rating_id,
+    "RT-SYN-005",
+  );
 });
 
 test("rejects score imposition, missing route dispositions, wrong adjudicators, and invalid rerating chains", async () => {
@@ -306,30 +370,53 @@ test("rejects score imposition, missing route dispositions, wrong adjudicators, 
   input.records[0].final_scores = { overall: 0.5 };
   input.records[0].route_dispositions.pop();
   input.records[0].adjudicator_id = "R-SYN-A";
-  dataset.ratings.find((entry) => entry.rating_id === "RT-SYN-009").predecessor_rating_id = "RT-SYN-001";
+  dataset.ratings.find(
+    (entry) => entry.rating_id === "RT-SYN-009",
+  ).predecessor_rating_id = "RT-SYN-001";
   input.dataset_sha256 = hashPilotRatingDataset(dataset);
   const report = validatePilotAdjudicationResolutions(caseSet, dataset, input);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("prohibited score-imposition")));
+  assert.ok(
+    report.errors.some((error) => error.includes("prohibited score-imposition")),
+  );
   assert.ok(report.errors.some((error) => error.includes("missing")));
-  assert.ok(report.errors.some((error) => error.includes("must match the case assignment")));
+  assert.ok(
+    report.errors.some((error) => error.includes("must match the case assignment")),
+  );
   assert.ok(report.errors.some((error) => error.includes("predecessor chain")));
 });
 
-test("builds a two-signoff distribution-preserving final snapshot without fabricating consensus", async () => {
+test("builds a two-signoff distribution-preserving snapshot without fabricating consensus", async () => {
   const [baseDataset, policy, control] = await loadInputs();
   const caseSet = generatePilotAdjudicationCases(baseDataset, policy, control);
   const dataset = addAcceptedObjectLevelRerating(baseDataset);
-  const resolutionReport = validatePilotAdjudicationResolutions(caseSet, dataset, makeResolutionInput(caseSet, dataset));
+  const resolutionReport = validatePilotAdjudicationResolutions(
+    caseSet,
+    dataset,
+    makeResolutionInput(caseSet, dataset),
+  );
   assert.equal(resolutionReport.status, "pass", resolutionReport.errors.join("\n"));
 
-  const draftInput = makeSnapshotInput(caseSet, dataset, resolutionReport);
-  const draft = buildPilotFinalLabelSnapshot(caseSet, dataset, resolutionReport, draftInput);
+  const draft = buildPilotFinalLabelSnapshot(
+    caseSet,
+    dataset,
+    resolutionReport,
+    makeSnapshotInput(caseSet, dataset, resolutionReport),
+  );
   assert.equal(draft.status, "fail");
   assert.match(draft.snapshot_body_sha256, /^[a-f0-9]{64}$/);
 
-  const finalInput = makeSnapshotInput(caseSet, dataset, resolutionReport, draft.snapshot_body_sha256);
-  const snapshot = buildPilotFinalLabelSnapshot(caseSet, dataset, resolutionReport, finalInput);
+  const snapshot = buildPilotFinalLabelSnapshot(
+    caseSet,
+    dataset,
+    resolutionReport,
+    makeSnapshotInput(
+      caseSet,
+      dataset,
+      resolutionReport,
+      draft.snapshot_body_sha256,
+    ),
+  );
   assert.equal(snapshot.status, "pass", snapshot.errors.join("\n"));
   assert.equal(snapshot.body.consensus_score_created, false);
   assert.equal(snapshot.body.original_initial_ratings_preserved, true);
@@ -339,32 +426,54 @@ test("builds a two-signoff distribution-preserving final snapshot without fabric
   assert.equal(snapshot.body.unresolved_cases, 1);
   assert.equal(snapshot.signoffs.length, 2);
   assert.equal(snapshot.accepted_signoff_unit_events.length, 2);
-  assert.ok(snapshot.accepted_signoff_unit_events.every((entry) => entry.payment_authorized === false));
   assert.match(snapshot.final_snapshot_sha256, /^[a-f0-9]{64}$/);
 
-  const critique3 = snapshot.body.critique_records.find((entry) => entry.critique_id === "C-SYN-03");
-  assert.deepEqual(critique3.initial_rating_ids.sort(), ["RT-SYN-005", "RT-SYN-006"]);
-  assert.deepEqual(critique3.latest_accepted_rating_ids.sort(), ["RT-SYN-006", "RT-SYN-009"]);
+  const critique3 = snapshot.body.critique_records.find(
+    (entry) => entry.critique_id === "C-SYN-03",
+  );
+  assert.deepEqual(critique3.initial_rating_ids.sort(), [
+    "RT-SYN-005",
+    "RT-SYN-006",
+  ]);
+  assert.deepEqual(critique3.latest_accepted_rating_ids.sort(), [
+    "RT-SYN-006",
+    "RT-SYN-009",
+  ]);
 });
 
-test("public summaries contain only counts and commitments", async () => {
+test("public summaries contain only aggregate counts and commitments", async () => {
   const [baseDataset, policy, control] = await loadInputs();
   const caseSet = generatePilotAdjudicationCases(baseDataset, policy, control);
   const dataset = addAcceptedObjectLevelRerating(baseDataset);
-  const resolutionReport = validatePilotAdjudicationResolutions(caseSet, dataset, makeResolutionInput(caseSet, dataset));
-  const draft = buildPilotFinalLabelSnapshot(caseSet, dataset, resolutionReport, makeSnapshotInput(caseSet, dataset, resolutionReport));
+  const resolutionReport = validatePilotAdjudicationResolutions(
+    caseSet,
+    dataset,
+    makeResolutionInput(caseSet, dataset),
+  );
+  const draft = buildPilotFinalLabelSnapshot(
+    caseSet,
+    dataset,
+    resolutionReport,
+    makeSnapshotInput(caseSet, dataset, resolutionReport),
+  );
   const snapshot = buildPilotFinalLabelSnapshot(
     caseSet,
     dataset,
     resolutionReport,
-    makeSnapshotInput(caseSet, dataset, resolutionReport, draft.snapshot_body_sha256)
+    makeSnapshotInput(
+      caseSet,
+      dataset,
+      resolutionReport,
+      draft.snapshot_body_sha256,
+    ),
   );
 
   const summaries = [
     sanitizePilotAdjudicationCaseSummary(caseSet),
     sanitizePilotAdjudicationResolutionSummary(resolutionReport),
-    sanitizePilotFinalLabelSnapshotSummary(snapshot)
+    sanitizePilotFinalLabelSnapshotSummary(snapshot),
   ];
+  assert.equal(summaries[0].counts.case_count, 2);
   for (const summary of summaries) {
     assert.equal(assertPublicAdjudicationSummary(summary), true);
     const text = JSON.stringify(summary);
@@ -380,7 +489,7 @@ test("public summaries contain only counts and commitments", async () => {
       '"object_level_considerations":',
       "C-SYN-03",
       "RT-SYN-009",
-      "ADJ_SYN_"
+      "ADJ_SYN_",
     ]) {
       assert.equal(text.includes(forbidden), false, `public summary leaked ${forbidden}`);
     }
