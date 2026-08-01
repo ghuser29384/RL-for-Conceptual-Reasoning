@@ -1,36 +1,79 @@
 # Metaphilosophy pilot readiness ledger
 
-**Status:** blocked.  
-**Current decision:** Q-006A remains pending.  
-**Effect of this file:** none by itself. It does not authorize outreach, recruitment, participant selection, controlled assignment generation, controlled task-bundle generation or distribution, protected-item screening or freezing, calibration, rating work, payment, funding submission, or Phase 2 activation.
+**Status:** blocked; Q-006A is approved, while methodological feedback and every later readiness gate remain incomplete.  
+**Q-006A approval:** `Q006A-APPROVAL-2026-08-01T113432Z`, recorded at `2026-08-01T11:34:32Z`.  
+**Effect of Q-006A:** consultation-packet preparation, exact methodological-adviser recipient research, public non-protected calibration screening, and non-final pilot-item screening are authorized.  
+**Still prohibited:** adviser contact or email, public recruitment, participant outreach or selection, protected-manifest freeze, controlled assignment, task-packet generation or distribution, calibration or rating work, acceptance or ingestion, adjudication, payment, funding submission, publication, or Phase 2.
 
-This is the public companion to `pilot-readiness-ledger.json`. Sensitive recipient, participant, protected-item, conflict, exposure, assignment, task-token, task-bundle, operator-index, and administrative records remain in private controlled storage.
+This is the public companion to `pilot-readiness-ledger.json`. Sensitive recipient, participant, protected-item, conflict, exposure, assignment, task-token, task-bundle, ingestion, adjudication, operator-index, and administrative records remain in private controlled storage.
 
 ## Current authorization state
 
 | Activity | Authorized? |
 |---|---:|
-| Q-006A consultation design approval | No — owner decision pending |
-| Methodological-adviser recipient research | No |
-| Methodological-adviser email | No |
+| Q-006A consultation and non-final screening design | Yes — non-binding preparation/screening scope only |
+| Methodological consultation-packet preparation | Yes |
+| Exact methodological-adviser recipient research | Yes |
+| Public non-protected calibration screening | Yes |
+| Non-final pilot-item screening | Yes |
+| Methodological-adviser email or contact | No |
 | Public recruitment | No |
 | Early-career rater or adjudicator outreach | No |
-| Non-final protected-item screening | No |
 | Protected manifest freeze | No |
 | Participant selection | No |
 | Controlled assignment generation | No |
 | Controlled blind task-bundle generation | No |
 | Task-bundle distribution | No |
 | Calibration or rating work | No |
-| Payment commitment | No |
+| Quality-control acceptance or controlled rating ingestion | No |
+| Adjudication case generation, distribution, work, or rerating | No |
+| Final label-snapshot generation or sign-off | No |
+| Adjudication-unit ledger freeze or payment commitment | No |
 | LTFF or Emergent Ventures submission | No |
 | 400-critique Phase 2 activation | No |
 
-## Records prepared in template form
+## Gate state
+
+1. **R-01 — passed:** Q-006A consultation and non-final screening design approved.
+2. **R-02 — blocked:** bounded methodological feedback has not been collected or dispositioned.
+3. **R-03 — blocked:** Q-006B methodology, calibration, analysis, assignment, packet, ingestion, adjudication, snapshot, and controlled-manifest rules are not approved.
+4. **R-04 — blocked:** Q-006C people, topic coverage, delivery, payment, privacy, legal, operator-role, outreach, and date decisions are not approved.
+5. **R-05 — blocked:** no controlled assignment or task packets have been separately authorized or generated.
+6. **R-06 — blocked:** the complete pilot readiness record has not been signed.
+
+Passing R-01 does not make the pilot ready to start. The first-Monday start rule remains inapplicable, and absolute calendar dates remain unset.
+
+## Authorized preparation work
+
+### Methodological consultation packet
+
+The approved work may now assemble:
+
+- a bounded methodological-adviser candidate slate;
+- role rationales and public professional sources;
+- the exact consultation brief and attachments;
+- draft adviser messages;
+- the permitted single follow-up;
+- the sender and reply-handling proposal; and
+- a pre-send privacy and claims audit.
+
+This preparation may not contact an adviser. Before any email, Ellen Sun must receive and separately approve the exact recipients, addresses and public sources, messages, attachments, sender, follow-up, and reply-handling plan.
+
+### Candidate screening
+
+A private, non-final candidate ledger may now record provenance, rights, source fidelity, ambiguity and scope review, critique-count arithmetic, length and formatting cues, acquisition-judge hashes, attack-family coverage, source-style cue risk, inclusion or exclusion reasons, conflicts, and prior exposure.
+
+Screening does not freeze the protected manifest, select the final 12 positions or 48 critiques, create assignments, or expose protected text publicly. Those remain Q-006B or later actions.
+
+### Public calibration screening
+
+Public, non-protected examples may now be screened for a proposed two-position, eight-critique calibration packet. The exact materials, considerations dossier, remediation rule, and qualification threshold remain unset. No person may perform calibration work under this approval, and calibration still earns zero honorarium units under the current plan.
+
+## Records that remain templates
 
 ### Methodological feedback
 
-The private feedback log will record a controlled adviser identifier, the owner-approved message version, substantive comments, protocol versions before and after the feedback, and one of four dispositions:
+No feedback has yet been collected. A future private feedback log must record a controlled adviser identifier, owner-approved message version, substantive comments, protocol versions before and after the feedback, and one of four dispositions:
 
 - adopted before launch;
 - adopted with modification;
@@ -39,61 +82,35 @@ The private feedback log will record a controlled adviser identifier, the owner-
 
 No public name or quotation may be attributed without separate permission. Participation must not be presented as endorsement.
 
-### Candidate screening
-
-The private candidate ledger will record provenance, rights, source fidelity, ambiguity and scope review, critique-count arithmetic, length and formatting cues, acquisition-judge hashes, attack-family coverage, source-style cue risk, inclusion or exclusion reasons, conflicts, and prior exposure.
-
-The public repository may later contain only aggregate counts and approved hashes. It must not contain exact protected position or critique IDs, text, labels, assignments, task tokens, rater packets, or exposure records.
-
-### Calibration
-
-The current proposal remains two public, non-protected positions with four critiques each. All six core raters and both adjudicators would independently rate the eight examples. The exact examples and qualification rule remain pending methodological review and owner approval.
-
-Calibration is excluded from production metrics and currently earns zero honorarium units. That burden must be disclosed before participant acceptance.
-
 ### Model baselines
 
 Before any protected human rating, a private reproducibility record must freeze provider, exact model version, prompt and rubric versions, reasoning or effort setting, sampling parameters, retry policy, output parser, invalid-output rule, request date, API environment, and raw-response retention and hashing policy.
 
-Model judgments may be used as acquisition signals or comparison baselines. They are not human labels and do not adjudicate human disagreements.
+Model judgments may be acquisition signals or comparison baselines. They are not human labels and do not adjudicate human disagreements.
 
 ### People and topic coverage
 
 The private readiness record must eventually cover six core raters, two dedicated adjudicators, and replacement coverage where feasible. It separately records qualification, approved topic families, consent, conflicts, prior exposure, calibration, availability, and administrative readiness.
 
-Baseline competence in two areas does not make a participant eligible for every position. Each assigned topic family must appear in that participant's approved coverage record.
+Q-006A does not authorize researching, contacting, selecting, or onboarding raters or adjudicators.
 
-### Controlled assignment
+### Controlled assignment and task packets
 
-Participant selection and assignment generation are separate gates. A controlled mapping may be generated only after Q-006B and Q-006C, a frozen private manifest, passed calibration, completed conflict and exposure checks, confirmed topic coverage, private controlled storage, and a separate versioned assignment authorization.
+Participant selection and assignment generation are separate later gates. A controlled mapping may be generated only after Q-006B and Q-006C, a frozen private manifest, passed calibration, completed conflict and exposure checks, confirmed topic coverage, private controlled storage, and a separate versioned assignment authorization.
 
-The deterministic generator enumerates all participant-to-anonymous-slot mappings and rejects any mapping that violates topic competence, conflict, prior exposure, or the frozen balance graph. If none is feasible, it produces no assignment. It may not relax a constraint or make an undocumented manual swap.
+Task-packet generation is a further separate gate. Generating an assignment would not authorize packets; generating packets would not authorize distribution; distribution would not authorize rating before final readiness.
 
-The full mapping remains a private controlled record outside the repository. Only hashes and a privacy-safe summary may later be published. Assignment generation does not authorize task-bundle generation, distribution, rating work, or the pilot start.
+### Rating acceptance, ingestion, and adjudication
 
-### Controlled blind task bundles
-
-After a controlled assignment exists, a second separately authorized operation may generate six participant-specific blind packets. Each packet contains four assigned positions and four sibling critiques per position, for sixteen production-rating forms.
-
-The task-bundle generator binds each packet to the selected assignment, protected-manifest hash, rubric version and hash, exact text and item versions, blindness declarations, and response schema. Controlled position and critique IDs are replaced with participant-specific HMAC task tokens. A private operator index maps those tokens back to controlled records.
-
-Rater packets must omit source class and identity, author or model identity, acquisition-judge outputs, provisional quality strata, the paired rater's identity or ratings, aggregate ratings, labels, and adjudication status. The public summary contains only aggregate arithmetic, privacy declarations, authorization-false state, and cryptographic commitments.
-
-Controlled task generation requires Q-006B, Q-006C, the frozen manifest, a separately authorized controlled assignment, a separate task-bundle-generation authorization, private storage, versioned approvals, and an approval timestamp. The output directory remains outside the repository with mode `0700`; bundle files and the operator index use mode `0600`.
-
-Generating private task files does not authorize distribution. Distribution remains a separate control tied to final readiness and the approved delivery process. A valid submission must match the exact bundle hash, participant, rubric, and all sixteen assigned task tokens; the submission validator does not itself create accepted rating records.
-
-## Six readiness gates
-
-1. **Q-006A:** consultation and non-final screening design approved.
-2. **Methodological feedback:** bounded feedback collected and dispositioned.
-3. **Q-006B:** methodology, calibration, analysis, deterministic assignment, blind task-bundle, and controlled item-manifest rules approved.
-4. **Q-006C:** people, topic coverage, administrative readiness, outreach, task distribution, and date decisions approved.
-5. **Controlled assignment and task bundles:** separately authorized mapping and blind packets generated, with conflict, exposure, topic-coverage, balance, blindness, and commitment checks passed.
-6. **Readiness signature:** Ellen Sun signs the complete readiness record.
-
-Only after all six gates pass may the first-Monday start rule be applied. Until then, calendar dates remain unset. A private task-bundle file existing before that signature does not itself permit delivery or rating.
+A structurally valid submission is not an accepted rating. Acceptance, controlled ingestion, case generation, case distribution, adjudication, rerating, resolution acceptance, snapshot generation, snapshot sign-off, honorarium-unit freeze, and payment each remain separately unauthorized.
 
 ## Immediate next action
 
-Approve, revise, or reject Q-006A. Approval would authorize consultation-packet preparation, recipient research, public calibration screening, and non-final item screening only. Exact recipients, any email send action, participant selection, controlled assignment generation, controlled task-bundle generation or distribution, and rating work would still require later separate approvals.
+Execute the four Q-006A-authorized preparation streams without sending or freezing anything:
+
+1. assemble the exact bounded methodological-adviser candidate slate and complete consultation/email packet without contacting anyone;
+2. screen public, non-protected examples for the proposed shared calibration packet;
+3. begin private non-final screening of candidate positions and critiques; and
+4. compile the resulting evidence for later Q-006B review.
+
+Q-006B is not yet ready for an owner decision. It should be presented only after these preparation and screening records exist.
