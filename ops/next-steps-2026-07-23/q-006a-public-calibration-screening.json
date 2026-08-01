@@ -1,0 +1,166 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/q006a-public-calibration-screening-v1.schema.json",
+  "screening_id": "q006a-public-calibration-screening-v1-2026-08-01",
+  "screening_version": 1,
+  "status": "completed_external_example_screening_zero_selected",
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "authorization_basis": {
+    "decision": "Q-006A",
+    "approved_at": "2026-08-01T11:34:32Z",
+    "permits_public_nonprotected_calibration_screening": true,
+    "permits_calibration_material_freeze": false,
+    "permits_calibration_or_rating_work": false
+  },
+  "source_reference": {
+    "title": "A dataset of rated conceptual arguments",
+    "authors": [
+      "Emery Cooper",
+      "Caspar Oesterheld",
+      "Linh Chi Nguyen",
+      "Alexander Kastner",
+      "Ethan Perez"
+    ],
+    "arxiv_id": "2607.27499",
+    "role": "methodological_prior_art_and_external_benchmark",
+    "direct_row_reuse_approved": false,
+    "redistribution_approval_recorded": false
+  },
+  "screening_scope": {
+    "public_examples_reviewed": 5,
+    "selected_for_metaphilosophy_calibration": 0,
+    "selected_for_metaphilosophy_production": 0,
+    "copied_position_or_critique_text": false,
+    "copied_human_rating_values": false
+  },
+  "candidates": [
+    {
+      "candidate_id": "LMCA-PUBLIC-T2-C1",
+      "public_locator": "Table 2, Critique 1; model-rating illustration in Table 4",
+      "issue_signals": [
+        "high-centrality critique that fails on strength and correctness",
+        "danger of rewarding a superficially plausible objection",
+        "difference between embedded normative content and a valid is-ought objection"
+      ],
+      "human_ratings_publicly_visible": true,
+      "model_judgment_publicly_visible": true,
+      "prior_discussion_or_exposure_risk": true,
+      "disposition": "exclude_from_calibration_and_production",
+      "reasons": [
+        "The expert ratings are already visible.",
+        "The paper explicitly uses this example to demonstrate a model failure.",
+        "A participant could reproduce the published evaluation rather than independently apply the rubric.",
+        "Direct LMCA row reuse and redistribution are not approved."
+      ],
+      "permitted_use": "link_only_prior_work_illustration_for_methodological_advisers"
+    },
+    {
+      "candidate_id": "LMCA-PUBLIC-T2-C3",
+      "public_locator": "Table 2, Critique 3",
+      "issue_signals": [
+        "strong and central objection",
+        "contrast case for applying the same rubric to sibling critiques",
+        "logical validity versus normative-premise classification"
+      ],
+      "human_ratings_publicly_visible": true,
+      "model_judgment_publicly_visible": false,
+      "prior_discussion_or_exposure_risk": true,
+      "disposition": "exclude_from_calibration_and_production",
+      "reasons": [
+        "The expert ratings are already visible.",
+        "It is paired with a prominently discussed weak sibling critique.",
+        "Using it for qualification would reward familiarity with the paper.",
+        "Direct LMCA row reuse and redistribution are not approved."
+      ],
+      "permitted_use": "link_only_prior_work_illustration_for_methodological_advisers"
+    },
+    {
+      "candidate_id": "LMCA-PUBLIC-T3-C4",
+      "public_locator": "Table 3, Approval-voting Critique 4; discussed again in Appendix D",
+      "issue_signals": [
+        "strength-centrality allocation ambiguity",
+        "correct initial point followed by a problematic example",
+        "correctness can fall without proportionally changing substantive impact",
+        "meaning can be changed by clarifying or additional text"
+      ],
+      "human_ratings_publicly_visible": true,
+      "model_judgment_publicly_visible": false,
+      "prior_discussion_or_exposure_risk": true,
+      "disposition": "exclude_from_calibration_and_production",
+      "reasons": [
+        "The expert ratings and the paper's own interpretation notes are visible.",
+        "Appendix D explains the intended lesson from the example.",
+        "It would test recall of published commentary rather than fresh rubric application.",
+        "Direct LMCA row reuse and redistribution are not approved."
+      ],
+      "permitted_use": "link_only_prior_work_illustration_for_methodological_advisers"
+    },
+    {
+      "candidate_id": "LMCA-PUBLIC-T8-C1",
+      "public_locator": "Table 8, freedom and disability Critique 1",
+      "issue_signals": [
+        "intuition-pump disagreement",
+        "substantive correctness disagreement",
+        "residual disagreement despite discussion",
+        "bottom-line views can influence argument evaluation"
+      ],
+      "human_ratings_publicly_visible": true,
+      "model_judgment_publicly_visible": false,
+      "prior_discussion_or_exposure_risk": true,
+      "disposition": "exclude_from_calibration_and_production",
+      "reasons": [
+        "The example was selected specifically to display rater disagreement.",
+        "The rating vector is publicly visible.",
+        "Its pedagogical role would create an obvious expected disagreement pattern.",
+        "Direct LMCA row reuse and redistribution are not approved."
+      ],
+      "permitted_use": "link_only_prior_work_illustration_for_methodological_advisers"
+    },
+    {
+      "candidate_id": "LMCA-PUBLIC-T9-C2",
+      "public_locator": "Table 9, residential-integration Critique 2",
+      "issue_signals": [
+        "whether an objection is already priced in to a position",
+        "large overall-score disagreement with high agreement on centrality and clarity",
+        "normative weight disagreement",
+        "residual uncertainty should remain visible"
+      ],
+      "human_ratings_publicly_visible": true,
+      "model_judgment_publicly_visible": false,
+      "prior_discussion_or_exposure_risk": true,
+      "disposition": "exclude_from_calibration_and_production",
+      "reasons": [
+        "The example and disagreement pattern are publicly explained.",
+        "It cannot serve as a blind qualification item after this exposure.",
+        "The public ratings could anchor participants toward a published range.",
+        "Direct LMCA row reuse and redistribution are not approved."
+      ],
+      "permitted_use": "link_only_prior_work_illustration_for_methodological_advisers"
+    }
+  ],
+  "coverage_observed": [
+    "interpretation and target ambiguity",
+    "priced-in objection ambiguity",
+    "strength-centrality allocation ambiguity",
+    "correctness versus strength distinction",
+    "intuition-pump and bottom-line disagreement",
+    "preservation of residual disagreement",
+    "danger of superficial model agreement"
+  ],
+  "coverage_gaps_requiring_new_public_candidates": [
+    "genuinely low-clarity critique near or below the 0.5 branch",
+    "practical verification of a correctness-sensitive factual or logical claim",
+    "dead weight versus unsuccessful substantive argument",
+    "single issue versus multiple independent issues without published labels",
+    "examples whose expected evaluation has not been disclosed"
+  ],
+  "screening_conclusion": {
+    "selected_materials_sha256": null,
+    "qualification_rule": null,
+    "next_step": "Screen fresh public synthetic or newly authored public examples that cover the missing issue types without visible expert labels, then present only the candidate slate and considerations dossier for Q-006B approval.",
+    "no_contact_or_sending_authorized": true,
+    "no_calibration_work_authorized": true,
+    "no_protected_manifest_freeze_authorized": true,
+    "no_production_item_selection_authorized": true,
+    "no_phase_2_authorized": true
+  }
+}
