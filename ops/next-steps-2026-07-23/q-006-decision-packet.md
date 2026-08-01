@@ -126,7 +126,7 @@ Approve:
 
 **Recommendation for funding ownership:** Ellen Sun remains accountable as project owner, while a named drafting/research contributor may be assigned separately. Do not represent either Long-Term Future Fund or Emergent Ventures as applied to, interested, or committed before an actual submission or response.
 
-## Controlled assignment authorization boundary
+## Assignment authorization boundary
 
 Even after Q-006B and Q-006C, a controlled assignment run requires a separate versioned assignment-authorization record, a frozen private manifest, completed conflict/exposure checks, passed calibration, confirmed private storage, and a secret seed. The full assignment cannot be printed publicly or written into the repository. Generating the mapping does not authorize task-packet generation or rating work.
 
