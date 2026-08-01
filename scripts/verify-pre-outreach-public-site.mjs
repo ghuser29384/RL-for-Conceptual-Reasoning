@@ -25,6 +25,12 @@ const REQUIRED_RESEARCH_MARKERS = Object.freeze([
   "It cannot settle philosophical questions",
 ]);
 
+const REQUIRED_INTERNAL_WORKSPACE_MARKERS = Object.freeze([
+  "workflowEvidenceCollections",
+  "sourceLeakageRedactionPolicy",
+  "releaseReportReadbackItems",
+]);
+
 const FORBIDDEN_PUBLIC_ROUTE_PATTERNS = Object.freeze([
   /href=["']\/contribute\/?["']/iu,
   /href=["'][^"']*\?section=rating/iu,
@@ -68,17 +74,25 @@ export function validatePreOutreachPublicSite(files) {
     errors.push("index.html must load the public trust-surface stylesheet.");
   }
 
-  for (const marker of ["const isRootSurface", "legacySectionTargets", "normalizeLegacyRootRoute", "#status"]) {
+  for (const marker of [
+    "const isRootSurface",
+    "legacySectionTargets",
+    "normalizeLegacyRootRoute",
+    "root.innerHTML = publicHomePage()",
+    'await import("./app.mjs")',
+    "enhanceWorkspace()",
+    "#status",
+  ]) {
     if (!siteEntry.includes(marker)) errors.push(`site-entry.mjs must include ${marker}.`);
   }
   if (/const\s+isPublicHome\s*=.*!initialQuery\.has\(["']section["']\)/su.test(siteEntry)) {
     errors.push("Legacy query-string routes must not bypass the public homepage and load the workspace path.");
   }
 
-  if (appModule.trim().length < 300) errors.push("The non-public workspace fallback must not be blank or trivial.");
-  for (const marker of ["not publicly open", "has not started production expert ratings", "/research/", "/arguments/"]) {
-    if (!appModule.includes(marker)) errors.push(`Workspace fallback must include ${marker}.`);
+  if (Buffer.byteLength(appModule, "utf8") < 100_000) {
+    errors.push("The non-public workspace must not be blank or trivial, and must not be replaced by a thin placeholder.");
   }
+  requireMarkers(errors, "internal research workspace", appModule, REQUIRED_INTERNAL_WORKSPACE_MARKERS);
 
   for (const marker of [
     "model-authored, unrated critiques",
@@ -91,6 +105,7 @@ export function validatePreOutreachPublicSite(files) {
 
   for (const marker of [
     "Reviewer intake is intentionally closed",
+    "The July 2026 intake window has closed",
     "No application, calibration submission, deadline, or paid assignment",
     "zero production ratings",
     "/research/",
@@ -125,7 +140,10 @@ export function validatePreOutreachPublicSite(files) {
       truthful_homepage: REQUIRED_HOME_MARKERS.every((marker) => homeModule.includes(marker)),
       public_protocol_present: REQUIRED_RESEARCH_MARKERS.every((marker) => researchHtml.includes(marker)),
       legacy_blank_route_removed:
-        siteEntry.includes("normalizeLegacyRootRoute") && appModule.trim().length >= 300,
+        siteEntry.includes("normalizeLegacyRootRoute") &&
+        siteEntry.includes('await import("./app.mjs")') &&
+        Buffer.byteLength(appModule, "utf8") >= 100_000 &&
+        REQUIRED_INTERNAL_WORKSPACE_MARKERS.every((marker) => appModule.includes(marker)),
       reviewer_intake_closed: reviewerClosedHtml.includes("Reviewer intake is intentionally closed"),
       synthetic_release_boundary_visible:
         argumentHtml.includes("None has been expert-rated by Metaphilosophy"),
