@@ -12,6 +12,8 @@ export const EXECUTION_AUTHORIZATION_FIELDS = Object.freeze([
   "protected_manifest_freeze_authorized",
   "participant_selection_authorized",
   "controlled_assignment_generation_authorized",
+  "controlled_task_bundle_generation_authorized",
+  "task_bundle_distribution_authorized",
   "calibration_or_rating_work_authorized",
   "payment_commitment_authorized",
   "funding_submission_authorized",
@@ -50,6 +52,22 @@ const REQUIRED_ASSIGNMENT_PRIVATE_FIELDS = Object.freeze([
   "controlled_assignment_output_path",
 ]);
 
+const REQUIRED_TASK_BUNDLE_PRIVATE_FIELDS = Object.freeze([
+  "q006b_approval_record",
+  "q006c_approval_record",
+  "task_bundle_generation_authorization_record",
+  "controlled_assignment_output_hash",
+  "protected_manifest_sha256",
+  "rubric_sha256",
+  "redacted_task_content_sha256",
+  "secret_task_token_key",
+  "task_token_key_sha256",
+  "individual_bundle_sha256_records",
+  "combined_bundle_commitment_sha256",
+  "operator_index_output_path",
+  "controlled_bundle_output_directory",
+]);
+
 const FORBIDDEN_PUBLIC_KEYS = new Set([
   "email",
   "email_address",
@@ -75,6 +93,14 @@ const FORBIDDEN_PUBLIC_KEYS = new Set([
   "conflict_position_ids",
   "prior_exposure_position_ids",
   "secret_assignment_seed",
+  "task_position_token",
+  "task_critique_token",
+  "task_token_secret",
+  "secret_task_token_key",
+  "participant_bundles",
+  "operator_index",
+  "position_mappings",
+  "critique_mappings",
 ]);
 
 export function validatePilotReadinessLedger(value) {
@@ -90,6 +116,7 @@ export function validatePilotReadinessLedger(value) {
   const people = objectOrEmpty(value?.people_payment_template);
   const requiredCounts = objectOrEmpty(people.required_counts);
   const assignment = objectOrEmpty(value?.assignment_template);
+  const taskBundle = objectOrEmpty(value?.task_bundle_template);
   const overall = objectOrEmpty(value?.overall_readiness);
 
   if (value?.ledger_id !== "metaphilosophy-pilot-readiness-v1-2026-07-30") {
@@ -235,6 +262,29 @@ export function validatePilotReadinessLedger(value) {
     if (!assignmentFields.includes(field)) errors.push(`assignment_template.private_required_fields must include ${field}.`);
   }
 
+  if (taskBundle.status !== "template_only_controlled_generation_and_distribution_not_authorized") {
+    errors.push("Task-bundle template must remain unauthorized for controlled generation and distribution.");
+  }
+  if (!String(taskBundle.contract_path ?? "").endsWith("pilot-task-bundle-contract.json")) {
+    errors.push("Task-bundle template must reference pilot-task-bundle-contract.json.");
+  }
+  if (taskBundle.public_summary !== null) {
+    errors.push("task_bundle_template.public_summary must remain null before controlled task-bundle generation.");
+  }
+  if (taskBundle.controlled_output_storage !== "private_controlled_directory_outside_repository") {
+    errors.push("Controlled task bundles must remain in a private directory outside the repository.");
+  }
+  if (taskBundle.distribution_authorized_by_generation !== false) {
+    errors.push("Task-bundle generation must not authorize distribution.");
+  }
+  if (taskBundle.rating_work_authorized_by_bundle !== false) {
+    errors.push("Task bundles must not authorize rating work.");
+  }
+  const taskBundleFields = normalizeStrings(taskBundle.private_required_fields);
+  for (const field of REQUIRED_TASK_BUNDLE_PRIVATE_FIELDS) {
+    if (!taskBundleFields.includes(field)) errors.push(`task_bundle_template.private_required_fields must include ${field}.`);
+  }
+
   const gates = Array.isArray(value?.readiness_gates) ? value.readiness_gates : [];
   if (gates.length !== EXPECTED_READINESS_GATES.length) errors.push("The readiness ledger must contain exactly six gates.");
   const observedGateIds = gates.map((gate) => String(gate?.id ?? ""));
@@ -246,7 +296,7 @@ export function validatePilotReadinessLedger(value) {
   }
   const assignmentGate = gates.find((gate) => gate?.id === "R-05");
   const assignmentGateName = String(assignmentGate?.name ?? "").toLowerCase();
-  for (const required of ["separately authorized", "topic-coverage", "balance"]) {
+  for (const required of ["separately authorized", "task-bundle", "topic-coverage", "balance", "blindness", "commitment"]) {
     if (!assignmentGateName.includes(required)) errors.push(`R-05 name must include ${required}.`);
   }
 
@@ -257,9 +307,16 @@ export function validatePilotReadinessLedger(value) {
     if (overall[field] !== null) errors.push(`overall_readiness.${field} must remain null.`);
   }
 
-  if (!Array.isArray(value?.invariants) || value.invariants.length < 7) errors.push("At least seven public-readiness invariants must remain explicit.");
+  if (!Array.isArray(value?.invariants) || value.invariants.length < 9) errors.push("At least nine public-readiness invariants must remain explicit.");
   const invariantText = normalizeStrings(value?.invariants).join(" ").toLowerCase();
-  for (const required of ["controlled assignment generation", "assignment generation is separate", "does not authorize rating work"]) {
+  for (const required of [
+    "controlled assignment generation",
+    "controlled task-bundle generation or distribution",
+    "assignment generation is separate",
+    "task-bundle generation is separate from distribution",
+    "task-bundle distribution is separate from final readiness",
+    "does not authorize rating work",
+  ]) {
     if (!invariantText.includes(required)) errors.push(`Readiness invariants must include ${required}.`);
   }
   if (value?.next_action?.id !== "Q-006A" || value?.next_action?.status !== "project_owner_decision_required") {
@@ -281,6 +338,10 @@ export function validatePilotReadinessLedger(value) {
     blocked_gate_count: gates.filter((gate) => gate?.status === "blocked").length,
     controlled_assignment_generation_authorized:
       authorization.controlled_assignment_generation_authorized ?? null,
+    controlled_task_bundle_generation_authorized:
+      authorization.controlled_task_bundle_generation_authorized ?? null,
+    task_bundle_distribution_authorized:
+      authorization.task_bundle_distribution_authorized ?? null,
     ready_to_start: overall.ready_to_start ?? null,
     errors,
   };
