@@ -1,7 +1,8 @@
 # Metaphilosophy next-steps execution package
 
 Date opened: 2026-07-23  
-Pilot-first revision: 2026-07-30
+Pilot-first revision: 2026-07-30  
+Blind task-bundle revision: 2026-08-01
 
 This directory is the execution record for the programme that follows the first LMCA paper and the synthetic argument-library release. It separates four artifact classes that must never be conflated:
 
@@ -20,11 +21,13 @@ The pilot-first direction is owner-approved. The exact 12 × 4 structure, topic/
 
 The LMCA work is treated as methodological prior art and an external benchmark. The pilot does not reuse LMCA rows because the canonical row-level dataset and redistribution license have not been supplied. The pilot instead tests a multi-rater, platform-mediated workflow designed to measure rating time, agreement, adjudication load, item defects, and auditability.
 
-A source-grounded LMCA audit now supports a preferred **six-six source crossing**, a **12-pair no-repeat anonymous assignment graph**, an **eight-critique shared public calibration proposal**, review whenever either rater assigns **clarity below 0.5**, and position-level small-sample safeguards. These remain non-binding Q-006A/Q-006B recommendations.
+A source-grounded LMCA audit supports a preferred **six-six source crossing**, a **12-pair no-repeat anonymous assignment graph**, an **eight-critique shared public calibration proposal**, review whenever either rater assigns **clarity below 0.5**, and position-level small-sample safeguards. These remain non-binding Q-006A/Q-006B recommendations.
 
-The anonymous graph now has an executable assignment layer. It enumerates all `6! = 720` participant-to-slot mappings, rejects any mapping that violates approved topic coverage, item conflicts, prior exposure, calibration, consent, availability, or frozen graph constraints, and deterministically selects among feasible mappings using a secret-seed hash. It never relaxes constraints to force an assignment. The synthetic fixture deliberately has exactly one feasible mapping.
+## Deterministic assignment
 
-This assignment work also closes a protocol gap: baseline eligibility in two philosophical areas is not enough to justify four-topic production assignment. Every assigned topic family must be separately recorded as within the participant's approved coverage. If the confirmed roster cannot support the preferred graph, the result is no assignment until recruitment changes or Q-006B approves a versioned graph change.
+The anonymous graph has an executable assignment layer. It enumerates all `6! = 720` participant-to-slot mappings, rejects any mapping that violates approved topic coverage, item conflicts, prior exposure, calibration, consent, availability, or frozen graph constraints, and deterministically selects among feasible mappings using a secret-seed hash. It never relaxes constraints to force an assignment. The synthetic fixture deliberately has exactly one feasible mapping.
+
+This closes a protocol gap: baseline eligibility in two philosophical areas is not enough to justify four-topic production assignment. Every assigned topic family must be separately recorded as within the participant's approved coverage. If the confirmed roster cannot support the preferred graph, the result is no assignment until recruitment changes or Q-006B approves a versioned graph change.
 
 The assignment CLI prints only a sanitized public summary in simulation mode:
 
@@ -34,9 +37,41 @@ node scripts/pilot-assignment-generator.mjs \
   test/fixtures/pilot-assignment-synthetic.json
 ```
 
-A later controlled run requires Q-006B and Q-006C evidence, a frozen manifest, confirmed and calibrated participants, completed conflict/exposure checks, a separate assignment authorization, and private controlled storage. The full output cannot be printed to standard output or written inside the repository; it must be written outside the working tree with file mode `0600`. Generating an assignment still does not authorize ratings to begin.
+A later controlled run requires Q-006B and Q-006C evidence, a frozen manifest, confirmed and calibrated participants, completed conflict/exposure checks, a separate assignment authorization, and private controlled storage. The full output cannot be printed to standard output or written inside the repository; it must be written outside the working tree with file mode `0600`. Generating an assignment does not authorize task-bundle generation, distribution, or ratings.
 
-The repository also contains an executable, source-faithful rating-record and analysis layer. The controlled engine validates append-only initial ratings and object-level re-ratings; implements the LMCA custom weighted loss and weighted pairwise ranking error; computes symmetric within-position ordering agreement, dimension gaps, interval-distance agreement diagnostics, rating-time summaries, position-level results, and leave-one-position-out ranges; and keeps every adjudication route inoperative unless an approved policy explicitly names it.
+## Blind task bundles and submissions
+
+The assignment layer now feeds a separate blind task-bundle generator. It produces six participant-specific packets, each containing four assigned positions and four sibling critiques per position, for sixteen production-rating forms per core rater and ninety-six critique presentations overall.
+
+The synthetic task-content fixture intentionally contains the metadata most likely to compromise blindness: source class and identity, author or model identity, acquisition-judge records and scores, provisional quality strata, paired-rater information, aggregate ratings, labels, and adjudication status. The generator strips all of it from the rater-facing packet. Controlled position and critique IDs are replaced with participant-specific HMAC-SHA-256 task tokens.
+
+Each packet is cryptographically bound to:
+
+- the selected assignment mapping;
+- the frozen protected-manifest hash;
+- the rubric version and SHA-256 commitment;
+- the exact position and critique text and versions;
+- the blind response contract; and
+- declarations that the artifact does not authorize distribution, rating work, or Phase 2.
+
+A private operator index maps task tokens back to controlled participant, position, critique, and version records. The raw task-token secret is never placed in a packet or public summary; only its hash is retained. The public output omits participant IDs, controlled item IDs, task tokens, individual bundle IDs or hashes, texts, assignment pairs, and operator-index mappings.
+
+The simulation command prints only a privacy-safe public summary:
+
+```bash
+node scripts/pilot-task-bundle-generator.mjs \
+  ops/next-steps-2026-07-23/pilot-methodology-recommendations.json \
+  test/fixtures/pilot-assignment-synthetic.json \
+  test/fixtures/pilot-task-content-synthetic.json
+```
+
+A controlled run remains blocked until Q-006B and Q-006C, a frozen manifest, a separately authorized controlled assignment, a separate task-bundle-generation authorization, private storage, versioned approval records, and an approval timestamp. Controlled output must be outside the repository; the directory uses mode `0700`, and six blind bundle files plus the operator index use mode `0600`.
+
+Generation is not distribution. Even a valid private packet cannot be sent or opened for rating until a later distribution control and the final readiness signature pass. The submission validator requires all sixteen assigned task tokens exactly once and binds the participant, bundle, rubric, and bundle hash. It rejects token substitution, duplicates, omissions, invalid score vectors, and leaked source or assignment metadata. It does not itself materialize accepted rating records.
+
+## Rating, analysis, and public reporting
+
+The repository contains an executable, source-faithful rating-record and analysis layer. The controlled engine validates append-only initial ratings and object-level re-ratings; implements the LMCA custom weighted loss and weighted pairwise ranking error; computes symmetric within-position ordering agreement, dimension gaps, interval-distance agreement diagnostics, rating-time summaries, position-level results, and leave-one-position-out ranges; and keeps every adjudication route inoperative unless an approved policy explicitly names it.
 
 Policy parsing fails closed. Unknown or duplicate routes, unsupported threshold keys, out-of-range values, and approved numerical routes without thresholds are rejected. Any non-empty operative route list additionally requires explicit Q-006B approval evidence, an approval-record identifier, and an approval timestamp. The checked-in policy has zero approved routes.
 
@@ -56,9 +91,9 @@ The contribution rules remain frozen: accepted initial ratings, operator-assigne
 
 **Ellen Sun, project owner, is the human operations owner.** Once the complete pilot readiness record is signed, the programme starts at 00:00 UTC on the earliest Monday at least 72 hours later and ends exactly 28 days after that. Accepted units remain credited if a contributor withdraws or is replaced.
 
-The public readiness ledger keeps every execution gate blocked while Q-006A is pending. It contains only empty templates and required-field contracts for methodological feedback, candidate screening, calibration, model baselines, people, payment, and readiness evidence. It contains no recipient addresses, participant names, protected item IDs or text, labels, assignments, payment data, or execution authorization.
+The public readiness ledger keeps every execution gate blocked while Q-006A is pending. It contains only empty templates and required-field contracts for methodological feedback, candidate screening, calibration, model baselines, people, payment, assignment, task bundles, and readiness evidence. It contains no recipient addresses, participant names, protected item IDs or text, task tokens, rater packets, labels, assignments, payment data, or execution authorization.
 
-The next owner checkpoint is **Q-006**. The recommended decision packet splits it into Q-006A (approve the consultation design), Q-006B (freeze methodology and protected items after adviser feedback), and Q-006C (approve people, payment, and dates after expressions of interest).
+The next owner checkpoint is **Q-006**. The recommended decision packet splits it into Q-006A (approve the consultation design), Q-006B (freeze methodology, protected items, assignment, task-bundle, and analysis rules after adviser feedback), and Q-006C (approve people, delivery, payment, and dates after expressions of interest).
 
 ## Files
 
@@ -74,11 +109,13 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `pilot-readiness-ledger.md` — human-readable readiness and sensitive-data boundary.
 - `pilot-assignment-contract.json` — machine-readable deterministic assignment, authorization, competence, conflict, exposure, and privacy contract; contains no real assignment data.
 - `pilot-assignment-contract.md` — human-readable assignment-generation and no-constraint-relaxation boundary.
+- `pilot-task-bundle-contract.json` — machine-readable blind packet, opaque-token, commitment-chain, submission, privacy, generation, and distribution contract; contains no real task packet.
+- `pilot-task-bundle-contract.md` — human-readable blind task-delivery and hash-bound submission boundary.
 - `pilot-rating-analysis-contract.json` — machine-readable append-only rating, source-derived loss, diagnostic, privacy, and threshold-governance contract; contains no rating data.
 - `pilot-rating-analysis-contract.md` — human-readable implementation, strict-policy, snapshot, and public-report boundary.
 - `pilot-analysis-policy-template.json` — checked-in diagnostic policy with provisional values and zero approved routes.
 - `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
-- `early-career-rater-brief.md` — internal role, workload, topic-coverage, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
+- `early-career-rater-brief.md` — internal role, workload, topic-coverage, blindness, task-packet, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
 - `q-006-decision-packet.md` — staged owner decision packet separating consultation design, frozen methodology/items, and people/payment/dates.
 - `q-006a-owner-approval.md` — concise pending owner-approval record; silence is explicitly not approval.
@@ -95,6 +132,8 @@ node scripts/verify-pilot-methodology-recommendations.mjs
 node scripts/verify-pilot-readiness-ledger.mjs
 node scripts/verify-pilot-assignment-contract.mjs
 node scripts/pilot-assignment-generator.mjs --help
+node scripts/verify-pilot-task-bundle-contract.mjs
+node scripts/pilot-task-bundle-generator.mjs --help
 node scripts/verify-pilot-rating-analysis-contract.mjs
 node scripts/verify-pilot-public-analysis.mjs
 node scripts/pilot-rating-analysis.mjs --help
