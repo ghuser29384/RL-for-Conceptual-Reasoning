@@ -31,8 +31,8 @@ export function validatePilotMethodologyRecommendations(value) {
     errors.push("recommendation_id must identify the 2026-07-30 pilot methodology recommendations.");
   }
   if (value?.recommendation_version !== 1) errors.push("recommendation_version must equal 1.");
-  if (value?.status !== "non_binding_pending_q_006a_and_q_006b") {
-    errors.push("status must preserve the non-binding Q-006A/Q-006B boundary.");
+  if (value?.status !== "non_binding_q006a_approved_pending_feedback_and_q006b") {
+    errors.push("status must record Q-006A consultation approval while preserving the non-binding Q-006B boundary.");
   }
 
   if (primaryReference.title !== "A dataset of rated conceptual arguments") {
@@ -75,7 +75,12 @@ export function validatePilotMethodologyRecommendations(value) {
   const raterStats = new Map(
     REQUIRED_ANONYMOUS_RATERS.map((rater) => [
       rater,
-      { positions: 0, partners: new Set(), topics: new Set(), sources: new Map(REQUIRED_SOURCE_CLASSES.map((sourceClass) => [sourceClass, 0])) },
+      {
+        positions: 0,
+        partners: new Set(),
+        topics: new Set(),
+        sources: new Map(REQUIRED_SOURCE_CLASSES.map((sourceClass) => [sourceClass, 0])),
+      },
     ]),
   );
   const pairKeys = new Set();
@@ -215,11 +220,31 @@ export function validatePilotMethodologyRecommendations(value) {
   }
 
   if (governance.binding_effect !== false) errors.push("governance.binding_effect must remain false.");
+  if (governance.q006a_consultation_and_screening_approved !== true) {
+    errors.push("Q-006A consultation and non-final screening approval must be recorded.");
+  }
+  if (governance.q006a_approved_at !== "2026-08-01T11:34:32Z") {
+    errors.push("governance.q006a_approved_at must match the owner approval timestamp.");
+  }
+  if (!String(governance.q006a_approval_record ?? "").endsWith("q-006a-owner-approval.md")) {
+    errors.push("governance.q006a_approval_record must reference the recorded owner approval.");
+  }
+  if (governance.q006b_methodology_freeze_approved !== false) {
+    errors.push("Q-006B methodology freeze must remain unapproved.");
+  }
+  for (const field of [
+    "consultation_packet_preparation_authorized",
+    "adviser_recipient_research_authorized",
+    "public_calibration_screening_authorized",
+    "nonfinal_item_screening_authorized",
+  ]) {
+    if (governance[field] !== true) errors.push(`governance.${field} must equal true after Q-006A approval.`);
+  }
   if (governance.no_outreach_authorization !== true) errors.push("The recommendations must not authorize outreach.");
   if (governance.no_protected_item_freeze !== true) errors.push("The recommendations must not freeze protected items.");
   if (governance.no_phase_2_activation !== true) errors.push("The recommendations must not activate Phase 2.");
   const approvalSequence = normalizeStrings(governance.approval_sequence).join(" ").toLowerCase();
-  for (const required of ["q-006a", "methodological-adviser", "q-006b"]) {
+  for (const required of ["q-006a approved", "methodological-adviser", "q-006b"]) {
     if (!approvalSequence.includes(required)) errors.push(`Governance approval sequence must include ${required}.`);
   }
   if (!Array.isArray(value?.unresolved_parameters) || value.unresolved_parameters.length < 5) {
@@ -231,8 +256,14 @@ export function validatePilotMethodologyRecommendations(value) {
     recommendation_id: value?.recommendation_id ?? null,
     slots: slots.length,
     unique_pairs: pairKeys.size,
-    preferred_source_mix: Object.fromEntries(REQUIRED_SOURCE_CLASSES.map((sourceClass) => [sourceClass, sourceCounts.get(sourceClass) ?? 0])),
+    preferred_source_mix: Object.fromEntries(
+      REQUIRED_SOURCE_CLASSES.map((sourceClass) => [sourceClass, sourceCounts.get(sourceClass) ?? 0]),
+    ),
     shared_calibration_critiques: calibration.shared_calibration_critiques ?? null,
+    q006a_consultation_and_screening_approved:
+      governance.q006a_consultation_and_screening_approved ?? null,
+    q006b_methodology_freeze_approved:
+      governance.q006b_methodology_freeze_approved ?? null,
     binding_effect: governance.binding_effect ?? null,
     errors,
   };
