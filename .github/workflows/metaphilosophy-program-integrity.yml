@@ -14,6 +14,7 @@ on:
       - "scripts/verify-pilot-assignment-contract.mjs"
       - "scripts/pilot-assignment-generator.mjs"
       - "scripts/verify-pilot-task-bundle-contract.mjs"
+      - "scripts/verify-pilot-task-bundle-integration.mjs"
       - "scripts/pilot-task-bundle-generator.mjs"
       - "scripts/verify-pilot-rating-analysis-contract.mjs"
       - "scripts/verify-pilot-public-analysis.mjs"
@@ -59,6 +60,7 @@ on:
       - "scripts/verify-pilot-assignment-contract.mjs"
       - "scripts/pilot-assignment-generator.mjs"
       - "scripts/verify-pilot-task-bundle-contract.mjs"
+      - "scripts/verify-pilot-task-bundle-integration.mjs"
       - "scripts/pilot-task-bundle-generator.mjs"
       - "scripts/verify-pilot-rating-analysis-contract.mjs"
       - "scripts/verify-pilot-public-analysis.mjs"
@@ -112,6 +114,7 @@ jobs:
       - run: node scripts/pilot-assignment-generator.mjs ops/next-steps-2026-07-23/pilot-methodology-recommendations.json test/fixtures/pilot-assignment-synthetic.json > /tmp/pilot-assignment-summary.json
       - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-assignment-summary.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"participant_id\":","\"position_id\":","\"critique_id\":","\"anonymous_slot_mapping\":","\"position_assignments\":"]; if(report.mode!=="simulation" || report.feasibility.feasible_mapping_count!==1 || report.rating_work_authorized || report.phase_2_authorized || report.privacy.contains_participant_ids!==false || report.privacy.contains_position_or_critique_ids!==false || report.privacy.contains_assignment_pairs!==false || forbidden.some((token)=>text.includes(token))) process.exit(1);'
       - run: node scripts/verify-pilot-task-bundle-contract.mjs
+      - run: node scripts/verify-pilot-task-bundle-integration.mjs
       - run: node scripts/pilot-task-bundle-generator.mjs --help
       - run: node scripts/pilot-task-bundle-generator.mjs ops/next-steps-2026-07-23/pilot-methodology-recommendations.json test/fixtures/pilot-assignment-synthetic.json test/fixtures/pilot-task-content-synthetic.json > /tmp/pilot-task-bundle-summary.json
       - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-task-bundle-summary.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"participant_id\":","\"position_id\":","\"critique_id\":","\"task_position_token\":","\"task_critique_token\":","\"bundle_id\":","\"task_bundle_sha256\":","\"participant_bundles\":","\"operator_index\":"]; if(report.mode!=="simulation" || report.counts.task_bundles!==6 || report.counts.total_bundle_critique_presentations!==96 || report.distribution_authorized || report.rating_work_authorized || report.phase_2_authorized || report.privacy.contains_participant_ids!==false || report.privacy.contains_position_or_critique_ids!==false || report.privacy.contains_task_tokens!==false || forbidden.some((token)=>text.includes(token))) process.exit(1);'
