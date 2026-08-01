@@ -4,6 +4,7 @@ const initialQuery = new URLSearchParams(window.location.search);
 const normalizedPath = window.location.pathname.replace(/\/+$/u, "") || "/";
 const isRootSurface = normalizedPath === "/" || normalizedPath === "/index.html";
 const isWorkspaceGateSurface = normalizedPath === "/workspace" || normalizedPath === "/reference";
+const lmcaPaperUrl = "https://arxiv.org/abs/2607.27499";
 const legacySectionTargets = Object.freeze({
   rating: "#status",
   platform: "#status",
@@ -24,6 +25,14 @@ function normalizeLegacyRootRoute() {
   });
 }
 
+function bindExternalResearchLinks() {
+  document.querySelectorAll('a[href="/src/assets/LMCA_dataset.pdf"]').forEach((link) => {
+    link.setAttribute("href", lmcaPaperUrl);
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noreferrer");
+  });
+}
+
 if (isRootSurface) {
   document.body.classList.add("publicHomeBody", "epochHomeBody");
   const { bindPublicHomeEvents, publicHomePage } = await import("./exact-reference-home.mjs");
@@ -31,6 +40,7 @@ if (isRootSurface) {
   if (!root) throw new Error("Missing #root mount point");
   root.innerHTML = publicHomePage();
   applyPublicWordmarkSystem();
+  bindExternalResearchLinks();
   bindPublicHomeEvents();
   normalizeLegacyRootRoute();
 } else if (isWorkspaceGateSurface) {
