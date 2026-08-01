@@ -13,13 +13,15 @@ This is a bounded volunteer research contribution with limited honoraria. It is 
 A candidate should normally satisfy all of the following:
 
 - be a philosophy PhD student, advanced research-degree student, recent philosophy PhD, or comparably qualified researcher;
-- demonstrate competence in at least two relevant areas, such as ethics, political philosophy, epistemology, philosophy of science, philosophy of mind, decision theory, social choice, metaphilosophy, or AI governance;
+- demonstrate competence in at least two relevant areas, such as ethics, political philosophy, epistemology, philosophy of science, philosophy of mind, decision theory, social choice, metaphilosophy, or AI governance, and—before production assignment—have every assigned topic family separately recorded as within approved coverage;
 - be able to interpret and assess English-language philosophical arguments precisely;
 - have no authorship, substantive editing, prior-label exposure, or other material conflict for assigned items;
 - complete the required calibration without access to protected labels; and
 - agree to the blindness, confidentiality, provenance, revision, and audit rules.
 
 These qualifications are recommendations pending final owner approval. Affiliation prestige by itself is not a substitute for demonstrated object-level judgment.
+
+Baseline eligibility is not assignment eligibility. Demonstrated competence in two areas does not by itself justify placement into four topic families. The final mapping must fail closed whenever a proposed position falls outside a participant's recorded approved coverage; the project must recruit differently or obtain Q-006B approval for a versioned graph change rather than silently widen topic eligibility.
 
 ## Recommended pilot workload
 
@@ -71,15 +73,15 @@ Before a rater locks all four sibling critiques for an assigned production posit
 - aggregate human ratings; or
 - adjudication status.
 
-A candidate cannot receive a production position they authored, substantively edited, or previously saw with labels. The assignment log records conflict, prior exposure, eligibility, and the deterministic assignment seed.
+A candidate cannot receive a production position they authored, substantively edited, or previously saw with labels. The assignment log records conflict, prior exposure, topic-coverage eligibility, and the deterministic assignment seed.
 
-The preferred anonymous assignment template uses twelve distinct rater pairs. Each rater receives four production positions, four distinct partners, four topic families, and—if the preferred six-six source crossing is feasible—two positions from each eligible source class. Named participants are mapped to anonymous slots only after conflict and exposure screening.
+The preferred anonymous assignment template uses twelve distinct rater pairs. Each rater receives four production positions, four distinct partners, four topic families, and—if the preferred six-six source crossing is feasible—two positions from each eligible source class. Named participants are mapped to anonymous slots only after conflict, exposure, and topic-coverage screening. If no mapping satisfies every constraint, no assignment is produced; constraints are not relaxed through undocumented manual swaps.
 
 ## Calibration and acceptance
 
 The recommended qualification sequence is:
 
-1. eligibility, consent, conflict, and exposure screening;
+1. eligibility, consent, conflict, exposure, and topic-coverage screening;
 2. a short orientation to the rubric and interface;
 3. independent ratings of the eight shared public calibration critiques;
 4. preservation of every initial calibration rating;
@@ -109,7 +111,7 @@ The honorarium illustration must be read together with the 3–8 hour planning e
 
 A contributor may withdraw. Accepted units are not forfeited solely because of withdrawal or replacement.
 
-After a missed checkpoint, the operator requests a recovery or withdrawal update. After 48 hours without an approved recovery plan, new assignments pause and overdue unstarted work may be reassigned. A replacement must satisfy the same qualification, consent, conflict, calibration, and exposure standards.
+After a missed checkpoint, the operator requests a recovery or withdrawal update. After 48 hours without an approved recovery plan, new assignments pause and overdue unstarted work may be reassigned. A replacement must satisfy the same qualification, consent, topic-coverage, conflict, calibration, and exposure standards.
 
 ## Data and publication boundary
 
@@ -122,7 +124,7 @@ No public claim should imply that a rater endorses Metaphilosophy, the final lab
 A candidate packet should contain:
 
 - current role and institution, if any;
-- relevant research areas;
+- relevant research areas and the topic families proposed for approved assignment coverage;
 - one short writing sample or public research link;
 - prior argument-evaluation, teaching, journal, debate, or dataset experience;
 - conflict and prior-exposure disclosure;
@@ -133,6 +135,6 @@ Do not request identity, tax, payment, or sanctions-screening data through a pub
 
 ## Draft invitation summary
 
-> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, and calibration rules for review—there is no commitment merely from expressing interest.
+> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, topic-coverage and calibration rules for review—there is no commitment merely from expressing interest.
 
 This is an internal draft, not an authorized or sent message.
