@@ -48,15 +48,16 @@ export function validatePublicTrustSurface(files) {
   ], "index.html", errors);
 
   requirePhrases(siteEntry, [
-    'import { publicHomePage, bindPublicHomeEvents } from "./exact-reference-home.mjs"',
+    "const isRootSurface",
+    "legacySectionTargets",
+    "normalizeLegacyRootRoute",
+    'await import("./exact-reference-home.mjs")',
     "root.innerHTML = publicHomePage()",
+    "applyPublicWordmarkSystem()",
     "bindPublicHomeEvents()",
-    'rawPath === "/workspace"',
-    'rawPath === "/reference"',
-    'import("./app.mjs")',
-    "enhanceWorkspace",
-    'window.location.replace("/")',
-  ], "site-entry route separation", errors);
+    'await import("./app.mjs")',
+    "enhanceWorkspace()",
+  ], "site-entry public/internal separation", errors);
 
   requirePhrases(home, [
     "Pilot in preparation · expert ratings have not started",
@@ -89,16 +90,9 @@ export function validatePublicTrustSurface(files) {
   ], "trust-home.css", errors);
 
   if (Buffer.byteLength(workspace, "utf8") < MINIMUM_INTERNAL_WORKSPACE_BYTES) {
-    errors.push(
-      `Internal research workspace must remain substantial; expected at least ${MINIMUM_INTERNAL_WORKSPACE_BYTES} bytes.`,
-    );
+    errors.push(`Internal research workspace must remain substantial; expected at least ${MINIMUM_INTERNAL_WORKSPACE_BYTES} bytes.`);
   }
-  requirePhrases(
-    workspace,
-    REQUIRED_INTERNAL_WORKSPACE_MARKERS,
-    "internal research workspace",
-    errors,
-  );
+  requirePhrases(workspace, REQUIRED_INTERNAL_WORKSPACE_MARKERS, "internal research workspace", errors);
 
   requirePhrases(research, [
     "Consultation phase · production ratings not started",
@@ -187,8 +181,10 @@ export function validatePublicTrustSurface(files) {
   return {
     status: errors.length ? "fail" : "pass",
     public_home_recruitment_cta_removed: !HOME_FORBIDDEN.some((value) => home.includes(value)),
-    public_private_route_separation_verified:
-      siteEntry.includes('rawPath === "/workspace"') && siteEntry.includes('import("./app.mjs")'),
+    public_internal_execution_separation_verified:
+      siteEntry.includes("const isRootSurface") &&
+      siteEntry.includes('await import("./exact-reference-home.mjs")') &&
+      siteEntry.includes('await import("./app.mjs")'),
     internal_workspace_preserved:
       Buffer.byteLength(workspace, "utf8") >= MINIMUM_INTERNAL_WORKSPACE_BYTES &&
       REQUIRED_INTERNAL_WORKSPACE_MARKERS.every((marker) => workspace.includes(marker)),
@@ -201,20 +197,7 @@ export function validatePublicTrustSurface(files) {
 }
 
 export async function readAndValidatePublicTrustSurface(root = resolve(import.meta.dirname, "..")) {
-  const [
-    index,
-    siteEntry,
-    home,
-    baseCss,
-    homeCss,
-    workspace,
-    research,
-    researchCss,
-    argumentsPage,
-    reviewersPage,
-    buildScript,
-    vercelText,
-  ] = await Promise.all([
+  const [index, siteEntry, home, baseCss, homeCss, workspace, research, researchCss, argumentsPage, reviewersPage, buildScript, vercelText] = await Promise.all([
     readFile(resolve(root, "index.html"), "utf8"),
     readFile(resolve(root, "src/site-entry.mjs"), "utf8"),
     readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
