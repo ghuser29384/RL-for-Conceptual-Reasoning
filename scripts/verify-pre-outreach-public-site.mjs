@@ -39,6 +39,7 @@ export function validatePreOutreachPublicSite(files) {
     homeModule = "",
     siteEntry = "",
     appModule = "",
+    exactCss = "",
     trustCss = "",
     researchHtml = "",
     researchCss = "",
@@ -60,7 +61,7 @@ export function validatePreOutreachPublicSite(files) {
     }
   }
 
-  if (!indexHtml.includes("expert ratings have not started")) {
+  if (!/expert ratings have not started/iu.test(indexHtml)) {
     errors.push("index.html metadata must state that expert ratings have not started.");
   }
   if (!indexHtml.includes("/src/trust-home.css")) {
@@ -101,7 +102,10 @@ export function validatePreOutreachPublicSite(files) {
     errors.push("Static build must copy the public research protocol directory.");
   }
 
-  for (const marker of [":focus-visible", "@media", ".mpWorkspaceGate", ".mpProtocolCard", ".mpStateGrid"]) {
+  for (const marker of [":focus-visible", "prefers-reduced-motion"]) {
+    if (!exactCss.includes(marker)) errors.push(`Base public CSS must include ${marker}.`);
+  }
+  for (const marker of ["@media", ".mpWorkspaceGate", ".mpProtocolCard", ".mpStateGrid"]) {
     if (!trustCss.includes(marker)) errors.push(`Public trust CSS must include ${marker}.`);
   }
   for (const marker of [":focus-visible", "@media", ".gateList", ".boundaryGrid", ".rubricGrid"]) {
@@ -127,7 +131,10 @@ export function validatePreOutreachPublicSite(files) {
         argumentHtml.includes("None has been expert-rated by Metaphilosophy"),
       research_in_static_build: buildScript.includes('resolve(root, "research")'),
       responsive_and_keyboard_styles_present:
-        trustCss.includes(":focus-visible") && researchCss.includes(":focus-visible"),
+        exactCss.includes(":focus-visible") &&
+        exactCss.includes("prefers-reduced-motion") &&
+        trustCss.includes("@media") &&
+        researchCss.includes(":focus-visible"),
     },
     outreach_authorized: false,
     production_ready: false,
@@ -143,6 +150,7 @@ export async function readAndValidatePreOutreachPublicSite(root) {
     homeModule,
     siteEntry,
     appModule,
+    exactCss,
     trustCss,
     researchHtml,
     researchCss,
@@ -154,6 +162,7 @@ export async function readAndValidatePreOutreachPublicSite(root) {
     read("src/exact-reference-home.mjs"),
     read("src/site-entry.mjs"),
     read("src/app.mjs"),
+    read("src/exact-reference.css"),
     read("src/trust-home.css"),
     read("research/index.html"),
     read("research/styles.css"),
@@ -167,6 +176,7 @@ export async function readAndValidatePreOutreachPublicSite(root) {
     homeModule,
     siteEntry,
     appModule,
+    exactCss,
     trustCss,
     researchHtml,
     researchCss,
