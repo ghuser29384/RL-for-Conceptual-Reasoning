@@ -89,7 +89,7 @@ export async function verifyPilotTaskBundleIntegration() {
   const requiredQ006Phrases = [
     /Blind task-packet proposal/i,
     /Artifact separation/i,
-    /Blind-packet and submission candidates/i,
+    /Blind-packet(?: and submission|, acceptance, and ingestion) candidates/i,
     /final blind task-bundle contract/i,
     /Task-bundle generation and distribution boundary/i,
     /Generation does not authorize distribution/i,
