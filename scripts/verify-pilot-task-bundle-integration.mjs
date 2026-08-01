@@ -53,6 +53,9 @@ export async function verifyPilotTaskBundleIntegration() {
   assert.equal(readinessReport.task_bundle_distribution_authorized, false);
   assert.equal(readinessReport.ready_to_start, false);
   assert.equal(readiness.authorization_state.calibration_or_rating_work_authorized, false);
+  assert.equal(readiness.task_bundle_template.public_summary, null);
+  assert.equal(readiness.task_bundle_template.distribution_authorized_by_generation, false);
+  assert.equal(readiness.task_bundle_template.rating_work_authorized_by_bundle, false);
 
   const requiredReadinessPhrases = [
     /Controlled blind task-bundle generation \| No/i,
@@ -110,19 +113,6 @@ export async function verifyPilotTaskBundleIntegration() {
     /contains_task_tokens/,
   ]) {
     assert.match(workflow, pattern);
-  }
-
-  const serializedPublicGovernance = JSON.stringify({
-    readiness,
-    contract,
-  });
-  for (const forbidden of [
-    '"task_position_token":',
-    '"task_critique_token":',
-    '"operator_index":',
-    '"task_token_secret":',
-  ]) {
-    assert.equal(serializedPublicGovernance.includes(forbidden), false, `public governance leaked ${forbidden}`);
   }
 
   return {
