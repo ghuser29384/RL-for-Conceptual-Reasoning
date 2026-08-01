@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { validateHardSetSourceAllocation } from "./verify-hard-set-source-allocation.mjs";
 import { validatePanelHonorariaPlan } from "./verify-panel-honoraria-plan.mjs";
 import { validatePilot48Plan } from "./verify-pilot-48-plan.mjs";
+import { validatePilotAssignmentContract } from "./verify-pilot-assignment-contract.mjs";
 import { validatePilotMethodologyRecommendations } from "./verify-pilot-methodology-recommendations.mjs";
 import { validatePilotReadinessLedger } from "./verify-pilot-readiness-ledger.mjs";
 import { validatePilotRatingAnalysisContract } from "./verify-pilot-rating-analysis-contract.mjs";
@@ -15,6 +16,10 @@ const decisionsPath = resolve(root, "ops/next-steps-2026-07-23/decision-register
 const pilotPath = resolve(root, "ops/next-steps-2026-07-23/pilot-48-plan.json");
 const methodologyPath = resolve(root, "ops/next-steps-2026-07-23/pilot-methodology-recommendations.json");
 const readinessPath = resolve(root, "ops/next-steps-2026-07-23/pilot-readiness-ledger.json");
+const assignmentContractPath = resolve(root, "ops/next-steps-2026-07-23/pilot-assignment-contract.json");
+const assignmentBriefPath = resolve(root, "ops/next-steps-2026-07-23/pilot-assignment-contract.md");
+const assignmentFixturePath = resolve(root, "test/fixtures/pilot-assignment-synthetic.json");
+const assignmentImplementationPath = resolve(root, "scripts/pilot-assignment-generator.mjs");
 const analysisContractPath = resolve(root, "ops/next-steps-2026-07-23/pilot-rating-analysis-contract.json");
 const analysisImplementationPath = resolve(root, "scripts/pilot-rating-analysis.mjs");
 const methodologyAuditPath = resolve(root, "ops/next-steps-2026-07-23/lmca-methodology-audit.md");
@@ -36,6 +41,10 @@ const [
   pilot,
   methodology,
   readiness,
+  assignmentContract,
+  assignmentBrief,
+  assignmentFixture,
+  assignmentImplementation,
   analysisContract,
   analysisImplementation,
   methodologyAudit,
@@ -56,6 +65,10 @@ const [
   readJson(pilotPath),
   readJson(methodologyPath),
   readJson(readinessPath),
+  readJson(assignmentContractPath),
+  readFile(assignmentBriefPath, "utf8"),
+  readJson(assignmentFixturePath),
+  readFile(assignmentImplementationPath, "utf8"),
   readJson(analysisContractPath),
   readFile(analysisImplementationPath, "utf8"),
   readFile(methodologyAuditPath, "utf8"),
@@ -141,7 +154,25 @@ assert.equal(readinessReport.status, "pass", readinessReport.errors.join("\n"));
 assert.equal(readinessReport.q006a_status, "pending_project_owner_decision");
 assert.equal(readinessReport.readiness_gate_count, 6);
 assert.equal(readinessReport.blocked_gate_count, 6);
+assert.equal(readinessReport.controlled_assignment_generation_authorized, false);
 assert.equal(readinessReport.ready_to_start, false);
+
+const assignmentReport = validatePilotAssignmentContract(assignmentContract, methodology, assignmentFixture);
+assert.equal(assignmentReport.status, "pass", assignmentReport.errors.join("\n"));
+assert.equal(assignmentReport.synthetic_feasible_mapping_count, 1);
+assert.match(assignmentReport.synthetic_selected_mapping_hash, /^[a-f0-9]{64}$/);
+assert.equal(assignmentReport.controlled_generation_authorized, false);
+assert.equal(assignmentReport.rating_work_authorized, false);
+assert.equal(assignmentReport.phase_2_authorized, false);
+assert.match(assignmentImplementation, /export function validatePilotAssignmentInput/);
+assert.match(assignmentImplementation, /export function generatePilotAssignments/);
+assert.match(assignmentImplementation, /export function sanitizePilotAssignmentReport/);
+assert.match(assignmentImplementation, /No feasible anonymous-slot mapping/);
+assert.match(assignmentImplementation, /full controlled assignments are never printed to stdout/i);
+assert.match(assignmentBrief, /no assignment/i);
+assert.match(assignmentBrief, /approved coverage/i);
+assert.match(assignmentBrief, /does not authorize rating work/i);
+assert.match(assignmentBrief, /file mode `0600`/i);
 
 const analysisContractReport = validatePilotRatingAnalysisContract(analysisContract);
 assert.equal(analysisContractReport.status, "pass", analysisContractReport.errors.join("\n"));
@@ -181,6 +212,9 @@ assert.match(raterBrief, /not represented as employment, a per-rating wage, or f
 assert.match(raterBrief, /accepted blind initial ratings \/ 96/);
 assert.match(raterBrief, /3–8 hours/);
 assert.match(raterBrief, /calibration is not a paid unit/i);
+assert.match(raterBrief, /Baseline eligibility is not assignment eligibility/);
+assert.match(raterBrief, /approved coverage/);
+assert.match(raterBrief, /no assignment is produced/i);
 
 assert.match(outreachPlan, /No email has been sent/);
 assert.match(outreachPlan, /No email may be sent until the project owner reviews and approves/i);
@@ -193,8 +227,11 @@ assert.match(outreachPlan, /Public recruitment remains closed/);
 assert.match(q006Packet, /Q-006A — approve the consultation design/);
 assert.match(q006Packet, /Preferred source crossing/);
 assert.match(q006Packet, /Shared calibration proposal/);
+assert.match(q006Packet, /Assignment eligibility and failure rule/);
+assert.match(q006Packet, /Assignment authorization boundary/);
 assert.match(q006Packet, /does[^\n]*not[^\n]*authorize sending/i);
 assert.match(q006Approval, /Pending project-owner decision/i);
+assert.match(q006Approval, /Assignment eligibility/);
 assert.match(q006Approval, /Does not authorize/i);
 assert.match(q006Approval, /Silence is not approval/i);
 
