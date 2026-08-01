@@ -59,7 +59,7 @@ test("accepts the evidence-bound public surface while preserving the internal wo
   const report = await readAndValidatePublicTrustSurface(root);
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.equal(report.public_home_recruitment_cta_removed, true);
-  assert.equal(report.public_private_route_separation_verified, true);
+  assert.equal(report.public_internal_execution_separation_verified, true);
   assert.equal(report.internal_workspace_preserved, true);
   assert.equal(report.research_protocol_published, true);
   assert.equal(report.synthetic_release_marked_unrated, true);
@@ -67,15 +67,15 @@ test("accepts the evidence-bound public surface while preserving the internal wo
   assert.equal(report.security_headers_present, true);
 });
 
-test("rejects reopening recruitment or breaking public-private route separation", async () => {
+test("rejects reopening recruitment or merging the public and internal entry branches", async () => {
   const inputs = await loadInputs();
   inputs.home += '<a href="/contribute">Become a reviewer</a>';
-  inputs.siteEntry = inputs.siteEntry.replace('rawPath === "/workspace"', 'rawPath === "/missing"');
+  inputs.siteEntry = inputs.siteEntry.replace("const isRootSurface", "const isPublicSurfaceRemoved");
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("/contribute")));
   assert.ok(report.errors.some((error) => error.includes("Become a reviewer")));
-  assert.ok(report.errors.some((error) => error.includes('rawPath === "/workspace"')));
+  assert.ok(report.errors.some((error) => error.includes("const isRootSurface")));
 });
 
 test("rejects replacing the internal research application with a thin placeholder", async () => {
