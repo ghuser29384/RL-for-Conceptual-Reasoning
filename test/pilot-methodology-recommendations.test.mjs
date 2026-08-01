@@ -14,7 +14,7 @@ async function loadRecommendations() {
   return JSON.parse(await readFile(recommendationPath, "utf8"));
 }
 
-test("accepts the balanced non-binding methodology recommendation", async () => {
+test("accepts the Q-006A-approved but still non-binding methodology recommendation", async () => {
   const report = validatePilotMethodologyRecommendations(await loadRecommendations());
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.equal(report.slots, 12);
@@ -24,6 +24,8 @@ test("accepts the balanced non-binding methodology recommendation", async () => 
     protected_public_domain_derived: 6,
   });
   assert.equal(report.shared_calibration_critiques, 8);
+  assert.equal(report.q006a_consultation_and_screening_approved, true);
+  assert.equal(report.q006b_methodology_freeze_approved, false);
   assert.equal(report.binding_effect, false);
 });
 
@@ -45,16 +47,32 @@ test("rejects loss of topic-source crossing", async () => {
   assert.ok(report.errors.some((error) => error.includes("exactly six position slots")));
 });
 
-test("rejects silently binding the recommendation or authorizing outreach", async () => {
+test("rejects silently binding Q-006A, authorizing outreach, or freezing Q-006B", async () => {
   const recommendations = await loadRecommendations();
   recommendations.status = "approved";
   recommendations.governance.binding_effect = true;
   recommendations.governance.no_outreach_authorization = false;
+  recommendations.governance.q006b_methodology_freeze_approved = true;
   const report = validatePilotMethodologyRecommendations(recommendations);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("non-binding")));
+  assert.ok(report.errors.some((error) => error.includes("non-binding Q-006B boundary")));
   assert.ok(report.errors.some((error) => error.includes("binding_effect")));
   assert.ok(report.errors.some((error) => error.includes("must not authorize outreach")));
+  assert.ok(report.errors.some((error) => error.includes("Q-006B methodology freeze")));
+});
+
+test("rejects erasing or falsifying the recorded Q-006A approval", async () => {
+  const recommendations = await loadRecommendations();
+  recommendations.governance.q006a_consultation_and_screening_approved = false;
+  recommendations.governance.q006a_approved_at = "2026-08-02T00:00:00Z";
+  recommendations.governance.q006a_approval_record = "wrong.md";
+  recommendations.governance.consultation_packet_preparation_authorized = false;
+  const report = validatePilotMethodologyRecommendations(recommendations);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes("Q-006A consultation")));
+  assert.ok(report.errors.some((error) => error.includes("approval timestamp")));
+  assert.ok(report.errors.some((error) => error.includes("recorded owner approval")));
+  assert.ok(report.errors.some((error) => error.includes("consultation_packet_preparation_authorized")));
 });
 
 test("rejects removal of shared calibration and low-clarity review", async () => {
