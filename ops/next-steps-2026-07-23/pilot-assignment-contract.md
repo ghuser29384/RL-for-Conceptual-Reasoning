@@ -2,7 +2,7 @@
 
 **Status:** implementation template only; non-binding; Q-006B and Q-006C remain pending.  
 **Contains:** no real participant, position, critique, conflict, exposure, payment, or assignment record.  
-**Does not authorize:** recipient research, outreach, public recruitment, item screening or freezing, participant selection, calibration, ratings, payment, funding submission, or Phase 2.
+**Does not authorize:** recipient research, outreach, public recruitment, item screening or freezing, participant selection, calibration, rating work, payment, funding submission, or Phase 2.
 
 ## Why this layer is needed
 
@@ -71,7 +71,7 @@ A controlled run remains blocked until its private input records all of the foll
 
 It must also include at least three versioned approval records and a valid approval timestamp. The controlled CLI refuses to print a full assignment to standard output. It requires an output path outside the repository and writes the file with mode `0600`.
 
-Generating an assignment still does **not** authorize ratings to begin. The final readiness signature and start rule remain separate.
+Generating an assignment still does **not** authorize rating work. The final readiness signature and start rule remain separate.
 
 ## Public-output boundary
 
