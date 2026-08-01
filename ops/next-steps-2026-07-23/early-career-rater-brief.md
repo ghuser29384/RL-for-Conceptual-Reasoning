@@ -17,7 +17,7 @@ A candidate should normally satisfy all of the following:
 - be able to interpret and assess English-language philosophical arguments precisely;
 - have no authorship, substantive editing, prior-label exposure, or other material conflict for assigned items;
 - complete the required calibration without access to protected labels; and
-- agree to the blindness, confidentiality, provenance, revision, task-packet, and audit rules.
+- agree to the blindness, confidentiality, provenance, revision, task-packet, acceptance, correction, and audit rules.
 
 These qualifications are recommendations pending final owner approval. Affiliation prestige by itself is not a substitute for demonstrated object-level judgment.
 
@@ -93,9 +93,27 @@ An initial submission must:
 - include the seven score dimensions and all required auxiliary fields; and
 - contain no source, assignment, paired-rater, aggregate-rating, label, or adjudication metadata.
 
-The system rejects altered packet hashes, unassigned or duplicated tokens, missing responses, invalid score vectors, and hidden metadata. A structurally valid submission does not automatically become an accepted honorarium unit: controlled ingestion and quality-control acceptance remain separate. The original initial response is preserved if a later operator-assigned, object-level re-rating occurs.
+The system rejects altered packet hashes, unassigned or duplicated tokens, missing responses, invalid score vectors, and hidden metadata. A structurally valid submission does not automatically become an accepted honorarium unit: quality-control acceptance and controlled ingestion remain separate. The original accepted initial response is preserved if a later operator-assigned, object-level re-rating occurs.
 
 The existence of a private task packet is not permission to begin. Distribution and rating work require the final readiness signature and the official start notice. Raters must not share packet text, tokens, screenshots, or hashes outside the approved delivery and support process.
+
+## Quality control, rejection, correction, and ingestion
+
+Every submitted response receives one recorded quality-control disposition under the frozen protocol:
+
+- `accepted_materialize` means the response is eligible to become one accepted initial-rating record;
+- `rejected_no_materialization` means the raw submission and decision are retained privately, but the response does not enter the accepted analysis dataset or earn an honorarium unit; and
+- `already_materialized_noop` means an accepted initial rating already exists from an earlier submission and no duplicate record is created.
+
+Quality control evaluates completeness, packet binding, allowed fields, and the frozen acceptance rules. It does not silently rewrite the rater's scores, rationale, confidence, elapsed time, context flag, verification status, or item-integrity flags.
+
+When a response is rejected for a correctable operational reason, the participant may receive the specific reason and the permitted correction procedure. A corrected response must be submitted in a new packet-bound submission. Previously accepted responses in that later submission remain no-ops; only the corrected response may be newly materialized. Exact resubmission replay and duplicate initial ratings are rejected.
+
+An accepted response receives deterministic controlled provenance linking the packet, canonical submission hash, quality-control decision, and ingestion event. Task tokens do not enter the rating dataset. The participant-facing process should provide a clear completion and acceptance record without revealing protected item IDs, the paired rater, aggregate ratings, or adjudication status.
+
+A quality-control rejection is not an object-level philosophical disagreement and must not be disguised as one. Conversely, a later object-level change to an accepted rating is not an operational correction; it requires an operator-assigned, predecessor-linked re-rating with an explicit object-level reason.
+
+The exact rejection categories, correction limits, notification timing, appeal route, and operator separation remain pending Q-006B and Q-006C. No production acceptance or ingestion is currently authorized.
 
 ## Calibration and acceptance
 
@@ -110,7 +128,7 @@ The recommended qualification sequence is:
 
 The exact calibration examples, reference considerations, and pass rule remain pending methodological review and owner approval. Calibration is not a paid contribution unit under the current plan and is excluded from the 48-critique pilot outcomes. This unpaid calibration burden must be disclosed before acceptance.
 
-An initial production rating earns one honorarium unit only when it is complete, assigned, submitted through the exact bound packet, ingested, and accepted under the frozen quality-control rules. A substantive re-rating earns one additional unit only when the operator assigned it and the result is accepted. Duplicates, rejected work, self-initiated re-ratings, avoidable formatting corrections, and calibration ratings earn zero units.
+An initial production rating earns one honorarium unit only when it is complete, assigned, submitted through the exact bound packet, explicitly accepted, and ingested under the frozen quality-control rules. A substantive re-rating earns one additional unit only when the operator assigned it and the result is accepted. Duplicates, rejected work, self-initiated re-ratings, avoidable formatting corrections, and calibration ratings earn zero units.
 
 ## Limited honoraria
 
@@ -135,7 +153,7 @@ After a missed checkpoint, the operator requests a recovery or withdrawal update
 
 ## Data and publication boundary
 
-Raters may be asked for permission to publish their name or affiliation separately from the rating data. The default research record should use controlled contributor identifiers. Protected item text, task tokens, task packets, assignments, labels, payment records, and personal information remain access-controlled.
+Raters may be asked for permission to publish their name or affiliation separately from the rating data. The default research record should use controlled contributor identifiers. Protected item text, task tokens, task packets, raw submissions, quality-control decisions, ingestion receipts, assignments, labels, payment records, and personal information remain access-controlled.
 
 No public claim should imply that a rater endorses Metaphilosophy, the final labels, the funding applications, or the 400-critique expansion merely because they participated in the pilot.
 
@@ -155,6 +173,6 @@ Do not request identity, tax, payment, or sanctions-screening data through a pub
 
 ## Draft invitation summary
 
-> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. Production work would be delivered through a participant-specific blind packet cryptographically bound to the frozen rubric and item versions. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, topic-coverage, task-packet, and calibration rules for review—there is no commitment merely from expressing interest.
+> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. Production work would be delivered through a participant-specific blind packet cryptographically bound to the frozen rubric and item versions. Each submitted response would receive a recorded acceptance disposition; rejected work would not enter the accepted dataset or honorarium count, and any permitted correction would use a new packet-bound submission without overwriting accepted work. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, topic-coverage, packet, acceptance, correction, and calibration rules for review—there is no commitment merely from expressing interest.
 
 This is an internal draft, not an authorized or sent message.
