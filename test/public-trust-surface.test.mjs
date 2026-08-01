@@ -11,41 +11,30 @@ import {
 const root = resolve(import.meta.dirname, "..");
 
 async function loadInputs() {
-  const [
-    index,
-    siteEntry,
-    home,
-    baseCss,
-    homeCss,
-    workspace,
-    research,
-    researchCss,
-    argumentsPage,
-    reviewersPage,
-    buildScript,
-    vercelText,
-  ] = await Promise.all([
-    readFile(resolve(root, "index.html"), "utf8"),
-    readFile(resolve(root, "src/site-entry.mjs"), "utf8"),
-    readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
-    readFile(resolve(root, "src/exact-reference.css"), "utf8"),
-    readFile(resolve(root, "src/trust-home.css"), "utf8"),
-    readFile(resolve(root, "src/app.mjs"), "utf8"),
-    readFile(resolve(root, "research/index.html"), "utf8"),
-    readFile(resolve(root, "research/styles.css"), "utf8"),
-    readFile(resolve(root, "arguments/index.html"), "utf8"),
-    readFile(resolve(root, "reviewers/closed.html"), "utf8"),
-    readFile(resolve(root, "scripts/build-static.mjs"), "utf8"),
-    readFile(resolve(root, "vercel.json"), "utf8"),
+  const read = (path) => readFile(resolve(root, path), "utf8");
+  const [index, siteEntry, home, baseCss, homeCss, gate, internalWorkspace, research, researchCss, argumentsPage, reviewersPage, buildScript, vercelText] = await Promise.all([
+    read("index.html"),
+    read("src/site-entry.mjs"),
+    read("src/exact-reference-home.mjs"),
+    read("src/exact-reference.css"),
+    read("src/trust-home.css"),
+    read("src/workspace-gate.mjs"),
+    read("src/app.mjs"),
+    read("research/index.html"),
+    read("research/styles.css"),
+    read("arguments/index.html"),
+    read("reviewers/closed.html"),
+    read("scripts/build-static.mjs"),
+    read("vercel.json"),
   ]);
-
   return {
     index,
     siteEntry,
     home,
     baseCss,
     homeCss,
-    workspace,
+    gate,
+    internalWorkspace,
     research,
     researchCss,
     argumentsPage,
@@ -55,37 +44,48 @@ async function loadInputs() {
   };
 }
 
-test("accepts the evidence-bound public surface while preserving the internal workspace", async () => {
+test("accepts a public workspace gate while preserving but not publishing internal source", async () => {
   const report = await readAndValidatePublicTrustSurface(root);
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.equal(report.public_home_recruitment_cta_removed, true);
-  assert.equal(report.public_internal_execution_separation_verified, true);
+  assert.equal(report.public_workspace_gate_verified, true);
   assert.equal(report.internal_workspace_preserved, true);
+  assert.equal(report.internal_workspace_excluded_from_public_build, true);
   assert.equal(report.research_protocol_published, true);
   assert.equal(report.synthetic_release_marked_unrated, true);
   assert.equal(report.reviewer_intake_closed, true);
   assert.equal(report.security_headers_present, true);
 });
 
-test("rejects reopening recruitment or merging the public and internal entry branches", async () => {
+test("rejects reopening recruitment or importing the internal app from the public entry", async () => {
   const inputs = await loadInputs();
   inputs.home += '<a href="/contribute">Become a reviewer</a>';
-  inputs.siteEntry = inputs.siteEntry.replace("const isRootSurface", "const isPublicSurfaceRemoved");
+  inputs.siteEntry += '\nawait import("./app.mjs");';
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("/contribute")));
   assert.ok(report.errors.some((error) => error.includes("Become a reviewer")));
-  assert.ok(report.errors.some((error) => error.includes("const isRootSurface")));
+  assert.ok(report.errors.some((error) => error.includes("must not import")));
 });
 
-test("rejects replacing the internal research application with a thin placeholder", async () => {
+test("rejects a blank gate or a gate containing internal execution structure", async () => {
   const inputs = await loadInputs();
-  inputs.workspace = `const root = document.querySelector("#root"); root.innerHTML = "Not ready";`;
+  inputs.gate = "workflowEvidenceCollections";
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("must remain substantial")));
+  assert.ok(report.errors.some((error) => error.includes("substantive")));
   assert.ok(report.errors.some((error) => error.includes("workflowEvidenceCollections")));
-  assert.ok(report.errors.some((error) => error.includes("sourceLeakageRedactionPolicy")));
+  assert.ok(report.errors.some((error) => error.includes("workspace is gated")));
+});
+
+test("rejects deleting the internal workspace or adding it to the public build", async () => {
+  const inputs = await loadInputs();
+  inputs.internalWorkspace = "placeholder";
+  inputs.buildScript = inputs.buildScript.replace('"trust-home.css",', '"trust-home.css",\n  "app.mjs",');
+  const report = validatePublicTrustSurface(inputs);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes("preserve the full internal")));
+  assert.ok(report.errors.some((error) => error.includes("app.mjs")));
 });
 
 test("rejects collapsing LMCA, synthetic, and pilot evidence classes", async () => {
@@ -101,13 +101,13 @@ test("rejects collapsing LMCA, synthetic, and pilot evidence classes", async () 
   assert.ok(report.errors.some((error) => error.includes("synthetic and unrated")));
 });
 
-test("rejects lost research routing or baseline browser protections", async () => {
+test("rejects lost workspace routing or baseline browser protections", async () => {
   const inputs = await loadInputs();
-  inputs.vercel.rewrites = inputs.vercel.rewrites.filter((entry) => entry.source !== "/research");
+  inputs.vercel.rewrites = inputs.vercel.rewrites.filter((entry) => entry.source !== "/workspace");
   inputs.vercel.headers = [];
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("route /research")));
+  assert.ok(report.errors.some((error) => error.includes("route /workspace")));
   assert.ok(report.errors.some((error) => error.includes("X-Content-Type-Options")));
   assert.ok(report.errors.some((error) => error.includes("Permissions-Policy")));
 });
