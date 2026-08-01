@@ -5,6 +5,7 @@ on:
     paths:
       - "index.html"
       - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
       - "src/app.mjs"
       - "src/exact-reference-home.mjs"
       - "src/exact-reference.css"
@@ -23,6 +24,7 @@ on:
     paths:
       - "index.html"
       - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
       - "src/app.mjs"
       - "src/exact-reference-home.mjs"
       - "src/exact-reference.css"
@@ -56,3 +58,5 @@ jobs:
       - run: npm run build
       - run: test -f dist/research/index.html
       - run: test -f dist/research/styles.css
+      - run: test -f dist/src/workspace-gate.mjs
+      - run: test ! -e dist/src/app.mjs
