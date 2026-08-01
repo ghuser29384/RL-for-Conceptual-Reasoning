@@ -6,7 +6,9 @@
   "supersedes": {
     "ledger_id": "metaphilosophy-pilot-readiness-v1-2026-07-30",
     "scope": "effective readiness and authorization state after Q-006A approval",
-    "historical_v1_retained": true
+    "historical_v1_retained": true,
+    "historical_snapshot": "ops/next-steps-2026-07-23/q-006a-pre-approval-readiness-snapshot.json",
+    "legacy_current_ledger": "ops/next-steps-2026-07-23/pilot-readiness-ledger.json"
   },
   "status": "q006a_approved_preparation_only_r02_blocked",
   "q006a": {
