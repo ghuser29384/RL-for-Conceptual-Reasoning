@@ -199,12 +199,20 @@
       "basis": "The owner explicitly delayed the 400-critique expansion but did not revoke the previously selected source allocation. Deferral preserves prior work without misrepresenting it as funded or active.",
       "approved_at": "2026-07-30",
       "contract_path": "ops/next-steps-2026-07-23/hard-set-source-allocation.json"
+    },
+    {
+      "id": "D-027",
+      "decision": "Approve Q-006A as written as a non-binding consultation and screening design, authorizing consultation-packet preparation, exact methodological-adviser recipient research, public non-protected calibration screening, and non-final pilot-item screening only.",
+      "credence": 0.99,
+      "basis": "The project owner instructed ‘Do the next step’ immediately after the next step was explicitly identified as Q-006A approval and the exact approval scope was quoted. This records that instruction while preserving every stated prohibition on contact, outreach, participant selection, manifest freeze, controlled execution, payment, funding submission, and Phase 2.",
+      "approved_at": "2026-08-01T11:34:32Z",
+      "contract_path": "ops/next-steps-2026-07-23/q-006a-owner-approval.md"
     }
   ],
   "pending_decision": {
-    "id": "Q-006",
-    "question": "Which recommended pilot structure, topic/source matrix, candidate-acquisition rule, numerical adjudication and scale-readiness thresholds, exact items, early-career raters and adjudicators, senior methodological advisers, participant jurisdictions and payment methods, and external-funding application owner should be approved for readiness?",
-    "status": "user_decision_required",
-    "reason": "These choices affect study validity, protected-item composition, contributor eligibility, legal/payment readiness, and external outreach. Several exact values and identities cannot be selected above the 0.90 decision threshold without methodological feedback or user-specific information."
+    "id": "Q-006B",
+    "question": "After bounded methodological feedback, public calibration screening, and non-final pilot-item screening are complete, which methodology, calibration, operative-route, assignment, packet, submission, ingestion, adjudication, final-snapshot, rubric, and controlled-manifest rules should be frozen?",
+    "status": "evidence_collection_required_before_owner_decision",
+    "reason": "Q-006A is approved, but Q-006B should not be decided until the authorized adviser-preparation and screening work produces reviewable evidence. No adviser contact, protected-manifest freeze, participant selection, or controlled execution is authorized yet."
   }
 }
