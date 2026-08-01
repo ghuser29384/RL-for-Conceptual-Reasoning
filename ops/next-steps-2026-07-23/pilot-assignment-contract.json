@@ -1,0 +1,145 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-assignment-contract-v1.schema.json",
+  "contract_id": "metaphilosophy-pilot-assignment-v1-2026-08-01",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_non_binding_q006b_q006c_pending",
+  "purpose": [
+    "Convert the approved-later anonymous assignment design into a deterministic controlled mapping without manually swapping participants into slots.",
+    "Fail closed when topic competence, authorship conflict, prior exposure, calibration, consent, availability, or authorization evidence is incomplete.",
+    "Preserve the 12-position, 48-critique, 96-initial-rating and no-repeat-pair arithmetic of the current preferred design.",
+    "Produce a privacy-safe public commitment summary while keeping participant, position, critique, and assignment identifiers in private controlled storage."
+  ],
+  "source_boundary": {
+    "primary_reference": "A dataset of rated conceptual arguments",
+    "reference_role": "methodological_prior_art_and_external_benchmark",
+    "metaphilosophy_specific_extension": true,
+    "reference_observations": [
+      "The reference dataset is strongly concentrated in one primary rater, motivating a deliberately multi-rater follow-on workflow.",
+      "The reference hides source and tags during rating but notes that source and writing style may remain inferable, so assignment cannot substitute for item-level cue controls.",
+      "The reference preserves original ratings after object-level reconsideration; this assignment contract does not alter the append-only rating-record rule."
+    ],
+    "direct_row_reuse": false
+  },
+  "canonical_inputs": {
+    "methodology_path": "ops/next-steps-2026-07-23/pilot-methodology-recommendations.json",
+    "assignment_input_data_classes": [
+      "synthetic_test_fixture",
+      "private_controlled_assignment_input"
+    ],
+    "anonymous_rater_slots": ["R1", "R2", "R3", "R4", "R5", "R6"],
+    "participant_records_required": 6,
+    "position_records_required": 12,
+    "critiques_per_position": 4,
+    "participant_required_fields": [
+      "controlled participant ID",
+      "core-rater role",
+      "qualification passed",
+      "consent recorded",
+      "availability confirmed",
+      "calibration passed",
+      "approved topic families",
+      "conflict position IDs",
+      "prior-exposure position IDs"
+    ]
+  },
+  "balanced_invariants": {
+    "positions": 12,
+    "critiques": 48,
+    "initial_raters_per_position": 2,
+    "core_raters": 6,
+    "positions_per_core_rater": 4,
+    "critiques_per_core_rater": 16,
+    "unique_rater_pairs": 12,
+    "distinct_partners_per_core_rater": 4,
+    "distinct_topic_families_per_core_rater": 4,
+    "preferred_source_positions_per_core_rater": {
+      "public_synthetic_with_new_expert_ratings": 2,
+      "protected_public_domain_derived": 2
+    }
+  },
+  "constraint_policy": {
+    "topic_competence": "A participant may receive a position only when its topic family appears in that participant's approved topic-family record.",
+    "conflicts": "A participant may not receive a position listed in their conflict record.",
+    "prior_exposure": "A participant may not receive a position listed in their prior-exposure record.",
+    "no_relaxation_fallback": true,
+    "infeasible_result": "Stop with no assignment. Do not ignore, downgrade, or silently remove a competence, conflict, exposure, or balance constraint.",
+    "graph_change_boundary": "If the preferred graph is infeasible, Q-006B must approve a versioned graph or source-mix change before controlled assignment is retried."
+  },
+  "deterministic_algorithm": {
+    "participant_order": "Sort controlled participant IDs lexicographically before enumeration.",
+    "candidate_mappings": "Enumerate all 6! bijections from confirmed participants to R1-R6.",
+    "feasibility_filter": "Retain only mappings satisfying topic competence, conflict, prior-exposure, and frozen graph constraints for all twelve positions.",
+    "selection": "Hash the secret assignment seed plus each canonical feasible mapping and select the lexicographically smallest hash, with canonical mapping text as a deterministic tiebreak.",
+    "input_order_independent": true,
+    "seed_publication": "Publish only the seed hash, never the raw controlled seed.",
+    "commitments": [
+      "methodology assignment hash",
+      "seed hash",
+      "redacted assignment-input hash",
+      "selected-mapping hash"
+    ]
+  },
+  "authorization": {
+    "simulation": {
+      "allowed": true,
+      "data_class_required": "synthetic_test_fixture",
+      "synthetic_identifier_prefix_required": "SIM_",
+      "approval_flags_must_remain_false": true,
+      "rating_work_authorized": false
+    },
+    "controlled_generation": {
+      "currently_authorized": false,
+      "data_class_required": "private_controlled_assignment_input",
+      "required_true_fields": [
+        "Q-006B approved",
+        "Q-006C approved",
+        "protected manifest frozen",
+        "participants confirmed",
+        "conflict and exposure checks complete",
+        "calibration complete",
+        "controlled assignment authorized",
+        "private controlled storage confirmed"
+      ],
+      "minimum_versioned_approval_records": 3,
+      "approval_timestamp_required": true,
+      "full_output_must_be_outside_repository": true,
+      "full_output_file_mode": "0600",
+      "rating_work_authorized_by_assignment": false
+    }
+  },
+  "privacy": {
+    "full_assignment_classification": "private_controlled_record_only",
+    "public_summary_may_include": [
+      "programme and report versions",
+      "authorization state",
+      "methodology, seed, input, and selected-mapping hashes",
+      "balance invariants",
+      "constraint-check booleans",
+      "synthetic feasible-mapping count only"
+    ],
+    "public_summary_must_exclude": [
+      "participant IDs",
+      "position IDs",
+      "critique IDs",
+      "anonymous-slot mapping",
+      "rater pairs",
+      "item-level conflict and exposure records",
+      "exact feasible-mapping count for controlled assignments"
+    ]
+  },
+  "governance": {
+    "binding_effect": false,
+    "q_006a_approved": false,
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "assignment_generation_authorized": false,
+    "rating_work_authorized": false,
+    "public_recruitment_authorized": false,
+    "outreach_authorized": false,
+    "protected_items_frozen": false,
+    "payment_commitment_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  }
+}
