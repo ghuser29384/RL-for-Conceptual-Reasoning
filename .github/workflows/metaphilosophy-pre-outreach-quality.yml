@@ -99,7 +99,18 @@ jobs:
         run: |
           node scripts/serve-static-preview.mjs > /tmp/metaphilosophy-preview.log 2>&1 &
           echo $! > /tmp/metaphilosophy-preview.pid
-          curl --fail --retry 30 --retry-delay 1 http://127.0.0.1:4173/
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/metaphilosophy-preview.pid)" 2>/dev/null; then
+              cat /tmp/metaphilosophy-preview.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/metaphilosophy-preview.log
+          exit 1
       - name: Run desktop and mobile browser audit
         run: npx playwright test --config=e2e/playwright.config.mjs
       - name: Upload rendered audit evidence
