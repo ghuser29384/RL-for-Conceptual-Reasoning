@@ -4,7 +4,15 @@ import {
 } from "./wordmark-system.mjs";
 
 const initialQuery = new URLSearchParams(window.location.search);
-const isPublicHome = window.location.pathname === "/" && !initialQuery.has("section");
+const isRootSurface = window.location.pathname === "/" || window.location.pathname === "/index.html";
+const legacySectionTargets = Object.freeze({
+  rating: "#status",
+  platform: "#status",
+  dataset: "#status",
+  method: "#method",
+  research: "#prior-work",
+  impact: "#impact",
+});
 
 function platformBrandMarkup() {
   return workspaceWordmarkMarkup();
@@ -50,7 +58,18 @@ function enhanceWorkspace() {
   });
 }
 
-if (isPublicHome) {
+function normalizeLegacyRootRoute() {
+  const requestedSection = initialQuery.get("section");
+  if (!requestedSection) return;
+
+  const target = legacySectionTargets[requestedSection] ?? "#status";
+  window.history.replaceState(null, "", `/${target}`);
+  window.requestAnimationFrame(() => {
+    document.querySelector(target)?.scrollIntoView({ block: "start" });
+  });
+}
+
+if (isRootSurface) {
   document.body.classList.add("publicHomeBody", "epochHomeBody");
   const { bindPublicHomeEvents, publicHomePage } = await import("./exact-reference-home.mjs");
   const root = document.querySelector("#root");
@@ -58,6 +77,7 @@ if (isPublicHome) {
   root.innerHTML = publicHomePage();
   applyPublicWordmarkSystem();
   bindPublicHomeEvents();
+  normalizeLegacyRootRoute();
 } else {
   document.body.classList.remove("publicHomeBody", "epochHomeBody");
   await import("./app.mjs");
