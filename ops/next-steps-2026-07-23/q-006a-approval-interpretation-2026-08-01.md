@@ -3,7 +3,8 @@
 **Recorded at:** 2026-08-01T11:34:32Z  
 **Project owner:** Ellen Sun  
 **Source instruction:** “Do the next step.”  
-**Interpretation:** Approval of Q-006A as written in `q-006a-owner-approval.md`, based on the immediately preceding, repeatedly stated recommendation that Q-006A approval was the project’s next substantive step.
+**Interpretation:** Approval of Q-006A as written in `q-006a-owner-approval.md`, based on the immediately preceding, repeatedly stated recommendation that Q-006A approval was the project’s next substantive step.  
+**Contact boundary:** No contact or sending is authorized by this decision.
 
 ## Authorized by this decision
 
