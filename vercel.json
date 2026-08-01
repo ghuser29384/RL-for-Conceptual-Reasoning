@@ -13,6 +13,22 @@
       "destination": "/research/index.html"
     },
     {
+      "source": "/workspace",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/workspace/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reference",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reference/",
+      "destination": "/index.html"
+    },
+    {
       "source": "/contribute",
       "destination": "/reviewers/closed.html"
     },
