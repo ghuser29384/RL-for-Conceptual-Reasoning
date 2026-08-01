@@ -26,7 +26,10 @@ on:
       - "scripts/pilot-analysis-public-report.mjs"
       - "scripts/run-pilot-rating-analysis.mjs"
       - "scripts/verify-pilot-adjudication-contract.mjs"
+      - "scripts/verify-pilot-adjudication-integration.mjs"
       - "scripts/pilot-adjudication.mjs"
+      - "scripts/pilot-adjudication-public.mjs"
+      - "scripts/run-pilot-adjudication.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
@@ -83,7 +86,10 @@ on:
       - "scripts/pilot-analysis-public-report.mjs"
       - "scripts/run-pilot-rating-analysis.mjs"
       - "scripts/verify-pilot-adjudication-contract.mjs"
+      - "scripts/verify-pilot-adjudication-integration.mjs"
       - "scripts/pilot-adjudication.mjs"
+      - "scripts/pilot-adjudication-public.mjs"
+      - "scripts/run-pilot-adjudication.mjs"
       - "scripts/verify-hard-set-source-allocation.mjs"
       - "scripts/verify-panel-honoraria-plan.mjs"
       - "scripts/calculate-honoraria.mjs"
@@ -150,9 +156,10 @@ jobs:
       - run: node scripts/run-pilot-rating-analysis.mjs test/fixtures/pilot-rating-analysis-synthetic.json ops/next-steps-2026-07-23/pilot-analysis-policy-template.json > /tmp/pilot-analysis-report.json
       - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-analysis-report.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"dataset_id\":","\"position_id\":","\"critique_id\":","\"rating_id\":","\"rater_id\":","\"rater_ids\":","\"route_results\":"]; if(!report.diagnostic_only || report.phase_2_authorized || report.initial.aggregate.critiques_with_operative_routes !== 0 || report.latest_accepted.aggregate.critiques_with_operative_routes !== 0 || forbidden.some((token)=>text.includes(token))) process.exit(1);'
       - run: node scripts/verify-pilot-adjudication-contract.mjs
-      - run: node scripts/pilot-adjudication.mjs --help
-      - run: node scripts/pilot-adjudication.mjs test/fixtures/pilot-rating-analysis-synthetic.json test/fixtures/pilot-analysis-policy-adjudication-synthetic.json test/fixtures/pilot-adjudication-control-synthetic.json > /tmp/pilot-adjudication-summary.json
-      - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-adjudication-summary.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"adjudicator_id\":","\"rater_id\":","\"position_id\":","\"critique_id\":","\"rating_id\":","\"case_id\":","\"case_packet_sha256\":","\"initial_ratings\":"]; if(report.mode!=="simulation" || report.counts.cases!==2 || report.counts.assigned_to_two_dedicated_adjudicators!==true || report.counts.maximum_assignment_imbalance!==0 || report.distribution_authorized || report.adjudication_work_authorized || report.rerating_work_authorized || report.payment_authorized || report.phase_2_authorized || forbidden.some((token)=>text.includes(token))) process.exit(1);'
+      - run: node scripts/verify-pilot-adjudication-integration.mjs
+      - run: node scripts/run-pilot-adjudication.mjs --help
+      - run: node scripts/run-pilot-adjudication.mjs test/fixtures/pilot-rating-analysis-synthetic.json test/fixtures/pilot-analysis-policy-adjudication-synthetic.json test/fixtures/pilot-adjudication-control-synthetic.json > /tmp/pilot-adjudication-summary.json
+      - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-adjudication-summary.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"adjudicator_id\":","\"rater_id\":","\"position_id\":","\"critique_id\":","\"rating_id\":","\"case_id\":","\"case_packet_sha256\":","\"initial_ratings\":"]; if(report.mode!=="simulation" || report.counts.case_count!==2 || report.counts.assigned_to_two_dedicated_adjudicators!==true || report.counts.maximum_assignment_imbalance!==0 || report.distribution_authorized || report.adjudication_work_authorized || report.rerating_work_authorized || report.payment_authorized || report.phase_2_authorized || forbidden.some((token)=>text.includes(token))) process.exit(1);'
       - run: node scripts/verify-hard-set-source-allocation.mjs
       - run: node scripts/verify-panel-honoraria-plan.mjs
       - run: node scripts/verify-program-contracts.mjs
