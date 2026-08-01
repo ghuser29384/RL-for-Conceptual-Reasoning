@@ -27,6 +27,7 @@ on:
       - "scripts/run-pilot-rating-analysis.mjs"
       - "scripts/verify-pilot-adjudication-contract.mjs"
       - "scripts/verify-pilot-adjudication-integration.mjs"
+      - "scripts/verify-pilot-adjudication-readiness.mjs"
       - "scripts/pilot-adjudication.mjs"
       - "scripts/pilot-adjudication-public.mjs"
       - "scripts/run-pilot-adjudication.mjs"
@@ -56,6 +57,7 @@ on:
       - "test/fixtures/pilot-adjudication-control-synthetic.json"
       - "test/pilot-adjudication.test.mjs"
       - "test/pilot-adjudication-cli.test.mjs"
+      - "test/pilot-adjudication-readiness.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -87,6 +89,7 @@ on:
       - "scripts/run-pilot-rating-analysis.mjs"
       - "scripts/verify-pilot-adjudication-contract.mjs"
       - "scripts/verify-pilot-adjudication-integration.mjs"
+      - "scripts/verify-pilot-adjudication-readiness.mjs"
       - "scripts/pilot-adjudication.mjs"
       - "scripts/pilot-adjudication-public.mjs"
       - "scripts/run-pilot-adjudication.mjs"
@@ -116,6 +119,7 @@ on:
       - "test/fixtures/pilot-adjudication-control-synthetic.json"
       - "test/pilot-adjudication.test.mjs"
       - "test/pilot-adjudication-cli.test.mjs"
+      - "test/pilot-adjudication-readiness.test.mjs"
       - "test/hard-set-source-allocation.test.mjs"
       - "test/panel-honoraria-plan.test.mjs"
       - "test/honoraria-calculator.test.mjs"
@@ -155,6 +159,7 @@ jobs:
       - run: node scripts/run-pilot-rating-analysis.mjs --help
       - run: node scripts/run-pilot-rating-analysis.mjs test/fixtures/pilot-rating-analysis-synthetic.json ops/next-steps-2026-07-23/pilot-analysis-policy-template.json > /tmp/pilot-analysis-report.json
       - run: node -e 'const fs=require("fs"); const report=JSON.parse(fs.readFileSync("/tmp/pilot-analysis-report.json","utf8")); const text=JSON.stringify(report); const forbidden=["\"dataset_id\":","\"position_id\":","\"critique_id\":","\"rating_id\":","\"rater_id\":","\"rater_ids\":","\"route_results\":"]; if(!report.diagnostic_only || report.phase_2_authorized || report.initial.aggregate.critiques_with_operative_routes !== 0 || report.latest_accepted.aggregate.critiques_with_operative_routes !== 0 || forbidden.some((token)=>text.includes(token))) process.exit(1);'
+      - run: node scripts/verify-pilot-adjudication-readiness.mjs
       - run: node scripts/verify-pilot-adjudication-contract.mjs
       - run: node scripts/verify-pilot-adjudication-integration.mjs
       - run: node scripts/run-pilot-adjudication.mjs --help
