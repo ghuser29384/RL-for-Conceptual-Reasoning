@@ -1,0 +1,61 @@
+{
+  "adjudication_request_id": "synthetic-pilot-adjudication-v1",
+  "input_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "data_class": "synthetic_test_fixture",
+  "mode": "simulation",
+  "synthetic_only": true,
+  "analysis_policy_id": "pilot-analysis-policy-adjudication-synthetic-v1",
+  "analysis_policy_version": 1,
+  "analysis_policy_sha256": null,
+  "initial_snapshot_sha256": null,
+  "case_assignment_seed": "synthetic-adjudication-assignment-seed-v1",
+  "opened_at": "2026-08-04T00:00:00.000Z",
+  "position_topic_families": [
+    {
+      "position_id": "P-SYN-01",
+      "topic_family": "synthetic_topic"
+    }
+  ],
+  "adjudicators": [
+    {
+      "adjudicator_id": "ADJ_SYN_A",
+      "qualified": true,
+      "consented": true,
+      "calibrated": true,
+      "available": true,
+      "approved_topic_families": ["synthetic_topic"],
+      "conflict_position_ids": [],
+      "conflict_critique_ids": [],
+      "prior_label_exposure_position_ids": []
+    },
+    {
+      "adjudicator_id": "ADJ_SYN_B",
+      "qualified": true,
+      "consented": true,
+      "calibrated": true,
+      "available": true,
+      "approved_topic_families": ["synthetic_topic"],
+      "conflict_position_ids": [],
+      "conflict_critique_ids": [],
+      "prior_label_exposure_position_ids": []
+    }
+  ],
+  "authorization": {
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "analysis_policy_frozen": false,
+    "accepted_initial_rating_snapshot_frozen": false,
+    "final_readiness_signed": false,
+    "adjudication_case_generation_authorized": false,
+    "private_controlled_storage_confirmed": false,
+    "approval_record_ids": [],
+    "approved_at": null
+  },
+  "adjudication_case_distribution_authorized": false,
+  "adjudication_work_authorized": false,
+  "rerating_work_authorized": false,
+  "payment_authorized": false,
+  "funding_submission_authorized": false,
+  "phase_2_authorized": false
+}
