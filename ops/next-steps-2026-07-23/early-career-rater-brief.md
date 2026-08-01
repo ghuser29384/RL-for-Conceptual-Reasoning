@@ -17,7 +17,7 @@ A candidate should normally satisfy all of the following:
 - be able to interpret and assess English-language philosophical arguments precisely;
 - have no authorship, substantive editing, prior-label exposure, or other material conflict for assigned items;
 - complete the required calibration without access to protected labels; and
-- agree to the blindness, confidentiality, provenance, revision, and audit rules.
+- agree to the blindness, confidentiality, provenance, revision, task-packet, and audit rules.
 
 These qualifications are recommendations pending final owner approval. Affiliation prestige by itself is not a substitute for demonstrated object-level judgment.
 
@@ -58,8 +58,9 @@ The rater also records:
 - a concise overall rationale;
 - confidence;
 - time spent;
-- an insufficient-context flag; and
-- verification status for correctness-sensitive claims.
+- an insufficient-context flag;
+- verification status for correctness-sensitive claims; and
+- any permitted item-integrity flags.
 
 Substantive impact is analyzed through `strength × centrality`; neither field is used in isolation as a decisive quality measure.
 
@@ -67,15 +68,34 @@ Substantive impact is analyzed through `strength × centrality`; neither field i
 
 Before a rater locks all four sibling critiques for an assigned production position, the system does not reveal:
 
-- source or author/model identity;
-- model-judge scores or provisional quality strata;
+- source class, source identity, or author/model identity;
+- model-judge scores, acquisition records, or provisional quality strata;
 - the paired rater's identity or ratings;
-- aggregate human ratings; or
+- aggregate human ratings or labels; or
 - adjudication status.
 
 A candidate cannot receive a production position they authored, substantively edited, or previously saw with labels. The assignment log records conflict, prior exposure, topic-coverage eligibility, and the deterministic assignment seed.
 
 The preferred anonymous assignment template uses twelve distinct rater pairs. Each rater receives four production positions, four distinct partners, four topic families, and—if the preferred six-six source crossing is feasible—two positions from each eligible source class. Named participants are mapped to anonymous slots only after conflict, exposure, and topic-coverage screening. If no mapping satisfies every constraint, no assignment is produced; constraints are not relaxed through undocumented manual swaps.
+
+## Blind task packet and submission
+
+A selected core rater would receive one private, participant-specific task packet only after the later assignment, task-generation, distribution, and readiness gates pass. The packet contains the exact text and frozen version of four assigned positions, with four sibling critiques per position, plus sixteen response forms.
+
+The packet uses opaque task tokens rather than the controlled position and critique IDs. The same underlying item receives a different token in each rater's packet. The packet is cryptographically bound to the selected assignment, protected-manifest hash, rubric version and hash, exact item text and versions, blindness declarations, and response schema.
+
+The packet must not contain source or author/model identity, acquisition-judge outputs, provisional quality strata, the paired rater's identity or ratings, aggregate ratings, labels, or adjudication status. A rater should report any suspected leak through the item-integrity field and stop work on the affected position until the operator responds; the rater should not search for the hidden source or compare packets with another participant.
+
+An initial submission must:
+
+- identify the exact packet, participant, rubric, and packet hash;
+- contain all sixteen assigned task tokens exactly once;
+- include the seven score dimensions and all required auxiliary fields; and
+- contain no source, assignment, paired-rater, aggregate-rating, label, or adjudication metadata.
+
+The system rejects altered packet hashes, unassigned or duplicated tokens, missing responses, invalid score vectors, and hidden metadata. A structurally valid submission does not automatically become an accepted honorarium unit: controlled ingestion and quality-control acceptance remain separate. The original initial response is preserved if a later operator-assigned, object-level re-rating occurs.
+
+The existence of a private task packet is not permission to begin. Distribution and rating work require the final readiness signature and the official start notice. Raters must not share packet text, tokens, screenshots, or hashes outside the approved delivery and support process.
 
 ## Calibration and acceptance
 
@@ -90,7 +110,7 @@ The recommended qualification sequence is:
 
 The exact calibration examples, reference considerations, and pass rule remain pending methodological review and owner approval. Calibration is not a paid contribution unit under the current plan and is excluded from the 48-critique pilot outcomes. This unpaid calibration burden must be disclosed before acceptance.
 
-An initial production rating earns one honorarium unit only when it is complete, assigned, and accepted under the frozen quality-control rules. A substantive re-rating earns one additional unit only when the operator assigned it and the result is accepted. Duplicates, rejected work, self-initiated re-ratings, avoidable formatting corrections, and calibration ratings earn zero units.
+An initial production rating earns one honorarium unit only when it is complete, assigned, submitted through the exact bound packet, ingested, and accepted under the frozen quality-control rules. A substantive re-rating earns one additional unit only when the operator assigned it and the result is accepted. Duplicates, rejected work, self-initiated re-ratings, avoidable formatting corrections, and calibration ratings earn zero units.
 
 ## Limited honoraria
 
@@ -111,11 +131,11 @@ The honorarium illustration must be read together with the 3–8 hour planning e
 
 A contributor may withdraw. Accepted units are not forfeited solely because of withdrawal or replacement.
 
-After a missed checkpoint, the operator requests a recovery or withdrawal update. After 48 hours without an approved recovery plan, new assignments pause and overdue unstarted work may be reassigned. A replacement must satisfy the same qualification, consent, topic-coverage, conflict, calibration, and exposure standards.
+After a missed checkpoint, the operator requests a recovery or withdrawal update. After 48 hours without an approved recovery plan, new assignments pause and overdue unstarted work may be reassigned. A replacement must satisfy the same qualification, consent, topic-coverage, conflict, calibration, exposure, task-packet, and confidentiality standards. The replacement receives a newly generated participant-specific packet; another person's packet is not transferred.
 
 ## Data and publication boundary
 
-Raters may be asked for permission to publish their name or affiliation separately from the rating data. The default research record should use controlled contributor identifiers. Protected item text, assignments, labels, payment records, and personal information remain access-controlled.
+Raters may be asked for permission to publish their name or affiliation separately from the rating data. The default research record should use controlled contributor identifiers. Protected item text, task tokens, task packets, assignments, labels, payment records, and personal information remain access-controlled.
 
 No public claim should imply that a rater endorses Metaphilosophy, the final labels, the funding applications, or the 400-critique expansion merely because they participated in the pilot.
 
@@ -135,6 +155,6 @@ Do not request identity, tax, payment, or sanctions-screening data through a pub
 
 ## Draft invitation summary
 
-> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, topic-coverage and calibration rules for review—there is no commitment merely from expressing interest.
+> Metaphilosophy is preparing a small pilot in which qualified early-career philosophers independently complete 16 protected production ratings plus a proposed 8-item shared public calibration set using a seven-dimensional rubric. The current planning estimate is roughly 3–8 hours including orientation and calibration, spread around a four-week production window, with additional time possible for assigned re-ratings. Production work would be delivered through a participant-specific blind packet cryptographically bound to the frozen rubric and item versions. A USD 400 limited-honoraria pool is divided transparently among accepted production contributions; calibration is not a paid unit, and the pool is not a per-rating wage or full-cost compensation. I would first send the full protocol, item-length information, privacy terms, topic-coverage, task-packet, and calibration rules for review—there is no commitment merely from expressing interest.
 
 This is an internal draft, not an authorized or sent message.
