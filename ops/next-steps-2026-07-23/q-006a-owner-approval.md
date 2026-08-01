@@ -1,12 +1,14 @@
 # Q-006A — owner approval record
 
-**Status:** Pending project-owner decision.  
-**Effect of approval:** authorizes methodological consultation preparation, exact adviser-recipient research, public calibration screening, and non-final pilot-item screening.  
+**Status:** Approved by the project owner.  
+**Approval record ID:** `Q006A-APPROVAL-2026-08-01T113432Z`  
+**Approved at:** `2026-08-01T11:34:32Z`  
+**Owner instruction:** “Do the next step.”  
+**Interpretation basis:** the instruction directly followed an explicit statement that the next step was approval or revision of Q-006A, together with the exact recommended approval scope. It is therefore recorded as approval of Q-006A as written.  
+**Effect of approval:** authorizes methodological consultation-packet preparation, exact adviser-recipient research, public non-protected calibration screening, and non-final pilot-item screening.  
 **Does not authorize:** sending email, public recruitment, protected-item freeze, participant selection, controlled assignment generation, controlled task-bundle generation or distribution, quality-control acceptance, controlled rating ingestion, adjudication case generation or distribution, adjudication or rerating work, resolution acceptance, final snapshot sign-off, payment commitment, funding submission, or Phase 2 activation.
 
-## Recommended decision
-
-Approve the following as a **non-binding consultation and screening design**:
+## Approved non-binding consultation and screening design
 
 1. **Pilot structure:** 12 positions × 4 critiques = 48 critiques.
 2. **Independent review:** 2 blind initial ratings per critique = 96 production ratings.
@@ -53,8 +55,6 @@ The following remain pending Q-006B, Q-006C, or later execution controls:
 - funding-application submission; and
 - activation of the 400-critique Phase 2 programme.
 
-## Recommended owner response
+## Audit note
 
-> I approve Q-006A as written. This authorizes the consultation and non-final screening design only. It does not authorize sending emails, recruiting publicly, freezing protected items, selecting participants, generating controlled assignments or task packets, distributing task packets, beginning calibration or ratings, accepting or ingesting ratings, opening or distributing adjudication cases, beginning adjudication or rerating work, accepting case resolutions, signing a final label snapshot, freezing adjudication honorarium units, committing payments, submitting funding applications, or activating Phase 2.
-
-An edited approval should identify the numbered clauses being changed. Silence is not approval.
+No email was sent and no person, protected item, assignment, packet, rating, adjudication case, payment, funding application, or Phase 2 action was created by this approval. The approval advances only the consultation-preparation and non-final-screening state described above.
