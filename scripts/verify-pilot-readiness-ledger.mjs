@@ -3,18 +3,34 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 export const EXPECTED_READINESS_GATES = Object.freeze(["R-01", "R-02", "R-03", "R-04", "R-05", "R-06"]);
-export const EXECUTION_AUTHORIZATION_FIELDS = Object.freeze([
+
+export const Q006A_PREPARATION_AUTHORIZATION_FIELDS = Object.freeze([
+  "methodological_consultation_packet_preparation_authorized",
   "methodological_adviser_recipient_research_authorized",
+  "public_calibration_screening_authorized",
+  "nonfinal_item_screening_authorized",
+]);
+
+export const EXECUTION_AUTHORIZATION_FIELDS = Object.freeze([
   "methodological_adviser_outreach_authorized",
   "public_recruitment_authorized",
   "participant_outreach_authorized",
-  "nonfinal_item_screening_authorized",
   "protected_manifest_freeze_authorized",
   "participant_selection_authorized",
   "controlled_assignment_generation_authorized",
   "controlled_task_bundle_generation_authorized",
   "task_bundle_distribution_authorized",
   "calibration_or_rating_work_authorized",
+  "quality_control_acceptance_authorized",
+  "controlled_rating_ingestion_authorized",
+  "adjudication_case_generation_authorized",
+  "adjudication_case_distribution_authorized",
+  "adjudication_work_authorized",
+  "rerating_work_authorized",
+  "adjudication_resolution_acceptance_authorized",
+  "final_snapshot_generation_authorized",
+  "final_snapshot_signoff_authorized",
+  "adjudication_unit_ledger_freeze_authorized",
   "payment_commitment_authorized",
   "funding_submission_authorized",
   "phase_2_activation_authorized",
@@ -126,8 +142,8 @@ export function validatePilotReadinessLedger(value) {
   if (value?.programme_id !== "metaphilosophy-48-critique-pilot-v1-2026-07-30") {
     errors.push("programme_id must identify the active 48-critique pilot.");
   }
-  if (value?.status !== "blocked_pending_q006a_and_later_readiness_gates") {
-    errors.push("The public readiness ledger must remain blocked while Q-006A and later gates are pending.");
+  if (value?.status !== "blocked_pending_methodological_feedback_and_later_readiness_gates") {
+    errors.push("The readiness ledger must remain blocked after Q-006A while methodological feedback and later gates are pending.");
   }
 
   for (const field of [
@@ -145,23 +161,34 @@ export function validatePilotReadinessLedger(value) {
     errors.push("Sensitive data must be restricted to private controlled records.");
   }
 
-  if (q006a.status !== "pending_project_owner_decision" || q006a.approved_at !== null) {
-    errors.push("Q-006A must remain pending with no approval timestamp until the project owner explicitly approves it.");
+  if (q006a.status !== "approved_nonbinding_consultation_and_screening_only") {
+    errors.push("Q-006A must be recorded as approved for non-binding consultation and screening only.");
+  }
+  if (!validIsoTimestamp(q006a.approved_at)) errors.push("Q-006A requires a valid approval timestamp.");
+  if (q006a.approval_record_id !== "Q006A-APPROVAL-2026-08-01T113432Z") {
+    errors.push("Q-006A approval_record_id must match the recorded owner approval.");
+  }
+  if (q006a.decision_id !== "D-027") errors.push("Q-006A must reference decision D-027.");
+  if (q006a.owner_instruction !== "Do the next step.") {
+    errors.push("Q-006A must preserve the project owner's exact approval instruction.");
   }
   if (!String(q006a.approval_record ?? "").endsWith("q-006a-owner-approval.md")) {
-    errors.push("Q-006A must reference the owner-approval record template.");
+    errors.push("Q-006A must reference the owner-approval record.");
+  }
+  for (const field of Q006A_PREPARATION_AUTHORIZATION_FIELDS) {
+    if (authorization[field] !== true) errors.push(`authorization_state.${field} must equal true after Q-006A approval.`);
   }
   for (const field of EXECUTION_AUTHORIZATION_FIELDS) {
-    if (authorization[field] !== false) errors.push(`authorization_state.${field} must remain false.`);
+    if (authorization[field] !== false) errors.push(`authorization_state.${field} must remain false after Q-006A approval.`);
   }
 
-  if (feedback.status !== "template_only_no_adviser_contact_authorized") {
-    errors.push("Methodological feedback must remain a template with no adviser contact authorized.");
+  if (feedback.status !== "preparation_authorized_no_contact_or_outreach") {
+    errors.push("Methodological feedback preparation must be authorized while adviser contact and outreach remain unauthorized.");
   }
   if (feedback.target_advisers?.minimum !== 2 || feedback.target_advisers?.maximum !== 4) {
     errors.push("The feedback template must preserve the proposed two-to-four adviser envelope.");
   }
-  if (!emptyArray(feedback.public_entries)) errors.push("No public methodological-adviser entries may exist before authorized outreach and permission.");
+  if (!emptyArray(feedback.public_entries)) errors.push("No public methodological-adviser entries may exist before contact and attribution permission.");
   const allowedDispositions = normalizeStrings(feedback.allowed_dispositions);
   for (const disposition of [
     "adopted_before_launch",
@@ -175,11 +202,14 @@ export function validatePilotReadinessLedger(value) {
     errors.push("Feedback attribution and endorsement boundaries must remain explicit.");
   }
 
-  if (itemScreening.status !== "template_only_screening_not_authorized") {
-    errors.push("Item screening must remain an unauthorized template until Q-006A is approved.");
+  if (itemScreening.status !== "nonfinal_screening_authorized_no_records_yet") {
+    errors.push("Item screening must be recorded as non-final, authorized, and not yet populated.");
   }
   if (itemScreening.controlled_private_manifest_required !== true || itemScreening.exact_ids_and_text_must_remain_private !== true) {
     errors.push("Item screening must require a private controlled manifest and keep exact IDs and text private.");
+  }
+  if (itemScreening.protected_manifest_freeze_authorized !== false || itemScreening.participant_assignment_authorized !== false) {
+    errors.push("Non-final item screening must not authorize a protected-manifest freeze or participant assignment.");
   }
   for (const field of [
     "positions_screened",
@@ -188,10 +218,10 @@ export function validatePilotReadinessLedger(value) {
     "candidate_critiques_screened",
     "candidate_critiques_provisionally_selected",
   ]) {
-    if (itemSummary[field] !== 0) errors.push(`item_screening_template.public_summary.${field} must remain zero before screening authorization.`);
+    if (itemSummary[field] !== 0) errors.push(`item_screening_template.public_summary.${field} must remain zero before screening records exist.`);
   }
   for (const field of ["controlled_manifest_sha256", "exclusion_ledger_sha256"]) {
-    if (itemSummary[field] !== null) errors.push(`item_screening_template.public_summary.${field} must remain null before a controlled freeze.`);
+    if (itemSummary[field] !== null) errors.push(`item_screening_template.public_summary.${field} must remain null before a controlled screening ledger exists.`);
   }
   if (itemScreening.minimum_candidate_critiques_per_position_proposal !== 8) {
     errors.push("The non-binding candidate-pool proposal must remain eight critiques per position.");
@@ -200,8 +230,8 @@ export function validatePilotReadinessLedger(value) {
     errors.push("The non-binding selected-critique proposal must remain four per position.");
   }
 
-  if (calibration.status !== "template_only_materials_and_pass_rule_pending") {
-    errors.push("Calibration must remain a template with materials and qualification rule pending.");
+  if (calibration.status !== "public_nonprotected_screening_authorized_no_materials_selected") {
+    errors.push("Public non-protected calibration screening must be authorized without selecting materials.");
   }
   if (calibration.proposed_public_nonprotected_positions !== 2 || calibration.proposed_critiques !== 8) {
     errors.push("The non-binding calibration proposal must remain two public positions and eight critiques.");
@@ -213,7 +243,10 @@ export function validatePilotReadinessLedger(value) {
     errors.push("Calibration must remain excluded from production metrics and worth zero honorarium units under the current plan.");
   }
   if (calibration.qualification_rule !== null || calibration.selected_materials_sha256 !== null) {
-    errors.push("Calibration qualification and material hash must remain unset before later approval.");
+    errors.push("Calibration qualification and selected-material hash must remain unset before Q-006B.");
+  }
+  if (calibration.calibration_work_authorized !== false) {
+    errors.push("Screening public calibration candidates must not authorize calibration work.");
   }
 
   if (baseline.status !== "template_only_lineup_pending") errors.push("Model-baseline lineup must remain pending.");
@@ -289,10 +322,28 @@ export function validatePilotReadinessLedger(value) {
   if (gates.length !== EXPECTED_READINESS_GATES.length) errors.push("The readiness ledger must contain exactly six gates.");
   const observedGateIds = gates.map((gate) => String(gate?.id ?? ""));
   if (!sameStringSet(observedGateIds, EXPECTED_READINESS_GATES)) errors.push("Readiness gate IDs must remain R-01 through R-06.");
-  for (const gate of gates) {
+
+  const q006aGate = gates.find((gate) => gate?.id === "R-01");
+  if (q006aGate?.status !== "passed") errors.push("R-01 must be passed after Q-006A approval.");
+  const q006aEvidence = objectOrEmpty(q006aGate?.evidence);
+  if (
+    q006aEvidence.decision_id !== q006a.decision_id ||
+    q006aEvidence.approval_record_id !== q006a.approval_record_id ||
+    q006aEvidence.approval_record !== q006a.approval_record ||
+    q006aEvidence.approved_at !== q006a.approved_at
+  ) {
+    errors.push("R-01 evidence must exactly match the Q-006A approval record.");
+  }
+  for (const gate of gates.filter((entry) => entry?.id !== "R-01")) {
     if (gate?.status !== "blocked" || gate?.evidence !== null) {
       errors.push(`${gate?.id ?? "unknown gate"} must remain blocked with null evidence.`);
     }
+  }
+
+  const methodologyGate = gates.find((gate) => gate?.id === "R-03");
+  const methodologyGateName = String(methodologyGate?.name ?? "").toLowerCase();
+  for (const required of ["ingestion", "adjudication", "snapshot", "controlled item manifest"]) {
+    if (!methodologyGateName.includes(required)) errors.push(`R-03 name must include ${required}.`);
   }
   const assignmentGate = gates.find((gate) => gate?.id === "R-05");
   const assignmentGateName = String(assignmentGate?.name ?? "").toLowerCase();
@@ -307,20 +358,28 @@ export function validatePilotReadinessLedger(value) {
     if (overall[field] !== null) errors.push(`overall_readiness.${field} must remain null.`);
   }
 
-  if (!Array.isArray(value?.invariants) || value.invariants.length < 9) errors.push("At least nine public-readiness invariants must remain explicit.");
+  if (!Array.isArray(value?.invariants) || value.invariants.length < 10) errors.push("At least ten public-readiness invariants must remain explicit.");
   const invariantText = normalizeStrings(value?.invariants).join(" ").toLowerCase();
   for (const required of [
+    "q-006a authorizes only",
+    "no email",
     "controlled assignment generation",
     "controlled task-bundle generation or distribution",
     "assignment generation is separate",
     "task-bundle generation is separate from distribution",
     "task-bundle distribution is separate from final readiness",
     "does not authorize rating work",
+    "every remaining gate stays blocked",
   ]) {
     if (!invariantText.includes(required)) errors.push(`Readiness invariants must include ${required}.`);
   }
-  if (value?.next_action?.id !== "Q-006A" || value?.next_action?.status !== "project_owner_decision_required") {
-    errors.push("The next action must remain Q-006A with a project-owner decision required.");
+
+  if (value?.next_action?.id !== "Q-006A-PREP" || value?.next_action?.status !== "authorized_preparation_required") {
+    errors.push("The next action must be the Q-006A-authorized preparation and screening work.");
+  }
+  const nextActionText = String(value?.next_action?.question ?? "").toLowerCase();
+  for (const required of ["without sending", "public non-protected calibration", "non-final pilot-item screening", "without freezing", "selecting participants"]) {
+    if (!nextActionText.includes(required)) errors.push(`next_action.question must include ${required}.`);
   }
 
   const serialized = JSON.stringify(value);
@@ -334,8 +393,20 @@ export function validatePilotReadinessLedger(value) {
     ledger_id: value?.ledger_id ?? null,
     programme_id: value?.programme_id ?? null,
     q006a_status: q006a.status ?? null,
+    q006a_approved_at: q006a.approved_at ?? null,
     readiness_gate_count: gates.length,
+    passed_gate_count: gates.filter((gate) => gate?.status === "passed").length,
     blocked_gate_count: gates.filter((gate) => gate?.status === "blocked").length,
+    consultation_packet_preparation_authorized:
+      authorization.methodological_consultation_packet_preparation_authorized ?? null,
+    adviser_recipient_research_authorized:
+      authorization.methodological_adviser_recipient_research_authorized ?? null,
+    public_calibration_screening_authorized:
+      authorization.public_calibration_screening_authorized ?? null,
+    nonfinal_item_screening_authorized:
+      authorization.nonfinal_item_screening_authorized ?? null,
+    methodological_adviser_outreach_authorized:
+      authorization.methodological_adviser_outreach_authorized ?? null,
     controlled_assignment_generation_authorized:
       authorization.controlled_assignment_generation_authorized ?? null,
     controlled_task_bundle_generation_authorized:
@@ -382,6 +453,10 @@ function sameStringSet(left, right) {
 
 function emptyArray(value) {
   return Array.isArray(value) && value.length === 0;
+}
+
+function validIsoTimestamp(value) {
+  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
 }
 
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
