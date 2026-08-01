@@ -117,8 +117,8 @@ assert.ok(register.decisions.length > 0);
 for (const decision of register.decisions) {
   assert.ok(decision.credence >= 0.9 && decision.credence <= 1, `${decision.id} violates the 90% decision threshold`);
 }
-assert.equal(register.pending_decision.status, "user_decision_required");
-assert.equal(register.pending_decision.id, "Q-006");
+assert.equal(register.pending_decision.status, "evidence_collection_required_before_owner_decision");
+assert.equal(register.pending_decision.id, "Q-006B");
 assert.equal(register.decisions.find((decision) => decision.id === "D-006")?.contract_path, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
 for (const decisionId of ["D-007", "D-008", "D-009", "D-010", "D-011", "D-012", "D-013", "D-014", "D-015", "D-016", "D-017", "D-025"]) {
   assert.equal(
@@ -133,6 +133,10 @@ for (const decisionId of ["D-018", "D-019", "D-020", "D-021", "D-022", "D-023", 
   );
 }
 assert.equal(register.decisions.find((decision) => decision.id === "D-026")?.contract_path, "ops/next-steps-2026-07-23/hard-set-source-allocation.json");
+const q006aDecision = register.decisions.find((decision) => decision.id === "D-027");
+assert.equal(q006aDecision?.contract_path, "ops/next-steps-2026-07-23/q-006a-owner-approval.md");
+assert.equal(q006aDecision?.approved_at, "2026-08-01T11:34:32Z");
+assert.match(q006aDecision?.decision ?? "", /Approve Q-006A as written/i);
 
 const pilotReport = validatePilot48Plan(pilot);
 assert.equal(pilotReport.status, "pass", pilotReport.errors.join("\n"));
@@ -164,9 +168,16 @@ assert.equal(methodologyReport.binding_effect, false);
 
 const readinessReport = validatePilotReadinessLedger(readiness);
 assert.equal(readinessReport.status, "pass", readinessReport.errors.join("\n"));
-assert.equal(readinessReport.q006a_status, "pending_project_owner_decision");
+assert.equal(readinessReport.q006a_status, "approved_nonbinding_consultation_and_screening_only");
+assert.equal(readinessReport.q006a_approved_at, "2026-08-01T11:34:32Z");
 assert.equal(readinessReport.readiness_gate_count, 6);
-assert.equal(readinessReport.blocked_gate_count, 6);
+assert.equal(readinessReport.passed_gate_count, 1);
+assert.equal(readinessReport.blocked_gate_count, 5);
+assert.equal(readinessReport.consultation_packet_preparation_authorized, true);
+assert.equal(readinessReport.adviser_recipient_research_authorized, true);
+assert.equal(readinessReport.public_calibration_screening_authorized, true);
+assert.equal(readinessReport.nonfinal_item_screening_authorized, true);
+assert.equal(readinessReport.methodological_adviser_outreach_authorized, false);
 assert.equal(readinessReport.controlled_assignment_generation_authorized, false);
 assert.equal(readinessReport.controlled_task_bundle_generation_authorized, false);
 assert.equal(readinessReport.task_bundle_distribution_authorized, false);
@@ -276,12 +287,14 @@ assert.match(q006Packet, /Blind task-packet proposal/);
 assert.match(q006Packet, /Task-bundle generation and distribution boundary/);
 assert.match(q006Packet, /Generation does not authorize distribution/);
 assert.match(q006Packet, /does[^\n]*not[^\n]*authorize sending/i);
-assert.match(q006Approval, /Pending project-owner decision/i);
+assert.match(q006Approval, /Approved by the project owner/i);
+assert.match(q006Approval, /Q006A-APPROVAL-2026-08-01T113432Z/);
+assert.match(q006Approval, /Owner instruction:[^\n]*Do the next step/i);
 assert.match(q006Approval, /Assignment eligibility/);
 assert.match(q006Approval, /Blind task-packet proposal/);
 assert.match(q006Approval, /controlled task-bundle generation or distribution/i);
 assert.match(q006Approval, /Does not authorize/i);
-assert.match(q006Approval, /Silence is not approval/i);
+assert.match(q006Approval, /No email was sent/i);
 
 const allocationReport = validateHardSetSourceAllocation(allocation);
 assert.equal(allocationReport.status, "pass", allocationReport.errors.join("\n"));
