@@ -2,7 +2,7 @@
   "$schema": "https://www.metaphilosophy.org/schemas/pilot-methodology-recommendations-v1.schema.json",
   "recommendation_id": "pilot-methodology-recommendations-v1-2026-07-30",
   "recommendation_version": 1,
-  "status": "non_binding_pending_q_006a_and_q_006b",
+  "status": "non_binding_q006a_approved_pending_feedback_and_q006b",
   "source_basis": {
     "primary_reference": {
       "title": "A dataset of rated conceptual arguments",
@@ -207,8 +207,16 @@
   },
   "governance": {
     "binding_effect": false,
+    "q006a_consultation_and_screening_approved": true,
+    "q006a_approved_at": "2026-08-01T11:34:32Z",
+    "q006a_approval_record": "ops/next-steps-2026-07-23/q-006a-owner-approval.md",
+    "q006b_methodology_freeze_approved": false,
+    "consultation_packet_preparation_authorized": true,
+    "adviser_recipient_research_authorized": true,
+    "public_calibration_screening_authorized": true,
+    "nonfinal_item_screening_authorized": true,
     "approval_sequence": [
-      "Q-006A may approve these elements for consultation and non-final screening.",
+      "Q-006A approved these elements for consultation and non-final screening only.",
       "Methodological-adviser comments and feasibility findings are recorded with dispositions.",
       "Q-006B freezes the final assignment, source mix, calibration rule, adjudication triggers, analysis plan, and exact protected items."
     ],
