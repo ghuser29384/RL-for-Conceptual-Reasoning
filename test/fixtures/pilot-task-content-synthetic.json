@@ -1,0 +1,180 @@
+{
+  "task_content_id": "synthetic-pilot-task-content-v1",
+  "input_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "data_class": "synthetic_test_fixture",
+  "mode": "simulation",
+  "rubric_version": "rubric-v2-seven-dimensional",
+  "rubric_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "protected_manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "task_token_secret": "synthetic-task-token-secret-v1",
+  "authorization": {
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "protected_manifest_frozen": false,
+    "task_bundle_generation_authorized": false,
+    "approval_record_ids": [],
+    "approved_at": null,
+    "private_controlled_storage_confirmed": false,
+    "distribution_authorized": false,
+    "rating_work_authorized": false
+  },
+  "positions": [
+    {
+      "slot_id": "P01",
+      "position_id": "SIM_P01",
+      "position_version": 1,
+      "position_text": "Synthetic position P01 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P01_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P01 provides test-only argumentative content."},
+        {"critique_id":"SIM_P01_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P01 provides test-only argumentative content."},
+        {"critique_id":"SIM_P01_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P01 provides test-only argumentative content."},
+        {"critique_id":"SIM_P01_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P01 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"public_synthetic_with_new_expert_ratings","topic_family":"normative_ethics","source_identity":"SIM_SOURCE_P01","author_or_model_identity":"SIM_AUTHOR_P01","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P02",
+      "position_id": "SIM_P02",
+      "position_version": 1,
+      "position_text": "Synthetic position P02 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P02_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P02 provides test-only argumentative content."},
+        {"critique_id":"SIM_P02_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P02 provides test-only argumentative content."},
+        {"critique_id":"SIM_P02_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P02 provides test-only argumentative content."},
+        {"critique_id":"SIM_P02_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P02 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"protected_public_domain_derived","topic_family":"normative_ethics","source_identity":"SIM_SOURCE_P02","author_or_model_identity":"SIM_AUTHOR_P02","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P03",
+      "position_id": "SIM_P03",
+      "position_version": 1,
+      "position_text": "Synthetic position P03 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P03_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P03 provides test-only argumentative content."},
+        {"critique_id":"SIM_P03_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P03 provides test-only argumentative content."},
+        {"critique_id":"SIM_P03_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P03 provides test-only argumentative content."},
+        {"critique_id":"SIM_P03_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P03 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"public_synthetic_with_new_expert_ratings","topic_family":"political_philosophy","source_identity":"SIM_SOURCE_P03","author_or_model_identity":"SIM_AUTHOR_P03","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P04",
+      "position_id": "SIM_P04",
+      "position_version": 1,
+      "position_text": "Synthetic position P04 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P04_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P04 provides test-only argumentative content."},
+        {"critique_id":"SIM_P04_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P04 provides test-only argumentative content."},
+        {"critique_id":"SIM_P04_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P04 provides test-only argumentative content."},
+        {"critique_id":"SIM_P04_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P04 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"protected_public_domain_derived","topic_family":"political_philosophy","source_identity":"SIM_SOURCE_P04","author_or_model_identity":"SIM_AUTHOR_P04","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P05",
+      "position_id": "SIM_P05",
+      "position_version": 1,
+      "position_text": "Synthetic position P05 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P05_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P05 provides test-only argumentative content."},
+        {"critique_id":"SIM_P05_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P05 provides test-only argumentative content."},
+        {"critique_id":"SIM_P05_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P05 provides test-only argumentative content."},
+        {"critique_id":"SIM_P05_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P05 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"public_synthetic_with_new_expert_ratings","topic_family":"epistemology_and_philosophy_of_science","source_identity":"SIM_SOURCE_P05","author_or_model_identity":"SIM_AUTHOR_P05","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P06",
+      "position_id": "SIM_P06",
+      "position_version": 1,
+      "position_text": "Synthetic position P06 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P06_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P06 provides test-only argumentative content."},
+        {"critique_id":"SIM_P06_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P06 provides test-only argumentative content."},
+        {"critique_id":"SIM_P06_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P06 provides test-only argumentative content."},
+        {"critique_id":"SIM_P06_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P06 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"protected_public_domain_derived","topic_family":"epistemology_and_philosophy_of_science","source_identity":"SIM_SOURCE_P06","author_or_model_identity":"SIM_AUTHOR_P06","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P07",
+      "position_id": "SIM_P07",
+      "position_version": 1,
+      "position_text": "Synthetic position P07 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P07_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P07 provides test-only argumentative content."},
+        {"critique_id":"SIM_P07_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P07 provides test-only argumentative content."},
+        {"critique_id":"SIM_P07_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P07 provides test-only argumentative content."},
+        {"critique_id":"SIM_P07_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P07 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"public_synthetic_with_new_expert_ratings","topic_family":"philosophy_of_mind_and_ai_consciousness","source_identity":"SIM_SOURCE_P07","author_or_model_identity":"SIM_AUTHOR_P07","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P08",
+      "position_id": "SIM_P08",
+      "position_version": 1,
+      "position_text": "Synthetic position P08 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P08_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P08 provides test-only argumentative content."},
+        {"critique_id":"SIM_P08_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P08 provides test-only argumentative content."},
+        {"critique_id":"SIM_P08_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P08 provides test-only argumentative content."},
+        {"critique_id":"SIM_P08_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P08 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"protected_public_domain_derived","topic_family":"philosophy_of_mind_and_ai_consciousness","source_identity":"SIM_SOURCE_P08","author_or_model_identity":"SIM_AUTHOR_P08","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P09",
+      "position_id": "SIM_P09",
+      "position_version": 1,
+      "position_text": "Synthetic position P09 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P09_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P09 provides test-only argumentative content."},
+        {"critique_id":"SIM_P09_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P09 provides test-only argumentative content."},
+        {"critique_id":"SIM_P09_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P09 provides test-only argumentative content."},
+        {"critique_id":"SIM_P09_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P09 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"public_synthetic_with_new_expert_ratings","topic_family":"decision_theory_and_social_choice","source_identity":"SIM_SOURCE_P09","author_or_model_identity":"SIM_AUTHOR_P09","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P10",
+      "position_id": "SIM_P10",
+      "position_version": 1,
+      "position_text": "Synthetic position P10 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P10_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P10 provides test-only argumentative content."},
+        {"critique_id":"SIM_P10_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P10 provides test-only argumentative content."},
+        {"critique_id":"SIM_P10_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P10 provides test-only argumentative content."},
+        {"critique_id":"SIM_P10_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P10 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"protected_public_domain_derived","topic_family":"decision_theory_and_social_choice","source_identity":"SIM_SOURCE_P10","author_or_model_identity":"SIM_AUTHOR_P10","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P11",
+      "position_id": "SIM_P11",
+      "position_version": 1,
+      "position_text": "Synthetic position P11 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P11_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P11 provides test-only argumentative content."},
+        {"critique_id":"SIM_P11_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P11 provides test-only argumentative content."},
+        {"critique_id":"SIM_P11_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P11 provides test-only argumentative content."},
+        {"critique_id":"SIM_P11_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P11 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"public_synthetic_with_new_expert_ratings","topic_family":"metaphilosophy_and_ai_governance","source_identity":"SIM_SOURCE_P11","author_or_model_identity":"SIM_AUTHOR_P11","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    },
+    {
+      "slot_id": "P12",
+      "position_id": "SIM_P12",
+      "position_version": 1,
+      "position_text": "Synthetic position P12 states a bounded claim used only to test blind task-bundle generation.",
+      "critiques": [
+        {"critique_id":"SIM_P12_C1","critique_version":1,"critique_text":"Synthetic critique 1 of P12 provides test-only argumentative content."},
+        {"critique_id":"SIM_P12_C2","critique_version":1,"critique_text":"Synthetic critique 2 of P12 provides test-only argumentative content."},
+        {"critique_id":"SIM_P12_C3","critique_version":1,"critique_text":"Synthetic critique 3 of P12 provides test-only argumentative content."},
+        {"critique_id":"SIM_P12_C4","critique_version":1,"critique_text":"Synthetic critique 4 of P12 provides test-only argumentative content."}
+      ],
+      "controlled_metadata": {"source_class":"protected_public_domain_derived","topic_family":"metaphilosophy_and_ai_governance","source_identity":"SIM_SOURCE_P12","author_or_model_identity":"SIM_AUTHOR_P12","acquisition_judge_record":{"mean":0.2,"disagreement":0.1},"acquisition_judge_scores":[0.2,0.4],"provisional_quality_stratum":"synthetic_only","paired_rater_identity":"MUST_BE_HIDDEN","aggregate_ratings":{"overall":0.5},"labels":["MUST_BE_HIDDEN"],"adjudication_status":"MUST_BE_HIDDEN"}
+    }
+  ]
+}
