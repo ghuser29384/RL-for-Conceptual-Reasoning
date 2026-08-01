@@ -12,5 +12,6 @@ await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
 await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
 await cp(resolve(root, "reviewers"), resolve(dist, "reviewers"), { recursive: true });
 await cp(resolve(root, "arguments"), resolve(dist, "arguments"), { recursive: true });
+await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });
 
 console.log(`Static build written to ${dist}`);
