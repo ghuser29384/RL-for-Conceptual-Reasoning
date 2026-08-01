@@ -1,0 +1,32 @@
+{
+  "record_id": "q-006a-approved-state-v1-2026-08-01",
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "approved",
+  "approved_by": "Ellen Sun",
+  "approved_at": "2026-08-01T11:34:32Z",
+  "source_instruction": "Do the next step.",
+  "interpretation_record": "ops/next-steps-2026-07-23/q-006a-approval-interpretation-2026-08-01.md",
+  "authorized_preparation": {
+    "methodological_consultation_packet_finalization": true,
+    "methodological_adviser_recipient_research": true,
+    "public_calibration_candidate_screening": true,
+    "controlled_nonfinal_item_screening": true
+  },
+  "execution_authorizations": {
+    "email_or_other_outreach": false,
+    "public_recruitment": false,
+    "protected_manifest_or_calibration_freeze": false,
+    "participant_selection": false,
+    "assignment_or_task_packet_generation": false,
+    "task_packet_distribution": false,
+    "calibration_or_rating_work": false,
+    "quality_control_acceptance_or_ingestion": false,
+    "adjudication_case_generation_or_distribution": false,
+    "adjudication_discussion_or_rerating": false,
+    "case_resolution_or_snapshot_signoff": false,
+    "honorarium_ledger_freeze_or_payment": false,
+    "funding_submission": false,
+    "phase_2_activation": false
+  },
+  "next_gate": "R-02 bounded methodological feedback collected and dispositioned"
+}
