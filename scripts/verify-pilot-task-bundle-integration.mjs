@@ -49,6 +49,7 @@ export async function verifyPilotTaskBundleIntegration() {
 
   const readinessReport = validatePilotReadinessLedger(readiness);
   assert.equal(readinessReport.status, "pass", readinessReport.errors.join("\n"));
+  assert.equal(readinessReport.q006a_status, "approved_nonbinding_consultation_and_screening_only");
   assert.equal(readinessReport.controlled_task_bundle_generation_authorized, false);
   assert.equal(readinessReport.task_bundle_distribution_authorized, false);
   assert.equal(readinessReport.ready_to_start, false);
@@ -60,10 +61,10 @@ export async function verifyPilotTaskBundleIntegration() {
   const requiredReadinessPhrases = [
     /Controlled blind task-bundle generation \| No/i,
     /Task-bundle distribution \| No/i,
-    /participant-specific HMAC task tokens/i,
-    /Generating private task files does not authorize distribution/i,
-    /does not authorize task-bundle generation, distribution, rating work/i,
-    /does not itself create accepted rating records/i,
+    /Task-packet generation is a further separate gate/i,
+    /generating packets would not authorize distribution/i,
+    /A structurally valid submission is not an accepted rating/i,
+    /Q-006A does not authorize researching, contacting, selecting, or onboarding raters or adjudicators/i,
   ];
   for (const pattern of requiredReadinessPhrases) assert.match(readinessBrief, pattern);
 
@@ -89,19 +90,20 @@ export async function verifyPilotTaskBundleIntegration() {
   const requiredQ006Phrases = [
     /Blind task-packet proposal/i,
     /Artifact separation/i,
-    /Blind-packet(?: and submission|, acceptance, and ingestion) candidates/i,
-    /final blind task-bundle contract/i,
+    /Blind packet, acceptance, ingestion, and adjudication/i,
     /Task-bundle generation and distribution boundary/i,
     /Generation does not authorize distribution/i,
+    /valid submission is not an accepted rating/i,
   ];
   for (const pattern of requiredQ006Phrases) assert.match(q006Packet, pattern);
 
   const requiredApprovalPhrases = [
+    /Approved by the project owner/i,
     /controlled task-bundle generation or distribution/i,
     /Blind task-packet proposal/i,
     /Artifact separation/i,
-    /generating controlled assignments or task packets/i,
-    /distributing task packets/i,
+    /any controlled assignment or task-packet generation action/i,
+    /any task-packet distribution or rating-start action/i,
   ];
   for (const pattern of requiredApprovalPhrases) assert.match(q006aApproval, pattern);
 
@@ -119,6 +121,7 @@ export async function verifyPilotTaskBundleIntegration() {
     status: "pass",
     synthetic_task_bundles: contractReport.synthetic_task_bundles,
     synthetic_bundle_commitment_sha256: contractReport.synthetic_bundle_commitment_sha256,
+    q006a_approved: true,
     controlled_task_bundle_generation_authorized: false,
     task_bundle_distribution_authorized: false,
     rating_work_authorized: false,
