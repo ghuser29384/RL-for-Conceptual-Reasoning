@@ -1,0 +1,66 @@
+{
+  "assignment_input_id": "synthetic-pilot-assignment-fixture-v1",
+  "input_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "data_class": "synthetic_test_fixture",
+  "mode": "simulation",
+  "seed": "synthetic-assignment-seed-v1",
+  "authorization": {
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "protected_manifest_frozen": false,
+    "participants_confirmed": false,
+    "conflict_and_exposure_checks_complete": false,
+    "calibration_complete": false,
+    "controlled_assignment_authorized": false,
+    "approval_record_ids": [],
+    "approved_at": null,
+    "private_controlled_storage_confirmed": false
+  },
+  "positions": [
+    {"slot_id":"P01","position_id":"SIM_P01","topic_family":"normative_ethics","source_class":"public_synthetic_with_new_expert_ratings","critique_ids":["SIM_P01_C1","SIM_P01_C2","SIM_P01_C3","SIM_P01_C4"]},
+    {"slot_id":"P02","position_id":"SIM_P02","topic_family":"normative_ethics","source_class":"protected_public_domain_derived","critique_ids":["SIM_P02_C1","SIM_P02_C2","SIM_P02_C3","SIM_P02_C4"]},
+    {"slot_id":"P03","position_id":"SIM_P03","topic_family":"political_philosophy","source_class":"public_synthetic_with_new_expert_ratings","critique_ids":["SIM_P03_C1","SIM_P03_C2","SIM_P03_C3","SIM_P03_C4"]},
+    {"slot_id":"P04","position_id":"SIM_P04","topic_family":"political_philosophy","source_class":"protected_public_domain_derived","critique_ids":["SIM_P04_C1","SIM_P04_C2","SIM_P04_C3","SIM_P04_C4"]},
+    {"slot_id":"P05","position_id":"SIM_P05","topic_family":"epistemology_and_philosophy_of_science","source_class":"public_synthetic_with_new_expert_ratings","critique_ids":["SIM_P05_C1","SIM_P05_C2","SIM_P05_C3","SIM_P05_C4"]},
+    {"slot_id":"P06","position_id":"SIM_P06","topic_family":"epistemology_and_philosophy_of_science","source_class":"protected_public_domain_derived","critique_ids":["SIM_P06_C1","SIM_P06_C2","SIM_P06_C3","SIM_P06_C4"]},
+    {"slot_id":"P07","position_id":"SIM_P07","topic_family":"philosophy_of_mind_and_ai_consciousness","source_class":"public_synthetic_with_new_expert_ratings","critique_ids":["SIM_P07_C1","SIM_P07_C2","SIM_P07_C3","SIM_P07_C4"]},
+    {"slot_id":"P08","position_id":"SIM_P08","topic_family":"philosophy_of_mind_and_ai_consciousness","source_class":"protected_public_domain_derived","critique_ids":["SIM_P08_C1","SIM_P08_C2","SIM_P08_C3","SIM_P08_C4"]},
+    {"slot_id":"P09","position_id":"SIM_P09","topic_family":"decision_theory_and_social_choice","source_class":"public_synthetic_with_new_expert_ratings","critique_ids":["SIM_P09_C1","SIM_P09_C2","SIM_P09_C3","SIM_P09_C4"]},
+    {"slot_id":"P10","position_id":"SIM_P10","topic_family":"decision_theory_and_social_choice","source_class":"protected_public_domain_derived","critique_ids":["SIM_P10_C1","SIM_P10_C2","SIM_P10_C3","SIM_P10_C4"]},
+    {"slot_id":"P11","position_id":"SIM_P11","topic_family":"metaphilosophy_and_ai_governance","source_class":"public_synthetic_with_new_expert_ratings","critique_ids":["SIM_P11_C1","SIM_P11_C2","SIM_P11_C3","SIM_P11_C4"]},
+    {"slot_id":"P12","position_id":"SIM_P12","topic_family":"metaphilosophy_and_ai_governance","source_class":"protected_public_domain_derived","critique_ids":["SIM_P12_C1","SIM_P12_C2","SIM_P12_C3","SIM_P12_C4"]}
+  ],
+  "participants": [
+    {
+      "participant_id":"SIM_A","role":"core_rater","qualified":true,"consented":true,"available":true,"calibration_status":"passed",
+      "approved_topic_families":["normative_ethics","political_philosophy","epistemology_and_philosophy_of_science","metaphilosophy_and_ai_governance"],
+      "conflict_position_ids":["SIM_P02"],"prior_exposure_position_ids":[]
+    },
+    {
+      "participant_id":"SIM_B","role":"core_rater","qualified":true,"consented":true,"available":true,"calibration_status":"passed",
+      "approved_topic_families":["epistemology_and_philosophy_of_science","philosophy_of_mind_and_ai_consciousness","decision_theory_and_social_choice","metaphilosophy_and_ai_governance"],
+      "conflict_position_ids":[],"prior_exposure_position_ids":["SIM_P03"]
+    },
+    {
+      "participant_id":"SIM_C","role":"core_rater","qualified":true,"consented":true,"available":true,"calibration_status":"passed",
+      "approved_topic_families":["normative_ethics","political_philosophy","epistemology_and_philosophy_of_science","philosophy_of_mind_and_ai_consciousness"],
+      "conflict_position_ids":["SIM_P07"],"prior_exposure_position_ids":[]
+    },
+    {
+      "participant_id":"SIM_D","role":"core_rater","qualified":true,"consented":true,"available":true,"calibration_status":"passed",
+      "approved_topic_families":["normative_ethics","political_philosophy","philosophy_of_mind_and_ai_consciousness","decision_theory_and_social_choice"],
+      "conflict_position_ids":[],"prior_exposure_position_ids":["SIM_P05"]
+    },
+    {
+      "participant_id":"SIM_E","role":"core_rater","qualified":true,"consented":true,"available":true,"calibration_status":"passed",
+      "approved_topic_families":["epistemology_and_philosophy_of_science","philosophy_of_mind_and_ai_consciousness","decision_theory_and_social_choice","metaphilosophy_and_ai_governance"],
+      "conflict_position_ids":["SIM_P11"],"prior_exposure_position_ids":[]
+    },
+    {
+      "participant_id":"SIM_F","role":"core_rater","qualified":true,"consented":true,"available":true,"calibration_status":"passed",
+      "approved_topic_families":["normative_ethics","political_philosophy","decision_theory_and_social_choice","metaphilosophy_and_ai_governance"],
+      "conflict_position_ids":[],"prior_exposure_position_ids":["SIM_P06"]
+    }
+  ]
+}
