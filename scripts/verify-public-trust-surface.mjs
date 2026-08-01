@@ -6,7 +6,6 @@ const HOME_FORBIDDEN = Object.freeze([
   "/contribute",
   "?section=rating",
   "Become a reviewer",
-  "Become a reviewer",
   "Open workspace",
   "Illustrative expert mean",
   "Critique C-1278",
@@ -24,6 +23,7 @@ export function validatePublicTrustSurface(files) {
   const errors = [];
   const index = String(files?.index ?? "");
   const home = String(files?.home ?? "");
+  const baseCss = String(files?.baseCss ?? "");
   const homeCss = String(files?.homeCss ?? "");
   const workspace = String(files?.workspace ?? "");
   const research = String(files?.research ?? "");
@@ -56,13 +56,17 @@ export function validatePublicTrustSurface(files) {
     if (home.includes(forbidden)) errors.push(`Public homepage must not contain ${forbidden}.`);
   }
 
+  requirePhrases(baseCss, [
+    ".mpHome :focus-visible",
+    "@media (prefers-reduced-motion: reduce)",
+  ], "exact-reference.css", errors);
+
   requirePhrases(homeCss, [
     ".mpProtocolCard",
     ".mpStateGrid",
     ".mpBoundaryNote",
     ".mpWorkspaceGate",
     "@media (max-width: 760px)",
-    "@media (prefers-reduced-motion: reduce)",
   ], "trust-home.css", errors);
 
   requirePhrases(workspace, [
@@ -169,23 +173,36 @@ export function validatePublicTrustSurface(files) {
 }
 
 export async function readAndValidatePublicTrustSurface(root = resolve(import.meta.dirname, "..")) {
-  const [index, home, homeCss, workspace, research, researchCss, argumentsPage, reviewersPage, buildScript, vercelText] =
-    await Promise.all([
-      readFile(resolve(root, "index.html"), "utf8"),
-      readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
-      readFile(resolve(root, "src/trust-home.css"), "utf8"),
-      readFile(resolve(root, "src/app.mjs"), "utf8"),
-      readFile(resolve(root, "research/index.html"), "utf8"),
-      readFile(resolve(root, "research/styles.css"), "utf8"),
-      readFile(resolve(root, "arguments/index.html"), "utf8"),
-      readFile(resolve(root, "reviewers/closed.html"), "utf8"),
-      readFile(resolve(root, "scripts/build-static.mjs"), "utf8"),
-      readFile(resolve(root, "vercel.json"), "utf8"),
-    ]);
+  const [
+    index,
+    home,
+    baseCss,
+    homeCss,
+    workspace,
+    research,
+    researchCss,
+    argumentsPage,
+    reviewersPage,
+    buildScript,
+    vercelText,
+  ] = await Promise.all([
+    readFile(resolve(root, "index.html"), "utf8"),
+    readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
+    readFile(resolve(root, "src/exact-reference.css"), "utf8"),
+    readFile(resolve(root, "src/trust-home.css"), "utf8"),
+    readFile(resolve(root, "src/app.mjs"), "utf8"),
+    readFile(resolve(root, "research/index.html"), "utf8"),
+    readFile(resolve(root, "research/styles.css"), "utf8"),
+    readFile(resolve(root, "arguments/index.html"), "utf8"),
+    readFile(resolve(root, "reviewers/closed.html"), "utf8"),
+    readFile(resolve(root, "scripts/build-static.mjs"), "utf8"),
+    readFile(resolve(root, "vercel.json"), "utf8"),
+  ]);
 
   return validatePublicTrustSurface({
     index,
     home,
+    baseCss,
     homeCss,
     workspace,
     research,
