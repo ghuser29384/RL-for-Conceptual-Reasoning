@@ -18,10 +18,17 @@ const ARGUMENT_LIBRARY_FORBIDDEN = Object.freeze([
 ]);
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu;
+const MINIMUM_INTERNAL_WORKSPACE_BYTES = 100_000;
+const REQUIRED_INTERNAL_WORKSPACE_MARKERS = Object.freeze([
+  "workflowEvidenceCollections",
+  "sourceLeakageRedactionPolicy",
+  "releaseReportReadbackItems",
+]);
 
 export function validatePublicTrustSurface(files) {
   const errors = [];
   const index = String(files?.index ?? "");
+  const siteEntry = String(files?.siteEntry ?? "");
   const home = String(files?.home ?? "");
   const baseCss = String(files?.baseCss ?? "");
   const homeCss = String(files?.homeCss ?? "");
@@ -39,6 +46,17 @@ export function validatePublicTrustSurface(files) {
     "/src/trust-home.css?v=1",
     "Expert ratings have not started",
   ], "index.html", errors);
+
+  requirePhrases(siteEntry, [
+    'import { publicHomePage, bindPublicHomeEvents } from "./exact-reference-home.mjs"',
+    "root.innerHTML = publicHomePage()",
+    "bindPublicHomeEvents()",
+    'rawPath === "/workspace"',
+    'rawPath === "/reference"',
+    'import("./app.mjs")',
+    "enhanceWorkspace",
+    'window.location.replace("/")',
+  ], "site-entry route separation", errors);
 
   requirePhrases(home, [
     "Pilot in preparation · expert ratings have not started",
@@ -67,15 +85,20 @@ export function validatePublicTrustSurface(files) {
     ".mpBoundaryNote",
     ".mpWorkspaceGate",
     "@media (max-width: 760px)",
+    "@media (prefers-reduced-motion: reduce)",
   ], "trust-home.css", errors);
 
-  requirePhrases(workspace, [
-    "The rating workspace is gated until the pilot is ready",
-    "has not started production expert ratings",
-    "/research/",
-    "/arguments/",
-  ], "workspace gate", errors);
-  if (!workspace.trim()) errors.push("Workspace route must not render a blank page.");
+  if (Buffer.byteLength(workspace, "utf8") < MINIMUM_INTERNAL_WORKSPACE_BYTES) {
+    errors.push(
+      `Internal research workspace must remain substantial; expected at least ${MINIMUM_INTERNAL_WORKSPACE_BYTES} bytes.`,
+    );
+  }
+  requirePhrases(
+    workspace,
+    REQUIRED_INTERNAL_WORKSPACE_MARKERS,
+    "internal research workspace",
+    errors,
+  );
 
   requirePhrases(research, [
     "Consultation phase · production ratings not started",
@@ -112,6 +135,7 @@ export function validatePublicTrustSurface(files) {
 
   requirePhrases(reviewersPage, [
     "Reviewer intake is intentionally closed",
+    "The July 2026 intake window has closed",
     "No application, calibration submission, deadline, or paid assignment",
     "Nothing to submit yet",
     "zero production ratings",
@@ -148,7 +172,7 @@ export function validatePublicTrustSurface(files) {
     if (headerMap.get(key) !== expected) errors.push(`Vercel header ${key} must equal ${expected}.`);
   }
 
-  const publicText = [index, home, workspace, research, argumentsPage, reviewersPage].join("\n");
+  const publicText = [index, home, research, argumentsPage, reviewersPage].join("\n");
   for (const prohibitedClaim of [
     "Metaphilosophy has 951 rated critiques",
     "Metaphilosophy has collected 1,458 expert ratings",
@@ -163,7 +187,11 @@ export function validatePublicTrustSurface(files) {
   return {
     status: errors.length ? "fail" : "pass",
     public_home_recruitment_cta_removed: !HOME_FORBIDDEN.some((value) => home.includes(value)),
-    workspace_route_gated: workspace.includes("workspace is gated"),
+    public_private_route_separation_verified:
+      siteEntry.includes('rawPath === "/workspace"') && siteEntry.includes('import("./app.mjs")'),
+    internal_workspace_preserved:
+      Buffer.byteLength(workspace, "utf8") >= MINIMUM_INTERNAL_WORKSPACE_BYTES &&
+      REQUIRED_INTERNAL_WORKSPACE_MARKERS.every((marker) => workspace.includes(marker)),
     research_protocol_published: research.includes("48-critique pilot"),
     synthetic_release_marked_unrated: argumentsPage.includes("synthetic and unrated"),
     reviewer_intake_closed: reviewersPage.includes("intake is intentionally closed"),
@@ -175,6 +203,7 @@ export function validatePublicTrustSurface(files) {
 export async function readAndValidatePublicTrustSurface(root = resolve(import.meta.dirname, "..")) {
   const [
     index,
+    siteEntry,
     home,
     baseCss,
     homeCss,
@@ -187,6 +216,7 @@ export async function readAndValidatePublicTrustSurface(root = resolve(import.me
     vercelText,
   ] = await Promise.all([
     readFile(resolve(root, "index.html"), "utf8"),
+    readFile(resolve(root, "src/site-entry.mjs"), "utf8"),
     readFile(resolve(root, "src/exact-reference-home.mjs"), "utf8"),
     readFile(resolve(root, "src/exact-reference.css"), "utf8"),
     readFile(resolve(root, "src/trust-home.css"), "utf8"),
@@ -201,6 +231,7 @@ export async function readAndValidatePublicTrustSurface(root = resolve(import.me
 
   return validatePublicTrustSurface({
     index,
+    siteEntry,
     home,
     baseCss,
     homeCss,
