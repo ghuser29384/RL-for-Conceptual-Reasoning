@@ -22,9 +22,23 @@ The LMCA work is treated as methodological prior art and an external benchmark. 
 
 A source-grounded LMCA audit now supports a preferred **six-six source crossing**, a **12-pair no-repeat anonymous assignment graph**, an **eight-critique shared public calibration proposal**, review whenever either rater assigns **clarity below 0.5**, and position-level small-sample safeguards. These remain non-binding Q-006A/Q-006B recommendations.
 
+The anonymous graph now has an executable assignment layer. It enumerates all `6! = 720` participant-to-slot mappings, rejects any mapping that violates approved topic coverage, item conflicts, prior exposure, calibration, consent, availability, or frozen graph constraints, and deterministically selects among feasible mappings using a secret-seed hash. It never relaxes constraints to force an assignment. The synthetic fixture deliberately has exactly one feasible mapping.
+
+This assignment work also closes a protocol gap: baseline eligibility in two philosophical areas is not enough to justify four-topic production assignment. Every assigned topic family must be separately recorded as within the participant's approved coverage. If the confirmed roster cannot support the preferred graph, the result is no assignment until recruitment changes or Q-006B approves a versioned graph change.
+
+The assignment CLI prints only a sanitized public summary in simulation mode:
+
+```bash
+node scripts/pilot-assignment-generator.mjs \
+  ops/next-steps-2026-07-23/pilot-methodology-recommendations.json \
+  test/fixtures/pilot-assignment-synthetic.json
+```
+
+A later controlled run requires Q-006B and Q-006C evidence, a frozen manifest, confirmed and calibrated participants, completed conflict/exposure checks, a separate assignment authorization, and private controlled storage. The full output cannot be printed to standard output or written inside the repository; it must be written outside the working tree with file mode `0600`. Generating an assignment still does not authorize ratings to begin.
+
 The repository also contains an executable, source-faithful rating-record and analysis layer. The controlled engine validates append-only initial ratings and object-level re-ratings; implements the LMCA custom weighted loss and weighted pairwise ranking error; computes symmetric within-position ordering agreement, dimension gaps, interval-distance agreement diagnostics, rating-time summaries, position-level results, and leave-one-position-out ranges; and keeps every adjudication route inoperative unless an approved policy explicitly names it.
 
-Policy parsing now fails closed. Unknown or duplicate routes, unsupported threshold keys, out-of-range values, and approved numerical routes without thresholds are rejected. Any non-empty operative route list additionally requires explicit Q-006B approval evidence, an approval-record identifier, and an approval timestamp. The checked-in policy has zero approved routes.
+Policy parsing fails closed. Unknown or duplicate routes, unsupported threshold keys, out-of-range values, and approved numerical routes without thresholds are rejected. Any non-empty operative route list additionally requires explicit Q-006B approval evidence, an approval-record identifier, and an approval timestamp. The checked-in policy has zero approved routes.
 
 The canonical reporting command is privacy-safe:
 
@@ -58,11 +72,13 @@ The next owner checkpoint is **Q-006**. The recommended decision packet splits i
 - `pilot-methodology-recommendations.md` — human-readable balanced assignment template and small-sample safeguards.
 - `pilot-readiness-ledger.json` — machine-readable blocked readiness state, authorization boundaries, empty controlled-record templates, and six execution gates.
 - `pilot-readiness-ledger.md` — human-readable readiness and sensitive-data boundary.
+- `pilot-assignment-contract.json` — machine-readable deterministic assignment, authorization, competence, conflict, exposure, and privacy contract; contains no real assignment data.
+- `pilot-assignment-contract.md` — human-readable assignment-generation and no-constraint-relaxation boundary.
 - `pilot-rating-analysis-contract.json` — machine-readable append-only rating, source-derived loss, diagnostic, privacy, and threshold-governance contract; contains no rating data.
 - `pilot-rating-analysis-contract.md` — human-readable implementation, strict-policy, snapshot, and public-report boundary.
 - `pilot-analysis-policy-template.json` — checked-in diagnostic policy with provisional values and zero approved routes.
 - `methodological-adviser-brief.md` — internal bounded-review brief; not sent.
-- `early-career-rater-brief.md` — internal role, workload, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
+- `early-career-rater-brief.md` — internal role, workload, topic-coverage, blindness, calibration, withdrawal, and honoraria brief; not published or sent.
 - `outreach-plan.md` — internal recipient, sequencing, email-approval, reply-handling, and audit plan; no email sent.
 - `q-006-decision-packet.md` — staged owner decision packet separating consultation design, frozen methodology/items, and people/payment/dates.
 - `q-006a-owner-approval.md` — concise pending owner-approval record; silence is explicitly not approval.
@@ -77,6 +93,8 @@ Local verification:
 node scripts/verify-pilot-48-plan.mjs
 node scripts/verify-pilot-methodology-recommendations.mjs
 node scripts/verify-pilot-readiness-ledger.mjs
+node scripts/verify-pilot-assignment-contract.mjs
+node scripts/pilot-assignment-generator.mjs --help
 node scripts/verify-pilot-rating-analysis-contract.mjs
 node scripts/verify-pilot-public-analysis.mjs
 node scripts/pilot-rating-analysis.mjs --help
