@@ -21,6 +21,8 @@ const INTERNAL_MARKERS = Object.freeze([
   "releaseReportReadbackItems",
 ]);
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu;
+const LMCA_PUBLIC_PATH = "/src/assets/LMCA_dataset.pdf";
+const LMCA_CANONICAL_URL = "https://arxiv.org/pdf/2607.27499";
 
 export function validatePublicTrustSurface(files) {
   const errors = [];
@@ -56,9 +58,7 @@ export function validatePublicTrustSurface(files) {
     "bindPublicHomeEvents()",
     'window.location.replace("/")',
   ], "site-entry public route separation", errors);
-  if (siteEntry.includes('import("./app.mjs")')) {
-    errors.push("Public site entry must not import the internal research workspace.");
-  }
+  if (siteEntry.includes('import("./app.mjs")')) errors.push("Public site entry must not import the internal research workspace.");
 
   requirePhrases(home, [
     "Pilot in preparation · expert ratings have not started",
@@ -68,6 +68,7 @@ export function validatePublicTrustSurface(files) {
     "External prior work",
     "does not present those ratings as its own",
     "Reviewer intake and adviser outreach remain closed",
+    LMCA_PUBLIC_PATH,
     "/research/",
     "/arguments/",
   ], "public homepage", errors);
@@ -98,9 +99,7 @@ export function validatePublicTrustSurface(files) {
     if (gate.includes(marker)) errors.push(`Public workspace gate must not embed internal execution structure ${marker}.`);
   }
 
-  if (Buffer.byteLength(internalWorkspace, "utf8") < 100_000) {
-    errors.push("Repository must preserve the full internal research workspace source.");
-  }
+  if (Buffer.byteLength(internalWorkspace, "utf8") < 100_000) errors.push("Repository must preserve the full internal research workspace source.");
   requirePhrases(internalWorkspace, INTERNAL_MARKERS, "internal research workspace", errors);
 
   requirePhrases(research, [
@@ -113,6 +112,7 @@ export function validatePublicTrustSurface(files) {
     "Currently not authorized",
     "What this pilot cannot establish",
     "zero production expert ratings collected",
+    LMCA_PUBLIC_PATH,
   ], "research protocol", errors);
   if (EMAIL_PATTERN.test(research)) errors.push("Public research protocol must not contain an email address.");
   requirePhrases(researchCss, [
@@ -150,21 +150,24 @@ export function validatePublicTrustSurface(files) {
     '"workspace-gate.mjs"',
     '"exact-reference-home.mjs"',
     '"trust-home.css"',
-    'resolve(root, "src/assets")',
     'resolve(root, "research")',
   ], "static build allowlist", errors);
-  if (/cp\(resolve\(root, "src"\), resolve\(dist, "src"\), \{ recursive: true \}\)/u.test(buildScript)) {
-    errors.push("Static build must not copy the entire internal src directory.");
-  }
+  if (/cp\(resolve\(root, "src"\), resolve\(dist, "src"\), \{ recursive: true \}\)/u.test(buildScript)) errors.push("Static build must not copy the entire internal src directory.");
   if (buildScript.includes('"app.mjs"')) errors.push("Internal app.mjs must not appear in the public build allowlist.");
+  if (buildScript.includes('resolve(root, "src/assets")')) errors.push("Public build must not depend on an untracked local LMCA asset directory.");
 
   const rewrites = Array.isArray(vercel.rewrites) ? vercel.rewrites : [];
-  for (const source of ["/research", "/research/"]) expectRewrite(rewrites, source, "/research/index.html", errors);
-  for (const source of ["/workspace", "/workspace/", "/reference", "/reference/"]) expectRewrite(rewrites, source, "/index.html", errors);
-  for (const source of ["/contribute", "/contribute/", "/reviewers", "/reviewers/"]) expectRewrite(rewrites, source, "/reviewers/closed.html", errors);
+  for (const source of ["/research", "/research/"]) expectRoute(rewrites, source, "/research/index.html", "rewrite", errors);
+  for (const source of ["/workspace", "/workspace/", "/reference", "/reference/"]) expectRoute(rewrites, source, "/index.html", "rewrite", errors);
+  for (const source of ["/contribute", "/contribute/", "/reviewers", "/reviewers/"]) expectRoute(rewrites, source, "/reviewers/closed.html", "rewrite", errors);
 
-  const headerEntries = (Array.isArray(vercel.headers) ? vercel.headers : [])
-    .flatMap((entry) => (Array.isArray(entry?.headers) ? entry.headers : []));
+  const redirects = Array.isArray(vercel.redirects) ? vercel.redirects : [];
+  const paperRedirect = redirects.find((entry) => entry?.source === LMCA_PUBLIC_PATH);
+  if (paperRedirect?.destination !== LMCA_CANONICAL_URL || paperRedirect?.permanent !== false) {
+    errors.push(`Vercel must temporarily redirect ${LMCA_PUBLIC_PATH} to the canonical arXiv PDF.`);
+  }
+
+  const headerEntries = (Array.isArray(vercel.headers) ? vercel.headers : []).flatMap((entry) => (Array.isArray(entry?.headers) ? entry.headers : []));
   const headerMap = new Map(headerEntries.map((entry) => [entry?.key, entry?.value]));
   for (const [key, expected] of [
     ["X-Content-Type-Options", "nosniff"],
@@ -188,12 +191,10 @@ export function validatePublicTrustSurface(files) {
   return {
     status: errors.length ? "fail" : "pass",
     public_home_recruitment_cta_removed: !HOME_FORBIDDEN.some((value) => home.includes(value)),
-    public_workspace_gate_verified:
-      siteEntry.includes('import("./workspace-gate.mjs")') && gate.includes("workspace is gated"),
-    internal_workspace_preserved:
-      Buffer.byteLength(internalWorkspace, "utf8") >= 100_000 && INTERNAL_MARKERS.every((marker) => internalWorkspace.includes(marker)),
-    internal_workspace_excluded_from_public_build:
-      buildScript.includes("const publicSrcFiles") && !buildScript.includes('"app.mjs"'),
+    public_workspace_gate_verified: siteEntry.includes('import("./workspace-gate.mjs")') && gate.includes("workspace is gated"),
+    internal_workspace_preserved: Buffer.byteLength(internalWorkspace, "utf8") >= 100_000 && INTERNAL_MARKERS.every((marker) => internalWorkspace.includes(marker)),
+    internal_workspace_excluded_from_public_build: buildScript.includes("const publicSrcFiles") && !buildScript.includes('"app.mjs"'),
+    canonical_lmca_redirect_present: paperRedirect?.destination === LMCA_CANONICAL_URL,
     research_protocol_published: research.includes("48-critique pilot"),
     synthetic_release_marked_unrated: argumentsPage.includes("synthetic and unrated"),
     reviewer_intake_closed: reviewersPage.includes("intake is intentionally closed"),
@@ -219,30 +220,16 @@ export async function readAndValidatePublicTrustSurface(root = resolve(import.me
     read("scripts/build-static.mjs"),
     read("vercel.json"),
   ]);
-  return validatePublicTrustSurface({
-    index,
-    siteEntry,
-    home,
-    baseCss,
-    homeCss,
-    gate,
-    internalWorkspace,
-    research,
-    researchCss,
-    argumentsPage,
-    reviewersPage,
-    buildScript,
-    vercel: JSON.parse(vercelText),
-  });
+  return validatePublicTrustSurface({ index, siteEntry, home, baseCss, homeCss, gate, internalWorkspace, research, researchCss, argumentsPage, reviewersPage, buildScript, vercel: JSON.parse(vercelText) });
 }
 
 function requirePhrases(text, phrases, label, errors) {
   for (const phrase of phrases) if (!text.includes(phrase)) errors.push(`${label} must contain ${phrase}.`);
 }
 
-function expectRewrite(rewrites, source, destination, errors) {
-  const rewrite = rewrites.find((entry) => entry?.source === source);
-  if (rewrite?.destination !== destination) errors.push(`Vercel must route ${source} to ${destination}.`);
+function expectRoute(entries, source, destination, kind, errors) {
+  const entry = entries.find((candidate) => candidate?.source === source);
+  if (entry?.destination !== destination) errors.push(`Vercel must ${kind} ${source} to ${destination}.`);
 }
 
 function objectOrEmpty(value) {
