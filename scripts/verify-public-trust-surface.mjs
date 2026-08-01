@@ -154,7 +154,7 @@ export function validatePublicTrustSurface(files) {
   ], "static build allowlist", errors);
   if (/cp\(resolve\(root, "src"\), resolve\(dist, "src"\), \{ recursive: true \}\)/u.test(buildScript)) errors.push("Static build must not copy the entire internal src directory.");
   if (buildScript.includes('"app.mjs"')) errors.push("Internal app.mjs must not appear in the public build allowlist.");
-  if (buildScript.includes('resolve(root, "src/assets")')) errors.push("Public build must not depend on an untracked local LMCA asset directory.");
+  if (/cp\(\s*resolve\(root,\s*"src\/assets"\)/u.test(buildScript)) errors.push("Public build must not depend on an untracked local LMCA asset directory.");
 
   const rewrites = Array.isArray(vercel.rewrites) ? vercel.rewrites : [];
   for (const source of ["/research", "/research/"]) expectRoute(rewrites, source, "/research/index.html", "rewrite", errors);
