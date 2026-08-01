@@ -18,6 +18,12 @@ const ARGUMENT_LIBRARY_FORBIDDEN = Object.freeze([
 ]);
 
 const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu;
+const MINIMUM_INTERNAL_WORKSPACE_BYTES = 100_000;
+const REQUIRED_INTERNAL_WORKSPACE_MARKERS = Object.freeze([
+  "workflowEvidenceCollections",
+  "sourceLeakageRedactionPolicy",
+  "releaseReportReadbackItems",
+]);
 
 export function validatePublicTrustSurface(files) {
   const errors = [];
@@ -51,7 +57,7 @@ export function validatePublicTrustSurface(files) {
     "bindPublicHomeEvents()",
     'await import("./app.mjs")',
     "enhanceWorkspace()",
-  ], "site-entry public/gated-route separation", errors);
+  ], "site-entry public/internal separation", errors);
 
   requirePhrases(home, [
     "Pilot in preparation · expert ratings have not started",
@@ -83,18 +89,10 @@ export function validatePublicTrustSurface(files) {
     "@media (prefers-reduced-motion: reduce)",
   ], "trust-home.css", errors);
 
-  requirePhrases(workspace, [
-    "The rating workspace is gated until the pilot is ready",
-    "This workspace is not publicly open",
-    "has not started production expert ratings",
-    "No application, assignment, rating task, deadline, payment commitment, or expert-result claim",
-    "/research/",
-    "/arguments/",
-  ], "gated workspace route", errors);
-  if (workspace.trim().length < 500) errors.push("Gated workspace route must render a substantive status page rather than a blank or trivial placeholder.");
-  for (const forbidden of ["workflowEvidenceCollections", "sourceLeakageRedactionPolicy", "releaseReportReadbackItems"]) {
-    if (workspace.includes(forbidden)) errors.push(`Public gated workspace must not embed internal execution structure ${forbidden}.`);
+  if (Buffer.byteLength(workspace, "utf8") < MINIMUM_INTERNAL_WORKSPACE_BYTES) {
+    errors.push(`Internal research workspace must remain substantial; expected at least ${MINIMUM_INTERNAL_WORKSPACE_BYTES} bytes.`);
   }
+  requirePhrases(workspace, REQUIRED_INTERNAL_WORKSPACE_MARKERS, "internal research workspace", errors);
 
   requirePhrases(research, [
     "Consultation phase · production ratings not started",
@@ -145,11 +143,15 @@ export function validatePublicTrustSurface(files) {
   const rewrites = Array.isArray(vercel.rewrites) ? vercel.rewrites : [];
   for (const source of ["/research", "/research/"]) {
     const rewrite = rewrites.find((entry) => entry?.source === source);
-    if (rewrite?.destination !== "/research/index.html") errors.push(`Vercel must route ${source} to /research/index.html.`);
+    if (rewrite?.destination !== "/research/index.html") {
+      errors.push(`Vercel must route ${source} to /research/index.html.`);
+    }
   }
   for (const source of ["/contribute", "/contribute/", "/reviewers", "/reviewers/"]) {
     const rewrite = rewrites.find((entry) => entry?.source === source);
-    if (rewrite?.destination !== "/reviewers/closed.html") errors.push(`Closed-intake rewrite missing for ${source}.`);
+    if (rewrite?.destination !== "/reviewers/closed.html") {
+      errors.push(`Closed-intake rewrite missing for ${source}.`);
+    }
   }
 
   const headerEntries = (Array.isArray(vercel.headers) ? vercel.headers : [])
@@ -164,27 +166,28 @@ export function validatePublicTrustSurface(files) {
     if (headerMap.get(key) !== expected) errors.push(`Vercel header ${key} must equal ${expected}.`);
   }
 
-  const publicText = [index, home, workspace, research, argumentsPage, reviewersPage].join("\n");
+  const publicText = [index, home, research, argumentsPage, reviewersPage].join("\n");
   for (const prohibitedClaim of [
     "Metaphilosophy has 951 rated critiques",
     "Metaphilosophy has collected 1,458 expert ratings",
     "the pilot has started",
     "recruitment is open",
   ]) {
-    if (publicText.toLowerCase().includes(prohibitedClaim.toLowerCase())) errors.push(`Public surfaces contain prohibited claim: ${prohibitedClaim}.`);
+    if (publicText.toLowerCase().includes(prohibitedClaim.toLowerCase())) {
+      errors.push(`Public surfaces contain prohibited claim: ${prohibitedClaim}.`);
+    }
   }
 
   return {
     status: errors.length ? "fail" : "pass",
     public_home_recruitment_cta_removed: !HOME_FORBIDDEN.some((value) => home.includes(value)),
-    public_gated_route_separation_verified:
+    public_internal_execution_separation_verified:
       siteEntry.includes("const isRootSurface") &&
       siteEntry.includes('await import("./exact-reference-home.mjs")') &&
       siteEntry.includes('await import("./app.mjs")'),
-    workspace_route_gated:
-      workspace.includes("workspace is gated") &&
-      workspace.includes("not publicly open") &&
-      workspace.trim().length >= 500,
+    internal_workspace_preserved:
+      Buffer.byteLength(workspace, "utf8") >= MINIMUM_INTERNAL_WORKSPACE_BYTES &&
+      REQUIRED_INTERNAL_WORKSPACE_MARKERS.every((marker) => workspace.includes(marker)),
     research_protocol_published: research.includes("48-critique pilot"),
     synthetic_release_marked_unrated: argumentsPage.includes("synthetic and unrated"),
     reviewer_intake_closed: reviewersPage.includes("intake is intentionally closed"),
