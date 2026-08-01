@@ -4,7 +4,7 @@
   "ledger_version": 1,
   "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
   "status": "blocked_pending_q006a_and_later_readiness_gates",
-  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach state.",
+  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach or assignment state.",
   "public_record_policy": {
     "contains_personal_or_professional_email_addresses": false,
     "contains_identity_documents": false,
@@ -28,6 +28,7 @@
     "nonfinal_item_screening_authorized": false,
     "protected_manifest_freeze_authorized": false,
     "participant_selection_authorized": false,
+    "controlled_assignment_generation_authorized": false,
     "calibration_or_rating_work_authorized": false,
     "payment_commitment_authorized": false,
     "funding_submission_authorized": false,
@@ -157,6 +158,7 @@
       "controlled_person_id",
       "role",
       "qualification_evidence",
+      "approved_topic_families",
       "consent_status",
       "conflict_status",
       "prior_exposure_status",
@@ -166,6 +168,27 @@
       "tax_documentation_status",
       "sanctions_screening_status",
       "availability_status"
+    ]
+  },
+  "assignment_template": {
+    "status": "template_only_controlled_generation_not_authorized",
+    "contract_path": "ops/next-steps-2026-07-23/pilot-assignment-contract.json",
+    "public_summary": null,
+    "full_output_storage": "private_controlled_record_outside_repository",
+    "rating_work_authorized_by_assignment": false,
+    "private_required_fields": [
+      "q006b_approval_record",
+      "q006c_approval_record",
+      "assignment_authorization_record",
+      "controlled_manifest_sha256",
+      "methodology_assignment_sha256",
+      "approved_topic_family_records",
+      "conflict_and_prior_exposure_records",
+      "calibration_completion_records",
+      "secret_assignment_seed",
+      "assignment_seed_sha256",
+      "selected_mapping_sha256",
+      "controlled_assignment_output_path"
     ]
   },
   "readiness_gates": [
@@ -189,13 +212,13 @@
     },
     {
       "id": "R-04",
-      "name": "Q-006C people, payment, privacy, legal, outreach, and date decisions approved",
+      "name": "Q-006C people, topic coverage, payment, privacy, legal, outreach, and date decisions approved",
       "status": "blocked",
       "evidence": null
     },
     {
       "id": "R-05",
-      "name": "Blind assignments generated and conflict and exposure checks passed",
+      "name": "Controlled blind assignment separately authorized, generated, and conflict, exposure, topic-coverage, and balance checks passed",
       "status": "blocked",
       "evidence": null
     },
@@ -214,11 +237,12 @@
     "derived_calendar_end": null
   },
   "invariants": [
-    "No outreach, public recruitment, participant selection, protected-item freeze, calibration, rating, payment commitment, funding submission, or Phase 2 activation is authorized by this ledger.",
-    "Sensitive participant and recipient records remain in private controlled storage and are never committed to the public repository.",
+    "No outreach, public recruitment, participant selection, controlled assignment generation, protected-item freeze, calibration, rating, payment commitment, funding submission, or Phase 2 activation is authorized by this ledger.",
+    "Sensitive participant, recipient, conflict, exposure, and assignment records remain in private controlled storage and are never committed to the public repository.",
     "Protected item IDs, text, critiques, labels, assignments, and exposure records remain absent from this public ledger.",
     "Model judgments remain acquisition or comparison baselines and never become human labels or adjudications.",
     "Calibration remains excluded from production metrics and earns zero honorarium units under the current approved plan.",
+    "Assignment generation is separate from participant selection and does not authorize rating work or the pilot start.",
     "Every gate remains blocked until supported by an explicit, versioned approval or completion record."
   ],
   "next_action": {
