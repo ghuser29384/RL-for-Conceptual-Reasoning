@@ -9,22 +9,11 @@ const root = resolve(import.meta.dirname, "..");
 
 async function loadFiles() {
   const read = (path) => readFile(resolve(root, path), "utf8");
-  const [
-    indexHtml,
-    homeModule,
-    siteEntry,
-    appModule,
-    exactCss,
-    trustCss,
-    researchHtml,
-    researchCss,
-    argumentHtml,
-    reviewerClosedHtml,
-    buildScript,
-  ] = await Promise.all([
+  const [indexHtml, homeModule, siteEntry, gateModule, appModule, exactCss, trustCss, researchHtml, researchCss, argumentHtml, reviewerClosedHtml, buildScript] = await Promise.all([
     read("index.html"),
     read("src/exact-reference-home.mjs"),
     read("src/site-entry.mjs"),
+    read("src/workspace-gate.mjs"),
     read("src/app.mjs"),
     read("src/exact-reference.css"),
     read("src/trust-home.css"),
@@ -34,11 +23,11 @@ async function loadFiles() {
     read("reviewers/closed.html"),
     read("scripts/build-static.mjs"),
   ]);
-
   return {
     indexHtml,
     homeModule,
     siteEntry,
+    gateModule,
     appModule,
     exactCss,
     trustCss,
@@ -50,13 +39,14 @@ async function loadFiles() {
   };
 }
 
-test("accepts the truthful, pilot-first public site while keeping outreach unauthorized", async () => {
+test("accepts the truthful public site, gated workspace, and excluded internal bundle", async () => {
   const report = validatePreOutreachPublicSite(await loadFiles());
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.deepEqual(report.checks, {
     truthful_homepage: true,
     public_protocol_present: true,
-    legacy_blank_route_removed: true,
+    workspace_route_gated: true,
+    internal_workspace_preserved_and_excluded: true,
     reviewer_intake_closed: true,
     synthetic_release_boundary_visible: true,
     research_in_static_build: true,
@@ -66,7 +56,7 @@ test("accepts the truthful, pilot-first public site while keeping outreach unaut
   assert.equal(report.production_ready, false);
 });
 
-test("rejects reopening recruitment or linking to a public workspace before readiness", async () => {
+test("rejects reopening recruitment or linking directly to a rating surface", async () => {
   const files = await loadFiles();
   files.homeModule += '<a href="/contribute">Become a reviewer</a>';
   files.argumentHtml += '<a href="/?section=rating">Open workspace</a>';
@@ -75,14 +65,25 @@ test("rejects reopening recruitment or linking to a public workspace before read
   assert.ok(report.errors.some((error) => error.includes("pre-outreach-forbidden route")));
 });
 
-test("rejects the old blank query-string workspace path", async () => {
+test("rejects importing the internal app or replacing the public gate with internal structure", async () => {
   const files = await loadFiles();
-  files.siteEntry = 'const isPublicHome = window.location.pathname === "/" && !initialQuery.has("section");';
-  files.appModule = "";
+  files.siteEntry += '\nawait import("./app.mjs");';
+  files.gateModule = "workflowEvidenceCollections";
   const report = validatePreOutreachPublicSite(files);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("Legacy query-string routes")));
-  assert.ok(report.errors.some((error) => error.includes("must not be blank or trivial")));
+  assert.ok(report.errors.some((error) => error.includes("must not import")));
+  assert.ok(report.errors.some((error) => error.includes("workspace gate must include")));
+  assert.ok(report.errors.some((error) => error.includes("must not include internal marker")));
+});
+
+test("rejects deleting the internal workspace or copying it into the public build", async () => {
+  const files = await loadFiles();
+  files.appModule = "";
+  files.buildScript = files.buildScript.replace('"trust-home.css",', '"trust-home.css",\n  "app.mjs",');
+  const report = validatePreOutreachPublicSite(files);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes("preserve the full internal")));
+  assert.ok(report.errors.some((error) => error.includes("must not be copied")));
 });
 
 test("rejects blurring LMCA, synthetic, and future Metaphilosophy ratings", async () => {
@@ -103,15 +104,12 @@ test("rejects blurring LMCA, synthetic, and future Metaphilosophy ratings", asyn
 
 test("rejects dropping the protocol from the static build or accessibility styles", async () => {
   const files = await loadFiles();
-  files.buildScript = files.buildScript.replace(
-    'await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });',
-    "",
-  );
+  files.buildScript = files.buildScript.replace('resolve(root, "research")', 'resolve(root, "missing-research")');
   files.exactCss = files.exactCss.replaceAll(":focus-visible", ":focus-disabled");
   files.researchCss = files.researchCss.replaceAll(":focus-visible", ":focus-disabled");
   const report = validatePreOutreachPublicSite(files);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("Static build must copy")));
+  assert.ok(report.errors.some((error) => error.includes("resolve(root, \"research\")")));
   assert.ok(report.errors.some((error) => error.includes("Base public CSS must include :focus-visible")));
   assert.ok(report.errors.some((error) => error.includes("Research protocol CSS must include :focus-visible")));
 });
