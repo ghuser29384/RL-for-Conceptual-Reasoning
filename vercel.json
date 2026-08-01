@@ -49,6 +49,13 @@
       "destination": "/reviewers/closed.html"
     }
   ],
+  "redirects": [
+    {
+      "source": "/src/assets/LMCA_dataset.pdf",
+      "destination": "https://arxiv.org/pdf/2607.27499",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
