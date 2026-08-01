@@ -16,13 +16,14 @@ Approve the following as a **non-binding consultation and screening design**:
 6. **Eligible sources:** public-synthetic critiques receiving new expert ratings and protected public-domain-derived positions that pass source-fidelity and ambiguity/scope review.
 7. **Preferred source crossing:** six positions from each source class, one of each source in every topic family; fallback to at least four from each class with every deviation documented.
 8. **Balanced anonymous assignment:** twelve distinct rater pairs; four positions, four distinct partners, and four distinct topic families per core rater; under the preferred source mix, two positions from each source class per rater.
-9. **Candidate pool:** at least eight critique candidates per position, with four selected only after freezing acquisition-judge, length, formatting, citation, source, attack-family, and source-style-cue diagnostics.
-10. **Rubric:** centrality, strength, correctness, clarity, dead weight, single issue, and overall; use `strength × centrality` for substantive impact.
-11. **Blindness and revision:** hide source/model/rater/aggregate/adjudication metadata until initial ratings lock; preserve originals and require object-level reasons for versioned re-ratings.
-12. **Shared calibration proposal:** eight public, non-protected calibration critiques rated independently by all six core raters and both adjudicators; no numerical pass rule until adviser review and later owner approval.
-13. **Additional review candidates:** item review when either rater assigns clarity below 0.5; evidence review when either reports an unresolved correctness-sensitive verification issue.
-14. **Small-sample safeguards:** publish all position-level results; use position as the resampling unit; report leave-one-position-out sensitivity; separate pre- and post-adjudication results; treat reliability coefficients, model comparisons, and subgroup effects as exploratory.
-15. **Senior-adviser request:** approximately 20 minutes asynchronously or one 30-minute call; no bulk rating, routine adjudication, open-ended board role, or implied endorsement.
+9. **Assignment eligibility:** every assigned topic family must appear in that participant's separately approved coverage record; authorship conflicts and prior exposure are hard exclusions; if no mapping satisfies all competence, conflict, exposure, and balance constraints, produce no assignment rather than relaxing a constraint or making an undocumented swap.
+10. **Candidate pool:** at least eight critique candidates per position, with four selected only after freezing acquisition-judge, length, formatting, citation, source, attack-family, and source-style-cue diagnostics.
+11. **Rubric:** centrality, strength, correctness, clarity, dead weight, single issue, and overall; use `strength × centrality` for substantive impact.
+12. **Blindness and revision:** hide source/model/rater/aggregate/adjudication metadata until initial ratings lock; preserve originals and require object-level reasons for versioned re-ratings.
+13. **Shared calibration proposal:** eight public, non-protected calibration critiques rated independently by all six core raters and both adjudicators; no numerical pass rule until adviser review and later owner approval.
+14. **Additional review candidates:** item review when either rater assigns clarity below 0.5; evidence review when either reports an unresolved correctness-sensitive verification issue.
+15. **Small-sample safeguards:** publish all position-level results; use position as the resampling unit; report leave-one-position-out sensitivity; separate pre- and post-adjudication results; treat reliability coefficients, model comparisons, and subgroup effects as exploratory.
+16. **Senior-adviser request:** approximately 20 minutes asynchronously or one 30-minute call; no bulk rating, routine adjudication, open-ended board role, or implied endorsement.
 
 ## Explicitly not approved by Q-006A
 
@@ -32,6 +33,7 @@ The following remain pending Q-006B or Q-006C:
 - exact calibration materials and qualification threshold;
 - binding numerical adjudication triggers and scale-readiness thresholds;
 - named raters, adjudicators, replacements, and advisers;
+- each named participant's approved topic-coverage record and final anonymous-slot mapping;
 - recipient jurisdictions, payment rails, tax and sanctions handling;
 - exact email recipients and messages;
 - any email send action;
