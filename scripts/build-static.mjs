@@ -17,6 +17,7 @@ const publicSrcFiles = Object.freeze([
   "trust-home.css",
 ]);
 
+// Do not copy an attached or private PDF from resolve(root, "src/assets"); public LMCA links resolve to the paper's arXiv record.
 await unpackSyntheticRelease();
 await rm(dist, { recursive: true, force: true });
 await mkdir(resolve(dist, "src"), { recursive: true });
