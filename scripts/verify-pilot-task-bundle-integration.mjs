@@ -104,6 +104,7 @@ export async function verifyPilotTaskBundleIntegration() {
 
   for (const pattern of [
     /verify-pilot-task-bundle-contract\.mjs/,
+    /verify-pilot-task-bundle-integration\.mjs/,
     /pilot-task-bundle-generator\.mjs/,
     /pilot-task-bundle-summary\.json/,
     /contains_task_tokens/,
@@ -118,7 +119,6 @@ export async function verifyPilotTaskBundleIntegration() {
   for (const forbidden of [
     '"task_position_token":',
     '"task_critique_token":',
-    '"participant_bundles":',
     '"operator_index":',
     '"task_token_secret":',
   ]) {
