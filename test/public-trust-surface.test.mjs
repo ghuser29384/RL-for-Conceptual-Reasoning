@@ -55,19 +55,19 @@ async function loadInputs() {
   };
 }
 
-test("accepts the evidence-bound public surface and substantive gated workspace route", async () => {
+test("accepts the evidence-bound public surface while preserving the internal workspace", async () => {
   const report = await readAndValidatePublicTrustSurface(root);
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.equal(report.public_home_recruitment_cta_removed, true);
-  assert.equal(report.public_gated_route_separation_verified, true);
-  assert.equal(report.workspace_route_gated, true);
+  assert.equal(report.public_internal_execution_separation_verified, true);
+  assert.equal(report.internal_workspace_preserved, true);
   assert.equal(report.research_protocol_published, true);
   assert.equal(report.synthetic_release_marked_unrated, true);
   assert.equal(report.reviewer_intake_closed, true);
   assert.equal(report.security_headers_present, true);
 });
 
-test("rejects reopening recruitment or merging the root and gated entry branches", async () => {
+test("rejects reopening recruitment or merging the public and internal entry branches", async () => {
   const inputs = await loadInputs();
   inputs.home += '<a href="/contribute">Become a reviewer</a>';
   inputs.siteEntry = inputs.siteEntry.replace("const isRootSurface", "const isPublicSurfaceRemoved");
@@ -78,14 +78,14 @@ test("rejects reopening recruitment or merging the root and gated entry branches
   assert.ok(report.errors.some((error) => error.includes("const isRootSurface")));
 });
 
-test("rejects a blank, trivial, or execution-bearing public workspace route", async () => {
+test("rejects replacing the internal research application with a thin placeholder", async () => {
   const inputs = await loadInputs();
-  inputs.workspace = `const workflowEvidenceCollections = []; const root = document.querySelector("#root"); root.innerHTML = "Not ready";`;
+  inputs.workspace = `const root = document.querySelector("#root"); root.innerHTML = "Not ready";`;
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("workspace is gated")));
-  assert.ok(report.errors.some((error) => error.includes("substantive status page")));
-  assert.ok(report.errors.some((error) => error.includes("internal execution structure")));
+  assert.ok(report.errors.some((error) => error.includes("must remain substantial")));
+  assert.ok(report.errors.some((error) => error.includes("workflowEvidenceCollections")));
+  assert.ok(report.errors.some((error) => error.includes("sourceLeakageRedactionPolicy")));
 });
 
 test("rejects collapsing LMCA, synthetic, and pilot evidence classes", async () => {
