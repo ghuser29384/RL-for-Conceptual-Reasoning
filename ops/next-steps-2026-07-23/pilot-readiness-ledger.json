@@ -4,7 +4,7 @@
   "ledger_version": 1,
   "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
   "status": "blocked_pending_q006a_and_later_readiness_gates",
-  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach or assignment state.",
+  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach, assignment, task-bundle, or distribution state.",
   "public_record_policy": {
     "contains_personal_or_professional_email_addresses": false,
     "contains_identity_documents": false,
@@ -29,6 +29,8 @@
     "protected_manifest_freeze_authorized": false,
     "participant_selection_authorized": false,
     "controlled_assignment_generation_authorized": false,
+    "controlled_task_bundle_generation_authorized": false,
+    "task_bundle_distribution_authorized": false,
     "calibration_or_rating_work_authorized": false,
     "payment_commitment_authorized": false,
     "funding_submission_authorized": false,
@@ -191,6 +193,29 @@
       "controlled_assignment_output_path"
     ]
   },
+  "task_bundle_template": {
+    "status": "template_only_controlled_generation_and_distribution_not_authorized",
+    "contract_path": "ops/next-steps-2026-07-23/pilot-task-bundle-contract.json",
+    "public_summary": null,
+    "controlled_output_storage": "private_controlled_directory_outside_repository",
+    "distribution_authorized_by_generation": false,
+    "rating_work_authorized_by_bundle": false,
+    "private_required_fields": [
+      "q006b_approval_record",
+      "q006c_approval_record",
+      "task_bundle_generation_authorization_record",
+      "controlled_assignment_output_hash",
+      "protected_manifest_sha256",
+      "rubric_sha256",
+      "redacted_task_content_sha256",
+      "secret_task_token_key",
+      "task_token_key_sha256",
+      "individual_bundle_sha256_records",
+      "combined_bundle_commitment_sha256",
+      "operator_index_output_path",
+      "controlled_bundle_output_directory"
+    ]
+  },
   "readiness_gates": [
     {
       "id": "R-01",
@@ -206,19 +231,19 @@
     },
     {
       "id": "R-03",
-      "name": "Q-006B methodology, calibration, analysis, and controlled item manifest approved",
+      "name": "Q-006B methodology, calibration, analysis, assignment, task-bundle, and controlled item manifest rules approved",
       "status": "blocked",
       "evidence": null
     },
     {
       "id": "R-04",
-      "name": "Q-006C people, topic coverage, payment, privacy, legal, outreach, and date decisions approved",
+      "name": "Q-006C people, topic coverage, payment, privacy, legal, outreach, distribution, and date decisions approved",
       "status": "blocked",
       "evidence": null
     },
     {
       "id": "R-05",
-      "name": "Controlled blind assignment separately authorized, generated, and conflict, exposure, topic-coverage, and balance checks passed",
+      "name": "Controlled blind assignment and task-bundle generation separately authorized and generated, with conflict, exposure, topic-coverage, balance, blindness, and commitment checks passed",
       "status": "blocked",
       "evidence": null
     },
@@ -237,12 +262,14 @@
     "derived_calendar_end": null
   },
   "invariants": [
-    "No outreach, public recruitment, participant selection, controlled assignment generation, protected-item freeze, calibration, rating, payment commitment, funding submission, or Phase 2 activation is authorized by this ledger.",
-    "Sensitive participant, recipient, conflict, exposure, and assignment records remain in private controlled storage and are never committed to the public repository.",
-    "Protected item IDs, text, critiques, labels, assignments, and exposure records remain absent from this public ledger.",
+    "No outreach, public recruitment, participant selection, controlled assignment generation, controlled task-bundle generation or distribution, protected-item freeze, calibration, rating, payment commitment, funding submission, or Phase 2 activation is authorized by this ledger.",
+    "Sensitive participant, recipient, conflict, exposure, assignment, task-token, task-bundle, and operator-index records remain in private controlled storage and are never committed to the public repository.",
+    "Protected item IDs, text, critiques, labels, assignments, task tokens, rater packets, and exposure records remain absent from this public ledger.",
     "Model judgments remain acquisition or comparison baselines and never become human labels or adjudications.",
     "Calibration remains excluded from production metrics and earns zero honorarium units under the current approved plan.",
-    "Assignment generation is separate from participant selection and does not authorize rating work or the pilot start.",
+    "Assignment generation is separate from participant selection and does not authorize task-bundle generation, distribution, rating work, or the pilot start.",
+    "Task-bundle generation is separate from distribution and does not authorize rating work or the pilot start.",
+    "Task-bundle distribution is separate from final readiness and cannot occur merely because private bundle artifacts exist.",
     "Every gate remains blocked until supported by an explicit, versioned approval or completion record."
   ],
   "next_action": {
