@@ -3,8 +3,8 @@
   "ledger_id": "metaphilosophy-pilot-readiness-v1-2026-07-30",
   "ledger_version": 1,
   "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
-  "status": "blocked_pending_q006a_and_later_readiness_gates",
-  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach, assignment, task-bundle, or distribution state.",
+  "status": "blocked_pending_methodological_feedback_and_later_readiness_gates",
+  "purpose": "Provide a public, machine-checkable readiness shell without publishing protected items, participant records, professional email addresses, payment data, or unapproved outreach, assignment, task-bundle, ingestion, adjudication, or distribution state.",
   "public_record_policy": {
     "contains_personal_or_professional_email_addresses": false,
     "contains_identity_documents": false,
@@ -17,27 +17,42 @@
   },
   "authorization_state": {
     "q006a": {
-      "status": "pending_project_owner_decision",
-      "approved_at": null,
+      "status": "approved_nonbinding_consultation_and_screening_only",
+      "approved_at": "2026-08-01T11:34:32Z",
+      "approval_record_id": "Q006A-APPROVAL-2026-08-01T113432Z",
+      "decision_id": "D-027",
+      "owner_instruction": "Do the next step.",
       "approval_record": "ops/next-steps-2026-07-23/q-006a-owner-approval.md"
     },
-    "methodological_adviser_recipient_research_authorized": false,
+    "methodological_consultation_packet_preparation_authorized": true,
+    "methodological_adviser_recipient_research_authorized": true,
+    "public_calibration_screening_authorized": true,
+    "nonfinal_item_screening_authorized": true,
     "methodological_adviser_outreach_authorized": false,
     "public_recruitment_authorized": false,
     "participant_outreach_authorized": false,
-    "nonfinal_item_screening_authorized": false,
     "protected_manifest_freeze_authorized": false,
     "participant_selection_authorized": false,
     "controlled_assignment_generation_authorized": false,
     "controlled_task_bundle_generation_authorized": false,
     "task_bundle_distribution_authorized": false,
     "calibration_or_rating_work_authorized": false,
+    "quality_control_acceptance_authorized": false,
+    "controlled_rating_ingestion_authorized": false,
+    "adjudication_case_generation_authorized": false,
+    "adjudication_case_distribution_authorized": false,
+    "adjudication_work_authorized": false,
+    "rerating_work_authorized": false,
+    "adjudication_resolution_acceptance_authorized": false,
+    "final_snapshot_generation_authorized": false,
+    "final_snapshot_signoff_authorized": false,
+    "adjudication_unit_ledger_freeze_authorized": false,
     "payment_commitment_authorized": false,
     "funding_submission_authorized": false,
     "phase_2_activation_authorized": false
   },
   "methodological_feedback_template": {
-    "status": "template_only_no_adviser_contact_authorized",
+    "status": "preparation_authorized_no_contact_or_outreach",
     "target_advisers": {
       "minimum": 2,
       "maximum": 4
@@ -66,7 +81,7 @@
     "endorsement_may_not_be_inferred": true
   },
   "item_screening_template": {
-    "status": "template_only_screening_not_authorized",
+    "status": "nonfinal_screening_authorized_no_records_yet",
     "controlled_private_manifest_required": true,
     "public_summary": {
       "positions_screened": 0,
@@ -100,10 +115,12 @@
     ],
     "minimum_candidate_critiques_per_position_proposal": 8,
     "selected_critiques_per_position_proposal": 4,
-    "exact_ids_and_text_must_remain_private": true
+    "exact_ids_and_text_must_remain_private": true,
+    "protected_manifest_freeze_authorized": false,
+    "participant_assignment_authorized": false
   },
   "calibration_template": {
-    "status": "template_only_materials_and_pass_rule_pending",
+    "status": "public_nonprotected_screening_authorized_no_materials_selected",
     "proposed_public_nonprotected_positions": 2,
     "proposed_critiques": 8,
     "participant_roles": [
@@ -114,6 +131,7 @@
     "honorarium_units_per_calibration_rating": 0,
     "qualification_rule": null,
     "selected_materials_sha256": null,
+    "calibration_work_authorized": false,
     "private_required_fields": [
       "controlled_calibration_item_id",
       "public_source_reference",
@@ -220,8 +238,13 @@
     {
       "id": "R-01",
       "name": "Q-006A consultation and non-final screening design approved",
-      "status": "blocked",
-      "evidence": null
+      "status": "passed",
+      "evidence": {
+        "decision_id": "D-027",
+        "approval_record_id": "Q006A-APPROVAL-2026-08-01T113432Z",
+        "approval_record": "ops/next-steps-2026-07-23/q-006a-owner-approval.md",
+        "approved_at": "2026-08-01T11:34:32Z"
+      }
     },
     {
       "id": "R-02",
@@ -231,13 +254,13 @@
     },
     {
       "id": "R-03",
-      "name": "Q-006B methodology, calibration, analysis, assignment, task-bundle, and controlled item manifest rules approved",
+      "name": "Q-006B methodology, calibration, analysis, assignment, task-bundle, ingestion, adjudication, snapshot, and controlled item manifest rules approved",
       "status": "blocked",
       "evidence": null
     },
     {
       "id": "R-04",
-      "name": "Q-006C people, topic coverage, payment, privacy, legal, outreach, distribution, and date decisions approved",
+      "name": "Q-006C people, topic coverage, payment, privacy, legal, outreach, distribution, operator-role, and date decisions approved",
       "status": "blocked",
       "evidence": null
     },
@@ -262,19 +285,20 @@
     "derived_calendar_end": null
   },
   "invariants": [
-    "No outreach, public recruitment, participant selection, controlled assignment generation, controlled task-bundle generation or distribution, protected-item freeze, calibration, rating, payment commitment, funding submission, or Phase 2 activation is authorized by this ledger.",
-    "Sensitive participant, recipient, conflict, exposure, assignment, task-token, task-bundle, and operator-index records remain in private controlled storage and are never committed to the public repository.",
+    "Q-006A authorizes only consultation-packet preparation, exact adviser-recipient research, public non-protected calibration screening, and non-final pilot-item screening.",
+    "No email, adviser contact, public recruitment, participant outreach, participant selection, protected-manifest freeze, controlled assignment generation, controlled task-bundle generation or distribution, calibration work, rating work, quality-control acceptance, controlled ingestion, adjudication work, payment commitment, funding submission, or Phase 2 activation is authorized by Q-006A or this ledger.",
+    "Sensitive participant, recipient, conflict, exposure, assignment, task-token, task-bundle, ingestion, adjudication, and operator-index records remain in private controlled storage and are never committed to the public repository.",
     "Protected item IDs, text, critiques, labels, assignments, task tokens, rater packets, and exposure records remain absent from this public ledger.",
     "Model judgments remain acquisition or comparison baselines and never become human labels or adjudications.",
     "Calibration remains excluded from production metrics and earns zero honorarium units under the current approved plan.",
     "Assignment generation is separate from participant selection and does not authorize task-bundle generation, distribution, rating work, or the pilot start.",
     "Task-bundle generation is separate from distribution and does not authorize rating work or the pilot start.",
     "Task-bundle distribution is separate from final readiness and cannot occur merely because private bundle artifacts exist.",
-    "Every gate remains blocked until supported by an explicit, versioned approval or completion record."
+    "Every remaining gate stays blocked until supported by an explicit, versioned approval or completion record."
   ],
   "next_action": {
-    "id": "Q-006A",
-    "status": "project_owner_decision_required",
-    "question": "Approve, revise, or reject the consultation and non-final screening design without authorizing outreach or execution."
+    "id": "Q-006A-PREP",
+    "status": "authorized_preparation_required",
+    "question": "Prepare the bounded methodological-adviser candidate slate and consultation packet without sending, screen public non-protected calibration candidates, and begin controlled non-final pilot-item screening without freezing a manifest or selecting participants."
   }
 }
