@@ -9,6 +9,7 @@ import { validatePilotAssignmentContract } from "./verify-pilot-assignment-contr
 import { validatePilotMethodologyRecommendations } from "./verify-pilot-methodology-recommendations.mjs";
 import { validatePilotReadinessLedger } from "./verify-pilot-readiness-ledger.mjs";
 import { validatePilotRatingAnalysisContract } from "./verify-pilot-rating-analysis-contract.mjs";
+import { validatePilotTaskBundleContract } from "./verify-pilot-task-bundle-contract.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const contractPath = resolve(root, "ops/next-steps-2026-07-23/release-contract.json");
@@ -20,6 +21,10 @@ const assignmentContractPath = resolve(root, "ops/next-steps-2026-07-23/pilot-as
 const assignmentBriefPath = resolve(root, "ops/next-steps-2026-07-23/pilot-assignment-contract.md");
 const assignmentFixturePath = resolve(root, "test/fixtures/pilot-assignment-synthetic.json");
 const assignmentImplementationPath = resolve(root, "scripts/pilot-assignment-generator.mjs");
+const taskBundleContractPath = resolve(root, "ops/next-steps-2026-07-23/pilot-task-bundle-contract.json");
+const taskBundleBriefPath = resolve(root, "ops/next-steps-2026-07-23/pilot-task-bundle-contract.md");
+const taskContentFixturePath = resolve(root, "test/fixtures/pilot-task-content-synthetic.json");
+const taskBundleImplementationPath = resolve(root, "scripts/pilot-task-bundle-generator.mjs");
 const analysisContractPath = resolve(root, "ops/next-steps-2026-07-23/pilot-rating-analysis-contract.json");
 const analysisImplementationPath = resolve(root, "scripts/pilot-rating-analysis.mjs");
 const methodologyAuditPath = resolve(root, "ops/next-steps-2026-07-23/lmca-methodology-audit.md");
@@ -45,6 +50,10 @@ const [
   assignmentBrief,
   assignmentFixture,
   assignmentImplementation,
+  taskBundleContract,
+  taskBundleBrief,
+  taskContentFixture,
+  taskBundleImplementation,
   analysisContract,
   analysisImplementation,
   methodologyAudit,
@@ -69,6 +78,10 @@ const [
   readFile(assignmentBriefPath, "utf8"),
   readJson(assignmentFixturePath),
   readFile(assignmentImplementationPath, "utf8"),
+  readJson(taskBundleContractPath),
+  readFile(taskBundleBriefPath, "utf8"),
+  readJson(taskContentFixturePath),
+  readFile(taskBundleImplementationPath, "utf8"),
   readJson(analysisContractPath),
   readFile(analysisImplementationPath, "utf8"),
   readFile(methodologyAuditPath, "utf8"),
@@ -155,6 +168,8 @@ assert.equal(readinessReport.q006a_status, "pending_project_owner_decision");
 assert.equal(readinessReport.readiness_gate_count, 6);
 assert.equal(readinessReport.blocked_gate_count, 6);
 assert.equal(readinessReport.controlled_assignment_generation_authorized, false);
+assert.equal(readinessReport.controlled_task_bundle_generation_authorized, false);
+assert.equal(readinessReport.task_bundle_distribution_authorized, false);
 assert.equal(readinessReport.ready_to_start, false);
 
 const assignmentReport = validatePilotAssignmentContract(assignmentContract, methodology, assignmentFixture);
@@ -173,6 +188,31 @@ assert.match(assignmentBrief, /no assignment/i);
 assert.match(assignmentBrief, /approved coverage/i);
 assert.match(assignmentBrief, /does not authorize rating work/i);
 assert.match(assignmentBrief, /file mode `0600`/i);
+
+const taskBundleReport = validatePilotTaskBundleContract(
+  taskBundleContract,
+  methodology,
+  assignmentFixture,
+  taskContentFixture,
+);
+assert.equal(taskBundleReport.status, "pass", taskBundleReport.errors.join("\n"));
+assert.equal(taskBundleReport.synthetic_task_bundles, 6);
+assert.match(taskBundleReport.synthetic_bundle_commitment_sha256, /^[a-f0-9]{64}$/);
+assert.equal(taskBundleReport.synthetic_public_summary_safe, true);
+assert.equal(taskBundleReport.synthetic_submission_valid, true);
+assert.equal(taskBundleReport.controlled_generation_authorized, false);
+assert.equal(taskBundleReport.distribution_authorized, false);
+assert.equal(taskBundleReport.rating_work_authorized, false);
+assert.equal(taskBundleReport.phase_2_authorized, false);
+assert.match(taskBundleImplementation, /export function validatePilotTaskContentInput/);
+assert.match(taskBundleImplementation, /export function generatePilotTaskBundles/);
+assert.match(taskBundleImplementation, /export function sanitizePilotTaskBundleSummary/);
+assert.match(taskBundleImplementation, /export function validatePilotTaskSubmission/);
+assert.match(taskBundleImplementation, /Task generation never authorizes distribution, rating work, funding submission, or Phase 2/);
+assert.match(taskBundleBrief, /participant-specific opaque task tokens/i);
+assert.match(taskBundleBrief, /Generating these files still does \*\*not\*\* authorize distribution or rating work/i);
+assert.match(taskBundleBrief, /file mode `0600`/i);
+assert.match(taskBundleBrief, /all sixteen assigned responses exactly once/i);
 
 const analysisContractReport = validatePilotRatingAnalysisContract(analysisContract);
 assert.equal(analysisContractReport.status, "pass", analysisContractReport.errors.join("\n"));
@@ -215,6 +255,9 @@ assert.match(raterBrief, /calibration is not a paid unit/i);
 assert.match(raterBrief, /Baseline eligibility is not assignment eligibility/);
 assert.match(raterBrief, /approved coverage/);
 assert.match(raterBrief, /no assignment is produced/i);
+assert.match(raterBrief, /Blind task packet and submission/i);
+assert.match(raterBrief, /all sixteen assigned task tokens exactly once/i);
+assert.match(raterBrief, /private task packet is not permission to begin/i);
 
 assert.match(outreachPlan, /No email has been sent/);
 assert.match(outreachPlan, /No email may be sent until the project owner reviews and approves/i);
@@ -229,9 +272,14 @@ assert.match(q006Packet, /Preferred source crossing/);
 assert.match(q006Packet, /Shared calibration proposal/);
 assert.match(q006Packet, /Assignment eligibility and failure rule/);
 assert.match(q006Packet, /Assignment authorization boundary/);
+assert.match(q006Packet, /Blind task-packet proposal/);
+assert.match(q006Packet, /Task-bundle generation and distribution boundary/);
+assert.match(q006Packet, /Generation does not authorize distribution/);
 assert.match(q006Packet, /does[^\n]*not[^\n]*authorize sending/i);
 assert.match(q006Approval, /Pending project-owner decision/i);
 assert.match(q006Approval, /Assignment eligibility/);
+assert.match(q006Approval, /Blind task-packet proposal/);
+assert.match(q006Approval, /controlled task-bundle generation or distribution/i);
 assert.match(q006Approval, /Does not authorize/i);
 assert.match(q006Approval, /Silence is not approval/i);
 
