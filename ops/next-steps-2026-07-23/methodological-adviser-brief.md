@@ -1,6 +1,6 @@
 # Internal draft — bounded methodological-adviser brief
 
-**Not sent. Exact advisers and wording require project-owner approval.**  
+**Not sent. Q-006A authorizes preparation and exact recipient research only; the final recipient/message packet and any send action require separate project-owner approval.**  
 **Requested contribution:** approximately 20 minutes of asynchronous review **or** one 30-minute call.  
 **Not requested:** bulk rating, routine adjudication, an open-ended advisory role, or endorsement.
 
@@ -14,7 +14,7 @@ The LMCA project, *A dataset of rated conceptual arguments*, is direct prior art
 
 ## Proposed design
 
-The core proposal, still subject to methodological review and project-owner approval, is:
+The core proposal is approved for consultation and screening but remains subject to methodological review and later Q-006B approval before it becomes an operative protocol:
 
 - 12 position texts;
 - 4 critiques per position;
@@ -76,7 +76,7 @@ All numerical values remain non-binding. The proposed analysis reports uncertain
 
 ## Decisions that remain deliberately open
 
-The project has not frozen:
+Q-006A does not freeze:
 
 - the exact 12 × 4 structure;
 - topic and source quotas;
@@ -88,7 +88,7 @@ The project has not frozen:
 - the exact items, raters, adjudicators, or model baselines; or
 - any claim that the pilot validates the full 400-critique expansion.
 
-Numerical candidates currently appear in the protocol only so advisers can criticize concrete proposals. They are marked non-binding and require explicit project-owner approval before the first protected rating.
+Numerical candidates currently appear in the protocol only so advisers can criticize concrete proposals. They remain non-binding and require explicit Q-006B approval before any protected rating.
 
 ## Three review questions
 
@@ -100,7 +100,7 @@ A useful response may be as short as three bullet points. Specific objections ar
 
 ## What the adviser would receive
 
-The review packet would contain only:
+The proposed review packet contains only:
 
 1. this brief;
 2. the human-readable pilot protocol;
@@ -127,4 +127,4 @@ The project will not quote, name, or imply endorsement by an adviser without sep
 
 > Would you be willing to spend about 20 minutes reviewing a short protocol for a 48-critique expert-rating pilot, or discuss it in one 30-minute call? I am not asking you to rate the dataset or join an ongoing advisory board. The three questions concern the largest validity risk, the design change you would prioritize, and what would make this pilot informative beyond existing work such as LMCA.
 
-This sentence is an internal draft, not an authorized or sent message.
+This sentence is an internal draft. Q-006A authorizes its preparation and revision, but it is not an authorized or sent message.
