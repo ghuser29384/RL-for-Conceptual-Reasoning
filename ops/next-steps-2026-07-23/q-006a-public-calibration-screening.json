@@ -109,7 +109,7 @@
       "disposition": "exclude_from_calibration_and_production",
       "reasons": [
         "The example was selected specifically to display rater disagreement.",
-        "The rating vector is publicly visible.",
+        "The expert ratings are publicly visible.",
         "Its pedagogical role would create an obvious expected disagreement pattern.",
         "Direct LMCA row reuse and redistribution are not approved."
       ],
