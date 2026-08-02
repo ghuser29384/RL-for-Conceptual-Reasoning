@@ -107,7 +107,7 @@ test("rejects lost workspace routing or baseline browser protections", async () 
   inputs.vercel.headers = [];
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("route /workspace")));
+  assert.ok(report.errors.some((error) => error.includes("rewrite /workspace")));
   assert.ok(report.errors.some((error) => error.includes("X-Content-Type-Options")));
   assert.ok(report.errors.some((error) => error.includes("Permissions-Policy")));
 });
