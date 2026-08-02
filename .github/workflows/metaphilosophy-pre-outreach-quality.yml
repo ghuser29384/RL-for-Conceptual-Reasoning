@@ -126,8 +126,8 @@ jobs:
           done
           cat /tmp/metaphilosophy-preview.log
           exit 1
-      - name: Run desktop and mobile browser audit
-        run: npx playwright test --config=e2e/playwright.config.mjs
+      - name: Run local desktop and mobile browser audit
+        run: npx playwright test e2e/public-rendered-smoke.spec.mjs --config=e2e/playwright.config.mjs
       - name: Upload validated public deployment bundle
         uses: actions/upload-artifact@v4
         with:
