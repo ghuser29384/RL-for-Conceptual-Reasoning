@@ -1,0 +1,60 @@
+name: Metaphilosophy Q-006A screening integrity
+
+on:
+  pull_request:
+    paths:
+      - "ops/next-steps-2026-07-23/q-006a-public-calibration-screening.json"
+      - "ops/next-steps-2026-07-23/q-006a-public-calibration-screening.md"
+      - "scripts/verify-q006a-public-calibration-screening.mjs"
+      - "test/q006a-public-calibration-screening.test.mjs"
+      - ".github/workflows/metaphilosophy-q006a-screening.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ops/next-steps-2026-07-23/q-006a-public-calibration-screening.json"
+      - "ops/next-steps-2026-07-23/q-006a-public-calibration-screening.md"
+      - "scripts/verify-q006a-public-calibration-screening.mjs"
+      - "test/q006a-public-calibration-screening.test.mjs"
+      - ".github/workflows/metaphilosophy-q006a-screening.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-screening-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-q006a-public-calibration-screening.mjs
+      - run: node --test test/q006a-public-calibration-screening.test.mjs
+      - name: Confirm no LMCA item text or rating values were copied
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const screening = JSON.parse(fs.readFileSync(
+            'ops/next-steps-2026-07-23/q-006a-public-calibration-screening.json',
+            'utf8',
+          ));
+          const serialized = JSON.stringify(screening);
+          const forbidden = [
+            '"position_text"',
+            '"critique_text"',
+            '"human_rating_values"',
+            '"rating_scores"',
+          ];
+          for (const key of forbidden) {
+            if (serialized.includes(key)) throw new Error(`Copied protected screening field: ${key}`);
+          }
+          if (screening.screening_scope.selected_for_metaphilosophy_calibration !== 0) {
+            throw new Error('An exposed LMCA example was selected for calibration');
+          }
+          if (screening.screening_scope.selected_for_metaphilosophy_production !== 0) {
+            throw new Error('An exposed LMCA example was selected for production');
+          }
+          NODE
