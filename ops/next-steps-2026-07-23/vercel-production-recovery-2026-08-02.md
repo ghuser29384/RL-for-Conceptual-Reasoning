@@ -81,13 +81,13 @@ The active production deployment should resume without another deployment.
 
 ## CI hardening still required
 
-The repository deployment workflow lacks:
+The deployment workflow now treats the Vercel team and project IDs as stable non-secret identifiers and pins them directly. It validates their exact expected values before deployment.
 
-- `VERCEL_TOKEN`;
-- `VERCEL_ORG_ID`; and
-- `VERCEL_PROJECT_ID`.
+Only one repository secret remains required:
 
-These are not required to resume the already-ready candidate, but they are required for reproducible GitHub-controlled Vercel deployments. They must be configured without committing their values to the repository. The workflow must continue to fail closed while any required value is absent.
+- `VERCEL_TOKEN`.
+
+The token must be added through GitHub's encrypted Actions-secret interface and must not be committed, printed, attached, or copied into an issue or pull-request body. Until it exists, preview and production jobs continue to fail closed at the credential gate. This does not prevent the already-ready direct production candidate from serving once the project is resumed.
 
 ## Temporary-resource cleanup
 
