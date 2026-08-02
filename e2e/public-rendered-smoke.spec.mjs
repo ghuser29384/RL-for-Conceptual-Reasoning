@@ -67,7 +67,7 @@ test("mobile homepage navigation and rubric remain usable", async ({ page }, tes
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".mpNavigation")).toHaveClass(/isOpen/u);
-  await expect(page.getByRole("link", { name: "Pilot protocol" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Pilot protocol", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveAttribute("aria-expanded", "false");
 
