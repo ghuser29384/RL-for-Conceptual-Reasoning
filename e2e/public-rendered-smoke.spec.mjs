@@ -63,13 +63,18 @@ test("mobile homepage navigation and rubric remain usable", async ({ page }, tes
   await page.goto("/", { waitUntil: "networkidle" });
 
   const menu = page.locator(".mpMenu");
+  const navigation = page.locator(".mpNavigation");
   await expect(menu).toBeVisible();
+  await expect(navigation).toHaveCSS("visibility", "hidden");
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator(".mpNavigation")).toHaveClass(/isOpen/u);
+  await expect(navigation).toHaveClass(/isOpen/u);
+  await expect(navigation).toHaveCSS("visibility", "visible");
   await expect(page.getByRole("link", { name: "Pilot protocol", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(menu).toHaveAttribute("aria-expanded", "false");
+  await expect(navigation).not.toHaveClass(/isOpen/u);
+  await expect(navigation).toHaveCSS("visibility", "hidden");
 
   await page.getByRole("button", { name: /Overall\s+All considered/iu }).click();
   await expect(page.locator("#mp-dimension-name")).toHaveText("Overall");
