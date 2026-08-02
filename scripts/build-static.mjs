@@ -12,12 +12,17 @@ const publicSrcFiles = Object.freeze([
   "styles.css",
   "brand-system.css",
   "epoch-system.css",
+  "epoch-core.css",
+  "epoch-platform.css",
+  "epoch-impact.css",
+  "epoch-workspace.css",
+  "epoch-responsive.css",
   "wordmark-system.css",
   "exact-reference.css",
   "trust-home.css",
 ]);
 
-// Do not copy an attached or private PDF from resolve(root, "src/assets"); public LMCA links resolve to the paper's arXiv record.
+// Public LMCA links resolve to the paper's canonical arXiv record; no private or attached PDF is copied.
 await unpackSyntheticRelease();
 await rm(dist, { recursive: true, force: true });
 await mkdir(resolve(dist, "src"), { recursive: true });
