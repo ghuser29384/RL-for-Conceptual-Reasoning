@@ -20,6 +20,7 @@ const publicSrcFiles = Object.freeze([
   "wordmark-system.css",
   "exact-reference.css",
   "trust-home.css",
+  "mobile-navigation.css",
 ]);
 
 // Public LMCA links resolve to the paper's canonical arXiv record; no private or attached PDF is copied.
