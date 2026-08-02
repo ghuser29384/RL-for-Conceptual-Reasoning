@@ -1,34 +1,35 @@
 # Metaphilosophy Vercel production recovery — 2026-08-02
 
-**Status:** exact production candidate ready; existing project remains paused.  
+**Status:** recovered and audited on the public custom domains.  
 **Project:** `rlhf-conceptual-reasoning`  
 **Project ID:** `prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ`  
 **Team ID:** `team_ySu6sF3Uho1E1GnJtCQPVEuJ`  
 **Operations owner:** Ellen Sun  
-**Outreach effect:** none. This record does not authorize email, recruitment, calibration, rating, payment, funding submission, publication of results, or Phase 2.
+**Outreach effect:** none. Recovery does not authorize email, recruitment, calibration, rating, payment, funding submission, publication of results, or Phase 2.
 
-## Finding
+## Incident and recovery
 
-The team account is capable of creating and building new deployments. The outage is isolated to the existing Metaphilosophy project, whose project record remains `live: false`.
+The incident initially presented as:
 
-Vercel project state and observed behavior:
+- HTTP `402` on `metaphilosophy.org` and `www.metaphilosophy.org`;
+- `x-vercel-error: DEPLOYMENT_DISABLED`;
+- project-local deployment queueing; and
+- project metadata reporting `live: false`.
 
-- custom domains return HTTP `402` and `DEPLOYMENT_DISABLED`;
-- new preview and production deployments on the existing project can be created;
-- the exact production candidate completed and is `READY`;
-- the production domains remain blocked because the project itself is paused; and
-- Vercel requires paused projects to be resumed individually through the Dashboard or an authenticated REST call.
+The team account itself remained capable of creating and building new projects, so the failure was isolated to the existing Metaphilosophy project rather than a continuing account-wide build outage.
 
-The connected Vercel deployment tool does not expose the project-unpause endpoint. Vercel build/deployment OIDC credentials were tested only against the documented unpause endpoint and were correctly rejected as invalid for account-management API access. No token was printed, copied, persisted, or exposed.
+An exact production candidate was built successfully while the domains were unavailable. At `2026-08-02T07:12Z`, the production data plane recovered and began serving that candidate on the custom domains. Subsequent custom-domain requests returned HTTP 200 with no Vercel error. The project metadata endpoint continued to lag by reporting `live: false`; the served custom-domain response, exact release marker, deployment alias set, and end-to-end production audit are treated as the operational source of truth.
 
-## Exact production candidate
+## Exact production release
 
-- Git commit: `23c4a7407aa7dcb6c079ce0a6bf7058c58284154`
-- release marker: `mp-preoutreach-20260802-r1`
-- production deployment ID: `dpl_Cce9VRWFcEz8SD6fGiTiD2ELxopC`
-- deployment URL: `rlhf-conceptual-reasoning-ort6z02tm-ellen-s.vercel.app`
-- deployment target: `production`
-- deployment state: `READY`
+- source commit: `23c4a7407aa7dcb6c079ce0a6bf7058c58284154`;
+- release marker: `mp-preoutreach-20260802-r1`;
+- production deployment ID: `dpl_Cce9VRWFcEz8SD6fGiTiD2ELxopC`;
+- deployment URL: `rlhf-conceptual-reasoning-ort6z02tm-ellen-s.vercel.app`;
+- deployment target: `production`;
+- deployment state: `READY`;
+- canonical origin: `https://www.metaphilosophy.org`; and
+- apex origin: HTTP 308 redirect to the canonical origin.
 
 Build-log evidence:
 
@@ -39,56 +40,77 @@ Build-log evidence:
 - synthetic source SHA-256: `1cb41afee3851c158b520da628a3659c3a387d16c18e6c38f64db1492f59d591`;
 - 250 positions, 1,000 critiques, and 25 domains unpacked;
 - 16 allowlisted public source files copied;
-- release marker verified; and
+- release marker verified;
+- internal workspace excluded from the public build; and
 - deployment completed.
 
-## CI evidence
+## Candidate-build evidence
 
-- workflow run: `30736377664`
-- commit: `23c4a7407aa7dcb6c079ce0a6bf7058c58284154`
-- complete Node tests: 438 passed, 0 failed
-- focused public-boundary/dependency tests: 17 passed, 0 failed
-- Playwright tests: 8 passed, 0 failed
-- public-dist artifact ID: `8829714772`
-- public-dist artifact SHA-256: `08693d6d86020aa1fbb1137912918c39344110f14f3b439206a21776806f27ab`
-- rendered-audit artifact ID: `8829714925`
-- rendered-audit artifact SHA-256: `4c8ed5a1413c59de3577535504b4f2a62aeb957c3c88cda3d407bdb4f33652f9`
+Workflow run `30736377664` verified the pre-deployment candidate:
 
-## Recovery action requiring an authenticated account session
+- complete Node tests: 438 passed, 0 failed;
+- focused public-boundary/dependency tests: 17 passed, 0 failed;
+- production-like Playwright tests: 8 passed, 0 failed;
+- public-dist artifact ID: `8829714772`;
+- public-dist artifact SHA-256: `08693d6d86020aa1fbb1137912918c39344110f14f3b439206a21776806f27ab`;
+- rendered-audit artifact ID: `8829714925`; and
+- rendered-audit artifact SHA-256: `4c8ed5a1413c59de3577535504b4f2a62aeb957c3c88cda3d407bdb4f33652f9`.
 
-In the Vercel Dashboard:
+## Exact-domain production evidence
 
-1. select team `ghuser29384's projects`;
-2. open project `rlhf-conceptual-reasoning`;
-3. open **Settings**;
-4. select **Resume Service** in the paused-project banner; and
-5. confirm with **Resume**.
+Workflow run `30737577369` audited the recovered public domains:
 
-The active production deployment should resume without another deployment.
+- audit commit: `d02c6cd98ac6d39dc60c57d28513c0ae328eb1b3`;
+- production audit artifact ID: `8830142366`;
+- production audit artifact SHA-256: `fe14cf83f90c07ae7cddf440f7d168bc22dc6a5aedff6e2c39571895cd607cbc`;
+- artifact retention expiry: 2026-09-01;
+- production corpus release audit: passed;
+- route and public-claim audit: passed;
+- release marker and canonical-domain audit: passed;
+- security-header audit: passed;
+- LMCA redirect audit: passed;
+- internal-source exclusion audit: passed;
+- browser production checks: 13 passed, 0 failed; and
+- manual inspection of nine retained production screenshots: no P0/P1 defect.
 
-## Mandatory verification immediately after resume
+Verified production behavior:
 
-1. Confirm project `live: true`.
-2. Confirm `dpl_Cce9VRWFcEz8SD6fGiTiD2ELxopC` remains the active production deployment.
-3. Confirm `www.metaphilosophy.org` and `metaphilosophy.org` return 2xx without `x-vercel-error`.
-4. Verify release marker `mp-preoutreach-20260802-r1`.
-5. Run `node scripts/audit-pre-outreach-production.mjs https://www.metaphilosophy.org`.
-6. Run the eight Playwright tests with `PUBLIC_SITE_BASE_URL=https://www.metaphilosophy.org`.
-7. Inspect desktop/mobile screenshots and browser console, page, request-failure, and overflow evidence.
-8. Verify the LMCA redirect remains temporary and points to the canonical arXiv PDF.
-9. Query runtime error clusters and fatal/error logs for the exact deployment.
-10. Update P-07 through P-09 only after all checks pass.
+- root: HTTP 200;
+- homepage claims module: HTTP 200;
+- `/research/`: HTTP 200;
+- `/arguments/`: HTTP 200;
+- `/contribute`: HTTP 200 and intentionally closed;
+- `/workspace`: public readiness gate, no internal execution UI;
+- `/reference`: public readiness gate, no internal execution UI;
+- legacy `/?section=rating`: truthful public status surface;
+- `metaphilosophy.org`: HTTP 308 to `www.metaphilosophy.org`;
+- LMCA route: HTTP 307 to `https://arxiv.org/pdf/2607.27499`;
+- internal `/src/app.mjs`: HTTP 404;
+- `X-Content-Type-Options: nosniff`;
+- `X-Frame-Options: DENY`;
+- `Referrer-Policy: strict-origin-when-cross-origin`; and
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
 
-## CI hardening still required
+Runtime monitoring for exact deployment `dpl_Cce9VRWFcEz8SD6fGiTiD2ELxopC` found:
 
-The deployment workflow now treats the Vercel team and project IDs as stable non-secret identifiers and pins them directly. It validates their exact expected values before deployment.
+- no grouped runtime error clusters in the recovery window;
+- no `error` or `fatal` runtime logs; and
+- no evidence of a 5xx application failure.
 
-Only one repository secret remains required:
+## Remaining CI hardening
+
+The GitHub deployment workflow pins and validates the stable, non-secret Vercel team and project identifiers. Only one encrypted repository secret remains required:
 
 - `VERCEL_TOKEN`.
 
-The token must be added through GitHub's encrypted Actions-secret interface and must not be committed, printed, attached, or copied into an issue or pull-request body. Until it exists, preview and production jobs continue to fail closed at the credential gate. This does not prevent the already-ready direct production candidate from serving once the project is resumed.
+The absence of this token does not invalidate the active production release or the completed production audit. It does mean future GitHub-controlled Vercel deployment jobs remain deliberately blocked at the credential gate.
+
+The token must be added only through GitHub's encrypted Actions-secret interface. Its value must not be committed, printed, attached, or placed in a PR, issue, chat message, or email.
 
 ## Temporary-resource cleanup
 
-Several isolated Vercel projects were created solely to distinguish team-account availability from the paused-project state and to test bounded recovery paths. They should be removed through the authenticated Dashboard after the production project is restored and verified. Do not remove `rlhf-conceptual-reasoning` or its custom domains.
+Several isolated Vercel projects were created solely to distinguish account availability from the paused-project state and test bounded recovery paths. The connected Vercel tool does not expose project deletion. These disposable projects should be removed through the authenticated Vercel Dashboard after preserving this incident record. Do not remove `rlhf-conceptual-reasoning` or any of its production domains.
+
+## Closure
+
+Production recovery gates P-07 through P-09 are passed. The next process gate is P-10: Ellen Sun's separate review of the exact Wave-1 methodological-adviser outreach packet. No Gmail action is authorized by this recovery record.
