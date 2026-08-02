@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: /public-rendered-smoke\.spec\.mjs/u,
+  testMatch: /public-(?:rendered-smoke|production-gate)\.spec\.mjs/u,
   fullyParallel: false,
   workers: 1,
   retries: 0,
