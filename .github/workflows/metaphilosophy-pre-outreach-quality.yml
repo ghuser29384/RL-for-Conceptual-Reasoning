@@ -8,8 +8,7 @@ on:
       - "src/workspace-gate.mjs"
       - "src/app.mjs"
       - "src/exact-reference-home.mjs"
-      - "src/exact-reference.css"
-      - "src/trust-home.css"
+      - "src/*.css"
       - "research/**"
       - "arguments/**"
       - "reviewers/**"
@@ -17,9 +16,11 @@ on:
       - "scripts/serve-static-preview.mjs"
       - "scripts/verify-pre-outreach-public-site.mjs"
       - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-css-dependencies.mjs"
       - "scripts/audit-pre-outreach-production.mjs"
       - "test/pre-outreach-public-site.test.mjs"
       - "test/public-trust-surface.test.mjs"
+      - "test/public-css-dependencies.test.mjs"
       - "e2e/**"
       - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
       - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
@@ -31,8 +32,7 @@ on:
       - "src/workspace-gate.mjs"
       - "src/app.mjs"
       - "src/exact-reference-home.mjs"
-      - "src/exact-reference.css"
-      - "src/trust-home.css"
+      - "src/*.css"
       - "research/**"
       - "arguments/**"
       - "reviewers/**"
@@ -40,9 +40,11 @@ on:
       - "scripts/serve-static-preview.mjs"
       - "scripts/verify-pre-outreach-public-site.mjs"
       - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-css-dependencies.mjs"
       - "scripts/audit-pre-outreach-production.mjs"
       - "test/pre-outreach-public-site.test.mjs"
       - "test/public-trust-surface.test.mjs"
+      - "test/public-css-dependencies.test.mjs"
       - "e2e/**"
       - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
       - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
@@ -63,7 +65,8 @@ jobs:
       - run: npm ci
       - run: node scripts/verify-pre-outreach-public-site.mjs
       - run: node scripts/verify-public-trust-surface.mjs
-      - run: node --test test/pre-outreach-public-site.test.mjs test/public-trust-surface.test.mjs
+      - run: node scripts/verify-public-css-dependencies.mjs
+      - run: node --test test/pre-outreach-public-site.test.mjs test/public-trust-surface.test.mjs test/public-css-dependencies.test.mjs
       - run: npm test
       - run: npm run build
       - name: Verify built public surfaces
@@ -76,6 +79,12 @@ jobs:
             'dist/src/workspace-gate.mjs',
             'dist/src/exact-reference-home.mjs',
             'dist/src/trust-home.css',
+            'dist/src/mobile-navigation.css',
+            'dist/src/epoch-core.css',
+            'dist/src/epoch-platform.css',
+            'dist/src/epoch-impact.css',
+            'dist/src/epoch-workspace.css',
+            'dist/src/epoch-responsive.css',
             'dist/research/index.html',
             'dist/research/styles.css',
             'dist/arguments/index.html',
