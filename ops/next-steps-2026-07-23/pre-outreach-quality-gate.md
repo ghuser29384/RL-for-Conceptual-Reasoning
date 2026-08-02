@@ -1,6 +1,6 @@
 # Metaphilosophy pre-outreach product quality gate
 
-**Gate version:** 3  
+**Gate version:** 4  
 **Opened:** 2026-08-01  
 **Updated:** 2026-08-02  
 **Status:** blocked at P-07 and P-10  
@@ -27,7 +27,7 @@ The Vercel account can create and build new projects, and the exact Metaphilosop
 
 Vercel documents that paused projects must be resumed individually through project settings or the authenticated REST API. Increasing the spend amount or paying the balance does not automatically resume every project. The connected deployment tool can create deployments but does not expose the project-unpause mutation; a Vercel access token is required for the REST endpoint. No token was copied, created, logged, or stored during recovery testing.
 
-The GitHub Vercel workflow also lacks `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. That remains a CI automation defect, but it no longer prevents the already-built direct production candidate from serving after the project is resumed.
+The GitHub Vercel workflow now pins the stable, non-secret Vercel team and project IDs directly and fails closed only when the repository lacks `VERCEL_TOKEN`. This remaining credential gap does not prevent the already-built direct production candidate from serving after the project is resumed, but it still blocks reproducible GitHub-controlled deployments.
 
 No outreach may begin while the custom domains are disabled. Resuming service does not itself authorize outreach.
 
