@@ -1,6 +1,20 @@
-name: Metaphilosophy production release audit
+name: Metaphilosophy production audit
 
 on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/*.css"
+      - "research/**"
+      - "arguments/**"
+      - "reviewers/**"
+      - "scripts/audit-pre-outreach-production.mjs"
+      - "scripts/audit-production-release.mjs"
+      - "e2e/**"
+      - ".github/workflows/metaphilosophy-production-audit.yml"
   workflow_dispatch:
     inputs:
       origin:
@@ -13,14 +27,91 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: metaphilosophy-production-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PUBLIC_SITE_BASE_URL: ${{ inputs.origin || 'https://www.metaphilosophy.org' }}
+  METAPHILOSOPHY_ORIGIN: ${{ inputs.origin || 'https://www.metaphilosophy.org' }}
+
 jobs:
-  audit:
+  audit-production:
+    name: Audit exact public domain
     runs-on: ubuntu-latest
-    env:
-      METAPHILOSOPHY_ORIGIN: ${{ inputs.origin || 'https://www.metaphilosophy.org' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node scripts/audit-production-release.mjs
+          cache: npm
+      - run: npm ci
+      - name: Verify production corpus release
+        run: |
+          mkdir -p test-results/production
+          node scripts/audit-production-release.mjs | tee test-results/production/corpus-release-report.json
+      - name: Verify production routes and public claims
+        run: node scripts/audit-pre-outreach-production.mjs "$PUBLIC_SITE_BASE_URL" | tee test-results/production/route-claim-report.json
+      - name: Verify canonical domain, exact release marker, headers, redirect, and internal-source exclusion
+        run: |
+          node - <<'NODE' | tee test-results/production/release-boundary-report.json
+          const marker = 'mp-preoutreach-20260802-r1';
+          const apex = await fetch('https://metaphilosophy.org/', { redirect: 'manual' });
+          if (![301, 302, 307, 308].includes(apex.status)) throw new Error(`Apex domain returned ${apex.status}`);
+          const apexLocation = apex.headers.get('location') ?? '';
+          if (!apexLocation.startsWith('https://www.metaphilosophy.org/')) throw new Error(`Unexpected apex redirect: ${apexLocation}`);
+
+          const root = await fetch('https://www.metaphilosophy.org/', { redirect: 'error' });
+          const rootText = await root.text();
+          if (root.status !== 200) throw new Error(`Root returned ${root.status}`);
+          if (!rootText.includes(`name="metaphilosophy-release-candidate" content="${marker}"`)) throw new Error('Release marker missing');
+          const headers = {
+            'x-content-type-options': 'nosniff',
+            'x-frame-options': 'DENY',
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+          };
+          for (const [name, expected] of Object.entries(headers)) {
+            const observed = root.headers.get(name);
+            if (observed !== expected) throw new Error(`${name} expected ${expected}, observed ${observed}`);
+          }
+
+          const lmca = await fetch('https://www.metaphilosophy.org/src/assets/LMCA_dataset.pdf', { redirect: 'manual' });
+          const lmcaLocation = lmca.headers.get('location') ?? '';
+          if (lmca.status !== 307) throw new Error(`LMCA route returned ${lmca.status}`);
+          if (!/^https:\/\/arxiv\.org\/pdf\/2607\.27499(?:[?#].*)?$/u.test(lmcaLocation)) throw new Error(`Unexpected LMCA redirect: ${lmcaLocation}`);
+
+          const internal = await fetch('https://www.metaphilosophy.org/src/app.mjs', { redirect: 'manual' });
+          const internalText = await internal.text();
+          if (internal.status !== 404) throw new Error(`Internal workspace source returned ${internal.status}`);
+          for (const markerText of ['workflowEvidenceCollections', 'sourceLeakageRedactionPolicy', 'releaseReportReadbackItems']) {
+            if (internalText.includes(markerText)) throw new Error(`Internal marker exposed: ${markerText}`);
+          }
+
+          console.log(JSON.stringify({
+            status: 'pass',
+            marker,
+            apex_status: apex.status,
+            apex_location: apexLocation,
+            root_status: root.status,
+            security_headers: headers,
+            lmca_status: lmca.status,
+            lmca_location: lmcaLocation,
+            internal_source_status: internal.status,
+            outreach_authorized: false,
+          }, null, 2));
+          NODE
+      - name: Install production-audit browser
+        run: |
+          npm install --no-save --package-lock=false @playwright/test@1.62.0
+          npx playwright install --with-deps chromium
+      - name: Run desktop, mobile, route, and release browser checks
+        run: npx playwright test --config=e2e/playwright.config.mjs
+      - name: Upload production audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metaphilosophy-production-audit
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 30
