@@ -1,0 +1,112 @@
+{
+  "record_id": "metaphilosophy-owner-development-direction-2026-08-04",
+  "recorded_at": "2026-08-04",
+  "approved_by": "Ellen Sun, project owner",
+  "decision_rule": "No interpretation below 0.90 confidence becomes binding without a follow-up owner decision.",
+  "status": "approved_direction_with_four_clarifications_pending",
+  "approved_direction": {
+    "next_30_day_primary_objective": "Make the 48-critique pilot fully operational and obtain real expert ratings.",
+    "development_mode": "Continue product development while repairing failures; the pilot workflow remains the primary delivery priority.",
+    "pre_outreach_gate": "Before contacting raters, pass the full production-path verification covering authentication, eligibility, blind assignment, autosave, submission, duplicate prevention, immutable initial ratings, revisions, adjudication, exports, audit logs, privacy boundaries, and interruption recovery. A separate external-tester mock-run requirement is not owner-selected.",
+    "pilot": {
+      "purpose": "Validate operations and produce preliminary evidence about rating time, agreement, disagreement causes, and adjudication demand.",
+      "positions": 12,
+      "critiques_per_position": 4,
+      "critiques": 48,
+      "source": "Twelve public synthetic positions with their four existing critiques each.",
+      "benchmark_status": "Permanent public development and workflow-validation set; never represented as a hidden benchmark.",
+      "provenance_stages": [
+        "Stage 1: operational pilot using existing public synthetic material.",
+        "Stage 2: later balanced measurement pilot with controlled human/model provenance."
+      ],
+      "core_raters": 6,
+      "nominal_initial_ratings_per_core_rater": 16,
+      "eligible_raters": "Philosophy doctoral students, postdoctoral researchers, and recent PhDs, plus exceptional masters-level, independent, AI-safety, decision-theory, legal-theory, or adjacent researchers who pass a stricter calibration.",
+      "recruitment_channels": "Targeted individual invitations plus open public recruitment, both blocked until production-workflow and pre-outreach gates pass.",
+      "senior_researcher_scope": "Review the protocol and 8–12 public calibration cases, identify methodological problems, recommend early-career raters, and optionally review a small capped number of difficult cases. No routine bulk-rating request.",
+      "rubric": {
+        "base_dimensions": [
+          "centrality",
+          "strength",
+          "correctness",
+          "clarity",
+          "dead_weight",
+          "single_issue",
+          "overall"
+        ],
+        "additional_structured_fields": [
+          "interpretation_confidence",
+          "relevant_background_assumptions",
+          "clearly_unsatisfactory_or_not_meaningfully_assessable",
+          "optional_issue_flags"
+        ]
+      },
+      "presentation": "Hide source and author metadata and present all four critiques of one position sequentially.",
+      "adjudication_triggers": [
+        "absolute overall-score difference of at least 0.30",
+        "absolute difference of at least 0.30 in strength multiplied by centrality",
+        "incompatible interpretations of the position or critique",
+        "disagreement over whether the critique is assessable",
+        "either rater explicitly requests review"
+      ],
+      "revision_policy": "Never overwrite an initial rating; preserve every version, require an object-level revision reason, and create a separate adjudicated label snapshot.",
+      "completion_standard": "Operational and research-operations pass: zero unresolved P0 defects; all critiques double-rated or validly replaced; original and revised ratings preserved; every triggered case adjudicated or explicitly unresolved; rating-time, agreement, disagreement causes, usability, burden, and a reproducible frozen export reported."
+    },
+    "product_direction": {
+      "model": "Hybrid product strategy with Metaphilosophy Review as the first priority.",
+      "audience_architecture": "Separate audience-specific routes with one dominant homepage audience, still to be selected.",
+      "public_capabilities_before_full_benchmark": [
+        "read research materials",
+        "browse the clearly labeled unrated synthetic library",
+        "submit candidate critiques segregated from expert-rated data",
+        "submit non-expert ratings stored separately from expert labels"
+      ]
+    },
+    "phase_2_and_funding": {
+      "candidate_generation": "High-quality candidate-critique generation may continue and is not treated as the principal capacity bottleneck.",
+      "first_major_funding_scope": "The 400-critique Hard Set, benchmark validation, and one paper.",
+      "application_timing_model": "Different timing by funder; exact timing remains unresolved.",
+      "submission_control": "No funding application may be submitted without Ellen Sun's explicit approval.",
+      "payment_vehicle": "Ellen Sun pays participants personally; payer jurisdiction and payment-account jurisdiction remain unresolved.",
+      "long_term_priority_ranking": [
+        "Build a large expert-rated training dataset that measurably improves AI reasoning.",
+        "Build a widely used public platform for structured philosophy.",
+        "Build a durable expert-review institution producing recurring datasets and benchmarks."
+      ]
+    },
+    "schedule_targets": {
+      "production_workflow_fully_verified": "2026-08-04",
+      "first_rater_invited": "2026-08-05",
+      "pilot_ratings_begin": "2026-08-05",
+      "classification": "owner targets, not evidence that readiness has passed"
+    },
+    "communications_control": {
+      "rater_outreach_sent": false,
+      "grant_application_submitted": false,
+      "automatic_authority_to_send_or_submit": false
+    }
+  },
+  "clarifications_required": [
+    {
+      "id": "C-2026-08-04-01",
+      "topic": "dominant_homepage_audience",
+      "question": "Which audience should dominate the homepage: prospective expert raters, AI-safety and AI-evaluation researchers, funders and institutional partners, or general philosophy users?"
+    },
+    {
+      "id": "C-2026-08-04-02",
+      "topic": "phase_2_expert_validation_gate",
+      "question": "Candidate critiques can be generated without a content bottleneck, but the expert-rated dataset still requires human ratings. What should authorize expert validation of all 400 critiques: explicit owner approval after Pilot 01, enough committed qualified rater capacity, external funding, or another rule?"
+    },
+    {
+      "id": "C-2026-08-04-03",
+      "topic": "funder_specific_timing",
+      "question": "Which funder should receive a submission before Pilot 01 results, after senior feedback, or only after Pilot 01 results? No submission will occur without a separate explicit approval."
+    },
+    {
+      "id": "C-2026-08-04-04",
+      "topic": "schedule_semantics",
+      "question": "Does 'Pilot rating begin: 2026-08-05' mean the first real research rating, the first calibration task, or the first internal synthetic rehearsal? The current audited workflow is not yet ready for real research ratings."
+    }
+  ],
+  "immediate_next_step": "Build and verify the authenticated staging rater journey against the complete pre-outreach gate. Continue candidate-critique and public-submission work only where it does not delay that critical path."
+}
