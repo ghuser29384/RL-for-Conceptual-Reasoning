@@ -1,0 +1,32 @@
+{
+  "ingestion_request_id": "SIM_PILOT_INGESTION_BATCH_V1",
+  "input_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "data_class": "synthetic_test_fixture",
+  "mode": "simulation",
+  "target_dataset_id": "SIM_INGESTED_PILOT_DATASET_V1",
+  "target_data_class": "synthetic_test_fixture",
+  "rubric_version": "rubric-v2-seven-dimensional",
+  "operator_index_sha256": null,
+  "bundle_commitment_sha256": null,
+  "ingested_at": "2026-08-04T12:00:00.000Z",
+  "synthetic_acceptance_only": true,
+  "authorization": {
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "protected_manifest_frozen": false,
+    "controlled_assignment_generated": false,
+    "task_bundles_generated": false,
+    "final_readiness_signed": false,
+    "task_bundle_distribution_authorized": false,
+    "rating_work_authorized": false,
+    "quality_control_complete": false,
+    "rating_ingestion_authorized": false,
+    "private_controlled_storage_confirmed": false,
+    "approval_record_ids": [],
+    "approved_at": null
+  },
+  "quality_control_decisions": [],
+  "funding_submission_authorized": false,
+  "phase_2_authorized": false
+}

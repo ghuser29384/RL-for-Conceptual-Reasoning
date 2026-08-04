@@ -1,0 +1,234 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-methodology-recommendations-v1.schema.json",
+  "recommendation_id": "pilot-methodology-recommendations-v1-2026-07-30",
+  "recommendation_version": 1,
+  "status": "non_binding_q006a_approved_pending_feedback_and_q006b",
+  "source_basis": {
+    "primary_reference": {
+      "title": "A dataset of rated conceptual arguments",
+      "role": "methodological_prior_art_and_external_benchmark",
+      "direct_row_reuse": false
+    },
+    "observations": [
+      "The reference reports 951 rated critiques, 1458 ratings, 442 positions with at least one rated critique, and 279 positions with at least two rated critiques.",
+      "The reference reports strong concentration in one primary rater and recommends more double-rated or double-checked critiques in later releases.",
+      "The reference identifies source and writing-style confounding, too few positions with a useful spread of critique quality, and interpretation-driven disagreement as important limitations.",
+      "The reference treats strength multiplied by centrality as the relevant substantive-impact quantity and branches to clarity plus overall when human clarity is below 0.5.",
+      "The reference preserves original ratings when discussion or object-level reconsideration produces a revision."
+    ]
+  },
+  "preferred_assignment": {
+    "status": "recommended_non_binding",
+    "anonymous_raters": ["R1", "R2", "R3", "R4", "R5", "R6"],
+    "source_classes": [
+      "public_synthetic_with_new_expert_ratings",
+      "protected_public_domain_derived"
+    ],
+    "preferred_source_mix": {
+      "public_synthetic_with_new_expert_ratings": 6,
+      "protected_public_domain_derived": 6
+    },
+    "fallback_rule": "If independent source-fidelity and ambiguity review makes the preferred six-six crossing infeasible, preserve at least four positions from each source class, maximize one-of-each-source topic crossing, and document every deviation before Q-006B.",
+    "invariants": [
+      "Each of the 12 positions is assigned to exactly two core raters.",
+      "Each core rater receives exactly four positions and sixteen critique ratings.",
+      "No anonymous rater pair is repeated.",
+      "Each core rater works with four distinct other raters.",
+      "Each core rater receives four distinct topic families.",
+      "Under the preferred six-six source mix, each core rater receives two positions from each source class.",
+      "Under the preferred six-six source mix, each topic family contains one position from each source class."
+    ],
+    "slots": [
+      {
+        "slot_id": "P01",
+        "topic_family": "normative_ethics",
+        "source_class": "public_synthetic_with_new_expert_ratings",
+        "rater_pair": ["R1", "R3"]
+      },
+      {
+        "slot_id": "P02",
+        "topic_family": "normative_ethics",
+        "source_class": "protected_public_domain_derived",
+        "rater_pair": ["R2", "R4"]
+      },
+      {
+        "slot_id": "P03",
+        "topic_family": "political_philosophy",
+        "source_class": "public_synthetic_with_new_expert_ratings",
+        "rater_pair": ["R1", "R4"]
+      },
+      {
+        "slot_id": "P04",
+        "topic_family": "political_philosophy",
+        "source_class": "protected_public_domain_derived",
+        "rater_pair": ["R2", "R3"]
+      },
+      {
+        "slot_id": "P05",
+        "topic_family": "epistemology_and_philosophy_of_science",
+        "source_class": "public_synthetic_with_new_expert_ratings",
+        "rater_pair": ["R3", "R6"]
+      },
+      {
+        "slot_id": "P06",
+        "topic_family": "epistemology_and_philosophy_of_science",
+        "source_class": "protected_public_domain_derived",
+        "rater_pair": ["R1", "R5"]
+      },
+      {
+        "slot_id": "P07",
+        "topic_family": "philosophy_of_mind_and_ai_consciousness",
+        "source_class": "public_synthetic_with_new_expert_ratings",
+        "rater_pair": ["R4", "R5"]
+      },
+      {
+        "slot_id": "P08",
+        "topic_family": "philosophy_of_mind_and_ai_consciousness",
+        "source_class": "protected_public_domain_derived",
+        "rater_pair": ["R1", "R6"]
+      },
+      {
+        "slot_id": "P09",
+        "topic_family": "decision_theory_and_social_choice",
+        "source_class": "public_synthetic_with_new_expert_ratings",
+        "rater_pair": ["R2", "R5"]
+      },
+      {
+        "slot_id": "P10",
+        "topic_family": "decision_theory_and_social_choice",
+        "source_class": "protected_public_domain_derived",
+        "rater_pair": ["R4", "R6"]
+      },
+      {
+        "slot_id": "P11",
+        "topic_family": "metaphilosophy_and_ai_governance",
+        "source_class": "public_synthetic_with_new_expert_ratings",
+        "rater_pair": ["R2", "R6"]
+      },
+      {
+        "slot_id": "P12",
+        "topic_family": "metaphilosophy_and_ai_governance",
+        "source_class": "protected_public_domain_derived",
+        "rater_pair": ["R3", "R5"]
+      }
+    ]
+  },
+  "candidate_selection_controls": {
+    "status": "recommended_non_binding",
+    "minimum_candidates_per_position": 8,
+    "selected_per_position": 4,
+    "required_preselection_diagnostics": [
+      "word count and sentence count",
+      "formatting and citation cues",
+      "candidate source and author or model identity",
+      "frozen acquisition-judge mean and disagreement",
+      "attack-family classification",
+      "obvious source-style cue risk"
+    ],
+    "rules": [
+      "Use acquisition-judge strata only to construct a difficult and varied candidate set; never treat them as labels.",
+      "Do not select a set in which provisional quality is trivially predictable from length, formatting, citation style, or source identity.",
+      "Do not rewrite substantive critique text merely to conceal its source; instead record residual cue risk and include it in limitations and sensitivity analysis.",
+      "Freeze all candidate-selection diagnostics and exclusion reasons before human rating."
+    ]
+  },
+  "shared_calibration": {
+    "status": "recommended_non_binding",
+    "public_positions": 2,
+    "critiques_per_position": 4,
+    "shared_calibration_critiques": 8,
+    "participants": ["all_six_core_raters", "both_dedicated_adjudicators"],
+    "issue_coverage": [
+      "position or critique interpretation ambiguity",
+      "a critique that may already be priced in to the position",
+      "strength-centrality allocation ambiguity",
+      "a low-clarity critique",
+      "a correctness-sensitive claim requiring verification",
+      "a specific but low-centrality objection",
+      "dead weight versus unsuccessful substantive argument",
+      "single-issue versus multiple-independent-issue classification"
+    ],
+    "sequence": [
+      "Independent blind scoring of all eight public calibration critiques.",
+      "Lock and preserve every initial calibration rating.",
+      "Reveal a rubric-based considerations dossier rather than a single unquestionable gold vector.",
+      "Discuss large differences using object-level reasons, with no instruction to conform merely because another rater disagrees.",
+      "Record a pass, targeted-remediation, or non-selection disposition under the later frozen qualification rule."
+    ],
+    "qualification_boundary": "No numerical calibration pass threshold is binding before methodological-adviser review and explicit project-owner approval.",
+    "exclusion": "Calibration items are public, non-protected, excluded from the 48-critique pilot, and excluded from the pilot outcome analysis."
+  },
+  "adjudication_additions": {
+    "status": "recommended_non_binding",
+    "required_item_review_candidates": [
+      {
+        "field": "clarity",
+        "condition": "either_initial_rater_scores_below_0_5",
+        "reason": "The reference methodology treats other dimension scores as unreliable or less meaningful when clarity is below 0.5."
+      },
+      {
+        "field": "verification_status",
+        "condition": "either_initial_rater_reports_an_unresolved_correctness_sensitive_claim",
+        "reason": "A correctness disagreement should not be resolved by confidence or averaging when a practical verification step remains open."
+      }
+    ],
+    "routing_rule": "These are candidates for item and evidence review, not automatic pressure on a rater to revise. Original ratings remain preserved."
+  },
+  "analysis_safeguards": {
+    "status": "recommended_non_binding",
+    "primary_quantities": [
+      "overall",
+      "strength_times_centrality",
+      "clarity",
+      "accepted_rating_time",
+      "absolute_initial_rater_difference",
+      "within_position_pairwise_ordering",
+      "item_integrity_flags",
+      "adjudication_frequency_and_cause"
+    ],
+    "do_not_treat_as_standalone_quality_targets": ["strength", "centrality"],
+    "low_clarity_branch": {
+      "human_clarity_below": 0.5,
+      "dimensions_retained_for_custom_discrepancy_summary": ["clarity", "overall"]
+    },
+    "uncertainty_and_sensitivity": [
+      "Report all 12 position-level results rather than only pooled point estimates.",
+      "Use position as the resampling or leave-one-out unit because four sibling critiques share context.",
+      "Report leave-one-position-out ranges for primary agreement summaries.",
+      "Label ICC, Krippendorff alpha, model comparisons, and subgroup effects exploratory and provide uncertainty intervals.",
+      "Keep pre-adjudication and post-adjudication results separate."
+    ],
+    "small_sample_limits": [
+      "Do not make a causal claim that one source class, topic family, model family, or rater type is superior from this 12-position pilot.",
+      "Do not rank individual raters publicly from sixteen production ratings.",
+      "Do not treat passing provisional scale-readiness thresholds as sufficient evidence to activate Phase 2 automatically."
+    ],
+    "model_baseline_boundary": "Freeze model identities, versions, prompts, sampling parameters, retries, and output parsing before protected human ratings; use model judgments as baselines, not labels or adjudicators."
+  },
+  "governance": {
+    "binding_effect": false,
+    "q006a_consultation_and_screening_approved": true,
+    "q006a_approved_at": "2026-08-01T11:34:32Z",
+    "q006a_approval_record": "ops/next-steps-2026-07-23/q-006a-owner-approval.md",
+    "q006b_methodology_freeze_approved": false,
+    "consultation_packet_preparation_authorized": true,
+    "adviser_recipient_research_authorized": true,
+    "public_calibration_screening_authorized": true,
+    "nonfinal_item_screening_authorized": true,
+    "approval_sequence": [
+      "Q-006A approved these elements for consultation and non-final screening only.",
+      "Methodological-adviser comments and feasibility findings are recorded with dispositions.",
+      "Q-006B freezes the final assignment, source mix, calibration rule, adjudication triggers, analysis plan, and exact protected items."
+    ],
+    "no_outreach_authorization": true,
+    "no_protected_item_freeze": true,
+    "no_phase_2_activation": true
+  },
+  "unresolved_parameters": [
+    "Whether the preferred six-six source crossing is feasible after independent source-fidelity and ambiguity review.",
+    "The exact public calibration positions, critiques, considerations dossier, remediation rule, and qualification threshold.",
+    "The final low-clarity and unresolved-verification routing rules.",
+    "The final uncertainty method and any pre-registered numerical scale-readiness thresholds.",
+    "The mapping from anonymous rater slots to qualified named participants after conflict and exposure screening."
+  ]
+}

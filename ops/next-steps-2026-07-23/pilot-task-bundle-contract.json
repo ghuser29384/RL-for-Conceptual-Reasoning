@@ -1,0 +1,208 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-task-bundle-contract-v1.schema.json",
+  "contract_id": "metaphilosophy-pilot-task-bundle-v1-2026-08-01",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_non_binding_generation_and_distribution_not_authorized",
+  "purpose": [
+    "Bind the frozen pilot manifest, deterministic assignment, rubric version, and each participant's blind task packet through cryptographic commitments.",
+    "Prevent source, author or model, acquisition-judge, provisional-stratum, paired-rater, aggregate-rating, label, and adjudication metadata from entering the rater-facing packet.",
+    "Replace controlled position and critique identifiers with participant-specific opaque task tokens.",
+    "Validate that an initial submission contains exactly the sixteen assigned ratings under the exact task-bundle and rubric commitments.",
+    "Keep generation, distribution, rating work, funding submission, and Phase 2 as distinct authorization states."
+  ],
+  "source_boundary": {
+    "primary_reference": "A dataset of rated conceptual arguments",
+    "reference_role": "methodological_prior_art_and_external_benchmark",
+    "source_derived_elements": [
+      "Seven rating dimensions: centrality, strength, correctness, clarity, dead weight, single issue, and overall.",
+      "Source and confounding tags are hidden during rating.",
+      "Critiques of the same position are evaluated together as sibling critiques.",
+      "Initial ratings are independent and original ratings remain preserved when object-level reconsideration produces a revision."
+    ],
+    "metaphilosophy_specific_extensions": [
+      "Opaque participant-specific task tokens instead of controlled position and critique IDs.",
+      "A bundle hash binding exact text versions, manifest, rubric, assignment, and response schema.",
+      "A private operator index mapping tokens back to controlled records.",
+      "A fail-closed submission validator bound to the exact bundle hash."
+    ],
+    "direct_row_reuse": false
+  },
+  "canonical_inputs": {
+    "methodology_path": "ops/next-steps-2026-07-23/pilot-methodology-recommendations.json",
+    "assignment_input_path_for_synthetic_test": "test/fixtures/pilot-assignment-synthetic.json",
+    "task_content_path_for_synthetic_test": "test/fixtures/pilot-task-content-synthetic.json",
+    "task_content_data_classes": [
+      "synthetic_test_fixture",
+      "private_controlled_task_content"
+    ],
+    "positions": 12,
+    "critiques_per_position": 4,
+    "participant_bundles": 6,
+    "positions_per_participant_bundle": 4,
+    "critiques_per_participant_bundle": 16,
+    "total_position_presentations": 24,
+    "total_critique_presentations": 96,
+    "rubric_version": "rubric-v2-seven-dimensional",
+    "required_score_dimensions": [
+      "centrality",
+      "strength",
+      "correctness",
+      "clarity",
+      "dead_weight",
+      "single_issue",
+      "overall"
+    ],
+    "required_auxiliary_fields": [
+      "overall_rationale",
+      "confidence",
+      "time_spent_seconds",
+      "insufficient_context",
+      "verification_status",
+      "item_integrity_flags"
+    ]
+  },
+  "blind_packet_policy": {
+    "position_and_critique_text_included": true,
+    "same_position_sibling_critiques_kept_together": true,
+    "controlled_position_and_critique_ids_replaced_with_participant_specific_tokens": true,
+    "must_hide": [
+      "source class",
+      "source identity",
+      "author or model identity",
+      "acquisition-judge records and scores",
+      "provisional quality strata",
+      "paired-rater identity and ratings",
+      "aggregate ratings",
+      "labels",
+      "adjudication status"
+    ],
+    "task_tokens": {
+      "construction": "HMAC-SHA-256 over the controlled participant, item, and version record using a separate controlled task-token secret.",
+      "participant_specific": true,
+      "assignment_seed_reuse_prohibited": true,
+      "raw_secret_publication_prohibited": true
+    }
+  },
+  "commitment_chain": {
+    "required_hashes": [
+      "selected assignment mapping hash",
+      "protected manifest SHA-256",
+      "rubric SHA-256",
+      "task-content SHA-256 with the raw token secret redacted",
+      "task-token-secret SHA-256",
+      "individual task-bundle body SHA-256",
+      "combined six-bundle commitment SHA-256"
+    ],
+    "bundle_hash_covers": [
+      "programme and data class",
+      "participant binding",
+      "selected assignment mapping hash",
+      "protected manifest hash",
+      "rubric version and hash",
+      "blindness declarations",
+      "response contract",
+      "exact position and critique text and versions",
+      "opaque task tokens",
+      "authorization-false declarations"
+    ],
+    "input_array_order_independent": true
+  },
+  "submission_contract": {
+    "stage": "initial",
+    "submission_version": 1,
+    "responses_required": 16,
+    "task_bundle_hash_must_match": true,
+    "participant_and_bundle_binding_required": true,
+    "every_assigned_task_token_exactly_once": true,
+    "unassigned_or_duplicate_task_tokens_rejected": true,
+    "score_interval": {
+      "minimum": 0,
+      "maximum": 1
+    },
+    "verification_statuses": [
+      "not_applicable",
+      "verified",
+      "unresolved_verifiable",
+      "not_practically_verifiable"
+    ],
+    "item_integrity_flags": [
+      "source_fidelity",
+      "ambiguity",
+      "scope",
+      "leakage",
+      "other_documented"
+    ],
+    "controlled_source_or_assignment_metadata_in_submission_prohibited": true,
+    "materialization_into_append_only_rating_records": "A later controlled ingestion layer must use the private operator index. This contract does not silently create or accept rating records."
+  },
+  "authorization": {
+    "simulation": {
+      "allowed": true,
+      "synthetic_data_only": true,
+      "approval_flags_must_remain_false": true,
+      "full_bundles_available_only_in_memory_to_tests": true,
+      "public_cli_output_only": true
+    },
+    "controlled_generation": {
+      "currently_authorized": false,
+      "requires_assignment_controlled_generation_authorization": true,
+      "required_true_fields": [
+        "Q-006B approved",
+        "Q-006C approved",
+        "protected manifest frozen",
+        "task-bundle generation specifically authorized",
+        "private controlled storage confirmed"
+      ],
+      "minimum_versioned_approval_records": 3,
+      "approval_timestamp_required": true,
+      "controlled_output_directory_must_be_outside_repository": true,
+      "directory_mode": "0700",
+      "bundle_and_operator_index_file_mode": "0600"
+    },
+    "distribution": {
+      "currently_authorized": false,
+      "not_authorized_by_generation": true,
+      "requires_final_readiness_and_a_separate_distribution_control": true
+    },
+    "rating_work": {
+      "currently_authorized": false,
+      "not_authorized_by_generation_or_distribution_artifact": true
+    }
+  },
+  "privacy": {
+    "controlled_task_content": "private_controlled_record_only",
+    "participant_task_bundles": "private_controlled_delivery_artifacts",
+    "operator_index": "private_controlled_record_only",
+    "public_summary_may_include": [
+      "programme and report versions",
+      "authorization-false state",
+      "assignment public summary",
+      "manifest, rubric, redacted task-content, token-secret, and combined-bundle hashes",
+      "aggregate bundle arithmetic",
+      "blindness and privacy declarations"
+    ],
+    "public_summary_must_exclude": [
+      "participant IDs",
+      "controlled position and critique IDs",
+      "task tokens",
+      "individual bundle IDs or hashes",
+      "position and critique text",
+      "assignment pairs",
+      "operator-index mappings"
+    ]
+  },
+  "governance": {
+    "binding_effect": false,
+    "q_006a_approved": false,
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "task_bundle_generation_authorized": false,
+    "task_bundle_distribution_authorized": false,
+    "rating_work_authorized": false,
+    "outreach_authorized": false,
+    "payment_commitment_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  }
+}

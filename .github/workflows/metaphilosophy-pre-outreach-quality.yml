@@ -1,0 +1,145 @@
+name: Metaphilosophy pre-outreach quality
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
+      - "src/app.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/*.css"
+      - "research/**"
+      - "arguments/**"
+      - "reviewers/**"
+      - "scripts/build-static.mjs"
+      - "scripts/serve-static-preview.mjs"
+      - "scripts/verify-pre-outreach-public-site.mjs"
+      - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-css-dependencies.mjs"
+      - "scripts/audit-pre-outreach-production.mjs"
+      - "test/pre-outreach-public-site.test.mjs"
+      - "test/public-trust-surface.test.mjs"
+      - "test/public-css-dependencies.test.mjs"
+      - "e2e/**"
+      - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
+      - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
+      - "src/app.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/*.css"
+      - "research/**"
+      - "arguments/**"
+      - "reviewers/**"
+      - "scripts/build-static.mjs"
+      - "scripts/serve-static-preview.mjs"
+      - "scripts/verify-pre-outreach-public-site.mjs"
+      - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-css-dependencies.mjs"
+      - "scripts/audit-pre-outreach-production.mjs"
+      - "test/pre-outreach-public-site.test.mjs"
+      - "test/public-trust-surface.test.mjs"
+      - "test/public-css-dependencies.test.mjs"
+      - "e2e/**"
+      - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
+      - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-public-product:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-pre-outreach-public-site.mjs
+      - run: node scripts/verify-public-trust-surface.mjs
+      - run: node scripts/verify-public-css-dependencies.mjs
+      - run: node --test test/pre-outreach-public-site.test.mjs test/public-trust-surface.test.mjs test/public-css-dependencies.test.mjs
+      - run: npm test
+      - run: npm run build
+      - name: Verify built public surfaces
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const required = [
+            'dist/index.html',
+            'dist/src/site-entry.mjs',
+            'dist/src/workspace-gate.mjs',
+            'dist/src/exact-reference-home.mjs',
+            'dist/src/trust-home.css',
+            'dist/src/mobile-navigation.css',
+            'dist/src/epoch-core.css',
+            'dist/src/epoch-platform.css',
+            'dist/src/epoch-impact.css',
+            'dist/src/epoch-workspace.css',
+            'dist/src/epoch-responsive.css',
+            'dist/research/index.html',
+            'dist/research/styles.css',
+            'dist/arguments/index.html',
+            'dist/reviewers/closed.html',
+          ];
+          for (const path of required) {
+            if (!fs.existsSync(path)) throw new Error(`Missing built public surface: ${path}`);
+          }
+          if (fs.existsSync('dist/src/app.mjs')) throw new Error('Internal workspace source leaked into public build');
+          const home = fs.readFileSync('dist/src/exact-reference-home.mjs', 'utf8');
+          const gate = fs.readFileSync('dist/src/workspace-gate.mjs', 'utf8');
+          const research = fs.readFileSync('dist/research/index.html', 'utf8');
+          const library = fs.readFileSync('dist/arguments/index.html', 'utf8');
+          const reviewers = fs.readFileSync('dist/reviewers/closed.html', 'utf8');
+          if (!home.includes('No Metaphilosophy expert ratings claimed yet')) throw new Error('Homepage evidence boundary missing');
+          if (!gate.includes('The rating workspace is gated until the pilot is ready')) throw new Error('Workspace readiness gate missing');
+          if (!research.includes('One gate passed. Five remain blocked.')) throw new Error('Research readiness boundary missing');
+          if (!library.includes('None has been expert-rated by Metaphilosophy')) throw new Error('Synthetic-library boundary missing');
+          if (!reviewers.includes('Reviewer intake is intentionally closed')) throw new Error('Closed-intake boundary missing');
+          NODE
+      - run: node scripts/audit-pre-outreach-production.mjs --help
+      - name: Install rendered-audit browser
+        run: |
+          npm install --no-save --package-lock=false @playwright/test@1.62.0
+          npx playwright install --with-deps chromium
+      - name: Start production-like static preview
+        run: |
+          node scripts/serve-static-preview.mjs > /tmp/metaphilosophy-preview.log 2>&1 &
+          echo $! > /tmp/metaphilosophy-preview.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/metaphilosophy-preview.pid)" 2>/dev/null; then
+              cat /tmp/metaphilosophy-preview.log
+              exit 1
+            fi
+            sleep 1
+          done
+          cat /tmp/metaphilosophy-preview.log
+          exit 1
+      - name: Run local desktop and mobile browser audit
+        run: npx playwright test e2e/public-rendered-smoke.spec.mjs --config=e2e/playwright.config.mjs
+      - name: Upload validated public deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: metaphilosophy-public-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload rendered audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metaphilosophy-rendered-public-audit
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,200 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-rating-ingestion-contract-v1.schema.json",
+  "contract_id": "metaphilosophy-pilot-rating-ingestion-v1-2026-08-01",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_non_binding_no_real_submission_or_rating_data",
+  "purpose": [
+    "Bridge validated blind task submissions into the append-only controlled rating dataset without exposing task tokens or silently accepting work.",
+    "Require an explicit quality-control disposition for every submitted response before any accepted initial rating is materialized.",
+    "Reject exact submission replay, duplicate initial ratings, mismatched bundle or operator-index commitments, and unauthorized controlled ingestion.",
+    "Preserve raw submissions and quality-control records separately even when a response is rejected and not materialized as an accepted rating.",
+    "Produce a privacy-safe public commitment summary while keeping submissions, item mappings, decisions, ratings, and receipts private."
+  ],
+  "source_boundary": {
+    "primary_reference": "A dataset of rated conceptual arguments",
+    "reference_role": "methodological_prior_art_and_external_benchmark",
+    "source_derived_elements": [
+      "Initial raters remain blind to other raters' judgments.",
+      "Original ratings are preserved when later object-level discussion produces a revision.",
+      "A complete rating uses the seven dimensions centrality, strength, correctness, clarity, dead weight, single issue, and overall.",
+      "Correctness-sensitive claims should be verified where practical."
+    ],
+    "metaphilosophy_specific_extensions": [
+      "Canonical submission hashing and exact replay rejection.",
+      "Per-response quality-control dispositions separated from the submitted score content.",
+      "Participant-specific task-token resolution through a private operator index.",
+      "Deterministic accepted-rating identifiers and ingestion-event commitments.",
+      "A no-materialization path for rejected responses and an explicit no-op path for responses already materialized from an earlier submission.",
+      "A privacy-safe aggregate ingestion summary."
+    ],
+    "direct_row_reuse": false
+  },
+  "canonical_inputs": {
+    "operator_index_version": "pilot-task-bundle-operator-index-v1",
+    "task_bundle_version": "pilot-task-bundle-v1",
+    "task_submission_version": 1,
+    "ingestion_control_fixture": "test/fixtures/pilot-rating-ingestion-control-synthetic.json",
+    "target_rating_dataset_version": 1,
+    "rubric_version": "rubric-v2-seven-dimensional",
+    "required_score_dimensions": [
+      "centrality",
+      "strength",
+      "correctness",
+      "clarity",
+      "dead_weight",
+      "single_issue",
+      "overall"
+    ],
+    "accepted_initial_record_stage": "initial",
+    "accepted_initial_record_version": 1
+  },
+  "input_binding": {
+    "operator_index_sha256_required": true,
+    "combined_bundle_commitment_sha256_required": true,
+    "individual_bundle_hash_must_match_operator_index": true,
+    "individual_bundle_body_hash_must_recompute": true,
+    "submission_must_pass_task_bundle_validator": true,
+    "canonical_submission_sha256_computed_by_ingestion": true,
+    "response_array_order_independent_submission_hash": true,
+    "operator_index_array_order_independent_hash": true,
+    "target_dataset_positions_must_match_operator_index_manifest": true
+  },
+  "quality_control": {
+    "decision_required_for_every_submitted_response": true,
+    "decision_required_fields": [
+      "controlled decision ID",
+      "canonical submission SHA-256",
+      "task critique token",
+      "disposition",
+      "decision reason",
+      "controlled operator ID",
+      "decision timestamp"
+    ],
+    "allowed_dispositions": [
+      "accepted_materialize",
+      "rejected_no_materialization",
+      "already_materialized_noop"
+    ],
+    "accepted_materialize": "Create one accepted append-only initial-rating record only when no initial rating already exists for that participant and critique.",
+    "rejected_no_materialization": "Retain the raw submission and quality-control record separately, but create no accepted rating record.",
+    "already_materialized_noop": "Create no new record and require an existing accepted initial rating for that participant and critique.",
+    "decision_timestamp_must_follow_submission": true,
+    "ingestion_timestamp_must_follow_decision": true,
+    "quality_control_decision_does_not_modify_submitted_scores": true
+  },
+  "materialization": {
+    "deterministic_rating_id": "SHA-256 commitment to programme, target dataset, controlled participant, controlled position and critique, initial stage and version, and canonical submission hash.",
+    "accepted_records_only": true,
+    "accepted_field_value": true,
+    "locked_at_source": "validated submission timestamp",
+    "operator_assigned": false,
+    "predecessor_rating_id": null,
+    "object_level_revision_reason": null,
+    "provenance_fields": [
+      "canonical source-submission SHA-256",
+      "source bundle ID and SHA-256",
+      "operator-index SHA-256",
+      "quality-control decision ID, operator ID, timestamp, and reason",
+      "ingestion-event ID and SHA-256"
+    ],
+    "task_tokens_must_not_enter_rating_dataset": true,
+    "rejected_responses_materialized": false,
+    "raw_submissions_retained_separately": true
+  },
+  "append_only_and_replay_policy": {
+    "exact_submission_replay_rejected": true,
+    "duplicate_initial_rating_rejected": true,
+    "rating_versions_remain_contiguous": true,
+    "existing_initial_rating_requires_already_materialized_noop": true,
+    "rejected_response_may_be_corrected_only_through_a_new_canonical_submission": true,
+    "new_submission_cannot_overwrite_an_existing_initial_rating": true,
+    "later_object_level_revision_uses_the_separate_rerating_contract": true
+  },
+  "ingestion_event": {
+    "private_receipt_required": true,
+    "event_hash_covers": [
+      "programme and ingestion request",
+      "target dataset hash before ingestion",
+      "operator-index and combined-bundle commitments",
+      "canonical submission hashes",
+      "quality-control decision hashes",
+      "materialized rating IDs",
+      "aggregate disposition counts",
+      "versioned authorization records",
+      "ingestion timestamp",
+      "funding-submission and Phase-2 authorization-false declarations"
+    ],
+    "dataset_hash_after_ingestion_required": true,
+    "receipt_contains_controlled_identifiers": true,
+    "receipt_storage": "private_controlled_record_only"
+  },
+  "authorization": {
+    "simulation": {
+      "allowed": true,
+      "synthetic_inputs_only": true,
+      "synthetic_acceptance_only": true,
+      "all_execution_approval_flags_must_remain_false": true,
+      "approval_records_must_be_empty": true,
+      "controlled_output_prohibited": true
+    },
+    "controlled_ingestion": {
+      "currently_authorized": false,
+      "required_true_fields": [
+        "Q-006B approved",
+        "Q-006C approved",
+        "protected manifest frozen",
+        "controlled assignment generated",
+        "task bundles generated",
+        "final readiness signed",
+        "task-bundle distribution authorized",
+        "rating work authorized",
+        "quality control complete",
+        "rating ingestion authorized",
+        "private controlled storage confirmed"
+      ],
+      "minimum_versioned_approval_records": 4,
+      "approval_timestamp_required": true,
+      "operator_index_must_come_from_controlled_generation": true,
+      "target_data_class": "private_controlled_pilot_record",
+      "controlled_output_must_be_outside_repository": true,
+      "controlled_output_file_mode": "0600"
+    }
+  },
+  "public_summary": {
+    "simulation_may_publish_exact_synthetic_counts": true,
+    "controlled_ingestion_exact_counts_withheld_by_default": true,
+    "may_include": [
+      "programme, report, mode, and data-class identifiers",
+      "operator-index, combined-bundle, target-dataset, and ingestion-event hashes",
+      "aggregate governance declarations",
+      "synthetic exact counts or controlled coarse completion booleans",
+      "privacy declarations"
+    ],
+    "must_exclude": [
+      "participant and rater IDs",
+      "position and critique IDs",
+      "rating IDs",
+      "bundle IDs and individual bundle hashes",
+      "task tokens",
+      "individual submission hashes",
+      "quality-control decision and operator IDs",
+      "rating content",
+      "controlled dataset and private receipt"
+    ]
+  },
+  "governance": {
+    "binding_effect": false,
+    "q_006a_approved": false,
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "controlled_assignment_generation_authorized": false,
+    "controlled_task_bundle_generation_authorized": false,
+    "task_bundle_distribution_authorized": false,
+    "rating_work_authorized": false,
+    "quality_control_acceptance_authorized": false,
+    "controlled_rating_ingestion_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  }
+}

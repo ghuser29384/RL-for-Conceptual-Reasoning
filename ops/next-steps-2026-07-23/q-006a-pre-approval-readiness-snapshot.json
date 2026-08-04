@@ -1,0 +1,50 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/q-006a-pre-approval-readiness-snapshot-v1.schema.json",
+  "snapshot_id": "q006a-pre-approval-readiness-v1-2026-08-01",
+  "snapshot_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "captured_before_approval_at": "2026-08-01T11:34:32Z",
+  "source": {
+    "path": "ops/next-steps-2026-07-23/pilot-readiness-ledger.json",
+    "ledger_id": "metaphilosophy-pilot-readiness-v1-2026-07-30",
+    "ledger_version": 1,
+    "github_blob_sha": "d0ccc4071fac3612ece4e7236e379e47b3219095"
+  },
+  "q006a": {
+    "status": "pending_project_owner_decision",
+    "approved_at": null,
+    "approval_record": "ops/next-steps-2026-07-23/q-006a-owner-approval.md"
+  },
+  "authorization_state": {
+    "methodological_adviser_recipient_research_authorized": false,
+    "methodological_adviser_outreach_authorized": false,
+    "public_recruitment_authorized": false,
+    "participant_outreach_authorized": false,
+    "nonfinal_item_screening_authorized": false,
+    "protected_manifest_freeze_authorized": false,
+    "participant_selection_authorized": false,
+    "controlled_assignment_generation_authorized": false,
+    "controlled_task_bundle_generation_authorized": false,
+    "task_bundle_distribution_authorized": false,
+    "calibration_or_rating_work_authorized": false,
+    "payment_commitment_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_activation_authorized": false
+  },
+  "readiness_gates": [
+    { "id": "R-01", "status": "blocked", "evidence": null },
+    { "id": "R-02", "status": "blocked", "evidence": null },
+    { "id": "R-03", "status": "blocked", "evidence": null },
+    { "id": "R-04", "status": "blocked", "evidence": null },
+    { "id": "R-05", "status": "blocked", "evidence": null },
+    { "id": "R-06", "status": "blocked", "evidence": null }
+  ],
+  "overall_readiness": {
+    "status": "blocked",
+    "ready_to_start": false,
+    "readiness_signed_at": null,
+    "derived_calendar_start": null,
+    "derived_calendar_end": null
+  },
+  "immutability_note": "This compact snapshot preserves the authorization and gate state immediately before Q-006A approval. The complete source ledger remains recoverable from the recorded Git blob. This snapshot is historical evidence only and never governs current authorization."
+}

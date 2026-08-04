@@ -1,0 +1,12 @@
+{
+  "status": "diagnostic_only_no_routes_approved",
+  "approved_routes": ["overall_gap", "unknown_route"],
+  "diagnostic_minimum_mean_overall_gap": 1.5,
+  "low_clarity_below": -0.1,
+  "numeric_thresholds": {
+    "overall_gap": -0.3
+  },
+  "governance": {
+    "q_006b_approved": false
+  }
+}

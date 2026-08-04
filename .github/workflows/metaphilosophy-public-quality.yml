@@ -1,0 +1,66 @@
+name: Metaphilosophy public quality
+
+on:
+  pull_request:
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
+      - "src/app.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/*.css"
+      - "research/**"
+      - "arguments/index.html"
+      - "arguments/app.mjs"
+      - "reviewers/closed.html"
+      - "scripts/build-static.mjs"
+      - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-css-dependencies.mjs"
+      - "test/public-trust-surface.test.mjs"
+      - "test/public-css-dependencies.test.mjs"
+      - "vercel.json"
+      - ".github/workflows/metaphilosophy-public-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/site-entry.mjs"
+      - "src/workspace-gate.mjs"
+      - "src/app.mjs"
+      - "src/exact-reference-home.mjs"
+      - "src/*.css"
+      - "research/**"
+      - "arguments/index.html"
+      - "arguments/app.mjs"
+      - "reviewers/closed.html"
+      - "scripts/build-static.mjs"
+      - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-css-dependencies.mjs"
+      - "test/public-trust-surface.test.mjs"
+      - "test/public-css-dependencies.test.mjs"
+      - "vercel.json"
+      - ".github/workflows/metaphilosophy-public-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-public-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/verify-public-trust-surface.mjs
+      - run: node scripts/verify-public-css-dependencies.mjs
+      - run: node --test test/public-trust-surface.test.mjs test/public-css-dependencies.test.mjs
+      - run: npm test
+      - run: npm run build
+      - run: test -f dist/research/index.html
+      - run: test -f dist/research/styles.css
+      - run: test -f dist/src/workspace-gate.mjs
+      - run: test -f dist/src/mobile-navigation.css
+      - run: test ! -e dist/src/app.mjs

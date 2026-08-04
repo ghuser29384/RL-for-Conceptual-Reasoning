@@ -1,0 +1,254 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-adjudication-contract-v1.schema.json",
+  "contract_id": "metaphilosophy-pilot-adjudication-v1-2026-08-01",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_non_binding_no_real_cases_resolutions_or_signoffs",
+  "purpose": [
+    "Turn explicitly operative analysis routes into deterministic private adjudication obligations without opening work from diagnostic-only thresholds.",
+    "Assign required cases across the two qualified dedicated adjudicators subject to topic coverage, conflict, prior-label-exposure, and role-separation constraints.",
+    "Preserve both accepted initial ratings and permit only append-only object-level reratings from the original raters.",
+    "Allow a case to close with a supported resolution, after a valid rerating, or as explicitly unresolved without fabricating consensus.",
+    "Freeze a distribution-preserving final label snapshot signed by both dedicated adjudicators without imposing a synthetic consensus score."
+  ],
+  "source_boundary": {
+    "primary_reference": "A dataset of rated conceptual arguments",
+    "reference_role": "methodological_prior_art_and_external_benchmark",
+    "source_derived_elements": [
+      "Initial raters remain blind to other raters' judgments.",
+      "Large disagreements are discussed through object-level considerations rather than pressure to match another score.",
+      "Interpretation of positions and critiques is a major source of hard-to-resolve disagreement.",
+      "Original ratings are always preserved when a later object-level reconsideration produces a new rating.",
+      "Some residual disagreements may remain after discussion and should not be hidden."
+    ],
+    "metaphilosophy_specific_extensions": [
+      "Deterministic critique-level case identifiers and case-set commitments.",
+      "Conflict-aware balanced assignment across exactly two dedicated adjudicators.",
+      "Versioned quality-controlled case-resolution records with prohibited score-imposition fields.",
+      "Explicit closure as unresolved when object-level disagreement remains.",
+      "Distribution-preserving final snapshot commitments and two-adjudicator sign-off.",
+      "Candidate honorarium-unit events that never authorize payment."
+    ],
+    "direct_lmca_row_reuse": false
+  },
+  "case_generation": {
+    "input_snapshot": "accepted_initial_ratings_only",
+    "operational_policy_required": true,
+    "diagnostic_only_policy_may_open_cases": false,
+    "one_case_per_position_critique_pair": true,
+    "case_opening_unit": "critique",
+    "operative_route_ids": [
+      "insufficient_context",
+      "item_integrity",
+      "unresolved_verification",
+      "low_clarity",
+      "overall_gap",
+      "strength_times_centrality_gap",
+      "correctness_gap",
+      "clarity_gap"
+    ],
+    "case_kinds": [
+      "rating_disagreement",
+      "item_or_context_review",
+      "evidence_review",
+      "mixed_review"
+    ],
+    "case_packet_binds": [
+      "programme",
+      "accepted-initial snapshot hash",
+      "approved analysis-policy identity and hash",
+      "position and critique identifiers",
+      "operative route details",
+      "both preserved initial rating records",
+      "assigned adjudicator",
+      "opening timestamp",
+      "authorization-false declarations"
+    ],
+    "case_set_commitment": "SHA-256 over the sorted individual case-packet hashes"
+  },
+  "adjudicator_assignment": {
+    "required_adjudicators": 2,
+    "role_separation_from_core_raters": true,
+    "required_statuses": [
+      "qualified",
+      "consented",
+      "calibrated",
+      "available"
+    ],
+    "hard_exclusions": [
+      "topic family outside approved adjudicator coverage",
+      "position conflict",
+      "critique conflict",
+      "prior label exposure to the position",
+      "adjudicator is one of the original case raters"
+    ],
+    "assignment_method": "deterministic least-loaded eligible adjudicator with secret-seed SHA-256 tiebreak",
+    "maximum_assignment_count_imbalance": 1,
+    "no_eligible_adjudicator_rule": "fail_closed_and_generate_no_assignment_for_the_case"
+  },
+  "resolution_records": {
+    "record_model": "append_only_versioned_until_first_accepted_closure",
+    "dispositions": [
+      "closed_without_rerating",
+      "closed_after_rerating",
+      "closed_unresolved"
+    ],
+    "route_dispositions": [
+      "resolved",
+      "unresolved_preserved"
+    ],
+    "required_fields": [
+      "case and case-packet binding",
+      "assigned adjudicator",
+      "object-level considerations",
+      "one disposition and rationale for every operative route",
+      "interpretation, context, and verification notes where relevant",
+      "all accepted case rerating IDs up to review time",
+      "residual disagreement summary when unresolved",
+      "minority or alternative interpretation preservation acknowledgement",
+      "no score imposition acknowledgement",
+      "no convergence pressure acknowledgement",
+      "independent quality-control disposition"
+    ],
+    "quality_control_decisions": [
+      "accepted_closure",
+      "rejected_record"
+    ],
+    "quality_control_operator_must_differ_from_adjudicator": true,
+    "corrected_resolution_rule": "A later resolution version may correct only an immediately preceding quality-control-rejected record; no record may follow an accepted closure.",
+    "prohibited_fields": [
+      "final_scores",
+      "consensus_scores",
+      "replacement_scores",
+      "imposed_score",
+      "winning_rater",
+      "majority_vote",
+      "forced_convergence"
+    ]
+  },
+  "rerating_boundary": {
+    "adjudicator_may_directly_create_or_edit_rating": false,
+    "accepted_rerating_must_be": [
+      "operator assigned",
+      "append-only",
+      "from one of the two original raters",
+      "for the same position and critique",
+      "locked after case opening",
+      "predecessor-linked to one of the preserved initial case ratings",
+      "supported by an object-level revision reason"
+    ],
+    "all_accepted_case_reratings_up_to_resolution_time_must_be_referenced": true,
+    "operational_correction_is_not_object_level_rerating": true
+  },
+  "final_label_snapshot": {
+    "semantics": "distribution_preserving_initial_and_latest_accepted_ratings_no_imposed_consensus_score",
+    "requires_all_cases": "accepted closure or explicit unresolved closure",
+    "critique_record_binds": [
+      "initial rating IDs and hash",
+      "latest accepted rating IDs and hash",
+      "case and resolution IDs where applicable",
+      "resolution disposition",
+      "unresolved-disagreement preservation flag"
+    ],
+    "consensus_score_created": false,
+    "initial_rating_overwrite_or_deletion_prohibited": true,
+    "required_signoffs": 2,
+    "signoff_rule": "Both dedicated adjudicators sign the exact snapshot-body hash once each.",
+    "signoff_acknowledgements": [
+      "completeness confirmed",
+      "original initial ratings preserved",
+      "residual disagreement preserved",
+      "no consensus score imposed",
+      "participation is not substantive endorsement"
+    ],
+    "signoff_quality_control_operator_must_differ_from_adjudicator": true
+  },
+  "honoraria_boundary": {
+    "candidate_case_closure_event": "accepted_adjudication_record_closing_an_operator_assigned_required_case",
+    "candidate_snapshot_signoff_event": "accepted_required_final_label_snapshot_signoff",
+    "candidate_units_per_event": 1,
+    "event_generation_authorizes_payment": false,
+    "payment_requires_separate_final_ledger_and_administrative_authorization": true,
+    "adjudication_reserve_usd": 100,
+    "unused_balance_remains_unspent": true
+  },
+  "authorization": {
+    "synthetic_simulation": {
+      "allowed": true,
+      "synthetic_data_only": true,
+      "approval_flags_must_remain_false": true,
+      "public_cli_output_only": true
+    },
+    "controlled_case_generation": {
+      "currently_authorized": false,
+      "requires": [
+        "Q-006B and Q-006C approvals",
+        "frozen operative analysis policy",
+        "frozen accepted-initial snapshot",
+        "final readiness signature",
+        "separate case-generation authorization",
+        "private controlled storage"
+      ],
+      "does_not_authorize": [
+        "case distribution",
+        "adjudication work",
+        "rerating work",
+        "payment",
+        "funding submission",
+        "Phase 2"
+      ]
+    },
+    "controlled_resolution": {
+      "currently_authorized": false,
+      "requires_separate_distribution_work_and_acceptance_controls": true
+    },
+    "controlled_snapshot": {
+      "currently_authorized": false,
+      "requires_all_cases_closed_or_documented_unresolved": true,
+      "requires_separate_generation_and_signoff_controls": true
+    },
+    "controlled_output": {
+      "outside_repository": true,
+      "file_mode": "0600"
+    }
+  },
+  "privacy": {
+    "case_packets": "private_controlled_record_only",
+    "resolution_records": "private_controlled_record_only",
+    "final_snapshot_and_signoffs": "private_controlled_record_only",
+    "public_summaries_may_include": [
+      "aggregate counts",
+      "case, resolution, dataset, and snapshot commitments",
+      "case-kind counts",
+      "assignment-balance diagnostics",
+      "authorization-false declarations",
+      "privacy declarations"
+    ],
+    "public_summaries_must_exclude": [
+      "adjudicator, rater, participant, and operator identifiers",
+      "position and critique identifiers",
+      "rating, case, resolution, and signoff identifiers",
+      "scores, rationales, and object-level notes",
+      "individual case-packet hashes",
+      "controlled case, resolution, snapshot, and signoff records"
+    ]
+  },
+  "governance": {
+    "binding_effect": false,
+    "q_006a_approved": false,
+    "q_006b_approved": false,
+    "q_006c_approved": false,
+    "operative_policy_approved_for_real_data": false,
+    "case_generation_authorized": false,
+    "case_distribution_authorized": false,
+    "adjudication_work_authorized": false,
+    "rerating_work_authorized": false,
+    "resolution_acceptance_authorized": false,
+    "final_snapshot_generation_authorized": false,
+    "final_snapshot_signoff_authorized": false,
+    "payment_authorized": false,
+    "publication_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  }
+}

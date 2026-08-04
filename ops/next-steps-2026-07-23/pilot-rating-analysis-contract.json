@@ -1,0 +1,143 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-rating-analysis-contract-v1.schema.json",
+  "contract_id": "pilot-rating-analysis-contract-v1-2026-07-30",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_non_binding_no_rating_data",
+  "source_basis": {
+    "primary_reference": "A dataset of rated conceptual arguments",
+    "source_derived_rules": {
+      "dimensions": [
+        "centrality",
+        "strength",
+        "correctness",
+        "clarity",
+        "dead_weight",
+        "single_issue",
+        "overall"
+      ],
+      "score_interval": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "substantive_impact_quantity": "strength_times_centrality",
+      "low_clarity_custom_loss_branch": {
+        "reference_clarity_below": 0.5,
+        "weights": {
+          "overall_absolute_difference": 0.5,
+          "clarity_absolute_difference": 0.5
+        }
+      },
+      "ordinary_custom_loss_branch": {
+        "weights": {
+          "overall_absolute_difference": 0.5,
+          "strength_times_centrality_absolute_difference": 0.2,
+          "clarity_absolute_difference": 0.1,
+          "correctness_absolute_difference": 0.1,
+          "dead_weight_absolute_difference": 0.05,
+          "single_issue_absolute_difference": 0.05
+        }
+      },
+      "weighted_pairwise_ranking_error": "Within each position, compare all critique pairs with non-equal reference overall scores; assign zero loss for matching order, half the reference score gap for a candidate tie, and the full reference score gap for reversed order; average within position and then across positions.",
+      "original_rating_preservation_required": true
+    },
+    "pilot_specific_extensions": {
+      "status": "recommended_non_binding_pending_q_006a_and_q_006b",
+      "position_is_resampling_unit": true,
+      "leave_one_position_out_required": true,
+      "pre_and_post_adjudication_outputs_separate": true,
+      "reliability_coefficients_exploratory": true,
+      "model_comparisons_exploratory": true,
+      "subgroup_effects_exploratory": true
+    }
+  },
+  "rating_record_contract": {
+    "record_model": "append_only_versioned",
+    "rubric_version": "rubric-v2-seven-dimensional",
+    "required_score_dimensions": [
+      "centrality",
+      "strength",
+      "correctness",
+      "clarity",
+      "dead_weight",
+      "single_issue",
+      "overall"
+    ],
+    "required_auxiliary_fields": [
+      "overall_rationale",
+      "confidence",
+      "time_spent_seconds",
+      "insufficient_context",
+      "verification_status",
+      "item_integrity_flags"
+    ],
+    "stages": [
+      "initial",
+      "rerating"
+    ],
+    "initial_rating_version": 1,
+    "rerating_requires_predecessor": true,
+    "rerating_requires_object_level_reason": true,
+    "overwrite_or_delete_prior_rating_prohibited": true,
+    "production_structure_proposal": {
+      "positions": 12,
+      "critiques_per_position": 4,
+      "initial_raters_per_critique": 2,
+      "accepted_initial_ratings": 96,
+      "core_raters": 6,
+      "accepted_initial_ratings_per_core_rater": 16,
+      "status": "recommended_pending_q_006a_and_final_readiness_approval"
+    }
+  },
+  "analysis_outputs": {
+    "source_derived": [
+      "lmca_custom_weighted_loss",
+      "lmca_weighted_pairwise_ranking_error"
+    ],
+    "pilot_diagnostics": [
+      "symmetric_weighted_within_position_ordering_agreement",
+      "mean_absolute_initial_rater_difference_by_dimension",
+      "interval_krippendorff_alpha_specialized_to_two_ratings_per_critique",
+      "median_and_distribution_of_accepted_rating_time",
+      "candidate_and_operative_adjudication_routes",
+      "consensus_overall_spread_by_position",
+      "position_level_results",
+      "leave_one_position_out_ranges"
+    ],
+    "not_implemented_as_a_claim": [
+      "causal_source_effect",
+      "causal_topic_effect",
+      "general_model_family_superiority",
+      "public_individual_rater_ranking",
+      "automatic_phase_2_readiness"
+    ]
+  },
+  "threshold_governance": {
+    "numeric_adjudication_thresholds_binding": false,
+    "numeric_scale_readiness_thresholds_binding": false,
+    "calibration_pass_threshold_binding": false,
+    "runtime_policy_must_explicitly_name_approved_routes": true,
+    "no_adjudication_route_is_operative_by_default": true,
+    "diagnostic_threshold_results_do_not_authorize_outreach_or_phase_2": true,
+    "later_threshold_changes_must_be_versioned_and_non_retroactive": true
+  },
+  "privacy_and_exposure": {
+    "contract_contains_rating_records": false,
+    "contract_contains_protected_item_ids_or_text": false,
+    "contract_contains_participant_names_or_email_addresses": false,
+    "contract_contains_identity_payment_or_tax_data": false,
+    "controlled_pseudonymous_rater_ids_required": true,
+    "protected_data_storage": "private_controlled_record_only",
+    "public_outputs": "aggregate_counts_approved_hashes_and_permissioned_attribution_only"
+  },
+  "authorization_boundary": {
+    "authorizes_q_006a": false,
+    "authorizes_recipient_research": false,
+    "authorizes_outreach": false,
+    "authorizes_item_screening": false,
+    "authorizes_calibration_or_rating": false,
+    "authorizes_payment": false,
+    "authorizes_funding_submission": false,
+    "authorizes_phase_2": false
+  }
+}
