@@ -75,17 +75,51 @@ test("repository-only changes skip Vercel without weakening runtime builds", () 
   );
 });
 
-test("vercel.json contains a fail-closed branch allowlist and ignored-build command", async () => {
+test("vercel.json contains deployment controls and every required public route", async () => {
   const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url)));
   assert.equal(config.git.deploymentEnabled["*"], false);
   assert.equal(config.git.deploymentEnabled.main, true);
-  assert.equal(
-    config.git.deploymentEnabled["release/vercel-preview"],
-    true,
+  assert.equal(config.git.deploymentEnabled["release/vercel-preview"], true);
+  assert.equal(config.ignoreCommand, "node scripts/vercel-ignore-build.mjs");
+
+  const rewrites = new Map(
+    config.rewrites.map((rule) => [rule.source, rule.destination]),
   );
+  for (const source of ["/research", "/research/"]) {
+    assert.equal(rewrites.get(source), "/research/index.html", source);
+  }
+  for (const source of ["/workspace", "/workspace/", "/reference", "/reference/"]) {
+    assert.equal(rewrites.get(source), "/index.html", source);
+  }
+  for (const source of [
+    "/contribute",
+    "/contribute/",
+    "/reviewers",
+    "/reviewers/",
+    "/reviewers/index.html",
+  ]) {
+    assert.equal(rewrites.get(source), "/reviewers/closed.html", source);
+  }
+
+  assert.deepEqual(config.redirects, [
+    {
+      source: "/src/assets/LMCA_dataset.pdf",
+      destination: "https://arxiv.org/pdf/2607.27499",
+      permanent: false,
+    },
+  ]);
+
+  const headerMap = new Map(
+    config.headers
+      .find((entry) => entry.source === "/(.*)")
+      .headers.map((entry) => [entry.key, entry.value]),
+  );
+  assert.equal(headerMap.get("X-Content-Type-Options"), "nosniff");
+  assert.equal(headerMap.get("X-Frame-Options"), "DENY");
+  assert.equal(headerMap.get("Referrer-Policy"), "strict-origin-when-cross-origin");
   assert.equal(
-    config.ignoreCommand,
-    "node scripts/vercel-ignore-build.mjs",
+    headerMap.get("Permissions-Policy"),
+    "camera=(), microphone=(), geolocation=()",
   );
 });
 
