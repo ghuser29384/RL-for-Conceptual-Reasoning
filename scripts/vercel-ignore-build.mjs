@@ -4,7 +4,6 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const ALLOWED_VERCEL_BRANCHES = Object.freeze([
-  "main",
   "release/vercel-preview",
 ]);
 
@@ -128,7 +127,8 @@ if (isMainModule()) {
     process.exitCode = result.skip ? 0 : 1;
   } catch (error) {
     // Vercel treats exit 0 as "skip" and exit 1 as "build". Any uncertainty
-    // must therefore fail open and preserve the release rather than suppress it.
+    // on the one approved Preview branch must preserve the release rather than
+    // suppress it.
     console.error(
       JSON.stringify({
         skip: false,
