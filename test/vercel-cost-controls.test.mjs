@@ -8,9 +8,8 @@ import {
   isKnownNonRuntimePath,
 } from "../scripts/vercel-ignore-build.mjs";
 
-test("only main and the designated release-preview branch may deploy", () => {
+test("only the designated release-preview branch may deploy", () => {
   assert.deepEqual(ALLOWED_VERCEL_BRANCHES, [
-    "main",
     "release/vercel-preview",
   ]);
 
@@ -26,11 +25,18 @@ test("only main and the designated release-preview branch may deploy", () => {
       branch: "main",
       changedFiles: ["index.html"],
     }).skip,
+    true,
+  );
+  assert.equal(
+    classifyVercelBuild({
+      branch: "release/vercel-preview",
+      changedFiles: ["index.html"],
+    }).skip,
     false,
   );
 });
 
-test("repository-only changes skip Vercel without weakening runtime builds", () => {
+test("repository-only changes skip Vercel without weakening approved Preview builds", () => {
   for (const path of [
     ".github/workflows/quality.yml",
     "docs/release.md",
@@ -57,7 +63,7 @@ test("repository-only changes skip Vercel without weakening runtime builds", () 
 
   assert.equal(
     classifyVercelBuild({
-      branch: "main",
+      branch: "release/vercel-preview",
       changedFiles: [
         "docs/release.md",
         "ops/review-packet.md",
@@ -68,17 +74,20 @@ test("repository-only changes skip Vercel without weakening runtime builds", () 
   );
   assert.equal(
     classifyVercelBuild({
-      branch: "main",
+      branch: "release/vercel-preview",
       changedFiles: ["docs/release.md", "src/site-entry.mjs"],
     }).skip,
     false,
   );
 });
 
-test("vercel.json contains a fail-closed branch allowlist and ignored-build command", async () => {
+test("vercel.json denies every branch except the designated Preview", async () => {
   const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url)));
   assert.equal(config.git.deploymentEnabled["*"], false);
-  assert.equal(config.git.deploymentEnabled.main, true);
+  assert.equal(
+    Object.hasOwn(config.git.deploymentEnabled, "main"),
+    false,
+  );
   assert.equal(
     config.git.deploymentEnabled["release/vercel-preview"],
     true,
