@@ -43,5 +43,5 @@ jobs:
             echo
             echo '- Ordinary pull requests are validated in GitHub Actions only.'
             echo '- Vercel Git deployments are limited to `main` and `release/vercel-preview` by `vercel.json`.'
-            echo '- This workflow does not invoke `vercel pull`, `vercel build`, or `vercel deploy`.'
+            echo '- This workflow contains no Vercel CLI build or deployment step.'
           } >> "$GITHUB_STEP_SUMMARY"
