@@ -2,9 +2,16 @@
   "record_id": "metaphilosophy-owner-clarifications-2026-08-05",
   "recorded_at": "2026-08-05",
   "approved_by": "Ellen Sun, project owner",
+  "decision_reference": "Use your recommendations.",
   "decision_rule": "No interpretation below 0.90 confidence becomes binding without a follow-up owner decision.",
-  "status": "three_decisions_approved_two_operational_clarifications_pending",
+  "status": "all_recommendations_approved_operational_readiness_still_pending",
   "approved": {
+    "homepage_audience": {
+      "primary": "AI-safety and AI-evaluation researchers",
+      "principal_secondary": "General philosophy users",
+      "architecture": "The homepage leads with the expert-rated-data programme, LMCA-based method, AI-reasoning objective, and research outputs. General philosophy users receive a prominent separate route for structured philosophy, argument browsing, candidate critiques, and non-expert ratings.",
+      "provenance_boundary": "Candidate critiques and non-expert ratings must remain visibly and technically segregated from expert-rated records."
+    },
     "phase_2_expert_validation_gate": {
       "candidate_generation_may_continue": true,
       "expert_validation_activation": "Requires a new explicit owner decision plus documented qualified capacity sufficient for the complete 400-critique human-rating, replacement, adjudication, and operations workload.",
@@ -25,35 +32,23 @@
     "personal_payment": {
       "payer": "Ellen Sun personally",
       "funds_origin_country": "US",
+      "default_originating_account_country": "US",
       "available_payment_account_countries_reported": [
         "US",
         "China"
       ],
-      "permitted_payment_rails_reported": [
-        "Wise",
-        "PayPal",
-        "bank transfer"
-      ],
+      "rail_policy": {
+        "us_recipients": "ACH or domestic bank transfer where available",
+        "supported_cross_border_recipients": "Wise",
+        "fallback_or_recipient_preference": "PayPal"
+      },
+      "china_account_policy": "Do not use the China-held account for Pilot 01 unless a specific payment requires it and a separate payer-recipient compliance review approves it.",
       "recipient_specific_selection_required": true,
       "sensitive_payment_or_tax_data_by_ordinary_email": false,
-      "legal_tax_and_payment_readiness_complete": false
+      "legal_tax_sanctions_and_payment_readiness_complete": false
     }
   },
-  "pending_clarifications": [
-    {
-      "id": "C-2026-08-05-01",
-      "topic": "dominant_homepage_audience",
-      "owner_answer": "B/D",
-      "reason_unresolved": "The approved audience architecture requires one clearly dominant homepage audience. B/D does not establish whether AI-safety and AI-evaluation researchers are primary with general philosophy users secondary, the reverse, or genuinely co-primary.",
-      "recommended_resolution": "Use AI-safety and AI-evaluation researchers as the primary homepage audience and general philosophy users as the principal secondary audience."
-    },
-    {
-      "id": "C-2026-08-05-02",
-      "topic": "personal_payment_account_and_rail_default",
-      "reason_unresolved": "The payer reports both US and China payment-account countries and three available rails. Readiness still requires the exact originating account jurisdiction and a recipient-specific rail rule, together with payer and recipient compliance review.",
-      "recommended_resolution": "Use a US-held account as the default origin because funds are reported as sent from the US; use ACH or domestic bank transfer for US recipients, Wise for supported cross-border transfers, and PayPal only as a fallback or recipient preference. Keep the China-held account outside the pilot unless separately required and reviewed."
-    }
-  ],
+  "pending_clarifications": [],
   "communications_control": {
     "rater_outreach_sent": false,
     "funding_application_submitted": false,
