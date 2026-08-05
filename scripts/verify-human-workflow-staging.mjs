@@ -17,7 +17,7 @@ const requiredFiles = [
   "staging/app.mjs",
   "staging/styles.css",
   "scripts/bootstrap-staging-rehearsal.mjs",
-  "scripts/smoke-staging-server.mjs",
+  "scripts/smoke-staging-runtime.mjs",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql",
 ];
@@ -74,9 +74,10 @@ assert.match(contents["src/server.mjs"], /createPlatformLmcaServer/);
 assert.match(contents["src/server.mjs"], /createStagingLmcaServer/);
 assert.match(contents["scripts/bootstrap-staging-rehearsal.mjs"], /--confirm-synthetic-rehearsal/);
 assert.match(contents["scripts/bootstrap-staging-rehearsal.mjs"], /researchRatingsAuthorized: false/);
-assert.match(contents["scripts/smoke-staging-server.mjs"], /cross_account_and_direct_object_access_denied/);
-assert.match(contents["scripts/smoke-staging-server.mjs"], /backup_restore_and_hash_chain_readback_passed/);
-assert.match(contents["scripts/smoke-staging-server.mjs"], /automated synthetic rehearsal/);
+assert.match(contents["scripts/smoke-staging-runtime.mjs"], /cross_account_direct_object_access_denied/);
+assert.match(contents["scripts/smoke-staging-runtime.mjs"], /backup_restore_and_hash_chain_readback_passed/);
+assert.match(contents["scripts/smoke-staging-runtime.mjs"], /automated synthetic runtime rehearsal/);
+assert.match(contents["scripts/smoke-staging-runtime.mjs"], /No outreach, participant selection, payment, funding submission, or real research rating was authorized/);
 
 for (const schemaPath of [
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
