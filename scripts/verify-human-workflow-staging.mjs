@@ -31,7 +31,7 @@ assert.match(RUBRIC.generalGuidance.join(" "), /Initial ratings are independent 
 
 assert.match(contents["api/staging.mjs"], /HttpOnly/);
 assert.match(contents["api/staging.mjs"], /SameSite=Strict/);
-assert.match(contents["api/staging.mjs"], /X-Staging-CSRF/);
+assert.match(contents["api/staging.mjs"], /x-staging-csrf/i);
 assert.match(contents["api/staging.mjs"], /staging_database_unconfigured/);
 assert.match(contents["api/staging.mjs"], /researchRatingsAuthorized: false/);
 assert.doesNotMatch(contents["api/staging.mjs"], /Access-Control-Allow-Origin[^\n]*\*/);
