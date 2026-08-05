@@ -10,6 +10,8 @@ const requiredFiles = [
   "src/staging-event-store.mjs",
   "src/staging-service.mjs",
   "src/staging-rubric.mjs",
+  "src/staging-server.mjs",
+  "src/platform-server.mjs",
   "src/server.mjs",
   "staging/index.html",
   "staging/app.mjs",
@@ -65,9 +67,11 @@ assert.match(contents["staging/app.mjs"], /Request correction/);
 assert.match(contents["staging/app.mjs"], /Request withdrawal/);
 assert.match(contents["staging/app.mjs"], /Explicitly unresolved/);
 
-assert.match(contents["src/server.mjs"], /Content-Security-Policy/);
-assert.match(contents["src/server.mjs"], /X-Robots-Tag/);
-assert.match(contents["src/server.mjs"], /Path traversal rejected/);
+assert.match(contents["src/staging-server.mjs"], /Content-Security-Policy/);
+assert.match(contents["src/staging-server.mjs"], /X-Robots-Tag/);
+assert.match(contents["src/staging-server.mjs"], /Path traversal rejected/);
+assert.match(contents["src/server.mjs"], /createPlatformLmcaServer/);
+assert.match(contents["src/server.mjs"], /createStagingLmcaServer/);
 assert.match(contents["scripts/bootstrap-staging-rehearsal.mjs"], /--confirm-synthetic-rehearsal/);
 assert.match(contents["scripts/bootstrap-staging-rehearsal.mjs"], /researchRatingsAuthorized: false/);
 assert.match(contents["scripts/smoke-staging-server.mjs"], /cross_account_and_direct_object_access_denied/);
