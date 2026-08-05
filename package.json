@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "node src/server.mjs",
     "serve": "node src/server.mjs",
+    "dev:staging": "node src/staging-server.mjs",
+    "serve:staging": "node src/staging-server.mjs",
     "build": "node scripts/build-static.mjs",
     "test": "node --test",
     "verify:staging": "node scripts/verify-human-workflow-staging.mjs",
