@@ -1,0 +1,84 @@
+name: Apply authenticated staging workflow payload
+
+on:
+  push:
+    branches:
+      - agent/48-critique-pilot-20260730
+    paths:
+      - ".github/workflows/apply-human-workflow-staging-payload.yml"
+      - ".github/payloads/metaphilosophy-staging.tgz"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-human-workflow-staging-payload
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/48-critique-pilot-20260730
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify and extract the reviewed payload
+        run: |
+          echo "c521572eaa25a5f96472824219b968574d07f295a4d27d37330432f03338ae64  .github/payloads/metaphilosophy-staging.tgz" | sha256sum -c -
+          tar -xzf .github/payloads/metaphilosophy-staging.tgz
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify implementation contracts and syntax
+        run: |
+          node --check api/staging.mjs
+          node --check staging/app.mjs
+          node --check src/server.mjs
+          node --check scripts/bootstrap-staging-rehearsal.mjs
+          node --check scripts/smoke-server.mjs
+          node --check scripts/verify-human-workflow-staging.mjs
+          node --check e2e/human-workflow-staging.spec.mjs
+          node scripts/verify-human-workflow-staging.mjs
+          node --test test/human-workflow-staging-contract.test.mjs
+          npm run build
+          node scripts/smoke-server.mjs
+
+      - name: Commit the authenticated staging implementation
+        env:
+          BRANCH: agent/48-critique-pilot-20260730
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/metaphilosophy-human-workflow-staging.yml \
+            api/staging.mjs \
+            e2e/human-workflow-staging.spec.mjs \
+            e2e/staging.playwright.config.mjs \
+            ops/next-steps-2026-07-23/human-workflow-readiness-ledger-v1.json \
+            ops/next-steps-2026-07-23/human-workflow-staging-runbook-2026-08-05.md \
+            ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql \
+            ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql \
+            scripts/bootstrap-staging-rehearsal.mjs \
+            scripts/build-static.mjs \
+            scripts/smoke-server.mjs \
+            scripts/verify-human-workflow-staging.mjs \
+            src/server.mjs \
+            staging/app.mjs \
+            staging/index.html \
+            staging/styles.css \
+            supabase/functions/metaphilosophy-staging/deno.json \
+            supabase/functions/metaphilosophy-staging/index.ts \
+            supabase/functions/metaphilosophy-staging/rubric.ts \
+            test/human-workflow-staging-contract.test.mjs \
+            vercel.json
+          git diff --cached --check
+          git commit -m "Build authenticated human-workflow staging"
+          git push origin "HEAD:${BRANCH}"
