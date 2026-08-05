@@ -35,4 +35,7 @@ await cp(resolve(root, "reviewers"), resolve(dist, "reviewers"), { recursive: tr
 await cp(resolve(root, "arguments"), resolve(dist, "arguments"), { recursive: true });
 await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });
 
-console.log(`Static public build written to ${dist}; ${publicSrcFiles.length} allowlisted source files copied.`);
+// The staging shell contains no protected research item. Access to every workflow record remains server-side and authenticated.
+await cp(resolve(root, "staging"), resolve(dist, "staging"), { recursive: true });
+
+console.log(`Static public build written to ${dist}; ${publicSrcFiles.length} allowlisted public source files and the controlled staging shell copied.`);
