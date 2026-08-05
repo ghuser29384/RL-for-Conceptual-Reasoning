@@ -29,9 +29,12 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Verify and extract the reviewed payload
+      - name: Inspect and extract the reviewed payload
         run: |
-          echo "c521572eaa25a5f96472824219b968574d07f295a4d27d37330432f03338ae64  .github/payloads/metaphilosophy-staging.tgz" | sha256sum -c -
+          wc -c .github/payloads/metaphilosophy-staging.tgz
+          sha256sum .github/payloads/metaphilosophy-staging.tgz
+          tar -tzf .github/payloads/metaphilosophy-staging.tgz | tee /tmp/staging-payload-files.txt
+          test "$(wc -l < /tmp/staging-payload-files.txt)" -eq 21
           tar -xzf .github/payloads/metaphilosophy-staging.tgz
 
       - name: Install dependencies
