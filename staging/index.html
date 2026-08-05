@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Metaphilosophy Review — controlled staging</title>
+  <link rel="stylesheet" href="/staging/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="wordmark" href="/staging/" aria-label="Metaphilosophy Review staging home">
+      <span>Metaphilosophy</span>
+      <small>Review · controlled staging</small>
+    </a>
+    <div class="environment-badge" aria-label="Environment">Synthetic rehearsal only</div>
+  </header>
+
+  <main id="app" class="app-shell" aria-live="polite">
+    <section id="loading-panel" class="panel compact-panel">
+      <p class="eyebrow">Controlled access</p>
+      <h1>Checking your staging session…</h1>
+      <p class="muted">No response entered here is authorized for Pilot 01 research unless a later signed readiness record says otherwise.</p>
+    </section>
+
+    <section id="login-panel" class="panel compact-panel" hidden>
+      <p class="eyebrow">Invitation required</p>
+      <h1>Open your assigned workspace</h1>
+      <p>This non-public staging environment exercises the complete rating workflow with synthetic rehearsal records. Invitation links expire, are single-use, and can be revoked.</p>
+      <form id="invite-form" novalidate>
+        <label>
+          <span>Invitation token</span>
+          <input id="invite-token" name="token" type="password" autocomplete="one-time-code" required>
+        </label>
+        <button type="submit" class="primary-button">Redeem invitation</button>
+      </form>
+      <p id="login-error" class="error-message" role="alert" hidden></p>
+    </section>
+
+    <section id="workspace-panel" hidden>
+      <div class="workspace-header panel">
+        <div>
+          <p id="role-kicker" class="eyebrow">Workspace</p>
+          <h1 id="workspace-title">Metaphilosophy Review</h1>
+          <p id="workspace-subtitle" class="muted"></p>
+        </div>
+        <div class="header-actions">
+          <span id="identity-label" class="identity-label"></span>
+          <button id="refresh-button" type="button" class="secondary-button">Refresh</button>
+          <button id="logout-button" type="button" class="secondary-button">Sign out</button>
+        </div>
+      </div>
+      <div id="workspace-content"></div>
+    </section>
+  </main>
+
+  <template id="score-field-template">
+    <label class="score-field">
+      <span class="score-label"></span>
+      <input type="number" min="0" max="1" step="0.01" inputmode="decimal" required>
+      <small class="score-hint"></small>
+    </label>
+  </template>
+
+  <template id="critique-card-template">
+    <article class="critique-card" data-critique-id="">
+      <header>
+        <p class="critique-number"></p>
+        <h3 class="critique-title"></h3>
+      </header>
+      <blockquote class="critique-text"></blockquote>
+      <details class="rubric-details">
+        <summary>Open the full LMCA-derived scoring guidance</summary>
+        <div class="rubric-detail-content"></div>
+      </details>
+      <form class="rating-form" novalidate>
+        <fieldset class="score-grid">
+          <legend>Seven LMCA dimensions</legend>
+        </fieldset>
+        <div class="structured-grid">
+          <label><span>Assessability</span><select name="assessability" required><option value="">Select</option><option value="assessable">Assessable</option><option value="clearly_unsatisfactory">Clearly unsatisfactory</option><option value="not_meaningfully_assessable">Not meaningfully assessable</option></select></label>
+          <label><span>Interpretation confidence</span><select name="interpretationConfidence" required><option value="">Select</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+          <label><span>Rating confidence</span><select name="confidence" required><option value="">Select</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+          <label><span>Correctness verification</span><select name="verificationStatus" required><option value="">Select</option><option value="not_needed">Not needed</option><option value="checked">Checked</option><option value="partially_checked">Partially checked</option><option value="unable_to_check">Unable to check</option></select></label>
+          <label><span>Time spent on this critique (seconds)</span><input name="timeSpentSeconds" type="number" min="0" max="86400" step="1" required></label>
+        </div>
+        <label class="full-width"><span>Object-level rationale</span><textarea name="rationale" rows="7" maxlength="12000" required></textarea></label>
+        <label class="full-width"><span>Relevant background assumptions or competing interpretations</span><textarea name="backgroundAssumptions" rows="4" maxlength="4000"></textarea></label>
+        <fieldset class="issue-flags"><legend>Issue flags</legend><div class="issue-flag-grid"></div></fieldset>
+        <label class="check-row"><input name="requestReview" type="checkbox"><span>Request adjudication even if no numerical trigger fires</span></label>
+        <div class="form-status" role="status"></div>
+      </form>
+    </article>
+  </template>
+
+  <template id="operator-template">
+    <section class="panel">
+      <p class="eyebrow">Operator controls</p>
+      <h2>Synthetic rehearsal administration</h2>
+      <div id="operator-counts" class="metrics-grid"></div>
+      <div class="operator-grid">
+        <form id="create-identity-form" class="subpanel">
+          <h3>Create controlled identity</h3>
+          <label><span>Display name</span><input name="displayName" required></label>
+          <label><span>Email</span><input name="email" type="email" required></label>
+          <label><span>Role</span><select name="role" required><option value="rater">Rater</option><option value="adjudicator">Adjudicator</option><option value="operator">Operator</option></select></label>
+          <button class="primary-button" type="submit">Create identity</button>
+          <div class="form-status" role="status"></div>
+        </form>
+        <form id="create-invite-form" class="subpanel">
+          <h3>Issue expiring invitation</h3>
+          <label><span>Identity</span><select name="identityId" required></select></label>
+          <label><span>Expires in hours</span><input name="expiresInHours" type="number" min="1" max="168" value="72" required></label>
+          <button class="primary-button" type="submit">Create invitation</button>
+          <label class="full-width"><span>One-time token</span><textarea id="issued-token" rows="3" readonly></textarea></label>
+          <div class="form-status" role="status"></div>
+        </form>
+        <form id="create-assignment-form" class="subpanel">
+          <h3>Assign rehearsal position</h3>
+          <label><span>Rater identity</span><select name="identityId" required></select></label>
+          <label><span>Position ID</span><input name="positionId" value="synthetic-rehearsal-position-001" required></label>
+          <button class="primary-button" type="submit">Create assignment</button>
+          <div class="form-status" role="status"></div>
+        </form>
+        <div class="subpanel">
+          <h3>Audit exports</h3>
+          <p class="muted">Private exports contain identities and append-only events. Public exports omit identity and session data.</p>
+          <div class="button-row"><button id="private-export-button" class="secondary-button" type="button">Download private export</button><button id="public-export-button" class="secondary-button" type="button">Download public-safe export</button></div>
+        </div>
+      </div>
+      <div class="table-wrap"><table><caption>Controlled identities</caption><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>ID</th></tr></thead><tbody id="identity-table-body"></tbody></table></div>
+      <div class="table-wrap"><table><caption>Assignments</caption><thead><tr><th>Identity</th><th>Kind</th><th>Status</th><th>Position</th><th>ID</th></tr></thead><tbody id="assignment-table-body"></tbody></table></div>
+    </section>
+  </template>
+
+  <template id="adjudicator-template">
+    <section class="panel">
+      <p class="eyebrow">Independent adjudication</p>
+      <h2>Triggered disagreement cases</h2>
+      <p class="muted">Review object-level considerations. Do not revise a rating merely because another rater disagreed. Unresolved interpretation is an allowed final status.</p>
+      <div id="adjudication-case-list"></div>
+    </section>
+  </template>
+
+  <script type="module" src="/staging/app.mjs"></script>
+</body>
+</html>
