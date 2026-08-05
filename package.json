@@ -14,7 +14,7 @@
     "build": "node scripts/build-static.mjs",
     "test": "node --test",
     "verify:staging": "node scripts/verify-human-workflow-staging.mjs",
-    "smoke:server": "node scripts/smoke-staging-server.mjs",
+    "smoke:server": "node scripts/smoke-staging-runtime.mjs",
     "bootstrap:staging": "node scripts/bootstrap-staging-rehearsal.mjs --confirm-synthetic-rehearsal",
     "check:staging": "npm run verify:staging && npm run test && npm run build && npm run smoke:server",
     "check": "npm run test && npm run build"
