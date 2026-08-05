@@ -40,7 +40,9 @@ test("two isolated browser raters autosave, resume, submit, and hand off an unre
   await expect(pageA.locator(".critique-card")).toHaveCount(4);
   await expect(pageA.getByText("Synthetic browser rater B")).toHaveCount(0);
   await expect(pageA.getByText("Source", { exact: true })).toHaveCount(0);
-  await expect(pageA.getByText("Seven LMCA dimensions")).toBeVisible();
+  const dimensionLegends = pageA.getByText("Seven LMCA dimensions", { exact: true });
+  await expect(dimensionLegends).toHaveCount(4);
+  await expect(dimensionLegends.first()).toBeVisible();
 
   const firstCardA = pageA.locator(".critique-card").first();
   await completeRating(firstCardA, { overall: 0.9, strength: 0.9, requestReview: true });
