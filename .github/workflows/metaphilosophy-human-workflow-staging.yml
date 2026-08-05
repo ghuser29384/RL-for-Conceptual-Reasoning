@@ -8,13 +8,16 @@ on:
     paths:
       - "api/staging.mjs"
       - "src/staging-*.mjs"
+      - "src/platform-server.mjs"
       - "src/server.mjs"
       - "staging/**"
       - "scripts/bootstrap-staging-rehearsal.mjs"
       - "scripts/smoke-staging-server.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
       - "scripts/build-static.mjs"
+      - "scripts/vercel-ignore-build.mjs"
       - "test/human-workflow-staging-contract.test.mjs"
+      - "test/vercel-cost-controls-backport.test.mjs"
       - "e2e/human-workflow-staging.spec.mjs"
       - "e2e/staging.playwright.config.mjs"
       - "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v*.sql"
@@ -28,13 +31,16 @@ on:
     paths:
       - "api/staging.mjs"
       - "src/staging-*.mjs"
+      - "src/platform-server.mjs"
       - "src/server.mjs"
       - "staging/**"
       - "scripts/bootstrap-staging-rehearsal.mjs"
       - "scripts/smoke-staging-server.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
       - "scripts/build-static.mjs"
+      - "scripts/vercel-ignore-build.mjs"
       - "test/human-workflow-staging-contract.test.mjs"
+      - "test/vercel-cost-controls-backport.test.mjs"
       - "e2e/human-workflow-staging.spec.mjs"
       - "e2e/staging.playwright.config.mjs"
       - "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v*.sql"
@@ -67,12 +73,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check staging syntax
+      - name: Check staging and compatibility syntax
         run: |
           node --check api/staging.mjs
           node --check src/staging-event-store.mjs
           node --check src/staging-rubric.mjs
           node --check src/staging-service.mjs
+          node --check src/staging-server.mjs
+          node --check src/platform-server.mjs
           node --check src/server.mjs
           node --check staging/app.mjs
           node --check scripts/bootstrap-staging-rehearsal.mjs
@@ -90,8 +98,17 @@ jobs:
       - name: Run complete repository tests
         run: npm test
 
-      - name: Build exact static release
-        run: npm run build
+      - name: Build ordinary public release without staging shell
+        run: |
+          npm run build
+          test ! -e dist/staging
+
+      - name: Build explicit controlled-staging release
+        run: |
+          STAGING_BUILD=true npm run build
+          test -f dist/staging/index.html
+          test -f dist/staging/app.mjs
+          test -f dist/staging/styles.css
 
       - name: Run end-to-end HTTP synthetic rehearsal
         run: npm run smoke:server
