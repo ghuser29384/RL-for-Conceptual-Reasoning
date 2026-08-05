@@ -12,6 +12,7 @@ on:
       - "src/server.mjs"
       - "staging/**"
       - "scripts/bootstrap-staging-rehearsal.mjs"
+      - "scripts/smoke-staging-runtime.mjs"
       - "scripts/smoke-staging-server.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
       - "scripts/build-static.mjs"
@@ -35,6 +36,7 @@ on:
       - "src/server.mjs"
       - "staging/**"
       - "scripts/bootstrap-staging-rehearsal.mjs"
+      - "scripts/smoke-staging-runtime.mjs"
       - "scripts/smoke-staging-server.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
       - "scripts/build-static.mjs"
@@ -83,7 +85,9 @@ jobs:
           node --check src/platform-server.mjs
           node --check src/server.mjs
           node --check staging/app.mjs
+          node --check staging/operator-token-guard.mjs
           node --check scripts/bootstrap-staging-rehearsal.mjs
+          node --check scripts/smoke-staging-runtime.mjs
           node --check scripts/smoke-staging-server.mjs
           node --check scripts/verify-human-workflow-staging.mjs
           node --check e2e/human-workflow-staging.spec.mjs
@@ -110,7 +114,7 @@ jobs:
           test -f dist/staging/app.mjs
           test -f dist/staging/styles.css
 
-      - name: Run end-to-end HTTP synthetic rehearsal
+      - name: Run deterministic synthetic lifecycle rehearsal
         run: npm run smoke:server
 
       - name: Upload contract and rehearsal evidence
@@ -121,6 +125,7 @@ jobs:
           path: .staging-evidence
           if-no-files-found: warn
           retention-days: 30
+          include-hidden-files: true
 
   rendered-browser-rehearsal:
     name: Rendered Chromium rehearsal
@@ -155,3 +160,4 @@ jobs:
           path: .staging-evidence
           if-no-files-found: warn
           retention-days: 30
+          include-hidden-files: true
