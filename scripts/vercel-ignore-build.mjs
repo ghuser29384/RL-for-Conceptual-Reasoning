@@ -2,7 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 
-const allowedBranches = new Set(["main", "release/vercel-preview"]);
+const allowedBranches = new Set(["release/vercel-preview"]);
 const branch = String(process.env.VERCEL_GIT_COMMIT_REF ?? "").trim();
 
 if (branch && !allowedBranches.has(branch)) {
