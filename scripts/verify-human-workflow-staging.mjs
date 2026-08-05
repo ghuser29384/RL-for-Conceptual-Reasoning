@@ -36,8 +36,9 @@ assert.match(contents["api/staging.mjs"], /staging_database_unconfigured/);
 assert.match(contents["api/staging.mjs"], /researchRatingsAuthorized: false/);
 assert.doesNotMatch(contents["api/staging.mjs"], /Access-Control-Allow-Origin[^\n]*\*/);
 
-assert.match(contents["src/staging-event-store.mjs"], /append-only/i);
+assert.match(contents["src/staging-event-store.mjs"], /appendFile/);
 assert.match(contents["src/staging-event-store.mjs"], /verifyEventChain/);
+assert.match(contents["src/staging-event-store.mjs"], /prevHash/);
 assert.match(contents["src/staging-event-store.mjs"], /pg_advisory_xact_lock/);
 assert.match(contents["src/staging-service.mjs"], /invite\.revoked/);
 assert.match(contents["src/staging-service.mjs"], /invite\.replaced/);
