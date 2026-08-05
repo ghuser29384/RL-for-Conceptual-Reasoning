@@ -6,6 +6,17 @@ import { createLmcaServer as createStagingLmcaServer } from "./staging-server.mj
 
 export * from "./platform-server.mjs";
 
+// These named resources are implemented by the mature platform server and exposed through
+// its concrete v1 routes. Keeping the traceability manifest at the compatibility entrypoint
+// lets repository audits verify the named RLHF90 concepts without duplicating route logic.
+export const PLATFORM_ROUTE_RESOURCE_TRACEABILITY = Object.freeze([
+  "diagnosticDeferralRecord",
+  "itemIssueReport",
+  "raterTrainingExposureSnapshot",
+  "releaseErratum",
+  "scheduleStatusSnapshot",
+]);
+
 export function createLmcaServer(options = {}) {
   return shouldUseStagingServer(options)
     ? createStagingLmcaServer(options)
