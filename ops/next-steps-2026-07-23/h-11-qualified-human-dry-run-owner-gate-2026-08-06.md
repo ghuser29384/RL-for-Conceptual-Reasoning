@@ -1,16 +1,16 @@
 # H-11 qualified-human synthetic dry-run owner gate — 2026-08-06
 
 **Packet ID:** `H11-OWNER-GATE-2026-08-06-V1`  
-**Status:** prepared for owner review; **not approved; do not contact anyone**  
+**Status:** protected pre-H11 engineering gate passed on exact release; prepared for owner review; **not approved; do not contact anyone**  
 **Operations owner:** Ellen Sun  
-**Evidence dependency:** `staging-acceptance-evidence-2026-08-06.json`  
+**Evidence dependency:** `hosted-staging-acceptance-evidence-2026-08-06-v1.json`  
 **Controlling audit:** `human-expert-rating-workflow-audit-2026-08-04.md`
 
 ## Decision boundary
 
 This packet prepares the H-11 decision but does not select a participant, authorize an email, create an invitation, distribute an assignment, promise an honorarium, collect a rating, or activate research use.
 
-Even after owner approval of this packet, outreach remains fail-closed until H-01 through H-10 pass on the exact protected hosted release. In particular, the current evidence still lacks a protected hosted workspace, a dedicated hosted staging database, the complete rater-visible correction and withdrawal drill, all three retained adjudication closure paths through the intended interface, and a support tabletop record.
+The pre-H11 engineering gate is now evidenced on exact protected release `202135a21fb15f5a12698e6a78e8c8d8b7fa79ef`. The record combines exact-head CI, rendered desktop and narrow-mobile rehearsals, Vercel OIDC to the retained Supabase Postgres project, a complete hosted synthetic lifecycle, correction and withdrawal, adjudication, support-tabletop, backup and exact restore, and a READY SSO-protected deployment. This technical pass does not pass H-11, authorize contact, or establish qualified-human comprehension. Outreach remains fail-closed until Ellen Sun explicitly approves the selections, message, support plan, honorarium, and contact authorization in this packet, and all recipient-specific checks are complete.
 
 ## Recommended qualified dry-run slate
 
@@ -120,7 +120,7 @@ Default rails after recipient-specific review are ACH or domestic bank transfer 
 
 **Sender:** Ellen Sun.  
 **Support owner:** Ellen Sun.  
-**Support promise:** acknowledge access-blocking or suspected-disclosure reports as promptly as reasonably possible during the agreed dry-run window; revoke access immediately when compromise is plausible; make no promise of continuous availability or a guaranteed response time until the support tabletop fixes and verifies one.
+**Support promise:** acknowledge access-blocking or suspected-disclosure reports as promptly as reasonably possible during the agreed dry-run window; revoke access immediately when compromise is plausible; follow the verified P0–P3 incident runbook; make no promise of continuous availability or a guaranteed response time.
 
 ## Exact proposed first message
 
@@ -136,14 +136,14 @@ Default rails after recipient-specific review are ACH or domestic bank transfer 
 >
 > Subject to payment onboarding and the applicable recipient-specific checks, I propose a flat USD 75 usability honorarium for the completed session.
 >
-> Would you be open to doing this after the protected staging release is ready? I would send the exact scope, privacy terms, and access window before you decide finally.
+> Would you be open to doing this during a private protected staging window? I would send the exact scope, privacy terms, and access window before you decide finally.
 >
 > Best,
 > Ellen Sun
 
 ## Reply handling
 
-- **Interested:** thank the person; do not issue access until the hosted release, database, remaining H-01 through H-10 evidence, consent text, payment checks, and exact session window are complete.
+- **Interested:** thank the person; do not issue access until this packet is explicitly approved, professional-contact and conflict checks are complete, consent and privacy terms are final, payment eligibility and wording are cleared, and the exact session window is set.
 - **Question:** answer only within the approved synthetic scope; escalate methodological or compensation changes to the owner decision record.
 - **Decline or no capacity:** thank the person and make no further request beyond the one permitted follow-up for non-response.
 - **Conflict or concern:** record privately, do not debate, and move to the next approved fallback only after the operations owner authorizes that substitution.
@@ -166,7 +166,7 @@ Every field below defaults to **not approved**:
 | Separate QA honorarium | USD 75 each; USD 150 ceiling | Not approved |
 | Payment wording and rails | Recipient-specific private onboarding | Not approved |
 | Professional-contact re-verification | Required immediately before send | Not approved as completed |
-| Contact or invitation | Remains prohibited until H-01 through H-10 pass | Not authorized |
+| Contact or invitation | May be authorized only through explicit approval of this packet after recipient-specific checks | Not authorized |
 
 ## Approval syntax
 
@@ -181,7 +181,7 @@ honorarium: USD 75 each, USD 150 separate QA ceiling
 sender/support owner: Ellen Sun
 message: exact proposed first message
 follow-up: one after seven calendar days
-contact authorization: only after H-01 through H-10 are evidenced as passed on the exact protected hosted release
+contact authorization: approved only after recipient-specific professional-contact, conflict, eligibility, payment, consent, and scheduling checks are complete
 ```
 
 Approval of this packet would still not authorize real research ratings, pilot participant selection, the 48-critique assignment graph, public recruitment, ingestion of real ratings, adjudication work, publication, funding submission, or Phase 2.
