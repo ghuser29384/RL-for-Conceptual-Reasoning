@@ -18,6 +18,8 @@ const requiredFiles = [
   "staging/styles.css",
   "scripts/bootstrap-staging-rehearsal.mjs",
   "scripts/smoke-staging-runtime.mjs",
+  "scripts/run-human-workflow-support-tabletop.mjs",
+  "e2e/human-workflow-staging.spec.mjs",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql",
 ];
@@ -63,8 +65,15 @@ assert.match(contents["staging/index.html"], /not meaningfully assessable/i);
 assert.match(contents["staging/app.mjs"], /debounced|scheduleAutosave|autosave/i);
 assert.match(contents["staging/app.mjs"], /Submit all four ratings/);
 assert.match(contents["staging/app.mjs"], /other raters, and adjudication state are hidden/i);
-assert.match(contents["staging/app.mjs"], /Request correction/);
-assert.match(contents["staging/app.mjs"], /Request withdrawal/);
+assert.match(contents["staging/app.mjs"], /Correction request:/);
+assert.match(contents["staging/app.mjs"], /Original ratings remain immutable/);
+assert.match(contents["staging/app.mjs"], /Withdrawal recorded; assignment locked/);
+assert.match(contents["staging/app.mjs"], /Accepted records remain retained/);
+assert.match(contents["staging/app.mjs"], /Approve predecessor-linked re-rating/);
+assert.match(contents["staging/app.mjs"], /Open adjudication case/);
+assert.match(contents["staging/app.mjs"], /Close resolved/);
+assert.match(contents["staging/app.mjs"], /Close unresolved/);
+assert.match(contents["staging/app.mjs"], /Close item defective/);
 assert.match(contents["staging/app.mjs"], /Explicitly unresolved/);
 
 assert.match(contents["src/staging-server.mjs"], /Content-Security-Policy/);
@@ -78,6 +87,20 @@ assert.match(contents["scripts/smoke-staging-runtime.mjs"], /cross_account_direc
 assert.match(contents["scripts/smoke-staging-runtime.mjs"], /backup_restore_and_hash_chain_readback_passed/);
 assert.match(contents["scripts/smoke-staging-runtime.mjs"], /automated synthetic runtime rehearsal/);
 assert.match(contents["scripts/smoke-staging-runtime.mjs"], /No outreach, participant selection, payment, funding submission, or real research rating was authorized/);
+
+assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /Ellen Sun/);
+assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /severity: "P1"/);
+assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /revoked_invite/);
+assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /replacement_token_single_redemption_passed/);
+assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /outbound_message_sent: false/);
+assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /research_ratings_authorized: false/);
+
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /Correction request: open/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /Withdrawal recorded; assignment locked/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /Close unresolved/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /without re-rating/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /predecessor-linked re-rating/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /snapshot\.reratingIds\.length === 4/);
 
 for (const schemaPath of [
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
@@ -98,6 +121,8 @@ console.log(JSON.stringify({
   claims: {
     authenticatedStagingArchitectureDefined: true,
     automatedSyntheticRehearsalDefined: true,
+    automatedSyntheticOperationsUiDefined: true,
+    automatedSupportTabletopDefined: true,
     hostedDatabaseConfigured: false,
     qualifiedHumanDryRunsComplete: false,
     operationsOwnerReadinessSigned: false,
