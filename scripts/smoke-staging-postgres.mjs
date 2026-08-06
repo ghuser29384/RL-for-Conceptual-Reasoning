@@ -19,12 +19,12 @@ let restoreStore = null;
 try {
   await sourceStore.initialize();
   const sourceMetadata = await inspectSchema(sourceStore);
-  assert.equal(sourceMetadata.schemaVersion, 2);
+  assert.equal(sourceMetadata.schemaVersion, 3);
   assert.equal(sourceMetadata.purpose, "synthetic_rehearsal_only");
   assert.equal(sourceMetadata.researchRatingsAuthorized, false);
   assert.equal(sourceMetadata.eventsTableRls, true);
   assert.equal(sourceMetadata.metadataTableRls, true);
-  timeline.push("reviewed_v1_v2_migrations_and_fail_closed_metadata_verified");
+  timeline.push("reviewed_v1_v2_v3_migrations_and_fail_closed_metadata_verified");
 
   const sourceService = new StagingWorkflowService({ store: sourceStore, now });
   await sourceService.initialize();
@@ -159,14 +159,14 @@ try {
   timeline.push("second_database_exact_event_restore_chain_readback_and_session_resume_passed");
 
   const report = {
-    schemaVersion: "metaphilosophy-human-workflow-postgres-rehearsal-v1",
+    schemaVersion: "metaphilosophy-human-workflow-postgres-rehearsal-v2",
     generatedAt: new Date().toISOString(),
     status: "pass",
     scope: "ephemeral GitHub Actions PostgreSQL service; automated synthetic data only",
     researchRatingsAuthorized: false,
     timeline,
     migrations: {
-      versions: [1, 2],
+      versions: [1, 2, 3],
       purpose: sourceMetadata.purpose,
       eventsTableRls: sourceMetadata.eventsTableRls,
       metadataTableRls: sourceMetadata.metadataTableRls,
@@ -209,7 +209,7 @@ try {
       protectedOrRealItemPresent: false,
     },
     limitations: [
-      "The PostgreSQL service and both databases are disposable GitHub Actions resources, not a protected hosted preview database.",
+      "The PostgreSQL service and both databases are disposable GitHub Actions resources, not the protected hosted preview database.",
       "This does not prove external-network availability, Vercel-to-database connectivity, or deployment protection.",
       "No qualified human dry-run rater participated.",
       "No outreach, participant selection, payment, real research rating, publication, funding submission, or Phase 2 action is authorized.",
