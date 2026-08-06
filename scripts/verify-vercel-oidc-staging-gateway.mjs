@@ -55,7 +55,7 @@ assert.equal(data.persistence, "supabase_postgres");
 assert.equal(data.researchRatingsAuthorized, false);
 assert.equal(data.metadata?.purpose, "synthetic_rehearsal_only");
 assert.equal(data.metadata?.research_ratings_authorized, false);
-assert.equal(data.metadata?.schema_version, 3);
+assert.equal(data.metadata?.schema_version, 4);
 assert.equal(data.chain?.ok, true);
 assert.ok(Number.isInteger(data.chain?.events) && data.chain.events >= 0);
 assert.match(String(data.chain?.headHash), /^[a-f0-9]{64}$/u);
