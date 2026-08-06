@@ -30,7 +30,16 @@ jobs:
         env:
           PACKAGE_SHA256: "9c96d6a8aef703c8a26d8cf21d55e4dfd03a9ea426d54d1b48c130b33f81d0be"
         run: |
-          base64 --decode .github/h11-owner-policy-package-v2.b64 > /tmp/h11-package.zip
+          test "$(find .github/h11pkg -maxdepth 1 -type f -name 'chunk-*.b64' | wc -l)" -eq 6
+          test "$(wc -c < .github/h11pkg/chunk-00.b64)" -eq 8000
+          test "$(wc -c < .github/h11pkg/chunk-01.b64)" -eq 8000
+          test "$(wc -c < .github/h11pkg/chunk-02.b64)" -eq 8000
+          test "$(wc -c < .github/h11pkg/chunk-03.b64)" -eq 8000
+          test "$(wc -c < .github/h11pkg/chunk-04.b64)" -eq 8000
+          test "$(wc -c < .github/h11pkg/chunk-05.b64)" -eq 1520
+          cat .github/h11pkg/chunk-*.b64 > /tmp/h11-package.b64
+          test "$(wc -c < /tmp/h11-package.b64)" -eq 41520
+          base64 --decode /tmp/h11-package.b64 > /tmp/h11-package.zip
           printf '%s  %s\n' "$PACKAGE_SHA256" /tmp/h11-package.zip | sha256sum --check --strict
           rm -rf /tmp/h11-package
           mkdir -p /tmp/h11-package
@@ -113,8 +122,9 @@ jobs:
         env:
           BRANCH: agent/48-critique-pilot-20260730
         run: |
-          rm .github/workflows/apply-h11-owner-policy-decisions-once.yml
-          rm .github/h11-owner-policy-package-v2.b64
+          rm -f .github/workflows/apply-h11-owner-policy-decisions-once.yml
+          rm -f .github/h11-owner-policy-package-v2.b64
+          rm -rf .github/h11pkg
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
