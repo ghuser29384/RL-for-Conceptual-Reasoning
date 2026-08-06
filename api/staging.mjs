@@ -7,6 +7,8 @@ import { StagingWorkflowService, serviceError } from "../src/staging-service.mjs
 const COOKIE_NAME = "mp_staging_session";
 const JSON_LIMIT_BYTES = 1_000_000;
 const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
+const HOSTED_GATEWAY_URL = "https://mbswhjnjvwlewdqmwwcf.supabase.co/functions/v1/metaphilosophy-staging-ledger";
+const HOSTED_CSRF_DOMAIN = "metaphilosophy-staging-preview-csrf-v1";
 const MUTATING_ACTIONS = new Set([
   "logout",
   "identity.create",
@@ -40,7 +42,7 @@ export function createStagingApiHandler(options = {}) {
     }
 
     try {
-      const runtime = await getRuntime(options);
+      const runtime = await getRuntime(options, req);
       const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
       const action = url.searchParams.get("action") || "health";
       const sessionToken = readCookie(req.headers.cookie, COOKIE_NAME);
@@ -57,6 +59,11 @@ export function createStagingApiHandler(options = {}) {
             environment: runtime.mode,
             persistence: runtime.store.constructor.name,
             chain: await runtime.store.verifyChain(),
+            release: {
+              sha: runtime.environment.VERCEL_GIT_COMMIT_SHA ?? null,
+              branch: runtime.environment.VERCEL_GIT_COMMIT_REF ?? null,
+              vercelEnvironment: runtime.environment.VERCEL_ENV ?? null,
+            },
             researchRatingsAuthorized: false,
           };
           break;
@@ -176,7 +183,7 @@ export function createStagingApiHandler(options = {}) {
   };
 }
 
-async function getRuntime(options) {
+async function getRuntime(options, req) {
   if (options.runtime) return options.runtime;
   if (options.store) {
     const service = options.service ?? new StagingWorkflowService({ store: options.store, now: options.now });
@@ -189,14 +196,37 @@ async function getRuntime(options) {
       mode: options.mode ?? "test",
     };
   }
-  if (cachedRuntime) return cachedRuntime;
 
   const environment = process.env;
   const isVercel = Boolean(environment.VERCEL);
-  const isDesignatedReleasePreview = isVercel && environment.VERCEL_GIT_COMMIT_REF === RELEASE_PREVIEW_BRANCH;
+  const isDesignatedReleasePreview = isVercel
+    && environment.VERCEL_ENV === "preview"
+    && environment.VERCEL_GIT_COMMIT_REF === RELEASE_PREVIEW_BRANCH;
+
+  if (isDesignatedReleasePreview) {
+    const oidcToken = String(req.headers["x-vercel-oidc-token"] ?? "");
+    if (!oidcToken) {
+      throw serviceError(503, "vercel_oidc_unavailable", "The protected preview did not supply its Vercel OIDC identity.");
+    }
+    const store = createStagingEventStore({
+      gatewayUrl: environment.METAPHILOSOPHY_STAGING_GATEWAY_URL ?? HOSTED_GATEWAY_URL,
+      oidcToken,
+      expectedReleaseSha: environment.VERCEL_GIT_COMMIT_SHA ?? null,
+      expectedBranch: environment.VERCEL_GIT_COMMIT_REF,
+      environment,
+    });
+    const service = new StagingWorkflowService({ store });
+    await service.initialize();
+    // The high-entropy HttpOnly session token remains the unguessable input to this HMAC.
+    // This stable domain-separation value is not a credential and avoids a long-lived preview secret.
+    const csrfSecret = environment.STAGING_CSRF_SECRET ?? HOSTED_CSRF_DOMAIN;
+    return { store, service, csrfSecret, environment, mode: "hosted_staging_oidc" };
+  }
+
+  if (cachedRuntime) return cachedRuntime;
+
   const databaseUrl = environment.METAPHILOSOPHY_STAGING_DATABASE_URL
     ?? environment.STAGING_DATABASE_URL
-    ?? (isDesignatedReleasePreview ? environment.POSTGRES_URL : null)
     ?? null;
   if (isVercel && !databaseUrl) {
     throw serviceError(503, "staging_database_unconfigured", "The isolated staging database has not been configured.");
