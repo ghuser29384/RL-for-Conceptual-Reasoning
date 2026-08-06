@@ -31,10 +31,9 @@ jobs:
           cache: npm
 
       - name: Apply bounded retry and append-only resume changes
-        run: python scripts/apply-hosted-acceptance-retry-once.py
-
-      - name: Remove one-time mutation files
-        run: rm -f scripts/apply-hosted-acceptance-retry-once.py .github/workflows/apply-hosted-acceptance-retry-once.yml
+        run: |
+          python scripts/apply-hosted-acceptance-retry-once.py
+          git checkout -- .github/workflows/metaphilosophy-human-workflow-staging.yml
 
       - name: Install exact dependencies
         run: npm ci
@@ -50,13 +49,13 @@ jobs:
           npm test
           npm run build
 
-      - name: Commit the repair and remove this workflow
+      - name: Commit only tested runtime and test files
         env:
           BRANCH: agent/48-critique-pilot-20260730
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add src/staging-event-store.mjs src/staging-service.mjs scripts/run-hosted-staging-acceptance.mjs test/hosted-staging-resume.test.mjs
           git diff --cached --check
           git commit -m "Resume hosted acceptance with bounded OIDC retries"
           git push origin "HEAD:${BRANCH}"
