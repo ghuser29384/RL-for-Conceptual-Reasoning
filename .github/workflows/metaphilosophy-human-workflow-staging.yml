@@ -14,6 +14,7 @@ on:
       - "scripts/bootstrap-staging-rehearsal.mjs"
       - "scripts/smoke-staging-runtime.mjs"
       - "scripts/smoke-staging-server.mjs"
+      - "scripts/run-human-workflow-support-tabletop.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
       - "scripts/build-static.mjs"
       - "scripts/vercel-ignore-build.mjs"
@@ -38,6 +39,7 @@ on:
       - "scripts/bootstrap-staging-rehearsal.mjs"
       - "scripts/smoke-staging-runtime.mjs"
       - "scripts/smoke-staging-server.mjs"
+      - "scripts/run-human-workflow-support-tabletop.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
       - "scripts/build-static.mjs"
       - "scripts/vercel-ignore-build.mjs"
@@ -89,6 +91,7 @@ jobs:
           node --check scripts/bootstrap-staging-rehearsal.mjs
           node --check scripts/smoke-staging-runtime.mjs
           node --check scripts/smoke-staging-server.mjs
+          node --check scripts/run-human-workflow-support-tabletop.mjs
           node --check scripts/verify-human-workflow-staging.mjs
           node --check e2e/human-workflow-staging.spec.mjs
           node --check e2e/staging.playwright.config.mjs
@@ -127,7 +130,10 @@ jobs:
       - name: Run deterministic synthetic lifecycle rehearsal
         run: npm run smoke:server
 
-      - name: Upload contract and rehearsal evidence
+      - name: Run the named support incident tabletop
+        run: npm run tabletop:staging
+
+      - name: Upload contract, rehearsal, and tabletop evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -159,7 +165,7 @@ jobs:
           npm install --no-save --no-package-lock @playwright/test
           npx playwright install --with-deps chromium
 
-      - name: Exercise the staged human workflow in Chromium
+      - name: Exercise the complete staged human workflow in Chromium
         run: npx playwright test --config=e2e/staging.playwright.config.mjs
 
       - name: Upload browser evidence
