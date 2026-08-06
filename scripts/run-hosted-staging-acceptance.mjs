@@ -7,7 +7,7 @@ import { StagingWorkflowService } from "../src/staging-service.mjs";
 const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
 const LEDGER_URL = "https://zpnbshgrscbfelpychhn.supabase.co/functions/v1/metaphilosophy-staging-ledger";
 const ACCEPTANCE_URL = "https://zpnbshgrscbfelpychhn.supabase.co/functions/v1/metaphilosophy-staging-acceptance";
-const REPORT_KIND = "protected-hosted-synthetic-lifecycle-v1";
+const REPORT_KIND = "protected-hosted-synthetic-lifecycle-v2";
 
 const isActualReleasePreview = process.env.VERCEL === "1"
   && process.env.VERCEL_ENV === "preview"
@@ -33,6 +33,7 @@ assert.equal(initialStatus.metadata?.schema_version, 4);
 assert.equal(initialStatus.metadata?.purpose, "synthetic_rehearsal_only");
 assert.equal(initialStatus.metadata?.research_ratings_authorized, false);
 assert.equal(initialStatus.researchRatingsAuthorized, false);
+const startingPrimary = structuredClone(initialStatus.primary);
 
 if (
   initialStatus.latestReport?.reportKind === REPORT_KIND
@@ -49,9 +50,9 @@ if (
   process.exit(0);
 }
 
-if (initialStatus.primary.eventCount !== 0 || initialStatus.restore.eventCount !== 0) {
+if (initialStatus.restore.eventCount !== 0) {
   throw new Error(
-    `Hosted staging acceptance requires an empty primary and restore ledger when no exact-release report exists; found ${initialStatus.primary.eventCount} and ${initialStatus.restore.eventCount}.`,
+    `Hosted staging acceptance requires an empty restore ledger when no exact-release report exists; found ${initialStatus.restore.eventCount}.`,
   );
 }
 
@@ -62,9 +63,12 @@ const makeStore = () => new RemoteEventStore({
   expectedBranch: RELEASE_PREVIEW_BRANCH,
 });
 
-let currentTime = new Date("2026-08-06T11:30:00.000Z");
+const acceptanceRunId = crypto.randomUUID();
+const fixture = hostedRehearsalFixture(acceptanceRunId);
+let currentTime = new Date("2026-08-06T14:00:00.000Z");
 const now = () => new Date(currentTime);
 const timeline = [];
+if (startingPrimary.eventCount > 0) timeline.push("prior_failed_attempt_chain_preserved_append_only");
 const store = makeStore();
 const service = new StagingWorkflowService({ store, now });
 await service.initialize();
@@ -74,6 +78,8 @@ const bootstrap = await service.bootstrap({
   bootstrapToken: bootstrapSecret,
   expectedBootstrapToken: bootstrapSecret,
   operatorEmail: "operator@hosted-acceptance.metaphilosophy.invalid",
+  fixture,
+  allowExistingOperator: true,
 });
 const operator = await service.redeemInvite({
   token: bootstrap.inviteToken,
@@ -388,6 +394,8 @@ const report = {
   status: "pass",
   exactReleaseSha,
   releaseBranch: RELEASE_PREVIEW_BRANCH,
+  acceptanceRunId,
+  preservedPriorPrimary: startingPrimary,
   scope: "Vercel preview build identity exercising the retained OIDC-authenticated hosted staging database; no public or remote bootstrap endpoint",
   researchRatingsAuthorized: false,
   timeline,
@@ -469,27 +477,60 @@ async function redeemIdentity(identityId, label) {
 }
 
 async function acceptanceRequest(action, extra = {}) {
-  const response = await fetch(ACCEPTANCE_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${oidcToken}`,
-      "Content-Type": "application/json",
-      "X-Metaphilosophy-Release-Sha": exactReleaseSha,
-      "X-Metaphilosophy-Release-Branch": RELEASE_PREVIEW_BRANCH,
-    },
-    body: JSON.stringify({ action, exactReleaseSha, ...extra }),
-    signal: AbortSignal.timeout(120_000),
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || payload?.ok !== true) {
-    throw new Error(
-      payload?.error?.message
-        ? `${action} failed with HTTP ${response.status}: ${payload.error.code} ${payload.error.message}`
-        : `${action} failed with HTTP ${response.status}.`,
-    );
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    let response;
+    let payload;
+    try {
+      response = await fetch(ACCEPTANCE_URL, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${oidcToken}`,
+          "Content-Type": "application/json",
+          "X-Metaphilosophy-Release-Sha": exactReleaseSha,
+          "X-Metaphilosophy-Release-Branch": RELEASE_PREVIEW_BRANCH,
+        },
+        body: JSON.stringify({ action, exactReleaseSha, ...extra }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      payload = await response.json().catch(() => null);
+    } catch (error) {
+      if (attempt === 3) throw error;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 250 * attempt));
+      continue;
+    }
+    if (response.ok && payload?.ok === true) return payload.data;
+    const retryable = response.status >= 500
+      || (response.status === 401 && payload?.error?.code === "oidc_token_rejected");
+    if (!retryable || attempt === 3) {
+      throw new Error(
+        payload?.error?.message
+          ? `${action} failed with HTTP ${response.status}: ${payload.error.code} ${payload.error.message}`
+          : `${action} failed with HTTP ${response.status}.`,
+      );
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250 * attempt));
   }
-  return payload.data;
+  throw new Error(`${action} exhausted its bounded hosted acceptance retry policy.`);
+}
+
+function hostedRehearsalFixture(runId) {
+  const prefix = `synthetic-hosted-${runId}`;
+  return {
+    position: {
+      id: `${prefix}-position`,
+      version: "1",
+      title: "Synthetic hosted rehearsal: contextualized conceptual critique evaluation",
+      text: "A community can improve judgment on conceptual questions by comparing contextualized objections even when it lacks a decisive answer to the underlying question. Comparative evaluation of relevance, correctness, clarity, and argumentative force can therefore provide useful supervision for systems that reason about philosophy.",
+      context: "This uniquely identified record exists only for the protected hosted synthetic acceptance run and must never enter Pilot 01 research results.",
+    },
+    critiques: [
+      { id: `${prefix}-critique-001`, version: "1", text: "Agreement about local argumentative qualities could reflect a shared but systematically biased standard, so convergence alone does not establish epistemic progress." },
+      { id: `${prefix}-critique-002`, version: "1", text: "The position does not specify how omitted background commitments are represented; an objection can appear decisive only because the relevant context has been withheld." },
+      { id: `${prefix}-critique-003`, version: "1", text: "Even if critique evaluation is easier than settling conclusions, the ratings may still be too noisy to provide useful supervision. Comparative ease is not adequacy." },
+      { id: `${prefix}-critique-004`, version: "1", text: "Famous objections may survive because of canon formation rather than merit, so training on expert consensus can reproduce historical selection effects." },
+    ],
+  };
 }
 
 function makeRating(overall, strength, overrides = {}) {

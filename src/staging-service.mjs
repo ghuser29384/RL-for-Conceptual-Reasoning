@@ -30,10 +30,10 @@ export class StagingWorkflowService {
     return reduceStagingEvents(await this.store.loadEvents());
   }
 
-  async bootstrap({ bootstrapToken, expectedBootstrapToken, operatorEmail = "operator@example.invalid", fixture = defaultRehearsalFixture() }) {
+  async bootstrap({ bootstrapToken, expectedBootstrapToken, operatorEmail = "operator@example.invalid", fixture = defaultRehearsalFixture(), allowExistingOperator = false }) {
     assertSecret(bootstrapToken, expectedBootstrapToken, "bootstrap token");
     const state = await this.state();
-    if (state.identities.some((identity) => identity.role === "operator" && identity.status === "active")) {
+    if (!allowExistingOperator && state.identities.some((identity) => identity.role === "operator" && identity.status === "active")) {
       throw serviceError(409, "bootstrap_already_completed", "An active operator already exists.");
     }
 

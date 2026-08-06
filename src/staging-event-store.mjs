@@ -301,20 +301,33 @@ export class RemoteEventStore {
     };
     if (this.expectedReleaseSha) headers["X-Metaphilosophy-Release-Sha"] = this.expectedReleaseSha;
     if (this.expectedBranch) headers["X-Metaphilosophy-Release-Branch"] = this.expectedBranch;
-    const response = await fetch(this.gatewayUrl, {
-      method: "POST",
-      headers,
-      cache: "no-store",
-      body: JSON.stringify({ action, ...extra }),
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload?.ok) {
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      let response;
+      let payload;
+      try {
+        response = await fetch(this.gatewayUrl, {
+          method: "POST",
+          headers,
+          cache: "no-store",
+          body: JSON.stringify({ action, ...extra }),
+        });
+        payload = await response.json().catch(() => null);
+      } catch (error) {
+        if (attempt === 3 || !isTransientHostedGatewayError(error)) throw error;
+        await delayHostedGatewayRetry(attempt);
+        continue;
+      }
+
+      if (response.ok && payload?.ok) return payload.data;
       const error = new Error(payload?.error?.message || `Hosted staging gateway failed with HTTP ${response.status}.`);
       error.status = response.status;
       error.code = payload?.error?.code || "hosted_gateway_error";
-      throw error;
+      if (attempt === 3 || !isTransientHostedGatewayError(error)) throw error;
+      await delayHostedGatewayRetry(attempt);
     }
-    return payload.data;
+
+    throw new Error("Hosted staging gateway exhausted its bounded retry policy.");
   }
 }
 
@@ -431,6 +444,18 @@ function rowToEvent(row) {
     prevHash: row.prev_hash,
     eventHash: row.event_hash,
   };
+}
+
+function isTransientHostedGatewayError(error) {
+  const status = Number(error?.status);
+  const code = String(error?.code ?? "");
+  return !Number.isFinite(status)
+    || status >= 500
+    || (status === 401 && code === "oidc_token_rejected");
+}
+
+function delayHostedGatewayRetry(attempt) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, 250 * attempt));
 }
 
 function assertHostedBoundary(data) {
