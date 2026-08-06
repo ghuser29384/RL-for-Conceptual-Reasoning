@@ -126,7 +126,7 @@ jobs:
               'full USD 75',
               '90 days after H-12 sign-off or final defect closure',
               'no contact',
-              'not authorized to send',
+              'separate explicit send authorization',
           ]:
               assert required.lower() in corpus.lower(), required
           for forbidden in [
