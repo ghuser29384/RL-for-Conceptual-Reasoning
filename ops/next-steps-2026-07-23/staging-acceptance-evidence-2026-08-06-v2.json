@@ -1,0 +1,302 @@
+{
+  "record_id": "metaphilosophy-staging-acceptance-evidence-2026-08-06-v2",
+  "record_version": 2,
+  "recorded_at": "2026-08-06T04:34:00Z",
+  "status": "complete_automated_synthetic_operations_gate_passed_hosted_and_human_gates_blocked",
+  "supersedes": "ops/next-steps-2026-07-23/staging-acceptance-evidence-2026-08-06.json",
+  "controlling_audit": "ops/next-steps-2026-07-23/human-expert-rating-workflow-audit-2026-08-04.md",
+  "tested_subject": {
+    "repository": "ghuser29384/RL-for-Conceptual-Reasoning",
+    "pull_request": 17,
+    "branch": "agent/48-critique-pilot-20260730",
+    "tested_commit": "19439b474fa35b717889ed94dc74a096d7cd6e43",
+    "tested_tree": "9936d81d459501df45d9a9a109e2916e5e61beb2",
+    "commit_message": "Report the verified tabletop chain length correctly",
+    "note": "This record is a documentation-only descendant of the tested commit and does not independently validate later runtime changes."
+  },
+  "workflow": {
+    "name": "Metaphilosophy authenticated staging gate",
+    "workflow_path": ".github/workflows/metaphilosophy-human-workflow-staging.yml",
+    "run_id": 31071319537,
+    "run_number": 29,
+    "event": "push",
+    "started_at": "2026-08-06T04:27:54Z",
+    "completed_at": "2026-08-06T04:30:01Z",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "job_id": 92519682290,
+        "name": "Contracts and synthetic rehearsal",
+        "conclusion": "success",
+        "passed": [
+          "staging and compatibility syntax",
+          "staging contract verifier",
+          "focused staging tests",
+          "complete repository test suite",
+          "ordinary public build with staging shell absent",
+          "designated Vercel release-preview build with staging shell present",
+          "explicit local controlled-staging build",
+          "deterministic synthetic lifecycle rehearsal",
+          "named P1 support incident tabletop"
+        ]
+      },
+      {
+        "job_id": 92519806314,
+        "name": "Rendered Chromium rehearsal",
+        "conclusion": "success",
+        "test_count": 1,
+        "duration_seconds": 20.6,
+        "test_title": "complete synthetic human workflow preserves initial ratings across correction, withdrawal, rerating, and three adjudication closures"
+      }
+    ]
+  },
+  "retained_artifacts": [
+    {
+      "artifact_id": 8955746567,
+      "name": "metaphilosophy-staging-contract-rehearsal-19439b474fa35b717889ed94dc74a096d7cd6e43",
+      "sha256": "78d2a485a59906119126103308cce0c04b2bf94beacb64fc4adcf68e6ca291d3",
+      "size_bytes": 3132,
+      "expires_at": "2026-09-05T04:28:45Z",
+      "files": [
+        "human-workflow-smoke-report.json",
+        "human-workflow-support-tabletop-report.json"
+      ]
+    },
+    {
+      "artifact_id": 8955765233,
+      "name": "metaphilosophy-staging-browser-19439b474fa35b717889ed94dc74a096d7cd6e43",
+      "sha256": "0a8f1cc5d5759aca7232852887be643dac5b81474485cf6c0885b287d7f0940c",
+      "size_bytes": 210032,
+      "expires_at": "2026-09-05T04:29:57Z",
+      "files": [
+        "playwright-report/index.html",
+        "playwright-results/.last-run.json"
+      ],
+      "last_run": {
+        "status": "passed",
+        "failed_tests": []
+      }
+    }
+  ],
+  "synthetic_runtime_rehearsal": {
+    "schema_version": "metaphilosophy-human-workflow-smoke-v2",
+    "generated_at": "2026-08-06T04:28:45.392Z",
+    "status": "pass",
+    "scope": "automated synthetic runtime rehearsal only; no human participant and no research rating",
+    "research_ratings_authorized": false,
+    "counts": {
+      "identities": 6,
+      "assignments": 3,
+      "ratings": 12,
+      "label_snapshots": 1,
+      "events": 102
+    },
+    "chain_head_hash": "012c99cc7b68373706aa7f80f5f3331ea0c5d00ba0c10a33cb2126367cccb09d",
+    "passed_checkpoints": [
+      "operator bootstrap",
+      "controlled identities",
+      "invitation revoke, replace, logout, and expiry",
+      "two isolated raters and full rubric",
+      "cross-account and direct-object denial",
+      "autosave conflict and process-restart resume",
+      "tamper rejection, idempotent submission, and receipts",
+      "immutable initials and predecessor-linked rerating",
+      "adjudication handoff and unresolved snapshot",
+      "correction and withdrawal paths",
+      "private audit and privacy-safe public exports",
+      "backup, restore, and hash-chain readback"
+    ]
+  },
+  "rendered_browser_rehearsal": {
+    "status": "pass",
+    "desktop_and_narrow_mobile": true,
+    "initial_raters": 2,
+    "initial_ratings": 8,
+    "predecessor_linked_reratings": 4,
+    "final_ratings": 12,
+    "rater_visible_correction_status": true,
+    "operator_correction_response_visible_to_rater": true,
+    "rater_visible_withdrawal_and_retention_status": true,
+    "operator_withdrawal_queue": true,
+    "cross_account_write_denial": true,
+    "adjudication_snapshots": [
+      {
+        "status": "unresolved",
+        "initial_rating_ids": 8,
+        "rerating_ids": 0
+      },
+      {
+        "status": "resolved",
+        "path": "closed_without_rerating",
+        "initial_rating_ids": 8,
+        "rerating_ids": 0
+      },
+      {
+        "status": "resolved",
+        "path": "valid_predecessor_linked_rerating",
+        "initial_rating_ids": 8,
+        "rerating_ids": 4
+      }
+    ],
+    "public_export_removed_staging_emails": true
+  },
+  "support_tabletop": {
+    "schema_version": "metaphilosophy-human-workflow-support-tabletop-v1",
+    "generated_at": "2026-08-06T04:28:45.586Z",
+    "status": "pass",
+    "incident_id": "H10-TABLETOP-2026-08-06-INVITE-COMPROMISE",
+    "severity": "P1",
+    "named_roles": {
+      "operations_owner": "Ellen Sun",
+      "support_lead": "Ellen Sun",
+      "incident_reporter": "Synthetic support-tabletop rater",
+      "recovery_operator": "Ellen Sun",
+      "independent_verifier": "GitHub Actions exact-commit staging gate"
+    },
+    "private_support_route_defined": true,
+    "severity_rules_defined": ["P0", "P1", "P2", "P3"],
+    "event_count": 24,
+    "chain_head_hash": "802fdd4fd96e5061fb324c07588f71a2a2154bbae654d22e329cc7d433f28f53",
+    "verified_chain_length": 24,
+    "old_invite_denied_after_revocation": true,
+    "replacement_invite_single_redemption_passed": true,
+    "old_invite_remained_denied_after_recovery": true,
+    "recovered_session_logout_passed": true,
+    "real_person_contacted": false,
+    "outbound_message_sent": false,
+    "research_rating_collected": false,
+    "payment_promised_or_made": false,
+    "research_ratings_authorized": false
+  },
+  "build_boundary": {
+    "ordinary_public_build_includes_staging": false,
+    "ordinary_main_autodeploy_enabled": false,
+    "ordinary_pull_request_autodeploy_enabled": false,
+    "sole_designated_preview_branch": "release/vercel-preview",
+    "designated_preview_build_includes_staging": true,
+    "explicit_local_staging_build_includes_staging": true,
+    "release_branch_advanced_or_deployed": false
+  },
+  "h_gate_assessment": [
+    {
+      "id": "H-01",
+      "status": "blocked",
+      "finding": "No protected hosted workspace usable by approved external dry-run raters has been exercised."
+    },
+    {
+      "id": "H-02",
+      "status": "passed_automated_synthetic",
+      "finding": "Separate staging entry point, exact commands, syntax, health, clean start, and three build modes pass."
+    },
+    {
+      "id": "H-03",
+      "status": "technical_automation_passed_official_gate_blocked",
+      "finding": "Invitation issue, redemption, expiry, single use, revocation, replacement, logout, cross-account denial, and recovery pass; hosted qualified-human acceptance remains absent."
+    },
+    {
+      "id": "H-04",
+      "status": "rendered_automation_passed_official_gate_blocked",
+      "finding": "The complete expert-style rating journey passes on desktop and narrow mobile; qualified human comprehension evidence remains absent."
+    },
+    {
+      "id": "H-05",
+      "status": "passed_automated_synthetic",
+      "finding": "Autosave, close and resume, process restart, retry, stale-version conflict, exactly-once submission, tamper rejection, and duplicate prevention pass."
+    },
+    {
+      "id": "H-06",
+      "status": "partial",
+      "finding": "Append-only file-backed persistence, backup, restore, and hash-chain readback pass; a dedicated hosted or disposable Postgres rehearsal and browser-to-database exercise remain absent."
+    },
+    {
+      "id": "H-07",
+      "status": "passed_automated_synthetic",
+      "finding": "Correction, operator response, predecessor-linked rerating, withdrawal, retained originals, and rater-visible statuses pass through the rendered interface."
+    },
+    {
+      "id": "H-08",
+      "status": "passed_automated_synthetic",
+      "finding": "Two isolated browser identities, hidden peer state and metadata, cross-account write denial, and direct-object denial pass."
+    },
+    {
+      "id": "H-09",
+      "status": "passed_automated_synthetic",
+      "finding": "The intended operator/adjudicator interface passes an explicitly unresolved case, a resolved case without rerating, and a resolved case with four valid predecessor-linked reratings while retaining all eight initials."
+    },
+    {
+      "id": "H-10",
+      "status": "passed_automated_synthetic",
+      "finding": "Named roles, private support route, P0-P3 rules, stop condition, revocation, replacement, recovery verification, and audit-chain readback pass in a retained P1 tabletop."
+    },
+    {
+      "id": "H-11",
+      "status": "blocked",
+      "finding": "No two qualified human synthetic dry runs have occurred."
+    },
+    {
+      "id": "H-12",
+      "status": "blocked",
+      "finding": "No operations-owner readiness signature citing complete H-01 through H-11 evidence exists."
+    }
+  ],
+  "resource_findings": {
+    "existing_supabase_projects_are_suitable_for_isolated_metaphilosophy_staging": false,
+    "reason": "The active project containing an older metaphilosophy_staging schema is the Moral Trade production database and does not contain the reviewed append-only event table expected by the runtime.",
+    "clean_supabase_project_option": {
+      "name": "metaphilosophy-staging",
+      "organization": "ghuser29384's Org",
+      "quoted_cost": "USD 10 per month",
+      "approved": false,
+      "created": false
+    },
+    "supabase_development_branch_option": {
+      "quoted_cost": "USD 0.01344 per hour",
+      "used": false,
+      "reason_not_used": "The available base project is not an acceptable Metaphilosophy isolation boundary."
+    }
+  },
+  "authorization_state": {
+    "hosted_preview_or_database_provisioning_authorized": false,
+    "qualified_human_dry_run_participants_selected": false,
+    "qualified_human_dry_run_outreach_authorized": false,
+    "participant_outreach_authorized": false,
+    "real_research_rating_authorized": false,
+    "controlled_assignment_distribution_authorized": false,
+    "rating_ingestion_authorized": false,
+    "adjudication_work_authorized": false,
+    "honorarium_commitment_or_payment_authorized": false,
+    "publication_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  },
+  "remaining_blockers": [
+    "Owner approval for a clean isolated database resource or an equally isolated alternative.",
+    "Protected hosted preview connected only to that database and synthetic material.",
+    "Hosted browser-to-database restart, readback, backup, and restore evidence.",
+    "Two owner-approved qualified human synthetic dry runs.",
+    "Operations-owner H-12 signature after H-01 through H-11 pass."
+  ],
+  "next_actions": [
+    {
+      "order": 1,
+      "action": "Run a no-cost disposable Postgres service rehearsal in GitHub Actions to reduce H-06 to only the hosted integration portion.",
+      "authorization": "engineering_only_synthetic"
+    },
+    {
+      "order": 2,
+      "action": "After explicit cost approval, create the clean isolated Metaphilosophy database, apply the reviewed event-ledger migrations, and configure branch-scoped secrets.",
+      "authorization": "owner_cost_approval_required"
+    },
+    {
+      "order": 3,
+      "action": "Advance only the designated release/vercel-preview branch after exact gates pass, verify deployment protection, and run synthetic hosted acceptance.",
+      "authorization": "engineering_only_after_database_exists"
+    },
+    {
+      "order": 4,
+      "action": "Only after H-01 through H-10 pass, request owner approval of the exact H-11 participant and compensation packet before any contact.",
+      "authorization": "owner_decision_required"
+    }
+  ]
+}
