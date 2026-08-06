@@ -1,0 +1,60 @@
+name: Apply staging operations UI patch
+
+on:
+  push:
+    branches:
+      - agent/48-critique-pilot-20260730
+    paths:
+      - ".github/workflows/apply-staging-operations-ui-patch.yml"
+      - "scripts/patch-staging-operations-ui.mjs"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-staging-operations-ui-patch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the controlled branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/48-critique-pilot-20260730
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply the fail-closed patch
+        run: node scripts/patch-staging-operations-ui.mjs
+
+      - name: Remove the one-time patch machinery
+        run: rm scripts/patch-staging-operations-ui.mjs .github/workflows/apply-staging-operations-ui-patch.yml
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify the patched repository
+        run: |
+          node --check staging/app.mjs
+          node scripts/verify-human-workflow-staging.mjs
+          node --test test/human-workflow-staging-contract.test.mjs test/vercel-cost-controls-backport.test.mjs
+          npm run build
+          test ! -e dist/staging
+          STAGING_BUILD=true npm run build
+          test -f dist/staging/app.mjs
+
+      - name: Commit the operations UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add staging/app.mjs scripts/patch-staging-operations-ui.mjs .github/workflows/apply-staging-operations-ui-patch.yml
+          git diff --cached --check
+          git commit -m "Complete the synthetic staging operations UI"
+          git push origin HEAD:agent/48-critique-pilot-20260730
