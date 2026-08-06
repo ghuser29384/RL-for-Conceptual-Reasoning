@@ -39,7 +39,7 @@ async function loadFiles() {
   };
 }
 
-test("accepts the truthful public site, gated workspace, and excluded internal bundle", async () => {
+test("accepts the authored public site, gated workspace, and excluded internal bundle", async () => {
   const report = validatePreOutreachPublicSite(await loadFiles());
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.deepEqual(report.checks, {
@@ -89,15 +89,15 @@ test("rejects deleting the internal workspace or copying it into the public buil
 test("rejects blurring LMCA, synthetic, and future Metaphilosophy ratings", async () => {
   const files = await loadFiles();
   files.researchHtml = files.researchHtml
-    .replace("Three artifacts. Three different claims.", "One combined dataset")
+    .replace("Three bodies of work, kept separate.", "One combined dataset")
     .replace("48 critiques · 0 ratings", "48 expert-rated critiques");
   files.argumentHtml = files.argumentHtml.replace(
-    "This collection is synthetic and unrated.",
+    "None has an expert rating.",
     "This collection is part of Metaphilosophy’s expert-rated corpus.",
   );
   const report = validatePreOutreachPublicSite(files);
   assert.equal(report.status, "fail");
-  assert.ok(report.errors.some((error) => error.includes("Three artifacts. Three different claims.")));
+  assert.ok(report.errors.some((error) => error.includes("Three bodies of work, kept separate.")));
   assert.ok(report.errors.some((error) => error.includes("48 critiques · 0 ratings")));
   assert.ok(report.errors.some((error) => error.includes("must not imply")));
 });
