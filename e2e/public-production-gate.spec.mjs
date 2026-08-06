@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const RELEASE_MARKER = "mp-preoutreach-20260802-r1";
+const RELEASE_MARKER = "mp-public-voice-20260806-r1";
 const REQUIRED_HEADERS = Object.freeze({
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
