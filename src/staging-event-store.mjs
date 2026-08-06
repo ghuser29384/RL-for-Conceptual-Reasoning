@@ -238,13 +238,120 @@ export class PostgresEventStore {
   }
 }
 
-export function createStagingEventStore({ databaseUrl, filePath, environment = process.env } = {}) {
+export class RemoteEventStore {
+  constructor({ gatewayUrl, oidcToken, expectedReleaseSha = null, expectedBranch = null }) {
+    if (!gatewayUrl) throw new Error("A hosted staging gateway URL is required.");
+    if (!oidcToken) throw new Error("A Vercel OIDC token is required for the hosted staging gateway.");
+    this.gatewayUrl = gatewayUrl;
+    this.oidcToken = oidcToken;
+    this.expectedReleaseSha = expectedReleaseSha;
+    this.expectedBranch = expectedBranch;
+  }
+
+  async initialize() {
+    const data = await this.request("health");
+    assertHostedBoundary(data);
+    return data.chain;
+  }
+
+  async loadEvents() {
+    const data = await this.request("load");
+    assertHostedBoundary(data);
+    verifyEventChain(data.events);
+    return data.events;
+  }
+
+  async append(item) {
+    const events = await this.appendMany([item]);
+    return events[0];
+  }
+
+  async appendMany(items) {
+    if (!items.length) return [];
+    const data = await this.request("appendMany", { items });
+    assertHostedBoundary(data);
+    return data.events;
+  }
+
+  async verifyChain() {
+    const data = await this.request("health");
+    assertHostedBoundary(data);
+    return data.chain;
+  }
+
+  async backup(destinationPath) {
+    const events = await this.loadEvents();
+    const target = resolve(destinationPath);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, events.length ? `${events.map((event) => JSON.stringify(event)).join("\n")}\n` : "", "utf8");
+    return { destination: target, ok: true, events: events.length, headHash: events.at(-1)?.eventHash ?? GENESIS_HASH };
+  }
+
+  async restore() {
+    throw new Error("Hosted restore must use the separately verified operator recovery procedure.");
+  }
+
+  async close() {}
+
+  async request(action, extra = {}) {
+    const headers = {
+      Accept: "application/json",
+      Authorization: `Bearer ${this.oidcToken}`,
+      "Content-Type": "application/json",
+    };
+    if (this.expectedReleaseSha) headers["X-Metaphilosophy-Release-Sha"] = this.expectedReleaseSha;
+    if (this.expectedBranch) headers["X-Metaphilosophy-Release-Branch"] = this.expectedBranch;
+    const response = await fetch(this.gatewayUrl, {
+      method: "POST",
+      headers,
+      cache: "no-store",
+      body: JSON.stringify({ action, ...extra }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      const error = new Error(payload?.error?.message || `Hosted staging gateway failed with HTTP ${response.status}.`);
+      error.status = response.status;
+      error.code = payload?.error?.code || "hosted_gateway_error";
+      throw error;
+    }
+    return payload.data;
+  }
+}
+
+export function createStagingEventStore({
+  databaseUrl,
+  gatewayUrl,
+  oidcToken,
+  expectedReleaseSha,
+  expectedBranch,
+  filePath,
+  environment = process.env,
+} = {}) {
+  const hostedGatewayUrl = gatewayUrl
+    ?? environment.METAPHILOSOPHY_STAGING_GATEWAY_URL
+    ?? environment.STAGING_GATEWAY_URL
+    ?? null;
+  if (hostedGatewayUrl) {
+    return new RemoteEventStore({
+      gatewayUrl: hostedGatewayUrl,
+      oidcToken,
+      expectedReleaseSha,
+      expectedBranch,
+    });
+  }
+
   const connectionString = databaseUrl
     ?? environment.METAPHILOSOPHY_STAGING_DATABASE_URL
     ?? environment.STAGING_DATABASE_URL
     ?? null;
-  if (connectionString) return new PostgresEventStore({ connectionString, ssl: environment.STAGING_DATABASE_SSL === "false" ? false : "require" });
-  if (!filePath) throw new Error("No staging database URL or local event-store file path was supplied.");
+  if (connectionString) {
+    return new PostgresEventStore({
+      connectionString,
+      ssl: environment.STAGING_DATABASE_SSL === "false" ? false : "require",
+      prepare: environment.STAGING_DATABASE_PREPARE === "true",
+    });
+  }
+  if (!filePath) throw new Error("No staging gateway, database URL, or local event-store file path was supplied.");
   return new FileEventStore({ filePath });
 }
 
@@ -324,4 +431,13 @@ function rowToEvent(row) {
     prevHash: row.prev_hash,
     eventHash: row.event_hash,
   };
+}
+
+function assertHostedBoundary(data) {
+  if (!data || data.researchRatingsAuthorized !== false) {
+    throw new Error("Hosted staging gateway did not preserve researchRatingsAuthorized=false.");
+  }
+  if (data.metadata?.purpose !== "synthetic_rehearsal_only") {
+    throw new Error("Hosted staging gateway did not preserve the synthetic-only purpose.");
+  }
 }
