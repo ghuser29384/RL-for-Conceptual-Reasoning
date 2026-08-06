@@ -161,7 +161,7 @@ export function createStagingApiHandler(options = {}) {
         case "export.public":
           requireMethod(req, "GET");
           result = await runtime.service.operatorExport({ actorSessionToken: sessionToken, publicOnly: true });
-          res.setHeader("Content-Disposition", `attachment; filename=metilosophy-staging-public-${new Date().toISOString().slice(0, 10)}.json`);
+          res.setHeader("Content-Disposition", `attachment; filename=metaphilosophy-staging-public-${new Date().toISOString().slice(0, 10)}.json`);
           break;
         default:
           throw serviceError(404, "unknown_action", "Unknown staging action.");
