@@ -16,13 +16,16 @@ on:
       - "scripts/serve-static-preview.mjs"
       - "scripts/verify-pre-outreach-public-site.mjs"
       - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-editorial-voice.mjs"
       - "scripts/verify-public-css-dependencies.mjs"
       - "scripts/audit-pre-outreach-production.mjs"
       - "test/pre-outreach-public-site.test.mjs"
       - "test/public-trust-surface.test.mjs"
+      - "test/public-editorial-voice.test.mjs"
       - "test/public-css-dependencies.test.mjs"
       - "e2e/**"
       - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
+      - "ops/next-steps-2026-07-23/public-editorial-voice.md"
       - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
   push:
     branches: [main]
@@ -40,13 +43,16 @@ on:
       - "scripts/serve-static-preview.mjs"
       - "scripts/verify-pre-outreach-public-site.mjs"
       - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-editorial-voice.mjs"
       - "scripts/verify-public-css-dependencies.mjs"
       - "scripts/audit-pre-outreach-production.mjs"
       - "test/pre-outreach-public-site.test.mjs"
       - "test/public-trust-surface.test.mjs"
+      - "test/public-editorial-voice.test.mjs"
       - "test/public-css-dependencies.test.mjs"
       - "e2e/**"
       - "ops/next-steps-2026-07-23/pre-outreach-quality-gate.md"
+      - "ops/next-steps-2026-07-23/public-editorial-voice.md"
       - ".github/workflows/metaphilosophy-pre-outreach-quality.yml"
   workflow_dispatch:
 
@@ -65,8 +71,9 @@ jobs:
       - run: npm ci
       - run: node scripts/verify-pre-outreach-public-site.mjs
       - run: node scripts/verify-public-trust-surface.mjs
+      - run: node scripts/verify-public-editorial-voice.mjs
       - run: node scripts/verify-public-css-dependencies.mjs
-      - run: node --test test/pre-outreach-public-site.test.mjs test/public-trust-surface.test.mjs test/public-css-dependencies.test.mjs
+      - run: node --test test/pre-outreach-public-site.test.mjs test/public-trust-surface.test.mjs test/public-editorial-voice.test.mjs test/public-css-dependencies.test.mjs
       - run: npm test
       - run: npm run build
       - name: Verify built public surfaces
@@ -99,11 +106,13 @@ jobs:
           const research = fs.readFileSync('dist/research/index.html', 'utf8');
           const library = fs.readFileSync('dist/arguments/index.html', 'utf8');
           const reviewers = fs.readFileSync('dist/reviewers/closed.html', 'utf8');
-          if (!home.includes('No Metaphilosophy expert ratings claimed yet')) throw new Error('Homepage evidence boundary missing');
-          if (!gate.includes('The rating workspace is gated until the pilot is ready')) throw new Error('Workspace readiness gate missing');
-          if (!research.includes('One gate passed. Five remain blocked.')) throw new Error('Research readiness boundary missing');
-          if (!library.includes('None has been expert-rated by Metaphilosophy')) throw new Error('Synthetic-library boundary missing');
-          if (!reviewers.includes('Reviewer intake is intentionally closed')) throw new Error('Closed-intake boundary missing');
+          if (!home.includes('Metaphilosophy is a research project by Ellen Sun')) throw new Error('Homepage authorship missing');
+          if (!home.includes('0 research ratings collected')) throw new Error('Homepage rating boundary missing');
+          if (!gate.includes('The research workspace is closed.')) throw new Error('Workspace closure missing');
+          if (!research.includes('Written and maintained by Ellen Sun')) throw new Error('Study-plan authorship missing');
+          if (!research.includes('The software is not the last gate.')) throw new Error('Study readiness boundary missing');
+          if (!library.includes('None has an expert rating.')) throw new Error('Synthetic-library boundary missing');
+          if (!reviewers.includes('Research rating applications are closed.')) throw new Error('Closed-intake boundary missing');
           NODE
       - run: node scripts/audit-pre-outreach-production.mjs --help
       - name: Install rendered-audit browser
