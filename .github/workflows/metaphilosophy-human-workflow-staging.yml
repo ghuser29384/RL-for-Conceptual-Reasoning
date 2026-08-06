@@ -107,7 +107,17 @@ jobs:
           npm run build
           test ! -e dist/staging
 
-      - name: Build explicit controlled-staging release
+      - name: Build designated Vercel release-preview artifact
+        env:
+          VERCEL: "1"
+          VERCEL_GIT_COMMIT_REF: release/vercel-preview
+        run: |
+          npm run build
+          test -f dist/staging/index.html
+          test -f dist/staging/app.mjs
+          test -f dist/staging/styles.css
+
+      - name: Build explicit local controlled-staging release
         run: |
           STAGING_BUILD=true npm run build
           test -f dist/staging/index.html
