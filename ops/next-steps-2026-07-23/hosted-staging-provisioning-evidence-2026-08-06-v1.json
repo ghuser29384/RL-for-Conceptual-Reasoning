@@ -1,0 +1,271 @@
+{
+  "record_id": "metaphilosophy-hosted-staging-provisioning-evidence-2026-08-06-v1",
+  "record_version": 1,
+  "recorded_at": "2026-08-06T11:01:25Z",
+  "status": "isolated_supabase_project_and_protected_vercel_preview_ready_build_to_database_oidc_preflight_passed_human_use_still_blocked",
+  "owner_decision": {
+    "instruction": "Use your recommendation",
+    "selected_supabase_organization": {
+      "id": "hxtjtgjxqpcgdwqzcrat",
+      "name": "ghuser29384's Org"
+    },
+    "recommended_region": "us-east-1",
+    "approved_project_cost": {
+      "amount_usd": 10,
+      "recurrence": "monthly",
+      "scope": "one Supabase Micro project; separate usage or add-on charges may apply"
+    }
+  },
+  "retained_supabase_project": {
+    "id": "zpnbshgrscbfelpychhn",
+    "ref": "zpnbshgrscbfelpychhn",
+    "name": "metaphilosophy-staging",
+    "organization_id": "hxtjtgjxqpcgdwqzcrat",
+    "region": "us-east-1",
+    "status": "ACTIVE_HEALTHY",
+    "postgres_engine": "17",
+    "created_at": "2026-08-06T09:52:42.176114Z",
+    "schema": {
+      "version": 3,
+      "migrations": [
+        "metaphilosophy_staging_schema_v1",
+        "metaphilosophy_staging_schema_v2",
+        "metaphilosophy_staging_schema_v3"
+      ],
+      "purpose": "synthetic_rehearsal_only",
+      "research_ratings_authorized": false,
+      "event_count_at_cutoff": 0,
+      "maximum_sequence_at_cutoff": 0,
+      "chain_head_at_cutoff": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "access_controls": {
+      "event_table_rls_enabled": true,
+      "metadata_table_rls_enabled": true,
+      "anon_table_dml": false,
+      "authenticated_table_dml": false,
+      "gateway_rpc_anon_execute": false,
+      "gateway_rpc_authenticated_execute": false,
+      "gateway_rpc_service_role_execute": true,
+      "browser_facing_direct_database_access": false
+    }
+  },
+  "hosted_gateway": {
+    "function_slug": "metaphilosophy-staging-ledger",
+    "function_version": 1,
+    "status": "ACTIVE",
+    "authentication": {
+      "type": "Vercel OIDC with explicit JWT verification",
+      "trusted_team_slug": "ellen-s",
+      "trusted_team_id": "team_ySu6sF3Uho1E1GnJtCQPVEuJ",
+      "trusted_project": "rlhf-conceptual-reasoning",
+      "trusted_project_id": "prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ",
+      "trusted_environment": "preview",
+      "static_database_password_in_vercel": false,
+      "static_supabase_service_role_key_in_vercel": false
+    },
+    "preflight_log": {
+      "method": "POST",
+      "status_code": 200,
+      "timestamp": "2026-08-06T10:39:02.946Z",
+      "execution_time_ms": 1259,
+      "deployment_id": "zpnbshgrscbfelpychhn_5dce7251-05a8-409a-a8ab-5904a9aa99aa_1"
+    }
+  },
+  "exact_release_evidence": {
+    "repository": "ghuser29384/RL-for-Conceptual-Reasoning",
+    "pull_request": 17,
+    "release_branch": "release/vercel-preview",
+    "release_commit": "93da831335801a7fe7d9ceaf46db62e480b51d84",
+    "release_tree": "b8f623691af856f423e39f06504e913d1d8c8a90",
+    "release_commit_message": "Contract-test the Vercel OIDC deployment preflight",
+    "github_actions": {
+      "workflow": "Metaphilosophy authenticated staging gate",
+      "run_id": 31093927878,
+      "run_number": 48,
+      "started_at": "2026-08-06T10:36:31Z",
+      "completed_at": "2026-08-06T10:38:39Z",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 92591293477,
+          "name": "Contracts and synthetic rehearsal",
+          "conclusion": "success"
+        },
+        {
+          "id": 92591293318,
+          "name": "Disposable Postgres persistence rehearsal",
+          "conclusion": "success"
+        },
+        {
+          "id": 92591461059,
+          "name": "Rendered Chromium rehearsal",
+          "conclusion": "success"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 8964641184,
+          "kind": "contract_runtime_and_tabletop",
+          "digest": "sha256:a00b4777128661263a39c8b5ff1fceedecc54607deda97ead84cd3b7fd84e584"
+        },
+        {
+          "id": 8964635144,
+          "kind": "disposable_postgres",
+          "digest": "sha256:38dbbfa2708c56143523af0c60a1fc090ed8c2de23f69f0de809cacef8c089a3"
+        },
+        {
+          "id": 8964670147,
+          "kind": "rendered_chromium",
+          "digest": "sha256:ed9da181f9c01a1db2335c515abe13978de913bd2c3dc67a9c831f87fa06e3db"
+        }
+      ]
+    },
+    "vercel": {
+      "project_id": "prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ",
+      "project_name": "rlhf-conceptual-reasoning",
+      "deployment_id": "dpl_GiQeejy8x7n5twk4Y9M8DkpShED6",
+      "deployment_host": "rlhf-conceptual-reasoning-m73phy18k-ellen-s.vercel.app",
+      "region": "iad1",
+      "created_at": "2026-08-06T10:38:55.697Z",
+      "building_at": "2026-08-06T10:38:58.248Z",
+      "ready_at": "2026-08-06T10:59:12.697Z",
+      "state": "READY",
+      "alias_error": null,
+      "lambda_count": 611,
+      "build_preflight": {
+        "status": "pass",
+        "scope": "Vercel build identity to OIDC-authenticated Supabase Edge Function and isolated staging Postgres",
+        "gateway_project_ref": "zpnbshgrscbfelpychhn",
+        "persistence": "supabase_postgres",
+        "schema_version": 3,
+        "purpose": "synthetic_rehearsal_only",
+        "research_ratings_authorized": false,
+        "chain_events": 0,
+        "caller_owner": "ellen-s",
+        "caller_project": "rlhf-conceptual-reasoning",
+        "caller_environment": "preview"
+      },
+      "protection_check": {
+        "path": "/staging/",
+        "observed_at": "2026-08-06T10:59:45Z",
+        "http_status": 302,
+        "destination": "Vercel SSO",
+        "cache_control": "no-store, max-age=0",
+        "x_robots_tag": "noindex",
+        "x_frame_options": "DENY"
+      }
+    }
+  },
+  "unintended_duplicate_resource": {
+    "id": "mbswhjnjvwlewdqmwwcf",
+    "name": "Metaphilosophy Staging",
+    "region": "us-west-1",
+    "status": "ACTIVE_HEALTHY",
+    "created_at": "2026-08-06T09:44:51.648327Z",
+    "event_count_at_cutoff": 0,
+    "referenced_by_release_commit": false,
+    "referenced_by_retained_gateway": false,
+    "disposition": "delete manually in the Supabase dashboard",
+    "billing_risk": "Likely a second USD 10 monthly project charge until deletion; exact prorated billing is controlled by Supabase.",
+    "connector_limitation": "The available Supabase connector can create and pause eligible projects but does not expose project deletion. Paid projects cannot be paused through the connector."
+  },
+  "h_gate_assessment": [
+    {
+      "id": "H-01",
+      "status": "partial",
+      "finding": "An exact-commit protected hosted preview is READY and SSO-protected, but no approved external dry-run rater has exercised it."
+    },
+    {
+      "id": "H-02",
+      "status": "passed_automated_synthetic",
+      "finding": "The separate staging runtime, build boundaries, health preflight and exact release identity pass."
+    },
+    {
+      "id": "H-03",
+      "status": "technical_automation_passed_human_acceptance_blocked",
+      "finding": "Invitation lifecycle and session isolation pass locally and in rendered automation; hosted qualified-human acceptance is absent."
+    },
+    {
+      "id": "H-04",
+      "status": "rendered_automation_passed_human_comprehension_blocked",
+      "finding": "The complete rating interface passes desktop and narrow-mobile Chromium automation; no qualified-human comprehension evidence exists."
+    },
+    {
+      "id": "H-05",
+      "status": "passed_automated_synthetic",
+      "finding": "Autosave, resume, conflict handling, idempotent submission and duplicate prevention pass."
+    },
+    {
+      "id": "H-06",
+      "status": "partial",
+      "finding": "Disposable PostgreSQL restart, backup and restore pass, and the Vercel build identity reaches the retained hosted Postgres through OIDC. A deployed-runtime synthetic write/read/restart exercise remains absent."
+    },
+    {
+      "id": "H-07",
+      "status": "passed_automated_synthetic",
+      "finding": "Correction, operator response, withdrawal, immutable initials and predecessor-linked rerating pass."
+    },
+    {
+      "id": "H-08",
+      "status": "passed_automated_synthetic",
+      "finding": "Two-rater isolation, metadata blinding, direct-object denial and cross-account write denial pass."
+    },
+    {
+      "id": "H-09",
+      "status": "passed_automated_synthetic",
+      "finding": "Unresolved closure, resolved closure without rerating and resolved closure after valid rerating pass."
+    },
+    {
+      "id": "H-10",
+      "status": "passed_automated_synthetic",
+      "finding": "The named P1 support and invitation-compromise tabletop passes."
+    },
+    {
+      "id": "H-11",
+      "status": "blocked",
+      "finding": "No two qualified humans have completed synthetic usability sessions."
+    },
+    {
+      "id": "H-12",
+      "status": "blocked",
+      "finding": "No operations-owner readiness signature citing complete H-01 through H-11 evidence exists."
+    }
+  ],
+  "authorization_state": {
+    "qualified_human_dry_run_participants_selected": false,
+    "qualified_human_dry_run_outreach_authorized": false,
+    "participant_outreach_authorized": false,
+    "real_research_rating_authorized": false,
+    "controlled_assignment_distribution_authorized": false,
+    "rating_ingestion_authorized": false,
+    "adjudication_work_authorized": false,
+    "honorarium_commitment_or_payment_authorized": false,
+    "publication_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  },
+  "limitations": [
+    "The Vercel build preflight proves Vercel OIDC to the retained Supabase gateway and database, not a complete deployed-runtime browser write and read.",
+    "The protected deployment requires an interactive Vercel SSO cookie; the available connector proved the SSO boundary but could not complete an authenticated browser session.",
+    "No real person, real rating, real pilot item, payment, publication or funding submission was involved.",
+    "The active PR remains draft and unmerged; production did not change.",
+    "Schema v4 exists only as an unactivated future extension on the development branch and is not part of the retained release or hosted database."
+  ],
+  "next_actions": [
+    {
+      "order": 1,
+      "action": "Delete the unintended duplicate Supabase project mbswhjnjvwlewdqmwwcf to prevent an unnecessary second project charge.",
+      "authorization": "manual_owner_dashboard_action_required"
+    },
+    {
+      "order": 2,
+      "action": "Run a synthetic deployed-runtime write, read, restart and chain-readback exercise against the protected preview and retained hosted database without enabling remote public bootstrap.",
+      "authorization": "engineering_only_synthetic"
+    },
+    {
+      "order": 3,
+      "action": "After H-01 through H-10 pass, present the exact H-11 participant, message, support and honorarium packet for explicit owner approval before any contact.",
+      "authorization": "owner_decision_required"
+    }
+  ]
+}
