@@ -5,45 +5,45 @@ const libraryHref = "/arguments/";
 const dimensions = [
   {
     name: "Centrality",
-    short: "Issue importance",
-    copy: "How much would the position weaken if the claims attacked by the critique were successfully refuted?",
-    note: "Interpret together with strength; the product is the substantive-impact quantity.",
+    short: "Importance of the target",
+    copy: "If the critique were right, how much of the position would it undo?",
+    note: "Read this with strength. Their product estimates the critique’s effect on the position.",
   },
   {
     name: "Strength",
-    short: "Attack success",
-    copy: "How successfully does the critique undermine the particular claims or inferences it attacks?",
-    note: "A critique can be strong against a minor point or weak against a central one.",
+    short: "Force of the objection",
+    copy: "How far does the critique establish the objection it actually makes?",
+    note: "A strong objection to a minor point may still have little effect on the position as a whole.",
   },
   {
     name: "Correctness",
-    short: "Claim accuracy",
-    copy: "What proportion of the critique is substantively correct rather than false or misleading?",
-    note: "Correctness-sensitive claims should be verified where practical.",
+    short: "Truth of its claims",
+    copy: "How much of the critique is correct, rather than false or misleading?",
+    note: "Logical claims should be checked where practical; easy empirical checks should be made.",
   },
   {
     name: "Clarity",
-    short: "Interpretability",
-    copy: "After careful reading, can an expert pin down what the critique is arguing and what follows from it?",
-    note: "Very low clarity makes the other dimensions less reliable.",
+    short: "Precision of meaning",
+    copy: "After serious effort, can the critique’s meaning be fixed precisely enough to rate?",
+    note: "Below 0.5, the other component scores become much less dependable.",
   },
   {
     name: "Dead weight",
-    short: "Irrelevant content",
-    copy: "How much material fails to contribute to the critique’s argument, clarification, or evidential value?",
-    note: "Bad arguments are not automatically dead weight; irrelevant material is.",
+    short: "Material that does no work",
+    copy: "What fraction of the text neither argues, clarifies, nor supplies relevant evidence?",
+    note: "A bad argument is not dead weight merely because it fails. Irrelevant material is.",
   },
   {
     name: "Single issue",
-    short: "Focus",
-    copy: "Does the critique stay on one line of attack rather than scattering across independent objections?",
-    note: "This is recorded separately from whether the critique is good.",
+    short: "One objection or several",
+    copy: "Does the critique pursue one issue, or several independent objections?",
+    note: "This records focus, not quality.",
   },
   {
     name: "Overall",
-    short: "All considered",
-    copy: "How good is the critique all considered—its force, insight, precision, correctness, and economy?",
-    note: "Overall is anchored to strength × centrality, then adjusted for the other dimensions.",
+    short: "All things considered",
+    copy: "How good is the critique, taking its force, precision, correctness, and economy together?",
+    note: "Start from strength × centrality, then adjust for the rest of the rubric.",
   },
 ];
 
@@ -51,7 +51,7 @@ function wordmark() {
   return `
     <span class="mpWordmark mpHeaderWordmark">
       <strong>Metaphilosophy</strong>
-      <small>Human judgment for AI philosophy</small>
+      <small>Expert ratings of philosophical arguments</small>
     </span>
   `;
 }
@@ -77,10 +77,10 @@ function rubricExplorer() {
     <article class="mpProtocolCard" id="rubric" aria-labelledby="mp-rubric-card-title">
       <div class="mpProtocolHeader">
         <div>
-          <span>Protocol preview</span>
-          <h2 id="mp-rubric-card-title">Seven-dimensional critique rating</h2>
+          <span>The rating form</span>
+          <h2 id="mp-rubric-card-title">Seven questions about a critique</h2>
         </div>
-        <span class="mpProtocolStatus"><i></i>No production data loaded</span>
+        <span class="mpProtocolStatus"><i></i>Demonstration only</span>
       </div>
 
       <div class="mpProtocolBody">
@@ -104,11 +104,11 @@ function rubricExplorer() {
         </div>
 
         <div class="mpProtocolReadout" aria-live="polite">
-          <p class="mpProtocolEyebrow">What the dimension asks</p>
+          <p class="mpProtocolEyebrow">The question</p>
           <h3 id="mp-dimension-name">${dimensions[0].name}</h3>
           <p id="mp-dimension-copy">${dimensions[0].copy}</p>
           <div>
-            <span>Interpretation note</span>
+            <span>Rubric note</span>
             <strong id="mp-dimension-note">${dimensions[0].note}</strong>
           </div>
         </div>
@@ -116,8 +116,8 @@ function rubricExplorer() {
 
       <footer class="mpProtocolFooter">
         <span>Scores run from 0 to 1</span>
-        <span>Initial ratings remain blind and append-only</span>
-        <a href="${paperHref}#page=24" target="_blank" rel="noreferrer">Read the source rubric ${externalIcon()}</a>
+        <span>First ratings are blind and kept permanently</span>
+        <a href="${paperHref}#page=24" target="_blank" rel="noreferrer">Read the original rubric ${externalIcon()}</a>
       </footer>
     </article>
   `;
@@ -152,14 +152,14 @@ export function publicHomePage() {
         </button>
 
         <nav class="mpNavigation" id="mp-navigation" aria-label="Primary navigation">
-          <a href="#status">Status</a>
-          <a href="#method">Method</a>
+          <a href="#status">What exists</a>
+          <a href="#method">How it works</a>
           <a href="#rubric">Rubric</a>
-          <a href="#prior-work">Prior work</a>
+          <a href="#prior-work">Why arguments</a>
           <a href="${libraryHref}">Library</a>
         </nav>
 
-        <a class="mpHeaderCta" href="${pilotHref}">View pilot protocol ${arrowIcon()}</a>
+        <a class="mpHeaderCta" href="${pilotHref}">Read the pilot plan ${arrowIcon()}</a>
       </header>
 
       <main id="main-content">
@@ -167,19 +167,19 @@ export function publicHomePage() {
           <span class="mpDotGrid" aria-hidden="true"></span>
 
           <div class="mpHeroCopy mpReveal isVisible">
-            <p class="mpHeroStatus"><i></i>Pilot in preparation · expert ratings have not started</p>
-            <h1 id="mp-hero-title">Building the evidence layer for AI philosophy.</h1>
+            <p class="mpHeroStatus"><i></i>Research study not yet open</p>
+            <h1 id="mp-hero-title">Philosophers can disagree and still judge arguments.</h1>
             <p>
-              Metaphilosophy is preparing a small, auditable pilot in which qualified human reviewers evaluate philosophical critiques. The goal is to test whether expert judgment can become reliable training and evaluation data without pretending that philosophy has an easy answer key.
+              Metaphilosophy is a research project by Ellen Sun. It adapts the method introduced in <em>A dataset of rated conceptual arguments</em>: show a position and a critique together, then ask philosophers to judge the critique on several precise dimensions. The first Metaphilosophy study has not begun.
             </p>
             <div class="mpHeroActions">
-              <a class="mpButton mpButtonPrimary" href="${pilotHref}">Read the pilot protocol ${arrowIcon()}</a>
-              <a class="mpButton mpButtonText" href="${libraryHref}">Explore the public synthetic library ${arrowIcon()}</a>
+              <a class="mpButton mpButtonPrimary" href="${pilotHref}">Read the pilot plan ${arrowIcon()}</a>
+              <a class="mpButton mpButtonText" href="${libraryHref}">Browse the synthetic library ${arrowIcon()}</a>
             </div>
             <div class="mpHeroProof" aria-label="Current project facts">
-              <span><i></i>1,000 public synthetic critiques</span>
-              <span><i></i>48-critique expert pilot planned</span>
-              <span><i></i>No Metaphilosophy expert ratings claimed yet</span>
+              <span><i></i>1,000 synthetic critiques online</span>
+              <span><i></i>48 critiques in the planned study</span>
+              <span><i></i>0 research ratings collected</span>
             </div>
           </div>
 
@@ -193,39 +193,39 @@ export function publicHomePage() {
         <section class="mpSection mpStatusSection" id="status" aria-labelledby="mp-status-title">
           <div class="mpSectionHeader">
             <div>
-              <p>Evidence boundary</p>
-              <h2 id="mp-status-title">Clear about what exists—and what does not.</h2>
+              <p>What is here</p>
+              <h2 id="mp-status-title">The library, the prior paper, and the planned study are different things.</h2>
             </div>
-            <p>Metaphilosophy keeps public synthetic material, external prior work, planned expert research, and future training data in separate artifact classes.</p>
+            <p>The numbers below should not be added together. They describe three separate bodies of work.</p>
           </div>
 
           <div class="mpStateGrid">
             ${stateCard({
-              eyebrow: "Public now",
-              title: "Synthetic argument library",
+              eyebrow: "Metaphilosophy",
+              title: "Synthetic critique library",
               metric: "1,000",
-              detail: "Model-authored critiques across 250 positions and 25 domains. They are public, useful for exploration, and explicitly unrated.",
+              detail: "Model-written critiques of 250 positions. They are useful for browsing and testing the interface, but none has an expert score.",
               tag: "Unrated",
               tone: "public",
               href: libraryHref,
-              link: "Browse the release",
+              link: "Open the library",
             })}
             ${stateCard({
-              eyebrow: "Preparing",
-              title: "Human-expert pilot",
+              eyebrow: "Metaphilosophy",
+              title: "Planned expert study",
               metric: "48",
-              detail: "Twelve positions, four critiques each, and two blind initial ratings per critique. The protocol is open for methodological criticism; the study has not started.",
+              detail: "Twelve positions with four critiques each. Two independent philosophers would rate every critique. Recruitment for research ratings is closed.",
               tag: "Not started",
               tone: "pilot",
               href: pilotHref,
-              link: "Inspect the design",
+              link: "Read the plan",
             })}
             ${stateCard({
-              eyebrow: "External prior work",
-              title: "LMCA research release",
+              eyebrow: "Cooper et al.",
+              title: "LMCA dataset",
               metric: "951",
-              detail: "Rated critiques reported by Cooper, Oesterheld, Nguyen, Kastner, and Perez. Metaphilosophy cites this as prior art and does not present those ratings as its own.",
-              tag: "External",
+              detail: "Expert-rated critiques reported in the paper that Metaphilosophy builds on. Those ratings belong to the LMCA project, not to Metaphilosophy.",
+              tag: "Prior work",
               tone: "external",
               href: paperHref,
               link: "Read the paper",
@@ -233,48 +233,48 @@ export function publicHomePage() {
           </div>
 
           <aside class="mpBoundaryNote">
-            <strong>Source boundary</strong>
-            <p>The LMCA paper reports 951 rated critiques and 1,458 ratings. Metaphilosophy’s separate public release contains 1,000 synthetic critiques and zero expert ratings. The proposed pilot would add new human judgments only after all readiness gates pass.</p>
+            <strong>The current record</strong>
+            <p>LMCA reports 951 rated critiques and 1,458 ratings. Metaphilosophy currently has a separate synthetic library and no research ratings of its own.</p>
           </aside>
         </section>
 
         <section class="mpSection mpMethodSection" id="method" aria-labelledby="mp-method-title">
           <div class="mpSectionHeader">
             <div>
-              <p>Proposed workflow</p>
-              <h2 id="mp-method-title">Measure arguments without manufacturing consensus.</h2>
+              <p>How a rating works</p>
+              <h2 id="mp-method-title">One position. Four critiques. Two independent raters.</h2>
             </div>
-            <p>The pilot is designed to preserve independent judgments, expose uncertainty, and fail closed when the evidence or operating conditions are not adequate.</p>
+            <p>The substantive method comes from LMCA. Metaphilosophy adds stricter assignment, access, and record-keeping controls around it.</p>
           </div>
 
           <ol class="mpMethodGrid">
-            <li><span>01</span><h3>Select difficult, contextualized critiques</h3><p>Each position receives four critiques chosen only after source, length, style, attack-family, and acquisition-judge confounds are recorded.</p></li>
-            <li><span>02</span><h3>Collect blind initial ratings</h3><p>Two qualified reviewers independently score all four sibling critiques using the same frozen context and seven-dimensional rubric.</p></li>
-            <li><span>03</span><h3>Preserve disagreement</h3><p>Original ratings remain immutable. Object-level reconsideration creates a new linked record; unresolved interpretation can remain unresolved.</p></li>
-            <li><span>04</span><h3>Report the evidence honestly</h3><p>Results remain position-level and uncertainty-aware. A successful pilot does not automatically authorize a larger dataset or strong causal claims.</p></li>
+            <li><span>01</span><h3>Read the position in context</h3><p>Raters see the position and all four critiques together. They judge the words on the page rather than guessing the author’s broader view.</p></li>
+            <li><span>02</span><h3>Score each critique independently</h3><p>Two philosophers use the same seven-part rubric. Neither sees the other person’s score while making the first judgment.</p></li>
+            <li><span>03</span><h3>Keep the first judgment</h3><p>If discussion later changes someone’s mind, the revision is added as a new record. The original score stays in the history.</p></li>
+            <li><span>04</span><h3>Publish the uncertainty</h3><p>Some disagreements may remain. The report will show them rather than averaging them into a false consensus.</p></li>
           </ol>
         </section>
 
         <section class="mpSection mpResearchSection" id="prior-work" aria-labelledby="mp-research-title">
           <div class="mpResearchGrid">
             <article class="mpResearchLead">
-              <p>Why arguments?</p>
-              <h2 id="mp-research-title">Important conceptual questions often lack an accessible ground truth.</h2>
-              <p>It may still be possible to make progress by evaluating contextualized arguments: whether a critique attacks a central issue, whether it succeeds, whether its claims are correct, and whether its meaning can be pinned down.</p>
+              <p>The premise</p>
+              <h2 id="mp-research-title">A conclusion can be unsettled even when a particular objection is weak.</h2>
+              <p>Philosophers often disagree about the final answer. They can still ask narrower questions: Did this critique attack an important claim? Did it support the objection? Were its claims true? Was it clear? That narrower unit is the basis of the project.</p>
               <div class="mpResearchLinks">
-                <a href="${paperHref}" target="_blank" rel="noreferrer">Read “A dataset of rated conceptual arguments” ${externalIcon()}</a>
-                <a href="${pilotHref}">Read Metaphilosophy’s pilot protocol ${arrowIcon()}</a>
+                <a href="${paperHref}" target="_blank" rel="noreferrer">Read <em>A dataset of rated conceptual arguments</em> ${externalIcon()}</a>
+                <a href="${pilotHref}">Read the Metaphilosophy study plan ${arrowIcon()}</a>
               </div>
             </article>
 
             <article class="mpGuardrailPanel">
-              <div class="mpGuardrailHead"><span>Pre-outreach quality gate</span><strong>Required</strong></div>
+              <div class="mpGuardrailHead"><span>Rules for the first study</span><strong>Fixed</strong></div>
               <ul>
-                <li><strong>Attribution</strong><span>External ratings and Metaphilosophy records remain visibly separate.</span></li>
-                <li><strong>Blindness</strong><span>Source, author/model identity, provisional strata, and other ratings stay hidden initially.</span></li>
-                <li><strong>Append-only evidence</strong><span>Initial ratings, corrections, reratings, and adjudication records are never silently overwritten.</span></li>
-                <li><strong>No forced convergence</strong><span>Adjudicators cannot impose replacement scores or erase residual disagreement.</span></li>
-                <li><strong>Small-sample restraint</strong><span>The 12-position pilot tests workflow feasibility; it cannot settle broad philosophical or model-performance questions.</span></li>
+                <li><strong>Separate sources</strong><span>LMCA ratings, synthetic material, and new Metaphilosophy ratings are never merged or relabelled.</span></li>
+                <li><strong>Hide provenance</strong><span>Raters do not see who wrote a critique, whether it came from a model, or how anyone else scored it.</span></li>
+                <li><strong>Keep every version</strong><span>Corrections and later reconsiderations do not overwrite the first rating.</span></li>
+                <li><strong>Allow unresolved cases</strong><span>An adjudicator may document a disagreement, but cannot invent a compromise score.</span></li>
+                <li><strong>Make modest claims</strong><span>Twelve positions can test the workflow. They cannot settle philosophy or rank philosophers.</span></li>
               </ul>
             </article>
           </div>
@@ -283,34 +283,34 @@ export function publicHomePage() {
         <section class="mpSection mpImpactSection" id="impact" aria-labelledby="mp-impact-title">
           <div class="mpImpactGrid">
             <div>
-              <p>Why test this</p>
-              <h2 id="mp-impact-title">AI may increasingly assist decisions where values, concepts, and arguments matter.</h2>
+              <p>Why build this</p>
+              <h2 id="mp-impact-title">AI systems already argue about questions that have no accepted answer key.</h2>
             </div>
             <div>
-              <p>Better tools for examining philosophical arguments could be valuable in AI governance, moral uncertainty, digital-mind questions, coordination, and long-run strategy. That is a motivation for the research—not a result the current dataset has established.</p>
-              <p>The immediate objective is narrower: determine whether Metaphilosophy can collect expert judgments that are blind, auditable, sufficiently reliable, and operationally sustainable.</p>
+              <p>That happens in moral reasoning, AI governance, political philosophy, decision theory, and debates about digital minds. Better judgment in those areas would matter.</p>
+              <p>The first question is much smaller: can this project collect expert ratings that are understandable, reproducible, and worth the time they cost?</p>
             </div>
           </div>
         </section>
 
         <section class="mpPreoutreach" aria-labelledby="mp-preoutreach-title">
           <div>
-            <p>Current operating status</p>
-            <h2 id="mp-preoutreach-title">Reviewer intake and adviser outreach remain closed.</h2>
-            <p>Metaphilosophy is improving the public product, screening calibration candidates, and completing methodological checks before asking experts for time. No unsolicited rating work or application is currently requested.</p>
+            <p>Status</p>
+            <h2 id="mp-preoutreach-title">Research rating recruitment is closed.</h2>
+            <p>The protected workflow has passed automated synthetic tests. The next step is a two-person synthetic usability check, followed by a final readiness decision. No research rating assignment is currently available.</p>
           </div>
           <div class="mpPreoutreachActions">
-            <a class="mpButton mpButtonPrimary" href="${pilotHref}">Review the protocol ${arrowIcon()}</a>
-            <a class="mpButton mpButtonText" href="${libraryHref}">Browse public materials ${arrowIcon()}</a>
+            <a class="mpButton mpButtonPrimary" href="${pilotHref}">Read the study plan ${arrowIcon()}</a>
+            <a class="mpButton mpButtonText" href="${libraryHref}">Browse the library ${arrowIcon()}</a>
           </div>
         </section>
       </main>
 
       <footer class="mpFooter">
         <a href="/" aria-label="Metaphilosophy home">${wordmark()}</a>
-        <p>Human judgment infrastructure for conceptual reasoning. Pilot in preparation; no production expert ratings have started.</p>
+        <p>A research project by Ellen Sun. The first expert-rating study has not begun.</p>
         <nav aria-label="Footer navigation">
-          <a href="${pilotHref}">Pilot protocol</a>
+          <a href="${pilotHref}">Pilot plan</a>
           <a href="${libraryHref}">Synthetic library</a>
           <a href="${paperHref}" target="_blank" rel="noreferrer">LMCA paper</a>
         </nav>
