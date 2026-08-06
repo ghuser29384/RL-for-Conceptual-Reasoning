@@ -9,22 +9,22 @@ const EVIDENCE_PATH = resolve(
   import.meta.dirname,
   "../ops/next-steps-2026-07-23/hosted-staging-acceptance-evidence-2026-08-06-v1.json",
 );
-const BACKEND_PATHS = Object.freeze([
-  "api/staging.mjs",
-  "src/staging-event-store.mjs",
-  "src/staging-rubric.mjs",
-  "src/staging-service.mjs",
-  "src/staging-server.mjs",
-  "src/platform-server.mjs",
-  "supabase/functions/metaphilosophy-staging-ledger/index.ts",
-  "supabase/functions/metaphilosophy-staging-ledger/deno.json",
-  "supabase/functions/metaphilosophy-staging-acceptance/index.ts",
-  "supabase/functions/metaphilosophy-staging-acceptance/deno.json",
-  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
-  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql",
-  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql",
-  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql",
-]);
+const ACCEPTED_BACKEND_BLOBS = Object.freeze({
+  "api/staging.mjs": "50fcdb32b5c45422f4b43081e74a67806f7c1f62",
+  "src/staging-event-store.mjs": "7d787bef3dbf0adf78192386dea5dc17b5a046ed",
+  "src/staging-rubric.mjs": "43fb998121da80581dee9dac79d3c05465858d63",
+  "src/staging-service.mjs": "76729b9336820dd885b878031958ab1e45254ec3",
+  "src/staging-server.mjs": "24586fe1143906d11f41454ab9878d7d3895e9c5",
+  "src/platform-server.mjs": "8b02307586e125edb7d8ff4e6f699dddbf1c916e",
+  "supabase/functions/metaphilosophy-staging-ledger/index.ts": "f5481c7c85070b290fc63e2c0174566c709f3403",
+  "supabase/functions/metaphilosophy-staging-ledger/deno.json": "cfa5f9137424860ff413b7dfcf68b9c92b013690",
+  "supabase/functions/metaphilosophy-staging-acceptance/index.ts": "3cd8c051380a44a5ea8f6c042e190d7d1379882e",
+  "supabase/functions/metaphilosophy-staging-acceptance/deno.json": "cfa5f9137424860ff413b7dfcf68b9c92b013690",
+  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql": "a356862cd4746bd5598a8bc09e7d001edac494d1",
+  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql": "b0f483862a6c966579b9fb6c2ac0202b883ced8b",
+  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql": "58ddd8fb8d5fe1f25f584bdced873a54e5daa050",
+  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql": "4a0e0a02627c8b576d8b8f5bbb83c7162c2dd589",
+});
 
 const isActualReleasePreview = process.env.VERCEL === "1"
   && process.env.VERCEL_ENV === "preview"
@@ -53,16 +53,20 @@ assert.equal(evidence?.supabase?.schema_version, 4);
 assert.equal(evidence?.supabase?.purpose, "synthetic_rehearsal_only");
 assert.equal(evidence?.supabase?.research_ratings_authorized, false);
 
-try {
-  execFileSync(
-    "git",
-    ["diff", "--quiet", `${acceptedReleaseSha}..${exactReleaseSha}`, "--", ...BACKEND_PATHS],
-    { stdio: "pipe" },
-  );
-} catch (error) {
-  throw new Error(
-    `The hosted rating backend differs from accepted release ${acceptedReleaseSha}; a fresh full hosted acceptance is required before publication. ${error?.message ?? ""}`,
-  );
+const observedBlobs = {};
+for (const [path, expectedBlob] of Object.entries(ACCEPTED_BACKEND_BLOBS)) {
+  let observedBlob;
+  try {
+    observedBlob = execFileSync("git", ["hash-object", "--", path], { encoding: "utf8" }).trim();
+  } catch (error) {
+    throw new Error(`Unable to hash required hosted-runtime file ${path}: ${error?.message ?? "unknown error"}`);
+  }
+  observedBlobs[path] = observedBlob;
+  if (observedBlob !== expectedBlob) {
+    throw new Error(
+      `Hosted rating backend file ${path} differs from accepted release ${acceptedReleaseSha}; a fresh full hosted acceptance is required before publication.`,
+    );
+  }
 }
 
 const response = await fetch(ACCEPTANCE_URL, {
@@ -101,7 +105,8 @@ console.log(JSON.stringify({
   mode: "accepted_backend_evidence_reused_for_unchanged_runtime",
   exactReleaseSha,
   acceptedReleaseSha,
-  backendPathsChecked: BACKEND_PATHS.length,
+  backendPathsChecked: Object.keys(ACCEPTED_BACKEND_BLOBS).length,
+  observedBackendBlobs: observedBlobs,
   hostedEventCount: expectedCount,
   hostedHeadHash: expectedHead,
   protectedFrontendRequiresExactHeadRenderedAudit: true,
