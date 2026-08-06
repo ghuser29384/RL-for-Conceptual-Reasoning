@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const bootstrapToken = "synthetic-rehearsal-bootstrap-token-32-bytes-minimum";
+const positionId = "synthetic-rehearsal-position-001";
 
 let operatorRequest;
 let setup;
@@ -43,7 +44,7 @@ test.afterAll(async () => {
   await operatorRequest?.dispose();
 });
 
-test("two isolated browser raters autosave, resume, submit, and hand off an unresolved case", async ({ browser }) => {
+test("complete synthetic human workflow preserves initial ratings across correction, withdrawal, rerating, and three adjudication closures", async ({ browser }) => {
   const contextA = await browser.newContext();
   const pageA = await contextA.newPage();
   await redeemInBrowser(pageA, setup.raterA.inviteToken);
@@ -115,43 +116,131 @@ test("two isolated browser raters autosave, resume, submit, and hand off an unre
   await pageB.getByRole("button", { name: "Submit all four ratings" }).click();
   await expect(pageB.getByText("Submitted and locked.")).toBeVisible();
 
-  const operatorWorkspace = await api(operatorRequest, "workspace");
+  let operatorWorkspace = await api(operatorRequest, "workspace");
   expect(operatorWorkspace.counts.ratings).toBe(8);
   expect(operatorWorkspace.counts.openAdjudicationCases).toBe(1);
 
-  const contextAdjudicator = await browser.newContext();
-  const adjudicatorPage = await contextAdjudicator.newPage();
-  await redeemInBrowser(adjudicatorPage, setup.adjudicator.inviteToken);
-  await expect(adjudicatorPage.getByRole("heading", { name: "Review triggered disagreement" })).toBeVisible();
-  await expect(adjudicatorPage.locator(".adjudication-card")).toHaveCount(1);
-  await adjudicatorPage.locator('select[name="disposition"]').selectOption("unresolved");
-  await adjudicatorPage.locator('textarea[name="explanation"]').fill("The two literal readings remain sufficiently plausible that the synthetic disagreement should be represented explicitly instead of forced into consensus.");
-  await adjudicatorPage.getByRole("button", { name: "Submit independent review" }).click();
-  await expect(adjudicatorPage.getByText("Your independent review is locked: unresolved")).toBeVisible();
+  await requestPostSubmissionAction(resumedPageA, "Request correction", "Synthetic object-level correction request: the first rating used an interpretation that should be reconsidered without overwriting the immutable initial record.");
+  await expect(resumedPageA.locator(".correction-request-status")).toContainText("Correction request: open");
+  await expect(resumedPageA.locator(".correction-request-status")).toContainText("Original ratings remain immutable");
 
-  const refreshedOperator = await api(operatorRequest, "workspace");
-  const caseId = refreshedOperator.adjudicationCases.find((item) => item.status === "open").id;
-  const closed = await api(operatorRequest, "adjudication.close", {
-    method: "POST",
-    headers: setup.operator.headers,
-    data: { caseId, status: "unresolved", notes: "Synthetic browser rehearsal closure: preserve both immutable initial judgments and the unresolved interpretation." },
-  });
-  expect(closed.snapshot.status).toBe("unresolved");
-  expect(closed.snapshot.initialRatingIds).toHaveLength(8);
+  await requestPostSubmissionAction(pageB, "Request withdrawal", "Synthetic withdrawal request after submission, used only to verify retained records and a locked assignment state.");
+  await expect(pageB.locator(".withdrawal-request-status")).toContainText("Withdrawal recorded; assignment locked");
+  await expect(pageB.locator(".withdrawal-request-status")).toContainText("remain in the private audit trail");
+
+  const operatorContext = await browser.newContext({ storageState: await operatorRequest.storageState() });
+  const operatorPage = await operatorContext.newPage();
+  await operatorPage.goto("/staging/");
+  await expect(operatorPage.getByRole("heading", { name: "Staging operator workspace" })).toBeVisible();
+  await expect(operatorPage.locator('[data-queue="corrections"]')).toContainText("Synthetic browser rater A");
+  await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("Synthetic browser rater B");
+  await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("Accepted records remain retained");
+
+  const adjudicatorContext = await browser.newContext();
+  const adjudicatorPage = await adjudicatorContext.newPage();
+  await redeemInBrowser(adjudicatorPage, setup.adjudicator.inviteToken);
+  await submitLatestAdjudicationReview(adjudicatorPage, "unresolved", "The two literal readings remain sufficiently plausible that the synthetic disagreement should be represented explicitly instead of forced into consensus.");
+  await closeLatestCase(operatorPage, "Close unresolved", "Synthetic unresolved closure preserves both immutable initial judgments and the competing interpretation.");
+
+  await openOperatorCase(operatorPage, "Second synthetic case verifies closure without any predecessor-linked re-rating.");
+  await adjudicatorPage.reload();
+  await submitLatestAdjudicationReview(adjudicatorPage, "confirm_initials", "Independent review finds the initial disagreement adequately represented; this case should close resolved without requesting or accepting a re-rating.");
+  await closeLatestCase(operatorPage, "Close resolved", "Resolved without re-rating after independent review; retain all eight immutable initial ratings.");
+
+  const openCorrection = operatorPage.locator('[data-queue="corrections"] .queue-item').filter({ hasText: "Synthetic browser rater A" });
+  await openCorrection.locator('textarea[name="correctionNotes"]').fill("Approved because the rater identified a concrete object-level interpretation issue; create a predecessor-linked re-rating and preserve the original.");
+  await openCorrection.getByRole("button", { name: "Approve predecessor-linked re-rating" }).click();
+  await expect(operatorPage.locator('[data-queue="corrections"]')).toContainText("Operator response: approve_rerating");
+
+  await resumedPageA.reload();
+  await expect(resumedPageA.locator(".correction-request-status")).toContainText("Correction request: approved");
+  await expect(resumedPageA.locator(".correction-request-status")).toContainText("Operator response: approve_rerating");
+  const reratingPanel = resumedPageA.locator(".assignment-panel").filter({ hasText: "Object-level re-rating" });
+  await expect(reratingPanel).toHaveCount(1);
+  for (let index = 0; index < 4; index += 1) {
+    await completeRating(reratingPanel.locator(".critique-card").nth(index), {
+      overall: index === 0 ? 0.72 : 0.58 - index * 0.08,
+      strength: index === 0 ? 0.8 : 0.68,
+      interpretationConfidence: "high",
+    });
+  }
+  await reratingPanel.getByRole("button", { name: "Submit all four ratings" }).click();
+  await expect(reratingPanel.getByText("Submitted and locked.")).toBeVisible();
+
+  operatorWorkspace = await api(operatorRequest, "workspace");
+  expect(operatorWorkspace.counts.ratings).toBe(12);
+  expect(operatorWorkspace.counts.openAdjudicationCases).toBe(1);
+
+  await adjudicatorPage.reload();
+  await submitLatestAdjudicationReview(adjudicatorPage, "confirm_initials", "The predecessor-linked re-rating is object-level, properly linked, and preserves the initial distribution; the case can close resolved with both versions retained.");
+  await operatorPage.reload();
+  await closeLatestCase(operatorPage, "Close resolved", "Resolved after a valid predecessor-linked re-rating; preserve the eight initial and four re-rating records in the signed snapshot.");
+
+  const privateExport = await api(operatorRequest, "export.private");
+  expect(privateExport.state.ratings).toHaveLength(12);
+  expect(privateExport.state.ratings.filter((rating) => rating.eventType === "initial")).toHaveLength(8);
+  expect(privateExport.state.ratings.filter((rating) => rating.eventType === "rerating")).toHaveLength(4);
+  expect(privateExport.state.assignments.filter((assignment) => assignment.kind === "rerating")).toHaveLength(1);
+  expect(privateExport.state.assignments.find((assignment) => assignment.kind === "rerating").predecessorAssignmentId).toBe(setup.raterA.assignmentId);
+  expect(privateExport.state.assignments.find((assignment) => assignment.id === setup.raterB.assignmentId).status).toBe("withdrawn");
+
+  const snapshots = privateExport.state.labelSnapshots;
+  expect(snapshots).toHaveLength(3);
+  expect(snapshots.filter((snapshot) => snapshot.status === "unresolved")).toHaveLength(1);
+  expect(snapshots.filter((snapshot) => snapshot.status === "resolved" && snapshot.reratingIds.length === 0)).toHaveLength(1);
+  expect(snapshots.filter((snapshot) => snapshot.status === "resolved" && snapshot.reratingIds.length === 4)).toHaveLength(1);
+  for (const snapshot of snapshots) expect(snapshot.initialRatingIds).toHaveLength(8);
 
   const publicExport = await api(operatorRequest, "export.public");
   expect(JSON.stringify(publicExport)).not.toContain("@staging.metaphilosophy.invalid");
-  expect(publicExport.counts.ratings).toBe(8);
+  expect(publicExport.counts.ratings).toBe(12);
+  expect(publicExport.snapshots).toHaveLength(3);
 
   await contextA.close();
   await contextB.close();
-  await contextAdjudicator.close();
+  await adjudicatorContext.close();
+  await operatorContext.close();
 });
 
 async function redeemInBrowser(page, token) {
   await page.goto(`/staging/?invite=${encodeURIComponent(token)}`);
   await expect(page.locator("#invite-token")).toHaveValue(token);
   await page.getByRole("button", { name: "Redeem invitation" }).click();
+}
+
+async function requestPostSubmissionAction(page, buttonName, reason) {
+  await page.getByRole("button", { name: buttonName }).click();
+  const dialog = page.locator("dialog[open]");
+  await expect(dialog).toBeVisible();
+  await dialog.locator('textarea[name="reason"]').fill(reason);
+  await dialog.getByRole("button", { name: "Submit request" }).click();
+}
+
+async function openOperatorCase(operatorPage, reason) {
+  const form = operatorPage.locator(".operator-open-case-form");
+  await form.locator('select[name="positionId"]').selectOption(positionId);
+  await form.locator('textarea[name="reason"]').fill(reason);
+  await form.getByRole("button", { name: "Open adjudication case" }).click();
+  await expect(operatorPage.locator('.adjudication-operator-card textarea[name="closureNotes"]')).toHaveCount(1);
+}
+
+async function submitLatestAdjudicationReview(page, disposition, explanation) {
+  await expect(page.getByRole("heading", { name: "Review triggered disagreement" })).toBeVisible();
+  const form = page.locator(".adjudication-form").last();
+  await expect(form).toBeVisible();
+  await form.locator('select[name="disposition"]').selectOption(disposition);
+  await form.locator('textarea[name="explanation"]').fill(explanation);
+  await form.getByRole("button", { name: "Submit independent review" }).click();
+  await expect(page.getByText(`Your independent review is locked: ${disposition}`)).toBeVisible();
+}
+
+async function closeLatestCase(operatorPage, buttonName, notes) {
+  await operatorPage.reload();
+  const openCard = operatorPage.locator('.adjudication-operator-card:has(textarea[name="closureNotes"])').last();
+  await expect(openCard).toBeVisible();
+  await openCard.locator('textarea[name="closureNotes"]').fill(notes);
+  await openCard.getByRole("button", { name: buttonName }).click();
+  await expect(operatorPage.locator('.adjudication-operator-card:has(textarea[name="closureNotes"])')).toHaveCount(0);
 }
 
 async function completeRating(card, {
