@@ -145,14 +145,15 @@ export class FileEventStore {
 }
 
 export class PostgresEventStore {
-  constructor({ connectionString, ssl = "require", max = 3 }) {
+  constructor({ connectionString, ssl = "require", max = 3, prepare = false }) {
     if (!connectionString) throw new Error("A staging Postgres connection string is required.");
     this.sql = postgres(connectionString, {
       ssl: ssl === false ? false : ssl,
       max,
       idle_timeout: 20,
       connect_timeout: 15,
-      prepare: true,
+      // Supabase transaction-pooler connections do not support prepared statements.
+      prepare,
     });
   }
 
