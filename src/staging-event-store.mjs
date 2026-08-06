@@ -293,6 +293,7 @@ function hashEvent(event) {
   return createHash("sha256").update(normalized).digest("hex");
 }
 
+// PostgreSQL jsonb canonicalizes object storage independently of JavaScript key insertion order.
 function canonicalStringify(value) {
   return JSON.stringify(canonicalize(value));
 }
