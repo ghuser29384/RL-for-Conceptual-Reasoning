@@ -1,0 +1,207 @@
+{
+  "record_id": "metaphilosophy-hosted-staging-acceptance-evidence-2026-08-06-v1",
+  "record_version": 1,
+  "recorded_at": "2026-08-06T14:22:30Z",
+  "status": "protected_hosted_synthetic_acceptance_passed_exact_release_ready_qualified_human_and_owner_signature_gates_blocked",
+  "exact_release": {
+    "repository": "ghuser29384/RL-for-Conceptual-Reasoning",
+    "branch": "release/vercel-preview",
+    "commit": "202135a21fb15f5a12698e6a78e8c8d8b7fa79ef",
+    "tree": "08809e252cb0bd897ac4029b32386c5f744b41b5",
+    "message": "Trigger exact-head validation for hosted acceptance isolation"
+  },
+  "github_actions": {
+    "staging_gate": {
+      "run_id": 31108455831,
+      "run_number": 58,
+      "conclusion": "success",
+      "started_at": "2026-08-06T13:58:01Z",
+      "completed_at": "2026-08-06T14:00:04Z",
+      "artifacts": [
+        {
+          "id": 8970621695,
+          "kind": "contract_runtime_tabletop",
+          "digest": "sha256:9c4ebfefde3b965df0571acaf599965119a99437f579db3e6e8ba29b941f320b"
+        },
+        {
+          "id": 8970622457,
+          "kind": "disposable_postgres_v4",
+          "digest": "sha256:cdeb9be9dce36b6aa06bc74a1a05d4c9893121d90d845382205330b22de4d85c"
+        },
+        {
+          "id": 8970660483,
+          "kind": "rendered_chromium",
+          "digest": "sha256:926fa12a7f359b2dda0bb7b587c70560a04005ab716ac51b476cf8fff62904a6"
+        }
+      ]
+    },
+    "release_gate": {
+      "run_id": 31108687854,
+      "conclusion": "success"
+    }
+  },
+  "supabase": {
+    "project_ref": "zpnbshgrscbfelpychhn",
+    "name": "metaphilosophy-staging",
+    "region": "us-east-1",
+    "schema_version": 4,
+    "purpose": "synthetic_rehearsal_only",
+    "research_ratings_authorized": false
+  },
+  "hosted_acceptance": {
+    "report_id": "b5340bb7-2d8f-445e-8de8-ce4cc4f34e05",
+    "report_kind": "protected-hosted-synthetic-lifecycle-v2",
+    "generated_at": "2026-08-06T14:02:58.403Z",
+    "retained_at": "2026-08-06T14:02:58.917707Z",
+    "acceptance_run_id": "85a3641b-61d7-4062-bef1-59a8c6aa2af8",
+    "status": "pass",
+    "preserved_prior_events": 104,
+    "appended_run_events": 102,
+    "total_events": 206,
+    "run_identities": 6,
+    "run_assignments": 3,
+    "run_initial_ratings": 8,
+    "run_reratings": 4,
+    "run_label_snapshots": 1,
+    "primary_head_hash": "9a13c2ef2803386b1578e789ce0b3bae0d5533d4f2c6aa7802f1af8966f039ce",
+    "restored_head_hash": "9a13c2ef2803386b1578e789ce0b3bae0d5533d4f2c6aa7802f1af8966f039ce",
+    "canonical_backup_sha256": "db617fe50811eab45356ab5de9503c4dc5daedeb656cd499fb955e2b72bff891",
+    "sequence_gap_count": 0,
+    "previous_hash_mismatch_count": 0,
+    "duplicate_event_id_count": 0,
+    "duplicate_event_hash_count": 0,
+    "real_person_contacted": false,
+    "outbound_message_sent": false,
+    "research_rating_collected": false,
+    "payment_promised_or_made": false,
+    "production_changed": false,
+    "remote_bootstrap_enabled": false
+  },
+  "vercel": {
+    "project_id": "prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ",
+    "deployment_id": "dpl_GmdeKXfv4LQJ6T5iGLnrRXipogHP",
+    "host": "rlhf-conceptual-reasoning-2n25o2ekg-ellen-s.vercel.app",
+    "region": "iad1",
+    "state": "READY",
+    "created_at": "2026-08-06T14:00:44.420Z",
+    "building_at": "2026-08-06T14:00:45.785Z",
+    "ready_at": "2026-08-06T14:21:15.343Z",
+    "alias_error": null,
+    "lambda_count": 611,
+    "build_preflight": {
+      "status": "pass",
+      "observed_at": "2026-08-06T14:00:49Z",
+      "caller_owner": "ellen-s",
+      "caller_project": "rlhf-conceptual-reasoning",
+      "caller_environment": "preview",
+      "starting_chain_events": 104,
+      "starting_chain_head_hash": "4dd87f21749a1575cd008ca06d779b5cb46964f5fc22a0ce843e9fb05d599caf"
+    },
+    "protection": {
+      "staging_path_observed_at": "2026-08-06T14:21:42Z",
+      "health_path_observed_at": "2026-08-06T14:21:51Z",
+      "http_status": 302,
+      "destination": "Vercel SSO",
+      "cache_control": "no-store, max-age=0",
+      "x_robots_tag": "noindex",
+      "x_frame_options": "DENY"
+    },
+    "runtime_health": {
+      "status": "not_directly_observed_through_connector",
+      "reason": "The connector correctly reached the interactive Vercel SSO boundary but did not retain the SSO cookie needed to invoke the protected HTTP route.",
+      "what_is_proven_instead": [
+        "The exact Vercel preview build identity authenticated to the retained Supabase gateway by short-lived OIDC.",
+        "The exact release performed the complete synthetic write/read/restart/backup/restore lifecycle against the hosted database.",
+        "The resulting exact deployment completed and reached READY."
+      ],
+      "limitation": "This is not a retained authenticated browser request to /api/staging?action=health after deployment."
+    }
+  },
+  "technical_gate_assessment": [
+    {
+      "id": "H-01",
+      "status": "passed_protected_workspace_boundary",
+      "finding": "An exact-commit preview is READY and protected by Vercel SSO. Qualified-human usability is evaluated under H-11."
+    },
+    {
+      "id": "H-02",
+      "status": "passed",
+      "finding": "Exact-head CI, release gates, clean builds, health preflight, and the separate staging architecture pass."
+    },
+    {
+      "id": "H-03",
+      "status": "passed_automated_pre_h11",
+      "finding": "Issue, expiry, one-time redemption, revocation, replacement, logout, session resume, and cross-account denial pass in exact-head automation and hosted persistence. Human comprehension remains H-11."
+    },
+    {
+      "id": "H-04",
+      "status": "passed_rendered_automation_pre_h11",
+      "finding": "Desktop and narrow-mobile Chromium rehearsals render the complete LMCA-derived workflow. Qualified-human comprehension remains H-11."
+    },
+    {
+      "id": "H-05",
+      "status": "passed",
+      "finding": "Autosave, close/reopen resume, stale-version conflict, tamper rejection, retry, idempotent submission, and immutable receipts pass."
+    },
+    {
+      "id": "H-06",
+      "status": "passed_hosted_acceptance_with_http_observation_limitation",
+      "finding": "The exact Vercel preview build identity appended 102 synthetic events, read them after fresh runtime instances, retained sessions and receipts, backed up 206 events, and restored an exact independent chain. The connector could not traverse interactive SSO for a post-deployment HTTP health call."
+    },
+    {
+      "id": "H-07",
+      "status": "passed",
+      "finding": "Rater-visible correction, operator response, immutable initials, predecessor-linked rerating, withdrawal, and retained audit records pass."
+    },
+    {
+      "id": "H-08",
+      "status": "passed",
+      "finding": "Two-rater blinding, isolated identities, direct-object denial, and hidden peer/source state pass."
+    },
+    {
+      "id": "H-09",
+      "status": "passed_combined_exact_release_evidence",
+      "finding": "The hosted run passed unresolved closure and exact-head rendered tests passed unresolved, resolved-without-rerating, and resolved-after-rerating paths."
+    },
+    {
+      "id": "H-10",
+      "status": "passed",
+      "finding": "The named P1 invitation-compromise support tabletop passes with explicit owner, stop, revocation, replacement, and readback procedures."
+    },
+    {
+      "id": "H-11",
+      "status": "blocked_owner_decision_required",
+      "finding": "No two qualified humans have completed the synthetic usability sessions; no contact is authorized."
+    },
+    {
+      "id": "H-12",
+      "status": "blocked",
+      "finding": "No operations-owner readiness signature citing H-01 through H-11 exists."
+    }
+  ],
+  "duplicate_project": {
+    "project_ref": "mbswhjnjvwlewdqmwwcf",
+    "name": "Metaphilosophy Staging",
+    "region": "us-west-1",
+    "status": "ACTIVE_HEALTHY_at_last_check",
+    "referenced_by_retained_release": false,
+    "disposition": "manual deletion still required",
+    "connector_limitation": "The available Supabase connector exposes no paid-project delete operation; do not claim deletion.",
+    "retain_project_ref": "zpnbshgrscbfelpychhn"
+  },
+  "authorization_state": {
+    "qualified_human_dry_run_participants_approved": false,
+    "qualified_human_outreach_authorized": false,
+    "participant_outreach_authorized": false,
+    "real_research_rating_authorized": false,
+    "honorarium_commitment_or_payment_authorized": false,
+    "publication_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  },
+  "next_action": {
+    "action": "Present the updated H-11 qualified-human synthetic dry-run packet for explicit owner decisions; do not contact anyone.",
+    "owner_decision_required": true,
+    "separate_manual_cleanup": "Delete duplicate Supabase project mbswhjnjvwlewdqmwwcf while retaining zpnbshgrscbfelpychhn."
+  }
+}
