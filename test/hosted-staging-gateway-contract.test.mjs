@@ -11,8 +11,10 @@ const files = Object.fromEntries(await Promise.all([
   "supabase/functions/metaphilosophy-staging-acceptance/index.ts",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql",
+  "ops/next-steps-2026-07-23/hosted-staging-acceptance-evidence-2026-08-06-v1.json",
   "scripts/verify-vercel-oidc-staging-gateway.mjs",
   "scripts/run-hosted-staging-acceptance.mjs",
+  "scripts/verify-hosted-staging-runtime-reuse.mjs",
   "vercel.json",
 ].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 
@@ -54,15 +56,15 @@ test("the gateway database RPC is transactional, serialized, and inaccessible to
   assert.match(migration, /research_ratings_authorized = false/u);
 });
 
-test("Vercel refuses to publish the designated preview unless the OIDC preflight and full hosted acceptance pass", () => {
+test("Vercel publishes the designated preview only after OIDC and unchanged-runtime evidence checks", () => {
   const verifier = files["scripts/verify-vercel-oidc-staging-gateway.mjs"];
-  const acceptance = files["scripts/run-hosted-staging-acceptance.mjs"];
+  const reuse = files["scripts/verify-hosted-staging-runtime-reuse.mjs"];
   const vercel = JSON.parse(files["vercel.json"]);
   assert.equal(
     vercel.buildCommand,
-    "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs && node scripts/run-hosted-staging-acceptance.mjs",
+    "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs && node scripts/verify-hosted-staging-runtime-reuse.mjs",
   );
-  for (const script of [verifier, acceptance]) {
+  for (const script of [verifier, reuse]) {
     assert.match(script, /VERCEL_OIDC_TOKEN/u);
     assert.match(script, /zpnbshgrscbfelpychhn/u);
     assert.doesNotMatch(script, /mbswhjnjvwlewdqmwwcf/u);
@@ -71,6 +73,19 @@ test("Vercel refuses to publish the designated preview unless the OIDC preflight
     assert.doesNotMatch(script, /SUPABASE_SERVICE_ROLE_KEY|POSTGRES_PASSWORD/u);
   }
   assert.match(verifier, /schema_version, 4/u);
+  assert.match(reuse, /git/u);
+  assert.match(reuse, /diff/u);
+  assert.match(reuse, /BACKEND_PATHS/u);
+  assert.match(reuse, /hosted-staging-acceptance-evidence-2026-08-06-v1\.json/u);
+  assert.match(reuse, /primary/u);
+  assert.match(reuse, /restore/u);
+  assert.match(reuse, /protectedFrontendRequiresExactHeadRenderedAudit: true/u);
+  assert.match(reuse, /realPersonContacted: false/u);
+  assert.match(reuse, /outboundMessageSent: false/u);
+});
+
+test("the full hosted acceptance remains available whenever the rating backend changes", () => {
+  const acceptance = files["scripts/run-hosted-staging-acceptance.mjs"];
   assert.match(acceptance, /restore\.verify/u);
   assert.match(acceptance, /report\.store/u);
   assert.match(acceptance, /new_runtime_instance_readback_and_session_resume_passed/u);
@@ -106,6 +121,19 @@ test("the acceptance gateway preserves exact-release, restore, and append-only e
   assert.match(migration, /research_ratings_authorized = false/u);
   assert.match(migration, /revoke all.+from anon/isu);
   assert.match(migration, /revoke all.+from authenticated/isu);
+});
+
+test("the retained acceptance evidence is exact, synthetic-only, and contact-free", () => {
+  const evidence = JSON.parse(files["ops/next-steps-2026-07-23/hosted-staging-acceptance-evidence-2026-08-06-v1.json"]);
+  assert.match(evidence.exact_release.commit, /^[a-f0-9]{40}$/u);
+  assert.equal(evidence.hosted_acceptance.status, "pass");
+  assert.equal(evidence.hosted_acceptance.total_events, 206);
+  assert.equal(evidence.hosted_acceptance.primary_head_hash, evidence.hosted_acceptance.restored_head_hash);
+  assert.equal(evidence.hosted_acceptance.sequence_gap_count, 0);
+  assert.equal(evidence.hosted_acceptance.previous_hash_mismatch_count, 0);
+  assert.equal(evidence.hosted_acceptance.real_person_contacted, false);
+  assert.equal(evidence.hosted_acceptance.outbound_message_sent, false);
+  assert.equal(evidence.supabase.research_ratings_authorized, false);
 });
 
 test("RemoteEventStore sends OIDC and rejects a missing synthetic-only boundary", async () => {
