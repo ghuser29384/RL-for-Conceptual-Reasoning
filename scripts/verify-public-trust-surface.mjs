@@ -41,10 +41,10 @@ export function validatePublicTrustSurface(files) {
   const vercel = objectOrEmpty(files?.vercel);
 
   requirePhrases(index, [
-    "Metaphilosophy is preparing an auditable human-expert pilot",
+    "A research project by Ellen Sun adapting the LMCA method",
     "https://www.metaphilosophy.org/",
     "/src/trust-home.css?v=1",
-    "Expert ratings have not started",
+    "The first Metaphilosophy study has not begun",
   ], "index.html", errors);
 
   requirePhrases(siteEntry, [
@@ -61,13 +61,15 @@ export function validatePublicTrustSurface(files) {
   if (siteEntry.includes('import("./app.mjs")')) errors.push("Public site entry must not import the internal research workspace.");
 
   requirePhrases(home, [
-    "Pilot in preparation · expert ratings have not started",
-    "No Metaphilosophy expert ratings claimed yet",
-    "1,000 public synthetic critiques",
-    "48-critique expert pilot planned",
-    "External prior work",
-    "does not present those ratings as its own",
-    "Reviewer intake and adviser outreach remain closed",
+    "Research study not yet open",
+    "Philosophers can disagree and still judge arguments.",
+    "Metaphilosophy is a research project by Ellen Sun",
+    "1,000 synthetic critiques online",
+    "48 critiques in the planned study",
+    "0 research ratings collected",
+    "Cooper et al.",
+    "Those ratings belong to the LMCA project, not to Metaphilosophy.",
+    "Research rating recruitment is closed.",
     LMCA_PUBLIC_PATH,
     "/research/",
     "/arguments/",
@@ -87,10 +89,10 @@ export function validatePublicTrustSurface(files) {
   ], "trust-home.css", errors);
 
   requirePhrases(gate, [
-    "The rating workspace is gated until the pilot is ready",
-    "This workspace is not publicly open",
-    "has not started production expert ratings",
-    "No application, assignment, rating task, deadline, payment commitment, or expert-result claim",
+    "The research workspace is closed.",
+    "Metaphilosophy is not assigning research ratings yet.",
+    "two-person synthetic usability check",
+    "There is no application, deadline, rating task, or research payment offer",
     "/research/",
     "/arguments/",
   ], "workspace gate", errors);
@@ -103,15 +105,16 @@ export function validatePublicTrustSurface(files) {
   requirePhrases(internalWorkspace, INTERNAL_MARKERS, "internal research workspace", errors);
 
   requirePhrases(research, [
-    "Consultation phase · production ratings not started",
-    "Ratings collected</dt><dd>0",
+    "Draft study plan · research ratings have not begun",
+    "Written and maintained by Ellen Sun",
     "951 rated critiques",
-    "1,000 unrated critiques",
+    "1,000 synthetic critiques",
     "48 critiques · 0 ratings",
-    "One gate passed. Five remain blocked.",
-    "Currently not authorized",
-    "What this pilot cannot establish",
-    "zero production expert ratings collected",
+    "Seven separate judgments about each critique.",
+    "The software is not the last gate.",
+    "There is no open application",
+    "What a twelve-position study cannot show.",
+    "zero Metaphilosophy research ratings collected",
     LMCA_PUBLIC_PATH,
   ], "research protocol", errors);
   if (EMAIL_PATTERN.test(research)) errors.push("Public research protocol must not contain an email address.");
@@ -125,10 +128,10 @@ export function validatePublicTrustSurface(files) {
   ], "research styles", errors);
 
   requirePhrases(argumentsPage, [
-    "07 / 2026",
-    "None has been expert-rated by Metaphilosophy",
-    "This collection is synthetic and unrated",
-    "Inclusion here is not expert endorsement",
+    "July 2026",
+    "1,000 model-written critiques",
+    "None has an expert rating.",
+    "Their presence here does not mean that a philosopher has checked them",
     "/research/",
   ], "argument library", errors);
   for (const forbidden of ARGUMENT_LIBRARY_FORBIDDEN) {
@@ -136,11 +139,11 @@ export function validatePublicTrustSurface(files) {
   }
 
   requirePhrases(reviewersPage, [
-    "Reviewer intake is intentionally closed",
-    "The July 2026 intake window has closed",
-    "No application, calibration submission, deadline, or paid assignment",
-    "Nothing to submit yet",
-    "zero production ratings",
+    "Research rating applications are closed.",
+    "The first Metaphilosophy study has not begun.",
+    "There is no assignment to claim.",
+    "does not accept applications, ratings, calibration work, or payment details",
+    "Zero research ratings have been collected.",
     "/research/",
   ], "closed reviewer page", errors);
 
@@ -182,7 +185,7 @@ export function validatePublicTrustSurface(files) {
   for (const prohibitedClaim of [
     "Metaphilosophy has 951 rated critiques",
     "Metaphilosophy has collected 1,458 expert ratings",
-    "the pilot has started",
+    "the study has started",
     "recruitment is open",
   ]) {
     if (publicText.toLowerCase().includes(prohibitedClaim.toLowerCase())) errors.push(`Public surfaces contain prohibited claim: ${prohibitedClaim}.`);
@@ -191,13 +194,13 @@ export function validatePublicTrustSurface(files) {
   return {
     status: errors.length ? "fail" : "pass",
     public_home_recruitment_cta_removed: !HOME_FORBIDDEN.some((value) => home.includes(value)),
-    public_workspace_gate_verified: siteEntry.includes('import("./workspace-gate.mjs")') && gate.includes("workspace is gated"),
+    public_workspace_gate_verified: siteEntry.includes('import("./workspace-gate.mjs")') && gate.includes("workspace is closed"),
     internal_workspace_preserved: Buffer.byteLength(internalWorkspace, "utf8") >= 100_000 && INTERNAL_MARKERS.every((marker) => internalWorkspace.includes(marker)),
     internal_workspace_excluded_from_public_build: buildScript.includes("const publicSrcFiles") && !buildScript.includes('"app.mjs"'),
     canonical_lmca_redirect_present: paperRedirect?.destination === LMCA_CANONICAL_URL,
-    research_protocol_published: research.includes("48-critique pilot"),
-    synthetic_release_marked_unrated: argumentsPage.includes("synthetic and unrated"),
-    reviewer_intake_closed: reviewersPage.includes("intake is intentionally closed"),
+    research_protocol_published: research.includes("48 critiques · 0 ratings"),
+    synthetic_release_marked_unrated: argumentsPage.includes("None has an expert rating."),
+    reviewer_intake_closed: reviewersPage.includes("Research rating applications are closed."),
     security_headers_present: headerMap.size >= 4,
     errors,
   };
