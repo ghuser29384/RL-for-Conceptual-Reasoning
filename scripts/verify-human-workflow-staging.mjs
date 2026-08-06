@@ -18,6 +18,7 @@ const requiredFiles = [
   "staging/styles.css",
   "scripts/bootstrap-staging-rehearsal.mjs",
   "scripts/smoke-staging-runtime.mjs",
+  "scripts/smoke-staging-postgres.mjs",
   "scripts/run-human-workflow-support-tabletop.mjs",
   "e2e/human-workflow-staging.spec.mjs",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
@@ -88,6 +89,18 @@ assert.match(contents["scripts/smoke-staging-runtime.mjs"], /backup_restore_and_
 assert.match(contents["scripts/smoke-staging-runtime.mjs"], /automated synthetic runtime rehearsal/);
 assert.match(contents["scripts/smoke-staging-runtime.mjs"], /No outreach, participant selection, payment, funding submission, or real research rating was authorized/);
 
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /STAGING_SOURCE_DATABASE_URL/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /STAGING_RESTORE_DATABASE_URL/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /metaphilosophy_staging_chain_readback/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /metaphilosophy_staging_assert_synthetic_only/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /update public\.metaphilosophy_staging_events/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /delete from public\.metaphilosophy_staging_events/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /postgres_connection_close_reopen_and_session_resume_passed/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /second_database_exact_event_restore_chain_readback_and_session_resume_passed/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /realPersonContacted: false/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /researchRatingCollected: false/);
+assert.match(contents["scripts/smoke-staging-postgres.mjs"], /paymentPromisedOrMade: false/);
+
 assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /Ellen Sun/);
 assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /severity: "P1"/);
 assert.match(contents["scripts/run-human-workflow-support-tabletop.mjs"], /revoked_invite/);
@@ -121,6 +134,7 @@ console.log(JSON.stringify({
   claims: {
     authenticatedStagingArchitectureDefined: true,
     automatedSyntheticRehearsalDefined: true,
+    automatedDisposablePostgresRehearsalDefined: true,
     automatedSyntheticOperationsUiDefined: true,
     automatedSupportTabletopDefined: true,
     hostedDatabaseConfigured: false,
