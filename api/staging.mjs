@@ -7,7 +7,7 @@ import { StagingWorkflowService, serviceError } from "../src/staging-service.mjs
 const COOKIE_NAME = "mp_staging_session";
 const JSON_LIMIT_BYTES = 1_000_000;
 const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
-const HOSTED_GATEWAY_URL = "https://mbswhjnjvwlewdqmwwcf.supabase.co/functions/v1/metaphilosophy-staging-ledger";
+const HOSTED_GATEWAY_URL = "https://zpnbshgrscbfelpychhn.supabase.co/functions/v1/metaphilosophy-staging-ledger";
 const HOSTED_CSRF_DOMAIN = "metaphilosophy-staging-preview-csrf-v1";
 const MUTATING_ACTIONS = new Set([
   "logout",
@@ -161,7 +161,7 @@ export function createStagingApiHandler(options = {}) {
         case "export.public":
           requireMethod(req, "GET");
           result = await runtime.service.operatorExport({ actorSessionToken: sessionToken, publicOnly: true });
-          res.setHeader("Content-Disposition", `attachment; filename=metaphilosophy-staging-public-${new Date().toISOString().slice(0, 10)}.json`);
+          res.setHeader("Content-Disposition", `attachment; filename=metilosophy-staging-public-${new Date().toISOString().slice(0, 10)}.json`);
           break;
         default:
           throw serviceError(404, "unknown_action", "Unknown staging action.");
