@@ -75,6 +75,7 @@ const response = await fetch(ACCEPTANCE_URL, {
     Authorization: `Bearer ${oidcToken}`,
     "Content-Type": "application/json",
     "X-Metaphilosophy-Release-Sha": exactReleaseSha,
+    Connection: "close",
   },
   body: JSON.stringify({ action: "status", exactReleaseSha }),
 });
@@ -114,3 +115,5 @@ console.log(JSON.stringify({
   realPersonContacted: false,
   outboundMessageSent: false,
 }, null, 2));
+
+process.exit(0);
