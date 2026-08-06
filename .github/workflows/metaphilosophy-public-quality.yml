@@ -15,9 +15,12 @@ on:
       - "reviewers/closed.html"
       - "scripts/build-static.mjs"
       - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-editorial-voice.mjs"
       - "scripts/verify-public-css-dependencies.mjs"
       - "test/public-trust-surface.test.mjs"
+      - "test/public-editorial-voice.test.mjs"
       - "test/public-css-dependencies.test.mjs"
+      - "ops/next-steps-2026-07-23/public-editorial-voice.md"
       - "vercel.json"
       - ".github/workflows/metaphilosophy-public-quality.yml"
   push:
@@ -35,9 +38,12 @@ on:
       - "reviewers/closed.html"
       - "scripts/build-static.mjs"
       - "scripts/verify-public-trust-surface.mjs"
+      - "scripts/verify-public-editorial-voice.mjs"
       - "scripts/verify-public-css-dependencies.mjs"
       - "test/public-trust-surface.test.mjs"
+      - "test/public-editorial-voice.test.mjs"
       - "test/public-css-dependencies.test.mjs"
+      - "ops/next-steps-2026-07-23/public-editorial-voice.md"
       - "vercel.json"
       - ".github/workflows/metaphilosophy-public-quality.yml"
 
@@ -55,8 +61,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node scripts/verify-public-trust-surface.mjs
+      - run: node scripts/verify-public-editorial-voice.mjs
       - run: node scripts/verify-public-css-dependencies.mjs
-      - run: node --test test/public-trust-surface.test.mjs test/public-css-dependencies.test.mjs
+      - run: node --test test/public-trust-surface.test.mjs test/public-editorial-voice.test.mjs test/public-css-dependencies.test.mjs
       - run: npm test
       - run: npm run build
       - run: test -f dist/research/index.html
