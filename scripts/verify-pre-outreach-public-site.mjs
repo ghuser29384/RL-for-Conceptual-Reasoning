@@ -3,31 +3,33 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const REQUIRED_HOME_MARKERS = Object.freeze([
-  "Pilot in preparation · expert ratings have not started",
-  "No Metaphilosophy expert ratings claimed yet",
-  "No production data loaded",
-  "External prior work",
-  "1,000 public synthetic critiques",
-  "48-critique expert pilot planned",
-  "Reviewer intake and adviser outreach remain closed",
+  "Research study not yet open",
+  "Philosophers can disagree and still judge arguments.",
+  "Metaphilosophy is a research project by Ellen Sun",
+  "Demonstration only",
+  "Cooper et al.",
+  "1,000 synthetic critiques online",
+  "48 critiques in the planned study",
+  "Research rating recruitment is closed.",
 ]);
 const REQUIRED_RESEARCH_MARKERS = Object.freeze([
-  "Consultation phase · production ratings not started",
-  "Three artifacts. Three different claims.",
+  "Draft study plan · research ratings have not begun",
+  "Written and maintained by Ellen Sun",
+  "Three bodies of work, kept separate.",
   "951 rated critiques",
-  "1,458 ratings",
-  "1,000 unrated critiques",
+  "1,458 expert ratings",
+  "1,000 synthetic critiques",
   "48 critiques · 0 ratings",
-  "Evaluate the critique—not agreement with its conclusion.",
-  "One gate passed. Five remain blocked.",
-  "Currently not authorized",
-  "It cannot settle philosophical questions",
+  "Seven separate judgments about each critique.",
+  "The software is not the last gate.",
+  "There is no open application",
+  "It cannot establish an objective answer to a philosophical question.",
 ]);
 const REQUIRED_GATE_MARKERS = Object.freeze([
-  "The rating workspace is gated until the pilot is ready",
-  "This workspace is not publicly open",
-  "has not started production expert ratings",
-  "No application, assignment, rating task, deadline, payment commitment, or expert-result claim",
+  "The research workspace is closed.",
+  "Metaphilosophy is not assigning research ratings yet.",
+  "two-person synthetic usability check",
+  "There is no application, deadline, rating task, or research payment offer",
   "/research/",
   "/arguments/",
 ]);
@@ -74,7 +76,8 @@ export function validatePreOutreachPublicSite(files) {
     }
   }
 
-  if (!/expert ratings have not started/iu.test(indexHtml)) errors.push("index.html metadata must state that expert ratings have not started.");
+  if (!/first Metaphilosophy study has not begun/iu.test(indexHtml)) errors.push("index.html metadata must state that the first Metaphilosophy study has not begun.");
+  if (!indexHtml.includes("A research project by Ellen Sun")) errors.push("index.html metadata must identify the project author.");
   if (!indexHtml.includes("/src/trust-home.css")) errors.push("index.html must load the public trust-surface stylesheet.");
 
   for (const marker of [
@@ -98,18 +101,19 @@ export function validatePreOutreachPublicSite(files) {
   }
 
   for (const marker of [
-    "model-authored, unrated critiques",
-    "None has been expert-rated by Metaphilosophy",
-    "external LMCA expert-rated research release",
+    "1,000 model-written critiques",
+    "None has an expert rating.",
+    "separate from the expert-rated LMCA dataset",
     "/research/",
   ]) {
     if (!argumentHtml.includes(marker)) errors.push(`Synthetic library must include ${marker}.`);
   }
   for (const marker of [
-    "Reviewer intake is intentionally closed",
-    "The July 2026 intake window has closed",
-    "No application, calibration submission, deadline, or paid assignment",
-    "zero production ratings",
+    "Research rating applications are closed.",
+    "The first Metaphilosophy study has not begun.",
+    "There is no assignment to claim.",
+    "does not accept applications, ratings, calibration work, or payment details",
+    "Zero research ratings have been collected.",
     "/research/",
   ]) {
     if (!reviewerClosedHtml.includes(marker)) errors.push(`Closed reviewer page must include ${marker}.`);
@@ -150,8 +154,8 @@ export function validatePreOutreachPublicSite(files) {
         Buffer.byteLength(appModule, "utf8") >= 100_000 &&
         REQUIRED_INTERNAL_WORKSPACE_MARKERS.every((marker) => appModule.includes(marker)) &&
         !buildScript.includes('"app.mjs"'),
-      reviewer_intake_closed: reviewerClosedHtml.includes("Reviewer intake is intentionally closed"),
-      synthetic_release_boundary_visible: argumentHtml.includes("None has been expert-rated by Metaphilosophy"),
+      reviewer_intake_closed: reviewerClosedHtml.includes("Research rating applications are closed."),
+      synthetic_release_boundary_visible: argumentHtml.includes("None has an expert rating."),
       research_in_static_build: buildScript.includes('resolve(root, "research")'),
       responsive_and_keyboard_styles_present:
         exactCss.includes(":focus-visible") &&
@@ -206,7 +210,7 @@ const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
 if (invokedPath === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--help")) {
     console.log("Usage: node scripts/verify-pre-outreach-public-site.mjs [repository-root]");
-    console.log("Validates public claims, gated workspace routes, evidence boundaries, closed intake, and static-build allowlisting. Passing never authorizes outreach or production promotion.");
+    console.log("Validates public claims, gated workspace routes, source boundaries, closed intake, and static-build allowlisting. Passing never authorizes outreach or production promotion.");
   } else {
     const root = process.argv[2] ?? resolve(import.meta.dirname, "..");
     const report = await readAndValidatePreOutreachPublicSite(root);
