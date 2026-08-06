@@ -16,6 +16,7 @@ test("the designated preview uses a non-secret Vercel OIDC gateway and keeps rem
   assert.match(api, /release\/vercel-preview/u);
   assert.match(api, /VERCEL_ENV === "preview"/u);
   assert.match(api, /x-vercel-oidc-token/u);
+  assert.match(api, /zpnbshgrscbfelpychhn/u);
   assert.match(api, /metaphilosophy-staging-ledger/u);
   assert.match(api, /remote_bootstrap_disabled/u);
   assert.doesNotMatch(api, /STAGING_ALLOW_REMOTE_BOOTSTRAP\s*=\s*["']true/u);
