@@ -1,9 +1,12 @@
 # Metaphilosophy public editorial voice
 
+**Version:** 1.0 · 6 August 2026  
 **Owner:** Ellen Sun  
 **Applies to:** the public homepage, study plan, synthetic library, closed-intake page, workspace gate, metadata, and future public research reports.
 
 Metaphilosophy should sound like a named researcher explaining a specific study. It should not sound like a software company describing a platform, an AI assistant arranging information into polished templates, or an internal compliance document published by accident.
+
+No editorial process can guarantee what every reader will infer about authorship. The practical standard is that the public text should have a clear human author, a consistent individual point of view, source-specific claims, and none of the stock language or templated organization commonly associated with generated copy.
 
 ## Voice
 
