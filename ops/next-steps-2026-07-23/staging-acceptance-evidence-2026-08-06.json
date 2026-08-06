@@ -1,0 +1,221 @@
+{
+  "record_id": "metaphilosophy-staging-acceptance-evidence-2026-08-06",
+  "record_version": 1,
+  "recorded_at": "2026-08-06T03:38:17Z",
+  "status": "automated_synthetic_staging_gate_passed_but_human_workflow_not_authorized",
+  "controlling_audit": "ops/next-steps-2026-07-23/human-expert-rating-workflow-audit-2026-08-04.md",
+  "evidence_subject": {
+    "repository": "ghuser29384/RL-for-Conceptual-Reasoning",
+    "pull_request": 17,
+    "branch": "agent/48-critique-pilot-20260730",
+    "tested_commit": "1175a223766f837a4c8712a6490a0cda4eb976a9",
+    "tested_tree": "b06282c76a6f09f36c10ffb1435facdfe5925ae5",
+    "commit_message": "Keep the operator API session across the Chromium rehearsal",
+    "note": "This evidence record is a documentation-only descendant of the tested runtime commit. It does not claim that documentation commits change or independently validate the tested runtime."
+  },
+  "workflow": {
+    "name": "Metaphilosophy authenticated staging gate",
+    "workflow_path": ".github/workflows/metaphilosophy-human-workflow-staging.yml",
+    "run_id": 31068387790,
+    "run_number": 21,
+    "event": "push",
+    "started_at": "2026-08-06T03:25:18Z",
+    "completed_at": "2026-08-06T03:26:57Z",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "job_id": 92510711638,
+        "name": "Contracts and synthetic rehearsal",
+        "conclusion": "success",
+        "evidence": [
+          "staging and compatibility syntax checks",
+          "staging contract verification",
+          "focused staging tests",
+          "complete repository tests",
+          "ordinary public build with staging omitted",
+          "explicit controlled-staging build",
+          "deterministic synthetic lifecycle rehearsal"
+        ]
+      },
+      {
+        "job_id": 92511065936,
+        "name": "Rendered Chromium rehearsal",
+        "conclusion": "success",
+        "evidence": [
+          "one complete Playwright test passed in 9.4 seconds",
+          "desktop rater autosave, close, resume, submit, and locked-state journey",
+          "390 by 844 mobile rater journey without horizontal overflow",
+          "two-rater blindness and cross-account write denial",
+          "adjudicator review and explicitly unresolved closure",
+          "privacy-safe public export"
+        ]
+      }
+    ]
+  },
+  "retained_artifacts": [
+    {
+      "artifact_id": 8954699765,
+      "name": "metaphilosophy-staging-contract-rehearsal-1175a223766f837a4c8712a6490a0cda4eb976a9",
+      "github_artifact_digest": "sha256:f104c81e53952349b77f56db803cde0ac844b38ac4ebec62435faae761809359",
+      "downloaded_archive_sha256": "4efd78aa213e61fb15e779ed16376b1a59f9a1bd766263565681cf5fa2bc68d7",
+      "expires_at": "2026-11-04T03:26:46Z",
+      "principal_file": "human-workflow-smoke-report.json"
+    },
+    {
+      "artifact_id": 8954716465,
+      "name": "metaphilosophy-staging-browser-1175a223766f837a4c8712a6490a0cda4eb976a9",
+      "github_artifact_digest": "sha256:8017b03147c747cc3adbd25cb547dbd73322ac876abb7cfd5c596f2defa53ad7",
+      "downloaded_archive_sha256": "45c555baca533746054db85673ede580ab4c60c9f426eafb57aedc733bbcf876",
+      "expires_at": "2026-11-04T03:26:56Z",
+      "principal_files": [
+        "playwright-report/index.html",
+        "playwright-results/.last-run.json"
+      ]
+    }
+  ],
+  "synthetic_runtime_rehearsal": {
+    "schema_version": "metaphilosophy-human-workflow-smoke-v2",
+    "generated_at": "2026-08-06T03:25:55.211Z",
+    "status": "pass",
+    "scope": "automated synthetic runtime rehearsal only; no human participant and no research rating",
+    "research_ratings_authorized": false,
+    "counts": {
+      "identities": 6,
+      "assignments": 3,
+      "ratings": 12,
+      "label_snapshots": 1,
+      "events": 102
+    },
+    "chain_head_hash": "adb8efd5a4ac79c03b68eb9bb5f04903f8cb7b3e5b76eb02473028ea8027a725",
+    "passed_checkpoints": [
+      "synthetic operator bootstrapped",
+      "controlled identities created",
+      "invitation revoke, replace, logout, and expiry exercised",
+      "two isolated raters and the full rubric loaded",
+      "cross-account and direct-object access denied",
+      "autosave conflict plus process-restart resume exercised",
+      "tamper rejection, idempotent submission, and receipts exercised",
+      "immutable initial ratings and predecessor-linked rerating exercised",
+      "adjudication handoff and unresolved snapshot exercised",
+      "correction and withdrawal paths exercised",
+      "private audit and privacy-safe public exports exercised",
+      "backup, restore, and hash-chain readback exercised"
+    ]
+  },
+  "corrective_history": {
+    "superseded_failed_run_id": 31029521606,
+    "failed_commit": "ad54d8ce3b66ff22068584cf028651687cdf27fd",
+    "failure_classification": "test_harness_session_scope_error",
+    "failure_detail": "The browser test attempted to read the operator workspace through a fresh unauthenticated Playwright request fixture after both rater journeys had already reached submitted-and-locked state.",
+    "corrective_change": "A dedicated operator API request context is now created in beforeAll, reused for the complete rehearsal, and disposed in afterAll.",
+    "corrected_commit": "1175a223766f837a4c8712a6490a0cda4eb976a9",
+    "corrected_run_id": 31068387790,
+    "corrected_result": "success"
+  },
+  "h_gate_assessment": [
+    {
+      "id": "H-01",
+      "status": "blocked",
+      "finding": "The authenticated staging architecture exists and passes locally, but no protected hosted workspace usable by external dry-run raters has been exercised."
+    },
+    {
+      "id": "H-02",
+      "status": "passed",
+      "finding": "The staging runtime has an isolated server entry point, reproducible commands, syntax checks, clean-start behavior, and health checks while the mature public server remains separate."
+    },
+    {
+      "id": "H-03",
+      "status": "technical_automation_passed_official_gate_blocked",
+      "finding": "Issue, redeem, expiry, one-time use, revoke, replace, logout, session reuse, cross-account denial, and recovery are automated; hosted and qualified-human acceptance remain absent."
+    },
+    {
+      "id": "H-04",
+      "status": "rendered_automation_passed_official_gate_blocked",
+      "finding": "Desktop and mobile browser automation covers all four sibling critiques, the full seven-dimensional rubric, auxiliary fields, autosave, resume, submission, receipts, and locked state; qualified expert-style walkthrough evidence remains absent."
+    },
+    {
+      "id": "H-05",
+      "status": "passed_automated_synthetic",
+      "finding": "Autosave, restart and resume, stale-version conflict, idempotent submission, tamper rejection, and duplicate prevention pass deterministically without lost or duplicated accepted scores."
+    },
+    {
+      "id": "H-06",
+      "status": "blocked",
+      "finding": "The append-only file-backed event store passes restart, readback, backup, restore, and hash-chain checks, but no dedicated hosted staging database or browser-to-hosted-database rehearsal has been exercised."
+    },
+    {
+      "id": "H-07",
+      "status": "partial",
+      "finding": "Correction, predecessor-linked rerating, withdrawal, and immutable history pass through the runtime state machine; a complete rater-visible correction and withdrawal walkthrough plus operator response is still required."
+    },
+    {
+      "id": "H-08",
+      "status": "passed_automated_synthetic",
+      "finding": "Two isolated browser contexts, hidden peer identity and metadata, cross-account write denial, and direct-object access denial are retained in the exact-head evidence."
+    },
+    {
+      "id": "H-09",
+      "status": "partial",
+      "finding": "Adjudication handoff, predecessor-linked rerating, immutable initial ratings, and explicit unresolved closure pass; closed-without-rerating and all three paths through the complete operator/adjudicator interface remain to be retained."
+    },
+    {
+      "id": "H-10",
+      "status": "blocked",
+      "finding": "The support and incident runbook exists, but no named tabletop execution record demonstrates recovery from a selected incident."
+    },
+    {
+      "id": "H-11",
+      "status": "blocked",
+      "finding": "No two qualified human synthetic dry runs have occurred."
+    },
+    {
+      "id": "H-12",
+      "status": "blocked",
+      "finding": "No operations-owner readiness signature citing complete H-01 through H-11 evidence exists."
+    }
+  ],
+  "authorization_state": {
+    "hosted_external_dry_run_authorized": false,
+    "qualified_human_dry_run_participants_selected": false,
+    "qualified_human_dry_run_outreach_authorized": false,
+    "participant_outreach_authorized": false,
+    "real_research_rating_authorized": false,
+    "controlled_assignment_distribution_authorized": false,
+    "rating_ingestion_authorized": false,
+    "adjudication_work_authorized": false,
+    "honorarium_commitment_or_payment_authorized": false,
+    "publication_authorized": false,
+    "funding_submission_authorized": false,
+    "phase_2_authorized": false
+  },
+  "limitations": [
+    "The passing CI run is evidence about an automated synthetic local runtime, not a qualified human usability study.",
+    "No dedicated hosted staging database or protected preview deployment was exercised.",
+    "No person is selected merely by appearing in an internal candidate slate.",
+    "No email, invitation, assignment, honorarium promise, payment, or real rating is authorized by this record.",
+    "The PR remains draft and unmerged."
+  ],
+  "next_actions": [
+    {
+      "order": 1,
+      "action": "Prepare a fail-closed owner decision packet for two qualified synthetic dry-run raters without contacting them.",
+      "authorization": "preparation_only"
+    },
+    {
+      "order": 2,
+      "action": "Exercise a protected hosted staging workspace backed by a dedicated disposable staging database and retain browser-to-database evidence.",
+      "authorization": "engineering_work_only_no_human_access"
+    },
+    {
+      "order": 3,
+      "action": "Retain the remaining rater-visible correction and withdrawal, all adjudication closure paths, and one support tabletop record.",
+      "authorization": "synthetic_only"
+    },
+    {
+      "order": 4,
+      "action": "Only after H-01 through H-10 pass, obtain explicit owner approval of exact H-11 participants, message, support owner, scope, timing, and any honorarium before contact.",
+      "authorization": "owner_decision_required"
+    }
+  ]
+}
