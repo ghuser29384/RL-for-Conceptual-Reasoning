@@ -55,7 +55,7 @@ jobs:
       - name: Verify canonical domain, exact release marker, headers, redirect, and internal-source exclusion
         run: |
           node - <<'NODE' | tee test-results/production/release-boundary-report.json
-          const marker = 'mp-preoutreach-20260802-r1';
+          const marker = 'mp-public-voice-20260806-r1';
           const apex = await fetch('https://metaphilosophy.org/', { redirect: 'manual' });
           if (![301, 302, 307, 308].includes(apex.status)) throw new Error(`Apex domain returned ${apex.status}`);
           const apexLocation = apex.headers.get('location') ?? '';
