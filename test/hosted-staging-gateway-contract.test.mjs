@@ -9,6 +9,8 @@ const files = Object.fromEntries(await Promise.all([
   "src/staging-event-store.mjs",
   "supabase/functions/metaphilosophy-staging-ledger/index.ts",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql",
+  "scripts/verify-vercel-oidc-staging-gateway.mjs",
+  "vercel.json",
 ].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 
 test("the designated preview uses a non-secret Vercel OIDC gateway and keeps remote bootstrap disabled", () => {
@@ -46,6 +48,19 @@ test("the gateway database RPC is transactional, serialized, and inaccessible to
   assert.match(migration, /revoke all.+from authenticated/isu);
   assert.match(migration, /grant execute.+to service_role/isu);
   assert.match(migration, /research_ratings_authorized = false/u);
+});
+
+test("Vercel refuses to publish the designated preview unless its OIDC identity reaches the isolated database", () => {
+  const script = files["scripts/verify-vercel-oidc-staging-gateway.mjs"];
+  const vercel = JSON.parse(files["vercel.json"]);
+  assert.equal(vercel.buildCommand, "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs");
+  assert.match(script, /VERCEL_OIDC_TOKEN/u);
+  assert.match(script, /zpnbshgrscbfelpychhn/u);
+  assert.match(script, /release\/vercel-preview/u);
+  assert.match(script, /synthetic_rehearsal_only/u);
+  assert.match(script, /researchRatingsAuthorized, false/u);
+  assert.match(script, /schema_version, 3/u);
+  assert.doesNotMatch(script, /SUPABASE_SERVICE_ROLE_KEY|POSTGRES_PASSWORD/u);
 });
 
 test("RemoteEventStore sends OIDC and rejects a missing synthetic-only boundary", async () => {
