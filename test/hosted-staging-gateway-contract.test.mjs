@@ -8,9 +8,11 @@ const files = Object.fromEntries(await Promise.all([
   "api/staging.mjs",
   "src/staging-event-store.mjs",
   "supabase/functions/metaphilosophy-staging-ledger/index.ts",
+  "supabase/functions/metaphilosophy-staging-acceptance/index.ts",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql",
   "scripts/verify-vercel-oidc-staging-gateway.mjs",
+  "scripts/run-hosted-staging-acceptance.mjs",
   "vercel.json",
 ].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
 
@@ -27,7 +29,7 @@ test("the designated preview uses a non-secret Vercel OIDC gateway and keeps rem
   assert.doesNotMatch(api, /SUPABASE_SERVICE_ROLE_KEY|POSTGRES_PASSWORD/u);
 });
 
-test("the Supabase gateway verifies exact Vercel owner, project, and preview claims", () => {
+test("the Supabase ledger gateway verifies exact Vercel owner, project, and preview claims", () => {
   const gateway = files["supabase/functions/metaphilosophy-staging-ledger/index.ts"];
   assert.match(gateway, /team_ySu6sF3Uho1E1GnJtCQPVEuJ/u);
   assert.match(gateway, /prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ/u);
@@ -52,18 +54,53 @@ test("the gateway database RPC is transactional, serialized, and inaccessible to
   assert.match(migration, /research_ratings_authorized = false/u);
 });
 
-test("Vercel refuses to publish the designated preview unless its OIDC identity reaches the retained US East database", () => {
-  const script = files["scripts/verify-vercel-oidc-staging-gateway.mjs"];
+test("Vercel refuses to publish the designated preview unless the OIDC preflight and full hosted acceptance pass", () => {
+  const verifier = files["scripts/verify-vercel-oidc-staging-gateway.mjs"];
+  const acceptance = files["scripts/run-hosted-staging-acceptance.mjs"];
   const vercel = JSON.parse(files["vercel.json"]);
-  assert.equal(vercel.buildCommand, "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs");
-  assert.match(script, /VERCEL_OIDC_TOKEN/u);
-  assert.match(script, /zpnbshgrscbfelpychhn/u);
-  assert.doesNotMatch(script, /mbswhjnjvwlewdqmwwcf/u);
-  assert.match(script, /release\/vercel-preview/u);
-  assert.match(script, /synthetic_rehearsal_only/u);
-  assert.match(script, /researchRatingsAuthorized, false/u);
-  assert.match(script, /schema_version, 3/u);
-  assert.doesNotMatch(script, /SUPABASE_SERVICE_ROLE_KEY|POSTGRES_PASSWORD/u);
+  assert.equal(
+    vercel.buildCommand,
+    "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs && node scripts/run-hosted-staging-acceptance.mjs",
+  );
+  for (const script of [verifier, acceptance]) {
+    assert.match(script, /VERCEL_OIDC_TOKEN/u);
+    assert.match(script, /zpnbshgrscbfelpychhn/u);
+    assert.doesNotMatch(script, /mbswhjnjvwlewdqmwwcf/u);
+    assert.match(script, /release\/vercel-preview/u);
+    assert.match(script, /researchRatingsAuthorized/u);
+    assert.doesNotMatch(script, /SUPABASE_SERVICE_ROLE_KEY|POSTGRES_PASSWORD/u);
+  }
+  assert.match(verifier, /schema_version, 4/u);
+  assert.match(acceptance, /restore\.verify/u);
+  assert.match(acceptance, /report\.store/u);
+  assert.match(acceptance, /new_runtime_instance_readback_and_session_resume_passed/u);
+  assert.match(acceptance, /second_runtime_restart_preserved_sessions_ratings_receipts_and_snapshot/u);
+  assert.match(acceptance, /realPersonContacted: false/u);
+  assert.match(acceptance, /participantContactAuthorized: false/u);
+});
+
+test("the acceptance gateway preserves exact-release, restore, and append-only evidence boundaries", () => {
+  const gateway = files["supabase/functions/metaphilosophy-staging-acceptance/index.ts"];
+  const migration = files["ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql"];
+  assert.match(gateway, /team_ySu6sF3Uho1E1GnJtCQPVEuJ/u);
+  assert.match(gateway, /prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ/u);
+  assert.match(gateway, /environment:preview/u);
+  assert.match(gateway, /exactReleaseSha/u);
+  assert.match(gateway, /restore\.verify/u);
+  assert.match(gateway, /report\.store/u);
+  assert.match(gateway, /verifyEventChain/u);
+  assert.match(gateway, /schema_version\) !== 4/u);
+  assert.match(gateway, /researchRatingsAuthorized: false/u);
+  assert.doesNotMatch(gateway, /Access-Control-Allow-Origin/u);
+
+  assert.match(migration, /metaphilosophy_staging_verification_reports/u);
+  assert.match(migration, /metaphilosophy_staging_restore_drill_events/u);
+  assert.match(migration, /before update or delete/iu);
+  assert.match(migration, /restore_drill_load/u);
+  assert.match(migration, /restore_drill_readback/u);
+  assert.match(migration, /research_ratings_authorized = false/u);
+  assert.match(migration, /revoke all.+from anon/isu);
+  assert.match(migration, /revoke all.+from authenticated/isu);
 });
 
 test("RemoteEventStore sends OIDC and rejects a missing synthetic-only boundary", async () => {
@@ -97,16 +134,4 @@ test("RemoteEventStore sends OIDC and rejects a missing synthetic-only boundary"
   } finally {
     globalThis.fetch = originalFetch;
   }
-});
-
-test("the unactivated v4 verification extension remains isolated and append-only", () => {
-  const migration = files["ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql"];
-  assert.match(migration, /metaphilosophy_staging_verification_reports/u);
-  assert.match(migration, /metaphilosophy_staging_restore_drill_events/u);
-  assert.match(migration, /before update or delete/iu);
-  assert.match(migration, /restore_drill_load/u);
-  assert.match(migration, /restore_drill_readback/u);
-  assert.match(migration, /research_ratings_authorized = false/u);
-  assert.match(migration, /revoke all.+from anon/isu);
-  assert.match(migration, /revoke all.+from authenticated/isu);
 });
