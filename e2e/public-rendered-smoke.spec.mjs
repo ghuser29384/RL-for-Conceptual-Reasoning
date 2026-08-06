@@ -46,7 +46,7 @@ test("desktop homepage is truthful, authored, interactive, and free of broken pu
   await expect(page.getByText("Research study not yet open", { exact: true })).toBeVisible();
   await expect(page.getByText("0 research ratings collected", { exact: true })).toBeVisible();
   await expect(page.getByText("Demonstration only", { exact: true })).toBeVisible();
-  await expect(page.getByText(/research project by Ellen Sun/iu)).toBeVisible();
+  await expect(page.getByText(/research project by Ellen Sun/iu).first()).toBeVisible();
 
   await page.getByRole("button", { name: /Clarity\s+Precision of meaning/iu }).click();
   await expect(page.locator("#mp-dimension-name")).toHaveText("Clarity");
