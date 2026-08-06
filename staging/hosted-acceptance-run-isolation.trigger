@@ -1,1 +1,0 @@
-Hosted acceptance cumulative-state assertions were repaired to scope all evidence to the current synthetic run while preserving prior append-only events. This marker triggers the complete exact-head staging gate for the validated repair.
