@@ -53,7 +53,8 @@ for (const critique of critiques) counts.set(critique.position_id, (counts.get(c
 assert.equal(counts.size, positions.length);
 for (const position of positions) assert.equal(counts.get(position.position_id), synthetic.expected.critiques_per_position);
 
-assert.match(intakeHtml, /The July 2026 intake window has closed\./);
+assert.match(intakeHtml, /Research rating applications are closed\./);
+assert.match(intakeHtml, /There is no assignment to claim\./);
 assert.doesNotMatch(intakeHtml, /Submit calibration/);
 
 console.log(
