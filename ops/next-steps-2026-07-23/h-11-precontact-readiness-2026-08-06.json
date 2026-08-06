@@ -1,0 +1,93 @@
+{
+  "schema_version": "metaphilosophy-h11-precontact-readiness-v1",
+  "recorded_at": "2026-08-06T15:09:00Z",
+  "owner_gate_id": "H11-OWNER-GATE-2026-08-06-V1",
+  "operations_packet_id": "H11-OPS-PACKET-2026-08-06-V1",
+  "status": "preparation_complete_owner_approval_absent",
+  "protected_release": {
+    "commit_sha": "202135a21fb15f5a12698e6a78e8c8d8b7fa79ef",
+    "deployment_id": "dpl_GmdeKXfv4LQJ6T5iGLnrRXipogHP",
+    "state": "READY",
+    "sso_protected": true,
+    "staging_path_status": 302,
+    "health_path_status": 302,
+    "cache_control": "no-store, max-age=0",
+    "x_robots_tag": "noindex",
+    "x_frame_options": "DENY",
+    "runtime_error_or_fatal_logs_last_12h": 0
+  },
+  "retained_supabase_project": {
+    "project_ref": "zpnbshgrscbfelpychhn",
+    "schema_version": 4,
+    "purpose": "synthetic_rehearsal_only",
+    "research_ratings_authorized": false
+  },
+  "duplicate_supabase_project": {
+    "project_ref": "mbswhjnjvwlewdqmwwcf",
+    "name": "Metaphilosophy Staging",
+    "region": "us-west-1",
+    "status": "ACTIVE_HEALTHY",
+    "pause_attempted": true,
+    "pause_result": "blocked_non_free_tier_requires_downgrade_or_manual_deletion",
+    "must_not_delete": false
+  },
+  "proposed_primary_pair": [
+    {
+      "name": "Alexander Kastner",
+      "lmca_coauthor": true,
+      "documented_ratings_ignoring_revisions": 130,
+      "rating_test_critiques": 52,
+      "current_public_affiliation": "Redwood Research technical staff",
+      "official_organization_contact_route_verified": true,
+      "selected": false,
+      "contact_authorized": false
+    },
+    {
+      "name": "Linh Chi Nguyen",
+      "lmca_coauthor": true,
+      "documented_ratings_ignoring_revisions": 103,
+      "rating_test_critiques": 52,
+      "current_public_affiliation": "Redwood Research technical staff",
+      "official_organization_contact_route_verified": true,
+      "selected": false,
+      "contact_authorized": false
+    }
+  ],
+  "prepared_controls": {
+    "professional_contact_route_verification": true,
+    "synthetic_scope": true,
+    "consent_and_privacy_terms": true,
+    "payment_eligibility_checklist": true,
+    "desktop_session_runbook": true,
+    "narrow_mobile_session_runbook": true,
+    "stop_conditions": true,
+    "evidence_schema": true,
+    "debrief_questionnaire": true,
+    "stale_hard_set_drafts_prohibited": true
+  },
+  "unresolved_recipient_specific_checks": {
+    "interest": true,
+    "availability": true,
+    "conflicts": true,
+    "jurisdiction": true,
+    "tax_residence": true,
+    "sanctions": true,
+    "institutional_outside_payment_rules": true,
+    "payment_rail": true,
+    "consent": true,
+    "session_window": true
+  },
+  "authorization": {
+    "owner_approval_recorded": false,
+    "participant_selected": false,
+    "email_draft_created_for_h11": false,
+    "email_sent": false,
+    "invitation_created": false,
+    "protected_url_shared": false,
+    "honorarium_promised": false,
+    "human_rating_collected": false,
+    "research_rating_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false
+  }
+}
