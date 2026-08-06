@@ -6,6 +6,7 @@ import { StagingWorkflowService, serviceError } from "../src/staging-service.mjs
 
 const COOKIE_NAME = "mp_staging_session";
 const JSON_LIMIT_BYTES = 1_000_000;
+const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
 const MUTATING_ACTIONS = new Set([
   "logout",
   "identity.create",
@@ -192,7 +193,11 @@ async function getRuntime(options) {
 
   const environment = process.env;
   const isVercel = Boolean(environment.VERCEL);
-  const databaseUrl = environment.METAPHILOSOPHY_STAGING_DATABASE_URL ?? environment.STAGING_DATABASE_URL ?? null;
+  const isDesignatedReleasePreview = isVercel && environment.VERCEL_GIT_COMMIT_REF === RELEASE_PREVIEW_BRANCH;
+  const databaseUrl = environment.METAPHILOSOPHY_STAGING_DATABASE_URL
+    ?? environment.STAGING_DATABASE_URL
+    ?? (isDesignatedReleasePreview ? environment.POSTGRES_URL : null)
+    ?? null;
   if (isVercel && !databaseUrl) {
     throw serviceError(503, "staging_database_unconfigured", "The isolated staging database has not been configured.");
   }
