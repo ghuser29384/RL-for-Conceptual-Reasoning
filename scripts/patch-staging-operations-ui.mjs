@@ -5,50 +5,7 @@ const root = resolve(import.meta.dirname, "..");
 const appPath = resolve(root, "staging/app.mjs");
 let source = await readFile(appPath, "utf8");
 
-source = replaceOnce(source, String.raw`function renderAssignmentActions(container, assignment) {
-  if (assignment.status === "submitted") {
-    const receipt = assignment.receipt;
-    container.innerHTML = \`<div class="receipt"><strong>Submitted and locked.</strong><span>Receipt \${escapeHtml(receipt?.id || "recorded")}</span><span>Payload \${escapeHtml(receipt?.payloadHash?.slice(0, 16) || "")}…</span></div>\`;
-    const correction = button("Request correction", "secondary-button", () => openReasonDialog("Correction request", "Explain the object-level or operational mistake. The initial rating will remain immutable.", async (reason) => {
-      await api("correction.request", { method: "POST", body: { assignmentId: assignment.id, reason } });
-      await loadWorkspace();
-    }));
-    const withdrawal = button("Request withdrawal", "danger-button", () => openReasonDialog("Withdrawal request", "Explain the request. Existing accepted records remain in the audit trail under the approved retention policy.", async (reason) => {
-      await api("withdrawal.request", { method: "POST", body: { assignmentId: assignment.id, reason } });
-      await loadWorkspace();
-    }));
-    container.append(correction, withdrawal);
-    return;
-  }
-  if (assignment.status === "withdrawn") {
-    container.innerHTML = "<p class=\"status-banner\">This assignment is withdrawn and locked.</p>";
-    return;
-  }
-  const status = document.createElement("div");
-  status.className = "submit-status";
-  const submit = button("Submit all four ratings", "primary-button", async () => {
-    submit.disabled = true;
-    status.textContent = "Saving drafts…";
-    try {
-      await flushAssignmentSaves(assignment.id);
-      status.textContent = "Validating and locking initial ratings…";
-      const idempotencyKey = \`submit:\${assignment.id}:\${crypto.randomUUID()}\`;
-      const response = await api("assignment.submit", {
-        method: "POST",
-        body: { assignmentId: assignment.id, idempotencyKey, packetHash: assignment.packetHash },
-      });
-      status.textContent = response.replay ? "The prior receipt was returned safely." : \`Submitted. Receipt \${response.receipt.id}\`;
-      await loadWorkspace();
-    } catch (error) {
-      status.textContent = error.message;
-      status.classList.add("error-message");
-    } finally {
-      submit.disabled = false;
-    }
-  });
-  container.append(submit, status);
-}`,
-String.raw`function renderAssignmentActions(container, assignment) {
+const assignmentActions = templateSource(String.raw`function renderAssignmentActions(container, assignment) {
   const correctionRequests = assignment.correctionRequests ?? [];
   const withdrawalRequests = assignment.withdrawalRequests ?? [];
   const latestCorrection = correctionRequests.at(-1) ?? null;
@@ -115,20 +72,17 @@ String.raw`function renderAssignmentActions(container, assignment) {
   container.append(submit, status);
 }`);
 
-source = replaceOnce(source, String.raw`  document.querySelector("#private-export-button").addEventListener("click", () => downloadExport("export.private", "metaphilosophy-staging-private.json"));
-  document.querySelector("#public-export-button").addEventListener("click", () => downloadExport("export.public", "metaphilosophy-staging-public.json"));
-}
+source = replaceBetweenOnce(
+  source,
+  "function renderAssignmentActions(container, assignment) {",
+  "\n\nfunction scheduleAutosave(form) {",
+  assignmentActions,
+);
 
-function operatorFormHandler(action, makeBody, onSuccess) {`,
-String.raw`  document.querySelector("#private-export-button").addEventListener("click", () => downloadExport("export.private", "metaphilosophy-staging-private.json"));
-  document.querySelector("#public-export-button").addEventListener("click", () => downloadExport("export.public", "metaphilosophy-staging-public.json"));
+const exportListeners = `  document.querySelector("#private-export-button").addEventListener("click", () => downloadExport("export.private", "metaphilosophy-staging-private.json"));\n  document.querySelector("#public-export-button").addEventListener("click", () => downloadExport("export.public", "metaphilosophy-staging-public.json"));`;
+source = replaceOnce(source, exportListeners, `${exportListeners}\n\n  renderOperatorCorrectionQueue();\n  renderOperatorWithdrawalQueue();\n  renderOperatorAdjudicationQueue();`);
 
-  renderOperatorCorrectionQueue();
-  renderOperatorWithdrawalQueue();
-  renderOperatorAdjudicationQueue();
-}
-
-function renderOperatorCorrectionQueue() {
+const operatorQueues = templateSource(String.raw`function renderOperatorCorrectionQueue() {
   const panel = document.createElement("section");
   panel.className = "panel operator-queue";
   panel.dataset.queue = "corrections";
@@ -243,15 +197,37 @@ async function operatorAction(action, body, status) {
     status.className = "form-status error-message";
   }
 }
+`);
 
-function operatorFormHandler(action, makeBody, onSuccess) {`);
+source = insertBeforeOnce(source, "function operatorFormHandler(action, makeBody, onSuccess) {", operatorQueues);
 
 await writeFile(appPath, source, "utf8");
 console.log(JSON.stringify({ status: "patched", file: "staging/app.mjs" }));
 
+function templateSource(value) {
+  return value.replaceAll("\\`", "`").replaceAll("\\${", "${");
+}
+
+function replaceBetweenOnce(input, startMarker, endMarker, replacement) {
+  const start = uniqueIndex(input, startMarker);
+  const end = input.indexOf(endMarker, start + startMarker.length);
+  if (end === -1) throw new Error(`End marker not found: ${endMarker}`);
+  return `${input.slice(0, start)}${replacement}${input.slice(end)}`;
+}
+
+function insertBeforeOnce(input, marker, insertion) {
+  const index = uniqueIndex(input, marker);
+  return `${input.slice(0, index)}${insertion}\n${input.slice(index)}`;
+}
+
 function replaceOnce(input, before, after) {
-  const first = input.indexOf(before);
-  if (first === -1) throw new Error("Expected staging UI source block was not found; refusing a partial patch.");
-  if (input.indexOf(before, first + before.length) !== -1) throw new Error("Expected staging UI source block is not unique; refusing an ambiguous patch.");
-  return `${input.slice(0, first)}${after}${input.slice(first + before.length)}`;
+  const index = uniqueIndex(input, before);
+  return `${input.slice(0, index)}${after}${input.slice(index + before.length)}`;
+}
+
+function uniqueIndex(input, marker) {
+  const first = input.indexOf(marker);
+  if (first === -1) throw new Error(`Required marker not found: ${marker}`);
+  if (input.indexOf(marker, first + marker.length) !== -1) throw new Error(`Required marker is not unique: ${marker}`);
+  return first;
 }
