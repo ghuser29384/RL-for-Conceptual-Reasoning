@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs && node scripts/run-hosted-staging-acceptance.mjs",
+  "buildCommand": "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs && node scripts/verify-hosted-staging-runtime-reuse.mjs",
   "outputDirectory": "dist",
   "git": {
     "deploymentEnabled": {
