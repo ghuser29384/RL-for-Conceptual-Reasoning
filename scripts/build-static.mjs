@@ -4,7 +4,10 @@ import { unpackSyntheticRelease } from "./unpack-synthetic-1000.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const dist = resolve(root, "dist");
-const includeStaging = process.env.STAGING_BUILD === "true";
+const releasePreviewBranch = "release/vercel-preview";
+const includeStaging =
+  process.env.STAGING_BUILD === "true" ||
+  (process.env.VERCEL === "1" && process.env.VERCEL_GIT_COMMIT_REF === releasePreviewBranch);
 const publicSrcFiles = Object.freeze([
   "site-entry.mjs",
   "workspace-gate.mjs",
@@ -37,7 +40,7 @@ await cp(resolve(root, "arguments"), resolve(dist, "arguments"), { recursive: tr
 await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });
 
 if (includeStaging) {
-  // The shell contains no protected item; authenticated records remain server-side. It is emitted only for an explicitly staged build.
+  // The shell contains no protected item; authenticated records remain server-side. It is emitted only for an explicit local staging build or the sole designated Vercel release-preview branch.
   await cp(resolve(root, "staging"), resolve(dist, "staging"), { recursive: true });
 }
 
