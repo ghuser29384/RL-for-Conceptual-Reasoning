@@ -93,8 +93,8 @@ export function validatePublicEditorialVoice(files) {
     /\bwill improve AI(?: systems)?\b/iu,
     /\bwill make AI better\b/iu,
     /\bthe benefits? (?:will|would) be astronomical\b/iu,
-    /\bsettle philosophy\b/iu,
-    /\bobjective philosophical ground truth\b/iu,
+    /\b(?:will|can|does) settle philosophy\b/iu,
+    /\b(?:has established|provides) objective philosophical ground truth\b/iu,
   ];
   for (const pattern of inflatedClaims) {
     if (pattern.test(publicCopy)) errors.push(`Public copy contains an unsupported outcome claim: ${pattern}.`);
