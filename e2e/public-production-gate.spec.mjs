@@ -37,9 +37,9 @@ for (const path of ["/workspace", "/reference"]) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(path, { waitUntil: "networkidle" });
 
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("The rating workspace is gated until the pilot is ready.");
-    await expect(page.getByText(/This workspace is not publicly open\. Metaphilosophy has not started production expert ratings\./iu)).toBeVisible();
-    await expect(page.getByText(/No application, assignment, rating task, deadline, payment commitment, or expert-result claim/iu)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("The research workspace is closed.");
+    await expect(page.getByText(/Metaphilosophy is not assigning research ratings yet\./iu)).toBeVisible();
+    await expect(page.getByText(/There is no application, deadline, rating task, or research payment offer/iu)).toBeVisible();
     await expect(page.locator(".appShell")).toHaveCount(0);
     await expect(page.locator(".mpWorkspaceGate")).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
