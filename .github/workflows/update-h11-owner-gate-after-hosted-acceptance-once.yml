@@ -1,0 +1,99 @@
+name: Update H-11 owner gate after hosted acceptance once
+
+on:
+  push:
+    branches:
+      - agent/48-critique-pilot-20260730
+    paths:
+      - ".github/workflows/update-h11-owner-gate-after-hosted-acceptance-once.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-h11-owner-gate-after-hosted-acceptance-once
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out controlled branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/48-critique-pilot-20260730
+          fetch-depth: 0
+
+      - name: Apply bounded H-11 packet updates
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("ops/next-steps-2026-07-23/h-11-qualified-human-dry-run-owner-gate-2026-08-06.md")
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "**Status:** prepared for owner review; **not approved; do not contact anyone**",
+                  "**Status:** protected pre-H11 engineering gate passed on exact release; prepared for owner review; **not approved; do not contact anyone**",
+              ),
+              (
+                  "**Evidence dependency:** `staging-acceptance-evidence-2026-08-06.json`",
+                  "**Evidence dependency:** `hosted-staging-acceptance-evidence-2026-08-06-v1.json`",
+              ),
+              (
+                  "Even after owner approval of this packet, outreach remains fail-closed until H-01 through H-10 pass on the exact protected hosted release. In particular, the current evidence still lacks a protected hosted workspace, a dedicated hosted staging database, the complete rater-visible correction and withdrawal drill, all three retained adjudication closure paths through the intended interface, and a support tabletop record.",
+                  "The pre-H11 engineering gate is now evidenced on exact protected release `202135a21fb15f5a12698e6a78e8c8d8b7fa79ef`. The record combines exact-head CI, rendered desktop and narrow-mobile rehearsals, Vercel OIDC to the retained Supabase Postgres project, a complete hosted synthetic lifecycle, correction and withdrawal, adjudication, support-tabletop, backup and exact restore, and a READY SSO-protected deployment. This technical pass does not pass H-11, authorize contact, or establish qualified-human comprehension. Outreach remains fail-closed until Ellen Sun explicitly approves the selections, message, support plan, honorarium, and contact authorization in this packet, and all recipient-specific checks are complete.",
+              ),
+              (
+                  "Would you be open to doing this after the protected staging release is ready? I would send the exact scope, privacy terms, and access window before you decide finally.",
+                  "Would you be open to doing this during a private protected staging window? I would send the exact scope, privacy terms, and access window before you decide finally.",
+              ),
+              (
+                  "- **Interested:** thank the person; do not issue access until the hosted release, database, remaining H-01 through H-10 evidence, consent text, payment checks, and exact session window are complete.",
+                  "- **Interested:** thank the person; do not issue access until this packet is explicitly approved, professional-contact and conflict checks are complete, consent and privacy terms are final, payment eligibility and wording are cleared, and the exact session window is set.",
+              ),
+              (
+                  "**Support promise:** acknowledge access-blocking or suspected-disclosure reports as promptly as reasonably possible during the agreed dry-run window; revoke access immediately when compromise is plausible; make no promise of continuous availability or a guaranteed response time until the support tabletop fixes and verifies one.",
+                  "**Support promise:** acknowledge access-blocking or suspected-disclosure reports as promptly as reasonably possible during the agreed dry-run window; revoke access immediately when compromise is plausible; follow the verified P0–P3 incident runbook; make no promise of continuous availability or a guaranteed response time.",
+              ),
+              (
+                  "| Contact or invitation | Remains prohibited until H-01 through H-10 pass | Not authorized |",
+                  "| Contact or invitation | May be authorized only through explicit approval of this packet after recipient-specific checks | Not authorized |",
+              ),
+              (
+                  "contact authorization: only after H-01 through H-10 are evidenced as passed on the exact protected hosted release",
+                  "contact authorization: approved only after recipient-specific professional-contact, conflict, eligibility, payment, consent, and scheduling checks are complete",
+              ),
+          ]
+
+          for before, after in replacements:
+              count = text.count(before)
+              if count != 1:
+                  raise SystemExit(f"Expected one occurrence, found {count}: {before[:120]!r}")
+              text = text.replace(before, after, 1)
+
+          path.write_text(text)
+          PY
+
+          rm .github/workflows/update-h11-owner-gate-after-hosted-acceptance-once.yml
+
+      - name: Validate the updated owner gate
+        run: |
+          grep -F 'hosted-staging-acceptance-evidence-2026-08-06-v1.json' ops/next-steps-2026-07-23/h-11-qualified-human-dry-run-owner-gate-2026-08-06.md
+          grep -F 'protected pre-H11 engineering gate passed' ops/next-steps-2026-07-23/h-11-qualified-human-dry-run-owner-gate-2026-08-06.md
+          grep -F 'not approved; do not contact anyone' ops/next-steps-2026-07-23/h-11-qualified-human-dry-run-owner-gate-2026-08-06.md
+          grep -F 'Contact or invitation' ops/next-steps-2026-07-23/h-11-qualified-human-dry-run-owner-gate-2026-08-06.md
+          git diff --check
+
+      - name: Commit updated owner gate and remove one-time workflow
+        env:
+          BRANCH: agent/48-critique-pilot-20260730
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Prepare H-11 owner review after hosted acceptance"
+          git push origin "HEAD:${BRANCH}"
