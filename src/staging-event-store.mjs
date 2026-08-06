@@ -280,7 +280,7 @@ function createEvent({ sequence, eventId, type, aggregateId, actorId, payload, c
 }
 
 function hashEvent(event) {
-  const normalized = JSON.stringify({
+  const normalized = canonicalStringify({
     sequence: Number(event.sequence),
     eventId: event.eventId,
     type: event.type,
@@ -291,6 +291,23 @@ function hashEvent(event) {
     prevHash: event.prevHash,
   });
   return createHash("sha256").update(normalized).digest("hex");
+}
+
+function canonicalStringify(value) {
+  return JSON.stringify(canonicalize(value));
+}
+
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .filter((key) => value[key] !== undefined)
+        .map((key) => [key, canonicalize(value[key])]),
+    );
+  }
+  return value;
 }
 
 function rowToEvent(row) {
