@@ -24,7 +24,9 @@ on:
       - "vercel.json"
       - ".github/workflows/metaphilosophy-public-quality.yml"
   push:
-    branches: [main]
+    branches:
+      - main
+      - agent/48-critique-pilot-20260730
     paths:
       - "index.html"
       - "src/site-entry.mjs"
