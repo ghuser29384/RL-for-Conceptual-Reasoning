@@ -30,14 +30,37 @@ jobs:
         env:
           PACKAGE_SHA256: "9c96d6a8aef703c8a26d8cf21d55e4dfd03a9ea426d54d1b48c130b33f81d0be"
         run: |
-          test "$(find .github/h11pkg -maxdepth 1 -type f -name 'chunk-*.b64' | wc -l)" -eq 6
+          for file in \
+            .github/h11pkg/chunk-00.b64 \
+            .github/h11pkg/chunk-01.b64 \
+            .github/h11pkg/chunk-02a.b64 \
+            .github/h11pkg/chunk-02b.b64 \
+            .github/h11pkg/chunk-02c.b64 \
+            .github/h11pkg/chunk-02d.b64 \
+            .github/h11pkg/chunk-03.b64 \
+            .github/h11pkg/chunk-04.b64 \
+            .github/h11pkg/chunk-05.b64; do
+            test -f "$file"
+          done
           test "$(wc -c < .github/h11pkg/chunk-00.b64)" -eq 8000
           test "$(wc -c < .github/h11pkg/chunk-01.b64)" -eq 8000
-          test "$(wc -c < .github/h11pkg/chunk-02.b64)" -eq 8000
+          test "$(wc -c < .github/h11pkg/chunk-02a.b64)" -eq 2000
+          test "$(wc -c < .github/h11pkg/chunk-02b.b64)" -eq 2000
+          test "$(wc -c < .github/h11pkg/chunk-02c.b64)" -eq 2000
+          test "$(wc -c < .github/h11pkg/chunk-02d.b64)" -eq 2000
           test "$(wc -c < .github/h11pkg/chunk-03.b64)" -eq 8000
           test "$(wc -c < .github/h11pkg/chunk-04.b64)" -eq 8000
           test "$(wc -c < .github/h11pkg/chunk-05.b64)" -eq 1520
-          cat .github/h11pkg/chunk-*.b64 > /tmp/h11-package.b64
+          cat \
+            .github/h11pkg/chunk-00.b64 \
+            .github/h11pkg/chunk-01.b64 \
+            .github/h11pkg/chunk-02a.b64 \
+            .github/h11pkg/chunk-02b.b64 \
+            .github/h11pkg/chunk-02c.b64 \
+            .github/h11pkg/chunk-02d.b64 \
+            .github/h11pkg/chunk-03.b64 \
+            .github/h11pkg/chunk-04.b64 \
+            .github/h11pkg/chunk-05.b64 > /tmp/h11-package.b64
           test "$(wc -c < /tmp/h11-package.b64)" -eq 41520
           base64 --decode /tmp/h11-package.b64 > /tmp/h11-package.zip
           printf '%s  %s\n' "$PACKAGE_SHA256" /tmp/h11-package.zip | sha256sum --check --strict
