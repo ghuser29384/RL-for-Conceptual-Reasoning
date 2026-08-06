@@ -2,27 +2,34 @@ import { expect, test } from "@playwright/test";
 
 const bootstrapToken = "synthetic-rehearsal-bootstrap-token-32-bytes-minimum";
 
+let operatorRequest;
 let setup;
 
-test.beforeAll(async ({ request }) => {
-  const bootstrap = await api(request, "bootstrap", {
+test.beforeAll(async ({ playwright }, testInfo) => {
+  const baseURL = testInfo.project.use.baseURL;
+  if (typeof baseURL !== "string" || !baseURL) {
+    throw new Error("The staging Chromium rehearsal requires a configured baseURL.");
+  }
+  operatorRequest = await playwright.request.newContext({ baseURL });
+
+  const bootstrap = await api(operatorRequest, "bootstrap", {
     method: "POST",
     headers: { "x-staging-bootstrap-token": bootstrapToken },
     data: { operatorEmail: "operator@staging.metaphilosophy.invalid" },
   });
-  const operator = await api(request, "invite.redeem", { method: "POST", data: { token: bootstrap.inviteToken } });
+  const operator = await api(operatorRequest, "invite.redeem", { method: "POST", data: { token: bootstrap.inviteToken } });
   const csrf = operator.csrfToken;
   const headers = { "x-staging-csrf": csrf, "sec-fetch-site": "same-origin" };
 
-  const raterA = await api(request, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater A", email: "browser-a@staging.metaphilosophy.invalid" } });
-  const raterB = await api(request, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater B", email: "browser-b@staging.metaphilosophy.invalid" } });
-  const adjudicator = await api(request, "identity.create", { method: "POST", headers, data: { role: "adjudicator", displayName: "Synthetic browser adjudicator", email: "browser-adjudicator@staging.metaphilosophy.invalid" } });
+  const raterA = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater A", email: "browser-a@staging.metaphilosophy.invalid" } });
+  const raterB = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater B", email: "browser-b@staging.metaphilosophy.invalid" } });
+  const adjudicator = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "adjudicator", displayName: "Synthetic browser adjudicator", email: "browser-adjudicator@staging.metaphilosophy.invalid" } });
 
-  const inviteA = await api(request, "invite.create", { method: "POST", headers, data: { identityId: raterA.identity.id, expiresInHours: 24 } });
-  const inviteB = await api(request, "invite.create", { method: "POST", headers, data: { identityId: raterB.identity.id, expiresInHours: 24 } });
-  const inviteAdjudicator = await api(request, "invite.create", { method: "POST", headers, data: { identityId: adjudicator.identity.id, expiresInHours: 24 } });
-  const assignmentA = await api(request, "assignment.create", { method: "POST", headers, data: { identityId: raterA.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
-  const assignmentB = await api(request, "assignment.create", { method: "POST", headers, data: { identityId: raterB.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
+  const inviteA = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterA.identity.id, expiresInHours: 24 } });
+  const inviteB = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterB.identity.id, expiresInHours: 24 } });
+  const inviteAdjudicator = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: adjudicator.identity.id, expiresInHours: 24 } });
+  const assignmentA = await api(operatorRequest, "assignment.create", { method: "POST", headers, data: { identityId: raterA.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
+  const assignmentB = await api(operatorRequest, "assignment.create", { method: "POST", headers, data: { identityId: raterB.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
 
   setup = {
     operator: { csrf, headers },
@@ -32,7 +39,11 @@ test.beforeAll(async ({ request }) => {
   };
 });
 
-test("two isolated browser raters autosave, resume, submit, and hand off an unresolved case", async ({ browser, request }) => {
+test.afterAll(async () => {
+  await operatorRequest?.dispose();
+});
+
+test("two isolated browser raters autosave, resume, submit, and hand off an unresolved case", async ({ browser }) => {
   const contextA = await browser.newContext();
   const pageA = await contextA.newPage();
   await redeemInBrowser(pageA, setup.raterA.inviteToken);
@@ -104,7 +115,7 @@ test("two isolated browser raters autosave, resume, submit, and hand off an unre
   await pageB.getByRole("button", { name: "Submit all four ratings" }).click();
   await expect(pageB.getByText("Submitted and locked.")).toBeVisible();
 
-  const operatorWorkspace = await api(request, "workspace");
+  const operatorWorkspace = await api(operatorRequest, "workspace");
   expect(operatorWorkspace.counts.ratings).toBe(8);
   expect(operatorWorkspace.counts.openAdjudicationCases).toBe(1);
 
@@ -118,9 +129,9 @@ test("two isolated browser raters autosave, resume, submit, and hand off an unre
   await adjudicatorPage.getByRole("button", { name: "Submit independent review" }).click();
   await expect(adjudicatorPage.getByText("Your independent review is locked: unresolved")).toBeVisible();
 
-  const refreshedOperator = await api(request, "workspace");
+  const refreshedOperator = await api(operatorRequest, "workspace");
   const caseId = refreshedOperator.adjudicationCases.find((item) => item.status === "open").id;
-  const closed = await api(request, "adjudication.close", {
+  const closed = await api(operatorRequest, "adjudication.close", {
     method: "POST",
     headers: setup.operator.headers,
     data: { caseId, status: "unresolved", notes: "Synthetic browser rehearsal closure: preserve both immutable initial judgments and the unresolved interpretation." },
@@ -128,7 +139,7 @@ test("two isolated browser raters autosave, resume, submit, and hand off an unre
   expect(closed.snapshot.status).toBe("unresolved");
   expect(closed.snapshot.initialRatingIds).toHaveLength(8);
 
-  const publicExport = await api(request, "export.public");
+  const publicExport = await api(operatorRequest, "export.public");
   expect(JSON.stringify(publicExport)).not.toContain("@staging.metaphilosophy.invalid");
   expect(publicExport.counts.ratings).toBe(8);
 
