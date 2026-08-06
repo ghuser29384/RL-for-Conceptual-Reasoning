@@ -77,7 +77,7 @@ const bootstrapSecret = "synthetic-hosted-acceptance-bootstrap-domain";
 const bootstrap = await service.bootstrap({
   bootstrapToken: bootstrapSecret,
   expectedBootstrapToken: bootstrapSecret,
-  operatorEmail: "operator@hosted-acceptance.metaphilosophy.invalid",
+  operatorEmail: syntheticEmail("operator"),
   fixture,
   allowExistingOperator: true,
 });
@@ -92,25 +92,25 @@ const raterAIdentity = await service.createIdentity({
   actorSessionToken: operator.sessionToken,
   role: "rater",
   displayName: "Synthetic hosted rater A",
-  email: "rater-a@hosted-acceptance.metaphilosophy.invalid",
+  email: syntheticEmail("rater-a"),
 });
 const raterBIdentity = await service.createIdentity({
   actorSessionToken: operator.sessionToken,
   role: "rater",
   displayName: "Synthetic hosted rater B",
-  email: "rater-b@hosted-acceptance.metaphilosophy.invalid",
+  email: syntheticEmail("rater-b"),
 });
 const adjudicatorIdentity = await service.createIdentity({
   actorSessionToken: operator.sessionToken,
   role: "adjudicator",
   displayName: "Synthetic hosted adjudicator",
-  email: "adjudicator@hosted-acceptance.metaphilosophy.invalid",
+  email: syntheticEmail("adjudicator"),
 });
 const recoveryIdentity = await service.createIdentity({
   actorSessionToken: operator.sessionToken,
   role: "rater",
   displayName: "Synthetic hosted recovery identity",
-  email: "recovery@hosted-acceptance.metaphilosophy.invalid",
+  email: syntheticEmail("recovery"),
 });
 
 timeline.push("role_separated_synthetic_identities_created");
@@ -147,7 +147,7 @@ const expiringIdentity = await service.createIdentity({
   actorSessionToken: operator.sessionToken,
   role: "rater",
   displayName: "Synthetic hosted expiry identity",
-  email: "expiry@hosted-acceptance.metaphilosophy.invalid",
+  email: syntheticEmail("expiry"),
 });
 const expiringInvite = await service.createInvite({
   actorSessionToken: operator.sessionToken,
@@ -180,16 +180,21 @@ const assignmentB = await service.createAssignment({
 
 const workspaceA = await service.getWorkspace(raterA.sessionToken);
 const workspaceB = await service.getWorkspace(raterB.sessionToken);
-assert.equal(workspaceA.assignments.length, 1);
-assert.equal(workspaceB.assignments.length, 1);
-assert.equal(workspaceA.assignments[0].critiques.length, 4);
-assert.equal(workspaceA.assignments[0].position.status, "synthetic_rehearsal_only");
+const assignmentViewA = workspaceA.assignments.find((assignment) => assignment.id === assignmentA.assignment.id);
+const assignmentViewB = workspaceB.assignments.find((assignment) => assignment.id === assignmentB.assignment.id);
+assert.ok(assignmentViewA);
+assert.ok(assignmentViewB);
+assert.equal(assignmentViewA.critiques.length, 4);
+assert.equal(assignmentViewB.critiques.length, 4);
+assert.equal(assignmentViewA.position.id, bootstrap.positionId);
+assert.equal(assignmentViewA.position.status, "synthetic_rehearsal_only");
 assert.equal(Object.keys(workspaceA.rubric.dimensions).length, 7);
-assert.equal(JSON.stringify(workspaceA).includes(raterBIdentity.identity.id), false);
-assert.equal(JSON.stringify(workspaceB).includes(raterAIdentity.identity.id), false);
+assert.equal(JSON.stringify(assignmentViewA).includes(raterBIdentity.identity.id), false);
+assert.equal(JSON.stringify(assignmentViewB).includes(raterAIdentity.identity.id), false);
 timeline.push("two_rater_blinding_four_siblings_and_complete_lmca_rubric_passed");
 
-const critiqueIds = workspaceA.assignments[0].critiques.map((critique) => critique.id);
+const critiqueIds = assignmentViewA.critiques.map((critique) => critique.id);
+const currentCritiqueIds = new Set(critiqueIds);
 await assert.rejects(
   () => service.saveDraft({
     sessionToken: raterA.sessionToken,
@@ -240,7 +245,9 @@ const restartedStore = makeStore();
 const restartedService = new StagingWorkflowService({ store: restartedStore, now });
 await restartedService.initialize();
 const resumedWorkspaceA = await restartedService.getWorkspace(raterA.sessionToken);
-assert.equal(resumedWorkspaceA.assignments[0].critiques.every((critique) => critique.draft?.version === 1), true);
+const resumedAssignmentA = resumedWorkspaceA.assignments.find((assignment) => assignment.id === assignmentA.assignment.id);
+assert.ok(resumedAssignmentA);
+assert.equal(resumedAssignmentA.critiques.every((critique) => critique.draft?.version === 1), true);
 timeline.push("new_runtime_instance_readback_and_session_resume_passed");
 
 await assert.rejects(
@@ -275,8 +282,14 @@ await restartedService.submitAssignment({
   packetHash: assignmentB.assignment.packetHash,
 });
 let afterInitials = await restartedService.state();
-assert.equal(afterInitials.ratings.filter((rating) => rating.eventType === "initial").length, 8);
-assert.equal(afterInitials.adjudicationCases.filter((item) => item.status === "open").length, 1);
+const currentInitialRatings = afterInitials.ratings.filter((rating) =>
+  rating.eventType === "initial" && currentCritiqueIds.has(rating.critiqueId)
+);
+const currentOpenCases = afterInitials.adjudicationCases.filter((item) =>
+  item.positionId === bootstrap.positionId && item.status === "open"
+);
+assert.equal(currentInitialRatings.length, 8);
+assert.equal(currentOpenCases.length, 1);
 timeline.push("tamper_rejection_exactly_once_submission_receipts_and_triggered_adjudication_passed");
 
 const correction = await restartedService.requestCorrection({
@@ -292,7 +305,7 @@ const correctionResolution = await restartedService.operatorResolveCorrection({
 });
 assert.equal(correctionResolution.assignment.predecessorAssignmentId, assignmentA.assignment.id);
 const reratingWorkspace = await restartedService.getWorkspace(raterA.sessionToken);
-const reratingAssignment = reratingWorkspace.assignments.find((assignment) => assignment.kind === "rerating");
+const reratingAssignment = reratingWorkspace.assignments.find((assignment) => assignment.kind === "rerating" && assignment.predecessorAssignmentId === assignmentA.assignment.id);
 assert.ok(reratingAssignment);
 for (const critique of reratingAssignment.critiques) {
   await restartedService.saveDraft({
@@ -314,8 +327,11 @@ await restartedService.submitAssignment({
 timeline.push("rater_visible_correction_and_predecessor_linked_rerating_passed");
 
 const adjudicatorWorkspace = await restartedService.getWorkspace(adjudicator.sessionToken);
-assert.equal(adjudicatorWorkspace.cases.length, 1);
-const caseId = adjudicatorWorkspace.cases[0].id;
+const currentAdjudicationCases = adjudicatorWorkspace.cases.filter((item) =>
+  item.positionId === bootstrap.positionId && item.status === "open"
+);
+assert.equal(currentAdjudicationCases.length, 1);
+const caseId = currentAdjudicationCases[0].id;
 await restartedService.submitAdjudicationReview({
   sessionToken: adjudicator.sessionToken,
   caseId,
@@ -340,8 +356,10 @@ await restartedService.requestWithdrawal({
   reason: "Synthetic hosted withdrawal after accepted work; retained ratings remain in the append-only private audit trail.",
 });
 const afterWithdrawal = await restartedService.state();
-assert.equal(afterWithdrawal.ratings.length, 12);
-assert.equal(afterWithdrawal.labelSnapshots.length, 1);
+const currentRatingsAfterWithdrawal = afterWithdrawal.ratings.filter((rating) => currentCritiqueIds.has(rating.critiqueId));
+const currentSnapshotsAfterWithdrawal = afterWithdrawal.labelSnapshots.filter((snapshot) => snapshot.positionId === bootstrap.positionId);
+assert.equal(currentRatingsAfterWithdrawal.length, 12);
+assert.equal(currentSnapshotsAfterWithdrawal.length, 1);
 assert.equal(afterWithdrawal.assignments.find((assignment) => assignment.id === assignmentB.assignment.id).status, "withdrawn");
 timeline.push("withdrawal_lock_and_immutable_rating_retention_passed");
 
@@ -354,8 +372,8 @@ const privateExport = await restartedService.operatorExport({
   publicOnly: false,
 });
 assert.equal(JSON.stringify(publicExport).includes("@hosted-acceptance.metaphilosophy.invalid"), false);
-assert.equal(publicExport.counts.ratings, 12);
-assert.ok(privateExport.events.length > 30);
+assert.equal(publicExport.ratings.filter((rating) => currentCritiqueIds.has(rating.critiqueId)).length, 12);
+assert.ok(privateExport.events.length > startingPrimary.eventCount);
 timeline.push("private_audit_and_privacy_safe_public_export_passed");
 
 const finalEvents = await restartedStore.loadEvents();
@@ -382,14 +400,31 @@ const secondRestartService = new StagingWorkflowService({ store: secondRestartSt
 await secondRestartService.initialize();
 const finalState = await secondRestartService.state();
 const finalWorkspaceA = await secondRestartService.getWorkspace(raterA.sessionToken);
-assert.equal(finalState.ratings.filter((rating) => rating.eventType === "initial").length, 8);
-assert.equal(finalState.ratings.filter((rating) => rating.eventType === "rerating").length, 4);
-assert.equal(finalState.labelSnapshots.length, 1);
-assert.equal(finalWorkspaceA.assignments.some((assignment) => assignment.kind === "rerating" && assignment.status === "submitted"), true);
+const finalInitialRatings = finalState.ratings.filter((rating) =>
+  rating.eventType === "initial" && currentCritiqueIds.has(rating.critiqueId)
+);
+const finalReratings = finalState.ratings.filter((rating) =>
+  rating.eventType === "rerating" && currentCritiqueIds.has(rating.critiqueId)
+);
+const finalRunSnapshots = finalState.labelSnapshots.filter((snapshot) => snapshot.positionId === bootstrap.positionId);
+const finalReratingAssignment = finalWorkspaceA.assignments.find((assignment) => assignment.id === reratingAssignment.id);
+assert.equal(finalInitialRatings.length, 8);
+assert.equal(finalReratings.length, 4);
+assert.equal(finalRunSnapshots.length, 1);
+assert.equal(finalReratingAssignment?.status, "submitted");
 timeline.push("second_runtime_restart_preserved_sessions_ratings_receipts_and_snapshot");
 
+const runIdentityIds = new Set([
+  operator.identity.id,
+  raterAIdentity.identity.id,
+  raterBIdentity.identity.id,
+  adjudicatorIdentity.identity.id,
+  recoveryIdentity.identity.id,
+  expiringIdentity.identity.id,
+]);
+const runAssignments = finalState.assignments.filter((assignment) => assignment.positionId === bootstrap.positionId);
 const report = {
-  schemaVersion: "metaphilosophy-protected-hosted-synthetic-acceptance-v1",
+  schemaVersion: "metaphilosophy-protected-hosted-synthetic-acceptance-v2",
   generatedAt: new Date().toISOString(),
   status: "pass",
   exactReleaseSha,
@@ -408,12 +443,16 @@ const report = {
     originalRatingsImmutable: true,
   },
   counts: {
-    identities: finalState.identities.length,
-    assignments: finalState.assignments.length,
-    initialRatings: finalState.ratings.filter((rating) => rating.eventType === "initial").length,
-    reratings: finalState.ratings.filter((rating) => rating.eventType === "rerating").length,
-    labelSnapshots: finalState.labelSnapshots.length,
-    primaryEvents: finalEvents.length,
+    runIdentities: finalState.identities.filter((identity) => runIdentityIds.has(identity.id)).length,
+    totalIdentities: finalState.identities.length,
+    runAssignments: runAssignments.length,
+    totalAssignments: finalState.assignments.length,
+    runInitialRatings: finalInitialRatings.length,
+    runReratings: finalReratings.length,
+    runLabelSnapshots: finalRunSnapshots.length,
+    totalPrimaryEvents: finalEvents.length,
+    preservedPriorEvents: startingPrimary.eventCount,
+    appendedRunEvents: finalEvents.length - startingPrimary.eventCount,
     restoredEvents: restoreEvidence.databaseReadback.eventCount,
   },
   chain: {
@@ -512,6 +551,10 @@ async function acceptanceRequest(action, extra = {}) {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 250 * attempt));
   }
   throw new Error(`${action} exhausted its bounded hosted acceptance retry policy.`);
+}
+
+function syntheticEmail(label) {
+  return `${label}-${acceptanceRunId}@hosted-acceptance.metaphilosophy.invalid`;
 }
 
 function hostedRehearsalFixture(runId) {

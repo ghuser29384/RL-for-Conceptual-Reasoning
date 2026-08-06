@@ -75,6 +75,11 @@ test("Vercel refuses to publish the designated preview unless the OIDC preflight
   assert.match(acceptance, /report\.store/u);
   assert.match(acceptance, /new_runtime_instance_readback_and_session_resume_passed/u);
   assert.match(acceptance, /second_runtime_restart_preserved_sessions_ratings_receipts_and_snapshot/u);
+  assert.match(acceptance, /syntheticEmail/u);
+  assert.match(acceptance, /assignment\.id === assignmentA\.assignment\.id/u);
+  assert.match(acceptance, /currentCritiqueIds\.has/u);
+  assert.match(acceptance, /prior_failed_attempt_chain_preserved_append_only/u);
+  assert.match(acceptance, /preservedPriorEvents/u);
   assert.match(acceptance, /realPersonContacted: false/u);
   assert.match(acceptance, /participantContactAuthorized: false/u);
 });
