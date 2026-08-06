@@ -7,41 +7,44 @@ const CHECKS = Object.freeze([
   {
     path: "/",
     name: "homepage shell",
-    required: ["/src/site-entry.mjs", "/src/trust-home.css"],
+    required: ["/src/site-entry.mjs", "/src/trust-home.css", "A research project by Ellen Sun"],
   },
   {
     path: "/src/exact-reference-home.mjs",
     name: "homepage claims module",
     required: [
-      "expert ratings have not started",
-      "No Metaphilosophy expert ratings claimed yet",
-      "Reviewer intake and adviser outreach remain closed",
+      "Research study not yet open",
+      "Philosophers can disagree and still judge arguments.",
+      "0 research ratings collected",
+      "Research rating recruitment is closed.",
     ],
   },
   {
     path: "/research/",
-    name: "public pilot protocol",
+    name: "public study plan",
     required: [
-      "Consultation phase · production ratings not started",
-      "Three artifacts. Three different claims.",
-      "One gate passed. Five remain blocked.",
+      "Draft study plan · research ratings have not begun",
+      "Written and maintained by Ellen Sun",
+      "Three bodies of work, kept separate.",
+      "The software is not the last gate.",
     ],
   },
   {
     path: "/arguments/",
     name: "synthetic library",
     required: [
-      "model-authored, unrated critiques",
-      "None has been expert-rated by Metaphilosophy",
-      "external LMCA expert-rated research release",
+      "1,000 model-written critiques",
+      "None has an expert rating.",
+      "separate from the expert-rated LMCA dataset",
     ],
   },
   {
     path: "/contribute",
     name: "closed reviewer intake",
     required: [
-      "Reviewer intake is intentionally closed",
-      "No application, calibration submission, deadline, or paid assignment",
+      "Research rating applications are closed.",
+      "There is no assignment to claim.",
+      "does not accept applications, ratings, calibration work, or payment details",
     ],
   },
 ]);
@@ -86,7 +89,7 @@ export async function auditPreOutreachProduction(origin = DEFAULT_ORIGIN, fetchI
 
   const passed = results.every((result) => result.passed);
   return {
-    audit_id: "metaphilosophy-pre-outreach-production-v1",
+    audit_id: "metaphilosophy-pre-outreach-production-v2",
     audited_origin: normalizedOrigin,
     status: passed ? "pass" : "fail",
     production_available: results.every((result) => result.available),
@@ -100,7 +103,7 @@ const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
 if (invokedPath === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--help")) {
     console.log("Usage: node scripts/audit-pre-outreach-production.mjs [origin]");
-    console.log("Checks production availability, required public routes, closed intake, and evidence-boundary claims. Passing does not authorize email or outreach.");
+    console.log("Checks production availability, required public routes, closed intake, named authorship, and source-boundary claims. Passing does not authorize email or outreach.");
   } else {
     const report = await auditPreOutreachProduction(process.argv[2] ?? DEFAULT_ORIGIN);
     console.log(JSON.stringify(report, null, 2));
