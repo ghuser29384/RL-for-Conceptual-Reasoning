@@ -9,6 +9,7 @@ const files = Object.fromEntries(await Promise.all([
   "src/staging-event-store.mjs",
   "supabase/functions/metaphilosophy-staging-ledger/index.ts",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql",
+  "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql",
   "scripts/verify-vercel-oidc-staging-gateway.mjs",
   "vercel.json",
 ].map(async (path) => [path, await readFile(new URL(`../${path}`, import.meta.url), "utf8")])));
@@ -18,7 +19,7 @@ test("the designated preview uses a non-secret Vercel OIDC gateway and keeps rem
   assert.match(api, /release\/vercel-preview/u);
   assert.match(api, /VERCEL_ENV === "preview"/u);
   assert.match(api, /x-vercel-oidc-token/u);
-  assert.match(api, /zpnbshgrscbfelpychhn/u);
+  assert.match(api, /mbswhjnjvwlewdqmwwcf/u);
   assert.match(api, /metaphilosophy-staging-ledger/u);
   assert.match(api, /remote_bootstrap_disabled/u);
   assert.doesNotMatch(api, /STAGING_ALLOW_REMOTE_BOOTSTRAP\s*=\s*["']true/u);
@@ -55,11 +56,11 @@ test("Vercel refuses to publish the designated preview unless its OIDC identity 
   const vercel = JSON.parse(files["vercel.json"]);
   assert.equal(vercel.buildCommand, "npm run build && node scripts/verify-vercel-oidc-staging-gateway.mjs");
   assert.match(script, /VERCEL_OIDC_TOKEN/u);
-  assert.match(script, /zpnbshgrscbfelpychhn/u);
+  assert.match(script, /mbswhjnjvwlewdqmwwcf/u);
   assert.match(script, /release\/vercel-preview/u);
   assert.match(script, /synthetic_rehearsal_only/u);
   assert.match(script, /researchRatingsAuthorized, false/u);
-  assert.match(script, /schema_version, 3/u);
+  assert.match(script, /schema_version, 4/u);
   assert.doesNotMatch(script, /SUPABASE_SERVICE_ROLE_KEY|POSTGRES_PASSWORD/u);
 });
 
@@ -94,4 +95,16 @@ test("RemoteEventStore sends OIDC and rejects a missing synthetic-only boundary"
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("hosted verification evidence and restore drill remain isolated and append-only", () => {
+  const migration = files["ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql"];
+  assert.match(migration, /metaphilosophy_staging_verification_reports/u);
+  assert.match(migration, /metaphilosophy_staging_restore_drill_events/u);
+  assert.match(migration, /before update or delete/iu);
+  assert.match(migration, /restore_drill_load/u);
+  assert.match(migration, /restore_drill_readback/u);
+  assert.match(migration, /research_ratings_authorized = false/u);
+  assert.match(migration, /revoke all.+from anon/isu);
+  assert.match(migration, /revoke all.+from authenticated/isu);
 });
