@@ -13,6 +13,14 @@ test("only the designated release-preview branch may deploy", async () => {
   assert.equal(config.ignoreCommand, "node scripts/vercel-ignore-build.mjs");
 });
 
+test("only an explicit staging build or the designated hosted branch emits the staging shell", async () => {
+  const buildScript = await readFile(new URL("../scripts/build-static.mjs", import.meta.url), "utf8");
+  assert.match(buildScript, /process\.env\.STAGING_BUILD === "true"/u);
+  assert.match(buildScript, /process\.env\.VERCEL === "1"/u);
+  assert.match(buildScript, /process\.env\.VERCEL_GIT_COMMIT_REF === releasePreviewBranch/u);
+  assert.match(buildScript, /const releasePreviewBranch = "release\/vercel-preview"/u);
+});
+
 test("unapproved branches skip before any Git comparison", () => {
   for (const branch of ["agent/48-critique-pilot-20260730", "main"]) {
     const result = spawnSync(process.execPath, [scriptUrl.pathname], {
