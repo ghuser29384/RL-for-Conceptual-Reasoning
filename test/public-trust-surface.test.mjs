@@ -44,7 +44,7 @@ async function loadInputs() {
   };
 }
 
-test("accepts a public workspace gate while preserving but not publishing internal source", async () => {
+test("accepts an authored public surface while preserving but not publishing internal source", async () => {
   const report = await readAndValidatePublicTrustSurface(root);
   assert.equal(report.status, "pass", report.errors.join("\n"));
   assert.equal(report.public_home_recruitment_cta_removed, true);
@@ -75,7 +75,7 @@ test("rejects a blank gate or a gate containing internal execution structure", a
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("substantive")));
   assert.ok(report.errors.some((error) => error.includes("workflowEvidenceCollections")));
-  assert.ok(report.errors.some((error) => error.includes("workspace is gated")));
+  assert.ok(report.errors.some((error) => error.includes("workspace is closed")));
 });
 
 test("rejects deleting the internal workspace or adding it to the public build", async () => {
@@ -88,17 +88,17 @@ test("rejects deleting the internal workspace or adding it to the public build",
   assert.ok(report.errors.some((error) => error.includes("app.mjs")));
 });
 
-test("rejects collapsing LMCA, synthetic, and pilot evidence classes", async () => {
+test("rejects collapsing LMCA, synthetic, and planned-study evidence", async () => {
   const inputs = await loadInputs();
   inputs.research += "Metaphilosophy has 951 rated critiques";
   inputs.argumentsPage = inputs.argumentsPage.replace(
-    "This collection is synthetic and unrated",
-    "This collection is expert-rated",
+    "None has an expert rating.",
+    "Every item has an expert rating.",
   );
   const report = validatePublicTrustSurface(inputs);
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("prohibited claim")));
-  assert.ok(report.errors.some((error) => error.includes("synthetic and unrated")));
+  assert.ok(report.errors.some((error) => error.includes("None has an expert rating.")));
 });
 
 test("rejects lost workspace routing or baseline browser protections", async () => {
