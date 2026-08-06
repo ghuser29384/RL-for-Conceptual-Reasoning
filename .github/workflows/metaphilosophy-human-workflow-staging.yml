@@ -13,6 +13,7 @@ on:
       - "staging/**"
       - "scripts/bootstrap-staging-rehearsal.mjs"
       - "scripts/smoke-staging-runtime.mjs"
+      - "scripts/smoke-staging-postgres.mjs"
       - "scripts/smoke-staging-server.mjs"
       - "scripts/run-human-workflow-support-tabletop.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
@@ -38,6 +39,7 @@ on:
       - "staging/**"
       - "scripts/bootstrap-staging-rehearsal.mjs"
       - "scripts/smoke-staging-runtime.mjs"
+      - "scripts/smoke-staging-postgres.mjs"
       - "scripts/smoke-staging-server.mjs"
       - "scripts/run-human-workflow-support-tabletop.mjs"
       - "scripts/verify-human-workflow-staging.mjs"
@@ -90,6 +92,7 @@ jobs:
           node --check staging/operator-token-guard.mjs
           node --check scripts/bootstrap-staging-rehearsal.mjs
           node --check scripts/smoke-staging-runtime.mjs
+          node --check scripts/smoke-staging-postgres.mjs
           node --check scripts/smoke-staging-server.mjs
           node --check scripts/run-human-workflow-support-tabletop.mjs
           node --check scripts/verify-human-workflow-staging.mjs
@@ -143,9 +146,71 @@ jobs:
           retention-days: 30
           include-hidden-files: true
 
+  postgres-persistence-rehearsal:
+    name: Disposable Postgres persistence rehearsal
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_ADMIN_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      STAGING_SOURCE_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/metaphilosophy_source
+      STAGING_RESTORE_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/metaphilosophy_restore
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Create isolated source and restore databases
+        run: |
+          psql --version
+          psql "$POSTGRES_ADMIN_URL" -v ON_ERROR_STOP=1 -c "create database metaphilosophy_source"
+          psql "$POSTGRES_ADMIN_URL" -v ON_ERROR_STOP=1 -c "create database metaphilosophy_restore"
+
+      - name: Apply the reviewed staging migrations to both databases
+        run: |
+          for database_url in "$STAGING_SOURCE_DATABASE_URL" "$STAGING_RESTORE_DATABASE_URL"; do
+            psql "$database_url" -v ON_ERROR_STOP=1 -f ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql
+            psql "$database_url" -v ON_ERROR_STOP=1 -f ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql
+          done
+
+      - name: Exercise restart, readback, backup, and exact second-database restore
+        run: npm run smoke:postgres
+
+      - name: Upload disposable Postgres evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metaphilosophy-staging-postgres-${{ github.sha }}
+          path: .staging-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          include-hidden-files: true
+
   rendered-browser-rehearsal:
     name: Rendered Chromium rehearsal
-    needs: contracts-and-rehearsal
+    needs:
+      - contracts-and-rehearsal
+      - postgres-persistence-rehearsal
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact commit
