@@ -1,0 +1,137 @@
+/* Coordinate the existing operational workspace with the public research identity. */
+body:not(.publicHomeBody) {
+  background: #f3f6f4;
+}
+
+body:not(.publicHomeBody) .appShell {
+  grid-template-columns: 238px minmax(0, 1fr);
+  background: #f3f6f4;
+}
+
+body:not(.publicHomeBody) .sidebar {
+  gap: 20px;
+  padding: 18px 14px;
+  border-right: 0;
+  background: var(--ep-ink);
+  color: white;
+}
+
+body:not(.publicHomeBody) .sidebar .brand {
+  color: white;
+  text-decoration: none;
+}
+
+body:not(.publicHomeBody) .sidebar .brand strong {
+  color: white;
+  font-size: 15px;
+}
+
+body:not(.publicHomeBody) .sidebar .brand span {
+  color: #a9bec0;
+}
+
+body:not(.publicHomeBody) .criterionBrandMark {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: transparent;
+}
+
+body:not(.publicHomeBody) .criterionBrandMark span {
+  background: white;
+}
+
+body:not(.publicHomeBody) .criterionBrandMark span:nth-child(4) {
+  background: var(--ep-coral);
+}
+
+body:not(.publicHomeBody) .navItem {
+  min-height: 39px;
+  border-radius: 8px;
+  color: #bdcecf;
+  font-size: 13px;
+}
+
+body:not(.publicHomeBody) .navItem:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+}
+
+body:not(.publicHomeBody) .navItem.active {
+  border-color: transparent;
+  background: var(--ep-mint);
+  color: var(--ep-ink);
+  box-shadow: none;
+}
+
+body:not(.publicHomeBody) .sidebarFooter {
+  border-color: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #adc0c2;
+}
+
+body:not(.publicHomeBody) .workspace {
+  gap: 20px;
+  padding: 24px;
+  background: #f3f6f4;
+}
+
+body:not(.publicHomeBody) .topbar h1 {
+  color: var(--ep-ink);
+  font-size: 26px;
+  letter-spacing: -0.035em;
+}
+
+body:not(.publicHomeBody) .topbar p {
+  color: #64777a;
+}
+
+body:not(.publicHomeBody) .topbarLabel {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ep-blue);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body:not(.publicHomeBody) .panel,
+body:not(.publicHomeBody) .stat,
+body:not(.publicHomeBody) .metricCard,
+body:not(.publicHomeBody) .queueMixCard {
+  border-color: #d9e0dd;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 8px 28px rgba(16, 44, 50, 0.055);
+}
+
+body:not(.publicHomeBody) .primaryButton {
+  border-color: var(--ep-navy);
+  border-radius: 8px;
+  background: var(--ep-navy);
+}
+
+body:not(.publicHomeBody) .primaryButton:hover {
+  border-color: var(--ep-blue);
+  background: var(--ep-blue);
+}
+
+body:not(.publicHomeBody) .secondaryButton,
+body:not(.publicHomeBody) .iconButton,
+body:not(.publicHomeBody) .rowButton {
+  border-radius: 8px;
+}
+
+body:not(.publicHomeBody) input,
+body:not(.publicHomeBody) select,
+body:not(.publicHomeBody) textarea {
+  border-radius: 8px;
+}
+
+body:not(.publicHomeBody) input:focus,
+body:not(.publicHomeBody) select:focus,
+body:not(.publicHomeBody) textarea:focus {
+  border-color: var(--ep-blue);
+  box-shadow: 0 0 0 3px rgba(49, 88, 217, 0.12);
+}

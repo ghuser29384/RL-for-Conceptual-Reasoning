@@ -207,6 +207,38 @@
       "basis": "The project owner instructed ‘Do the next step’ immediately after the next step was explicitly identified as Q-006A approval and the exact approval scope was quoted. This records that instruction while preserving every stated prohibition on contact, outreach, participant selection, manifest freeze, controlled execution, payment, funding submission, and Phase 2.",
       "approved_at": "2026-08-01T11:34:32Z",
       "contract_path": "ops/next-steps-2026-07-23/q-006a-owner-approval.md"
+    },
+    {
+      "id": "D-028",
+      "decision": "Approve H11-OWNER-GATE-2026-08-06-V1 exactly as recommended for preparation of two qualified-human synthetic usability sessions, while keeping contact, invitations, access issuance, payment commitments, and research use blocked until the packet's recipient-specific gates are complete and the standing no-email instruction is separately cleared.",
+      "credence": 0.99,
+      "basis": "The project owner instructed 'Do the next steps' immediately after the exact H-11 approval syntax and boundaries were quoted. This mirrors D-027's interpretation precedent. The approval is bounded to preparation and does not authorize sending, invitations, real ratings, payment, publication, funding submission, production change, or Phase 2.",
+      "approved_at": "2026-08-06T14:45:42Z",
+      "contract_path": "ops/next-steps-2026-07-23/h11-owner-approval-2026-08-06.md"
+    },
+    {
+      "id": "D-029",
+      "decision": "Designate Ellen Sun personally as the legal payer for the two H-11 synthetic usability honoraria, while requiring recipient-specific work-location, tax, sanctions, payment-rail, and recordkeeping review before any commitment or payment.",
+      "credence": 1.0,
+      "basis": "The project owner selected option 1A on 2026-08-06. The decision designates the payer but does not determine recipient eligibility, classification, withholding, reporting, or payment legality.",
+      "approved_at": "2026-08-06T15:20:14Z",
+      "contract_path": "ops/next-steps-2026-07-23/h11-owner-approval-2026-08-06.md"
+    },
+    {
+      "id": "D-030",
+      "decision": "Pay the full USD 75 H-11 honorarium if a participant has started and a platform defect, security stop, or operator-required termination prevents completion; a voluntary stop unrelated to a product defect does not automatically earn the full amount.",
+      "credence": 1.0,
+      "basis": "The project owner selected option 2A on 2026-08-06.",
+      "approved_at": "2026-08-06T15:20:14Z",
+      "contract_path": "ops/next-steps-2026-07-23/h11-consent-and-session-brief-2026-08-06.md"
+    },
+    {
+      "id": "D-031",
+      "decision": "Retain identifiable H-11 synthetic-session records until 90 days after H-12 sign-off or final defect closure, whichever is later; then delete direct identifiers and retain only de-identified usability findings, integrity hashes, and the minimum audit summary.",
+      "credence": 1.0,
+      "basis": "The project owner selected option 3A on 2026-08-06.",
+      "approved_at": "2026-08-06T15:20:14Z",
+      "contract_path": "ops/next-steps-2026-07-23/h11-consent-and-session-brief-2026-08-06.md"
     }
   ],
   "pending_decision": {

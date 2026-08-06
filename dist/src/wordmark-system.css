@@ -1,0 +1,145 @@
+/* Metaphilosophy wordmark-first identity. Loaded after the existing site systems. */
+.mpWordmark {
+  display: grid;
+  width: max-content;
+  min-width: 0;
+  gap: 4px;
+  color: inherit;
+}
+
+.mpWordmark strong {
+  display: block;
+  margin: 0;
+  color: inherit;
+  font-family: var(--ep-sans, Inter, ui-sans-serif, system-ui, sans-serif);
+  font-size: clamp(22px, 1.55vw, 27px);
+  font-weight: 720;
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+}
+
+.mpWordmark small {
+  display: block;
+  color: var(--ep-ink-soft, #38545a);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.115em;
+  text-transform: uppercase;
+}
+
+.epHeader .epBrand,
+.epFooter .epBrand {
+  gap: 0;
+}
+
+.mpHeaderWordmark strong {
+  font-size: clamp(23px, 1.65vw, 28px);
+}
+
+.mpFooterWordmark {
+  gap: 5px;
+}
+
+.mpFooterWordmark strong {
+  font-size: 22px;
+}
+
+.mpFooterWordmark small {
+  font-size: 7.5px;
+}
+
+/* Replace the former standalone mark with a message-led visual. */
+.epContributeGraphic.mpContributeStatement {
+  isolation: isolate;
+}
+
+.epContributeGraphic.mpContributeStatement::before {
+  width: min(76%, 440px);
+  height: min(76%, 440px);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.38), transparent 26%),
+    var(--ep-lilac, #d9d8ff);
+}
+
+.mpContributeStatement > div {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(72%, 390px);
+  color: var(--ep-navy, #0c254e);
+  font-family: var(--ep-sans, Inter, ui-sans-serif, system-ui, sans-serif);
+  font-size: clamp(38px, 4.3vw, 68px);
+  font-weight: 690;
+  line-height: 0.88;
+  letter-spacing: -0.065em;
+}
+
+.mpContributeStatement > div span:nth-child(2) {
+  justify-self: end;
+}
+
+.mpContributeStatement > div i {
+  margin: 15px 0 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.mpContributeStatement > div span:last-child {
+  color: var(--ep-coral, #ff5b3f);
+  font-size: 1.2em;
+}
+
+/* Operational workspace wordmark. */
+body:not(.publicHomeBody) .sidebar .brand {
+  gap: 0;
+  padding-top: 7px;
+  padding-bottom: 13px;
+}
+
+body:not(.publicHomeBody) .mpWorkspaceWordmark {
+  gap: 5px;
+}
+
+body:not(.publicHomeBody) .mpWorkspaceWordmark strong {
+  color: #fff;
+  font-size: 17px;
+  letter-spacing: -0.045em;
+}
+
+body:not(.publicHomeBody) .mpWorkspaceWordmark small {
+  color: #9fb4b7;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+
+@media (max-width: 780px) {
+  .mpHeaderWordmark strong {
+    font-size: 20px;
+  }
+
+  .mpHeaderWordmark small {
+    display: none;
+  }
+
+  .mpContributeStatement > div {
+    width: min(74%, 310px);
+    font-size: clamp(38px, 12vw, 60px);
+  }
+}
+
+@media (max-width: 470px) {
+  .mpHeaderWordmark strong {
+    font-size: 19px;
+  }
+
+  .mpContributeStatement > div {
+    width: min(78%, 285px);
+  }
+}

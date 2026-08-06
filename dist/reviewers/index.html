@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Paid expert reviewer intake for the Metaphilosophy conceptual-reasoning dataset." />
+    <meta name="robots" content="index,follow" />
+    <title>Expert reviewer intake | Metaphilosophy</title>
+    <link rel="stylesheet" href="/reviewers/styles.css?v=1" />
+  </head>
+  <body>
+    <header class="siteHeader">
+      <a class="brand" href="/" aria-label="Metaphilosophy home">
+        <span class="brandMark" aria-hidden="true">M</span>
+        <span><strong>Metaphilosophy</strong><small>Expert reviewer intake</small></span>
+      </a>
+      <div class="deadline">
+        Intake closes <time datetime="2026-07-16T23:59:00-07:00">Thursday, July 16, 11:59 PM Pacific</time>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Paid 10–15 minute calibration review</p>
+          <h1 id="page-title">Help evaluate whether AI can reason about difficult conceptual questions.</h1>
+          <p class="lede">
+            We are recruiting philosophers and adjacent researchers to evaluate critiques of arguments using a structured, blinded rubric.
+            The first task is one public calibration item; no ongoing commitment is required.
+          </p>
+          <div class="trustRow" aria-label="Key terms">
+            <span>Initial calibration: <strong>$25</strong></span>
+            <span>Subsequent accepted work: <strong>$60/hour</strong></span>
+            <span>Referral: <strong>$15</strong> per activated expert, up to two</span>
+          </div>
+          <p class="finePrint">
+            Calibration payment is subject to identity, eligibility, duplicate, and good-faith completion checks. Qualification decisions are made by a human reviewer.
+          </p>
+        </div>
+        <aside class="heroCard" aria-label="What you will do">
+          <h2>What you will do</h2>
+          <ol>
+            <li>Provide a short expertise profile.</li>
+            <li>Review the seven rating dimensions.</li>
+            <li>Score one position–critique pair and explain your judgment.</li>
+          </ol>
+          <p id="liveProgress" class="liveProgress" hidden></p>
+        </aside>
+      </section>
+
+      <section class="intakeShell" aria-labelledby="intake-title">
+        <div class="progressHeader">
+          <div>
+            <p class="eyebrow">Reviewer intake</p>
+            <h2 id="intake-title">Complete all three steps</h2>
+          </div>
+          <ol class="stepList" aria-label="Intake progress">
+            <li class="active" data-step-indicator="1"><span>1</span> Background</li>
+            <li data-step-indicator="2"><span>2</span> Rubric &amp; consent</li>
+            <li data-step-indicator="3"><span>3</span> Calibration</li>
+          </ol>
+        </div>
+
+        <div id="formAlert" class="alert" role="alert" tabindex="-1" hidden></div>
+
+        <form id="reviewerForm" novalidate>
+          <section class="formStep" data-step="1" aria-labelledby="step-1-title">
+            <div class="sectionHeading">
+              <p class="stepKicker">Step 1 of 3</p>
+              <h3 id="step-1-title" tabindex="-1">Background and expertise</h3>
+              <p>Doctoral students, postdocs, faculty, independent researchers, and researchers in adjacent disciplines are eligible.</p>
+            </div>
+
+            <div class="fieldGrid twoColumns">
+              <label class="field">
+                <span>Full name</span>
+                <input name="displayName" autocomplete="name" maxlength="120" required />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input name="email" type="email" autocomplete="email" maxlength="254" required />
+              </label>
+              <label class="field">
+                <span>Current role</span>
+                <select name="role" required>
+                  <option value="">Select one</option>
+                  <option value="doctoral_student">Doctoral student</option>
+                  <option value="postdoctoral_researcher">Postdoctoral researcher</option>
+                  <option value="faculty">Faculty</option>
+                  <option value="independent_researcher">Independent researcher</option>
+                  <option value="research_staff">Research staff</option>
+                  <option value="legal_or_policy_researcher">Legal or policy researcher</option>
+                  <option value="industry_researcher">Industry researcher</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label class="field conditional" data-show-when="role:other" hidden>
+                <span>Describe your role</span>
+                <input name="otherRole" maxlength="120" />
+              </label>
+              <label class="field">
+                <span>Affiliation</span>
+                <input name="affiliation" autocomplete="organization" maxlength="180" placeholder="University, research organization, or Independent" required />
+              </label>
+              <label class="field">
+                <span>Highest relevant training</span>
+                <select name="training" required>
+                  <option value="">Select one</option>
+                  <option value="current_doctoral_training">Current doctoral training</option>
+                  <option value="completed_doctorate">Completed doctorate</option>
+                  <option value="professional_research_equivalent">Comparable professional research experience</option>
+                  <option value="masters_plus_research_experience">Master’s plus research experience</option>
+                  <option value="other_relevant_expertise">Other relevant expertise</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Public profile <small>Optional</small></span>
+                <input name="profileUrl" type="url" inputmode="url" maxlength="500" placeholder="https://orcid.org/… or institutional page" />
+              </label>
+              <label class="field">
+                <span>Availability after calibration</span>
+                <select name="availability" required>
+                  <option value="">Select one</option>
+                  <option value="calibration_only">Calibration only</option>
+                  <option value="under_2_hours">Under 2 hours this week</option>
+                  <option value="2_to_5_hours">2–5 hours this week</option>
+                  <option value="over_5_hours">More than 5 hours this week</option>
+                </select>
+              </label>
+            </div>
+
+            <fieldset class="checkboxFieldset">
+              <legend>Areas of expertise <small>Select all that apply</small></legend>
+              <div class="checkboxGrid">
+                <label><input type="checkbox" name="expertise" value="ai_safety" /> AI safety</label>
+                <label><input type="checkbox" name="expertise" value="decision_theory" /> Decision theory</label>
+                <label><input type="checkbox" name="expertise" value="normative_ethics" /> Normative ethics</label>
+                <label><input type="checkbox" name="expertise" value="philosophy_of_mind" /> Philosophy of mind</label>
+                <label><input type="checkbox" name="expertise" value="epistemology" /> Epistemology</label>
+                <label><input type="checkbox" name="expertise" value="social_political_philosophy" /> Social / political philosophy</label>
+                <label><input type="checkbox" name="expertise" value="philosophy_of_ai" /> Philosophy of AI</label>
+                <label><input type="checkbox" name="expertise" value="law_and_legal_theory" /> Law / legal theory</label>
+                <label><input type="checkbox" name="expertise" value="economics" /> Economics</label>
+                <label><input type="checkbox" name="expertise" value="cognitive_science" /> Cognitive science</label>
+                <label><input type="checkbox" name="expertise" value="formal_methods" /> Formal methods</label>
+                <label><input type="checkbox" name="expertise" value="other" /> Other</label>
+              </div>
+              <p class="fieldError" data-error-for="expertise"></p>
+            </fieldset>
+
+            <label class="field conditional" data-show-when="expertise:other" hidden>
+              <span>Other expertise</span>
+              <input name="otherExpertise" maxlength="160" />
+            </label>
+
+            <label class="honeypot" aria-hidden="true">
+              Website
+              <input name="website" autocomplete="off" tabindex="-1" />
+            </label>
+
+            <div class="stepActions end">
+              <button class="primaryButton" type="button" data-next-step="2">Continue to rubric</button>
+            </div>
+          </section>
+
+          <section class="formStep" data-step="2" aria-labelledby="step-2-title" hidden>
+            <div class="sectionHeading">
+              <p class="stepKicker">Step 2 of 3</p>
+              <h3 id="step-2-title" tabindex="-1">Rubric and consent</h3>
+              <p>Evaluate the critique—not whether you agree with the position. Scores run from 0 to 1.</p>
+            </div>
+
+            <div class="rubricGrid">
+              <article><h4>Centrality</h4><p>Does the critique address an important part of the position?</p></article>
+              <article><h4>Strength</h4><p>If correct, how much would the critique weaken the position?</p></article>
+              <article><h4>Correctness</h4><p>How accurate are the critique’s claims, weighted by importance?</p></article>
+              <article><h4>Clarity</h4><p>Is the critique easy to understand and sufficiently precise?</p></article>
+              <article><h4>Dead weight</h4><p>How much of the critique is irrelevant, redundant, or unhelpful?</p></article>
+              <article><h4>Single issue</h4><p>Does the critique stay focused on one issue?</p></article>
+              <article><h4>Overall</h4><p>Considering the other dimensions, how good is the critique?</p></article>
+            </div>
+
+            <div class="noticeBox">
+              <strong>Blinding rule.</strong> You will not be told whether a critique was written by a person or a model. Do not try to infer authorship; judge only the argument shown.
+            </div>
+
+            <fieldset class="consentList">
+              <legend>Required confirmations</legend>
+              <label><input type="checkbox" name="age18" required /> I am at least 18 years old.</label>
+              <label><input type="checkbox" name="expertiseAffirmation" required /> My background and expertise information is accurate.</label>
+              <label><input type="checkbox" name="researchUse" required /> I consent to my calibration response and deidentified reviewer metadata being used for qualification, reliability analysis, research, and dataset operations.</label>
+              <label><input type="checkbox" name="contact" required /> I consent to being contacted about qualification, payment, referrals, and later review assignments.</label>
+              <label><input type="checkbox" name="compensationTerms" required /> I understand that the $25 calibration payment requires identity, eligibility, duplicate, and good-faith completion checks.</label>
+              <label><input type="checkbox" name="publicAttribution" /> I opt in to public acknowledgment by name if I later contribute accepted reviews. <small>Optional; you may change this later.</small></label>
+            </fieldset>
+
+            <div class="stepActions">
+              <button class="secondaryButton" type="button" data-previous-step="1">Back</button>
+              <button class="primaryButton" type="button" data-next-step="3">Continue to calibration</button>
+            </div>
+          </section>
+
+          <section class="formStep" data-step="3" aria-labelledby="step-3-title" hidden>
+            <div class="sectionHeading">
+              <p class="stepKicker">Step 3 of 3</p>
+              <h3 id="step-3-title" tabindex="-1">Public calibration item</h3>
+              <p>This synthetic item is used only for onboarding and qualification. It is not part of a hidden benchmark.</p>
+            </div>
+
+            <article class="argumentCard">
+              <div class="argumentLabel">Position</div>
+              <p>
+                Any public policy that reduces preventable deaths without imposing comparable harms ought to be adopted.
+                Requiring smoke alarms in newly built homes reduces preventable deaths without imposing comparable harms.
+                Therefore, smoke alarms ought to be required in newly built homes.
+              </p>
+            </article>
+
+            <article class="argumentCard critiqueCard">
+              <div class="argumentLabel">Critique</div>
+              <p>
+                The first premise merely states a factual relationship about reducing deaths. The conclusion says what ought to be done.
+                Because the argument never supplies a moral bridge from facts to obligations, it commits the is–ought fallacy.
+              </p>
+            </article>
+
+            <input type="hidden" name="calibrationItemId" value="public-calibration-is-ought-v1" />
+
+            <fieldset class="scoreFieldset">
+              <legend>Scores</legend>
+              <p class="fieldHint">Choose a value for every dimension. No value is selected by default.</p>
+              <div id="scoreGrid" class="scoreGrid"></div>
+            </fieldset>
+
+            <label class="field">
+              <span>Confidence</span>
+              <select name="confidence" required>
+                <option value="">Select one</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Brief rationale</span>
+              <textarea name="rationale" rows="6" minlength="60" maxlength="2400" required placeholder="Explain what the critique gets right or wrong and why that matters for your scores."></textarea>
+              <small>Minimum 60 characters. Do not use external AI assistance for the calibration response.</small>
+            </label>
+
+            <div class="stepActions">
+              <button class="secondaryButton" type="button" data-previous-step="2">Back</button>
+              <button id="submitButton" class="primaryButton" type="submit">Submit calibration</button>
+            </div>
+          </section>
+        </form>
+
+        <section id="completionPanel" class="completionPanel" hidden tabindex="-1" aria-labelledby="completion-title">
+          <div class="completionIcon" aria-hidden="true">✓</div>
+          <p class="eyebrow">Calibration complete</p>
+          <h3 id="completion-title">Your response has been recorded.</h3>
+          <p>
+            Qualification is pending human review. Qualified reviewers will receive an email with payment instructions and the option to accept additional assignments.
+          </p>
+          <dl class="confirmationDetails">
+            <div><dt>Application reference</dt><dd id="applicationReference">—</dd></div>
+            <div><dt>Payment status</dt><dd>Pending identity and good-faith review</dd></div>
+          </dl>
+          <div class="referralPanel">
+            <h4>Nominate two expert peers</h4>
+            <p>You can receive $15 for each referred expert who qualifies and completes calibration, capped at two referrals.</p>
+            <div class="copyRow">
+              <input id="referralLink" readonly aria-label="Your referral link" />
+              <button id="copyReferralButton" class="secondaryButton" type="button">Copy link</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="faq" aria-labelledby="faq-title">
+        <p class="eyebrow">Details</p>
+        <h2 id="faq-title">Frequently asked questions</h2>
+        <details><summary>Who counts as an expert?</summary><p>Relevant backgrounds include philosophy, AI safety, ethics, decision theory, political theory, law, economics, cognitive science, and closely related fields. Doctoral students and researchers with comparable professional experience are eligible.</p></details>
+        <details><summary>Will the calibration item enter the research benchmark?</summary><p>No. It is a synthetic public onboarding item. Hidden evaluation material is kept separate from recruitment and training.</p></details>
+        <details><summary>How is payment determined?</summary><p>The $25 calibration payment is available after identity, eligibility, duplicate, and good-faith completion checks. Submissions generated by a bot, copied from another person, or completed with external AI assistance are not eligible.</p></details>
+        <details><summary>What data may be published?</summary><p>Calibration responses and reviewer metadata may be analyzed in deidentified form. Public acknowledgment by name is optional and requires an explicit opt-in.</p></details>
+      </section>
+    </main>
+
+    <footer>
+      <p>Metaphilosophy — building a dataset to train AI to do better philosophy.</p>
+      <p>No third-party analytics, advertising pixels, or social trackers are used on this intake page.</p>
+    </footer>
+
+    <script type="module" src="/reviewers/app.mjs?v=1"></script>
+  </body>
+</html>

@@ -1,16 +1,17 @@
 # H-11 qualified-human synthetic dry-run owner gate — 2026-08-06
 
-**Packet ID:** `H11-OWNER-GATE-2026-08-06-V1`  
-**Status:** protected pre-H11 engineering gate passed on exact release; prepared for owner review; **not approved; do not contact anyone**  
-**Operations owner:** Ellen Sun  
-**Evidence dependency:** `hosted-staging-acceptance-evidence-2026-08-06-v1.json`  
+**Packet ID:** `H11-OWNER-GATE-2026-08-06-V1`
+**Status:** owner-approved for bounded preparation on 2026-08-06; **no contact, invitation, access issuance, or payment commitment authorized**
+**Operations owner:** Ellen Sun
+**Evidence dependency:** `hosted-staging-acceptance-evidence-2026-08-06-v1.json`
 **Controlling audit:** `human-expert-rating-workflow-audit-2026-08-04.md`
+**Owner approval:** `h11-owner-approval-2026-08-06.md`
 
 ## Decision boundary
 
-This packet prepares the H-11 decision but does not select a participant, authorize an email, create an invitation, distribute an assignment, promise an honorarium, collect a rating, or activate research use.
+This packet is approved for bounded preparation of the recommended synthetic dry runs. It does not authorize an email, institutional forwarding request, invitation, access issuance, payment commitment, research rating, pilot assignment, or research use.
 
-The pre-H11 engineering gate is now evidenced on exact protected release `202135a21fb15f5a12698e6a78e8c8d8b7fa79ef`. The record combines exact-head CI, rendered desktop and narrow-mobile rehearsals, Vercel OIDC to the retained Supabase Postgres project, a complete hosted synthetic lifecycle, correction and withdrawal, adjudication, support-tabletop, backup and exact restore, and a READY SSO-protected deployment. This technical pass does not pass H-11, authorize contact, or establish qualified-human comprehension. Outreach remains fail-closed until Ellen Sun explicitly approves the selections, message, support plan, honorarium, and contact authorization in this packet, and all recipient-specific checks are complete.
+The pre-H11 engineering gate is now evidenced on exact protected release `202135a21fb15f5a12698e6a78e8c8d8b7fa79ef`. The record combines exact-head CI, rendered desktop and narrow-mobile rehearsals, Vercel OIDC to the retained Supabase Postgres project, a complete hosted synthetic lifecycle, correction and withdrawal, adjudication, support-tabletop, backup and exact restore, and a READY SSO-protected deployment. This technical pass does not pass H-11 or establish qualified-human comprehension. Ellen Sun approved the selections, scope, draft content, support ownership, and proposed honorarium ceiling for preparation at `2026-08-06T14:45:42Z`. Outreach remains fail-closed because the standing no-email instruction, recipient-specific checks, consent finalization, payment eligibility, scheduling, and separate send authorization remain incomplete. Ellen Sun personally is the approved payer; the full USD 75 applies after a participant starts if a platform defect, security stop, or operator-required termination prevents completion; and identifiable records follow the approved 90-day post-H-12/final-defect-closure rule.
 
 ## Recommended qualified dry-run slate
 
@@ -72,8 +73,8 @@ The automated synthetic adjudicator remains synthetic. Neither dry-run participa
 
 ## Time and evidence
 
-**Expected participant time:** 60–90 minutes.  
-**Proposed completion window:** seven calendar days after acceptance, with no advertised date until the protected hosted release passes H-01 through H-10.  
+**Expected participant time:** 60–90 minutes.
+**Proposed completion window:** seven calendar days after acceptance, with no advertised date until the protected hosted release passes H-01 through H-10.
 **Permitted follow-up:** one brief follow-up seven calendar days after the first message if no reply.
 
 A dry run passes only when both participants:
@@ -107,7 +108,7 @@ P0 or P1 means immediate stop, revocation of outstanding access, defect correcti
 
 This is a proposed separate quality-assurance honorarium. It is not a per-rating wage, does not depend on score content or agreement, and must not be silently drawn from the approved USD 400 core-rater completion pool or USD 100 adjudication reserve, whose current rules assign zero contribution units to calibration or practice work.
 
-No compensation may be mentioned until Ellen Sun separately approves:
+The approved draft may state the proposed honorarium, but no message may be sent and no payment commitment becomes operative until:
 
 - the USD 150 additional ceiling;
 - recipient-specific eligibility and payment rail;
@@ -118,8 +119,8 @@ Default rails after recipient-specific review are ACH or domestic bank transfer 
 
 ## Proposed sender and support owner
 
-**Sender:** Ellen Sun.  
-**Support owner:** Ellen Sun.  
+**Sender:** Ellen Sun.
+**Support owner:** Ellen Sun.
 **Support promise:** acknowledge access-blocking or suspected-disclosure reports as promptly as reasonably possible during the agreed dry-run window; revoke access immediately when compromise is plausible; follow the verified P0–P3 incident runbook; make no promise of continuous availability or a guaranteed response time.
 
 ## Exact proposed first message
@@ -143,7 +144,7 @@ Default rails after recipient-specific review are ACH or domestic bank transfer 
 
 ## Reply handling
 
-- **Interested:** thank the person; do not issue access until this packet is explicitly approved, professional-contact and conflict checks are complete, consent and privacy terms are final, payment eligibility and wording are cleared, and the exact session window is set.
+- **Interested:** thank the person; do not issue access until professional-contact and conflict checks are complete, consent and privacy terms are final, payment eligibility and wording are cleared, the exact session window is set, and access issuance is separately authorized.
 - **Question:** answer only within the approved synthetic scope; escalate methodological or compensation changes to the owner decision record.
 - **Decline or no capacity:** thank the person and make no further request beyond the one permitted follow-up for non-response.
 - **Conflict or concern:** record privately, do not debate, and move to the next approved fallback only after the operations owner authorizes that substitution.
@@ -151,26 +152,29 @@ Default rails after recipient-specific review are ACH or domestic bank transfer 
 
 ## Owner decisions required
 
-Every field below defaults to **not approved**:
+The owner-approved preparation state is recorded below. No row authorizes sending, institutional forwarding, or access issuance:
 
 | Decision | Recommendation | Current state |
 |---|---|---|
-| Primary dry-run pair | Alexander Kastner and Linh Chi Nguyen | Not approved |
-| Ordered fallbacks | Lukas Gloor, then Lukas Finnveden | Not approved |
-| Synthetic-only scope | Exact scope above; no research use | Not approved |
-| Session length | 60–90 minutes | Not approved |
-| Completion window | Seven days after acceptance | Not approved |
-| First message and subject | Exact text above | Not approved |
-| One follow-up | After seven calendar days | Not approved |
-| Sender and support owner | Ellen Sun | Not approved for this H-11 send |
-| Separate QA honorarium | USD 75 each; USD 150 ceiling | Not approved |
-| Payment wording and rails | Recipient-specific private onboarding | Not approved |
-| Professional-contact re-verification | Required immediately before send | Not approved as completed |
-| Contact or invitation | May be authorized only through explicit approval of this packet after recipient-specific checks | Not authorized |
+| Primary dry-run pair | Alexander Kastner and Linh Chi Nguyen | Approved for preparation |
+| Ordered fallbacks | Lukas Gloor, then Lukas Finnveden | Approved for preparation; activation still conditional |
+| Synthetic-only scope | Exact scope above; no research use | Approved |
+| Session length | 60–90 minutes | Approved |
+| Completion window | Seven days after acceptance | Approved |
+| First message and subject | Exact text above | Content approved; not authorized to send |
+| One follow-up | After seven calendar days | Content approved; only after an authorized initial send |
+| Sender and support owner | Ellen Sun | Approved for preparation; send still blocked |
+| Separate QA honorarium | USD 75 each; USD 150 ceiling | Ceiling approved; no commitment until payer and checks are complete |
+| Payment wording and rails | Recipient-specific private onboarding | Payer approved; recipient checks pending |
+| Professional-contact re-verification | Required immediately before send | Partially evidenced; recipient confirmation pending |
+| Legal payer | Ellen Sun personally | Approved; recipient-specific legal/tax/payment checks pending |
+| Forced-stop compensation | Full USD 75 after start when a platform defect, security stop, or operator-required termination prevents completion | Approved |
+| Private-record retention | Identifiable records until 90 days after H-12 sign-off or final defect closure, whichever is later; then delete direct identifiers | Approved |
+| Contact or invitation | Requires recipient-specific gates and separate send/access authorization | Not authorized |
 
-## Approval syntax
+## Recorded owner approval
 
-A future owner decision may approve or modify the packet using an unambiguous record such as:
+The bounded owner decision recorded at `2026-08-06T14:45:42Z` is:
 
 ```text
 APPROVE H11-OWNER-GATE-2026-08-06-V1
@@ -184,4 +188,4 @@ follow-up: one after seven calendar days
 contact authorization: approved only after recipient-specific professional-contact, conflict, eligibility, payment, consent, and scheduling checks are complete
 ```
 
-Approval of this packet would still not authorize real research ratings, pilot participant selection, the 48-critique assignment graph, public recruitment, ingestion of real ratings, adjudication work, publication, funding submission, or Phase 2.
+This approval still does not authorize real research ratings, pilot participant selection, the 48-critique assignment graph, public recruitment, ingestion of real ratings, real adjudication work, publication, funding submission, production change, or Phase 2. The standing no-email instruction also means that the conditionally approved contact line above is not operative without a separate explicit send authorization.

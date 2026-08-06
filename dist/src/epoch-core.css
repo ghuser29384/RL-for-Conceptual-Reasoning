@@ -1,0 +1,596 @@
+/* Metaphilosophy — research platform identity inspired by data-first scientific publishing */
+:root {
+  --ep-ink: #102c32;
+  --ep-ink-soft: #38545a;
+  --ep-paper: #f6f7f3;
+  --ep-white: #ffffff;
+  --ep-soft: #edf2ef;
+  --ep-rule: #d9dfdc;
+  --ep-rule-strong: #bdc8c4;
+  --ep-blue: #3158d9;
+  --ep-blue-dark: #183b91;
+  --ep-aqua: #82d9d1;
+  --ep-mint: #b8efd8;
+  --ep-lilac: #d9d8ff;
+  --ep-sand: #f4e7c9;
+  --ep-coral: #ff5b3f;
+  --ep-navy: #0c254e;
+  --ep-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ep-shadow: 0 24px 70px rgba(16, 44, 50, 0.08);
+}
+
+.srOnly {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 96px;
+}
+
+body.epochHomeBody {
+  margin: 0;
+  background: var(--ep-paper);
+  color: var(--ep-ink);
+  font-family: var(--ep-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body.epochHomeBody.epMenuOpen {
+  overflow: hidden;
+}
+
+.epSite,
+.epSite *,
+.epSite *::before,
+.epSite *::after {
+  box-sizing: border-box;
+}
+
+.epSite {
+  min-width: 320px;
+  overflow: clip;
+  background:
+    radial-gradient(circle at 85% 2%, rgba(217, 216, 255, 0.35), transparent 22rem),
+    var(--ep-paper);
+  color: var(--ep-ink);
+  font-family: var(--ep-sans);
+}
+
+.epSite a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.epSite button,
+.epSite input,
+.epSite select,
+.epSite textarea {
+  font: inherit;
+}
+
+.epSkip {
+  position: fixed;
+  z-index: 1000;
+  top: 12px;
+  left: 12px;
+  transform: translateY(-180%);
+  padding: 11px 15px;
+  border-radius: 8px;
+  background: var(--ep-ink);
+  color: white;
+  font: 700 12px/1 var(--ep-sans);
+  transition: transform 0.16s ease;
+}
+
+.epSkip:focus {
+  transform: none;
+}
+
+.epHeader {
+  position: sticky;
+  z-index: 50;
+  top: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto minmax(220px, 1fr);
+  align-items: center;
+  min-height: 88px;
+  padding: 0 clamp(22px, 3vw, 48px);
+  border-bottom: 1px solid rgba(16, 44, 50, 0.12);
+  background: rgba(246, 247, 243, 0.92);
+  backdrop-filter: blur(18px);
+}
+
+.epBrand {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 12px;
+}
+
+.epMark {
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.epBrandMark {
+  width: 43px;
+  height: 43px;
+}
+
+.epBrand > span {
+  display: grid;
+  gap: 3px;
+}
+
+.epBrand strong {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.epBrand small {
+  color: var(--ep-ink-soft);
+  font-size: 10.5px;
+  line-height: 1.2;
+  letter-spacing: 0.015em;
+}
+
+.epNav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(25px, 2.3vw, 42px);
+}
+
+.epNav a {
+  position: relative;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 590;
+}
+
+.epNav a::after {
+  position: absolute;
+  right: 0;
+  bottom: 1px;
+  left: 0;
+  height: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: var(--ep-coral);
+  content: "";
+  transition: transform 0.16s ease;
+}
+
+.epNav a:hover::after,
+.epNav a:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.epHeaderAction,
+.epPrimaryButton,
+.epLightButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid var(--ep-navy);
+  border-radius: 8px;
+  background: var(--ep-navy);
+  color: white !important;
+  font-size: 12.5px;
+  font-weight: 680;
+  line-height: 1;
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.epHeaderAction {
+  justify-self: end;
+}
+
+.epHeaderAction svg,
+.epPrimaryButton svg,
+.epTextButton svg,
+.epLightButton svg,
+.epDarkTextButton svg,
+.epProfileStats a svg,
+.epBenchmarkPanel a svg,
+.epImpactLinks a svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.epHeaderAction:hover,
+.epHeaderAction:focus-visible,
+.epPrimaryButton:hover,
+.epPrimaryButton:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--ep-blue);
+  background: var(--ep-blue);
+}
+
+.epMenuButton {
+  display: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.epMenuButton > span:not(.srOnly) {
+  display: block;
+  width: 23px;
+  height: 1.5px;
+  margin: 6px auto;
+  background: var(--ep-ink);
+  transition: transform 0.16s ease;
+}
+
+.epHero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(650px, 1.06fr);
+  gap: clamp(38px, 4vw, 70px);
+  max-width: 1680px;
+  min-height: min(800px, calc(100vh - 88px));
+  margin: 0 auto;
+  padding: clamp(62px, 7vh, 94px) clamp(24px, 3.2vw, 54px) clamp(60px, 7vh, 90px);
+  border-bottom: 1px solid var(--ep-rule);
+}
+
+.epHeroCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.epHero h1 {
+  max-width: 720px;
+  margin: 0;
+  font-size: clamp(62px, 6.2vw, 104px);
+  font-weight: 650;
+  line-height: 0.97;
+  letter-spacing: -0.065em;
+  text-wrap: balance;
+}
+
+.epHeroLede {
+  max-width: 650px;
+  margin: 34px 0 0;
+  color: var(--ep-ink-soft);
+  font-size: clamp(17px, 1.3vw, 21px);
+  line-height: 1.52;
+  letter-spacing: -0.012em;
+}
+
+.epHeroActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 28px;
+  margin-top: 34px;
+}
+
+.epTextButton,
+.epDarkTextButton,
+.epBenchmarkPanel a,
+.epImpactLinks a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid currentColor;
+  font-size: 12.5px;
+  font-weight: 650;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.epTextButton:hover,
+.epTextButton:focus-visible,
+.epBenchmarkPanel a:hover,
+.epBenchmarkPanel a:focus-visible {
+  color: var(--ep-blue);
+  border-color: var(--ep-blue);
+}
+
+.epBenefitRail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: clamp(45px, 6vh, 72px);
+  border-top: 1px solid var(--ep-rule);
+}
+
+.epBenefitRail > div {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 13px;
+  padding: 22px 22px 0 0;
+}
+
+.epBenefitRail > div + div {
+  padding-left: 22px;
+  border-left: 1px solid var(--ep-rule);
+}
+
+.epSmallIcon {
+  width: 22px;
+  height: 22px;
+  color: var(--ep-blue);
+}
+
+.epBenefitRail p {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.epBenefitRail strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.epBenefitRail span {
+  color: var(--ep-ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.epProfileCard {
+  position: relative;
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(16, 44, 50, 0.13);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(49, 88, 217, 0.08) 1px, transparent 1.2px) 0 0 / 18px 18px,
+    rgba(255, 255, 255, 0.88);
+  box-shadow: var(--ep-shadow);
+}
+
+.epProfileTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 26px 12px;
+}
+
+.epProfileTop h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+
+.epProfileTop p {
+  margin: 5px 0 0;
+  color: var(--ep-ink-soft);
+  font-size: 11px;
+}
+
+.epProfileControls {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--ep-rule);
+  border-radius: 8px;
+  background: rgba(246, 247, 243, 0.8);
+}
+
+.epProfileControls button {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ep-ink-soft);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.epProfileControls button.isActive {
+  background: var(--ep-white);
+  color: var(--ep-ink);
+  box-shadow: 0 1px 6px rgba(16, 44, 50, 0.1);
+}
+
+.epProfileLegend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 0 26px 15px;
+  color: var(--ep-ink-soft);
+  font-size: 9.5px;
+}
+
+.epProfileLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.epProfileLegend i {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  background: var(--ep-coral);
+}
+
+.epProfileLegend span + span i {
+  height: 8px;
+  background: #dde4ee;
+}
+
+.epProfileRows {
+  display: grid;
+  gap: 0;
+  padding: 0 26px 2px;
+}
+
+.epProfileRow {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr) 28px;
+  gap: 13px;
+  align-items: center;
+  min-height: 40px;
+  color: var(--ep-ink);
+  font-size: 11px;
+}
+
+.epProfileRow > strong {
+  color: var(--ep-ink-soft);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.epProfileScale {
+  position: relative;
+  height: 25px;
+  background:
+    linear-gradient(to right, rgba(16, 44, 50, 0.09) 1px, transparent 1px) 0 50% / 25% 9px repeat-x,
+    linear-gradient(to right, rgba(16, 44, 50, 0.17), rgba(16, 44, 50, 0.17)) 0 50% / 100% 1px no-repeat;
+}
+
+.epProfileRange,
+.epProfileWhisker,
+.epProfileMean {
+  position: absolute;
+  top: 50%;
+  transition: opacity 0.2s ease;
+}
+
+.epProfileRange {
+  left: var(--low);
+  width: calc(var(--high) - var(--low));
+  height: 10px;
+  transform: translateY(-50%);
+  border-radius: 6px;
+  background: #e6eaf0;
+}
+
+.epProfileWhisker {
+  left: var(--low);
+  width: calc(var(--high) - var(--low));
+  height: 1.5px;
+  transform: translateY(-50%);
+  background: var(--ep-coral);
+}
+
+.epProfileWhisker::before,
+.epProfileWhisker::after {
+  position: absolute;
+  top: -3px;
+  width: 1px;
+  height: 7px;
+  background: var(--ep-coral);
+  content: "";
+}
+
+.epProfileWhisker::before {
+  left: 0;
+}
+
+.epProfileWhisker::after {
+  right: 0;
+}
+
+.epProfileMean {
+  left: var(--mean);
+  width: 7px;
+  height: 7px;
+  transform: translate(-50%, -50%);
+  border: 1.5px solid white;
+  border-radius: 50%;
+  background: var(--ep-coral);
+  box-shadow: 0 0 0 1px var(--ep-coral);
+}
+
+.epProfileRow.isInverse .epProfileMean,
+.epProfileRow.isInverse .epProfileWhisker,
+.epProfileRow.isInverse .epProfileWhisker::before,
+.epProfileRow.isInverse .epProfileWhisker::after {
+  background: var(--ep-blue);
+}
+
+.epProfileRow.isInverse .epProfileMean {
+  box-shadow: 0 0 0 1px var(--ep-blue);
+}
+
+.epProfileCard.meanOnly .epProfileRange,
+.epProfileCard.meanOnly .epProfileWhisker,
+.epProfileCard.meanOnly .epProfileLegend span + span {
+  opacity: 0.12;
+}
+
+.epProfileAxis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 54px 18px 144px;
+  color: #6c7b7f;
+  font-size: 9px;
+}
+
+.epProfileStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(125px, 1.15fr);
+  border-top: 1px solid var(--ep-rule);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.epProfileStats > div,
+.epProfileStats > a {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 112px;
+  padding: 16px 17px;
+  border-right: 1px solid var(--ep-rule);
+}
+
+.epProfileStats > div strong {
+  font-size: clamp(23px, 2vw, 31px);
+  font-weight: 520;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.epProfileStats > div span,
+.epProfileStats > a span {
+  margin-top: 8px;
+  color: var(--ep-ink-soft);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.epProfileStats > a {
+  border-right: 0;
+}
+
+.epProfileStats > a strong {
+  margin-top: 7px;
+  font-size: 11px;
+}
+
+.epProfileStats > a svg {
+  margin-top: 10px;
+  color: var(--ep-blue);
+}
