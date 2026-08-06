@@ -13,17 +13,24 @@ permissions:
 
 concurrency:
   group: apply-h11-owner-policy-decisions-once
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out controlled branch
-        uses: actions/checkout@v4
-        with:
-          ref: agent/48-critique-pilot-20260730
-          fetch-depth: 0
+      - name: Check out controlled branch without a marketplace action
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: agent/48-critique-pilot-20260730
+        run: |
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/ghuser29384/RL-for-Conceptual-Reasoning.git"
+          git fetch --no-tags origin "refs/heads/${BRANCH}"
+          git checkout -B "${BRANCH}" FETCH_HEAD
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Reconstruct and verify the owner-decision package
         shell: bash
@@ -148,12 +155,10 @@ jobs:
           rm -f .github/workflows/apply-h11-owner-policy-decisions-once.yml
           rm -f .github/h11-owner-policy-package-v2.b64
           rm -rf .github/h11pkg
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
           git commit -m "Record H-11 payer, stop, and retention decisions"
-          git push origin "HEAD:$BRANCH"
+          git push origin "HEAD:${BRANCH}"
 
       - name: Update draft PR 17 without changing its draft state
         shell: bash
