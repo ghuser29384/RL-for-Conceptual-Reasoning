@@ -1,0 +1,131 @@
+name: Apply H-11 owner policy decisions once
+
+on:
+  push:
+    branches:
+      - agent/48-critique-pilot-20260730
+    paths:
+      - ".github/workflows/apply-h11-owner-policy-decisions-once.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: apply-h11-owner-policy-decisions-once
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out controlled branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/48-critique-pilot-20260730
+          fetch-depth: 0
+
+      - name: Reconstruct and verify the owner-decision package
+        shell: bash
+        env:
+          PACKAGE_SHA256: "9c96d6a8aef703c8a26d8cf21d55e4dfd03a9ea426d54d1b48c130b33f81d0be"
+        run: |
+          base64 --decode .github/h11-owner-policy-package-v2.b64 > /tmp/h11-package.zip
+          printf '%s  %s\n' "$PACKAGE_SHA256" /tmp/h11-package.zip | sha256sum --check --strict
+          rm -rf /tmp/h11-package
+          mkdir -p /tmp/h11-package
+          unzip -q /tmp/h11-package.zip -d /tmp/h11-package
+          test -f /tmp/h11-package/metaphilosophy_h11_next_steps_2026-08-06_v2/apply_h11_owner_approval.py
+
+      - name: Check and apply D-028 through D-031
+        shell: bash
+        run: |
+          PACKAGE=/tmp/h11-package/metaphilosophy_h11_next_steps_2026-08-06_v2
+          python "$PACKAGE/apply_h11_owner_approval.py" --repo . --check
+          python "$PACKAGE/apply_h11_owner_approval.py" --repo . --apply
+
+      - name: Normalize Markdown files for repository whitespace checks
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          paths = [
+              Path('ops/next-steps-2026-07-23/h-11-qualified-human-dry-run-owner-gate-2026-08-06.md'),
+              Path('ops/next-steps-2026-07-23/h11-owner-approval-2026-08-06.md'),
+              Path('ops/next-steps-2026-07-23/h11-pre-send-owner-decisions-2026-08-06.md'),
+              Path('ops/next-steps-2026-07-23/h11-recipient-verification-2026-08-06-v1.md'),
+              Path('ops/next-steps-2026-07-23/h11-consent-and-session-brief-2026-08-06.md'),
+              Path('ops/next-steps-2026-07-23/h11-session-runbook-2026-08-06.md'),
+              Path('ops/next-steps-2026-07-23/h11-outreach-drafts-approved-not-sent-2026-08-06.md'),
+          ]
+          for path in paths:
+              text = path.read_text(encoding='utf-8')
+              path.write_text('\n'.join(line.rstrip() for line in text.splitlines()) + '\n', encoding='utf-8')
+          PY
+
+      - name: Validate decisions and authorization boundaries
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          register = json.loads(Path('ops/next-steps-2026-07-23/decision-register.json').read_text())
+          ids = [row['id'] for row in register['decisions']]
+          assert ids.count('D-028') == 1
+          assert ids.count('D-029') == 1
+          assert ids.count('D-030') == 1
+          assert ids.count('D-031') == 1
+          assert ids[-4:] == ['D-028', 'D-029', 'D-030', 'D-031']
+
+          corpus = '\n'.join(
+              path.read_text(errors='ignore')
+              for path in Path('ops/next-steps-2026-07-23').glob('h11-*.md')
+          )
+          for required in [
+              'Ellen Sun personally',
+              'full USD 75',
+              '90 days after H-12 sign-off or final defect closure',
+              'no contact',
+              'not authorized to send',
+          ]:
+              assert required.lower() in corpus.lower(), required
+          for forbidden in [
+              'research_ratings_authorized=true',
+              'email_send_authorized=true',
+              'payment_commitment_authorized=true',
+          ]:
+              assert forbidden not in corpus
+          PY
+          git diff --check
+
+      - name: Run repository verification
+        shell: bash
+        run: |
+          npm ci
+          npm run verify:staging
+          npm test
+          npm run build
+          git diff --check
+
+      - name: Commit the bounded operational records
+        shell: bash
+        env:
+          BRANCH: agent/48-critique-pilot-20260730
+        run: |
+          rm .github/workflows/apply-h11-owner-policy-decisions-once.yml
+          rm .github/h11-owner-policy-package-v2.b64
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Record H-11 payer, stop, and retention decisions"
+          git push origin "HEAD:$BRANCH"
+
+      - name: Update draft PR 17 without changing its draft state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PACKAGE=/tmp/h11-package/metaphilosophy_h11_next_steps_2026-08-06_v2
+          gh pr edit 17 --repo ghuser29384/RL-for-Conceptual-Reasoning --body-file "$PACKAGE/pr17-body-replacement.md"
