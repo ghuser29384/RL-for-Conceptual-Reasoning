@@ -113,7 +113,7 @@ const report = {
     event_file_kind: "temporary isolated FileEventStore",
     event_count: privateExport.chain.events,
     chain_head_hash: privateExport.chain.headHash,
-    verified_chain_length: chain.length,
+    verified_chain_length: chain.events,
     original_invite_id: original.invite.id,
     replacement_invite_id: replacement.invite.id,
     old_token_redeem_denied_after_revocation: true,
