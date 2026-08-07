@@ -104,8 +104,8 @@
       <div class="operator-grid">
         <form id="create-identity-form" class="subpanel">
           <h3>Create controlled identity</h3>
-          <label><span>Display name</span><input name="displayName" required></label>
-          <label><span>Email</span><input name="email" type="email" required></label>
+          <label><span>Pseudonymous display label</span><input name="displayName" maxlength="160" required><small class="field-help">For an H-11 human, use only a slot alias such as “H-11 participant A”. Never enter the person's name.</small></label>
+          <label><span>Contact email</span><input name="email" type="email" required><small class="field-help">For an H-11 human, this address is validated in the request and then discarded; it is never written to the append-only ledger. Keep the identity mapping only in the approved external contact system.</small></label>
           <label><span>Role</span><select name="role" required><option value="rater">Rater</option><option value="adjudicator">Adjudicator</option><option value="operator">Operator</option></select></label>
           <label><span>Purpose</span><select name="purpose" required><option value="synthetic_automation" data-role="rater">Synthetic automation rater</option><option value="h11_human_usability" data-role="rater">H-11 qualified human usability participant</option><option value="synthetic_adjudication" data-role="adjudicator">Synthetic adjudicator</option><option value="controlled_operator" data-role="operator">Controlled operator</option></select><small class="field-help">Synthetic identities must use a non-deliverable .invalid email. Human H-11 identities are access-gated separately.</small></label>
           <button class="primary-button" type="submit">Create identity</button>
@@ -132,7 +132,7 @@
           <div class="button-row"><button id="private-export-button" class="secondary-button" type="button">Download private export</button><button id="public-export-button" class="secondary-button" type="button">Download public-safe export</button></div>
         </div>
       </div>
-      <div class="table-wrap"><table><caption>Controlled identities</caption><thead><tr><th>Name</th><th>Role</th><th>Purpose</th><th>Status</th><th>ID</th></tr></thead><tbody id="identity-table-body"></tbody></table></div>
+      <div class="table-wrap"><table><caption>Controlled identities</caption><thead><tr><th>Alias</th><th>Role</th><th>Purpose</th><th>Contact handling</th><th>Status</th><th>ID</th></tr></thead><tbody id="identity-table-body"></tbody></table></div>
       <div class="table-wrap"><table><caption>Assignments</caption><thead><tr><th>Identity</th><th>Kind</th><th>Status</th><th>Position</th><th>ID</th></tr></thead><tbody id="assignment-table-body"></tbody></table></div>
     </section>
   </template>

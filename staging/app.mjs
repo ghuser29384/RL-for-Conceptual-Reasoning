@@ -578,7 +578,10 @@ function renderOperatorWorkspace() {
   for (const [label, value] of Object.entries(state.workspace.counts)) counts.append(metric(label, value));
   const identityBody = document.querySelector("#identity-table-body");
   for (const identity of state.workspace.identities) {
-    identityBody.insertAdjacentHTML("beforeend", `<tr><td>${escapeHtml(identity.displayName)}</td><td>${escapeHtml(identity.role)}</td><td>${escapeHtml(identity.purpose || "unknown")}</td><td>${escapeHtml(identity.status)}</td><td><code>${escapeHtml(identity.id)}</code></td></tr>`);
+    const contactHandling = identity.purpose === "h11_human_usability"
+      ? (identity.contactRouteValidated && identity.directContactPersisted === false ? "validated transiently · not persisted" : "BLOCKED · identity not minimized")
+      : "controlled synthetic record";
+    identityBody.insertAdjacentHTML("beforeend", `<tr><td>${escapeHtml(identity.displayName)}</td><td>${escapeHtml(identity.role)}</td><td>${escapeHtml(identity.purpose || "unknown")}</td><td>${escapeHtml(contactHandling)}</td><td>${escapeHtml(identity.status)}</td><td><code>${escapeHtml(identity.id)}</code></td></tr>`);
   }
   const assignmentBody = document.querySelector("#assignment-table-body");
   for (const assignment of state.workspace.assignments) {

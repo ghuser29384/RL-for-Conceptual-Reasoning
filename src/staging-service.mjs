@@ -83,6 +83,41 @@ export class StagingWorkflowService {
     if (!normalized) throw serviceError(400, "invalid_email", "A valid email address is required.");
     const normalizedPurpose = normalizeIdentityPurpose({ role, purpose, email: normalized });
     const state = await this.state();
+
+    if (normalizedPurpose === "h11_human_usability") {
+      const alias = normalizeH11ParticipantAlias(displayName);
+      const existingAlias = state.identities.find((identity) => (
+        identity.role === "rater"
+        && effectiveIdentityPurpose(identity) === "h11_human_usability"
+        && identity.displayName === alias
+        && identity.status === "active"
+      ));
+      if (existingAlias) {
+        throw serviceError(409, "h11_alias_conflict", "That H-11 participant alias is already active. Use the existing identity or choose another non-identifying slot alias.", {
+          identityId: existingAlias.id,
+        });
+      }
+      const identity = {
+        id: randomUUID(),
+        role,
+        purpose: normalizedPurpose,
+        displayName: alias,
+        email: null,
+        contactRouteValidated: true,
+        directContactPersisted: false,
+        status: "active",
+      };
+      await this.store.append(event("identity.created", identity.id, actor.identity.id, identity, this.now().toISOString()));
+      await this.audit(actor.identity.id, "identity.created", {
+        identityId: identity.id,
+        role,
+        purpose: normalizedPurpose,
+        contactRouteValidated: true,
+        directContactPersisted: false,
+      });
+      return { identity: publicIdentity(identity), created: true };
+    }
+
     const existing = state.identities.find((identity) => identity.email === normalized && identity.role === role && identity.status === "active");
     if (existing) {
       if (effectiveIdentityPurpose(existing) !== normalizedPurpose) {
@@ -96,10 +131,18 @@ export class StagingWorkflowService {
       purpose: normalizedPurpose,
       displayName: String(displayName ?? "").trim().slice(0, 160) || normalized,
       email: normalized,
+      contactRouteValidated: false,
+      directContactPersisted: true,
       status: "active",
     };
     await this.store.append(event("identity.created", identity.id, actor.identity.id, identity, this.now().toISOString()));
-    await this.audit(actor.identity.id, "identity.created", { identityId: identity.id, role, purpose: normalizedPurpose });
+    await this.audit(actor.identity.id, "identity.created", {
+      identityId: identity.id,
+      role,
+      purpose: normalizedPurpose,
+      contactRouteValidated: false,
+      directContactPersisted: true,
+    });
     return { identity: publicIdentity(identity), created: true };
   }
 
@@ -909,6 +952,14 @@ function normalizeIdentityPurpose({ role, purpose, email }) {
   return value;
 }
 
+function normalizeH11ParticipantAlias(value) {
+  const alias = String(value ?? "").trim();
+  if (!/^H-11 participant [A-Za-z0-9_-]{1,24}$/u.test(alias)) {
+    throw serviceError(400, "h11_pseudonym_required", "Use a non-identifying alias in the form 'H-11 participant A', 'H-11 participant B', or another short slot code. Do not enter a person's name.");
+  }
+  return alias;
+}
+
 function effectiveIdentityPurpose(identity) {
   if (identity?.purpose) return identity.purpose;
   if (identity?.role === "rater" && isSyntheticEmail(identity.email)) return "synthetic_automation";
@@ -1057,9 +1108,10 @@ function validateRaterIdentityPurpose(identity, errorStatus) {
     return purpose;
   }
   if (purpose === "h11_human_usability") {
-    if (isSyntheticEmail(identity.email)) {
-      throw serviceError(errorStatus, "human_identity_deliverable_email_required", "Qualified human H-11 access may not use a synthetic .invalid identity.");
+    if (identity.email || identity.contactRouteValidated !== true || identity.directContactPersisted !== false) {
+      throw serviceError(errorStatus, "h11_identity_not_minimized", "Qualified human H-11 access requires a pseudonymous identity whose deliverable contact route was validated transiently and never persisted in the append-only ledger.");
     }
+    normalizeH11ParticipantAlias(identity.displayName);
     return purpose;
   }
   throw serviceError(errorStatus, "identity_purpose_required", "Unclassified real-email rater access is blocked. Create or repair an explicitly H-11-classified identity before proceeding.");
@@ -1176,7 +1228,8 @@ function activeSessionMatchesCurrentAccessGate(state, session, identity, now) {
   if (identity.role !== "rater") return !session.h11AccessGateId;
   const purpose = effectiveIdentityPurpose(identity);
   if (purpose === "synthetic_automation") return isSyntheticEmail(identity.email) && !session.h11AccessGateId;
-  if (purpose !== "h11_human_usability" || isSyntheticEmail(identity.email)) return false;
+  if (purpose !== "h11_human_usability") return false;
+  if (identity.email || identity.contactRouteValidated !== true || identity.directContactPersisted !== false) return false;
   if (!session.h11AccessGateId || !session.assignmentId || !session.packetHash) return false;
   const assignment = state.assignments.find((candidate) => candidate.id === session.assignmentId);
   if (!assignment || assignment.identityId !== identity.id || assignment.packetHash !== session.packetHash) return false;
@@ -1324,7 +1377,15 @@ function ownedAssignment(state, assignmentId, identityId) {
 }
 
 function publicIdentity(identity) {
-  return identity ? { id: identity.id, role: identity.role, purpose: effectiveIdentityPurpose(identity), displayName: identity.displayName, status: identity.status } : null;
+  return identity ? {
+    id: identity.id,
+    role: identity.role,
+    purpose: effectiveIdentityPurpose(identity),
+    displayName: identity.displayName,
+    contactRouteValidated: identity.contactRouteValidated === true,
+    directContactPersisted: identity.directContactPersisted !== false,
+    status: identity.status,
+  } : null;
 }
 
 function publicInvite(invite) {

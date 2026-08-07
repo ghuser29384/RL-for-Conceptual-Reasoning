@@ -16,10 +16,13 @@ test("H-11 access invitations fail closed until exact screening, consent, sessio
     actorSessionToken: operator.sessionToken,
     role: "rater",
     purpose: "h11_human_usability",
-    displayName: "Qualified H-11 participant",
+    displayName: "H-11 participant A",
     email: "qualified-participant@example.test",
   });
   assert.equal(participant.identity.purpose, "h11_human_usability");
+  assert.equal(participant.identity.displayName, "H-11 participant A");
+  assert.equal(participant.identity.contactRouteValidated, true);
+  assert.equal(participant.identity.directContactPersisted, false);
 
   const assignment = await harness.service.createAssignment({
     actorSessionToken: operator.sessionToken,
@@ -151,7 +154,8 @@ test("H-11 access invitations fail closed until exact screening, consent, sessio
   const publicExport = await harness.service.operatorExport({ actorSessionToken: operator.sessionToken, publicOnly: true });
   assert.equal(privateExport.state.h11AccessGates.length, 3);
   assert.ok(privateExport.state.sessions.find((record) => record.id === session.session.id).revokedAt);
-  assert.ok(JSON.stringify(privateExport).includes("qualified-participant@example.test"));
+  assert.equal(JSON.stringify(privateExport).includes("qualified-participant@example.test"), false);
+  assert.ok(JSON.stringify(privateExport).includes("H-11 participant A"));
   assert.ok(JSON.stringify(privateExport).includes("H11-TEST-OWNER-AUTHORIZATION-0002"));
   assert.equal(JSON.stringify(publicExport).includes("qualified-participant@example.test"), false);
   assert.equal(JSON.stringify(publicExport).includes("H11-TEST-OWNER-AUTHORIZATION-0002"), false);
@@ -175,6 +179,17 @@ test("real-email raters require an explicit H-11 purpose while synthetic automat
     () => harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", purpose: "h11_human_usability", displayName: "Fake human", email: "fake-human@example.invalid" }),
     (error) => error.status === 400 && error.code === "human_identity_deliverable_email_required",
   );
+  await assert.rejects(
+    () => harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", purpose: "h11_human_usability", displayName: "Alex Example", email: "alex@example.test" }),
+    (error) => error.status === 400 && error.code === "h11_pseudonym_required",
+  );
+  const minimizedHuman = await harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", purpose: "h11_human_usability", displayName: "H-11 participant privacy-test", email: "privacy-test@example.test" });
+  const state = await harness.service.state();
+  const storedHuman = state.identities.find((identity) => identity.id === minimizedHuman.identity.id);
+  assert.equal(storedHuman.email, null);
+  assert.equal(storedHuman.contactRouteValidated, true);
+  assert.equal(storedHuman.directContactPersisted, false);
+  assert.equal(JSON.stringify(await harness.store.loadEvents()).includes("privacy-test@example.test"), false);
   const synthetic = await harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", displayName: "Synthetic", email: "synthetic@example.invalid" });
   assert.equal(synthetic.identity.purpose, "synthetic_automation");
   const syntheticInvite = await harness.service.createInvite({ actorSessionToken: operator.sessionToken, identityId: synthetic.identity.id, expiresInHours: 24 });

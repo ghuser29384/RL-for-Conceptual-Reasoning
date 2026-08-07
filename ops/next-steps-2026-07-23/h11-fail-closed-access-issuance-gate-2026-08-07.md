@@ -63,3 +63,11 @@ V2 adds four controls:
 4. explicit revocation of any still-active participant session when a new gate supersedes the prior gate.
 
 Replacement invitation issuance now excludes only the invitation being replaced and rejects the operation if another unused current-gate invitation or any active participant session already exists. An operator who needs to recover from a lost authenticated browser must supersede the gate, thereby invalidating the prior session, before issuing a fresh token.
+
+## Direct-identifier minimization
+
+Qualified-human H-11 identities no longer persist the participant's name or contact email in the append-only staging ledger. The operator must use a slot pseudonym such as `H-11 participant A`; a personal name is rejected. The contact email is used transiently only to validate that the route is deliverable and non-synthetic, then discarded before the `identity.created` event is formed.
+
+The persisted identity contains only the opaque identity ID, constrained participant alias, role, H-11 purpose, `contactRouteValidated=true`, `directContactPersisted=false`, and status. Private exports and raw event readback therefore do not contain the submitted contact email. The approved external contact system remains the sole identity-to-contact mapping and can be cleaned under the H-11 retention policy without requiring mutation of the append-only integrity ledger.
+
+H-11 invitation issuance and session authentication fail closed if a human identity contains a stored email, lacks transient-route validation evidence, or uses an unconstrained/non-pseudonymous label.
