@@ -506,3 +506,38 @@
     width: 100%;
   }
 }
+
+.access-gate-panel {
+  border-color: #b6c7d8;
+  background:
+    linear-gradient(145deg, rgba(244, 248, 252, 0.98), rgba(255, 255, 255, 0.98)),
+    var(--paper);
+}
+
+.access-gate-card {
+  margin-top: 16px;
+}
+
+.access-gate-form {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.access-gate-summary {
+  margin-bottom: 18px;
+}
+
+.access-gate-summary dl > div {
+  grid-template-columns: minmax(125px, 0.24fr) minmax(0, 1fr);
+}
+
+.h11-access-gate-form code,
+.access-gate-summary code {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .access-gate-card {
+    padding: 16px;
+  }
+}

@@ -22,15 +22,27 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   const csrf = operator.csrfToken;
   const headers = { "x-staging-csrf": csrf, "sec-fetch-site": "same-origin" };
 
-  const raterA = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater A", email: "browser-a@staging.metaphilosophy.invalid" } });
-  const raterB = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater B", email: "browser-b@staging.metaphilosophy.invalid" } });
-  const adjudicator = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "adjudicator", displayName: "Synthetic browser adjudicator", email: "browser-adjudicator@staging.metaphilosophy.invalid" } });
+  const raterA = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", purpose: "h11_human_usability", displayName: "Synthetic browser rater A", email: "browser-a@example.test" } });
+  const raterB = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", purpose: "h11_human_usability", displayName: "Synthetic browser rater B", email: "browser-b@example.test" } });
+  const adjudicator = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "adjudicator", purpose: "synthetic_adjudication", displayName: "Synthetic browser adjudicator", email: "browser-adjudicator@staging.metaphilosophy.invalid" } });
 
-  const inviteA = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterA.identity.id, expiresInHours: 24 } });
-  const inviteB = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterB.identity.id, expiresInHours: 24 } });
-  const inviteAdjudicator = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: adjudicator.identity.id, expiresInHours: 24 } });
   const assignmentA = await api(operatorRequest, "assignment.create", { method: "POST", headers, data: { identityId: raterA.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
   const assignmentB = await api(operatorRequest, "assignment.create", { method: "POST", headers, data: { identityId: raterB.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
+
+  const blockedInvite = await operatorRequest.post("/api/staging?action=invite.create", {
+    headers,
+    data: { identityId: raterA.identity.id, expiresInHours: 2 },
+  });
+  expect(blockedInvite.status()).toBe(409);
+  expect((await blockedInvite.json()).error.code).toBe("h11_access_gate_required");
+
+  const gateA = await api(operatorRequest, "h11.access.gate.record", { method: "POST", headers, data: { identityId: raterA.identity.id, assignmentId: assignmentA.assignment.id, payload: makeH11AccessGatePayload("A") } });
+  const gateB = await api(operatorRequest, "h11.access.gate.record", { method: "POST", headers, data: { identityId: raterB.identity.id, assignmentId: assignmentB.assignment.id, payload: makeH11AccessGatePayload("B") } });
+  const inviteA = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterA.identity.id, expiresInHours: 2 } });
+  const inviteB = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterB.identity.id, expiresInHours: 2 } });
+  const inviteAdjudicator = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: adjudicator.identity.id, expiresInHours: 24 } });
+  expect(inviteA.invite.h11AccessGateId).toBe(gateA.record.id);
+  expect(inviteB.invite.h11AccessGateId).toBe(gateB.record.id);
 
   setup = {
     operator: { csrf, headers },
@@ -137,6 +149,9 @@ test("complete synthetic human workflow preserves initial ratings across correct
   const operatorPage = await operatorContext.newPage();
   await operatorPage.goto("/staging/");
   await expect(operatorPage.getByRole("heading", { name: "Staging operator workspace" })).toBeVisible();
+  await expect(operatorPage.locator('[data-queue="access-preflight"]')).toContainText("Synthetic browser rater A");
+  await expect(operatorPage.locator('[data-queue="access-preflight"]')).toContainText("Synthetic browser rater B");
+  await expect(operatorPage.locator('[data-queue="access-preflight"]')).toContainText("Access preflight ready");
   await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Synthetic browser rater A");
   await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Synthetic browser rater B");
   await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Consent recorded");
@@ -192,6 +207,8 @@ test("complete synthetic human workflow preserves initial ratings across correct
   expect(privateExport.state.assignments.filter((assignment) => assignment.kind === "rerating")).toHaveLength(1);
   expect(privateExport.state.assignments.find((assignment) => assignment.kind === "rerating").predecessorAssignmentId).toBe(setup.raterA.assignmentId);
   expect(privateExport.state.assignments.find((assignment) => assignment.id === setup.raterB.assignmentId).status).toBe("withdrawn");
+  expect(privateExport.state.h11AccessGates).toHaveLength(2);
+  expect(privateExport.state.h11AccessGates.every((record) => record.version === "H11-ACCESS-GATE-2026-08-07-V1")).toBe(true);
   expect(privateExport.state.participantEvidence).toHaveLength(4);
   expect(privateExport.state.participantEvidence.filter((record) => record.kind === "consent")).toHaveLength(2);
   expect(privateExport.state.participantEvidence.filter((record) => record.kind === "debrief")).toHaveLength(2);
@@ -205,6 +222,8 @@ test("complete synthetic human workflow preserves initial ratings across correct
 
   const publicExport = await api(operatorRequest, "export.public");
   expect(JSON.stringify(publicExport)).not.toContain("@staging.metaphilosophy.invalid");
+  expect(JSON.stringify(publicExport)).not.toContain("browser-a@example.test");
+  expect(JSON.stringify(publicExport)).not.toContain("H11-E2E-OWNER-AUTHORIZATION");
   expect(JSON.stringify(publicExport)).not.toContain("Centrality measures how much the attacked claim matters");
   expect(publicExport.counts.ratings).toBe(12);
   expect(publicExport.snapshots).toHaveLength(3);
@@ -215,6 +234,58 @@ test("complete synthetic human workflow preserves initial ratings across correct
   await operatorContext.close();
 });
 
+
+
+function makeH11AccessGatePayload(recipientSlot) {
+  const now = Date.now();
+  return {
+    recipientSlot,
+    screening: {
+      identityConfirmed: true,
+      professionalRouteConfirmed: true,
+      exactSyntheticItemExposure: "no",
+      stagingInterfaceExposure: "no",
+      conflictStatus: "none_declared",
+      conflictNotes: "Synthetic rendered-browser rehearsal only.",
+      countryOfTaxResidence: "United States",
+      countryOfWorkForSession: "United States",
+      sanctionsScreening: "pass",
+      honorariumEligibility: "pass",
+      preferredPaymentRail: "wise",
+      accessibilityOrDeviceNeeds: "No additional needs in the synthetic browser rehearsal.",
+      operatorCoverageAvailable: true,
+      screeningOutcome: "pass",
+    },
+    finalConsent: {
+      scopeAndDataTermsRead: true,
+      syntheticScoresExcluded: true,
+      auditTrailAndNotesConsented: true,
+      voluntaryAndMayStop: true,
+      confirmationReference: `H11-E2E-CONSENT-${recipientSlot}-0001`,
+    },
+    session: {
+      startAt: new Date(now - 5 * 60 * 1000).toISOString(),
+      endAt: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
+      timeZone: "UTC",
+      supportRouteConfirmed: true,
+    },
+    externalPreflight: {
+      releaseSha: "b".repeat(40),
+      deploymentId: `dpl_h11browserdeployment${recipientSlot}000001`,
+      schemaVersion: 4,
+      syntheticOnlyPurposeConfirmed: true,
+      researchRatingsAuthorizedFalseConfirmed: true,
+      noOpenP0P1Defect: true,
+      shareLinkCreatedWithin23Hours: true,
+      signedOutIncognitoJourneyPassed: true,
+      noOperatorOrCrossIdentityExposure: true,
+      controlIdentityJourneyPassed: true,
+      shareLinkExpiresAt: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
+    },
+    ownerAuthorizationReference: `H11-E2E-OWNER-AUTHORIZATION-${recipientSlot}-0001`,
+    notes: "Synthetic rendered-browser evidence only; no human participant or research rating.",
+  };
+}
 
 async function completeSyntheticConsent(page) {
   const form = page.locator(".participant-consent-form").first();

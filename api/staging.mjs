@@ -16,6 +16,7 @@ const MUTATING_ACTIONS = new Set([
   "invite.revoke",
   "invite.replace",
   "assignment.create",
+  "h11.access.gate.record",
   "draft.save",
   "assignment.submit",
   "participant.evidence.record",
@@ -121,6 +122,10 @@ export function createStagingApiHandler(options = {}) {
         case "assignment.create":
           requireMethod(req, "POST");
           result = await runtime.service.createAssignment({ actorSessionToken: sessionToken, ...body });
+          break;
+        case "h11.access.gate.record":
+          requireMethod(req, "POST");
+          result = await runtime.service.recordH11AccessGate({ actorSessionToken: sessionToken, ...body });
           break;
         case "draft.save":
           requireMethod(req, "PUT");

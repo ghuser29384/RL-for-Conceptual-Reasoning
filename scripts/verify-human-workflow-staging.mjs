@@ -23,6 +23,7 @@ const requiredFiles = [
   "scripts/smoke-staging-postgres.mjs",
   "scripts/run-human-workflow-support-tabletop.mjs",
   "e2e/human-workflow-staging.spec.mjs",
+  "test/h11-access-gate-contract.test.mjs",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v2.sql",
 ];
@@ -42,6 +43,7 @@ assert.match(contents["api/staging.mjs"], /x-staging-csrf/i);
 assert.match(contents["api/staging.mjs"], /staging_database_unconfigured/);
 assert.match(contents["api/staging.mjs"], /researchRatingsAuthorized: false/);
 assert.match(contents["api/staging.mjs"], /participant\.evidence\.record/);
+assert.match(contents["api/staging.mjs"], /h11\.access\.gate\.record/);
 assert.doesNotMatch(contents["api/staging.mjs"], /Access-Control-Allow-Origin[^\n]*\*/);
 
 assert.match(contents["src/staging-event-store.mjs"], /appendFile/);
@@ -63,6 +65,10 @@ assert.match(contents["src/staging-service.mjs"], /assessabilityDisagreement/);
 assert.match(contents["src/staging-service.mjs"], /participant\.evidence\.recorded/);
 assert.match(contents["src/staging-service.mjs"], /H11-CONSENT-2026-08-07-V1/);
 assert.match(contents["src/staging-service.mjs"], /H11-DEBRIEF-2026-08-07-V1/);
+assert.match(contents["src/staging-service.mjs"], /H11-ACCESS-GATE-2026-08-07-V1/);
+assert.match(contents["src/staging-service.mjs"], /h11\.access\.gate\.recorded/);
+assert.match(contents["src/staging-service.mjs"], /h11_access_gate_required/);
+assert.match(contents["src/staging-service.mjs"], /h11_access_gate_superseded/);
 
 assert.match(contents["staging/index.html"], /Synthetic rehearsal only/);
 assert.match(contents["staging/index.html"], /Seven LMCA dimensions/);
@@ -86,6 +92,9 @@ assert.match(contents["staging/app.mjs"], /Synthetic-session consent/);
 assert.match(contents["staging/app.mjs"], /Record consent and open synthetic assignment/);
 assert.match(contents["staging/app.mjs"], /Submit synthetic-session debrief/);
 assert.match(contents["staging/app.mjs"], /Consent and debrief records/);
+assert.match(contents["staging/app.mjs"], /H-11 access issuance gate/);
+assert.match(contents["staging/app.mjs"], /Record immutable H-11 access gate/);
+assert.match(contents["staging/app.mjs"], /Still no access issuance/);
 assert.match(contents["staging/participant-readiness.css"], /participant-evidence-panel/);
 
 assert.match(contents["src/staging-server.mjs"], /Content-Security-Policy/);
@@ -128,6 +137,10 @@ assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /snapshot\.reratin
 assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /completeSyntheticConsent/);
 assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /completeSyntheticDebrief/);
 assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /participantEvidence/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /h11AccessGates/);
+assert.match(contents["e2e/human-workflow-staging.spec.mjs"], /h11_access_gate_required/);
+assert.match(contents["test/h11-access-gate-contract.test.mjs"], /H-11 access invitations fail closed/);
+assert.match(contents["test/h11-access-gate-contract.test.mjs"], /h11_access_gate_superseded/);
 
 for (const schemaPath of [
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",

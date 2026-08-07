@@ -578,7 +578,7 @@ function renderOperatorWorkspace() {
   for (const [label, value] of Object.entries(state.workspace.counts)) counts.append(metric(label, value));
   const identityBody = document.querySelector("#identity-table-body");
   for (const identity of state.workspace.identities) {
-    identityBody.insertAdjacentHTML("beforeend", `<tr><td>${escapeHtml(identity.displayName)}</td><td>${escapeHtml(identity.role)}</td><td>${escapeHtml(identity.status)}</td><td><code>${escapeHtml(identity.id)}</code></td></tr>`);
+    identityBody.insertAdjacentHTML("beforeend", `<tr><td>${escapeHtml(identity.displayName)}</td><td>${escapeHtml(identity.role)}</td><td>${escapeHtml(identity.purpose || "unknown")}</td><td>${escapeHtml(identity.status)}</td><td><code>${escapeHtml(identity.id)}</code></td></tr>`);
   }
   const assignmentBody = document.querySelector("#assignment-table-body");
   for (const assignment of state.workspace.assignments) {
@@ -594,7 +594,23 @@ function renderOperatorWorkspace() {
     }
   }
 
-  document.querySelector("#create-identity-form").addEventListener("submit", operatorFormHandler("identity.create", (form) => Object.fromEntries(new FormData(form)), loadWorkspace));
+  const identityForm = document.querySelector("#create-identity-form");
+  const identityRole = identityForm.elements.namedItem("role");
+  const identityPurpose = identityForm.elements.namedItem("purpose");
+  const syncIdentityPurpose = () => {
+    const role = identityRole.value;
+    let selectedStillAllowed = false;
+    for (const option of identityPurpose.options) {
+      const allowed = option.dataset.role === role;
+      option.hidden = !allowed;
+      option.disabled = !allowed;
+      if (allowed && option.selected) selectedStillAllowed = true;
+    }
+    if (!selectedStillAllowed) identityPurpose.value = [...identityPurpose.options].find((option) => !option.disabled)?.value || "";
+  };
+  identityRole.addEventListener("change", syncIdentityPurpose);
+  syncIdentityPurpose();
+  identityForm.addEventListener("submit", operatorFormHandler("identity.create", (form) => Object.fromEntries(new FormData(form)), loadWorkspace));
   document.querySelector("#create-invite-form").addEventListener("submit", operatorFormHandler("invite.create", (form) => {
     const data = Object.fromEntries(new FormData(form));
     data.expiresInHours = Number(data.expiresInHours);
@@ -607,12 +623,243 @@ function renderOperatorWorkspace() {
   document.querySelector("#private-export-button").addEventListener("click", () => downloadExport("export.private", "metaphilosophy-staging-private.json"));
   document.querySelector("#public-export-button").addEventListener("click", () => downloadExport("export.public", "metaphilosophy-staging-public.json"));
 
+  renderOperatorAccessGate();
   renderOperatorParticipantEvidence();
   renderOperatorCorrectionQueue();
   renderOperatorWithdrawalQueue();
   renderOperatorAdjudicationQueue();
 }
 
+
+
+function renderOperatorAccessGate() {
+  const panel = document.createElement("section");
+  panel.className = "panel operator-queue access-gate-panel";
+  panel.dataset.queue = "access-preflight";
+  panel.innerHTML = `
+    <p class="eyebrow">H-11 access issuance gate</p>
+    <h2>Screening, final consent, and protected-access preflight</h2>
+    <p class="muted">A human H-11 invitation is rejected by the service until an immutable record below passes every recipient-screening, final-consent, exact-session, external-browser, release, and owner-authorization gate. This record never issues access or authorizes research ratings by itself.</p>`;
+
+  const identities = (state.workspace.identities ?? []).filter((identity) => identity.role === "rater" && identity.purpose === "h11_human_usability");
+  if (!identities.length) {
+    panel.insertAdjacentHTML("beforeend", '<p class="muted">No H-11 human usability identity exists. Synthetic automation identities do not use this gate.</p>');
+  }
+
+  for (const identity of identities) {
+    const assignment = (state.workspace.assignments ?? [])
+      .filter((candidate) => candidate.identityId === identity.id && candidate.kind === "initial")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+    const records = (state.workspace.h11AccessGates ?? [])
+      .filter((record) => record.identityId === identity.id && (!assignment || record.assignmentId === assignment.id))
+      .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+    const latest = records[0] ?? null;
+    const ready = Boolean(latest && assignment && latest.packetHash === assignment.packetHash && new Date(latest.validUntil) > new Date());
+    const card = document.createElement("article");
+    card.className = "subpanel access-gate-card";
+    card.dataset.identityId = identity.id;
+    card.innerHTML = `
+      <div class="operator-evidence-heading">
+        <div>
+          <p class="eyebrow">${ready ? "ready for bounded invite issuance" : "blocked"}</p>
+          <h3>${escapeHtml(identity.displayName)}</h3>
+          <p>${assignment ? `Initial assignment <code>${escapeHtml(assignment.id)}</code> · ${escapeHtml(assignment.status)}` : "Create the exact initial synthetic assignment before recording this gate."}</p>
+        </div>
+        <span class="evidence-chip ${ready ? "is-complete" : ""}">${ready ? "Access preflight ready" : "Invitation blocked"}</span>
+      </div>`;
+
+    if (latest) {
+      const summary = document.createElement("details");
+      summary.className = "technical-integrity access-gate-summary";
+      summary.innerHTML = `
+        <summary>Latest immutable H-11 access-gate record</summary>
+        <dl>
+          <div><dt>Version</dt><dd>${escapeHtml(latest.version)}</dd></div>
+          <div><dt>Recorded</dt><dd>${escapeHtml(latest.recordedAt)}</dd></div>
+          <div><dt>Valid until</dt><dd>${escapeHtml(latest.validUntil)}</dd></div>
+          <div><dt>Release</dt><dd><code>${escapeHtml(latest.payload.externalPreflight.releaseSha)}</code></dd></div>
+          <div><dt>Deployment</dt><dd><code>${escapeHtml(latest.payload.externalPreflight.deploymentId)}</code></dd></div>
+          <div><dt>Session</dt><dd>${escapeHtml(latest.payload.session.startAt)} → ${escapeHtml(latest.payload.session.endAt)} · ${escapeHtml(latest.payload.session.timeZone)}</dd></div>
+          <div><dt>Screening</dt><dd>${escapeHtml(latest.payload.screening.screeningOutcome)} · conflicts ${escapeHtml(latest.payload.screening.conflictStatus)} · sanctions ${escapeHtml(latest.payload.screening.sanctionsScreening)} · honorarium ${escapeHtml(latest.payload.screening.honorariumEligibility)}</dd></div>
+          <div><dt>Owner reference</dt><dd>${escapeHtml(latest.payload.ownerAuthorizationReference)}</dd></div>
+        </dl>`;
+      card.append(summary);
+    }
+
+    if (!assignment || assignment.status !== "assigned") {
+      card.insertAdjacentHTML("beforeend", '<p class="status-banner"><strong>Gate unavailable.</strong><span>An open initial synthetic assignment is required.</span></p>');
+      panel.append(card);
+      continue;
+    }
+
+    const p = latest?.payload ?? {};
+    const screening = p.screening ?? {};
+    const consent = p.finalConsent ?? {};
+    const session = p.session ?? {};
+    const external = p.externalPreflight ?? {};
+    const startDefault = session.startAt ? toLocalDateTimeValue(session.startAt) : toLocalDateTimeValue(new Date(Date.now() + 5 * 60 * 1000));
+    const endDefault = session.endAt ? toLocalDateTimeValue(session.endAt) : toLocalDateTimeValue(new Date(Date.now() + 3 * 60 * 60 * 1000));
+    const shareExpiryDefault = external.shareLinkExpiresAt ? toLocalDateTimeValue(external.shareLinkExpiresAt) : toLocalDateTimeValue(new Date(Date.now() + 4 * 60 * 60 * 1000));
+    const form = document.createElement("form");
+    form.className = "evidence-form h11-access-gate-form";
+    form.innerHTML = `
+      <fieldset>
+        <legend>Recipient screening</legend>
+        <div class="evidence-scale-grid">
+          <label><span>Recipient slot</span><select name="recipientSlot" required>${selectOptions([["A", "A"], ["B", "B"], ["fallback", "Fallback"]], p.recipientSlot || "A")}</select></label>
+          <label><span>Exact synthetic-item exposure</span><select name="exactSyntheticItemExposure" required>${selectOptions([["no", "No"], ["yes", "Yes"], ["uncertain", "Uncertain"]], screening.exactSyntheticItemExposure || "no")}</select></label>
+          <label><span>Staging-interface exposure</span><select name="stagingInterfaceExposure" required>${selectOptions([["no", "No"], ["yes", "Yes"], ["uncertain", "Uncertain"]], screening.stagingInterfaceExposure || "no")}</select></label>
+          <label><span>Conflict / institutional restriction</span><select name="conflictStatus" required>${selectOptions([["none_declared", "None declared / cleared"], ["review_required", "Review required"], ["disqualifying", "Disqualifying"]], screening.conflictStatus || "none_declared")}</select></label>
+          <label><span>Country of tax residence</span><input name="countryOfTaxResidence" value="${escapeHtml(screening.countryOfTaxResidence || "")}" required></label>
+          <label><span>Country of work for session</span><input name="countryOfWorkForSession" value="${escapeHtml(screening.countryOfWorkForSession || "")}" required></label>
+          <label><span>Sanctions screening</span><select name="sanctionsScreening" required>${selectOptions([["pass", "Pass"], ["review_required", "Review required"], ["fail", "Fail"]], screening.sanctionsScreening || "pass")}</select></label>
+          <label><span>Honorarium eligibility</span><select name="honorariumEligibility" required>${selectOptions([["pass", "Pass"], ["review_required", "Review required"], ["fail", "Fail"]], screening.honorariumEligibility || "pass")}</select></label>
+          <label><span>Preferred payment rail</span><select name="preferredPaymentRail" required>${selectOptions([["wise", "Wise"], ["paypal", "PayPal"], ["us_bank_transfer", "Supported U.S. bank transfer"], ["waive", "Waive honorarium"], ["other", "Other / separately reviewed"]], screening.preferredPaymentRail || "wise")}</select></label>
+          <label><span>Screening outcome</span><select name="screeningOutcome" required>${selectOptions([["pass", "Pass"], ["pause", "Pause"], ["decline", "Decline"]], screening.screeningOutcome || "pass")}</select></label>
+        </div>
+        <label class="check-row"><input name="identityConfirmed" type="checkbox" ${checked(screening.identityConfirmed)} required><span>Identity confirmed.</span></label>
+        <label class="check-row"><input name="professionalRouteConfirmed" type="checkbox" ${checked(screening.professionalRouteConfirmed)} required><span>Professional contact route confirmed.</span></label>
+        <label class="check-row"><input name="operatorCoverageAvailable" type="checkbox" ${checked(screening.operatorCoverageAvailable)} required><span>Live operator coverage is available for the proposed window.</span></label>
+        <label class="full-width"><span>Minimum necessary conflict notes</span><textarea name="conflictNotes" rows="3" maxlength="2000">${escapeHtml(screening.conflictNotes || "")}</textarea></label>
+        <label class="full-width"><span>Accessibility, browser, or device needs</span><textarea name="accessibilityOrDeviceNeeds" rows="3" maxlength="2000">${escapeHtml(screening.accessibilityOrDeviceNeeds || "")}</textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Final consent and staffed session window</legend>
+        <label class="check-row"><input name="scopeAndDataTermsRead" type="checkbox" ${checked(consent.scopeAndDataTermsRead)} required><span>Participant confirmed that the H-11 scope and data terms were read.</span></label>
+        <label class="check-row"><input name="syntheticScoresExcluded" type="checkbox" ${checked(consent.syntheticScoresExcluded)} required><span>Participant confirmed that synthetic scores are excluded from research use.</span></label>
+        <label class="check-row"><input name="auditTrailAndNotesConsented" type="checkbox" ${checked(consent.auditTrailAndNotesConsented)} required><span>Participant consented to the private audit trail and de-identified internal usability notes.</span></label>
+        <label class="check-row"><input name="voluntaryAndMayStop" type="checkbox" ${checked(consent.voluntaryAndMayStop)} required><span>Participant confirmed that participation is voluntary and may be stopped.</span></label>
+        <label class="full-width"><span>Private consent-confirmation reference</span><input name="confirmationReference" value="${escapeHtml(consent.confirmationReference || "")}" minlength="12" maxlength="240" required><small class="field-help">Use a private thread/message reference; do not paste the participant's full message or credentials.</small></label>
+        <div class="evidence-scale-grid">
+          <label><span>Session start</span><input name="startAt" type="datetime-local" value="${escapeHtml(startDefault)}" required></label>
+          <label><span>Session end</span><input name="endAt" type="datetime-local" value="${escapeHtml(endDefault)}" required></label>
+          <label><span>Time zone</span><input name="timeZone" value="${escapeHtml(session.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}" required></label>
+        </div>
+        <label class="check-row"><input name="supportRouteConfirmed" type="checkbox" ${checked(session.supportRouteConfirmed)} required><span>Private live support route confirmed for the session.</span></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Exact protected external-access preflight</legend>
+        <div class="evidence-scale-grid">
+          <label><span>Accepted release SHA</span><input name="releaseSha" value="${escapeHtml(external.releaseSha || "")}" pattern="[a-fA-F0-9]{40}" required></label>
+          <label><span>Exact Vercel deployment ID</span><input name="deploymentId" value="${escapeHtml(external.deploymentId || "")}" pattern="dpl_[A-Za-z0-9]{12,156}" required></label>
+          <label><span>Schema version</span><input name="schemaVersion" type="number" min="4" max="4" value="4" readonly required></label>
+          <label><span>Protected share-link expiry</span><input name="shareLinkExpiresAt" type="datetime-local" value="${escapeHtml(shareExpiryDefault)}" required></label>
+        </div>
+        <label class="check-row"><input name="syntheticOnlyPurposeConfirmed" type="checkbox" ${checked(external.syntheticOnlyPurposeConfirmed)} required><span>Exact release purpose is <code>synthetic_rehearsal_only</code>.</span></label>
+        <label class="check-row"><input name="researchRatingsAuthorizedFalseConfirmed" type="checkbox" ${checked(external.researchRatingsAuthorizedFalseConfirmed)} required><span>Exact release reports <code>research_ratings_authorized=false</code>.</span></label>
+        <label class="check-row"><input name="noOpenP0P1Defect" type="checkbox" ${checked(external.noOpenP0P1Defect)} required><span>No P0/P1 defect, integrity alert, or incident is open.</span></label>
+        <label class="check-row"><input name="shareLinkCreatedWithin23Hours" type="checkbox" ${checked(external.shareLinkCreatedWithin23Hours)} required><span>Fresh protected share URL was created no more than 23 hours before the session.</span></label>
+        <label class="check-row"><input name="signedOutIncognitoJourneyPassed" type="checkbox" ${checked(external.signedOutIncognitoJourneyPassed)} required><span>Normal signed-out/incognito external browser journey passed.</span></label>
+        <label class="check-row"><input name="noOperatorOrCrossIdentityExposure" type="checkbox" ${checked(external.noOperatorOrCrossIdentityExposure)} required><span>External path exposed no operator session, other identity, assignment, or reusable application token.</span></label>
+        <label class="check-row"><input name="controlIdentityJourneyPassed" type="checkbox" ${checked(external.controlIdentityJourneyPassed)} required><span>Combined external journey passed with a separate synthetic control identity.</span></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Separate owner authorization</legend>
+        <label><span>Owner access-authorization reference</span><input name="ownerAuthorizationReference" value="${escapeHtml(p.ownerAuthorizationReference || "")}" minlength="12" maxlength="240" required><small class="field-help">This must refer to a separate owner decision authorizing access issuance for this recipient and exact window.</small></label>
+        <label class="full-width"><span>Minimum necessary private notes</span><textarea name="notes" rows="3" maxlength="4000">${escapeHtml(p.notes || "")}</textarea></label>
+      </fieldset>
+
+      <div class="support-callout">
+        <strong>Still no access issuance</strong>
+        <span>Submitting this form records an immutable private gate. Use the separate invitation control only after the record returns ready. Never store the share URL or application token here.</span>
+      </div>
+      <div class="evidence-actions">
+        <button class="primary-button" type="submit">Record immutable H-11 access gate</button>
+        <p class="form-status" role="status"></p>
+      </div>`;
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const status = form.querySelector(".form-status");
+      const submit = form.querySelector('button[type="submit"]');
+      const bool = (name) => data.get(name) === "on";
+      submit.disabled = true;
+      status.textContent = "Recording H-11 access gate…";
+      status.className = "form-status";
+      try {
+        const payload = {
+          recipientSlot: data.get("recipientSlot"),
+          screening: {
+            identityConfirmed: bool("identityConfirmed"),
+            professionalRouteConfirmed: bool("professionalRouteConfirmed"),
+            exactSyntheticItemExposure: data.get("exactSyntheticItemExposure"),
+            stagingInterfaceExposure: data.get("stagingInterfaceExposure"),
+            conflictStatus: data.get("conflictStatus"),
+            conflictNotes: data.get("conflictNotes") || "",
+            countryOfTaxResidence: data.get("countryOfTaxResidence") || "",
+            countryOfWorkForSession: data.get("countryOfWorkForSession") || "",
+            sanctionsScreening: data.get("sanctionsScreening"),
+            honorariumEligibility: data.get("honorariumEligibility"),
+            preferredPaymentRail: data.get("preferredPaymentRail"),
+            accessibilityOrDeviceNeeds: data.get("accessibilityOrDeviceNeeds") || "",
+            operatorCoverageAvailable: bool("operatorCoverageAvailable"),
+            screeningOutcome: data.get("screeningOutcome"),
+          },
+          finalConsent: {
+            scopeAndDataTermsRead: bool("scopeAndDataTermsRead"),
+            syntheticScoresExcluded: bool("syntheticScoresExcluded"),
+            auditTrailAndNotesConsented: bool("auditTrailAndNotesConsented"),
+            voluntaryAndMayStop: bool("voluntaryAndMayStop"),
+            confirmationReference: data.get("confirmationReference") || "",
+          },
+          session: {
+            startAt: new Date(data.get("startAt")).toISOString(),
+            endAt: new Date(data.get("endAt")).toISOString(),
+            timeZone: data.get("timeZone") || "",
+            supportRouteConfirmed: bool("supportRouteConfirmed"),
+          },
+          externalPreflight: {
+            releaseSha: data.get("releaseSha") || "",
+            deploymentId: data.get("deploymentId") || "",
+            schemaVersion: Number(data.get("schemaVersion")),
+            syntheticOnlyPurposeConfirmed: bool("syntheticOnlyPurposeConfirmed"),
+            researchRatingsAuthorizedFalseConfirmed: bool("researchRatingsAuthorizedFalseConfirmed"),
+            noOpenP0P1Defect: bool("noOpenP0P1Defect"),
+            shareLinkCreatedWithin23Hours: bool("shareLinkCreatedWithin23Hours"),
+            signedOutIncognitoJourneyPassed: bool("signedOutIncognitoJourneyPassed"),
+            noOperatorOrCrossIdentityExposure: bool("noOperatorOrCrossIdentityExposure"),
+            controlIdentityJourneyPassed: bool("controlIdentityJourneyPassed"),
+            shareLinkExpiresAt: new Date(data.get("shareLinkExpiresAt")).toISOString(),
+          },
+          ownerAuthorizationReference: data.get("ownerAuthorizationReference") || "",
+          notes: data.get("notes") || "",
+        };
+        await api("h11.access.gate.record", {
+          method: "POST",
+          body: { identityId: identity.id, assignmentId: assignment.id, payload },
+        });
+        status.textContent = "H-11 access gate recorded.";
+        await loadWorkspace();
+      } catch (error) {
+        status.textContent = error.message;
+        status.className = "form-status error-message";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+    card.append(form);
+    panel.append(card);
+  }
+  elements.workspaceContent.append(panel);
+}
+
+function checked(value) {
+  return value === true ? "checked" : "";
+}
+
+function selectOptions(options, selectedValue) {
+  return options.map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
+}
+
+function toLocalDateTimeValue(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
 
 function renderOperatorParticipantEvidence() {
   const panel = document.createElement("section");
