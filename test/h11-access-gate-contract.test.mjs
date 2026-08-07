@@ -43,7 +43,29 @@ test("H-11 access invitations fail closed until exact screening, consent, sessio
     (error) => error.status === 400 && error.code === "h11_access_gate_incomplete",
   );
 
+  const staleLinkPayload = makeAccessGate(harness.now());
+  staleLinkPayload.externalPreflight.shareLinkCreatedAt = new Date(harness.now().getTime() - 24 * 60 * 60 * 1000).toISOString();
+  await assert.rejects(
+    () => harness.service.recordH11AccessGate({
+      actorSessionToken: operator.sessionToken,
+      identityId: participant.identity.id,
+      assignmentId: assignment.assignment.id,
+      payload: staleLinkPayload,
+    }),
+    (error) => error.status === 409 && error.code === "h11_share_link_stale",
+  );
+
   const firstPayload = makeAccessGate(harness.now());
+  await assert.rejects(
+    () => harness.service.recordH11AccessGate({
+      actorSessionToken: operator.sessionToken,
+      identityId: participant.identity.id,
+      assignmentId: assignment.assignment.id,
+      payload: firstPayload,
+      expectedReleaseSha: "c".repeat(40),
+    }),
+    (error) => error.status === 409 && error.code === "h11_release_sha_mismatch",
+  );
   const first = await harness.service.recordH11AccessGate({
     actorSessionToken: operator.sessionToken,
     identityId: participant.identity.id,
@@ -92,17 +114,43 @@ test("H-11 access invitations fail closed until exact screening, consent, sessio
     inviteId: invite.invite.id,
     expiresInHours: 2,
   });
+  await assert.rejects(
+    () => harness.service.replaceInvite({ actorSessionToken: operator.sessionToken, inviteId: invite.invite.id, expiresInHours: 2 }),
+    (error) => error.status === 409 && error.code === "h11_active_invite_exists",
+  );
   const session = await harness.service.redeemInvite({ token: replacement.token });
   assert.equal(session.identity.id, participant.identity.id);
   assert.equal(session.session.expiresAt, replacement.invite.expiresAt);
   assert.ok(new Date(session.session.expiresAt) <= new Date(superseding.record.payload.session.endAt));
   assert.ok(new Date(session.session.expiresAt) <= new Date(superseding.record.payload.externalPreflight.shareLinkExpiresAt));
+  await assert.rejects(
+    () => harness.service.createInvite({ actorSessionToken: operator.sessionToken, identityId: participant.identity.id, expiresInHours: 1 }),
+    (error) => error.status === 409 && error.code === "h11_active_session_exists",
+  );
+
+  const thirdPayload = makeAccessGate(harness.now(), {
+    deploymentId: "dpl_h11thirddeployment000000003",
+    ownerAuthorizationReference: "H11-TEST-OWNER-AUTHORIZATION-0003",
+  });
+  const third = await harness.service.recordH11AccessGate({
+    actorSessionToken: operator.sessionToken,
+    identityId: participant.identity.id,
+    assignmentId: assignment.assignment.id,
+    payload: thirdPayload,
+  });
+  assert.equal(third.record.supersedesId, superseding.record.id);
+  assert.deepEqual(third.invalidatedSessions, [session.session.id]);
+  await assert.rejects(
+    () => harness.service.me(session.sessionToken),
+    (error) => error.status === 401 && error.code === "authentication_required",
+  );
 
   const operatorWorkspace = await harness.service.getWorkspace(operator.sessionToken);
-  assert.equal(operatorWorkspace.h11AccessGates.length, 2);
+  assert.equal(operatorWorkspace.h11AccessGates.length, 3);
   const privateExport = await harness.service.operatorExport({ actorSessionToken: operator.sessionToken, publicOnly: false });
   const publicExport = await harness.service.operatorExport({ actorSessionToken: operator.sessionToken, publicOnly: true });
-  assert.equal(privateExport.state.h11AccessGates.length, 2);
+  assert.equal(privateExport.state.h11AccessGates.length, 3);
+  assert.ok(privateExport.state.sessions.find((record) => record.id === session.session.id).revokedAt);
   assert.ok(JSON.stringify(privateExport).includes("qualified-participant@example.test"));
   assert.ok(JSON.stringify(privateExport).includes("H11-TEST-OWNER-AUTHORIZATION-0002"));
   assert.equal(JSON.stringify(publicExport).includes("qualified-participant@example.test"), false);
@@ -238,6 +286,7 @@ function makeAccessGate(now, overrides = {}) {
       syntheticOnlyPurposeConfirmed: true,
       researchRatingsAuthorizedFalseConfirmed: true,
       noOpenP0P1Defect: true,
+      shareLinkCreatedAt: new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
       shareLinkCreatedWithin23Hours: true,
       signedOutIncognitoJourneyPassed: true,
       noOperatorOrCrossIdentityExposure: true,

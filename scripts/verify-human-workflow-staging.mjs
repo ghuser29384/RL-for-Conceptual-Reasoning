@@ -65,13 +65,17 @@ assert.match(contents["src/staging-service.mjs"], /assessabilityDisagreement/);
 assert.match(contents["src/staging-service.mjs"], /participant\.evidence\.recorded/);
 assert.match(contents["src/staging-service.mjs"], /H11-CONSENT-2026-08-07-V1/);
 assert.match(contents["src/staging-service.mjs"], /H11-DEBRIEF-2026-08-07-V1/);
-assert.match(contents["src/staging-service.mjs"], /H11-ACCESS-GATE-2026-08-07-V1/);
+assert.match(contents["src/staging-service.mjs"], /H11-ACCESS-GATE-2026-08-07-V2/);
 assert.match(contents["src/staging-service.mjs"], /h11\.access\.gate\.recorded/);
 assert.match(contents["src/staging-service.mjs"], /h11_access_gate_required/);
 assert.match(contents["src/staging-service.mjs"], /h11_access_gate_superseded/);
 assert.match(contents["src/staging-service.mjs"], /h11_active_invite_exists/);
 assert.match(contents["src/staging-service.mjs"], /human_identity_deliverable_email_required/);
-assert.match(contents["src/staging-service.mjs"], /h11SessionExpiresAt/);
+assert.match(contents["src/staging-service.mjs"], /h11Access/);
+assert.match(contents["src/staging-service.mjs"], /h11_active_session_exists/);
+assert.match(contents["src/staging-service.mjs"], /activeSessionMatchesCurrentAccessGate/);
+assert.match(contents["src/staging-service.mjs"], /h11_release_sha_mismatch/);
+assert.match(contents["src/staging-service.mjs"], /h11_share_link_stale/);
 
 assert.match(contents["staging/index.html"], /Synthetic rehearsal only/);
 assert.match(contents["staging/index.html"], /Seven LMCA dimensions/);
@@ -98,6 +102,8 @@ assert.match(contents["staging/app.mjs"], /Consent and debrief records/);
 assert.match(contents["staging/app.mjs"], /H-11 access issuance gate/);
 assert.match(contents["staging/app.mjs"], /Record immutable H-11 access gate/);
 assert.match(contents["staging/app.mjs"], /Still no access issuance/);
+assert.match(contents["staging/app.mjs"], /shareLinkCreatedAt/);
+assert.match(contents["staging/app.mjs"], /H11-ACCESS-GATE-2026-08-07-V2/);
 assert.match(contents["staging/participant-readiness.css"], /participant-evidence-panel/);
 
 assert.match(contents["src/staging-server.mjs"], /Content-Security-Policy/);
@@ -147,6 +153,9 @@ assert.match(contents["test/h11-access-gate-contract.test.mjs"], /h11_access_gat
 assert.match(contents["test/h11-access-gate-contract.test.mjs"], /h11_active_invite_exists/);
 assert.match(contents["test/h11-access-gate-contract.test.mjs"], /legacy real-email rater invitations remain blocked/);
 assert.match(contents["test/h11-access-gate-contract.test.mjs"], /human_identity_deliverable_email_required/);
+assert.match(contents["test/h11-access-gate-contract.test.mjs"], /h11_active_session_exists/);
+assert.match(contents["test/h11-access-gate-contract.test.mjs"], /h11_release_sha_mismatch/);
+assert.match(contents["test/h11-access-gate-contract.test.mjs"], /h11_share_link_stale/);
 
 for (const schemaPath of [
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v1.sql",

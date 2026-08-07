@@ -208,7 +208,7 @@ test("complete synthetic human workflow preserves initial ratings across correct
   expect(privateExport.state.assignments.find((assignment) => assignment.kind === "rerating").predecessorAssignmentId).toBe(setup.raterA.assignmentId);
   expect(privateExport.state.assignments.find((assignment) => assignment.id === setup.raterB.assignmentId).status).toBe("withdrawn");
   expect(privateExport.state.h11AccessGates).toHaveLength(2);
-  expect(privateExport.state.h11AccessGates.every((record) => record.version === "H11-ACCESS-GATE-2026-08-07-V1")).toBe(true);
+  expect(privateExport.state.h11AccessGates.every((record) => record.version === "H11-ACCESS-GATE-2026-08-07-V2")).toBe(true);
   expect(privateExport.state.participantEvidence).toHaveLength(4);
   expect(privateExport.state.participantEvidence.filter((record) => record.kind === "consent")).toHaveLength(2);
   expect(privateExport.state.participantEvidence.filter((record) => record.kind === "debrief")).toHaveLength(2);
@@ -276,6 +276,7 @@ function makeH11AccessGatePayload(recipientSlot) {
       syntheticOnlyPurposeConfirmed: true,
       researchRatingsAuthorizedFalseConfirmed: true,
       noOpenP0P1Defect: true,
+      shareLinkCreatedAt: new Date(now - 5 * 60 * 1000).toISOString(),
       shareLinkCreatedWithin23Hours: true,
       signedOutIncognitoJourneyPassed: true,
       noOperatorOrCrossIdentityExposure: true,

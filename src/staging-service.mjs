@@ -15,7 +15,7 @@ const PARTICIPANT_EVIDENCE_KINDS = new Set(["consent", "debrief"]);
 const IDENTITY_PURPOSES = new Set(["synthetic_automation", "h11_human_usability", "synthetic_adjudication", "controlled_operator"]);
 const H11_CONSENT_VERSION = "H11-CONSENT-2026-08-07-V1";
 const H11_DEBRIEF_VERSION = "H11-DEBRIEF-2026-08-07-V1";
-const H11_ACCESS_GATE_VERSION = "H11-ACCESS-GATE-2026-08-07-V1";
+const H11_ACCESS_GATE_VERSION = "H11-ACCESS-GATE-2026-08-07-V2";
 const H11_PAYMENT_RAILS = ["wise", "paypal", "us_bank_transfer", "waive", "other"];
 const H11_EXPOSURE_VALUES = ["no", "yes", "uncertain"];
 const H11_CONFLICT_VALUES = ["none_declared", "review_required", "disqualifying"];
@@ -146,7 +146,9 @@ export class StagingWorkflowService {
     const invite = state.invites.find((candidate) => candidate.id === inviteId);
     if (!invite) throw serviceError(404, "invite_not_found", "Invite not found.");
     const identity = activeIdentity(state, invite.identityId);
-    const gate = resolveInviteAccessGate(state, identity, this.now(), expiresInHours);
+    const now = this.now();
+    const gate = resolveInviteAccessGate(state, identity, now, expiresInHours);
+    assertNoActiveH11Invite(state, identity.id, gate.metadata.h11AccessGateId ?? null, now, invite.id);
     if (!invite.revokedAt && !invite.usedAt) {
       await this.store.append(event("invite.revoked", invite.id, actor.identity.id, {
         inviteId,
@@ -183,21 +185,31 @@ export class StagingWorkflowService {
     if (invite.usedAt) throw serviceError(409, "used_invite", "The invitation has already been used. Ask the operator for a replacement.");
     if (new Date(invite.expiresAt) <= now) throw serviceError(401, "expired_invite", "The invitation has expired.");
     const identity = activeIdentity(state, invite.identityId);
-    const h11SessionExpiresAt = validateInviteAccessGateAtRedemption(state, invite, identity, now, this.sessionTtlHours);
+    const h11Access = validateInviteAccessGateAtRedemption(state, invite, identity, now, this.sessionTtlHours);
     const sessionToken = makeToken();
     const session = {
       id: randomUUID(),
       identityId: identity.id,
       tokenHash: sha256Token(sessionToken),
       createdAt: now.toISOString(),
-      expiresAt: h11SessionExpiresAt ?? addHours(now, this.sessionTtlHours).toISOString(),
+      expiresAt: h11Access?.expiresAt ?? addHours(now, this.sessionTtlHours).toISOString(),
       revokedAt: null,
+      purpose: effectiveIdentityPurpose(identity),
+      h11AccessGateId: h11Access?.h11AccessGateId ?? null,
+      assignmentId: h11Access?.assignmentId ?? null,
+      packetHash: h11Access?.packetHash ?? null,
       userAgentHash: userAgent ? createHash("sha256").update(String(userAgent)).digest("hex") : null,
     };
     await this.store.appendMany([
       event("invite.redeemed", invite.id, identity.id, { inviteId: invite.id, usedAt: now.toISOString(), sessionId: session.id }, now.toISOString()),
       event("session.created", session.id, identity.id, session, now.toISOString()),
-      event("audit.recorded", randomUUID(), identity.id, { action: "invite.redeemed", subjectId: invite.id }, now.toISOString()),
+      event("audit.recorded", randomUUID(), identity.id, {
+        action: "invite.redeemed",
+        subjectId: invite.id,
+        h11AccessGateId: session.h11AccessGateId,
+        assignmentId: session.assignmentId,
+        sessionExpiresAt: session.expiresAt,
+      }, now.toISOString()),
     ]);
     return { sessionToken, session: publicSession(session), identity: publicIdentity(identity) };
   }
@@ -259,7 +271,7 @@ export class StagingWorkflowService {
 
 
 
-  async recordH11AccessGate({ actorSessionToken, identityId, assignmentId, payload }) {
+  async recordH11AccessGate({ actorSessionToken, identityId, assignmentId, payload, expectedReleaseSha = null }) {
     const actor = await this.requireRole(actorSessionToken, "operator");
     const state = await this.state();
     const identity = activeIdentity(state, identityId);
@@ -276,6 +288,9 @@ export class StagingWorkflowService {
     }
 
     const normalized = normalizeH11AccessGate(payload, this.now());
+    if (expectedReleaseSha && normalized.externalPreflight.releaseSha !== String(expectedReleaseSha).trim().toLowerCase()) {
+      throw serviceError(409, "h11_release_sha_mismatch", "The recorded release SHA does not match the exact runtime commit serving this protected staging environment.");
+    }
     const prior = latestH11AccessGate(state, identity.id, assignment.id);
     if (prior && prior.packetHash === assignment.packetHash && JSON.stringify(prior.payload) === JSON.stringify(normalized)) {
       return { record: publicH11AccessGate(prior), replay: true };
@@ -293,8 +308,18 @@ export class StagingWorkflowService {
       recordedAt,
       validUntil: normalized.externalPreflight.shareLinkExpiresAt,
     };
+    const sessionsToRevoke = state.sessions.filter((session) => (
+      session.identityId === identity.id
+      && !session.revokedAt
+      && new Date(session.expiresAt) > new Date(recordedAt)
+    ));
     await this.store.appendMany([
       event("h11.access.gate.recorded", record.id, actor.identity.id, record, recordedAt),
+      ...sessionsToRevoke.map((session) => event("session.revoked", session.id, actor.identity.id, {
+        sessionId: session.id,
+        revokedAt: recordedAt,
+        reason: "h11_access_gate_superseded",
+      }, recordedAt)),
       event("audit.recorded", randomUUID(), actor.identity.id, {
         action: "h11.access.gate.recorded",
         subjectId: record.id,
@@ -303,9 +328,14 @@ export class StagingWorkflowService {
         packetHash: assignment.packetHash,
         version: record.version,
         supersedesId: record.supersedesId,
+        invalidatedSessionIds: sessionsToRevoke.map((session) => session.id),
       }, recordedAt),
     ]);
-    return { record: publicH11AccessGate(record), replay: false };
+    return {
+      record: publicH11AccessGate(record),
+      replay: false,
+      invalidatedSessions: sessionsToRevoke.map((session) => session.id),
+    };
   }
 
   async recordParticipantEvidence({ sessionToken, assignmentId, kind, payload }) {
@@ -634,7 +664,9 @@ export class StagingWorkflowService {
     if (!allowRevoked && session.revokedAt) return null;
     if (!allowExpired && new Date(session.expiresAt) <= this.now()) return null;
     const identity = state.identities.find((candidate) => candidate.id === session.identityId && candidate.status === "active");
-    return identity ? { session, identity, state } : null;
+    if (!identity) return null;
+    if (!allowExpired && !allowRevoked && !activeSessionMatchesCurrentAccessGate(state, session, identity, this.now())) return null;
+    return { session, identity, state };
   }
 
   async requireSession(sessionToken) {
@@ -933,6 +965,7 @@ function normalizeH11AccessGate(payload = {}, now = new Date()) {
       syntheticOnlyPurposeConfirmed: requireGateTrue(external.syntheticOnlyPurposeConfirmed, "Confirm the synthetic_rehearsal_only purpose."),
       researchRatingsAuthorizedFalseConfirmed: requireGateTrue(external.researchRatingsAuthorizedFalseConfirmed, "Confirm research_ratings_authorized=false."),
       noOpenP0P1Defect: requireGateTrue(external.noOpenP0P1Defect, "Confirm that no P0 or P1 defect or incident is open."),
+      shareLinkCreatedAt: requireIsoDate(external.shareLinkCreatedAt, "Share-link creation time"),
       shareLinkCreatedWithin23Hours: requireGateTrue(external.shareLinkCreatedWithin23Hours, "Confirm the share link was created no more than 23 hours before the session."),
       signedOutIncognitoJourneyPassed: requireGateTrue(external.signedOutIncognitoJourneyPassed, "Confirm the normal signed-out or incognito external journey passed."),
       noOperatorOrCrossIdentityExposure: requireGateTrue(external.noOperatorOrCrossIdentityExposure, "Confirm the external path exposed no operator session, other identity, assignment, or reusable token."),
@@ -955,6 +988,7 @@ function normalizeH11AccessGate(payload = {}, now = new Date()) {
 
   const start = new Date(normalized.session.startAt);
   const end = new Date(normalized.session.endAt);
+  const shareCreated = new Date(normalized.externalPreflight.shareLinkCreatedAt);
   const shareExpiry = new Date(normalized.externalPreflight.shareLinkExpiresAt);
   if (end <= start) throw serviceError(400, "invalid_session_window", "The H-11 session end must be after its start.");
   if (end.getTime() - start.getTime() > 4 * 60 * 60 * 1000) {
@@ -965,6 +999,15 @@ function normalizeH11AccessGate(payload = {}, now = new Date()) {
   }
   if (start.getTime() > now.getTime() + 14 * 24 * 60 * 60 * 1000) {
     throw serviceError(400, "h11_session_window_too_distant", "The H-11 session window must be within the next fourteen days.");
+  }
+  if (shareCreated.getTime() > now.getTime() + 5 * 60 * 1000) {
+    throw serviceError(400, "h11_share_link_created_in_future", "The recorded share-link creation time is implausibly in the future.");
+  }
+  if (now.getTime() - shareCreated.getTime() > 23 * 60 * 60 * 1000) {
+    throw serviceError(409, "h11_share_link_stale", "The protected share link was created more than 23 hours ago; create and preflight a fresh link.");
+  }
+  if (shareExpiry <= shareCreated) {
+    throw serviceError(400, "h11_share_link_window_invalid", "The protected share-link expiry must be after its recorded creation time.");
   }
   if (shareExpiry < end) {
     throw serviceError(409, "h11_share_link_expires_too_early", "The protected share link must remain valid through the complete session window.");
@@ -1022,10 +1065,11 @@ function validateRaterIdentityPurpose(identity, errorStatus) {
   throw serviceError(errorStatus, "identity_purpose_required", "Unclassified real-email rater access is blocked. Create or repair an explicitly H-11-classified identity before proceeding.");
 }
 
-function assertNoActiveH11Invite(state, identityId, h11AccessGateId, now) {
+function assertNoActiveH11Invite(state, identityId, h11AccessGateId, now, excludedInviteId = null) {
   if (!h11AccessGateId) return;
   const existing = state.invites.find((invite) => (
-    invite.identityId === identityId
+    invite.id !== excludedInviteId
+    && invite.identityId === identityId
     && invite.h11AccessGateId === h11AccessGateId
     && !invite.usedAt
     && !invite.revokedAt
@@ -1035,6 +1079,17 @@ function assertNoActiveH11Invite(state, identityId, h11AccessGateId, now) {
     throw serviceError(409, "h11_active_invite_exists", "An unused H-11 invitation already exists for this exact access gate. Revoke or replace it rather than issuing a second valid token.", {
       inviteId: existing.id,
       expiresAt: existing.expiresAt,
+    });
+  }
+  const activeSession = state.sessions.find((session) => (
+    session.identityId === identityId
+    && !session.revokedAt
+    && new Date(session.expiresAt) > now
+  ));
+  if (activeSession) {
+    throw serviceError(409, "h11_active_session_exists", "An authenticated H-11 session is already active. Supersede the gate to invalidate it before issuing another invitation.", {
+      sessionId: activeSession.id,
+      expiresAt: activeSession.expiresAt,
     });
   }
 }
@@ -1048,6 +1103,7 @@ function resolveInviteAccessGate(state, identity, now, expiresInHours) {
   if (!assignment) throw serviceError(409, "h11_assignment_required", "Create the participant's exact initial synthetic assignment before issuing access.");
   const preflight = latestH11AccessGate(state, identity.id, assignment.id);
   if (!preflight) throw serviceError(409, "h11_access_gate_required", "Record the complete recipient screening, final consent, session, and external access gate before issuing an invitation.");
+  if (preflight.version !== H11_ACCESS_GATE_VERSION) throw serviceError(409, "h11_access_gate_version_stale", "Record a fresh access gate under the current H-11 access-control contract before issuing an invitation.");
   if (preflight.packetHash !== assignment.packetHash) throw serviceError(409, "h11_packet_gate_mismatch", "The access gate does not match the current assignment packet.");
   const end = new Date(preflight.payload.session.endAt);
   const shareExpiry = new Date(preflight.payload.externalPreflight.shareLinkExpiresAt);
@@ -1090,6 +1146,9 @@ function validateInviteAccessGateAtRedemption(state, invite, identity, now, sess
   if (!latest || latest.id !== invite.h11AccessGateId) {
     throw serviceError(401, "h11_access_gate_superseded", "The access gate was replaced; ask the operator for a fresh invitation.");
   }
+  if (latest.version !== H11_ACCESS_GATE_VERSION) {
+    throw serviceError(401, "h11_access_gate_version_stale", "The invitation was issued under an obsolete H-11 access-control contract.");
+  }
   if (latest.packetHash !== assignment.packetHash || invite.packetHash !== assignment.packetHash) {
     throw serviceError(401, "h11_packet_gate_mismatch", "The invitation packet no longer matches the approved access gate.");
   }
@@ -1100,12 +1159,33 @@ function validateInviteAccessGateAtRedemption(state, invite, identity, now, sess
   if (now < start) throw serviceError(403, "h11_access_window_not_open", "The protected H-11 session window has not opened yet.");
   if (now >= end || now >= shareExpiry || now >= inviteExpiry) throw serviceError(401, "h11_access_window_closed", "The protected H-11 session, share-link, or invitation window has closed.");
   const ordinarySessionExpiry = addHours(now, sessionTtlHours);
-  return new Date(Math.min(
-    ordinarySessionExpiry.getTime(),
-    end.getTime(),
-    shareExpiry.getTime(),
-    inviteExpiry.getTime(),
-  )).toISOString();
+  return {
+    expiresAt: new Date(Math.min(
+      ordinarySessionExpiry.getTime(),
+      end.getTime(),
+      shareExpiry.getTime(),
+      inviteExpiry.getTime(),
+    )).toISOString(),
+    h11AccessGateId: latest.id,
+    assignmentId: assignment.id,
+    packetHash: assignment.packetHash,
+  };
+}
+
+function activeSessionMatchesCurrentAccessGate(state, session, identity, now) {
+  if (identity.role !== "rater") return !session.h11AccessGateId;
+  const purpose = effectiveIdentityPurpose(identity);
+  if (purpose === "synthetic_automation") return isSyntheticEmail(identity.email) && !session.h11AccessGateId;
+  if (purpose !== "h11_human_usability" || isSyntheticEmail(identity.email)) return false;
+  if (!session.h11AccessGateId || !session.assignmentId || !session.packetHash) return false;
+  const assignment = state.assignments.find((candidate) => candidate.id === session.assignmentId);
+  if (!assignment || assignment.identityId !== identity.id || assignment.packetHash !== session.packetHash) return false;
+  const latest = latestH11AccessGate(state, identity.id, assignment.id);
+  if (!latest || latest.id !== session.h11AccessGateId || latest.version !== H11_ACCESS_GATE_VERSION) return false;
+  if (latest.packetHash !== session.packetHash) return false;
+  const end = new Date(latest.payload.session.endAt);
+  const shareExpiry = new Date(latest.payload.externalPreflight.shareLinkExpiresAt);
+  return now < end && now < shareExpiry;
 }
 
 function normalizeRating(rating = {}) {

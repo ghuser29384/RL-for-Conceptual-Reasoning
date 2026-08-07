@@ -125,7 +125,11 @@ export function createStagingApiHandler(options = {}) {
           break;
         case "h11.access.gate.record":
           requireMethod(req, "POST");
-          result = await runtime.service.recordH11AccessGate({ actorSessionToken: sessionToken, ...body });
+          result = await runtime.service.recordH11AccessGate({
+            actorSessionToken: sessionToken,
+            ...body,
+            expectedReleaseSha: runtime.environment.VERCEL_GIT_COMMIT_SHA ?? null,
+          });
           break;
         case "draft.save":
           requireMethod(req, "PUT");

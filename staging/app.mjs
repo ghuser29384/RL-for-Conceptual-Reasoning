@@ -654,7 +654,7 @@ function renderOperatorAccessGate() {
       .filter((record) => record.identityId === identity.id && (!assignment || record.assignmentId === assignment.id))
       .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
     const latest = records[0] ?? null;
-    const ready = Boolean(latest && assignment && latest.packetHash === assignment.packetHash && new Date(latest.validUntil) > new Date());
+    const ready = Boolean(latest && latest.version === "H11-ACCESS-GATE-2026-08-07-V2" && assignment && latest.packetHash === assignment.packetHash && new Date(latest.validUntil) > new Date());
     const card = document.createElement("article");
     card.className = "subpanel access-gate-card";
     card.dataset.identityId = identity.id;
@@ -679,6 +679,7 @@ function renderOperatorAccessGate() {
           <div><dt>Valid until</dt><dd>${escapeHtml(latest.validUntil)}</dd></div>
           <div><dt>Release</dt><dd><code>${escapeHtml(latest.payload.externalPreflight.releaseSha)}</code></dd></div>
           <div><dt>Deployment</dt><dd><code>${escapeHtml(latest.payload.externalPreflight.deploymentId)}</code></dd></div>
+          <div><dt>Share link</dt><dd>${escapeHtml(latest.payload.externalPreflight.shareLinkCreatedAt || "legacy/unknown")} → ${escapeHtml(latest.payload.externalPreflight.shareLinkExpiresAt)}</dd></div>
           <div><dt>Session</dt><dd>${escapeHtml(latest.payload.session.startAt)} → ${escapeHtml(latest.payload.session.endAt)} · ${escapeHtml(latest.payload.session.timeZone)}</dd></div>
           <div><dt>Screening</dt><dd>${escapeHtml(latest.payload.screening.screeningOutcome)} · conflicts ${escapeHtml(latest.payload.screening.conflictStatus)} · sanctions ${escapeHtml(latest.payload.screening.sanctionsScreening)} · honorarium ${escapeHtml(latest.payload.screening.honorariumEligibility)}</dd></div>
           <div><dt>Owner reference</dt><dd>${escapeHtml(latest.payload.ownerAuthorizationReference)}</dd></div>
@@ -699,6 +700,7 @@ function renderOperatorAccessGate() {
     const external = p.externalPreflight ?? {};
     const startDefault = session.startAt ? toLocalDateTimeValue(session.startAt) : toLocalDateTimeValue(new Date(Date.now() + 5 * 60 * 1000));
     const endDefault = session.endAt ? toLocalDateTimeValue(session.endAt) : toLocalDateTimeValue(new Date(Date.now() + 3 * 60 * 60 * 1000));
+    const shareCreatedDefault = external.shareLinkCreatedAt ? toLocalDateTimeValue(external.shareLinkCreatedAt) : toLocalDateTimeValue(new Date());
     const shareExpiryDefault = external.shareLinkExpiresAt ? toLocalDateTimeValue(external.shareLinkExpiresAt) : toLocalDateTimeValue(new Date(Date.now() + 4 * 60 * 60 * 1000));
     const form = document.createElement("form");
     form.className = "evidence-form h11-access-gate-form";
@@ -745,6 +747,7 @@ function renderOperatorAccessGate() {
           <label><span>Accepted release SHA</span><input name="releaseSha" value="${escapeHtml(external.releaseSha || "")}" pattern="[a-fA-F0-9]{40}" required></label>
           <label><span>Exact Vercel deployment ID</span><input name="deploymentId" value="${escapeHtml(external.deploymentId || "")}" pattern="dpl_[A-Za-z0-9]{12,156}" required></label>
           <label><span>Schema version</span><input name="schemaVersion" type="number" min="4" max="4" value="4" readonly required></label>
+          <label><span>Protected share-link creation time</span><input name="shareLinkCreatedAt" type="datetime-local" value="${escapeHtml(shareCreatedDefault)}" required></label>
           <label><span>Protected share-link expiry</span><input name="shareLinkExpiresAt" type="datetime-local" value="${escapeHtml(shareExpiryDefault)}" required></label>
         </div>
         <label class="check-row"><input name="syntheticOnlyPurposeConfirmed" type="checkbox" ${checked(external.syntheticOnlyPurposeConfirmed)} required><span>Exact release purpose is <code>synthetic_rehearsal_only</code>.</span></label>
@@ -819,6 +822,7 @@ function renderOperatorAccessGate() {
             syntheticOnlyPurposeConfirmed: bool("syntheticOnlyPurposeConfirmed"),
             researchRatingsAuthorizedFalseConfirmed: bool("researchRatingsAuthorizedFalseConfirmed"),
             noOpenP0P1Defect: bool("noOpenP0P1Defect"),
+            shareLinkCreatedAt: new Date(data.get("shareLinkCreatedAt")).toISOString(),
             shareLinkCreatedWithin23Hours: bool("shareLinkCreatedWithin23Hours"),
             signedOutIncognitoJourneyPassed: bool("signedOutIncognitoJourneyPassed"),
             noOperatorOrCrossIdentityExposure: bool("noOperatorOrCrossIdentityExposure"),

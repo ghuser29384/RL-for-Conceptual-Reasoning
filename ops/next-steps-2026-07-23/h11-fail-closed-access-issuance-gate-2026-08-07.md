@@ -50,3 +50,16 @@ A second code review found and closed four residual access-boundary defects befo
 4. the same current H-11 access gate could otherwise have more than one simultaneously valid unused invitation.
 
 The service now bounds an H-11 session to the earliest of the ordinary session TTL, the approved session end, the protected share-link expiry, and the one-time invitation expiry. It rejects unclassified real-email rater access at both issuance and redemption, requires synthetic and human identity classes to use non-overlapping email classes, and permits only one unused invitation for the same current gate. A superseding gate still invalidates every invitation bound to the earlier gate.
+
+## V2 session and exact-release binding
+
+The current access record is `H11-ACCESS-GATE-2026-08-07-V2`. V1 records are deliberately stale for future invitation issuance.
+
+V2 adds four controls:
+
+1. a structured share-link creation timestamp that must be no more than 23 hours old, cannot be materially in the future, and must precede the recorded expiry;
+2. hosted API verification that the operator-entered release SHA equals `VERCEL_GIT_COMMIT_SHA` for the exact runtime serving the gate form;
+3. session metadata binding to the exact H-11 gate, assignment, and packet hash, with authentication revalidation against the latest gate on every ordinary protected request; and
+4. explicit revocation of any still-active participant session when a new gate supersedes the prior gate.
+
+Replacement invitation issuance now excludes only the invitation being replaced and rejects the operation if another unused current-gate invitation or any active participant session already exists. An operator who needs to recover from a lost authenticated browser must supersede the gate, thereby invalidating the prior session, before issuing a fresh token.
