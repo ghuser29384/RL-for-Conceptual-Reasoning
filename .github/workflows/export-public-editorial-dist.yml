@@ -1,0 +1,40 @@
+name: Export audited public editorial bundle
+
+on:
+  push:
+    branches:
+      - ops/export-public-editorial-dist-20260807
+    paths:
+      - ".github/workflows/export-public-editorial-dist.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify exact public release marker and staging exclusion
+        run: |
+          grep -F 'mp-public-voice-20260806-r1' dist/index.html
+          test ! -e dist/staging
+          test ! -e dist/src/app.mjs
+      - name: Write bundle manifest
+        run: |
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS.txt
+          printf '%s\n' 'a0273b471ac025263fed99d9c07e171272aba8a7' > dist/SOURCE_COMMIT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: metaphilosophy-public-editorial-dist-a0273b4
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
