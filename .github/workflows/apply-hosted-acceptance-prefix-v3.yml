@@ -123,22 +123,14 @@ jobs:
           test ! -e .github/apply_hosted_acceptance_prefix_v3.py
           test ! -e .github/workflows/apply-hosted-acceptance-prefix-v3.yml
           test ! -e .github/__pycache__
-          git reset --hard HEAD
-          git checkout HEAD -- .
-          # Re-apply validated working-tree changes from the index is unnecessary;
-          # the patch remains unstaged at this point. The reset above would erase it,
-          # so this assertion intentionally fails if the workflow order is changed.
-        shell: bash
-
-      - name: Commit validated files
-        run: |
           git config user.name "ghuser29384"
           git config user.email "262476329+ghuser29384@users.noreply.github.com"
           git add scripts/run-hosted-staging-acceptance.mjs \
             supabase/functions/metaphilosophy-staging-acceptance/index.ts \
             test/hosted-staging-gateway-contract.test.mjs \
-            ops/next-steps-2026-07-23/hosted-acceptance-restore-prefix-v3-2026-08-07.md \
-            .github/apply_hosted_acceptance_prefix_v3.py \
-            .github/workflows/apply-hosted-acceptance-prefix-v3.yml
+            ops/next-steps-2026-07-23/hosted-acceptance-restore-prefix-v3-2026-08-07.md
+          git add -A .github
           git commit -m "Support append-only hosted acceptance restore prefixes"
+          git reset --hard HEAD
+          git clean -fdx -e .staging-evidence/
           git push origin HEAD:candidate/h11-hosted-acceptance-v3-20260807
