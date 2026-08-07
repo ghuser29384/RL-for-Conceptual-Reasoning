@@ -81,7 +81,7 @@ test("repository-only changes skip Vercel without weakening approved Preview bui
   );
 });
 
-test("vercel.json binds the one-time main deployment to the exact public aliases", async () => {
+test("vercel.json explicitly auto-aliases the exact public release to the canonical domains", async () => {
   const [configText, index] = await Promise.all([
     readFile(new URL("../vercel.json", import.meta.url), "utf8"),
     readFile(new URL("../index.html", import.meta.url), "utf8"),
@@ -95,6 +95,7 @@ test("vercel.json binds the one-time main deployment to the exact public aliases
   assert.equal(config.git.deploymentEnabled["*"], false);
   assert.equal(config.git.deploymentEnabled.main, true);
   assert.equal(config.git.deploymentEnabled["release/vercel-preview"], true);
+  assert.equal(config.github.autoAlias, true);
   assert.equal(config.buildCommand, "npm run build");
   assert.equal(Object.hasOwn(config, "ignoreCommand"), false);
   assert.deepEqual(config.alias, [
