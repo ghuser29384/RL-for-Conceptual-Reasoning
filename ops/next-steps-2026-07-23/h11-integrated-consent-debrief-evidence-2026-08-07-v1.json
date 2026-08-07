@@ -1,0 +1,85 @@
+{
+  "record_id": "H11-INTEGRATED-CONSENT-DEBRIEF-EVIDENCE-2026-08-07-V1",
+  "recorded_at": "2026-08-07T06:27:00Z",
+  "scope": "synthetic H-11 usability and rubric-comprehension evidence only",
+  "authorization": {
+    "research_ratings_authorized": false,
+    "participant_access_issued": false,
+    "payment_committed": false,
+    "production_deployed": false,
+    "release_preview_advanced": false,
+    "funding_submitted": false
+  },
+  "implementation": {
+    "product_commit": "0feac5a5dd074c9eea92d66e351752179fdbc5a8",
+    "validated_head": "27f450542381866858890d6e4ee62c5d7fad0d12",
+    "summary": [
+      "requires an authenticated rater to record four approved synthetic-session consent statements before an initial assignment is displayed",
+      "records a structured rubric-comprehension and workflow-usability debrief after the initial assignment is submitted or withdrawn",
+      "writes consent and debrief as immutable, idempotent, append-only participant.evidence.recorded events bound to the authenticated rater and initial synthetic assignment",
+      "shows private consent and debrief status in the operator workspace and visibly highlights safety stop conditions",
+      "includes participant evidence in private exports while excluding it and its free text from public-safe exports",
+      "keeps the existing synthetic-only database schema and research-ratings authorization state unchanged"
+    ]
+  },
+  "defects_found_and_fixed": [
+    {
+      "class": "rendered UI liveness",
+      "finding": "the participant-readiness MutationObserver observed its own descendant text and attribute updates, causing a feedback loop after the new consent state re-rendered",
+      "fix": "observe only direct child-list replacement in the staging workspace; descendant form and status changes no longer retrigger the enhancer"
+    },
+    {
+      "class": "keyboard accessibility",
+      "finding": "the skip link animated from an off-screen top position and was still partly outside the viewport at the instant keyboard focus was asserted",
+      "fix": "remove the focus transition and support both :focus and :focus-visible so the link appears immediately"
+    }
+  ],
+  "validation": {
+    "workflow_run_id": 31153800583,
+    "workflow_name": "Metaphilosophy authenticated staging gate",
+    "status": "pass",
+    "jobs": {
+      "contracts_and_synthetic_rehearsal": "pass",
+      "disposable_postgres_persistence_rehearsal": "pass",
+      "rendered_chromium_rehearsal": "pass"
+    },
+    "checks": [
+      "staging and compatibility syntax",
+      "staging contract verifier",
+      "focused human-workflow and hosted-gateway tests",
+      "complete repository test suite",
+      "ordinary public build excludes the staging shell",
+      "designated release-preview and explicit staging builds include participant-readiness assets",
+      "deterministic synthetic lifecycle",
+      "support incident tabletop",
+      "PostgreSQL restart, chain readback, backup, and exact second-database restore",
+      "rendered Chromium: full two-rater lifecycle plus desktop/mobile participant-readiness and keyboard-focus checks"
+    ],
+    "artifacts": [
+      {
+        "id": 8984333110,
+        "name": "metaphilosophy-staging-contract-rehearsal-27f450542381866858890d6e4ee62c5d7fad0d12",
+        "sha256": "c91edc9ebe2828f255b74ab97dfaf00a0faf6c929460727d6b5b316cb51f544f"
+      },
+      {
+        "id": 8984328121,
+        "name": "metaphilosophy-staging-postgres-27f450542381866858890d6e4ee62c5d7fad0d12",
+        "sha256": "f359ee51076abb89514d1c502c98eab36d27f734e84ddb5453f590f0be84a46c"
+      },
+      {
+        "id": 8984359864,
+        "name": "metaphilosophy-staging-browser-27f450542381866858890d6e4ee62c5d7fad0d12",
+        "sha256": "c030763f4277f5a702b2a8a896b6dfd671fdc9dac2ef0b37be76dec8efadc1a1"
+      }
+    ]
+  },
+  "release_boundary": {
+    "accepted_hosted_release_commit": "202135a21fb15f5a12698e6a78e8c8d8b7fa79ef",
+    "accepted_hosted_deployment": "dpl_GmdeKXfv4LQJ6T5iGLnrRXipogHP",
+    "accepted_hosted_release_unchanged": true,
+    "successor_candidate_deployed": false,
+    "manual_signed_out_external_access_preflight_required_before_participant_access": true,
+    "qualified_human_h11_sessions_complete": false,
+    "h12_signed": false
+  }
+}
