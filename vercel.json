@@ -3,13 +3,22 @@
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "alias": [
+    "www.metaphilosophy.org",
+    "metaphilosophy.org",
+    "www.goodphilosophy.org",
+    "goodphilosophy.org",
+    "www.argumentquality.org",
+    "argumentquality.org",
+    "rlhf-conceptual-reasoning.vercel.app"
+  ],
   "git": {
     "deploymentEnabled": {
       "*": false,
+      "main": true,
       "release/vercel-preview": true
     }
   },
-  "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
   "rewrites": [
     {
       "source": "/research",
