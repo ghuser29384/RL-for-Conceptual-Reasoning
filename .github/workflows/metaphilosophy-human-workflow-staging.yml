@@ -130,7 +130,12 @@ jobs:
           grep -q 'h11_release_sha_mismatch' src/staging-service.mjs
           grep -q 'h11_active_session_exists' src/staging-service.mjs
           grep -q 'activeSessionMatchesCurrentAccessGate' src/staging-service.mjs
+          grep -q 'h11_pseudonym_required' src/staging-service.mjs
+          grep -q 'contactRouteValidated: true' src/staging-service.mjs
+          grep -q 'directContactPersisted: false' src/staging-service.mjs
+          grep -q 'validated transiently · not persisted' staging/app.mjs
           grep -q 'H11-ACCESS-GATE-2026-08-07-V2' e2e/human-workflow-staging.spec.mjs
+          grep -q 'not.toContain("browser-a@example.test")' e2e/human-workflow-staging.spec.mjs
 
       - name: Verify staging contracts
         run: npm run verify:staging
